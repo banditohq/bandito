@@ -82,6 +82,8 @@ public final class ServerModel: Identifiable {
     @ObservationIgnored var terminalStreams: [String: TerminalStream] = [:]
     /// Port forwarders started by `forwardOnce(port:)`; closed by `disconnect()`.
     @ObservationIgnored var forwarders: [PortForwarder] = []
+    /// The transport of the current connection. Its `httpBase` is where the daemon's HTTP routes answer.
+    @ObservationIgnored var transport: RPCTransport?
     /// Bumped whenever a connection attempt starts and on disconnect. An attempt that finds the
     /// number changed has been superseded and throws away its client.
     private var generation = 0
@@ -160,6 +162,7 @@ public final class ServerModel: Identifiable {
         stopPumps()
         let old = client
         client = nil
+        transport = nil
         state = .disconnected
         finishTerminalStreams()
         await stopForwarders()
@@ -172,8 +175,10 @@ public final class ServerModel: Identifiable {
         generation += 1
         let attempt = generation
         await dropClient()
+        let current = makeTransport(config)
+        transport = current
         let c = RPCClient(
-            transport: makeTransport(config),
+            transport: current,
             onDecodeFailure: { [weak self] in
                 Task { @MainActor in self?.noteDecodeFailure() }
             })
@@ -579,5 +584,21 @@ public enum Pairing {
         defer { Task { await client.close() } }
         struct P: Encodable { var code: String; var deviceName: String }
         return try await client.call("pair.redeem", P(code: code, deviceName: deviceName), as: PairResult.self)
+    }
+
+    /// Revokes a device on the daemon (`devices.revoke`), over a connection that the token itself opens. Used when
+    /// the app cannot keep a token it was just given, so the daemon does not keep a device nobody holds.
+    public static func revoke(url: URL, token: String, deviceID: String) async throws {
+        guard WebSocketTransport.allowsToken(for: url) else {
+            throw RPCError(
+                code: RPCError.insecureTransport,
+                message: "refusing to send the device token over an unencrypted connection")
+        }
+        let client = RPCClient(transport: WebSocketTransport(url: url, token: token))
+        try await client.start()
+        defer { Task { await client.close() } }
+        struct P: Encodable { var id: String }
+        struct Revoked: Decodable { var revoked: Bool }
+        _ = try await client.call("devices.revoke", P(id: deviceID), as: Revoked.self)
     }
 }

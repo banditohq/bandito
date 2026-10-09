@@ -44,6 +44,8 @@ public enum CDPCommand: Sendable {
     case getTargets
     case createTarget(url: String)
     case activateTarget(id: String)
+    /// Runs `expression` in the page and returns its value (`returnByValue`).
+    case evaluate(expression: String)
 
     public var method: String {
         switch self {
@@ -61,6 +63,7 @@ public enum CDPCommand: Sendable {
         case .getTargets: "Target.getTargets"
         case .createTarget: "Target.createTarget"
         case .activateTarget: "Target.activateTarget"
+        case .evaluate: "Runtime.evaluate"
         }
     }
 
@@ -126,6 +129,8 @@ public enum CDPCommand: Sendable {
             return .object(["url": .string(url)])
         case .activateTarget(let id):
             return .object(["targetId": .string(id)])
+        case .evaluate(let expression):
+            return .object(["expression": .string(expression), "returnByValue": .bool(true)])
         }
     }
 }
@@ -190,24 +195,5 @@ public enum CDP {
         else { return nil }
         return ScreencastFrame(
             jpeg: jpeg, sessionId: Int(sessionId), deviceWidth: width, deviceHeight: height)
-    }
-
-    /// `ws://127.0.0.1:<local>/devtools/page/<id>` from the local HTTP URL that `forwardOnce` returned.
-    public static func pageSocketURL(local: URL, pageId: String) -> URL? {
-        socketURL(local: local, path: "/devtools/page/\(pageId)")
-    }
-
-    /// The browser-level socket: `ws://127.0.0.1:<local><path>`, for `Target.*` calls.
-    public static func browserSocketURL(local: URL, path: String) -> URL? {
-        socketURL(local: local, path: path.hasPrefix("/") ? path : "/" + path)
-    }
-
-    private static func socketURL(local: URL, path: String) -> URL? {
-        guard var components = URLComponents(url: local, resolvingAgainstBaseURL: false) else { return nil }
-        components.scheme = "ws"
-        components.path = path
-        components.query = nil
-        components.fragment = nil
-        return components.url
     }
 }

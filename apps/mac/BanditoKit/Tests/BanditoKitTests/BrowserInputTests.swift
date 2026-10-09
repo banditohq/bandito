@@ -141,9 +141,14 @@ import Testing
     #expect(PreviewURL.previewURL(port: 0) == nil)
 }
 
-@Test func httpBaseFromTheServerAddress() throws {
-    #expect(PreviewURL.httpBase(for: try #require(URL(string: "wss://srv.example.com/v1/ws?x=1")))?.absoluteString
-        == "https://srv.example.com")
-    #expect(PreviewURL.httpBase(for: try #require(URL(string: "ws://10.0.0.2:7777")))?.absoluteString
-        == "http://10.0.0.2:7777")
+@Test func proxyPartsKeepThePathAndQueryAsTheDaemonExpectsThem() throws {
+    let page = try #require(URL(string: "bandito-preview://p3000/a%20b/?x=1&y=2"))
+    let parts = try #require(PreviewURL.proxyParts(for: page))
+    #expect(parts.path == "/v1/proxy/3000/a%20b/")
+    #expect(parts.query == "x=1&y=2")
+    let root = try #require(URL(string: "bandito-preview://p5173"))
+    #expect(PreviewURL.proxyParts(for: root)?.path == "/v1/proxy/5173/")
+    #expect(PreviewURL.proxyParts(for: root)?.query == nil)
+    let outOfRange = try #require(URL(string: "bandito-preview://p70000/"))
+    #expect(PreviewURL.proxyParts(for: outOfRange) == nil)
 }

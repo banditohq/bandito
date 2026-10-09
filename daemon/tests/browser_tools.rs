@@ -89,11 +89,10 @@ fn ordinary_names_are_not_risky() {
 // --- Chrome launch arguments ---
 
 #[test]
-fn chrome_starts_headless_with_the_profile_and_port() {
-    let args = chrome_args(Path::new("/home/u/.bandito/workspaces/shared/browser"), 9222, false);
+fn chrome_starts_headless_with_the_profile_and_the_devtools_pipe() {
+    let args = chrome_args(Path::new("/home/u/.bandito/workspaces/shared/browser"), false);
     for flag in [
-        "--remote-debugging-port=9222",
-        "--remote-debugging-address=127.0.0.1",
+        "--remote-debugging-pipe",
         "--user-data-dir=/home/u/.bandito/workspaces/shared/browser",
         "--no-first-run",
         "--no-default-browser-check",
@@ -109,7 +108,7 @@ fn chrome_starts_headless_with_the_profile_and_port() {
 
 #[test]
 fn no_sandbox_only_when_asked() {
-    let args = chrome_args(Path::new("/p"), 1, true);
+    let args = chrome_args(Path::new("/p"), true);
     assert!(args.iter().any(|a| a == "--no-sandbox"));
 }
 

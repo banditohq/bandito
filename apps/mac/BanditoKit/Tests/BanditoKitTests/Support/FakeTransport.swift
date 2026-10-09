@@ -20,11 +20,17 @@ actor FakeTransport: RPCTransport {
     /// The client's read loop is the only reader, so the iterator needs no further synchronization.
     private let inbound: InboundIterator
     private var sent: [String] = []
+    /// What `httpBase` answers: an ssh tunnel's HTTP base in the tests that need one.
+    private var base: URL?
 
-    init(handlers: [String: Handler] = [:], errors: [String: Failure] = [:], autoRespond: Bool = true) {
+    init(
+        handlers: [String: Handler] = [:], errors: [String: Failure] = [:], autoRespond: Bool = true,
+        httpBase: URL? = nil
+    ) {
         self.handlers = handlers
         self.errors = errors
         self.autoRespond = autoRespond
+        self.base = httpBase
         let (stream, continuation) = AsyncThrowingStream.makeStream(
             of: String.self, throwing: Error.self, bufferingPolicy: .unbounded)
         self.continuation = continuation
@@ -55,7 +61,16 @@ actor FakeTransport: RPCTransport {
         continuation.finish()
     }
 
+    var httpBase: URL? {
+        get async { base }
+    }
+
     // MARK: test controls
+
+    /// Moves the tunnel: the next request is answered from the new base.
+    func setHTTPBase(_ url: URL?) {
+        base = url
+    }
 
     /// Delivers a server message (a response or a notification).
     func push(_ text: String) {

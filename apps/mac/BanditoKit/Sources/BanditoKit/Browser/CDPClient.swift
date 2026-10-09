@@ -15,10 +15,29 @@ public enum CDPError: Error, Sendable, Equatable, LocalizedError {
     case closed
     /// The browser has no page to attach to.
     case noPage
-    /// A message that is not DevTools JSON, or a socket URL that cannot be built.
+    /// A message that is not DevTools JSON, or a route address that cannot be built.
     case badMessage
-    /// The DevTools HTTP endpoint answered with this status instead of 200.
+    /// A browser route answered with this status, and the status has no more specific case.
     case httpStatus(Int)
+    /// The browser is not running on the server (`409 browser_not_running`).
+    case browserNotRunning
+    /// The tab is no longer open (`404 no_such_tab`).
+    case noSuchTab
+    /// This device already holds its DevTools sockets (`429`).
+    case tooManySockets
+    /// The server refused the device token (`401` or `403`).
+    case unauthorized
+
+    /// The error for a browser route that answered `status` instead of 200 or 101.
+    static func routeError(status: Int) -> CDPError {
+        switch status {
+        case 401, 403: .unauthorized
+        case 404: .noSuchTab
+        case 409: .browserNotRunning
+        case 429: .tooManySockets
+        default: .httpStatus(status)
+        }
+    }
 
     public var errorDescription: String? {
         switch self {
@@ -26,7 +45,11 @@ public enum CDPError: Error, Sendable, Equatable, LocalizedError {
         case .closed: "the browser connection closed"
         case .noPage: "the browser has no page"
         case .badMessage: "the browser sent an unreadable message"
-        case .httpStatus(let code): "the browser's DevTools answered with HTTP \(code)"
+        case .httpStatus(let code): "the browser's server answered with HTTP \(code)"
+        case .browserNotRunning: "the browser is not running"
+        case .noSuchTab: "that tab is no longer open"
+        case .tooManySockets: "this device already has its browser connections open"
+        case .unauthorized: "the server refused this device's token"
         }
     }
 }
@@ -41,15 +64,38 @@ public protocol CDPSocket: Sendable {
 
 /// A `URLSessionWebSocketTask` that speaks text frames.
 public actor URLSessionCDPSocket: CDPSocket {
+    /// The largest message the app takes from the daemon: a screencast frame or a big answer. Chrome's own limit is 64 MiB.
+    static let maxMessageSize = 64 * 1024 * 1024
+
     private let session: URLSession
     private let task: URLSessionWebSocketTask
 
-    /// Opens the socket: the task starts at once.
-    public init(url: URL) {
-        let session = URLSession(configuration: .ephemeral)
+    private init(session: URLSession, task: URLSessionWebSocketTask) {
         self.session = session
-        self.task = session.webSocketTask(with: url)
+        self.task = task
+    }
+
+    /// Opens the socket and waits for the upgrade. A refused upgrade throws `CDPError.routeError` for its
+    /// HTTP status, so the caller learns why (409, 404, 429) instead of a silent close.
+    public static func open(request: URLRequest) async throws -> URLSessionCDPSocket {
+        let session = URLSession(configuration: .ephemeral)
+        let task = session.webSocketTask(with: request)
+        task.maximumMessageSize = maxMessageSize
         task.resume()
+        do {
+            // A ping completes once the upgrade has succeeded, and fails with the handshake error otherwise.
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                task.sendPing { error in
+                    if let error { continuation.resume(throwing: error) } else { continuation.resume() }
+                }
+            }
+        } catch {
+            let status = (task.response as? HTTPURLResponse)?.statusCode
+            session.invalidateAndCancel()
+            if let status, status != 101 { throw CDPError.routeError(status: status) }
+            throw CDPError.closed
+        }
+        return URLSessionCDPSocket(session: session, task: task)
     }
 
     public func send(_ text: String) async throws {

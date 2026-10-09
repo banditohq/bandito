@@ -20,20 +20,30 @@ enum Keychain {
         return String(data: data, encoding: .utf8)
     }
 
-    /// Replaces the stored token. Returns whether the new token was stored (always true when clearing).
+    /// Replaces the stored token in place (`SecItemUpdate`), or adds it when there is none. Clearing deletes it.
+    /// Returns whether the change was made (clearing an absent token counts as made).
     @discardableResult
     static func setToken(_ token: String?, for server: UUID) -> Bool {
-        let base: [String: Any] = [
+        let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: server.uuidString,
         ]
-        SecItemDelete(base as CFDictionary)
-        guard let token else { return true }
-        var add = base
-        add[kSecValueData as String] = Data(token.utf8)
-        // Readable after the first unlock (background sync works), never copied to other devices.
-        add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        return SecItemAdd(add as CFDictionary, nil) == errSecSuccess
+        guard let token else {
+            let status = SecItemDelete(query as CFDictionary)
+            return status == errSecSuccess || status == errSecItemNotFound
+        }
+        let attributes: [String: Any] = [
+            kSecValueData as String: Data(token.utf8),
+            // Readable after the first unlock (background sync works), never copied to other devices.
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+        ]
+        let updated = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        if updated == errSecItemNotFound {
+            var add = query
+            add.merge(attributes) { _, new in new }
+            return SecItemAdd(add as CFDictionary, nil) == errSecSuccess
+        }
+        return updated == errSecSuccess
     }
 }

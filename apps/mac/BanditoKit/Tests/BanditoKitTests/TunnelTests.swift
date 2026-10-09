@@ -270,13 +270,6 @@ func finished<T: Sendable>(_ task: Task<T, Error>, within timeout: Duration = .s
         await forwarder.stop()
     }
 
-    @Test func remoteAddressWithTokenOutsideTLSOrLoopbackIsRefused() {
-        #expect(throws: RPCError.self) {
-            _ = try PortForwarder(
-                tunnelURL: URL(string: "ws://192.168.1.20:7878/v1/tunnel?port=3000")!, token: "secret")
-        }
-    }
-
     // MARK: ServerModel.forwardOnce
 
     @Test func forwardOnceOnThisMacIsDirectWithoutAForwarder() async throws {

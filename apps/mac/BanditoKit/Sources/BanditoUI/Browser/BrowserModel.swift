@@ -1,3 +1,4 @@
+import AppKit
 import BanditoKit
 import BanditoL10n
 import Foundation
@@ -47,6 +48,10 @@ final class BrowserModel {
     private var pollTask: Task<Void, Never>?
     private var pollTick = 0
     private var lastTouch: Date = .distantPast
+    /// Reopens the page connection after it drops. Its count restarts once a connection shows an event.
+    private var reconnect = BrowserReconnectPolicy()
+    /// True after five reconnects in a row failed: the browser is shown as stopped, with a button to start it.
+    private(set) var gaveUp = false
 
     init(server: ServerModel) {
         self.server = server
@@ -83,6 +88,8 @@ final class BrowserModel {
 
     /// Starts the browser on the server, then connects to its first page.
     func start() async {
+        gaveUp = false
+        reconnect = BrowserReconnectPolicy()
         do {
             status = try await server.browserStart()
             errorText = nil
@@ -97,10 +104,10 @@ final class BrowserModel {
     /// Opens a new tab on `about:blank` and shows it (⌘T). The new tab is made on the browser connection,
     /// because `Target.createTarget` is a browser command, not a page one.
     func newTab() async {
-        guard canInteract, let port = status?.cdpPort, let wsPath = status?.browserWsPath else { return }
+        guard canInteract, status?.isRelay == true else { return }
         let browser: CDPClient
         do {
-            browser = try await server.browserTargetsClient(cdpPort: port, wsPath: wsPath)
+            browser = try await server.browserTargetsClient()
         } catch {
             errorText = Self.describe(error)
             return
@@ -116,39 +123,63 @@ final class BrowserModel {
         await browser.close()
         guard case .object(let object) = result, case .string(let id)? = object["targetId"] else { return }
         do {
-            tabs = try await server.browserTabs(cdpPort: port)
+            tabs = try await server.browserTabs()
         } catch {
             errorText = Self.describe(error)
         }
         await selectPage(id)
     }
 
-    /// One poll: the status, the tabs every few polls, and a keep-alive while the browser is on screen.
+    /// One poll: the status, the tabs every few polls, a reconnect when the page connection is down, and a
+    /// keep-alive while the browser is on screen and the app is the active one.
     func refresh() async {
         guard isSupported else { return }
         do {
             let fresh = try await server.browserStatus()
-            status = fresh
             errorText = nil
-            guard fresh.running, let port = fresh.cdpPort else {
+            guard fresh.isRelay else {
+                status = fresh
                 await closeClient()
                 tabs = []
                 return
             }
+            guard !gaveUp else {
+                status = .stopped
+                return
+            }
+            status = fresh
             pollTick += 1
             if pollTick % 5 == 1 {
-                tabs = try await server.browserTabs(cdpPort: port)
+                tabs = try await server.browserTabs()
             }
             // The page connection follows the page tabs; a preview needs none.
             if client == nil, !isPreviewSelected {
-                try await connect(cdpPort: port, tabID: pageTabID)
+                await reconnectIfDue()
             }
-            if Date().timeIntervalSince(lastTouch) > 60 {
+            if Date().timeIntervalSince(lastTouch) > 60, NSApplication.shared.isActive {
                 lastTouch = Date()
                 try? await server.browserTouch()
             }
         } catch {
             errorText = Self.describe(error)
+        }
+    }
+
+    /// Opens the page connection again if the policy allows it now. After five failures in a row the browser
+    /// is shown as stopped, and only Start brings it back.
+    private func reconnectIfDue() async {
+        switch reconnect.next(at: Date.timeIntervalSinceReferenceDate) {
+        case .wait:
+            return
+        case .giveUp:
+            gaveUp = true
+            status = .stopped
+        case .attempt:
+            do {
+                try await connect(tabID: pageTabID)
+            } catch {
+                errorText = Self.describe(error)
+            }
         }
     }
 
@@ -169,12 +200,11 @@ final class BrowserModel {
         selection = .page(id)
         clientTabID = nil
         await closeClient()
-        if let port = status?.cdpPort {
-            do {
-                try await connect(cdpPort: port, tabID: id)
-            } catch {
-                errorText = Self.describe(error)
-            }
+        guard status?.isRelay == true else { return }
+        do {
+            try await connect(tabID: id)
+        } catch {
+            errorText = Self.describe(error)
         }
     }
 
@@ -312,11 +342,11 @@ final class BrowserModel {
 
     // MARK: Connection
 
-    private func connect(cdpPort: Int, tabID: String?) async throws {
+    private func connect(tabID: String?) async throws {
         await closeClient()
         isLoading = true
         do {
-            let (client, tab) = try await server.browserPageClient(cdpPort: cdpPort, tabID: tabID)
+            let (client, tab) = try await server.browserPageClient(tabID: tabID)
             self.client = client
             clientTabID = tab.id
             if selection == nil { selection = .page(tab.id) }
@@ -328,6 +358,9 @@ final class BrowserModel {
                     guard let self else { return }
                     await self.handle(event, client: client)
                 }
+                // The stream ends when the socket closes: the browser stopped, or the link dropped.
+                guard let self else { return }
+                self.connectionEnded(client)
             }
             _ = try await client.send(.startScreencast(maxWidth: 1280, maxHeight: 800, quality: 70))
         } catch {
@@ -337,6 +370,8 @@ final class BrowserModel {
     }
 
     private func handle(_ event: CDPEvent, client: CDPClient) async {
+        // An event from the current connection shows it works: the reconnect count starts over.
+        if self.client === client { reconnect.succeeded() }
         switch event.method {
         case "Page.screencastFrame":
             guard let frame = CDP.screencastFrame(from: event.params) else { return }
@@ -368,6 +403,15 @@ final class BrowserModel {
         }()
         canGoBack = index > 0
         canGoForward = index < count - 1
+    }
+
+    /// The socket closed under us. Drops the connection; the next poll reconnects, under the policy.
+    private func connectionEnded(_ ended: CDPClient) {
+        guard client === ended else { return }
+        client = nil
+        clientTabID = nil
+        frame = nil
+        isLoading = false
     }
 
     private func closeClient() async {

@@ -5,7 +5,8 @@ import Foundation
 @MainActor
 enum FileDownload {
     static func save(_ entry: FsEntry, server: ServerModel) async throws {
-        guard let request = server.rawURLRequest(path: entry.path), let source = request.url else {
+        let request = try await server.rawURLRequest(path: entry.path)
+        guard let source = request.url else {
             throw RemoteFile.Failure.unavailable
         }
         guard let destination = FileBridge.saveURL(suggestedName: entry.name) else { return }

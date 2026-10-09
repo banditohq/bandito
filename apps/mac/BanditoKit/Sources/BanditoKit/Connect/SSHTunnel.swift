@@ -113,6 +113,13 @@ public actor SSHTunnel {
         localPort.flatMap { URL(string: "ws://127.0.0.1:\($0)/v1/rpc") }
     }
 
+    /// `http://127.0.0.1:<port>`: the daemon's HTTP routes through this tunnel. Nil until `start()` has
+    /// succeeded, and again once the tunnel is down, so a request never goes to a port nothing answers on.
+    public var httpBase: URL? {
+        guard state == .up, let port = localPort else { return nil }
+        return URL(string: "http://127.0.0.1:\(port)")
+    }
+
     private let target: SSHTarget
     private let remotePort: Int
     private let sshPath: String

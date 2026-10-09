@@ -3,6 +3,7 @@
 pub mod agent_token;
 pub mod browser;
 pub mod cdp;
+pub mod cdp_pipe;
 pub mod checkpoint;
 pub mod children;
 pub mod commands;

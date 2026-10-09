@@ -12,13 +12,13 @@ private func json(_ text: String) throws -> Data {
 @Test func browserStatusDecodesRunningBrowser() throws {
     let data = try json(
         """
-        {"running":true,"cdp_port":9222,"browser_ws_path":"/devtools/browser/abc","pid":4321,
+        {"running":true,"cdp":"relay","pid":4321,
          "started_at":1700000000000,"controller":"agent"}
         """)
     let status = try RPCClient.decoder.decode(BrowserStatus.self, from: data)
     #expect(status.running)
-    #expect(status.cdpPort == 9222)
-    #expect(status.browserWsPath == "/devtools/browser/abc")
+    #expect(status.cdp == "relay")
+    #expect(status.isRelay)
     #expect(status.pid == 4321)
     #expect(status.startedAt == 1_700_000_000_000)
     #expect(status.controller == .agent)
@@ -28,7 +28,8 @@ private func json(_ text: String) throws -> Data {
     let data = try json(#"{"running":false}"#)
     let status = try RPCClient.decoder.decode(BrowserStatus.self, from: data)
     #expect(!status.running)
-    #expect(status.cdpPort == nil)
+    #expect(status.cdp == nil)
+    #expect(!status.isRelay)
     #expect(status.controller == .none)
 }
 
@@ -192,7 +193,15 @@ private func parsed(_ text: String) throws -> [String: Any] {
     #expect(throws: (any Error).self) { try CDP.parse("not json") }
 }
 
-@Test func pageSocketURLReplacesTheHostAndPath() {
-    let url = CDP.pageSocketURL(local: URL(string: "http://127.0.0.1:51000")!, pageId: "ABC")
-    #expect(url?.absoluteString == "ws://127.0.0.1:51000/devtools/page/ABC")
+@Test func runningWithoutTheRelayIsNotConnectable() throws {
+    let status = try RPCClient.decoder.decode(BrowserStatus.self, from: json(#"{"running":true,"cdp":"port"}"#))
+    #expect(!status.isRelay)
+}
+
+@Test func cdpEvaluateEncodesTheExpression() throws {
+    let text = CDP.encode(id: 4, command: .evaluate(expression: "1 + 1"))
+    let object = try JSONDecoder().decode(JSONValue.self, from: Data(text.utf8))
+    #expect(object["method"] == .string("Runtime.evaluate"))
+    #expect(object["params"]?["expression"] == .string("1 + 1"))
+    #expect(object["params"]?["returnByValue"] == .bool(true))
 }

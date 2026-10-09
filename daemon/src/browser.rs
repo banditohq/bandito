@@ -1,17 +1,14 @@
 //! The server's browser: one Chrome per workspace, driven over the DevTools protocol.
-//! The app watches it through the tunnel (CDP screencast); agents use it through the
+//! The app watches it over the DevTools routes (CDP screencast); agents use it through the
 //! crew MCP tools, which call the `browser.agent.*` methods. See docs/ARCHITECTURE.md#browser.
 
 use crate::cdp::{Cdp, Element};
+use crate::cdp_pipe::{LinkError, MAX_CHROME_MESSAGE, PageClient, Pipes, Relay};
 use crate::children::TrackedChild;
 use crate::event::Decision;
-use crate::rpc::preview::client;
 use crate::setup;
 use crate::supervisor::{ApprovalSpec, Supervisor};
-use anyhow::{Context, Result, bail};
-use axum::body::Body;
-use axum::http::{Request, Uri};
-use http_body_util::BodyExt;
+use anyhow::{Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -21,7 +18,7 @@ use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
-use tokio::process::{Child, Command};
+use tokio::process::Command;
 use tokio::sync::Mutex;
 
 /// Workspace the agents share, and the default for every method.
@@ -30,7 +27,7 @@ pub const DEFAULT_WORKSPACE: &str = "shared";
 const IDLE_LIMIT: Duration = Duration::from_secs(30 * 60);
 /// How often the idle check runs.
 const IDLE_CHECK: Duration = Duration::from_secs(60);
-/// How long Chrome may take to answer on its DevTools port.
+/// How long Chrome may take to answer `Browser.getVersion` after the start.
 const STARTUP_LIMIT: Duration = Duration::from_secs(10);
 /// How long Chrome may take to exit after SIGTERM.
 const STOP_GRACE: Duration = Duration::from_secs(5);
@@ -49,12 +46,17 @@ pub enum Holder {
     None,
 }
 
+/// How the app reaches a running browser: its DevTools protocol through the relay.
+pub const CDP_RELAY: &str = "relay";
+/// Live DevTools WebSockets one device may hold at once.
+pub const CDP_SOCKETS_PER_DEVICE: usize = 16;
+
 /// What the app sees of a workspace's browser.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Status {
     pub running: bool,
-    pub cdp_port: Option<u16>,
-    pub browser_ws_path: Option<String>,
+    /// `"relay"` while running (see docs/ARCHITECTURE.md#browser), `null` when stopped.
+    pub cdp: Option<&'static str>,
     pub pid: Option<u32>,
     pub started_at: Option<i64>,
     pub controller: Option<Holder>,
@@ -64,13 +66,22 @@ impl Status {
     fn stopped() -> Self {
         Self {
             running: false,
-            cdp_port: None,
-            browser_ws_path: None,
+            cdp: None,
             pid: None,
             started_at: None,
             controller: None,
         }
     }
+}
+
+/// A page in the browser, as the app lists it (the shape of DevTools' `/json/list` entries).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct PageInfo {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub kind: &'static str,
+    pub title: String,
+    pub url: String,
 }
 
 /// Why a browser method failed. The RPC layer maps each one (see rpc/browser.rs).
@@ -94,8 +105,8 @@ pub enum BrowserError {
 struct Running {
     child: TrackedChild,
     pid: u32,
-    port: u16,
-    browser_path: String,
+    /// The pipe to Chrome's DevTools protocol, shared by the app and the agent tools.
+    relay: Relay,
     started_at: i64,
     controller: Holder,
     /// The tab the agent tools work in (a DevTools target id).
@@ -106,7 +117,7 @@ struct Running {
 impl Running {
     fn is_alive(&mut self) -> bool {
         match self.child.try_wait() {
-            Ok(None) => true,
+            Ok(None) => !self.relay.is_closed(),
             // Reaped: its registration ends here.
             _ => {
                 self.child.release();
@@ -118,8 +129,7 @@ impl Running {
     fn status(&self) -> Status {
         Status {
             running: true,
-            cdp_port: Some(self.port),
-            browser_ws_path: Some(self.browser_path.clone()),
+            cdp: Some(CDP_RELAY),
             pid: Some(self.pid),
             started_at: Some(self.started_at),
             controller: Some(self.controller),
@@ -144,6 +154,8 @@ pub struct BrowserManager {
     /// Whether the idle check task is running (started by the first `start`).
     watching: AtomicBool,
     running: Mutex<HashMap<String, Running>>,
+    /// DevTools WebSockets the app holds, per device.
+    cdp_slots: Arc<CdpSlots>,
 }
 
 impl BrowserManager {
@@ -163,6 +175,7 @@ impl BrowserManager {
             idle_limit,
             watching: AtomicBool::new(false),
             running: Mutex::new(HashMap::new()),
+            cdp_slots: Arc::new(CdpSlots::default()),
         })
     }
 
@@ -187,36 +200,35 @@ impl BrowserManager {
         let log_path = dir.join("browser.log");
         let log = std::fs::File::create(&log_path).map_err(start_failed)?;
         let log_again = log.try_clone().map_err(start_failed)?;
-        let port = free_port().map_err(start_failed)?;
         let no_sandbox = std::env::var(NO_SANDBOX_ENV).is_ok_and(|v| v == "1");
-        let child = Command::new(&binary)
-            .args(chrome_args(&profile, port, no_sandbox))
+        // The pipes live until the spawn has returned: the child inherits its ends from them.
+        let pipes = Pipes::new().map_err(start_failed)?;
+        let mut command = Command::new(&binary);
+        command
+            .args(chrome_args(&profile, no_sandbox))
             .stdin(Stdio::null())
             .stdout(Stdio::from(log))
             .stderr(Stdio::from(log_again))
             .process_group(0)
-            .kill_on_drop(true)
-            .spawn()
-            .map_err(start_failed)?;
+            .kill_on_drop(true);
+        pipes.install(&mut command);
+        let mut child = TrackedChild::new(command.spawn().map_err(start_failed)?);
         let pid = child.id().unwrap_or_default();
-        let mut child = TrackedChild::new(child);
-        let browser_path = match wait_for_devtools(port, &mut child).await {
-            Ok(path) => path,
-            Err(e) => {
-                signal_group(pid, libc::SIGKILL);
-                let _ = child.wait().await;
-                child.release();
-                return Err(BrowserError::StartFailed(format!(
-                    "{e:#} (log: {})",
-                    log_path.display()
-                )));
-            }
-        };
+        let (to_chrome, from_chrome) = pipes.into_parent().map_err(start_failed)?;
+        let relay = Relay::spawn(from_chrome, to_chrome, MAX_CHROME_MESSAGE);
+        if let Err(e) = wait_ready(&relay).await {
+            signal_group(pid, libc::SIGKILL);
+            let _ = child.wait().await;
+            child.release();
+            return Err(BrowserError::StartFailed(format!(
+                "{e:#} (log: {})",
+                log_path.display()
+            )));
+        }
         let entry = Running {
             child,
             pid,
-            port,
-            browser_path,
+            relay,
             started_at: crate::store::now_ms(),
             controller: Holder::None,
             target: None,
@@ -287,17 +299,38 @@ impl BrowserManager {
         live(&mut running, workspace).is_some()
     }
 
-    async fn browser_endpoint(&self, workspace: &str) -> Option<(u16, String)> {
-        self.running
-            .lock()
-            .await
-            .get(workspace)
-            .map(|r| (r.port, r.browser_path.clone()))
+    /// The relay of the workspace's running browser, for the app. Counts as app activity.
+    /// [`BrowserError::NotRunning`] when there is no browser.
+    pub async fn app_relay(&self, workspace: &str) -> Result<Relay, BrowserError> {
+        let mut running = self.running.lock().await;
+        let r = live(&mut running, workspace).ok_or(BrowserError::NotRunning)?;
+        r.last_activity = Instant::now();
+        Ok(r.relay.clone())
     }
 
-    /// The port and current tab of the default workspace, for an agent call. Starts the browser
+    /// Takes one of the device's DevTools socket slots, or `None` when it has them all.
+    pub fn cdp_slot(&self, device_id: &str) -> Option<CdpSlot> {
+        self.cdp_slots.acquire(device_id, CDP_SOCKETS_PER_DEVICE)
+    }
+
+    /// The pages open in the workspace's browser.
+    pub async fn pages(&self, workspace: &str) -> Result<Vec<PageInfo>, BrowserError> {
+        let relay = self.app_relay(workspace).await?;
+        Ok(page_tabs(&relay)
+            .await?
+            .into_iter()
+            .map(|tab| PageInfo {
+                id: tab.id,
+                kind: "page",
+                title: tab.title,
+                url: tab.url,
+            })
+            .collect())
+    }
+
+    /// The relay and current tab of the default workspace, for an agent call. Starts the browser
     /// when it is not running, refuses while the user holds it, and counts as activity.
-    async fn agent_state(self: &Arc<Self>) -> Result<(u16, Option<String>), BrowserError> {
+    async fn agent_state(self: &Arc<Self>) -> Result<(Relay, Option<String>), BrowserError> {
         if !self.is_running(DEFAULT_WORKSPACE).await {
             self.start(DEFAULT_WORKSPACE).await?;
         }
@@ -307,7 +340,7 @@ impl BrowserManager {
             return Err(BrowserError::UserControls);
         }
         r.last_activity = Instant::now();
-        Ok((r.port, r.target.clone()))
+        Ok((r.relay.clone(), r.target.clone()))
     }
 
     async fn set_target(&self, target: &str) {
@@ -316,46 +349,24 @@ impl BrowserManager {
         }
     }
 
-    /// The agent's current tab, connected. Opens a new blank tab when `new_tab`, or when the browser has none.
-    async fn agent_page(self: &Arc<Self>, new_tab: bool) -> Result<Cdp, BrowserError> {
-        let (port, current) = self.agent_state().await?;
+    /// The agent's current tab, as a session. Opens a new blank tab when `new_tab`, or when the browser has none.
+    async fn agent_page(self: &Arc<Self>, new_tab: bool) -> Result<Cdp<PageClient>, BrowserError> {
+        let (relay, current) = self.agent_state().await?;
         let target = if new_tab {
-            self.create_tab(port).await?
+            create_tab(&relay).await?
         } else {
-            let pages = page_tabs(port).await.map_err(failed)?;
+            let pages = page_tabs(&relay).await?;
             match current
                 .filter(|c| pages.iter().any(|p| &p.id == c))
                 .or_else(|| pages.first().map(|p| p.id.clone()))
             {
                 Some(id) => id,
-                None => self.create_tab(port).await?,
+                None => create_tab(&relay).await?,
             }
         };
         self.set_target(&target).await;
-        Cdp::connect(&page_url(port, &target)).await.map_err(failed)
-    }
-
-    async fn create_tab(&self, port: u16) -> Result<String, BrowserError> {
-        let created = self
-            .browser_command(port, "Target.createTarget", json!({ "url": "about:blank" }))
-            .await?;
-        created["targetId"]
-            .as_str()
-            .map(str::to_string)
-            .ok_or_else(|| BrowserError::Failed("the browser created no tab".into()))
-    }
-
-    /// One command on the browser-level DevTools socket.
-    async fn browser_command(&self, port: u16, method: &str, params: Value) -> Result<Value, BrowserError> {
-        let path = self
-            .browser_endpoint(DEFAULT_WORKSPACE)
-            .await
-            .map(|(_, path)| path)
-            .ok_or(BrowserError::NotRunning)?;
-        let mut browser = Cdp::connect(&format!("ws://127.0.0.1:{port}{path}"))
-            .await
-            .map_err(failed)?;
-        browser.call(method, params).await.map_err(failed)
+        let page = relay.page_client(&target).await.map_err(link_failed)?;
+        Ok(Cdp::new(page))
     }
 
     /// Open a URL in the agent's tab (a new tab with `new_tab`).
@@ -437,8 +448,8 @@ impl BrowserManager {
     }
 
     pub async fn agent_tabs(self: &Arc<Self>) -> Result<String, BrowserError> {
-        let (port, current) = self.agent_state().await?;
-        let tabs = page_tabs(port).await.map_err(failed)?;
+        let (relay, current) = self.agent_state().await?;
+        let tabs = page_tabs(&relay).await?;
         if tabs.is_empty() {
             return Ok("No tabs.".to_string());
         }
@@ -459,26 +470,70 @@ impl BrowserManager {
 
     /// Make tab `index` (as `browser_tabs` lists it) the agent's tab, and bring it to the front.
     pub async fn agent_switch(self: &Arc<Self>, index: usize) -> Result<String, BrowserError> {
-        let (port, _) = self.agent_state().await?;
-        let tabs = page_tabs(port).await.map_err(failed)?;
+        let (relay, _) = self.agent_state().await?;
+        let tabs = page_tabs(&relay).await?;
         let tab = tabs
             .get(index)
             .ok_or_else(|| BrowserError::Failed(format!("no tab {index}; browser_tabs lists them")))?;
-        self.browser_command(port, "Target.activateTarget", json!({ "targetId": tab.id }))
-            .await?;
+        browser_call(&relay, "Target.activateTarget", json!({ "targetId": tab.id })).await?;
         self.set_target(&tab.id).await;
         Ok(format!("Switched to tab {index}: {}", tab.title))
     }
 }
 
-/// The workspace's browser if its process is still alive. A dead one is dropped from the map.
+/// The workspace's browser if it is still alive. A dead one is dropped from the map. One whose
+/// pipe closed while its process still runs is killed first.
 fn live<'a>(running: &'a mut HashMap<String, Running>, workspace: &str) -> Option<&'a mut Running> {
     let alive = running.get_mut(workspace)?.is_alive();
     if alive {
-        running.get_mut(workspace)
-    } else {
-        running.remove(workspace);
-        None
+        return running.get_mut(workspace);
+    }
+    if let Some(mut dead) = running.remove(workspace) {
+        // An unreaped child keeps its pid, so its process group id is still ours to signal.
+        if matches!(dead.child.try_wait(), Ok(None)) {
+            signal_group(dead.pid, libc::SIGKILL);
+        }
+    }
+    None
+}
+
+/// The DevTools sockets the app holds, per device id.
+#[derive(Default)]
+pub struct CdpSlots {
+    open: std::sync::Mutex<HashMap<String, usize>>,
+}
+
+/// One live DevTools socket of a device. Dropping it frees the slot.
+pub struct CdpSlot {
+    slots: Arc<CdpSlots>,
+    device_id: String,
+}
+
+impl CdpSlots {
+    /// A slot for `device_id`, or `None` when it already holds `limit` sockets.
+    fn acquire(self: &Arc<Self>, device_id: &str, limit: usize) -> Option<CdpSlot> {
+        let mut open = self.open.lock().unwrap_or_else(|e| e.into_inner());
+        let count = open.entry(device_id.to_owned()).or_insert(0);
+        if *count >= limit {
+            return None;
+        }
+        *count += 1;
+        Some(CdpSlot {
+            slots: self.clone(),
+            device_id: device_id.to_owned(),
+        })
+    }
+}
+
+impl Drop for CdpSlot {
+    fn drop(&mut self) {
+        let mut open = self.slots.open.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(count) = open.get_mut(&self.device_id) {
+            *count -= 1;
+            if *count == 0 {
+                open.remove(&self.device_id);
+            }
+        }
     }
 }
 
@@ -574,11 +629,11 @@ pub fn is_risky_name(text: &str) -> bool {
     RISKY_STEMS.iter().any(|stem| lower.contains(stem))
 }
 
-/// The arguments that start Chrome for the agent's browser.
-pub fn chrome_args(profile: &Path, port: u16, no_sandbox: bool) -> Vec<String> {
+/// The arguments that start Chrome for the agent's browser. DevTools talks over the pipes on fd 3
+/// and 4 (see `cdp_pipe`), so no port is opened.
+pub fn chrome_args(profile: &Path, no_sandbox: bool) -> Vec<String> {
     let mut args = vec![
-        format!("--remote-debugging-port={port}"),
-        "--remote-debugging-address=127.0.0.1".to_string(),
+        "--remote-debugging-pipe".to_string(),
         format!("--user-data-dir={}", profile.display()),
         "--no-first-run".to_string(),
         "--no-default-browser-check".to_string(),
@@ -647,28 +702,13 @@ fn failed(e: anyhow::Error) -> BrowserError {
     BrowserError::Failed(format!("{e:#}"))
 }
 
-/// A free loopback port. Another process could take it before Chrome binds; then the start fails.
-fn free_port() -> std::io::Result<u16> {
-    Ok(std::net::TcpListener::bind("127.0.0.1:0")?.local_addr()?.port())
-}
-
-/// Waits for Chrome's DevTools port and returns the browser socket path (`/devtools/browser/<id>`).
-async fn wait_for_devtools(port: u16, child: &mut Child) -> Result<String> {
-    let deadline = Instant::now() + STARTUP_LIMIT;
-    loop {
-        if let Some(status) = child.try_wait()? {
-            bail!("the browser exited ({status})");
-        }
-        if let Ok(version) = get_json(port, "/json/version").await
-            && let Some(url) = version["webSocketDebuggerUrl"].as_str()
-            && let Some(at) = url.find("/devtools/")
-        {
-            return Ok(url[at..].to_string());
-        }
-        if Instant::now() >= deadline {
-            bail!("no DevTools answer within {} s", STARTUP_LIMIT.as_secs());
-        }
-        tokio::time::sleep(Duration::from_millis(100)).await;
+/// Chrome answers `Browser.getVersion` once its DevTools protocol is up. A pipe that closes before
+/// that means Chrome exited.
+async fn wait_ready(relay: &Relay) -> Result<()> {
+    let mut cdp = Cdp::new(relay.browser_client().await.map_err(|e| anyhow!(e))?);
+    match tokio::time::timeout(STARTUP_LIMIT, cdp.call("Browser.getVersion", json!({}))).await {
+        Ok(answer) => answer.map(|_| ()),
+        Err(_) => bail!("no DevTools answer within {} s", STARTUP_LIMIT.as_secs()),
     }
 }
 
@@ -699,8 +739,10 @@ fn spawn_idle_check(weak: Weak<BrowserManager>, every: Duration) {
     });
 }
 
+/// A target as `Target.getTargets` lists it.
 #[derive(Debug, Clone, Deserialize)]
 struct Tab {
+    #[serde(rename = "targetId")]
     id: String,
     #[serde(rename = "type")]
     kind: String,
@@ -710,23 +752,35 @@ struct Tab {
     url: String,
 }
 
-/// The page tabs of the browser, in the order DevTools lists them.
-async fn page_tabs(port: u16) -> Result<Vec<Tab>> {
-    let list: Vec<Tab> = serde_json::from_value(get_json(port, "/json/list").await?)?;
+/// The page tabs of the browser, in the order Chrome lists them.
+async fn page_tabs(relay: &Relay) -> Result<Vec<Tab>, BrowserError> {
+    let result = browser_call(relay, "Target.getTargets", json!({})).await?;
+    let list: Vec<Tab> =
+        serde_json::from_value(result["targetInfos"].clone()).map_err(|e| BrowserError::Failed(e.to_string()))?;
     Ok(list.into_iter().filter(|t| t.kind == "page").collect())
 }
 
-fn page_url(port: u16, target: &str) -> String {
-    format!("ws://127.0.0.1:{port}/devtools/page/{target}")
+/// Opens a blank tab and returns its target id.
+async fn create_tab(relay: &Relay) -> Result<String, BrowserError> {
+    let created = browser_call(relay, "Target.createTarget", json!({ "url": "about:blank" })).await?;
+    created["targetId"]
+        .as_str()
+        .map(str::to_string)
+        .ok_or_else(|| BrowserError::Failed("the browser created no tab".into()))
 }
 
-/// GET on the browser's loopback DevTools HTTP port.
-async fn get_json(port: u16, path: &str) -> Result<Value> {
-    let uri: Uri = format!("http://127.0.0.1:{port}{path}").parse()?;
-    let request = Request::get(uri).body(Body::empty())?;
-    let response = client().request(request).await.context("no answer from the browser")?;
-    let bytes = response.into_body().collect().await?.to_bytes();
-    Ok(serde_json::from_slice(&bytes)?)
+/// One command on a new browser-level client.
+async fn browser_call(relay: &Relay, method: &str, params: Value) -> Result<Value, BrowserError> {
+    let mut cdp = Cdp::new(relay.browser_client().await.map_err(link_failed)?);
+    cdp.call(method, params).await.map_err(failed)
+}
+
+/// A relay that refused a client: the browser is gone, or the tab does not exist.
+fn link_failed(e: LinkError) -> BrowserError {
+    match e {
+        LinkError::Closed => BrowserError::NotRunning,
+        LinkError::NoTarget(message) => BrowserError::Failed(message),
+    }
 }
 
 /// Stops the Chrome processes an earlier daemon left behind: any process whose command line has
@@ -822,14 +876,14 @@ mod tests {
     use crate::store::{ApprovalMode, MemoryMode, NewAgent, Store};
     use crate::supervisor::Runtimes;
     use std::os::unix::process::CommandExt;
+    use tokio::process::Child;
     use tokio::sync::broadcast;
 
     fn fake_running(child: Child, pid: u32, activity: Instant) -> Running {
         Running {
             child: TrackedChild::new(child),
             pid,
-            port: 9,
-            browser_path: "/devtools/browser/x".into(),
+            relay: crate::cdp_pipe::idle_relay(),
             started_at: 0,
             controller: Holder::None,
             target: None,
@@ -967,6 +1021,38 @@ mod tests {
     }
 
     #[test]
+    fn chrome_args_use_the_pipe_not_a_port() {
+        let args = chrome_args(Path::new("/p"), false);
+        assert!(args.iter().any(|a| a == "--remote-debugging-pipe"), "{args:?}");
+        assert!(
+            args.iter()
+                .all(|a| !a.starts_with("--remote-debugging-port") && !a.starts_with("--remote-debugging-address")),
+            "{args:?}"
+        );
+    }
+
+    #[test]
+    fn a_device_holds_at_most_its_limit_of_cdp_sockets() {
+        let slots = Arc::new(CdpSlots::default());
+        let held: Vec<CdpSlot> = (0..CDP_SOCKETS_PER_DEVICE)
+            .map(|_| slots.acquire("dev", CDP_SOCKETS_PER_DEVICE).expect("within the limit"))
+            .collect();
+        assert!(slots.acquire("dev", CDP_SOCKETS_PER_DEVICE).is_none());
+        assert!(slots.acquire("other", CDP_SOCKETS_PER_DEVICE).is_some());
+        drop(held);
+        assert!(slots.acquire("dev", CDP_SOCKETS_PER_DEVICE).is_some());
+    }
+
+    /// What `lsof` prints for the TCP sockets `pid` listens on: empty when there are none.
+    fn listening_sockets(pid: u32) -> String {
+        let out = std::process::Command::new("lsof")
+            .args(["-nP", "-iTCP", "-sTCP:LISTEN", "-a", "-p", &pid.to_string()])
+            .output()
+            .expect("lsof must be installed for the real-Chrome test");
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    }
+
+    #[test]
     fn holder_uses_lowercase_names() {
         assert_eq!(serde_json::to_value(Holder::User).unwrap(), json!("user"));
         assert_eq!(serde_json::from_value::<Holder>(json!("agent")).unwrap(), Holder::Agent);
@@ -1090,7 +1176,13 @@ mod tests {
         let home = tempfile::tempdir().unwrap();
         let (sup, store, agent) = with_agent();
         let manager = BrowserManager::new(home.path().to_path_buf());
-        manager.start(DEFAULT_WORKSPACE).await.expect("start");
+        let started = manager.start(DEFAULT_WORKSPACE).await.expect("start");
+        // The DevTools protocol runs over the pipes: Chrome must not listen on any TCP port.
+        let listening = listening_sockets(started.pid.expect("a running browser has a pid"));
+        assert!(
+            !listening.contains("LISTEN"),
+            "Chrome listens on a TCP port:\n{listening}"
+        );
         let page = "data:text/html;charset=utf-8,\
             <button onclick=\"document.title='paid'\">Оплатить</button>\
             <button onclick=\"document.title='removed'\">Удалить</button>\
@@ -1153,6 +1245,48 @@ mod tests {
         allow.await.unwrap();
         let now = manager.agent_snapshot().await.unwrap();
         assert_eq!(title(&now), "Title: paid");
+
+        manager.stop(DEFAULT_WORKSPACE).await;
+    }
+
+    /// A page client is one tab's view of the browser. It must not list the other tabs, attach to them, or read
+    /// them. Real Chrome: run with `BANDITO_BROWSER_IT=1 cargo test -- --ignored browser_it_page_client`.
+    #[tokio::test]
+    #[ignore = "starts a real Chrome; BANDITO_BROWSER_IT=1 cargo test -- --ignored browser_it_page_client"]
+    async fn browser_it_page_client_cannot_reach_other_tabs() {
+        if std::env::var("BANDITO_BROWSER_IT").as_deref() != Ok("1") {
+            return;
+        }
+        let home = tempfile::tempdir().unwrap();
+        let manager = BrowserManager::new(home.path().to_path_buf());
+        manager.start(DEFAULT_WORKSPACE).await.expect("start");
+        manager
+            .agent_open("data:text/html,<title>tab-a</title>", false)
+            .await
+            .expect("open a");
+        manager
+            .agent_open("data:text/html,<title>secret-tab-b</title>", true)
+            .await
+            .expect("open b");
+        let pages = manager.pages(DEFAULT_WORKSPACE).await.expect("pages");
+        let a = pages.iter().find(|p| p.title == "tab-a").expect("tab a").id.clone();
+        let b = pages
+            .iter()
+            .find(|p| p.title == "secret-tab-b")
+            .expect("tab b")
+            .id
+            .clone();
+        let relay = manager.app_relay(DEFAULT_WORKSPACE).await.expect("relay");
+
+        let mut tab_a = Cdp::new(relay.page_client(&a).await.expect("page client"));
+        // Listing the tabs would show the other tab's id and URL.
+        let listed = tab_a.call("Target.getTargets", json!({})).await;
+        assert!(listed.is_err(), "a page client listed the tabs: {listed:?}");
+        // Attaching to the other tab would give a session on it.
+        let attached = tab_a
+            .call("Target.attachToTarget", json!({ "targetId": b, "flatten": true }))
+            .await;
+        assert!(attached.is_err(), "a page client attached to another tab: {attached:?}");
 
         manager.stop(DEFAULT_WORKSPACE).await;
     }
