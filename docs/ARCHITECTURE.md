@@ -79,7 +79,7 @@ A pending approval blocks only that agent. Approvals time out after 24 h → den
 - `rules(id, agent_id NULL, pattern, action)`
 - `schedules(id, agent_id, cron, tz, prompt, enabled, last_run_at, next_run_at)`
 - `devices(id, name, token_hash, created_at, last_seen_at)`; `pairing(code_hash, expires_at)`
-- `secrets(name, value)` for API keys, file mode 0600 (keychain/age later)
+- `secrets(name, value, agents, created_at, updated_at)` for API keys, file mode 0600 (keychain/age later); see [Secrets](#secrets)
 
 Migrations: numbered SQL files embedded in the binary, applied by `PRAGMA user_version`.
 
@@ -87,7 +87,7 @@ Migrations: numbered SQL files embedded in the binary, applied by `PRAGMA user_v
 
 JSON-RPC 2.0. Same methods on every transport.
 
-- Requests: `daemon.info`, `runtimes.status`, `agents.list|get|create|update|delete`, `agents.send{agent_id,text}`, `agents.interrupt`, `events.since{seq,limit,agent_id?}`, `approvals.list|resolve{approval_id,decision,remember}`, `rules.list|set|delete`, `schedules.list|create|update|delete|run_now`, `devices.list|revoke`, `pair.redeem{code,device_name}` (only unauthenticated method), `term.list|open|input|resize|rename|close|attach|detach` (see Terminals), `fs.*` (see [Files](#files)).
+- Requests: `daemon.info`, `runtimes.status`, `agents.list|get|create|update|delete`, `agents.send{agent_id,text}`, `agents.interrupt`, `events.since{seq,limit,agent_id?}`, `approvals.list|resolve{approval_id,decision,remember}`, `rules.list|set|delete`, `schedules.list|create|update|delete|run_now`, `devices.list|revoke`, `pair.redeem{code,device_name}` (only unauthenticated method), `term.list|open|input|resize|rename|close|attach|detach` (see Terminals), `fs.*` (see [Files](#files)), `secrets.list|set|delete` (see [Secrets](#secrets)).
 - Notifications (server → client): `event{seq, agent_id, kind, payload, ts}` for every event including `message.delta`; `term.output|gap|exit|closed` for attached terminals (see Terminals).
 
 ## Transports (connect any way you like)
@@ -168,6 +168,30 @@ Environment: a terminal gets only a whitelist of the daemon's variables (`PATH`,
 Errors: code `-32021` (`TERM_ERROR`), message `<code>: <text>`, where `<code>` is `too_many`, `not_found`, `invalid_size`, `exited` or `busy`.
 
 When the daemon stops, every terminal is hung up (`TerminalManager::shutdown_all`). Feature string: `"terminals"` in `daemon.info`.
+## Secrets
+
+API keys and passwords that agents need, such as `OPENAI_API_KEY` or a database password. A session gets them as environment variables when it starts. Their values never reach the app, the event log or the chat. `daemon/src/store/secrets.rs` holds the rules and storage, `daemon/src/redact.rs` the redaction, `daemon/src/rpc/secrets.rs` the methods. Clients show the feature when `daemon.info.features` contains `"secrets"`.
+
+- `secrets.list {}` → `[SecretInfo]`, sorted by name.
+- `secrets.set {name, value, agents}` → `SecretInfo`. Creates the secret or replaces its value and agents.
+- `secrets.delete {name}` → `{deleted: bool}`.
+
+`SecretInfo` is `{name, tail, agents, updated_at}`. `tail` is the last 4 characters of a value of 12 characters or more, otherwise `""`. No method returns a value. `agents` lists agent ids; `["*"]` means every agent, and `[]` means no agent yet. A list that mixes `"*"` with ids is `INVALID_PARAMS`.
+
+**Rules.** Name: `^[A-Z_][A-Z0-9_]{0,63}$`, and not `PATH`, `HOME`, `USER`, `SHELL`, `LD_PRELOAD`, `LD_LIBRARY_PATH`, or anything starting with `DYLD_` or `BANDITO_`. Value: 1 to 65 536 bytes, no NUL byte. Bad input is `INVALID_PARAMS`, and nothing is stored.
+
+**Storage.** Table `secrets` in `bandito.db`, as plain text. The daemon sets the database file to mode 0600 when it opens it (unix). Values are not encrypted. The server's owner can read the file, and so can an agent with shell access, because it runs as the same user. This is the owner model; encryption at rest (keychain, age) comes later.
+
+**Delivery.** A session gets the secrets that list its agent id, or `*`, as environment variables of the CLI process. `secrets.set` and `secrets.delete` restart the sessions of the agents concerned (every agent for `*`): an idle session closes at once, a running one when its turn ends. The next message starts with the new values. Terminals never get them (see Terminals).
+
+**Redaction.** Before an event is stored or sent, each value of the session's secrets is replaced by `••••NAME`. This covers message text, tool call titles and inputs (every string inside the JSON), tool output, error text, and approval title, command, diff, input and reason. The approval keeps its key, so the answer still reaches the right request. Messages the user types are stored as typed. Values shorter than 6 bytes are not redacted. Where values overlap, the longer one wins.
+
+**Limits.**
+
+- Redaction works on whole strings. A value split across two `message.delta` chunks can show in the live stream. The stored `message.assistant` text is complete and redacted.
+- Runtimes cut tool output to 16 KB before the daemon sees it, so a value cut at that point leaks its first part. Encoded forms of a value (base64, URL-encoded) are not matched.
+- Redaction protects the chat, the event log and the app. It does not protect files. An agent that writes a secret into a file it may write has put it on disk, where it is the owner's to keep.
+
 ## Files
 
 The app browses and edits files on the server: `fs.*` RPC methods, plus `GET`/`HEAD /v1/files/raw` to stream a file's bytes. Clients show the feature when `daemon.info.features` contains `"files"`.

@@ -7,6 +7,7 @@ pub mod home;
 pub mod hub;
 pub mod pairing;
 pub mod policy;
+pub mod redact;
 pub mod rpc;
 pub mod runtime;
 pub mod scheduler;

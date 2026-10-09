@@ -5,6 +5,7 @@
 use crate::event::{AgentStatus, DecidedBy, Decision, EventBody, Source, TurnStatus, Usage};
 use crate::hub::Hub;
 use crate::policy::{self, Verdict};
+use crate::redact::Redactor;
 use crate::runtime::{ApprovalRequest, Runtime, RuntimeKind, RuntimeOutput, Session, SpawnConfig};
 use crate::store::{Agent, DEFAULT_CONTEXT_BUDGET, MemoryMode, RuleAction, new_id, now_ms};
 use anyhow::{Result, anyhow, bail};
@@ -111,7 +112,8 @@ enum Cmd {
     /// Checks the per-turn and hop limits and, if they pass, counts one crew
     /// message against the running turn. Done in the actor so the check and the
     /// count are one step.
-    ReserveCrewSend(oneshot::Sender<Result<CrewContext>>),
+    /// Also redacts the message text with the sender's session secrets, before it is delivered.
+    ReserveCrewSend(String, oneshot::Sender<Result<(CrewContext, String)>>),
 }
 
 pub struct Supervisor {
@@ -273,6 +275,7 @@ impl Supervisor {
             mcp: self.mcp.clone(),
             session: None,
             output: None,
+            redactor: Redactor::default(),
             turn: None,
             turn_hops: 0,
             turn_chain: None,
@@ -317,12 +320,19 @@ impl Supervisor {
         if text.trim().is_empty() {
             bail!("message is empty");
         }
+        // The text is the sender's to protect: redacted with the secrets it holds now, and with
+        // those its running session was started with (the actor does that), before the recipient
+        // gets it. The recipient's thread and its CLI see only the redacted text.
+        let current = Redactor::new(store.secrets_for_agent(from_id)?);
+        let text = current.redact(text).into_owned();
         // Depth and per-turn limits are checked and counted by the sender's actor.
-        let ctx = self.call(from_id, Cmd::ReserveCrewSend).await?;
+        let (ctx, text) = self
+            .call(from_id, move |reply| Cmd::ReserveCrewSend(text, reply))
+            .await?;
         let chain = ctx.chain.unwrap_or_else(new_id);
         self.reserve_chain_message(&chain)?;
         let msg = Inbound {
-            text: text.to_string(),
+            text,
             source: Source::Crew,
             from_agent: Some(from.name),
             hops: ctx.hops.saturating_add(1),
@@ -461,6 +471,8 @@ struct Actor {
     mcp: Option<(PathBuf, Vec<String>)>,
     session: Option<Box<dyn Session>>,
     output: Option<mpsc::Receiver<RuntimeOutput>>,
+    /// Replaces the values of the secrets this session was started with, in everything it stores or sends.
+    redactor: Redactor,
     turn: Option<String>,
     turn_hops: u8,
     turn_chain: Option<String>,
@@ -537,8 +549,11 @@ impl Actor {
             } => {
                 let _ = reply.send(self.resolve(&approval_id, decision, by, remember).await);
             }
-            Cmd::ReserveCrewSend(reply) => {
-                let _ = reply.send(self.reserve_crew_send());
+            Cmd::ReserveCrewSend(text, reply) => {
+                let result = self
+                    .reserve_crew_send()
+                    .map(|ctx| (ctx, self.redactor.redact(&text).into_owned()));
+                let _ = reply.send(result);
             }
             Cmd::Reload { new_chapter, reply } => {
                 self.reload_after_turn = true;
@@ -642,6 +657,7 @@ impl Actor {
             blocks.push(sp.to_string());
         }
         let prompt = blocks.join("\n\n");
+        let secrets = self.hub.store.secrets_for_agent(&agent.id)?;
         let spawned = rt
             .spawn(SpawnConfig {
                 agent_id: agent.id.clone(),
@@ -654,13 +670,15 @@ impl Actor {
                     args.extend(["--agent".to_string(), agent.id.clone()]);
                     (prog, args)
                 }),
-                env: Vec::new(),
+                env: secrets.clone(),
                 effort: agent.effort,
                 extra_dirs: agent.home_dir.iter().map(PathBuf::from).collect(),
             })
             .await?;
         self.session = Some(spawned.session);
         self.output = Some(spawned.output);
+        // The same values the child got, so what it prints is redacted exactly for them.
+        self.redactor = Redactor::new(secrets);
         Ok(())
     }
 
@@ -886,6 +904,7 @@ impl Actor {
                 self.after_turn().await;
             }
             RuntimeOutput::Event(body) => {
+                let body = self.redactor.redact_event(body);
                 self.hub.emit(&self.id, body);
             }
             RuntimeOutput::ContextSize(tokens) => self.turn_context = Some(tokens),
@@ -901,6 +920,7 @@ impl Actor {
                 }
             }
             RuntimeOutput::Exited { code, stderr_tail } => {
+                let stderr_tail = self.redactor.redact(&stderr_tail).into_owned();
                 self.session = None;
                 let failed = code != Some(0);
                 let detail = if failed {
@@ -1005,7 +1025,9 @@ impl Actor {
         }
     }
 
-    async fn approval(&mut self, req: ApprovalRequest) -> Result<()> {
+    async fn approval(&mut self, mut req: ApprovalRequest) -> Result<()> {
+        // Before the policy looks at it, so what is stored, shown and remembered has no secret in it.
+        self.redactor.redact_approval(&mut req);
         let agent = self.agent()?;
         let rules = self.hub.store.rule_list(Some(&self.id))?;
         // The agent's own folders: its working folder, and its home when it has one.
@@ -1052,12 +1074,13 @@ impl Actor {
 
     /// Store an approval and emit `approval.requested`. Returns its id.
     fn record(&self, req: &ApprovalRequest, reason: &str) -> Result<String> {
+        let reason = self.redactor.redact(reason);
         let payload = json!({
             "command": req.command,
             "diff": req.diff,
             "input": req.input,
             "key": req.key,
-            "reason": reason,
+            "reason": reason.as_ref(),
         });
         let a = self
             .hub
@@ -1072,7 +1095,7 @@ impl Actor {
                 title: req.title.clone(),
                 command: req.command.clone(),
                 diff: req.diff.clone(),
-                reason: reason.to_string(),
+                reason: reason.into_owned(),
             },
         );
         Ok(a.id)
@@ -1344,6 +1367,60 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn secrets_reach_the_session_env_and_are_redacted_before_storing() {
+        let mut w = world(ApprovalMode::Always);
+        let value = "sk-live-0123456789";
+        w.store.secret_set("OPENAI_API_KEY", value, &["*".into()]).unwrap();
+        w.store
+            .secret_set("ELSEWHERE_TOKEN", "tok-elsewhere-999", &["someone-else".into()])
+            .unwrap();
+
+        w.sup.send(&w.agent, Inbound::user("use the key")).await.unwrap();
+        w.wait_log("send use the key").await;
+        {
+            let spawns = w.spawns.lock().unwrap();
+            assert_eq!(spawns[0].env, vec![("OPENAI_API_KEY".to_string(), value.to_string())]);
+        }
+
+        w.push(RuntimeOutput::Event(EventBody::ToolCall {
+            call_id: "c0".into(),
+            tool: "Bash".into(),
+            title: format!("echo {value}"),
+            input: json!({"command": format!("echo {value}")}),
+        }))
+        .await;
+        w.wait(|b| matches!(b, EventBody::ToolCall { .. })).await;
+        w.push(RuntimeOutput::Event(EventBody::MessageAssistant {
+            text: format!("the key is {value}"),
+        }))
+        .await;
+        let e = w.wait(|b| matches!(b, EventBody::MessageAssistant { .. })).await;
+        assert_eq!(
+            e.body,
+            EventBody::MessageAssistant {
+                text: "the key is ••••OPENAI_API_KEY".into()
+            }
+        );
+        w.push(RuntimeOutput::Approval(ApprovalRequest {
+            key: "k1".into(),
+            call_id: "c1".into(),
+            tool: "Bash".into(),
+            title: format!("curl {value}"),
+            command: Some(format!("curl -H 'Bearer {value}'")),
+            diff: None,
+            paths: vec![],
+            input: json!({"command": format!("curl -H 'Bearer {value}'")}),
+        }))
+        .await;
+        w.wait(|b| matches!(b, EventBody::ApprovalRequested { .. })).await;
+
+        let stored = serde_json::to_string(&w.store.events_since(0, 1000, None).unwrap()).unwrap();
+        assert!(!stored.contains(value), "value stored in an event: {stored}");
+        assert!(stored.contains("••••OPENAI_API_KEY"));
+        assert!(!stored.contains("tok-elsewhere-999"), "not given to this agent");
+    }
+
+    #[tokio::test]
     async fn queues_messages_one_turn_at_a_time() {
         let w = world(ApprovalMode::Risky);
         w.sup.send(&w.agent, Inbound::user("first")).await.unwrap();
@@ -1553,6 +1630,75 @@ mod tests {
         assert_eq!(text, "please review");
         assert_eq!(source, Source::Crew);
         assert_eq!(from_agent.as_deref(), Some("Forge"));
+    }
+
+    #[tokio::test]
+    async fn crew_text_reaches_the_recipient_redacted_with_the_senders_secrets() {
+        let mut w = world(ApprovalMode::Risky);
+        let scout = add_agent(&w.store, "Scout");
+        let old = "sk-old-0123456789";
+        w.store.secret_set("OPENAI_API_KEY", old, &[w.agent.clone()]).unwrap();
+        // The sender's turn starts its session with the old value in its environment.
+        w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
+        w.wait_log("send go").await;
+
+        let to = w
+            .sup
+            .crew_send(&w.agent, "scout", &format!("use {old} now"))
+            .await
+            .unwrap();
+        assert_eq!(to, scout);
+        let e = w
+            .wait(|b| {
+                matches!(
+                    b,
+                    EventBody::MessageUser {
+                        source: Source::Crew,
+                        ..
+                    }
+                )
+            })
+            .await;
+        assert_eq!(e.agent_id, scout);
+        assert_eq!(
+            e.body,
+            EventBody::MessageUser {
+                text: "use ••••OPENAI_API_KEY now".into(),
+                source: Source::Crew,
+                from_agent: Some("Forge".into()),
+            }
+        );
+
+        // The recipient's turn ends, so its queued next message starts (and is stored) now.
+        w.push_as(&scout, done()).await;
+        // Rotated while the turn runs: the running session still holds the old value, the store has the new one.
+        let new = "sk-new-9876543210";
+        w.store.secret_set("OPENAI_API_KEY", new, &[w.agent.clone()]).unwrap();
+        w.sup
+            .crew_send(&w.agent, "scout", &format!("old {old} and new {new}"))
+            .await
+            .unwrap();
+        let e = w
+            .wait(|b| {
+                matches!(
+                    b,
+                    EventBody::MessageUser {
+                        source: Source::Crew,
+                        ..
+                    }
+                )
+            })
+            .await;
+        let EventBody::MessageUser { text, .. } = e.body else {
+            unreachable!()
+        };
+        assert_eq!(text, "old ••••OPENAI_API_KEY and new ••••OPENAI_API_KEY");
+
+        let stored = serde_json::to_string(&w.store.events_since(0, 1000, None).unwrap()).unwrap();
+        assert!(
+            !stored.contains(old) && !stored.contains(new),
+            "a value reached the store: {stored}"
+        );
     }
 
     #[tokio::test]

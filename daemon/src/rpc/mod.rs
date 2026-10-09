@@ -21,6 +21,7 @@ use std::time::Duration;
 use tokio::sync::{broadcast, mpsc};
 
 pub mod files;
+pub mod secrets;
 pub mod term;
 pub mod unix;
 pub mod ws;
@@ -41,6 +42,7 @@ pub const FEATURES: &[&str] = &[
     "history",
     "terminals",
     "files",
+    "secrets",
 ];
 
 /// Context budget bounds for `smart` memory, in tokens.
@@ -831,6 +833,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
         "term.list" | "term.open" | "term.input" | "term.resize" | "term.rename" | "term.close" => {
             term::dispatch(app, method, p).await
         }
+        "secrets.list" | "secrets.set" | "secrets.delete" => secrets::dispatch(app, method, p).await,
 
         _ => Err(RpcError::new(METHOD_NOT_FOUND, format!("unknown method {method}"))),
     }
