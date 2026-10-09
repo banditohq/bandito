@@ -7,6 +7,11 @@ on:
     branches: [main]
     paths: ["apps/**", "daemon/**", "i18n/**", "brand/tokens/**", "guide/**", "scripts/check_guide.py", ".github/workflows/apple.yml"]
 
+# A newer push to the same PR or branch cancels the run for the older one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 
