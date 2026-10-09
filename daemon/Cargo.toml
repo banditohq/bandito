@@ -30,4 +30,5 @@ uuid = { version = "1.27.0", features = ["v7", "serde"] }
 
 [dev-dependencies]
 tempfile = "3.27.0"
+tokio-tungstenite = "0.29"
 tower = { version = "0.5", features = ["util"] }

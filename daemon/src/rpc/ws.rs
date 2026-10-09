@@ -1,8 +1,11 @@
 //! HTTP + WebSocket transport: `GET /v1/health`, `GET /v1/rpc` (WebSocket),
-//! `GET` and `HEAD /v1/files/raw` (file bytes, see docs/ARCHITECTURE.md#files).
+//! `GET` and `HEAD /v1/files/raw` (file bytes, see docs/ARCHITECTURE.md#files),
+//! `GET /v1/tunnel` (TCP to the server's loopback, see docs/ARCHITECTURE.md#tunnel).
 //! Auth: `Authorization: Bearer <device token>`. Without a token the socket
-//! is anonymous (only `daemon.hello` and `pair.redeem`); raw files need a token.
+//! is anonymous (only `daemon.hello` and `pair.redeem`); raw files and the
+//! tunnel need a token.
 
+use super::tunnel;
 use super::{App, Peer, serve};
 use crate::files::{EntryKind, FsError};
 use crate::store::Device;
@@ -27,6 +30,7 @@ pub fn router(app: Arc<App>) -> Router {
         .route("/v1/health", get(|| async { "ok" }))
         .route("/v1/rpc", get(rpc))
         .route("/v1/files/raw", get(files_raw))
+        .route("/v1/tunnel", get(tunnel_upgrade))
         .with_state(app)
 }
 
@@ -61,6 +65,19 @@ fn device_for(app: &App, headers: &HeaderMap) -> Result<Option<Device>, (StatusC
     }
 }
 
+/// The paired device behind the request. The error is the status and message to
+/// send when the request has a browser origin, or the token is missing or unknown.
+fn require_device(app: &App, headers: &HeaderMap) -> Result<Device, (StatusCode, &'static str)> {
+    if has_browser_origin(headers) {
+        return Err((StatusCode::FORBIDDEN, "browser origins are not allowed"));
+    }
+    match device_for(app, headers) {
+        Ok(Some(device)) => Ok(device),
+        Ok(None) => Err((StatusCode::UNAUTHORIZED, "device token required")),
+        Err(e) => Err(e),
+    }
+}
+
 async fn rpc(State(app): State<Arc<App>>, headers: HeaderMap, ws: WebSocketUpgrade) -> Response {
     if has_browser_origin(&headers) {
         return (StatusCode::FORBIDDEN, "browser origins are not allowed").into_response();
@@ -89,13 +106,8 @@ async fn files_raw(
     headers: HeaderMap,
     Query(query): Query<RawQuery>,
 ) -> Response {
-    if has_browser_origin(&headers) {
-        return (StatusCode::FORBIDDEN, "browser origins are not allowed").into_response();
-    }
-    match device_for(&app, &headers) {
-        Ok(Some(_)) => {}
-        Ok(None) => return (StatusCode::UNAUTHORIZED, "device token required").into_response(),
-        Err(e) => return e.into_response(),
+    if let Err(e) = require_device(&app, &headers) {
+        return e.into_response();
     }
 
     let files = app.files.clone();
@@ -157,6 +169,35 @@ async fn files_raw(
     builder
         .body(body)
         .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response())
+}
+
+#[derive(Deserialize)]
+struct TunnelQuery {
+    /// Text, so that a bad value is refused after the auth checks, with 400.
+    port: Option<String>,
+}
+
+/// `GET /v1/tunnel?port=<n>`: after the upgrade, the WebSocket carries one TCP
+/// connection to `127.0.0.1:<n>` on the server. Checks run before the upgrade.
+async fn tunnel_upgrade(
+    State(app): State<Arc<App>>,
+    headers: HeaderMap,
+    Query(query): Query<TunnelQuery>,
+    ws: WebSocketUpgrade,
+) -> Response {
+    let device = match require_device(&app, &headers) {
+        Ok(device) => device,
+        Err(e) => return e.into_response(),
+    };
+    let port = match query.port.as_deref().map(str::parse::<u16>) {
+        Some(Ok(port)) if port != 0 => port,
+        _ => return (StatusCode::BAD_REQUEST, "port must be 1..=65535").into_response(),
+    };
+    let Some(slot) = app.tunnels.acquire(&device.id, tunnel::tunnel_limit()) else {
+        return (StatusCode::TOO_MANY_REQUESTS, "too many tunnels").into_response();
+    };
+    ws.max_message_size(tunnel::MAX_MESSAGE_SIZE)
+        .on_upgrade(move |socket| tunnel::run(socket, port, slot))
 }
 
 fn raw_error(e: FsError) -> Response {

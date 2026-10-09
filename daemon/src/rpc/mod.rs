@@ -22,6 +22,7 @@ use tokio::sync::{broadcast, mpsc};
 
 pub mod files;
 pub mod term;
+pub mod tunnel;
 pub mod unix;
 pub mod ws;
 
@@ -41,6 +42,7 @@ pub const FEATURES: &[&str] = &[
     "history",
     "terminals",
     "files",
+    "tunnel",
 ];
 
 /// Context budget bounds for `smart` memory, in tokens.
@@ -61,6 +63,8 @@ pub struct App {
     redeem_failures: Mutex<VecDeque<i64>>,
     /// Server files for the `fs.*` methods and `GET /v1/files/raw`.
     pub files: Arc<FileService>,
+    /// Live TCP tunnels per device (see docs/ARCHITECTURE.md#tunnel).
+    pub tunnels: Arc<tunnel::TunnelSlots>,
 }
 
 impl App {
@@ -79,6 +83,7 @@ impl App {
             terminals: TerminalManager::new(Limits::default()),
             redeem_failures: Mutex::new(VecDeque::new()),
             files: Arc::new(files),
+            tunnels: Arc::new(tunnel::TunnelSlots::default()),
         })
     }
 }
