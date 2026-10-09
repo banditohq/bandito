@@ -228,6 +228,8 @@
 "onboarding.server.title" = "Wo soll dein Team wohnen?";
 "onboarding.server.whatHappens" = "Was passiert";
 "onboarding.server.whereAria" = "Wo ausführen";
+"onboarding.skip" = "Später einrichten";
+"onboarding.skipHint" = "Öffnet die App. Server und Agenten können Sie jederzeit hinzufügen.";
 "onboarding.welcome.askText" = "Pushes, Deployments und Löschungen nur mit deinem Ja. Antworte am Mac, über eine Benachrichtigung oder am iPhone.";
 "onboarding.welcome.askTitle" = "Sie fragen, bevor es riskant wird";
 "onboarding.welcome.footer" = "Open Source · dein Code und deine Schlüssel verlassen nie deine Server";

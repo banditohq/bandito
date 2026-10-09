@@ -879,6 +879,7 @@ public enum L10n {
     public enum Onboarding {
         public static var showAgain: String { L10n.tr("onboarding.showAgain") }
         public static var skip: String { L10n.tr("onboarding.skip") }
+        public static var skipHint: String { L10n.tr("onboarding.skipHint") }
         public static func stepOf(step: String, total: String) -> String { L10n.tr("onboarding.stepOf", step, total) }
 
         public enum Account {

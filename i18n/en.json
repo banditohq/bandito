@@ -586,7 +586,8 @@
   "onboarding.account.github.denied": "You declined the sign-in on GitHub.",
   "onboarding.account.github.retry": "Try again",
   "onboarding.account.github.copyAndOpen": "Copy code and open GitHub",
-  "onboarding.skip": "Skip",
+  "onboarding.skip": "Set up later",
+  "onboarding.skipHint": "Opens the app now. You can add a server and an agent at any time.",
   "onboarding.stepOf": "Step {step} of {total}",
   "onboarding.showAgain": "Show the introduction again",
   "onboarding.server.title": "Where will your team live?",
@@ -619,8 +620,8 @@
   "onboarding.server.next.checkServerKey": "The server's key changed. Someone may be in the middle, or the server was reinstalled. Check the server before trying again.",
   "onboarding.server.thisMacDesc": "Quick to try. Works while the Mac stays awake.",
   "onboarding.server.minutes": {
-    "one": "≈ ≈ {count} minute",
-    "other": "≈ ≈ {count} minutes"
+    "one": "≈ {count} minute",
+    "other": "≈ {count} minutes"
   },
   "onboarding.server.ownServer": "On your own server",
   "onboarding.server.ownServerDesc": "Round the clock. A VPS, a home PC or a work server.",

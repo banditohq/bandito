@@ -94,6 +94,7 @@ public struct OnboardingFlow: View {
             } else {
                 Button(L10n.Onboarding.skip) { onboarding.skip() }
                     .banditoButton(.quiet())
+                    .help(L10n.Onboarding.skipHint)
             }
         }
     }

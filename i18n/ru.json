@@ -607,7 +607,8 @@
   "onboarding.account.github.denied": "Вход на GitHub отклонён.",
   "onboarding.account.github.retry": "Ещё раз",
   "onboarding.account.github.copyAndOpen": "Скопировать код и открыть GitHub",
-  "onboarding.skip": "Пропустить",
+  "onboarding.skip": "Настроить позже",
+  "onboarding.skipHint": "Откроется приложение. Сервер и агента можно добавить в любой момент.",
   "onboarding.stepOf": "Шаг {step} из {total}",
   "onboarding.showAgain": "Показать знакомство снова",
   "onboarding.server.title": "Где будет жить ваша команда?",
@@ -640,10 +641,10 @@
   "onboarding.server.next.checkServerKey": "Ключ сервера изменился. Возможно, кто-то посередине, или сервер переустановили. Проверьте сервер перед повтором.",
   "onboarding.server.thisMacDesc": "Быстро попробовать. Работает, пока Mac не спит.",
   "onboarding.server.minutes": {
-    "one": "≈ ≈ {count} минута",
-    "few": "≈ ≈ {count} минуты",
-    "many": "≈ ≈ {count} минут",
-    "other": "≈ ≈ {count} минуты"
+    "one": "≈ {count} минута",
+    "few": "≈ {count} минуты",
+    "many": "≈ {count} минут",
+    "other": "≈ {count} минуты"
   },
   "onboarding.server.ownServer": "На своём сервере",
   "onboarding.server.ownServerDesc": "Круглосуточно. VPS, домашний ПК или рабочий сервер.",

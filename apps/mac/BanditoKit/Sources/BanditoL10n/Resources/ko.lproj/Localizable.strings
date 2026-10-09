@@ -228,6 +228,8 @@
 "onboarding.server.title" = "팀은 어디에서 살까요?";
 "onboarding.server.whatHappens" = "다음 단계";
 "onboarding.server.whereAria" = "실행 위치";
+"onboarding.skip" = "나중에 설정";
+"onboarding.skipHint" = "앱을 엽니다. 서버와 에이전트는 언제든 추가할 수 있습니다.";
 "onboarding.welcome.askText" = "push, 배포, 삭제는 사용자가 승인해야만 합니다. Mac, 알림, iPhone 어디서든 답할 수 있습니다.";
 "onboarding.welcome.askTitle" = "위험한 작업 전에는 먼저 묻습니다";
 "onboarding.welcome.footer" = "오픈 소스 · 코드와 키는 서버 밖으로 나가지 않습니다";

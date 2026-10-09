@@ -155,10 +155,9 @@ struct AccountSignInView: View {
                     Text(L10n.Onboarding.Account.emailToggle)
                         .font(BanditoFont.font(size: 13.5, weight: 500))
                         .foregroundStyle(Color.Bandito.text2)
-                        .frame(maxWidth: .infinity)
                 }
                 .banditoButton(.link)
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 if emailExpanded, let models {
                     EmailBlock(model: models.email)
@@ -167,17 +166,16 @@ struct AccountSignInView: View {
             }
 
             privacyLine
-                .frame(maxWidth: .infinity, alignment: .center)
+                .frame(maxWidth: .infinity, alignment: .leading)
             Button {
                 onSkipAccount?()
             } label: {
                 Text(L10n.Onboarding.Account.skip)
                     .font(BanditoFont.font(size: 13.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
-                    .frame(maxWidth: .infinity)
             }
             .banditoButton(.link)
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .help(L10n.Onboarding.Account.skipHint)
             .opacity(onSkipAccount == nil ? 0 : 1)
             .disabled(onSkipAccount == nil)
@@ -194,7 +192,7 @@ struct AccountSignInView: View {
             Text(L10n.Onboarding.Account.privacy)
                 .font(BanditoFont.font(size: 12.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
-                .multilineTextAlignment(.center)
+                .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }

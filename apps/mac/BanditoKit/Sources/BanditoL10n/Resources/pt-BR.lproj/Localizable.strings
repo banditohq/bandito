@@ -228,6 +228,8 @@
 "onboarding.server.title" = "Onde vai morar sua equipe?";
 "onboarding.server.whatHappens" = "O que acontece";
 "onboarding.server.whereAria" = "Onde executar";
+"onboarding.skip" = "Configurar depois";
+"onboarding.skipHint" = "Abre o app agora. Você pode adicionar um servidor e um agente quando quiser.";
 "onboarding.welcome.askText" = "Pushes, deploys e exclusões só com seu sim. Responda pelo Mac, por uma notificação ou pelo iPhone.";
 "onboarding.welcome.askTitle" = "Perguntam antes do que é arriscado";
 "onboarding.welcome.footer" = "Código aberto · seu código e suas chaves nunca saem dos seus servidores";

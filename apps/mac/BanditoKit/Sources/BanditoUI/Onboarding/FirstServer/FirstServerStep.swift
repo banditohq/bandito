@@ -17,6 +17,7 @@ struct FirstServerStep: View {
     @Environment(AccountHub.self) private var hub
     @State private var model = FirstServerModel()
     @State private var showLog = false
+    @State private var chooserWidth: CGFloat = 760
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
@@ -64,17 +65,19 @@ struct FirstServerStep: View {
                     .lineSpacing(2)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            // Side by side when the step is wide enough, one under another when it is not. Each row gives its cards
-            // the same height: the tallest card sets it.
-            ViewThatFits(in: .horizontal) {
-                optionCards(side: true)
-                optionCards(side: false)
-            }
+            // Side by side when the step is wide enough, compact rows one under another when it is not. In a row the
+            // cards share the width equally and the tallest card sets the height.
+            optionCards(side: chooserWidth >= Self.sideBySideWidth)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { chooserWidth = $0 }
             if model.option == .ownServer {
                 ownServerPanel
             }
         }
     }
+
+    /// Width of the chooser below which the three cards become compact rows.
+    static let sideBySideWidth: CGFloat = 620
 
     /// The three ways: this Mac, your own server, and "no server yet", which opens the guide and is not a choice.
     @ViewBuilder
@@ -709,46 +712,9 @@ private struct ServerOptionCard: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 12) {
-                Image(systemName: icon)
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundStyle(selected ? Color.Bandito.onSignal : tint)
-                    .frame(width: 44, height: 44)
-                    .background(
-                        LinearGradient(
-                            colors: selected
-                                ? [Color.Bandito.signalFill, Color.Bandito.signalFillEnd]
-                                : [tint.opacity(0.28), tint.opacity(0.08)],
-                            startPoint: .topLeading, endPoint: .bottomTrailing),
-                        in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                VStack(alignment: .leading, spacing: 6) {
-                    if let badge {
-                        Text(badge)
-                            .font(BanditoFont.font(size: 11, weight: 600))
-                            .foregroundStyle(AvatarColor.sage.color)
-                            .oneLine()
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(AvatarColor.sage.color.opacity(0.14), in: Capsule())
-                    }
-                    Text(title)
-                        .font(BanditoFont.font(size: 16, weight: 600))
-                        .foregroundStyle(Color.Bandito.text)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Text(text)
-                    .font(BanditoFont.font(size: 13.5, weight: 400))
-                    .foregroundStyle(Color.Bandito.text2)
-                    .lineSpacing(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 0)
-                footer
-                    .padding(.top, 4)
+            Group {
+                if side { column } else { row }
             }
-            .padding(18)
-            .frame(width: side ? ServerOptionCard.sideWidth : nil, alignment: .topLeading)
-            .frame(maxWidth: side ? nil : .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .fill(selected ? Color.Bandito.signal.opacity(0.09) : Color.Bandito.text.opacity(hovered ? 0.05 : 0.025)))
@@ -773,8 +739,85 @@ private struct ServerOptionCard: View {
         .banditoAnimation(BanditoMotion.ease, value: selected)
     }
 
-    /// Width of each card when three sit side by side: three cards and two 14-point gaps make the 760-point row.
-    static let sideWidth: CGFloat = 244
+    /// Side by side: tile, badge and title, text, and the chip at the foot. The row shares its width equally.
+    private var column: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            tile(size: 44)
+            VStack(alignment: .leading, spacing: 6) {
+                badgeView
+                titleView
+            }
+            textView
+            Spacer(minLength: 0)
+            footer
+                .padding(.top, 4)
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    /// Stacked: one compact row — tile, title and text, the chip or link on the right.
+    private var row: some View {
+        HStack(alignment: .center, spacing: 14) {
+            tile(size: 38)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 8) {
+                    titleView
+                    badgeView
+                }
+                textView
+            }
+            Spacer(minLength: 8)
+            footer
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 13)
+        .padding(.trailing, selected ? 26 : 0)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func tile(size: CGFloat) -> some View {
+        Image(systemName: icon)
+            .font(.system(size: size * 0.45, weight: .medium))
+            .foregroundStyle(selected ? Color.Bandito.onSignal : tint)
+            .frame(width: size, height: size)
+            .background(
+                LinearGradient(
+                    colors: selected
+                        ? [Color.Bandito.signalFill, Color.Bandito.signalFillEnd]
+                        : [tint.opacity(0.28), tint.opacity(0.08)],
+                    startPoint: .topLeading, endPoint: .bottomTrailing),
+                in: RoundedRectangle(cornerRadius: size * 0.32, style: .continuous))
+    }
+
+    @ViewBuilder
+    private var badgeView: some View {
+        if let badge {
+            Text(badge)
+                .font(BanditoFont.font(size: 11, weight: 600))
+                .foregroundStyle(AvatarColor.sage.color)
+                .oneLine()
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(AvatarColor.sage.color.opacity(0.14), in: Capsule())
+        }
+    }
+
+    private var titleView: some View {
+        Text(title)
+            .font(BanditoFont.font(size: 16, weight: 600))
+            .foregroundStyle(Color.Bandito.text)
+            .lineLimit(2)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var textView: some View {
+        Text(text)
+            .font(BanditoFont.font(size: 13.5, weight: 400))
+            .foregroundStyle(Color.Bandito.text2)
+            .lineSpacing(2)
+            .fixedSize(horizontal: false, vertical: true)
+    }
 
     @ViewBuilder
     private var footer: some View {

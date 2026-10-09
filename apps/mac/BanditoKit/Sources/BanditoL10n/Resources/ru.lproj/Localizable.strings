@@ -849,7 +849,8 @@
 "onboarding.server.whatHappens" = "Что произойдёт";
 "onboarding.server.whereAria" = "Где запустить";
 "onboarding.showAgain" = "Показать знакомство снова";
-"onboarding.skip" = "Пропустить";
+"onboarding.skip" = "Настроить позже";
+"onboarding.skipHint" = "Откроется приложение. Сервер и агента можно добавить в любой момент.";
 "onboarding.stepOf" = "Шаг %1$@ из %2$@";
 "onboarding.steps.account" = "Аккаунт";
 "onboarding.steps.agent" = "Первый агент";

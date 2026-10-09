@@ -1,4 +1,6 @@
 {
+  "onboarding.skip": "稍后设置",
+  "onboarding.skipHint": "立即打开应用。随时可以添加服务器和智能体。",
   "app.name": "Bandito",
 
   "sidebar.search": "搜索 (⌘K)",

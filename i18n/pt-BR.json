@@ -1,4 +1,6 @@
 {
+  "onboarding.skip": "Configurar depois",
+  "onboarding.skipHint": "Abre o app agora. Você pode adicionar um servidor e um agente quando quiser.",
   "app.name": "Bandito",
 
   "sidebar.search": "Buscar (⌘K)",

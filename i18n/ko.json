@@ -1,4 +1,6 @@
 {
+  "onboarding.skip": "나중에 설정",
+  "onboarding.skipHint": "앱을 엽니다. 서버와 에이전트는 언제든 추가할 수 있습니다.",
   "app.name": "Bandito",
 
   "sidebar.search": "검색 (⌘K)",

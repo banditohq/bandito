@@ -228,6 +228,8 @@
 "onboarding.server.title" = "チームはどこで動かしますか？";
 "onboarding.server.whatHappens" = "この後の流れ";
 "onboarding.server.whereAria" = "実行場所";
+"onboarding.skip" = "あとで設定";
+"onboarding.skipHint" = "アプリを開きます。サーバーとエージェントはいつでも追加できます。";
 "onboarding.welcome.askText" = "push、デプロイ、削除はあなたが「はい」と答えた場合のみ。Mac、通知、iPhone のどこからでも答えられます。";
 "onboarding.welcome.askTitle" = "危険な操作の前に確認します";
 "onboarding.welcome.footer" = "オープンソース · コードとキーはあなたのサーバーから出ません";

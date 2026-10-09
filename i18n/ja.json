@@ -1,4 +1,6 @@
 {
+  "onboarding.skip": "あとで設定",
+  "onboarding.skipHint": "アプリを開きます。サーバーとエージェントはいつでも追加できます。",
   "app.name": "Bandito",
 
   "sidebar.search": "検索 (⌘K)",

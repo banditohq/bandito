@@ -228,6 +228,8 @@
 "onboarding.server.title" = "你的团队住在哪里？";
 "onboarding.server.whatHappens" = "接下来会发生什么";
 "onboarding.server.whereAria" = "运行位置";
+"onboarding.skip" = "稍后设置";
+"onboarding.skipHint" = "立即打开应用。随时可以添加服务器和智能体。";
 "onboarding.welcome.askText" = "推送、部署、删除都必须得到你的同意。可以在 Mac、通知或 iPhone 上回复。";
 "onboarding.welcome.askTitle" = "有风险的操作前会先询问";
 "onboarding.welcome.footer" = "开源 · 你的代码和密钥永远不会离开你的服务器";
