@@ -1,6 +1,6 @@
 //! Codex adapter against the fake CLI replaying `tests/fixtures/codex/*.jsonl`.
 
-use bandito::event::{Decision, EventBody, LimitWindow, TurnStatus};
+use bandito::event::{Decision, EventBody, LimitWindow, Plan, TurnStatus};
 use bandito::runtime::codex::CodexRuntime;
 use bandito::runtime::{Runtime, RuntimeOutput, SpawnConfig, Spawned};
 use bandito::store::Effort;
@@ -337,6 +337,39 @@ async fn refresh_usage_reports_a_refused_read() {
 async fn status_reports_missing_binary() {
     let st = CodexRuntime::with_program("/nonexistent/codex").status().await;
     assert!(!st.installed);
+}
+
+#[tokio::test]
+async fn account_plan_reads_the_plan_without_a_turn() {
+    let plan = usage_runtime("account_read_pro.jsonl")
+        .account_plan()
+        .await
+        .expect("account read");
+    assert_eq!(
+        plan,
+        Some(Plan {
+            id: "pro".into(),
+            label: "Pro".into(),
+        })
+    );
+}
+
+#[tokio::test]
+async fn account_plan_is_none_when_the_read_is_refused() {
+    let plan = usage_runtime("account_read_error.jsonl")
+        .account_plan()
+        .await
+        .expect("a refused read is not an error for the plan");
+    assert_eq!(plan, None);
+}
+
+#[tokio::test]
+async fn account_plan_is_none_without_a_plan_type() {
+    let plan = usage_runtime("account_read_no_plan.jsonl")
+        .account_plan()
+        .await
+        .expect("account read");
+    assert_eq!(plan, None);
 }
 
 fn is_session_id(o: &RuntimeOutput) -> bool {

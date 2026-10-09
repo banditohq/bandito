@@ -4,11 +4,13 @@
 
 use super::process::{self, JsonProcess, LineSink, Router, locked};
 use super::{
-    ApprovalRequest, Runtime, RuntimeKind, RuntimeOutput, RuntimeStatus, Session, SpawnConfig, Spawned, clip_input,
+    ApprovalRequest, Plan, Runtime, RuntimeKind, RuntimeOutput, RuntimeStatus, Session, SpawnConfig, Spawned,
+    capitalized, clip_input,
 };
 use crate::event::{Decision, EventBody, LimitWindow, TOOL_OUTPUT_LIMIT, TurnStatus, Usage, truncate_output};
 use anyhow::bail;
 use async_trait::async_trait;
+use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -44,8 +46,15 @@ const TITLE_LIMIT: usize = 200;
 /// Approval key → the original tool input (echoed back as `updatedInput`, unclipped).
 type PendingMap = Arc<Mutex<HashMap<String, Value>>>;
 
+/// File in the Claude config folder that holds the login, the subscription and OAuth tokens.
+const CREDENTIALS_FILE: &str = ".credentials.json";
+
 pub struct ClaudeRuntime {
     program: String,
+    /// Environment the account read sees, over the daemon's own. Spawned sessions keep their own env.
+    env: Vec<(String, String)>,
+    /// Folder with `.credentials.json`. `None` = from the environment. Tests point it at a temp dir.
+    config_dir: Option<PathBuf>,
 }
 
 impl ClaudeRuntime {
@@ -56,7 +65,40 @@ impl ClaudeRuntime {
     pub fn with_program(program: &str) -> Self {
         Self {
             program: program.to_string(),
+            env: Vec::new(),
+            config_dir: None,
         }
+    }
+
+    /// Environment for the account read (`CLAUDE_CONFIG_DIR`, `HOME`).
+    pub fn with_env(mut self, env: Vec<(String, String)>) -> Self {
+        self.env = env;
+        self
+    }
+
+    /// Folder with `.credentials.json`, instead of the one the environment names.
+    pub fn with_config_dir(mut self, dir: impl Into<PathBuf>) -> Self {
+        self.config_dir = Some(dir.into());
+        self
+    }
+
+    /// Folder with `.credentials.json`: the explicit one, else `CLAUDE_CONFIG_DIR`, else `$HOME/.claude`.
+    fn credentials_dir(&self) -> Option<PathBuf> {
+        if let Some(dir) = &self.config_dir {
+            return Some(dir.clone());
+        }
+        let home = self.env_var("HOME").map(PathBuf::from).or_else(dirs::home_dir);
+        config_dir_from(self.env_var("CLAUDE_CONFIG_DIR"), home)
+    }
+
+    /// `key` as the account read sees it: this runtime's own entries win, then the daemon's environment.
+    fn env_var(&self, key: &str) -> Option<String> {
+        self.env
+            .iter()
+            .rev()
+            .find(|(k, _)| k == key)
+            .map(|(_, v)| v.clone())
+            .or_else(|| std::env::var(key).ok())
     }
 }
 
@@ -133,6 +175,84 @@ impl Runtime for ClaudeRuntime {
             output,
         })
     }
+
+    /// Reads the subscription from `.credentials.json`; no process is started.
+    /// On macOS the CLI keeps its login in the Keychain and writes no such file: then this is `Ok(None)`, which is normal.
+    async fn account_plan(&self) -> anyhow::Result<Option<Plan>> {
+        let Some(dir) = self.credentials_dir() else {
+            return Ok(None);
+        };
+        let path = dir.join(CREDENTIALS_FILE);
+        match tokio::fs::read(&path).await {
+            Ok(bytes) => Ok(plan_from_credentials(&bytes)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => {
+                tracing::warn!(path = %path.display(), kind = ?e.kind(), "claude: could not read the account file");
+                Ok(None)
+            }
+        }
+    }
+}
+
+/// Where `.credentials.json` lives: `CLAUDE_CONFIG_DIR` when it is set and not blank, else `<home>/.claude`.
+pub fn config_dir_from(claude_config_dir: Option<String>, home: Option<PathBuf>) -> Option<PathBuf> {
+    match (claude_config_dir.filter(|dir| !dir.trim().is_empty()), home) {
+        (Some(dir), _) => Some(PathBuf::from(dir)),
+        (None, Some(home)) => Some(home.join(".claude")),
+        (None, None) => None,
+    }
+}
+
+/// Only the two fields the plan needs. Serde skips every other key, OAuth tokens included, so they never reach a struct.
+#[derive(Deserialize)]
+struct CredentialsFile {
+    #[serde(rename = "claudeAiOauth")]
+    oauth: Option<OauthAccount>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct OauthAccount {
+    subscription_type: Option<String>,
+    rate_limit_tier: Option<String>,
+}
+
+/// The plan in a `.credentials.json` body. A broken file is logged without its content, since it holds tokens.
+pub fn plan_from_credentials(bytes: &[u8]) -> Option<Plan> {
+    let file: CredentialsFile = match serde_json::from_slice(bytes) {
+        Ok(file) => file,
+        Err(_) => {
+            tracing::warn!("claude: .credentials.json is not readable; the plan stays unknown");
+            return None;
+        }
+    };
+    let oauth = file.oauth?;
+    plan_from_claude(oauth.subscription_type.as_deref()?, oauth.rate_limit_tier.as_deref())
+}
+
+/// Plan from Claude's `subscriptionType` and `rateLimitTier`. The tier only tells the Max sizes apart.
+pub fn plan_from_claude(subscription: &str, tier: Option<&str>) -> Option<Plan> {
+    let raw = subscription.trim();
+    let tier = tier.unwrap_or("").to_lowercase();
+    let (id, label) = match raw.to_lowercase().as_str() {
+        "" => return None,
+        "max" if tier.contains("20x") => ("max_20x", "Max ×20"),
+        "max" if tier.contains("5x") => ("max_5x", "Max ×5"),
+        "max" => ("max", "Max"),
+        "pro" => ("pro", "Pro"),
+        "team" => ("team", "Team"),
+        "enterprise" => ("enterprise", "Enterprise"),
+        _ => {
+            return Some(Plan {
+                id: raw.to_string(),
+                label: capitalized(raw),
+            });
+        }
+    };
+    Some(Plan {
+        id: id.to_string(),
+        label: label.to_string(),
+    })
 }
 
 /// One-line human title for a tool call.
@@ -1050,5 +1170,149 @@ mod tests {
         assert_eq!(clipped["t"], true);
         // The original is untouched.
         assert_eq!(v["a"].as_str().expect("a").len(), 10_000);
+    }
+
+    fn named(id: &str, label: &str) -> Plan {
+        Plan {
+            id: id.into(),
+            label: label.into(),
+        }
+    }
+
+    #[test]
+    fn plan_from_claude_maps_max_tiers_and_plain_plans() {
+        assert_eq!(
+            plan_from_claude("max", Some("default_claude_max_20x")),
+            Some(named("max_20x", "Max ×20"))
+        );
+        assert_eq!(
+            plan_from_claude("max", Some("default_claude_max_5x")),
+            Some(named("max_5x", "Max ×5"))
+        );
+        assert_eq!(plan_from_claude("max", None), Some(named("max", "Max")));
+        assert_eq!(
+            plan_from_claude("max", Some("default_claude_max")),
+            Some(named("max", "Max"))
+        );
+        assert_eq!(
+            plan_from_claude("pro", Some("default_claude_pro")),
+            Some(named("pro", "Pro"))
+        );
+        assert_eq!(plan_from_claude("team", None), Some(named("team", "Team")));
+        assert_eq!(
+            plan_from_claude("enterprise", None),
+            Some(named("enterprise", "Enterprise"))
+        );
+    }
+
+    #[test]
+    fn plan_from_claude_ignores_case_and_spaces() {
+        assert_eq!(
+            plan_from_claude("MAX", Some("  Default_Claude_Max_20X ")),
+            Some(named("max_20x", "Max ×20"))
+        );
+        assert_eq!(plan_from_claude(" Max ", None), Some(named("max", "Max")));
+        // The tier only refines `max`: a Pro account with a max-looking tier is Pro.
+        assert_eq!(
+            plan_from_claude("pro", Some("default_claude_max_20x")),
+            Some(named("pro", "Pro"))
+        );
+    }
+
+    #[test]
+    fn plan_from_claude_names_other_plans_as_they_come() {
+        assert_eq!(plan_from_claude("weird", None), Some(named("weird", "Weird")));
+        assert_eq!(
+            plan_from_claude("Custom Plan", None),
+            Some(named("Custom Plan", "Custom Plan"))
+        );
+    }
+
+    #[test]
+    fn plan_from_claude_needs_a_subscription_type() {
+        assert_eq!(plan_from_claude("", Some("default_claude_max_20x")), None);
+        assert_eq!(plan_from_claude("   ", None), None);
+    }
+
+    #[test]
+    fn config_dir_prefers_claude_config_dir_then_home() {
+        assert_eq!(
+            config_dir_from(Some("/opt/claude".into()), Some("/home/u".into())),
+            Some(PathBuf::from("/opt/claude"))
+        );
+        assert_eq!(
+            config_dir_from(Some("  ".into()), Some("/home/u".into())),
+            Some(PathBuf::from("/home/u/.claude"))
+        );
+        assert_eq!(
+            config_dir_from(None, Some("/home/u".into())),
+            Some(PathBuf::from("/home/u/.claude"))
+        );
+        assert_eq!(config_dir_from(None, None), None);
+    }
+
+    const CREDENTIALS: &str = r#"{"claudeAiOauth": {"accessToken": "SECRET-ACCESS-123", "refreshToken": "SECRET-REFRESH-456", "expiresAt": 1791543600000, "scopes": ["user:inference"], "subscriptionType": "max", "rateLimitTier": "default_claude_max_20x"}}"#;
+
+    fn dir_with_credentials(content: &str) -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join(".credentials.json"), content).unwrap();
+        dir
+    }
+
+    #[tokio::test]
+    async fn account_plan_reads_the_subscription_and_never_the_tokens() {
+        let dir = dir_with_credentials(CREDENTIALS);
+        let plan = ClaudeRuntime::new()
+            .with_config_dir(dir.path())
+            .account_plan()
+            .await
+            .unwrap()
+            .expect("a plan");
+        assert_eq!(plan, named("max_20x", "Max ×20"));
+        let debug = format!("{plan:?}");
+        let json = serde_json::to_string(&plan).unwrap();
+        for text in [debug, json] {
+            assert!(!text.contains("SECRET"), "token leaked into {text}");
+        }
+    }
+
+    #[tokio::test]
+    async fn account_plan_uses_claude_config_dir_from_the_runtime_env() {
+        let dir = dir_with_credentials(CREDENTIALS);
+        let rt = ClaudeRuntime::new().with_env(vec![
+            ("CLAUDE_CONFIG_DIR".into(), dir.path().display().to_string()),
+            ("HOME".into(), "/nonexistent-home".into()),
+        ]);
+        assert_eq!(rt.account_plan().await.unwrap(), Some(named("max_20x", "Max ×20")));
+    }
+
+    #[tokio::test]
+    async fn account_plan_is_none_without_the_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let plan = ClaudeRuntime::new()
+            .with_config_dir(dir.path())
+            .account_plan()
+            .await
+            .unwrap();
+        assert_eq!(plan, None);
+    }
+
+    #[tokio::test]
+    async fn account_plan_is_none_for_broken_or_incomplete_files() {
+        for content in [
+            r#"{"claudeAiOauth": {"accessToken": "SECRET-"#,
+            "{}",
+            r#"{"claudeAiOauth": {"accessToken": "SECRET-ONLY"}}"#,
+            r#"{"claudeAiOauth": "SECRET-STRING"}"#,
+            r#"{"claudeAiOauth": {"subscriptionType": ""}}"#,
+        ] {
+            let dir = dir_with_credentials(content);
+            let plan = ClaudeRuntime::new()
+                .with_config_dir(dir.path())
+                .account_plan()
+                .await
+                .unwrap();
+            assert_eq!(plan, None, "{content}");
+        }
     }
 }

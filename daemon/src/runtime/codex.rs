@@ -3,7 +3,8 @@
 
 use super::process::{self, JsonProcess, LineSink, Router, locked};
 use super::{
-    ApprovalRequest, Runtime, RuntimeKind, RuntimeOutput, RuntimeStatus, Session, SpawnConfig, Spawned, clip_input,
+    ApprovalRequest, Plan, Runtime, RuntimeKind, RuntimeOutput, RuntimeStatus, Session, SpawnConfig, Spawned,
+    capitalized, clip_input,
 };
 use crate::event::{Decision, EventBody, LimitWindow, TOOL_OUTPUT_LIMIT, TurnStatus, Usage, truncate_output};
 use crate::store::Effort;
@@ -27,6 +28,9 @@ const USAGE_INIT_ID: i64 = 1;
 const USAGE_READ_ID: i64 = 2;
 /// Upper bound for a whole usage read: start, handshake, answer.
 const USAGE_TIMEOUT: Duration = Duration::from_secs(15);
+/// Ids of the two requests of a plan read (`initialize`, then `account/read`). Its own process, so its own ids.
+const PLAN_INIT_ID: i64 = 1;
+const PLAN_READ_ID: i64 = 2;
 /// Tool input strings longer than this are clipped in events and approvals.
 const INPUT_CLIP_BYTES: usize = 4096;
 /// Max bytes of diff text shown in an approval.
@@ -152,6 +156,32 @@ impl Runtime for CodexRuntime {
             Err(_) => bail!("codex: rate limits request timed out"),
         }
     }
+
+    /// Starts `codex app-server` only for this read (`account/read`), with no thread and no turn, and stops it again.
+    async fn account_plan(&self) -> anyhow::Result<Option<Plan>> {
+        let mut cmd = Command::new(&self.program);
+        cmd.arg("app-server")
+            .arg("--stdio")
+            .envs(self.env.iter().map(|(k, v)| (k, v)));
+        let (answer_tx, answer_rx) = oneshot::channel();
+        let mut answer_tx = Some(answer_tx);
+        let router: Router = Box::new(move |msg: &Value, sink: &LineSink| {
+            if let Some(answer) = plan_step(msg, sink)
+                && let Some(tx) = answer_tx.take()
+            {
+                // The caller may have given up already; then nobody needs the answer.
+                let _ = tx.send(answer);
+            }
+            Vec::new()
+        });
+        let (proc, _output) = JsonProcess::spawn(cmd, LABEL, router)?;
+        let outcome = timeout(USAGE_TIMEOUT, plan_exchange(&proc, answer_rx)).await;
+        proc.shutdown().await;
+        match outcome {
+            Ok(answer) => answer,
+            Err(_) => bail!("codex: account read timed out"),
+        }
+    }
 }
 
 /// `clientInfo` of the `initialize` request.
@@ -198,6 +228,91 @@ fn usage_step(msg: &Value, sink: &LineSink) -> Option<anyhow::Result<Vec<LimitWi
         }),
         _ => None,
     }
+}
+
+/// Sends `initialize` and waits for the plan the router passes on through `answer`.
+/// The router drops `answer`'s sender when the process ends, which ends the wait with an error.
+async fn plan_exchange(
+    proc: &JsonProcess,
+    answer: oneshot::Receiver<anyhow::Result<Option<Plan>>>,
+) -> anyhow::Result<Option<Plan>> {
+    proc.send(&json!({"jsonrpc": "2.0", "id": PLAN_INIT_ID, "method": "initialize", "params": client_info()}))?;
+    answer
+        .await
+        .map_err(|_| anyhow!("codex: app-server exited before answering"))?
+}
+
+/// The plan read's reaction to one server message. `Some` when the read is over.
+/// A refused read is logged and means "no plan": it must not fail the usage refresh.
+fn plan_step(msg: &Value, sink: &LineSink) -> Option<anyhow::Result<Option<Plan>>> {
+    if msg.get("method").is_some() {
+        return None;
+    }
+    match msg.get("id").and_then(Value::as_i64)? {
+        PLAN_INIT_ID => {
+            if let Some(error) = msg.get("error") {
+                tracing::debug!(
+                    "codex: plan read refused at initialize: {}",
+                    error_text(error, "initialize failed")
+                );
+                return Some(Ok(None));
+            }
+            let initialized = json!({"jsonrpc": "2.0", "method": "initialized"});
+            let read = json!({"jsonrpc": "2.0", "id": PLAN_READ_ID, "method": "account/read", "params": {}});
+            let sent =
+                process::push_line(sink, LABEL, &initialized).and_then(|()| process::push_line(sink, LABEL, &read));
+            match sent {
+                Ok(()) => None,
+                Err(e) => Some(Err(e)),
+            }
+        }
+        PLAN_READ_ID => Some(match msg.get("error") {
+            Some(error) => {
+                tracing::debug!(
+                    "codex: account read refused: {}",
+                    error_text(error, "account read failed")
+                );
+                Ok(None)
+            }
+            None => Ok(plan_of_account(msg.get("result").unwrap_or(&NULL))),
+        }),
+        _ => None,
+    }
+}
+
+/// The plan in an `account/read` answer: `account.planType`, else `rateLimits.planType`.
+pub fn plan_of_account(result: &Value) -> Option<Plan> {
+    let plan_type = id_at(result, "/account/planType").or_else(|| id_at(result, "/rateLimits/planType"))?;
+    plan_from_codex(&plan_type)
+}
+
+/// Plan from Codex's `planType`. Known names get their label; any other name is shown as it comes.
+pub fn plan_from_codex(plan_type: &str) -> Option<Plan> {
+    let raw = plan_type.trim();
+    if raw.is_empty() {
+        return None;
+    }
+    let key = raw.to_lowercase();
+    let known = match key.as_str() {
+        "plus" => Some("Plus"),
+        "pro" => Some("Pro"),
+        "team" => Some("Team"),
+        "business" => Some("Business"),
+        "enterprise" => Some("Enterprise"),
+        "edu" => Some("Edu"),
+        "free" => Some("Free"),
+        _ => None,
+    };
+    Some(match known {
+        Some(label) => Plan {
+            id: key,
+            label: label.to_string(),
+        },
+        None => Plan {
+            id: raw.to_string(),
+            label: capitalized(raw),
+        },
+    })
 }
 
 /// Codex's `effort` for a turn. `max` is not a Codex level and the RPC refuses it, so it maps to the highest one.
@@ -1102,5 +1217,57 @@ mod tests {
         assert_eq!(error_text(&json!({"message": "boom"}), "x"), "boom");
         assert_eq!(error_text(&json!({"message": ""}), "x"), "x");
         assert_eq!(error_text(&NULL, "Codex turn failed"), "Codex turn failed");
+    }
+
+    #[test]
+    fn plan_from_codex_names_known_plans() {
+        let named = |id: &str, label: &str| {
+            Some(Plan {
+                id: id.into(),
+                label: label.into(),
+            })
+        };
+        assert_eq!(plan_from_codex("plus"), named("plus", "Plus"));
+        assert_eq!(plan_from_codex("pro"), named("pro", "Pro"));
+        assert_eq!(plan_from_codex("team"), named("team", "Team"));
+        assert_eq!(plan_from_codex("business"), named("business", "Business"));
+        assert_eq!(plan_from_codex("enterprise"), named("enterprise", "Enterprise"));
+        assert_eq!(plan_from_codex("edu"), named("edu", "Edu"));
+        assert_eq!(plan_from_codex("free"), named("free", "Free"));
+        assert_eq!(plan_from_codex("PRO"), named("pro", "Pro"));
+        assert_eq!(plan_from_codex(" pro "), named("pro", "Pro"));
+    }
+
+    #[test]
+    fn plan_from_codex_names_other_plans_capitalized() {
+        assert_eq!(
+            plan_from_codex("prolite"),
+            Some(Plan {
+                id: "prolite".into(),
+                label: "Prolite".into(),
+            })
+        );
+    }
+
+    #[test]
+    fn plan_from_codex_needs_a_plan_type() {
+        assert_eq!(plan_from_codex(""), None);
+        assert_eq!(plan_from_codex("   "), None);
+    }
+
+    #[test]
+    fn plan_of_account_prefers_account_then_rate_limits() {
+        let plan = |id: &str, label: &str| {
+            Some(Plan {
+                id: id.into(),
+                label: label.into(),
+            })
+        };
+        let both = json!({"account": {"type": "chatgpt", "planType": "plus"}, "rateLimits": {"planType": "pro"}});
+        assert_eq!(plan_of_account(&both), plan("plus", "Plus"));
+        let only_limits = json!({"rateLimits": {"planType": "team"}});
+        assert_eq!(plan_of_account(&only_limits), plan("team", "Team"));
+        assert_eq!(plan_of_account(&json!({"account": {"type": "apiKey"}})), None);
+        assert_eq!(plan_of_account(&NULL), None);
     }
 }

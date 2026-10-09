@@ -62,6 +62,14 @@ pub struct LimitWindow {
     pub resets_at: Option<i64>,
 }
 
+/// The subscription an account is on, as the CLI names it: `id` is stable (`max_20x`, `pro`),
+/// `label` is for people (`Max ×20`, `Pro`). Holds no credentials.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Plan {
+    pub id: String,
+    pub label: String,
+}
+
 /// The typed body of an event. Serialized as `{"kind": "...", "payload": {...}}`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", content = "payload")]
