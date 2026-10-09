@@ -215,12 +215,9 @@ impl Platform {
     }
 }
 
-/// `$BANDITO_HOME`, or `~/.bandito`: the daemon's data directory when `--home` is not given.
+/// The daemon's data directory: `--home`, else `$BANDITO_HOME`, else `~/.bandito` (see [`crate::home::data_home`]).
 pub fn default_home() -> PathBuf {
-    std::env::var_os("BANDITO_HOME")
-        .map(PathBuf::from)
-        .or_else(|| dirs::home_dir().map(|home| home.join(".bandito")))
-        .unwrap_or_else(|| PathBuf::from(".bandito"))
+    crate::home::data_home()
 }
 
 /// `<data dir>/tools`: where Bandito puts Node and the agent CLIs.

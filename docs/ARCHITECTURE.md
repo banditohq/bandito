@@ -38,7 +38,7 @@ Recorded protocol transcripts live in `daemon/tests/fixtures/`. Adapter tests ru
 
 Every adapter turns its protocol into the same internal events (below). Resuming after a daemon restart uses each CLI's own session id (`--resume`, `thread/resume`, `session/load`), stored on the agent.
 
-Useful extras we surface: Claude's `rate_limit_event` and Codex `account/rateLimits/updated` → subscription usage in the app; `runtimes.status` reports installed / version / logged in for each CLI.
+Useful extras we surface: Claude's `rate_limit_event` and Codex `account/rateLimits/updated` → subscription usage in the app; `runtimes.status` reports installed / version / logged in for each CLI. `logged_in` is `true` or `false` from `claude auth status` (Claude) and `codex login status` (Codex: exit 0 is logged in, exit 1 with "Not logged in" is logged out). It is `null` when the CLI does not say, fails, or takes more than 5 s, and Grok always reports `null`. The answer is cached per runtime for 60 s, and concurrent requests share one probe. The probe reads no account details: the email and organisation are not kept. Without `.credentials.json` (macOS keeps the Claude login in the Keychain), Claude's plan for usage comes from `claude auth status` too.
 
 ## Events
 
@@ -131,6 +131,7 @@ Migrations: numbered SQL files embedded in the binary, applied by `PRAGMA user_v
 
 JSON-RPC 2.0. Same methods on every transport.
 
+- `devices.list` returns the paired devices as `{id, name, created_at, last_seen_at, current}`. `current` is `true` for the device whose token made the request; the owner's CLI is no device, so every row is `false` for it. Old apps ignore the field.
 - Requests: `daemon.info`, `runtimes.status`, `agents.list|get|create|update|delete` (`update` takes `paused` too, see [Pause](#pause)), `agents.send{agent_id,text}` (replies `{queued: true}` when the agent is paused), `agents.interrupt`, `agents.pause_all{paused}`, `events.since{seq,limit,agent_id?}`, `approvals.list|resolve{approval_id,decision,remember}`, `rules.list|set|delete`, `schedules.list|create|update|delete|run_now`, `devices.list|revoke`, `pair.redeem{code,device_name}` (only unauthenticated method), `term.list|open|input|resize|rename|close|attach|detach` (see Terminals), `fs.*` (see [Files](#files)), `changes.checkpoints|diff|file|restore` (see [Changes](#changes)), `secrets.list|set|delete` (see [Secrets](#secrets), `host.stats|history|processes|ports|kill`, `setup.status|install|job` (see [Setup](#setup)), `commands.list|install` (see [Commands](#commands)), `browser.start|status|stop|control|touch` (see [Browser](#browser)), `workspaces.list|create|update|delete|start|stop` (see [Workspaces](#workspaces)), `daemon.logs{lines,level}` (see [Logs](#logs)). `browser.agent.*` is for the crew MCP on the server only.
 - Notifications (server → client): `event{seq, agent_id, kind, payload, ts}` for every event including `message.delta`; `term.output|gap|exit|closed` for attached terminals (see Terminals).
 
@@ -552,7 +553,7 @@ On macOS, Bandito installs only `node`, `claude` and `codex`. The screen feature
 
 Poll `setup.job` about once a second with the last `offset`. The daemon keeps only the most recent job, so an unknown id is `not_found`. Errors: code `-32024` (`SETUP_ERROR`) with `error.data.reason`: `busy` or `not_found`.
 
-**PATH.** At start the daemon puts `<data dir>/tools/bin` first on its `PATH`, before the runtime starts, so the tools reach agents and terminals. The data dir is `$BANDITO_HOME` or `~/.bandito`; `--home` does not move it.
+**PATH.** At start the daemon puts `<data dir>/tools/bin` first on its `PATH`, before the runtime starts, so the tools reach agents and terminals. The data dir is `--home`, else `$BANDITO_HOME`, else `~/.bandito`. One value, set by `main` at start, is read by everything under the data dir (PATH, tools, screens, browser, the run folder).
 
 ## Commands
 
@@ -630,6 +631,8 @@ A separate Linux user for a workspace is the next step, not in this version.
 | `workspaces.start`, `workspaces.stop` | `{id}` | `status` (container workspaces only) |
 
 `agents.create` and `agents.update` take `workspace_id` (default `shared`). Moving an agent starts a new chapter, as a folder change does.
+
+`agents.create` with no `cwd`, or an empty one, runs the agent in its own folder: the folder is made first, and its path becomes the agent's `cwd`. A `cwd` that is given must exist on the server, as before.
 
 Limits: name 1–64 characters; `cpus` 0.1–64; `memory_mb` 64–262144; mounts are absolute paths without `,`, `"` or `..`. The shared workspace has no container settings, so it refuses them.
 
@@ -715,7 +718,7 @@ Per agent `memory_mode`:
 
 Before a chapter closes, the daemon sends a wrap-up turn shown in the thread as a quiet line (`source: "system"`), excluded from history search: *update your memory files with what matters from this chapter*. Then the session is dropped and `session.rotated` is emitted. The check runs when the next message arrives, so an idle agent costs nothing, and that message waits while the wrap-up runs. If the CLI session has gone, Bandito resumes it for the wrap-up. If it cannot resume, the chapter closes without a wrap-up and the thread says `memory not saved`.
 
-**Agent home.** Every agent gets its own folder on the server, `~/bandito/agents/<slug>/`, next to (not inside) the project it works on:
+**Agent home.** Every agent gets its own folder on the server, `~/bandito/agents/<slug>/`, next to (not inside) the project it works on. The root is `$BANDITO_AGENTS_DIR` when it is set to an absolute path; otherwise, when the daemon runs with its own `--home` (and not `~/.bandito`), it is `<home>/agents/`, so a second daemon never writes into the first one's folders. `<slug>` is the agent's name in lowercase ASCII: Cyrillic is transliterated (`Ёж` → `yozh`, `Щи` → `shchi`, `ъ` and `ь` are dropped), other letters are dropped, and any other character becomes `-`. An empty result is `agent`. A name taken by another agent gets `-2`, `-3`, and so on:
 
 ```
 MEMORY.md        short index, read at the start of every chapter (≤ 200 lines)

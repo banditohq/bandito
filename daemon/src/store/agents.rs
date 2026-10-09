@@ -50,6 +50,8 @@ pub struct NewAgent {
     pub runtime: RuntimeKind,
     #[serde(default)]
     pub model: Option<String>,
+    /// Where the CLI runs. Empty: the agent's own folder (set by `agents.create` once it exists).
+    #[serde(default)]
     pub cwd: String,
     #[serde(default = "default_mode")]
     pub approval_mode: ApprovalMode,
