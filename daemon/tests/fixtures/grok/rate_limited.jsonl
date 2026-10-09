@@ -1,0 +1,10 @@
+// The prompt fails (shape from a real run with exhausted free usage, trimmed). Unknown requests get an error.
+{"expect": {"method": "initialize"}}
+{"send": {"jsonrpc": "2.0", "id": "$last:/id", "result": {"protocolVersion": 1, "agentCapabilities": {"loadSession": true}}}}
+{"expect": {"method": "session/load", "params": {"sessionId": "sess-old", "mcpServers": []}}}
+{"send": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "sess-old", "update": {"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": "replayed history"}}}}}
+{"send": {"jsonrpc": "2.0", "id": "$last:/id", "result": null}}
+{"expect": {"method": "session/prompt", "params": {"sessionId": "sess-old", "prompt": [{"type": "text", "text": "again"}]}}}
+{"send": {"jsonrpc": "2.0", "id": 3, "method": "fs/read_text_file", "params": {"sessionId": "sess-old", "path": "/etc/passwd"}}}
+{"expect": {"id": 3, "error": {"code": -32601}}}
+{"send": {"jsonrpc": "2.0", "id": 3, "error": {"code": -32003, "message": "Rate limited", "data": "You've used all the included free usage for model grok-4.7 for now."}}}

@@ -1,0 +1,13 @@
+// A pending approval is withdrawn when the host interrupts the turn.
+{"expect": {"method": "initialize"}}
+{"send": {"id": "$last:/id", "result": {}}}
+{"expect": {"method": "initialized"}}
+{"expect": {"method": "thread/start"}}
+{"send": {"id": "$last:/id", "result": {"thread": {"id": "thr-3"}}}}
+{"expect": {"method": "turn/start"}}
+{"send": {"id": "$last:/id", "result": {"turn": {"id": "turn-3", "items": [], "status": "inProgress"}}}}
+{"send": {"id": 5, "method": "item/commandExecution/requestApproval", "params": {"threadId": "thr-3", "turnId": "turn-3", "itemId": "item-9", "startedAtMs": 1, "command": "rm -rf build"}}}
+{"expect": {"method": "turn/interrupt", "params": {"threadId": "thr-3", "turnId": "turn-3"}}}
+{"send": {"id": "$last:/id", "result": {}}}
+{"send": {"method": "serverRequest/resolved", "params": {"threadId": "thr-3", "requestId": 5}}}
+{"send": {"method": "turn/completed", "params": {"threadId": "thr-3", "turn": {"id": "turn-3", "items": [], "status": "interrupted", "error": null}}}}

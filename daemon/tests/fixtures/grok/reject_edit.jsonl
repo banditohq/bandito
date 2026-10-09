@@ -1,0 +1,10 @@
+// An edit outside the project: paths from toolCall.locations, diff from the content; the host rejects.
+{"expect": {"method": "initialize"}}
+{"send": {"jsonrpc": "2.0", "id": "$last:/id", "result": {"protocolVersion": 1, "agentCapabilities": {"loadSession": true}}}}
+{"expect": {"method": "session/new"}}
+{"send": {"jsonrpc": "2.0", "id": "$last:/id", "result": {"sessionId": "sess-g2"}}}
+{"expect": {"method": "session/prompt"}}
+{"send": {"jsonrpc": "2.0", "id": "p-1", "method": "session/request_permission", "params": {"sessionId": "sess-g2", "toolCall": {"toolCallId": "call-2", "title": "Edit /etc/hosts", "kind": "edit", "locations": [{"path": "/etc/hosts"}], "content": [{"type": "diff", "path": "/etc/hosts", "oldText": "a\n", "newText": "b\n"}], "rawInput": {"path": "/etc/hosts"}}, "options": [{"optionId": "y", "name": "Allow", "kind": "allow_once"}, {"optionId": "n", "name": "Reject", "kind": "reject_once"}]}}}
+{"expect": {"id": "p-1", "result": {"outcome": {"outcome": "selected", "optionId": "n"}}}}
+{"send": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "sess-g2", "update": {"sessionUpdate": "tool_call_update", "toolCallId": "call-2", "status": "failed", "content": [{"type": "content", "content": {"type": "text", "text": "Rejected by user"}}]}}}}
+{"send": {"jsonrpc": "2.0", "id": "$last:/id", "result": {"stopReason": "end_turn"}}}

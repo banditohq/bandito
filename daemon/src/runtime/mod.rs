@@ -9,6 +9,8 @@ use std::path::PathBuf;
 use tokio::sync::mpsc;
 
 pub mod claude;
+pub mod codex;
+pub mod grok;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

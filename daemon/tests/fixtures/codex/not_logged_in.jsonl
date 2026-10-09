@@ -1,0 +1,10 @@
+// Not logged in: the turn fails with a 401 after retries (shape from a real run, trimmed).
+{"expect": {"method": "initialize"}}
+{"send": {"id": "$last:/id", "result": {}}}
+{"expect": {"method": "initialized"}}
+{"expect": {"method": "thread/start"}}
+{"send": {"id": "$last:/id", "result": {"thread": {"id": "thr-4"}}}}
+{"expect": {"method": "turn/start"}}
+{"send": {"id": "$last:/id", "result": {"turn": {"id": "turn-4", "items": [], "status": "inProgress"}}}}
+{"send": {"method": "error", "params": {"error": {"message": "Reconnecting... 2/5", "codexErrorInfo": {"responseStreamDisconnected": {"httpStatusCode": 401}}}, "willRetry": true}}}
+{"send": {"method": "turn/completed", "params": {"threadId": "thr-4", "turn": {"id": "turn-4", "items": [], "status": "failed", "error": {"message": "unexpected status 401 Unauthorized: Missing bearer or basic authentication in header"}}}}}

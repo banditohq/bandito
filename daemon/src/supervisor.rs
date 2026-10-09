@@ -38,6 +38,8 @@ pub struct Inbound {
     pub text: String,
     pub source: Source,
     pub from_agent: Option<String>,
+    /// Crew messages in a row since a human or a schedule last spoke.
+    pub hops: u8,
 }
 
 impl Inbound {
@@ -46,9 +48,22 @@ impl Inbound {
             text: text.into(),
             source: Source::User,
             from_agent: None,
+            hops: 0,
+        }
+    }
+
+    pub fn schedule(text: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            source: Source::Schedule,
+            from_agent: None,
+            hops: 0,
         }
     }
 }
+
+/// A crew chain stops after this many agent-to-agent messages without a human.
+pub const MAX_CREW_HOPS: u8 = 8;
 
 enum Cmd {
     Send(Inbound, oneshot::Sender<Result<()>>),
@@ -61,6 +76,8 @@ enum Cmd {
         reply: oneshot::Sender<Result<()>>,
     },
     Stop(oneshot::Sender<()>),
+    /// Hops of the turn that is running now (0 when idle).
+    Hops(oneshot::Sender<Result<u8>>),
 }
 
 pub struct Supervisor {
@@ -126,6 +143,7 @@ impl Supervisor {
             session: None,
             output: None,
             turn: None,
+            turn_hops: 0,
             queue: VecDeque::new(),
             pending: HashMap::new(),
             status: None,
@@ -146,6 +164,36 @@ impl Supervisor {
 
     pub async fn send(&self, agent_id: &str, msg: Inbound) -> Result<()> {
         self.call(agent_id, |r| Cmd::Send(msg, r)).await
+    }
+
+    /// One agent messages another by name (the crew MCP tool `crew_send`).
+    /// Returns the target agent's id.
+    pub async fn crew_send(&self, from_id: &str, to_name: &str, text: &str) -> Result<String> {
+        let store = &self.hub.store;
+        let from = store.agent_get(from_id)?.ok_or_else(|| anyhow!("no agent {from_id}"))?;
+        let to = store
+            .agent_by_name(to_name)?
+            .ok_or_else(|| anyhow!("no agent named '{to_name}' in this crew"))?;
+        if to.id == from.id {
+            bail!("an agent can't message itself");
+        }
+        if text.trim().is_empty() {
+            bail!("message is empty");
+        }
+        let hops = self.call(from_id, Cmd::Hops).await?.saturating_add(1);
+        if hops > MAX_CREW_HOPS {
+            bail!(
+                "crew chain limit reached ({MAX_CREW_HOPS} messages between agents without a human); report back to the user instead"
+            );
+        }
+        let msg = Inbound {
+            text: text.to_string(),
+            source: Source::Crew,
+            from_agent: Some(from.name),
+            hops,
+        };
+        self.send(&to.id, msg).await?;
+        Ok(to.id)
     }
 
     pub async fn interrupt(&self, agent_id: &str) -> Result<()> {
@@ -232,6 +280,7 @@ struct Actor {
     session: Option<Box<dyn Session>>,
     output: Option<mpsc::Receiver<RuntimeOutput>>,
     turn: Option<String>,
+    turn_hops: u8,
     queue: VecDeque<Inbound>,
     pending: HashMap<String, PendingApproval>,
     status: Option<AgentStatus>,
@@ -294,6 +343,10 @@ impl Actor {
                 reply,
             } => {
                 let _ = reply.send(self.resolve(&approval_id, decision, by, remember).await);
+            }
+            Cmd::Hops(reply) => {
+                let hops = if self.turn.is_some() { self.turn_hops } else { 0 };
+                let _ = reply.send(Ok(hops));
             }
             Cmd::Stop(_) => unreachable!("handled in run"),
         }
@@ -369,7 +422,10 @@ impl Actor {
                 system_prompt: (!prompt.is_empty()).then_some(prompt),
                 resume: agent.runtime_session_id.clone(),
                 program: None,
-                mcp: self.mcp.clone(),
+                mcp: self.mcp.clone().map(|(prog, mut args)| {
+                    args.extend(["--agent".to_string(), agent.id.clone()]);
+                    (prog, args)
+                }),
                 env: Vec::new(),
             })
             .await?;
@@ -399,6 +455,7 @@ impl Actor {
         }
         let turn_id = new_id();
         self.turn = Some(turn_id.clone());
+        self.turn_hops = msg.hops;
         self.hub.emit(
             &self.id,
             EventBody::TurnStarted {
@@ -1052,6 +1109,118 @@ mod tests {
             w.store.approval_get(&a.id).unwrap().unwrap().status,
             ApprovalStatus::Expired
         );
+    }
+
+    fn add_agent(store: &Store, name: &str) -> String {
+        store
+            .agent_create(NewAgent {
+                name: name.into(),
+                role: String::new(),
+                runtime: RuntimeKind::Claude,
+                model: None,
+                cwd: "/tmp".into(),
+                approval_mode: ApprovalMode::Risky,
+                system_prompt: None,
+            })
+            .unwrap()
+            .id
+    }
+
+    #[tokio::test]
+    async fn crew_send_delivers_by_name_with_sender() {
+        let mut w = world(ApprovalMode::Risky);
+        let scout = add_agent(&w.store, "Scout");
+        let to = w.sup.crew_send(&w.agent, "scout", "please review").await.unwrap();
+        assert_eq!(to, scout);
+        let e = w.wait(|b| matches!(b, EventBody::MessageUser { .. })).await;
+        assert_eq!(e.agent_id, scout);
+        let EventBody::MessageUser {
+            text,
+            source,
+            from_agent,
+        } = e.body
+        else {
+            unreachable!()
+        };
+        assert_eq!(text, "please review");
+        assert_eq!(source, Source::Crew);
+        assert_eq!(from_agent.as_deref(), Some("Forge"));
+    }
+
+    #[tokio::test]
+    async fn crew_send_rejects_unknown_self_and_empty() {
+        let w = world(ApprovalMode::Risky);
+        add_agent(&w.store, "Scout");
+        assert!(
+            w.sup
+                .crew_send(&w.agent, "Nobody", "x")
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("no agent named")
+        );
+        assert!(
+            w.sup
+                .crew_send(&w.agent, "forge", "x")
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("itself")
+        );
+        assert!(
+            w.sup
+                .crew_send(&w.agent, "Scout", "  ")
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("empty")
+        );
+    }
+
+    #[tokio::test]
+    async fn crew_chain_stops_after_the_hop_limit() {
+        let w = world(ApprovalMode::Risky);
+        add_agent(&w.store, "Scout");
+        // Forge is in a turn that started from a crew message with the maximum hops.
+        let msg = Inbound {
+            text: "hi".into(),
+            source: Source::Crew,
+            from_agent: Some("Scout".into()),
+            hops: MAX_CREW_HOPS,
+        };
+        w.sup.send(&w.agent, msg).await.unwrap();
+        w.wait_log("send hi").await;
+        let err = w.sup.crew_send(&w.agent, "Scout", "and again").await.unwrap_err();
+        assert!(err.to_string().contains("crew chain limit"));
+        // after the turn ends, a fresh chain may start
+        w.push(done()).await;
+        for _ in 0..100 {
+            if w.sup.crew_send(&w.agent, "Scout", "new chain").await.is_ok() {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        panic!("chain did not reset after the turn");
+    }
+
+    #[tokio::test]
+    async fn mcp_server_gets_the_agent_id() {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let hub = Hub::new(store.clone());
+        let log: Log = Arc::default();
+        let spawns = Arc::new(Mutex::new(Vec::new()));
+        let mut rts = Runtimes::default();
+        rts.insert(Arc::new(MockRuntime {
+            log: log.clone(),
+            out: Arc::new(Mutex::new(None)),
+            spawns: spawns.clone(),
+        }));
+        let id = add_agent(&store, "Forge");
+        let sup = Supervisor::new(hub, rts, Some((PathBuf::from("/bin/bandito"), vec!["mcp".into()])));
+        sup.send(&id, Inbound::user("go")).await.unwrap();
+        let (prog, args) = spawns.lock().unwrap()[0].mcp.clone().unwrap();
+        assert_eq!(prog, PathBuf::from("/bin/bandito"));
+        assert_eq!(args, vec!["mcp".to_string(), "--agent".to_string(), id]);
     }
 
     #[tokio::test]

@@ -1,0 +1,13 @@
+// Resuming a stored thread; an unsupported server request gets a JSON-RPC error.
+{"expect": {"method": "initialize"}}
+{"send": {"id": "$last:/id", "result": {}}}
+{"expect": {"method": "initialized"}}
+{"expect": {"method": "thread/resume", "params": {"threadId": "thr-old", "approvalPolicy": "untrusted", "sandbox": "workspace-write"}}}
+{"send": {"id": "$last:/id", "result": {"thread": {"id": "thr-old"}}}}
+{"expect": {"method": "turn/start", "params": {"threadId": "thr-old"}}}
+{"send": {"id": "$last:/id", "result": {"turn": {"id": "turn-5", "items": [], "status": "inProgress"}}}}
+{"send": {"id": 11, "method": "item/tool/requestUserInput", "params": {"threadId": "thr-old", "turnId": "turn-5", "itemId": "q-1", "questions": []}}}
+{"expect": {"id": 11, "error": {"code": -32601}}}
+{"send": {"method": "item/started", "params": {"threadId": "thr-old", "turnId": "turn-5", "item": {"type": "mcpToolCall", "id": "mcp-1", "server": "bandito", "tool": "crew_send", "arguments": {"to": "Scout", "message": "review please"}, "status": "inProgress"}}}}
+{"send": {"method": "item/completed", "params": {"threadId": "thr-old", "turnId": "turn-5", "completedAtMs": 1, "item": {"type": "mcpToolCall", "id": "mcp-1", "server": "bandito", "tool": "crew_send", "arguments": {}, "status": "completed", "result": {"content": [{"type": "text", "text": "sent to Scout"}]}}}}}
+{"send": {"method": "turn/completed", "params": {"threadId": "thr-old", "turn": {"id": "turn-5", "items": [], "status": "completed", "error": null}}}}

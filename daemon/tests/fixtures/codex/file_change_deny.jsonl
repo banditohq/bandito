@@ -1,0 +1,13 @@
+// A patch that needs approval; the host declines. Diffs come from the fileChange item, not the request.
+{"expect": {"method": "initialize"}}
+{"send": {"id": "$last:/id", "result": {"userAgent": "bandito/0.161.0"}}}
+{"expect": {"method": "initialized"}}
+{"expect": {"method": "thread/start"}}
+{"send": {"id": "$last:/id", "result": {"thread": {"id": "thr-2"}}}}
+{"expect": {"method": "turn/start"}}
+{"send": {"id": "$last:/id", "result": {"turn": {"id": "turn-2", "items": [], "status": "inProgress"}}}}
+{"send": {"method": "item/started", "params": {"threadId": "thr-2", "turnId": "turn-2", "item": {"type": "fileChange", "id": "fc-1", "status": "inProgress", "changes": [{"path": "/home/user/work/src/lib.rs", "kind": {"type": "update", "move_path": null}, "diff": "@@ -1 +1 @@\n-old\n+new\n"}, {"path": "/etc/hosts", "kind": {"type": "update", "move_path": null}, "diff": "@@ -1 +1 @@\n-a\n+b\n"}]}}}}
+{"send": {"id": "req-7", "method": "item/fileChange/requestApproval", "params": {"threadId": "thr-2", "turnId": "turn-2", "itemId": "fc-1", "startedAtMs": 1791530170000, "reason": "outside the workspace", "grantRoot": null}}}
+{"expect": {"id": "req-7", "result": {"decision": "decline"}}}
+{"send": {"method": "item/completed", "params": {"threadId": "thr-2", "turnId": "turn-2", "completedAtMs": 1, "item": {"type": "fileChange", "id": "fc-1", "status": "declined", "changes": []}}}}
+{"send": {"method": "turn/completed", "params": {"threadId": "thr-2", "turn": {"id": "turn-2", "items": [], "status": "completed", "error": null}}}}
