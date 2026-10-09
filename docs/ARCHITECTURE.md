@@ -412,3 +412,17 @@ An account is optional: without one the app works on one Mac. With one, every de
 **Push.** Approvals and finished turns reach phones through `push.bandito.dev`: the daemon sends an end-to-end encrypted payload addressed to device push tokens; a notification service extension decrypts it on the phone. Approve and Deny from the notification call the daemon directly (through whatever connection the phone has: Tailscale, SSH, relay).
 
 **Reaching servers from a phone.** Tailscale and direct TLS work as on the Mac; SSH works through an in-app SSH client; the Bandito Relay (outbound-only, end-to-end encrypted) covers servers behind NAT without any setup.
+
+## Screen
+
+A virtual desktop on a Linux server that people see in the app and agents can drive. `daemon/src/screen.rs` runs it; `daemon/src/rpc/screen.rs` is the RPC layer. Other systems answer `unsupported`.
+
+**Lifecycle.** `screen.start {workspace?, width?, height?}` starts `Xvfb` on the first free display from `:90`, `openbox` when it is installed, and `x11vnc` bound to `127.0.0.1` on a free port with a random password (file mode 0600 under `$BANDITO_HOME/screens/<workspace>/`). Each process has its own process group; x11vnc is restarted once if it dies. `screen.status` returns `{running, display, width, height, vnc_port, vnc_password, started_at, controller, idle_ms}`; `screen.stop` ends it. A screen with no VNC client and no agent tool call for 30 minutes stops by itself. The daemon stops every screen when it shuts down.
+
+**Viewing.** The app calls `screen.start`, then opens `/v1/tunnel?port=<vnc_port>` through a one-shot local forwarder and speaks VNC with the password. RFB uses only the first 8 characters of a password; the tunnel is what keeps the screen private (loopback only, paired device only).
+
+**Agents.** The crew MCP server offers `screen_screenshot` (PNG, at most 1280 px wide, with the original size so clicks use screen pixels), `screen_click {x, y, button?, double?}`, `screen_move`, `screen_type {text}`, `screen_key {keys}`, `screen_scroll {direction, amount?}` and `screen_launch {command}`. They call local-only `screen.agent.*` methods and start the screen when it is off.
+
+**Control.** `screen.control {holder: user|agent|none}`. While the user holds the screen, agent tools fail with a message asking the agent to wait or ask for it back.
+
+**Needs** `xvfb`, `x11vnc`, `xdotool`, ImageMagick (`import`) and optionally `openbox` (see [Setup](#setup)). A missing one is `SCREEN_ERROR` (`-32025`) with `data.reason = "missing_component"` and `data.component`. Feature string: `"screen"` (Linux only).

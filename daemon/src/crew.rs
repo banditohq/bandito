@@ -44,6 +44,8 @@ pub trait CrewBackend: Send + Sync {
     async fn history_search(&self, query: &str, limit: u32) -> Result<String>;
     /// Everything said with the agent on one local day (`YYYY-MM-DD`), formatted.
     async fn history_day(&self, date: &str) -> Result<String>;
+    /// One `screen.agent.*` RPC method with its parameters. Returns the daemon's result.
+    async fn screen(&self, method: &str, params: Value) -> Result<Value>;
 }
 
 /// Backend that asks the daemon over its unix socket.
@@ -87,6 +89,10 @@ impl CrewBackend for DaemonBackend {
         )
         .await?;
         text_of(v, "history.day")
+    }
+
+    async fn screen(&self, method: &str, params: Value) -> Result<Value> {
+        call(&self.sock, method, params).await
     }
 }
 
@@ -188,9 +194,16 @@ async fn handle_line(line: &str, backend: &dyn CrewBackend) -> Option<Value> {
     let outcome: Result<Value, Fault> = match method {
         "initialize" => Ok(initialize(&params)),
         "ping" => Ok(json!({})),
-        "tools/list" => Ok(json!({
-            "tools": [crew_list_tool(), crew_send_tool(), history_search_tool(), history_day_tool()]
-        })),
+        "tools/list" => {
+            let mut tools = vec![
+                crew_list_tool(),
+                crew_send_tool(),
+                history_search_tool(),
+                history_day_tool(),
+            ];
+            tools.extend(screen_tools());
+            Ok(json!({ "tools": tools }))
+        }
         "tools/call" => call_tool(&params, backend).await,
         "" => Err((INVALID_REQUEST, "invalid request: no method".into())),
         other => Err((METHOD_NOT_FOUND, format!("Method not found: {other}"))),
@@ -284,6 +297,7 @@ async fn call_tool(params: &Value, backend: &dyn CrewBackend) -> Result<Value, F
         "crew_send" => Ok(tool_result(crew_send(&args, backend).await)),
         "history_search" => Ok(tool_result(history_search(&args, backend).await)),
         "history_day" => Ok(tool_result(history_day(&args, backend).await)),
+        _ if SCREEN_TOOLS.iter().any(|(tool, _)| *tool == name) => Ok(screen_tool(name, &args, backend).await),
         _ => Err((INVALID_PARAMS, format!("Unknown tool: {name}"))),
     }
 }
@@ -329,6 +343,126 @@ async fn crew_send(args: &Value, backend: &dyn CrewBackend) -> Result<String, St
     Ok(format!(
         "Sent to {to}. Their answer will arrive as a new message from them."
     ))
+}
+
+/// Screen tools and the daemon method each one calls. The arguments are passed on as they are.
+const SCREEN_TOOLS: [(&str, &str); 7] = [
+    ("screen_screenshot", "screen.agent.screenshot"),
+    ("screen_click", "screen.agent.click"),
+    ("screen_move", "screen.agent.move"),
+    ("screen_type", "screen.agent.type"),
+    ("screen_key", "screen.agent.key"),
+    ("screen_scroll", "screen.agent.scroll"),
+    ("screen_launch", "screen.agent.launch"),
+];
+
+fn screen_tools() -> Vec<Value> {
+    let point = |what: &str| {
+        json!({
+            "type": "integer",
+            "minimum": 0,
+            "description": format!("{what} in screen pixels, from the top left corner"),
+        })
+    };
+    vec![
+        json!({
+            "name": "screen_screenshot",
+            "description": "Take a screenshot of the server's screen, the desktop the user can also see over VNC. Starts the screen if it is not running. Returns the image, with the screen's original width and height and the scale of the image. Multiply coordinates you read from the image by 1/scale to get screen pixels for screen_click, screen_move and screen_scroll.",
+            "inputSchema": { "type": "object", "properties": {} },
+        }),
+        json!({
+            "name": "screen_click",
+            "description": "Click at x, y in screen pixels (not the pixels of the screenshot; see screen_screenshot for the scale). Starts the screen if needed. Refused while the user controls the screen.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "x": point("X"),
+                    "y": point("Y"),
+                    "button": { "type": "string", "enum": ["left", "right", "middle"], "description": "Mouse button, left by default" },
+                    "double": { "type": "boolean", "description": "Double click, false by default" },
+                },
+                "required": ["x", "y"],
+            },
+        }),
+        json!({
+            "name": "screen_move",
+            "description": "Move the mouse pointer to x, y in screen pixels (not the pixels of the screenshot). Refused while the user controls the screen.",
+            "inputSchema": {
+                "type": "object",
+                "properties": { "x": point("X"), "y": point("Y") },
+                "required": ["x", "y"],
+            },
+        }),
+        json!({
+            "name": "screen_type",
+            "description": "Type text into the window that has focus, as if typed on a keyboard. Refused while the user controls the screen.",
+            "inputSchema": {
+                "type": "object",
+                "properties": { "text": { "type": "string", "description": "Text to type" } },
+                "required": ["text"],
+            },
+        }),
+        json!({
+            "name": "screen_key",
+            "description": "Press a key or a shortcut, for example Return, Tab, Escape, ctrl+l or alt+F4. Refused while the user controls the screen.",
+            "inputSchema": {
+                "type": "object",
+                "properties": { "keys": { "type": "string", "description": "Key or shortcut, joined with +" } },
+                "required": ["keys"],
+            },
+        }),
+        json!({
+            "name": "screen_scroll",
+            "description": "Scroll with the mouse wheel at the pointer position, which can be set with screen_move (in screen pixels). Refused while the user controls the screen.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "direction": { "type": "string", "enum": ["up", "down", "left", "right"] },
+                    "amount": { "type": "integer", "minimum": 1, "maximum": 20, "description": "Wheel notches, 3 by default" },
+                },
+                "required": ["direction"],
+            },
+        }),
+        json!({
+            "name": "screen_launch",
+            "description": "Start a program on the server's screen, for example firefox. It runs detached: the call returns at once and does not wait for the program. Starts the screen if needed. Refused while the user controls the screen.",
+            "inputSchema": {
+                "type": "object",
+                "properties": { "command": { "type": "string", "description": "Shell command line to run" } },
+                "required": ["command"],
+            },
+        }),
+    ]
+}
+
+/// Runs one screen tool through the daemon. The screenshot comes back as an image block.
+async fn screen_tool(tool: &str, args: &Value, backend: &dyn CrewBackend) -> Value {
+    let Some((_, method)) = SCREEN_TOOLS.iter().find(|(name, _)| *name == tool) else {
+        return tool_result(Err(format!("Unknown tool: {tool}")));
+    };
+    let reply = match backend.screen(method, args.clone()).await {
+        Ok(reply) => reply,
+        Err(e) => return tool_result(Err(format!("{e:#}"))),
+    };
+    if tool != "screen_screenshot" {
+        return tool_result(Ok("Done.".into()));
+    }
+    let png = reply.get("png_base64").and_then(Value::as_str);
+    let size = json!({
+        "width": reply.get("width").cloned().unwrap_or(Value::Null),
+        "height": reply.get("height").cloned().unwrap_or(Value::Null),
+        "scale": reply.get("scale").cloned().unwrap_or(Value::Null),
+    });
+    match png {
+        Some(data) => json!({
+            "content": [
+                { "type": "text", "text": size.to_string() },
+                { "type": "image", "data": data, "mimeType": "image/png" },
+            ],
+            "isError": false,
+        }),
+        None => tool_result(Err("screen_screenshot: the daemon sent no image".into())),
+    }
 }
 
 /// Matches returned when `history_search` gets no `limit`.
@@ -386,6 +520,10 @@ mod tests {
         searches: Mutex<Vec<(String, u32)>>,
         /// Date of every history_day call.
         days: Mutex<Vec<String>>,
+        /// Method and parameters of every screen call.
+        screen_calls: Mutex<Vec<(String, Value)>>,
+        /// What screen calls answer; `{}` when unset.
+        screen_reply: Option<Value>,
         /// When set, every backend call fails with this message.
         fail: Option<String>,
     }
@@ -421,6 +559,14 @@ mod tests {
             }
             self.days.lock().unwrap().push(date.to_string());
             Ok(format!("day {date}"))
+        }
+
+        async fn screen(&self, method: &str, params: Value) -> Result<Value> {
+            if let Some(e) = &self.fail {
+                anyhow::bail!("{e}");
+            }
+            self.screen_calls.lock().unwrap().push((method.to_string(), params));
+            Ok(self.screen_reply.clone().unwrap_or_else(|| json!({})))
         }
     }
 
@@ -536,12 +682,27 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn tools_list_has_all_four_tools() {
+    async fn tools_list_has_the_crew_history_and_screen_tools() {
         let backend = MockBackend::default();
         let r = reply(json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/list" }), &backend).await;
         let tools = r["result"]["tools"].as_array().unwrap();
         let names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
-        assert_eq!(names, ["crew_list", "crew_send", "history_search", "history_day"]);
+        assert_eq!(
+            names,
+            [
+                "crew_list",
+                "crew_send",
+                "history_search",
+                "history_day",
+                "screen_screenshot",
+                "screen_click",
+                "screen_move",
+                "screen_type",
+                "screen_key",
+                "screen_scroll",
+                "screen_launch",
+            ]
+        );
         assert_eq!(tools[0]["inputSchema"], json!({ "type": "object", "properties": {} }));
         assert_eq!(tools[1]["inputSchema"]["required"], json!(["to", "message"]));
         assert_eq!(tools[1]["inputSchema"]["properties"]["to"]["type"], "string");
@@ -709,6 +870,121 @@ mod tests {
         .await;
         assert_eq!(r["result"]["isError"], true);
         assert_eq!(tool_text(&r), "no agent named 'Nobody' in this crew");
+        assert!(r.get("error").is_none());
+    }
+
+    #[tokio::test]
+    async fn screen_tools_describe_their_inputs() {
+        let backend = MockBackend::default();
+        let r = reply(json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/list" }), &backend).await;
+        let tools = r["result"]["tools"].as_array().unwrap();
+        let tool = |name: &str| tools.iter().find(|t| t["name"] == name).unwrap().clone();
+
+        assert_eq!(tool("screen_screenshot")["inputSchema"]["properties"], json!({}));
+        let click = tool("screen_click");
+        assert_eq!(click["inputSchema"]["required"], json!(["x", "y"]));
+        assert_eq!(
+            click["inputSchema"]["properties"]["button"]["enum"],
+            json!(["left", "right", "middle"])
+        );
+        assert_eq!(click["inputSchema"]["properties"]["double"]["type"], "boolean");
+        assert_eq!(tool("screen_move")["inputSchema"]["required"], json!(["x", "y"]));
+        assert_eq!(tool("screen_type")["inputSchema"]["required"], json!(["text"]));
+        assert_eq!(tool("screen_key")["inputSchema"]["required"], json!(["keys"]));
+        let scroll = tool("screen_scroll");
+        assert_eq!(scroll["inputSchema"]["required"], json!(["direction"]));
+        assert_eq!(
+            scroll["inputSchema"]["properties"]["direction"]["enum"],
+            json!(["up", "down", "left", "right"])
+        );
+        assert_eq!(scroll["inputSchema"]["properties"]["amount"]["minimum"], 1);
+        assert_eq!(scroll["inputSchema"]["properties"]["amount"]["maximum"], 20);
+        assert_eq!(tool("screen_launch")["inputSchema"]["required"], json!(["command"]));
+        for name in ["screen_click", "screen_move", "screen_scroll"] {
+            assert!(
+                tool(name)["description"].as_str().unwrap().contains("pixel"),
+                "{name} should say that coordinates are screen pixels"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn screen_click_is_forwarded_to_the_daemon() {
+        let backend = MockBackend::default();
+        let r = reply(
+            tool_call("screen_click", json!({ "x": 10, "y": 20, "button": "right" })),
+            &backend,
+        )
+        .await;
+        assert_eq!(r["result"]["isError"], false, "{r}");
+        assert_eq!(
+            *backend.screen_calls.lock().unwrap(),
+            vec![(
+                "screen.agent.click".to_string(),
+                json!({ "x": 10, "y": 20, "button": "right" })
+            )]
+        );
+    }
+
+    #[tokio::test]
+    async fn screen_tools_forward_to_their_daemon_method() {
+        let backend = MockBackend::default();
+        for (tool, method, args) in [
+            ("screen_move", "screen.agent.move", json!({ "x": 1, "y": 2 })),
+            ("screen_type", "screen.agent.type", json!({ "text": "hi" })),
+            ("screen_key", "screen.agent.key", json!({ "keys": "ctrl+l" })),
+            (
+                "screen_scroll",
+                "screen.agent.scroll",
+                json!({ "direction": "down", "amount": 4 }),
+            ),
+            ("screen_launch", "screen.agent.launch", json!({ "command": "firefox" })),
+        ] {
+            let r = reply(tool_call(tool, args.clone()), &backend).await;
+            assert_eq!(r["result"]["isError"], false, "{tool}: {r}");
+            assert_eq!(tool_text(&r), "Done.", "{tool}");
+            let calls = backend.screen_calls.lock().unwrap();
+            assert_eq!(calls.last().unwrap(), &(method.to_string(), args), "{tool}");
+        }
+    }
+
+    #[tokio::test]
+    async fn screen_screenshot_returns_the_size_and_the_image() {
+        let backend = MockBackend {
+            screen_reply: Some(json!({
+                "width": 1600,
+                "height": 1000,
+                "scale": 0.8,
+                "png_base64": "iVBORw0KGgo=",
+            })),
+            ..Default::default()
+        };
+        let r = reply(tool_call("screen_screenshot", json!({})), &backend).await;
+        assert_eq!(r["result"]["isError"], false, "{r}");
+        let content = r["result"]["content"].as_array().unwrap();
+        assert_eq!(content.len(), 2, "{r}");
+        assert_eq!(content[0]["type"], "text");
+        let size: Value = serde_json::from_str(content[0]["text"].as_str().unwrap()).unwrap();
+        assert_eq!(size, json!({ "width": 1600, "height": 1000, "scale": 0.8 }));
+        assert_eq!(
+            content[1],
+            json!({ "type": "image", "data": "iVBORw0KGgo=", "mimeType": "image/png" })
+        );
+        assert_eq!(backend.screen_calls.lock().unwrap()[0].0, "screen.agent.screenshot");
+    }
+
+    #[tokio::test]
+    async fn screen_refusal_from_the_daemon_is_a_tool_error() {
+        let backend = MockBackend {
+            fail: Some("The user is controlling the screen. Wait or ask them to hand it back.".into()),
+            ..Default::default()
+        };
+        let r = reply(tool_call("screen_type", json!({ "text": "hi" })), &backend).await;
+        assert_eq!(r["result"]["isError"], true);
+        assert_eq!(
+            tool_text(&r),
+            "The user is controlling the screen. Wait or ask them to hand it back."
+        );
         assert!(r.get("error").is_none());
     }
 
