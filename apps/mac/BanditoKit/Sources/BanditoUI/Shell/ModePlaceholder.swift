@@ -12,8 +12,8 @@ struct ModePlaceholder: View {
     }
 }
 
-/// Sidebar stand-in for a mode whose list needs a server. Without a server it offers the connection; with an
-/// old server it says that the server needs an update.
+/// Sidebar stand-in for a mode whose list needs a server. Without a server it stays empty: the main area
+/// already offers the connection, once. With an old server it says that the server needs an update.
 struct SidebarPlaceholder: View {
     var mode: AppMode
 
@@ -22,7 +22,7 @@ struct SidebarPlaceholder: View {
     var body: some View {
         Group {
             if app.currentServer == nil {
-                NoServerView(symbol: mode.systemImage, compact: true)
+                Color.clear
             } else {
                 VStack(spacing: 6) {
                     Text(mode.title)
