@@ -13,19 +13,25 @@ struct AccountIllustration: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduced)) { context in
-                let t = reduced ? 0 : context.date.timeIntervalSinceReferenceDate
-                ZStack {
-                    Canvas { canvas, _ in
-                        drawLink(canvas, t: t)
+        VStack(alignment: .leading, spacing: 18) {
+            // The composition is drawn at its design size (380 x 420) and scaled down to fit the card.
+            GeometryReader { geometry in
+                let scale = min(1, geometry.size.width / 380, geometry.size.height / 420)
+                TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduced)) { context in
+                    let t = reduced ? 0 : context.date.timeIntervalSinceReferenceDate
+                    ZStack {
+                        Canvas { canvas, _ in
+                            drawLink(canvas, t: t)
+                        }
+                        mac(t: t)
+                            .offset(x: -40, y: -50)
+                        phone(t: t)
+                            .offset(x: 70, y: 60)
                     }
-                    mac(t: t)
-                        .offset(x: -40, y: -50)
-                    phone(t: t)
-                        .offset(x: 70, y: 60)
+                    .frame(width: 380, height: 420)
+                    .scaleEffect(scale)
+                    .frame(width: geometry.size.width, height: geometry.size.height)
                 }
-                .frame(width: 380, height: 420)
             }
             VStack(alignment: .leading, spacing: 8) {
                 Text(L10n.Onboarding.Account.heroTitle)
@@ -36,18 +42,18 @@ struct AccountIllustration: View {
                     .foregroundStyle(Color.Bandito.text2)
                     .lineSpacing(2)
             }
-            .padding(.leading, 48)
-            .padding(.trailing, 28)
-            .padding(.top, 24)
         }
-        .padding(.top, 56)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // One rounded card: the fill, a soft glow and a hairline, all clipped to the same shape.
+        .background(Color.Bandito.surface1.opacity(0.6))
         .background(
             RadialGradient(
                 colors: [Color.Bandito.signal.opacity(0.14), .clear],
-                center: UnitPoint(x: 0.45, y: 0.45), startRadius: 0, endRadius: 300)
+                center: UnitPoint(x: 0.45, y: 0.4), startRadius: 0, endRadius: 320)
         )
-        .background(Color.Bandito.surface1.opacity(0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 22))
+        .overlay(RoundedRectangle(cornerRadius: 22).stroke(Color.Bandito.text.opacity(0.09), lineWidth: 1))
         .accessibilityHidden(true)
     }
 

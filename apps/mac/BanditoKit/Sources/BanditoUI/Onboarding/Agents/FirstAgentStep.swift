@@ -190,27 +190,38 @@ struct FirstAgentStep: View {
     @State private var pickingFolder = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text(L10n.Onboarding.Agent.title)
-                .font(BanditoFont.font(size: 30, weight: 600))
-                .foregroundStyle(Color.Bandito.text)
-            Text(L10n.Onboarding.Agent.subtitle)
-                .font(BanditoFont.font(size: 15, weight: 400))
-                .foregroundStyle(Color.Bandito.text2)
-                .lineSpacing(2)
-            if model.signedIn.isEmpty {
-                noSubscription
-            } else {
-                templates
-                if model.template != nil {
-                    form
+        HStack(alignment: .top, spacing: 28) {
+            VStack(alignment: .leading, spacing: 18) {
+                Text(L10n.Onboarding.Agent.title)
+                    .font(BanditoFont.font(size: 38, weight: 600))
+                    .foregroundStyle(Color.Bandito.text)
+                Text(L10n.Onboarding.Agent.subtitle)
+                    .font(BanditoFont.font(size: 15, weight: 400))
+                    .foregroundStyle(Color.Bandito.text2)
+                    .lineSpacing(2)
+                if model.signedIn.isEmpty {
+                    noSubscription
+                } else {
+                    templates
+                    if model.template != nil {
+                        form
+                    }
+                }
+                if let errorText = model.errorText {
+                    UserFacingErrorView(message: errorText)
                 }
             }
-            if let errorText = model.errorText {
-                UserFacingErrorView(message: errorText)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            // The preview of the agent to be hired. Its place is kept before a template is picked, so nothing shifts.
+            if !model.signedIn.isEmpty {
+                preview
+                    .frame(width: 320)
+                    .opacity(model.template == nil ? 0 : 1)
+                    .accessibilityHidden(model.template == nil)
             }
         }
-        .frame(maxWidth: 680, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .onboardingNext(hireAction)
         .task {
             await model.loadHome()
             await model.workplaces.load()
@@ -223,6 +234,82 @@ struct FirstAgentStep: View {
         }
     }
 
+    /// The agent as it will be hired: avatar, name, the settings in rows, the template's description.
+    @ViewBuilder
+    private var preview: some View {
+        if let template = model.template {
+            let shownName = model.name.trimmingCharacters(in: .whitespaces).isEmpty
+                ? template.title : model.name.trimmingCharacters(in: .whitespaces)
+            VStack(alignment: .leading, spacing: 16) {
+                Text(L10n.Onboarding.Agent.yourFirst)
+                    .font(BanditoFont.font(size: 11, weight: 600))
+                    .tracking(0.8)
+                    .foregroundStyle(Color.Bandito.text3)
+                HStack(spacing: 14) {
+                    RaccoonAvatar(name: template.title, color: color(template), size: 60)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(shownName)
+                            .font(BanditoFont.font(size: 20, weight: 600))
+                            .foregroundStyle(Color.Bandito.text)
+                            .lineLimit(1)
+                        Text(template.title)
+                            .font(BanditoFont.font(size: 12.5, weight: 400))
+                            .foregroundStyle(Color.Bandito.text3)
+                    }
+                }
+                VStack(spacing: 0) {
+                    previewRow(L10n.Onboarding.Agent.runtimeLabel, model.runtime.map(runtimeTitle) ?? "—")
+                    previewRow(L10n.Onboarding.Agent.folderLabel, model.folder)
+                    previewRow(L10n.Onboarding.Agent.workplace, model.workplace.mode == .separate
+                        ? L10n.Workspace.Choice.separate : L10n.Workspace.Choice.shared)
+                }
+                .background(Color.Bandito.text.opacity(0.02), in: RoundedRectangle(cornerRadius: 14))
+                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.Bandito.text.opacity(0.08)))
+                Text(template.description)
+                    .font(BanditoFont.font(size: 12.5, weight: 400))
+                    .foregroundStyle(Color.Bandito.text2)
+                    .lineSpacing(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(L10n.Onboarding.Agent.firstMessage(name: shownName))
+                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .foregroundStyle(Color.Bandito.text3)
+                    .lineSpacing(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(22)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .background(Color.Bandito.surface1, in: RoundedRectangle(cornerRadius: 24))
+            .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.Bandito.text.opacity(0.1)))
+        }
+    }
+
+    private func previewRow(_ key: String, _ value: String) -> some View {
+        HStack(spacing: 10) {
+            Text(key)
+                .font(BanditoFont.font(size: 13, weight: 400))
+                .foregroundStyle(Color.Bandito.text3)
+            Spacer(minLength: 8)
+            Text(value)
+                .font(BanditoFont.font(size: 13, weight: 500, mono: key == L10n.Onboarding.Agent.folderLabel))
+                .foregroundStyle(Color.Bandito.text)
+                .lineLimit(1)
+                .truncationMode(.head)
+        }
+        .padding(.horizontal, 13)
+        .padding(.vertical, 9)
+    }
+
+    /// The hire button sits in the flow's bottom bar, once a template is chosen and a runtime is signed in.
+    private var hireAction: OnboardingNextAction? {
+        guard !model.signedIn.isEmpty, model.template != nil else { return nil }
+        return OnboardingNextAction(
+            title: L10n.Onboarding.Agent.hire(name: model.name.trimmingCharacters(in: .whitespaces)),
+            isEnabled: model.canCreate
+        ) {
+            Task { await hire() }
+        }
+    }
+
     private var noSubscription: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(L10n.Onboarding.Agent.needSubscription)
@@ -230,7 +317,7 @@ struct FirstAgentStep: View {
                 .foregroundStyle(Color.Bandito.text2)
                 .lineSpacing(2)
             Button(L10n.Onboarding.Agent.toSubscriptions, action: onNeedSubscription)
-                .buttonStyle(SignalButtonStyle())
+                .banditoButton(.signal())
         }
         .padding(16)
         .background(Color.Bandito.surface1, in: RoundedRectangle(cornerRadius: 16))
@@ -288,11 +375,6 @@ struct FirstAgentStep: View {
             runtimeRow
             folderRow
             workplaceRow
-            Button(L10n.Onboarding.Agent.hire(name: model.name.trimmingCharacters(in: .whitespaces))) {
-                Task { await hire() }
-            }
-            .buttonStyle(SignalButtonStyle())
-            .disabled(!model.canCreate)
         }
     }
 
@@ -304,7 +386,7 @@ struct FirstAgentStep: View {
             HStack(spacing: 6) {
                 ForEach(model.signedIn, id: \.self) { kind in
                     Button(runtimeTitle(kind)) { model.chooseRuntime(kind) }
-                        .buttonStyle(QuietButtonStyle(size: .regular))
+                        .banditoButton(.quiet(size: .regular))
                         .overlay(
                             RoundedRectangle(cornerRadius: 999)
                                 .stroke(model.runtime == kind ? Color.Bandito.signal : .clear, lineWidth: 1.5))
@@ -326,7 +408,7 @@ struct FirstAgentStep: View {
                     .truncationMode(.head)
                 Spacer()
                 Button(L10n.Onboarding.Agent.changeFolder) { pickingFolder = true }
-                    .buttonStyle(QuietButtonStyle(size: .regular))
+                    .banditoButton(.quiet(size: .regular))
             }
             .padding(.horizontal, 14)
             .frame(height: 42)
@@ -398,7 +480,7 @@ struct FirstAgentStep: View {
 
     private func placeChip(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
         Button(title, action: action)
-            .buttonStyle(QuietButtonStyle(size: .regular))
+            .banditoButton(.quiet(size: .regular))
             .overlay(
                 RoundedRectangle(cornerRadius: 999)
                     .stroke(selected ? Color.Bandito.signal : .clear, lineWidth: 1.5))

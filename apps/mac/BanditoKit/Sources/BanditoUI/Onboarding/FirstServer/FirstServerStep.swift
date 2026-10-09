@@ -9,6 +9,9 @@ struct FirstServerStep: View {
     var onFinished: () -> Void
     /// Called once when the server is connected. The add-server sheet closes then.
     var onConnected: () -> Void = {}
+    /// Onboarding: the "next" button of the connected state goes to the flow's bottom bar, at the fixed place.
+    /// The add-server sheet keeps it inside the step.
+    var placesNextInFooter = false
 
     @Environment(AppModel.self) private var app
     @Environment(AccountHub.self) private var hub
@@ -32,7 +35,7 @@ struct FirstServerStep: View {
                 connected(config)
             }
         }
-        .frame(maxWidth: 620, alignment: .leading)
+        .frame(maxWidth: placesNextInFooter ? 760 : 620, alignment: .topLeading)
         .task {
             model.accountHub = hub
             let ssh = URL(fileURLWithPath: NSHomeDirectory()).appending(path: ".ssh")
@@ -48,63 +51,123 @@ struct FirstServerStep: View {
     // MARK: choosing
 
     private var chooser: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text(L10n.Onboarding.Server.title)
-                .font(BanditoFont.font(size: 32, weight: 600))
-                .foregroundStyle(Color.Bandito.text)
-            Text(L10n.Onboarding.Server.subtitle)
-                .font(BanditoFont.font(size: 15, weight: 400))
-                .foregroundStyle(Color.Bandito.text2)
-                .lineSpacing(2)
-            HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 26) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(L10n.Onboarding.Server.title)
+                    .font(BanditoFont.font(size: 38, weight: 600))
+                    .foregroundStyle(Color.Bandito.text)
+                Text(L10n.Onboarding.Server.subtitle)
+                    .font(BanditoFont.font(size: 15, weight: 400))
+                    .foregroundStyle(Color.Bandito.text2)
+                    .lineSpacing(2)
+            }
+            // Both cards take the height of the taller one: the row's ideal height, then each card fills it.
+            HStack(alignment: .top, spacing: 14) {
                 optionCard(
                     title: L10n.Onboarding.Server.onThisMac, text: L10n.Onboarding.Server.thisMacDesc,
-                    selected: model.option == .thisMac
+                    icon: "laptopcomputer", hint: L10n.Onboarding.Server.minutes(count: 1),
+                    recommended: false, selected: model.option == .thisMac
                 ) {
                     model.startThisMac(app: app)
                 }
                 optionCard(
                     title: L10n.Onboarding.Server.ownServer, text: L10n.Onboarding.Server.ownServerDesc,
-                    selected: model.option == .ownServer
+                    icon: "server.rack", hint: L10n.Onboarding.Server.minutes(count: 3),
+                    recommended: true, selected: model.option == .ownServer
                 ) {
                     model.choose(.ownServer)
                 }
+                noServerCard
             }
+            .fixedSize(horizontal: false, vertical: true)
             if model.option == .ownServer {
                 addressBlock
-            }
-            HStack(spacing: 6) {
-                Text(L10n.Onboarding.Server.noServerDesc)
-                    .font(BanditoFont.font(size: 12.5, weight: 400))
-                    .foregroundStyle(Color.Bandito.text3)
-                Button(L10n.Onboarding.Server.getServer) {
-                    SystemActions.open(URL(string: "https://bandito.dev/guide/server")!)
-                }
-                .buttonStyle(.plain)
-                .font(BanditoFont.font(size: 12.5, weight: 500))
-                .foregroundStyle(Color.Bandito.signal)
             }
         }
     }
 
-    private func optionCard(title: String, text: String, selected: Bool, action: @escaping () -> Void) -> some View {
+    /// The third card: no server yet. It is not a choice; it opens the guide, as on the board.
+    private var noServerCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Image(systemName: "questionmark.circle")
+                .font(.system(size: 20, weight: .medium))
+                .foregroundStyle(AvatarColor.sky.color)
+                .frame(width: 44, height: 44)
+                .background(AvatarColor.sky.color.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
+            Text(L10n.Onboarding.Server.noServer)
+                .font(BanditoFont.font(size: 17, weight: 600))
+                .foregroundStyle(Color.Bandito.text)
+            Text(L10n.Onboarding.Server.noServerDesc)
+                .font(BanditoFont.font(size: 13.5, weight: 400))
+                .foregroundStyle(Color.Bandito.text3)
+                .lineSpacing(2)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            Button(L10n.Onboarding.Server.getServer) {
+                SystemActions.open(URL(string: "https://bandito.dev/guide/server")!)
+            }
+            .buttonStyle(.plain)
+            .font(BanditoFont.font(size: 12.5, weight: 500))
+            .foregroundStyle(Color.Bandito.signal)
+            .padding(.top, 4)
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .overlay(
+            RoundedRectangle(cornerRadius: 20)
+                .strokeBorder(Color.Bandito.text.opacity(0.16), style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
+    }
+
+    /// One way to run Bandito: icon tile, title, text, a hint line at the bottom. Equal height comes from the row.
+    private func optionCard(
+        title: String, text: String, icon: String, hint: String, recommended: Bool, selected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top) {
+                    Image(systemName: icon)
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(selected ? Color.Bandito.onSignal : Color.Bandito.text2)
+                        .frame(width: 44, height: 44)
+                        .background(
+                            selected ? Color.Bandito.signalFill : Color.Bandito.text.opacity(0.06),
+                            in: RoundedRectangle(cornerRadius: 14))
+                    Spacer(minLength: 8)
+                    if recommended {
+                        Text(L10n.Common.recommended)
+                            .font(BanditoFont.font(size: 11, weight: 600))
+                            .foregroundStyle(AvatarColor.sage.color)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 3)
+                            .background(AvatarColor.sage.color.opacity(0.14), in: Capsule())
+                    }
+                }
                 Text(title)
-                    .font(BanditoFont.font(size: 16, weight: 600))
+                    .font(BanditoFont.font(size: 17, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                 Text(text)
-                    .font(BanditoFont.font(size: 13, weight: 400))
+                    .font(BanditoFont.font(size: 13.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                     .lineSpacing(2)
                     .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                Text(hint)
+                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .foregroundStyle(Color.Bandito.text3)
+                    .padding(.top, 4)
             }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.Bandito.surface1, in: RoundedRectangle(cornerRadius: 16))
+            .padding(20)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .contentShape(RoundedRectangle(cornerRadius: 20))
+            .background(
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(selected ? Color.Bandito.signal.opacity(0.09) : Color.Bandito.text.opacity(0.025)))
             .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(selected ? Color.Bandito.signal : Color.Bandito.text.opacity(0.1), lineWidth: 1))
+                RoundedRectangle(cornerRadius: 20)
+                    .stroke(
+                        selected ? Color.Bandito.signal.opacity(0.5) : Color.Bandito.text.opacity(0.09),
+                        lineWidth: 1))
         }
         .buttonStyle(.plain)
     }
@@ -124,7 +187,7 @@ struct FirstServerStep: View {
                     .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.Bandito.text.opacity(0.12)))
                     .onSubmit { model.startOwnServer(app: app) }
                 Button(L10n.Onboarding.Server.connect) { model.startOwnServer(app: app) }
-                    .buttonStyle(SignalButtonStyle())
+                    .banditoButton(.signal())
             }
             if let addressError = model.addressError {
                 Text(addressError)
@@ -138,7 +201,7 @@ struct FirstServerStep: View {
                 HStack(spacing: 6) {
                     ForEach(model.suggestions.prefix(6), id: \.self) { host in
                         Button(host) { model.address = host }
-                            .buttonStyle(QuietButtonStyle(size: .regular))
+                            .banditoButton(.quiet(size: .regular))
                     }
                 }
             }
@@ -223,9 +286,9 @@ struct FirstServerStep: View {
                 Button(L10n.Onboarding.Server.trustHost) {
                     Task { await model.trustHost(preview, app: app) }
                 }
-                .buttonStyle(SignalButtonStyle())
+                .banditoButton(.signal())
                 Button(L10n.Common.cancel) { model.backToChoice() }
-                    .buttonStyle(QuietButtonStyle())
+                    .banditoButton(.quiet())
             }
         }
     }
@@ -257,7 +320,7 @@ struct FirstServerStep: View {
                         .foregroundStyle(Color.Bandito.text)
                         .textSelection(.enabled)
                     Button(L10n.Onboarding.Server.copy) { SystemActions.copy(command) }
-                        .buttonStyle(QuietButtonStyle(size: .regular))
+                        .banditoButton(.quiet(size: .regular))
                 }
             }
             if let command = model.proxyCommand {
@@ -267,14 +330,14 @@ struct FirstServerStep: View {
                         .foregroundStyle(Color.Bandito.text)
                         .textSelection(.enabled)
                     Button(L10n.Onboarding.Server.copy) { SystemActions.copy(command) }
-                        .buttonStyle(QuietButtonStyle(size: .regular))
+                        .banditoButton(.quiet(size: .regular))
                 }
             }
             if !model.checklist.log.isEmpty {
                 logDisclosure
             }
             Button(L10n.Onboarding.Server.back) { model.backToChoice() }
-                .buttonStyle(QuietButtonStyle())
+                .banditoButton(.quiet())
         }
     }
 
@@ -297,9 +360,9 @@ struct FirstServerStep: View {
                 .lineSpacing(2)
             HStack(spacing: 10) {
                 Button(L10n.Onboarding.Server.connectRetry) { model.retryConnection(app: app) }
-                    .buttonStyle(SignalButtonStyle())
+                    .banditoButton(.signal())
                 Button(L10n.Onboarding.Server.back) { model.backToChoice() }
-                    .buttonStyle(QuietButtonStyle())
+                    .banditoButton(.quiet())
             }
         }
     }
@@ -308,7 +371,7 @@ struct FirstServerStep: View {
     private func failureActions(_ failure: InstallError) -> some View {
         if case .sshFailed(.hostKeyUnknown) = failure {
             Button(L10n.Onboarding.Server.reviewHost) { Task { await model.reviewHost() } }
-                .buttonStyle(SignalButtonStyle())
+                .banditoButton(.signal())
         } else if case .sshFailed(.keyNotAccepted) = failure, let command = Self.copyKeyCommand(model.address) {
             VStack(alignment: .leading, spacing: 10) {
                 Text(L10n.Onboarding.Server.copyKeyHint)
@@ -320,17 +383,17 @@ struct FirstServerStep: View {
                         .foregroundStyle(Color.Bandito.text)
                         .textSelection(.enabled)
                     Button(L10n.Onboarding.Server.copy) { SystemActions.copy(command) }
-                        .buttonStyle(QuietButtonStyle(size: .regular))
+                        .banditoButton(.quiet(size: .regular))
                 }
                 Button(L10n.Onboarding.Server.retry) { model.startOwnServer(app: app) }
-                    .buttonStyle(SignalButtonStyle())
+                    .banditoButton(.signal())
             }
         } else if model.option == .ownServer {
             Button(L10n.Onboarding.Server.retry) { model.startOwnServer(app: app) }
-                .buttonStyle(SignalButtonStyle())
+                .banditoButton(.signal())
         } else {
             Button(L10n.Onboarding.Server.retry) { model.startThisMac(app: app) }
-                .buttonStyle(SignalButtonStyle())
+                .banditoButton(.signal())
         }
     }
 
@@ -379,13 +442,18 @@ struct FirstServerStep: View {
                 HStack(spacing: 10) {
                     UserFacingErrorView(message: syncError)
                     Button(L10n.Onboarding.Server.retry) { model.syncServers(app: app) }
-                        .buttonStyle(QuietButtonStyle(size: .regular))
+                        .banditoButton(.quiet(size: .regular))
                 }
             }
             componentsBlock(config)
-            Button(L10n.Onboarding.Server.nextAgent, action: onFinished)
-                .buttonStyle(SignalButtonStyle())
+            if !placesNextInFooter {
+                Button(L10n.Onboarding.Server.nextAgent, action: onFinished)
+                    .banditoButton(.signal())
+            }
         }
+        .onboardingNext(placesNextInFooter
+            ? OnboardingNextAction(title: L10n.Onboarding.Server.nextAgent, isEnabled: true, perform: onFinished)
+            : nil)
     }
 
     private func componentsBlock(_ config: ServerConfig) -> some View {
@@ -417,7 +485,7 @@ struct FirstServerStep: View {
                 Button(L10n.Onboarding.Server.installMissing) {
                     Task { await model.setup.install(model.setup.missingInstallable, server: server) }
                 }
-                .buttonStyle(QuietButtonStyle())
+                .banditoButton(.quiet())
             }
             if let server {
                 Button(L10n.Onboarding.Server.checkAgain) {
@@ -446,12 +514,12 @@ struct FirstServerStep: View {
                     .foregroundStyle(Color.Bandito.text)
                     .textSelection(.enabled)
                 Button(L10n.Onboarding.Server.copy) { SystemActions.copy(command) }
-                    .buttonStyle(QuietButtonStyle(size: .regular))
+                    .banditoButton(.quiet(size: .regular))
             }
             Button(L10n.Onboarding.Server.doneCheckAgain) {
                 Task { await model.setup.load(server) }
             }
-            .buttonStyle(SignalButtonStyle())
+            .banditoButton(.signal())
         }
     }
 }
