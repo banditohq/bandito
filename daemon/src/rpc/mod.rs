@@ -16,6 +16,7 @@ use crate::store::{
 };
 use crate::supervisor::Supervisor;
 use crate::terminal::{Limits, TerminalManager};
+use crate::update;
 use chrono::{Local, NaiveDate, NaiveTime, TimeZone};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
@@ -66,6 +67,7 @@ pub fn features() -> Vec<&'static str> {
         "commands",
         "workspaces",
         "browser",
+        "update",
     ];
     if cfg!(target_os = "linux") {
         list.push("screen");
@@ -740,6 +742,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             "started_at": app.started_at,
             "last_seq": store.last_seq()?,
             "features": features(),
+            "update": update::last_check(),
         })),
         "runtimes.status" => {
             let mut out = Vec::new();
@@ -1124,6 +1127,13 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
         }
 
         "setup.status" | "setup.install" | "setup.job" => setup::dispatch(app, method, p).await,
+
+        "daemon.update_check" => ok(update::check_async(VERSION).await?),
+        "daemon.update_apply" => {
+            let update::ApplyParams { version } = params(p)?;
+            let restarting = update::rpc_apply(&version).await?;
+            ok(json!({ "ok": true, "restarting": restarting }))
+        }
 
         _ => Err(RpcError::new(METHOD_NOT_FOUND, format!("unknown method {method}"))),
     }
@@ -2039,6 +2049,11 @@ mod memory_tests {
         let features = info["features"].as_array().unwrap();
         assert!(features.contains(&json!("usage")));
         assert!(features.contains(&json!("memory")));
+        assert!(features.contains(&json!("update")));
+        assert!(
+            info.get("update").is_some(),
+            "daemon.info carries the last update check"
+        );
     }
 
     #[tokio::test]
@@ -2572,6 +2587,23 @@ mod trust_tests {
         let agent = Peer::Agent("agent-a".into());
         let v = dispatch(&app(), &agent, "crew.list", json!({})).await.unwrap();
         assert_eq!(v, json!([]));
+    }
+
+    #[tokio::test]
+    async fn only_the_owner_and_apps_may_update_the_daemon() {
+        // Refused by the gate before anything runs, so no network call happens here.
+        let agent = Peer::Agent("agent-a".into());
+        let anonymous = Peer::Anonymous("203.0.113.7".into());
+        for method in ["daemon.update_check", "daemon.update_apply"] {
+            for peer in [&agent, &anonymous] {
+                let err = dispatch(&app(), peer, method, json!({ "version": "9.9.9" }))
+                    .await
+                    .unwrap_err();
+                assert_eq!(err.code, UNAUTHORIZED, "{method} from {peer:?}");
+            }
+            assert!(allowed(&Peer::Local, method), "{method} from the owner");
+            assert!(allowed(&device(), method), "{method} from an app");
+        }
     }
 
     #[test]
