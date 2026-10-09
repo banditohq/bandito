@@ -78,7 +78,9 @@ public enum L10n {
 
     public enum Approval {
         public static func always(command: String, path: String) -> String { L10n.tr("approval.always", command, path) }
+        public static var alwaysHere: String { L10n.tr("approval.alwaysHere") }
         public static var approve: String { L10n.tr("approval.approve") }
+        public static var approvedByPolicy: String { L10n.tr("approval.approvedByPolicy") }
         public static func approvedByYou(time: String) -> String { L10n.tr("approval.approvedByYou", time) }
         public static var deniedByPolicy: String { L10n.tr("approval.deniedByPolicy") }
         public static func deniedByYou(time: String) -> String { L10n.tr("approval.deniedByYou", time) }
@@ -133,14 +135,21 @@ public enum L10n {
         public static func agentCount(count: Int) -> String { L10n.tr("common.agentCount", count) }
         public static var agents: String { L10n.tr("common.agents") }
         public static var back: String { L10n.tr("common.back") }
+        public static var cancel: String { L10n.tr("common.cancel") }
         public static var close: String { L10n.tr("common.close") }
         public static var comingSoon: String { L10n.tr("common.comingSoon") }
+        public static var delete: String { L10n.tr("common.delete") }
         public static func minutesAgo(count: Int) -> String { L10n.tr("common.minutesAgo", count) }
         public static var next: String { L10n.tr("common.next") }
         public static var now: String { L10n.tr("common.now") }
         public static var recommended: String { L10n.tr("common.recommended") }
+        public static var save: String { L10n.tr("common.save") }
         public static func serverCount(count: Int) -> String { L10n.tr("common.serverCount", count) }
         public static func workingCount(count: Int) -> String { L10n.tr("common.workingCount", count) }
+    }
+
+    public enum Composer {
+        public static var contextHint: String { L10n.tr("composer.contextHint") }
     }
 
     public enum Connect {
@@ -255,12 +264,25 @@ public enum L10n {
     public enum Inspector {
         public static var aboutAgent: String { L10n.tr("inspector.aboutAgent") }
         public static var addSchedule: String { L10n.tr("inspector.addSchedule") }
+        public static var approvals: String { L10n.tr("inspector.approvals") }
         public static var askRisky: String { L10n.tr("inspector.askRisky") }
+        public static var cronLabel: String { L10n.tr("inspector.cronLabel") }
         public static var details: String { L10n.tr("inspector.details") }
         public static var instructionsHeader: String { L10n.tr("inspector.instructionsHeader") }
+        public static var instructionsPlaceholder: String { L10n.tr("inspector.instructionsPlaceholder") }
         public static var library: String { L10n.tr("inspector.library") }
+        public static var loggedIn: String { L10n.tr("inspector.loggedIn") }
+        public static var loggedOut: String { L10n.tr("inspector.loggedOut") }
+        public static var model: String { L10n.tr("inspector.model") }
         public static func nextRun(time: String) -> String { L10n.tr("inspector.nextRun", time) }
+        public static var noSchedules: String { L10n.tr("inspector.noSchedules") }
+        public static var notInstalled: String { L10n.tr("inspector.notInstalled") }
+        public static var placeBrowser: String { L10n.tr("inspector.placeBrowser") }
+        public static var placeFolder: String { L10n.tr("inspector.placeFolder") }
+        public static var placeScreen: String { L10n.tr("inspector.placeScreen") }
+        public static var placeTerminal: String { L10n.tr("inspector.placeTerminal") }
         public static var project: String { L10n.tr("inspector.project") }
+        public static var promptLabel: String { L10n.tr("inspector.promptLabel") }
         public static func resets(time: String) -> String { L10n.tr("inspector.resets", time) }
         public static var rules: String { L10n.tr("inspector.rules") }
         public static var runNow: String { L10n.tr("inspector.runNow") }
@@ -270,9 +292,12 @@ public enum L10n {
         public static var schedules: String { L10n.tr("inspector.schedules") }
         public static var server: String { L10n.tr("inspector.server") }
         public static func serverInfo(os: String, version: String, uptime: String) -> String { L10n.tr("inspector.serverInfo", os, version, uptime) }
+        public static var subscription: String { L10n.tr("inspector.subscription") }
         public static var toggleAria: String { L10n.tr("inspector.toggleAria") }
         public static func uptime(count: Int) -> String { L10n.tr("inspector.uptime", count) }
         public static var usage: String { L10n.tr("inspector.usage") }
+        public static var whereRuns: String { L10n.tr("inspector.whereRuns") }
+        public static var workplace: String { L10n.tr("inspector.workplace") }
 
         public enum Window {
             public static var fiveHour: String { L10n.tr("inspector.window.fiveHour") }
@@ -380,6 +405,7 @@ public enum L10n {
         public static var modeAria: String { L10n.tr("memory.modeAria") }
         public static var notes: String { L10n.tr("memory.notes") }
         public static func notesMeta(files: String, count: Int) -> String { L10n.tr("memory.notesMeta", files, count) }
+        public static func occupied(tokens: String) -> String { L10n.tr("memory.occupied", tokens) }
         public static func searchResult(query: String, count: Int, time: String) -> String { L10n.tr("memory.searchResult", query, count, time) }
         public static var searched: String { L10n.tr("memory.searched") }
         public static var smart: String { L10n.tr("memory.smart") }
@@ -693,7 +719,20 @@ public enum L10n {
     }
 
     public enum Team {
+        public static var changes: String { L10n.tr("team.changes") }
+        public static var emptyTitle: String { L10n.tr("team.emptyTitle") }
+        public static var noMessages: String { L10n.tr("team.noMessages") }
+        public static var pauseUnavailable: String { L10n.tr("team.pauseUnavailable") }
         public static var pickAgent: String { L10n.tr("team.pickAgent") }
+        public static var resolvedAllowed: String { L10n.tr("team.resolvedAllowed") }
+        public static var resolvedDenied: String { L10n.tr("team.resolvedDenied") }
+        public static var schedules: String { L10n.tr("team.schedules") }
+        public static var terminal: String { L10n.tr("team.terminal") }
+        public static var workplaceShared: String { L10n.tr("team.workplaceShared") }
+
+        public enum Delete {
+            public static var action: String { L10n.tr("team.delete.action") }
+        }
     }
 
     public enum Template {
