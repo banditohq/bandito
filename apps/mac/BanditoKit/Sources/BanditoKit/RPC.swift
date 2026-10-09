@@ -47,6 +47,8 @@ public struct RPCError: Error, Sendable, Equatable, LocalizedError {
     public static let timedOut = -2
     /// Client-side: refused to send a credential over an unencrypted connection.
     public static let insecureTransport = -3
+    /// Client-side: this operation is not available for the server's connection kind yet.
+    public static let unsupportedTransport = -4
 }
 
 /// A JSON-RPC notification other than `event` (for example `term.output`), with its raw params.

@@ -5,8 +5,11 @@ import Observation
 public enum ServerEndpoint: Codable, Sendable, Hashable {
     /// The daemon on this Mac (unix socket, no token).
     case local(socketPath: String)
-    /// A WebSocket URL (`ws://127.0.0.1:7878/v1/rpc` via an SSH tunnel, a tailnet address, `wss://…`).
+    /// A WebSocket URL (`ws://127.0.0.1:7878/v1/rpc`, a tailnet address, `wss://…`).
     case webSocket(url: URL)
+    /// The daemon on a server reached over ssh. `target` is `[user@]host[:port]` or an alias; `remotePort`
+    /// is the daemon's listen port on the server's loopback. See `SSHTransport`.
+    case ssh(target: String, remotePort: Int)
 
     public static var defaultLocal: ServerEndpoint {
         .local(socketPath: FileManager.default.homeDirectoryForCurrentUser.appending(path: ".bandito/bandito.sock").path)
@@ -101,6 +104,12 @@ public final class ServerModel: Identifiable {
                 switch cfg.endpoint {
                 case .local(let path): return UnixSocketTransport(path: path)
                 case .webSocket(let url): return WebSocketTransport(url: url, token: cfg.token)
+                case .ssh(let target, let remotePort):
+                    #if os(macOS)
+                    return SSHTransport(target: target, remotePort: remotePort, token: cfg.token)
+                    #else
+                    return UnavailableTransport(reason: "ssh servers are not available on this platform yet")
+                    #endif
                 }
             }
         self.reconnectDelay = reconnectDelay ?? { ServerModel.backoff(attempt: $0) }
