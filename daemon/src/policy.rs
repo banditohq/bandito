@@ -1485,6 +1485,14 @@ mod tests {
     }
 
     #[test]
+    fn system_account_lookup_finds_root_and_nothing_for_a_missing_user() {
+        // `root` exists on Linux and macOS alike; the directory is /root or /var/root.
+        let home = system_home("root").expect("root has a home folder");
+        assert!(home.starts_with('/'), "{home}");
+        assert!(system_home("no-such-user-for-bandito-tests").is_none());
+    }
+
+    #[test]
     fn long_command_line_is_decided_quickly() {
         let line = format!("{}git push", "echo x; ".repeat(5_000));
         let started = Instant::now();
