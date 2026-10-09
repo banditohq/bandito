@@ -1,0 +1,42 @@
+name: codeql
+
+# Rust, Python and the workflows are analysed on every PR (Linux runners). Swift needs a Mac runner and
+# takes the longest, so it runs on main and weekly.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 20 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+concurrency:
+  group: codeql-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ${{ matrix.language == 'swift' && 'macos-latest' || 'ubuntu-latest' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ${{ fromJSON(github.event_name == 'pull_request' && '["rust","python","actions"]' || '["rust","python","actions","swift"]') }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.language == 'swift' && 'autobuild' || 'none' }}
+      - if: matrix.language == 'swift'
+        uses: github/codeql-action/autobuild@v3
+        with:
+          working-directory: apps/mac/BanditoKit
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: /language:${{ matrix.language }}
