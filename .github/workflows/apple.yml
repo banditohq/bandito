@@ -34,7 +34,7 @@ jobs:
       - name: Xcode version
         run: xcodebuild -version
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: apps/mac/BanditoKit/.build
           key: swiftpm-${{ runner.os }}-${{ hashFiles('apps/mac/BanditoKit/Package.resolved', 'apps/mac/BanditoKit/Package.swift') }}
@@ -57,7 +57,7 @@ jobs:
         run: brew install xcodegen
 
       - name: Cache Xcode build products
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/bandito-xcode
           key: xcode-${{ runner.os }}-${{ hashFiles('apps/mac/project.yml', 'apps/mac/BanditoKit/Package.resolved') }}-${{ github.sha }}
