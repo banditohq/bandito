@@ -37,6 +37,8 @@ public enum Sheet: Identifiable, Hashable, Sendable {
     case newAgent
     case changes(agentID: String)
     case addServer
+    /// Sign in or create an account (Onboarding's account step, reused from Settings).
+    case account
     case settings(SettingsSection)
 
     public var id: String {
@@ -44,6 +46,7 @@ public enum Sheet: Identifiable, Hashable, Sendable {
         case .newAgent: "newAgent"
         case .changes(let agentID): "changes-\(agentID)"
         case .addServer: "addServer"
+        case .account: "account"
         case .settings(let section): "settings-\(section.rawValue)"
         }
     }
@@ -76,6 +79,10 @@ public final class Router {
     public var screenID: String?
     /// Server: the section in view.
     public var serverSection: ServerSection = .overview
+    /// Browser: a port to open a preview of (Server → Open). Taken once by the browser.
+    public var pendingPreviewPort: Int?
+    /// Terminals: a command to type into a new terminal (Server → Install, Update). Taken once by the terminals.
+    public var pendingTerminalCommand: String?
 
     public var sheet: Sheet?
     /// The quick-open palette (⌘K).

@@ -2,7 +2,7 @@ import BanditoDesign
 import BanditoL10n
 import SwiftUI
 
-/// The Settings window (⌘,): 12 sections in a left navigation, 1040 × 760 pt, like the design.
+/// The Settings window (⌘,): 13 sections in a left navigation, 1040 × 760 pt, like the design.
 public struct SettingsWindow: View {
     @State private var section: SettingsSection = .general
 
@@ -79,6 +79,7 @@ public struct SettingsWindow: View {
         case .notifications: NotificationsSection()
         case .appearance: AppearanceSection()
         case .language: LanguageSection()
+        case .updates: UpdatesSection()
         }
     }
 }
