@@ -10,7 +10,9 @@ use crate::pairing;
 use crate::runtime::RuntimeKind;
 use crate::scheduler;
 use crate::setup::Setup;
-use crate::store::{AgentPatch, Device, Effort, NewAgent, NewSchedule, NextRun, RuleAction, SchedulePatch, Store};
+use crate::store::{
+    AgentPatch, Device, Effort, NewAgent, NewSchedule, NextRun, RuleAction, SHARED_WORKSPACE, SchedulePatch, Store,
+};
 use crate::supervisor::Supervisor;
 use crate::terminal::{Limits, TerminalManager};
 use chrono::{Local, NaiveDate, NaiveTime, TimeZone};
@@ -33,6 +35,7 @@ pub mod setup;
 pub mod term;
 pub mod tunnel;
 pub mod unix;
+pub mod workspaces;
 pub mod ws;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -58,6 +61,7 @@ pub fn features() -> Vec<&'static str> {
         "host",
         "setup",
         "commands",
+        "workspaces",
     ];
     if cfg!(target_os = "linux") {
         list.push("screen");
@@ -174,6 +178,8 @@ pub const SETUP_ERROR: i64 = -32024;
 pub const SCREEN_ERROR: i64 = -32025;
 /// A command or skill call failed; `error.data.reason` says why (see rpc::commands).
 pub const COMMANDS_ERROR: i64 = -32027;
+/// Workspace failures; `error.data.reason` says which (see docs/ARCHITECTURE.md#workspaces).
+pub const WORKSPACE_ERROR: i64 = -32028;
 
 impl RpcError {
     fn new(code: i64, message: impl Into<String>) -> Self {
@@ -195,7 +201,10 @@ impl RpcError {
 
 impl From<anyhow::Error> for RpcError {
     fn from(e: anyhow::Error) -> Self {
-        Self::new(SERVER_ERROR, format!("{e:#}"))
+        match e.downcast_ref::<crate::workspace::WorkspaceError>() {
+            Some(w) => Self::with_data(WORKSPACE_ERROR, w.to_string(), json!({ "reason": w.reason() })),
+            None => Self::new(SERVER_ERROR, format!("{e:#}")),
+        }
     }
 }
 
@@ -227,6 +236,14 @@ struct MaybeAgent {
     #[serde(default)]
     agent_id: Option<String>,
 }
+/// `agents.create`: a new agent, optionally in a workspace other than `shared`.
+#[derive(Deserialize)]
+struct CreateAgent {
+    #[serde(flatten)]
+    agent: NewAgent,
+    #[serde(default)]
+    workspace_id: Option<String>,
+}
 #[derive(Deserialize)]
 struct UpdateAgent {
     id: String,
@@ -249,6 +266,7 @@ struct AgentPatchParams {
     memory_mode: Option<crate::store::MemoryMode>,
     #[serde(default, deserialize_with = "double_option")]
     context_budget: Option<Option<u32>>,
+    workspace_id: Option<String>,
 }
 impl AgentPatchParams {
     /// Whether the patch changes something a running session was started with, so
@@ -266,8 +284,10 @@ impl AgentPatchParams {
             effort,
             memory_mode,
             context_budget,
+            workspace_id,
         } = self;
-        name.as_ref().is_some_and(|n| n.trim() != current.name)
+        workspace_id.as_ref().is_some_and(|w| *w != current.workspace_id)
+            || name.as_ref().is_some_and(|n| n.trim() != current.name)
             || role.as_ref().is_some_and(|r| *r != current.role)
             || model.as_ref().is_some_and(|m| *m != current.model)
             || cwd.as_ref().is_some_and(|c| *c != current.cwd)
@@ -542,6 +562,10 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
     if method.starts_with("screen.") {
         return screen::dispatch(app, peer, method, p).await;
     }
+    if method.starts_with("workspaces.") {
+        // Every `workspaces.*` name is answered there, unknown ones with METHOD_NOT_FOUND.
+        return workspaces::dispatch(app, method, p).await;
+    }
     if method.starts_with("commands.") {
         // Every `commands.*` name is answered there, unknown ones with METHOD_NOT_FOUND.
         return commands::dispatch(app, method, p).await;
@@ -586,11 +610,11 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                 .ok_or_else(|| RpcError::new(SERVER_ERROR, format!("no agent {id}")))?)
         }
         "agents.create" => {
-            let a: NewAgent = params(p)?;
+            let CreateAgent { agent: a, workspace_id } = params(p)?;
             check_cwd(&a.cwd)?;
             check_effort(a.runtime, a.effort)?;
             check_context_budget(a.context_budget)?;
-            let created = store.agent_create(a)?;
+            let created = store.agent_create_in(a, workspace_id.as_deref().unwrap_or(SHARED_WORKSPACE))?;
             let folder = home::ensure_agent_home(&app.agents_root, &created.id, &created.name).and_then(|dir| {
                 store.agent_set_home(&created.id, &dir.display().to_string())?;
                 Ok(dir)
@@ -619,8 +643,9 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             check_effort(current.runtime, patch.effort.flatten())?;
             check_context_budget(patch.context_budget.flatten())?;
             let reload = patch.changes_session(&current);
-            // A session is tied to its folder: a folder change starts a new chapter.
-            let new_chapter = patch.cwd.as_ref().is_some_and(|cwd| *cwd != current.cwd);
+            // A session is tied to its folder and its workspace: either change starts a new chapter.
+            let moved = patch.workspace_id.as_ref().is_some_and(|w| *w != current.workspace_id);
+            let new_chapter = patch.cwd.as_ref().is_some_and(|cwd| *cwd != current.cwd) || moved;
             let a = store.agent_update(
                 &id,
                 AgentPatch {
@@ -633,6 +658,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                     effort: patch.effort,
                     memory_mode: patch.memory_mode,
                     context_budget: patch.context_budget,
+                    workspace_id: patch.workspace_id,
                 },
             )?;
             // New config takes effect with the next session: the running one is

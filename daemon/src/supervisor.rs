@@ -8,7 +8,10 @@ use crate::hub::Hub;
 use crate::policy::{self, Verdict};
 use crate::redact::Redactor;
 use crate::runtime::{ApprovalRequest, Runtime, RuntimeKind, RuntimeOutput, Session, SpawnConfig};
-use crate::store::{Agent, CheckpointKind, DEFAULT_CONTEXT_BUDGET, MemoryMode, RuleAction, Store, new_id, now_ms};
+use crate::store::{
+    Agent, CheckpointKind, DEFAULT_CONTEXT_BUDGET, MemoryMode, RuleAction, Store, WorkspaceKind, new_id, now_ms,
+};
+use crate::workspace::{self, WorkspaceManager, WorkspaceSpec};
 use anyhow::{Result, anyhow, bail};
 use chrono::{DateTime, Local, NaiveTime, TimeZone};
 use serde_json::json;
@@ -135,6 +138,8 @@ pub struct Supervisor {
     actors: Mutex<HashMap<String, mpsc::Sender<Cmd>>>,
     /// Crew messages accepted so far, per chain id.
     chains: Mutex<HashMap<String, u32>>,
+    /// Docker for the container workspaces (see docs/ARCHITECTURE.md#workspaces).
+    workspaces: Arc<WorkspaceManager>,
 }
 
 /// Approvals nobody answered are denied after this long.
@@ -239,13 +244,27 @@ fn next_chapter(hub: &Hub, agent_id: &str, reason: &'static str) {
 
 impl Supervisor {
     pub fn new(hub: Hub, runtimes: Runtimes, mcp: Option<(PathBuf, Vec<String>)>) -> Arc<Self> {
+        Self::new_with_workspaces(hub, runtimes, mcp, WorkspaceManager::system())
+    }
+
+    pub fn new_with_workspaces(
+        hub: Hub,
+        runtimes: Runtimes,
+        mcp: Option<(PathBuf, Vec<String>)>,
+        workspaces: Arc<WorkspaceManager>,
+    ) -> Arc<Self> {
         Arc::new(Self {
             hub,
             runtimes,
             mcp,
             actors: Mutex::new(HashMap::new()),
             chains: Mutex::new(HashMap::new()),
+            workspaces,
         })
+    }
+
+    pub fn workspaces(&self) -> &Arc<WorkspaceManager> {
+        &self.workspaces
     }
 
     pub fn hub(&self) -> &Hub {
@@ -287,6 +306,7 @@ impl Supervisor {
             hub: self.hub.clone(),
             runtimes: self.runtimes.clone(),
             mcp: self.mcp.clone(),
+            workspaces: self.workspaces.clone(),
             session: None,
             output: None,
             redactor: Redactor::default(),
@@ -486,6 +506,7 @@ struct Actor {
     hub: Hub,
     runtimes: Runtimes,
     mcp: Option<(PathBuf, Vec<String>)>,
+    workspaces: Arc<WorkspaceManager>,
     session: Option<Box<dyn Session>>,
     output: Option<mpsc::Receiver<RuntimeOutput>>,
     /// Replaces the values of the secrets this session was started with, in everything it stores or sends.
@@ -677,6 +698,20 @@ impl Actor {
         }
         let prompt = blocks.join("\n\n");
         let secrets = self.hub.store.secrets_for_agent(&agent.id)?;
+        let ws = self
+            .hub
+            .store
+            .workspace_get(&agent.workspace_id)?
+            .ok_or_else(|| anyhow!("workspace {} is gone", agent.workspace_id))?;
+        let (workspace, mcp) = match ws.kind {
+            WorkspaceKind::Shared => (WorkspaceSpec::Shared, self.mcp.clone()),
+            WorkspaceKind::Container => {
+                let mounts = workspace::mounts_for(&self.hub.store, &ws)?;
+                self.workspaces.ensure_running(&ws, &mounts).await?;
+                // The crew server talks to the daemon socket, which is not mounted: no crew inside a container.
+                (self.workspaces.spec(&ws), None)
+            }
+        };
         let spawned = rt
             .spawn(SpawnConfig {
                 agent_id: agent.id.clone(),
@@ -685,13 +720,14 @@ impl Actor {
                 system_prompt: (!prompt.is_empty()).then_some(prompt),
                 resume: agent.runtime_session_id.clone(),
                 program: None,
-                mcp: self.mcp.clone().map(|(prog, mut args)| {
+                mcp: mcp.map(|(prog, mut args)| {
                     args.extend(["--agent".to_string(), agent.id.clone()]);
                     (prog, args)
                 }),
                 env: secrets.clone(),
                 effort: agent.effort,
                 extra_dirs: agent.home_dir.iter().map(PathBuf::from).collect(),
+                workspace: Some(workspace),
             })
             .await?;
         self.session = Some(spawned.session);
@@ -2612,5 +2648,121 @@ mod tests {
         w.push(done()).await;
         w.wait(|b| matches!(b, EventBody::TurnCompleted { .. })).await;
         assert!(w.store.checkpoint_list(&w.agent, 10).unwrap().is_empty());
+    }
+}
+
+#[cfg(test)]
+mod workspace_tests {
+    use super::testing::MockRuntime;
+    use super::*;
+    use crate::store::{ApprovalMode, MemoryMode, Network, NewAgent, NewWorkspace, Store, WorkspaceKind};
+    use crate::workspace::testing::fake_docker;
+    use crate::workspace::{WorkspaceManager, WorkspaceSpec};
+    use std::time::Duration;
+
+    fn rig(store: Arc<Store>, manager: Arc<WorkspaceManager>) -> (Arc<Supervisor>, Arc<Mutex<Vec<SpawnConfig>>>) {
+        let spawns = Arc::new(Mutex::new(Vec::new()));
+        let mut rts = Runtimes::default();
+        rts.insert(Arc::new(MockRuntime {
+            log: Arc::default(),
+            out: Arc::default(),
+            spawns: spawns.clone(),
+        }));
+        let hub = Hub::new(store);
+        (Supervisor::new_with_workspaces(hub, rts, None, manager), spawns)
+    }
+
+    fn agent(store: &Store, name: &str, workspace: &str) -> String {
+        store
+            .agent_create_in(
+                NewAgent {
+                    name: name.into(),
+                    role: String::new(),
+                    runtime: RuntimeKind::Claude,
+                    model: None,
+                    cwd: std::env::temp_dir().display().to_string(),
+                    approval_mode: ApprovalMode::Never,
+                    system_prompt: None,
+                    effort: None,
+                    memory_mode: MemoryMode::Smart,
+                    context_budget: None,
+                },
+                workspace,
+            )
+            .unwrap()
+            .id
+    }
+
+    async fn first_spawn(spawns: &Arc<Mutex<Vec<SpawnConfig>>>) -> SpawnConfig {
+        for _ in 0..100 {
+            if let Some(cfg) = spawns.lock().unwrap().first().cloned() {
+                return cfg;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        panic!("no session was spawned");
+    }
+
+    fn scratch_manager() -> Arc<WorkspaceManager> {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().to_path_buf();
+        std::mem::forget(dir);
+        WorkspaceManager::new(PathBuf::from("/nonexistent/bandito-docker"), path.join("build"))
+    }
+
+    #[tokio::test]
+    async fn a_shared_agent_gets_the_shared_spec_and_its_mcp_server() {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let id = agent(&store, "Forge", "shared");
+        let (sup, spawns) = rig(store, scratch_manager());
+        sup.send(&id, Inbound::user("go")).await.unwrap();
+        let cfg = first_spawn(&spawns).await;
+        assert_eq!(cfg.workspace, Some(WorkspaceSpec::Shared));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_container_agent_starts_its_container_and_runs_inside_it() {
+        let fake = fake_docker(None);
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let box_ws = store
+            .workspace_create(NewWorkspace {
+                name: "Box".into(),
+                kind: WorkspaceKind::Container,
+                image: Some("img:1".into()),
+                cpus: None,
+                memory_mb: None,
+                network: Network::Internet,
+                mounts: Vec::new(),
+            })
+            .unwrap();
+        let id = agent(&store, "Scout", &box_ws.id);
+        let manager = WorkspaceManager::new(fake.docker.clone(), fake.dir.path().join("build"));
+        let (sup, spawns) = rig(store, manager);
+        sup.send(&id, Inbound::user("go")).await.unwrap();
+
+        let cfg = first_spawn(&spawns).await;
+        let name = format!("bandito-ws-{}", box_ws.id);
+        assert_eq!(
+            cfg.workspace,
+            Some(WorkspaceSpec::Container {
+                name: name.clone(),
+                docker: fake.docker.clone(),
+            })
+        );
+        assert!(
+            cfg.mcp.is_none(),
+            "a container cannot reach the daemon socket, so no crew server"
+        );
+        let cwd = std::env::temp_dir().display().to_string();
+        let log = fake.calls();
+        let run = log
+            .iter()
+            .find(|l| l.starts_with(&format!("run -d --name {name} ")))
+            .unwrap_or_else(|| panic!("container created: {log:?}"));
+        assert!(
+            run.contains(&format!("source={cwd},target={cwd}")),
+            "the agent's folder is mounted: {run}"
+        );
     }
 }

@@ -20,3 +20,4 @@ pub mod setup;
 pub mod store;
 pub mod supervisor;
 pub mod terminal;
+pub mod workspace;

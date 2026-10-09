@@ -1,5 +1,6 @@
-use super::{ApprovalMode, Effort, MemoryMode, Store, new_id, now_ms};
+use super::{ApprovalMode, Effort, MemoryMode, SHARED_WORKSPACE, Store, new_id, now_ms};
 use crate::runtime::RuntimeKind;
+use crate::workspace::WorkspaceError;
 use anyhow::{Result, anyhow, bail};
 use rusqlite::{OptionalExtension, Row, params};
 use serde::{Deserialize, Serialize};
@@ -28,6 +29,8 @@ pub struct Agent {
     /// Chapter number of the current session, from 1.
     pub chapter: u32,
     pub last_turn_at: Option<i64>,
+    /// The workspace the agent's CLI runs in (see docs/ARCHITECTURE.md#workspaces).
+    pub workspace_id: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -72,9 +75,11 @@ pub struct AgentPatch {
     pub effort: Option<Option<Effort>>,
     pub memory_mode: Option<MemoryMode>,
     pub context_budget: Option<Option<u32>>,
+    /// Moves the agent to another workspace. The next session starts a new chapter.
+    pub workspace_id: Option<String>,
 }
 
-const COLS: &str = "id, name, role, runtime, model, cwd, approval_mode, system_prompt, runtime_session_id, created_at, updated_at, effort, memory_mode, context_budget, home_dir, context_tokens, chapter, last_turn_at";
+const COLS: &str = "id, name, role, runtime, model, cwd, approval_mode, system_prompt, runtime_session_id, created_at, updated_at, effort, memory_mode, context_budget, home_dir, context_tokens, chapter, last_turn_at, workspace_id";
 
 fn from_row(r: &Row) -> rusqlite::Result<Agent> {
     let runtime: String = r.get(3)?;
@@ -98,6 +103,7 @@ fn from_row(r: &Row) -> rusqlite::Result<Agent> {
         context_tokens: r.get::<_, i64>(15)?.max(0) as u64,
         chapter: r.get::<_, i64>(16)?.clamp(1, u32::MAX as i64) as u32,
         last_turn_at: r.get(17)?,
+        workspace_id: r.get(18)?,
     })
 }
 
@@ -119,7 +125,15 @@ pub fn validate_name(name: &str) -> Result<()> {
 
 impl Store {
     pub fn agent_create(&self, a: NewAgent) -> Result<Agent> {
+        self.agent_create_in(a, SHARED_WORKSPACE)
+    }
+
+    /// Creates an agent that runs in the given workspace. The workspace must exist.
+    pub fn agent_create_in(&self, a: NewAgent, workspace_id: &str) -> Result<Agent> {
         validate_name(&a.name)?;
+        if self.workspace_get(workspace_id)?.is_none() {
+            return Err(WorkspaceError::NotFound(workspace_id.to_string()).into());
+        }
         let now = now_ms();
         let agent = Agent {
             id: new_id(),
@@ -140,10 +154,11 @@ impl Store {
             context_tokens: 0,
             chapter: 1,
             last_turn_at: None,
+            workspace_id: workspace_id.to_string(),
         };
         let res = self.conn().execute(
             &format!(
-                "INSERT INTO agents ({COLS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)"
+                "INSERT INTO agents ({COLS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)"
             ),
             params![
                 agent.id,
@@ -163,7 +178,8 @@ impl Store {
                 agent.home_dir,
                 agent.context_tokens as i64,
                 agent.chapter,
-                agent.last_turn_at
+                agent.last_turn_at,
+                agent.workspace_id
             ],
         );
         match res {
@@ -231,10 +247,16 @@ impl Store {
         if let Some(v) = p.context_budget {
             a.context_budget = v;
         }
+        if let Some(v) = p.workspace_id {
+            if self.workspace_get(&v)?.is_none() {
+                return Err(WorkspaceError::NotFound(v).into());
+            }
+            a.workspace_id = v;
+        }
         a.updated_at = now_ms();
         let res = self.conn().execute(
             "UPDATE agents SET name=?2, role=?3, model=?4, cwd=?5, approval_mode=?6, system_prompt=?7, updated_at=?8,
-             effort=?9, memory_mode=?10, context_budget=?11 WHERE id=?1",
+             effort=?9, memory_mode=?10, context_budget=?11, workspace_id=?12 WHERE id=?1",
             params![
                 a.id,
                 a.name,
@@ -246,7 +268,8 @@ impl Store {
                 a.updated_at,
                 a.effort.map(Effort::as_str),
                 a.memory_mode.as_str(),
-                a.context_budget
+                a.context_budget,
+                a.workspace_id
             ],
         );
         match res {

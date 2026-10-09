@@ -17,6 +17,7 @@ mod rules;
 mod schedules;
 mod secrets;
 mod usage;
+mod workspaces;
 
 pub use agents::{Agent, AgentPatch, NewAgent};
 pub use approvals::{Approval, ApprovalStatus};
@@ -26,6 +27,7 @@ pub use rules::{Rule, RuleAction};
 pub use schedules::{NewSchedule, NextRun, Schedule, SchedulePatch};
 pub use secrets::{SecretInfo, check_agents, check_name, check_value};
 pub use usage::UsageEntry;
+pub use workspaces::{Mount, Network, NewWorkspace, SHARED_WORKSPACE, Workspace, WorkspaceKind, WorkspacePatch};
 
 const MIGRATIONS: &[&str] = &[
     include_str!("../../migrations/0001_init.sql"),
@@ -33,6 +35,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../../migrations/0003_usage_plan.sql"),
     include_str!("../../migrations/0004_checkpoints.sql"),
     include_str!("../../migrations/0005_secrets.sql"),
+    include_str!("../../migrations/0006_workspaces.sql"),
 ];
 
 pub struct Store {
@@ -374,6 +377,28 @@ mod tests {
         std::fs::set_permissions(&old, std::fs::Permissions::from_mode(0o644)).unwrap();
         Store::open(&old).unwrap();
         assert_eq!(mode(&old), 0o600, "an existing database is tightened");
+    }
+
+    #[test]
+    fn workspace_migration_gives_existing_agents_the_shared_workspace() {
+        // A database as the previous release left it: migrations 1 to 5, with an agent.
+        let conn = Connection::open_in_memory().unwrap();
+        for sql in &MIGRATIONS[..5] {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.pragma_update(None, "user_version", 5).unwrap();
+        conn.execute(
+            "INSERT INTO agents (id, name, runtime, cwd, created_at, updated_at) VALUES ('old', 'Old', 'claude', '/work', 1, 1)",
+            [],
+        )
+        .unwrap();
+
+        let s = Store::init(conn).unwrap();
+        assert_eq!(s.agent_get("old").unwrap().unwrap().workspace_id, SHARED_WORKSPACE);
+        assert_eq!(
+            s.workspace_get(SHARED_WORKSPACE).unwrap().unwrap().kind,
+            WorkspaceKind::Shared
+        );
     }
 
     #[test]

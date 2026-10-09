@@ -81,6 +81,7 @@ A pending approval blocks only that agent. Approvals time out after 24 h → den
 - `devices(id, name, token_hash, created_at, last_seen_at)`; `pairing(code_hash, expires_at)`
 - `checkpoints(id, agent_id, sha, label, kind, turn_id, created_at)`: points in an agent's folder history (see [Changes](#changes))
 - `secrets(name, value, agents, created_at, updated_at)` for API keys, file mode 0600 (keychain/age later); see [Secrets](#secrets)
+- `workspaces(id, name, kind, image, cpus, memory_mb, network, mounts, created_at)`: where an agent's CLI runs. The row `shared` is created by the migration and always exists. `agents.workspace_id` (default `shared`) says where each agent runs; see [Workspaces](#workspaces)
 
 Migrations: numbered SQL files embedded in the binary, applied by `PRAGMA user_version`.
 
@@ -88,7 +89,7 @@ Migrations: numbered SQL files embedded in the binary, applied by `PRAGMA user_v
 
 JSON-RPC 2.0. Same methods on every transport.
 
-- Requests: `daemon.info`, `runtimes.status`, `agents.list|get|create|update|delete`, `agents.send{agent_id,text}`, `agents.interrupt`, `events.since{seq,limit,agent_id?}`, `approvals.list|resolve{approval_id,decision,remember}`, `rules.list|set|delete`, `schedules.list|create|update|delete|run_now`, `devices.list|revoke`, `pair.redeem{code,device_name}` (only unauthenticated method), `term.list|open|input|resize|rename|close|attach|detach` (see Terminals), `fs.*` (see [Files](#files)), `changes.checkpoints|diff|file|restore` (see [Changes](#changes)), `secrets.list|set|delete` (see [Secrets](#secrets), `host.stats|history|processes|ports|kill`, `setup.status|install|job` (see [Setup](#setup)), `commands.list|install` (see [Commands](#commands)).
+- Requests: `daemon.info`, `runtimes.status`, `agents.list|get|create|update|delete`, `agents.send{agent_id,text}`, `agents.interrupt`, `events.since{seq,limit,agent_id?}`, `approvals.list|resolve{approval_id,decision,remember}`, `rules.list|set|delete`, `schedules.list|create|update|delete|run_now`, `devices.list|revoke`, `pair.redeem{code,device_name}` (only unauthenticated method), `term.list|open|input|resize|rename|close|attach|detach` (see Terminals), `fs.*` (see [Files](#files)), `changes.checkpoints|diff|file|restore` (see [Changes](#changes)), `secrets.list|set|delete` (see [Secrets](#secrets), `host.stats|history|processes|ports|kill`, `setup.status|install|job` (see [Setup](#setup)), `commands.list|install` (see [Commands](#commands)), `workspaces.list|create|update|delete|start|stop` (see [Workspaces](#workspaces)).
 - Notifications (server → client): `event{seq, agent_id, kind, payload, ts}` for every event including `message.delta`; `term.output|gap|exit|closed` for attached terminals (see Terminals).
 
 ## Transports (connect any way you like)
@@ -383,6 +384,47 @@ Install writes under the daemon user's home (`user`) or under the agent's folder
 
 Errors: code `-32027` (`COMMANDS_ERROR`) with `error.data.reason`: `invalid_name`, `invalid_path`, `invalid_content`, `file_count`, `too_many_files`, `too_large`, `missing_skill_file`, `exists`, `no_home`, `io`. Bad params are `-32602`.
 
+## Workspaces
+
+A workspace is where an agent's CLI runs: on the server itself, or in a Docker container with its own disk, network and limits. Agents can be mixed freely: some share the server, one sits in a container. Code: `daemon/src/workspace.rs` (Docker, the command each runtime runs), `daemon/src/store/workspaces.rs` (rows), `daemon/src/rpc/workspaces.rs` (methods). Feature string: `"workspaces"`.
+
+**Kinds.**
+
+| kind | where the CLI runs | notes |
+|---|---|---|
+| `shared` | the server, as the daemon's user | built in, always present, cannot be deleted; the default for agents |
+| `container` | Docker container `bandito-ws-<id>`, started by Bandito | own disk layer, network `internet` or `none`, optional `cpus` and `memory_mb`, extra `mounts` |
+
+A separate Linux user for a workspace is the next step, not in this version.
+
+**What a container sees.** Each agent's folder and its home (`~/bandito/agents/<slug>/`) are mounted read-write at the same paths they have on the server, so the paths in messages, approvals and checkpoints match. The workspace's own `mounts` are added (host folders, optionally read-only). The CLI logins are mounted read-write: `~/.claude` as `/root/.claude` and `~/.codex` as `/root/.codex`, when they exist, so the agent inside is logged in with the same subscription. Nothing else from the server is mounted: no other project, no daemon socket, no Docker socket. Agent secrets reach the CLI as environment variables, by name.
+
+**Image.** When a container workspace names no `image`, Bandito builds `bandito/workspace:<hash>` once from a fixed Dockerfile: `FROM node:22-bookworm` plus the global npm packages `@anthropic-ai/claude-code` and `@openai/codex`. The tag changes with the Dockerfile. With `image` set, that image is used as it is, and it must have the CLIs on `PATH` and run as root.
+
+**Lifecycle.** A container starts with the first session of an agent in its workspace. Each start checks it: missing → created; stopped → started; settings that differ (image, limits, network, or mounts, including the folders of the agents in the workspace) → recreated. Containers restart with the Docker daemon (`--restart unless-stopped`). Recreation drops the container's own writable layer, so anything installed inside it (apt or npm packages) is lost; folders on the host stay. Recreation also ends the running sessions of the other agents in that container, which resume with their next message. `workspaces.stop` stops the container; the next message starts it again.
+
+**How a CLI runs.** Runtimes build their command as before, then `workspace::confine` moves it into the workspace. For a container that is `docker exec -i -w <cwd> -e NAME… <container> <program> <args…>`, so stdin, stdout and stderr pass through and the JSON protocols do not change. Environment values are not in the argument list: `-e NAME` takes the value from the environment of the docker client, which keeps secrets out of the process list. The crew MCP server is not given to container agents: it talks to the daemon socket, which is not mounted. Approvals, checkpoints and memory keep working, because they run in the daemon on the server against the same folders.
+
+**Security.** A container isolates the files outside its mounts, the network (`none` means no network at all) and the CPU and memory it may use. It does not isolate the CLI logins: `~/.claude` and `~/.codex` are writable inside, so an agent in a container can read and change that subscription login. A mount may not be the server root, the Docker socket, or a path with `..`, `,` or `"`. Membership of the `docker` group is root-equivalent on the server, so the daemon's user holds that power whenever a container workspace exists.
+
+**Docker.** Bandito uses the `docker` program from `PATH` and runs `docker info` before each start. Without Docker, or when it does not answer, the error is `docker_unavailable` and it names the install guide. The `containers` feature of [Setup](#setup) shows the same check.
+
+**Methods.**
+
+| method | params | result |
+|---|---|---|
+| `workspaces.list` | `{}` | `[Workspace + {agents: [ids], status}]`. `status` is `null` for `shared`; for a container it is `{running, container_id, cpu, mem}`, or `{running: false, error}` when Docker cannot answer |
+| `workspaces.create` | `{name, kind: "shared"\|"container", image?, cpus?, memory_mb?, network?: "internet"\|"none", mounts?: [{host, target, read_only?}]}` | `Workspace` |
+| `workspaces.update` | `{id, name?, image?, cpus?, memory_mb?, network?, mounts?}`; `null` clears `image`, `cpus` or `memory_mb` | `Workspace`. Limits and mounts apply at the container's next start |
+| `workspaces.delete` | `{id}` | `{deleted: true}`. Removes the container of an empty workspace first |
+| `workspaces.start`, `workspaces.stop` | `{id}` | `status` (container workspaces only) |
+
+`agents.create` and `agents.update` take `workspace_id` (default `shared`). Moving an agent starts a new chapter, as a folder change does.
+
+Limits: name 1–64 characters; `cpus` 0.1–64; `memory_mb` 64–262144; mounts are absolute paths without `,`, `"` or `..`. The shared workspace has no container settings, so it refuses them.
+
+Errors: code `-32028` (`WORKSPACE_ERROR`) with `error.data.reason`: `docker_unavailable`, `not_found`, `builtin` (the shared workspace cannot be deleted), `not_empty` (agents still run in it), `invalid` (bad settings or mount), `docker` (Docker failed; its message is in `message`).
+
 ## Mac app
 
 SwiftUI, macOS 14+. Sidebar: servers → crew. Thread view rendered from events; approval cards with Approve / Deny / Always; schedules; connection wizard. Menu bar item with the status dot. Local notifications with Approve / Deny actions while the app runs. Strings in a String Catalog, 9 languages. Colors from `brand/tokens/dist`.
@@ -400,6 +442,7 @@ daemon/            Rust crate `bandito`
   src/host.rs      host load, processes, ports, kill (see Host)
   src/setup.rs     components per feature, install jobs (see Setup)
   src/commands.rs  slash commands: discovery, expansion, install (see Commands)
+  src/workspace.rs where CLIs run: the server or a Docker container (see Workspaces)
   src/scheduler.rs
   src/crew.rs      MCP server
   tests/fixtures/  recorded protocol transcripts
@@ -460,7 +503,7 @@ The agent's instructions (built by the daemon, before the user's own) explain th
 
 **Recall instead of remembering.** The crew MCP server also offers `history_search{query}` and `history_day{date}` over the agent's own past messages in the daemon's database, so an agent looks up what was said weeks ago instead of carrying it.
 
-**Changing an agent.** `agents.update` applies name, role, model, effort, system prompt, memory mode, context budget and folder from the next session: an idle agent's session is closed at once, a running one when its turn ends. The chapter goes on, except after a folder change, which starts a new chapter (a CLI session is tied to its folder). The approval mode is read on every request and needs no restart.
+**Changing an agent.** `agents.update` applies name, role, model, effort, system prompt, memory mode, context budget and folder from the next session: an idle agent's session is closed at once, a running one when its turn ends. The chapter goes on, except after a folder change or a workspace change, which starts a new chapter (a CLI session is tied to its folder and to where it runs; see [Workspaces](#workspaces)). The approval mode is read on every request and needs no restart.
 
 **Effort.** Each agent has an `effort` (`low`, `medium`, `high`, `xhigh`, `max`). The daemon maps it to the runtime (`--effort` for Claude, the turn's `effort` for Codex, `--reasoning-effort` for Grok) and refuses levels a runtime does not offer.
 

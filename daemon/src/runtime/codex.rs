@@ -119,6 +119,7 @@ impl Runtime for CodexRuntime {
         let router_launch = launch.clone();
         let router: Router =
             Box::new(move |msg: &Value, sink: &LineSink| route(msg, &router_state, &router_launch, sink));
+        let cmd = crate::workspace::confine(cmd, cfg.workspace.as_ref());
         let (proc, output) = JsonProcess::spawn(cmd, LABEL, router)?;
         let sink = proc.sink();
         // A CLI that already died has closed its stdin. Its exit reaches the caller as `Exited`.

@@ -113,6 +113,8 @@ pub struct SpawnConfig {
     pub effort: Option<crate::store::Effort>,
     /// Folders besides `cwd` the agent may read and write (its home).
     pub extra_dirs: Vec<PathBuf>,
+    /// Where the CLI runs (see docs/ARCHITECTURE.md#workspaces). `None` = the server itself.
+    pub workspace: Option<crate::workspace::WorkspaceSpec>,
 }
 
 /// A live session with one agent CLI.

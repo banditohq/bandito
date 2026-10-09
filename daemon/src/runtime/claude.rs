@@ -158,6 +158,7 @@ impl Runtime for ClaudeRuntime {
         let pending: PendingMap = Arc::new(Mutex::new(HashMap::new()));
         let router_pending = Arc::clone(&pending);
         let router: Router = Box::new(move |msg: &Value, sink: &LineSink| route(msg, &router_pending, sink));
+        let cmd = crate::workspace::confine(cmd, cfg.workspace.as_ref());
         let (proc, output) = JsonProcess::spawn(cmd, "claude", router)?;
         let init = json!({
             "type": "control_request",
