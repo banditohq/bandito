@@ -367,11 +367,23 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             if patch.prompt.as_deref().is_some_and(|t| t.trim().is_empty()) {
                 return Err(RpcError::new(INVALID_PARAMS, "prompt is empty"));
             }
-            let cron = patch.cron.as_deref().unwrap_or(&cur.cron);
-            let tz = patch.tz.as_deref().unwrap_or(&cur.tz);
-            let next = scheduler::next_run(cron, tz, crate::store::now_ms())
-                .map_err(|e| RpcError::new(INVALID_PARAMS, e.to_string()))?;
-            ok(store.schedule_update(&id, patch, Some(next))?)
+            // Recompute the next run only when the timing changes (cron or zone) or the
+            // schedule is switched on. A prompt edit or a switch off keeps next_run_at,
+            // so a run that is already due is not pushed back or duplicated.
+            let timing_changed = patch.cron.as_deref().is_some_and(|c| c != cur.cron)
+                || patch.tz.as_deref().is_some_and(|z| z != cur.tz);
+            let switched_on = patch.enabled == Some(true) && !cur.enabled;
+            let next = if timing_changed || switched_on {
+                let cron = patch.cron.as_deref().unwrap_or(&cur.cron);
+                let tz = patch.tz.as_deref().unwrap_or(&cur.tz);
+                Some(
+                    scheduler::next_run(cron, tz, crate::store::now_ms())
+                        .map_err(|e| RpcError::new(INVALID_PARAMS, e.to_string()))?,
+                )
+            } else {
+                cur.next_run_at
+            };
+            ok(store.schedule_update(&id, patch, next)?)
         }
         "schedules.delete" => {
             let Id { id } = params(p)?;
@@ -666,6 +678,63 @@ mod schedule_tests {
         .await
         .unwrap_err();
         assert_eq!(err, RpcError::new(SERVER_ERROR, "no agent nope"));
+    }
+
+    #[tokio::test]
+    async fn schedules_update_keeps_next_run_unless_timing_or_enabled_changes() {
+        let (app, agent) = app_with_agent();
+        let created = call(
+            &app,
+            "schedules.create",
+            json!({"agent_id": agent, "cron": "0 2 * * *", "prompt": "report"}),
+        )
+        .await
+        .unwrap();
+        let id = created["id"].as_str().unwrap().to_string();
+        let next = created["next_run_at"].as_i64().unwrap();
+
+        let edited = call(&app, "schedules.update", json!({"id": id, "prompt": "new prompt"}))
+            .await
+            .unwrap();
+        assert_eq!(edited["prompt"], "new prompt");
+        assert_eq!(edited["next_run_at"], next);
+
+        // Repeating the current cron and zone is not a change either.
+        let same = call(
+            &app,
+            "schedules.update",
+            json!({"id": id, "cron": "0 2 * * *", "tz": "UTC"}),
+        )
+        .await
+        .unwrap();
+        assert_eq!(same["next_run_at"], next);
+
+        let off = call(&app, "schedules.update", json!({"id": id, "enabled": false}))
+            .await
+            .unwrap();
+        assert_eq!(off["enabled"], false);
+        assert_eq!(off["next_run_at"], next);
+
+        // Switching on recomputes: a stale (already due) value is replaced by a future one.
+        app.sup
+            .hub()
+            .store
+            .schedule_update(&id, SchedulePatch::default(), Some(1_000))
+            .unwrap();
+        let on = call(&app, "schedules.update", json!({"id": id, "enabled": true}))
+            .await
+            .unwrap();
+        assert_eq!(on["enabled"], true);
+        assert!(on["next_run_at"].as_i64().unwrap() > crate::store::now_ms());
+
+        // A cron change moves the next run to 03:00.
+        let moved = call(&app, "schedules.update", json!({"id": id, "cron": "0 3 * * *"}))
+            .await
+            .unwrap();
+        assert_eq!(
+            moved["next_run_at"].as_i64().unwrap().rem_euclid(86_400_000),
+            3 * 3_600_000
+        );
     }
 
     #[tokio::test]

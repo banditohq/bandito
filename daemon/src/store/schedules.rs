@@ -150,6 +150,28 @@ impl Store {
         Ok(())
     }
 
+    /// Claim a due run (compare-and-set). Succeeds only if the schedule is still enabled and
+    /// its `next_run_at` is still `due_at`; then records `last_run_at = ran_at`, `next_run_at = next`.
+    /// `false` means the schedule was changed or disabled since it was read, so nothing is recorded.
+    pub fn schedule_claim(&self, id: &str, due_at: i64, ran_at: i64, next: Option<i64>) -> Result<bool> {
+        let n = self.conn().execute(
+            "UPDATE schedules SET last_run_at = ?3, next_run_at = ?4
+             WHERE id = ?1 AND enabled = 1 AND next_run_at = ?2",
+            params![id, due_at, ran_at, next],
+        )?;
+        Ok(n == 1)
+    }
+
+    /// Move a due run that is skipped as missed (compare-and-set on `next_run_at`).
+    /// `last_run_at` is not touched. `false` if `next_run_at` is no longer `due_at`.
+    pub fn schedule_reschedule(&self, id: &str, due_at: i64, next: Option<i64>) -> Result<bool> {
+        let n = self.conn().execute(
+            "UPDATE schedules SET next_run_at = ?3 WHERE id = ?1 AND next_run_at = ?2",
+            params![id, due_at, next],
+        )?;
+        Ok(n == 1)
+    }
+
     /// Enabled schedules with `next_run_at <= now`, ordered by `next_run_at`.
     pub fn schedule_due(&self, now: i64) -> Result<Vec<Schedule>> {
         let conn = self.conn();
@@ -304,5 +326,60 @@ mod tests {
         assert!(s.schedule_delete(&a.id).unwrap());
         assert!(!s.schedule_delete(&a.id).unwrap());
         assert_eq!(s.schedule_get(&a.id).unwrap(), None);
+    }
+
+    #[test]
+    fn claim_records_run_once_for_the_due_value() {
+        let s = Store::open_in_memory().unwrap();
+        let a = s.schedule_create(new("agent-1"), Some(100)).unwrap();
+        assert!(s.schedule_claim(&a.id, 100, 105, Some(500)).unwrap());
+        let b = s.schedule_get(&a.id).unwrap().unwrap();
+        assert_eq!(b.last_run_at, Some(105));
+        assert_eq!(b.next_run_at, Some(500));
+        // The same due value is gone now: a second claim (same tick or a racing one) loses.
+        assert!(!s.schedule_claim(&a.id, 100, 106, Some(600)).unwrap());
+        assert_eq!(s.schedule_get(&a.id).unwrap(), Some(b));
+    }
+
+    #[test]
+    fn claim_is_false_when_disabled() {
+        let s = Store::open_in_memory().unwrap();
+        let a = s.schedule_create(new("agent-1"), Some(100)).unwrap();
+        let patch = SchedulePatch {
+            enabled: Some(false),
+            ..Default::default()
+        };
+        s.schedule_update(&a.id, patch, Some(100)).unwrap();
+        assert!(!s.schedule_claim(&a.id, 100, 105, Some(500)).unwrap());
+        let b = s.schedule_get(&a.id).unwrap().unwrap();
+        assert_eq!(b.last_run_at, None);
+        assert_eq!(b.next_run_at, Some(100));
+    }
+
+    #[test]
+    fn claim_is_false_when_next_run_changed() {
+        let s = Store::open_in_memory().unwrap();
+        let a = s.schedule_create(new("agent-1"), Some(100)).unwrap();
+        let patch = SchedulePatch {
+            cron: Some("*/5 * * * *".into()),
+            ..Default::default()
+        };
+        s.schedule_update(&a.id, patch, Some(900)).unwrap();
+        assert!(!s.schedule_claim(&a.id, 100, 105, Some(500)).unwrap());
+        assert_eq!(s.schedule_get(&a.id).unwrap().unwrap().next_run_at, Some(900));
+        assert!(!s.schedule_claim("missing", 100, 105, Some(500)).unwrap());
+    }
+
+    #[test]
+    fn reschedule_moves_next_and_keeps_last_run() {
+        let s = Store::open_in_memory().unwrap();
+        let a = s.schedule_create(new("agent-1"), Some(100)).unwrap();
+        assert!(s.schedule_reschedule(&a.id, 100, Some(500)).unwrap());
+        let b = s.schedule_get(&a.id).unwrap().unwrap();
+        assert_eq!(b.next_run_at, Some(500));
+        assert_eq!(b.last_run_at, None);
+        // Stale due value: no longer matches, nothing changes.
+        assert!(!s.schedule_reschedule(&a.id, 100, Some(900)).unwrap());
+        assert_eq!(s.schedule_get(&a.id).unwrap().unwrap().next_run_at, Some(500));
     }
 }
