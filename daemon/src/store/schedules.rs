@@ -36,6 +36,14 @@ fn yes() -> bool {
     true
 }
 
+/// What [`Store::schedule_update`] does with `next_run_at`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NextRun {
+    /// Leave the stored value.
+    Keep,
+    Set(Option<i64>),
+}
+
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct SchedulePatch {
     pub cron: Option<String>,
@@ -110,8 +118,10 @@ impl Store {
         Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
 
-    /// Apply the patch and set `next_run_at` (caller recomputes it). Error if missing.
-    pub fn schedule_update(&self, id: &str, p: SchedulePatch, next_run_at: Option<i64>) -> Result<Schedule> {
+    /// Apply the patch in one transaction. `next` either sets `next_run_at` or
+    /// leaves the stored value alone, so an edit can't undo a concurrent claim.
+    /// Error if missing.
+    pub fn schedule_update(&self, id: &str, p: SchedulePatch, next: NextRun) -> Result<Schedule> {
         let conn = self.conn();
         let tx = conn.unchecked_transaction()?;
         let Some(mut s) = tx
@@ -132,13 +142,24 @@ impl Store {
         if let Some(v) = p.enabled {
             s.enabled = v;
         }
-        s.next_run_at = next_run_at;
+        if let NextRun::Set(v) = next {
+            s.next_run_at = v;
+        }
         tx.execute(
             "UPDATE schedules SET cron = ?2, tz = ?3, prompt = ?4, enabled = ?5, next_run_at = ?6 WHERE id = ?1",
             params![s.id, s.cron, s.tz, s.prompt, i64::from(s.enabled), s.next_run_at],
         )?;
         tx.commit()?;
         Ok(s)
+    }
+
+    /// Record a manual run: only `last_run_at` changes.
+    pub fn schedule_mark_ran(&self, id: &str, ran_at: i64) -> Result<()> {
+        self.conn().execute(
+            "UPDATE schedules SET last_run_at = ?2 WHERE id = ?1",
+            params![id, ran_at],
+        )?;
+        Ok(())
     }
 
     /// Record a run: `last_run_at = ran_at`, `next_run_at = next`.
@@ -203,6 +224,16 @@ mod tests {
     }
 
     #[test]
+    fn mark_ran_touches_only_last_run() {
+        let s = Store::open_in_memory().unwrap();
+        let a = s.schedule_create(new("agent-1"), Some(5000)).unwrap();
+        s.schedule_mark_ran(&a.id, 42).unwrap();
+        let b = s.schedule_get(&a.id).unwrap().unwrap();
+        assert_eq!(b.last_run_at, Some(42));
+        assert_eq!(b.next_run_at, Some(5000));
+    }
+
+    #[test]
     fn create_get_and_list_by_agent() {
         let s = Store::open_in_memory().unwrap();
         let a = s.schedule_create(new("agent-1"), Some(1000)).unwrap();
@@ -228,7 +259,7 @@ mod tests {
             prompt: Some("new prompt".into()),
             enabled: Some(false),
         };
-        let b = s.schedule_update(&a.id, patch, Some(2000)).unwrap();
+        let b = s.schedule_update(&a.id, patch, NextRun::Set(Some(2000))).unwrap();
         assert_eq!(b.cron, "*/5 * * * *");
         assert_eq!(b.tz, "Asia/Tokyo");
         assert_eq!(b.prompt, "new prompt");
@@ -246,9 +277,10 @@ mod tests {
                     prompt: Some("only prompt".into()),
                     ..Default::default()
                 },
-                Some(2000),
+                NextRun::Keep,
             )
             .unwrap();
+        assert_eq!(c.next_run_at, Some(2000), "Keep leaves next_run_at alone");
         assert_eq!(c.cron, "*/5 * * * *");
         assert_eq!(c.tz, "Asia/Tokyo");
         assert!(!c.enabled);
@@ -259,7 +291,9 @@ mod tests {
     fn update_sets_next_run_as_given_even_to_none() {
         let s = Store::open_in_memory().unwrap();
         let a = s.schedule_create(new("agent-1"), Some(1000)).unwrap();
-        let b = s.schedule_update(&a.id, SchedulePatch::default(), None).unwrap();
+        let b = s
+            .schedule_update(&a.id, SchedulePatch::default(), NextRun::Set(None))
+            .unwrap();
         assert_eq!(b.next_run_at, None);
         assert_eq!(s.schedule_get(&a.id).unwrap().unwrap().next_run_at, None);
     }
@@ -268,7 +302,7 @@ mod tests {
     fn update_missing_is_err() {
         let s = Store::open_in_memory().unwrap();
         let err = s
-            .schedule_update("missing", SchedulePatch::default(), None)
+            .schedule_update("missing", SchedulePatch::default(), NextRun::Set(None))
             .unwrap_err();
         assert!(err.to_string().contains("no schedule missing"));
     }
@@ -349,7 +383,7 @@ mod tests {
             enabled: Some(false),
             ..Default::default()
         };
-        s.schedule_update(&a.id, patch, Some(100)).unwrap();
+        s.schedule_update(&a.id, patch, NextRun::Set(Some(100))).unwrap();
         assert!(!s.schedule_claim(&a.id, 100, 105, Some(500)).unwrap());
         let b = s.schedule_get(&a.id).unwrap().unwrap();
         assert_eq!(b.last_run_at, None);
@@ -364,7 +398,7 @@ mod tests {
             cron: Some("*/5 * * * *".into()),
             ..Default::default()
         };
-        s.schedule_update(&a.id, patch, Some(900)).unwrap();
+        s.schedule_update(&a.id, patch, NextRun::Set(Some(900))).unwrap();
         assert!(!s.schedule_claim(&a.id, 100, 105, Some(500)).unwrap());
         assert_eq!(s.schedule_get(&a.id).unwrap().unwrap().next_run_at, Some(900));
         assert!(!s.schedule_claim("missing", 100, 105, Some(500)).unwrap());

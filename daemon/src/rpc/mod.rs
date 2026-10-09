@@ -4,7 +4,7 @@
 use crate::event::{Decision, Event};
 use crate::pairing;
 use crate::scheduler;
-use crate::store::{AgentPatch, Device, NewAgent, NewSchedule, RuleAction, SchedulePatch};
+use crate::store::{AgentPatch, Device, NewAgent, NewSchedule, NextRun, RuleAction, SchedulePatch};
 use crate::supervisor::{Inbound, Supervisor};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
@@ -376,12 +376,12 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             let next = if timing_changed || switched_on {
                 let cron = patch.cron.as_deref().unwrap_or(&cur.cron);
                 let tz = patch.tz.as_deref().unwrap_or(&cur.tz);
-                Some(
+                NextRun::Set(Some(
                     scheduler::next_run(cron, tz, crate::store::now_ms())
                         .map_err(|e| RpcError::new(INVALID_PARAMS, e.to_string()))?,
-                )
+                ))
             } else {
-                cur.next_run_at
+                NextRun::Keep
             };
             ok(store.schedule_update(&id, patch, next)?)
         }
@@ -719,7 +719,7 @@ mod schedule_tests {
         app.sup
             .hub()
             .store
-            .schedule_update(&id, SchedulePatch::default(), Some(1_000))
+            .schedule_update(&id, SchedulePatch::default(), NextRun::Set(Some(1_000)))
             .unwrap();
         let on = call(&app, "schedules.update", json!({"id": id, "enabled": true}))
             .await

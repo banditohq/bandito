@@ -6,7 +6,7 @@
 //! skipped and only the next occurrence is scheduled. Cron patterns have five
 //! fields (`min hour dom mon dow`) and are evaluated in an IANA time zone.
 
-use crate::store::{SchedulePatch, now_ms};
+use crate::store::{NextRun, SchedulePatch, now_ms};
 use crate::supervisor::{Inbound, Supervisor};
 use anyhow::{Result, anyhow, bail};
 use chrono::{DateTime, Utc};
@@ -66,7 +66,7 @@ pub async fn tick(sup: &Supervisor, now_ms: i64) -> Result<usize> {
                     enabled: Some(false),
                     ..Default::default()
                 };
-                if let Err(e) = store.schedule_update(&s.id, disable, None) {
+                if let Err(e) = store.schedule_update(&s.id, disable, NextRun::Set(None)) {
                     tracing::warn!(schedule = %s.id, "could not disable broken schedule: {e:#}");
                 }
                 continue;
@@ -111,7 +111,7 @@ pub async fn run_now(sup: &Supervisor, id: &str) -> Result<()> {
         bail!("no schedule {id}");
     };
     sup.send(&s.agent_id, Inbound::schedule(s.prompt.clone())).await?;
-    store.schedule_mark_run(&s.id, now_ms(), s.next_run_at)?;
+    store.schedule_mark_ran(&s.id, now_ms())?;
     Ok(())
 }
 
