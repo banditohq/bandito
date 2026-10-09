@@ -32,16 +32,23 @@ struct AccountSignInView: View {
     @State private var showGitHub = false
 
     var body: some View {
-        HStack(spacing: 0) {
-            if showsIllustration {
-                AccountIllustration()
-                    .frame(width: 380)
+        GeometryReader { geometry in
+            HStack(spacing: 0) {
+                if showsIllustration {
+                    // Left column: about 44% of the step, the card keeps its inset from the flow's bars.
+                    AccountIllustration()
+                        .frame(width: Self.illustrationWidth(for: geometry.size.width))
+                }
+                // Right column: the form, vertically centered; it scrolls when the window is short.
+                ScrollView {
+                    form
+                        .frame(maxWidth: 460, alignment: .leading)
+                        .frame(maxWidth: .infinity, minHeight: geometry.size.height, alignment: .center)
+                        .padding(.horizontal, showsIllustration ? 48 : 0)
+                }
+                .scrollIndicators(.hidden)
             }
-            form
-                .frame(maxWidth: 460, alignment: .leading)
-                .padding(.leading, showsIllustration ? 56 : 0)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task { await build() }
         .onChange(of: finishedSession) { _, session in
             if session != nil { Task { await finish() } }
@@ -55,6 +62,11 @@ struct AccountSignInView: View {
         }
         // Leaving the screen stops a GitHub wait that is still running.
         .onDisappear { models?.github.cancel() }
+    }
+
+    /// The illustration column: 44% of the step's width, between 300 and 520 points.
+    static func illustrationWidth(for stepWidth: CGFloat) -> CGFloat {
+        min(520, max(300, (stepWidth * 0.44).rounded()))
     }
 
     /// Set when either way of signing in succeeded.

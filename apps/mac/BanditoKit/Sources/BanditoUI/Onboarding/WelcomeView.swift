@@ -11,94 +11,121 @@ struct WelcomeView: View {
     @State private var demoStart = Date()
     @State private var storyAnchorIndex = 0
     @State private var storyAnchorTime = Date()
-    @State private var languageChanged = false
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            BlurOrbs()
-            VStack(spacing: 0) {
-                HStack(alignment: .center, spacing: 56) {
-                    intro
-                        .frame(maxWidth: 560, alignment: .leading)
-                    WelcomeDemoCard(start: demoStart) {
-                        demoStart = Date()
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                OnboardingStepBar(current: 0)
-                    .padding(.top, 24)
+        // The background, the top bar (with the language control) and the step bar belong to the flow.
+        // Four layouts, the first that fits: wide or narrow (the demo leaves below ~1040 pt), full or compact (short window).
+        ViewThatFits {
+            layout(wide: true, compact: false)
+            layout(wide: true, compact: true)
+            layout(wide: false, compact: false)
+            layout(wide: false, compact: true)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func layout(wide: Bool, compact: Bool) -> some View {
+        VStack(spacing: 0) {
+            if wide {
+                wideLayout(compact: compact)
+            } else {
+                narrowLayout(compact: compact)
+            }
+            if !compact {
                 Text(L10n.Onboarding.Welcome.footer)
                     .font(BanditoFont.font(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.top, 14)
             }
-            languageMenu
-                .padding(.top, 4)
         }
     }
 
-    private var intro: some View {
-        VStack(alignment: .leading, spacing: 22) {
-            RaccoonMark()
-            (Text(L10n.Onboarding.Welcome.headline)
-                + Text("\n")
-                + Text(L10n.Onboarding.Welcome.headlineAccent)
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [AvatarColor.peach.color, Color.Bandito.signal, Color.Bandito.signalFillEnd],
-                            startPoint: .leading, endPoint: .trailing)))
-                .font(BanditoFont.font(size: 62, weight: 600))
-                .foregroundStyle(Color.Bandito.text)
-                .lineSpacing(-4)
+    private func wideLayout(compact: Bool) -> some View {
+        HStack(alignment: .center, spacing: 40) {
+            intro(compact: compact)
+                .frame(width: 540, alignment: .leading)
+            WelcomeDemoCard(start: demoStart) {
+                demoStart = Date()
+            }
+        }
+    }
+
+    private func narrowLayout(compact: Bool) -> some View {
+        intro(compact: compact)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func intro(compact: Bool) -> some View {
+        VStack(alignment: .leading, spacing: compact ? 14 : 22) {
+            if !compact {
+                RaccoonMark()
+            }
+            // The headline is never cut: the first size whose two lines fit the column is used.
+            if compact {
+                ViewThatFits(in: .horizontal) {
+                    headline(size: 44)
+                    headline(size: 40)
+                    headline(size: 36)
+                }
+            } else {
+                ViewThatFits(in: .horizontal) {
+                    headline(size: 62)
+                    headline(size: 52)
+                    headline(size: 44)
+                    headline(size: 36)
+                }
+            }
             Text(L10n.Onboarding.Welcome.subtitle)
                 .font(BanditoFont.font(size: 17, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .lineSpacing(3)
-            StoryCard(anchorIndex: $storyAnchorIndex, anchorTime: $storyAnchorTime)
-            HStack(spacing: 14) {
-                Button(action: onContinue) {
-                    HStack(spacing: 10) {
-                        Text(L10n.Onboarding.Welcome.start)
-                        Image(systemName: "arrow.right")
-                    }
+            StoryCard(anchorIndex: $storyAnchorIndex, anchorTime: $storyAnchorTime, compact: compact)
+            // Side by side when there is room, one under the other otherwise. Labels never wrap.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 14) {
+                    startButton
+                    hasAccountButton
                 }
-                .buttonStyle(SignalButtonStyle(size: .large))
-                Button(L10n.Onboarding.Welcome.hasAccount, action: onContinue)
-                    .buttonStyle(QuietButtonStyle(size: .large))
+                VStack(alignment: .leading, spacing: 12) {
+                    startButton
+                    hasAccountButton
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// The language menu from the design: the same choice as Settings → Language, applied after a restart.
-    private var languageMenu: some View {
-        VStack(alignment: .trailing, spacing: 6) {
-            Menu {
-                ForEach(L10n.languages, id: \.code) { entry in
-                    Button(entry.native) {
-                        GeneralSection.storeLanguage(entry.code)
-                        languageChanged = true
-                    }
-                }
-            } label: {
-                Label(currentLanguageName, systemImage: "globe")
-                    .font(BanditoFont.font(size: 12.5, weight: 400))
-            }
-            .menuStyle(.borderlessButton)
+    private func headline(size: CGFloat) -> some View {
+        (Text(L10n.Onboarding.Welcome.headline)
+            + Text("\n")
+            + Text(L10n.Onboarding.Welcome.headlineAccent)
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [AvatarColor.peach.color, Color.Bandito.signal, Color.Bandito.signalFillEnd],
+                        startPoint: .leading, endPoint: .trailing)))
+            .font(BanditoFont.font(size: size, weight: 600))
+            .foregroundStyle(Color.Bandito.text)
+            .lineSpacing(-4)
             .fixedSize()
-            if languageChanged {
-                Text(L10n.Settings.languageRestart)
-                    .font(BanditoFont.font(size: 11.5, weight: 400))
-                    .foregroundStyle(Color.Bandito.text3)
-            }
-        }
-        .padding(.trailing, 24)
     }
 
-    private var currentLanguageName: String {
-        let code = GeneralSection.storedLanguage()
-        return L10n.languages.first { $0.code == code }?.native ?? "English"
+    private var startButton: some View {
+        Button(action: onContinue) {
+            HStack(spacing: 10) {
+                Text(L10n.Onboarding.Welcome.start)
+                Image(systemName: "arrow.right")
+            }
+            .fixedSize()
+        }
+        .buttonStyle(SignalButtonStyle(size: .large))
+        .fixedSize()
+    }
+
+    private var hasAccountButton: some View {
+        Button(L10n.Onboarding.Welcome.hasAccount, action: onContinue)
+            .buttonStyle(QuietButtonStyle(size: .large))
+            .fixedSize()
     }
 }
 
@@ -123,6 +150,8 @@ private struct RaccoonMark: View {
 private struct StoryCard: View {
     @Binding var anchorIndex: Int
     @Binding var anchorTime: Date
+    /// On a short window the card is shorter: smaller icon and padding.
+    var compact = false
 
     private struct Slide {
         var title: String
@@ -171,6 +200,7 @@ private struct StoryCard: View {
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .focusEffectDisabled()
                         .accessibilityLabel(slides[k].title)
                     }
                 }
@@ -191,11 +221,11 @@ private struct StoryCard: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                .frame(minHeight: 72, alignment: .leading)
+                .frame(minHeight: compact ? 56 : 72, alignment: .leading)
                 .id(position.index)
             }
             .padding(.horizontal, 18)
-            .padding(.vertical, 14)
+            .padding(.vertical, compact ? 10 : 14)
             .background(Color.Bandito.surface1.opacity(0.72), in: RoundedRectangle(cornerRadius: 20))
             .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.Bandito.text.opacity(0.09)))
         }

@@ -27,7 +27,7 @@ struct WelcomeDemoCard: View {
                 chat(frame: frame, t: t)
             }
         }
-        .frame(width: 560, height: 560)
+        .frame(width: 460, height: 520)
         .background(Color.Bandito.surface1.opacity(0.9), in: RoundedRectangle(cornerRadius: 22))
         .overlay(RoundedRectangle(cornerRadius: 22).stroke(Color.Bandito.text.opacity(0.1), lineWidth: 1))
         .shadow(color: .black.opacity(0.6), radius: 40, y: 24)
@@ -133,9 +133,16 @@ struct WelcomeDemoCard: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.black.opacity(0.35), in: RoundedRectangle(cornerRadius: 9))
             HStack(spacing: 8) {
-                Button(L10n.Approval.deny) {}
-                    .buttonStyle(QuietButtonStyle(size: .regular))
-                    .allowsHitTesting(false)
+                // Decorative: the demo's "Deny" is not a control, so it is neither focusable nor read out.
+                Text(L10n.Approval.deny)
+                    .font(BanditoFont.font(size: 12.5, weight: 500))
+                    .foregroundStyle(Color.Bandito.text)
+                    .padding(.horizontal, 14)
+                    .frame(height: 32)
+                    .background(Color.Bandito.text.opacity(0.05), in: Capsule())
+                    .overlay(Capsule().stroke(Color.Bandito.text.opacity(0.12), lineWidth: 1))
+                    .focusable(false)
+                    .accessibilityHidden(true)
                 Text(L10n.Onboarding.Demo.allow)
                     .font(BanditoFont.font(size: 12.5, weight: 600))
                     .foregroundStyle(Color.Bandito.onSignal)

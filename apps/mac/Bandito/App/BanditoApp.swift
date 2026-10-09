@@ -46,6 +46,7 @@ struct BanditoApp: App {
                     await model.refreshDaemonInfoHourly()
                 }
                 .preferredColorScheme(.dark)
+                .background(WindowChrome())
         }
         .defaultSize(width: 1240, height: 800)
         .windowStyle(.hiddenTitleBar)
@@ -72,4 +73,25 @@ struct BanditoApp: App {
         }
         .menuBarExtraStyle(.window)
     }
+}
+
+/// Window chrome for the hidden title bar: the titlebar area is transparent and the window fill is the app's
+/// background, so no grey system strip shows above or below the content (onboarding draws edge to edge).
+private struct WindowChrome: NSViewRepresentable {
+    final class ChromeView: NSView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard let window else { return }
+            window.titlebarAppearsTransparent = true
+            window.titleVisibility = .hidden
+            // The dark value of Color.Bandito.bg (#12100E).
+            window.backgroundColor = NSColor(srgbRed: 0.071, green: 0.063, blue: 0.055, alpha: 1)
+        }
+    }
+
+    func makeNSView(context: Context) -> NSView {
+        ChromeView()
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
 }

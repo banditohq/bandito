@@ -140,7 +140,7 @@ struct SubscriptionsStep: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             Text(L10n.Onboarding.Subs.title)
-                .font(BanditoFont.font(size: 30, weight: 600))
+                .font(BanditoFont.font(size: 38, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
             Text(L10n.Onboarding.Subs.subtitle)
                 .font(BanditoFont.font(size: 15, weight: 400))
@@ -159,15 +159,13 @@ struct SubscriptionsStep: View {
                     .font(BanditoFont.font(size: 13, weight: 400))
                     .foregroundStyle(Color.Bandito.danger)
             }
-            HStack(spacing: 14) {
-                Button(L10n.Onboarding.Subs.continueLabel, action: onContinue)
-                    .buttonStyle(SignalButtonStyle())
-                Text(L10n.Onboarding.Subs.needOne)
-                    .font(BanditoFont.font(size: 12.5, weight: 400))
-                    .foregroundStyle(Color.Bandito.text3)
-            }
+            Text(L10n.Onboarding.Subs.needOne)
+                .font(BanditoFont.font(size: 12.5, weight: 400))
+                .foregroundStyle(Color.Bandito.text3)
         }
-        .frame(maxWidth: 620, alignment: .leading)
+        .frame(maxWidth: 760, alignment: .topLeading)
+        // "Next" of this step is in the flow's bottom bar, at the same place as on the other steps.
+        .onboardingNext(OnboardingNextAction(title: L10n.Onboarding.Subs.continueLabel, isEnabled: true, perform: onContinue))
     }
 
     private func row(_ kind: RuntimeKind) -> some View {

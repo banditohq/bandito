@@ -20,4 +20,15 @@ public enum SystemActions {
         NSWorkspace.shared.open(url)
         #endif
     }
+
+    /// Starts a new instance of this app and quits this one: the interface language applies at launch.
+    public static func relaunch() {
+        #if os(macOS)
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.createsNewApplicationInstance = true
+        NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: configuration) { _, _ in
+            DispatchQueue.main.async { NSApp.terminate(nil) }
+        }
+        #endif
+    }
 }
