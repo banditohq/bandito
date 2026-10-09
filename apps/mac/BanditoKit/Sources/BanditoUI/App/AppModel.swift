@@ -148,6 +148,21 @@ public final class AppModel {
         lastError = message
     }
 
+    public func add(_ config: ServerConfig) {
+        // A server whose token cannot be stored could never authenticate: refuse it instead of adding a dead entry.
+        guard Keychain.setToken(config.token, for: config.id) else {
+            lastError = "Could not save the device token in the Keychain. The server was not added."
+            return
+        }
+        lastError = nil
+        let model = ServerModel(config: config)
+        attachNotifications(model)
+        servers.append(model)
+        selectedServerID = model.id
+        save()
+        Task { await model.connect() }
+    }
+
     public func remove(_ id: UUID) {
         guard let i = servers.firstIndex(where: { $0.id == id }) else { return }
         let s = servers.remove(at: i)
