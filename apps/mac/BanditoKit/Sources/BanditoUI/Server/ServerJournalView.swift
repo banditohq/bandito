@@ -8,7 +8,7 @@ struct ServerJournalView: View {
     let server: ServerModel?
     @State private var level: DaemonLogLevel = .info
     @State private var log: DaemonLog?
-    @State private var error: String?
+    @State private var error: UserFacingMessage?
     @State private var loading = false
 
     /// How many lines one read asks for. The daemon allows up to 2000.
@@ -43,9 +43,7 @@ struct ServerJournalView: View {
         ) {
             if let server, server.supports("logs") {
                 if let error {
-                    Text(error)
-                        .font(.system(size: 13))
-                        .foregroundStyle(Color.Bandito.danger)
+                    UserFacingErrorView(message: error)
                 }
                 ServerCard {
                     logBody
@@ -107,7 +105,7 @@ struct ServerJournalView: View {
                 log = try await server.daemonLog(lines: Self.lineCount, level: level)
                 error = nil
             } catch {
-                self.error = error.localizedDescription
+                self.error = UserFacingError.message(for: error)
             }
             loading = false
         }

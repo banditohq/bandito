@@ -10,7 +10,9 @@ struct TerminalsSidebar: View {
     @Environment(AppModel.self) private var app
 
     var body: some View {
-        if let server = app.currentServer, server.supports("terminals") {
+        if app.currentServer == nil {
+            SidebarPlaceholder(mode: .terminals)
+        } else if let server = app.currentServer, server.supports("terminals") {
             TerminalsSidebarList(controller: app.terminalController(for: server))
         } else {
             Text(L10n.Terminals.updateServer)

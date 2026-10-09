@@ -233,6 +233,7 @@ The amount of motion in the app: Full (Полные), Less (Меньше), or Of
 The same language choice as in General, shown in its own section. It applies after you restart Bandito.
 Где: Settings (⌘,) → Language (Язык)
 1. Pick a language, or System (Системная). Quit and open Bandito again.
+2. The label on the first screen shows the language the interface uses now, written in that language (Русский, English, 日本語). Picking a language there works like here: it applies after a restart, and the app says so.
 
 ## Updates (Обновления)
 

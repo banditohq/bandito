@@ -125,7 +125,7 @@ private struct TextSnippet: View {
     let path: String
     let server: ServerModel
     @State private var lines: [String]?
-    @State private var note: String?
+    @State private var note: UserFacingMessage?
 
     var body: some View {
         Group {
@@ -137,9 +137,7 @@ private struct TextSnippet: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(12)
             } else if let note {
-                Text(note)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.Bandito.text3)
+                UserFacingErrorView(message: note)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .padding(12)
             } else {
@@ -157,7 +155,7 @@ private struct TextSnippet: View {
                     .prefix(40)
                     .map(String.init))
             } catch let error as RPCError where error.reason == "too_large" || error.reason == "binary" {
-                note = L10n.Files.Preview.tooLarge
+                note = UserFacingMessage(text: L10n.Files.Preview.tooLarge)
             } catch {
                 note = FileErrorText.message(for: error)
             }

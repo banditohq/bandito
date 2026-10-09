@@ -25,6 +25,6 @@ import Testing
         #expect(DaemonUpdateModel.statusText(for: .done(version: "0.3.0"))?.contains("0.3.0") == true)
         #expect(DaemonUpdateModel.statusText(for: .timedOut(version: "0.3.0"))?.contains("0.3.0") == true)
         #expect(DaemonUpdateModel.statusText(for: .updating) != nil)
-        #expect(DaemonUpdateModel.statusText(for: .failed("boom"))?.contains("boom") == true)
+        #expect(DaemonUpdateModel.statusText(for: .failed(UserFacingMessage(text: "boom")))?.contains("boom") == true)
     }
 }

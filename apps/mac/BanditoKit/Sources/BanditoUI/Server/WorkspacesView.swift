@@ -60,9 +60,7 @@ struct WorkspacesView: View {
     private func realContent(_ model: WorkspacesModel) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             if let error = model.errorText {
-                Text(error)
-                    .font(.system(size: 13))
-                    .foregroundStyle(Color.Bandito.danger)
+                UserFacingErrorView(message: error)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: 680, alignment: .leading)
             }
@@ -172,9 +170,7 @@ private struct DockerCard: View {
                     .textSelection(.enabled)
             }
             if let error = setup.error {
-                Text(error)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(Color.Bandito.danger)
+                UserFacingErrorView(message: error)
             }
         }
         .onChange(of: setup.isRunning) { _, running in
@@ -469,9 +465,7 @@ struct WorkspaceCreateSheet: View {
                 .foregroundStyle(Color.Bandito.text2)
                 .fixedSize(horizontal: false, vertical: true)
             if let error = model.errorText {
-                Text(error)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(Color.Bandito.danger)
+                UserFacingErrorView(message: error)
                     .fixedSize(horizontal: false, vertical: true)
             }
             HStack(spacing: 10) {

@@ -306,7 +306,6 @@
 "settings.usage" = "用量";
 "sidebar.agentRail" = "代理";
 "sidebar.agents" = "团队";
-"sidebar.connectApps" = "连接应用";
 "sidebar.empty" = "还没有智能体。创建第一个吧。";
 "sidebar.messageTeam" = "给团队发消息…";
 "sidebar.needsYou" = "等待你处理";

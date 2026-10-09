@@ -15,7 +15,7 @@ struct DetailsTab: View {
     @State private var instructions = ""
     @State private var schedules: [Schedule] = []
     @State private var showingNewSchedule = false
-    @State private var error: String?
+    @State private var error: UserFacingMessage?
     /// Values the daemon changed on its own after the last change (for example an effort the runtime lacks).
     @State private var notes: [String] = []
     @State private var modelDraft = ""
@@ -159,7 +159,7 @@ struct DetailsTab: View {
             }
 
             if let error {
-                InspectorError(text: error)
+                InspectorError(message: error)
             }
         }
         .onChange(of: agent.model, initial: true) { _, model in
@@ -194,7 +194,7 @@ struct DetailsTab: View {
     private func change(_ work: @escaping () async throws -> Void) {
         error = nil
         Task {
-            do { try await work() } catch { self.error = error.localizedDescription }
+            do { try await work() } catch { self.error = UserFacingError.message(for: error) }
         }
     }
 
@@ -206,7 +206,7 @@ struct DetailsTab: View {
                 let update = try await server.updateAgent(agent.id, patch: patch)
                 notes = update.warnings
             } catch {
-                self.error = error.localizedDescription
+                self.error = UserFacingError.message(for: error)
             }
         }
     }
@@ -292,7 +292,7 @@ private struct ScheduleEditor: View {
     @Environment(\.dismiss) private var dismiss
     @State private var cron = ""
     @State private var prompt = ""
-    @State private var error: String?
+    @State private var error: UserFacingMessage?
     @State private var busy = false
 
     var body: some View {
@@ -314,7 +314,7 @@ private struct ScheduleEditor: View {
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.Bandito.line, lineWidth: 1))
             }
             if let error {
-                InspectorError(text: error)
+                InspectorError(message: error)
             }
             HStack {
                 Spacer()
@@ -340,7 +340,7 @@ private struct ScheduleEditor: View {
                     tz: TimeZone.current.identifier, prompt: prompt.trimmingCharacters(in: .whitespacesAndNewlines))
                 dismiss()
             } catch {
-                self.error = error.localizedDescription
+                self.error = UserFacingError.message(for: error)
                 busy = false
             }
         }
@@ -356,7 +356,7 @@ struct MemoryTab: View {
 
     @Environment(Router.self) private var router
     @State private var files: [FsEntry] = []
-    @State private var error: String?
+    @State private var error: UserFacingMessage?
 
     private var budget: Int { agent.contextBudget ?? ContextUsage.defaultBudget }
 
@@ -373,7 +373,7 @@ struct MemoryTab: View {
             }
             filesSection
             if let error {
-                InspectorError(text: error)
+                InspectorError(message: error)
             }
         }
         .task(id: agent.id) { await loadFiles() }
@@ -422,7 +422,7 @@ struct MemoryTab: View {
         return Button {
             error = nil
             Task {
-                do { _ = try await server.updateAgent(agent.id, memoryMode: mode) } catch { self.error = error.localizedDescription }
+                do { _ = try await server.updateAgent(agent.id, memoryMode: mode) } catch { self.error = UserFacingError.message(for: error) }
             }
         } label: {
             HStack(alignment: .top, spacing: 11) {
@@ -554,7 +554,7 @@ struct MemoryTab: View {
         do {
             files = try await server.list(home).entries
         } catch {
-            self.error = error.localizedDescription
+            self.error = UserFacingError.message(for: error)
         }
     }
 }
@@ -572,7 +572,7 @@ struct WhereTab: View {
     @State private var pendingMove: MoveTarget?
     /// The daemon's notes on the last change (for example the new chapter).
     @State private var notes: [String] = []
-    @State private var error: String?
+    @State private var error: UserFacingMessage?
 
     /// A workplace to move the agent to: the shared server (`shared`) or a container.
     private struct MoveTarget: Identifiable {
@@ -607,9 +607,7 @@ struct WhereTab: View {
                     }
                 }
                 if let error {
-                    Text(error)
-                        .font(BanditoFont.font(size: 12, weight: 400))
-                        .foregroundStyle(Color.Bandito.danger)
+                    UserFacingErrorView(message: error)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 ForEach(notes, id: \.self) { note in

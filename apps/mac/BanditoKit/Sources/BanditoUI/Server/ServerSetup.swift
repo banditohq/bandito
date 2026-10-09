@@ -18,7 +18,7 @@ final class SetupModel {
     private(set) var job: SetupJob?
     /// The job's log so far. The daemon sends only what is new since `offset`.
     private(set) var log = ""
-    private(set) var error: String?
+    private(set) var error: UserFacingMessage?
 
     /// The state of each feature and runtime, in the order of the design.
     var lines: [SetupLine] {
@@ -51,7 +51,7 @@ final class SetupModel {
             status = try await server.setupStatus()
             error = nil
         } catch {
-            self.error = error.localizedDescription
+            self.error = UserFacingError.message(for: error)
         }
     }
 
@@ -74,7 +74,7 @@ final class SetupModel {
             }
             await load(server)
         } catch {
-            self.error = error.localizedDescription
+            self.error = UserFacingError.message(for: error)
         }
     }
 }
@@ -134,9 +134,7 @@ struct ServerFeaturesCard: View {
                     .font(.system(size: 12.5))
                     .foregroundStyle(Color.Bandito.danger)
             } else if let error = setup.error {
-                Text(error)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(Color.Bandito.danger)
+                UserFacingErrorView(message: error)
             }
         }
         .task { await setup.load(server) }

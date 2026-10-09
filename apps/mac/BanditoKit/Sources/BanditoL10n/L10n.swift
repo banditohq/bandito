@@ -389,9 +389,39 @@ public enum L10n {
         public static var xhigh: String { L10n.tr("effort.xhigh") }
     }
 
+    public enum Empty {
+
+        public enum NoServers {
+            public static var action: String { L10n.tr("empty.noServers.action") }
+            public static var title: String { L10n.tr("empty.noServers.title") }
+        }
+    }
+
     public enum Error {
         public static func disconnected(server: String) -> String { L10n.tr("error.disconnected", server) }
         public static func generic(message: String) -> String { L10n.tr("error.generic", message) }
+    }
+
+    public enum Failure {
+        public static var copy: String { L10n.tr("failure.copy") }
+        public static var details: String { L10n.tr("failure.details") }
+        public static var deviceRevoked: String { L10n.tr("failure.deviceRevoked") }
+        public static var generic: String { L10n.tr("failure.generic") }
+        public static var noAnswer: String { L10n.tr("failure.noAnswer") }
+
+        public enum Reason {
+            public static var binary: String { L10n.tr("failure.reason.binary") }
+            public static var cloneFailed: String { L10n.tr("failure.reason.cloneFailed") }
+            public static var conflict: String { L10n.tr("failure.reason.conflict") }
+            public static var decodeFailed: String { L10n.tr("failure.reason.decodeFailed") }
+            public static var exists: String { L10n.tr("failure.reason.exists") }
+            public static var forbidden: String { L10n.tr("failure.reason.forbidden") }
+            public static var io: String { L10n.tr("failure.reason.io") }
+            public static var notEmpty: String { L10n.tr("failure.reason.notEmpty") }
+            public static var notFound: String { L10n.tr("failure.reason.notFound") }
+            public static var tooLarge: String { L10n.tr("failure.reason.tooLarge") }
+            public static var unsupported: String { L10n.tr("failure.reason.unsupported") }
+        }
     }
 
     public enum Files {
@@ -1598,7 +1628,6 @@ public enum L10n {
     public enum Sidebar {
         public static var agentRail: String { L10n.tr("sidebar.agentRail") }
         public static var agents: String { L10n.tr("sidebar.agents") }
-        public static var connectApps: String { L10n.tr("sidebar.connectApps") }
         public static var empty: String { L10n.tr("sidebar.empty") }
         public static var messageTeam: String { L10n.tr("sidebar.messageTeam") }
         public static var needsYou: String { L10n.tr("sidebar.needsYou") }

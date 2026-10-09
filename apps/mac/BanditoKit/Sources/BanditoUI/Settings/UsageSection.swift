@@ -7,7 +7,7 @@ struct UsageSection: View {
     @Environment(AppModel.self) private var app
     @Environment(DemoStore.self) private var demo
     @State private var refreshing = false
-    @State private var error: String?
+    @State private var error: UserFacingMessage?
 
     var body: some View {
         let snapshot = UsageCards.snapshot(server: app.currentServer, demo: demo)
@@ -37,9 +37,7 @@ struct UsageSection: View {
                             .banditoCard()
                     }
                     if let error {
-                        Text(error)
-                            .font(.system(size: 12.5))
-                            .foregroundStyle(Color.Bandito.danger)
+                        UserFacingErrorView(message: error)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -56,7 +54,7 @@ struct UsageSection: View {
             do {
                 try await server.refreshUsage()
             } catch {
-                self.error = error.localizedDescription
+                self.error = UserFacingError.message(for: error)
             }
             refreshing = false
         }

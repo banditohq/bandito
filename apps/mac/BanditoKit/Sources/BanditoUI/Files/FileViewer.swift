@@ -29,9 +29,7 @@ struct FileViewer: View {
                         onTakeServer: { document.takeServer() })
                 }
                 if let message = document.saveError {
-                    Text(message)
-                        .font(.system(size: 12.5))
-                        .foregroundStyle(Color.Bandito.danger)
+                    UserFacingErrorView(message: message)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 16)
                         .padding(.top, 8)
@@ -273,8 +271,8 @@ private struct ViewerBody: View {
         case .loading:
             ProgressView().controlSize(.small)
         case .failed(let message):
-            Text(L10n.Viewer.error(error: message))
-                .foregroundStyle(Color.Bandito.text2)
+            UserFacingErrorView(message: message)
+                .frame(maxWidth: 420)
         case .tooLarge:
             CardNote(text: L10n.Viewer.tooLarge, document: document, server: server)
         case .binary:
@@ -342,6 +340,8 @@ private struct CardNote: View {
     let text: String
     let document: FileDocument
     let server: ServerModel
+    /// A download that failed: shown under the button instead of being dropped.
+    @State private var failure: UserFacingMessage?
 
     var body: some View {
         VStack(spacing: 14) {
@@ -351,9 +351,20 @@ private struct CardNote: View {
                 .foregroundStyle(Color.Bandito.text)
                 .multilineTextAlignment(.center)
             Button(L10n.Files.Preview.download) {
-                Task { try? await FileDownload.save(document.entry, server: server) }
+                Task {
+                    do {
+                        try await FileDownload.save(document.entry, server: server)
+                        failure = nil
+                    } catch {
+                        failure = UserFacingError.message(for: error)
+                    }
+                }
             }
             .buttonStyle(QuietButtonStyle())
+            if let failure {
+                UserFacingErrorView(message: failure)
+                    .frame(maxWidth: 360)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.Bandito.surface1, in: RoundedRectangle(cornerRadius: 14, style: .continuous))

@@ -8,7 +8,7 @@ struct PortsView: View {
     let server: ServerModel?
     @Environment(Router.self) private var router
     @State private var reply: HostPorts?
-    @State private var error: String?
+    @State private var error: UserFacingMessage?
 
     var body: some View {
         ServerPage(title: L10n.Mode.serverPorts) {
@@ -63,9 +63,7 @@ struct PortsView: View {
                         .overlay(alignment: .top) { Rectangle().fill(Color.Bandito.text.opacity(0.05)).frame(height: 1) }
                     }
                     if let error {
-                        Text(error)
-                            .font(.system(size: 12.5))
-                            .foregroundStyle(Color.Bandito.danger)
+                        UserFacingErrorView(message: error)
                     }
                 }
             } else {
@@ -79,7 +77,7 @@ struct PortsView: View {
                     reply = try await server.hostPorts()
                     error = nil
                 } catch {
-                    self.error = error.localizedDescription
+                    self.error = UserFacingError.message(for: error)
                 }
                 try? await Task.sleep(for: HostMonitor.interval)
             }

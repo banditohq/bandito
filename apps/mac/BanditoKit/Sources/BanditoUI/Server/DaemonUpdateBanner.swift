@@ -18,7 +18,7 @@ final class DaemonUpdateModel {
         /// Installed, but no service manager restarts the daemon, so the new binary waits for a manual restart.
         case manualRestart(version: String)
         case timedOut(version: String)
-        case failed(String)
+        case failed(UserFacingMessage)
     }
 
     private(set) var phase: Phase = .idle
@@ -48,7 +48,7 @@ final class DaemonUpdateModel {
         case .done(let version): L10n.Server.DaemonUpdate.done(version: version)
         case .manualRestart(let version): L10n.Server.DaemonUpdate.manualRestart(version: version)
         case .timedOut(let version): L10n.Server.DaemonUpdate.timedOut(version: version)
-        case .failed(let message): L10n.Server.DaemonUpdate.failed(error: message)
+        case .failed(let message): L10n.Server.DaemonUpdate.failed(error: message.text)
         }
     }
 
@@ -73,7 +73,7 @@ final class DaemonUpdateModel {
             }
             phase = .timedOut(version: offer.latest)
         } catch {
-            phase = .failed(error.localizedDescription)
+            phase = .failed(UserFacingError.message(for: error))
         }
     }
 }
@@ -98,7 +98,9 @@ struct DaemonUpdateBanner: View {
                     Text(current == nil ? (status ?? "") : L10n.Server.DaemonUpdate.title(latest: offer.latest, current: offer.current))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Color.Bandito.text)
-                    if current != nil, let status {
+                    if current != nil, case .failed(let failure) = model.phase {
+                        UserFacingErrorView(message: failure.wrapped { L10n.Server.DaemonUpdate.failed(error: $0) })
+                    } else if current != nil, let status {
                         Text(status)
                             .font(.system(size: 12))
                             .foregroundStyle(Color.Bandito.text2)

@@ -28,7 +28,7 @@ struct AccountSignInView: View {
 
     @Environment(AccountHub.self) private var hub
     @State private var models: AccountModels?
-    @State private var setupError: String?
+    @State private var setupError: UserFacingMessage?
     @State private var showGitHub = false
 
     var body: some View {
@@ -102,9 +102,7 @@ struct AccountSignInView: View {
             }
             if let setupError {
                 HStack(spacing: 10) {
-                    Text(setupError)
-                        .font(BanditoFont.font(size: 13, weight: 400))
-                        .foregroundStyle(Color.Bandito.danger)
+                    UserFacingErrorView(message: setupError)
                     // Checking the account and creating the first blob are safe to repeat.
                     Button(L10n.Onboarding.Server.retry) { Task { await finish() } }
                         .buttonStyle(QuietButtonStyle(size: .regular))
@@ -216,9 +214,7 @@ private struct EmailBlock: View {
                 }
             }
             if let error = model.errorText {
-                Text(error)
-                    .font(BanditoFont.font(size: 13, weight: 400))
-                    .foregroundStyle(Color.Bandito.danger)
+                UserFacingErrorView(message: error)
             }
         }
     }
@@ -345,19 +341,18 @@ struct GitHubSignInSheet: View {
                     .foregroundStyle(Color.Bandito.text2)
             }
         case .expired:
-            failure(L10n.Onboarding.Account.Github.expired)
+            failure(UserFacingMessage(text: L10n.Onboarding.Account.Github.expired))
         case .denied:
-            failure(L10n.Onboarding.Account.Github.denied)
+            failure(UserFacingMessage(text: L10n.Onboarding.Account.Github.denied))
         case .failed(let message):
             failure(message)
         }
     }
 
-    private func failure(_ message: String) -> some View {
+    private func failure(_ message: UserFacingMessage) -> some View {
         VStack(spacing: 12) {
-            Text(message)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(Color.Bandito.danger)
+            UserFacingErrorView(message: message)
+                .frame(maxWidth: 420)
             Button(L10n.Onboarding.Account.Github.retry) {
                 copiedNote = false
                 model.start()

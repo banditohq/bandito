@@ -191,8 +191,8 @@ import Testing
         let stream = TerminalStream(id: "t1")
         stream.receiveOutput(offset: 0, data: Data("ab".utf8))
 
-        stream.abortAttach(error: "io: link lost")
-        #expect(await collect(stream, count: 2) == [.output(Data("ab".utf8)), .error("io: link lost")])
+        stream.abortAttach(error: .reason("io"))
+        #expect(await collect(stream, count: 2) == [.output(Data("ab".utf8)), .error(.reason("io"))])
 
         // The stream is still open and follows output again.
         stream.receiveOutput(offset: 2, data: Data("c".utf8))
@@ -235,7 +235,7 @@ import Testing
         await first.dropConnection()
 
         try await eventually { model.state == .connected && queue.made.count == 2 }
-        #expect(await collect(stream, count: 1) == [.error("io: boom")])
+        #expect(await collect(stream, count: 1) == [.error(.reason("io"))])
         await model.disconnect()
     }
 

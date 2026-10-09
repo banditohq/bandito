@@ -33,7 +33,7 @@ struct ChangesSheet: View {
     /// The line the user picked; `nil` means the first change.
     @State private var focus: ChangeLocation?
     @State private var viewMode: ChangesViewMode = .inline
-    @State private var loadError: String?
+    @State private var loadError: UserFacingMessage?
     @State private var busy = false
     @State private var confirmRollback = false
 
@@ -85,9 +85,7 @@ struct ChangesSheet: View {
                     points: timeline, baseID: base?.id, nowTitle: L10n.Changes.now, onSelect: choose)
             }
             if let loadError {
-                Text(loadError)
-                    .font(BanditoFont.font(size: 12.5, weight: 500))
-                    .foregroundStyle(Color.Bandito.danger)
+                UserFacingErrorView(message: loadError)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 22)
                     .padding(.vertical, 8)
@@ -278,8 +276,10 @@ struct ChangesSheet: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .binary:
             message(L10n.Changes.binary)
-        case .failed(let text):
-            message(text, tint: Color.Bandito.danger)
+        case .failed(let failure):
+            UserFacingErrorView(message: failure)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(28)
         case .text(let hunks, let truncated):
             if hunks.isEmpty {
                 message(L10n.Changes.noTextChanges)
@@ -421,7 +421,7 @@ struct ChangesSheet: View {
             }
             dismiss()
         } catch {
-            loadError = error.localizedDescription
+            loadError = UserFacingError.message(for: error)
         }
     }
 
@@ -436,7 +436,7 @@ struct ChangesSheet: View {
             base = RestorePoints.base(in: list)
             loaded = true
         } catch {
-            loadError = error.localizedDescription
+            loadError = UserFacingError.message(for: error)
             loaded = true
         }
     }
@@ -469,7 +469,7 @@ struct ChangesSheet: View {
             file = .text(hunks: UnifiedDiff.parse(result.diff), truncated: result.truncated)
         } catch {
             guard !Task.isCancelled else { return }
-            file = .failed(error.localizedDescription)
+            file = .failed(UserFacingError.message(for: error))
         }
     }
 
@@ -488,7 +488,7 @@ struct ChangesSheet: View {
             guard !Task.isCancelled else { return }
             diff = nil
             diffBase = nil
-            loadError = error.localizedDescription
+            loadError = UserFacingError.message(for: error)
         }
     }
 
@@ -519,7 +519,7 @@ private enum FileState {
     case idle, loading
     case text(hunks: [ChangeHunk], truncated: Bool)
     case binary
-    case failed(String)
+    case failed(UserFacingMessage)
 }
 
 private struct FileLoadKey: Hashable {
@@ -829,7 +829,7 @@ struct RollbackToast: View {
     var notice: RollbackNotice
     var onClose: () -> Void
 
-    @State private var failure: String?
+    @State private var failure: UserFacingMessage?
     @State private var undoing = false
 
     var body: some View {
@@ -838,10 +838,7 @@ struct RollbackToast: View {
                 .font(BanditoFont.font(size: 13, weight: 500))
                 .foregroundStyle(Color.Bandito.text)
             if let failure {
-                Text(failure)
-                    .font(BanditoFont.font(size: 12, weight: 400))
-                    .foregroundStyle(Color.Bandito.danger)
-                    .lineLimit(1)
+                UserFacingErrorView(message: failure)
             }
             Button(L10n.Changes.undo) { undo() }
                 .buttonStyle(.plain)
@@ -868,7 +865,7 @@ struct RollbackToast: View {
                 _ = try await notice.server.restore(agentID: notice.agentID, checkpointID: notice.undoCheckpointID)
                 onClose()
             } catch {
-                failure = error.localizedDescription
+                failure = UserFacingError.message(for: error)
                 undoing = false
             }
         }

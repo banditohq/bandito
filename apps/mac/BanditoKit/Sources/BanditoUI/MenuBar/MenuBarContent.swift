@@ -30,7 +30,7 @@ public struct MenuBarLabel: View {
 public struct MenuBarContent: View {
     @Environment(AppModel.self) private var app
     @Environment(DemoStore.self) private var demo
-    @State private var failure: String?
+    @State private var failure: UserFacingMessage?
 
     public init() {}
 
@@ -98,9 +98,7 @@ public struct MenuBarContent: View {
                 approvalRow(row)
             }
             if let failure {
-                Text(failure)
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(Color.Bandito.danger)
+                UserFacingErrorView(message: failure)
                     .padding(.horizontal, 8)
             }
         }
@@ -238,7 +236,7 @@ public struct MenuBarContent: View {
                 try await row.server.resolve(row.approval.approvalId, decision)
                 failure = nil
             } catch {
-                failure = L10n.Menubar.resolveFailed(error: error.localizedDescription)
+                failure = UserFacingError.message(for: error)
             }
         }
     }

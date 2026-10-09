@@ -50,7 +50,7 @@ final class HostMonitor {
     private(set) var ports: [ListeningPort] = []
     private(set) var portsSupported = true
     /// The last failure of a refresh, for the user.
-    private(set) var error: String?
+    private(set) var error: UserFacingMessage?
 
     var range: HostHistoryRange = .hour
 
@@ -66,22 +66,22 @@ final class HostMonitor {
     }
 
     func refresh(_ server: ServerModel) async {
-        var failures: [String] = []
-        do { stats = try await server.hostStats() } catch { failures.append(error.localizedDescription) }
-        do { history = try await server.hostHistory(range: range) } catch { failures.append(error.localizedDescription) }
+        var failures: [UserFacingMessage] = []
+        do { stats = try await server.hostStats() } catch { failures.append(UserFacingError.message(for: error)) }
+        do { history = try await server.hostHistory(range: range) } catch { failures.append(UserFacingError.message(for: error)) }
         do {
             let reply = try await server.hostProcesses()
             processesSupported = reply.supported
             processes = ProcessRow.rows(from: reply.owners)
         } catch {
-            failures.append(error.localizedDescription)
+            failures.append(UserFacingError.message(for: error))
         }
         do {
             let reply = try await server.hostPorts()
             portsSupported = reply.supported
             ports = reply.ports.sorted { $0.port < $1.port }
         } catch {
-            failures.append(error.localizedDescription)
+            failures.append(UserFacingError.message(for: error))
         }
         error = failures.first
     }
@@ -89,6 +89,6 @@ final class HostMonitor {
     /// Switches the history range and loads its points.
     func setRange(_ range: HostHistoryRange, server: ServerModel) async {
         self.range = range
-        do { history = try await server.hostHistory(range: range) } catch { self.error = error.localizedDescription }
+        do { history = try await server.hostHistory(range: range) } catch { self.error = UserFacingError.message(for: error) }
     }
 }

@@ -34,7 +34,7 @@ final class BrowserModel {
     private(set) var canGoBack = false
     private(set) var canGoForward = false
     /// Shown under the toolbar when the browser cannot be reached.
-    private(set) var errorText: String?
+    private(set) var errorText: UserFacingMessage?
     /// True while an agent holds the browser and the person tried to act on the page.
     private(set) var asksToTakeControl = false
     /// Chrome is not on the server, so the browser cannot start. The app offers to install it.
@@ -432,13 +432,11 @@ final class BrowserModel {
         return CGImageSourceCreateImageAtIndex(source, 0, nil)
     }
 
-    static func describe(_ error: Error) -> String {
-        if let rpc = error as? RPCError {
-            if rpc.reason == "missing_component" { return L10n.Browser.missingChrome }
-            return rpc.message
+    static func describe(_ error: Error) -> UserFacingMessage {
+        if let rpc = error as? RPCError, rpc.reason == "missing_component" {
+            return UserFacingMessage(text: L10n.Browser.missingChrome)
         }
-        if let cdp = error as? CDPError { return cdp.localizedDescription }
-        return L10n.Browser.error
+        return UserFacingError.message(for: error)
     }
 }
 

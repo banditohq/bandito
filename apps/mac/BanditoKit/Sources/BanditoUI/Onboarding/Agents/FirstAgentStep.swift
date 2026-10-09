@@ -18,7 +18,7 @@ final class FirstAgentModel {
     private(set) var folderCustomized = false
     @ObservationIgnored private var folderGeneration = 0
     private(set) var creating = false
-    private(set) var errorText: String?
+    private(set) var errorText: UserFacingMessage?
     /// The server's workplaces: the containers that exist and whether a separate one can be made.
     let workplaces: WorkspacesModel
     private(set) var workplace: WorkplaceChoice = .shared
@@ -158,7 +158,7 @@ final class FirstAgentModel {
                 workspaceId: workspaceID))
             return agent
         } catch {
-            errorText = WorkspaceText.failure(error) ?? SignInMessages.text(for: error)
+            errorText = WorkspaceText.failure(error).map { UserFacingMessage(text: $0) } ?? SignInMessages.text(for: error)
             return nil
         }
     }
@@ -207,9 +207,7 @@ struct FirstAgentStep: View {
                 }
             }
             if let errorText = model.errorText {
-                Text(errorText)
-                    .font(BanditoFont.font(size: 13, weight: 400))
-                    .foregroundStyle(Color.Bandito.danger)
+                UserFacingErrorView(message: errorText)
             }
         }
         .frame(maxWidth: 680, alignment: .leading)

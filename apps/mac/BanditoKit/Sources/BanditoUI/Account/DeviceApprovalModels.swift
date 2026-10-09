@@ -24,7 +24,7 @@ final class DeviceApprovalModel {
         case confirmSender(senderCode: String)
         /// The codes did not match: the key was dropped.
         case rejected
-        case failed(String)
+        case failed(UserFacingMessage)
         case finished
     }
 
@@ -122,7 +122,7 @@ final class ApproveDeviceModel {
     let ownFingerprint: String
 
     private(set) var code = DeviceCodeInput()
-    private(set) var errorText: String?
+    private(set) var errorText: UserFacingMessage?
     private(set) var isBusy = false
     private(set) var approved = false
 
@@ -156,7 +156,7 @@ final class ApproveDeviceModel {
         guard let computed = try? DeviceFingerprint.code(publicKeyBase64: device.publicKey),
             DeviceFingerprint.matches(computed, code.raw)
         else {
-            errorText = L10n.Onboarding.Account.codeMismatch
+            errorText = UserFacingMessage(text: L10n.Onboarding.Account.codeMismatch)
             return
         }
         isBusy = true
@@ -166,7 +166,7 @@ final class ApproveDeviceModel {
             try await backend.approve(device, confirmedFingerprint: code.raw, syncKey: key, identity: identity)
             approved = true
         } catch AccountError.fingerprintMismatch {
-            errorText = L10n.Onboarding.Account.codeMismatch
+            errorText = UserFacingMessage(text: L10n.Onboarding.Account.codeMismatch)
         } catch {
             errorText = SignInMessages.text(for: error)
         }

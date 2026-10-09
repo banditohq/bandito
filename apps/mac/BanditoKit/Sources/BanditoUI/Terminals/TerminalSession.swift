@@ -24,7 +24,7 @@ final class TerminalSession {
     private(set) var activity = TerminalActivity()
     private(set) var exit: Exit?
     /// Set when following the terminal failed. Cleared by the next successful attach.
-    private(set) var errorMessage: String?
+    private(set) var errorMessage: UserFacingMessage?
     /// True while the output stream is open.
     private(set) var isAttached = false
 
@@ -92,7 +92,7 @@ final class TerminalSession {
                 }
             }
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserFacingError.message(for: error)
         }
     }
 
@@ -136,8 +136,8 @@ final class TerminalSession {
         case .closed:
             isAttached = false
             onClosed?()
-        case .error(let message):
-            errorMessage = L10n.Terminals.error(message: message)
+        case .error(let kind):
+            errorMessage = UserFacingError.message(for: kind).wrapped { L10n.Terminals.error(message: $0) }
         }
     }
 
