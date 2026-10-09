@@ -9,16 +9,21 @@ import Testing
 actor FakeTransport: RPCTransport {
     /// Receives the request's params as JSON, returns the result as JSON.
     typealias Handler = @Sendable (String) -> String
+    /// Receives the request's params as JSON; returns the error object (`{code, message, data}`)
+    /// to answer with, or nil to fall through to the normal handler.
+    typealias Failure = @Sendable (String) -> String?
 
     private let handlers: [String: Handler]
+    private let errors: [String: Failure]
     private let autoRespond: Bool
     private let continuation: AsyncThrowingStream<String, Error>.Continuation
     /// The client's read loop is the only reader, so the iterator needs no further synchronization.
     private let inbound: InboundIterator
     private var sent: [String] = []
 
-    init(handlers: [String: Handler] = [:], autoRespond: Bool = true) {
+    init(handlers: [String: Handler] = [:], errors: [String: Failure] = [:], autoRespond: Bool = true) {
         self.handlers = handlers
+        self.errors = errors
         self.autoRespond = autoRespond
         let (stream, continuation) = AsyncThrowingStream.makeStream(
             of: String.self, throwing: Error.self, bufferingPolicy: .unbounded)
@@ -30,7 +35,12 @@ actor FakeTransport: RPCTransport {
 
     func send(_ text: String) async throws {
         sent.append(text)
-        guard autoRespond, let request = JSONRPC.parse(text), let handler = handlers[request.method] else { return }
+        guard autoRespond, let request = JSONRPC.parse(text) else { return }
+        if let failure = errors[request.method], let error = failure(request.paramsJSON) {
+            continuation.yield(JSONRPC.errorResponse(id: request.id, error: error))
+            return
+        }
+        guard let handler = handlers[request.method] else { return }
         continuation.yield(JSONRPC.response(id: request.id, result: handler(request.paramsJSON)))
     }
 
@@ -96,6 +106,11 @@ enum JSONRPC {
 
     static func response(id: Int, result: String) -> String {
         #"{"jsonrpc":"2.0","id":\#(id),"result":\#(result)}"#
+    }
+
+    /// `error` is the JSON error object: `{"code":…,"message":…,"data":…}`.
+    static func errorResponse(id: Int, error: String) -> String {
+        #"{"jsonrpc":"2.0","id":\#(id),"error":\#(error)}"#
     }
 
     static func notification(_ event: String) -> String {

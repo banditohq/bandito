@@ -130,3 +130,61 @@ import Testing
         await client.close()
     }
 }
+
+@MainActor
+@Suite struct RPCWireTests {
+    @Test func errorDataCarriesReasonAndEtag() async throws {
+        let fake = FakeTransport(autoRespond: false)
+        let client = RPCClient(transport: fake)
+        try await client.start()
+
+        let call = Task { try await client.call("fs.write", NoParams(), as: String.self) }
+        try await eventually { await fake.sentTexts().count == 1 }
+        let id = try #require(JSONRPC.id(of: "fs.write", in: await fake.sentTexts()))
+        await fake.push(
+            JSONRPC.errorResponse(
+                id: id, error: #"{"code":-32020,"message":"conflict","data":{"reason":"conflict","etag":"e9"}}"#))
+
+        do {
+            _ = try await call.value
+            Issue.record("expected a conflict")
+        } catch let error as RPCError {
+            #expect(error.code == -32020)
+            #expect(error.reason == "conflict")
+            #expect(error.etag == "e9")
+            #expect(error.data == .object(["reason": .string("conflict"), "etag": .string("e9")]))
+        }
+        await client.close()
+    }
+
+    @Test func errorWithoutDataHasNoReasonOrEtag() async throws {
+        let error = RPCError(code: RPCError.invalidParams, message: "bad params")
+        #expect(error.data == nil)
+        #expect(error.reason == nil)
+        #expect(error.etag == nil)
+    }
+
+    @Test func otherNotificationsReachTheNotificationStreamAndEventsStillWork() async throws {
+        let fake = FakeTransport(autoRespond: false)
+        let client = RPCClient(transport: fake)
+        try await client.start()
+
+        await fake.push(#"{"jsonrpc":"2.0","method":"term.gap","params":{"id":"t1","lost":7}}"#)
+        await fake.push(JSONRPC.notification(JSONRPC.messageEvent(seq: 1, text: "ok")))
+
+        var notifications = client.notifications.makeAsyncIterator()
+        let note = try #require(await notifications.next())
+        #expect(note.method == "term.gap")
+        struct Gap: Decodable {
+            var id: String
+            var lost: UInt64
+        }
+        let gap = try RPCClient.decoder.decode(Gap.self, from: note.params)
+        #expect(gap.id == "t1")
+        #expect(gap.lost == 7)
+
+        var events = client.events.makeAsyncIterator()
+        #expect(await events.next()?.seq == 1)
+        await client.close()
+    }
+}
