@@ -13,6 +13,9 @@ targets:
     platform: macOS
     sources:
       - Bandito
+      # Installs the server-side script into the app bundle (SSHInstaller reads it as install.sh).
+      - path: ../../scripts/install.sh
+        buildPhase: resources
     dependencies:
       - package: BanditoKit
         product: BanditoKit
@@ -20,8 +23,32 @@ targets:
         product: BanditoDesign
       - package: BanditoKit
         product: BanditoUI
+    postBuildScripts:
+      # Builds the bandito daemon and puts it into Contents/Helpers/bandito, signed with the app's identity.
+      # Helpers, not MacOS: on the default case-insensitive APFS, MacOS/bandito would collide with the app's Bandito.
+      - name: Build and bundle the bandito daemon
+        basedOnDependencyAnalysis: false
+        script: |
+          set -eu
+          # Xcode's script PATH has no cargo from rustup or Homebrew.
+          export PATH="$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+          if ! command -v cargo >/dev/null 2>&1; then
+            echo "error: cargo not found. Install Rust (https://rustup.rs) so the bandito daemon can be built." >&2
+            exit 1
+          fi
+          target="${CARGO_TARGET_DIR:-$HOME/.cache/bandito-target-app}"
+          (cd "$SRCROOT/../../daemon" && CARGO_TARGET_DIR="$target" cargo build --release --locked -p bandito)
+          helpers="$BUILT_PRODUCTS_DIR/$CONTENTS_FOLDER_PATH/Helpers"
+          mkdir -p "$helpers"
+          cp -f "$target/release/bandito" "$helpers/bandito"
+          # Ad-hoc ("-", Debug and CI) needs no timestamp server; a real identity (Developer ID) needs one.
+          identity="${EXPANDED_CODE_SIGN_IDENTITY:--}"
+          if [ "$identity" = "-" ]; then timestamp="--timestamp=none"; else timestamp="--timestamp"; fi
+          codesign --force --options runtime $timestamp --sign "$identity" "$helpers/bandito"
     settings:
       base:
+        # The script above reads files outside the target and writes into the product; the sandbox would block it.
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
         PRODUCT_NAME: Bandito
         PRODUCT_BUNDLE_IDENTIFIER: dev.bandito.mac
         MARKETING_VERSION: 0.1.0
