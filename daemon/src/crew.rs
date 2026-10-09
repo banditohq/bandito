@@ -40,6 +40,10 @@ pub struct CrewMember {
 pub trait CrewBackend: Send + Sync {
     async fn list(&self) -> Result<Vec<CrewMember>>;
     async fn send(&self, to: &str, message: &str) -> Result<()>;
+    /// Formatted matches from the agent's own past messages, newest first.
+    async fn history_search(&self, query: &str, limit: u32) -> Result<String>;
+    /// Everything said with the agent on one local day (`YYYY-MM-DD`), formatted.
+    async fn history_day(&self, date: &str) -> Result<String>;
 }
 
 /// Backend that asks the daemon over its unix socket.
@@ -64,6 +68,34 @@ impl CrewBackend for DaemonBackend {
         .await?;
         Ok(())
     }
+
+    async fn history_search(&self, query: &str, limit: u32) -> Result<String> {
+        let v = call(
+            &self.sock,
+            "history.search",
+            json!({ "agent_id": self.agent_id, "query": query, "limit": limit }),
+        )
+        .await?;
+        text_of(v, "history.search")
+    }
+
+    async fn history_day(&self, date: &str) -> Result<String> {
+        let v = call(
+            &self.sock,
+            "history.day",
+            json!({ "agent_id": self.agent_id, "date": date }),
+        )
+        .await?;
+        text_of(v, "history.day")
+    }
+}
+
+/// The `text` field of a history reply.
+fn text_of(v: Value, method: &str) -> Result<String> {
+    v.get("text")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .with_context(|| format!("{method}: unexpected response"))
 }
 
 /// Serve MCP until the reader reaches EOF. Every request gets one reply line;
@@ -156,7 +188,9 @@ async fn handle_line(line: &str, backend: &dyn CrewBackend) -> Option<Value> {
     let outcome: Result<Value, Fault> = match method {
         "initialize" => Ok(initialize(&params)),
         "ping" => Ok(json!({})),
-        "tools/list" => Ok(json!({ "tools": [crew_list_tool(), crew_send_tool()] })),
+        "tools/list" => Ok(json!({
+            "tools": [crew_list_tool(), crew_send_tool(), history_search_tool(), history_day_tool()]
+        })),
         "tools/call" => call_tool(&params, backend).await,
         "" => Err((INVALID_REQUEST, "invalid request: no method".into())),
         other => Err((METHOD_NOT_FOUND, format!("Method not found: {other}"))),
@@ -208,12 +242,48 @@ fn crew_send_tool() -> Value {
     })
 }
 
+fn history_search_tool() -> Value {
+    json!({
+        "name": "history_search",
+        "description": "Search your past conversations with the user and the crew (older messages are not in your context). Returns matching messages with dates.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": { "type": "string", "description": "Text to look for" },
+                "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 50,
+                    "description": "How many matches to return, newest first (default 20)",
+                },
+            },
+            "required": ["query"],
+        },
+    })
+}
+
+fn history_day_tool() -> Value {
+    json!({
+        "name": "history_day",
+        "description": "Read everything said with you on one day.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "date": { "type": "string", "description": "Day as YYYY-MM-DD (server local time)" },
+            },
+            "required": ["date"],
+        },
+    })
+}
+
 async fn call_tool(params: &Value, backend: &dyn CrewBackend) -> Result<Value, Fault> {
     let name = params.get("name").and_then(Value::as_str).unwrap_or_default();
     let args = params.get("arguments").cloned().unwrap_or(Value::Null);
     match name {
         "crew_list" => Ok(tool_result(crew_list(backend).await)),
         "crew_send" => Ok(tool_result(crew_send(&args, backend).await)),
+        "history_search" => Ok(tool_result(history_search(&args, backend).await)),
+        "history_day" => Ok(tool_result(history_day(&args, backend).await)),
         _ => Err((INVALID_PARAMS, format!("Unknown tool: {name}"))),
     }
 }
@@ -261,6 +331,42 @@ async fn crew_send(args: &Value, backend: &dyn CrewBackend) -> Result<String, St
     ))
 }
 
+/// Matches returned when `history_search` gets no `limit`.
+const HISTORY_SEARCH_DEFAULT_LIMIT: u32 = 20;
+const HISTORY_SEARCH_MAX_LIMIT: u32 = 50;
+
+async fn history_search(args: &Value, backend: &dyn CrewBackend) -> Result<String, String> {
+    let query = args
+        .get("query")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+    let Some(query) = query else {
+        return Err("history_search needs \"query\"".into());
+    };
+    let limit = match args.get("limit") {
+        None | Some(Value::Null) => HISTORY_SEARCH_DEFAULT_LIMIT,
+        Some(v) => v
+            .as_u64()
+            .and_then(|n| u32::try_from(n).ok())
+            .filter(|n| (1..=HISTORY_SEARCH_MAX_LIMIT).contains(n))
+            .ok_or_else(|| "history_search: \"limit\" must be an integer from 1 to 50".to_string())?,
+    };
+    backend.history_search(query, limit).await.map_err(|e| format!("{e:#}"))
+}
+
+async fn history_day(args: &Value, backend: &dyn CrewBackend) -> Result<String, String> {
+    let date = args
+        .get("date")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+    let Some(date) = date else {
+        return Err("history_day needs \"date\" as YYYY-MM-DD".into());
+    };
+    backend.history_day(date).await.map_err(|e| format!("{e:#}"))
+}
+
 /// Run the crew MCP server for one agent on stdin/stdout.
 pub async fn serve_stdio(sock: PathBuf, agent_id: String) -> Result<()> {
     let backend = DaemonBackend { sock, agent_id };
@@ -276,6 +382,10 @@ mod tests {
     struct MockBackend {
         members: Vec<CrewMember>,
         sent: Mutex<Vec<(String, String)>>,
+        /// (query, limit) of every history_search call.
+        searches: Mutex<Vec<(String, u32)>>,
+        /// Date of every history_day call.
+        days: Mutex<Vec<String>>,
         /// When set, every backend call fails with this message.
         fail: Option<String>,
     }
@@ -295,6 +405,22 @@ mod tests {
             }
             self.sent.lock().unwrap().push((to.to_string(), message.to_string()));
             Ok(())
+        }
+
+        async fn history_search(&self, query: &str, limit: u32) -> Result<String> {
+            if let Some(e) = &self.fail {
+                anyhow::bail!("{e}");
+            }
+            self.searches.lock().unwrap().push((query.to_string(), limit));
+            Ok(format!("searched {query} ({limit})"))
+        }
+
+        async fn history_day(&self, date: &str) -> Result<String> {
+            if let Some(e) = &self.fail {
+                anyhow::bail!("{e}");
+            }
+            self.days.lock().unwrap().push(date.to_string());
+            Ok(format!("day {date}"))
         }
     }
 
@@ -410,15 +536,97 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn tools_list_has_both_tools() {
+    async fn tools_list_has_all_four_tools() {
         let backend = MockBackend::default();
         let r = reply(json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/list" }), &backend).await;
         let tools = r["result"]["tools"].as_array().unwrap();
         let names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
-        assert_eq!(names, ["crew_list", "crew_send"]);
+        assert_eq!(names, ["crew_list", "crew_send", "history_search", "history_day"]);
         assert_eq!(tools[0]["inputSchema"], json!({ "type": "object", "properties": {} }));
         assert_eq!(tools[1]["inputSchema"]["required"], json!(["to", "message"]));
         assert_eq!(tools[1]["inputSchema"]["properties"]["to"]["type"], "string");
+        assert_eq!(tools[2]["inputSchema"]["required"], json!(["query"]));
+        assert_eq!(tools[2]["inputSchema"]["properties"]["query"]["type"], "string");
+        assert_eq!(tools[2]["inputSchema"]["properties"]["limit"]["type"], "integer");
+        assert_eq!(tools[3]["inputSchema"]["required"], json!(["date"]));
+        assert_eq!(tools[3]["inputSchema"]["properties"]["date"]["type"], "string");
+        assert_eq!(
+            tools[2]["description"],
+            "Search your past conversations with the user and the crew (older messages are not in your context). Returns matching messages with dates."
+        );
+        assert_eq!(tools[3]["description"], "Read everything said with you on one day.");
+    }
+
+    #[tokio::test]
+    async fn history_search_passes_query_and_default_limit() {
+        let backend = MockBackend::default();
+        let r = reply(tool_call("history_search", json!({ "query": " deploy " })), &backend).await;
+        assert_eq!(r["result"]["isError"], false);
+        assert_eq!(tool_text(&r), "searched deploy (20)");
+        assert_eq!(*backend.searches.lock().unwrap(), vec![("deploy".to_string(), 20)]);
+    }
+
+    #[tokio::test]
+    async fn history_search_takes_a_limit_from_1_to_50() {
+        let backend = MockBackend::default();
+        let r = reply(
+            tool_call("history_search", json!({ "query": "deploy", "limit": 50 })),
+            &backend,
+        )
+        .await;
+        assert_eq!(r["result"]["isError"], false);
+        assert_eq!(tool_text(&r), "searched deploy (50)");
+        let r = reply(
+            tool_call("history_search", json!({ "query": "deploy", "limit": 1 })),
+            &backend,
+        )
+        .await;
+        assert_eq!(tool_text(&r), "searched deploy (1)");
+    }
+
+    #[tokio::test]
+    async fn history_search_bad_arguments_are_tool_errors() {
+        let backend = MockBackend::default();
+        for args in [
+            json!({}),
+            json!({ "query": "   " }),
+            json!({ "query": "x", "limit": 0 }),
+            json!({ "query": "x", "limit": 51 }),
+            json!({ "query": "x", "limit": "5" }),
+            json!({ "query": "x", "limit": 2.5 }),
+        ] {
+            let r = reply(tool_call("history_search", args.clone()), &backend).await;
+            assert_eq!(r["result"]["isError"], true, "{args}");
+            assert!(r.get("error").is_none(), "{args}");
+        }
+        assert!(backend.searches.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn history_day_passes_the_date() {
+        let backend = MockBackend::default();
+        let r = reply(tool_call("history_day", json!({ "date": "2026-10-01" })), &backend).await;
+        assert_eq!(r["result"]["isError"], false);
+        assert_eq!(tool_text(&r), "day 2026-10-01");
+        assert_eq!(*backend.days.lock().unwrap(), vec!["2026-10-01".to_string()]);
+
+        let r = reply(tool_call("history_day", json!({})), &backend).await;
+        assert_eq!(r["result"]["isError"], true);
+        assert_eq!(backend.days.lock().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn history_backend_error_is_a_tool_error() {
+        let backend = MockBackend {
+            fail: Some("cannot reach the daemon".into()),
+            ..Default::default()
+        };
+        let r = reply(tool_call("history_search", json!({ "query": "x" })), &backend).await;
+        assert_eq!(r["result"]["isError"], true);
+        assert_eq!(tool_text(&r), "cannot reach the daemon");
+        let r = reply(tool_call("history_day", json!({ "date": "2026-10-01" })), &backend).await;
+        assert_eq!(r["result"]["isError"], true);
+        assert_eq!(tool_text(&r), "cannot reach the daemon");
     }
 
     #[tokio::test]

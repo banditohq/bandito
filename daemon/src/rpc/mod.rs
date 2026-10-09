@@ -1,11 +1,12 @@
 //! JSON-RPC 2.0, the same on every transport (unix socket, WebSocket).
 //! See docs/ARCHITECTURE.md#rpc.
 
-use crate::event::{Decision, Event};
+use crate::event::{Decision, Event, EventBody, Source};
 use crate::pairing;
 use crate::scheduler;
-use crate::store::{AgentPatch, Device, NewAgent, NewSchedule, NextRun, RuleAction, SchedulePatch};
+use crate::store::{AgentPatch, Device, NewAgent, NewSchedule, NextRun, RuleAction, SchedulePatch, Store};
 use crate::supervisor::{Inbound, Supervisor};
+use chrono::{Local, NaiveDate, NaiveTime, TimeZone};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
@@ -195,6 +196,29 @@ struct CrewSendParams {
     to: String,
     message: String,
 }
+#[derive(Deserialize)]
+struct HistorySearchParams {
+    agent_id: String,
+    query: String,
+    #[serde(default = "default_history_limit")]
+    limit: u32,
+}
+fn default_history_limit() -> u32 {
+    20
+}
+#[derive(Deserialize)]
+struct HistoryDayParams {
+    agent_id: String,
+    date: String,
+}
+
+/// Most messages `history.day` reads for one day.
+const HISTORY_DAY_LIMIT: u32 = 500;
+/// Longest text of one message in a history reply, in characters.
+const HISTORY_LINE_CHARS: usize = 600;
+/// Longest history reply, in characters.
+const HISTORY_REPLY_CHARS: usize = 8000;
+const HISTORY_MORE: &str = "… (more; narrow the search)";
 
 fn check_cwd(cwd: &str) -> Result<(), RpcError> {
     let p = std::path::Path::new(cwd);
@@ -211,6 +235,127 @@ fn check_cwd(cwd: &str) -> Result<(), RpcError> {
         ));
     }
     Ok(())
+}
+
+/// History is read by the crew MCP servers (same user, unix socket) only.
+fn ensure_local(peer: &Peer) -> Result<(), RpcError> {
+    if matches!(peer, Peer::Local) {
+        Ok(())
+    } else {
+        Err(RpcError::new(
+            UNAUTHORIZED,
+            "history can only be read by agents on the server",
+        ))
+    }
+}
+
+fn history_agent_name(store: &Store, agent_id: &str) -> Result<String, RpcError> {
+    store
+        .agent_get(agent_id)?
+        .map(|a| a.name)
+        .ok_or_else(|| RpcError::new(SERVER_ERROR, format!("no agent {agent_id}")))
+}
+
+/// Strict `YYYY-MM-DD`: the date must print back exactly as it was given.
+fn parse_day(s: &str) -> Result<NaiveDate, RpcError> {
+    NaiveDate::parse_from_str(s, "%Y-%m-%d")
+        .ok()
+        .filter(|d| d.format("%Y-%m-%d").to_string() == s)
+        .ok_or_else(|| RpcError::new(INVALID_PARAMS, format!("date must be YYYY-MM-DD, got {s}")))
+}
+
+/// Unix milliseconds of local midnight at the start of `day` and of the next day.
+fn local_day_bounds(day: NaiveDate) -> Result<(i64, i64), RpcError> {
+    let midnight = |d: NaiveDate| {
+        Local
+            .from_local_datetime(&d.and_time(NaiveTime::MIN))
+            .earliest()
+            .map(|t| t.timestamp_millis())
+            .ok_or_else(|| RpcError::new(SERVER_ERROR, format!("no local midnight on {d}")))
+    };
+    let next = day
+        .succ_opt()
+        .ok_or_else(|| RpcError::new(INVALID_PARAMS, format!("date out of range: {day}")))?;
+    Ok((midnight(day)?, midnight(next)?))
+}
+
+/// Readable transcript of stored messages, one line each, in the order given:
+/// `YYYY-MM-DD HH:MM · <who>: <text>`. Stays within `HISTORY_REPLY_CHARS`.
+fn format_history(events: &[Event], agent_name: &str) -> String {
+    let lines: Vec<String> = events.iter().filter_map(|e| history_line(e, agent_name)).collect();
+    if lines.is_empty() {
+        return "Nothing found.".into();
+    }
+    join_within(&lines, HISTORY_REPLY_CHARS)
+}
+
+fn history_line(e: &Event, agent_name: &str) -> Option<String> {
+    let (who, text) = match &e.body {
+        EventBody::MessageUser {
+            text,
+            source,
+            from_agent,
+        } => {
+            let who = match source {
+                Source::User => "user".to_string(),
+                Source::Schedule => "schedule".to_string(),
+                Source::Crew => from_agent.clone().unwrap_or_else(|| "crew".to_string()),
+            };
+            (who, text.as_str())
+        }
+        EventBody::MessageAssistant { text } => (agent_name.to_string(), text.as_str()),
+        // The history queries return messages only.
+        _ => return None,
+    };
+    Some(format!(
+        "{} · {who}: {}",
+        local_minute(e.ts),
+        one_line(text, HISTORY_LINE_CHARS)
+    ))
+}
+
+fn local_minute(ts_ms: i64) -> String {
+    match Local.timestamp_millis_opt(ts_ms).single() {
+        Some(t) => t.format("%Y-%m-%d %H:%M").to_string(),
+        None => "unknown time".into(),
+    }
+}
+
+/// Line breaks become " ⏎ "; text longer than `max` characters is cut and marked with "…".
+fn one_line(text: &str, max: usize) -> String {
+    let joined = text.trim().lines().collect::<Vec<_>>().join(" ⏎ ");
+    if joined.chars().count() <= max {
+        return joined;
+    }
+    let mut cut: String = joined.chars().take(max.saturating_sub(1)).collect();
+    cut.push('…');
+    cut
+}
+
+/// Join lines with newlines. If the result would exceed `max` characters, keep
+/// the lines that fit and end with the "more" marker, which counts toward `max`.
+fn join_within(lines: &[String], max: usize) -> String {
+    let full = lines.join("\n");
+    if full.chars().count() <= max {
+        return full;
+    }
+    let budget = max.saturating_sub(HISTORY_MORE.chars().count() + 1);
+    let mut out = String::new();
+    let mut used = 0;
+    for line in lines {
+        let add = line.chars().count() + usize::from(!out.is_empty());
+        if used + add > budget {
+            break;
+        }
+        if !out.is_empty() {
+            out.push('\n');
+        }
+        out.push_str(line);
+        used += add;
+    }
+    out.push('\n');
+    out.push_str(HISTORY_MORE);
+    out
 }
 
 /// Handle one request. `events.subscribe` lives in [`serve`] because it needs
@@ -326,6 +471,28 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             let CrewSendParams { from, to, message } = params(p)?;
             let to_id = app.sup.crew_send(&from, &to, &message).await?;
             ok(json!({ "to_id": to_id }))
+        }
+
+        "history.search" => {
+            ensure_local(peer)?;
+            let h: HistorySearchParams = params(p)?;
+            let name = history_agent_name(store, &h.agent_id)?;
+            let events = store.history_search(&h.agent_id, &h.query, h.limit)?;
+            ok(json!({ "text": format_history(&events, &name) }))
+        }
+        "history.day" => {
+            ensure_local(peer)?;
+            let d: HistoryDayParams = params(p)?;
+            let day = parse_day(&d.date)?;
+            let (from, to) = local_day_bounds(day)?;
+            let name = history_agent_name(store, &d.agent_id)?;
+            let events = store.history_range(&d.agent_id, from, to, HISTORY_DAY_LIMIT)?;
+            let text = if events.is_empty() {
+                format!("No messages on {}.", d.date)
+            } else {
+                format_history(&events, &name)
+            };
+            ok(json!({ "text": text }))
         }
 
         "events.since" => {
@@ -542,6 +709,267 @@ mod crew_tests {
             .await
             .unwrap();
         assert_eq!(v.as_array().unwrap().len(), 1);
+    }
+}
+
+#[cfg(test)]
+mod history_tests {
+    use super::*;
+    use crate::hub::Hub;
+    use crate::runtime::RuntimeKind;
+    use crate::store::{ApprovalMode, NewAgent, Store};
+    use crate::supervisor::Runtimes;
+
+    fn app_with_agent() -> (Arc<App>, String) {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let agent = store
+            .agent_create(NewAgent {
+                name: "Forge".into(),
+                role: String::new(),
+                runtime: RuntimeKind::Claude,
+                model: None,
+                cwd: "/tmp".into(),
+                approval_mode: ApprovalMode::Risky,
+                system_prompt: None,
+                effort: None,
+                memory_mode: crate::store::MemoryMode::Smart,
+                context_budget: None,
+            })
+            .unwrap();
+        let sup = Supervisor::new(Hub::new(store), Runtimes::default(), None);
+        (App::new(sup), agent.id)
+    }
+
+    fn user(text: &str, source: Source, from_agent: Option<&str>) -> EventBody {
+        EventBody::MessageUser {
+            text: text.into(),
+            source,
+            from_agent: from_agent.map(str::to_string),
+        }
+    }
+
+    fn event(body: EventBody, ts: i64) -> Event {
+        Event {
+            seq: 1,
+            agent_id: "a".into(),
+            ts,
+            body,
+        }
+    }
+
+    /// The line text after `YYYY-MM-DD HH:MM · who: `.
+    fn text_of_line(line: &str) -> &str {
+        line.split_once(": ").unwrap().1
+    }
+
+    #[test]
+    fn format_labels_each_speaker() {
+        let events = vec![
+            event(user("hi", Source::User, None), 0),
+            event(user("nightly", Source::Schedule, None), 0),
+            event(user("review please", Source::Crew, Some("Scout")), 0),
+            event(user("crew without a name", Source::Crew, None), 0),
+            event(EventBody::MessageAssistant { text: "done".into() }, 0),
+        ];
+        let out = format_history(&events, "Forge");
+        let lines: Vec<&str> = out.lines().collect();
+        assert_eq!(lines.len(), 5);
+        let who: Vec<&str> = lines
+            .iter()
+            .map(|l| l.split_once(" · ").unwrap().1.split_once(": ").unwrap().0)
+            .collect();
+        assert_eq!(who, ["user", "schedule", "Scout", "crew", "Forge"]);
+        let stamp = lines[0].split_once(" · ").unwrap().0;
+        assert_eq!(stamp.len(), 16);
+        assert_eq!(stamp.as_bytes()[10], b' ');
+    }
+
+    #[test]
+    fn format_shows_line_breaks_inline() {
+        let out = format_history(&[event(user("one\ntwo\r\nthree\n", Source::User, None), 0)], "Forge");
+        assert_eq!(out.lines().count(), 1);
+        assert_eq!(text_of_line(&out), "one ⏎ two ⏎ three");
+    }
+
+    #[test]
+    fn format_cuts_each_message_to_600_chars() {
+        let long = "ж".repeat(700);
+        let out = format_history(&[event(user(&long, Source::User, None), 0)], "Forge");
+        let text = text_of_line(&out);
+        assert_eq!(text.chars().count(), 600);
+        assert!(text.ends_with('…'));
+        assert_eq!(text.chars().filter(|&c| c == 'ж').count(), 599);
+
+        let exact = "a".repeat(600);
+        let out = format_history(&[event(user(&exact, Source::User, None), 0)], "Forge");
+        assert_eq!(text_of_line(&out), exact);
+    }
+
+    #[test]
+    fn format_caps_the_whole_reply_and_says_so() {
+        let body = "b".repeat(600);
+        let events: Vec<Event> = (0..50).map(|i| event(user(&body, Source::User, None), i)).collect();
+        let out = format_history(&events, "Forge");
+        let total = out.chars().count();
+        assert!(total <= HISTORY_REPLY_CHARS, "{total}");
+        assert!(out.ends_with(HISTORY_MORE));
+        // Each line is 625 characters; the next one did not fit.
+        assert!(total > HISTORY_REPLY_CHARS - 626, "{total}");
+    }
+
+    #[test]
+    fn format_empty_says_nothing_found() {
+        assert_eq!(format_history(&[], "Forge"), "Nothing found.");
+    }
+
+    #[test]
+    fn parse_day_is_strict() {
+        assert_eq!(
+            parse_day("2026-10-09").unwrap(),
+            NaiveDate::from_ymd_opt(2026, 10, 9).unwrap()
+        );
+        for bad in ["2026-1-5", "2026-13-01", "2026-02-30", "10/09/2026", "", "yesterday"] {
+            assert_eq!(parse_day(bad).unwrap_err().code, INVALID_PARAMS, "{bad}");
+        }
+    }
+
+    #[tokio::test]
+    async fn history_search_returns_matches_newest_first() {
+        let (app, forge) = app_with_agent();
+        let store = app.sup.hub().store.clone();
+        store
+            .append_event(&forge, user("deploy plan", Source::User, None))
+            .unwrap();
+        store
+            .append_event(
+                &forge,
+                EventBody::MessageAssistant {
+                    text: "deploy started".into(),
+                },
+            )
+            .unwrap();
+        store
+            .append_event(
+                &forge,
+                EventBody::Error {
+                    message: "deploy failed".into(),
+                },
+            )
+            .unwrap();
+        let v = dispatch(
+            &app,
+            &Peer::Local,
+            "history.search",
+            json!({ "agent_id": forge, "query": "deploy" }),
+        )
+        .await
+        .unwrap();
+        let text = v["text"].as_str().unwrap();
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(lines.len(), 2, "{text}");
+        assert!(lines[0].ends_with(" · Forge: deploy started"), "{text}");
+        assert!(lines[1].ends_with(" · user: deploy plan"), "{text}");
+    }
+
+    #[tokio::test]
+    async fn history_search_blank_query_and_unknown_agent() {
+        let (app, forge) = app_with_agent();
+        let v = dispatch(
+            &app,
+            &Peer::Local,
+            "history.search",
+            json!({ "agent_id": forge, "query": "  " }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(v["text"], "Nothing found.");
+
+        let err = dispatch(
+            &app,
+            &Peer::Local,
+            "history.search",
+            json!({ "agent_id": "nope", "query": "x" }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err, RpcError::new(SERVER_ERROR, "no agent nope"));
+    }
+
+    #[tokio::test]
+    async fn history_day_reads_today_and_says_when_empty() {
+        let (app, forge) = app_with_agent();
+        let store = app.sup.hub().store.clone();
+        store
+            .append_event(&forge, user("standup notes", Source::User, None))
+            .unwrap();
+        let today = Local::now().format("%Y-%m-%d").to_string();
+        let v = dispatch(
+            &app,
+            &Peer::Local,
+            "history.day",
+            json!({ "agent_id": forge, "date": today }),
+        )
+        .await
+        .unwrap();
+        assert!(v["text"].as_str().unwrap().ends_with(" · user: standup notes"), "{v}");
+
+        let v = dispatch(
+            &app,
+            &Peer::Local,
+            "history.day",
+            json!({ "agent_id": forge, "date": "2001-01-01" }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(v["text"], "No messages on 2001-01-01.");
+    }
+
+    #[tokio::test]
+    async fn history_day_rejects_bad_dates() {
+        let (app, forge) = app_with_agent();
+        for bad in ["2026-13-01", "2026-1-5", "2026-02-30", "yesterday"] {
+            let err = dispatch(
+                &app,
+                &Peer::Local,
+                "history.day",
+                json!({ "agent_id": forge, "date": bad }),
+            )
+            .await
+            .unwrap_err();
+            assert_eq!(err.code, INVALID_PARAMS, "{bad}");
+        }
+    }
+
+    #[tokio::test]
+    async fn history_is_local_only() {
+        let (app, forge) = app_with_agent();
+        let device = Peer::Device(Device {
+            id: "dev-1".into(),
+            name: "Mac".into(),
+            created_at: 0,
+            last_seen_at: None,
+        });
+        let search = dispatch(
+            &app,
+            &device,
+            "history.search",
+            json!({ "agent_id": forge, "query": "x" }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(
+            search,
+            RpcError::new(UNAUTHORIZED, "history can only be read by agents on the server")
+        );
+        let day = dispatch(
+            &app,
+            &device,
+            "history.day",
+            json!({ "agent_id": forge, "date": "2026-10-09" }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(day.code, UNAUTHORIZED);
     }
 }
 

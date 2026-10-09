@@ -11,6 +11,7 @@ use std::sync::Mutex;
 mod agents;
 mod approvals;
 pub mod auth;
+mod history;
 mod rules;
 mod schedules;
 
