@@ -19,14 +19,33 @@ public struct CommandResult: Sendable, Equatable {
 
 /// Progress of an install, as the connect screen shows it.
 public enum InstallEvent: Sendable, Equatable {
-    /// A new stage started. The text is for the user.
-    case step(String)
+    /// A new stage started: its step (the checklist matches it by this id) and a text for the log.
+    case step(InstallStep, String)
     /// A line of output from the install.
     case log(String)
     /// Done: the server is paired and the config can be saved.
     case done(PairInfo)
     /// Stopped. Nothing after this event.
     case failed(InstallError)
+}
+
+/// The stages of an install. An install emits one `InstallEvent.step` per stage it enters; the app's checklist groups
+/// the stages into its lines by this id, never by the text.
+public enum InstallStep: Sendable, Hashable {
+    /// Opening the connection to the server (ssh). Not used on this Mac.
+    case connect
+    /// Reading the server, or this Mac's state, before anything changes.
+    case check
+    /// Fetching the release (SSH installs only).
+    case download
+    /// Checking the release's signature and hash (SSH installs only).
+    case verify
+    /// Putting the binary in place: a copy on this Mac, or the install script on the server.
+    case install
+    /// Starting the daemon as a user service.
+    case service
+    /// Creating a pairing code and exchanging it for the app's device token.
+    case pair
 }
 
 /// A server that is installed, running, and paired with this app.
@@ -72,6 +91,10 @@ public enum InstallError: Error, Sendable, Equatable, LocalizedError {
     case downloadFailed(String)
     /// The latest release is older than this app: its release is still being published. `tag` is that release.
     case releaseStillPublishing(String)
+    /// This Mac's daemon did not answer `running: true` in time. The last lines of its log went to the install log.
+    case localDaemonNotStarted
+    /// The app could not keep the device token in the Keychain, so the server was not added.
+    case tokenNotSaved
 
     public var errorDescription: String? {
         switch self {
@@ -101,6 +124,10 @@ public enum InstallError: Error, Sendable, Equatable, LocalizedError {
             return "Downloading Bandito failed: \(detail)"
         case .releaseStillPublishing(let tag):
             return "Release \(tag) is still being published — try again in a few minutes."
+        case .localDaemonNotStarted:
+            return "Bandito did not start on this Mac."
+        case .tokenNotSaved:
+            return "The device token could not be saved in the Keychain. The server was not added."
         }
     }
 }
@@ -220,7 +247,8 @@ public struct SSHInstaller: Sendable {
             return
         }
         do {
-            emit(.step("Checking the server"))
+            emit(.step(.connect, "Connecting over SSH"))
+            emit(.step(.check, "Checking the server"))
             let probeResult = try checked(await remote(target, Self.probeCommand), step: "Checking the server")
             let probe = try RemoteProbe.parse(probeResult.stdout)
 
@@ -233,7 +261,7 @@ public struct SSHInstaller: Sendable {
                 try await install(on: target, probe: probe, emit: emit)
             }
 
-            emit(.step("Starting the service"))
+            emit(.step(.service, "Starting the service"))
             let serviceResult = try await remote(target, "\(binary) service install --json")
             if serviceResult.status == 255 { _ = try checked(serviceResult, step: "Starting the service") }
             let service = try Self.serviceOutcome(serviceResult)
@@ -243,13 +271,13 @@ public struct SSHInstaller: Sendable {
                 throw InstallError.badResponse("info")
             }
 
-            emit(.step("Creating a pairing code"))
+            emit(.step(.pair, "Creating a pairing code"))
             let pairResult = try checked(await remote(target, "\(binary) pair --json"), step: "Creating a pairing code")
             guard let code = Self.pairCode(in: pairResult.stdout) else {
                 throw InstallError.badResponse("pair")
             }
 
-            emit(.step("Connecting"))
+            emit(.step(.pair, "Connecting"))
             let paired: PairResult
             do {
                 paired = try await redeem(target.description, listen, code, deviceName)
@@ -288,7 +316,7 @@ public struct SSHInstaller: Sendable {
     private func install(on target: SSHTarget, probe: RemoteProbe, emit: (InstallEvent) -> Void) async throws {
         #if DEBUG
         if let localBinary {
-            emit(.step("Installing Bandito"))
+            emit(.step(.install, "Installing Bandito"))
             _ = try checked(await remote(target, "mkdir -p ~/.local/bin"), step: "Installing Bandito")
             _ = try checked(await scp(localBinary, to: target), step: "Copying Bandito")
             _ = try checked(await remote(target, "chmod 755 ~/.local/bin/bandito"), step: "Installing Bandito")
@@ -305,13 +333,13 @@ public struct SSHInstaller: Sendable {
 
         #if DEBUG
         if let devArchive {
-            emit(.step("Installing Bandito"))
+            emit(.step(.install, "Installing Bandito"))
             try await installArchive(devArchive, asset: asset, script: script, signed: nil, on: target, emit: emit)
             return
         }
         #endif
 
-        emit(.step("Downloading Bandito"))
+        emit(.step(.download, "Downloading Bandito"))
         let fetched = try await release.fetch(version: appTag, asset: asset, into: work)
         if let tag = fetched.tag {
             emit(.log("Bandito release \(tag)"))
@@ -319,7 +347,7 @@ public struct SSHInstaller: Sendable {
         if fetched.fellBackToLatest, let appTag {
             emit(.log("No Bandito \(appTag) release yet: installing \(fetched.tag ?? "the latest release"), a newer one."))
         }
-        emit(.step("Verifying the Bandito release"))
+        emit(.step(.verify, "Verifying the Bandito release"))
         do {
             try ReleaseVerifier.verify(
                 sums: fetched.sums, signatureBase64: fetched.signatureBase64,
@@ -332,7 +360,7 @@ public struct SSHInstaller: Sendable {
         let signature = work.appending(path: "SHA256SUMS.sig")
         try fetched.sums.write(to: sums)
         try Data(fetched.signatureBase64.utf8).write(to: signature)
-        emit(.step("Installing Bandito"))
+        emit(.step(.install, "Installing Bandito"))
         try await installArchive(
             fetched.archive, asset: asset, script: script, signed: SignedFiles(sums: sums, signature: signature),
             on: target, emit: emit)

@@ -987,6 +987,9 @@ public enum L10n {
             public static var check: String { L10n.tr("onboarding.install.check") }
             public static var connect: String { L10n.tr("onboarding.install.connect") }
             public static var install: String { L10n.tr("onboarding.install.install") }
+            public static var localInstall: String { L10n.tr("onboarding.install.localInstall") }
+            public static var localPair: String { L10n.tr("onboarding.install.localPair") }
+            public static var localStart: String { L10n.tr("onboarding.install.localStart") }
             public static var service: String { L10n.tr("onboarding.install.service") }
         }
 
@@ -1001,6 +1004,8 @@ public enum L10n {
             public static var componentsFailed: String { L10n.tr("onboarding.server.componentsFailed") }
             public static var componentsTitle: String { L10n.tr("onboarding.server.componentsTitle") }
             public static var connect: String { L10n.tr("onboarding.server.connect") }
+            public static var connectFailedTitle: String { L10n.tr("onboarding.server.connectFailedTitle") }
+            public static var connectRetry: String { L10n.tr("onboarding.server.connectRetry") }
             public static var connectedTitle: String { L10n.tr("onboarding.server.connectedTitle") }
             public static var copy: String { L10n.tr("onboarding.server.copy") }
             public static var copyKeyHint: String { L10n.tr("onboarding.server.copyKeyHint") }
@@ -1036,6 +1041,7 @@ public enum L10n {
             public static var stepLink: String { L10n.tr("onboarding.server.stepLink") }
             public static var subtitle: String { L10n.tr("onboarding.server.subtitle") }
             public static var thisMacDesc: String { L10n.tr("onboarding.server.thisMacDesc") }
+            public static var thisMacName: String { L10n.tr("onboarding.server.thisMacName") }
             public static var title: String { L10n.tr("onboarding.server.title") }
             public static var trustHost: String { L10n.tr("onboarding.server.trustHost") }
             public static var viaProxy: String { L10n.tr("onboarding.server.viaProxy") }
@@ -1043,6 +1049,9 @@ public enum L10n {
             public static var whereAria: String { L10n.tr("onboarding.server.whereAria") }
 
             public enum Err {
+                public static var appNotConnectedServer: String { L10n.tr("onboarding.server.err.appNotConnectedServer") }
+                public static var appNotConnectedThisMac: String { L10n.tr("onboarding.server.err.appNotConnectedThisMac") }
+                public static var daemonNotStarted: String { L10n.tr("onboarding.server.err.daemonNotStarted") }
                 public static var generic: String { L10n.tr("onboarding.server.err.generic") }
                 public static var hostChanged: String { L10n.tr("onboarding.server.err.hostChanged") }
                 public static var hostUnknown: String { L10n.tr("onboarding.server.err.hostUnknown") }
@@ -1053,6 +1062,7 @@ public enum L10n {
                 public static var releaseCheck: String { L10n.tr("onboarding.server.err.releaseCheck") }
                 public static func releasePublishing(tag: String) -> String { L10n.tr("onboarding.server.err.releasePublishing", tag) }
                 public static var timedOut: String { L10n.tr("onboarding.server.err.timedOut") }
+                public static var tokenNotSaved: String { L10n.tr("onboarding.server.err.tokenNotSaved") }
                 public static var unknownHost: String { L10n.tr("onboarding.server.err.unknownHost") }
                 public static var unsupported: String { L10n.tr("onboarding.server.err.unsupported") }
             }

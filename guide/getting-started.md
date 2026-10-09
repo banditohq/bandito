@@ -41,7 +41,7 @@ The step where your team lives: Where will your team live? You choose On this Ma
 ## This Mac is your first server
 
 <!-- id: gs-this-mac; covers: -->
-On the first launch Bandito adds a server named after this Mac (the host name, or "This Mac"). It runs the Bandito daemon on this Mac, so agents and their CLIs run here. Other servers are listed in Settings → Servers.
+Choosing On this Mac adds a server named after this Mac (its host name, or "This Mac"). No SSH is involved: Bandito is copied to `~/.local/bin`, its service starts, and the app pairs with it over the connection on this Mac, with its own device token. If the daemon does not start, the install log shows the last lines of its log. Agents and their CLIs run on this Mac. Other servers are listed in Settings → Servers.
 Где: Settings (⌘,) → Servers (Серверы) → the server list
 1. Open Settings with ⌘, and choose Servers (Серверы). Your Mac is listed with its state: Online (В сети) or Offline (Не в сети).
 ## Add a server
