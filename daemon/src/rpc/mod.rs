@@ -422,7 +422,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
 }
 
 #[cfg(test)]
-mod tests {
+mod crew_tests {
     use super::*;
     use crate::runtime::RuntimeKind;
     use crate::store::{ApprovalMode, NewAgent, Store};
@@ -601,7 +601,7 @@ pub async fn serve(app: Arc<App>, peer: Peer, mut inbox: mpsc::Receiver<String>,
 }
 
 #[cfg(test)]
-mod tests {
+mod schedule_tests {
     use super::*;
     use crate::hub::Hub;
     use crate::runtime::RuntimeKind;
