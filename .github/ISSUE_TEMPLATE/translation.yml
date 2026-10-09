@@ -1,0 +1,29 @@
+name: Translation
+description: Add a new language or fix a translation
+labels: [translation]
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What do you want to do?
+      options:
+        - Add a new language
+        - Fix a translation
+    validations: {required: true}
+  - type: input
+    id: language
+    attributes:
+      label: Language
+      description: BCP 47 code and name, for example `it (Italian)` or `pt-BR (Portuguese, Brazil)`.
+    validations: {required: true}
+  - type: input
+    id: keys
+    attributes:
+      label: Keys
+      description: Dotted keys from `i18n/en.json`, for example `thread.approve`. Leave empty for a new language.
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggestion
+      description: Current text and your proposed text. Keep placeholders such as `{name}` exactly as they are.
+    validations: {required: true}
