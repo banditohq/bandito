@@ -139,6 +139,17 @@ public final class ServerModel: Identifiable {
         threads[e.agentId] = t
     }
 
+    func rpcClient() throws -> RPCClient { try rpc() }
+
+    var runtimesStore: [RuntimeStatus] {
+        get { runtimes }
+        set { runtimes = newValue }
+    }
+
+    func replaceAgent(_ a: Agent) {
+        if let i = agents.firstIndex(where: { $0.id == a.id }) { agents[i] = a } else { agents.append(a) }
+    }
+
     private func rpc() throws -> RPCClient {
         guard let client else { throw RPCError(code: RPCError.disconnected, message: "not connected to \(config.name)") }
         return client
@@ -188,6 +199,95 @@ public final class ServerModel: Identifiable {
             t.lastSeq = live.lastSeq
         }
         threads[agentId] = t
+    }
+}
+
+// MARK: - Settings-level API (rules, schedules, devices, runtimes)
+
+extension ServerModel {
+    public func refreshRuntimes() async throws {
+        runtimesStore = try await rpcClient().call("runtimes.status", NoParams(), as: [RuntimeStatus].self)
+    }
+
+    public func rules(agentId: String? = nil) async throws -> [Rule] {
+        struct P: Encodable { var agentId: String? }
+        return try await rpcClient().call("rules.list", P(agentId: agentId), as: [Rule].self)
+    }
+
+    @discardableResult
+    public func setRule(pattern: String, action: RuleAction, agentId: String? = nil) async throws -> Rule {
+        struct P: Encodable { var agentId: String?; var pattern: String; var action: RuleAction }
+        return try await rpcClient().call("rules.set", P(agentId: agentId, pattern: pattern, action: action), as: Rule.self)
+    }
+
+    public func deleteRule(_ id: String) async throws {
+        struct P: Encodable { var id: String }
+        try await rpcClient().call("rules.delete", P(id: id))
+    }
+
+    public func schedules(agentId: String? = nil) async throws -> [Schedule] {
+        struct P: Encodable { var agentId: String? }
+        return try await rpcClient().call("schedules.list", P(agentId: agentId), as: [Schedule].self)
+    }
+
+    @discardableResult
+    public func createSchedule(agentId: String, cron: String, tz: String, prompt: String) async throws -> Schedule {
+        struct P: Encodable { var agentId: String; var cron: String; var tz: String; var prompt: String }
+        return try await rpcClient().call(
+            "schedules.create", P(agentId: agentId, cron: cron, tz: tz, prompt: prompt), as: Schedule.self)
+    }
+
+    @discardableResult
+    public func updateSchedule(
+        _ id: String, cron: String? = nil, tz: String? = nil, prompt: String? = nil, enabled: Bool? = nil
+    ) async throws -> Schedule {
+        struct P: Encodable { var id: String; var cron: String?; var tz: String?; var prompt: String?; var enabled: Bool? }
+        return try await rpcClient().call(
+            "schedules.update", P(id: id, cron: cron, tz: tz, prompt: prompt, enabled: enabled), as: Schedule.self)
+    }
+
+    public func deleteSchedule(_ id: String) async throws {
+        struct P: Encodable { var id: String }
+        try await rpcClient().call("schedules.delete", P(id: id))
+    }
+
+    public func runScheduleNow(_ id: String) async throws {
+        struct P: Encodable { var id: String }
+        try await rpcClient().call("schedules.run_now", P(id: id))
+    }
+
+    public func devices() async throws -> [Device] {
+        try await rpcClient().call("devices.list", NoParams(), as: [Device].self)
+    }
+
+    public func revokeDevice(_ id: String) async throws {
+        struct P: Encodable { var id: String }
+        try await rpcClient().call("devices.revoke", P(id: id))
+    }
+
+    @discardableResult
+    public func updateAgent(
+        _ id: String, name: String? = nil, role: String? = nil, cwd: String? = nil, approvalMode: ApprovalMode? = nil
+    ) async throws -> Agent {
+        struct P: Encodable {
+            var id: String; var name: String?; var role: String?; var cwd: String?; var approvalMode: ApprovalMode?
+        }
+        let a = try await rpcClient().call(
+            "agents.update", P(id: id, name: name, role: role, cwd: cwd, approvalMode: approvalMode), as: Agent.self)
+        replaceAgent(a)
+        return a
+    }
+}
+
+/// Pairing happens on an unauthenticated connection: redeem the six-word code
+/// from `bandito pair` for a device token.
+public enum Pairing {
+    public static func redeem(url: URL, code: String, deviceName: String) async throws -> PairResult {
+        let client = RPCClient(transport: WebSocketTransport(url: url, token: nil))
+        try await client.start()
+        defer { Task { await client.close() } }
+        struct P: Encodable { var code: String; var deviceName: String }
+        return try await client.call("pair.redeem", P(code: code, deviceName: deviceName), as: PairResult.self)
     }
 }
 
