@@ -121,6 +121,50 @@ public enum L10n {
         public static var retry: String { L10n.tr("banner.retry") }
     }
 
+    public enum Changes {
+        public static var agentGone: String { L10n.tr("changes.agentGone") }
+        public static func askAgent(name: String) -> String { L10n.tr("changes.askAgent", name) }
+        public static func askPlace(path: String, line: String) -> String { L10n.tr("changes.askPlace", path, line) }
+        public static var binary: String { L10n.tr("changes.binary") }
+        public static var empty: String { L10n.tr("changes.empty") }
+        public static func fileCount(count: Int) -> String { L10n.tr("changes.fileCount", count) }
+        public static var inline: String { L10n.tr("changes.inline") }
+        public static func keepAria(name: String) -> String { L10n.tr("changes.keepAria", name) }
+        public static func keepFiles(count: Int) -> String { L10n.tr("changes.keepFiles", count) }
+        public static var keepHint: String { L10n.tr("changes.keepHint") }
+        public static var noTextChanges: String { L10n.tr("changes.noTextChanges") }
+        public static var now: String { L10n.tr("changes.now") }
+        public static func placeCount(count: Int) -> String { L10n.tr("changes.placeCount", count) }
+        public static func renamedFrom(path: String) -> String { L10n.tr("changes.renamedFrom", path) }
+        public static var rollbackAll: String { L10n.tr("changes.rollbackAll") }
+        public static var rollbackConfirmAction: String { L10n.tr("changes.rollbackConfirmAction") }
+        public static var rollbackConfirmMessage: String { L10n.tr("changes.rollbackConfirmMessage") }
+        public static var rollbackConfirmTitle: String { L10n.tr("changes.rollbackConfirmTitle") }
+        public static func rolledBack(count: Int) -> String { L10n.tr("changes.rolledBack", count) }
+        public static var selectFile: String { L10n.tr("changes.selectFile") }
+        public static var sideBySide: String { L10n.tr("changes.sideBySide") }
+        public static func task(task: String) -> String { L10n.tr("changes.task", task) }
+        public static var timeline: String { L10n.tr("changes.timeline") }
+        public static func title(name: String) -> String { L10n.tr("changes.title", name) }
+        public static var truncated: String { L10n.tr("changes.truncated") }
+        public static var undo: String { L10n.tr("changes.undo") }
+        public static func unticked(count: Int) -> String { L10n.tr("changes.unticked", count) }
+        public static var updateServer: String { L10n.tr("changes.updateServer") }
+
+        public enum Point {
+            public static var restore: String { L10n.tr("changes.point.restore") }
+            public static var start: String { L10n.tr("changes.point.start") }
+            public static var turnEnd: String { L10n.tr("changes.point.turnEnd") }
+        }
+
+        public enum Status {
+            public static var added: String { L10n.tr("changes.status.added") }
+            public static var deleted: String { L10n.tr("changes.status.deleted") }
+            public static var modified: String { L10n.tr("changes.status.modified") }
+            public static var renamed: String { L10n.tr("changes.status.renamed") }
+        }
+    }
+
     public enum Chapter {
         public static func explainer(name: String) -> String { L10n.tr("chapter.explainer", name) }
         public static func nextAt(limit: String) -> String { L10n.tr("chapter.nextAt", limit) }

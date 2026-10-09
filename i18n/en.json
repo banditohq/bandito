@@ -593,6 +593,56 @@
   "menubar.resolveFailed": "Could not send your answer: {error}",
   "team.delete.action": "Delete",
   "team.changes": "Changes",
+  "changes.title": "What {name} changed",
+  "changes.task": "Task «{task}»",
+  "changes.fileCount": {
+    "one": "{count} file",
+    "other": "{count} files"
+  },
+  "changes.placeCount": {
+    "one": "{count} place",
+    "other": "{count} places"
+  },
+  "changes.inline": "Inline",
+  "changes.sideBySide": "Side by side",
+  "changes.timeline": "Restore points",
+  "changes.now": "Now",
+  "changes.point.start": "Before the task",
+  "changes.point.turnEnd": "End of turn",
+  "changes.point.restore": "Before restore",
+  "changes.keepHint": "Untick a file to put it back as it was before the task. The rest stays.",
+  "changes.keepAria": "Keep {name}",
+  "changes.status.added": "added",
+  "changes.status.modified": "changed",
+  "changes.status.deleted": "deleted",
+  "changes.status.renamed": "renamed",
+  "changes.renamedFrom": "renamed from {path}",
+  "changes.unticked": {
+    "one": "{count} file unticked",
+    "other": "{count} files unticked"
+  },
+  "changes.rollbackAll": "Roll back the whole task",
+  "changes.rollbackConfirmTitle": "Roll back the whole task?",
+  "changes.rollbackConfirmMessage": "Files go back to how they were before the task. You can undo this from the notice.",
+  "changes.rollbackConfirmAction": "Roll back",
+  "changes.askAgent": "Ask {name} about this place",
+  "changes.askPlace": "Look at {path}:{line} — what changed here and why?",
+  "changes.keepFiles": {
+    "one": "Keep {count} file",
+    "other": "Keep {count} files"
+  },
+  "changes.rolledBack": {
+    "one": "Rolled back {count} file",
+    "other": "Rolled back {count} files"
+  },
+  "changes.undo": "Undo",
+  "changes.empty": "Nothing changed yet",
+  "changes.updateServer": "Update the server",
+  "changes.binary": "Binary file changed",
+  "changes.noTextChanges": "No text changes",
+  "changes.truncated": "The diff is cut at 512 KiB",
+  "changes.agentGone": "This agent no longer exists",
+  "changes.selectFile": "Pick a file to see what changed",
   "team.terminal": "Agent terminal (view only)",
   "team.schedules": "Schedules",
   "team.emptyTitle": "No agents yet",

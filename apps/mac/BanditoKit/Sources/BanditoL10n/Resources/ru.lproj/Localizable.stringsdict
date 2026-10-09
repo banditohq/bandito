@@ -2,6 +2,106 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>changes.fileCount</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%1$lld файла</string>
+			<key>many</key>
+			<string>%1$lld файлов</string>
+			<key>one</key>
+			<string>%1$lld файл</string>
+			<key>other</key>
+			<string>%1$lld файла</string>
+		</dict>
+	</dict>
+	<key>changes.keepFiles</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>Оставить %1$lld файла</string>
+			<key>many</key>
+			<string>Оставить %1$lld файлов</string>
+			<key>one</key>
+			<string>Оставить %1$lld файл</string>
+			<key>other</key>
+			<string>Оставить %1$lld файла</string>
+		</dict>
+	</dict>
+	<key>changes.placeCount</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%1$lld места</string>
+			<key>many</key>
+			<string>%1$lld мест</string>
+			<key>one</key>
+			<string>%1$lld место</string>
+			<key>other</key>
+			<string>%1$lld места</string>
+		</dict>
+	</dict>
+	<key>changes.rolledBack</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>Откатил %1$lld файла</string>
+			<key>many</key>
+			<string>Откатил %1$lld файлов</string>
+			<key>one</key>
+			<string>Откатил %1$lld файл</string>
+			<key>other</key>
+			<string>Откатил %1$lld файла</string>
+		</dict>
+	</dict>
+	<key>changes.unticked</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>Сняты %1$lld файла</string>
+			<key>many</key>
+			<string>Снято %1$lld файлов</string>
+			<key>one</key>
+			<string>Снят %1$lld файл</string>
+			<key>other</key>
+			<string>Снято %1$lld файла</string>
+		</dict>
+	</dict>
 	<key>chapter.tokensUsed</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>

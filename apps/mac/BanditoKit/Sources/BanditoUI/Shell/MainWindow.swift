@@ -8,6 +8,8 @@ struct MainWindow: View {
     @Environment(AppModel.self) private var app
     @Environment(Router.self) private var router
     @Environment(GestureSettings.self) private var gestures
+    /// Shown after a rollback from "What changed", with the undo.
+    @State private var rollbackNotice: RollbackNotice?
 
     var body: some View {
         @Bindable var router = router
@@ -30,8 +32,20 @@ struct MainWindow: View {
             onBack: { router.back() },
             onForward: { router.forward() })
         .sheet(item: $router.sheet) { sheet in
-            SheetPlaceholder(sheet: sheet)
+            if case .changes(let agentID) = sheet {
+                ChangesSheet(agentID: agentID) { rollbackNotice = $0 }
+            } else {
+                SheetPlaceholder(sheet: sheet)
+            }
         }
+        .overlay(alignment: .bottom) {
+            if let notice = rollbackNotice {
+                RollbackToast(notice: notice) { rollbackNotice = nil }
+                    .padding(.bottom, 18)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .banditoAnimation(BanditoMotion.ease, value: rollbackNotice?.id)
     }
 }
 
