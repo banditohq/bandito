@@ -88,7 +88,7 @@ Migrations: numbered SQL files embedded in the binary, applied by `PRAGMA user_v
 
 JSON-RPC 2.0. Same methods on every transport.
 
-- Requests: `daemon.info`, `runtimes.status`, `agents.list|get|create|update|delete`, `agents.send{agent_id,text}`, `agents.interrupt`, `events.since{seq,limit,agent_id?}`, `approvals.list|resolve{approval_id,decision,remember}`, `rules.list|set|delete`, `schedules.list|create|update|delete|run_now`, `devices.list|revoke`, `pair.redeem{code,device_name}` (only unauthenticated method), `term.list|open|input|resize|rename|close|attach|detach` (see Terminals), `fs.*` (see [Files](#files)), `changes.checkpoints|diff|file|restore` (see [Changes](#changes)), `secrets.list|set|delete` (see [Secrets](#secrets), `host.stats|history|processes|ports|kill`.
+- Requests: `daemon.info`, `runtimes.status`, `agents.list|get|create|update|delete`, `agents.send{agent_id,text}`, `agents.interrupt`, `events.since{seq,limit,agent_id?}`, `approvals.list|resolve{approval_id,decision,remember}`, `rules.list|set|delete`, `schedules.list|create|update|delete|run_now`, `devices.list|revoke`, `pair.redeem{code,device_name}` (only unauthenticated method), `term.list|open|input|resize|rename|close|attach|detach` (see Terminals), `fs.*` (see [Files](#files)), `changes.checkpoints|diff|file|restore` (see [Changes](#changes)), `secrets.list|set|delete` (see [Secrets](#secrets), `host.stats|history|processes|ports|kill`, `setup.status|install|job` (see [Setup](#setup)).
 - Notifications (server → client): `event{seq, agent_id, kind, payload, ts}` for every event including `message.delta`; `term.output|gap|exit|closed` for attached terminals (see Terminals).
 
 ## Transports (connect any way you like)
@@ -308,6 +308,41 @@ The app shows what the server is doing: CPU, memory, disks, network, the process
 
 Machine-readable output for scripts and the app: `bandito pair --json` prints `{"code","expires_in_ms"}`; `bandito info --json` prints version, paths, `listen`, `running`, and the `features` the daemon reports (empty when it is down); `service install --json` prints `{"ok","mode","listen","socket","warnings"}`; `service status --json` prints `{"installed","mode","running","pid"?}`.
 
+## Setup
+
+The server sets itself up from the app. The daemon knows which components each feature needs, checks whether they are there, and installs the missing ones. Clients show a feature from `setup.status`, and offer the install. Code: `daemon/src/setup.rs` (checks, plans, jobs), `daemon/src/rpc/setup.rs` (methods). Feature string: `"setup"`.
+
+**Features and components.** `screen` needs `xvfb`, `x11vnc`, `xdotool`, `window_manager` (openbox) and `fonts` (Noto). `browser` needs `browser` and `fonts`. `agents` are `claude`, `codex` and `grok`; `claude` and `codex` need `node`. `containers` needs `docker`. The screen feature is `unsupported` off Linux.
+
+**Checks.** A component is installed when its program is on `PATH`: `Xvfb`, `x11vnc`, `xdotool`, `openbox`, one of `google-chrome`, `google-chrome-stable`, `chromium`, `chromium-browser`, or `node`, `claude`, `codex`, `grok`. Tools that have a version must answer `--version`. Node must be 18 or newer (`node --version`). `fonts` passes when `fc-list` lists a Noto family. `docker` passes when `docker info` succeeds. The check uses the daemon's `PATH`, which starts with `<data dir>/tools/bin`.
+
+**How it is installed.**
+
+| component | how | needs sudo |
+|---|---|---|
+| `xvfb`, `x11vnc`, `xdotool`, `window_manager`, `fonts`, `browser` | apt, dnf or pacman, one batch per job (apt runs `update` first). Ubuntu on x86_64 gets Google Chrome as a .deb, since its `chromium-browser` is a snap. Ubuntu on arm64 has no installer | yes |
+| `node` | Node 22 LTS tarball from nodejs.org, checked against `SHASUMS256.txt` (sha256), unpacked into `<data dir>/tools/node`, linked as `node`, `npm`, `npx` in `<data dir>/tools/bin` | no |
+| `claude`, `codex` | `npm install -g @anthropic-ai/claude-code` / `@openai/codex` with `NPM_CONFIG_PREFIX=<data dir>/tools` | no |
+| `grok`, `docker` | not installed by Bandito. The hint names the docs; a docker permission error hints `sudo usermod -aG docker $USER` | — |
+
+On macOS, Bandito installs only `node`, `claude` and `codex`. The screen feature is `unsupported`, and `browser`, `grok` and `docker` show a hint.
+
+**Sudo.** Bandito never asks for or takes a sudo password. Package commands run as `sudo -n`, which fails rather than prompt. `setup.status` reports `sudo`: `passwordless` (`sudo -n true` works), `password` (sudo exists but asks), or `none` (no sudo). When a job needs sudo and it is not `passwordless`, nothing runs: the job ends in `needs_password` with `command`, the exact command line for the user to run in a terminal of the app. The app opens that terminal; the user types the password there, not in Bandito. Then the user starts the install again. Commands for node and the agent CLIs never use sudo.
+
+**Jobs.** `setup.install` starts one job in the background and answers at once. A second install while one runs is `busy`. The order is node, then system packages (one batch), then Chrome, then npm packages. A component that needs node pulls it in. No command gets stdin. apt installs run with `DEBIAN_FRONTEND=noninteractive`, and each command has a limit of 15 minutes. Its stdout and stderr go to the job log. At the end every requested component is checked again. A failure names the first component still missing in `failed_component`.
+
+**Methods.**
+
+| method | params | result |
+|---|---|---|
+| `setup.status` | `{}` | `{os, arch, package_manager, sudo, components: [Component], features}`. `Component` is `{id, feature, installed, version, installable, needs_sudo, hint}`. `features` is `{screen, browser, containers: ready\|missing\|unsupported, agents: {claude, codex, grok: ready\|missing}}` |
+| `setup.install` | `{components: [id]}` | `{job_id}`. Unknown ids and an empty list are `-32602` |
+| `setup.job` | `{job_id, from?: u64}` | `{state, step, log, offset, command?, failed_component?}`. `state` is `running`, `done`, `failed` or `needs_password`. `log` holds bytes from `from` (a byte offset) to the end; `offset` is the next `from`. The log keeps the newest 256 KiB |
+
+Poll `setup.job` about once a second with the last `offset`. The daemon keeps only the most recent job, so an unknown id is `not_found`. Errors: code `-32024` (`SETUP_ERROR`) with `error.data.reason`: `busy` or `not_found`.
+
+**PATH.** At start the daemon puts `<data dir>/tools/bin` first on its `PATH`, before the runtime starts, so the tools reach agents and terminals. The data dir is `$BANDITO_HOME` or `~/.bandito`; `--home` does not move it.
+
 ## Mac app
 
 SwiftUI, macOS 14+. Sidebar: servers → crew. Thread view rendered from events; approval cards with Approve / Deny / Always; schedules; connection wizard. Menu bar item with the status dot. Local notifications with Approve / Deny actions while the app runs. Strings in a String Catalog, 9 languages. Colors from `brand/tokens/dist`.
@@ -323,6 +358,7 @@ daemon/            Rust crate `bandito`
   src/runtime/     process.rs (shared child-process plumbing), claude.rs, codex.rs, grok.rs, api/
   src/policy.rs    approval rules
   src/host.rs      host load, processes, ports, kill (see Host)
+  src/setup.rs     components per feature, install jobs (see Setup)
   src/scheduler.rs
   src/crew.rs      MCP server
   tests/fixtures/  recorded protocol transcripts
