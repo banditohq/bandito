@@ -206,10 +206,11 @@ public final class AccountHub {
     /// Does nothing without a session: nobody can ask for pending devices then.
     public func startWatchingPending() {
         guard watchTask == nil, signedIn else { return }
+        // Weak capture, and the hub is held only for the refresh itself: while the Task sleeps, nothing keeps it alive.
         watchTask = Task { [weak self] in
             while !Task.isCancelled {
-                guard let self else { return }
-                await self.refreshPending()
+                guard self != nil else { return }
+                await self?.refreshPending()
                 try? await Task.sleep(for: .seconds(30))
             }
         }

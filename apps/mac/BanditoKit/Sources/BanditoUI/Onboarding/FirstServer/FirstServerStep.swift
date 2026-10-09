@@ -247,6 +247,19 @@ struct FirstServerStep: View {
                     .font(BanditoFont.font(size: 13, weight: 400))
                     .foregroundStyle(Color.Bandito.danger)
             }
+            if let command = model.knownHostCommand {
+                Text(L10n.Onboarding.Server.removeOldKey)
+                    .font(BanditoFont.font(size: 13.5, weight: 400))
+                    .foregroundStyle(Color.Bandito.text2)
+                HStack(spacing: 10) {
+                    Text(command)
+                        .font(BanditoFont.font(size: 13, weight: 400, mono: true))
+                        .foregroundStyle(Color.Bandito.text)
+                        .textSelection(.enabled)
+                    Button(L10n.Onboarding.Server.copy) { SystemActions.copy(command) }
+                        .buttonStyle(QuietButtonStyle(size: .regular))
+                }
+            }
             if let command = model.proxyCommand {
                 HStack(spacing: 10) {
                     Text(command)
@@ -362,8 +375,8 @@ struct FirstServerStep: View {
                         .foregroundStyle(ready ? AvatarColor.sage.color : Color.Bandito.text3)
                 }
             }
-            if let error = model.setup.error {
-                Text(error)
+            if model.setup.error != nil {
+                Text(L10n.Onboarding.Server.componentsFailed)
                     .font(BanditoFont.font(size: 12.5, weight: 400))
                     .foregroundStyle(Color.Bandito.danger)
             }

@@ -21,6 +21,9 @@ public enum SSHHostKeyError: Error, Equatable, LocalizedError {
     case viaProxy
     /// The key the server presents changed between the review and the write: nothing is written.
     case changedBetweenChecks
+    /// known_hosts already has this host with another key of the same type. Nothing is added; the person removes
+    /// the old entry first (`ssh-keygen -R <host>`). `host` is the name the entry is kept under.
+    case keyChangedSincePreviousVisit(host: String)
     /// The existing known_hosts file could not be read: nothing is written.
     case readFailed(String)
     case writeFailed(String)
@@ -32,6 +35,7 @@ public enum SSHHostKeyError: Error, Equatable, LocalizedError {
         case .changedBetweenChecks: return "The server's host key changed between the two checks. Nothing was trusted."
         case .readFailed(let file): return "Could not read \(file). Nothing was changed."
         case .writeFailed(let file): return "Could not write \(file). Nothing was changed."
+        case .keyChangedSincePreviousVisit(let host): return "The key for \(host) changed since last time. Nothing was trusted."
         }
     }
 }
@@ -57,6 +61,8 @@ public struct SSHHostKeyTrust: Sendable {
         var port: Int
         var hostKeyAlias: String?
         var viaProxy: Bool
+        /// The first file of `UserKnownHostsFile` from `ssh -G`, with `~` expanded. Trust writes there.
+        var knownHostsPath: String?
 
         /// The first field of a known_hosts line: the alias when one is set, else `host` or `[host]:port`.
         var knownHostsField: String {
@@ -100,9 +106,44 @@ public struct SSHHostKeyTrust: Sendable {
         }
         let host = set("hostname") ?? target.host
         let port = Int(values["port"] ?? "") ?? target.port ?? 22
+        let knownHostsPath = set("userknownhostsfile")
+            .flatMap { $0.split(separator: " ").first.map(String.init) }
+            .map(expandTilde)
         return Endpoint(
             host: host, port: port, hostKeyAlias: set("hostkeyalias"),
-            viaProxy: set("proxyjump") != nil || set("proxycommand") != nil)
+            viaProxy: set("proxyjump") != nil || set("proxycommand") != nil,
+            knownHostsPath: knownHostsPath)
+    }
+
+    static func expandTilde(_ path: String) -> String {
+        path.hasPrefix("~/") ? NSHomeDirectory() + String(path.dropFirst(1)) : path
+    }
+
+    /// `ssh-keygen -F HOST -f FILE`: the entries of `host` in `file`.
+    static func lookupArguments(host: String, file: String) -> [String] {
+        ["-F", host, "-f", file]
+    }
+
+    /// The key parts (`type base64`) of the entries in `ssh-keygen -F` output. Comments are skipped.
+    static func previousKeys(fromLookup output: String) -> [(type: String, key: String)] {
+        output.split(whereSeparator: \.isNewline).compactMap { line in
+            guard !line.hasPrefix("#") else { return nil }
+            let fields = line.split(separator: " ")
+            guard fields.count >= 3 else { return nil }
+            return (String(fields[1]), String(fields[2]))
+        }
+    }
+
+    /// Whether known_hosts holds this host with a key of the same type as one shown, but another key.
+    static func conflicts(previous: [(type: String, key: String)], shown: [String]) -> Bool {
+        let shownKeys = shown.compactMap { line -> (type: String, key: String)? in
+            let fields = line.split(separator: " ")
+            guard fields.count >= 3 else { return nil }
+            return (String(fields[1]), String(fields[2]))
+        }
+        return previous.contains { old in
+            shownKeys.contains { $0.type == old.type && $0.key != old.key }
+        }
     }
 
     /// The fingerprint of the first key in `ssh-keygen -lf` output: `256 SHA256:abc… host (ED25519)`.
@@ -138,6 +179,20 @@ public struct SSHHostKeyTrust: Sendable {
         return Self.endpoint(fromConfig: config.stdout, target: target)
     }
 
+    /// The file trust writes to: the one `ssh -G` names, else the one given to the initializer.
+    private func knownHostsFile(for endpoint: Endpoint) -> URL {
+        endpoint.knownHostsPath.map { URL(fileURLWithPath: $0) } ?? knownHosts
+    }
+
+    /// Whether the file already has this host with a different key of a type shown now.
+    private func hasConflict(_ lines: [String], field: String, file: URL) async throws -> Bool {
+        let lookup = try await runner.run(
+            Self.keygenPath, Self.lookupArguments(host: field, file: file.path), stdin: nil)
+        // ssh-keygen answers 1 when there is no such host, or no such file: nothing to conflict with.
+        guard lookup.status == 0 else { return false }
+        return Self.conflicts(previous: Self.previousKeys(fromLookup: lookup.stdout), shown: lines)
+    }
+
     /// Scans the key types in order and returns the first one the server presents, with its fingerprint.
     public func preview(_ target: SSHTarget) async throws -> HostKeyPreview {
         let endpoint = try await endpoint(for: target)
@@ -146,13 +201,15 @@ public struct SSHHostKeyTrust: Sendable {
             let scan = try await runner.run(
                 Self.keyscanPath,
                 Self.keyscanArguments(host: endpoint.host, port: endpoint.port, keyType: keyType), stdin: nil)
-            let lines = Self.keyLines(scan.stdout)
-            guard scan.status == 0, !lines.isEmpty else { continue }
+            guard scan.status == 0, !Self.keyLines(scan.stdout).isEmpty else { continue }
             let keygen = try await runner.run(Self.keygenPath, ["-lf", "-"], stdin: Data(scan.stdout.utf8))
             guard let fingerprint = Self.fingerprint(fromKeygen: keygen.stdout) else { throw SSHHostKeyError.noKey }
+            let lines = Self.knownHostsLines(from: scan.stdout, field: endpoint.knownHostsField)
+            if try await hasConflict(lines, field: endpoint.knownHostsField, file: knownHostsFile(for: endpoint)) {
+                throw SSHHostKeyError.keyChangedSincePreviousVisit(host: endpoint.knownHostsField)
+            }
             return HostKeyPreview(
-                keyType: keyType, fingerprint: fingerprint, scanOutput: scan.stdout,
-                knownHostsLines: Self.knownHostsLines(from: scan.stdout, field: endpoint.knownHostsField))
+                keyType: keyType, fingerprint: fingerprint, scanOutput: scan.stdout, knownHostsLines: lines)
         }
         throw SSHHostKeyError.noKey
     }
@@ -168,6 +225,10 @@ public struct SSHHostKeyTrust: Sendable {
         guard scan.status == 0, Self.keyLines(scan.stdout) == Self.keyLines(preview.scanOutput) else {
             throw SSHHostKeyError.changedBetweenChecks
         }
-        try KnownHostsFile.append(lines: preview.knownHostsLines, to: knownHosts)
+        let file = knownHostsFile(for: endpoint)
+        if try await hasConflict(preview.knownHostsLines, field: endpoint.knownHostsField, file: file) {
+            throw SSHHostKeyError.keyChangedSincePreviousVisit(host: endpoint.knownHostsField)
+        }
+        try KnownHostsFile.append(lines: preview.knownHostsLines, to: file)
     }
 }

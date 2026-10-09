@@ -13,6 +13,10 @@ final class SubscriptionsModel {
     let server: ServerModel
     /// The runtime whose login terminal is open, if any.
     private(set) var loginRuntime: RuntimeKind?
+    /// Set before the terminal is requested, so a second tap cannot open a second terminal.
+    @ObservationIgnored private var gate = LoginGate()
+    /// Whether a login is being opened right now (buttons are disabled meanwhile).
+    var isOpening: Bool { gate.isOpening }
     private(set) var terminal: TerminalSession?
     /// The last https link the login printed. Only https is ever offered.
     private(set) var latestLink: URL?
@@ -41,6 +45,10 @@ final class SubscriptionsModel {
     /// One poll: fresh runtime states, and the login is closed as soon as its runtime reports signed in.
     func poll() async {
         try? await server.refreshRuntimes()
+        // A server that says "not signed in" overrides an earlier "Done".
+        for kind in Self.kinds where server.runtimes.first(where: { $0.kind == kind })?.loggedIn == false {
+            confirmed.remove(kind)
+        }
         if let kind = loginRuntime, state(kind)?.isReady == true {
             await endLogin()
         }
@@ -48,7 +56,8 @@ final class SubscriptionsModel {
 
     /// Starts the login command of `kind` in a terminal on the server and follows its output.
     func startLogin(_ kind: RuntimeKind) async {
-        guard terminal == nil else { return }
+        guard terminal == nil, gate.tryStart() else { return }
+        defer { gate.finish() }
         errorText = nil
         latestLink = nil
         outputTail = ""

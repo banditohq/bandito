@@ -12,17 +12,23 @@ actor FakeKeyRunner: CommandRunner {
     private(set) var calls: [Call] = []
     private var scans: [[String: String]]
     private let config: String
+    private let lookup: String
 
     /// `scans`: one dictionary per keyscan round, from key type to the scan output (missing type = no key).
-    init(config: String, scans: [[String: String]]) {
+    /// `lookup`: what `ssh-keygen -F` finds in known_hosts (empty = no entry).
+    init(config: String, scans: [[String: String]], lookup: String = "") {
         self.config = config
         self.scans = scans
+        self.lookup = lookup
     }
 
     func run(_ executable: String, _ arguments: [String], stdin: Data?) async throws -> CommandResult {
         calls.append(Call(executable: executable, arguments: arguments))
         if executable == SSHInstaller.sshExecutable {
             return CommandResult(status: 0, stdout: config, stderr: "")
+        }
+        if executable == SSHHostKeyTrust.keygenPath, arguments.first == "-F" {
+            return CommandResult(status: lookup.isEmpty ? 1 : 0, stdout: lookup, stderr: "")
         }
         if executable == SSHHostKeyTrust.keygenPath {
             let text = String(decoding: stdin ?? Data(), as: UTF8.self)
@@ -188,7 +194,65 @@ actor FakeKeyRunner: CommandRunner {
         let written = try String(contentsOf: file, encoding: .utf8)
         #expect(written.hasPrefix("prod-key ssh-ed25519 "))
     }
+
+    @Test func trustWritesToTheFileSshConfigurationNames() async throws {
+        let custom = tempKnownHosts()
+        let config = "hostname 203.0.113.7\nport 2222\nproxyjump none\nuserknownhostsfile \(custom.path) /other\n"
+        let runner = FakeKeyRunner(config: config, scans: [["ed25519": Self.ed25519], ["ed25519": Self.ed25519]])
+        let trust = SSHHostKeyTrust(runner: runner, knownHosts: tempKnownHosts())
+        let host = try target("server.example")
+        let preview = try await trust.preview(host)
+        try await trust.trust(preview, for: host)
+        #expect(FileManager.default.fileExists(atPath: custom.path))
+        #expect(try String(contentsOf: custom, encoding: .utf8).hasPrefix("[203.0.113.7]:2222 ssh-ed25519 "))
+    }
+
+    @Test func aTildeInTheConfiguredFileIsExpanded() throws {
+        let endpoint = SSHHostKeyTrust.endpoint(
+            fromConfig: "hostname a.example\nport 22\nuserknownhostsfile ~/.ssh/custom_hosts ~/.ssh/other\n",
+            target: try target("a"))
+        #expect(endpoint.knownHostsPath == NSHomeDirectory() + "/.ssh/custom_hosts")
+    }
+
+    @Test func aKnownHostWithAnotherKeyOfTheSameTypeIsNotOverwritten() async throws {
+        let oldLine = "[203.0.113.7]:2222 ssh-ed25519 AAAAOLDKEYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n"
+        let runner = FakeKeyRunner(config: Self.plainConfig, scans: [["ed25519": Self.ed25519]], lookup: oldLine)
+        let file = tempKnownHosts()
+        let trust = SSHHostKeyTrust(runner: runner, knownHosts: file)
+        await #expect(throws: SSHHostKeyError.keyChangedSincePreviousVisit(host: "[203.0.113.7]:2222")) {
+            _ = try await trust.preview(try target("server.example"))
+        }
+        #expect(!FileManager.default.fileExists(atPath: file.path))
+    }
+
+    @Test func aKeyAppearingAfterThePreviewIsNotWritten() async throws {
+        let oldLine = "[203.0.113.7]:2222 ssh-ed25519 AAAAOLDKEYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n"
+        let runner = FakeKeyRunner(config: Self.plainConfig, scans: [["ed25519": Self.ed25519], ["ed25519": Self.ed25519]])
+        let file = tempKnownHosts()
+        let trust = SSHHostKeyTrust(runner: runner, knownHosts: file)
+        let host = try target("server.example")
+        let preview = try await trust.preview(host)
+        let conflicting = FakeKeyRunner(config: Self.plainConfig, scans: [["ed25519": Self.ed25519]], lookup: oldLine)
+        let later = SSHHostKeyTrust(runner: conflicting, knownHosts: file)
+        await #expect(throws: SSHHostKeyError.self) {
+            try await later.trust(preview, for: host)
+        }
+        #expect(!FileManager.default.fileExists(atPath: file.path))
+    }
+
+    @Test func anEntryWithTheSameKeyIsNoConflict() {
+        let previous = SSHHostKeyTrust.previousKeys(fromLookup: "# Host h found: line 1\nh ssh-ed25519 KEYA\n")
+        let shown = ["h ssh-ed25519 KEYA"]
+        #expect(!SSHHostKeyTrust.conflicts(previous: previous, shown: shown))
+    }
+
+    @Test func anEntryOfAnotherTypeIsNoConflict() {
+        let previous = SSHHostKeyTrust.previousKeys(fromLookup: "h ssh-rsa KEYRSA\n")
+        let shown = ["h ssh-ed25519 KEYED"]
+        #expect(!SSHHostKeyTrust.conflicts(previous: previous, shown: shown))
+    }
 }
+
 
 @Suite struct KnownHostsFileTests {
     private func tempFolder() throws -> URL {

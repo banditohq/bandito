@@ -29,19 +29,25 @@ struct TourLayer: View {
     var anchors: [TourAnchor: Anchor<CGRect>]
 
     @Environment(OnboardingModel.self) private var onboarding
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var tour: TourModel?
 
     var body: some View {
         GeometryReader { proxy in
-            let rects = anchors.mapValues { proxy[$0] }
-            if let tour, let current = tour.current, let target = rects[current] {
-                let hole = target.insetBy(dx: -8, dy: -8)
+            if let tour, let current = tour.current {
+                let rects = anchors.mapValues { proxy[$0] }
+                // The spotlight follows the target; when the target is gone, the bubble stands alone in the middle.
+                let hole = rects[current]?.insetBy(dx: -8, dy: -8)
                 ZStack {
-                    SpotlightShape(hole: hole)
-                        .fill(Color.black.opacity(0.6), style: FillStyle(eoFill: true))
-                        .contentShape(Rectangle())
-                        .onTapGesture {}
+                    if let hole {
+                        SpotlightShape(hole: hole)
+                            .fill(Color.black.opacity(0.6), style: FillStyle(eoFill: true))
+                            .contentShape(Rectangle())
+                            .onTapGesture {}
+                    } else {
+                        Color.black.opacity(0.6)
+                            .contentShape(Rectangle())
+                            .onTapGesture {}
+                    }
                     bubble(for: current, tour: tour, hole: hole, size: proxy.size)
                 }
                 .banditoAnimation(BanditoMotion.ease, value: current)
@@ -50,7 +56,8 @@ struct TourLayer: View {
         }
         .onAppear {
             guard tour == nil else { return }
-            let model = TourModel(steps: TourPlan.steps(available: Set(anchors.keys)))
+            var model = TourModel(steps: TourPlan.steps(available: Set(anchors.keys)))
+            model.skipMissing(available: Set(anchors.keys))
             if model.isFinished {
                 onboarding.endTour()
             } else {
@@ -59,11 +66,22 @@ struct TourLayer: View {
         }
     }
 
-    private func bubble(for anchor: TourAnchor, tour: TourModel, hole: CGRect, size: CGSize) -> some View {
+    private var available: Set<TourAnchor> {
+        Set(anchors.keys)
+    }
+
+    private func bubble(for anchor: TourAnchor, tour: TourModel, hole: CGRect?, size: CGSize) -> some View {
         let width: CGFloat = 320
-        let onRight = hole.midX < size.width / 2
-        let x = onRight ? min(hole.maxX + 18, size.width - width - 16) : max(hole.minX - width - 18, 16)
-        let y = min(max(hole.minY, 16), size.height - 220)
+        let x: CGFloat
+        let y: CGFloat
+        if let hole {
+            let onRight = hole.midX < size.width / 2
+            x = onRight ? min(hole.maxX + 18, size.width - width - 16) : max(hole.minX - width - 18, 16)
+            y = min(max(hole.minY, 16), size.height - 220)
+        } else {
+            x = (size.width - width) / 2
+            y = (size.height - 220) / 2
+        }
         return VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
                 RaccoonAvatar(name: "Bandito", color: .peach, size: 26)
@@ -94,7 +112,7 @@ struct TourLayer: View {
                 .font(BanditoFont.font(size: 13, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
                 Spacer()
-                Button(tour.isLast ? L10n.Tour.finish : L10n.Common.next) {
+                Button(tour.hasNext(available: available) ? L10n.Common.next : L10n.Tour.finish) {
                     advance()
                 }
                 .buttonStyle(SignalButtonStyle(size: .regular))
@@ -108,14 +126,14 @@ struct TourLayer: View {
         .offset(x: x, y: y)
     }
 
+    /// Next step whose anchor is on screen; the tour ends after the last one.
     private func advance() {
         guard var next = tour else { return }
-        if next.isLast {
-            next.next()
-            tour = next
+        next.next(available: available)
+        if next.isFinished {
+            tour = nil
             onboarding.endTour()
         } else {
-            next.next()
             tour = next
         }
     }

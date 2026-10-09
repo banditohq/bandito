@@ -101,10 +101,11 @@ final class DeviceApprovalModel {
     /// The codes differ: the key is dropped and nothing is stored. The device is removed from the account too:
     /// the other side is not this device, so this device has no reason to stay. Returns whether the server removed it.
     func refuse() async -> Bool {
+        // The key goes at once; the phase moves on only when the server has removed this device.
         pending = nil
-        phase = .rejected
         do {
             try await backend.deleteDevice(id: deviceID, force: false)
+            phase = .rejected
             return true
         } catch {
             return false

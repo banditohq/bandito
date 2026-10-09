@@ -191,7 +191,7 @@ final class SystemCalls {
         await model.enter("000000", at: 0)
         #expect(model.phase == .code)
         #expect(model.code.value == "")
-        #expect(model.errorText == AccountError.api(code: "code_invalid", status: 401).errorDescription)
+        #expect(model.errorText == L10n.Onboarding.Failure.codeInvalid)
         #expect(model.signedIn == nil)
     }
 
@@ -408,7 +408,7 @@ final class SystemCalls {
         let service = FakeSignInService(start: .failure(.api(code: "rate", status: 429)))
         let model = GitHubSignInModel(service: service, copyToPasteboard: { _ in }, openURL: { _ in }, sleep: { _ in })
         await model.run()
-        #expect(model.state == .failed(AccountError.api(code: "rate", status: 429).errorDescription ?? ""))
+        #expect(model.state == .failed(L10n.Onboarding.Failure.rate))
     }
 
     @Test func tryAgainStartsANewFlow() async {
@@ -439,5 +439,28 @@ final class SystemCalls {
         #expect(!EmailAddressCheck.isPlausible("a@b"))
         #expect(!EmailAddressCheck.isPlausible("@b.dev"))
         #expect(!EmailAddressCheck.isPlausible("a b@c.dev"))
+    }
+}
+
+@MainActor
+@Suite struct SignInMessageTests {
+    @Test func everyAccountCodeHasItsOwnTextNotTheKitsEnglish() {
+        for code in ["invalid", "code_invalid", "rate", "session_too_old", "github_unavailable", "lastdevice-unknown"] {
+            let text = SignInMessages.text(for: AccountError.api(code: code, status: 400))
+            #expect(!text.isEmpty)
+            #expect(text != code)
+        }
+        #expect(SignInMessages.text(for: AccountError.api(code: "rate", status: 429)) == L10n.Onboarding.Failure.rate)
+        #expect(SignInMessages.text(for: AccountError.network("offline")) == L10n.Onboarding.Failure.network)
+    }
+
+    @Test func hostKeyFileErrorsUseTheirOwnTexts() {
+        #expect(SignInMessages.text(for: SSHHostKeyError.readFailed("known_hosts"))
+            == L10n.Onboarding.Failure.hostKeyReadFailed)
+        #expect(SignInMessages.text(for: SSHHostKeyError.writeFailed("known_hosts"))
+            == L10n.Onboarding.Failure.hostKeyWriteFailed)
+        #expect(SignInMessages.text(for: SSHHostKeyError.keyChangedSincePreviousVisit(host: "h"))
+            == L10n.Onboarding.Failure.knownHostConflict)
+        #expect(SignInMessages.text(for: SSHHostKeyError.noKey) == L10n.Onboarding.Server.hostKeyScanFailed)
     }
 }

@@ -15,6 +15,7 @@ actor FakeApprovalBackend: DeviceApprovalBackend {
     private(set) var deleteCalls: [(id: String, force: Bool)] = []
     private var networkFailures: Int
     private var cancelNext: Bool
+    var failDelete = false
 
     init(envelopes: [Envelope?] = [], networkFailures: Int = 0, cancelNext: Bool = false) {
         self.envelopes = envelopes
@@ -46,8 +47,13 @@ actor FakeApprovalBackend: DeviceApprovalBackend {
         approveCalls.append(confirmedFingerprint)
     }
 
+    func setFailDelete(_ value: Bool) {
+        failDelete = value
+    }
+
     func deleteDevice(id: String, force: Bool) async throws {
         deleteCalls.append((id, force))
+        if failDelete { throw AccountError.network("offline") }
     }
 }
 
@@ -268,6 +274,18 @@ actor FakeApprovalBackend: DeviceApprovalBackend {
         let stopped = await model.pollOnce()
         #expect(stopped == false)
         #expect(model.phase == .waiting)
+    }
+
+    @Test func aRefusedRemovalDoesNotReportRejection() async throws {
+        let ids = try identities()
+        let backend = FakeApprovalBackend(envelopes: [])
+        await backend.setFailDelete(true)
+        let model = DeviceApprovalModel(
+            backend: backend, identity: ids.newcomer, accountID: "acc", deviceID: "dev-me",
+            keys: MemorySecretStore(), sleep: { _ in })
+        let removed = await model.refuse()
+        #expect(removed == false)
+        #expect(model.phase != .rejected)
     }
 
     @Test func refusingRemovesThisDeviceFromTheAccount() async throws {

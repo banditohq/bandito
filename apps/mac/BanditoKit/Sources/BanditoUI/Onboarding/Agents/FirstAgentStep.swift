@@ -16,6 +16,7 @@ final class FirstAgentModel {
     private(set) var home: String?
     private(set) var folder = ""
     private(set) var folderCustomized = false
+    @ObservationIgnored private var folderGeneration = 0
     private(set) var creating = false
     private(set) var errorText: String?
 
@@ -76,7 +77,24 @@ final class FirstAgentModel {
     private func refreshFolder() {
         guard !folderCustomized, let home else { return }
         let trimmed = name.trimmingCharacters(in: .whitespaces)
-        folder = AgentFolder.defaultPath(home: home, name: trimmed.isEmpty ? "agent" : trimmed)
+        let base = AgentFolder.defaultPath(home: home, name: trimmed.isEmpty ? "agent" : trimmed)
+        folder = base
+        // The name is free only when no agent and no folder in projects has it. Answers for an older name are dropped.
+        folderGeneration += 1
+        let generation = folderGeneration
+        Task { [weak self] in
+            await self?.resolveFolder(base: base, home: home, generation: generation)
+        }
+    }
+
+    private func resolveFolder(base: String, home: String, generation: Int) async {
+        var taken = Set(server.agents.map(\.cwd))
+        let projects = home + "/projects"
+        if let listing = try? await server.list(projects) {
+            taken.formUnion(listing.entries.map { projects + "/" + $0.name })
+        }
+        guard generation == folderGeneration, !folderCustomized else { return }
+        folder = AgentFolder.unique(base, taken: taken)
     }
 
     /// Creates the agent. The folder (and `projects` above it) is made when missing, unless the person chose one.
@@ -355,7 +373,11 @@ struct AgentStep: View {
         switch phase {
         case .subscriptions:
             SubscriptionsStep(model: subscriptions) {
-                phase = .firstAgent
+                // The login terminal belongs to the subscriptions step: it closes before the form opens.
+                Task {
+                    await subscriptions.endLogin()
+                    phase = .firstAgent
+                }
             }
         case .firstAgent:
             FirstAgentStep(model: first) {

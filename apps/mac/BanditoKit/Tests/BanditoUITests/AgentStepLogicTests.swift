@@ -29,11 +29,29 @@ import Testing
             == .loggedIn(plan: nil))
     }
 
+    @Test func anExplicitNotSignedInBeatsAnEarlierDone() {
+        #expect(SubscriptionState.resolve(installed: true, loggedIn: false, plan: nil, confirmed: true)
+            == .needsLogin)
+    }
+
     @Test func onlyASignedInStateCountsAsReady() {
         #expect(SubscriptionState.loggedIn(plan: nil).isReady)
         #expect(!SubscriptionState.unverified.isReady)
         #expect(!SubscriptionState.needsLogin.isReady)
         #expect(!SubscriptionState.notInstalled.isReady)
+    }
+}
+
+@Suite struct LoginGateTests {
+    @Test func aSecondStartWhileOpeningIsRefused() {
+        var gate = LoginGate()
+        let first = gate.tryStart()
+        let second = gate.tryStart()
+        gate.finish()
+        let third = gate.tryStart()
+        #expect(first)
+        #expect(!second)
+        #expect(third)
     }
 }
 
@@ -108,6 +126,29 @@ import Testing
     }
 }
 
+@Suite struct AgentFolderNamingTests {
+    @Test func aFreeFolderKeepsItsName() {
+        #expect(AgentFolder.unique("/h/projects/forge", taken: []) == "/h/projects/forge")
+    }
+
+    @Test func aTakenFolderGetsTheNextFreeNumber() {
+        #expect(AgentFolder.unique("/h/projects/forge", taken: ["/h/projects/forge"]) == "/h/projects/forge-2")
+        #expect(AgentFolder.unique("/h/projects/forge", taken: ["/h/projects/forge", "/h/projects/forge-2"])
+            == "/h/projects/forge-3")
+        #expect(AgentFolder.unique("/h/projects/forge", taken: ["/h/projects/forge-2"]) == "/h/projects/forge")
+    }
+}
+
+@Suite struct KnownHostRemovalTests {
+    @Test func theCommandNamesTheHostInQuotes() {
+        #expect(KnownHostRemoval.command(for: "[203.0.113.7]:2222") == "ssh-keygen -R '[203.0.113.7]:2222'")
+    }
+
+    @Test func aQuoteInTheNameCannotEndTheQuoting() {
+        #expect(KnownHostRemoval.command(for: "a';rm -rf ~;'") == "ssh-keygen -R 'a'\\'';rm -rf ~;'\\'''")
+    }
+}
+
 @Suite struct AgentFolderTests {
     @Test func theDefaultFolderIsAProjectUnderHome() {
         #expect(AgentFolder.defaultPath(home: "/home/dev", name: "Forge Bot") == "/home/dev/projects/forge-bot")
@@ -151,6 +192,35 @@ import Testing
 
     @Test func aTourWithNoAvailableStepIsFinished() {
         let tour = TourModel(steps: [])
+        #expect(tour.isFinished)
+    }
+
+    @Test func aTourWithoutAnyAnchorOnScreenEndsWithNext() {
+        var tour = TourModel(steps: [.agents, .composer])
+        tour.skipMissing(available: [])
+        #expect(tour.isFinished)
+    }
+
+    @Test func nextPassesOverStepsWhoseAnchorIsGone() {
+        var tour = TourModel(steps: [.agents, .approvals, .modes])
+        tour.next(available: [.agents, .modes])
+        #expect(tour.current == .modes)
+        #expect(!tour.hasNext(available: [.agents, .modes]))
+        tour.next(available: [.agents, .modes])
+        #expect(tour.isFinished)
+    }
+
+    @Test func aTourEndsWhenNoLaterStepIsOnScreen() {
+        var tour = TourModel(steps: [.agents, .composer])
+        #expect(!tour.hasNext(available: []))
+        tour.next(available: [])
+        #expect(tour.isFinished)
+    }
+
+    @Test func skippingMovesPastAllStepsFromAnyPlace() {
+        var tour = TourModel(steps: [.agents, .composer, .modes])
+        tour.next()
+        tour.skip()
         #expect(tour.isFinished)
     }
 }

@@ -23,9 +23,26 @@ enum SubscriptionState: Equatable, Sendable {
         guard installed else { return .notInstalled }
         switch loggedIn {
         case .some(true): return .loggedIn(plan: plan)
-        case .some(false): return confirmed ? .loggedIn(plan: plan) : .needsLogin
+        // An explicit "not signed in" from the server wins over an earlier "Done".
+        case .some(false): return .needsLogin
         case .none: return confirmed ? .loggedIn(plan: plan) : .unverified
         }
+    }
+}
+
+/// Keeps one login at a time: a second tap while a login terminal is being opened is ignored.
+struct LoginGate: Equatable, Sendable {
+    private(set) var isOpening = false
+
+    /// True when the caller may start a login; the gate stays closed until `finish`.
+    mutating func tryStart() -> Bool {
+        guard !isOpening else { return false }
+        isOpening = true
+        return true
+    }
+
+    mutating func finish() {
+        isOpening = false
     }
 }
 
@@ -98,6 +115,16 @@ enum AgentRuntimeChoice {
 }
 
 enum AgentFolder {
+    /// `path` when nothing is taken there yet, else `path-2`, `path-3`, … The first free name wins.
+    static func unique(_ path: String, taken: Set<String>) -> String {
+        guard taken.contains(path) else { return path }
+        var number = 2
+        while taken.contains("\(path)-\(number)") {
+            number += 1
+        }
+        return "\(path)-\(number)"
+    }
+
     /// `<home>/projects/<slug of the name>`. A name with no letters or digits becomes `agent`.
     static func defaultPath(home: String, name: String) -> String {
         var slug = ""
@@ -152,6 +179,24 @@ struct TourModel: Equatable {
 
     mutating func next() {
         index += 1
+    }
+
+    /// Whether a step after the current one has its anchor on screen.
+    func hasNext(available: Set<TourAnchor>) -> Bool {
+        steps.dropFirst(index + 1).contains { available.contains($0) }
+    }
+
+    /// Moves past the current step while its anchor is not on screen.
+    mutating func skipMissing(available: Set<TourAnchor>) {
+        while let step = current, !available.contains(step) {
+            index += 1
+        }
+    }
+
+    /// Moves to the next step whose anchor is on screen. Steps whose anchor went away are passed over.
+    mutating func next(available: Set<TourAnchor>) {
+        index += 1
+        skipMissing(available: available)
     }
 
     /// "Skip": the tour ends here, whatever step it is on.

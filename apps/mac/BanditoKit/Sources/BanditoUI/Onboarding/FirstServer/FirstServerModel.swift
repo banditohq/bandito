@@ -32,6 +32,8 @@ final class FirstServerModel {
     private(set) var hostKeyError: String?
     /// For an address behind a jump host: the command to run once in Terminal, to confirm the key there.
     private(set) var proxyCommand: String?
+    /// For a host whose old key is still in known_hosts: the command that removes that entry.
+    private(set) var knownHostCommand: String?
     /// Known hosts from `~/.ssh/config` and `known_hosts`, shown as chips.
     private(set) var suggestions: [String] = []
     /// The components of the connected server.
@@ -112,8 +114,16 @@ final class FirstServerModel {
             proxyCommand = "ssh " + target.sshArguments.joined(separator: " ")
             hostKeyError = L10n.Onboarding.Server.viaProxy
         } catch {
-            hostKeyError = L10n.Onboarding.Server.hostKeyScanFailed
+            showHostKeyError(error)
         }
+    }
+
+    /// The text for a host-key failure. A conflicting old entry also gets the command that removes it.
+    private func showHostKeyError(_ error: Error) {
+        if let hostKey = error as? SSHHostKeyError, case .keyChangedSincePreviousVisit(let host) = hostKey {
+            knownHostCommand = KnownHostRemoval.command(for: host)
+        }
+        hostKeyError = SignInMessages.text(for: error)
     }
 
     /// Step two, only after the person pressed "This is my server — trust it": the key is written, then the install retries.
@@ -123,9 +133,11 @@ final class FirstServerModel {
             try await SSHHostKeyTrust(runner: runner).trust(preview, for: target)
             startOwnServer(app: app)
         } catch {
-            hostKeyError = (error as? SSHHostKeyError) == .changedBetweenChecks
-                ? L10n.Onboarding.Server.hostKeyChangedWhileReviewing
-                : (error as? SSHHostKeyError)?.errorDescription ?? L10n.Onboarding.Server.hostKeyScanFailed
+            if (error as? SSHHostKeyError) == .changedBetweenChecks {
+                hostKeyError = L10n.Onboarding.Server.hostKeyChangedWhileReviewing
+            } else {
+                showHostKeyError(error)
+            }
             phase = .failed
         }
     }
@@ -197,6 +209,13 @@ final class FirstServerModel {
 
 /// The part of the account payload that holds servers: the ssh servers of this Mac. A server on this Mac
 /// (a local socket) is not synced, and neither is an endpoint whose address no longer parses.
+/// The command that removes an old known_hosts entry. The host is quoted for a shell, so a name cannot add a command.
+enum KnownHostRemoval {
+    static func command(for host: String) -> String {
+        "ssh-keygen -R '" + host.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
+}
+
 enum ServerSyncPayload {
     static func payload(for configs: [ServerConfig], now: Date = Date()) -> SyncPayload {
         var payload = SyncPayload()

@@ -98,6 +98,7 @@ struct DeviceApprovalStep: View {
     @State private var mode: Mode = .loading
     @State private var model: DeviceApprovalModel?
     @State private var errorText: String?
+    @State private var refuseFailed = false
 
     private enum Mode: Equatable {
         case loading
@@ -128,6 +129,10 @@ struct DeviceApprovalStep: View {
                 Text(errorText)
                     .font(BanditoFont.font(size: 13, weight: 400))
                     .foregroundStyle(Color.Bandito.danger)
+            }
+            if refuseFailed {
+                Button(L10n.Onboarding.Server.retry) { Task { await refuseThenSignOut() } }
+                    .buttonStyle(QuietButtonStyle(size: .regular))
             }
         }
         .frame(maxWidth: 480, alignment: .leading)
@@ -187,12 +192,7 @@ struct DeviceApprovalStep: View {
                 Button(L10n.Onboarding.Account.codesMatch) { confirm() }
                     .buttonStyle(SignalButtonStyle())
                 Button(L10n.Onboarding.Account.codesDiffer) {
-                    Task {
-                        // The other device is not this one: this device is removed and the person signed out.
-                        _ = await model?.refuse()
-                        try? await hub.signOut()
-                        mode = .refused
-                    }
+                    Task { await refuseThenSignOut() }
                 }
                 .buttonStyle(QuietButtonStyle())
             }
@@ -284,6 +284,20 @@ struct DeviceApprovalStep: View {
             errorText = SignInMessages.setupText(for: error)
             mode = .failed
         }
+    }
+
+    /// The codes differ: this device is removed from the account, and only then is the person signed out.
+    /// If the server refuses the removal, nothing is signed out; the person can try again.
+    private func refuseThenSignOut() async {
+        guard let model else { return }
+        guard await model.refuse() else {
+            refuseFailed = true
+            errorText = L10n.Onboarding.Account.refuseFailed
+            return
+        }
+        refuseFailed = false
+        try? await hub.signOut()
+        mode = .refused
     }
 
     private func confirm() {
