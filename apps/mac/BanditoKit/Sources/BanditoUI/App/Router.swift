@@ -70,6 +70,8 @@ public final class Router {
     public var pendingTerminalCwd: String?
     /// New agent sheet: the folder the agent should work in ("Create agent in this folder"). Taken once by the sheet.
     public var pendingAgentCwd: String?
+    /// Team: text for the composer of the selected agent ("Ask about this place"). Taken once by the thread.
+    public var pendingComposerText: String?
     /// Browser: the open tab.
     public var browserTabID: String?
     /// Server screen: the screen being shown.

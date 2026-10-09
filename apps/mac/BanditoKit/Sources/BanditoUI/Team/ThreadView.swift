@@ -83,6 +83,12 @@ struct ThreadView: View {
             await loadHistory()
             await loadChanges()
         }
+        // Text put here by another screen ("Ask about this place") goes into the composer, once.
+        .onChange(of: router.pendingComposerText, initial: true) { _, text in
+            guard let text else { return }
+            draft = draft.isEmpty ? text : draft + "\n" + text
+            router.pendingComposerText = nil
+        }
         // The change counts are refreshed when a turn ends.
         .onChange(of: thread.turnRunning) { wasRunning, isRunning in
             if wasRunning && !isRunning {
