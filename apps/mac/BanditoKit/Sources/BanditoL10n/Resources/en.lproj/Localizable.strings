@@ -735,6 +735,9 @@
 "onboarding.install.check" = "Checking the system";
 "onboarding.install.connect" = "Connecting over SSH";
 "onboarding.install.install" = "Installing Bandito";
+"onboarding.install.localInstall" = "Installing Bandito on this Mac";
+"onboarding.install.localPair" = "Connecting the app";
+"onboarding.install.localStart" = "Starting Bandito";
 "onboarding.install.service" = "Starting the service";
 "onboarding.server.addressHint" = "This is how you usually sign in over SSH: user@address. We use your keys from %1$@, and we won't ask for a password.";
 "onboarding.server.addressTitle" = "Server address";
@@ -746,10 +749,15 @@
 "onboarding.server.componentsFailed" = "Could not read the components of the server. Check the connection and try again.";
 "onboarding.server.componentsTitle" = "On the server";
 "onboarding.server.connect" = "Connect";
+"onboarding.server.connectFailedTitle" = "The connection failed";
+"onboarding.server.connectRetry" = "Retry";
 "onboarding.server.connectedTitle" = "The server is connected";
 "onboarding.server.copy" = "Copy";
 "onboarding.server.copyKeyHint" = "Add this Mac's key to the server once. Run this in Terminal on this Mac, and type the server password when asked:";
 "onboarding.server.doneCheckAgain" = "Done, check again";
+"onboarding.server.err.appNotConnectedServer" = "The app did not connect to the server.";
+"onboarding.server.err.appNotConnectedThisMac" = "The app did not connect to Bandito on this Mac.";
+"onboarding.server.err.daemonNotStarted" = "Bandito did not start on this Mac.";
 "onboarding.server.err.generic" = "The install stopped. Look at the log for the step that failed.";
 "onboarding.server.err.hostChanged" = "The server's key is not the one this Mac knows. That can mean someone is in the middle. Nothing is trusted; check the server first.";
 "onboarding.server.err.hostUnknown" = "This Mac has not seen this server before. Check its fingerprint, then trust it if it is yours.";
@@ -760,6 +768,7 @@
 "onboarding.server.err.releaseCheck" = "Release signature check failed — the download may have been tampered with. Nothing was installed.";
 "onboarding.server.err.releasePublishing" = "Release %1$@ is still being published — try again in a few minutes.";
 "onboarding.server.err.timedOut" = "The server does not answer. Check that it is on and reachable.";
+"onboarding.server.err.tokenNotSaved" = "The app could not keep the server's key in the Keychain, so the server was not added.";
 "onboarding.server.err.unknownHost" = "The server name does not resolve. Check the address.";
 "onboarding.server.err.unsupported" = "This server's system or processor is not supported. Bandito needs Linux or macOS on x86_64 or arm64.";
 "onboarding.server.failedTitle" = "The install did not finish";
@@ -792,6 +801,7 @@
 "onboarding.server.stepLink" = "Link the server to this Mac";
 "onboarding.server.subtitle" = "Agents run on a computer that stays on. Use your own server, a home PC, or this Mac just to try things out.";
 "onboarding.server.thisMacDesc" = "Quick to try. Agents run only while the Mac is awake and open.";
+"onboarding.server.thisMacName" = "This Mac";
 "onboarding.server.title" = "Where will your team live?";
 "onboarding.server.trustHost" = "This is my server — trust it";
 "onboarding.server.viaProxy" = "This server is reached through a jump host. Connect once in Terminal with the command below, and confirm its key there.";

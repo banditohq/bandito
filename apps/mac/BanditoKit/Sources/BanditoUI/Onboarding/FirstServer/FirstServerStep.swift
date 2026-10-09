@@ -20,12 +20,14 @@ struct FirstServerStep: View {
             switch model.phase {
             case .choosing:
                 chooser
-            case .installing:
+            case .installing, .connecting:
                 checklistView
             case .reviewingHost(let preview):
                 hostReview(preview)
             case .failed:
                 failureView
+            case .connectFailed:
+                connectFailedView
             case .connected(let config):
                 connected(config)
             }
@@ -154,28 +156,33 @@ struct FirstServerStep: View {
             Text(L10n.Onboarding.Server.installingTitle)
                 .font(BanditoFont.font(size: 26, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
-            ForEach(ChecklistItem.allCases, id: \.self) { item in
+            ForEach(model.checklist.items.indices, id: \.self) { index in
                 HStack(spacing: 12) {
-                    markView(model.checklist.mark(of: item))
-                    Text(itemTitle(item))
+                    markView(model.checklist.mark(at: index))
+                    Text(model.checklist.items[index].title)
                         .font(BanditoFont.font(size: 14.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text)
                 }
-                .banditoAnimation(BanditoMotion.ease, value: model.checklist.mark(of: item))
+                .banditoAnimation(BanditoMotion.ease, value: model.checklist.mark(at: index))
             }
-            DisclosureGroup(L10n.Onboarding.Server.showLog, isExpanded: $showLog) {
-                ScrollView {
-                    Text(model.checklist.log.joined(separator: "\n"))
-                        .font(BanditoFont.font(size: 11.5, weight: 400, mono: true))
-                        .foregroundStyle(Color.Bandito.text3)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .textSelection(.enabled)
-                }
-                .frame(height: 140)
-            }
-            .font(BanditoFont.font(size: 12.5, weight: 500))
-            .foregroundStyle(Color.Bandito.text2)
+            logDisclosure
         }
+    }
+
+    /// The installer's output, folded away until the person wants to read it.
+    private var logDisclosure: some View {
+        DisclosureGroup(L10n.Onboarding.Server.showLog, isExpanded: $showLog) {
+            ScrollView {
+                Text(model.checklist.log.joined(separator: "\n"))
+                    .font(BanditoFont.font(size: 11.5, weight: 400, mono: true))
+                    .foregroundStyle(Color.Bandito.text3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
+            }
+            .frame(height: 140)
+        }
+        .font(BanditoFont.font(size: 12.5, weight: 500))
+        .foregroundStyle(Color.Bandito.text2)
     }
 
     @ViewBuilder
@@ -189,16 +196,6 @@ struct FirstServerStep: View {
             Image(systemName: "checkmark.circle.fill").foregroundStyle(AvatarColor.sage.color)
         case .failed:
             Image(systemName: "xmark.circle.fill").foregroundStyle(Color.Bandito.danger)
-        }
-    }
-
-    private func itemTitle(_ item: ChecklistItem) -> String {
-        switch item {
-        case .connect: L10n.Onboarding.Install.connect
-        case .check: L10n.Onboarding.Install.check
-        case .install: L10n.Onboarding.Install.install
-        case .service: L10n.Onboarding.Install.service
-        case .app: L10n.Onboarding.Install.app
         }
     }
 
@@ -273,8 +270,37 @@ struct FirstServerStep: View {
                         .buttonStyle(QuietButtonStyle(size: .regular))
                 }
             }
+            if !model.checklist.log.isEmpty {
+                logDisclosure
+            }
             Button(L10n.Onboarding.Server.back) { model.backToChoice() }
                 .buttonStyle(QuietButtonStyle())
+        }
+    }
+
+    // MARK: connect failed
+
+    /// The install finished, but the app did not connect within `FirstServerModel.connectTimeout`. The server stays
+    /// added, so trying again only connects it.
+    private var connectFailedView: some View {
+        let text =
+            model.option == .thisMac
+            ? L10n.Onboarding.Server.Err.appNotConnectedThisMac
+            : L10n.Onboarding.Server.Err.appNotConnectedServer
+        return VStack(alignment: .leading, spacing: 16) {
+            Text(L10n.Onboarding.Server.connectFailedTitle)
+                .font(BanditoFont.font(size: 24, weight: 600))
+                .foregroundStyle(Color.Bandito.danger)
+            Text(text)
+                .font(BanditoFont.font(size: 14, weight: 400))
+                .foregroundStyle(Color.Bandito.text2)
+                .lineSpacing(2)
+            HStack(spacing: 10) {
+                Button(L10n.Onboarding.Server.connectRetry) { model.retryConnection(app: app) }
+                    .buttonStyle(SignalButtonStyle())
+                Button(L10n.Onboarding.Server.back) { model.backToChoice() }
+                    .buttonStyle(QuietButtonStyle())
+            }
         }
     }
 
@@ -326,6 +352,8 @@ struct FirstServerStep: View {
         case .releaseCheckFailed: return L10n.Onboarding.Server.Err.releaseCheck
         case .releaseStillPublishing(let tag): return L10n.Onboarding.Server.Err.releasePublishing(tag: tag)
         case .localBinaryMissing: return L10n.Onboarding.Server.Err.localBinary
+        case .localDaemonNotStarted: return L10n.Onboarding.Server.Err.daemonNotStarted
+        case .tokenNotSaved: return L10n.Onboarding.Server.Err.tokenNotSaved
         default: return L10n.Onboarding.Server.Err.generic
         }
     }
