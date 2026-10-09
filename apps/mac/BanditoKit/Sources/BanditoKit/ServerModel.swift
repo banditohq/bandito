@@ -516,20 +516,33 @@ extension ServerModel {
         try await rpc().call("devices.revoke", P(id: id))
     }
 
+    /// Files the agent changed since its last checkpoint (`changes.diff`). Needs the `changes` feature.
+    public func changesDiff(agentID: String) async throws -> ChangesDiff {
+        struct P: Encodable { var agentId: String }
+        return try await rpc().call("changes.diff", P(agentId: agentID), as: ChangesDiff.self)
+    }
+
+    /// Lists a folder on the server (`fs.list`). Hidden entries are left out unless asked for.
+    public func list(_ path: String, hidden: Bool = false) async throws -> FileListing {
+        struct P: Encodable { var path: String; var hidden: Bool }
+        return try await rpc().call("fs.list", P(path: path, hidden: hidden), as: FileListing.self)
+    }
+
     @discardableResult
     public func updateAgent(
         _ id: String, name: String? = nil, role: String? = nil, cwd: String? = nil, approvalMode: ApprovalMode? = nil,
-        effort: Effort? = nil, memoryMode: MemoryMode? = nil, contextBudget: Int? = nil
+        effort: Effort? = nil, memoryMode: MemoryMode? = nil, contextBudget: Int? = nil,
+        systemPrompt: String? = nil
     ) async throws -> Agent {
         struct P: Encodable {
             var id: String; var name: String?; var role: String?; var cwd: String?; var approvalMode: ApprovalMode?
-            var effort: Effort?; var memoryMode: MemoryMode?; var contextBudget: Int?
+            var effort: Effort?; var memoryMode: MemoryMode?; var contextBudget: Int?; var systemPrompt: String?
         }
         let a = try await rpc().call(
             "agents.update",
             P(
                 id: id, name: name, role: role, cwd: cwd, approvalMode: approvalMode, effort: effort,
-                memoryMode: memoryMode, contextBudget: contextBudget),
+                memoryMode: memoryMode, contextBudget: contextBudget, systemPrompt: systemPrompt),
             as: Agent.self)
         replaceAgent(a)
         return a

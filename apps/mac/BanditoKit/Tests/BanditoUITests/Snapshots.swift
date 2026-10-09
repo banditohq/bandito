@@ -39,7 +39,6 @@ import Testing
         let (server, agent) = Self.demoServer()
         // ScrollView and text fields are AppKit-backed and don't render offscreen: snapshot the rows.
         let view = ThreadItemsView(items: server.thread(for: agent.id).items, server: server)
-            .overlay(alignment: .top) { HeaderPill(agent: agent, status: server.thread(for: agent.id).status) }
             .background(Color(red: 0.07, green: 0.063, blue: 0.055))
         let url = try SnapshotSupport.render(view, "thread-approval", size: CGSize(width: 900, height: 640))
         #expect(FileManager.default.fileExists(atPath: url.path))

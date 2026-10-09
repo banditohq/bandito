@@ -3,14 +3,27 @@ import BanditoKit
 import BanditoL10n
 import SwiftUI
 
-/// Team mode: the chat with the agent selected in the sidebar, or a hint when none is.
+/// Team mode: the thread of the agent selected in the sidebar, with the details panel on the right when it is open.
 struct TeamMode: View {
     @Environment(AppModel.self) private var app
     @Environment(Router.self) private var router
+    @State private var inspectorTab: InspectorTab = .details
 
     var body: some View {
         if let server = app.currentServer, let agent = selectedAgent(on: server) {
-            ThreadView(server: server, agent: agent)
+            HStack(spacing: 0) {
+                ThreadView(server: server, agent: agent, inspectorTab: $inspectorTab)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if router.inspectorOpen {
+                    InspectorView(
+                        server: server, agent: agent, tab: $inspectorTab,
+                        onClose: { router.inspectorOpen = false })
+                        .frame(width: 400)
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
+            }
+            .banditoAnimation(BanditoMotion.ease, value: router.inspectorOpen)
+            .background(Color.Bandito.bg)
         } else {
             EmptyTeam()
         }

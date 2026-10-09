@@ -32,48 +32,118 @@ public enum AvatarFace: CaseIterable, Sendable {
 
 /// Raccoon avatar: a rounded tile in an agent color, the dark mask and a face on it.
 /// Without explicit `color` / `face`, both come from a stable hash of `name`.
+/// `mood` animates the face (blinking, scanning, hopping…); with Reduce Motion it stays at rest.
 public struct RaccoonAvatar: View {
     public let name: String
     public let color: AvatarColor?
     public let face: AvatarFace
     public let size: CGFloat
+    public let mood: AvatarMood
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// - Parameters:
-    ///   - name: Agent name; also the seed for the automatic color and face.
+    ///   - name: Agent name; also the seed for the automatic color and face and for the rhythm.
     ///   - color: Tile color, or `nil` to derive it from `name`.
     ///   - face: Face on the mask, or `.auto` to derive it from `name`.
     ///   - size: Edge of the square tile in points.
-    public init(name: String, color: AvatarColor? = nil, face: AvatarFace = .auto, size: CGFloat = 40) {
+    ///   - mood: Expression; `.idle` blinks.
+    public init(
+        name: String, color: AvatarColor? = nil, face: AvatarFace = .auto, size: CGFloat = 40,
+        mood: AvatarMood = .idle
+    ) {
         self.name = name
         self.color = color
         self.face = face
         self.size = size
+        self.mood = mood
     }
 
     public var body: some View {
         let resolved = AvatarResolver.resolve(name: name, color: color, face: face)
-        let tint = resolved.color.color
-        let strokeWidth = size * 2.4 / DesignGrid.edge
-        ZStack {
-            RoundedRectangle(cornerRadius: size * 17 / DesignGrid.edge, style: .continuous)
-                .fill(tint)
-            RaccoonMask()
-                .fill(BanditoPalette.avatarMask)
-            switch resolved.face {
-            case .dots:
-                RaccoonDots()
-                    .fill(tint)
-            case .chevronDash, .carets:
-                RaccoonFaceStrokes(face: resolved.face)
-                    .stroke(tint, style: StrokeStyle(lineWidth: strokeWidth, lineCap: .round, lineJoin: .round))
-            case .auto:
-                // The resolver never returns `.auto`; kept for exhaustiveness.
-                EmptyView()
-            }
+        let phase = AvatarPose.phase(for: name)
+        TimelineView(.animation(minimumInterval: 1.0 / 20, paused: reduceMotion)) { context in
+            let pose = AvatarPose.make(
+                mood: mood, time: context.date.timeIntervalSinceReferenceDate, phase: phase,
+                reduceMotion: reduceMotion)
+            RaccoonFace(resolved: resolved, pose: pose, size: size)
         }
         .frame(width: size, height: size)
         // Decorative: the agent name is always shown next to the avatar.
         .accessibilityHidden(true)
+    }
+}
+
+/// One frame of a raccoon avatar drawn from a pose. Pose offsets are in the 52-point design grid.
+private struct RaccoonFace: View {
+    let resolved: ResolvedAvatar
+    let pose: AvatarPose
+    let size: CGFloat
+
+    var body: some View {
+        let tint = resolved.color.color
+        let unit = size / DesignGrid.edge
+        let strokeWidth = size * 2.4 / DesignGrid.edge
+        ZStack {
+            ZStack {
+                RoundedRectangle(cornerRadius: size * 17 / DesignGrid.edge, style: .continuous)
+                    .fill(tint)
+                RaccoonMask()
+                    .fill(BanditoPalette.avatarMask)
+                eyes(tint: tint, strokeWidth: strokeWidth, unit: unit)
+            }
+            .offset(x: pose.shakeX * unit, y: pose.bodyOffsetY * unit)
+            .opacity(pose.opacity)
+
+            if pose.showsDots {
+                ForEach(0..<3, id: \.self) { index in
+                    Circle()
+                        .fill(tint)
+                        .frame(width: 2.6 * 2 * unit, height: 2.6 * 2 * unit)
+                        .opacity(pose.dotOpacities[index])
+                        .position(x: (20 + Double(index) * 6) * unit, y: 7 * unit)
+                }
+            }
+            if pose.showsZ {
+                ForEach(0..<2, id: \.self) { index in
+                    let progress = pose.zProgresses[index]
+                    Text("z")
+                        .font(BanditoFont.font(size: size * (index == 0 ? 0.3 : 0.24), weight: 700))
+                        .foregroundStyle(Color.Bandito.info)
+                        .opacity(zOpacity(progress))
+                        .offset(x: size * 0.36 + size * 0.2 * progress, y: -size * 0.36 - size * 0.42 * progress)
+                }
+            }
+        }
+        .frame(width: size, height: size)
+    }
+
+    @ViewBuilder
+    private func eyes(tint: Color, strokeWidth: CGFloat, unit: CGFloat) -> some View {
+        if pose.showsDashEyes {
+            RaccoonDashEyes()
+                .stroke(tint, style: StrokeStyle(lineWidth: strokeWidth, lineCap: .round))
+        } else {
+            Group {
+                switch resolved.face {
+                case .dots:
+                    RaccoonDots().fill(tint)
+                case .chevronDash, .carets:
+                    RaccoonFaceStrokes(face: resolved.face)
+                        .stroke(tint, style: StrokeStyle(lineWidth: strokeWidth, lineCap: .round, lineJoin: .round))
+                case .auto:
+                    // The resolver never returns `.auto`; kept for exhaustiveness.
+                    EmptyView()
+                }
+            }
+            .scaleEffect(x: 1, y: pose.eyeScaleY, anchor: .center)
+            .offset(x: pose.eyeOffsetX * unit)
+        }
+    }
+
+    /// Fades a "z" in, then out again over its progress from 0 to 1.
+    private func zOpacity(_ progress: Double) -> Double {
+        if progress < 0.3 { return progress / 0.3 }
+        return max(0, 1 - (progress - 0.3) / 0.7)
     }
 }
 
@@ -83,14 +153,17 @@ public struct AgentAvatar: View {
     public var name: String
     /// Edge of the square tile in points.
     public var size: CGFloat
+    /// Expression of the face.
+    public var mood: AvatarMood
 
-    public init(name: String, size: CGFloat = 40) {
+    public init(name: String, size: CGFloat = 40, mood: AvatarMood = .idle) {
         self.name = name
         self.size = size
+        self.mood = mood
     }
 
     public var body: some View {
-        RaccoonAvatar(name: name, size: size)
+        RaccoonAvatar(name: name, size: size, mood: mood)
     }
 }
 
@@ -190,6 +263,19 @@ struct RaccoonDots: Shape {
             let center = grid.point(x, 26)
             path.addEllipse(in: CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2))
         }
+        return path
+    }
+}
+
+/// Two short horizontal strokes (`M15 26.5h6` and `M31 26.5h6`) for sleeping avatars.
+struct RaccoonDashEyes: Shape {
+    func path(in rect: CGRect) -> Path {
+        let grid = DesignGrid(rect: rect)
+        var path = Path()
+        path.move(to: grid.point(15, 26.5))
+        path.addLine(to: grid.point(21, 26.5))
+        path.move(to: grid.point(31, 26.5))
+        path.addLine(to: grid.point(37, 26.5))
         return path
     }
 }
