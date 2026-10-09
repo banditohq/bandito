@@ -19,10 +19,15 @@ final class FirstAgentModel {
     @ObservationIgnored private var folderGeneration = 0
     private(set) var creating = false
     private(set) var errorText: String?
+    /// The server's workplaces: the containers that exist and whether a separate one can be made.
+    let workplaces: WorkspacesModel
+    private(set) var workplace: WorkplaceChoice = .shared
+    private(set) var newWorkplace = NewWorkplaceDraft()
 
     init(server: ServerModel, subscriptions: SubscriptionsModel) {
         self.server = server
         self.subscriptions = subscriptions
+        self.workplaces = WorkspacesModel(server: server)
     }
 
     /// Only runtimes that are signed in can run an agent.
@@ -41,7 +46,42 @@ final class FirstAgentModel {
 
     var canCreate: Bool {
         template != nil && runtime != nil && nameProblem == nil
-            && !name.trimmingCharacters(in: .whitespaces).isEmpty && !folder.isEmpty && !creating
+            && !name.trimmingCharacters(in: .whitespaces).isEmpty && !folder.isEmpty && !creating && workplaceReady
+    }
+
+    /// The chosen workplace can be used: the shared server, a container that still exists, or a new one that can be made.
+    var workplaceReady: Bool {
+        switch workplace {
+        case .shared: true
+        case .existing(let id): workplaces.containers.contains { $0.id == id }
+        case .new: workplaces.canCreateSeparate && newWorkplace.canCreate
+        }
+    }
+
+    /// Shared server, or a separate workplace. Switching to separate picks the first container, or a new one.
+    func setSeparate(_ separate: Bool) {
+        guard !separate else {
+            guard workplaces.canCreateSeparate, workplace == .shared else { return }
+            if let first = workplaces.containers.first {
+                workplace = .existing(first.id)
+            } else {
+                workplace = .new
+            }
+            return
+        }
+        workplace = .shared
+    }
+
+    func chooseExisting(_ id: String) {
+        workplace = .existing(id)
+    }
+
+    func chooseNewWorkplace() {
+        workplace = .new
+    }
+
+    func setNewWorkplaceName(_ text: String) {
+        newWorkplace.name = text
     }
 
     func loadHome() async {
@@ -106,6 +146,7 @@ final class FirstAgentModel {
             if !folderCustomized {
                 try await ensureDefaultFolder()
             }
+            let workspaceID = try await WorkplaceCreation.prepare(workplace, new: newWorkplace, on: server)
             let agent = try await server.createAgent(NewAgent(
                 name: name.trimmingCharacters(in: .whitespaces),
                 role: template == .scratch ? "" : template.title,
@@ -113,10 +154,11 @@ final class FirstAgentModel {
                 cwd: folder,
                 approvalMode: .risky,
                 systemPrompt: template.instructions.isEmpty ? nil : template.instructions,
-                effort: template.effort))
+                effort: template.effort,
+                workspaceId: workspaceID))
             return agent
         } catch {
-            errorText = SignInMessages.text(for: error)
+            errorText = WorkspaceText.failure(error) ?? SignInMessages.text(for: error)
             return nil
         }
     }
@@ -171,7 +213,10 @@ struct FirstAgentStep: View {
             }
         }
         .frame(maxWidth: 680, alignment: .leading)
-        .task { await model.loadHome() }
+        .task {
+            await model.loadHome()
+            await model.workplaces.load()
+        }
         .sheet(isPresented: $pickingFolder) {
             FolderPicker(
                 server: model.server,
@@ -244,14 +289,7 @@ struct FirstAgentStep: View {
             }
             runtimeRow
             folderRow
-            HStack(spacing: 8) {
-                Text(L10n.Onboarding.Agent.workplace)
-                    .font(BanditoFont.font(size: 12.5, weight: 500))
-                    .foregroundStyle(Color.Bandito.text2)
-                Text(L10n.Onboarding.Agent.workplaceShared)
-                    .font(BanditoFont.font(size: 12.5, weight: 400))
-                    .foregroundStyle(Color.Bandito.text3)
-            }
+            workplaceRow
             Button(L10n.Onboarding.Agent.hire(name: model.name.trimmingCharacters(in: .whitespaces))) {
                 Task { await hire() }
             }
@@ -296,6 +334,76 @@ struct FirstAgentStep: View {
             .frame(height: 42)
             .background(Color.Bandito.surface1, in: RoundedRectangle(cornerRadius: 12))
         }
+    }
+
+    /// Where the agent runs: the shared server, or a separate workplace (an existing container or a new one).
+    /// Separate needs Docker on the server; without the feature the row only says where the agent runs.
+    private var workplaceRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(L10n.Onboarding.Agent.workplace)
+                .font(BanditoFont.font(size: 12.5, weight: 500))
+                .foregroundStyle(Color.Bandito.text2)
+            if model.workplaces.canCreateSeparate {
+                HStack(spacing: 6) {
+                    placeChip(L10n.Workspace.Choice.shared, selected: model.workplace.mode == .shared) {
+                        model.setSeparate(false)
+                    }
+                    placeChip(L10n.Workspace.Choice.separate, selected: model.workplace.mode == .separate) {
+                        model.setSeparate(true)
+                    }
+                }
+                if model.workplace.mode == .separate {
+                    HStack(spacing: 6) {
+                        ForEach(model.workplaces.containers) { container in
+                            placeChip(container.name, selected: model.workplace == .existing(container.id)) {
+                                model.chooseExisting(container.id)
+                            }
+                        }
+                        placeChip(L10n.Workspace.Choice.newOne, selected: model.workplace == .new) {
+                            model.chooseNewWorkplace()
+                        }
+                    }
+                    if model.workplace == .new {
+                        TextField(
+                            L10n.Workspace.Create.name,
+                            text: Binding(get: { model.newWorkplace.name }, set: { model.setNewWorkplaceName($0) })
+                        )
+                        .textFieldStyle(.plain)
+                        .font(BanditoFont.font(size: 14, weight: 400))
+                        .padding(.horizontal, 14)
+                        .frame(height: 38)
+                        .background(Color.Bandito.surface1, in: RoundedRectangle(cornerRadius: 12))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.Bandito.text.opacity(0.12)))
+                    }
+                    Text(L10n.Workspace.Choice.isolation)
+                        .font(BanditoFont.font(size: 12, weight: 400))
+                        .foregroundStyle(Color.Bandito.text3)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(L10n.Workspace.Choice.lost)
+                        .font(BanditoFont.font(size: 12, weight: 400))
+                        .foregroundStyle(Color.Bandito.text3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } else {
+                Text(L10n.Onboarding.Agent.workplaceShared)
+                    .font(BanditoFont.font(size: 12.5, weight: 400))
+                    .foregroundStyle(Color.Bandito.text3)
+                if model.workplaces.supported {
+                    Text(L10n.Workspace.Choice.dockerNeeded)
+                        .font(BanditoFont.font(size: 12, weight: 400))
+                        .foregroundStyle(Color.Bandito.text3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    private func placeChip(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(title, action: action)
+            .buttonStyle(QuietButtonStyle(size: .regular))
+            .overlay(
+                RoundedRectangle(cornerRadius: 999)
+                    .stroke(selected ? Color.Bandito.signal : .clear, lineWidth: 1.5))
     }
 
     private func hire() async {

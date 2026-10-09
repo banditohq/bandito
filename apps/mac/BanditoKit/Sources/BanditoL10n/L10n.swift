@@ -1910,4 +1910,130 @@ public enum L10n {
             public static var split: String { L10n.tr("viewer.mode.split") }
         }
     }
+
+    public enum Workspace {
+        public static var agents: String { L10n.tr("workspace.agents") }
+
+        public enum Action {
+            public static var create: String { L10n.tr("workspace.action.create") }
+            public static var delete: String { L10n.tr("workspace.action.delete") }
+            public static var install: String { L10n.tr("workspace.action.install") }
+            public static var start: String { L10n.tr("workspace.action.start") }
+            public static var stop: String { L10n.tr("workspace.action.stop") }
+        }
+
+        public enum Agents {
+            public static var none: String { L10n.tr("workspace.agents.none") }
+        }
+
+        public enum Choice {
+            public static var dockerNeeded: String { L10n.tr("workspace.choice.dockerNeeded") }
+            public static var isolation: String { L10n.tr("workspace.choice.isolation") }
+            public static var lost: String { L10n.tr("workspace.choice.lost") }
+            public static var newOne: String { L10n.tr("workspace.choice.newOne") }
+            public static var separate: String { L10n.tr("workspace.choice.separate") }
+            public static var shared: String { L10n.tr("workspace.choice.shared") }
+            public static var unsupported: String { L10n.tr("workspace.choice.unsupported") }
+        }
+
+        public enum Create {
+            public static var cpu: String { L10n.tr("workspace.create.cpu") }
+            public static var memory: String { L10n.tr("workspace.create.memory") }
+            public static var name: String { L10n.tr("workspace.create.name") }
+            public static var nameHint: String { L10n.tr("workspace.create.nameHint") }
+            public static var network: String { L10n.tr("workspace.create.network") }
+            public static var networkHint: String { L10n.tr("workspace.create.networkHint") }
+            public static var submit: String { L10n.tr("workspace.create.submit") }
+            public static var title: String { L10n.tr("workspace.create.title") }
+            public static var unlimited: String { L10n.tr("workspace.create.unlimited") }
+        }
+
+        public enum Delete {
+            public static func blocked(names: String) -> String { L10n.tr("workspace.delete.blocked", names) }
+            public static var confirm: String { L10n.tr("workspace.delete.confirm") }
+            public static var message: String { L10n.tr("workspace.delete.message") }
+            public static func title(name: String) -> String { L10n.tr("workspace.delete.title", name) }
+        }
+
+        public enum Docker {
+            public static var body: String { L10n.tr("workspace.docker.body") }
+            public static var installing: String { L10n.tr("workspace.docker.installing") }
+            public static var manual: String { L10n.tr("workspace.docker.manual") }
+            public static var title: String { L10n.tr("workspace.docker.title") }
+        }
+
+        public enum Draft {
+            public static func defaults(limits: String) -> String { L10n.tr("workspace.draft.defaults", limits) }
+        }
+
+        public enum Error {
+            public static var banditoData: String { L10n.tr("workspace.error.banditoData") }
+            public static var builtin: String { L10n.tr("workspace.error.builtin") }
+            public static func docker(message: String) -> String { L10n.tr("workspace.error.docker", message) }
+            public static var dockerUnavailable: String { L10n.tr("workspace.error.dockerUnavailable") }
+            public static func invalid(message: String) -> String { L10n.tr("workspace.error.invalid", message) }
+            public static var notEmpty: String { L10n.tr("workspace.error.notEmpty") }
+            public static var notFound: String { L10n.tr("workspace.error.notFound") }
+            public static func other(message: String) -> String { L10n.tr("workspace.error.other", message) }
+        }
+
+        public enum Folders {
+            public static var add: String { L10n.tr("workspace.folders.add") }
+            public static var none: String { L10n.tr("workspace.folders.none") }
+            public static var readOnly: String { L10n.tr("workspace.folders.readOnly") }
+            public static var remove: String { L10n.tr("workspace.folders.remove") }
+        }
+
+        public enum Kind {
+            public static var container: String { L10n.tr("workspace.kind.container") }
+            public static var shared: String { L10n.tr("workspace.kind.shared") }
+        }
+
+        public enum Location {
+            public static var change: String { L10n.tr("workspace.location.change") }
+            public static var loading: String { L10n.tr("workspace.location.loading") }
+            public static var missing: String { L10n.tr("workspace.location.missing") }
+            public static var noBrowser: String { L10n.tr("workspace.location.noBrowser") }
+            public static var title: String { L10n.tr("workspace.location.title") }
+        }
+
+        public enum Move {
+            public static var chapter: String { L10n.tr("workspace.move.chapter") }
+            public static var confirm: String { L10n.tr("workspace.move.confirm") }
+            public static func title(name: String) -> String { L10n.tr("workspace.move.title", name) }
+        }
+
+        public enum Network {
+            public static var internet: String { L10n.tr("workspace.network.internet") }
+            public static var offline: String { L10n.tr("workspace.network.offline") }
+        }
+
+        public enum Row {
+            public static var cpu: String { L10n.tr("workspace.row.cpu") }
+            public static var disk: String { L10n.tr("workspace.row.disk") }
+            public static var folders: String { L10n.tr("workspace.row.folders") }
+            public static var memory: String { L10n.tr("workspace.row.memory") }
+            public static var network: String { L10n.tr("workspace.row.network") }
+        }
+
+        public enum Shared {
+            public static var subtitle: String { L10n.tr("workspace.shared.subtitle") }
+            public static var title: String { L10n.tr("workspace.shared.title") }
+        }
+
+        public enum Status {
+            public static var dockerError: String { L10n.tr("workspace.status.dockerError") }
+            public static var running: String { L10n.tr("workspace.status.running") }
+            public static var stopped: String { L10n.tr("workspace.status.stopped") }
+        }
+
+        public enum Value {
+            public static func cpu(cpus: String) -> String { L10n.tr("workspace.value.cpu", cpus) }
+            public static var disk: String { L10n.tr("workspace.value.disk") }
+            public static var internet: String { L10n.tr("workspace.value.internet") }
+            public static func memory(memory: String) -> String { L10n.tr("workspace.value.memory", memory) }
+            public static var noLimit: String { L10n.tr("workspace.value.noLimit") }
+            public static var offline: String { L10n.tr("workspace.value.offline") }
+        }
+    }
 }

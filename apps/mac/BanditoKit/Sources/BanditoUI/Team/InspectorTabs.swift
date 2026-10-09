@@ -546,31 +546,62 @@ struct MemoryTab: View {
 
 // MARK: - Where it runs
 
-/// Where the agent works (the workplace and its places) and the runtimes on this server with their plans.
+/// Where the agent works: its workplace (and a change of it), its places, and the runtimes on this server with their plans.
 struct WhereTab: View {
     var server: ServerModel
     var agent: Agent
 
     @Environment(Router.self) private var router
+    @State private var workplaces: WorkspacesModel?
+    /// The workplace the person picked, until the move is confirmed.
+    @State private var pendingMove: MoveTarget?
+    /// The daemon's notes on the last change (for example the new chapter).
+    @State private var notes: [String] = []
+    @State private var error: String?
+
+    /// A workplace to move the agent to: the shared server (`shared`) or a container.
+    private struct MoveTarget: Identifiable {
+        var id: String
+        var name: String
+    }
+
+    private var inContainer: Bool { agent.workspaceId != Workspace.sharedID }
+    private var current: Workspace? { workplaces?.workspace(agent.workspaceId) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 11) {
-                    Image(systemName: "house")
+                    Image(systemName: inContainer ? "shippingbox" : "house")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(BanditoPalette.peach)
                         .frame(width: 34, height: 34)
                         .background(BanditoPalette.peach.opacity(0.13), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(L10n.Team.workplaceShared)
+                        Text(workplaceTitle)
                             .font(BanditoFont.font(size: 14, weight: 600))
                             .foregroundStyle(Color.Bandito.text)
-                        Text(server.config.name)
+                            .lineLimit(1)
+                        Text(workplaceSubtitle)
                             .font(BanditoFont.font(size: 12, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                     }
                     Spacer()
+                    if workplaces?.supported == true {
+                        changeMenu
+                    }
+                }
+                if let error {
+                    Text(error)
+                        .font(BanditoFont.font(size: 12, weight: 400))
+                        .foregroundStyle(Color.Bandito.danger)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                ForEach(notes, id: \.self) { note in
+                    Text(note)
+                        .font(BanditoFont.font(size: 12, weight: 400))
+                        .foregroundStyle(Color.Bandito.text2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 6) {
                     place(L10n.Inspector.placeFolder, symbol: "folder") {
@@ -578,8 +609,16 @@ struct WhereTab: View {
                         router.select(mode: .files)
                     }
                     place(L10n.Inspector.placeTerminal, symbol: "terminal") { router.select(mode: .terminals) }
-                    place(L10n.Inspector.placeBrowser, symbol: "globe") { router.select(mode: .browser) }
-                    place(L10n.Inspector.placeScreen, symbol: "display") { router.select(mode: .screen) }
+                    if !inContainer {
+                        place(L10n.Inspector.placeBrowser, symbol: "globe") { router.select(mode: .browser) }
+                        place(L10n.Inspector.placeScreen, symbol: "display") { router.select(mode: .screen) }
+                    }
+                }
+                if inContainer {
+                    Text(L10n.Workspace.Location.noBrowser)
+                        .font(BanditoFont.font(size: 11.5, weight: 400))
+                        .foregroundStyle(Color.Bandito.text3)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .padding(14)
@@ -591,6 +630,70 @@ struct WhereTab: View {
                 ForEach(server.runtimes, id: \.kind) { status in
                     runtimeRow(status)
                 }
+            }
+        }
+        .task(id: agent.workspaceId) {
+            let model = WorkspacesModel(server: server)
+            workplaces = model
+            await model.load()
+        }
+        .confirmationDialog(
+            pendingMove.map { L10n.Workspace.Move.title(name: $0.name) } ?? "",
+            isPresented: Binding(get: { pendingMove != nil }, set: { if !$0 { pendingMove = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button(L10n.Workspace.Move.confirm) {
+                if let target = pendingMove { move(to: target) }
+            }
+        } message: {
+            Text(L10n.Workspace.Move.chapter)
+        }
+    }
+
+    private var workplaceTitle: String {
+        guard inContainer else { return L10n.Workspace.Shared.title }
+        if let current { return current.name }
+        return workplaces?.loading == true ? L10n.Workspace.Location.loading : L10n.Workspace.Location.missing
+    }
+
+    private var workplaceSubtitle: String {
+        guard inContainer else { return server.config.name }
+        guard let current else { return "" }
+        return current.isRunning ? L10n.Workspace.Status.running : L10n.Workspace.Status.stopped
+    }
+
+    /// Lists the shared server and the containers. Choosing one asks first: the agent starts a new chapter there.
+    private var changeMenu: some View {
+        Menu {
+            Button(L10n.Workspace.Shared.title) {
+                pendingMove = MoveTarget(id: Workspace.sharedID, name: L10n.Workspace.Shared.title)
+            }
+            .disabled(!inContainer)
+            ForEach(workplaces?.containers ?? []) { container in
+                Button(container.name) {
+                    pendingMove = MoveTarget(id: container.id, name: container.name)
+                }
+                .disabled(container.id == agent.workspaceId)
+            }
+        } label: {
+            Text(L10n.Workspace.Location.change)
+                .font(BanditoFont.font(size: 12.5, weight: 500))
+        }
+        .menuStyle(.button)
+        .buttonStyle(QuietButtonStyle(size: .regular))
+        .fixedSize()
+    }
+
+    /// `agents.update {workspace_id}`. The daemon's warnings are shown under the header.
+    private func move(to target: MoveTarget) {
+        error = nil
+        notes = []
+        Task {
+            do {
+                let update = try await server.updateAgent(agent.id, patch: AgentPatch(workspaceId: target.id))
+                notes = update.warnings
+            } catch {
+                self.error = WorkspaceText.message(for: error)
             }
         }
     }

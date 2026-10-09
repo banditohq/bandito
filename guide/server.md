@@ -50,13 +50,47 @@ The card on Overview lists the ports that open on the server with their owner. A
 ## Workplaces (Рабочие места)
 
 <!-- id: server-workplaces; covers: -->
-Shows where each agent works: its files, browser, screen and terminals. The screen explains the three kinds of workplace and lists the agents in each.
-Где: Server → Workplaces (Рабочие места) → How to choose (Как выбрать)
-1. Shared (Общее): the agent works on the same server as you. Quick and simple. Nothing to install.
-2. Separate user (Отдельный пользователь): the agent has its own files, browser and screen. Bandito creates the user itself.
-3. Container (Контейнер): full isolation: its own disk, network, and CPU and memory limits. Needs Docker or Podman.
-4. The agents are listed under each kind (shared with the server, separate user, container · full isolation). Drag an agent to another workplace: it moves with its next task.
-5. If the examples are off, the screen says there is nothing to show. Turn them on in Settings → General → Show examples (see [settings.md](settings.md)).
+Lists the workplaces where agents run: the shared server first, then the containers. Each card shows the agents in it, the status of the container, its limits, its network and its folders. The screen needs the workplaces feature of the server; without it, the sample cards show only while examples are on (Settings → General → Show examples, see [settings.md](settings.md)).
+Где: Server → Workplaces (Рабочие места)
+1. Read the status chip of a container: Running (Работает), Stopped (Остановлено), or Docker does not answer (Docker не отвечает).
+2. Read the limits: Processor and Memory, or No limit (Без ограничения). Disk is the container's own disk. Network is internet, or off when the container has no network. Without a network the agent cannot reach its model, so it does not answer.
+3. Agents in a workplace are shown as avatars under Agents (Агенты). Move an agent from its Inspector: Where it works → Change (Сменить). The agent starts a new chapter there, and its CLI session is not carried over.
+
+## Create a workplace (Создать рабочее место)
+
+<!-- id: server-workplace-create; covers: -->
+Makes a container workplace: a name, a processor limit and a memory limit (or no limit), and the network. The button is enabled when Docker is ready.
+Где: Server → Workplaces (Рабочие места) → Create workplace (Создать рабочее место)
+1. Click Create workplace (Создать рабочее место).
+2. Type a Name (Название), 1 to 64 characters. Choose Processor (Процессор) and Memory (Память), or leave them at No limit (Без ограничения).
+3. Choose Network (Сеть): Internet (Интернет) lets the agent reach its model; None (Нет) cuts the network off completely.
+4. Read what the workplace gives and what it takes away: the agent sees only its own folder and the folders you add, and inside a container it has no browser and no screen tools.
+5. Click Create (Создать). The workplace is saved at once. Its container starts with the first message of an agent in it.
+
+## Folders of a workplace (Папки)
+
+<!-- id: server-workplace-folders; covers: -->
+Folders are the host folders the container may see, besides the folders of its agents. The folder is mounted read-write at the same path.
+Где: Server → Workplaces (Рабочие места) → a container card → Folders (Папки) → Add folder (Добавить папку)
+1. Click Add folder (Добавить папку) and choose the folder in the folder picker.
+2. The change applies when the container next starts. Until then the container keeps its old folders.
+3. Remove a folder with the cross next to its path. Bandito's own data folder, the server root and the Docker socket cannot be added. A folder that holds Bandito's data gets the sentence "This folder holds Bandito's own data".
+
+## Start, stop and delete a workplace (Запустить, Остановить, Удалить)
+
+<!-- id: server-workplace-control; covers: -->
+Start (Запустить) and Stop (Остановить) control the container. Delete (Удалить) removes the workplace with its container and its own disk. The folders on the server stay.
+Где: Server → Workplaces (Рабочие места) → a container card → Start (Запустить), Stop (Остановить), Delete (Удалить)
+1. Click Stop (Остановить) to stop the container. The next message of an agent in it starts it again.
+2. Click Delete (Удалить) and confirm. A workplace with agents in it cannot be deleted: the card lists the agents (Здесь работают агенты) and asks you to move them first. The shared server cannot be deleted.
+
+## Install Docker (Установить Docker)
+
+<!-- id: server-workplace-docker; covers: -->
+Containers need Docker on the server. Until Docker is ready, the Workplaces screen shows an Install Docker (Установить Docker) card instead of the Create button.
+Где: Server → Workplaces (Рабочие места) → Install Docker (Установить Docker)
+1. If the card has an Install (Установить) button, click it. Bandito installs Docker and shows the log.
+2. If not, the card gives the instruction: install Docker by hand, then come back. The guide is at docs.docker.com/engine/install.
 
 ## Separate and container workplaces (planned)
 

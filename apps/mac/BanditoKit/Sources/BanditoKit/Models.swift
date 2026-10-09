@@ -80,6 +80,8 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
     public var fallbackModel: String?
     /// The runtime the agent runs on now; `nil` = the primary `runtime`.
     public var activeRuntime: RuntimeKind?
+    /// The workspace the agent's CLI runs in: `shared` (the server) or a container's id (see `Workspace`).
+    public var workspaceId: String
 
     public init(
         id: String, name: String, role: String = "", runtime: RuntimeKind, model: String? = nil, cwd: String,
@@ -87,8 +89,10 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
         createdAt: Int64 = 0, updatedAt: Int64 = 0,
         effort: Effort? = nil, memoryMode: MemoryMode = .smart, contextBudget: Int? = nil, homeDir: String? = nil,
         contextTokens: Int = 0, chapter: Int = 1, lastTurnAt: Int64? = nil,
-        fallbackRuntime: RuntimeKind? = nil, fallbackModel: String? = nil, activeRuntime: RuntimeKind? = nil
+        fallbackRuntime: RuntimeKind? = nil, fallbackModel: String? = nil, activeRuntime: RuntimeKind? = nil,
+        workspaceId: String = "shared"
     ) {
+        self.workspaceId = workspaceId
         self.id = id
         self.name = name
         self.role = role
@@ -136,6 +140,7 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
         fallbackRuntime = try c.decodeIfPresent(RuntimeKind.self, forKey: .fallbackRuntime)
         fallbackModel = try c.decodeIfPresent(String.self, forKey: .fallbackModel)
         activeRuntime = try c.decodeIfPresent(RuntimeKind.self, forKey: .activeRuntime)
+        workspaceId = try c.decodeIfPresent(String.self, forKey: .workspaceId) ?? "shared"
     }
 }
 
@@ -153,13 +158,16 @@ public struct NewAgent: Codable, Sendable {
     /// Optional fallback subscription; omitted from the request when `nil`.
     public var fallbackRuntime: RuntimeKind?
     public var fallbackModel: String?
+    /// The workspace to run in; omitted from the request when `nil` (the daemon uses `shared`).
+    public var workspaceId: String?
 
     public init(
         name: String, role: String = "", runtime: RuntimeKind, model: String? = nil, cwd: String,
         approvalMode: ApprovalMode = .risky, systemPrompt: String? = nil,
         effort: Effort? = nil, memoryMode: MemoryMode = .smart, contextBudget: Int? = nil,
-        fallbackRuntime: RuntimeKind? = nil, fallbackModel: String? = nil
+        fallbackRuntime: RuntimeKind? = nil, fallbackModel: String? = nil, workspaceId: String? = nil
     ) {
+        self.workspaceId = workspaceId
         self.fallbackRuntime = fallbackRuntime
         self.fallbackModel = fallbackModel
         self.name = name
