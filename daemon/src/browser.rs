@@ -4,6 +4,7 @@
 
 use crate::cdp::{Cdp, Element};
 use crate::cdp_pipe::{LinkError, MAX_CHROME_MESSAGE, PageClient, Pipes, Relay};
+use crate::children::TrackedChild;
 use crate::event::Decision;
 use crate::setup;
 use crate::supervisor::{ApprovalSpec, Supervisor};
@@ -17,7 +18,7 @@ use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
-use tokio::process::{Child, Command};
+use tokio::process::Command;
 use tokio::sync::Mutex;
 
 /// Workspace the agents share, and the default for every method.
@@ -102,7 +103,7 @@ pub enum BrowserError {
 
 /// One running Chrome.
 struct Running {
-    child: Child,
+    child: TrackedChild,
     pid: u32,
     /// The pipe to Chrome's DevTools protocol, shared by the app and the agent tools.
     relay: Relay,
@@ -115,7 +116,14 @@ struct Running {
 
 impl Running {
     fn is_alive(&mut self) -> bool {
-        matches!(self.child.try_wait(), Ok(None)) && !self.relay.is_closed()
+        match self.child.try_wait() {
+            Ok(None) => !self.relay.is_closed(),
+            // Reaped: its registration ends here.
+            _ => {
+                self.child.release();
+                false
+            }
+        }
     }
 
     fn status(&self) -> Status {
@@ -135,6 +143,7 @@ impl Running {
             signal_group(self.pid, libc::SIGKILL);
             let _ = self.child.wait().await;
         }
+        self.child.release();
     }
 }
 
@@ -203,13 +212,14 @@ impl BrowserManager {
             .process_group(0)
             .kill_on_drop(true);
         pipes.install(&mut command);
-        let mut child = command.spawn().map_err(start_failed)?;
+        let mut child = TrackedChild::new(command.spawn().map_err(start_failed)?);
         let pid = child.id().unwrap_or_default();
         let (to_chrome, from_chrome) = pipes.into_parent().map_err(start_failed)?;
         let relay = Relay::spawn(from_chrome, to_chrome, MAX_CHROME_MESSAGE);
         if let Err(e) = wait_ready(&relay).await {
             signal_group(pid, libc::SIGKILL);
             let _ = child.wait().await;
+            child.release();
             return Err(BrowserError::StartFailed(format!(
                 "{e:#} (log: {})",
                 log_path.display()
@@ -866,11 +876,12 @@ mod tests {
     use crate::store::{ApprovalMode, MemoryMode, NewAgent, Store};
     use crate::supervisor::Runtimes;
     use std::os::unix::process::CommandExt;
+    use tokio::process::Child;
     use tokio::sync::broadcast;
 
     fn fake_running(child: Child, pid: u32, activity: Instant) -> Running {
         Running {
-            child,
+            child: TrackedChild::new(child),
             pid,
             relay: crate::cdp_pipe::idle_relay(),
             started_at: 0,

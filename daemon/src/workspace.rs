@@ -17,8 +17,15 @@ use tokio::process::Command as AsyncCommand;
 
 /// Containers are named `bandito-ws-<workspace id>`.
 const CONTAINER_PREFIX: &str = "bandito-ws-";
-/// The image built when a container workspace names none: Node with both agent CLIs.
-const DOCKERFILE: &str = "FROM node:22-bookworm\nRUN npm install -g @anthropic-ai/claude-code @openai/codex\n";
+/// The Dockerfile of the image built when a container workspace names none: Node with both agent
+/// CLIs, at the versions pinned in `setup::NPM_PINS`.
+fn dockerfile() -> String {
+    let packages: Vec<String> = crate::setup::NPM_PINS
+        .iter()
+        .map(|(name, version)| format!("{name}@{version}"))
+        .collect();
+    format!("FROM node:22-bookworm\nRUN npm install -g {}\n", packages.join(" "))
+}
 /// How long `docker info` may take before Docker counts as unavailable.
 const DOCKER_INFO_TIMEOUT: Duration = Duration::from_secs(20);
 /// The container label that holds [`config_hash`].
@@ -86,15 +93,21 @@ pub fn data_dir() -> PathBuf {
         .unwrap_or_else(|| dirs::home_dir().unwrap_or_else(|| PathBuf::from("/")).join(".bandito"))
 }
 
-/// The tag of the image Bandito builds from [`DOCKERFILE`]. The tag changes with the Dockerfile.
+/// The tag of the image Bandito builds from [`dockerfile`]. The tag changes with the Dockerfile.
 pub fn default_image_tag() -> String {
-    let digest = Sha256::digest(DOCKERFILE.as_bytes());
+    let digest = Sha256::digest(dockerfile().as_bytes());
     format!("bandito/workspace:{}", &hex::encode(digest)[..12])
 }
 
 /// Checks one mount by its shape. Host paths must be absolute and free of the characters
-/// `docker --mount` cannot carry, and the Docker socket and the server root are refused.
+/// `docker --mount` cannot carry, and the Docker socket and the server root are refused. So is
+/// any folder that holds Bandito's own data, lies in it, or is it (see [`check_mount_in`]).
 pub fn check_mount(m: &Mount) -> Result<(), WorkspaceError> {
+    check_mount_in(m, &data_dir())
+}
+
+/// [`check_mount`] for a given data folder.
+fn check_mount_in(m: &Mount, data: &Path) -> Result<(), WorkspaceError> {
     for path in [&m.host, &m.target] {
         if !path.starts_with('/') {
             return Err(WorkspaceError::Invalid(format!("mount path {path} must be absolute")));
@@ -119,7 +132,39 @@ pub fn check_mount(m: &Mount) -> Result<(), WorkspaceError> {
     if m.host.ends_with("docker.sock") {
         return Err(WorkspaceError::Invalid("the Docker socket cannot be mounted".into()));
     }
+    if overlaps(Path::new(&m.host), data) {
+        return Err(WorkspaceError::Invalid(format!(
+            "{} contains Bandito's own data and cannot be mounted",
+            m.host
+        )));
+    }
     Ok(())
+}
+
+/// Whether `host` is `data`, inside it, or holds it (`$HOME` when the data folder is `$HOME/.bandito`).
+fn overlaps(host: &Path, data: &Path) -> bool {
+    let host = resolve(host);
+    let data = resolve(data);
+    host.starts_with(&data) || data.starts_with(&host)
+}
+
+/// A path as the file system resolves it. The longest part that exists is canonicalised (so symlinks
+/// count), and the rest is joined on as it was written.
+pub(crate) fn resolve(path: &Path) -> PathBuf {
+    let mut rest: Vec<std::ffi::OsString> = Vec::new();
+    let mut current = path;
+    loop {
+        if let Ok(real) = std::fs::canonicalize(current) {
+            return rest.iter().rev().fold(real, |acc, part| acc.join(part));
+        }
+        match (current.parent(), current.file_name()) {
+            (Some(parent), Some(name)) => {
+                rest.push(name.to_os_string());
+                current = parent;
+            }
+            _ => return path.to_path_buf(),
+        }
+    }
 }
 
 /// The daemon user's CLI logins, so the agent inside a container is logged in too:
@@ -438,7 +483,7 @@ impl WorkspaceManager {
             return Ok(());
         }
         std::fs::create_dir_all(&self.build_dir)
-            .and_then(|_| std::fs::write(self.build_dir.join("Dockerfile"), DOCKERFILE))
+            .and_then(|_| std::fs::write(self.build_dir.join("Dockerfile"), dockerfile()))
             .map_err(|e| WorkspaceError::Docker(format!("write the Dockerfile: {e}")))?;
         let dir = self.build_dir.display().to_string();
         self.run(&["build", "-t", &tag, &dir]).await?;
@@ -741,11 +786,43 @@ mod tests {
     }
 
     #[test]
+    fn bandito_data_and_the_folders_around_it_cannot_be_mounted() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().join("home");
+        let data = home.join(".bandito");
+        std::fs::create_dir_all(&data).unwrap();
+        std::fs::create_dir_all(home.join("project")).unwrap();
+        let refused = |host: PathBuf| {
+            let err = check_mount_in(&mount(&host.display().to_string(), false), &data).unwrap_err();
+            matches!(err, WorkspaceError::Invalid(ref m) if m.contains("contains Bandito's own data and cannot be mounted"))
+        };
+        // The home folder holds the data folder, the data folder is itself, and a folder inside it.
+        assert!(refused(home.clone()), "home");
+        assert!(refused(data.clone()), "data folder");
+        assert!(
+            refused(data.join("workspaces").join("box")),
+            "inside the data folder, not yet created"
+        );
+        // A sibling of the data folder is fine.
+        assert!(check_mount_in(&mount(&home.join("project").display().to_string(), false), &data).is_ok());
+        assert!(check_mount_in(&mount(&home.join(".claude").display().to_string(), false), &data).is_ok());
+    }
+
+    #[test]
     fn default_image_tag_is_fixed_by_its_dockerfile() {
         let tag = default_image_tag();
         assert!(tag.starts_with("bandito/workspace:"), "{tag}");
         assert_eq!(tag, default_image_tag());
         assert!(tag.len() > "bandito/workspace:".len());
+    }
+
+    #[test]
+    fn default_image_installs_the_pinned_agent_clis() {
+        let file = dockerfile();
+        assert!(file.starts_with("FROM node:22-bookworm\n"), "{file}");
+        for (name, version) in crate::setup::NPM_PINS {
+            assert!(file.contains(&format!("{name}@{version}")), "{file}");
+        }
     }
 
     #[test]

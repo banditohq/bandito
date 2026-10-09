@@ -97,3 +97,50 @@ jobs:
         run: |
           set -euo pipefail
           gh release upload "$TAG" scripts/install.sh --repo "$GITHUB_REPOSITORY" --clobber
+
+  sign:
+    name: SHA256SUMS
+    needs: [binaries, installer]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - name: Collect checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p assets
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir assets \
+            --pattern 'bandito-*.tar.gz' --pattern 'install.sh'
+          cd assets
+          sha256sum bandito-*.tar.gz install.sh | sort -k2 > ../SHA256SUMS
+          cat ../SHA256SUMS
+
+      - name: Sign
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$RELEASE_SIGNING_KEY" ]; then
+            echo "::error::RELEASE_SIGNING_KEY is not set; run scripts/release-key.sh"
+            exit 1
+          fi
+          umask 077
+          key="$RUNNER_TEMP/release-key.pem"
+          trap 'rm -f "$key"' EXIT
+          printf '%s\n' "$RELEASE_SIGNING_KEY" > "$key"
+          openssl pkeyutl -sign -inkey "$key" -rawin -in SHA256SUMS -out SHA256SUMS.bin
+          openssl pkey -in "$key" -pubout -out release.pub
+          openssl pkeyutl -verify -pubin -inkey release.pub -rawin -in SHA256SUMS -sigfile SHA256SUMS.bin
+          openssl base64 -A -in SHA256SUMS.bin -out SHA256SUMS.sig
+          echo "Public key: $(sed -n 2p release.pub)"
+
+      - name: Upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release upload "$TAG" SHA256SUMS SHA256SUMS.sig --repo "$GITHUB_REPOSITORY" --clobber

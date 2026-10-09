@@ -5,7 +5,7 @@
 //! forwards `crew.list` / `crew.send` to the daemon over its unix socket.
 //! Stdout carries the protocol only, so logs must go to stderr.
 
-use crate::rpc::unix::call;
+use crate::rpc::unix::call_agent;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -50,59 +50,54 @@ pub trait CrewBackend: Send + Sync {
     async fn screen(&self, method: &str, params: Value) -> Result<Value>;
 }
 
-/// Backend that asks the daemon over its unix socket.
+/// Backend that asks the daemon over `agent.sock`, as the agent whose session token it holds.
+/// The daemon takes the agent from the token: the calls carry no agent id.
 pub struct DaemonBackend {
     pub sock: PathBuf,
-    pub agent_id: String,
+    pub token: String,
 }
 
 #[async_trait]
 impl CrewBackend for DaemonBackend {
     async fn list(&self) -> Result<Vec<CrewMember>> {
-        let v = call(&self.sock, "crew.list", json!({ "agent_id": self.agent_id })).await?;
+        let v = call_agent(&self.sock, &self.token, "crew.list", json!({})).await?;
         serde_json::from_value(v).context("crew.list: unexpected response")
     }
 
     async fn send(&self, to: &str, message: &str) -> Result<()> {
-        call(
+        call_agent(
             &self.sock,
+            &self.token,
             "crew.send",
-            json!({ "from": self.agent_id, "to": to, "message": message }),
+            json!({ "to": to, "message": message }),
         )
         .await?;
         Ok(())
     }
 
     async fn history_search(&self, query: &str, limit: u32) -> Result<String> {
-        let v = call(
+        let v = call_agent(
             &self.sock,
+            &self.token,
             "history.search",
-            json!({ "agent_id": self.agent_id, "query": query, "limit": limit }),
+            json!({ "query": query, "limit": limit }),
         )
         .await?;
         text_of(v, "history.search")
     }
 
     async fn history_day(&self, date: &str) -> Result<String> {
-        let v = call(
-            &self.sock,
-            "history.day",
-            json!({ "agent_id": self.agent_id, "date": date }),
-        )
-        .await?;
+        let v = call_agent(&self.sock, &self.token, "history.day", json!({ "date": date })).await?;
         text_of(v, "history.day")
     }
 
-    async fn browser(&self, method: &str, mut params: Value) -> Result<Value> {
-        // Every browser call is made for this agent; a risky click asks the user in its feed.
-        if let Some(object) = params.as_object_mut() {
-            object.insert("agent_id".to_string(), json!(self.agent_id));
-        }
-        call(&self.sock, method, params).await
+    async fn browser(&self, method: &str, params: Value) -> Result<Value> {
+        // A risky click asks the user in the agent's feed; the daemon knows the agent from the token.
+        call_agent(&self.sock, &self.token, method, params).await
     }
 
     async fn screen(&self, method: &str, params: Value) -> Result<Value> {
-        call(&self.sock, method, params).await
+        call_agent(&self.sock, &self.token, method, params).await
     }
 }
 
@@ -690,10 +685,53 @@ async fn history_day(args: &Value, backend: &dyn CrewBackend) -> Result<String, 
     backend.history_day(date).await.map_err(|e| format!("{e:#}"))
 }
 
-/// Run the crew MCP server for one agent on stdin/stdout.
-pub async fn serve_stdio(sock: PathBuf, agent_id: String) -> Result<()> {
-    let backend = DaemonBackend { sock, agent_id };
+/// Run the crew MCP server on stdin/stdout, for the agent whose session token it is given: from
+/// `token_file` when one is named (the daemon's way), else from `BANDITO_AGENT_TOKEN`.
+pub async fn serve_stdio(sock: PathBuf, token_file: Option<PathBuf>) -> Result<()> {
+    let from_file = match &token_file {
+        Some(path) => Some(
+            std::fs::read_to_string(path).with_context(|| format!("read the agent token file {}", path.display()))?,
+        ),
+        None => None,
+    };
+    let token = token_from(from_file.as_deref(), std::env::var("BANDITO_AGENT_TOKEN").ok())?;
+    let backend = DaemonBackend { sock, token };
     serve(BufReader::new(tokio::io::stdin()), tokio::io::stdout(), &backend).await
+}
+
+/// The session token: the token file's contents when a file is named, else `BANDITO_AGENT_TOKEN`.
+/// Blank values count as missing.
+fn token_from(file: Option<&str>, env: Option<String>) -> Result<String> {
+    if let Some(text) = file {
+        let token = text.trim();
+        anyhow::ensure!(!token.is_empty(), "the agent token file is empty");
+        return Ok(token.to_string());
+    }
+    env.filter(|t| !t.trim().is_empty()).map(|t| t.trim().to_string()).context(
+        "no agent token: the Bandito crew server only runs inside an agent session (BANDITO_AGENT_TOKEN is not set)",
+    )
+}
+
+#[cfg(test)]
+mod token_tests {
+    use super::*;
+
+    #[test]
+    fn the_token_file_wins_and_the_environment_is_the_fallback() {
+        assert_eq!(
+            token_from(Some("  bat_file \n"), Some("bat_env".into())).unwrap(),
+            "bat_file"
+        );
+        assert_eq!(token_from(None, Some("bat_env".into())).unwrap(), "bat_env");
+    }
+
+    #[test]
+    fn a_missing_or_blank_token_is_an_error() {
+        let missing = token_from(None, None).unwrap_err().to_string();
+        assert!(missing.contains("BANDITO_AGENT_TOKEN is not set"), "{missing}");
+        assert!(token_from(None, Some(String::new())).is_err());
+        assert!(token_from(Some("  \n"), Some("bat_env".into())).is_err());
+    }
 }
 
 #[cfg(test)]

@@ -2,13 +2,15 @@
 //! single turn runs at a time, applies the approval policy, and turns runtime
 //! output into stored events.
 
+use crate::agent_token::{AgentTokens, SessionToken};
 use crate::checkpoint;
 use crate::event::LimitWindow;
 use crate::event::{AgentStatus, DecidedBy, Decision, EventBody, Source, TurnStatus, Usage};
 use crate::hub::Hub;
 use crate::limit;
-use crate::policy::{self, Verdict};
+use crate::policy::{self, Protected, Verdict};
 use crate::redact::Redactor;
+use crate::runtime::sandbox::SandboxPolicy;
 use crate::runtime::{ApprovalRequest, Runtime, RuntimeKind, RuntimeOutput, Session, SpawnConfig};
 use crate::store::{
     Agent, CheckpointKind, DEFAULT_CONTEXT_BUDGET, MemoryMode, RuleAction, Store, UsageEntry, WorkspaceKind, new_id,
@@ -19,7 +21,8 @@ use anyhow::{Result, anyhow, bail};
 use chrono::{DateTime, Local, NaiveTime, TimeZone};
 use serde_json::json;
 use std::collections::{HashMap, VecDeque};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
@@ -162,6 +165,20 @@ pub struct Supervisor {
     chains: Mutex<HashMap<String, u32>>,
     /// Docker for the container workspaces (see docs/ARCHITECTURE.md#workspaces).
     workspaces: Arc<WorkspaceManager>,
+    /// Live session tokens of the agents (see docs/ARCHITECTURE.md#trust-model).
+    agent_tokens: Arc<AgentTokens>,
+    /// Whether agent sessions run under the macOS sandbox (see `runtime::sandbox`).
+    agent_sandbox: Arc<AtomicBool>,
+    /// Bandito's own files and controls, for the approval policy. Built once at start.
+    protected: Arc<Protected>,
+}
+
+/// Bandito's own files and controls, as the approval policy protects them: the data folder,
+/// the daemon's binary, and the service files of the user's home. `BANDITO_HOME` or `~/.bandito`.
+fn daemon_protected(data_home: &std::path::Path) -> Protected {
+    let exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("bandito"));
+    let user_home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
+    Protected::new(data_home, &exe, &user_home)
 }
 
 /// Approvals nobody answered are denied after this long.
@@ -290,6 +307,26 @@ impl Supervisor {
         mcp: Option<(PathBuf, Vec<String>)>,
         workspaces: Arc<WorkspaceManager>,
     ) -> Arc<Self> {
+        Self::new_in(hub, runtimes, mcp, workspaces, &crate::workspace::data_dir())
+    }
+
+    /// The daemon of the data folder `home` (`--home`): the approval policy protects that folder.
+    pub fn new_in_home(
+        hub: Hub,
+        runtimes: Runtimes,
+        mcp: Option<(PathBuf, Vec<String>)>,
+        home: &std::path::Path,
+    ) -> Arc<Self> {
+        Self::new_in(hub, runtimes, mcp, WorkspaceManager::system(), home)
+    }
+
+    fn new_in(
+        hub: Hub,
+        runtimes: Runtimes,
+        mcp: Option<(PathBuf, Vec<String>)>,
+        workspaces: Arc<WorkspaceManager>,
+        home: &std::path::Path,
+    ) -> Arc<Self> {
         Arc::new(Self {
             hub,
             runtimes,
@@ -297,7 +334,20 @@ impl Supervisor {
             actors: Mutex::new(HashMap::new()),
             chains: Mutex::new(HashMap::new()),
             workspaces,
+            agent_tokens: AgentTokens::new(),
+            agent_sandbox: Arc::new(AtomicBool::new(true)),
+            protected: Arc::new(daemon_protected(home)),
         })
+    }
+
+    /// Turns the sandbox for agent sessions on or off (from the config file, at start).
+    pub fn set_agent_sandbox(&self, on: bool) {
+        self.agent_sandbox.store(on, Ordering::Relaxed);
+    }
+
+    /// The live agent session tokens, for `agent.sock`.
+    pub fn agent_tokens(&self) -> Arc<AgentTokens> {
+        Arc::clone(&self.agent_tokens)
     }
 
     pub fn workspaces(&self) -> &Arc<WorkspaceManager> {
@@ -344,6 +394,10 @@ impl Supervisor {
             runtimes: self.runtimes.clone(),
             mcp: self.mcp.clone(),
             workspaces: self.workspaces.clone(),
+            tokens: self.agent_tokens.clone(),
+            sandbox_on: self.agent_sandbox.clone(),
+            agent_token: None,
+            protected: self.protected.clone(),
             session: None,
             output: None,
             redactor: Redactor::default(),
@@ -580,6 +634,11 @@ struct Actor {
     runtimes: Runtimes,
     mcp: Option<(PathBuf, Vec<String>)>,
     workspaces: Arc<WorkspaceManager>,
+    tokens: Arc<AgentTokens>,
+    sandbox_on: Arc<AtomicBool>,
+    /// The token of the running session. Dropping it (when the session ends) revokes the token.
+    agent_token: Option<SessionToken>,
+    protected: Arc<Protected>,
     session: Option<Box<dyn Session>>,
     output: Option<mpsc::Receiver<RuntimeOutput>>,
     /// Replaces the values of the secrets this session was started with, in everything it stores or sends.
@@ -740,7 +799,16 @@ impl Actor {
         }
         let remember = remember && decision == Decision::Allow && !external;
         if remember {
-            self.hub.store.rule_set(Some(&self.id), &p.subject, RuleAction::Allow)?;
+            // The exact command, escaped; never a command with parts that cannot be known.
+            match policy::always_pattern(&p.subject, &self.protected) {
+                Some(pattern) => {
+                    self.hub.store.rule_set(Some(&self.id), &pattern, RuleAction::Allow)?;
+                }
+                None => tracing::info!(
+                    agent = self.id,
+                    "not remembered: the command has parts that cannot be known"
+                ),
+            }
         }
         self.hub.emit(
             &self.id,
@@ -791,6 +859,33 @@ impl Actor {
         }
         let prompt = blocks.join("\n\n");
         let secrets = self.hub.store.secrets_for_agent(&agent.id)?;
+        let (token, token_guard) = self.tokens.issue(&agent.id)?;
+        // The token file's path goes into an argument list: it must be text, or the session does not start.
+        let token_file_arg = match token_guard.token_file() {
+            Some(file) => Some(crate::runtime::path_text(file)?.to_string()),
+            None => None,
+        };
+        // Containers are isolated already; the sandbox is for the agents that run on the server itself.
+        let sandbox = match self.tokens.home() {
+            Some(home)
+                if agent.workspace_id == crate::store::SHARED_WORKSPACE && self.sandbox_on.load(Ordering::Relaxed) =>
+            {
+                Some(SandboxPolicy {
+                    home,
+                    // Without a home folder the profile cannot protect the login files: the session is refused.
+                    user_home: dirs::home_dir()
+                        .ok_or_else(|| anyhow!("no home folder: the agent cannot be sandboxed"))?,
+                    exe: std::env::current_exe().ok(),
+                    session_files: token_guard
+                        .token_file()
+                        .into_iter()
+                        .chain(token_guard.config_file())
+                        .map(Path::to_path_buf)
+                        .collect(),
+                })
+            }
+            _ => None,
+        };
         let ws = self
             .hub
             .store
@@ -819,19 +914,27 @@ impl Actor {
                 program: None,
                 mcp: mcp.map(|(prog, mut args)| {
                     args.extend(["--agent".to_string(), agent.id.clone()]);
+                    // The bridge reads the token from this file, so the token stays out of argument lists.
+                    if let Some(file) = &token_file_arg {
+                        args.extend(["--token-file".to_string(), file.clone()]);
+                    }
                     (prog, args)
                 }),
                 env: secrets.clone(),
                 effort: agent.effort,
                 extra_dirs: agent.home_dir.iter().map(PathBuf::from).collect(),
                 workspace: Some(workspace),
+                agent_token: Some(token.clone()),
+                agent_mcp_file: token_guard.config_file().map(Path::to_path_buf),
+                sandbox,
             })
             .await?;
         self.session = Some(spawned.session);
         self.output = Some(spawned.output);
         self.session_kind = Some(kind);
-        // The same values the child got, so what it prints is redacted exactly for them.
-        self.redactor = Redactor::new(secrets);
+        self.agent_token = Some(token_guard);
+        // The same values the child got, so what it prints is redacted exactly for them, the token too.
+        self.redactor = Redactor::new(secrets.into_iter().chain([("BANDITO_AGENT_TOKEN".to_string(), token)]));
         Ok(())
     }
 
@@ -940,6 +1043,7 @@ impl Actor {
         if let Some(s) = self.session.take() {
             s.shutdown().await;
         }
+        self.agent_token = None;
         self.output = None;
         self.session_kind = None;
         self.reload_after_turn = false;
@@ -1115,6 +1219,7 @@ impl Actor {
             RuntimeOutput::Exited { code, stderr_tail } => {
                 let stderr_tail = self.redactor.redact(&stderr_tail).into_owned();
                 self.session = None;
+                self.agent_token = None;
                 let failed = code != Some(0);
                 let detail = if failed {
                     let tail: Vec<&str> = stderr_tail.lines().rev().take(5).collect();
@@ -1331,7 +1436,7 @@ impl Actor {
         // The agent's own folders: its working folder, and its home when it has one.
         let mut roots = vec![agent.cwd.as_str()];
         roots.extend(agent.home_dir.as_deref());
-        let verdict = policy::evaluate(agent.approval_mode, &req, &roots, &rules);
+        let verdict = policy::guarded(|| policy::evaluate(agent.approval_mode, &req, &roots, &rules, &self.protected));
         let subject = req.command.clone().unwrap_or_else(|| req.title.clone());
         match verdict {
             Verdict::Allow => match self.session.as_mut() {
@@ -1467,6 +1572,7 @@ impl Actor {
         if let Some(s) = self.session.take() {
             s.shutdown().await;
         }
+        self.agent_token = None;
         self.output = None;
         if self.turn.is_some() {
             self.end_turn(TurnStatus::Interrupted, None);
@@ -1855,7 +1961,7 @@ mod tests {
         else {
             unreachable!()
         };
-        assert_eq!(reason, "risky: git push*");
+        assert_eq!(reason, "risky: git push");
         assert_eq!(command.as_deref(), Some("git push origin main"));
         w.wait(is_status(AgentStatus::NeedsYou)).await;
         assert_eq!(w.store.approval_list_pending(None).unwrap().len(), 1);
@@ -3298,6 +3404,20 @@ mod workspace_tests {
         assert_eq!(cfg.workspace, Some(WorkspaceSpec::Shared));
     }
 
+    #[tokio::test]
+    async fn a_session_gets_its_own_token_and_loses_it_when_it_ends() {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let id = agent(&store, "Forge", "shared");
+        let (sup, spawns) = rig(store, scratch_manager());
+        sup.send(&id, Inbound::user("go")).await.unwrap();
+        let cfg = first_spawn(&spawns).await;
+        let token = cfg.agent_token.clone().expect("a session gets a token");
+        assert!(token.starts_with("bat_"), "{token}");
+        assert_eq!(sup.agent_tokens().agent_for(&token), Some(id.clone()));
+        sup.stop(&id).await;
+        assert_eq!(sup.agent_tokens().agent_for(&token), None);
+    }
+
     #[cfg(unix)]
     #[tokio::test]
     async fn a_container_agent_starts_its_container_and_runs_inside_it() {
@@ -3416,5 +3536,19 @@ mod workspace_tests {
                 .any(|l| l.starts_with(&format!("run -d --name bandito-ws-{} ", box_ws.id))),
             "the container is created for the fallback too"
         );
+    }
+}
+
+#[cfg(test)]
+mod home_policy_tests {
+    use super::*;
+
+    #[test]
+    fn the_policy_protects_the_home_the_daemon_was_started_with() {
+        let store = Arc::new(crate::store::Store::open_in_memory().unwrap());
+        let home = std::path::Path::new("/srv/bandito-home");
+        let sup = Supervisor::new_in_home(Hub::new(store), Runtimes::default(), None, home);
+        assert_eq!(sup.protected.paths[0], PathBuf::from("/srv/bandito-home"));
+        assert!(sup.protected.words.iter().any(|w| w == "/srv/bandito-home"));
     }
 }

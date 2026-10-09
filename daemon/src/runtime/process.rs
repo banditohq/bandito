@@ -24,6 +24,9 @@ const EXIT_GRACE: Duration = Duration::from_secs(5);
 const KILL_GRACE: Duration = Duration::from_secs(2);
 /// How long to wait for stderr to close after the child exited.
 const STDERR_GRACE: Duration = Duration::from_secs(2);
+/// After the CLI has exited, how long its stdout may stay open for the rest of its output. A process it
+/// left behind may hold the pipe; after this the group is killed and the exit is reported.
+const OUTPUT_AFTER_EXIT: Duration = Duration::from_secs(1);
 
 /// Frames waiting for the writer task. `None` once the session is shut down.
 pub type LineSink = Arc<Mutex<Option<mpsc::UnboundedSender<String>>>>;
@@ -63,7 +66,10 @@ impl JsonProcess {
 
         let mut child = cmd.spawn().with_context(|| format!("failed to start {program}"))?;
         // Unix: the child leads its own process group, so the whole tree can be killed.
-        let pgid = if cfg!(unix) { child.id() } else { None };
+        let pid = child.id();
+        let pgid = if cfg!(unix) { pid } else { None };
+        // Registered now that the spawn succeeded; it ends with the pump, which waits for the child.
+        let registration = pid.map(crate::children::register);
         let stdin = piped(child.stdin.take(), "stdin", label)?;
         let stdout = piped(child.stdout.take(), "stdout", label)?;
         let stderr = piped(child.stderr.take(), "stderr", label)?;
@@ -78,6 +84,7 @@ impl JsonProcess {
         let (kill_tx, kill_rx) = oneshot::channel();
         let pump = Pump {
             child,
+            _registration: registration,
             pgid,
             router,
             sink: Arc::clone(&sink),
@@ -134,6 +141,8 @@ impl JsonProcess {
 /// `Exited` at the end.
 struct Pump {
     child: Child,
+    /// The child's pid, registered while its exit is still to be waited for.
+    _registration: Option<crate::children::Registration>,
     /// Process group id (unix). Kills go to the whole group.
     pgid: Option<u32>,
     router: Router,
@@ -153,64 +162,88 @@ impl Pump {
         kill_tree(&mut self.child, self.pgid);
     }
 
+    /// Routes one stdout line. False when the output is no longer wanted (a kill, or nobody listens).
+    async fn route(&mut self, text: &str) -> bool {
+        let Ok(msg) = serde_json::from_str::<Value>(text) else {
+            tracing::debug!("skipping non-JSON line from {} stdout", self.label);
+            return true;
+        };
+        for output in (self.router)(&msg, &self.sink) {
+            if self.killed {
+                return false;
+            }
+            // Shutdown must not wait behind a full channel.
+            let sent = tokio::select! {
+                result = self.tx.send(output) => result.is_ok(),
+                _ = &mut self.kill, if !self.killed => false,
+            };
+            if !sent {
+                // A kill was requested, or nobody listens any more.
+                self.kill_now();
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Reads stdout and waits for the child at the same time. The exit is seen even while a process the
+    /// CLI left behind keeps the pipe open. Once the CLI has exited, its remaining output is read for at
+    /// most `OUTPUT_AFTER_EXIT`, then the process group is killed and `Exited` is sent with the real code.
     async fn run(mut self, stdout: ChildStdout) {
         let mut reader = BufReader::new(stdout);
+        let mut eof = false;
+        // Some(code) once the CLI has exited.
+        let mut exit: Option<Option<i32>> = None;
+        let mut drain_until: Option<tokio::time::Instant> = None;
         loop {
-            let read = tokio::select! {
-                read = read_capped_line(&mut reader, MAX_LINE_BYTES) => read,
-                _ = &mut self.kill, if !self.killed => {
-                    self.kill_now();
-                    continue;
+            tokio::select! {
+                read = read_capped_line(&mut reader, MAX_LINE_BYTES), if !eof => match read {
+                    Ok(Line::Text(text)) => {
+                        if !self.route(&text).await {
+                            break;
+                        }
+                    }
+                    Ok(Line::TooLong) => {
+                        tracing::warn!(
+                            "dropped a {} stdout line longer than {MAX_LINE_BYTES} bytes",
+                            self.label
+                        );
+                    }
+                    Ok(Line::Eof) => eof = true,
+                    Err(e) => {
+                        tracing::warn!("{} stdout read failed: {e}", self.label);
+                        self.kill_now();
+                        break;
+                    }
+                },
+                status = self.child.wait(), if exit.is_none() => {
+                    exit = Some(status.ok().and_then(|s| s.code()));
+                    drain_until = Some(tokio::time::Instant::now() + OUTPUT_AFTER_EXIT);
                 }
-            };
-            let line = match read {
-                Ok(Line::Text(text)) => text,
-                Ok(Line::TooLong) => {
-                    tracing::warn!(
-                        "dropped a {} stdout line longer than {MAX_LINE_BYTES} bytes",
-                        self.label
-                    );
-                    continue;
-                }
-                Ok(Line::Eof) => break,
-                Err(e) => {
-                    tracing::warn!("{} stdout read failed: {e}", self.label);
-                    self.kill_now();
-                    break;
-                }
-            };
-            let Ok(msg) = serde_json::from_str::<Value>(&line) else {
-                tracing::debug!("skipping non-JSON line from {} stdout", self.label);
-                continue;
-            };
-            for output in (self.router)(&msg, &self.sink) {
-                if self.killed {
-                    break;
-                }
-                // Shutdown must not wait behind a full channel.
-                let sent = tokio::select! {
-                    result = self.tx.send(output) => result.is_ok(),
-                    _ = &mut self.kill, if !self.killed => false,
-                };
-                if !sent {
-                    // A kill was requested, or nobody listens any more.
-                    self.kill_now();
-                    break;
-                }
+                _ = tokio::time::sleep_until(drain_until.unwrap_or_else(tokio::time::Instant::now)),
+                    if drain_until.is_some() => break,
+                _ = &mut self.kill, if !self.killed => self.kill_now(),
+            }
+            if eof && exit.is_some() {
+                break;
             }
         }
 
-        let status = loop {
-            tokio::select! {
-                status = self.child.wait() => break status.ok(),
-                _ = &mut self.kill, if !self.killed => self.kill_now(),
-            }
+        let code = match exit {
+            Some(code) => code,
+            None => loop {
+                tokio::select! {
+                    status = self.child.wait() => {
+                        break status.ok().and_then(|s| s.code());
+                    }
+                    _ = &mut self.kill, if !self.killed => self.kill_now(),
+                }
+            },
         };
         if let Some(pgid) = self.pgid {
             // Whatever the CLI left in its group (e.g. background jobs) goes too.
             kill_group(pgid);
         }
-        let code = status.and_then(|s| s.code());
         if timeout(STDERR_GRACE, &mut self.stderr_task).await.is_err() {
             self.stderr_task.abort();
         }
@@ -374,6 +407,30 @@ pub(crate) fn locked<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The CLI exits with code 3 but leaves a process holding its stdout. The exit must not wait for
+    /// that process: `Exited` comes with the real code after the grace for the rest of the output.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn an_exit_is_reported_while_a_leftover_process_holds_stdout() {
+        let mut cmd = Command::new("sh");
+        cmd.args(["-c", "sleep 15 & exit 3"]);
+        let (proc, mut rx) = JsonProcess::spawn(cmd, "test", Box::new(|_: &Value, _: &LineSink| Vec::new())).unwrap();
+        let started = std::time::Instant::now();
+        let exited = tokio::time::timeout(Duration::from_secs(8), async {
+            while let Some(output) = rx.recv().await {
+                if let RuntimeOutput::Exited { code, .. } = output {
+                    return Some(code);
+                }
+            }
+            None
+        })
+        .await
+        .expect("Exited arrives well before the leftover process ends");
+        assert_eq!(exited, Some(Some(3)));
+        assert!(started.elapsed() < Duration::from_secs(8), "{:?}", started.elapsed());
+        proc.shutdown().await;
+    }
 
     #[tokio::test]
     async fn read_capped_line_replaces_invalid_utf8() {

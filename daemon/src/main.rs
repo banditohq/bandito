@@ -52,10 +52,15 @@ enum Cmd {
         #[command(subcommand)]
         cmd: ServiceCmd,
     },
-    /// Crew MCP server for one agent (started by the daemon; speaks MCP on stdio).
+    /// Crew MCP server of an agent (started by the daemon; speaks MCP on stdio). The agent comes
+    /// from its session token: read from `--token-file`, else from `BANDITO_AGENT_TOKEN`. `--agent`
+    /// is accepted for older configs and changes nothing.
     Mcp {
         #[arg(long)]
-        agent: String,
+        agent: Option<String>,
+        /// The file the daemon wrote the session token to (under `$BANDITO_HOME/run`).
+        #[arg(long)]
+        token_file: Option<PathBuf>,
     },
 }
 
@@ -139,7 +144,7 @@ async fn run_command(cmd: Cmd, home: PathBuf) -> Result<()> {
         Cmd::Pair { json } => pair(&sock, json).await,
         Cmd::Info { json } => info(&home, &sock, json).await,
         Cmd::Service { cmd } => service_cmd(cmd, &home).await,
-        Cmd::Mcp { agent } => bandito::crew::serve_stdio(sock, agent).await,
+        Cmd::Mcp { token_file, .. } => bandito::crew::serve_stdio(home.join("agent.sock"), token_file).await,
     }
 }
 
@@ -286,6 +291,8 @@ async fn status(sock: &Path) -> Result<()> {
 }
 
 async fn daemon(home: &Path, sock: &Path, listen: SocketAddr) -> Result<()> {
+    // Before anything starts: sessions recovered below are children too.
+    rpc::unix::become_subreaper();
     let store = Arc::new(Store::open(&home.join("bandito.db"))?);
     let agents_root = home::default_agents_root(home);
     let created = home::backfill(&store, &agents_root);
@@ -310,14 +317,26 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr) -> Result<()> {
         );
         None
     };
-    let sup = Supervisor::new(hub, runtimes, mcp);
+    let sup = Supervisor::new_in_home(hub, runtimes, mcp, home);
+    // Session tokens are files in `run/`: a previous daemon's leftovers go, and no token outlives a restart.
+    sup.agent_tokens()
+        .set_run_dir(&home.join("run"))
+        .context("prepare the run folder")?;
+    let config = bandito::config::load(home)?;
+    sup.set_agent_sandbox(config.agent_sandbox);
     sup.recover()?;
     let app = App::new(sup.clone(), agents_root);
 
+    // Children that double-fork away stay under this process, so the owner's socket can tell them apart,
+    // and this process reaps them (see docs/ARCHITECTURE.md#trust-model).
+    rpc::unix::spawn_zombie_reaper(rpc::unix::REAP_INTERVAL);
     let unix = rpc::unix::bind(sock)?;
+    // Agents reach the daemon only through this socket, with their session token (docs/ARCHITECTURE.md#trust-model).
+    let agent_unix = rpc::unix::bind(&home.join("agent.sock"))?;
     // This daemon owns the socket now, so Chrome left by an earlier daemon is ours to stop.
     bandito::browser::reap_orphans(&bandito::setup::default_home());
     tokio::spawn(rpc::unix::run(app.clone(), unix));
+    tokio::spawn(rpc::unix::run_agents(app.clone(), agent_unix));
 
     let tcp = tokio::net::TcpListener::bind(listen)
         .await
@@ -325,9 +344,9 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr) -> Result<()> {
     if let Err(e) = std::fs::write(home.join(LISTEN_FILE), tcp.local_addr()?.to_string()) {
         tracing::warn!("could not record the listen address: {e}");
     }
-    let router = rpc::ws::router(app.clone());
+    let router = rpc::ws::router_listening(app.clone(), listen.ip(), config.allowed_hosts);
     tokio::spawn(async move {
-        if let Err(e) = axum::serve(tcp, router).await {
+        if let Err(e) = axum::serve(tcp, router.into_make_service_with_connect_info::<SocketAddr>()).await {
             tracing::error!("http server: {e}");
         }
     });

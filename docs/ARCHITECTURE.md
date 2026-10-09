@@ -21,7 +21,7 @@ Status: working design, October 2026. This file is the source of truth for the M
 ```
 
 - The daemon runs as the user who owns the CLI logins (`~/.claude`, `~/.codex`, `~/.grok`), never as root.
-- One binary: `bandito daemon` (foreground), `bandito pair`, `bandito info`, `bandito status`, `bandito mcp` (crew MCP over stdio, proxies to the daemon socket), `bandito service install|uninstall|status` (see [Install and service](#install-and-service)).
+- One binary: `bandito daemon` (foreground), `bandito pair`, `bandito info`, `bandito status`, `bandito mcp [--token-file <path>]` (crew MCP over stdio, proxies to the daemon's `agent.sock` with the agent's session token), `bandito service install|uninstall|status` (see [Install and service](#install-and-service)).
 
 ## Runtimes
 
@@ -68,7 +68,46 @@ Per agent `approval_mode`:
 - `always`: every tool call that the CLI asks about goes to the human.
 - `never`: auto-allow everything (for sandboxes).
 
-Risky = matches a rule. Built-in rules (editable): `git push*`, `git reset --hard*`, `rm -rf*`, `*deploy*`, `npm publish*`, `cargo publish*`, `kubectl delete*`, `terraform apply*`, `DROP TABLE*`, `prisma migrate deploy*`, writes outside the agent's own folders (its `cwd` and its home folder). Agent rules (`allow` / `ask` / `deny` patterns) win over built-ins. "Always allow here" on an approval adds an `allow` rule to that agent.
+**Protected: always denied.** Bandito's own files and controls are off limits to agents, in every mode, and no rule can allow them. A call is refused with `Bandito's own files and controls are off limits to agents` when a path it reaches is known to be one of them:
+
+- the data folder (`$BANDITO_HOME`, else `~/.bandito`), reached by a path the command uses (an argument, a redirect target, the program, a file the tool edits or reads), once `~`, `~user` (looked up in the system's account database), `$HOME`, `${HOME}`, `$BANDITO_HOME`, variables set earlier on the same line, `cd`, `pushd` and `popd` are followed. Glob names count (`~/.ban*/bandito.*`, `~/[.]bandito`), and so do case differences (APFS and most Linux setups are case-insensitive);
+- a folder that contains the data folder, when the command reaches everything under it: removal, copying, moving or archiving (`rm -r ~`, `cp -r ~ /tmp`, `tar czf h.tgz ~`, `rsync … ~`), a recursive search (`grep -r x ~`, `rg`, `ag`, `ack`, `du`, `tree`, `ls -R`, `find` deeper than depth 1, `git grep` from such a folder), or `ditto`;
+- the daemon's own binary, or a command named `bandito`;
+- a command that stops, restarts, disables or kills Bandito: `kill` of the daemon's pid or of anything named `bandito`, `pkill`/`killall bandito`, `systemctl … stop|restart|disable bandito*`, `launchctl … bandito`;
+- the daemon's service files: `~/.config/systemd/user/bandito*`, `/etc/systemd/system/bandito*`, `~/Library/LaunchAgents/dev.bandito*`;
+- the data folder spelled out in the raw command line (`~/.bandito`, `$HOME/.bandito`, `${HOME}/.bandito`, the absolute path), so a `python -c` that names it is refused too.
+
+The Claude runtime also starts with `--settings` carrying `permissions.deny` for `Read`, `Edit` and `Write` under the data folder, so the file tools refuse it without asking.
+
+**Asked: what cannot be known, or names Bandito's files without a path.** The rule is: a path, folder or command that cannot be worked out is asked about, never allowed. In risky and always modes a call is asked about when:
+
+- a word the command uses cannot be expanded (a variable not set on the line, `$1`, `${X:-y}`, a substitution, an unknown user) and it can name a file: it is the program itself, a redirect target, or an argument of a command that reads or writes files (`cat`, `less`, `head`, `tail`, `grep`, `sed`, `awk`, `jq`, `sqlite3`, `strings`, `xxd`, `base64`, `openssl`, `nc`, `socat`, `tar`, `cp`, `mv`, `rm`, `python`, `node`, `sh`, `source`, …). `echo "$PATH"`, `printf '%s' "$HOME"` and `git commit -m "$MSG"` are allowed. Inside single quotes, `$` is literal: `awk '{print $1}' f` is not unknown;
+- a folder the command runs in is unknown (after `cd -`, `popd` with nothing pushed, a `cd` in a pipeline, or a `cd` to an unknown folder), and the command takes path arguments (a plain name in `cd $X && rm a` counts; `cargo test` and `echo` do not);
+- `source FILE` or `. FILE` where FILE is unknown, or known but outside the agent's folders (`source ~/.bashrc`). A file inside the folder is allowed (`. .venv/bin/activate`): what it contains is not read, as with `python script.py`;
+- a bare name of Bandito's files (`bandito.db`, `bandito.sock`, `agent.sock`) appears in the command line without a path that reaches them: asked, not refused, so `grep -rn agent.sock daemon/src` can still be asked and answered;
+- a line contains brace expansion (`{a,b}`, `{a..b}`), a zsh `=word`, a substitution, a process substitution, a heredoc, `eval`, a variable or glob as the program, an unclosed quote, a pipe into a shell or interpreter with no script, inline code from a pipe, a line over 64 KiB, or nesting deeper than 8.
+
+Never mode allows what is only asked about; it still refuses what is proven to reach Bandito's files.
+
+**Risky (default): a safety net, not a boundary.** `risky` reads the command line itself (`daemon/src/shell.rs`: quotes, `&&`, `;`, pipes, redirections, heredocs, `$(…)`, `$'…'` escapes, `sh -c`, subshells, and wrappers such as `sudo`, `env`, `timeout`, `nice`, `busybox`, `xargs` and `find -exec`, which are taken off so the command underneath is judged). It asks the human when a command means something risky, by meaning and not by prefix:
+
+- `git`: `push` (any form), `reset --hard`, `clean` with `-f`, `branch -D`, `checkout`/`restore .`, `filter-branch`, `filter-repo`; a config key that runs a program (`core.sshCommand`, `core.pager`, `core.editor`, `core.hooksPath`, `core.fsmonitor`, `alias.* = !…`, `filter.*`, `diff.*.textconv`, `credential.helper`, `sequence.editor`, `gpg.program`, `ssh.variant`, `protocol.*.allow`, `uploadpack.*`, `receive.*`) given with `-c` or `git config`, and the environment variables `GIT_SSH_COMMAND`, `GIT_PAGER`, `GIT_EDITOR`, `GIT_EXTERNAL_DIFF` and similar: `risky: git config exec`;
+- `rm` with a recursive flag, `find -delete`, `shred`, `dd of=`, `mkfs*`, `truncate`, `chmod -R`, `chown -R`;
+- publishing: `npm`/`pnpm`/`yarn publish`, `cargo publish`, `twine upload`, `gem push`; deploys: a program or script whose name starts with `deploy` (`./deploy.sh`), `npm|pnpm|yarn run deploy*`, `make deploy*`, `cargo xtask deploy*`, `fly`/`wrangler`/`firebase`/`gcloud deploy`, `vercel deploy` and `vercel --prod`;
+- `kubectl delete|apply|replace|patch|drain|rollout`, `helm install|upgrade|uninstall|delete`, `terraform apply|destroy`, `pulumi up|destroy`, `docker system prune`, `docker volume rm`, `docker rm -f`, `docker compose down -v`;
+- SQL `drop table`, `drop database`, `truncate table`, `delete from` anywhere in the line (matched in the raw text on purpose);
+- `shutdown`, `reboot`, `halt`, `poweroff`, `systemctl` except `status`/`show`/`list-*`/`is-*`, `launchctl`, `crontab` except `-l`, `at`, `systemd-run`, `useradd`, `usermod`, `passwd`, `visudo`;
+- sending data out: `curl` with `-d`, `-F`, `-T`, `--data*`, `--form*`, `--json` or a write method (`-X POST`, `-XPOST`, `-sSd`), `wget --post-*`, `scp`, `rsync` to a remote host, `nc`, `ncat`, `socat`, `telnet`, `ssh` with a command.
+
+The reason reads `risky: <rule>`. Two more asks: a write (redirect, or `cp`, `mv`, `rm`, `tee`, `touch`, `mkdir`, `sed -i`, `curl -o`, `wget -O`, `tar -C`, `unzip -d`, `rsync`'s destination, the start paths of a `find -exec`) to a path outside the agent's folders (`writes outside <folder>`); and any part of the line the reader cannot follow, as above (`can't check: <reason>`). Everything else is allowed.
+
+Agent rules (`allow` / `ask` / `deny`) are checked after the protected rule and before the risky checks, and they win over the risky checks. None of them can allow a protected call. "Always allow here" stores the exact command, with `*` escaped so the rule matches only that command; a command with a part that cannot be known is not remembered.
+
+A panic while deciding is logged without the command and becomes `Ask("policy error")`.
+
+**What is modelled, and what is not.** Modelled: quoting and escapes (including `$'…'` and `$"…"`), redirections, `~`, `~user`, `$HOME`, `${HOME}`, `$BANDITO_HOME`, variables set on the line (assignments, `export`, `unset`, `read`, prefix assignments for their own command only), `cd`, `pushd`, `popd`, subshells `( … )` (state restored after them), pipelines (`cd` or an assignment on one side of a pipe leaves the state unknown), wrappers, `sh -c` and `find -exec` bodies, `xargs`. Not modelled, so the call is asked about or only partly checked: the code run by an interpreter (`python -c`, `node -e`, `perl -e`), the contents of a script file (`./deploy.sh` is judged by its name only), npm and make script bodies, shell functions, aliases and startup files, `PATH` lookups (a program named `rm` may not be the system's), symbolic links (paths are compared lexically, the file system is not read), `$PWD`, `$OLDPWD`, `cd -`, parameters set by the shell itself, and the environment of the agent's shell beyond `HOME` and `BANDITO_HOME`.
+
+**Limits, stated plainly.** Risky mode guards against an agent making a mistake. It does not stop an agent that is trying to get around it: an interpreter, a script or a symlink can reach what the reader does not follow. The data folder is the one the daemon runs in: `--home`, else `BANDITO_HOME`, else `~/.bandito` (the daemon passes it to the policy at start). The real boundary is a separate machine or a workspace container (see [Workspaces](#workspaces)).
 
 The daemon can also ask the human itself, for something no runtime asked about (a risky browser click, see [Browser](#browser)). Such a request goes into the agent's feed like any other approval: `approval.requested`, answered with `approvals.resolve`. Nothing is remembered from it. No answer within the time limit denies it, and so does a stop of the agent while it waits. This works the same for every runtime.
 
@@ -99,8 +138,9 @@ JSON-RPC 2.0. Same methods on every transport.
 
 The daemon always listens on:
 
-1. Unix socket `~/.bandito/bandito.sock` (0600). Trusted: same user.
-2. `127.0.0.1:7878` HTTP + WebSocket (`/v1/rpc`, `/v1/health`, `/v1/files/raw`, `/v1/tunnel`, `/v1/browser/*`). Token required.
+1. Unix socket `~/.bandito/bandito.sock` (0600): the owner's CLI. Only processes that are not under the daemon may connect, see [Trust model](#trust-model).
+2. Unix socket `~/.bandito/agent.sock` (0600): the crew servers of agents. Each connection must open with `daemon.hello` carrying its session token.
+3. `127.0.0.1:7878` HTTP + WebSocket (`/v1/rpc`, `/v1/health`, `/v1/files/raw`, `/v1/tunnel`, `/v1/browser/*`). Token required.
 
 WebSocket upgrades that carry an `Origin` header are refused: native apps don't send one, browsers always do, so a web page can't drive the daemon through the user's browser. Unix socket paths are limited to ~104 bytes on macOS, so keep `BANDITO_HOME` short.
 
@@ -119,6 +159,64 @@ Ways the Mac app reaches a server, all ending in the same WebSocket:
 | Cloudflare Tunnel, WireGuard/ZeroTier/Netbird, reverse proxy | any URL that ends at the daemon port; token auth |
 | Bandito Relay | later: outbound-only connection from the daemon through bandito.dev, end-to-end encrypted |
 
+## Trust model
+
+Who may call the daemon, and what. One list in `daemon/src/rpc/mod.rs` (`allowed`) decides, and it is checked first in every dispatch and before the event stream.
+
+**Two sockets, both mode 0600.** Both are created under umask `0077`, so there is no moment when they are more open.
+
+- `bandito.sock` is the owner's CLI. A connection is refused when the calling process runs under the daemon: agents, their shells and tools, and the terminals and apps the daemon opened. The caller's pid comes from the socket (`SO_PEERCRED` on Linux, `LOCAL_PEERPID` on macOS), and the parent chain is walked (`/proc/<pid>/stat` on Linux, `proc_pidinfo` on macOS) up to pid 1. A caller whose chain cannot be read is refused too (fail closed, with a warning). On Linux the daemon is a child subreaper, so a process that double-forks away is still re-parented under it. The daemon also reaps those children: every 10 s it reads `/proc`, and a zombie child that is still a zombie at the next scan is waited for by its pid (the first scan only marks it, so a child whose owner waits for it gets the chance first). Children that have an owner who waits for them (runtime CLIs, terminals, the screen and the browser) are registered and left alone; an owner's exit status is never taken away. A CLI that exits while a process it left behind keeps its stdout open is reported with its real exit code after one second; that process is then killed with the rest of the CLI's group. Consequence: `bandito pair` run from a terminal that the Bandito app opened does not work. Use a terminal of your own.
+- `agent.sock` is for the crew servers of agents. The first request must be `daemon.hello {"agent_token": "..."}`. Without a valid token the reply is UNAUTHORIZED and the connection closes.
+
+**Agent session tokens.** Each runtime session (Claude, Codex, Grok, and a fallback runtime) gets its own token when it starts: `bat_` plus 32 random bytes in base64url. The daemon keeps only the SHA-256 of each token, in memory. Two places carry the token, and neither puts it in an argument list (`ps` shows argument lists to other users): the CLI's environment (`BANDITO_AGENT_TOKEN`), and a file under `$BANDITO_HOME/run/` (`agent-<random>.token`, mode 0600, written through a temporary file and a rename). The crew server is started with `--token-file <that file>`. Its MCP config for Claude is a file too (`agent-<random>.mcp.json`, mode 0600), passed to `--mcp-config` by path. The run folder is mode 0700. Ending the session revokes the token and removes both files. Starting the daemon removes what a previous one left, and a restart revokes all tokens. The agent is the one its token names: an `agent_id` or `from` in the params must match it, or the call is refused.
+
+| Peer | How it connects | May call |
+|---|---|---|
+| Anonymous | any transport, not paired | `daemon.hello`, `pair.redeem` |
+| Device (paired app) | WebSocket with the device token | everything except the agent tools |
+| Local (owner's CLI) | `bandito.sock`, not under the daemon | everything except the agent tools |
+| Agent | `agent.sock` with a live token | `daemon.hello`, `crew.list`, `crew.send`, `history.day`, `history.search`, `browser.agent.{back,click,open,press,screenshot,snapshot,switch,tabs,type}`, `screen.agent.{click,key,launch,move,screenshot,scroll,type}`; for the agent its token names (see the caveat below) |
+
+The agent tools (`crew.send`, `history.*`, `browser.agent.*`, `screen.agent.*`) are for agents alone. The owner's CLI and the apps may not call them, so nothing that speaks as the owner can pass for an agent. Agents may call none of the owner's methods: rules, approvals, pairing, devices, secrets, agent create/update/delete, workspaces, setup, and `commands.install` at user scope.
+
+**Host header.** The check depends on the address the daemon listens on. On a loopback listener (`127.0.0.0/8` or `::1`), HTTP and WebSocket routes accept only the `Host` names `127.0.0.1`, `localhost`, `[::1]` and `::1` (the port is ignored), plus the names in `allowed_hosts` of `$BANDITO_HOME/config.json`. Any other name, and a request without `Host`, gets 421 Misdirected Request. This blocks DNS rebinding from a web page. A reverse proxy or tunnel on the same server connects to loopback and sends its own name, so put that name in `allowed_hosts`. On a listener on any other address (for example `0.0.0.0` or a Tailscale address) the `Host` is not checked: the bearer token and the refused `Origin` header protect it. The config file is optional. It is a JSON object with two keys: `allowed_hosts` (a list of host names without port or path) and `agent_sandbox` (see [macOS sandbox](#macos-sandbox)). An unknown key or a bad name stops the daemon at start.
+
+**`pair.redeem` rate limit.** Failures count in a 10-minute window: at most 100 for the whole daemon, and 5 per source (the client IP on WebSocket, `local` on `bandito.sock`). A refused call gets RATE_LIMITED.
+
+**What this does not stop.**
+- A process of the same user that is not under the daemon passes as the owner. Examples are one started by `systemd-run --user`, by cron, or in a tmux server the owner already runs. The check asks "is this under the daemon", not "is this trusted".
+- On macOS a double-forked process is re-parented to launchd, so it is not seen as the daemon's. The [macOS sandbox](#macos-sandbox) closes the known channels for agent sessions: their processes, orphans included, cannot reach `bandito.sock`. It is a layer, not a boundary (see there).
+- Agents of the same user can read each other's token files: on Linux, and on macOS when the sandbox is off (`agent_sandbox: false`). An agent that reads another agent's token can speak as that agent (`crew.send`, `history.*`). The sandbox on macOS denies the other sessions' files.
+- An agent with shell access runs as the daemon's user and can do what that user can on disk. The token only opens the agent tools, but the agent can read its own environment. For real isolation use a container workspace (see [Workspaces](#workspaces)), not these checks.
+
+**What agents share.** The browser (one per workspace) and the screen (one per workspace) are shared by all agents in that workspace, and the daemon starts them, so they run outside any agent sandbox. An agent can drive them through the browser and screen tools, but it cannot run commands through them. Anything an agent does in the browser or on the screen is visible to the other agents of the workspace.
+
+**Agent sessions in containers.** A container is the isolation for an agent in a container workspace. Agents in containers get no crew server, so they have no agent tools (`crew.send`, `history.*`, browser and screen tools), and `agent.sock` is not mounted. Their session token still goes into their environment, but nothing reads it there. This is a known limit: such agents cannot use the crew tools at all.
+
+## macOS sandbox
+
+On macOS, the Claude, Grok and Codex sessions of the shared workspace run under `sandbox-exec`, with a Seatbelt profile that the daemon writes for each session. The processes a session starts run under the same profile. This is an additional layer. It closes the channels we know that start something outside a session. It is not a boundary (see below).
+
+**What the profile closes.**
+- Starting programs that hand work to other services: `open` (Launch Services), `osascript` (Apple events), `launchctl`, `lsappinfo`, and the scheduler programs `crontab`, `at`, `batch` and `cron`. Their exec is refused, and so is a Launch Services connection (`mach-lookup` of `launchservicesd`).
+- Apple events: `appleevent-send` is denied. `osascript` cannot run at all under the profile, so `osascript -e 'return 1'` fails there too.
+- Autostart and later execution: writes to the login files (`.zshrc`, `.zprofile`, `.zshenv`, `.zlogin`, `.bashrc`, `.bash_profile`, `.profile`, `.ssh/rc`, `.ssh/authorized_keys`), to `~/.config/fish`, to `~/Library/LaunchAgents`, and to the background task manager's folder under `~/Library/Application Support`.
+- The daemon's data folder (`$BANDITO_HOME`): nothing in it is readable or writable, except the session's own two files (its token file and its MCP config). Connecting to `bandito.sock` is denied, and `agent.sock` is allowed. A denial on the folder does not stop a connect to a unix socket, so the network rule is the one that counts. Writing the daemon's binary is denied.
+
+**What the profile does not close.** Everything else stays open: project folders, the network, and the rest of the user's files. The profile is a list of known channels, not an allowlist, and it is not a boundary. A copy of a system binary that is not on the list, an unknown channel, or a process of the owner's own shells is outside what it checks. The real isolation is a container workspace (see [Workspaces](#workspaces)), or in future a separate macOS user.
+
+**Codex.** Codex is wrapped in the same profile, and its own sandbox is turned off: the `-c sandbox_mode="danger-full-access"` override, and the same `sandbox` value for its threads (checked against `codex-cli` 0.161.0). Approvals stay with Codex's approval policy (`untrusted`), and so with Bandito's policy. A nested sandbox cannot be applied inside a sandbox (`sandbox_apply: Operation not permitted`), which is why Codex's own is the one that goes.
+
+**Containers** are not wrapped: they are isolated already.
+
+**Paths.** A path that is not valid UTF-8 cannot be written into a profile or an argument list faithfully. Such a session does not start, with an error that names the path. Nothing is converted lossily.
+
+**Switching it off.** `"agent_sandbox": false` in `$BANDITO_HOME/config.json` turns the sandbox off for new sessions. It is on by default. It has no effect on Linux.
+
+**Checked on macOS** (tests in `daemon/src/runtime/sandbox.rs`): a read of the database is denied; a connect to `bandito.sock` is denied, also from an orphan started by a shell; a connect to `agent.sock` and a read of the own token file work; other sessions' token files are denied; `open` and `launchctl` cannot start; an Apple event sent by a small program is refused under the profile and accepted without it; writes to `~/.zshrc` and `~/Library/LaunchAgents` are denied in a temporary home, and a file elsewhere in the home stays writable; writes into the project, `git`, `node` and `curl` work; `nc` to the network works where there is a network.
+
+**Not verified.** The Claude and Grok CLIs may run their own shell tool under `sandbox-exec`. Then their commands fail inside this profile, since nested sandboxes are refused. This was not tested with the real CLIs; check it before relying on the sandbox.
+
 ## Scheduler
 
 Cron expressions with a time zone. On fire: `agents.send` with `source:"schedule"`. Missed runs while the daemon was down run once on start if missed by less than 1 h.
@@ -127,7 +225,7 @@ Cron expressions with a time zone. On fire: `agents.send` with `source:"schedule
 
 `bandito mcp` is an MCP server (stdio) injected into every agent: `--mcp-config` for Claude, `mcp_servers` config for Codex, `mcpServers` in ACP `session/new` for Grok. It answers `initialize` with the client's protocol version when it is one of `2025-06-18`, `2025-03-26`, `2024-11-05`, otherwise with `2025-06-18`. Input lines over 1 MB get a parse error and are skipped.
 
-Tools today: `crew_list` and `crew_send{to, message}` (becomes `message.user` with `source:"crew"` for the target). `report{text}` (shows in the user's inbox) is later, not in the MVP yet. `crew.send` over RPC is accepted only from the local socket, i.e. from the crew MCP servers on the server; paired apps can call `crew.list` only.
+Tools today: `crew_list` and `crew_send{to, message}` (becomes `message.user` with `source:"crew"` for the target). `report{text}` (shows in the user's inbox) is later, not in the MVP yet. `crew.send` over RPC is accepted only from an agent's session on `agent.sock`, and only as that agent; paired apps can call `crew.list` only. See [Trust model](#trust-model).
 
 Loop guards: every crew message belongs to a chain, which starts with each user or schedule message. The daemon counts three limits:
 
@@ -171,7 +269,7 @@ Chrome has no DevTools port any more, so `/v1/tunnel` cannot reach the browser. 
 
 **Errors.** `BROWSER_ERROR` (-32026), with `error.data.reason`: `missing_component`, `start_failed`, `unsupported` (not Linux or macOS), `not_running`, `user_controls`, `declined`, `failed`. A bad workspace name (letters, digits, `-`, `_`, up to 64) or a URL that is not `http`, `https`, `data:` or `about:blank` is `-32602`.
 
-**Agent tools.** The crew MCP server offers the browser tools, and each one calls `browser.agent.*` on the unix socket. Those methods accept only local peers. The browser starts on the first use. While `controller` is `user`, every tool call fails with "The user is using the browser. Wait or ask them to hand it back.". Refs come from the latest snapshot and are the DOM node's `backendDOMNodeId`.
+**Agent tools.** The crew MCP server offers the browser tools, and each one calls `browser.agent.*` on the unix socket. Those methods accept only agents, on `agent.sock`, for their own agent. The browser starts on the first use. While `controller` is `user`, every tool call fails with "The user is using the browser. Wait or ask them to hand it back.". Refs come from the latest snapshot and are the DOM node's `backendDOMNodeId`.
 - `browser_snapshot` returns the title, the URL, and one line per link, button, textbox, searchbox, combobox, checkbox, radio, menuitem, tab, heading, or named image: `[ref] role "name" (value)`. Names are cut at 120 characters; there are at most 600 element lines.
 - `browser_open{url, new_tab?}` navigates the agent's tab, or opens a new one, and waits for the load event for up to 30 s.
 - `browser_click{ref}`, `browser_type{ref, text, submit?}`, `browser_press{key}` (named keys only, such as `Enter`, `Tab`, `Escape`, `ArrowDown`), `browser_back`, `browser_screenshot` (PNG, at most 1280 px wide, returned as an image), `browser_tabs` (`*` marks the agent's tab), `browser_switch{index}`.
@@ -366,7 +464,9 @@ The app shows what the server is doing: CPU, memory, disks, network, the process
 
 ## Install and service
 
-`scripts/install.sh` (served as `https://bandito.dev/install.sh`) picks the release asset for the machine (`bandito-<target>.tar.gz`, targets `x86_64|aarch64` × `unknown-linux-gnu|apple-darwin`), checks its `.sha256`, installs `bandito` to `~/.local/bin`, and runs `bandito service install` unless `--no-service` is given. Releases are built by `.github/workflows/release.yml` on tag publish or by manual dispatch with a tag.
+`scripts/install.sh` (served as `https://bandito.dev/install.sh`) picks the release asset for the machine (`bandito-<target>.tar.gz`, targets `x86_64|aarch64` × `unknown-linux-gnu|apple-darwin`), checks it, installs `bandito` to `~/.local/bin`, and runs `bandito service install` unless `--no-service` is given. Releases are built by `.github/workflows/release.yml` on tag publish or by manual dispatch with a tag.
+
+Release signing: the last job of the release workflow lists the SHA-256 of every archive and of `install.sh` in `SHA256SUMS` and signs that file with the release key (Ed25519, raw signature, base64 in `SHA256SUMS.sig`). The private key is the repository secret `RELEASE_SIGNING_KEY`; `scripts/release-key.sh` makes it on the owner's Mac, stores it there and in a keychain backup, and writes the public key into `install.sh` (`RELEASE_PUBKEY`). `install.sh` verifies the signature with OpenSSL 3 and takes the archive's hash from the signed list. Without OpenSSL 3 it falls back to the per-archive `.sha256` with a warning, unless `BANDITO_REQUIRE_SIGNATURE=1`. The Mac app does not depend on the server's OpenSSL: it downloads the archive and `SHA256SUMS` on the Mac, verifies the signature with CryptoKit against the key it carries, copies the archive over SSH and runs `install.sh --archive`.
 
 `bandito service install` writes `~/.config/systemd/user/bandito.service` (Linux) or `~/Library/LaunchAgents/dev.bandito.daemon.plist` (macOS), starts it, and waits up to 10 s for `daemon.info` on the socket. Linux machines without a user systemd manager (WSL without systemd, containers) get a detached background process with its pid in `<home>/daemon.pid` and output in `<home>/logs/daemon.log`; it does not survive a reboot. On Linux the installer also asks for lingering (`loginctl enable-linger`), so the daemon outlives the SSH session that installed it; if that is refused, the command prints the `sudo` line. `service uninstall` removes the unit or plist and stops the daemon; data is kept. `service install --dry-run` prints what would be written and run, and changes nothing.
 
@@ -376,18 +476,20 @@ Machine-readable output for scripts and the app: `bandito pair --json` prints `{
 
 The server sets itself up from the app. The daemon knows which components each feature needs, checks whether they are there, and installs the missing ones. Clients show a feature from `setup.status`, and offer the install. Code: `daemon/src/setup.rs` (checks, plans, jobs), `daemon/src/rpc/setup.rs` (methods). Feature string: `"setup"`.
 
-**Features and components.** `screen` needs `xvfb`, `x11vnc`, `xdotool`, `window_manager` (openbox) and `fonts` (Noto). `browser` needs `browser` and `fonts`. `agents` are `claude`, `codex` and `grok`; `claude` and `codex` need `node`. `containers` needs `docker`. The screen feature is `unsupported` off Linux.
+**Features and components.** `screen` needs `xvfb`, `x11vnc`, `xdotool`, `xauth`, `imagemagick` (`import`), `window_manager` (openbox) and `fonts` (Noto). `browser` needs `browser` and `fonts`. `agents` are `claude`, `codex` and `grok`; `claude` and `codex` need `node`. `containers` needs `docker`. The screen feature is `unsupported` off Linux.
 
-**Checks.** A component is installed when its program is on `PATH`: `Xvfb`, `x11vnc`, `xdotool`, `openbox`, one of `google-chrome`, `google-chrome-stable`, `chromium`, `chromium-browser`, or `node`, `claude`, `codex`, `grok`. Tools that have a version must answer `--version`. Node must be 18 or newer (`node --version`). `fonts` passes when `fc-list` lists a Noto family. `docker` passes when `docker info` succeeds. The check uses the daemon's `PATH`, which starts with `<data dir>/tools/bin`.
+**Checks.** A component is installed when its program is on `PATH`: `Xvfb`, `x11vnc`, `xdotool`, `xauth`, `import`, `openbox`, one of `google-chrome`, `google-chrome-stable`, `chromium`, `chromium-browser`, or `node`, `claude`, `codex`, `grok`. Tools that have a version must answer `--version`. Node must be 18 or newer (`node --version`). `fonts` passes when `fc-list` lists a Noto family. `docker` passes when `docker info` succeeds. The check uses the daemon's `PATH`, which starts with `<data dir>/tools/bin`.
 
 **How it is installed.**
 
 | component | how | needs sudo |
 |---|---|---|
-| `xvfb`, `x11vnc`, `xdotool`, `window_manager`, `fonts`, `browser` | apt, dnf or pacman, one batch per job (apt runs `update` first). Ubuntu on x86_64 gets Google Chrome as a .deb, since its `chromium-browser` is a snap. Ubuntu on arm64 has no installer | yes |
+| `xvfb`, `x11vnc`, `xdotool`, `xauth`, `imagemagick`, `window_manager`, `fonts`, `browser` | apt, dnf or pacman, one batch per job (apt runs `update` first). Ubuntu on x86_64 gets Google Chrome from Google's signed apt repository, since its `chromium-browser` is a snap (see below). Ubuntu on arm64 has no installer | yes |
 | `node` | Node 22 LTS tarball from nodejs.org, checked against `SHASUMS256.txt` (sha256), unpacked into `<data dir>/tools/node`, linked as `node`, `npm`, `npx` in `<data dir>/tools/bin` | no |
-| `claude`, `codex` | `npm install -g @anthropic-ai/claude-code` / `@openai/codex` with `NPM_CONFIG_PREFIX=<data dir>/tools` | no |
+| `claude`, `codex` | `npm install -g @anthropic-ai/claude-code@2.1.295` / `@openai/codex@0.162.0` with `NPM_CONFIG_PREFIX=<data dir>/tools`. The versions are pinned in `NPM_PINS` (`daemon/src/setup.rs`) and move only with a Bandito release | no |
 | `grok`, `docker` | not installed by Bandito. The hint names the docs; a docker permission error hints `sudo usermod -aG docker $USER` | — |
+
+**Google Chrome on Ubuntu (x86_64).** Chrome comes from Google's apt repository, signed. The job downloads `https://dl.google.com/linux/linux_signing_key.pub` (https only, TLS 1.2 or newer) into `<data dir>/tools/downloads`, and `gpg --dearmor` turns it into a keyring there. That keyring is checked before anything is installed: `gpg --show-keys --with-colons` must list exactly one primary key, and the `fpr:` line right after its `pub:` line must be `EB4C1BFD4F042F6DDDCCEC917721F63BD38B4796`, the primary key of Google's Linux Package Signing Authority. Subkeys do not count, and a keyring with a second key in it is refused. Otherwise the job fails with `Google signing key fingerprint mismatch`, deletes the files, and runs nothing more. The checked keyring is then installed with `sudo -n install` as `/etc/apt/keyrings/google-chrome.gpg`, with the sources line `deb [arch=amd64 signed-by=/etc/apt/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb/ stable main` in `/etc/apt/sources.list.d/google-chrome.list`. apt then updates from the Chrome list alone, and installs `google-chrome-stable`. A keyring and list already in place, passing the same check, are not written again. gpg is installed with the package batch when it is missing.
 
 On macOS, Bandito installs only `node`, `claude` and `codex`. The screen feature is `unsupported`, and `browser`, `grok` and `docker` show a hint.
 
@@ -462,13 +564,13 @@ A separate Linux user for a workspace is the next step, not in this version.
 
 **What a container sees.** Each agent's folder and its home (`~/bandito/agents/<slug>/`) are mounted read-write at the same paths they have on the server, so the paths in messages, approvals and checkpoints match. The workspace's own `mounts` are added (host folders, optionally read-only). The CLI logins are mounted read-write: `~/.claude` as `/root/.claude` and `~/.codex` as `/root/.codex`, when they exist, so the agent inside is logged in with the same subscription. Nothing else from the server is mounted: no other project, no daemon socket, no Docker socket. Agent secrets reach the CLI as environment variables, by name.
 
-**Image.** When a container workspace names no `image`, Bandito builds `bandito/workspace:<hash>` once from a fixed Dockerfile: `FROM node:22-bookworm` plus the global npm packages `@anthropic-ai/claude-code` and `@openai/codex`. The tag changes with the Dockerfile. With `image` set, that image is used as it is, and it must have the CLIs on `PATH` and run as root.
+**Image.** When a container workspace names no `image`, Bandito builds `bandito/workspace:<hash>` once from a fixed Dockerfile: `FROM node:22-bookworm` plus the global npm packages `@anthropic-ai/claude-code@2.1.295` and `@openai/codex@0.162.0`, the versions in `NPM_PINS` (the same table the setup installs from). The tag changes with the Dockerfile. With `image` set, that image is used as it is, and it must have the CLIs on `PATH` and run as root.
 
 **Lifecycle.** A container starts with the first session of an agent in its workspace. Each start checks it: missing → created; stopped → started; settings that differ (image, limits, network, or mounts, including the folders of the agents in the workspace) → recreated. Containers restart with the Docker daemon (`--restart unless-stopped`). Recreation drops the container's own writable layer, so anything installed inside it (apt or npm packages) is lost; folders on the host stay. Recreation also ends the running sessions of the other agents in that container, which resume with their next message. `workspaces.stop` stops the container; the next message starts it again.
 
-**How a CLI runs.** Runtimes build their command as before, then `workspace::confine` moves it into the workspace. For a container that is `docker exec -i -w <cwd> -e NAME… <container> <program> <args…>`, so stdin, stdout and stderr pass through and the JSON protocols do not change. Environment values are not in the argument list: `-e NAME` takes the value from the environment of the docker client, which keeps secrets out of the process list. The crew MCP server is not given to container agents: it talks to the daemon socket, which is not mounted. Approvals, checkpoints and memory keep working, because they run in the daemon on the server against the same folders.
+**How a CLI runs.** Runtimes build their command as before, then `workspace::confine` moves it into the workspace. For a container that is `docker exec -i -w <cwd> -e NAME… <container> <program> <args…>`, so stdin, stdout and stderr pass through and the JSON protocols do not change. Environment values are not in the argument list: `-e NAME` takes the value from the environment of the docker client, which keeps secrets out of the process list. The crew MCP server is not given to container agents, and `agent.sock` is not mounted, so they have no agent tools. The session token still goes into their environment. This is a known limit: a container agent cannot use the crew, browser or screen tools, and the daemon's `history.*` tools are out of its reach. Approvals, checkpoints and memory keep working, because they run in the daemon on the server against the same folders.
 
-**Security.** A container isolates the files outside its mounts, the network (`none` means no network at all) and the CPU and memory it may use. It does not isolate the CLI logins: `~/.claude` and `~/.codex` are writable inside, so an agent in a container can read and change that subscription login. A mount may not be the server root, the Docker socket, or a path with `..`, `,` or `"`. Membership of the `docker` group is root-equivalent on the server, so the daemon's user holds that power whenever a container workspace exists.
+**Security.** A container isolates the files outside its mounts, the network (`none` means no network at all) and the CPU and memory it may use. It does not isolate the CLI logins: `~/.claude` and `~/.codex` are writable inside, so an agent in a container can read and change that subscription login. A mount may not be the server root, the Docker socket, or a path with `..`, `,` or `"`. Nor may it be Bandito's own data folder (`$BANDITO_HOME`, or `~/.bandito`), a folder inside it, or a folder that holds it (such as the home folder). Membership of the `docker` group is root-equivalent on the server, so the daemon's user holds that power whenever a container workspace exists.
 
 **Docker.** Bandito uses the `docker` program from `PATH` and runs `docker info` before each start. Without Docker, or when it does not answer, the error is `docker_unavailable` and it names the install guide. The `containers` feature of [Setup](#setup) shows the same check.
 
@@ -501,7 +603,8 @@ daemon/            Rust crate `bandito`
   src/rpc/         JSON-RPC, transports, auth, pairing
   src/store/       SQLite + migrations
   src/runtime/     process.rs (shared child-process plumbing), claude.rs, codex.rs, grok.rs, api/
-  src/policy.rs    approval rules
+  src/policy.rs    approval rules: protected paths, risky checks (see Approvals)
+  src/shell.rs     reads a command line for the policy: simple commands, wrappers, redirections
   src/host.rs      host load, processes, ports, kill (see Host)
   src/setup.rs     components per feature, install jobs (see Setup)
   src/browser.rs   the server's Chrome: start, stop, agent actions, risky clicks (see Browser)
@@ -636,12 +739,12 @@ An account is optional: without one the app works on one Mac. With one, every de
 
 A virtual desktop on a Linux server that people see in the app and agents can drive. `daemon/src/screen.rs` runs it; `daemon/src/rpc/screen.rs` is the RPC layer. Other systems answer `unsupported`.
 
-**Lifecycle.** `screen.start {workspace?, width?, height?}` starts `Xvfb` on the first free display from `:90`, `openbox` when it is installed, and `x11vnc` bound to `127.0.0.1` on a free port with a random password (file mode 0600 under `$BANDITO_HOME/screens/<workspace>/`). Each process has its own process group; x11vnc is restarted once if it dies. `screen.status` returns `{running, display, width, height, vnc_port, vnc_password, started_at, controller, idle_ms}`; `screen.stop` ends it. A screen with no VNC client and no agent tool call for 30 minutes stops by itself. The daemon stops every screen when it shuts down.
+**Lifecycle.** `screen.start {workspace?, width?, height?}` starts `Xvfb` on the first free display from `:90`, `openbox` when it is installed, and `x11vnc` bound to `127.0.0.1` on a free port with a random password (file mode 0600 under `$BANDITO_HOME/screens/<workspace>/`). Before Xvfb starts, `xauth -f FILE source -` writes the folder's `Xauthority` with one `MIT-MAGIC-COOKIE-1` of 16 random bytes for the display. The cookie goes to xauth on stdin, not in its arguments, so it does not show in the process list (mode 0600; a file from a crashed screen is replaced). Xvfb runs with `-auth` on it, and x11vnc with `-auth`. Every program on the screen (openbox, x11vnc, `screen.launch`, and the agent tools) gets `DISPLAY` and `XAUTHORITY`, so another local user cannot open the screen. `screen.stop` removes the file. `xauth` and `x11vnc -storepasswd` run with umask 077, and the folder is 0700 even when it existed before. Each process has its own process group; x11vnc is restarted once if it dies. `screen.status` returns `{running, display, width, height, vnc_port, vnc_password, started_at, controller, idle_ms}`; `screen.stop` ends it. A screen with no VNC client and no agent tool call for 30 minutes stops by itself. The daemon stops every screen when it shuts down.
 
-**Viewing.** The app calls `screen.start`, then opens `/v1/tunnel?port=<vnc_port>` through a one-shot local forwarder and speaks VNC with the password. RFB uses only the first 8 characters of a password; the tunnel is what keeps the screen private (loopback only, paired device only).
+**Viewing.** The app calls `screen.start`, then opens `/v1/tunnel?port=<vnc_port>` through a one-shot local forwarder and speaks VNC with the password. The password is 8 characters, the whole of what RFB uses (it reads only the first 8). They come from the system RNG as printable ASCII without `"` and `\` (92 symbols), by rejection sampling, so no symbol is favored. The tunnel is what keeps the screen private (loopback only, paired device only).
 
-**Agents.** The crew MCP server offers `screen_screenshot` (PNG, at most 1280 px wide, with the original size so clicks use screen pixels), `screen_click {x, y, button?, double?}`, `screen_move`, `screen_type {text}`, `screen_key {keys}`, `screen_scroll {direction, amount?}` and `screen_launch {command}`. They call local-only `screen.agent.*` methods and start the screen when it is off.
+**Agents.** The crew MCP server offers `screen_screenshot` (PNG, at most 1280 px wide, with the original size so clicks use screen pixels), `screen_click {x, y, button?, double?}`, `screen_move`, `screen_type {text}`, `screen_key {keys}`, `screen_scroll {direction, amount?}` and `screen_launch {command}`. They call `screen.agent.*` methods, which only agents may call and start the screen when it is off.
 
 **Control.** `screen.control {holder: user|agent|none}`. While the user holds the screen, agent tools fail with a message asking the agent to wait or ask for it back.
 
-**Needs** `xvfb`, `x11vnc`, `xdotool`, ImageMagick (`import`) and optionally `openbox` (see [Setup](#setup)). A missing one is `SCREEN_ERROR` (`-32025`) with `data.reason = "missing_component"` and `data.component`. Feature string: `"screen"` (Linux only).
+**Needs** `xvfb`, `x11vnc`, `xdotool`, `xauth`, `imagemagick` (`import`, `convert`) and optionally `openbox` (see [Setup](#setup)). A missing one is `SCREEN_ERROR` (`-32025`) with `data.reason = "missing_component"` and `data.component`. Feature string: `"screen"` (Linux only).

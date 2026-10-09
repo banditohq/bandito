@@ -84,7 +84,14 @@ impl Runtime for GrokRuntime {
         cmd.current_dir(&cfg.cwd).envs(cfg.env.iter().map(|(k, v)| (k, v)));
         // Marks the CLI and its children for `host.processes` (see docs/ARCHITECTURE.md#host).
         cmd.env("BANDITO_AGENT_ID", &cfg.agent_id);
+        if let Some(token) = &cfg.agent_token {
+            cmd.env("BANDITO_AGENT_TOKEN", token);
+        }
 
+        // The crew server's program goes into the ACP handshake as text: a path that is not UTF-8 stops the session.
+        if let Some((program, _)) = &cfg.mcp {
+            crate::runtime::path_text(program)?;
+        }
         let state = Arc::new(Mutex::new(State::new(cfg.system_prompt.clone())));
         let handshake = Handshake {
             cwd: cfg.cwd.clone(),
@@ -93,6 +100,7 @@ impl Runtime for GrokRuntime {
         };
         let router_state = Arc::clone(&state);
         let router: Router = Box::new(move |msg: &Value, sink: &LineSink| route(msg, &router_state, &handshake, sink));
+        let cmd = crate::runtime::sandbox::wrap(cmd, cfg.sandbox.as_ref())?;
         let cmd = crate::workspace::confine(cmd, cfg.workspace.as_ref());
         let (proc, output) = JsonProcess::spawn(cmd, LABEL, router)?;
         let init = json!({

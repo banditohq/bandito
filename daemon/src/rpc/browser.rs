@@ -241,7 +241,7 @@ struct SwitchParams {
 pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResult {
     let browser = &app.browser;
     if let Some(tool) = method.strip_prefix("browser.agent.") {
-        if !matches!(peer, Peer::Local) {
+        if !matches!(peer, Peer::Agent(_)) {
             return Err(RpcError::new(
                 UNAUTHORIZED,
                 "browser tools can only be used by agents on the server",
@@ -417,7 +417,10 @@ mod route_tests {
 
     /// A plain GET through the router: the status and the body.
     async fn get(app: &Arc<App>, uri: &str, headers: &[(&str, &str)]) -> (StatusCode, String) {
-        let mut request = Request::builder().method(Method::GET).uri(uri);
+        let mut request = Request::builder()
+            .method(Method::GET)
+            .uri(uri)
+            .header("host", "127.0.0.1:7878");
         for (name, value) in headers {
             request = request.header(*name, *value);
         }

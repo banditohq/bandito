@@ -14,22 +14,33 @@ use crate::files::{EntryKind, FsError};
 use crate::store::Device;
 use axum::Router;
 use axum::body::Body;
+use axum::extract::ConnectInfo;
+use axum::extract::Extension;
 use axum::extract::Query;
 use axum::extract::Request;
 use axum::extract::State;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::http::{HeaderMap, Method, StatusCode, header};
+use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{any, get};
 use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
 use std::io::{self, ErrorKind, SeekFrom};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use tokio::sync::mpsc;
 use tokio_util::io::ReaderStream;
 
+/// The router for a daemon that listens on loopback only (also used by tests).
 pub fn router(app: Arc<App>) -> Router {
+    router_listening(app, IpAddr::V4(Ipv4Addr::LOCALHOST), Vec::new())
+}
+
+/// The router for a daemon that listens on `listen`. `allowed_hosts` are extra `Host` names from the
+/// config, honoured on loopback listeners only (see [`HostGuard`]).
+pub fn router_listening(app: Arc<App>, listen: IpAddr, allowed_hosts: Vec<String>) -> Router {
     Router::new()
         .route("/v1/health", get(|| async { "ok" }))
         .route("/v1/rpc", get(rpc))
@@ -39,7 +50,79 @@ pub fn router(app: Arc<App>) -> Router {
         .route("/v1/browser/cdp", get(browser::cdp_browser))
         .route("/v1/browser/cdp/page/{target_id}", get(browser::cdp_page))
         .route("/v1/proxy/{*rest}", any(preview_proxy))
+        .layer(axum::middleware::from_fn_with_state(
+            HostGuard::new(listen, allowed_hosts),
+            check_host,
+        ))
         .with_state(app)
+}
+
+/// DNS rebinding defence for a loopback listener: a web page on another name is pointed at the daemon
+/// through the user's browser, and its `Host` is that other name. So on a loopback listener only loopback
+/// names, and the names in `allowed_hosts` (for a reverse proxy or tunnel on this server), get through;
+/// anything else gets 421 Misdirected Request. A listener on any other address is not checked: the
+/// bearer token and the refused `Origin` header protect it instead.
+#[derive(Clone)]
+struct HostGuard {
+    check: bool,
+    /// Lower-case names from `allowed_hosts`.
+    names: Vec<String>,
+}
+
+impl HostGuard {
+    fn new(listen: IpAddr, allowed_hosts: Vec<String>) -> Self {
+        Self {
+            check: listen.is_loopback(),
+            names: allowed_hosts.iter().map(|n| n.trim().to_ascii_lowercase()).collect(),
+        }
+    }
+
+    /// Whether a request with this `Host` header (absent: `None`) may proceed.
+    fn allows(&self, header: Option<&str>) -> bool {
+        if !self.check {
+            return true;
+        }
+        let Some(name) = header.and_then(host_name) else {
+            return false;
+        };
+        if name.eq_ignore_ascii_case("localhost") || self.names.iter().any(|n| n.eq_ignore_ascii_case(name)) {
+            return true;
+        }
+        match name.parse::<IpAddr>() {
+            Ok(ip) => ip == IpAddr::V4(Ipv4Addr::LOCALHOST) || ip == IpAddr::V6(Ipv6Addr::LOCALHOST),
+            Err(_) => false,
+        }
+    }
+}
+
+/// The host name of a `Host` header value, without its port: `localhost:17777` → `localhost`,
+/// `[::1]:7878` → `::1`, and a bare `::1` is kept whole.
+fn host_name(header: &str) -> Option<&str> {
+    if let Some(rest) = header.strip_prefix('[') {
+        return rest.split_once(']').map(|(ip, _)| ip);
+    }
+    if header.matches(':').count() > 1 {
+        return Some(header);
+    }
+    Some(header.split_once(':').map_or(header, |(name, _)| name))
+}
+
+/// The address a request came from, as the router saw it: the rate limit of `pair.redeem` keys on it.
+#[derive(Clone)]
+struct ClientAddr(String);
+
+/// Refuses a request whose `Host` is not allowed, and records the client's address for the handlers.
+async fn check_host(State(guard): State<HostGuard>, mut req: Request, next: Next) -> Response {
+    let header = req.headers().get(header::HOST).and_then(|v| v.to_str().ok());
+    if !guard.allows(header) {
+        return (StatusCode::MISDIRECTED_REQUEST, "unknown host name").into_response();
+    }
+    let addr = req
+        .extensions()
+        .get::<ConnectInfo<SocketAddr>>()
+        .map_or_else(|| "unknown".to_string(), |c| c.0.ip().to_string());
+    req.extensions_mut().insert(ClientAddr(addr));
+    next.run(req).await
 }
 
 fn bearer(headers: &HeaderMap) -> Option<&str> {
@@ -86,13 +169,18 @@ pub(super) fn require_device(app: &App, headers: &HeaderMap) -> Result<Device, (
     }
 }
 
-async fn rpc(State(app): State<Arc<App>>, headers: HeaderMap, ws: WebSocketUpgrade) -> Response {
+async fn rpc(
+    State(app): State<Arc<App>>,
+    Extension(client): Extension<ClientAddr>,
+    headers: HeaderMap,
+    ws: WebSocketUpgrade,
+) -> Response {
     if has_browser_origin(&headers) {
         return (StatusCode::FORBIDDEN, "browser origins are not allowed").into_response();
     }
     let peer = match device_for(&app, &headers) {
         Ok(Some(device)) => Peer::Device(device),
-        Ok(None) => Peer::Anonymous,
+        Ok(None) => Peer::Anonymous(client.0),
         Err(e) => return e.into_response(),
     };
     ws.max_message_size(4 << 20)
@@ -390,7 +478,10 @@ mod tests {
     }
 
     async fn send(app: &Arc<App>, method: Method, uri: &str, headers: &[(&str, &str)]) -> Response {
-        let mut req = Request::builder().method(method).uri(uri);
+        let mut req = Request::builder()
+            .method(method)
+            .uri(uri)
+            .header(header::HOST, "127.0.0.1:7878");
         for (name, value) in headers {
             req = req.header(*name, *value);
         }
@@ -709,6 +800,7 @@ mod tests {
         let req = Request::builder()
             .method(Method::POST)
             .uri(format!("/v1/proxy/{port}/echo"))
+            .header(header::HOST, "127.0.0.1:7878")
             .header(AUTH.0, AUTH.1)
             .body(Body::from("ping"))
             .unwrap();
@@ -752,5 +844,96 @@ mod tests {
         let app = served(dir.path());
         let res = send(&app, Method::GET, &format!("/v1/proxy/{port}/x"), &[AUTH]).await;
         assert_eq!(res.status(), StatusCode::BAD_GATEWAY);
+    }
+}
+
+#[cfg(test)]
+mod host_tests {
+    use super::*;
+    use crate::hub::Hub;
+    use crate::store::Store;
+    use crate::supervisor::{Runtimes, Supervisor};
+    use axum::body::Body;
+    use axum::http::Request;
+    use tower::ServiceExt;
+
+    fn app() -> Arc<App> {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let sup = Supervisor::new(Hub::new(store), Runtimes::default(), None);
+        App::new(sup, std::env::temp_dir().join("bandito-host-tests"))
+    }
+
+    /// Status of `GET /v1/health` with the given `Host` header (none: `None`), through a router for `listen`.
+    async fn health(listen: &str, allowed: &[&str], host: Option<&str>) -> StatusCode {
+        let mut req = Request::builder().uri("/v1/health");
+        if let Some(host) = host {
+            req = req.header(header::HOST, host);
+        }
+        let allowed = allowed.iter().map(|n| n.to_string()).collect();
+        let router = router_listening(app(), listen.parse().unwrap(), allowed);
+        router.oneshot(req.body(Body::empty()).unwrap()).await.unwrap().status()
+    }
+
+    #[test]
+    fn host_names_drop_the_port_and_keep_bare_ipv6() {
+        assert_eq!(host_name("localhost:17777"), Some("localhost"));
+        assert_eq!(host_name("127.0.0.1:7878"), Some("127.0.0.1"));
+        assert_eq!(host_name("[::1]:7878"), Some("::1"));
+        assert_eq!(host_name("[::1]"), Some("::1"));
+        assert_eq!(host_name("::1"), Some("::1"));
+        assert_eq!(host_name("evil.example"), Some("evil.example"));
+    }
+
+    #[tokio::test]
+    async fn loopback_names_are_allowed_on_a_loopback_listener() {
+        assert_eq!(health("127.0.0.1", &[], Some("127.0.0.1:7878")).await, StatusCode::OK);
+        assert_eq!(health("127.0.0.1", &[], Some("localhost:17777")).await, StatusCode::OK);
+        assert_eq!(health("127.0.0.1", &[], Some("LOCALHOST")).await, StatusCode::OK);
+        assert_eq!(health("::1", &[], Some("[::1]:7878")).await, StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn loopback_listener_refuses_a_foreign_host_with_421() {
+        assert_eq!(
+            health("127.0.0.1", &[], Some("evil.example")).await,
+            StatusCode::MISDIRECTED_REQUEST
+        );
+        assert_eq!(
+            health("127.0.0.1", &[], Some("evil.example:7878")).await,
+            StatusCode::MISDIRECTED_REQUEST
+        );
+        assert_eq!(
+            health("127.0.0.1", &[], Some("127.0.0.2:7878")).await,
+            StatusCode::MISDIRECTED_REQUEST
+        );
+        assert_eq!(health("127.0.0.1", &[], None).await, StatusCode::MISDIRECTED_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn allowed_hosts_are_added_on_a_loopback_listener() {
+        // A reverse proxy or tunnel on this server connects to loopback and sends its own name.
+        let allowed = ["Proxy.Example"];
+        assert_eq!(
+            health("127.0.0.1", &allowed, Some("proxy.example")).await,
+            StatusCode::OK
+        );
+        assert_eq!(
+            health("127.0.0.1", &allowed, Some("proxy.example:443")).await,
+            StatusCode::OK
+        );
+        assert_eq!(
+            health("127.0.0.1", &allowed, Some("other.example")).await,
+            StatusCode::MISDIRECTED_REQUEST
+        );
+    }
+
+    #[tokio::test]
+    async fn a_wildcard_listener_checks_no_host() {
+        assert_eq!(health("0.0.0.0", &[], Some("evil.example")).await, StatusCode::OK);
+        assert_eq!(health("0.0.0.0", &[], None).await, StatusCode::OK);
+        assert_eq!(
+            health("100.64.0.5", &[], Some("mac.tailnet.ts.net:7879")).await,
+            StatusCode::OK
+        );
     }
 }
