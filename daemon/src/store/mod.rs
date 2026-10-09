@@ -3,7 +3,7 @@
 
 use crate::event::{Event, EventBody};
 use anyhow::{Context, Result, bail};
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::Mutex;
@@ -15,6 +15,7 @@ mod checkpoints;
 mod history;
 mod rules;
 mod schedules;
+mod secrets;
 mod usage;
 
 pub use agents::{Agent, AgentPatch, NewAgent};
@@ -23,6 +24,7 @@ pub use auth::Device;
 pub use checkpoints::{Checkpoint, CheckpointKind};
 pub use rules::{Rule, RuleAction};
 pub use schedules::{NewSchedule, NextRun, Schedule, SchedulePatch};
+pub use secrets::{SecretInfo, check_agents, check_name, check_value};
 pub use usage::UsageEntry;
 
 const MIGRATIONS: &[&str] = &[
@@ -30,6 +32,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../../migrations/0002_memory.sql"),
     include_str!("../../migrations/0003_usage_plan.sql"),
     include_str!("../../migrations/0004_checkpoints.sql"),
+    include_str!("../../migrations/0005_secrets.sql"),
 ];
 
 pub struct Store {
@@ -46,6 +49,7 @@ pub fn new_id() -> String {
 
 impl Store {
     pub fn open(path: &Path) -> Result<Self> {
+        restrict_to_owner(path)?;
         let conn = Connection::open(path).with_context(|| format!("open {}", path.display()))?;
         Self::init(conn)
     }
@@ -172,24 +176,31 @@ impl Store {
             .conn()
             .query_row("SELECT COALESCE(MAX(seq), 0) FROM events", [], |r| r.get(0))?)
     }
+}
 
-    // ---- secrets ----
-
-    pub fn secret_get(&self, name: &str) -> Result<Option<String>> {
-        Ok(self
-            .conn()
-            .query_row("SELECT value FROM secrets WHERE name = ?1", [name], |r| r.get(0))
-            .optional()?)
+/// The database holds secrets, so only the daemon's user may read it. A new file is created
+/// private from the start; an existing one is tightened. SQLite gives its journal and WAL
+/// files the database file's mode.
+#[cfg(unix)]
+fn restrict_to_owner(path: &Path) -> Result<()> {
+    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+    match std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(path)
+    {
+        Ok(_) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+        Err(e) => return Err(e).with_context(|| format!("create {}", path.display())),
     }
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
+        .with_context(|| format!("chmod {}", path.display()))
+}
 
-    pub fn secret_set(&self, name: &str, value: &str) -> Result<()> {
-        self.conn().execute(
-            "INSERT INTO secrets (name, value) VALUES (?1, ?2)
-             ON CONFLICT(name) DO UPDATE SET value = excluded.value",
-            params![name, value],
-        )?;
-        Ok(())
-    }
+#[cfg(not(unix))]
+fn restrict_to_owner(_path: &Path) -> Result<()> {
+    Ok(())
 }
 
 /// How hard the model thinks. Mapped per runtime (see docs/ARCHITECTURE.md#memory-and-context).
@@ -347,13 +358,22 @@ mod tests {
         assert!(s.events_page("a", Some(seqs[0]), 10).unwrap().is_empty());
     }
 
+    #[cfg(unix)]
     #[test]
-    fn secrets_upsert() {
-        let s = Store::open_in_memory().unwrap();
-        assert_eq!(s.secret_get("k").unwrap(), None);
-        s.secret_set("k", "1").unwrap();
-        s.secret_set("k", "2").unwrap();
-        assert_eq!(s.secret_get("k").unwrap().as_deref(), Some("2"));
+    fn database_file_is_private() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let mode = |p: &Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+
+        let fresh = dir.path().join("fresh.db");
+        Store::open(&fresh).unwrap();
+        assert_eq!(mode(&fresh), 0o600, "a new database is created private");
+
+        let old = dir.path().join("old.db");
+        std::fs::write(&old, b"").unwrap();
+        std::fs::set_permissions(&old, std::fs::Permissions::from_mode(0o644)).unwrap();
+        Store::open(&old).unwrap();
+        assert_eq!(mode(&old), 0o600, "an existing database is tightened");
     }
 
     #[test]
