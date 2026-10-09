@@ -2,6 +2,7 @@
 //! single turn runs at a time, applies the approval policy, and turns runtime
 //! output into stored events.
 
+use crate::agent_token::{AgentTokens, SessionToken};
 use crate::checkpoint;
 use crate::event::LimitWindow;
 use crate::event::{AgentStatus, DecidedBy, Decision, EventBody, Source, TurnStatus, Usage};
@@ -162,6 +163,8 @@ pub struct Supervisor {
     chains: Mutex<HashMap<String, u32>>,
     /// Docker for the container workspaces (see docs/ARCHITECTURE.md#workspaces).
     workspaces: Arc<WorkspaceManager>,
+    /// Live session tokens of the agents (see docs/ARCHITECTURE.md#trust-model).
+    agent_tokens: Arc<AgentTokens>,
 }
 
 /// Approvals nobody answered are denied after this long.
@@ -297,7 +300,13 @@ impl Supervisor {
             actors: Mutex::new(HashMap::new()),
             chains: Mutex::new(HashMap::new()),
             workspaces,
+            agent_tokens: AgentTokens::new(),
         })
+    }
+
+    /// The live agent session tokens, for `agent.sock`.
+    pub fn agent_tokens(&self) -> Arc<AgentTokens> {
+        Arc::clone(&self.agent_tokens)
     }
 
     pub fn workspaces(&self) -> &Arc<WorkspaceManager> {
@@ -344,6 +353,8 @@ impl Supervisor {
             runtimes: self.runtimes.clone(),
             mcp: self.mcp.clone(),
             workspaces: self.workspaces.clone(),
+            tokens: self.agent_tokens.clone(),
+            agent_token: None,
             session: None,
             output: None,
             redactor: Redactor::default(),
@@ -580,6 +591,9 @@ struct Actor {
     runtimes: Runtimes,
     mcp: Option<(PathBuf, Vec<String>)>,
     workspaces: Arc<WorkspaceManager>,
+    tokens: Arc<AgentTokens>,
+    /// The token of the running session. Dropping it (when the session ends) revokes the token.
+    agent_token: Option<SessionToken>,
     session: Option<Box<dyn Session>>,
     output: Option<mpsc::Receiver<RuntimeOutput>>,
     /// Replaces the values of the secrets this session was started with, in everything it stores or sends.
@@ -791,6 +805,7 @@ impl Actor {
         }
         let prompt = blocks.join("\n\n");
         let secrets = self.hub.store.secrets_for_agent(&agent.id)?;
+        let (token, token_guard) = self.tokens.issue(&agent.id);
         let ws = self
             .hub
             .store
@@ -825,13 +840,15 @@ impl Actor {
                 effort: agent.effort,
                 extra_dirs: agent.home_dir.iter().map(PathBuf::from).collect(),
                 workspace: Some(workspace),
+                agent_token: Some(token.clone()),
             })
             .await?;
         self.session = Some(spawned.session);
         self.output = Some(spawned.output);
         self.session_kind = Some(kind);
-        // The same values the child got, so what it prints is redacted exactly for them.
-        self.redactor = Redactor::new(secrets);
+        self.agent_token = Some(token_guard);
+        // The same values the child got, so what it prints is redacted exactly for them, the token too.
+        self.redactor = Redactor::new(secrets.into_iter().chain([("BANDITO_AGENT_TOKEN".to_string(), token)]));
         Ok(())
     }
 
@@ -940,6 +957,7 @@ impl Actor {
         if let Some(s) = self.session.take() {
             s.shutdown().await;
         }
+        self.agent_token = None;
         self.output = None;
         self.session_kind = None;
         self.reload_after_turn = false;
@@ -1115,6 +1133,7 @@ impl Actor {
             RuntimeOutput::Exited { code, stderr_tail } => {
                 let stderr_tail = self.redactor.redact(&stderr_tail).into_owned();
                 self.session = None;
+                self.agent_token = None;
                 let failed = code != Some(0);
                 let detail = if failed {
                     let tail: Vec<&str> = stderr_tail.lines().rev().take(5).collect();
@@ -1467,6 +1486,7 @@ impl Actor {
         if let Some(s) = self.session.take() {
             s.shutdown().await;
         }
+        self.agent_token = None;
         self.output = None;
         if self.turn.is_some() {
             self.end_turn(TurnStatus::Interrupted, None);
@@ -3296,6 +3316,20 @@ mod workspace_tests {
         sup.send(&id, Inbound::user("go")).await.unwrap();
         let cfg = first_spawn(&spawns).await;
         assert_eq!(cfg.workspace, Some(WorkspaceSpec::Shared));
+    }
+
+    #[tokio::test]
+    async fn a_session_gets_its_own_token_and_loses_it_when_it_ends() {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let id = agent(&store, "Forge", "shared");
+        let (sup, spawns) = rig(store, scratch_manager());
+        sup.send(&id, Inbound::user("go")).await.unwrap();
+        let cfg = first_spawn(&spawns).await;
+        let token = cfg.agent_token.clone().expect("a session gets a token");
+        assert!(token.starts_with("bat_"), "{token}");
+        assert_eq!(sup.agent_tokens().agent_for(&token), Some(id.clone()));
+        sup.stop(&id).await;
+        assert_eq!(sup.agent_tokens().agent_for(&token), None);
     }
 
     #[cfg(unix)]

@@ -235,6 +235,28 @@ async fn passes_flags() {
     s.session.shutdown().await;
 }
 
+#[tokio::test]
+async fn the_crew_server_gets_the_session_token_in_its_own_env() {
+    let dir = tempfile::tempdir().unwrap();
+    let args_out = dir.path().join("args.json");
+    let mut c = cfg("deny.jsonl", Some(&args_out));
+    c.mcp = Some((
+        PathBuf::from("/usr/local/bin/bandito"),
+        vec!["mcp".into(), "--agent".into(), "a1".into()],
+    ));
+    c.agent_token = Some("bat_session".into());
+    let s = ClaudeRuntime::new().spawn(c).await.unwrap();
+    let args = written_args(&args_out).await;
+    let i = args.iter().position(|a| a == "--mcp-config").expect("--mcp-config");
+    let mcp: serde_json::Value = serde_json::from_str(&args[i + 1]).unwrap();
+    // The MCP client does not pass the environment on, so the token is named in the server's entry.
+    assert_eq!(
+        mcp["mcpServers"]["bandito"]["env"],
+        serde_json::json!({"BANDITO_AGENT_TOKEN": "bat_session"})
+    );
+    s.session.shutdown().await;
+}
+
 /// Argv of a fake CLI, read once it has written it (it does so at startup).
 async fn written_args(path: &std::path::Path) -> Vec<String> {
     for _ in 0..250 {

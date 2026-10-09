@@ -115,6 +115,9 @@ pub struct SpawnConfig {
     pub extra_dirs: Vec<PathBuf>,
     /// Where the CLI runs (see docs/ARCHITECTURE.md#workspaces). `None` = the server itself.
     pub workspace: Option<crate::workspace::WorkspaceSpec>,
+    /// This session's agent token: the CLI gets it as `BANDITO_AGENT_TOKEN`, and so does its crew
+    /// server. See docs/ARCHITECTURE.md#trust-model.
+    pub agent_token: Option<String>,
 }
 
 /// A live session with one agent CLI.

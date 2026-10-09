@@ -93,8 +93,14 @@ pub fn default_image_tag() -> String {
 }
 
 /// Checks one mount by its shape. Host paths must be absolute and free of the characters
-/// `docker --mount` cannot carry, and the Docker socket and the server root are refused.
+/// `docker --mount` cannot carry, and the Docker socket and the server root are refused. So is
+/// any folder that holds Bandito's own data, lies in it, or is it (see [`check_mount_in`]).
 pub fn check_mount(m: &Mount) -> Result<(), WorkspaceError> {
+    check_mount_in(m, &data_dir())
+}
+
+/// [`check_mount`] for a given data folder.
+fn check_mount_in(m: &Mount, data: &Path) -> Result<(), WorkspaceError> {
     for path in [&m.host, &m.target] {
         if !path.starts_with('/') {
             return Err(WorkspaceError::Invalid(format!("mount path {path} must be absolute")));
@@ -119,7 +125,39 @@ pub fn check_mount(m: &Mount) -> Result<(), WorkspaceError> {
     if m.host.ends_with("docker.sock") {
         return Err(WorkspaceError::Invalid("the Docker socket cannot be mounted".into()));
     }
+    if overlaps(Path::new(&m.host), data) {
+        return Err(WorkspaceError::Invalid(format!(
+            "{} contains Bandito's own data and cannot be mounted",
+            m.host
+        )));
+    }
     Ok(())
+}
+
+/// Whether `host` is `data`, inside it, or holds it (`$HOME` when the data folder is `$HOME/.bandito`).
+fn overlaps(host: &Path, data: &Path) -> bool {
+    let host = resolve(host);
+    let data = resolve(data);
+    host.starts_with(&data) || data.starts_with(&host)
+}
+
+/// A path as the file system resolves it. The longest part that exists is canonicalised (so symlinks
+/// count), and the rest is joined on as it was written.
+fn resolve(path: &Path) -> PathBuf {
+    let mut rest: Vec<std::ffi::OsString> = Vec::new();
+    let mut current = path;
+    loop {
+        if let Ok(real) = std::fs::canonicalize(current) {
+            return rest.iter().rev().fold(real, |acc, part| acc.join(part));
+        }
+        match (current.parent(), current.file_name()) {
+            (Some(parent), Some(name)) => {
+                rest.push(name.to_os_string());
+                current = parent;
+            }
+            _ => return path.to_path_buf(),
+        }
+    }
 }
 
 /// The daemon user's CLI logins, so the agent inside a container is logged in too:
@@ -738,6 +776,29 @@ mod tests {
             read_only: false,
         };
         assert_eq!(check_mount(&relative_target).unwrap_err().reason(), "invalid");
+    }
+
+    #[test]
+    fn bandito_data_and_the_folders_around_it_cannot_be_mounted() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().join("home");
+        let data = home.join(".bandito");
+        std::fs::create_dir_all(&data).unwrap();
+        std::fs::create_dir_all(home.join("project")).unwrap();
+        let refused = |host: PathBuf| {
+            let err = check_mount_in(&mount(&host.display().to_string(), false), &data).unwrap_err();
+            matches!(err, WorkspaceError::Invalid(ref m) if m.contains("contains Bandito's own data and cannot be mounted"))
+        };
+        // The home folder holds the data folder, the data folder is itself, and a folder inside it.
+        assert!(refused(home.clone()), "home");
+        assert!(refused(data.clone()), "data folder");
+        assert!(
+            refused(data.join("workspaces").join("box")),
+            "inside the data folder, not yet created"
+        );
+        // A sibling of the data folder is fine.
+        assert!(check_mount_in(&mount(&home.join("project").display().to_string(), false), &data).is_ok());
+        assert!(check_mount_in(&mount(&home.join(".claude").display().to_string(), false), &data).is_ok());
     }
 
     #[test]

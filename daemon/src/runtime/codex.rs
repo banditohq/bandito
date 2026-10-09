@@ -102,6 +102,11 @@ impl Runtime for CodexRuntime {
                 json!(prog.display().to_string())
             ));
             cmd.arg("-c").arg(format!("mcp_servers.bandito.args={}", json!(args)));
+            if let Some(token) = &cfg.agent_token {
+                // A TOML inline table; the token is base64url, so it needs no escaping.
+                cmd.arg("-c")
+                    .arg(format!("mcp_servers.bandito.env={{BANDITO_AGENT_TOKEN = \"{token}\"}}"));
+            }
         }
         if !cfg.extra_dirs.is_empty() {
             // The workspace-write sandbox also writes to these roots. One override carries the whole list.
@@ -112,6 +117,9 @@ impl Runtime for CodexRuntime {
         cmd.current_dir(&cfg.cwd).envs(cfg.env.iter().map(|(k, v)| (k, v)));
         // Marks the CLI and its children for `host.processes` (see docs/ARCHITECTURE.md#host).
         cmd.env("BANDITO_AGENT_ID", &cfg.agent_id);
+        if let Some(token) = &cfg.agent_token {
+            cmd.env("BANDITO_AGENT_TOKEN", token);
+        }
 
         let state = Arc::new(Mutex::new(State::new(cfg.effort.map(turn_effort))));
         let launch = Launch::from_config(&cfg);

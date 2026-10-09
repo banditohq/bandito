@@ -21,7 +21,7 @@ Status: working design, October 2026. This file is the source of truth for the M
 ```
 
 - The daemon runs as the user who owns the CLI logins (`~/.claude`, `~/.codex`, `~/.grok`), never as root.
-- One binary: `bandito daemon` (foreground), `bandito pair`, `bandito info`, `bandito status`, `bandito mcp` (crew MCP over stdio, proxies to the daemon socket), `bandito service install|uninstall|status` (see [Install and service](#install-and-service)).
+- One binary: `bandito daemon` (foreground), `bandito pair`, `bandito info`, `bandito status`, `bandito mcp` (crew MCP over stdio, proxies to the daemon's `agent.sock` with the agent's session token), `bandito service install|uninstall|status` (see [Install and service](#install-and-service)).
 
 ## Runtimes
 
@@ -99,8 +99,9 @@ JSON-RPC 2.0. Same methods on every transport.
 
 The daemon always listens on:
 
-1. Unix socket `~/.bandito/bandito.sock` (0600). Trusted: same user.
-2. `127.0.0.1:7878` HTTP + WebSocket (`/v1/rpc`, `/v1/health`, `/v1/files/raw`, `/v1/tunnel`). Token required.
+1. Unix socket `~/.bandito/bandito.sock` (0600): the owner's CLI. Only processes that are not under the daemon may connect, see [Trust model](#trust-model).
+2. Unix socket `~/.bandito/agent.sock` (0600): the crew servers of agents. Each connection must open with `daemon.hello` carrying its session token.
+3. `127.0.0.1:7878` HTTP + WebSocket (`/v1/rpc`, `/v1/health`, `/v1/files/raw`, `/v1/tunnel`). Token required.
 
 WebSocket upgrades that carry an `Origin` header are refused: native apps don't send one, browsers always do, so a web page can't drive the daemon through the user's browser. Unix socket paths are limited to ~104 bytes on macOS, so keep `BANDITO_HOME` short.
 
@@ -119,6 +120,35 @@ Ways the Mac app reaches a server, all ending in the same WebSocket:
 | Cloudflare Tunnel, WireGuard/ZeroTier/Netbird, reverse proxy | any URL that ends at the daemon port; token auth |
 | Bandito Relay | later: outbound-only connection from the daemon through bandito.dev, end-to-end encrypted |
 
+## Trust model
+
+Who may call the daemon, and what. One list in `daemon/src/rpc/mod.rs` (`allowed`) decides, and it is checked first in every dispatch and before the event stream.
+
+**Two sockets, both mode 0600.** Both are created under umask `0077`, so there is no moment when they are more open.
+
+- `bandito.sock` is the owner's CLI. A connection is refused when the calling process runs under the daemon: agents, their shells and tools, and the terminals and apps the daemon opened. The caller's pid comes from the socket (`SO_PEERCRED` on Linux, `LOCAL_PEERPID` on macOS), and the parent chain is walked (`/proc/<pid>/stat` on Linux, `proc_pidinfo` on macOS) up to pid 1. A caller whose chain cannot be read is refused too (fail closed, with a warning). On Linux the daemon is a child subreaper, so a process that double-forks away is still re-parented under it. Consequence: `bandito pair` run from a terminal that the Bandito app opened does not work. Use a terminal of your own.
+- `agent.sock` is for the crew servers of agents. The first request must be `daemon.hello {"agent_token": "..."}`. Without a valid token the reply is UNAUTHORIZED and the connection closes.
+
+**Agent session tokens.** Each runtime session (Claude, Codex, Grok, and a fallback runtime) gets its own token when it starts: `bat_` plus 32 random bytes in base64url. The daemon keeps only the SHA-256 of each token, in memory. The token goes into the CLI's environment as `BANDITO_AGENT_TOKEN` and into the environment of its crew server. Ending the session revokes the token. A daemon restart revokes all of them. The agent is the one its token names: an `agent_id` or `from` in the params must match it, or the call is refused.
+
+| Peer | How it connects | May call |
+|---|---|---|
+| Anonymous | any transport, not paired | `daemon.hello`, `pair.redeem` |
+| Device (paired app) | WebSocket with the device token | everything except the agent tools |
+| Local (owner's CLI) | `bandito.sock`, not under the daemon | everything except the agent tools |
+| Agent | `agent.sock` with a live token | `daemon.hello`, `crew.list`, `crew.send`, `history.day`, `history.search`, `browser.agent.{back,click,open,press,screenshot,snapshot,switch,tabs,type}`, `screen.agent.{click,key,launch,move,screenshot,scroll,type}`; for its own agent only |
+
+The agent tools (`crew.send`, `history.*`, `browser.agent.*`, `screen.agent.*`) are for agents alone. The owner's CLI and the apps may not call them, so nothing that speaks as the owner can pass for an agent. Agents may call none of the owner's methods: rules, approvals, pairing, devices, secrets, agent create/update/delete, workspaces, setup, and `commands.install` at user scope.
+
+**Host header.** HTTP and WebSocket routes accept only the `Host` names `127.0.0.1`, `localhost`, `[::1]` and `::1` (the port is ignored), plus the listen address when the daemon listens on a concrete IP. Any other host, and a request without a `Host`, gets 421 Misdirected Request. This blocks DNS rebinding from a web page. Consequence: a Tailscale MagicDNS name, a Cloudflare Tunnel hostname or a reverse-proxy domain is refused. Connect by the listen address, or through a tunnel that keeps `Host` as the daemon's address.
+
+**`pair.redeem` rate limit.** Failures count in a 10-minute window: at most 100 for the whole daemon, and 5 per source (the client IP on WebSocket, `local` on `bandito.sock`). A refused call gets RATE_LIMITED.
+
+**What this does not stop.**
+- A process of the same user that is not under the daemon passes as the owner. Examples are one started by `systemd-run --user`, by cron, or in a tmux server the owner already runs. The check asks "is this under the daemon", not "is this trusted".
+- On macOS nothing marks a double-forked process as the daemon's, so one that re-parents to launchd passes as the owner.
+- An agent with shell access runs as the daemon's user and can do what that user can on disk. The token only opens the agent tools, but the agent can read its own environment. For real isolation use a container workspace (see [Workspaces](#workspaces)), not these checks.
+
 ## Scheduler
 
 Cron expressions with a time zone. On fire: `agents.send` with `source:"schedule"`. Missed runs while the daemon was down run once on start if missed by less than 1 h.
@@ -127,7 +157,7 @@ Cron expressions with a time zone. On fire: `agents.send` with `source:"schedule
 
 `bandito mcp` is an MCP server (stdio) injected into every agent: `--mcp-config` for Claude, `mcp_servers` config for Codex, `mcpServers` in ACP `session/new` for Grok. It answers `initialize` with the client's protocol version when it is one of `2025-06-18`, `2025-03-26`, `2024-11-05`, otherwise with `2025-06-18`. Input lines over 1 MB get a parse error and are skipped.
 
-Tools today: `crew_list` and `crew_send{to, message}` (becomes `message.user` with `source:"crew"` for the target). `report{text}` (shows in the user's inbox) is later, not in the MVP yet. `crew.send` over RPC is accepted only from the local socket, i.e. from the crew MCP servers on the server; paired apps can call `crew.list` only.
+Tools today: `crew_list` and `crew_send{to, message}` (becomes `message.user` with `source:"crew"` for the target). `report{text}` (shows in the user's inbox) is later, not in the MVP yet. `crew.send` over RPC is accepted only from an agent's session on `agent.sock`, and only as that agent; paired apps can call `crew.list` only. See [Trust model](#trust-model).
 
 Loop guards: every crew message belongs to a chain, which starts with each user or schedule message. The daemon counts three limits:
 
@@ -153,7 +183,7 @@ The server runs one Chrome per workspace (`shared` by default). The app watches 
 
 **Errors.** `BROWSER_ERROR` (-32026), with `error.data.reason`: `missing_component`, `start_failed`, `unsupported` (not Linux or macOS), `not_running`, `user_controls`, `declined`, `failed`. A bad workspace name (letters, digits, `-`, `_`, up to 64) or a URL that is not `http`, `https`, `data:` or `about:blank` is `-32602`.
 
-**Agent tools.** The crew MCP server offers the browser tools, and each one calls `browser.agent.*` on the unix socket. Those methods accept only local peers. The browser starts on the first use. While `controller` is `user`, every tool call fails with "The user is using the browser. Wait or ask them to hand it back.". Refs come from the latest snapshot and are the DOM node's `backendDOMNodeId`.
+**Agent tools.** The crew MCP server offers the browser tools, and each one calls `browser.agent.*` on the unix socket. Those methods accept only agents, on `agent.sock`, for their own agent. The browser starts on the first use. While `controller` is `user`, every tool call fails with "The user is using the browser. Wait or ask them to hand it back.". Refs come from the latest snapshot and are the DOM node's `backendDOMNodeId`.
 - `browser_snapshot` returns the title, the URL, and one line per link, button, textbox, searchbox, combobox, checkbox, radio, menuitem, tab, heading, or named image: `[ref] role "name" (value)`. Names are cut at 120 characters; there are at most 600 element lines.
 - `browser_open{url, new_tab?}` navigates the agent's tab, or opens a new one, and waits for the load event for up to 30 s.
 - `browser_click{ref}`, `browser_type{ref, text, submit?}`, `browser_press{key}` (named keys only, such as `Enter`, `Tab`, `Escape`, `ArrowDown`), `browser_back`, `browser_screenshot` (PNG, at most 1280 px wide, returned as an image), `browser_tabs` (`*` marks the agent's tab), `browser_switch{index}`.
@@ -444,9 +474,9 @@ A separate Linux user for a workspace is the next step, not in this version.
 
 **Lifecycle.** A container starts with the first session of an agent in its workspace. Each start checks it: missing → created; stopped → started; settings that differ (image, limits, network, or mounts, including the folders of the agents in the workspace) → recreated. Containers restart with the Docker daemon (`--restart unless-stopped`). Recreation drops the container's own writable layer, so anything installed inside it (apt or npm packages) is lost; folders on the host stay. Recreation also ends the running sessions of the other agents in that container, which resume with their next message. `workspaces.stop` stops the container; the next message starts it again.
 
-**How a CLI runs.** Runtimes build their command as before, then `workspace::confine` moves it into the workspace. For a container that is `docker exec -i -w <cwd> -e NAME… <container> <program> <args…>`, so stdin, stdout and stderr pass through and the JSON protocols do not change. Environment values are not in the argument list: `-e NAME` takes the value from the environment of the docker client, which keeps secrets out of the process list. The crew MCP server is not given to container agents: it talks to the daemon socket, which is not mounted. Approvals, checkpoints and memory keep working, because they run in the daemon on the server against the same folders.
+**How a CLI runs.** Runtimes build their command as before, then `workspace::confine` moves it into the workspace. For a container that is `docker exec -i -w <cwd> -e NAME… <container> <program> <args…>`, so stdin, stdout and stderr pass through and the JSON protocols do not change. Environment values are not in the argument list: `-e NAME` takes the value from the environment of the docker client, which keeps secrets out of the process list. The crew MCP server is not given to container agents, and `agent.sock` is not mounted, so they have no agent tools. The session token still goes into their environment. Approvals, checkpoints and memory keep working, because they run in the daemon on the server against the same folders.
 
-**Security.** A container isolates the files outside its mounts, the network (`none` means no network at all) and the CPU and memory it may use. It does not isolate the CLI logins: `~/.claude` and `~/.codex` are writable inside, so an agent in a container can read and change that subscription login. A mount may not be the server root, the Docker socket, or a path with `..`, `,` or `"`. Membership of the `docker` group is root-equivalent on the server, so the daemon's user holds that power whenever a container workspace exists.
+**Security.** A container isolates the files outside its mounts, the network (`none` means no network at all) and the CPU and memory it may use. It does not isolate the CLI logins: `~/.claude` and `~/.codex` are writable inside, so an agent in a container can read and change that subscription login. A mount may not be the server root, the Docker socket, or a path with `..`, `,` or `"`. Nor may it be Bandito's own data folder (`$BANDITO_HOME`, or `~/.bandito`), a folder inside it, or a folder that holds it (such as the home folder). Membership of the `docker` group is root-equivalent on the server, so the daemon's user holds that power whenever a container workspace exists.
 
 **Docker.** Bandito uses the `docker` program from `PATH` and runs `docker info` before each start. Without Docker, or when it does not answer, the error is `docker_unavailable` and it names the install guide. The `containers` feature of [Setup](#setup) shows the same check.
 
@@ -618,7 +648,7 @@ A virtual desktop on a Linux server that people see in the app and agents can dr
 
 **Viewing.** The app calls `screen.start`, then opens `/v1/tunnel?port=<vnc_port>` through a one-shot local forwarder and speaks VNC with the password. RFB uses only the first 8 characters of a password; the tunnel is what keeps the screen private (loopback only, paired device only).
 
-**Agents.** The crew MCP server offers `screen_screenshot` (PNG, at most 1280 px wide, with the original size so clicks use screen pixels), `screen_click {x, y, button?, double?}`, `screen_move`, `screen_type {text}`, `screen_key {keys}`, `screen_scroll {direction, amount?}` and `screen_launch {command}`. They call local-only `screen.agent.*` methods and start the screen when it is off.
+**Agents.** The crew MCP server offers `screen_screenshot` (PNG, at most 1280 px wide, with the original size so clicks use screen pixels), `screen_click {x, y, button?, double?}`, `screen_move`, `screen_type {text}`, `screen_key {keys}`, `screen_scroll {direction, amount?}` and `screen_launch {command}`. They call `screen.agent.*` methods, which only agents may call and start the screen when it is off.
 
 **Control.** `screen.control {holder: user|agent|none}`. While the user holds the screen, agent tools fail with a message asking the agent to wait or ask for it back.
 

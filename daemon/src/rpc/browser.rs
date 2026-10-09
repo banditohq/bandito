@@ -63,7 +63,7 @@ struct SwitchParams {
 pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResult {
     let browser = &app.browser;
     if let Some(tool) = method.strip_prefix("browser.agent.") {
-        if !matches!(peer, Peer::Local) {
+        if !matches!(peer, Peer::Agent(_)) {
             return Err(RpcError::new(
                 UNAUTHORIZED,
                 "browser tools can only be used by agents on the server",

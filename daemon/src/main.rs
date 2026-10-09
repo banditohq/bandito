@@ -10,7 +10,7 @@ use bandito::store::Store;
 use bandito::supervisor::{Runtimes, Supervisor};
 use clap::{Parser, Subcommand};
 use serde_json::{Value, json};
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -52,10 +52,11 @@ enum Cmd {
         #[command(subcommand)]
         cmd: ServiceCmd,
     },
-    /// Crew MCP server for one agent (started by the daemon; speaks MCP on stdio).
+    /// Crew MCP server of an agent (started by the daemon; speaks MCP on stdio). The agent comes
+    /// from `BANDITO_AGENT_TOKEN`; `--agent` is accepted for older configs and changes nothing.
     Mcp {
         #[arg(long)]
-        agent: String,
+        agent: Option<String>,
     },
 }
 
@@ -139,7 +140,7 @@ async fn run_command(cmd: Cmd, home: PathBuf) -> Result<()> {
         Cmd::Pair { json } => pair(&sock, json).await,
         Cmd::Info { json } => info(&home, &sock, json).await,
         Cmd::Service { cmd } => service_cmd(cmd, &home).await,
-        Cmd::Mcp { agent } => bandito::crew::serve_stdio(sock, agent).await,
+        Cmd::Mcp { .. } => bandito::crew::serve_stdio(home.join("agent.sock")).await,
     }
 }
 
@@ -314,10 +315,15 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr) -> Result<()> {
     sup.recover()?;
     let app = App::new(sup.clone(), agents_root);
 
+    // Children that double-fork away stay under this process, so the owner's socket can tell them apart.
+    rpc::unix::become_subreaper();
     let unix = rpc::unix::bind(sock)?;
+    // Agents reach the daemon only through this socket, with their session token (docs/ARCHITECTURE.md#trust-model).
+    let agent_unix = rpc::unix::bind(&home.join("agent.sock"))?;
     // This daemon owns the socket now, so Chrome left by an earlier daemon is ours to stop.
     bandito::browser::reap_orphans(&bandito::setup::default_home());
     tokio::spawn(rpc::unix::run(app.clone(), unix));
+    tokio::spawn(rpc::unix::run_agents(app.clone(), agent_unix));
 
     let tcp = tokio::net::TcpListener::bind(listen)
         .await
@@ -325,9 +331,11 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr) -> Result<()> {
     if let Err(e) = std::fs::write(home.join(LISTEN_FILE), tcp.local_addr()?.to_string()) {
         tracing::warn!("could not record the listen address: {e}");
     }
-    let router = rpc::ws::router(app.clone());
+    // A wildcard listener has no address of its own to allow in the Host check; a concrete one does.
+    let own_ip: Option<IpAddr> = Some(listen.ip()).filter(|ip| !ip.is_unspecified());
+    let router = rpc::ws::router_listening(app.clone(), own_ip);
     tokio::spawn(async move {
-        if let Err(e) = axum::serve(tcp, router).await {
+        if let Err(e) = axum::serve(tcp, router.into_make_service_with_connect_info::<SocketAddr>()).await {
             tracing::error!("http server: {e}");
         }
     });
