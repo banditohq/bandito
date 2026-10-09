@@ -1,0 +1,226 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>chapter.tokensUsed</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>занято %1$lld токена</string>
+			<key>many</key>
+			<string>занято %1$lld токенов</string>
+			<key>one</key>
+			<string>занято %1$lld токен</string>
+			<key>other</key>
+			<string>занято %1$lld токена</string>
+		</dict>
+	</dict>
+	<key>common.agentCount</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%1$lld агента</string>
+			<key>many</key>
+			<string>%1$lld агентов</string>
+			<key>one</key>
+			<string>%1$lld агент</string>
+			<key>other</key>
+			<string>%1$lld агента</string>
+		</dict>
+	</dict>
+	<key>common.serverCount</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%1$lld сервера</string>
+			<key>many</key>
+			<string>%1$lld серверов</string>
+			<key>one</key>
+			<string>%1$lld сервер</string>
+			<key>other</key>
+			<string>%1$lld сервера</string>
+		</dict>
+	</dict>
+	<key>common.workingCount</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%1$lld работают</string>
+			<key>many</key>
+			<string>%1$lld работают</string>
+			<key>one</key>
+			<string>%1$lld работает</string>
+			<key>other</key>
+			<string>%1$lld работают</string>
+		</dict>
+	</dict>
+	<key>inspector.uptime</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>работает %1$lld дня</string>
+			<key>many</key>
+			<string>работает %1$lld дней</string>
+			<key>one</key>
+			<string>работает %1$lld день</string>
+			<key>other</key>
+			<string>работает %1$lld дня</string>
+		</dict>
+	</dict>
+	<key>memory.filesMeta</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%1$lld файла, которые %2$@ сделал для себя</string>
+			<key>many</key>
+			<string>%1$lld файлов, которые %2$@ сделал для себя</string>
+			<key>one</key>
+			<string>%1$lld файл, который %2$@ сделал для себя</string>
+			<key>other</key>
+			<string>%1$lld файла, которые %2$@ сделал для себя</string>
+		</dict>
+	</dict>
+	<key>memory.journalMeta</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>Сегодня: %1$lld записи · вчера: %2$@</string>
+			<key>many</key>
+			<string>Сегодня: %1$lld записей · вчера: %2$@</string>
+			<key>one</key>
+			<string>Сегодня: %1$lld запись · вчера: %2$@</string>
+			<key>other</key>
+			<string>Сегодня: %1$lld записи · вчера: %2$@</string>
+		</dict>
+	</dict>
+	<key>memory.searchResult</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%2$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>«%1$@» · %2$lld совпадения, %3$@</string>
+			<key>many</key>
+			<string>«%1$@» · %2$lld совпадений, %3$@</string>
+			<key>one</key>
+			<string>«%1$@» · %2$lld совпадение, %3$@</string>
+			<key>other</key>
+			<string>«%1$@» · %2$lld совпадения, %3$@</string>
+		</dict>
+	</dict>
+	<key>menubar.needsYou</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%1$lld агента ждут вас</string>
+			<key>many</key>
+			<string>%1$lld агентов ждут вас</string>
+			<key>one</key>
+			<string>%1$lld агент ждёт вас</string>
+			<key>other</key>
+			<string>%1$lld агента ждут вас</string>
+		</dict>
+	</dict>
+	<key>onboarding.server.minutes</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%1$lld минуты</string>
+			<key>many</key>
+			<string>%1$lld минут</string>
+			<key>one</key>
+			<string>%1$lld минута</string>
+			<key>other</key>
+			<string>%1$lld минуты</string>
+		</dict>
+	</dict>
+	<key>thread.ranCommands</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>Выполнил %1$lld команды</string>
+			<key>many</key>
+			<string>Выполнил %1$lld команд</string>
+			<key>one</key>
+			<string>Выполнил %1$lld команду</string>
+			<key>other</key>
+			<string>Выполнил %1$lld команды</string>
+		</dict>
+	</dict>
+</dict>
+</plist>
