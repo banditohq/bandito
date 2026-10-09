@@ -21,7 +21,7 @@ Status: working design, October 2026. This file is the source of truth for the M
 ```
 
 - The daemon runs as the user who owns the CLI logins (`~/.claude`, `~/.codex`, `~/.grok`), never as root.
-- One binary: `bandito daemon` (service), `bandito pair`, `bandito status`, `bandito mcp` (crew MCP over stdio, proxies to the daemon socket), `bandito install-service`.
+- One binary: `bandito daemon` (foreground), `bandito pair`, `bandito info`, `bandito status`, `bandito mcp` (crew MCP over stdio, proxies to the daemon socket), `bandito service install|uninstall|status` (see [Install and service](#install-and-service)).
 
 ## Runtimes
 
@@ -220,6 +220,14 @@ Params are objects; unknown fields are `invalid_params`.
 
 Feature string: `"tunnel"` in `daemon.info`.
 
+## Install and service
+
+`scripts/install.sh` (served as `https://bandito.dev/install.sh`) picks the release asset for the machine (`bandito-<target>.tar.gz`, targets `x86_64|aarch64` × `unknown-linux-gnu|apple-darwin`), checks its `.sha256`, installs `bandito` to `~/.local/bin`, and runs `bandito service install` unless `--no-service` is given. Releases are built by `.github/workflows/release.yml` on tag publish or by manual dispatch with a tag.
+
+`bandito service install` writes `~/.config/systemd/user/bandito.service` (Linux) or `~/Library/LaunchAgents/dev.bandito.daemon.plist` (macOS), starts it, and waits up to 10 s for `daemon.info` on the socket. Linux machines without a user systemd manager (WSL without systemd, containers) get a detached background process with its pid in `<home>/daemon.pid` and output in `<home>/logs/daemon.log`; it does not survive a reboot. On Linux the installer also asks for lingering (`loginctl enable-linger`), so the daemon outlives the SSH session that installed it; if that is refused, the command prints the `sudo` line. `service uninstall` removes the unit or plist and stops the daemon; data is kept. `service install --dry-run` prints what would be written and run, and changes nothing.
+
+Machine-readable output for scripts and the app: `bandito pair --json` prints `{"code","expires_in_ms"}`; `bandito info --json` prints version, paths, `listen`, `running`, and the `features` the daemon reports (empty when it is down); `service install --json` prints `{"ok","mode","listen","socket","warnings"}`; `service status --json` prints `{"installed","mode","running","pid"?}`.
+
 ## Mac app
 
 SwiftUI, macOS 14+. Sidebar: servers → crew. Thread view rendered from events; approval cards with Approve / Deny / Always; schedules; connection wizard. Menu bar item with the status dot. Local notifications with Approve / Deny actions while the app runs. Strings in a String Catalog, 9 languages. Colors from `brand/tokens/dist`.
@@ -229,6 +237,7 @@ SwiftUI, macOS 14+. Sidebar: servers → crew. Thread view rendered from events;
 ```
 daemon/            Rust crate `bandito`
   src/main.rs      CLI entry
+  src/service.rs   user service: systemd unit, launchd plist, background fallback
   src/rpc/         JSON-RPC, transports, auth, pairing
   src/store/       SQLite + migrations
   src/runtime/     process.rs (shared child-process plumbing), claude.rs, codex.rs, grok.rs, api/
