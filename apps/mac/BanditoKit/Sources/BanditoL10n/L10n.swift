@@ -463,29 +463,49 @@ public enum L10n {
     public enum Files {
         public static var agentsWorking: String { L10n.tr("files.agentsWorking") }
         public static var back: String { L10n.tr("files.back") }
+        public static var backHelp: String { L10n.tr("files.backHelp") }
         public static var cancel: String { L10n.tr("files.cancel") }
         public static var connecting: String { L10n.tr("files.connecting") }
         public static var copyPath: String { L10n.tr("files.copyPath") }
         public static var create: String { L10n.tr("files.create") }
+        public static var createHelp: String { L10n.tr("files.createHelp") }
         public static var empty: String { L10n.tr("files.empty") }
+        public static var emptyCreate: String { L10n.tr("files.emptyCreate") }
         public static var favorites: String { L10n.tr("files.favorites") }
         public static var forward: String { L10n.tr("files.forward") }
+        public static var forwardHelp: String { L10n.tr("files.forwardHelp") }
         public static var hidden: String { L10n.tr("files.hidden") }
+        public static var hideDetails: String { L10n.tr("files.hideDetails") }
+        public static var hidePlace: String { L10n.tr("files.hidePlace") }
         public static var loading: String { L10n.tr("files.loading") }
+        public static var more: String { L10n.tr("files.more") }
         public static var noResults: String { L10n.tr("files.noResults") }
+        public static var panelAgent: String { L10n.tr("files.panelAgent") }
+        public static var panelTerminal: String { L10n.tr("files.panelTerminal") }
         public static func search(folder: String) -> String { L10n.tr("files.search", folder) }
+        public static var searchButton: String { L10n.tr("files.searchButton") }
+        public static var showDetails: String { L10n.tr("files.showDetails") }
+        public static var showHiddenPlaces: String { L10n.tr("files.showHiddenPlaces") }
+        public static var showInFinder: String { L10n.tr("files.showInFinder") }
         public static func skipped(count: Int) -> String { L10n.tr("files.skipped", count) }
         public static var terminalHere: String { L10n.tr("files.terminalHere") }
+        public static var terminalHint: String { L10n.tr("files.terminalHint") }
         public static var trash: String { L10n.tr("files.trash") }
         public static func truncated(count: Int) -> String { L10n.tr("files.truncated", count) }
         public static var unsupported: String { L10n.tr("files.unsupported") }
+
+        public enum Access {
+            public static var hintServer: String { L10n.tr("files.access.hintServer") }
+            public static var hintThisMac: String { L10n.tr("files.access.hintThisMac") }
+            public static var openSettings: String { L10n.tr("files.access.openSettings") }
+            public static var title: String { L10n.tr("files.access.title") }
+        }
 
         public enum Banner {
             public static var dismiss: String { L10n.tr("files.banner.dismiss") }
         }
 
         public enum Column {
-            public static var by: String { L10n.tr("files.column.by") }
             public static var changed: String { L10n.tr("files.column.changed") }
             public static var name: String { L10n.tr("files.column.name") }
             public static var size: String { L10n.tr("files.column.size") }
@@ -500,6 +520,10 @@ public enum L10n {
         public enum Create {
             public static var file: String { L10n.tr("files.create.file") }
             public static var folder: String { L10n.tr("files.create.folder") }
+        }
+
+        public enum Crumb {
+            public static var more: String { L10n.tr("files.crumb.more") }
         }
 
         public enum Dialog {
@@ -558,6 +582,8 @@ public enum L10n {
             public static var copyPath: String { L10n.tr("files.menu.copyPath") }
             public static var download: String { L10n.tr("files.menu.download") }
             public static var duplicate: String { L10n.tr("files.menu.duplicate") }
+            public static var favoriteAdd: String { L10n.tr("files.menu.favoriteAdd") }
+            public static var favoriteRemove: String { L10n.tr("files.menu.favoriteRemove") }
             public static var `open`: String { L10n.tr("files.menu.open") }
             public static var rename: String { L10n.tr("files.menu.rename") }
             public static var terminal: String { L10n.tr("files.menu.terminal") }
@@ -589,6 +615,12 @@ public enum L10n {
             public static func minutes(count: Int) -> String { L10n.tr("files.time.minutes", count) }
             public static func today(time: String) -> String { L10n.tr("files.time.today", time) }
             public static func yesterday(time: String) -> String { L10n.tr("files.time.yesterday", time) }
+        }
+
+        public enum TrashBlocked {
+            public static var detail: String { L10n.tr("files.trashBlocked.detail") }
+            public static var openFinder: String { L10n.tr("files.trashBlocked.openFinder") }
+            public static var title: String { L10n.tr("files.trashBlocked.title") }
         }
 
         public enum Upload {

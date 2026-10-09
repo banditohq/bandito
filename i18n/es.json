@@ -2,7 +2,6 @@
   "onboarding.skip": "Configurar más tarde",
   "onboarding.skipHint": "Abre la app ahora. Puedes añadir un servidor y un agente cuando quieras.",
   "app.name": "Bandito",
-
   "sidebar.search": "Buscar (⌘K)",
   "sidebar.newAgent": "Nuevo agente (⌘N)",
   "sidebar.new": "Nuevo",
@@ -17,7 +16,6 @@
   "sidebar.pinned": "Fijados",
   "sidebar.servers": "Servidores",
   "sidebar.empty": "Todavía no hay agentes. Crea el primero.",
-
   "common.now": "ahora",
   "common.agentCount": {"one": "{count} agente", "other": "{count} agentes"},
   "common.serverCount": {"one": "{count} servidor", "other": "{count} servidores"},
@@ -29,7 +27,6 @@
   "common.next": "Siguiente",
   "common.close": "Cerrar",
   "common.agents": "AGENTES",
-
   "agent.menu.pin": "Fijar",
   "agent.menu.unpin": "Desafijar",
   "agent.menu.markUnread": "Marcar como no leído",
@@ -39,27 +36,22 @@
   "agent.menu.hide": "Ocultar de la barra lateral",
   "agent.menu.delete": "Eliminar…",
   "agent.delete.confirm": "¿Eliminar {name}? Su historial se conserva en el servidor.",
-
   "status.idle": "Inactivo",
   "status.working": "Trabajando",
   "status.needsYou": "Necesita tu atención",
   "status.error": "Error",
   "status.offline": "Sin conexión",
-
   "profile.getIphone": "Obtener la app para iPhone",
   "profile.help": "Ayuda",
   "profile.settings": "Ajustes…",
   "profile.addServer": "Añadir servidor",
   "profile.signOut": "Cerrar sesión en este servidor",
-
   "search.placeholder": "Buscar agentes y mensajes",
   "search.noResults": "No se encontró nada",
-
   "new.to": "Para:",
   "new.placeholder": "Iniciar un chat con…",
   "new.agent": "Nuevo agente",
   "new.channel": "Nuevo canal de equipo",
-
   "palette.title": "Cambio rápido",
   "palette.search": "Buscar",
   "palette.newAgentNamed": "Nuevo agente — con el nombre «{name}…»",
@@ -72,7 +64,6 @@
   "palette.hintOpen": "↵ abrir",
   "palette.hintMessage": "⌘↵ escribir",
   "palette.footerCounts": "{servers} · {agents}",
-
   "agentSheet.title": "Nuevo agente",
   "agentSheet.name": "Nombre",
   "agentSheet.role": "Rol",
@@ -97,7 +88,6 @@
   "agentSheet.cancel": "Cancelar",
   "agentSheet.runtimeMissing": "{runtime} no está instalado en {server}",
   "agentSheet.runtimeLogin": "{runtime} no ha iniciado sesión en {server}. Ejecuta allí: {command}",
-
   "avatar.presets": "Predefinidos",
   "avatar.generate": "Generar",
   "avatar.upload": "Subir",
@@ -111,12 +101,10 @@
   "avatar.colorLilac": "Lila",
   "avatar.colorCream": "Crema",
   "avatar.face": "Cara:",
-
   "runtime.claude": "Claude Code",
   "runtime.codex": "Codex",
   "runtime.grok": "Grok",
   "runtime.api": "Clave de API",
-
   "connect.loggedInPlan": "Sesión iniciada · {plan}",
   "connect.needsLogin": "Hace falta iniciar sesión",
   "connect.limitUntil": "Límite hasta {time}",
@@ -124,7 +112,6 @@
   "connect.stateLoggedIn": "sesión iniciada",
   "connect.stateLoginNeeded": "falta iniciar sesión",
   "connect.stateLimitToday": "límite alcanzado hoy",
-
   "effort.title": "Esfuerzo",
   "effort.label": "esfuerzo: {level}",
   "effort.low": "Bajo",
@@ -133,11 +120,9 @@
   "effort.xhigh": "Muy alto",
   "effort.max": "Máximo",
   "effort.hint": "Un esfuerzo mayor es más listo en tareas difíciles, pero va más lento y gasta el límite más rápido. Para el trabajo diario basta con medio.",
-
   "approvalMode.risky": "Solo lo arriesgado",
   "approvalMode.always": "Todo",
   "approvalMode.never": "Nada",
-
   "thread.placeholder": "Mensaje para {name}",
   "thread.send": "Enviar",
   "thread.stop": "Detener",
@@ -161,7 +146,6 @@
   "thread.hintNewLine": "⇧↵ nueva línea",
   "thread.hintStop": "⌘. detener",
   "thread.hintSearch": "⌘K buscar",
-
   "chapter.title": "Capítulo {count}",
   "chapter.resumed": "Capítulo {count} · {name} releyó su memoria y retomó donde lo dejó",
   "chapter.startedToday": "en curso desde esta mañana",
@@ -169,7 +153,6 @@
   "chapter.nextAt": "nuevo capítulo tras {limit}",
   "chapter.explainer": "Cuando un capítulo se llena, {name} guarda lo importante en la memoria y empieza en una página limpia. La conversación se mantiene completa en la ventana y cada mensaje nuevo no encarece nada.",
   "chapter.usageHint": "Cuánto se ha usado del capítulo actual",
-
   "memory.title": "Memoria",
   "memory.header": "MEMORIA",
   "memory.splitHeader": "CÓMO DIVIDIR EN CAPÍTULOS",
@@ -191,7 +174,6 @@
   "memory.files": "Archivos",
   "memory.filesMeta": {"one": "{count} archivo que {name} creó para sí", "other": "{count} archivos que {name} creó para sí"},
   "memory.footer": "Archivos Markdown normales en tu servidor. Puedes abrirlos, editarlos o borrarlos. El agente lee la nueva versión en el siguiente capítulo.",
-
   "approval.needsYou": "necesita tu atención",
   "approval.wants": "{name} quiere ejecutar",
   "approval.wantsPush": "{name} quiere subir una rama",
@@ -203,12 +185,10 @@
   "approval.deniedByYou": "Denegado por ti · {time}",
   "approval.deniedByPolicy": "Denegado por una regla",
   "approval.expired": "Caducado",
-
   "banner.notLoggedIn": "{runtime} no ha iniciado sesión en {server}. Ejecuta `{command}` allí.",
   "banner.offline": "{server} está sin conexión. Reconectando…",
   "banner.limit": "Límite de uso alcanzado. Se restablece a las {time}.",
   "banner.retry": "Reintentar",
-
   "usage.title": "Uso",
   "usage.refresh": "Actualizar",
   "usage.left": "Quedan {percent}",
@@ -220,7 +200,6 @@
   "usage.buttonAria": "Uso: quedan {percent}",
   "usage.hours": "{count} h",
   "usage.days": "{count} d",
-
   "inspector.details": "Detalles",
   "inspector.aboutAgent": "Info del agente",
   "inspector.toggleAria": "Detalles del agente (⌘I)",
@@ -243,7 +222,6 @@
   "inspector.uptime": {"one": "activo {count} día", "other": "activo {count} días"},
   "inspector.serverInfo": "{os} · Bandito {version} · {uptime}",
   "inspector.instructionsHeader": "INSTRUCCIONES",
-
   "settings.title": "Ajustes",
   "settings.sectionsAria": "Secciones de ajustes",
   "settings.general": "General",
@@ -262,7 +240,6 @@
   "settings.notifications": "Notificaciones",
   "settings.menuBar": "Mostrar en la barra de menús",
   "settings.launchAtLogin": "Abrir al iniciar sesión",
-
   "settings.updates.channel": "Canal de actualización",
   "settings.updates.stable": "Estable",
   "settings.updates.beta": "Beta",
@@ -270,7 +247,6 @@
   "settings.updates.check": "Buscar ahora",
   "settings.updates.daemon": "Actualizar el daemon",
   "settings.updates.restartDaemon": "Reiniciar el daemon",
-
   "rules.newRule": "Nueva regla",
   "rules.when": "Cuando el agente quiera ejecutar",
   "rules.placeholder": "p. ej., wrangler deploy*",
@@ -290,7 +266,6 @@
   "rules.builtin": "Comprobaciones integradas",
   "rules.builtinHint": "se aplican siempre salvo que una regla de arriba diga lo contrario",
   "rules.builtinOutsideProject": "escribir fuera de la carpeta del proyecto",
-
   "server.add.title": "Añadir servidor",
   "server.add.heading": "Conecta un servidor",
   "server.add.intro": "El código se queda en tu servidor. Elige cómo llega este Mac a él: todas las opciones dan la misma conexión cifrada.",
@@ -329,7 +304,6 @@
   "server.stepOf": "PASO {step} DE {total}",
   "server.status.online": "En línea",
   "server.status.offline": "Sin conexión",
-
   "menubar.needsYou": {"one": "{count} agente necesita tu atención", "other": "{count} agentes necesitan tu atención"},
   "menubar.open": "Abrir Bandito",
   "menubar.pauseAll": "Pausar todos",
@@ -337,13 +311,10 @@
   "menubar.openChat": "Abrir chat →",
   "menubar.working": "TRABAJANDO",
   "menubar.upNext": "A CONTINUACIÓN",
-
   "notification.approval": "{name} necesita tu aprobación",
   "notification.finished": "{name} ha terminado",
-
   "error.generic": "Algo salió mal: {message}",
   "error.disconnected": "Se perdió la conexión con {server}",
-
   "onboarding.welcome.headline": "Tu equipo de IA.",
   "onboarding.welcome.headlineAccent": "En tu servidor.",
   "onboarding.welcome.subtitle": "Agentes con Claude Code, Codex y Grok, con roles y horarios. Siguen trabajando aunque cierres el portátil y preguntan antes de cualquier acción arriesgada.",
@@ -357,7 +328,6 @@
   "onboarding.welcome.haveAccount": "¿Ya tienes una cuenta?",
   "onboarding.welcome.signIn": "Iniciar sesión",
   "onboarding.welcome.footer": "Código abierto · tu código y tus claves nunca salen de tus servidores",
-
   "onboarding.account.heroTitle": "Un inicio de sesión — todos tus dispositivos",
   "onboarding.account.heroText": "Servidores y agentes en Mac e iPhone.",
   "onboarding.account.title": "Inicia sesión en Bandito",
@@ -371,7 +341,6 @@
   "onboarding.account.skip": "Continuar sin cuenta",
   "onboarding.account.emailToggle": "Iniciar sesión con correo",
   "onboarding.account.skipHint": "todo se queda solo en este Mac",
-
   "onboarding.server.title": "¿Dónde vivirá tu equipo?",
   "onboarding.server.subtitle": "Los agentes funcionan en un equipo que siempre está encendido. Usa tu propio servidor, un PC de casa o este Mac solo para probar.",
   "onboarding.server.whereAria": "Dónde ejecutar",
@@ -418,14 +387,12 @@
   "onboarding.server.noPorts": "No abrimos ningún puerto: el servidor solo escucha en sí mismo.",
   "onboarding.server.otherWays": "Otras formas: Tailscale, conexión directa, dirección personalizada — {link}",
   "onboarding.server.allOptions": "todas las opciones",
-
   "onboarding.agent.title": "¿A quién contratas primero?",
   "onboarding.agent.subtitle": "Elige un rol ya hecho y nosotros ponemos el modelo, las instrucciones y el horario. Todo se puede cambiar después y puedes añadir agentes en cualquier momento.",
   "onboarding.agent.yourFirst": "TU PRIMER AGENTE",
   "onboarding.agent.asks": "Pregunta",
   "onboarding.agent.hire": "Contratar a {name} y saludar",
   "onboarding.agent.firstMessage": "El primer mensaje tarda unos segundos: {name} se presenta y pregunta por dónde empezar.",
-
   "template.groupAria": "Plantilla de agente",
   "template.instructionsHeader": "INSTRUCCIONES DE LA PLANTILLA",
   "template.builder.title": "Constructor",
@@ -447,7 +414,6 @@
   "template.scratch.title": "Desde cero",
   "template.scratch.desc": "Un agente vacío: tú eliges el nombre, el rol y las instrucciones.",
   "template.scratch.meta": "Cualquier modelo",
-
   "tour.hintAria": "Consejo",
   "tour.counter": "{step} de {total}",
   "tour.skip": "Omitir",
@@ -482,5 +448,30 @@
   "browser.closeTab": "Cerrar pestaña",
   "browser.closeTabHelp": "Cerrar pestaña (⌘W)",
   "browser.copyAddress": "Copiar dirección",
-  "keys.closeTab": "Cerrar pestaña"
+  "keys.closeTab": "Cerrar pestaña",
+  "files.backHelp": "Atrás: carpeta anterior (⌘[)",
+  "files.forwardHelp": "Adelante (⌘])",
+  "files.searchButton": "Buscar",
+  "files.terminalHint": "Abrir una terminal en esta carpeta",
+  "files.createHelp": "Crear una carpeta o un archivo",
+  "files.more": "Más",
+  "files.showDetails": "Mostrar detalles",
+  "files.hideDetails": "Ocultar detalles",
+  "files.emptyCreate": "Crear carpeta",
+  "files.panelAgent": "Crear agente aquí",
+  "files.crumb.more": "Carpetas de la ruta",
+  "files.trashBlocked.title": "macOS no permite que las apps vean la Papelera",
+  "files.trashBlocked.detail": "Los archivos borrados en Bandito están en la Papelera del Finder, desde donde puedes recuperarlos.",
+  "files.trashBlocked.openFinder": "Abrir la Papelera en el Finder",
+  "files.access.title": "Sin acceso a esta carpeta",
+  "files.access.hintThisMac": "Da a Bandito acceso total al disco en Ajustes del Sistema → Privacidad y seguridad → Acceso total al disco.",
+  "files.access.hintServer": "El demonio del servidor no puede leer esta carpeta. Revisa los permisos del usuario con el que se ejecuta.",
+  "files.access.openSettings": "Abrir Ajustes",
+  "files.menu.favoriteAdd": "Añadir a Favoritos",
+  "files.menu.favoriteRemove": "Quitar de Favoritos",
+  "files.hidePlace": "Ocultar",
+  "files.showHiddenPlaces": "Mostrar lugares ocultos",
+  "files.showInFinder": "Mostrar en el Finder",
+  "files.terminalHere": "Terminal",
+  "files.panelTerminal": "Terminal aquí"
 }

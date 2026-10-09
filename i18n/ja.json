@@ -2,7 +2,6 @@
   "onboarding.skip": "あとで設定",
   "onboarding.skipHint": "アプリを開きます。サーバーとエージェントはいつでも追加できます。",
   "app.name": "Bandito",
-
   "sidebar.search": "検索 (⌘K)",
   "sidebar.newAgent": "新しいエージェント (⌘N)",
   "sidebar.new": "新規",
@@ -17,7 +16,6 @@
   "sidebar.pinned": "ピン留め",
   "sidebar.servers": "サーバー",
   "sidebar.empty": "エージェントはまだありません。最初のエージェントを作成してください。",
-
   "common.now": "たった今",
   "common.agentCount": {"other": "{count} 件のエージェント"},
   "common.serverCount": {"other": "{count} 台のサーバー"},
@@ -29,7 +27,6 @@
   "common.next": "次へ",
   "common.close": "閉じる",
   "common.agents": "エージェント",
-
   "agent.menu.pin": "ピン留め",
   "agent.menu.unpin": "ピン留めを解除",
   "agent.menu.markUnread": "未読にする",
@@ -39,27 +36,22 @@
   "agent.menu.hide": "サイドバーから非表示",
   "agent.menu.delete": "削除…",
   "agent.delete.confirm": "{name} を削除しますか？履歴はサーバーに残ります。",
-
   "status.idle": "待機中",
   "status.working": "作業中",
   "status.needsYou": "対応が必要",
   "status.error": "エラー",
   "status.offline": "オフライン",
-
   "profile.getIphone": "iPhone アプリを入手",
   "profile.help": "ヘルプ",
   "profile.settings": "設定…",
   "profile.addServer": "サーバーを追加",
   "profile.signOut": "このサーバーからサインアウト",
-
   "search.placeholder": "エージェントとメッセージを検索",
   "search.noResults": "見つかりません",
-
   "new.to": "宛先:",
   "new.placeholder": "送信先を指定してチャットを開始…",
   "new.agent": "新規エージェント",
   "new.channel": "新規クルーチャンネル",
-
   "palette.title": "クイック切替",
   "palette.search": "検索",
   "palette.newAgentNamed": "新しいエージェント — 名前「{name}…」",
@@ -72,7 +64,6 @@
   "palette.hintOpen": "↵ 開く",
   "palette.hintMessage": "⌘↵ メッセージ",
   "palette.footerCounts": "{servers} · {agents}",
-
   "agentSheet.title": "新規エージェント",
   "agentSheet.name": "名前",
   "agentSheet.role": "役割",
@@ -97,7 +88,6 @@
   "agentSheet.cancel": "キャンセル",
   "agentSheet.runtimeMissing": "{server} に {runtime} がインストールされていません",
   "agentSheet.runtimeLogin": "{server} では {runtime} にログインしていません。そこで実行: {command}",
-
   "avatar.presets": "プリセット",
   "avatar.generate": "生成",
   "avatar.upload": "アップロード",
@@ -111,12 +101,10 @@
   "avatar.colorLilac": "ライラック",
   "avatar.colorCream": "クリーム",
   "avatar.face": "顔:",
-
   "runtime.claude": "Claude Code",
   "runtime.codex": "Codex",
   "runtime.grok": "Grok",
   "runtime.api": "APIキー",
-
   "connect.loggedInPlan": "ログイン済み · {plan}",
   "connect.needsLogin": "ログインが必要",
   "connect.limitUntil": "{time} まで上限",
@@ -124,7 +112,6 @@
   "connect.stateLoggedIn": "ログイン済み",
   "connect.stateLoginNeeded": "ログインが必要",
   "connect.stateLimitToday": "本日の上限に到達",
-
   "effort.title": "作業量",
   "effort.label": "作業量: {level}",
   "effort.low": "低",
@@ -133,11 +120,9 @@
   "effort.xhigh": "非常に高",
   "effort.max": "最大",
   "effort.hint": "作業量を上げると難しい作業で賢くなりますが、遅くなり、上限も早く減ります。日常の作業なら「中」で十分です。",
-
   "approvalMode.risky": "危険な操作のみ",
   "approvalMode.always": "すべて",
   "approvalMode.never": "なし",
-
   "thread.placeholder": "{name} へのメッセージ",
   "thread.send": "送信",
   "thread.stop": "停止",
@@ -161,7 +146,6 @@
   "thread.hintNewLine": "⇧↵ 改行",
   "thread.hintStop": "⌘. 停止",
   "thread.hintSearch": "⌘K 検索",
-
   "chapter.title": "チャプター {count}",
   "chapter.resumed": "チャプター {count} · {name} は記憶を読み直し、前回の続きから再開",
   "chapter.startedToday": "今朝から実行中",
@@ -169,7 +153,6 @@
   "chapter.nextAt": "{limit} を超えると新しいチャプター",
   "chapter.explainer": "チャプターがいっぱいになると、{name} が大事なことを記憶に保存して白紙から始めます。会話はウィンドウに丸ごと残り、新しいメッセージが高くなることはありません。",
   "chapter.usageHint": "現在のチャプターの使用量",
-
   "memory.title": "メモリ",
   "memory.header": "メモリ",
   "memory.splitHeader": "チャプターへの分け方",
@@ -191,7 +174,6 @@
   "memory.files": "ファイル",
   "memory.filesMeta": {"other": "{name} が自分用に作った {count} 個のファイル"},
   "memory.footer": "サーバー上のプレーンな Markdown ファイルです。開く、編集する、削除することができます。エージェントは次のチャプターで新しいバージョンを読みます。",
-
   "approval.needsYou": "対応が必要",
   "approval.wants": "{name} が実行を求めています",
   "approval.wantsPush": "{name} がブランチを push しようとしています",
@@ -203,12 +185,10 @@
   "approval.deniedByYou": "拒否しました · {time}",
   "approval.deniedByPolicy": "ルールにより拒否",
   "approval.expired": "期限切れ",
-
   "banner.notLoggedIn": "{server} で {runtime} にログインしていません。そこで `{command}` を実行してください。",
   "banner.offline": "{server} がオフラインです。再接続中…",
   "banner.limit": "使用上限に達しました。{time} にリセットされます。",
   "banner.retry": "再試行",
-
   "usage.title": "使用量",
   "usage.refresh": "更新",
   "usage.left": "残り {percent}",
@@ -220,7 +200,6 @@
   "usage.buttonAria": "使用量: 残り {percent}",
   "usage.hours": "{count} 時間",
   "usage.days": "{count} 日",
-
   "inspector.details": "詳細",
   "inspector.aboutAgent": "エージェント情報",
   "inspector.toggleAria": "エージェントの詳細 (⌘I)",
@@ -243,7 +222,6 @@
   "inspector.uptime": {"other": "稼働 {count} 日"},
   "inspector.serverInfo": "{os} · Bandito {version} · {uptime}",
   "inspector.instructionsHeader": "指示",
-
   "settings.title": "設定",
   "settings.sectionsAria": "設定のセクション",
   "settings.general": "一般",
@@ -262,7 +240,6 @@
   "settings.notifications": "通知",
   "settings.menuBar": "メニューバーに表示",
   "settings.launchAtLogin": "ログイン時に起動",
-
   "settings.updates.channel": "アップデートチャンネル",
   "settings.updates.stable": "安定版",
   "settings.updates.beta": "ベータ版",
@@ -270,7 +247,6 @@
   "settings.updates.check": "今すぐ確認",
   "settings.updates.daemon": "デーモンを更新",
   "settings.updates.restartDaemon": "デーモンを再起動",
-
   "rules.newRule": "新しいルール",
   "rules.when": "エージェントが実行しようとするとき",
   "rules.placeholder": "例: wrangler deploy*",
@@ -290,7 +266,6 @@
   "rules.builtin": "組み込みチェック",
   "rules.builtinHint": "上のルールで別の指定がない限り常に適用",
   "rules.builtinOutsideProject": "プロジェクトフォルダ外への書き込み",
-
   "server.add.title": "サーバーを追加",
   "server.add.heading": "サーバーを接続",
   "server.add.intro": "コードはあなたのサーバーに残ります。この Mac からどう接続するか選んでください。どの方法でも、同じ暗号化された接続になります。",
@@ -329,7 +304,6 @@
   "server.stepOf": "ステップ {step} / {total}",
   "server.status.online": "オンライン",
   "server.status.offline": "オフライン",
-
   "menubar.needsYou": {"other": "{count} 件のエージェントが対応を待っています"},
   "menubar.open": "Bandito を開く",
   "menubar.pauseAll": "すべて一時停止",
@@ -337,13 +311,10 @@
   "menubar.openChat": "チャットを開く →",
   "menubar.working": "作業中",
   "menubar.upNext": "次に",
-
   "notification.approval": "{name} の承認が必要です",
   "notification.finished": "{name} が完了しました",
-
   "error.generic": "問題が発生しました: {message}",
   "error.disconnected": "{server} から切断されました",
-
   "onboarding.welcome.headline": "あなたの AI チーム。",
   "onboarding.welcome.headlineAccent": "あなたのサーバー上に。",
   "onboarding.welcome.subtitle": "Claude Code、Codex、Grok で動くエージェント。役割とスケジュールを設定できます。ノートパソコンを閉じても動き続け、危険な操作の前には必ず確認します。",
@@ -357,7 +328,6 @@
   "onboarding.welcome.haveAccount": "すでにアカウントをお持ちですか？",
   "onboarding.welcome.signIn": "サインイン",
   "onboarding.welcome.footer": "オープンソース · コードとキーはあなたのサーバーから出ません",
-
   "onboarding.account.heroTitle": "一度のサインインで全デバイス",
   "onboarding.account.heroText": "サーバーとエージェントは Mac と iPhone で。",
   "onboarding.account.title": "Banditoにサインイン",
@@ -371,7 +341,6 @@
   "onboarding.account.skip": "アカウントなしで続ける",
   "onboarding.account.emailToggle": "メールでサインイン",
   "onboarding.account.skipHint": "すべてこの Mac にだけ保存されます",
-
   "onboarding.server.title": "チームはどこで動かしますか？",
   "onboarding.server.subtitle": "エージェントは常時起動しているコンピュータで動きます。自分のサーバー、家庭用 PC、または試すだけならこの Mac を使えます。",
   "onboarding.server.whereAria": "実行場所",
@@ -418,14 +387,12 @@
   "onboarding.server.noPorts": "ポートは一切開きません。サーバーは自分自身だけで待ち受けます。",
   "onboarding.server.otherWays": "その他の方法: Tailscale、直接接続、カスタムアドレス — {link}",
   "onboarding.server.allOptions": "すべての方法",
-
   "onboarding.agent.title": "最初に雇うのは誰？",
   "onboarding.agent.subtitle": "用意された役割から選ぶと、モデル、指示、スケジュールを自動で設定します。すべてあとから変更でき、新しいエージェントはいつでも追加できます。",
   "onboarding.agent.yourFirst": "最初のエージェント",
   "onboarding.agent.asks": "確認",
   "onboarding.agent.hire": "{name} を雇って挨拶する",
   "onboarding.agent.firstMessage": "最初のメッセージは数秒で済みます。{name} が自己紹介し、どこから始めるか尋ねます。",
-
   "template.groupAria": "エージェントのテンプレート",
   "template.instructionsHeader": "テンプレートの指示",
   "template.builder.title": "ビルダー",
@@ -447,7 +414,6 @@
   "template.scratch.title": "ゼロから",
   "template.scratch.desc": "空のエージェント。名前、役割、指示はあなたが決めます。",
   "template.scratch.meta": "任意のモデル",
-
   "tour.hintAria": "ヒント",
   "tour.counter": "{step} / {total}",
   "tour.skip": "スキップ",
@@ -482,5 +448,30 @@
   "browser.closeTab": "タブを閉じる",
   "browser.closeTabHelp": "タブを閉じる (⌘W)",
   "browser.copyAddress": "アドレスをコピー",
-  "keys.closeTab": "タブを閉じる"
+  "keys.closeTab": "タブを閉じる",
+  "files.backHelp": "戻る — 前のフォルダ (⌘[)",
+  "files.forwardHelp": "進む (⌘])",
+  "files.searchButton": "検索",
+  "files.terminalHint": "このフォルダでターミナルを開く",
+  "files.createHelp": "フォルダまたはファイルを作成",
+  "files.more": "その他",
+  "files.showDetails": "詳細を表示",
+  "files.hideDetails": "詳細を隠す",
+  "files.emptyCreate": "フォルダを作成",
+  "files.panelAgent": "ここにエージェントを作成",
+  "files.crumb.more": "パス内のフォルダ",
+  "files.trashBlocked.title": "macOS はアプリにゴミ箱の中を見ることを許可していません",
+  "files.trashBlocked.detail": "Bandito で削除したファイルは Finder のゴミ箱にあり、そこから戻せます。",
+  "files.trashBlocked.openFinder": "Finder でゴミ箱を開く",
+  "files.access.title": "このフォルダにアクセスできません",
+  "files.access.hintThisMac": "システム設定 → プライバシーとセキュリティ → フルディスクアクセス で Bandito を許可してください。",
+  "files.access.hintServer": "サーバーのデーモンはこのフォルダを読めません。実行ユーザーの権限を確認してください。",
+  "files.access.openSettings": "設定を開く",
+  "files.menu.favoriteAdd": "お気に入りに追加",
+  "files.menu.favoriteRemove": "お気に入りから削除",
+  "files.hidePlace": "非表示",
+  "files.showHiddenPlaces": "非表示の場所を表示",
+  "files.showInFinder": "Finder で表示",
+  "files.terminalHere": "ターミナル",
+  "files.panelTerminal": "ここでターミナル"
 }

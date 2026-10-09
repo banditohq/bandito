@@ -17,9 +17,9 @@ enum FileFormat {
         }
     }
 
-    /// "6.4 KB" style size; folders have none.
+    /// "6.4 KB" style size. Folders have none, so the text is empty (not a dash).
     static func size(of entry: FsEntry) -> String {
-        guard entry.kind == .file else { return "—" }
+        guard entry.kind == .file else { return "" }
         return ByteCountFormatter.string(fromByteCount: entry.size, countStyle: .file)
     }
 

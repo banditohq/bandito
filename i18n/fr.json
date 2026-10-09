@@ -2,7 +2,6 @@
   "onboarding.skip": "Configurer plus tard",
   "onboarding.skipHint": "Ouvre l’app maintenant. Vous pourrez ajouter un serveur et un agent à tout moment.",
   "app.name": "Bandito",
-
   "sidebar.search": "Rechercher (⌘K)",
   "sidebar.newAgent": "Nouvel agent (⌘N)",
   "sidebar.new": "Nouveau",
@@ -17,7 +16,6 @@
   "sidebar.pinned": "Épinglés",
   "sidebar.servers": "Serveurs",
   "sidebar.empty": "Aucun agent pour l'instant. Créez le premier.",
-
   "common.now": "maintenant",
   "common.agentCount": {"one": "{count} agent", "other": "{count} agents"},
   "common.serverCount": {"one": "{count} serveur", "other": "{count} serveurs"},
@@ -29,7 +27,6 @@
   "common.next": "Suivant",
   "common.close": "Fermer",
   "common.agents": "AGENTS",
-
   "agent.menu.pin": "Épingler",
   "agent.menu.unpin": "Désépingler",
   "agent.menu.markUnread": "Marquer comme non lu",
@@ -39,27 +36,22 @@
   "agent.menu.hide": "Masquer de la barre latérale",
   "agent.menu.delete": "Supprimer…",
   "agent.delete.confirm": "Supprimer {name} ? Son historique reste sur le serveur.",
-
   "status.idle": "Inactif",
   "status.working": "En cours",
   "status.needsYou": "Attend votre action",
   "status.error": "Erreur",
   "status.offline": "Hors ligne",
-
   "profile.getIphone": "Obtenir l'app iPhone",
   "profile.help": "Aide",
   "profile.settings": "Réglages…",
   "profile.addServer": "Ajouter un serveur",
   "profile.signOut": "Se déconnecter de ce serveur",
-
   "search.placeholder": "Rechercher des agents et des messages",
   "search.noResults": "Aucun résultat",
-
   "new.to": "À :",
   "new.placeholder": "Commencer une conversation avec…",
   "new.agent": "Nouvel agent",
   "new.channel": "Nouveau canal d'équipe",
-
   "palette.title": "Accès rapide",
   "palette.search": "Rechercher",
   "palette.newAgentNamed": "Nouvel agent — nommé « {name}… »",
@@ -72,7 +64,6 @@
   "palette.hintOpen": "↵ ouvrir",
   "palette.hintMessage": "⌘↵ écrire",
   "palette.footerCounts": "{servers} · {agents}",
-
   "agentSheet.title": "Nouvel agent",
   "agentSheet.name": "Nom",
   "agentSheet.role": "Rôle",
@@ -97,7 +88,6 @@
   "agentSheet.cancel": "Annuler",
   "agentSheet.runtimeMissing": "{runtime} n'est pas installé sur {server}",
   "agentSheet.runtimeLogin": "{runtime} n'est pas connecté sur {server}. Exécutez là-bas : {command}",
-
   "avatar.presets": "Préréglages",
   "avatar.generate": "Générer",
   "avatar.upload": "Importer",
@@ -111,12 +101,10 @@
   "avatar.colorLilac": "Lilas",
   "avatar.colorCream": "Crème",
   "avatar.face": "Visage :",
-
   "runtime.claude": "Claude Code",
   "runtime.codex": "Codex",
   "runtime.grok": "Grok",
   "runtime.api": "Clé API",
-
   "connect.loggedInPlan": "Connecté · {plan}",
   "connect.needsLogin": "Connexion requise",
   "connect.limitUntil": "Limite jusqu'à {time}",
@@ -124,7 +112,6 @@
   "connect.stateLoggedIn": "connecté",
   "connect.stateLoginNeeded": "connexion requise",
   "connect.stateLimitToday": "limite atteinte aujourd'hui",
-
   "effort.title": "Effort",
   "effort.label": "effort : {level}",
   "effort.low": "Faible",
@@ -133,11 +120,9 @@
   "effort.xhigh": "Très élevé",
   "effort.max": "Maximum",
   "effort.hint": "Un effort plus élevé est plus intelligent sur les tâches difficiles, mais plus lent et consomme la limite plus vite. Pour le travail courant, « Moyen » suffit.",
-
   "approvalMode.risky": "Seulement le risqué",
   "approvalMode.always": "Tout",
   "approvalMode.never": "Rien",
-
   "thread.placeholder": "Message pour {name}",
   "thread.send": "Envoyer",
   "thread.stop": "Arrêter",
@@ -161,7 +146,6 @@
   "thread.hintNewLine": "⇧↵ nouvelle ligne",
   "thread.hintStop": "⌘. arrêter",
   "thread.hintSearch": "⌘K rechercher",
-
   "chapter.title": "Chapitre {count}",
   "chapter.resumed": "Chapitre {count} · {name} a relu sa mémoire et repris là où il s'était arrêté",
   "chapter.startedToday": "en cours depuis ce matin",
@@ -169,7 +153,6 @@
   "chapter.nextAt": "nouveau chapitre après {limit}",
   "chapter.explainer": "Quand un chapitre se remplit, {name} enregistre l'essentiel en mémoire et repart sur une page blanche. La conversation reste entière dans la fenêtre, et chaque nouveau message ne coûte pas plus cher.",
   "chapter.usageHint": "Part du chapitre actuel déjà utilisée",
-
   "memory.title": "Mémoire",
   "memory.header": "MÉMOIRE",
   "memory.splitHeader": "COMMENT DÉCOUPER EN CHAPITRES",
@@ -191,7 +174,6 @@
   "memory.files": "Fichiers",
   "memory.filesMeta": {"one": "{count} fichier créé par {name} pour lui-même", "other": "{count} fichiers créés par {name} pour lui-même"},
   "memory.footer": "Fichiers Markdown simples sur votre serveur. Vous pouvez les ouvrir, les modifier ou les supprimer. L'agent lit la nouvelle version au chapitre suivant.",
-
   "approval.needsYou": "attend votre action",
   "approval.wants": "{name} veut exécuter",
   "approval.wantsPush": "{name} veut pousser une branche",
@@ -203,12 +185,10 @@
   "approval.deniedByYou": "Refusé par vous · {time}",
   "approval.deniedByPolicy": "Refusé par une règle",
   "approval.expired": "Expiré",
-
   "banner.notLoggedIn": "{runtime} n'est pas connecté sur {server}. Exécutez `{command}` là-bas.",
   "banner.offline": "{server} est hors ligne. Reconnexion…",
   "banner.limit": "Limite d'utilisation atteinte. Réinitialisation à {time}.",
   "banner.retry": "Réessayer",
-
   "usage.title": "Utilisation",
   "usage.refresh": "Actualiser",
   "usage.left": "{percent} restant",
@@ -220,7 +200,6 @@
   "usage.buttonAria": "Utilisation : {percent} restant",
   "usage.hours": "{count} h",
   "usage.days": "{count} j",
-
   "inspector.details": "Détails",
   "inspector.aboutAgent": "Infos sur l'agent",
   "inspector.toggleAria": "Détails de l'agent (⌘I)",
@@ -243,7 +222,6 @@
   "inspector.uptime": {"one": "actif depuis {count} jour", "other": "actif depuis {count} jours"},
   "inspector.serverInfo": "{os} · Bandito {version} · {uptime}",
   "inspector.instructionsHeader": "INSTRUCTIONS",
-
   "settings.title": "Réglages",
   "settings.sectionsAria": "Sections des réglages",
   "settings.general": "Général",
@@ -262,7 +240,6 @@
   "settings.notifications": "Notifications",
   "settings.menuBar": "Afficher dans la barre des menus",
   "settings.launchAtLogin": "Lancer à l'ouverture de session",
-
   "settings.updates.channel": "Canal de mise à jour",
   "settings.updates.stable": "Stable",
   "settings.updates.beta": "Bêta",
@@ -270,7 +247,6 @@
   "settings.updates.check": "Vérifier maintenant",
   "settings.updates.daemon": "Mettre à jour le démon",
   "settings.updates.restartDaemon": "Redémarrer le démon",
-
   "rules.newRule": "Nouvelle règle",
   "rules.when": "Quand l'agent veut exécuter",
   "rules.placeholder": "ex. : wrangler deploy*",
@@ -290,7 +266,6 @@
   "rules.builtin": "Contrôles intégrés",
   "rules.builtinHint": "s'appliquent toujours, sauf si une règle ci-dessus dit le contraire",
   "rules.builtinOutsideProject": "écriture hors du dossier du projet",
-
   "server.add.title": "Ajouter un serveur",
   "server.add.heading": "Connecter un serveur",
   "server.add.intro": "Le code reste sur votre serveur. Choisissez comment ce Mac y accède : chaque option donne la même connexion chiffrée.",
@@ -329,7 +304,6 @@
   "server.stepOf": "ÉTAPE {step} SUR {total}",
   "server.status.online": "En ligne",
   "server.status.offline": "Hors ligne",
-
   "menubar.needsYou": {"one": "{count} agent attend votre action", "other": "{count} agents attendent votre action"},
   "menubar.open": "Ouvrir Bandito",
   "menubar.pauseAll": "Tout mettre en pause",
@@ -337,13 +311,10 @@
   "menubar.openChat": "Ouvrir le chat →",
   "menubar.working": "EN COURS",
   "menubar.upNext": "À VENIR",
-
   "notification.approval": "{name} attend votre approbation",
   "notification.finished": "{name} a terminé",
-
   "error.generic": "Une erreur est survenue : {message}",
   "error.disconnected": "Connexion à {server} interrompue",
-
   "onboarding.welcome.headline": "Votre équipe d'IA.",
   "onboarding.welcome.headlineAccent": "Sur votre serveur.",
   "onboarding.welcome.subtitle": "Des agents sur Claude Code, Codex et Grok, avec des rôles et des plannings. Ils continuent à travailler quand vous fermez votre portable et demandent avant toute action risquée.",
@@ -357,7 +328,6 @@
   "onboarding.welcome.haveAccount": "Vous avez déjà un compte ?",
   "onboarding.welcome.signIn": "Se connecter",
   "onboarding.welcome.footer": "Open source · votre code et vos clés ne quittent jamais vos serveurs",
-
   "onboarding.account.heroTitle": "Une connexion — tous vos appareils",
   "onboarding.account.heroText": "Serveurs et agents sur Mac et iPhone.",
   "onboarding.account.title": "Connectez-vous à Bandito",
@@ -371,7 +341,6 @@
   "onboarding.account.skip": "Continuer sans compte",
   "onboarding.account.emailToggle": "Se connecter par e-mail",
   "onboarding.account.skipHint": "tout reste uniquement sur ce Mac",
-
   "onboarding.server.title": "Où vivra votre équipe ?",
   "onboarding.server.subtitle": "Les agents tournent sur un ordinateur allumé en permanence. Utilisez votre propre serveur, un PC à la maison ou simplement ce Mac pour essayer.",
   "onboarding.server.whereAria": "Où exécuter",
@@ -418,14 +387,12 @@
   "onboarding.server.noPorts": "Nous n'ouvrons aucun port : le serveur n'écoute que lui-même.",
   "onboarding.server.otherWays": "Autres méthodes : Tailscale, connexion directe, adresse personnalisée — {link}",
   "onboarding.server.allOptions": "toutes les options",
-
   "onboarding.agent.title": "Qui engagez-vous en premier ?",
   "onboarding.agent.subtitle": "Choisissez un rôle prêt à l'emploi : nous réglons le modèle, les instructions et le planning. Tout est modifiable plus tard, et vous pouvez ajouter des agents à tout moment.",
   "onboarding.agent.yourFirst": "VOTRE PREMIER AGENT",
   "onboarding.agent.asks": "Demande",
   "onboarding.agent.hire": "Engager {name} et dire bonjour",
   "onboarding.agent.firstMessage": "Le premier message ne prend que quelques secondes : {name} se présente et demande par où commencer.",
-
   "template.groupAria": "Modèle d'agent",
   "template.instructionsHeader": "INSTRUCTIONS DU MODÈLE",
   "template.builder.title": "Développeur",
@@ -447,7 +414,6 @@
   "template.scratch.title": "À partir de zéro",
   "template.scratch.desc": "Un agent vide : vous choisissez le nom, le rôle et les instructions.",
   "template.scratch.meta": "N'importe quel modèle",
-
   "tour.hintAria": "Astuce",
   "tour.counter": "{step} sur {total}",
   "tour.skip": "Passer",
@@ -482,5 +448,30 @@
   "browser.closeTab": "Fermer l'onglet",
   "browser.closeTabHelp": "Fermer l'onglet (⌘W)",
   "browser.copyAddress": "Copier l'adresse",
-  "keys.closeTab": "Fermer l'onglet"
+  "keys.closeTab": "Fermer l'onglet",
+  "files.backHelp": "Retour — dossier précédent (⌘[)",
+  "files.forwardHelp": "Avancer (⌘])",
+  "files.searchButton": "Rechercher",
+  "files.terminalHint": "Ouvrir un terminal dans ce dossier",
+  "files.createHelp": "Créer un dossier ou un fichier",
+  "files.more": "Plus",
+  "files.showDetails": "Afficher les détails",
+  "files.hideDetails": "Masquer les détails",
+  "files.emptyCreate": "Créer un dossier",
+  "files.panelAgent": "Créer un agent ici",
+  "files.crumb.more": "Dossiers du chemin",
+  "files.trashBlocked.title": "macOS n'autorise pas les apps à voir la Corbeille",
+  "files.trashBlocked.detail": "Les fichiers supprimés dans Bandito sont dans la Corbeille du Finder, où vous pouvez les restaurer.",
+  "files.trashBlocked.openFinder": "Ouvrir la Corbeille dans le Finder",
+  "files.access.title": "Pas d'accès à ce dossier",
+  "files.access.hintThisMac": "Donnez à Bandito l'accès complet au disque dans Réglages Système → Confidentialité et sécurité → Accès complet au disque.",
+  "files.access.hintServer": "Le démon du serveur ne peut pas lire ce dossier. Vérifiez les droits de l'utilisateur qui le lance.",
+  "files.access.openSettings": "Ouvrir les réglages",
+  "files.menu.favoriteAdd": "Ajouter aux favoris",
+  "files.menu.favoriteRemove": "Retirer des favoris",
+  "files.hidePlace": "Masquer",
+  "files.showHiddenPlaces": "Afficher les emplacements masqués",
+  "files.showInFinder": "Afficher dans le Finder",
+  "files.terminalHere": "Terminal",
+  "files.panelTerminal": "Terminal ici"
 }

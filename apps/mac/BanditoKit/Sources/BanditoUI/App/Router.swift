@@ -116,8 +116,14 @@ public final class Router {
         self.mode = mode
     }
 
-    public var canGoBack: Bool { !backStack.isEmpty }
-    public var canGoForward: Bool { !forwardStack.isEmpty }
+    /// In Files, back and forward walk the folders visited on the server (`FolderHistory`), not the modes.
+    public var canGoBack: Bool {
+        mode == .files ? files.canStepBack || files.showsViewer : !backStack.isEmpty
+    }
+
+    public var canGoForward: Bool {
+        mode == .files ? files.canStepForward : !forwardStack.isEmpty
+    }
 
     /// Switches to `next`. Selecting the current mode does nothing. A new switch clears forward history.
     public func select(mode next: AppMode) {
@@ -127,18 +133,37 @@ public final class Router {
         mode = next
     }
 
-    /// Returns to the previous mode (⌘[ or a swipe to the right).
+    /// Returns to the previous mode (⌘[ or a swipe to the right). In Files it goes back one folder instead; with
+    /// no folder left to go back to, an open file viewer closes and the folder shows.
     public func back() {
+        if mode == .files {
+            if let path = files.stepBack() {
+                showFolder(path)
+            } else if files.showsViewer {
+                files.showsViewer = false
+            }
+            return
+        }
         guard let previous = backStack.popLast() else { return }
         forwardStack.append(mode)
         mode = previous
     }
 
-    /// Goes forward again after `back()` (⌘] or a swipe to the left).
+    /// Goes forward again after `back()` (⌘] or a swipe to the left). In Files it goes forward one folder.
     public func forward() {
+        if mode == .files {
+            if let path = files.stepForward() { showFolder(path) }
+            return
+        }
         guard let next = forwardStack.popLast() else { return }
         backStack.append(mode)
         mode = next
+    }
+
+    /// A folder chosen with the history steps: the browser shows it, even when a file was open in the viewer.
+    private func showFolder(_ path: String) {
+        filesPath = path
+        files.showsViewer = false
     }
 
     public func toggleSidebar() {
@@ -202,6 +227,13 @@ public final class Router {
         guard composerFocusAgentID == agentID else { return false }
         composerFocusAgentID = nil
         return true
+    }
+
+    /// "Open terminal here": the Terminals mode opens a new terminal in `folder` once the server's terminals
+    /// are listed (the folder waits in `pendingTerminalCwd` until then).
+    public func openTerminalHere(_ folder: String) {
+        pendingTerminalCwd = folder
+        select(mode: .terminals)
     }
 
     /// A terminal command for the Terminals mode, and the mode switch in the same step, so the command runs

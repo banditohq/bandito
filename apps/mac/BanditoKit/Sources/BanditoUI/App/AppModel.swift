@@ -200,6 +200,7 @@ public final class AppModel {
         #endif
         Task { await s.disconnect() }
         Keychain.setToken(nil, for: id)
+        FileFavorites.forget(serverID: id)
         if selectedServerID == id { selectedServerID = servers.first?.id }
         save()
     }

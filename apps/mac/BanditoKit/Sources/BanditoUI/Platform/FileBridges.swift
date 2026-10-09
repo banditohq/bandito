@@ -39,6 +39,28 @@ enum FileBridge {
         #endif
     }
 
+    /// Opens a folder in Finder, or a System Settings pane through its `x-apple.systempreferences:` URL.
+    static func open(_ url: URL) {
+        #if os(macOS)
+        NSWorkspace.shared.open(url)
+        #endif
+    }
+
+    /// Opens the Full Disk Access pane of System Settings, where macOS lets Bandito read protected folders.
+    static func openPrivacySettings() {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") else {
+            return
+        }
+        open(url)
+    }
+
+    /// Shows a file or folder selected in its Finder window ("Show in Finder").
+    static func showInFinder(_ url: URL) {
+        #if os(macOS)
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+        #endif
+    }
+
     /// An image from raw bytes, or `nil` if they are not an image this OS can draw.
     static func image(from data: Data) -> Image? {
         #if os(macOS)
