@@ -6,3 +6,5 @@ DerivedData/
 .env
 .env.*
 target/
+.build/
+.swiftpm/
