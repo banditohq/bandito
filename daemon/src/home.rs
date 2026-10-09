@@ -33,14 +33,17 @@ const MEMORY_TEMPLATE: &str = "\
 ";
 
 /// Root for all agent folders: `$BANDITO_AGENTS_DIR`, else `~/bandito/agents`.
-pub fn default_agents_root() -> PathBuf {
-    agents_root_from(std::env::var_os("BANDITO_AGENTS_DIR"), dirs::home_dir())
+/// `fallback` (the daemon's data dir) is used when there is no home directory,
+/// so the root is never a relative path.
+pub fn default_agents_root(fallback: &Path) -> PathBuf {
+    agents_root_from(std::env::var_os("BANDITO_AGENTS_DIR"), dirs::home_dir(), fallback)
 }
 
-fn agents_root_from(env: Option<OsString>, home: Option<PathBuf>) -> PathBuf {
-    match env {
-        Some(dir) => PathBuf::from(dir),
-        None => home.unwrap_or_default().join("bandito").join("agents"),
+fn agents_root_from(env: Option<OsString>, home: Option<PathBuf>, fallback: &Path) -> PathBuf {
+    match (env, home) {
+        (Some(dir), _) => PathBuf::from(dir),
+        (None, Some(home)) => home.join("bandito").join("agents"),
+        (None, None) => fallback.join("agents"),
     }
 }
 
@@ -150,11 +153,11 @@ mod tests {
     #[test]
     fn root_comes_from_env_or_home() {
         assert_eq!(
-            agents_root_from(Some("/srv/agents".into()), Some("/home/u".into())),
+            agents_root_from(Some("/srv/agents".into()), Some("/home/u".into()), Path::new("/var/b")),
             PathBuf::from("/srv/agents")
         );
         assert_eq!(
-            agents_root_from(None, Some("/home/u".into())),
+            agents_root_from(None, Some("/home/u".into()), Path::new("/var/b")),
             PathBuf::from("/home/u/bandito/agents")
         );
     }

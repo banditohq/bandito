@@ -125,7 +125,7 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr) -> Result<()> {
     };
     let sup = Supervisor::new(hub, runtimes, mcp);
     sup.recover()?;
-    let app = App::new(sup.clone(), home::default_agents_root());
+    let app = App::new(sup.clone(), home::default_agents_root(home));
 
     let unix = rpc::unix::bind(sock)?;
     tokio::spawn(rpc::unix::run(app.clone(), unix));
