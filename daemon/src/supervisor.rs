@@ -591,8 +591,18 @@ impl Actor {
                 }
             } else if agent.runtime_session_id.is_some() || agent.context_tokens > 0 {
                 // No session to close, but a stored session id would resume the old chapter.
-                if let Err(e) = self.hub.store.agent_next_chapter(&self.id) {
-                    tracing::warn!(agent = self.id, "start next chapter: {e:#}");
+                match self.hub.store.agent_next_chapter(&self.id) {
+                    Ok(chapter) => {
+                        self.hub.emit(
+                            &self.id,
+                            EventBody::SessionRotated {
+                                chapter,
+                                reason: "new day".into(),
+                                context_tokens: agent.context_tokens,
+                            },
+                        );
+                    }
+                    Err(e) => tracing::warn!(agent = self.id, "start next chapter: {e:#}"),
                 }
             }
         }
@@ -824,9 +834,12 @@ impl Actor {
                     self.hub.emit(&self.id, EventBody::Error { message: d.clone() });
                 }
                 self.expire_pending();
-                // A wrap-up turn that died still closes its chapter.
+                // A wrap-up turn that died still closes its chapter, and the
+                // messages waiting behind it go to the fresh session.
                 if let Some(reason) = self.wrap_up.take() {
                     self.rotate(reason).await;
+                    self.after_turn().await;
+                    return;
                 }
                 if failed {
                     self.set_status(AgentStatus::Error, detail);
@@ -1854,7 +1867,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn new_day_without_a_session_starts_the_next_chapter_quietly() {
+    async fn new_day_without_a_session_starts_the_next_chapter() {
         let w = world(ApprovalMode::Risky);
         // a session id from before a restart: it must not be resumed on a new day
         w.store.agent_set_session(&w.agent, Some("old-session")).unwrap();
@@ -1863,7 +1876,8 @@ mod tests {
         w.wait_log("send hi").await;
         assert_eq!(w.spawns.lock().unwrap()[0].resume, None);
         assert_eq!(w.store.agent_get(&w.agent).unwrap().unwrap().chapter, 2);
-        assert!(!w.kinds().iter().any(|k| k == "session.rotated"));
+        // the thread still shows where the new chapter began
+        assert!(w.kinds().iter().any(|k| k == "session.rotated"));
     }
 
     #[test]

@@ -352,6 +352,7 @@ fn history_line(e: &Event, agent_name: &str) -> Option<String> {
                 Source::User => "user".to_string(),
                 Source::Schedule => "schedule".to_string(),
                 Source::Crew => from_agent.clone().unwrap_or_else(|| "crew".to_string()),
+                Source::System => "system".to_string(),
             };
             (who, text.as_str())
         }
@@ -862,7 +863,10 @@ mod history_tests {
             })
             .unwrap();
         let sup = Supervisor::new(Hub::new(store), Runtimes::default(), None);
-        (App::new(sup), agent.id)
+        (
+            App::new(sup, std::env::temp_dir().join("bandito-history-tests")),
+            agent.id,
+        )
     }
 
     fn user(text: &str, source: Source, from_agent: Option<&str>) -> EventBody {

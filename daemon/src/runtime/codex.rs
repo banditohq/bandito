@@ -147,7 +147,8 @@ impl Runtime for CodexRuntime {
         let outcome = timeout(USAGE_TIMEOUT, usage_exchange(&proc, answer_rx)).await;
         proc.shutdown().await;
         match outcome {
-            Ok(answer) => answer.map(Some),
+            // An empty answer must not wipe the windows a turn reported earlier.
+            Ok(answer) => answer.map(|w| (!w.is_empty()).then_some(w)),
             Err(_) => bail!("codex: rate limits request timed out"),
         }
     }
