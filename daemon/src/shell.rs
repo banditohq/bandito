@@ -2,8 +2,12 @@
 //!
 //! This is not a shell and runs nothing. [`parse`] returns the simple commands a line
 //! runs, with the wrappers taken off (`sudo`, `env`, `timeout`, `xargs`, `sh -c`,
-//! `find -exec` …), the redirections of each, and `opaque`: the reasons why some part
-//! of the line could not be read. The policy asks the human about opaque lines.
+//! `find -exec` …), the redirections of each, the folder each one runs in (`cd` and
+//! `pushd`/`popd` are followed), what its words expand to where that is known, and
+//! `opaque`: the reasons why some part of the line could not be read. Where a word or a
+//! folder cannot be known, the command says so; the policy asks the human about it.
+
+use std::collections::HashMap;
 
 /// Longer lines are not read at all: the result is opaque ("too long").
 pub const MAX_LEN: usize = 64 * 1024;
@@ -25,6 +29,20 @@ const TIMEOUT_VALUE_FLAGS: &[&str] = &["-s", "-k", "--signal", "--kill-after"];
 const IONICE_VALUE_FLAGS: &[&str] = &["-c", "-n", "-p", "-P", "-u"];
 const XARGS_VALUE_FLAGS: &[&str] = &["-a", "-d", "-E", "-I", "-L", "-n", "-P", "-s"];
 
+/// Resolves `~user` to that user's home folder. None when there is no such user.
+pub type UserDir = fn(&str) -> Option<String>;
+
+/// What the reader needs to know about the daemon's own surroundings.
+#[derive(Clone)]
+pub struct Env {
+    /// The user's home folder: the start of `~`, `$HOME` before the line changes it.
+    pub home: String,
+    /// The data folder: `$BANDITO_HOME`.
+    pub bandito_home: String,
+    /// Looks up `~user`.
+    pub users: UserDir,
+}
+
 /// What a command line runs and what could not be read.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Parsed {
@@ -42,7 +60,15 @@ pub struct SimpleCommand {
     pub argv: Vec<String>,
     /// The program as written, before the basename was taken (`/usr/bin/rm`). Empty when `argv` is.
     pub program: String,
+    /// What each word of `argv` expands to, where it is known (`None`: a variable, `~user` or
+    /// substitution that cannot be known here). Same length and order as `argv`; `[0]` is the
+    /// program as written.
+    pub expanded: Vec<Option<String>>,
     pub redirects: Vec<Redirect>,
+    /// The folder the command runs in: absolute and lexically normalized. None when it is not known.
+    pub cwd: Option<String>,
+    /// Names set just before the command (`NAME=value cmd`), and by `env` in front of it.
+    pub assigned: Vec<String>,
     /// The arguments come from input through `xargs`, not from the line.
     pub via_xargs: bool,
     /// `find … -delete`.
@@ -54,10 +80,12 @@ pub struct SimpleCommand {
 /// A redirection. `op` is the operator with its descriptor: `>`, `>>`, `<`, `>|`, `&>`,
 /// `&>>`, `<>`, `2>`, `2>>`, …. Descriptor duplications (`2>&1`) keep `>&` / `<&` and
 /// a descriptor number (or `-`) as the target; they name no file.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Redirect {
     pub op: String,
     pub target: String,
+    /// What the target expands to, where it is known.
+    pub expanded: Option<String>,
 }
 
 impl Redirect {
@@ -80,12 +108,65 @@ impl Parsed {
     }
 }
 
-/// Reads a command line. Never fails: what it cannot read is listed in `opaque`.
-pub fn parse(cmd: &str) -> Parsed {
-    parse_at(cmd, 0)
+/// Reads a command line that runs in `cwd` (None: not known), in the surroundings `env`.
+/// Never fails: what cannot be read is listed in `opaque`, and unknown values are None.
+pub fn parse(cmd: &str, cwd: Option<&str>, env: &Env) -> Parsed {
+    let state = State::initial(env, cwd.map(canon));
+    parse_state(cmd, 0, env, state)
 }
 
-fn parse_at(cmd: &str, depth: usize) -> Parsed {
+/// Lexically normalized absolute form of a path: `.` and empty parts dropped, `..` applied.
+pub fn canon(path: &str) -> String {
+    format!("/{}", normalize_path(path).join("/"))
+}
+
+/// Path components, lexically: empty and `.` dropped, `..` pops (no-op at the root).
+pub fn normalize_path(path: &str) -> Vec<&str> {
+    let mut parts: Vec<&str> = Vec::new();
+    for component in path.split('/') {
+        match component {
+            "" | "." => {}
+            ".." => {
+                parts.pop();
+            }
+            other => parts.push(other),
+        }
+    }
+    parts
+}
+
+/// Shell state that changes along a line: variables, the folder, and `pushd` stack.
+#[derive(Clone, Default)]
+struct State {
+    /// Known values by name. A name mapped to None, or not mapped at all, is unknown.
+    vars: HashMap<String, Option<String>>,
+    cwd: Option<String>,
+    dirs: Vec<Option<String>>,
+}
+
+impl State {
+    fn initial(env: &Env, cwd: Option<String>) -> State {
+        let mut vars = HashMap::new();
+        vars.insert("HOME".to_string(), Some(env.home.clone()));
+        vars.insert("BANDITO_HOME".to_string(), Some(env.bandito_home.clone()));
+        State {
+            vars,
+            cwd,
+            dirs: Vec::new(),
+        }
+    }
+
+    fn var(&self, name: &str) -> Option<String> {
+        self.vars.get(name).cloned().flatten()
+    }
+
+    /// Sets a variable. In a pipeline the assignment runs in a subshell in many shells, so it is unknown after it.
+    fn set(&mut self, name: &str, value: Option<String>, piped: bool) {
+        self.vars.insert(name.to_string(), if piped { None } else { value });
+    }
+}
+
+fn parse_state(cmd: &str, depth: usize, env: &Env, state: State) -> Parsed {
     if depth > MAX_DEPTH {
         let mut out = Parsed::default();
         out.note("nesting");
@@ -96,24 +177,231 @@ fn parse_at(cmd: &str, depth: usize) -> Parsed {
         out.note("too long");
         return out;
     }
-    let mut lexer = Lexer::new(cmd, depth);
+    let mut lexer = Lexer::new(cmd, depth, env.clone());
     let tokens = lexer.run();
     let mut out = lexer.out;
+    let mut st = state;
+    // Each `(` saves the state, and the matching `)` brings it back: a subshell changes nothing outside.
+    let mut saved: Vec<State> = Vec::new();
     for raw in build(&tokens) {
-        let ctx = Ctx {
-            depth,
-            via_xargs: false,
-            piped: raw.piped,
-        };
-        normalize(&raw.argv, &raw.redirects, ctx, &mut out);
+        for _ in 0..raw.closes {
+            if let Some(prev) = saved.pop() {
+                st = prev;
+            }
+        }
+        for _ in 0..raw.opens {
+            saved.push(st.clone());
+        }
+        for why in &raw.opaque {
+            out.note(why);
+        }
+        run_raw(&raw, &mut st, depth, env, &mut out);
     }
     out
 }
 
+/// One word after expansion: its text, and what it expands to where that is known.
+#[derive(Clone, Debug)]
+struct Word {
+    text: String,
+    exp: Option<String>,
+}
+
+/// Runs one raw command: expands its words in the current state, then reads it and follows its effect on the shell.
+fn run_raw(raw: &Raw, st: &mut State, depth: usize, env: &Env, out: &mut Parsed) {
+    let words: Vec<Word> = raw
+        .words
+        .iter()
+        .map(|text| Word {
+            text: text.clone(),
+            exp: expand(text, st, env),
+        })
+        .collect();
+    let redirects: Vec<Redirect> = raw
+        .redirects
+        .iter()
+        .map(|r| Redirect {
+            expanded: expand(&r.target, st, env),
+            ..r.clone()
+        })
+        .collect();
+    let piped = raw.piped_in || raw.piped_out;
+    let ctx = Ctx {
+        depth,
+        via_xargs: false,
+        piped: raw.piped_in,
+        cwd: st.cwd.clone(),
+        assigned: Vec::new(),
+    };
+    let assigns = words.iter().take_while(|w| is_assignment(&w.text)).count();
+    if assigns == words.len() {
+        // Only assignments (and maybe redirections): they change the shell's own variables.
+        for word in &words {
+            let (name, value) = split_assignment(&word.text);
+            let value = expand(value, st, env);
+            st.set(name, value, piped);
+        }
+        if !redirects.is_empty() {
+            out.commands.push(build_simple(&[], &redirects, &ctx, (false, false)));
+        }
+        return;
+    }
+    let assigned: Vec<String> = words[..assigns]
+        .iter()
+        .map(|w| split_assignment(&w.text).0.to_string())
+        .collect();
+    let command = &words[assigns..];
+    let ctx = Ctx { assigned, ..ctx };
+    normalize(command, &redirects, &ctx, env, st, out);
+    effects(command, st, piped);
+}
+
+/// The shell's own changes made by a command: `cd`, `pushd`, `popd`, `export`, `unset`, `read`, …
+fn effects(words: &[Word], st: &mut State, piped: bool) {
+    let Some(first) = words.first() else {
+        return;
+    };
+    let args = &words[1..];
+    match basename(&first.text) {
+        "cd" => {
+            let target = cd_target(args, st);
+            st.cwd = if piped { None } else { target };
+        }
+        "pushd" => {
+            st.dirs.push(st.cwd.clone());
+            let target = cd_target(args, st);
+            st.cwd = if piped { None } else { target };
+        }
+        "popd" => {
+            let top = st.dirs.pop().flatten();
+            st.cwd = if piped { None } else { top };
+        }
+        "export" | "declare" | "typeset" | "local" | "readonly" => {
+            for word in args.iter().filter(|w| !w.text.starts_with('-')) {
+                if is_assignment(&word.text) {
+                    let (name, _) = split_assignment(&word.text);
+                    // The expansion of `NAME=value` is `NAME=` plus the expanded value.
+                    let value = word
+                        .exp
+                        .as_deref()
+                        .and_then(|e| e.split_once('='))
+                        .map(|(_, v)| v.to_string());
+                    st.set(name, value, piped);
+                } else {
+                    st.set(&word.text, None, piped);
+                }
+            }
+        }
+        "unset" | "read" => {
+            for word in args.iter().filter(|w| !w.text.starts_with('-')) {
+                st.set(&word.text, None, piped);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// The folder `cd` goes to, if it is known. No argument goes home; `cd -` is unknown.
+fn cd_target(args: &[Word], st: &State) -> Option<String> {
+    let operands: Vec<&Word> = args
+        .iter()
+        .filter(|w| !(w.text.starts_with('-') && w.text != "-"))
+        .collect();
+    match operands.as_slice() {
+        [] => st.var("HOME").map(|home| canon(&home)),
+        [word] if word.text == "-" => None,
+        [word] => resolve(word.exp.as_deref()?, st.cwd.as_deref()),
+        _ => None,
+    }
+}
+
+/// A path as the shell would make it absolute from `cwd`; None when `cwd` is unknown and the path is relative.
+fn resolve(path: &str, cwd: Option<&str>) -> Option<String> {
+    if path.starts_with('/') {
+        Some(canon(path))
+    } else {
+        cwd.map(|c| canon(&format!("{c}/{path}")))
+    }
+}
+
+/// Expands the parts of a word that this reader can know: `~`, `~user`, `$NAME`, `${NAME}`.
+/// None when a part cannot be known (a variable not set on this line, a substitution, a
+/// positional or special parameter, a parameter expression, an unknown user).
+fn expand(word: &str, st: &State, env: &Env) -> Option<String> {
+    if word.contains('`') || word.contains("$(") || word.contains("<(") || word.contains(">(") {
+        return None;
+    }
+    // `--output=~/x` and `--dir=$HOME/x`: the value after an option's `=` expands as a word of its own.
+    if let Some((head, tail)) = word
+        .split_once('=')
+        .filter(|(head, tail)| head.starts_with('-') && (tail.starts_with('~') || tail.contains('$')))
+    {
+        return Some(format!("{head}={}", expand(tail, st, env)?));
+    }
+    let mut out = String::new();
+    let mut rest = word;
+    if let Some(after) = word.strip_prefix('~') {
+        let end = after.find('/').unwrap_or(after.len());
+        let name = &after[..end];
+        let dir = match name {
+            "" => st.var("HOME"),
+            "+" | "-" => None,
+            _ => (env.users)(name),
+        }?;
+        out.push_str(&dir);
+        rest = &after[end..];
+    }
+    while let Some(pos) = rest.find('$') {
+        out.push_str(&rest[..pos]);
+        let after = &rest[pos + 1..];
+        if let Some(inner) = after.strip_prefix('{') {
+            let end = inner.find('}')?;
+            let name = &inner[..end];
+            if !is_name(name) {
+                return None;
+            }
+            out.push_str(&st.var(name)?);
+            rest = &inner[end + 1..];
+        } else {
+            let len = after
+                .chars()
+                .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+                .count();
+            if len == 0 {
+                match after.chars().next() {
+                    Some(c) if "@*#?-$!".contains(c) => return None,
+                    _ => {
+                        out.push('$');
+                        rest = after;
+                        continue;
+                    }
+                }
+            }
+            let name = &after[..len];
+            out.push_str(&st.var(name)?);
+            rest = &after[len..];
+        }
+    }
+    out.push_str(rest);
+    Some(out)
+}
+
+/// `NAME` as a shell variable name: a letter or `_`, then letters, digits or `_`.
+fn is_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    matches!(chars.next(), Some(c) if c.is_ascii_alphabetic() || c == '_')
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Tok {
-    /// `quoted` when any part was quoted or escaped: such a word is never a keyword.
-    Word { text: String, quoted: bool },
+    /// `quoted` when any part was quoted or escaped: such a word is never a keyword. `shell`
+    /// names the shell feature the word needs and this reader does not model (brace expansion, zsh `=word`).
+    Word {
+        text: String,
+        quoted: bool,
+        shell: Option<&'static str>,
+    },
     /// `&&`, `||`, `;`, `&`, `|`, `|&`, `(`, `)`, a newline. A bare `{` or `}` is also `;`.
     Op(&'static str),
     /// A redirection. Its target is the next word. `fd` holds the digits before it, or "".
@@ -126,19 +414,21 @@ struct Lexer {
     chars: Vec<char>,
     pos: usize,
     depth: usize,
+    env: Env,
     stop: bool,
     /// Heredoc delimiters whose bodies start on the next line: (word, `<<-` strips tabs).
     heredocs: Vec<(String, bool)>,
-    /// Commands from substitutions, already normalized, and the reasons found so far.
+    /// Commands from substitutions, already read, and the reasons found so far.
     out: Parsed,
 }
 
 impl Lexer {
-    fn new(cmd: &str, depth: usize) -> Self {
+    fn new(cmd: &str, depth: usize, env: Env) -> Self {
         Self {
             chars: cmd.chars().collect(),
             pos: 0,
             depth,
+            env,
             stop: false,
             heredocs: Vec::new(),
             out: Parsed::default(),
@@ -223,7 +513,7 @@ impl Lexer {
                 }
                 _ => {
                     let start = self.pos;
-                    let (text, quoted) = self.word();
+                    let (text, quoted, shell) = self.word();
                     if self.pos == start {
                         self.pos += 1;
                         continue;
@@ -231,7 +521,7 @@ impl Lexer {
                     if !quoted && (text == "{" || text == "}") {
                         toks.push(Tok::Op(";"));
                     } else if quoted || !text.is_empty() {
-                        toks.push(Tok::Word { text, quoted });
+                        toks.push(Tok::Word { text, quoted, shell });
                     }
                 }
             }
@@ -270,11 +560,12 @@ impl Lexer {
             if let Some(inner) = self.extract_paren() {
                 self.note("process substitution");
                 self.nested(&inner);
+                toks.push(Tok::Word {
+                    text: format!("{c}({inner})"),
+                    quoted: true,
+                    shell: None,
+                });
             }
-            toks.push(Tok::Word {
-                text: format!("{c}()"),
-                quoted: true,
-            });
             return;
         }
         let op: &'static str = match (c, next) {
@@ -291,7 +582,7 @@ impl Lexer {
                         self.pos += 1;
                     }
                     self.skip_blanks();
-                    let (delim, _) = self.word();
+                    let (delim, _, _) = self.word();
                     self.heredocs.push((delim, strip));
                 }
                 self.note("heredoc");
@@ -331,10 +622,16 @@ impl Lexer {
     }
 
     /// Reads one word: quotes removed, `$(…)` and backticks read as commands. Stops at
-    /// blanks and operators. Returns the text and whether any part was quoted.
-    fn word(&mut self) -> (String, bool) {
+    /// blanks and operators. Returns the text, whether any part was quoted, and the
+    /// shell feature it needs that is not modelled (if any).
+    fn word(&mut self) -> (String, bool, Option<&'static str>) {
         let mut text = String::new();
         let mut quoted = false;
+        // Unquoted brace expansion: `{`, then `,` or `..`, then `}`.
+        let mut brace_open = false;
+        let mut brace_sep = false;
+        let mut brace = false;
+        let mut zsh_equals = false;
         while let Some(c) = self.peek(0) {
             match c {
                 ' ' | '\t' | '\r' | '\n' | ';' | '&' | '|' | '(' | ')' | '<' | '>' => break,
@@ -361,7 +658,7 @@ impl Lexer {
                             None => {
                                 self.note("unclosed quote");
                                 self.stop = true;
-                                return (text, quoted);
+                                return (text, quoted, None);
                             }
                         }
                     }
@@ -370,9 +667,18 @@ impl Lexer {
                     quoted = true;
                     self.pos += 1;
                     if !self.double_quoted(&mut text) {
-                        return (text, quoted);
+                        return (text, quoted, None);
                     }
                 }
+                '$' if self.peek(1) == Some('\'') => {
+                    quoted = true;
+                    self.pos += 2;
+                    if !self.ansi_c(&mut text) {
+                        return (text, quoted, None);
+                    }
+                }
+                // `$"…"` is `"…"` (the translation is not modelled).
+                '$' if self.peek(1) == Some('"') => self.pos += 1,
                 '$' if self.peek(1) == Some('(') => {
                     quoted = true;
                     self.pos += 2;
@@ -384,12 +690,36 @@ impl Lexer {
                     self.backticks(&mut text);
                 }
                 _ => {
+                    if c == '=' && text.is_empty() && !quoted {
+                        zsh_equals = true;
+                    }
+                    match c {
+                        '{' => {
+                            brace_open = true;
+                            brace_sep = false;
+                        }
+                        ',' if brace_open => brace_sep = true,
+                        '.' if brace_open && self.peek(1) == Some('.') => brace_sep = true,
+                        '}' => {
+                            brace |= brace_open && brace_sep;
+                            brace_open = false;
+                            brace_sep = false;
+                        }
+                        _ => {}
+                    }
                     text.push(c);
                     self.pos += 1;
                 }
             }
         }
-        (text, quoted)
+        let shell = if brace {
+            Some("brace expansion")
+        } else if zsh_equals {
+            Some("zsh =word")
+        } else {
+            None
+        };
+        (text, quoted, shell)
     }
 
     /// Reads a double-quoted part (after the opening quote). False when it is not closed.
@@ -432,7 +762,80 @@ impl Lexer {
         }
     }
 
-    /// After `$(`: reads the command up to its closing parenthesis and parses it.
+    /// After `$'`: the ANSI-C quoted text, with its escapes read as bash reads them. False when it is not closed.
+    fn ansi_c(&mut self, text: &mut String) -> bool {
+        loop {
+            let Some(c) = self.bump() else {
+                self.note("unclosed quote");
+                self.stop = true;
+                return false;
+            };
+            match c {
+                '\'' => return true,
+                '\\' => {
+                    let Some(e) = self.bump() else {
+                        text.push('\\');
+                        continue;
+                    };
+                    match e {
+                        'n' => text.push('\n'),
+                        't' => text.push('\t'),
+                        'r' => text.push('\r'),
+                        'a' => text.push('\u{7}'),
+                        'b' => text.push('\u{8}'),
+                        'e' | 'E' => text.push('\u{1b}'),
+                        'f' => text.push('\u{c}'),
+                        'v' => text.push('\u{b}'),
+                        '\\' | '\'' | '"' | '?' => text.push(e),
+                        'x' => self.numeric_escape(text, 16, 2, "\\x"),
+                        'u' => self.numeric_escape(text, 16, 4, "\\u"),
+                        'U' => self.numeric_escape(text, 16, 8, "\\U"),
+                        '0'..='7' => {
+                            let mut value = e.to_digit(8).unwrap_or(0);
+                            for _ in 0..2 {
+                                match self.peek(0).and_then(|d| d.to_digit(8)) {
+                                    Some(d) => {
+                                        value = value * 8 + d;
+                                        self.pos += 1;
+                                    }
+                                    None => break,
+                                }
+                            }
+                            text.push(char::from_u32(value).unwrap_or('\u{fffd}'));
+                        }
+                        other => {
+                            text.push('\\');
+                            text.push(other);
+                        }
+                    }
+                }
+                other => text.push(other),
+            }
+        }
+    }
+
+    /// Up to `max` digits in `radix` after an ANSI-C `\x`, `\u` or `\U`. No digits: the escape stays as written.
+    fn numeric_escape(&mut self, text: &mut String, radix: u32, max: usize, written: &str) {
+        let mut value = 0u32;
+        let mut count = 0;
+        while count < max {
+            match self.peek(0).and_then(|d| d.to_digit(radix)) {
+                Some(d) => {
+                    value = value.wrapping_mul(radix).wrapping_add(d);
+                    self.pos += 1;
+                    count += 1;
+                }
+                None => break,
+            }
+        }
+        if count == 0 {
+            text.push_str(written);
+        } else {
+            text.push(char::from_u32(value).unwrap_or('\u{fffd}'));
+        }
+    }
+
+    /// After `$(`: reads the command up to its closing parenthesis and reads it.
     fn substitution(&mut self, text: &mut String) {
         if let Some(inner) = self.extract_paren() {
             self.note("command substitution");
@@ -486,7 +889,7 @@ impl Lexer {
         None
     }
 
-    /// After an opening backtick: reads up to the closing one and parses it.
+    /// After an opening backtick: reads up to the closing one and reads it.
     fn backticks(&mut self, text: &mut String) {
         let start = self.pos;
         let len = self.chars.len();
@@ -512,9 +915,10 @@ impl Lexer {
         self.note("unclosed backticks");
     }
 
-    /// Parses text that a substitution runs and keeps its commands.
+    /// Reads text that a substitution runs. Its shell state is not known here, so it starts unknown.
     fn nested(&mut self, inner: &str) {
-        let parsed = parse_at(inner, self.depth + 1);
+        let state = State::initial(&self.env, None);
+        let parsed = parse_state(inner, self.depth + 1, &self.env, state);
         merge(&mut self.out, parsed, &[]);
     }
 
@@ -543,60 +947,102 @@ impl Lexer {
     }
 }
 
-/// A simple command as the parser found it, before wrappers are taken off.
+/// A simple command as the lexer found it: words and redirections, before wrappers and expansion.
 #[derive(Debug, Default)]
 struct Raw {
-    argv: Vec<String>,
+    words: Vec<String>,
     redirects: Vec<Redirect>,
+    /// Shell features this command needs that are not modelled.
+    opaque: Vec<&'static str>,
     /// Fed by a pipe (`… | this`).
-    piped: bool,
+    piped_in: bool,
+    /// Its output goes to a pipe (`this | …`).
+    piped_out: bool,
+    /// Subshells opened just before it, and closed just before it.
+    opens: usize,
+    closes: usize,
 }
 
 impl Raw {
     fn is_empty(&self) -> bool {
-        self.argv.is_empty() && self.redirects.is_empty()
+        self.words.is_empty() && self.redirects.is_empty()
     }
 }
 
-/// Groups tokens into simple commands, split at operators.
+/// Groups tokens into simple commands, split at operators; keeps subshell nesting and pipes.
 fn build(tokens: &[Tok]) -> Vec<Raw> {
     let mut raws = Vec::new();
     let mut cur = Raw::default();
+    let mut started = false;
+    let mut piped_in = false;
+    let mut pend_open = 0usize;
+    let mut pend_close = 0usize;
     let mut i = 0;
     while i < tokens.len() {
         match &tokens[i] {
-            Tok::Op(op) => {
-                let piped = matches!(*op, "|" | "|&");
-                if !cur.is_empty() {
-                    raws.push(std::mem::take(&mut cur));
+            Tok::Op(op) => match *op {
+                "|" | "|&" => {
+                    cur.piped_out = true;
+                    finish(&mut raws, &mut cur, &mut started);
+                    piped_in = true;
                 }
-                cur.piped = piped;
-            }
+                "(" => {
+                    finish(&mut raws, &mut cur, &mut started);
+                    pend_open += 1;
+                }
+                ")" => {
+                    finish(&mut raws, &mut cur, &mut started);
+                    pend_close += 1;
+                }
+                _ => {
+                    finish(&mut raws, &mut cur, &mut started);
+                    piped_in = false;
+                }
+            },
             Tok::Heredoc => {}
             Tok::Redir { fd, op } => {
-                let target = match tokens.get(i + 1) {
-                    Some(Tok::Word { text, .. }) => {
-                        i += 1;
-                        Some(text.clone())
+                if let Some(Tok::Word { text, shell, .. }) = tokens.get(i + 1) {
+                    i += 1;
+                    begin(&mut cur, &mut started, piped_in, &mut pend_open, &mut pend_close);
+                    if let Some(reason) = shell {
+                        cur.opaque.push(reason);
                     }
-                    _ => None,
-                };
-                if let Some(target) = target {
-                    cur.redirects.push(redirect(fd, op, target));
+                    cur.redirects.push(redirect(fd, op, text.clone()));
                 }
             }
-            Tok::Word { text, quoted } => {
-                if !(cur.argv.is_empty() && !quoted && RESERVED.contains(&text.as_str())) {
-                    cur.argv.push(text.clone());
+            Tok::Word { text, quoted, shell } => {
+                if !(cur.words.is_empty() && !quoted && RESERVED.contains(&text.as_str())) {
+                    begin(&mut cur, &mut started, piped_in, &mut pend_open, &mut pend_close);
+                    if let Some(reason) = shell {
+                        cur.opaque.push(reason);
+                    }
+                    cur.words.push(text.clone());
                 }
             }
         }
         i += 1;
     }
-    if !cur.is_empty() {
-        raws.push(cur);
-    }
+    finish(&mut raws, &mut cur, &mut started);
     raws
+}
+
+/// Marks the start of a command: it takes the pipe and subshell marks waiting for it.
+fn begin(cur: &mut Raw, started: &mut bool, piped_in: bool, pend_open: &mut usize, pend_close: &mut usize) {
+    if !*started {
+        *started = true;
+        cur.piped_in = piped_in;
+        cur.opens = std::mem::take(pend_open);
+        cur.closes = std::mem::take(pend_close);
+    }
+}
+
+fn finish(raws: &mut Vec<Raw>, cur: &mut Raw, started: &mut bool) {
+    if !cur.is_empty() {
+        raws.push(std::mem::take(cur));
+    } else {
+        *cur = Raw::default();
+    }
+    *started = false;
 }
 
 /// Builds a redirection. `>&word` (not a descriptor) writes a file, as `&>` does.
@@ -606,6 +1052,7 @@ fn redirect(fd: &str, op: &str, target: String) -> Redirect {
         return Redirect {
             op: format!("{fd}{op}"),
             target,
+            expanded: None,
         };
     }
     let op = match op {
@@ -617,121 +1064,188 @@ fn redirect(fd: &str, op: &str, target: String) -> Redirect {
     Redirect {
         op: format!("{fd}{op}"),
         target,
+        expanded: None,
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 struct Ctx {
     depth: usize,
     /// Inside an `xargs` call: the arguments come from input.
     via_xargs: bool,
     /// Fed by a pipe.
     piped: bool,
+    /// The folder the command runs in.
+    cwd: Option<String>,
+    /// Names set just before the command.
+    assigned: Vec<String>,
 }
 
 /// Takes wrappers off one command and pushes what it really runs.
-fn normalize(argv: &[String], redirects: &[Redirect], ctx: Ctx, out: &mut Parsed) {
+fn normalize(words: &[Word], redirects: &[Redirect], ctx: &Ctx, env: &Env, state: &State, out: &mut Parsed) {
     if ctx.depth > MAX_DEPTH {
         out.note("nesting");
         return;
     }
-    let argv = &argv[argv.iter().take_while(|w| is_assignment(w)).count()..];
-    let Some(program) = argv.first() else {
+    let Some(program) = words.first() else {
         if !redirects.is_empty() {
-            out.commands.push(SimpleCommand {
-                redirects: redirects.to_vec(),
-                via_xargs: ctx.via_xargs,
-                ..SimpleCommand::default()
-            });
+            out.commands.push(build_simple(&[], redirects, ctx, (false, false)));
         }
         return;
     };
-    if program.starts_with('$') {
+    if program.text.starts_with('$') {
         out.note("variable command");
     }
-    if program.contains(['*', '?', '[']) {
+    if program.text.contains(['*', '?', '[']) {
         out.note("glob command");
     }
-    let name = basename(program);
-    let rest = &argv[1..];
-    let inner = Ctx {
-        depth: ctx.depth + 1,
-        ..ctx
-    };
+    let name = basename(&program.text);
     match name {
         "eval" => out.note("eval"),
         "source" | "." => out.note("source"),
         _ => {}
     }
+    let rest = &words[1..];
+    let texts: Vec<&str> = rest.iter().map(|w| w.text.as_str()).collect();
+    // The words after `k` (indexes into `words`), clamped so a wrapper with nothing after its options is harmless.
+    let from = |k: usize| &words[k.min(words.len())..];
+    let inner = Ctx {
+        depth: ctx.depth + 1,
+        ..ctx.clone()
+    };
     match name {
-        "sudo" => normalize(&rest[after_options(rest, SUDO_VALUE_FLAGS)..], redirects, inner, out),
-        "doas" => normalize(&rest[after_options(rest, DOAS_VALUE_FLAGS)..], redirects, inner, out),
-        "env" => {
-            if rest.iter().any(|a| a.starts_with("-S")) {
-                out.note("env -S");
-            }
-            let mut i = after_options(rest, ENV_VALUE_FLAGS);
-            while i < rest.len() && is_assignment(&rest[i]) {
-                i += 1;
-            }
-            normalize(&rest[i..], redirects, inner, out);
-        }
-        "nice" => normalize(&rest[after_options(rest, &["-n"])..], redirects, inner, out),
-        "nohup" | "setsid" | "unbuffer" | "command" | "builtin" => {
-            normalize(&rest[after_options(rest, &[])..], redirects, inner, out)
-        }
-        "exec" => normalize(&rest[after_options(rest, &["-a"])..], redirects, inner, out),
-        "time" => normalize(&rest[after_options(rest, &["-f", "-o"])..], redirects, inner, out),
-        "timeout" => normalize(
-            &rest[skip_one(rest, after_options(rest, TIMEOUT_VALUE_FLAGS))..],
+        "sudo" => normalize(
+            from(1 + after_options(&texts, SUDO_VALUE_FLAGS)),
             redirects,
-            inner,
+            &inner,
+            env,
+            state,
             out,
         ),
-        "stdbuf" => normalize(&rest[after_options(rest, &["-i", "-o", "-e"])..], redirects, inner, out),
-        "ionice" => normalize(&rest[after_options(rest, IONICE_VALUE_FLAGS)..], redirects, inner, out),
-        "chrt" | "taskset" => normalize(&rest[skip_one(rest, after_options(rest, &[]))..], redirects, inner, out),
+        "doas" => normalize(
+            from(1 + after_options(&texts, DOAS_VALUE_FLAGS)),
+            redirects,
+            &inner,
+            env,
+            state,
+            out,
+        ),
+        "env" => {
+            if texts.iter().any(|a| a.starts_with("-S")) {
+                out.note("env -S");
+            }
+            let mut i = after_options(&texts, ENV_VALUE_FLAGS);
+            let mut assigned = inner.assigned.clone();
+            while i < texts.len() && is_assignment(texts[i]) {
+                assigned.push(split_assignment(texts[i]).0.to_string());
+                i += 1;
+            }
+            let with_env = Ctx { assigned, ..inner };
+            normalize(from(1 + i), redirects, &with_env, env, state, out);
+        }
+        "nice" => normalize(
+            from(1 + after_options(&texts, &["-n"])),
+            redirects,
+            &inner,
+            env,
+            state,
+            out,
+        ),
+        "nohup" | "setsid" | "unbuffer" | "command" | "builtin" | "busybox" | "toybox" => {
+            // `busybox rm` runs the applet `rm`; the options before it are not modelled.
+            let k = if matches!(name, "busybox" | "toybox") {
+                1
+            } else {
+                1 + after_options(&texts, &[])
+            };
+            normalize(from(k), redirects, &inner, env, state, out)
+        }
+        "exec" => normalize(
+            from(1 + after_options(&texts, &["-a"])),
+            redirects,
+            &inner,
+            env,
+            state,
+            out,
+        ),
+        "time" => normalize(
+            from(1 + after_options(&texts, &["-f", "-o"])),
+            redirects,
+            &inner,
+            env,
+            state,
+            out,
+        ),
+        "timeout" => {
+            let at = skip_one(&texts, after_options(&texts, TIMEOUT_VALUE_FLAGS));
+            normalize(from(1 + at), redirects, &inner, env, state, out)
+        }
+        "stdbuf" => normalize(
+            from(1 + after_options(&texts, &["-i", "-o", "-e"])),
+            redirects,
+            &inner,
+            env,
+            state,
+            out,
+        ),
+        "ionice" => normalize(
+            from(1 + after_options(&texts, IONICE_VALUE_FLAGS)),
+            redirects,
+            &inner,
+            env,
+            state,
+            out,
+        ),
+        "chrt" | "taskset" => {
+            let at = skip_one(&texts, after_options(&texts, &[]));
+            normalize(from(1 + at), redirects, &inner, env, state, out)
+        }
         "xargs" => {
             let xargs = Ctx {
                 via_xargs: true,
                 piped: false,
                 ..inner
             };
-            normalize(&rest[after_options(rest, XARGS_VALUE_FLAGS)..], redirects, xargs, out);
+            normalize(
+                from(1 + after_options(&texts, XARGS_VALUE_FLAGS)),
+                redirects,
+                &xargs,
+                env,
+                state,
+                out,
+            );
         }
-        "find" => find(name, program, rest, redirects, ctx, out),
-        "sh" | "bash" | "zsh" | "dash" | "ksh" => match shell_script(rest) {
-            Some(script) => merge(out, parse_at(script, ctx.depth + 1), redirects),
-            None => push_plain(name, program, rest, redirects, ctx, out),
+        "find" => find(words, redirects, ctx, env, state, out),
+        "sh" | "bash" | "zsh" | "dash" | "ksh" => match shell_script(&texts) {
+            Some(script) => merge(out, parse_state(script, ctx.depth + 1, env, state.clone()), redirects),
+            None => push_plain(words, redirects, ctx, out),
         },
-        _ => push_plain(name, program, rest, redirects, ctx, out),
+        _ => push_plain(words, redirects, ctx, out),
     }
 }
 
 /// `find`: the call itself (with `-delete` / `-exec` flags) and the commands its `-exec` runs.
-fn find(name: &str, program: &str, rest: &[String], redirects: &[Redirect], ctx: Ctx, out: &mut Parsed) {
-    out.commands.push(SimpleCommand {
-        argv: with_name(name, rest),
-        program: program.to_string(),
-        redirects: redirects.to_vec(),
-        via_xargs: ctx.via_xargs,
-        find_delete: rest.iter().any(|a| a == "-delete"),
-        find_exec: rest.iter().any(|a| EXEC_FLAGS.contains(&a.as_str())),
-    });
+fn find(words: &[Word], redirects: &[Redirect], ctx: &Ctx, env: &Env, state: &State, out: &mut Parsed) {
+    let rest = &words[1..];
+    let texts: Vec<&str> = rest.iter().map(|w| w.text.as_str()).collect();
+    let delete = texts.contains(&"-delete");
+    let exec = texts.iter().any(|a| EXEC_FLAGS.contains(a));
+    out.commands.push(build_simple(words, redirects, ctx, (delete, exec)));
     let inner = Ctx {
         depth: ctx.depth + 1,
         via_xargs: false,
         piped: false,
+        ..ctx.clone()
     };
     let mut i = 0;
-    while i < rest.len() {
-        if EXEC_FLAGS.contains(&rest[i].as_str()) {
+    while i < texts.len() {
+        if EXEC_FLAGS.contains(&texts[i]) {
             let start = i + 1;
             let mut end = start;
-            while end < rest.len() && rest[end] != ";" && rest[end] != "+" {
+            while end < texts.len() && texts[end] != ";" && texts[end] != "+" {
                 end += 1;
             }
-            normalize(&rest[start..end], redirects, inner, out);
+            normalize(&rest[start.min(rest.len())..end], redirects, &inner, env, state, out);
             i = end + 1;
         } else {
             i += 1;
@@ -740,38 +1254,53 @@ fn find(name: &str, program: &str, rest: &[String], redirects: &[Redirect], ctx:
 }
 
 /// A command that is not a wrapper. Notes what an interpreter fed by a pipe or xargs would run.
-fn push_plain(name: &str, program: &str, rest: &[String], redirects: &[Redirect], ctx: Ctx, out: &mut Parsed) {
+fn push_plain(words: &[Word], redirects: &[Redirect], ctx: &Ctx, out: &mut Parsed) {
+    let name = basename(&words[0].text);
+    let rest: Vec<&str> = words[1..].iter().map(|w| w.text.as_str()).collect();
     if (ctx.piped || ctx.via_xargs) && is_interpreter(name) {
         if rest.iter().all(|a| a.starts_with('-')) {
             out.note("stdin into interpreter");
-        } else if !is_shell(name) && rest.iter().any(|a| matches!(a.as_str(), "-c" | "-e" | "-E" | "--eval")) {
+        } else if !is_shell(name) && rest.iter().any(|a| matches!(*a, "-c" | "-e" | "-E" | "--eval")) {
             out.note("inline code from a pipe");
         }
     }
-    out.commands.push(SimpleCommand {
-        argv: with_name(name, rest),
-        program: program.to_string(),
-        redirects: redirects.to_vec(),
-        via_xargs: ctx.via_xargs,
-        find_delete: false,
-        find_exec: false,
-    });
+    out.commands.push(build_simple(words, redirects, ctx, (false, false)));
 }
 
-fn with_name(name: &str, rest: &[String]) -> Vec<String> {
-    let mut argv = Vec::with_capacity(rest.len() + 1);
-    argv.push(name.to_string());
-    argv.extend(rest.iter().cloned());
-    argv
+/// A simple command from its words (`words[0]` is the program as written; may be empty).
+fn build_simple(words: &[Word], redirects: &[Redirect], ctx: &Ctx, find: (bool, bool)) -> SimpleCommand {
+    let program = words.first().map(|w| w.text.clone()).unwrap_or_default();
+    let argv: Vec<String> = words
+        .iter()
+        .enumerate()
+        .map(|(i, w)| {
+            if i == 0 {
+                basename(&w.text).to_string()
+            } else {
+                w.text.clone()
+            }
+        })
+        .collect();
+    SimpleCommand {
+        argv,
+        program,
+        expanded: words.iter().map(|w| w.exp.clone()).collect(),
+        redirects: redirects.to_vec(),
+        cwd: ctx.cwd.clone(),
+        assigned: ctx.assigned.clone(),
+        via_xargs: ctx.via_xargs,
+        find_delete: find.0,
+        find_exec: find.1,
+    }
 }
 
 /// For `sh -c SCRIPT` (options such as `-lc`, `-e -c`, `-o pipefail -c` allowed): the script.
-fn shell_script(rest: &[String]) -> Option<&str> {
+fn shell_script<'a>(args: &[&'a str]) -> Option<&'a str> {
     let mut i = 0;
-    while i < rest.len() {
-        let a = rest[i].as_str();
+    while i < args.len() {
+        let a = args[i];
         if a == "-c" || (a.len() > 1 && a.starts_with('-') && !a.starts_with("--") && a[1..].contains('c')) {
-            return rest.get(i + 1).map(String::as_str);
+            return args.get(i + 1).copied();
         }
         if matches!(a, "-o" | "+o" | "-O" | "+O") {
             i += 2;
@@ -784,24 +1313,25 @@ fn shell_script(rest: &[String]) -> Option<&str> {
     None
 }
 
-/// Index of the first word after a wrapper's options. `value_flags` take the next word as their value.
-fn after_options(args: &[String], value_flags: &[&str]) -> usize {
+/// Index of the first argument after a wrapper's options. `value_flags` take the next argument as their value.
+/// Never past the end: a value flag at the end leaves nothing to run.
+fn after_options(args: &[&str], value_flags: &[&str]) -> usize {
     let mut i = 0;
     while i < args.len() {
-        let a = args[i].as_str();
+        let a = args[i];
         if a == "--" {
-            return i + 1;
+            return (i + 1).min(args.len());
         }
         if a.len() < 2 || !a.starts_with('-') {
             return i;
         }
         i += if value_flags.contains(&a) { 2 } else { 1 };
     }
-    i
+    args.len()
 }
 
-/// One more positional word (a duration, a mask, a priority) after the options.
-fn skip_one(args: &[String], index: usize) -> usize {
+/// One more positional argument (a duration, a mask, a priority) after the options; never past the end.
+fn skip_one(args: &[&str], index: usize) -> usize {
     (index + 1).min(args.len())
 }
 
@@ -822,12 +1352,12 @@ fn basename(program: &str) -> &str {
 
 /// `NAME=value` with a valid NAME: a shell assignment, not a command.
 fn is_assignment(word: &str) -> bool {
-    let Some((name, _)) = word.split_once('=') else {
-        return false;
-    };
-    let mut chars = name.chars();
-    matches!(chars.next(), Some(c) if c.is_ascii_alphabetic() || c == '_')
-        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+    word.split_once('=').is_some_and(|(name, _)| is_name(name))
+}
+
+/// `NAME=value` as (NAME, value). A word without `=` gives (word, "").
+fn split_assignment(word: &str) -> (&str, &str) {
+    word.split_once('=').unwrap_or((word, ""))
 }
 
 fn is_shell(name: &str) -> bool {
@@ -843,20 +1373,33 @@ fn is_interpreter(name: &str) -> bool {
 mod tests {
     use super::*;
 
+    fn test_env() -> Env {
+        Env {
+            home: "/home/u".into(),
+            bandito_home: "/home/u/.bandito".into(),
+            users: |name| (name == "u").then(|| "/home/u".to_string()),
+        }
+    }
+
+    /// Parses in the folder `/home/u/app`.
+    fn p(cmd: &str) -> Parsed {
+        parse(cmd, Some("/home/u/app"), &test_env())
+    }
+
     fn words(list: &[&str]) -> Vec<String> {
         list.iter().map(|s| s.to_string()).collect()
     }
 
     fn argvs(cmd: &str) -> Vec<Vec<String>> {
-        parse(cmd).commands.into_iter().map(|c| c.argv).collect()
+        p(cmd).commands.into_iter().map(|c| c.argv).collect()
     }
 
     fn opaque(cmd: &str) -> Vec<&'static str> {
-        parse(cmd).opaque
+        p(cmd).opaque
     }
 
     fn redirects(cmd: &str) -> Vec<(String, String)> {
-        parse(cmd)
+        p(cmd)
             .commands
             .into_iter()
             .flat_map(|c| c.redirects)
@@ -915,7 +1458,7 @@ mod tests {
 
     #[test]
     fn program_keeps_its_path_and_argv_gets_the_basename() {
-        let cmd = &parse("/usr/bin/rm x").commands[0];
+        let cmd = &p("/usr/bin/rm x").commands[0];
         assert_eq!(cmd.argv, words(&["rm", "x"]));
         assert_eq!(cmd.program, "/usr/bin/rm");
     }
@@ -933,14 +1476,9 @@ mod tests {
 
     #[test]
     fn descriptor_duplication_is_not_a_file() {
-        let r = &parse("cargo test 2>&1").commands[0].redirects;
-        assert_eq!(
-            r,
-            &vec![Redirect {
-                op: "2>&".into(),
-                target: "1".into()
-            }]
-        );
+        let r = &p("cargo test 2>&1").commands[0].redirects;
+        assert_eq!(r[0].op, "2>&");
+        assert_eq!(r[0].target, "1");
         assert!(!r[0].writes_file());
     }
 
@@ -965,26 +1503,26 @@ mod tests {
 
     #[test]
     fn heredoc_is_opaque_and_its_body_is_not_read() {
-        let p = parse("cat <<EOF\nrm -rf ~\nEOF\necho ok");
-        assert_eq!(p.opaque, vec!["heredoc"]);
+        let parsed = p("cat <<EOF\nrm -rf ~\nEOF\necho ok");
+        assert_eq!(parsed.opaque, vec!["heredoc"]);
         assert_eq!(
-            p.commands.iter().map(|c| c.argv.clone()).collect::<Vec<_>>(),
+            parsed.commands.iter().map(|c| c.argv.clone()).collect::<Vec<_>>(),
             vec![words(&["cat"]), words(&["echo", "ok"])]
         );
     }
 
     #[test]
     fn indented_heredoc_delimiter_may_be_tab_indented() {
-        let p = parse("cat <<-'X'\n\trm -rf ~\n\tX\nls");
-        assert_eq!(p.opaque, vec!["heredoc"]);
-        assert_eq!(p.commands.len(), 2);
+        let parsed = p("cat <<-'X'\n\trm -rf ~\n\tX\nls");
+        assert_eq!(parsed.opaque, vec!["heredoc"]);
+        assert_eq!(parsed.commands.len(), 2);
     }
 
     #[test]
     fn here_string_is_opaque_and_its_word_is_data() {
-        let p = parse("grep x <<< rm");
-        assert_eq!(p.opaque, vec!["heredoc"]);
-        assert_eq!(p.commands[0].argv, words(&["grep", "x"]));
+        let parsed = p("grep x <<< rm");
+        assert_eq!(parsed.opaque, vec!["heredoc"]);
+        assert_eq!(parsed.commands[0].argv, words(&["grep", "x"]));
     }
 
     #[test]
@@ -995,16 +1533,16 @@ mod tests {
 
     #[test]
     fn command_substitution_is_read_and_opaque() {
-        let p = parse("echo $(rm -rf x)");
-        assert_eq!(p.opaque, vec!["command substitution"]);
-        assert!(p.commands.iter().any(|c| c.argv == words(&["rm", "-rf", "x"])));
+        let parsed = p("echo $(rm -rf x)");
+        assert_eq!(parsed.opaque, vec!["command substitution"]);
+        assert!(parsed.commands.iter().any(|c| c.argv == words(&["rm", "-rf", "x"])));
     }
 
     #[test]
     fn backticks_are_read_and_opaque() {
-        let p = parse("echo `git push`");
-        assert_eq!(p.opaque, vec!["backticks"]);
-        assert!(p.commands.iter().any(|c| c.argv == words(&["git", "push"])));
+        let parsed = p("echo `git push`");
+        assert_eq!(parsed.opaque, vec!["backticks"]);
+        assert!(parsed.commands.iter().any(|c| c.argv == words(&["git", "push"])));
     }
 
     #[test]
@@ -1014,9 +1552,9 @@ mod tests {
 
     #[test]
     fn substitution_with_parentheses_inside_quotes_closes_correctly() {
-        let p = parse("echo $(echo ')' ) && rm x");
-        assert_eq!(p.opaque, vec!["command substitution"]);
-        assert!(p.commands.iter().any(|c| c.argv == words(&["rm", "x"])));
+        let parsed = p("echo $(echo ')' ) && rm x");
+        assert_eq!(parsed.opaque, vec!["command substitution"]);
+        assert!(parsed.commands.iter().any(|c| c.argv == words(&["rm", "x"])));
     }
 
     #[test]
@@ -1065,6 +1603,8 @@ mod tests {
             ("taskset 0x1 rm x", &["rm", "x"]),
             ("if rm x; then ls; fi", &["rm", "x"]),
             ("! rm x", &["rm", "x"]),
+            ("busybox rm -rf x", &["rm", "-rf", "x"]),
+            ("toybox rm -rf x", &["rm", "-rf", "x"]),
         ];
         for (cmd, want) in cases {
             let got = argvs(cmd);
@@ -1074,10 +1614,10 @@ mod tests {
 
     #[test]
     fn xargs_marks_its_command() {
-        let p = parse("find . | xargs -0 -I {} rm -rf {}");
-        let rm = p.commands.iter().find(|c| c.argv[0] == "rm").expect("rm");
+        let parsed = p("find . | xargs -0 -I {} rm -rf {}");
+        let rm = parsed.commands.iter().find(|c| c.argv[0] == "rm").expect("rm");
         assert!(rm.via_xargs);
-        assert!(!p.commands.iter().any(|c| c.argv[0] == "find" && c.via_xargs));
+        assert!(!parsed.commands.iter().any(|c| c.argv[0] == "find" && c.via_xargs));
     }
 
     #[test]
@@ -1100,33 +1640,37 @@ mod tests {
 
     #[test]
     fn shell_script_file_is_not_read() {
-        let p = parse("bash ./deploy.sh");
-        assert_eq!(p.commands[0].argv, words(&["bash", "./deploy.sh"]));
-        assert!(p.opaque.is_empty());
+        let parsed = p("bash ./deploy.sh");
+        assert_eq!(parsed.commands[0].argv, words(&["bash", "./deploy.sh"]));
+        assert!(parsed.opaque.is_empty());
     }
 
     #[test]
     fn find_exec_and_delete_are_read() {
-        let p = parse("find /tmp -exec rm -rf {} +");
-        assert!(p.commands.iter().any(|c| c.argv == words(&["rm", "-rf", "{}"])));
-        assert!(p.commands.iter().any(|c| c.find_exec));
-        let p = parse(r"find . -name x -exec echo {} \; -delete");
-        assert!(p.commands.iter().any(|c| c.argv == words(&["echo", "{}"])));
-        let find = p.commands.iter().find(|c| c.argv[0] == "find").expect("find");
+        let parsed = p("find /tmp -exec rm -rf {} +");
+        assert!(parsed.commands.iter().any(|c| c.argv == words(&["rm", "-rf", "{}"])));
+        assert!(parsed.commands.iter().any(|c| c.find_exec));
+        let parsed = p(r"find . -name x -exec echo {} \; -delete");
+        assert!(parsed.commands.iter().any(|c| c.argv == words(&["echo", "{}"])));
+        let find = parsed.commands.iter().find(|c| c.argv[0] == "find").expect("find");
         assert!(find.find_delete);
     }
 
     #[test]
     fn assignment_only_line_runs_nothing() {
-        assert!(parse("FOO=1").commands.is_empty());
+        assert!(p("FOO=1").commands.is_empty());
     }
 
     #[test]
     fn redirect_only_line_keeps_its_target() {
-        let p = parse("> ~/.bashrc");
-        assert_eq!(p.commands.len(), 1);
-        assert!(p.commands[0].argv.is_empty());
-        assert_eq!(p.commands[0].redirects[0].target, "~/.bashrc");
+        let parsed = p("> ~/.bashrc");
+        assert_eq!(parsed.commands.len(), 1);
+        assert!(parsed.commands[0].argv.is_empty());
+        assert_eq!(parsed.commands[0].redirects[0].target, "~/.bashrc");
+        assert_eq!(
+            parsed.commands[0].redirects[0].expanded.as_deref(),
+            Some("/home/u/.bashrc")
+        );
     }
 
     #[test]
@@ -1151,23 +1695,23 @@ mod tests {
 
     #[test]
     fn nesting_within_the_limit_is_read() {
-        let p = parse("echo $(echo $(echo $(rm x)))");
-        assert!(!p.opaque.contains(&"nesting"));
-        assert!(p.commands.iter().any(|c| c.argv == words(&["rm", "x"])));
+        let parsed = p("echo $(echo $(echo $(rm x)))");
+        assert!(!parsed.opaque.contains(&"nesting"));
+        assert!(parsed.commands.iter().any(|c| c.argv == words(&["rm", "x"])));
     }
 
     #[test]
     fn long_line_is_opaque_and_not_read() {
-        let p = parse(&"x ".repeat(40_000));
-        assert_eq!(p.opaque, vec!["too long"]);
-        assert!(p.commands.is_empty());
+        let parsed = p(&"x ".repeat(40_000));
+        assert_eq!(parsed.opaque, vec!["too long"]);
+        assert!(parsed.commands.is_empty());
     }
 
     #[test]
     fn many_unclosed_substitutions_finish_quickly() {
         let started = std::time::Instant::now();
-        let p = parse(&"$(".repeat(30_000));
-        assert!(p.opaque.contains(&"unclosed substitution"));
+        let parsed = p(&"$(".repeat(30_000));
+        assert!(parsed.opaque.contains(&"unclosed substitution"));
         assert!(started.elapsed() < std::time::Duration::from_secs(2));
     }
 
@@ -1176,31 +1720,152 @@ mod tests {
         let line = format!("{}rm x", "sudo ".repeat(20));
         assert!(opaque(&line).contains(&"nesting"));
     }
-}
 
-#[cfg(test)]
-mod probes_shell {
-    use super::*;
+    // --- brace and zsh expansion ---
 
     #[test]
     fn brace_expansion_is_opaque_but_plain_braces_are_not() {
-        for cmd in ["{rm,-rf,~}", "sh -c '{rm,-rf,x}'", "zsh -c \"{rm,-rf,x}\"", "echo {a..b}"] {
-            assert!(parse(cmd).opaque.contains(&"brace expansion"), "{cmd}");
+        for cmd in [
+            "{rm,-rf,~}",
+            "sh -c '{rm,-rf,x}'",
+            "zsh -c \"{rm,-rf,x}\"",
+            "echo {a..b}",
+        ] {
+            assert!(p(cmd).opaque.contains(&"brace expansion"), "{cmd}");
         }
         for cmd in ["echo {}", "find . -exec x {} +", "git log --format='{x}'"] {
-            assert!(parse(cmd).opaque.is_empty(), "{cmd}");
+            assert!(p(cmd).opaque.is_empty(), "{cmd}");
         }
     }
 
     #[test]
     fn zsh_equals_word_is_opaque() {
-        assert!(parse("=rm -rf x").opaque.contains(&"zsh =word"));
+        assert!(p("=rm -rf x").opaque.contains(&"zsh =word"));
     }
 
     #[test]
     fn option_values_at_the_end_do_not_panic() {
-        for cmd in ["sudo -u", "env -S", "xargs -I", "nice -n", "exec -a", "timeout", "stdbuf -o"] {
-            let _ = parse(cmd);
+        for cmd in [
+            "sudo -u",
+            "env -S",
+            "xargs -I",
+            "nice -n",
+            "exec -a",
+            "timeout",
+            "stdbuf -o",
+        ] {
+            let _ = p(cmd);
         }
+    }
+
+    // --- expansion and the folder ---
+
+    #[test]
+    fn home_variables_and_tilde_are_expanded() {
+        let parsed = p("cat ~/a \"$HOME/b\" ${HOME}/c ~u/d $BANDITO_HOME/e");
+        let exp: Vec<Option<String>> = parsed.commands[0].expanded.clone();
+        assert_eq!(
+            exp,
+            vec![
+                Some("cat".into()),
+                Some("/home/u/a".into()),
+                Some("/home/u/b".into()),
+                Some("/home/u/c".into()),
+                Some("/home/u/d".into()),
+                Some("/home/u/.bandito/e".into()),
+            ]
+        );
+    }
+
+    #[test]
+    fn unknown_names_and_users_expand_to_none() {
+        let parsed = p("cat $UNSET/x ~nobody/y $1 ${A:-b}");
+        assert_eq!(parsed.commands[0].expanded[1], None);
+        assert_eq!(parsed.commands[0].expanded[2], None);
+        assert_eq!(parsed.commands[0].expanded[3], None);
+        assert_eq!(parsed.commands[0].expanded[4], None);
+    }
+
+    #[test]
+    fn assignments_on_the_line_are_followed() {
+        let parsed = p("X=/home/u/.bandit\"\"o; cat \"$X\"/ban*.db");
+        let cat = parsed.commands.iter().find(|c| c.argv[0] == "cat").expect("cat");
+        assert_eq!(cat.expanded[1].as_deref(), Some("/home/u/.bandito/ban*.db"));
+    }
+
+    #[test]
+    fn export_is_followed_and_prefix_assignment_is_not() {
+        let parsed = p("export X=/home/u/.bandito; cat $X/a; Y=/tmp cat $Y/b");
+        let cats: Vec<&SimpleCommand> = parsed.commands.iter().filter(|c| c.argv[0] == "cat").collect();
+        assert_eq!(cats[0].expanded[1].as_deref(), Some("/home/u/.bandito/a"));
+        assert_eq!(cats[1].expanded[1], None);
+        assert_eq!(cats[1].assigned, vec!["Y".to_string()]);
+    }
+
+    #[test]
+    fn ansi_c_quoting_is_decoded() {
+        let parsed = p(r"cat $'/home/u/.band\x69to/ban*.db'");
+        assert_eq!(parsed.commands[0].argv[1], "/home/u/.bandito/ban*.db");
+        let parsed = p(r"echo $'a\tb\101A'");
+        assert_eq!(parsed.commands[0].argv[1], "a\tbAA");
+    }
+
+    #[test]
+    fn cd_moves_the_folder_for_the_commands_after_it() {
+        let parsed = p("cd ~ && cd .bandito && cat *");
+        let cat = parsed.commands.iter().find(|c| c.argv[0] == "cat").expect("cat");
+        assert_eq!(cat.cwd.as_deref(), Some("/home/u/.bandito"));
+        let parsed = p("cd - && rm a");
+        let rm = parsed.commands.iter().find(|c| c.argv[0] == "rm").expect("rm");
+        assert_eq!(rm.cwd, None);
+    }
+
+    #[test]
+    fn subshell_restores_the_folder_and_variables() {
+        let parsed = p("(cd ~ && X=/a) && cat x");
+        let cat = parsed.commands.iter().find(|c| c.argv[0] == "cat").expect("cat");
+        assert_eq!(cat.cwd.as_deref(), Some("/home/u/app"));
+        let parsed = p("(X=/a); cat $X");
+        let cat = parsed.commands.iter().find(|c| c.argv[0] == "cat").expect("cat");
+        assert_eq!(cat.expanded[1], None);
+    }
+
+    #[test]
+    fn pushd_and_popd_follow_the_stack() {
+        let parsed = p("pushd ~ >/dev/null; cat x; popd; cat y");
+        let cats: Vec<&SimpleCommand> = parsed.commands.iter().filter(|c| c.argv[0] == "cat").collect();
+        assert_eq!(cats[0].cwd.as_deref(), Some("/home/u"));
+        assert_eq!(cats[1].cwd.as_deref(), Some("/home/u/app"));
+        let parsed = p("popd && rm a");
+        let rm = parsed.commands.iter().find(|c| c.argv[0] == "rm").expect("rm");
+        assert_eq!(rm.cwd, None);
+    }
+
+    #[test]
+    fn cd_in_a_pipeline_leaves_the_folder_unknown() {
+        let parsed = p("cd ~ | cat; cat .bandito/x");
+        let cat = parsed.commands.iter().rfind(|c| c.argv[0] == "cat").expect("cat");
+        assert_eq!(cat.cwd, None);
+    }
+
+    #[test]
+    fn nested_shell_sees_the_folder_and_variables_of_its_line() {
+        let parsed = p("cd ~ && sh -c 'cat .bandito/x'");
+        let cat = parsed.commands.iter().find(|c| c.argv[0] == "cat").expect("cat");
+        assert_eq!(cat.cwd.as_deref(), Some("/home/u"));
+    }
+
+    #[test]
+    fn substitution_starts_with_an_unknown_folder() {
+        let parsed = p("cd ~ && echo $(cat x)");
+        let cat = parsed.commands.iter().find(|c| c.argv[0] == "cat").expect("cat");
+        assert_eq!(cat.cwd, None);
+    }
+
+    #[test]
+    fn plain_redirect_target_expands_with_the_line() {
+        let parsed = p("X=/home/u/.bandito; echo hi > $X/notes");
+        let echo = parsed.commands.iter().find(|c| c.argv[0] == "echo").expect("echo");
+        assert_eq!(echo.redirects[0].expanded.as_deref(), Some("/home/u/.bandito/notes"));
     }
 }

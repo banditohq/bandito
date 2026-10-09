@@ -1,9 +1,12 @@
 //! Decides what happens to a tool call the CLI asked permission for: refuse it (Bandito's
 //! own files and controls), let it run, ask the human, or allow it. See
 //! docs/ARCHITECTURE.md#approvals-policy.
+//!
+//! Rule for what cannot be known: only a path that is known and lands on Bandito's own
+//! files is refused. A path, folder or command that cannot be worked out is asked about.
 
 use crate::runtime::ApprovalRequest;
-use crate::shell::{self, SimpleCommand};
+use crate::shell::{self, Env, Parsed, SimpleCommand, UserDir, canon, normalize_path as normalize};
 use crate::store::{ApprovalMode, Rule, RuleAction};
 use std::path::{Path, PathBuf};
 
@@ -20,34 +23,53 @@ pub const PROTECTED_MESSAGE: &str = "Bandito's own files and controls are off li
 
 /// Commands that write the files they name. Their non-flag arguments are write targets.
 const WRITERS: &[&str] = &[
-    "cp", "mv", "install", "ln", "tee", "touch", "mkdir", "rm", "rmdir", "chmod", "chown", "truncate",
+    "cp", "mv", "install", "ln", "tee", "touch", "mkdir", "rm", "rmdir", "chmod", "chown", "truncate", "ditto",
 ];
 /// Redirection targets that are not files.
 const DEVICES: &[&str] = &["/dev/null", "/dev/stdout", "/dev/stderr"];
 /// Words that mean SQL data loss. Matched in the raw command line.
 const SQL_LOSS: &[&str] = &["drop table", "drop database", "truncate table", "delete from"];
+/// Bandito's file names. Asked about in risky mode (refusing them would stop a grep over a source tree).
+const ASK_WORDS: &[&str] = &["bandito.sock", "agent.sock", "bandito.db"];
+/// Environment variables that name a program git runs. Setting one makes the command a command to ask about.
+const GIT_EXEC_ENV: &[&str] = &[
+    "GIT_SSH_COMMAND",
+    "GIT_SSH",
+    "GIT_PAGER",
+    "GIT_EDITOR",
+    "GIT_EXTERNAL_DIFF",
+    "GIT_ASKPASS",
+    "GIT_PROXY_COMMAND",
+    "SSH_ASKPASS",
+];
+/// Commands whose arguments are never file paths: an unknown folder does not matter to them.
+const NO_PATH_ARGS: &[&str] = &[
+    "echo", "printf", "cargo", "npm", "pnpm", "yarn", "make", "kubectl", "docker", "true", "false", "date", "pwd",
+    "whoami", "uname", "which",
+];
+/// Options whose value is a path the command writes to, per command.
+const WRITE_VALUE_FLAGS: &[(&str, &[&str])] = &[
+    ("tar", &["-C", "--directory"]),
+    ("bsdtar", &["-C", "--directory"]),
+    ("unzip", &["-d"]),
+    ("wget", &["-O", "-P", "--output-document", "--directory-prefix"]),
+    ("curl", &["-o", "--output"]),
+];
 
 /// Bandito's own files and controls. Checked first, in every mode, before any rule.
 pub struct Protected {
     /// Absolute, lexically normalized. A component ending in `*` is a name pattern.
     pub paths: Vec<PathBuf>,
-    /// Lowercase words. A command line containing one (anywhere, as a substring) is refused.
+    /// Lowercase: a command line containing one of these is refused (the data folder spelled out).
     pub words: Vec<String>,
-    /// The daemon user's home folder, absolute. Expands `~`, `$HOME` and `${HOME}`.
-    home: String,
+    /// Lowercase names that are asked about in risky mode.
+    pub ask_words: Vec<String>,
+    /// Home folder, data folder and user lookup, for reading command lines.
+    env: Env,
     /// Lowercase file name of the daemon's executable.
     exe_name: String,
-    /// Home folder of a user by name (`~user`). None when there is no such user.
-    users: UserDir,
     /// The daemon's process id: `kill` of it is refused.
     pid: u32,
-}
-
-/// Resolves `~user` to the user's home folder.
-pub type UserDir = fn(&str) -> Option<String>;
-
-fn system_home(_name: &str) -> Option<String> {
-    None
 }
 
 impl Protected {
@@ -56,6 +78,8 @@ impl Protected {
         let bandito_home = lexical_absolute(bandito_home);
         let exe = lexical_absolute(exe);
         let home = lexical_absolute(home);
+        let home_text = home.display().to_string();
+        let data_text = bandito_home.display().to_string();
         let paths = vec![
             bandito_home.clone(),
             exe.clone(),
@@ -63,12 +87,7 @@ impl Protected {
             PathBuf::from("/etc/systemd/system/bandito*"),
             home.join("Library/LaunchAgents/dev.bandito*"),
         ];
-        let mut words: Vec<String> = vec![
-            "bandito.sock".into(),
-            "agent.sock".into(),
-            "bandito.db".into(),
-            bandito_home.display().to_string(),
-        ];
+        let mut words = vec![data_text.clone()];
         if let Ok(rel) = bandito_home.strip_prefix(&home) {
             let rel = rel.display().to_string();
             if !rel.is_empty() {
@@ -77,24 +96,27 @@ impl Protected {
                 words.push(format!("${{HOME}}/{rel}"));
             }
         }
-        let words = words.iter().map(|w| w.to_lowercase()).collect();
         let exe_name = exe
             .file_name()
             .map(|n| n.to_string_lossy().to_lowercase())
             .unwrap_or_default();
         Self {
             paths,
-            words,
-            home: home.display().to_string(),
+            words: words.iter().map(|w| w.to_lowercase()).collect(),
+            ask_words: ASK_WORDS.iter().map(|w| w.to_string()).collect(),
+            env: Env {
+                home: home_text,
+                bandito_home: data_text,
+                users: system_home,
+            },
             exe_name,
-            users: system_home,
             pid: std::process::id(),
         }
     }
 
     /// Replaces the lookup of `~user` (tests inject their own users).
     pub fn with_users(mut self, users: UserDir) -> Self {
-        self.users = users;
+        self.env.users = users;
         self
     }
 
@@ -104,8 +126,8 @@ impl Protected {
         self
     }
 
-    /// True when `abs` (absolute, not yet normalized) is inside a protected path, or, with
-    /// `recursive`, is a folder that contains one (deleting or copying it takes Bandito along).
+    /// True when `abs` (absolute) is inside a protected path, or, with `recursive`, is a
+    /// folder that contains one (deleting, copying or searching it reaches Bandito).
     fn touches(&self, abs: &str, recursive: bool) -> bool {
         let cand = normalize(abs);
         self.paths.iter().any(|path| {
@@ -119,11 +141,37 @@ impl Protected {
     }
 }
 
+/// The home folder of a user, from the system's account database. None when there is no such user.
+fn system_home(name: &str) -> Option<String> {
+    let user = std::ffi::CString::new(name).ok()?;
+    let mut buf = vec![0u8; 16 * 1024];
+    // SAFETY: zeroed is a valid starting value for passwd; getpwnam_r fills it and `buf`, both live here.
+    let mut entry: libc::passwd = unsafe { std::mem::zeroed() };
+    let mut found: *mut libc::passwd = std::ptr::null_mut();
+    let rc = unsafe {
+        libc::getpwnam_r(
+            user.as_ptr(),
+            &mut entry,
+            buf.as_mut_ptr().cast(),
+            buf.len(),
+            &mut found,
+        )
+    };
+    if rc != 0 || found.is_null() {
+        return None;
+    }
+    // SAFETY: `found` points at `entry`; pw_dir is a NUL-terminated string inside `buf`.
+    let dir = unsafe { std::ffi::CStr::from_ptr((*found).pw_dir) };
+    dir.to_str().ok().map(str::to_string)
+}
+
 /// Decide for one request.
 ///
 /// Order:
-/// 1. Anything that touches Bandito's own files or controls is `Deny`, in every mode and
-///    whatever the rules say (see [`touches_own_files`]).
+/// 1. Anything that reaches Bandito's own files or controls (a known path, a known folder that
+///    contains them, a command that kills Bandito) is `Deny`, in every mode and whatever the
+///    rules say. A name in the command line that means Bandito's files is asked about (risky
+///    and always modes), and a path that cannot be known is asked about (risky and always).
 /// 2. `rules` are already ordered (agent's own first, then global). The first
 ///    rule whose `pattern` matches `subject` (= `req.command` if present, else
 ///    `req.title`) with [`glob_match`] (case-sensitive) decides:
@@ -132,10 +180,7 @@ impl Protected {
 /// 3. No rule matched:
 ///    - `Never`  → `Allow`
 ///    - `Always` → `Ask("approval required for every action")`
-///    - `Risky`  → see [`risky`]: a command that means something risky (`git push`,
-///      `rm -r`, `kubectl delete`, …) → `Ask("risky: <rule>")`; a write outside
-///      `roots` → `Ask("writes outside <first root>")`; a part of the line that
-///      cannot be read → `Ask("can't check: <reason>")`; else `Allow`.
+///    - `Risky`  → see [`risky`].
 ///
 /// `roots` are the folders the agent owns: its working folder first, then its
 /// home folder when it has one. A path inside any of them is inside. Risky mode is a
@@ -147,8 +192,15 @@ pub fn evaluate(
     rules: &[Rule],
     protected: &Protected,
 ) -> Verdict {
-    if touches_own_files(req, roots, protected) {
-        return Verdict::Deny(PROTECTED_MESSAGE.into());
+    let cwd = roots.first().copied().unwrap_or("/");
+    let parsed = req
+        .command
+        .as_deref()
+        .map(|command| shell::parse(command, Some(cwd), &protected.env));
+    match own_files(req, roots, protected, parsed.as_ref()) {
+        Some(Verdict::Deny(reason)) => return Verdict::Deny(reason),
+        Some(ask @ Verdict::Ask(_)) if mode != ApprovalMode::Never => return ask,
+        _ => {}
     }
     let subject = req.command.as_deref().unwrap_or(req.title.as_str());
     if let Some(rule) = rules.iter().find(|rule| glob_match(&rule.pattern, subject, false)) {
@@ -161,140 +213,328 @@ pub fn evaluate(
     match mode {
         ApprovalMode::Never => Verdict::Allow,
         ApprovalMode::Always => Verdict::Ask("approval required for every action".into()),
-        ApprovalMode::Risky => risky(req, roots, protected),
+        ApprovalMode::Risky => risky(req, roots, protected, parsed.as_ref()),
     }
 }
 
-/// True when the call names one of Bandito's own files or controls. Checked three ways:
-/// a protected word in the raw command, the paths the call writes to, and the simple
-/// commands the line runs (after `~`, `$HOME` and relative paths are resolved).
-fn touches_own_files(req: &ApprovalRequest, roots: &[&str], prot: &Protected) -> bool {
+/// Runs a policy decision; a panic becomes `Ask("policy error")`, logged without the command.
+pub fn guarded(decide: impl FnOnce() -> Verdict) -> Verdict {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(decide)) {
+        Ok(verdict) => verdict,
+        Err(_) => {
+            tracing::error!("approval policy failed; the human decides");
+            Verdict::Ask("policy error".into())
+        }
+    }
+}
+
+/// The rule to store for "always allow here" on `subject`: the exact command, with its `*`
+/// escaped so it matches only itself. None when the command cannot be read, or has a part
+/// that cannot be known: such a command is never remembered.
+pub fn always_pattern(subject: &str, prot: &Protected) -> Option<String> {
+    let parsed = shell::parse(subject, None, &prot.env);
+    let unknown = parsed
+        .commands
+        .iter()
+        .any(|c| c.expanded.iter().any(Option::is_none) || c.redirects.iter().any(|r| r.expanded.is_none()));
+    if !parsed.opaque.is_empty() || unknown {
+        return None;
+    }
+    Some(subject.replace('\\', "\\\\").replace('*', "\\*"))
+}
+
+/// What is known about Bandito's own files in this call, if anything: a refusal, or a question.
+fn own_files(req: &ApprovalRequest, roots: &[&str], prot: &Protected, parsed: Option<&Parsed>) -> Option<Verdict> {
     let cwd = roots.first().copied().unwrap_or("/");
-    let texts = [req.command.as_deref(), Some(req.title.as_str())];
-    let lowered: Vec<String> = texts.iter().flatten().map(|t| t.to_lowercase()).collect();
-    if lowered
+    let texts: Vec<String> = [req.command.as_deref(), Some(req.title.as_str())]
+        .iter()
+        .flatten()
+        .map(|t| t.to_lowercase())
+        .collect();
+    if texts
         .iter()
         .any(|text| prot.words.iter().any(|word| text.contains(word.as_str())))
     {
-        return true;
+        return Some(Verdict::Deny(PROTECTED_MESSAGE.into()));
     }
-    if req
-        .paths
-        .iter()
-        .any(|path| prot.touches(&absolute(path, prot, cwd), false))
-    {
-        return true;
-    }
-    req.command.as_deref().is_some_and(|command| {
-        shell::parse(command)
-            .commands
-            .iter()
-            .any(|cmd| command_touches(cmd, prot, cwd))
-    })
-}
-
-fn command_touches(cmd: &SimpleCommand, prot: &Protected, cwd: &str) -> bool {
-    if let Some(name) = cmd.argv.first() {
-        let name = name.to_lowercase();
-        if name == "bandito" || (!prot.exe_name.is_empty() && name == prot.exe_name) {
-            return true;
+    for path in &req.paths {
+        if prot.touches(&absolute_from(path, cwd, &prot.env.home), false) {
+            return Some(Verdict::Deny(PROTECTED_MESSAGE.into()));
         }
     }
-    let recursive = destructive(cmd);
-    let redirects = cmd
-        .redirects
+    let mut unknown = false;
+    if let Some(parsed) = parsed {
+        for cmd in &parsed.commands {
+            match check_command(cmd, prot) {
+                Check::Deny => return Some(Verdict::Deny(PROTECTED_MESSAGE.into())),
+                Check::Unknown => unknown = true,
+                Check::Clear => {}
+            }
+        }
+    }
+    // With an unreadable part in the line, risky mode names that part: leave the question to it.
+    if unknown && parsed.is_none_or(|p| p.opaque.is_empty()) {
+        return Some(Verdict::Ask("can't check: unknown path".into()));
+    }
+    if texts
         .iter()
-        .filter(|r| !r.is_duplication())
-        .map(|r| r.target.as_str());
-    let targets = cmd
-        .argv
-        .iter()
-        .skip(1)
-        .map(String::as_str)
-        .chain(std::iter::once(cmd.program.as_str()))
-        .chain(redirects);
-    targets
-        .filter(|target| !target.is_empty())
-        .any(|target| prot.touches(&absolute(target, prot, cwd), recursive))
+        .any(|text| prot.ask_words.iter().any(|word| text.contains(word.as_str())))
+    {
+        return Some(Verdict::Ask("touches Bandito's files by name".into()));
+    }
+    None
 }
 
-/// A command that can take a folder with everything in it: `rm -r`, `cp -r`, `mv`, `rsync`,
-/// an archive, `find -delete`/`-exec`. Such a command aimed at a folder that contains
-/// Bandito is refused.
-fn destructive(cmd: &SimpleCommand) -> bool {
+/// The result of checking one simple command against Bandito's own files.
+enum Check {
+    Clear,
+    /// A path it touches cannot be known.
+    Unknown,
+    Deny,
+}
+
+fn check_command(cmd: &SimpleCommand, prot: &Protected) -> Check {
+    if let Some(name) = cmd.argv.first() {
+        let name = name.to_lowercase();
+        if name == "bandito" || (!prot.exe_name.is_empty() && name == prot.exe_name) || kills_bandito(cmd, prot.pid) {
+            return Check::Deny;
+        }
+    }
+    let recursive = recursive_action(cmd);
+    let program = cmd.argv.first().map(|n| n.to_lowercase()).unwrap_or_default();
+    let cwd = cmd.cwd.as_deref();
+    let mut result = Check::Clear;
+    let mut look = |exp: Option<&str>, text: &str, strict: bool| -> bool {
+        match target_path(exp, text, cwd, strict) {
+            None => false,
+            Some(None) => {
+                result = Check::Unknown;
+                false
+            }
+            Some(Some(abs)) => prot.touches(&abs, recursive),
+        }
+    };
+    // The program's own word is a name, not a path unless it looks like one.
+    if cmd
+        .expanded
+        .first()
+        .is_some_and(|exp| look(exp.as_deref(), &cmd.program, false))
+    {
+        return Check::Deny;
+    }
+    let strict = cwd.is_none() && !NO_PATH_ARGS.contains(&program.as_str());
+    for (i, exp) in cmd.expanded.iter().enumerate().skip(1) {
+        if look(exp.as_deref(), &cmd.argv[i], strict) {
+            return Check::Deny;
+        }
+    }
+    for redirect in cmd.redirects.iter().filter(|r| !r.is_duplication()) {
+        if look(redirect.expanded.as_deref(), &redirect.target, true) {
+            return Check::Deny;
+        }
+    }
+    if implicit_cwd(cmd) && look(Some("."), ".", true) {
+        return Check::Deny;
+    }
+    result
+}
+
+/// `expanded` as a path the command reaches. None: not a path (a plain word with no folder to
+/// make it one). Some(None): a path that cannot be known. `strict`: a plain word is a path too.
+fn target_path(exp: Option<&str>, text: &str, cwd: Option<&str>, strict: bool) -> Option<Option<String>> {
+    match exp {
+        None => Some(None),
+        Some(e) if e.starts_with('/') => Some(Some(canon(e))),
+        Some(e) => match cwd {
+            Some(c) => Some(Some(canon(&format!("{c}/{e}")))),
+            None if strict || path_like(e) || path_like(text) => Some(None),
+            None => None,
+        },
+    }
+}
+
+/// A word that looks like a path: it has a slash, starts with `.` or `~`, or has a glob.
+fn path_like(word: &str) -> bool {
+    word.contains('/') || word.starts_with('.') || word.starts_with('~') || word.contains(['*', '?', '['])
+}
+
+/// A path the tool named, made absolute from the agent's folder and home folder.
+fn absolute_from(path: &str, cwd: &str, home: &str) -> String {
+    let expanded = if path == "~" {
+        home.to_string()
+    } else if let Some(rest) = path.strip_prefix("~/") {
+        format!("{home}/{rest}")
+    } else {
+        path.to_string()
+    };
+    if expanded.starts_with('/') {
+        expanded
+    } else {
+        format!("{cwd}/{expanded}")
+    }
+}
+
+/// True when the command stops, restarts or disables Bandito, or kills its process.
+fn kills_bandito(cmd: &SimpleCommand, pid: u32) -> bool {
+    let Some(name) = cmd.argv.first().map(|n| n.to_lowercase()) else {
+        return false;
+    };
+    let args: Vec<String> = cmd.argv[1..].iter().map(|a| a.to_lowercase()).collect();
+    let mentions = args.iter().any(|a| a.contains("bandito"));
+    match name.as_str() {
+        "kill" | "pkill" | "killall" => mentions || cmd.argv[1..].iter().any(|a| a.parse::<u32>().ok() == Some(pid)),
+        "systemctl" => {
+            mentions
+                && args
+                    .iter()
+                    .any(|a| matches!(a.as_str(), "stop" | "restart" | "disable" | "kill" | "mask"))
+        }
+        "launchctl" => mentions,
+        _ => false,
+    }
+}
+
+/// A command that reaches everything under the folders it names: removal, copying or moving
+/// of a folder, an archive, a recursive search, `find` (unless it stops at depth 1), `rsync`.
+/// Aimed at a folder that contains Bandito, it is refused.
+fn recursive_action(cmd: &SimpleCommand) -> bool {
     let Some(name) = cmd.argv.first().map(|n| n.to_lowercase()) else {
         return false;
     };
     let args: Vec<&str> = cmd.argv[1..].iter().map(String::as_str).collect();
+    let recursive_flag = |a: &str| a == "--recursive" || short_flag(a, 'r') || short_flag(a, 'R');
     match name.as_str() {
-        "rm" => args
-            .iter()
-            .any(|a| *a == "--recursive" || short_flag(a, 'r') || short_flag(a, 'R')),
-        "zip" => args.iter().any(|a| short_flag(a, 'r')),
+        "rm" => args.iter().any(|a| recursive_flag(a)),
+        "zip" | "scp" => args.iter().any(|a| short_flag(a, 'r')),
         "chmod" | "chown" | "chgrp" => args.iter().any(|a| *a == "--recursive" || short_flag(a, 'R')),
         "cp" => args.iter().any(|a| {
             *a == "--recursive" || *a == "--archive" || short_flag(a, 'r') || short_flag(a, 'R') || short_flag(a, 'a')
         }),
-        "mv" | "rsync" => true,
-        "tar" => args.iter().any(|a| {
+        "mv" | "rsync" | "ditto" => true,
+        "tar" | "bsdtar" => args.iter().any(|a| {
             *a == "--create"
                 || (!a.starts_with("--")
                     && a.trim_start_matches('-').chars().all(|c| c.is_ascii_alphabetic())
                     && a.contains('c'))
         }),
-        "find" => cmd.find_delete || cmd.find_exec,
+        "find" => cmd.find_delete || cmd.find_exec || !maxdepth_is_shallow(&args),
+        "grep" => args.iter().any(|a| recursive_flag(a)),
+        "rg" | "ag" | "ack" | "du" | "tree" => true,
+        "ls" => args.iter().any(|a| short_flag(a, 'R') || *a == "--recursive"),
+        "git" => args.contains(&"grep"),
         _ => false,
     }
 }
 
-/// The risky rules for `Risky` mode, when no owner rule decided: meaning first, then writes
-/// outside the agent's folders, then parts that could not be read.
-fn risky(req: &ApprovalRequest, roots: &[&str], prot: &Protected) -> Verdict {
-    let cwd = roots.first().copied().unwrap_or("/");
-    let first = roots.first().copied().unwrap_or_default();
-    if let Some(command) = req.command.as_deref() {
-        let parsed = shell::parse(command);
-        let lowered = command.to_lowercase();
-        if SQL_LOSS.iter().any(|word| lowered.contains(*word)) {
-            return Verdict::Ask("risky: sql".into());
+/// `find -maxdepth N` with N of 1 or less: the search does not go into folders.
+fn maxdepth_is_shallow(args: &[&str]) -> bool {
+    args.iter()
+        .position(|a| *a == "-maxdepth")
+        .and_then(|i| args.get(i + 1))
+        .and_then(|n| n.parse::<u32>().ok())
+        .is_some_and(|depth| depth <= 1)
+}
+
+/// True for a command that, given no path, works on the current folder: a search with only a
+/// pattern, a listing with no argument. Its implicit folder is checked as if it were named.
+fn implicit_cwd(cmd: &SimpleCommand) -> bool {
+    let Some(name) = cmd.argv.first().map(|n| n.to_lowercase()) else {
+        return false;
+    };
+    let args: Vec<&str> = cmd.argv[1..].iter().map(String::as_str).collect();
+    let positional = |list: &[&str]| list.iter().filter(|a| !a.starts_with('-')).count();
+    match name.as_str() {
+        "grep" | "rg" | "ag" | "ack" => positional(&args) <= 1 && recursive_action(cmd),
+        "git" => {
+            let after_grep: Vec<&str> = args.iter().skip_while(|a| **a != "grep").skip(1).copied().collect();
+            args.contains(&"grep") && positional(&after_grep) <= 1
         }
-        if let Some(rule) = parsed.commands.iter().find_map(risky_rule) {
-            return Verdict::Ask(format!("risky: {rule}"));
-        }
-        if let Some(cmd) = parsed.commands.iter().find(|cmd| cmd.via_xargs && writes_args(cmd)) {
-            let name = cmd.argv.first().map(String::as_str).unwrap_or_default();
-            return Verdict::Ask(format!("can't check: xargs {name}"));
-        }
-        let writes_outside = parsed
-            .commands
-            .iter()
-            .flat_map(write_targets)
-            .any(|target| is_outside_all(&absolute(target, prot, cwd), roots));
-        if writes_outside {
-            return Verdict::Ask(format!("writes outside {first}"));
-        }
-        if !parsed.opaque.is_empty() {
-            return Verdict::Ask(format!("can't check: {}", parsed.opaque.join(", ")));
-        }
+        "du" | "tree" | "ls" => positional(&args) == 0,
+        "find" => args
+            .first()
+            .is_none_or(|a| a.starts_with('-') || *a == "(" || *a == "!"),
+        _ => false,
     }
-    if req
-        .paths
+}
+
+/// What the command writes: its redirection files, and for writers their non-flag arguments,
+/// the values of options that name an output folder, `find -exec` start paths, and the
+/// destination of `rsync`. Each is the expanded word (if known) and the text as written.
+fn write_targets(cmd: &SimpleCommand) -> Vec<(Option<String>, String)> {
+    let mut out: Vec<(Option<String>, String)> = cmd
+        .redirects
         .iter()
-        .any(|path| is_outside_all(&absolute(path, prot, cwd), roots))
-    {
-        return Verdict::Ask(format!("writes outside {first}"));
+        .filter(|r| r.writes_file())
+        .map(|r| (r.expanded.clone(), r.target.clone()))
+        .collect();
+    let Some(name) = cmd.argv.first().map(|n| n.to_lowercase()) else {
+        return out;
+    };
+    let in_place = matches!(name.as_str(), "sed" | "perl")
+        && cmd.argv[1..].iter().any(|a| short_flag(a, 'i') || a == "--in-place");
+    if WRITERS.contains(&name.as_str()) || in_place || (name == "find" && cmd.find_exec) {
+        for i in 1..cmd.argv.len() {
+            if !cmd.argv[i].starts_with('-') {
+                out.push((cmd.expanded[i].clone(), cmd.argv[i].clone()));
+            }
+        }
     }
-    Verdict::Allow
+    let value_flags: &[&str] = WRITE_VALUE_FLAGS
+        .iter()
+        .find(|(n, _)| *n == name)
+        .map(|(_, flags)| *flags)
+        .unwrap_or(&[]);
+    for i in 1..cmd.argv.len() {
+        let arg = cmd.argv[i].as_str();
+        for flag in value_flags {
+            if arg == *flag && i + 1 < cmd.argv.len() {
+                out.push((cmd.expanded[i + 1].clone(), cmd.argv[i + 1].clone()));
+            } else if let Some(value) = arg.strip_prefix(&format!("{flag}=")) {
+                let expanded = cmd.expanded[i]
+                    .as_deref()
+                    .and_then(|e| e.strip_prefix(&format!("{flag}=")))
+                    .map(str::to_string);
+                out.push((expanded, value.to_string()));
+            }
+        }
+        // `curl -so out.html`: the output file is the next word after a short option ending in `o`.
+        if name == "curl"
+            && arg.len() > 1
+            && arg.starts_with('-')
+            && !arg.starts_with("--")
+            && arg.ends_with('o')
+            && i + 1 < cmd.argv.len()
+        {
+            out.push((cmd.expanded[i + 1].clone(), cmd.argv[i + 1].clone()));
+        }
+    }
+    if let (true, Some(i)) = (
+        name == "rsync",
+        (1..cmd.argv.len()).rev().find(|&i| !cmd.argv[i].starts_with('-')),
+    ) {
+        out.push((cmd.expanded[i].clone(), cmd.argv[i].clone()));
+    }
+    out
 }
 
 /// The risky meaning of one simple command, as a short rule name. None when it is routine.
 fn risky_rule(cmd: &SimpleCommand) -> Option<String> {
-    if cmd.argv.iter().any(|a| a.to_lowercase().contains("deploy")) {
-        return Some("deploy".into());
-    }
+    command_rule(cmd).or_else(|| {
+        cmd.assigned
+            .iter()
+            .any(|n| GIT_EXEC_ENV.contains(&n.as_str()))
+            .then(|| "git config exec".into())
+    })
+}
+
+/// The risky meaning of the program and its arguments.
+fn command_rule(cmd: &SimpleCommand) -> Option<String> {
     let name = cmd.argv.first()?.to_lowercase();
     let args: Vec<&str> = cmd.argv[1..].iter().map(String::as_str).collect();
     let lower: Vec<String> = args.iter().map(|a| a.to_lowercase()).collect();
+    if deploy_rule(&name, &args, &lower) {
+        return Some("deploy".into());
+    }
     let has = |word: &str| lower.iter().any(|a| a == word);
     let verb = |verbs: &[&str]| verbs.iter().copied().find(|v| has(v)).map(|v| format!("{name} {v}"));
     match name.as_str() {
@@ -318,7 +558,7 @@ fn risky_rule(cmd: &SimpleCommand) -> Option<String> {
         "cargo" => has("publish").then(|| "cargo publish".into()),
         "twine" => has("upload").then(|| "twine upload".into()),
         "gem" => has("push").then(|| "gem push".into()),
-        "kubectl" => verb(&["delete", "apply", "replace", "patch", "drain"]),
+        "kubectl" => verb(&["delete", "apply", "replace", "patch", "drain", "rollout"]),
         "helm" => verb(&["install", "upgrade", "uninstall", "delete"]),
         "terraform" => verb(&["apply", "destroy"]),
         "pulumi" => verb(&["up", "destroy"]),
@@ -357,6 +597,25 @@ fn risky_rule(cmd: &SimpleCommand) -> Option<String> {
     }
 }
 
+/// Deploys: a program or script named `deploy…`, or a deploy named through a runner.
+fn deploy_rule(name: &str, args: &[&str], lower: &[String]) -> bool {
+    if name.split('.').next().unwrap_or(name).starts_with("deploy") {
+        return true;
+    }
+    let has = |word: &str| lower.iter().any(|a| a == word);
+    match name {
+        "npm" | "pnpm" | "yarn" => has("run") && lower.iter().any(|a| a.starts_with("deploy")),
+        "make" => lower.iter().any(|a| a.starts_with("deploy")),
+        "cargo" => {
+            args.first().is_some_and(|a| *a == "xtask")
+                && args.get(1).is_some_and(|a| a.to_lowercase().starts_with("deploy"))
+        }
+        "fly" | "wrangler" | "firebase" | "gcloud" => has("deploy"),
+        "vercel" => has("deploy") || has("--prod"),
+        _ => false,
+    }
+}
+
 const SSH_VALUE_FLAGS: &[&str] = &[
     "-b", "-c", "-D", "-E", "-e", "-F", "-I", "-i", "-J", "-L", "-l", "-m", "-O", "-o", "-p", "-Q", "-R", "-S", "-W",
     "-w",
@@ -367,10 +626,12 @@ fn git_rule(args: &[&str]) -> Option<String> {
     let mut i = 0;
     while i < args.len() {
         let a = args[i];
-        if matches!(
-            a,
-            "-C" | "-c" | "--git-dir" | "--work-tree" | "--namespace" | "--super-prefix"
-        ) {
+        if a == "-c" {
+            if args.get(i + 1).is_some_and(|kv| git_config_exec(kv)) {
+                return Some("git config exec".into());
+            }
+            i += 2;
+        } else if matches!(a, "-C" | "--git-dir" | "--work-tree" | "--namespace" | "--super-prefix") {
             i += 2;
         } else if a.starts_with('-') {
             i += 1;
@@ -393,27 +654,83 @@ fn git_rule(args: &[&str]) -> Option<String> {
             .any(|a| matches!(*a, "." | "./" | ":/" | "*"))
             .then(|| format!("git {sub} .")),
         "filter-branch" | "filter-repo" => Some(format!("git {sub}")),
+        "config" => rest
+            .iter()
+            .any(|k| git_exec_key(k, "") || k.to_lowercase().starts_with("alias."))
+            .then(|| "git config exec".into()),
         _ => None,
     }
 }
 
-/// `curl` with a body to send or a method that changes data.
-fn curl_uploads(args: &[&str]) -> bool {
-    args.iter().enumerate().any(|(i, &a)| {
-        curl_body_flag(a)
-            || ((a == "-X" || a == "--request") && args.get(i + 1).is_some_and(|m| http_write_method(m)))
-            || (a.len() > 2 && a.starts_with("-X") && http_write_method(&a[2..]))
-            || a.strip_prefix("--request=").is_some_and(http_write_method)
-    })
+/// `key=value` as given to `git -c`.
+fn git_config_exec(kv: &str) -> bool {
+    let (key, value) = kv.split_once('=').unwrap_or((kv, ""));
+    git_exec_key(key, value)
 }
 
-/// `-d`, `-F`, `-T` (also attached: `-d@file`) and the long forms that send a body.
-fn curl_body_flag(arg: &str) -> bool {
-    matches!(arg, "-d" | "-F" | "-T")
-        || ["--data", "--form", "--json", "--upload-file"]
-            .iter()
-            .any(|p| arg.starts_with(p))
-        || (arg.len() > 2 && ["-d", "-F", "-T"].iter().any(|p| arg.starts_with(p)))
+/// A git config key whose value is run as a program, or that points git at one.
+fn git_exec_key(key: &str, value: &str) -> bool {
+    let key = key.to_lowercase();
+    (key.starts_with("alias.") && value.starts_with('!'))
+        || matches!(
+            key.as_str(),
+            "core.sshcommand"
+                | "core.pager"
+                | "core.editor"
+                | "core.hookspath"
+                | "core.fsmonitor"
+                | "core.gitproxy"
+                | "credential.helper"
+                | "sequence.editor"
+                | "gpg.program"
+                | "ssh.variant"
+        )
+        || key.starts_with("filter.")
+        || (key.starts_with("diff.") && key.ends_with(".textconv"))
+        || (key.starts_with("protocol.") && key.ends_with(".allow"))
+        || key.starts_with("uploadpack.")
+        || key.starts_with("receive.")
+}
+
+/// `curl` with a body to send, a method that changes data, or a short option cluster that does (`-sSd`, `-XPOST`).
+fn curl_uploads(args: &[&str]) -> bool {
+    for (i, &a) in args.iter().enumerate() {
+        if a == "-X" || a == "--request" {
+            if args.get(i + 1).is_some_and(|m| http_write_method(m)) {
+                return true;
+            }
+        } else if let Some(method) = a.strip_prefix("--request=") {
+            if http_write_method(method) {
+                return true;
+            }
+        } else if a.starts_with("--") {
+            if ["--data", "--form", "--json", "--upload-file"]
+                .iter()
+                .any(|p| a.starts_with(p))
+            {
+                return true;
+            }
+        } else if a.len() > 1 && a.starts_with('-') {
+            let (head, method) = match a.find('X') {
+                Some(pos) => (&a[..pos], Some(&a[pos + 1..])),
+                None => (a, None),
+            };
+            if head[1..].chars().any(|c| matches!(c, 'd' | 'F' | 'T')) {
+                return true;
+            }
+            if let Some(method) = method {
+                let method_word = if method.is_empty() {
+                    args.get(i + 1).copied().unwrap_or("")
+                } else {
+                    method
+                };
+                if http_write_method(method_word) {
+                    return true;
+                }
+            }
+        }
+    }
+    false
 }
 
 fn http_write_method(method: &str) -> bool {
@@ -456,43 +773,96 @@ fn writes_args(cmd: &SimpleCommand) -> bool {
     WRITERS.contains(&name.as_str()) || in_place
 }
 
-/// Where the command writes: its redirection files and, for writers, its non-flag arguments.
-fn write_targets(cmd: &SimpleCommand) -> Vec<&str> {
-    let mut targets: Vec<&str> = cmd
-        .redirects
+/// The risky rules for `Risky` mode, when no owner rule and no protected path decided:
+/// meaning first, then writes outside the agent's folders, then parts that could not be read.
+fn risky(req: &ApprovalRequest, roots: &[&str], prot: &Protected, parsed: Option<&Parsed>) -> Verdict {
+    let cwd = roots.first().copied().unwrap_or("/");
+    let first = roots.first().copied().unwrap_or_default();
+    if let (Some(command), Some(parsed)) = (req.command.as_deref(), parsed) {
+        let lowered = command.to_lowercase();
+        if SQL_LOSS.iter().any(|word| lowered.contains(*word)) {
+            return Verdict::Ask("risky: sql".into());
+        }
+        if let Some(rule) = parsed.commands.iter().find_map(risky_rule) {
+            return Verdict::Ask(format!("risky: {rule}"));
+        }
+        if let Some(cmd) = parsed.commands.iter().find(|cmd| cmd.via_xargs && writes_args(cmd)) {
+            let name = cmd.argv.first().map(String::as_str).unwrap_or_default();
+            return Verdict::Ask(format!("can't check: xargs {name}"));
+        }
+        for cmd in &parsed.commands {
+            for (exp, text) in write_targets(cmd) {
+                match target_path(exp.as_deref(), &text, cmd.cwd.as_deref(), true) {
+                    None => {}
+                    Some(None) => return Verdict::Ask("can't check: unknown path".into()),
+                    Some(Some(abs)) => {
+                        if !DEVICES.contains(&abs.as_str()) && is_outside_all(&abs, roots) {
+                            return Verdict::Ask(format!("writes outside {first}"));
+                        }
+                    }
+                }
+            }
+        }
+        if !parsed.opaque.is_empty() {
+            return Verdict::Ask(format!("can't check: {}", parsed.opaque.join(", ")));
+        }
+    }
+    if req
+        .paths
         .iter()
-        .filter(|r| r.writes_file() && !DEVICES.contains(&r.target.as_str()))
-        .map(|r| r.target.as_str())
-        .collect();
-    if writes_args(cmd) {
-        targets.extend(cmd.argv[1..].iter().filter(|a| !a.starts_with('-')).map(String::as_str));
+        .any(|path| is_outside_all(&absolute_from(path, cwd, &prot.env.home), roots))
+    {
+        return Verdict::Ask(format!("writes outside {first}"));
     }
-    targets
+    Verdict::Allow
 }
 
-/// A path as the command means it: `~`, `$HOME` and `${HOME}` expanded, relative to the working folder.
-fn absolute(path: &str, prot: &Protected, cwd: &str) -> String {
-    let expanded = expand(path, &prot.home);
-    if expanded.starts_with('/') {
-        expanded
-    } else {
-        format!("{cwd}/{expanded}")
-    }
-}
-
-/// Expands `~`, `$HOME` and `${HOME}`, also after `--option=`.
-fn expand(arg: &str, home: &str) -> String {
-    if let Some((head, tail)) = arg.split_once('=').filter(|(head, _)| head.starts_with('-')) {
-        return format!("{head}={}", expand(tail, home));
-    }
-    let tilde = if arg == "~" {
-        home.to_string()
-    } else if let Some(rest) = arg.strip_prefix("~/") {
-        format!("{home}/{rest}")
-    } else {
-        arg.to_string()
+/// `*` matches any run of characters (including empty); `\x` matches `x` literally; every
+/// other char is literal; the whole `text` must match. Iterative, no recursion blowup on
+/// long inputs.
+pub fn glob_match(pattern: &str, text: &str, case_insensitive: bool) -> bool {
+    let fold = |c: char| {
+        if case_insensitive {
+            c.to_lowercase().next().unwrap_or(c)
+        } else {
+            c
+        }
     };
-    tilde.replace("${HOME}", home).replace("$HOME", home)
+    // `None` is a `*`; `Some(c)` a literal.
+    let mut pat: Vec<Option<char>> = Vec::with_capacity(pattern.len());
+    let mut chars = pattern.chars();
+    while let Some(c) = chars.next() {
+        match c {
+            '\\' => pat.push(Some(fold(chars.next().unwrap_or('\\')))),
+            '*' => pat.push(None),
+            other => pat.push(Some(fold(other))),
+        }
+    }
+    let txt: Vec<char> = text.chars().map(fold).collect();
+    // Classic wildcard matching: on a mismatch, rewind to the last `*` and let
+    // it absorb one more character. Only the last `*` ever needs revisiting.
+    let (mut p, mut t) = (0, 0);
+    // Index in `pat` of the last `*` seen.
+    let mut star: Option<usize> = None;
+    // Index in `txt` where the last `*` started absorbing.
+    let mut star_t = 0;
+    while t < txt.len() {
+        if p < pat.len() && pat[p].is_none() {
+            star = Some(p);
+            star_t = t;
+            p += 1;
+        } else if p < pat.len() && pat[p] == Some(txt[t]) {
+            p += 1;
+            t += 1;
+        } else if let Some(star_p) = star {
+            p = star_p + 1;
+            star_t += 1;
+            t = star_t;
+        } else {
+            return false;
+        }
+    }
+    pat[p..].iter().all(Option::is_none)
 }
 
 /// How a path relates to a protected one, by components.
@@ -515,21 +885,22 @@ fn relate(cand: &[&str], prot: &[&str]) -> Relation {
     }
 }
 
-/// Components match when either side, read as a pattern, matches the other.
+/// Components match when either side, read as a pattern, matches the other. Case-insensitive.
 fn same_component(a: &str, b: &str) -> bool {
     wild_match(a, b) || wild_match(b, a)
 }
 
 /// `*`, `?` and `[…]` in `pattern` match the way a shell glob would, widened: `?` and a class
-/// count as `*`. Like a shell, a wildcard at the start does not match a leading dot.
+/// count as `*`. A pattern that starts with `*` or `?` does not match a leading dot; one that
+/// starts with a literal dot, or with a class (`[.]bandito`), does.
 fn wild_match(pattern: &str, text: &str) -> bool {
-    if !pattern.contains(['*', '?', '[']) {
-        return pattern == text;
+    if !pattern.contains(['*', '?', '[', '\\']) {
+        return pattern.to_lowercase() == text.to_lowercase();
     }
-    if text.starts_with('.') && matches!(pattern.chars().next(), Some('*' | '?' | '[')) {
+    if text.starts_with('.') && matches!(pattern.chars().next(), Some('*' | '?')) {
         return false;
     }
-    glob_match(&simplify_wild(pattern), text, false)
+    glob_match(&simplify_wild(pattern), text, true)
 }
 
 fn simplify_wild(pattern: &str) -> String {
@@ -548,77 +919,6 @@ fn simplify_wild(pattern: &str) -> String {
         }
     }
     out
-}
-
-/// Lexical path components: empty and `.` are dropped, `..` pops the last
-/// component (no-op at the root).
-fn normalize(path: &str) -> Vec<&str> {
-    let mut parts: Vec<&str> = Vec::new();
-    for component in path.split('/') {
-        match component {
-            "" | "." => {}
-            ".." => {
-                parts.pop();
-            }
-            other => parts.push(other),
-        }
-    }
-    parts
-}
-
-/// `path` made absolute (from the current folder if relative) and lexically normalized.
-fn lexical_absolute(path: &Path) -> PathBuf {
-    let abs = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
-    let text = abs.to_string_lossy().into_owned();
-    PathBuf::from(format!("/{}", normalize(&text).join("/")))
-}
-
-/// `*` matches any run of characters (including empty); every other char is
-/// literal; the whole `text` must match. No other wildcards. Iterative, no
-/// recursion blowup on long inputs.
-pub fn glob_match(pattern: &str, text: &str, case_insensitive: bool) -> bool {
-    let (pat, txt): (Vec<char>, Vec<char>) = if case_insensitive {
-        (
-            pattern.to_lowercase().chars().collect(),
-            text.to_lowercase().chars().collect(),
-        )
-    } else {
-        (pattern.chars().collect(), text.chars().collect())
-    };
-    // Classic wildcard matching: on a mismatch, rewind to the last `*` and let
-    // it absorb one more character. Only the last `*` ever needs revisiting.
-    let (mut p, mut t) = (0, 0);
-    // Index in `pat` of the last `*` seen.
-    let mut star: Option<usize> = None;
-    // Index in `txt` where the last `*` started absorbing.
-    let mut star_t = 0;
-    while t < txt.len() {
-        if p < pat.len() && pat[p] == '*' {
-            star = Some(p);
-            star_t = t;
-            p += 1;
-        } else if p < pat.len() && pat[p] == txt[t] {
-            p += 1;
-            t += 1;
-        } else if let Some(star_p) = star {
-            p = star_p + 1;
-            star_t += 1;
-            t = star_t;
-        } else {
-            return false;
-        }
-    }
-    pat[p..].iter().all(|&c| c == '*')
-}
-
-/// The rule to store for "always allow here" on `subject`. None when the command cannot be read.
-pub fn always_pattern(subject: &str, _prot: &Protected) -> Option<String> {
-    Some(subject.to_string())
-}
-
-/// Runs a policy decision; a panic becomes `Ask("policy error")`.
-pub fn guarded(decide: impl FnOnce() -> Verdict) -> Verdict {
-    decide()
 }
 
 /// True if `path` lies outside every root. A relative path is taken relative to
@@ -642,6 +942,13 @@ pub fn is_outside_all(path: &str, roots: &[&str]) -> bool {
 /// itself and anything under it are inside. `/a/bc` is NOT inside `/a/b`.
 pub fn is_outside(path: &str, cwd: &str) -> bool {
     is_outside_all(path, &[cwd])
+}
+
+/// `path` made absolute (from the current folder if relative) and lexically normalized.
+fn lexical_absolute(path: &Path) -> PathBuf {
+    let abs = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
+    let text = abs.to_string_lossy().into_owned();
+    PathBuf::from(format!("/{}", normalize(&text).join("/")))
 }
 
 #[cfg(test)]
@@ -1123,19 +1430,19 @@ mod tests {
 
     #[test]
     fn protected_word_is_case_insensitive() {
-        assert_eq!(
-            shell_verdict(ApprovalMode::Never, "cat BANDITO.DB"),
-            Verdict::Deny(PROTECTED_MESSAGE.into())
-        );
+        // A bare name is asked about in risky mode, and allowed in never mode.
+        assert_eq!(ask_reason("cat BANDITO.DB"), "touches Bandito's files by name");
+        assert_eq!(shell_verdict(ApprovalMode::Never, "cat BANDITO.DB"), Verdict::Allow);
     }
 
     #[test]
-    fn protected_words_are_raw_substrings_and_do_not_need_a_command() {
+    fn bare_names_are_asked_about_in_risky_mode_and_allowed_in_never() {
         let r = req(Some("echo agent.sock"), "Bash", &[]);
         assert_eq!(
-            run(ApprovalMode::Never, &r, &[CWD], &[]),
-            Verdict::Deny(PROTECTED_MESSAGE.into())
+            run(ApprovalMode::Risky, &r, &[CWD], &[]),
+            Verdict::Ask("touches Bandito's files by name".into())
         );
+        assert_eq!(run(ApprovalMode::Never, &r, &[CWD], &[]), Verdict::Allow);
     }
 
     #[test]
@@ -1165,15 +1472,6 @@ mod tests {
             run(ApprovalMode::Never, &r, &[CWD], &rules),
             Verdict::Deny(PROTECTED_MESSAGE.into())
         );
-    }
-
-    #[test]
-    fn expansion_of_tilde_and_home_forms() {
-        assert_eq!(expand("~/x", "/home/u"), "/home/u/x");
-        assert_eq!(expand("$HOME/x", "/home/u"), "/home/u/x");
-        assert_eq!(expand("${HOME}/x", "/home/u"), "/home/u/x");
-        assert_eq!(expand("--file=~/x", "/home/u"), "--file=/home/u/x");
-        assert_eq!(expand("~user/x", "/home/u"), "~user/x");
     }
 
     #[test]
@@ -1254,7 +1552,11 @@ mod probes {
                 _ => ApprovalMode::Risky,
             };
             let got = kind(&evaluate(mode, &req(cmd), &[cwd], &[], &prot));
-            let ok = if want == "notallow" { got != "allow" } else { got == want };
+            let ok = if want == "notallow" {
+                got != "allow"
+            } else {
+                got == want
+            };
             if !ok {
                 bad.push(format!("[{mode:?}] {cmd}  (cwd {cwd}): want {want}, got {got}"));
             }
@@ -1451,11 +1753,11 @@ mod probes {
     fn probe_7_random_lines_never_panic() {
         // Pieces that shape the shell reader and the wrappers, so that short lines hit them.
         let pieces: &[&str] = &[
-            "sudo", "-u", "-g", "env", "-S", "-i", "-u", "xargs", "-I", "-n", "nice", "exec", "-a", "timeout", "stdbuf",
-            "-o", "-oL", "git", "-c", "rm", "-rf", "find", "-exec", "{}", ";", "+", "sh", "-c", "busybox", "curl", "-d",
-            "-X", "tar", "-C", "~", "$", "${", "}", "{", "$HOME", "X=", "=", "''", "\"", "\"", "`", "$(", ")", "(", "|",
-            "&&", "||", ";", "&", ">", ">>", "<", "2>&1", "<<", "<<<", "\\", "#", "*", "?", "[", "]", "/", "..", ".",
-            "cd", "pushd", "popd", "bandito", "kill", "grep", "a", "b",
+            "sudo", "-u", "-g", "env", "-S", "-i", "-u", "xargs", "-I", "-n", "nice", "exec", "-a", "timeout",
+            "stdbuf", "-o", "-oL", "git", "-c", "rm", "-rf", "find", "-exec", "{}", ";", "+", "sh", "-c", "busybox",
+            "curl", "-d", "-X", "tar", "-C", "~", "$", "${", "}", "{", "$HOME", "X=", "=", "''", "\"", "\"", "`", "$(",
+            ")", "(", "|", "&&", "||", ";", "&", ">", ">>", "<", "2>&1", "<<", "<<<", "\\", "#", "*", "?", "[", "]",
+            "/", "..", ".", "cd", "pushd", "popd", "bandito", "kill", "grep", "a", "b",
         ];
         let mut seed: u64 = 0x9E37_79B9_7F4A_7C15;
         let mut next = move || {

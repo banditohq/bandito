@@ -753,7 +753,16 @@ impl Actor {
         }
         let remember = remember && decision == Decision::Allow && !external;
         if remember {
-            self.hub.store.rule_set(Some(&self.id), &p.subject, RuleAction::Allow)?;
+            // The exact command, escaped; never a command with parts that cannot be known.
+            match policy::always_pattern(&p.subject, &self.protected) {
+                Some(pattern) => {
+                    self.hub.store.rule_set(Some(&self.id), &pattern, RuleAction::Allow)?;
+                }
+                None => tracing::info!(
+                    agent = self.id,
+                    "not remembered: the command has parts that cannot be known"
+                ),
+            }
         }
         self.hub.emit(
             &self.id,
@@ -1344,7 +1353,7 @@ impl Actor {
         // The agent's own folders: its working folder, and its home when it has one.
         let mut roots = vec![agent.cwd.as_str()];
         roots.extend(agent.home_dir.as_deref());
-        let verdict = policy::evaluate(agent.approval_mode, &req, &roots, &rules, &self.protected);
+        let verdict = policy::guarded(|| policy::evaluate(agent.approval_mode, &req, &roots, &rules, &self.protected));
         let subject = req.command.clone().unwrap_or_else(|| req.title.clone());
         match verdict {
             Verdict::Allow => match self.session.as_mut() {
