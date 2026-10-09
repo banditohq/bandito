@@ -6,18 +6,27 @@ use super::{
     ApprovalRequest, Runtime, RuntimeKind, RuntimeOutput, RuntimeStatus, Session, SpawnConfig, Spawned, clip_input,
 };
 use crate::event::{Decision, EventBody, LimitWindow, TOOL_OUTPUT_LIMIT, TurnStatus, Usage, truncate_output};
-use anyhow::bail;
+use crate::store::Effort;
+use anyhow::{anyhow, bail};
 use async_trait::async_trait;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use tokio::process::Command;
+use tokio::sync::oneshot;
+use tokio::time::timeout;
 
 /// Name of the CLI in logs and error messages.
 const LABEL: &str = "codex";
 /// JSON-RPC error code for a method we do not implement.
 const METHOD_NOT_FOUND: i64 = -32601;
+/// Ids of the two requests of a usage read (`initialize`, then `account/rateLimits/read`).
+const USAGE_INIT_ID: i64 = 1;
+const USAGE_READ_ID: i64 = 2;
+/// Upper bound for a whole usage read: start, handshake, answer.
+const USAGE_TIMEOUT: Duration = Duration::from_secs(15);
 /// Tool input strings longer than this are clipped in events and approvals.
 const INPUT_CLIP_BYTES: usize = 4096;
 /// Max bytes of diff text shown in an approval.
@@ -32,6 +41,8 @@ static NULL: Value = Value::Null;
 
 pub struct CodexRuntime {
     program: String,
+    /// Extra environment for the usage read (`refresh_usage`). Turns get theirs from the spawn config.
+    env: Vec<(String, String)>,
 }
 
 impl CodexRuntime {
@@ -42,7 +53,14 @@ impl CodexRuntime {
     pub fn with_program(program: &str) -> Self {
         Self {
             program: program.to_string(),
+            env: Vec::new(),
         }
+    }
+
+    /// Environment for the usage read. Tests point it at a fake CLI.
+    pub fn with_env(mut self, env: Vec<(String, String)>) -> Self {
+        self.env = env;
+        self
     }
 }
 
@@ -81,9 +99,15 @@ impl Runtime for CodexRuntime {
             ));
             cmd.arg("-c").arg(format!("mcp_servers.bandito.args={}", json!(args)));
         }
+        if !cfg.extra_dirs.is_empty() {
+            // The workspace-write sandbox also writes to these roots. One override carries the whole list.
+            let roots: Vec<String> = cfg.extra_dirs.iter().map(|dir| dir.display().to_string()).collect();
+            cmd.arg("-c")
+                .arg(format!("sandbox_workspace_write.writable_roots={}", json!(roots)));
+        }
         cmd.current_dir(&cfg.cwd).envs(cfg.env.iter().map(|(k, v)| (k, v)));
 
-        let state = Arc::new(Mutex::new(State::new()));
+        let state = Arc::new(Mutex::new(State::new(cfg.effort.map(turn_effort))));
         let launch = Launch::from_config(&cfg);
         let router_state = Arc::clone(&state);
         let router_launch = launch.clone();
@@ -91,10 +115,8 @@ impl Runtime for CodexRuntime {
             Box::new(move |msg: &Value, sink: &LineSink| route(msg, &router_state, &router_launch, sink));
         let (proc, output) = JsonProcess::spawn(cmd, LABEL, router)?;
         let sink = proc.sink();
-        let client =
-            json!({"clientInfo": {"name": "bandito", "title": "Bandito", "version": env!("CARGO_PKG_VERSION")}});
         // A CLI that already died has closed its stdin. Its exit reaches the caller as `Exited`.
-        if let Err(e) = locked(&state).request(&sink, "initialize", client, Pending::Init) {
+        if let Err(e) = locked(&state).request(&sink, "initialize", client_info(), Pending::Init) {
             tracing::debug!("could not send initialize: {e}");
         }
 
@@ -102,6 +124,88 @@ impl Runtime for CodexRuntime {
             session: Box::new(CodexSession { proc, sink, state }),
             output,
         })
+    }
+
+    /// Starts `codex app-server` only for this read, with no thread and no turn, and stops it again.
+    async fn refresh_usage(&self) -> anyhow::Result<Option<Vec<LimitWindow>>> {
+        let mut cmd = Command::new(&self.program);
+        cmd.arg("app-server")
+            .arg("--stdio")
+            .envs(self.env.iter().map(|(k, v)| (k, v)));
+        let (answer_tx, answer_rx) = oneshot::channel();
+        let mut answer_tx = Some(answer_tx);
+        let router: Router = Box::new(move |msg: &Value, sink: &LineSink| {
+            if let Some(answer) = usage_step(msg, sink)
+                && let Some(tx) = answer_tx.take()
+            {
+                // The caller may have given up already; then nobody needs the answer.
+                let _ = tx.send(answer);
+            }
+            Vec::new()
+        });
+        let (proc, _output) = JsonProcess::spawn(cmd, LABEL, router)?;
+        let outcome = timeout(USAGE_TIMEOUT, usage_exchange(&proc, answer_rx)).await;
+        proc.shutdown().await;
+        match outcome {
+            Ok(answer) => answer.map(Some),
+            Err(_) => bail!("codex: rate limits request timed out"),
+        }
+    }
+}
+
+/// `clientInfo` of the `initialize` request.
+fn client_info() -> Value {
+    json!({"clientInfo": {"name": "bandito", "title": "Bandito", "version": env!("CARGO_PKG_VERSION")}})
+}
+
+/// Sends `initialize` and waits for the windows the router passes on through `answer`.
+/// The router drops `answer`'s sender when the process ends, which ends the wait with an error.
+async fn usage_exchange(
+    proc: &JsonProcess,
+    answer: oneshot::Receiver<anyhow::Result<Vec<LimitWindow>>>,
+) -> anyhow::Result<Vec<LimitWindow>> {
+    proc.send(&json!({"jsonrpc": "2.0", "id": USAGE_INIT_ID, "method": "initialize", "params": client_info()}))?;
+    answer
+        .await
+        .map_err(|_| anyhow!("codex: app-server exited before answering"))?
+}
+
+/// The usage read's reaction to one server message. `Some` when the read is over: its windows, or its error.
+/// Notifications and server requests are ignored, so the read is never answered by mistake.
+fn usage_step(msg: &Value, sink: &LineSink) -> Option<anyhow::Result<Vec<LimitWindow>>> {
+    if msg.get("method").is_some() {
+        return None;
+    }
+    match msg.get("id").and_then(Value::as_i64)? {
+        USAGE_INIT_ID => {
+            if let Some(error) = msg.get("error") {
+                return Some(Err(anyhow!("codex: {}", error_text(error, "initialize failed"))));
+            }
+            let initialized = json!({"jsonrpc": "2.0", "method": "initialized"});
+            let read =
+                json!({"jsonrpc": "2.0", "id": USAGE_READ_ID, "method": "account/rateLimits/read", "params": {}});
+            let sent =
+                process::push_line(sink, LABEL, &initialized).and_then(|()| process::push_line(sink, LABEL, &read));
+            match sent {
+                Ok(()) => None,
+                Err(e) => Some(Err(e)),
+            }
+        }
+        USAGE_READ_ID => Some(match msg.get("error") {
+            Some(error) => Err(anyhow!("codex: {}", error_text(error, "rate limits read failed"))),
+            None => Ok(rate_limit_windows(msg.pointer("/result/rateLimits").unwrap_or(&NULL))),
+        }),
+        _ => None,
+    }
+}
+
+/// Codex's `effort` for a turn. `max` is not a Codex level and the RPC refuses it, so it maps to the highest one.
+fn turn_effort(effort: Effort) -> &'static str {
+    match effort {
+        Effort::Low => "low",
+        Effort::Medium => "medium",
+        Effort::High => "high",
+        Effort::Xhigh | Effort::Max => "xhigh",
     }
 }
 
@@ -157,11 +261,14 @@ struct State {
     /// Changes of each `fileChange` item, from `item/started`: (path, diff).
     file_changes: HashMap<String, Vec<(String, String)>>,
     last_usage: Option<Usage>,
+    /// `effort` sent with every `turn/start`. `None` leaves it out.
+    effort: Option<&'static str>,
 }
 
 impl State {
-    fn new() -> Self {
+    fn new(effort: Option<&'static str>) -> Self {
         Self {
+            effort,
             next_id: 1,
             thread_id: None,
             turn_id: None,
@@ -213,12 +320,11 @@ impl State {
         };
         // No `text_elements`: the recorded transcript matches the input item exactly.
         let input = json!([{"type": "text", "text": text}]);
-        self.request(
-            sink,
-            "turn/start",
-            json!({"threadId": thread_id, "input": input}),
-            Pending::TurnStart,
-        )?;
+        let mut params = json!({"threadId": thread_id, "input": input});
+        if let Some(effort) = self.effort {
+            params["effort"] = json!(effort);
+        }
+        self.request(sink, "turn/start", params, Pending::TurnStart)?;
         self.turn_active = true;
         Ok(())
     }
@@ -824,6 +930,15 @@ fn error_text(error: &Value, fallback: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn turn_effort_names_codex_levels_and_maps_max_to_xhigh() {
+        assert_eq!(turn_effort(Effort::Low), "low");
+        assert_eq!(turn_effort(Effort::Medium), "medium");
+        assert_eq!(turn_effort(Effort::High), "high");
+        assert_eq!(turn_effort(Effort::Xhigh), "xhigh");
+        assert_eq!(turn_effort(Effort::Max), "xhigh");
+    }
 
     #[test]
     fn command_title_is_first_line_clipped_by_chars() {

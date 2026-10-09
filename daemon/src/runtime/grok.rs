@@ -7,6 +7,7 @@ use super::{
     ApprovalRequest, Runtime, RuntimeKind, RuntimeOutput, RuntimeStatus, Session, SpawnConfig, Spawned, clip_input,
 };
 use crate::event::{Decision, EventBody, TOOL_OUTPUT_LIMIT, TurnStatus, truncate_output};
+use crate::store::Effort;
 use anyhow::{anyhow, bail};
 use async_trait::async_trait;
 use serde_json::{Value, json};
@@ -75,6 +76,10 @@ impl Runtime for GrokRuntime {
         if let Some(model) = &cfg.model {
             cmd.arg("--model").arg(model);
         }
+        if let Some(effort) = cfg.effort {
+            cmd.arg("--reasoning-effort").arg(reasoning_effort(effort));
+        }
+        // `cfg.extra_dirs` is not passed on: Grok has no option for extra directories, so they are ignored here.
         cmd.arg("stdio");
         cmd.current_dir(&cfg.cwd).envs(cfg.env.iter().map(|(k, v)| (k, v)));
 
@@ -107,6 +112,15 @@ impl Runtime for GrokRuntime {
             session: Box::new(GrokSession { proc, state }),
             output,
         })
+    }
+}
+
+/// `--reasoning-effort` value. Grok has no level above `high`, so `xhigh` and `max` are sent as `high`.
+fn reasoning_effort(effort: Effort) -> &'static str {
+    match effort {
+        Effort::Low => "low",
+        Effort::Medium => "medium",
+        Effort::High | Effort::Xhigh | Effort::Max => "high",
     }
 }
 
@@ -744,6 +758,15 @@ fn array<'a>(v: &'a Value, key: &str) -> &'a [Value] {
 mod tests {
     use super::*;
     use tokio::sync::mpsc;
+
+    #[test]
+    fn reasoning_effort_names_grok_levels_and_caps_at_high() {
+        assert_eq!(reasoning_effort(Effort::Low), "low");
+        assert_eq!(reasoning_effort(Effort::Medium), "medium");
+        assert_eq!(reasoning_effort(Effort::High), "high");
+        assert_eq!(reasoning_effort(Effort::Xhigh), "high");
+        assert_eq!(reasoning_effort(Effort::Max), "high");
+    }
 
     fn option(option_id: &str, kind: &str) -> ApprovalOption {
         ApprovalOption {

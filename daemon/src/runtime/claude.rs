@@ -90,6 +90,12 @@ impl Runtime for ClaudeRuntime {
         if let Some(model) = &cfg.model {
             cmd.arg("--model").arg(model);
         }
+        if let Some(effort) = cfg.effort {
+            cmd.arg("--effort").arg(effort.as_str());
+        }
+        for dir in &cfg.extra_dirs {
+            cmd.arg("--add-dir").arg(dir);
+        }
         if let Some(prompt) = &cfg.system_prompt {
             cmd.arg("--append-system-prompt").arg(prompt);
         }
