@@ -1,5 +1,5 @@
 {
-  "originHash" : "06aeb2a3c8a9542180523aa52b657cc66c6faef31496b851cd6d395e007919fc",
+  "originHash" : "ed0fc3e29bebeefdb454afa34c23961bedd4e46b008010550b2070278b74a648",
   "pins" : [
     {
       "identity" : "cryptoswift",
@@ -25,15 +25,6 @@
       "location" : "https://github.com/royalapplications/royalvnc",
       "state" : {
         "revision" : "92d4427c73817d8f849bb289ff190aa4b40c44ea"
-      }
-    },
-    {
-      "identity" : "sparkle",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/sparkle-project/Sparkle",
-      "state" : {
-        "revision" : "eef1a539a373c1f1a320624b1130fc5de7b2e100",
-        "version" : "2.10.0"
       }
     },
     {

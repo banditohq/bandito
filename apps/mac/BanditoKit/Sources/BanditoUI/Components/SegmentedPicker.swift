@@ -34,6 +34,9 @@ public struct SegmentedPicker<T: Hashable>: View {
             Text(title)
                 .font(BanditoFont.font(size: 12.5, weight: isSelected ? 600 : 500))
                 .foregroundStyle(isSelected ? Color.Bandito.text : Color.Bandito.text3)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .padding(.horizontal, 12)
                 .frame(maxWidth: .infinity)
                 .frame(height: 30)
                 .background {
