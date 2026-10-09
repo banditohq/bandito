@@ -8,6 +8,7 @@ use crate::host::Sampler;
 use crate::pairing;
 use crate::runtime::RuntimeKind;
 use crate::scheduler;
+use crate::setup::Setup;
 use crate::store::{AgentPatch, Device, Effort, NewAgent, NewSchedule, NextRun, RuleAction, SchedulePatch, Store};
 use crate::supervisor::{Inbound, Supervisor};
 use crate::terminal::{Limits, TerminalManager};
@@ -25,6 +26,7 @@ pub mod changes;
 pub mod files;
 pub mod host;
 pub mod secrets;
+pub mod setup;
 pub mod term;
 pub mod tunnel;
 pub mod unix;
@@ -50,6 +52,7 @@ pub const FEATURES: &[&str] = &[
     "changes",
     "secrets",
     "host",
+    "setup",
 ];
 
 /// Context budget bounds for `smart` memory, in tokens.
@@ -74,6 +77,8 @@ pub struct App {
     pub tunnels: Arc<tunnel::TunnelSlots>,
     /// Load, processes and ports of this server (see docs/ARCHITECTURE.md#host). Sampled by a task started in `main`.
     pub host: Arc<Sampler>,
+    /// Components the features need, and installing them (see docs/ARCHITECTURE.md#setup).
+    pub setup: Arc<Setup>,
 }
 
 impl App {
@@ -94,6 +99,7 @@ impl App {
             files: Arc::new(files),
             tunnels: Arc::new(tunnel::TunnelSlots::default()),
             host: Sampler::new(),
+            setup: Setup::system(),
         })
     }
 }
@@ -140,6 +146,8 @@ pub const FS_ERROR: i64 = -32020;
 pub const CHANGES_ERROR: i64 = -32022;
 /// A host method failed; `error.data.reason` says why (see rpc::host).
 pub const HOST_ERROR: i64 = -32023;
+/// A setup method failed; `error.data.reason` says why (see rpc::setup).
+pub const SETUP_ERROR: i64 = -32024;
 
 impl RpcError {
     fn new(code: i64, message: impl Into<String>) -> Self {
@@ -861,6 +869,8 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
         "host.stats" | "host.history" | "host.processes" | "host.ports" | "host.kill" => {
             host::dispatch(app, method, p).await
         }
+
+        "setup.status" | "setup.install" | "setup.job" => setup::dispatch(app, method, p).await,
 
         _ => Err(RpcError::new(METHOD_NOT_FOUND, format!("unknown method {method}"))),
     }

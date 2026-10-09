@@ -54,8 +54,7 @@ fn home_dir(arg: Option<PathBuf>) -> Result<PathBuf> {
     Ok(dir)
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     // Logs go to stderr: `mcp` uses stdout for the protocol.
     tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
@@ -63,8 +62,17 @@ async fn main() -> Result<()> {
         .init();
     let cli = Cli::parse();
     let home = home_dir(cli.home)?;
+    // Tools installed by `setup` go first on PATH. Done before the runtime starts any thread.
+    bandito::setup::prepend_tools_to_path();
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?
+        .block_on(run_command(cli.cmd, home))
+}
+
+async fn run_command(cmd: Cmd, home: PathBuf) -> Result<()> {
     let sock = home.join("bandito.sock");
-    match cli.cmd {
+    match cmd {
         Cmd::Daemon { listen } => daemon(&home, &sock, listen).await,
         Cmd::Status => status(&sock).await,
         Cmd::Pair => {
