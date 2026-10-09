@@ -330,9 +330,11 @@ import Testing
 
         let body = try jsonBody(http.requests[1])
         let envelope = try #require(body["envelope"] as? String)
-        let opened = try SyncKey.open(envelope: envelope, with: newDevice)
-        #expect(rawBytes(of: opened.key) == rawBytes(of: syncKey))
-        #expect(opened.senderFingerprint == approver.fingerprint)
+        // The envelope is bound to the account (u1 in the seeded session) and to the pending device (d2).
+        let pendingKey = try SyncKey.open(
+            envelope: envelope, with: newDevice, accountID: "u1", deviceID: "d2")
+        #expect(pendingKey.senderFingerprint == approver.fingerprint)
+        #expect(rawBytes(of: try pendingKey.accept(confirmedFingerprint: approver.fingerprint)) == rawBytes(of: syncKey))
     }
 
     @Test func approveWithAMismatchedFingerprintSendsNothing() async throws {
@@ -460,7 +462,33 @@ import Testing
             try AccountClient(
                 identity: identity, sessions: sessions, baseURL: URL(string: "https://bandito.dev.evil.example/")!)
         }
+        // User info in the URL: the host is not the one the user sees.
+        #expect(throws: AccountError.insecureBaseURL) {
+            try AccountClient(
+                identity: identity, sessions: sessions, baseURL: URL(string: "https://bandito.dev@evil.example/")!)
+        }
+        #expect(throws: AccountError.insecureBaseURL) {
+            try AccountClient(
+                identity: identity, sessions: sessions, baseURL: URL(string: "https://user:pw@bandito.dev/")!)
+        }
+        // A non-standard HTTPS port is another server as far as the client can tell.
+        #expect(throws: AccountError.insecureBaseURL) {
+            try AccountClient(
+                identity: identity, sessions: sessions, baseURL: URL(string: "https://bandito.dev:8443/api/v1")!)
+        }
+        #expect(throws: AccountError.insecureBaseURL) {
+            try AccountClient(
+                identity: identity, sessions: sessions, baseURL: URL(string: "http://127.0.0.1:8787@evil.example/")!)
+        }
+        #expect(throws: AccountError.insecureBaseURL) {
+            try AccountClient(
+                identity: identity, sessions: sessions, baseURL: URL(string: "http://user@127.0.0.1:8787/")!)
+        }
         _ = try AccountClient(identity: identity, sessions: sessions, baseURL: AccountClient.defaultBaseURL)
+        _ = try AccountClient(
+            identity: identity, sessions: sessions, baseURL: URL(string: "https://bandito.dev:443/api/v1")!)
+        _ = try AccountClient(
+            identity: identity, sessions: sessions, baseURL: URL(string: "http://127.0.0.1:9999/api/v1")!)
         _ = try AccountClient(
             identity: identity, sessions: sessions, baseURL: URL(string: "http://127.0.0.1:8787/api/v1")!)
         _ = try AccountClient(

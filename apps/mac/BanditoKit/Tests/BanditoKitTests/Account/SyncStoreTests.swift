@@ -281,4 +281,55 @@ import Testing
         #expect(try await store.pull() == fresh)
         #expect(defaults.integer(forKey: SyncStore.versionKey(accountID: accountID)) == 1)
     }
+
+    @Test func resetAccountThenPushAndPullWorkWithoutAManualForget() async throws {
+        let keys = MemorySecretStore()
+        let key = SymmetricKey(size: .bits256)
+        try SyncKey.save(key, to: keys)
+        let defaults = Self.freshDefaults()
+        let before = SyncPayload(servers: [serverA])
+        let after = SyncPayload(servers: [serverB])
+        let http = ScriptedHTTP([
+            "GET /sync": [
+                ScriptedReply(#"{"ok":true,"version":5,"blob":"\#(try blob(of: before, key: key, version: 5))"}"#),
+                ScriptedReply(#"{"ok":true,"version":1,"blob":"\#(try blob(of: after, key: key, version: 1))"}"#),
+            ],
+            "POST /account/reset": [ScriptedReply(#"{"ok":true,"device":{"id":"d1","approved":true}}"#)],
+            "PUT /sync": [ScriptedReply(#"{"ok":true,"version":1}"#)],
+        ])
+        let store = try makeStore(http: http, keys: keys, defaults: defaults)
+
+        #expect(try await store.pull() == before)
+        #expect(defaults.integer(forKey: SyncStore.versionKey(accountID: accountID)) == 5)
+
+        #expect(try await store.resetAccount() == DeviceRef(id: "d1", approved: true))
+        #expect(defaults.integer(forKey: SyncStore.versionKey(accountID: accountID)) == 0)
+
+        try await store.push(after)
+        #expect(try await store.pull() == after)
+        #expect(store.knownVersion == 1)
+        #expect(defaults.integer(forKey: SyncStore.versionKey(accountID: accountID)) == 1)
+    }
+
+    @Test func aVersionOneBlobWithoutAResetThroughTheStoreIsRefusedAsARollback() async throws {
+        // Control for the test above: the same blob is refused when the account was not reset through the store.
+        let keys = MemorySecretStore()
+        let key = SymmetricKey(size: .bits256)
+        try SyncKey.save(key, to: keys)
+        let defaults = Self.freshDefaults()
+        defaults.set(5, forKey: SyncStore.versionKey(accountID: accountID))
+        let http = ScriptedHTTP([
+            "GET /sync": [
+                ScriptedReply(#"{"ok":true,"version":1,"blob":"\#(try blob(of: SyncPayload(), key: key, version: 1))"}"#)
+            ]
+        ])
+        let store = try makeStore(http: http, keys: keys, defaults: defaults)
+
+        do {
+            _ = try await store.pull()
+            Issue.record("expected rollback")
+        } catch let error as SyncStoreError {
+            #expect(error == .rollback(seen: 5, got: 1))
+        }
+    }
 }

@@ -121,6 +121,45 @@ import Testing
         await tunnel.stop()
     }
 
+    @Test func aBindFailureWithNoNamedListenerIsAnOrdinaryStartError() async throws {
+        // ssh says the port is taken, but lsof names no other listener: not a takeover, so no retry.
+        let ssh = try writeBindFailingSSH()
+        let ports = PortLog()
+        let tunnel = try SSHTunnel(
+            target: "prod-1", remotePort: 7878, sshPath: ssh.path,
+            listeners: { port in
+                ports.record(port)
+                return []
+            })
+
+        do {
+            try await tunnel.start()
+            Issue.record("expected exited")
+        } catch let error as SSHTunnelError {
+            #expect(error == .exited(detail: "bind [127.0.0.1]:1: Address already in use"))
+        }
+        #expect(ports.ports.count == 1)
+    }
+
+    @Test func aBindFailureWithAForeignListenerLeadsToPortHijacked() async throws {
+        let ssh = try writeBindFailingSSH()
+        let ports = PortLog()
+        let tunnel = try SSHTunnel(
+            target: "prod-1", remotePort: 7878, sshPath: ssh.path,
+            listeners: { port in
+                ports.record(port)
+                return [1]
+            })
+
+        do {
+            try await tunnel.start()
+            Issue.record("expected portHijacked")
+        } catch let error as SSHTunnelError {
+            #expect(error == .portHijacked)
+        }
+        #expect(ports.ports.count == SSHTunnel.maxPortAttempts)
+    }
+
     @Test func aPortConflictInSSHsOwnWordsIsRecognised() {
         #expect(SSHTunnel.isPortConflict(stderr: "bind [127.0.0.1]:9000: Address already in use"))
         #expect(SSHTunnel.isPortConflict(stderr: "channel_setup_fwd_listener_tcpip: cannot listen to port: 9000"))
@@ -146,6 +185,11 @@ final class PortLog: @unchecked Sendable {
     var ports: [Int] {
         lock.withLock { recorded }
     }
+}
+
+/// An ssh stand-in that fails the way ssh does when its forward port is taken.
+private func writeBindFailingSSH() throws -> URL {
+    try writeFakeSSH("echo 'bind [127.0.0.1]:1: Address already in use' >&2; exit 255")
 }
 
 /// An ssh stand-in that listens on the `-L` local port with netcat and then becomes it (`exec`), so the

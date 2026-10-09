@@ -91,10 +91,15 @@ public struct DeviceIdentity: Sendable {
 /// Loads this device's identity once. The actor serializes the first load, so concurrent callers get the
 /// same key pair and never create two.
 public actor DeviceIdentityStore {
+    /// The device identity of the app, kept in the login Keychain. The app uses only this instance: a second
+    /// store could create a second key pair.
+    public static let shared = DeviceIdentityStore(secrets: KeychainStore(service: DeviceIdentity.keychainService))
+
     private let secrets: SecretStore
     private var loaded: DeviceIdentity?
 
-    public init(secrets: SecretStore) {
+    /// Tests inject an in-memory store through `@testable import`. The app does not create stores.
+    init(secrets: SecretStore) {
         self.secrets = secrets
     }
 

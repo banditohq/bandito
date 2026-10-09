@@ -80,10 +80,20 @@ public final class SyncStore {
         }
     }
 
-    /// Forgets the newest version this device has read, for the signed-in account. Call it only after the
-    /// user resets the account (`AccountClient.reset`): the server then starts a new version history, and
-    /// the old high-water mark would reject it as a rollback. Nothing else clears it.
-    public func forgetVersionHistory() async throws {
+    /// Resets the signed-in account on the server and forgets this device's version history for it. This is the
+    /// only supported way to reset: the UI must not call `AccountClient.reset()` itself. The server then starts a
+    /// new blob history at version 1, and the old high-water mark would refuse it as a rollback.
+    /// If the server refuses the reset, the history is kept.
+    public func resetAccount() async throws -> DeviceRef {
+        let accountID = try await currentAccountID()
+        let device = try await account.reset()
+        defaults.removeObject(forKey: Self.versionKey(accountID: accountID))
+        knownVersion = 0
+        return device
+    }
+
+    /// Forgets the newest version this device has read, for the signed-in account. Only `resetAccount` calls it.
+    func forgetVersionHistory() async throws {
         defaults.removeObject(forKey: Self.versionKey(accountID: try await currentAccountID()))
         knownVersion = 0
     }

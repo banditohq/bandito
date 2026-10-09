@@ -290,7 +290,11 @@ public actor SSHTunnel {
             if !process.isRunning {
                 pipe.fileHandleForReading.readabilityHandler = nil
                 buffer.append((try? pipe.fileHandleForReading.readToEnd()) ?? Data())
-                if Self.isPortConflict(stderr: buffer.text) { throw LaunchFailure.portTaken }
+                // A bind failure is a port takeover only when lsof names another listener on the port.
+                // Otherwise it is an ordinary start failure, reported with ssh's own words.
+                if Self.isPortConflict(stderr: buffer.text), await foreignListener(port: port, except: process.processIdentifier) {
+                    throw LaunchFailure.portTaken
+                }
                 throw SSHTunnelError.from(stderr: buffer.text)
             }
             if await Self.isAccepting(port: port) {
@@ -304,7 +308,10 @@ public actor SSHTunnel {
                 }
                 if owners == [process.processIdentifier] { return current }
                 abandon(process, pipe: pipe)
-                throw LaunchFailure.portTaken
+                // Another listener is named: the port was taken. No listener named: the owner is unknown, which
+                // is an error, not a takeover.
+                if owners.contains(where: { $0 != process.processIdentifier }) { throw LaunchFailure.portTaken }
+                throw SSHTunnelError.exited(detail: "could not confirm which process listens on the tunnel port")
             }
             if ContinuousClock.now >= deadline {
                 // Not an exit to react to: the launch is failing and the caller decides.
@@ -366,6 +373,12 @@ public actor SSHTunnel {
                 }
             }
         }
+    }
+
+    /// Whether lsof names a listener on `port` other than `pid`. Any lookup failure answers false.
+    private func foreignListener(port: Int, except pid: Int32) async -> Bool {
+        guard let owners = try? await listeners(port) else { return false }
+        return owners.contains { $0 != pid }
     }
 
     /// ssh's words for "the local port is taken". With `ExitOnForwardFailure` ssh exits with them.

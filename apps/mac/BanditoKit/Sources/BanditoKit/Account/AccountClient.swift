@@ -30,13 +30,15 @@ public actor AccountClient {
         self.device = device
     }
 
-    /// The base URL must be `https://bandito.dev`. Plain `http` is allowed only to a loopback host (local
-    /// development, `wrangler dev`). Anything else would send tokens in the clear or to another server.
+    /// The base URL must be `https://bandito.dev` with no port or port 443, and no user info. Plain `http` is
+    /// allowed only to a loopback host on any port (local development, `wrangler dev`), also without user info.
+    /// Anything else would send tokens in the clear or to another server.
     public static func validate(baseURL: URL) throws {
         guard let scheme = baseURL.scheme?.lowercased(), let host = baseURL.host?.lowercased() else {
             throw AccountError.insecureBaseURL
         }
-        if scheme == "https", host == "bandito.dev" { return }
+        guard baseURL.user == nil, baseURL.password == nil else { throw AccountError.insecureBaseURL }
+        if scheme == "https", host == "bandito.dev", baseURL.port == nil || baseURL.port == 443 { return }
         if scheme == "http", ["127.0.0.1", "localhost"].contains(host) { return }
         throw AccountError.insecureBaseURL
     }
@@ -141,6 +143,9 @@ public actor AccountClient {
     /// The code of `device.publicKey` must equal `confirmedFingerprint`, the code the user compared on the new
     /// device's screen. Otherwise nothing is sealed or sent: `AccountError.fingerprintMismatch`. This is what
     /// stops a server that swapped the public key from receiving the sync key.
+    ///
+    /// The envelope is bound to this account (the signed-in session) and to `device.id`. Only that device of
+    /// that account can open it.
     public func approve(
         _ device: PendingDevice, confirmedFingerprint: String, syncKey: SymmetricKey, identity: DeviceIdentity
     ) async throws {
@@ -149,10 +154,12 @@ public actor AccountClient {
             throw AccountError.fingerprintMismatch
         }
         struct Body: Encodable { var envelope: String }
-        let envelope = try SyncKey.seal(syncKey, forPublicKey: device.publicKey, sender: identity)
-        let reply = try await send(
-            "POST", "/devices/\(try Self.segment(device.id))/approve", body: Body(envelope: envelope),
-            authenticated: true)
+        let path = "/devices/\(try Self.segment(device.id))/approve"
+        let session = try requireSession()
+        let envelope = try SyncKey.seal(
+            syncKey, forPublicKey: device.publicKey, sender: identity,
+            accountID: session.user.id, deviceID: device.id)
+        let reply = try await send("POST", path, body: Body(envelope: envelope), authenticated: true)
         try checkOK(reply)
     }
 
@@ -206,6 +213,9 @@ public actor AccountClient {
 
     /// Recovery for an account whose key is lost: discards the sync data and the other devices.
     /// Needs a session created in the last 10 minutes. Returns this device's state.
+    ///
+    /// The UI must not call this directly. Use `SyncStore.resetAccount()`: it also forgets the version history
+    /// of the account on this device. Without that, the new blob (version 1) would be refused as a rollback.
     public func reset() async throws -> DeviceRef {
         struct Body: Encodable { var confirm = "RESET" }
         struct Wire: Decodable { var device: DeviceRef }
