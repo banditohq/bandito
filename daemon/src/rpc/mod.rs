@@ -73,7 +73,10 @@ pub const RATE_LIMITED: i64 = -32002;
 
 impl RpcError {
     fn new(code: i64, message: impl Into<String>) -> Self {
-        Self { code, message: message.into() }
+        Self {
+            code,
+            message: message.into(),
+        }
     }
 }
 
@@ -172,10 +175,16 @@ struct RedeemParams {
 fn check_cwd(cwd: &str) -> Result<(), RpcError> {
     let p = std::path::Path::new(cwd);
     if !p.is_absolute() {
-        return Err(RpcError::new(INVALID_PARAMS, "cwd must be an absolute path on the server"));
+        return Err(RpcError::new(
+            INVALID_PARAMS,
+            "cwd must be an absolute path on the server",
+        ));
     }
     if !p.is_dir() {
-        return Err(RpcError::new(INVALID_PARAMS, format!("folder not found on the server: {cwd}")));
+        return Err(RpcError::new(
+            INVALID_PARAMS,
+            format!("folder not found on the server: {cwd}"),
+        ));
     }
     Ok(())
 }
@@ -184,7 +193,10 @@ fn check_cwd(cwd: &str) -> Result<(), RpcError> {
 /// connection state.
 pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResult {
     if matches!(peer, Peer::Anonymous) && !matches!(method, "daemon.hello" | "pair.redeem") {
-        return Err(RpcError::new(UNAUTHORIZED, "not paired: run `bandito pair` on the server"));
+        return Err(RpcError::new(
+            UNAUTHORIZED,
+            "not paired: run `bandito pair` on the server",
+        ));
     }
     let store = &app.sup.hub().store;
     match method {
@@ -214,7 +226,9 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
         "agents.list" => ok(store.agent_list()?),
         "agents.get" => {
             let Id { id } = params(p)?;
-            ok(store.agent_get(&id)?.ok_or_else(|| RpcError::new(SERVER_ERROR, format!("no agent {id}")))?)
+            ok(store
+                .agent_get(&id)?
+                .ok_or_else(|| RpcError::new(SERVER_ERROR, format!("no agent {id}")))?)
         }
         "agents.create" => {
             let a: NewAgent = params(p)?;
@@ -314,11 +328,17 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                     f.pop_front();
                 }
                 if f.len() >= REDEEM_MAX_FAILURES {
-                    return Err(RpcError::new(RATE_LIMITED, "too many attempts, try again in a few minutes"));
+                    return Err(RpcError::new(
+                        RATE_LIMITED,
+                        "too many attempts, try again in a few minutes",
+                    ));
                 }
             }
             if !store.pairing_take(&r.code)? {
-                app.redeem_failures.lock().unwrap_or_else(|e| e.into_inner()).push_back(now);
+                app.redeem_failures
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .push_back(now);
                 return Err(RpcError::new(UNAUTHORIZED, "invalid or expired code"));
             }
             let name = r.device_name.trim();

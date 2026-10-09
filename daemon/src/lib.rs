@@ -4,6 +4,7 @@ pub mod event;
 pub mod hub;
 pub mod pairing;
 pub mod policy;
+pub mod rpc;
 pub mod runtime;
 pub mod store;
 pub mod supervisor;

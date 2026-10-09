@@ -97,6 +97,8 @@ The daemon always listens on:
 1. Unix socket `~/.bandito/bandito.sock` (0600). Trusted: same user.
 2. `127.0.0.1:7878` HTTP + WebSocket (`/v1/rpc`, `/v1/health`). Token required.
 
+WebSocket upgrades that carry an `Origin` header are refused: native apps don't send one, browsers always do, so a web page can't drive the daemon through the user's browser. Unix socket paths are limited to ~104 bytes on macOS, so keep `BANDITO_HOME` short.
+
 Optional: `listen = ["0.0.0.0:7879"]` with TLS (self-signed cert generated on first start; the app pins its SHA-256 fingerprint at pairing).
 
 Pairing: `bandito pair` prints a 6-word code, a QR and a `bandito://pair?...` link (host hints + cert fingerprint). `pair.redeem` swaps the one-time code (10 min) for a device token; the app keeps it in the Keychain. Tokens are stored hashed and can be revoked.
