@@ -11,3 +11,4 @@ pub mod runtime;
 pub mod scheduler;
 pub mod store;
 pub mod supervisor;
+pub mod terminal;
