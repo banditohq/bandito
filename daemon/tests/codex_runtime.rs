@@ -254,3 +254,154 @@ async fn status_reports_missing_binary() {
     let st = CodexRuntime::with_program("/nonexistent/codex").status().await;
     assert!(!st.installed);
 }
+
+fn is_session_id(o: &RuntimeOutput) -> bool {
+    matches!(o, RuntimeOutput::SessionId(_))
+}
+
+fn is_message_delta(o: &RuntimeOutput) -> bool {
+    matches!(o, RuntimeOutput::Event(EventBody::MessageDelta { .. }))
+}
+
+/// Messages of all `Error` events, in order.
+fn error_messages(out: &[RuntimeOutput]) -> Vec<String> {
+    out.iter()
+        .filter_map(|o| match o {
+            RuntimeOutput::Event(EventBody::Error { message }) => Some(message.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Status of every `TurnCompleted`, in order.
+fn turn_statuses(out: &[RuntimeOutput]) -> Vec<TurnStatus> {
+    out.iter()
+        .filter_map(|o| match o {
+            RuntimeOutput::Event(EventBody::TurnCompleted { status, .. }) => Some(*status),
+            _ => None,
+        })
+        .collect()
+}
+
+#[tokio::test]
+async fn thread_start_error_ends_each_queued_turn_and_reports_the_error_once() {
+    let mut s = spawn(cfg("thread_start_error.jsonl")).await;
+    s.session.send("first").await.unwrap();
+    s.session.send("second").await.unwrap();
+    let mut out = until(&mut s, is_turn_end).await;
+    out.extend(until(&mut s, is_turn_end).await);
+    assert_eq!(error_messages(&out), vec!["codex: sandbox setup failed".to_string()]);
+    assert_eq!(turn_statuses(&out), vec![TurnStatus::Error, TurnStatus::Error]);
+    assert!(!out.iter().any(is_session_id));
+    s.session.shutdown().await;
+}
+
+#[tokio::test]
+async fn initialize_error_ends_the_queued_turn() {
+    let mut s = spawn(cfg("initialize_error.jsonl")).await;
+    s.session.send("hello").await.unwrap();
+    let out = until(&mut s, is_turn_end).await;
+    assert_eq!(error_messages(&out), vec!["codex: server busy".to_string()]);
+    assert_eq!(turn_statuses(&out), vec![TurnStatus::Error]);
+    s.session.shutdown().await;
+}
+
+#[tokio::test]
+async fn resume_failure_starts_a_new_thread_and_runs_the_queued_text() {
+    let mut c = cfg("resume_fallback.jsonl");
+    c.resume = Some("thr-gone".into());
+    c.model = Some("gpt-5.5-codex".into());
+    c.system_prompt = Some("You are Forge.".into());
+    let mut s = spawn(c).await;
+    s.session.send("go on").await.unwrap();
+    let out = until(&mut s, is_turn_end).await;
+    assert_eq!(
+        error_messages(&out),
+        vec!["codex could not resume the previous thread; started a new one".to_string()]
+    );
+    assert!(out.contains(&RuntimeOutput::SessionId("thr-new".into())));
+    assert!(!out.contains(&RuntimeOutput::SessionId("thr-gone".into())));
+    assert!(out.iter().any(|o| matches!(o,
+        RuntimeOutput::Event(EventBody::MessageDelta { text }) if text == "Back.")));
+    assert_eq!(turn_statuses(&out), vec![TurnStatus::Ok]);
+    s.session.shutdown().await;
+}
+
+#[tokio::test]
+async fn interrupt_before_the_turn_id_is_sent_when_turn_start_answers() {
+    let mut s = spawn(cfg("interrupt_turn_start_pending.jsonl")).await;
+    until(&mut s, is_session_id).await;
+    s.session.send("long task").await.unwrap();
+    // turn/start is still unanswered here. The fixture only answers after a delay, so this is the pending path.
+    s.session.interrupt().await.unwrap();
+    let out = until(&mut s, is_turn_end).await;
+    assert_eq!(turn_statuses(&out), vec![TurnStatus::Interrupted]);
+    s.session.shutdown().await;
+}
+
+#[tokio::test]
+async fn interrupt_uses_the_turn_id_from_turn_started() {
+    let mut s = spawn(cfg("interrupt_on_turn_started.jsonl")).await;
+    until(&mut s, is_session_id).await;
+    s.session.send("long task").await.unwrap();
+    // The delta is sent after turn/started, so the turn id is known once it arrives.
+    until(&mut s, is_message_delta).await;
+    s.session.interrupt().await.unwrap();
+    let out = until(&mut s, is_turn_end).await;
+    assert_eq!(turn_statuses(&out), vec![TurnStatus::Interrupted]);
+    s.session.shutdown().await;
+}
+
+#[tokio::test]
+async fn interrupt_before_the_thread_ends_the_queued_turns() {
+    let mut s = spawn(cfg("interrupt_before_thread.jsonl")).await;
+    s.session.send("first").await.unwrap();
+    s.session.send("second").await.unwrap();
+    s.session.interrupt().await.unwrap();
+    // Reported with the CLI's next message, before anything else it says.
+    let mut out = until(&mut s, is_turn_end).await;
+    out.extend(until(&mut s, is_turn_end).await);
+    assert_eq!(
+        turn_statuses(&out),
+        vec![TurnStatus::Interrupted, TurnStatus::Interrupted]
+    );
+    assert!(!out.iter().any(is_session_id));
+    s.session.shutdown().await;
+}
+
+#[tokio::test]
+async fn mcp_tool_that_reports_is_error_failed() {
+    let mut s = spawn(cfg("mcp_is_error.jsonl")).await;
+    s.session.send("send it").await.unwrap();
+    let out = until(&mut s, is_turn_end).await;
+    assert!(out.iter().any(|o| matches!(o,
+        RuntimeOutput::Event(EventBody::ToolResult { call_id, ok: false, output })
+            if call_id == "mcp-2" && output == "unknown recipient")));
+    assert_eq!(turn_statuses(&out), vec![TurnStatus::Ok]);
+    s.session.shutdown().await;
+}
+
+#[tokio::test]
+async fn turn_end_cancels_approvals_that_are_still_open() {
+    let mut s = spawn(cfg("approval_open_at_turn_end.jsonl")).await;
+    s.session.send("clean").await.unwrap();
+    let before = until(&mut s, is_approval).await;
+    let RuntimeOutput::Approval(req) = before.last().unwrap().clone() else {
+        unreachable!()
+    };
+    assert_eq!(req.key, "req-9");
+    let after = until(&mut s, is_turn_end).await;
+    let cancelled = after
+        .iter()
+        .position(|o| *o == RuntimeOutput::ApprovalCancelled { key: "req-9".into() });
+    let ended = after.iter().position(is_turn_end);
+    assert!(
+        matches!((cancelled, ended), (Some(c), Some(e)) if c < e),
+        "cancelled before the turn ends: {after:?}"
+    );
+    assert!(
+        s.session.resolve("req-9", Decision::Allow).await.is_err(),
+        "the turn already closed it"
+    );
+    s.session.shutdown().await;
+}

@@ -1,0 +1,10 @@
+// The turn completes while an approval is still open. The host gets ApprovalCancelled; nothing is answered.
+{"expect": {"method": "initialize"}}
+{"send": {"id": "$last:/id", "result": {}}}
+{"expect": {"method": "initialized"}}
+{"expect": {"method": "thread/start"}}
+{"send": {"id": "$last:/id", "result": {"thread": {"id": "thr-12"}}}}
+{"expect": {"method": "turn/start"}}
+{"send": {"id": "$last:/id", "result": {"turn": {"id": "turn-13", "items": [], "status": "inProgress", "error": null}}}}
+{"send": {"id": "req-9", "method": "item/commandExecution/requestApproval", "params": {"threadId": "thr-12", "turnId": "turn-13", "itemId": "item-13", "startedAtMs": 1, "command": "rm -rf build"}}}
+{"send": {"method": "turn/completed", "params": {"threadId": "thr-12", "turn": {"id": "turn-13", "items": [], "status": "completed", "error": null}}}}

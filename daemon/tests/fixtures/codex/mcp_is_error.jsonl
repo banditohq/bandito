@@ -1,0 +1,11 @@
+// An MCP tool call completes, but the tool reports isError: the call failed.
+{"expect": {"method": "initialize"}}
+{"send": {"id": "$last:/id", "result": {}}}
+{"expect": {"method": "initialized"}}
+{"expect": {"method": "thread/start"}}
+{"send": {"id": "$last:/id", "result": {"thread": {"id": "thr-11"}}}}
+{"expect": {"method": "turn/start"}}
+{"send": {"id": "$last:/id", "result": {"turn": {"id": "turn-12", "items": [], "status": "inProgress", "error": null}}}}
+{"send": {"method": "item/started", "params": {"threadId": "thr-11", "turnId": "turn-12", "item": {"type": "mcpToolCall", "id": "mcp-2", "server": "bandito", "tool": "crew_send", "arguments": {"to": "Nobody"}, "status": "inProgress"}}}}
+{"send": {"method": "item/completed", "params": {"threadId": "thr-11", "turnId": "turn-12", "completedAtMs": 1, "item": {"type": "mcpToolCall", "id": "mcp-2", "server": "bandito", "tool": "crew_send", "arguments": {}, "status": "completed", "result": {"content": [{"type": "text", "text": "unknown recipient"}], "isError": true}}}}}
+{"send": {"method": "turn/completed", "params": {"threadId": "thr-11", "turn": {"id": "turn-12", "items": [], "status": "completed", "error": null}}}}

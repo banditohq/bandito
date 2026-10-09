@@ -1,0 +1,14 @@
+// thread/resume is refused (the stored thread is gone). The adapter starts a new thread with the same
+// options and runs the queued message in it. The sleep keeps the test's send ahead of the thread.
+{"expect": {"method": "initialize"}}
+{"sleep_ms": 200}
+{"send": {"id": "$last:/id", "result": {"userAgent": "bandito/0.161.0"}}}
+{"expect": {"method": "initialized"}}
+{"expect": {"method": "thread/resume", "params": {"threadId": "thr-gone", "approvalPolicy": "untrusted", "sandbox": "workspace-write", "model": "gpt-5.5-codex", "developerInstructions": "You are Forge."}}}
+{"send": {"id": "$last:/id", "error": {"code": -32600, "message": "no rollout found for thread thr-gone"}}}
+{"expect": {"method": "thread/start", "params": {"approvalPolicy": "untrusted", "sandbox": "workspace-write", "model": "gpt-5.5-codex", "developerInstructions": "You are Forge."}}}
+{"send": {"id": "$last:/id", "result": {"thread": {"id": "thr-new"}}}}
+{"expect": {"method": "turn/start", "params": {"threadId": "thr-new", "input": [{"type": "text", "text": "go on"}]}}}
+{"send": {"id": "$last:/id", "result": {"turn": {"id": "turn-9", "items": [], "status": "inProgress", "error": null}}}}
+{"send": {"method": "item/agentMessage/delta", "params": {"threadId": "thr-new", "turnId": "turn-9", "itemId": "m-9", "delta": "Back."}}}
+{"send": {"method": "turn/completed", "params": {"threadId": "thr-new", "turn": {"id": "turn-9", "items": [], "status": "completed", "error": null}}}}
