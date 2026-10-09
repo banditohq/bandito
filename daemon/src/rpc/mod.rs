@@ -1,6 +1,7 @@
 //! JSON-RPC 2.0, the same on every transport (unix socket, WebSocket).
 //! See docs/ARCHITECTURE.md#rpc.
 
+use crate::commands::prepare as prepare_message;
 use crate::event::{Decision, Event, EventBody, Source};
 use crate::files::FileService;
 use crate::home;
@@ -10,7 +11,7 @@ use crate::runtime::RuntimeKind;
 use crate::scheduler;
 use crate::setup::Setup;
 use crate::store::{AgentPatch, Device, Effort, NewAgent, NewSchedule, NextRun, RuleAction, SchedulePatch, Store};
-use crate::supervisor::{Inbound, Supervisor};
+use crate::supervisor::Supervisor;
 use crate::terminal::{Limits, TerminalManager};
 use chrono::{Local, NaiveDate, NaiveTime, TimeZone};
 use serde::Deserialize;
@@ -23,6 +24,7 @@ use std::time::Duration;
 use tokio::sync::{broadcast, mpsc};
 
 pub mod changes;
+pub mod commands;
 pub mod files;
 pub mod host;
 pub mod secrets;
@@ -53,6 +55,7 @@ pub const FEATURES: &[&str] = &[
     "secrets",
     "host",
     "setup",
+    "commands",
 ];
 
 /// Context budget bounds for `smart` memory, in tokens.
@@ -148,6 +151,8 @@ pub const CHANGES_ERROR: i64 = -32022;
 pub const HOST_ERROR: i64 = -32023;
 /// A setup method failed; `error.data.reason` says why (see rpc::setup).
 pub const SETUP_ERROR: i64 = -32024;
+/// A command or skill call failed; `error.data.reason` says why (see rpc::commands).
+pub const COMMANDS_ERROR: i64 = -32027;
 
 impl RpcError {
     fn new(code: i64, message: impl Into<String>) -> Self {
@@ -433,6 +438,7 @@ fn history_line(e: &Event, agent_name: &str) -> Option<String> {
             text,
             source,
             from_agent,
+            ..
         } => {
             let who = match source {
                 Source::User => "user".to_string(),
@@ -511,6 +517,10 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
         return files::dispatch(app, method, p)
             .await
             .unwrap_or_else(|| Err(RpcError::new(METHOD_NOT_FOUND, format!("unknown method {method}"))));
+    }
+    if method.starts_with("commands.") {
+        // Every `commands.*` name is answered there, unknown ones with METHOD_NOT_FOUND.
+        return commands::dispatch(app, method, p).await;
     }
     if method.starts_with("changes.") {
         // Every `changes.*` name is answered there, unknown ones with METHOD_NOT_FOUND.
@@ -622,7 +632,10 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             if text.len() > MAX_MESSAGE_BYTES {
                 return Err(RpcError::new(INVALID_PARAMS, "message is too long"));
             }
-            app.sup.send(&agent_id, Inbound::user(text)).await?;
+            // A slash command is expanded for runtimes that do not run it themselves; the thread keeps what was typed.
+            let agent = store.agent_get(&agent_id)?;
+            let prepared = prepare_message(agent.as_ref(), &text)?;
+            app.sup.send(&agent_id, prepared.into_inbound(Source::User)).await?;
             ok(json!({}))
         }
         "agents.interrupt" => {
@@ -1002,6 +1015,7 @@ mod history_tests {
             text: text.into(),
             source,
             from_agent: from_agent.map(str::to_string),
+            command: None,
         }
     }
 

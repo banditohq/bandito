@@ -82,6 +82,9 @@ pub enum EventBody {
         source: Source,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         from_agent: Option<String>,
+        /// Name of the slash command in `text`, when one was recognised (see docs/ARCHITECTURE.md#commands).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        command: Option<String>,
     },
     #[serde(rename = "message.assistant")]
     MessageAssistant { text: String },
