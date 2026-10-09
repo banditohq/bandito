@@ -309,12 +309,28 @@ impl CommandSpec {
         self
     }
 
-    /// The command as a person would type it. Environment variables are not shown.
+    /// The command as a person would type it, with arguments quoted for a shell. Environment
+    /// variables are not shown.
     pub fn display(&self) -> String {
         std::iter::once(self.program.as_str())
             .chain(self.args.iter().map(String::as_str))
+            .map(shell_word)
             .collect::<Vec<_>>()
             .join(" ")
+    }
+}
+
+/// `word` as a shell reads it: as it is when it has only plain characters, otherwise in single
+/// quotes, with each `'` written as `'\''`.
+fn shell_word(word: &str) -> String {
+    let plain = !word.is_empty()
+        && word
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"_./:=@%+-".contains(&b));
+    if plain {
+        word.to_string()
+    } else {
+        format!("'{}'", word.replace('\'', "'\\''"))
     }
 }
 
@@ -453,18 +469,28 @@ pub fn has_noto_font(fc_list_output: &str) -> bool {
     fc_list_output.to_lowercase().contains("noto")
 }
 
-/// True when the output of `gpg --show-keys --with-colons` lists `fingerprint`, as the primary key
-/// or as a subkey. Case and spaces in either side do not matter.
-pub fn lists_fingerprint(show_keys_output: &str, fingerprint: &str) -> bool {
-    let wanted = normalize_fingerprint(fingerprint);
-    show_keys_output
-        .lines()
-        .filter(|line| line.starts_with("fpr:"))
-        .any(|line| {
-            line.split(':')
+/// True when the output of `gpg --show-keys --with-colons` on a keyring lists exactly one primary
+/// key (`pub:`), and the `fpr:` line right after it is Google's Chrome signing key. Subkeys do not
+/// count, and a keyring with a second key glued on is refused.
+pub fn is_chrome_signing_key(show_keys_output: &str) -> bool {
+    let lines: Vec<&str> = show_keys_output.lines().collect();
+    let pub_lines: Vec<usize> = lines
+        .iter()
+        .enumerate()
+        .filter(|(_, line)| line.starts_with("pub:"))
+        .map(|(at, _)| at)
+        .collect();
+    let [pub_at] = pub_lines.as_slice() else {
+        return false;
+    };
+    let wanted = normalize_fingerprint(CHROME_KEY_FINGERPRINT);
+    lines.get(pub_at + 1).is_some_and(|line| {
+        line.starts_with("fpr:")
+            && line
+                .split(':')
                 .skip(1)
                 .any(|field| normalize_fingerprint(field) == wanted)
-        })
+    })
 }
 
 fn normalize_fingerprint(text: &str) -> String {
@@ -1236,12 +1262,13 @@ impl Setup {
         }
         self.show_keys(&repo.keyring_target)
             .await
-            .is_ok_and(|listing| lists_fingerprint(&listing, CHROME_KEY_FINGERPRINT))
+            .is_ok_and(|listing| is_chrome_signing_key(&listing))
     }
 
-    /// Gets Google's key, checks that it has the fingerprint of the Chrome signing key, and writes
-    /// the keyring and the sources line into `<tools>/downloads`. Returns `true` when the repository
-    /// was configured already, and then writes nothing. A key with another fingerprint stops here.
+    /// Gets Google's key and turns it into a keyring in `<tools>/downloads`. The keyring is checked
+    /// before anything is installed: it must hold exactly the Chrome signing key as its primary key.
+    /// Then the sources line is written next to it. Returns `true` when the repository was configured
+    /// already, and then writes nothing. A keyring that fails the check is deleted and the job stops.
     async fn prepare_chrome_repo(&self, job: &Job, repo: &ChromeRepo) -> Result<bool, String> {
         if self.chrome_repo_configured(repo).await {
             job.push_log("The Google Chrome key and repository are in place already.");
@@ -1268,12 +1295,6 @@ impl Setup {
             INSTALL_TIMEOUT,
         )
         .await?;
-        let listing = self.show_keys(&repo.key_download).await?;
-        if !lists_fingerprint(&listing, CHROME_KEY_FINGERPRINT) {
-            let _ = std::fs::remove_file(&repo.key_download);
-            job.push_log(&format!("expected the fingerprint {CHROME_KEY_FINGERPRINT}"));
-            return Err("Google signing key fingerprint mismatch".into());
-        }
         let keyring_arg = repo.keyring.display().to_string();
         self.run_step(
             job,
@@ -1291,6 +1312,22 @@ impl Setup {
             PROBE_TIMEOUT,
         )
         .await?;
+        // The keyring is checked, not the download: this is the file that apt will trust.
+        let checked = match self.show_keys(&repo.keyring).await {
+            Ok(listing) if is_chrome_signing_key(&listing) => Ok(()),
+            Ok(_) => {
+                job.push_log(&format!(
+                    "expected one primary key, with the fingerprint {CHROME_KEY_FINGERPRINT}"
+                ));
+                Err("Google signing key fingerprint mismatch".to_string())
+            }
+            Err(message) => Err(message),
+        };
+        if let Err(message) = checked {
+            let _ = std::fs::remove_file(&repo.keyring);
+            let _ = std::fs::remove_file(&repo.key_download);
+            return Err(message);
+        }
         std::fs::write(&repo.list, format!("{CHROME_REPO_LINE}\n"))
             .map_err(|e| format!("write {}: {e}", repo.list.display()))?;
         Ok(false)
@@ -1652,35 +1689,76 @@ sub:-:4096:1:A1B2C3D4E5F60718:1234567890::::::e::::::23:
 fpr:::::::::1111222233334444555566667777888899990000:
 ";
 
+    /// Another key, glued after or before Chrome's in a keyring.
+    const FOREIGN_KEY_LISTING: &str = "\
+pub:-:4096:1:0123456789ABCDEF:1234567890:::-:::scESC::::::23::0:
+fpr:::::::::00112233445566778899AABBCCDDEEFF00112233:
+uid:-::::1234567890::ABCDEF::Someone <someone@example.com>::::::::::0:
+";
+
     #[test]
-    fn key_is_accepted_only_with_the_chrome_signing_fingerprint() {
-        assert!(lists_fingerprint(CHROME_KEY_LISTING, CHROME_KEY_FINGERPRINT));
+    fn keyring_with_one_primary_key_is_accepted_when_it_is_the_chrome_signing_key() {
+        assert!(is_chrome_signing_key(CHROME_KEY_LISTING));
         // Lower case, and spaces between the groups of the fingerprint.
         let loose = CHROME_KEY_LISTING.replace(
             "EB4C1BFD4F042F6DDDCCEC917721F63BD38B4796",
             "eb4c 1bfd 4f04 2f6d ddcc ec91 7721 f63b d38b 4796",
         );
-        assert!(lists_fingerprint(&loose, CHROME_KEY_FINGERPRINT));
-        // A subkey's fingerprint counts when it is the one asked for.
-        assert!(lists_fingerprint(
-            CHROME_KEY_LISTING,
-            "1111222233334444555566667777888899990000"
-        ));
+        assert!(is_chrome_signing_key(&loose));
     }
 
     #[test]
-    fn key_with_another_fingerprint_is_refused() {
-        // Same key id (the last 16 hex digits), different fingerprint.
-        let forged = CHROME_KEY_LISTING.replace(
-            "EB4C1BFD4F042F6DDDCCEC917721F63BD38B4796",
-            "0000000000000000000000007721F63BD38B4796",
+    fn keyring_with_two_primary_keys_is_refused() {
+        let chrome_then_other = format!("{CHROME_KEY_LISTING}{FOREIGN_KEY_LISTING}");
+        assert!(!is_chrome_signing_key(&chrome_then_other));
+        let other_then_chrome = format!("{FOREIGN_KEY_LISTING}{CHROME_KEY_LISTING}");
+        assert!(!is_chrome_signing_key(&other_then_chrome));
+    }
+
+    #[test]
+    fn chrome_fingerprint_on_a_subkey_alone_is_refused() {
+        // The primary key is someone else's. Chrome's fingerprint is only on a subkey.
+        let subkey_only = CHROME_KEY_LISTING
+            .replace(
+                "EB4C1BFD4F042F6DDDCCEC917721F63BD38B4796",
+                "0000000000000000000000000000000000000000",
+            )
+            .replace(
+                "1111222233334444555566667777888899990000",
+                "EB4C1BFD4F042F6DDDCCEC917721F63BD38B4796",
+            );
+        assert!(!is_chrome_signing_key(&subkey_only));
+    }
+
+    #[test]
+    fn primary_fingerprint_must_come_right_after_the_pub_line() {
+        let moved = "\
+pub:-:4096:1:7721F63BD38B4796:1234567890:::-:::scESC::::::23::0:
+uid:-::::1234567890::ABCDEF::Google Inc.::::::::::0:
+fpr:::::::::EB4C1BFD4F042F6DDDCCEC917721F63BD38B4796:
+";
+        assert!(!is_chrome_signing_key(moved));
+    }
+
+    #[test]
+    fn keyring_without_a_key_is_refused() {
+        assert!(!is_chrome_signing_key(""));
+        assert!(!is_chrome_signing_key("tru::1:1700000000:0:3:1:5\n"));
+        assert!(!is_chrome_signing_key("pub:-:4096:1:7721F63BD38B4796:::\n"));
+    }
+
+    #[test]
+    fn displayed_commands_quote_arguments_outside_the_plain_alphabet() {
+        // Plain words, paths, `=`, `:`, `@`, `%`, `+` show as they are.
+        let plain = CommandSpec::new("sudo", ["install", "-m", "0644", "/tmp/a/b.gpg", "a=b:c/d@e%f+g"]);
+        assert_eq!(plain.display(), "sudo install -m 0644 /tmp/a/b.gpg a=b:c/d@e%f+g");
+        // A space, a quote and an empty argument are quoted; `'` becomes `'\''`.
+        let rough = CommandSpec::new("sudo", ["install", "/tmp/my dir/it's.gpg", ""]);
+        assert_eq!(rough.display(), "sudo install '/tmp/my dir/it'\\''s.gpg' ''");
+        assert_eq!(
+            CommandSpec::new("/opt/my tools/npm", ["install"]).display(),
+            "'/opt/my tools/npm' install"
         );
-        assert!(!lists_fingerprint(&forged, CHROME_KEY_FINGERPRINT));
-        assert!(!lists_fingerprint("", CHROME_KEY_FINGERPRINT));
-        assert!(!lists_fingerprint(
-            "pub:-:4096:1:7721F63BD38B4796:::\n",
-            CHROME_KEY_FINGERPRINT
-        ));
     }
 
     #[test]
@@ -1785,8 +1863,12 @@ fpr:::::::::1111222233334444555566667777888899990000:
             &format!("curl --proto =https --tlsv1.2 -fsSL -o {key} {CHROME_KEY_URL}"),
             ok_reply(""),
         );
-        mock.on(&format!("gpg --show-keys --with-colons {key}"), ok_reply(key_listing));
         mock.on(&format!("gpg --batch --yes --dearmor -o {keyring} {key}"), ok_reply(""));
+        // The check reads the keyring that would be installed, not the downloaded file.
+        mock.on(
+            &format!("gpg --show-keys --with-colons {keyring}"),
+            ok_reply(key_listing),
+        );
         mock.on(
             &format!("sudo -n install -D -m 0644 {keyring} {keyring_target}"),
             ok_reply(""),
@@ -1838,7 +1920,7 @@ fpr:::::::::1111222233334444555566667777888899990000:
         let check = calls
             .iter()
             .position(|c| c.starts_with("gpg --show-keys"))
-            .expect("the key is checked");
+            .expect("the keyring is checked");
         assert_eq!(calls.len(), check + 1, "nothing may run after a bad key: {calls:?}");
         assert!(!root.join("apt").exists(), "no keyring or list may be written");
     }
@@ -1858,8 +1940,8 @@ fpr:::::::::1111222233334444555566667777888899990000:
             [
                 "sudo -n true".to_string(),
                 format!("curl --proto =https --tlsv1.2 -fsSL -o {key} {CHROME_KEY_URL}"),
-                format!("gpg --show-keys --with-colons {key}"),
                 format!("gpg --batch --yes --dearmor -o {keyring} {key}"),
+                format!("gpg --show-keys --with-colons {keyring}"),
                 format!(
                     "sudo -n install -D -m 0644 {keyring} {}",
                     repo.keyring_target.display()

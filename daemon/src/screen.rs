@@ -804,14 +804,17 @@ async fn launch(dir: &Path, display: u32, width: u32, height: u32) -> Result<Ses
     }
 }
 
-/// Creates the folder of a screen, mode 0700. An existing folder keeps its mode.
+/// Creates the folder of a screen, mode 0700. A folder that exists is set to 0700 as well.
 #[cfg(target_os = "linux")]
 fn create_screen_dir(dir: &Path) -> Result<(), ScreenError> {
     std::fs::DirBuilder::new()
         .recursive(true)
         .mode(0o700)
         .create(dir)
-        .map_err(|e| ScreenError::StartFailed(format!("cannot create {}: {e}", dir.display())))
+        .map_err(|e| ScreenError::StartFailed(format!("cannot create {}: {e}", dir.display())))?;
+    // A folder that existed already keeps its old mode, so the mode is set again.
+    std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))
+        .map_err(|e| ScreenError::StartFailed(format!("cannot protect {}: {e}", dir.display())))
 }
 
 /// Writes `<dir>/Xauthority` with a new cookie for `:display`, mode 0600. A file left by a crashed
@@ -823,7 +826,7 @@ async fn write_xauthority(dir: &Path, display: u32) -> Result<PathBuf, ScreenErr
     let _ = std::fs::remove_file(&path);
     let cookie = random_cookie_hex();
     let written = async {
-        run_capture(
+        run_capture_private(
             &xauth_source_argv(&path),
             &[],
             Some(xauth_source_input(display, &cookie)),
@@ -899,7 +902,7 @@ struct Vnc {
 async fn start_vnc(dir: &Path, display: u32, xauth: &Path) -> Result<Vnc, ScreenError> {
     let passwd = dir.join("passwd");
     let password = generate_password();
-    run_capture(&storepasswd_argv(&password, &passwd), &[], None, "x11vnc")
+    run_capture_private(&storepasswd_argv(&password, &passwd), &[], None, "x11vnc")
         .await
         .map_err(start_failed)?;
     std::fs::set_permissions(&passwd, std::fs::Permissions::from_mode(0o600))
@@ -1046,6 +1049,28 @@ async fn run_capture(
     input: Option<Vec<u8>>,
     component: &'static str,
 ) -> Result<Vec<u8>, ScreenError> {
+    run_capture_with(argv, env, input, component, false).await
+}
+
+/// `run_capture` with umask 077: whatever the program creates is owner-only from the start.
+#[cfg(target_os = "linux")]
+async fn run_capture_private(
+    argv: &[String],
+    env: &[(String, String)],
+    input: Option<Vec<u8>>,
+    component: &'static str,
+) -> Result<Vec<u8>, ScreenError> {
+    run_capture_with(argv, env, input, component, true).await
+}
+
+#[cfg(target_os = "linux")]
+async fn run_capture_with(
+    argv: &[String],
+    env: &[(String, String)],
+    input: Option<Vec<u8>>,
+    component: &'static str,
+    private: bool,
+) -> Result<Vec<u8>, ScreenError> {
     use tokio::io::AsyncWriteExt;
     let mut cmd = Command::new(&argv[0]);
     cmd.args(&argv[1..])
@@ -1054,6 +1079,16 @@ async fn run_capture(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
+    if private {
+        // SAFETY: the closure only calls umask, which is async-signal-safe, so it is sound in the
+        // child between fork and exec.
+        unsafe {
+            cmd.as_std_mut().pre_exec(|| {
+                libc::umask(0o077);
+                Ok(())
+            });
+        }
+    }
     let mut child = cmd.spawn().map_err(|e| spawn_error(&e, component))?;
     if let (Some(data), Some(mut stdin)) = (input, child.stdin.take()) {
         // A write error means the program quit early. Its exit status says why.
@@ -1333,6 +1368,29 @@ mod tests {
         assert_ne!(a, random_cookie_hex());
     }
 
+    // Linux: what the screen's helper programs run with, and the folder they write into.
+
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn helper_programs_run_with_umask_077() {
+        let argv = vec!["sh".to_string(), "-c".to_string(), "umask".to_string()];
+        let out = run_capture_private(&argv, &[], None, "sh").await.unwrap();
+        assert_eq!(String::from_utf8_lossy(&out).trim(), "0077");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn screen_folder_is_owner_only_even_when_it_existed() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let screen = dir.path().join("shared");
+        std::fs::create_dir(&screen).unwrap();
+        std::fs::set_permissions(&screen, std::fs::Permissions::from_mode(0o755)).unwrap();
+        create_screen_dir(&screen).unwrap();
+        let mode = std::fs::metadata(&screen).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o700);
+    }
+
     #[test]
     fn storepasswd_argv_writes_the_password_to_the_file() {
         assert_eq!(
@@ -1558,9 +1616,18 @@ mod tests {
         mgr.shutdown_all().await;
     }
 
-    // Linux integration: needs Xvfb, x11vnc, xdotool, ImageMagick, openbox, xauth and xdpyinfo.
-    // Run with: BANDITO_SCREEN_IT=1 cargo test -- --ignored screen_lifecycle
-    // A container with all of them: the `bandito-screen-it` image (Debian bookworm).
+    // Linux integration: needs Xvfb, x11vnc, xdotool, ImageMagick, openbox, xauth and xdpyinfo,
+    // which are in daemon/tests/docker/screen-it.Dockerfile. Run from the repository root:
+    //   mkdir -p screen-it
+    //   # 1. build the lib test binary in rust:1-bookworm and copy it to ./screen-it/lib-test-bin
+    //   docker run --rm -v "$PWD":/src:ro -v bandito-target:/target -v "$PWD/screen-it":/out \
+    //     -e CARGO_TARGET_DIR=/target -w /src/daemon rust:1-bookworm sh -c \
+    //     'cargo test --lib --no-run --message-format=json | grep "\"executable\":\"" \
+    //      | sed "s/.*\"executable\":\"\([^\"]*\)\".*/\1/" | tail -1 | xargs -I{} cp {} /out/lib-test-bin'
+    //   # 2. build the image and run the ignored test in it
+    //   docker build -f daemon/tests/docker/screen-it.Dockerfile -t bandito-screen-it daemon/tests/docker
+    //   docker run --rm -e BANDITO_SCREEN_IT=1 -v "$PWD/screen-it:/t" --entrypoint /t/lib-test-bin \
+    //     bandito-screen-it --ignored screen_lifecycle --nocapture
 
     #[cfg(target_os = "linux")]
     fn it_enabled() -> bool {
