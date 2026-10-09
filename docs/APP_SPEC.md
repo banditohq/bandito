@@ -159,3 +159,20 @@ name hash. Only one attention animation per screen.
 
 Every visible string goes through `L10n`. New keys go to `i18n/en.json` (source) and `i18n/ru.json`;
 other languages are filled in a translation pass. Run `python3 i18n/build.py` after editing.
+
+## Guide is mandatory
+
+`guide/` is the user reference of the Apple app: each entry says what a screen, a setting or a command does and
+where to find it, in the current version. A new screen, sheet, settings section, `@AppStorage`/UserDefaults setting,
+keymap command or onboarding step must have an entry in `guide/` in the same PR. A change that adds one without it
+does not pass CI.
+
+`scripts/check_guide.py` extracts the real list from the Swift code (`AppMode`, `Sheet`, `SettingsSection`, the keys
+read by the Settings views, `Command` ids in `Keymap.swift`, `OnboardingStep`) and compares it with the
+`covers:` keys of the entries. It fails on a missing element and on a key that names nothing in the code (a stale
+guide). Run `python3 scripts/check_guide.py --list` to see what it extracts. It runs in `.claude/verify.sh` and in the
+`apple` workflow.
+
+Entry format: `## <Title>`, then `<!-- id: <unique>; covers: <kind:name, …>; status: planned -->` (status only for
+features that are in the design but not working yet), a sentence or two, `Где:` with the path, the numbered steps,
+and `Хоткей:` when the entry has a shortcut.
