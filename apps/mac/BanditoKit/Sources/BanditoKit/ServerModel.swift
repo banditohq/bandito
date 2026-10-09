@@ -311,6 +311,7 @@ public final class ServerModel: Identifiable {
             if e.seq <= lastSeq { return }
         }
         apply(e)
+        onLiveEvent?(e)
     }
 
     /// Fetches `events.since` pages until `lastSeq` reaches `last`, applying them in order.
@@ -326,6 +327,10 @@ public final class ServerModel: Identifiable {
             if lastSeq == before { break }
         }
     }
+
+    /// Called for each event that arrives live (not for history fetched to fill a gap). The app uses it
+    /// for notifications, so events that were already seen never notify twice.
+    public var onLiveEvent: ((Event) -> Void)?
 
     /// Fold one event into the model (also used by tests).
     public func apply(_ e: Event) {
@@ -531,19 +536,31 @@ extension ServerModel {
         effort: Effort? = nil, memoryMode: MemoryMode? = nil, contextBudget: Int? = nil,
         systemPrompt: String? = nil, model: String? = nil
     ) async throws -> Agent {
+        try await updateAgent(
+            id,
+            patch: AgentPatch(
+                name: name, role: role, cwd: cwd, approvalMode: approvalMode, effort: effort,
+                memoryMode: memoryMode, contextBudget: contextBudget, systemPrompt: systemPrompt,
+                model: model.map { .set($0) })
+        ).agent
+    }
+
+    /// Applies `patch` (`agents.update`). Returns the agent and the daemon's warnings.
+    @discardableResult
+    public func updateAgent(_ id: String, patch: AgentPatch) async throws -> AgentUpdate {
         struct P: Encodable {
-            var id: String; var name: String?; var role: String?; var cwd: String?; var approvalMode: ApprovalMode?
-            var effort: Effort?; var memoryMode: MemoryMode?; var contextBudget: Int?; var systemPrompt: String?
-            var model: String?
+            var id: String
+            var patch: AgentPatch
+
+            func encode(to encoder: Encoder) throws {
+                var c = encoder.container(keyedBy: AgentPatch.Key.self)
+                try c.encode(id, forKey: .id)
+                try patch.encodeFields(into: &c)
+            }
         }
-        let a = try await rpc().call(
-            "agents.update",
-            P(
-                id: id, name: name, role: role, cwd: cwd, approvalMode: approvalMode, effort: effort,
-                memoryMode: memoryMode, contextBudget: contextBudget, systemPrompt: systemPrompt, model: model),
-            as: Agent.self)
-        replaceAgent(a)
-        return a
+        let update = try await rpc().call("agents.update", P(id: id, patch: patch), as: AgentUpdate.self)
+        replaceAgent(update.agent)
+        return update
     }
 }
 

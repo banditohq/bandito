@@ -36,6 +36,8 @@ final class BrowserModel {
     private(set) var errorText: String?
     /// True while an agent holds the browser and the person tried to act on the page.
     private(set) var asksToTakeControl = false
+    /// Chrome is not on the server, so the browser cannot start. The app offers to install it.
+    private(set) var needsChrome = false
     /// Text of the address bar. Edited by the person; reset to the page's URL on navigation.
     var addressText = ""
 
@@ -84,10 +86,41 @@ final class BrowserModel {
         do {
             status = try await server.browserStart()
             errorText = nil
+            needsChrome = false
             await refresh()
+        } catch {
+            needsChrome = Self.isMissingChrome(error)
+            errorText = Self.describe(error)
+        }
+    }
+
+    /// Opens a new tab on `about:blank` and shows it (⌘T). The new tab is made on the browser connection,
+    /// because `Target.createTarget` is a browser command, not a page one.
+    func newTab() async {
+        guard canInteract, let port = status?.cdpPort, let wsPath = status?.browserWsPath else { return }
+        let browser: CDPClient
+        do {
+            browser = try await server.browserTargetsClient(cdpPort: port, wsPath: wsPath)
+        } catch {
+            errorText = Self.describe(error)
+            return
+        }
+        let result: JSONValue
+        do {
+            result = try await browser.send(.createTarget(url: "about:blank"))
+        } catch {
+            await browser.close()
+            errorText = Self.describe(error)
+            return
+        }
+        await browser.close()
+        guard case .object(let object) = result, case .string(let id)? = object["targetId"] else { return }
+        do {
+            tabs = try await server.browserTabs(cdpPort: port)
         } catch {
             errorText = Self.describe(error)
         }
+        await selectPage(id)
     }
 
     /// One poll: the status, the tabs every few polls, and a keep-alive while the browser is on screen.
@@ -263,6 +296,11 @@ final class BrowserModel {
             errorText = Self.describe(error)
             return false
         }
+    }
+
+    /// Whether the start failed because Chrome is not installed on the server (the install card is shown).
+    static func isMissingChrome(_ error: Error) -> Bool {
+        (error as? RPCError)?.reason == "missing_component"
     }
 
     /// The page point under a view point, for a picture of `pageSize` shown in a view of `viewSize`.

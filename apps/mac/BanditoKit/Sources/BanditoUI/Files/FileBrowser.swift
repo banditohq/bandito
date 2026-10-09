@@ -68,6 +68,16 @@ struct FileBrowser: View {
             if router.filesPath != model.path, requested == "~", let path = model.path {
                 router.filesPath = path
             }
+            // The folder is listed now: a file asked for (Inspector → Memory) opens, or is dropped if it is gone.
+            if let path = router.takePendingFilePath(), let entry = model.visibleEntries.first(where: { $0.path == path }) {
+                router.files.open(entry, server: server)
+            }
+        }
+        .onChange(of: router.pendingFilePath) { _, path in
+            // The folder may already be on screen; open the file now if it is listed. Otherwise the load opens it.
+            guard let path, let entry = model.visibleEntries.first(where: { $0.path == path }) else { return }
+            _ = router.takePendingFilePath()
+            router.files.open(entry, server: server)
         }
         .onChange(of: model.showHidden) { Task { await model.reload(server: server) } }
         .onDrop(of: [.fileURL], isTargeted: $dropTargeted) { providers in

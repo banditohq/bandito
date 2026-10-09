@@ -90,7 +90,13 @@ struct QuickOpenPalette: View {
             case .upArrow: move(-1)
             case .downArrow: move(1)
             case .escape: close()
-            default: activate(rows.indices.contains(selected) ? rows[selected] : nil)
+            default:
+                let row = rows.indices.contains(selected) ? rows[selected] : nil
+                // ⌘↵ on an agent opens it and puts the cursor in its message field.
+                if press.modifiers.contains(.command), let agentID = row?.agentID {
+                    router.requestComposerFocus(agentID: agentID)
+                }
+                activate(row)
             }
             return .handled
         }
@@ -224,6 +230,7 @@ struct QuickOpenPalette: View {
             return PaletteRow(
                 id: "agent-\(entry.server.id)-\(entry.agent.id)",
                 kind: .agents,
+                agentID: entry.agent.id,
                 title: entry.agent.name,
                 ranges: ranked.match.ranges,
                 subtitle: [entry.agent.role, entry.agent.runtime.rawValue, folder].filter { !$0.isEmpty }
@@ -408,6 +415,8 @@ private struct PaletteRow: Identifiable {
 
     let id: String
     let kind: Kind
+    /// For an agent row: the agent it opens.
+    var agentID: String?
     let title: String
     let ranges: [Range<Int>]
     let subtitle: String?
@@ -418,11 +427,12 @@ private struct PaletteRow: Identifiable {
     let run: () -> Void
 
     init(
-        id: String, kind: Kind, title: String, ranges: [Range<Int>], subtitle: String?, monoSubtitle: Bool,
-        leading: AnyView, trailing: String?, enabled: Bool, run: @escaping () -> Void
+        id: String, kind: Kind, agentID: String? = nil, title: String, ranges: [Range<Int>], subtitle: String?,
+        monoSubtitle: Bool, leading: AnyView, trailing: String?, enabled: Bool, run: @escaping () -> Void
     ) {
         self.id = id
         self.kind = kind
+        self.agentID = agentID
         self.title = title
         self.ranges = ranges
         self.subtitle = subtitle

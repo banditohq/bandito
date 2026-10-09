@@ -1,3 +1,4 @@
+import AppKit
 import BanditoUI
 import SwiftUI
 
@@ -17,7 +18,16 @@ struct BanditoApp: App {
                 .environment(keymap)
                 .environment(gestures)
                 .environment(demo)
-                .task { await model.connectAll() }
+                .task {
+                    // Actions aimed at the server that was in front are dropped when another one is chosen.
+                    model.onServerChanged = { [router] in router.dropPendingServerActions() }
+                    model.startNotifications(
+                        selectedAgentID: { [router] in
+                            router.mode == .team ? router.selectedAgentID : nil
+                        },
+                        windowActive: { NSApp.isActive })
+                    await model.connectAll()
+                }
                 .preferredColorScheme(.dark)
         }
         .defaultSize(width: 1240, height: 800)

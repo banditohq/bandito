@@ -69,6 +69,7 @@ public enum ThreadRows {
     static func timestamp(of item: ThreadItem) -> Int64? {
         switch item {
         case .user(_, _, _, _, let ts), .assistant(_, _, let ts), .note(_, _, _, let ts): ts
+        case .runtimeSwitch(_, _, _, _, let ts): ts
         case .streaming, .tool, .approval: nil
         }
     }

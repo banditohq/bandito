@@ -50,7 +50,11 @@ final class FolderModel {
     /// Something a file operation could not do; shown once, then the user dismisses it.
     var actionError: String?
 
-    var showHidden = false
+    /// Settings → Terminal and files: whether hidden files show when the browser opens.
+    static let showHiddenDefaultsKey = "files.showHiddenByDefault"
+
+    /// Starts from the Settings choice; ⇧⌘. changes it for the open browser only.
+    var showHidden = UserDefaults.standard.bool(forKey: FolderModel.showHiddenDefaultsKey)
     var layout: FileLayout = .list
     var selection: String?
     var searchText = "" {
