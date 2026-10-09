@@ -1,0 +1,9 @@
+// Non-JSON noise on stdout is skipped; the turn still completes.
+{"expect": {"type": "control_request", "request": {"subtype": "initialize"}}}
+{"send": {"type": "control_response", "response": {"subtype": "success", "request_id": "$last:/request_id", "response": {}}}}
+{"expect": {"type": "user"}}
+{"raw": "warning: this line is not json"}
+{"send": {"type": "system", "subtype": "init", "session_id": "55555555-5555-4555-8555-555555555555"}}
+{"raw": "{ truncated json"}
+{"send": {"type": "assistant", "message": {"id": "msg_1", "type": "message", "role": "assistant", "content": [{"type": "text", "text": "Hi there."}]}, "parent_tool_use_id": null, "session_id": "55555555-5555-4555-8555-555555555555"}}
+{"send": {"type": "result", "subtype": "success", "is_error": false, "result": "Hi there.", "session_id": "55555555-5555-4555-8555-555555555555"}}

@@ -1,0 +1,8 @@
+// The CLI sends a control request this host does not implement. It must get an error reply, then the turn goes on.
+{"expect": {"type": "control_request", "request": {"subtype": "initialize"}}}
+{"send": {"type": "control_response", "response": {"subtype": "success", "request_id": "$last:/request_id", "response": {}}}}
+{"expect": {"type": "user"}}
+{"send": {"type": "system", "subtype": "init", "session_id": "77777777-7777-4777-8777-777777777777"}}
+{"send": {"type": "control_request", "request_id": "hook-1", "request": {"subtype": "hook_callback", "callback_id": "cb-1", "input": {}}}}
+{"expect": {"type": "control_response", "response": {"subtype": "error", "request_id": "hook-1"}}}
+{"send": {"type": "result", "subtype": "success", "is_error": false, "result": "Done.", "session_id": "77777777-7777-4777-8777-777777777777"}}

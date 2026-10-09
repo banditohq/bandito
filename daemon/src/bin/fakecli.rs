@@ -4,6 +4,7 @@
 //! Env:
 //! - `FAKECLI_SCRIPT`   path to a JSONL script (required)
 //! - `FAKECLI_ARGS_OUT` if set, argv (without argv[0]) is written there as a JSON array
+//! - `FAKECLI_PID_OUT` if set, the pid of the `spawn_sleep` child is written there (write + rename)
 //!
 //! Script steps, one JSON object per line (blank lines and lines starting
 //! with `//` are skipped):
@@ -13,6 +14,9 @@
 //! - `{"send": <json>}`    write `<json>` as one line to stdout. Any string
 //!   value `"$last:<json-pointer>"` is replaced by the value at that pointer
 //!   in the last matched input (e.g. `"$last:/id"`).
+//! - `{"raw": "text"}`     write `text` to stdout as one line, unchanged (not JSON on purpose).
+//! - `{"spawn_sleep": n}`  start `sleep n` as a child that is not waited for (stdio null),
+//!   and write its pid to `$FAKECLI_PID_OUT`. It stays in this process group.
 //! - `{"stderr": "text"}`  write a line to stderr.
 //! - `{"sleep_ms": n}`
 //! - `{"exit": code}`      exit now.
@@ -22,6 +26,7 @@
 
 use serde_json::Value;
 use std::io::{BufRead, Write};
+use std::process::Stdio;
 
 fn contains(have: &Value, want: &Value) -> bool {
     match (have, want) {
@@ -78,6 +83,25 @@ fn main() {
             out.flush().expect("flush");
         } else if let Some(s) = step.get("stderr").and_then(Value::as_str) {
             eprintln!("{s}");
+        } else if let Some(text) = step.get("raw").and_then(Value::as_str) {
+            writeln!(out, "{text}").expect("stdout");
+            out.flush().expect("flush");
+        } else if let Some(secs) = step.get("spawn_sleep").and_then(Value::as_u64) {
+            // Deliberately not waited for: the child must outlive this step, as a real background job would.
+            #[allow(clippy::zombie_processes)]
+            let child = std::process::Command::new("sleep")
+                .arg(secs.to_string())
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+                .expect("spawn sleep");
+            if let Ok(p) = std::env::var("FAKECLI_PID_OUT") {
+                // Write then rename, so a reader never sees a half-written pid.
+                let tmp = format!("{p}.tmp");
+                std::fs::write(&tmp, child.id().to_string()).expect("write pid");
+                std::fs::rename(&tmp, &p).expect("rename pid");
+            }
         } else if let Some(ms) = step.get("sleep_ms").and_then(Value::as_u64) {
             std::thread::sleep(std::time::Duration::from_millis(ms));
         } else if let Some(code) = step.get("exit").and_then(Value::as_i64) {

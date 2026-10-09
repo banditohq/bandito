@@ -167,6 +167,7 @@ dependencies = [
  "dirs",
  "futures-util",
  "hex",
+ "libc",
  "rand 0.10.3",
  "rusqlite",
  "serde",

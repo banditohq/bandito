@@ -1,0 +1,4 @@
+// Starts a background child in the CLI's process group (for the kill tests), then ends the script.
+{"expect": {"type": "control_request", "request": {"subtype": "initialize"}}}
+{"send": {"type": "control_response", "response": {"subtype": "success", "request_id": "$last:/request_id", "response": {}}}}
+{"spawn_sleep": 60}

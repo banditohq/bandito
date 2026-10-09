@@ -1,7 +1,7 @@
 //! Runtime adapters: drive an agent CLI (or an API loop) and translate its
 //! protocol into [`EventBody`]s and approval requests.
 
-use crate::event::{Decision, EventBody};
+use crate::event::{Decision, EventBody, truncate_output};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -118,6 +118,22 @@ pub trait Session: Send {
 pub struct Spawned {
     pub session: Box<dyn Session>,
     pub output: mpsc::Receiver<RuntimeOutput>,
+}
+
+/// Copy of a tool input with every string longer than `max_string_bytes` cut
+/// (via [`truncate_output`]). Used for event payloads, so a 100 KB `Write`
+/// does not end up in the store. The original input still goes back to the CLI.
+pub fn clip_input(v: &Value, max_string_bytes: usize) -> Value {
+    match v {
+        Value::String(s) if s.len() > max_string_bytes => Value::String(truncate_output(s, max_string_bytes)),
+        Value::Array(items) => Value::Array(items.iter().map(|x| clip_input(x, max_string_bytes)).collect()),
+        Value::Object(map) => Value::Object(
+            map.iter()
+                .map(|(k, x)| (k.clone(), clip_input(x, max_string_bytes)))
+                .collect(),
+        ),
+        _ => v.clone(),
+    }
 }
 
 #[async_trait]
