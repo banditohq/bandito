@@ -1088,14 +1088,23 @@ mod tests {
             scrollback: 1024,
         });
         let _guard = Cleanup(mgr.clone());
-        let mut rx = mgr.subscribe();
         let info = mgr.open(sh_spec(80, 24)).expect("open");
         mgr.input(&info.id, b"yes x | head -c 10000; echo DONE$((1+1))\n")
             .await
             .expect("input");
-        wait_output(&mut rx, &info.id, "DONE2").await;
-
-        let (_, snap) = mgr.attach(&info.id, None).expect("attach");
+        // Bulk output arrives in many small chunks and may outrun the shared event
+        // channel; a lagging client re-attaches, so this test polls the snapshot instead.
+        let snap = tokio::time::timeout(WAIT, async {
+            loop {
+                let (_, snap) = mgr.attach(&info.id, None).expect("attach");
+                if String::from_utf8_lossy(&snap.data).contains("DONE2") {
+                    return snap;
+                }
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .expect("timed out waiting for DONE2");
         assert!(snap.data.len() <= 1024, "retained {} bytes", snap.data.len());
         assert!(snap.start > 0, "old output should have been dropped");
         assert!(mgr.info(&info.id).expect("info").offset >= 10_000);
