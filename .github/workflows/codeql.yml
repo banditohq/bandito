@@ -28,7 +28,7 @@ jobs:
       matrix:
         language: ${{ fromJSON(github.event_name == 'pull_request' && '["rust","python","actions"]' || '["rust","python","actions","swift"]') }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}

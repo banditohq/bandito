@@ -21,7 +21,7 @@ jobs:
     name: build-macos
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Guide covers every screen, setting and command
         run: python3 scripts/check_guide.py
