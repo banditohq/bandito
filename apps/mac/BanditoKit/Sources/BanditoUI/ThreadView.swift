@@ -14,18 +14,7 @@ struct ThreadView: View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 10) {
-                        ForEach(thread.items) { item in
-                            ThreadItemView(item: item, server: server)
-                                .id(item.id)
-                        }
-                        Color.clear.frame(height: 1).id("bottom")
-                    }
-                    .frame(maxWidth: 760)
-                    .padding(.horizontal, 24)
-                    .padding(.top, 64)
-                    .padding(.bottom, 12)
-                    .frame(maxWidth: .infinity)
+                    ThreadItemsView(items: thread.items, server: server)
                 }
                 .onChange(of: thread.items.count) { _, _ in
                     withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo("bottom", anchor: .bottom) }
@@ -66,7 +55,29 @@ struct ThreadView: View {
     }
 }
 
-private struct HeaderPill: View {
+/// The rows of a thread. Separate from the scroll view so it can be rendered
+/// on its own (snapshots, previews).
+struct ThreadItemsView: View {
+    var items: [ThreadItem]
+    var server: ServerModel
+
+    var body: some View {
+        LazyVStack(alignment: .leading, spacing: 10) {
+            ForEach(items) { item in
+                ThreadItemView(item: item, server: server)
+                    .id(item.id)
+            }
+            Color.clear.frame(height: 1).id("bottom")
+        }
+        .frame(maxWidth: 760)
+        .padding(.horizontal, 24)
+        .padding(.top, 64)
+        .padding(.bottom, 12)
+        .frame(maxWidth: .infinity)
+    }
+}
+
+struct HeaderPill: View {
     var agent: Agent
     var status: AgentStatus
 

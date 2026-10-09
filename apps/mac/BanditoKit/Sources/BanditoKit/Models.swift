@@ -24,6 +24,24 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
     public var runtimeSessionId: String?
     public var createdAt: Int64
     public var updatedAt: Int64
+
+    public init(
+        id: String, name: String, role: String = "", runtime: RuntimeKind, model: String? = nil, cwd: String,
+        approvalMode: ApprovalMode = .risky, systemPrompt: String? = nil, runtimeSessionId: String? = nil,
+        createdAt: Int64 = 0, updatedAt: Int64 = 0
+    ) {
+        self.id = id
+        self.name = name
+        self.role = role
+        self.runtime = runtime
+        self.model = model
+        self.cwd = cwd
+        self.approvalMode = approvalMode
+        self.systemPrompt = systemPrompt
+        self.runtimeSessionId = runtimeSessionId
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
 }
 
 public struct NewAgent: Codable, Sendable {
@@ -109,6 +127,13 @@ public struct Event: Sendable, Hashable, Identifiable {
     /// Unix milliseconds.
     public var ts: Int64
     public var body: EventBody
+
+    public init(seq: Int64, agentId: String, ts: Int64, body: EventBody) {
+        self.seq = seq
+        self.agentId = agentId
+        self.ts = ts
+        self.body = body
+    }
 
     public var id: String { seq > 0 ? "s\(seq)" : "d\(agentId)-\(ts)" }
 }

@@ -1,5 +1,4 @@
-import BanditoDesign
-import BanditoKit
+import BanditoUI
 import SwiftUI
 
 @main

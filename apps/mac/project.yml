@@ -18,6 +18,8 @@ targets:
         product: BanditoKit
       - package: BanditoKit
         product: BanditoDesign
+      - package: BanditoKit
+        product: BanditoUI
     settings:
       base:
         PRODUCT_NAME: Bandito

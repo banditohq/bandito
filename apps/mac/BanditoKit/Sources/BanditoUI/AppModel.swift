@@ -5,27 +5,27 @@ import Observation
 /// App-wide state: saved servers and what is selected.
 @MainActor
 @Observable
-final class AppModel {
-    private(set) var servers: [ServerModel] = []
-    var selectedServerID: UUID?
-    var selectedAgentID: String?
+public final class AppModel {
+    public private(set) var servers: [ServerModel] = []
+    public var selectedServerID: UUID?
+    public var selectedAgentID: String?
 
     private static let storeKey = "servers.v1"
 
-    init() {
+    public init() {
         load()
     }
 
-    var currentServer: ServerModel? {
+    public var currentServer: ServerModel? {
         servers.first { $0.id == selectedServerID } ?? servers.first
     }
 
-    var selectedAgent: Agent? {
+    public var selectedAgent: Agent? {
         guard let id = selectedAgentID else { return nil }
         return currentServer?.agents.first { $0.id == id }
     }
 
-    func connectAll() async {
+    public func connectAll() async {
         await withTaskGroup(of: Void.self) { group in
             for s in servers {
                 group.addTask { await s.connect() }
@@ -33,7 +33,7 @@ final class AppModel {
         }
     }
 
-    func add(_ config: ServerConfig) {
+    public func add(_ config: ServerConfig) {
         Keychain.setToken(config.token, for: config.id)
         let model = ServerModel(config: config)
         servers.append(model)
@@ -42,7 +42,7 @@ final class AppModel {
         Task { await model.connect() }
     }
 
-    func remove(_ id: UUID) {
+    public func remove(_ id: UUID) {
         guard let i = servers.firstIndex(where: { $0.id == id }) else { return }
         let s = servers.remove(at: i)
         Task { await s.disconnect() }

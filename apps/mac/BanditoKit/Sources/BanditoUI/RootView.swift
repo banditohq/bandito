@@ -2,10 +2,12 @@ import BanditoDesign
 import BanditoKit
 import SwiftUI
 
-struct RootView: View {
+public struct RootView: View {
     @Environment(AppModel.self) private var app
 
-    var body: some View {
+    public init() {}
+
+    public var body: some View {
         NavigationSplitView {
             SidebarView()
                 .navigationSplitViewColumnWidth(min: 240, ideal: 270, max: 340)
