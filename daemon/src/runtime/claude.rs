@@ -141,9 +141,10 @@ struct AuthStatus {
     subscription_type: Option<String>,
 }
 
-/// What `claude auth status` says. A failed run, or output that is not that JSON, is unknown: never "logged out".
+/// What `claude auth status` says. The CLI exits 1 when logged out and still prints its JSON, so the JSON decides
+/// whatever the exit code; a run that was killed, or output that is not that JSON, is unknown: never "logged out".
 pub fn login_from_auth_status(probe: Option<&ProbeOutput>) -> LoginCheck {
-    let Some(probe) = probe.filter(|p| p.code == Some(0)) else {
+    let Some(probe) = probe.filter(|p| p.code.is_some()) else {
         return LoginCheck::unknown();
     };
     match serde_json::from_str::<AuthStatus>(&probe.stdout) {
@@ -1519,13 +1520,30 @@ mod login_tests {
     }
 
     #[test]
-    fn a_failed_exit_or_no_answer_is_unknown() {
+    fn logged_out_exits_1_and_still_answers() {
+        // Real output of claude 2.1.295 on a server where nobody signed in: exit 1 with the JSON.
+        let logged_out = ProbeOutput {
+            code: Some(1),
+            stdout: r#"{"loggedIn": false, "authMethod": "none", "apiProvider": "firstParty"}"#.into(),
+            stderr: String::new(),
+        };
+        assert_eq!(
+            login_from_auth_status(Some(&logged_out)),
+            LoginCheck {
+                logged_in: Some(false),
+                plan: None
+            }
+        );
         let failed = ProbeOutput {
             code: Some(1),
-            stdout: r#"{"loggedIn": false}"#.into(),
+            stdout: String::new(),
             stderr: "boom".into(),
         };
         assert_eq!(login_from_auth_status(Some(&failed)), LoginCheck::unknown());
+    }
+
+    #[test]
+    fn a_killed_run_or_no_answer_is_unknown() {
         assert_eq!(login_from_auth_status(None), LoginCheck::unknown());
         let killed = ProbeOutput {
             code: None,

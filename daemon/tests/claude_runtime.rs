@@ -660,11 +660,22 @@ async fn status_reads_logged_out_as_false() {
 }
 
 #[tokio::test]
+async fn status_reads_logged_out_with_exit_1() {
+    // claude 2.1.295 exits 1 when logged out and still prints the JSON.
+    let dir = tempfile::tempdir().unwrap();
+    let rt = login_runtime(
+        &dir.path().join("calls"),
+        &[("FAKE_OUT", r#"{"loggedIn": false}"#), ("FAKE_CODE", "1")],
+    );
+    assert_eq!(rt.status().await.logged_in, Some(false));
+}
+
+#[tokio::test]
 async fn status_is_unknown_when_auth_status_fails() {
     let dir = tempfile::tempdir().unwrap();
     let rt = login_runtime(
         &dir.path().join("calls"),
-        &[("FAKE_OUT", r#"{"loggedIn": true}"#), ("FAKE_CODE", "1")],
+        &[("FAKE_ERR", "network down"), ("FAKE_CODE", "1")],
     );
     assert_eq!(
         rt.status().await.logged_in,
