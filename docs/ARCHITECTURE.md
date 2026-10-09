@@ -231,13 +231,15 @@ A paused agent (`agents.update {paused: true}`, or all agents at once with `agen
 - Scheduled runs of a paused agent are skipped (see [Scheduler](#scheduler)).
 - The flag is in the store (`agents.paused`), so the apps see it in `agents.list|get`. The queue is in memory: messages held at a daemon restart are lost, as messages waiting for a turn already are. They stay visible in the thread.
 
-`agents.pause_all` is for the owner's CLI and the apps. It returns how many agents changed.
+`agents.pause_all` is for the owner's CLI and the apps. It returns how many agents changed. Clients show the pause controls when `daemon.info.features` contains `"pause"`.
 
 ## Logs
 
 `daemon.logs {lines?, level?}` returns the newest lines of the daemon's own log, for the app's journal view. `lines` is 1–2000 (default 500); `level` is the lowest level to show: `info` (default; debug and trace lines are left out), `warn` or `error`. The reply is `{source, lines}`, where `source` is `journald` or `file`.
 
 Where the lines are: a systemd user unit writes to the journal (read with `journalctl --user -u bandito.service -o cat`), and a launchd agent or a background process writes `<home>/logs/daemon.log`. The reader scans the last 4 MB of the file, or the last 10 000 journal lines, then keeps the newest `lines` lines at the level. A line without a level takes the level of the line before it, so a wrapped error stays with its error. Colour codes are removed.
+
+Clients show the journal when `daemon.info.features` contains `"logs"`.
 
 Before a line is returned, every secret value is replaced as in [Secrets](#secrets) (`••••NAME`), and the secret part of Bandito's tokens (`bdt_` and `bat_`) becomes `••••`. Only the owner's CLI and the apps may call it.
 
