@@ -3,7 +3,8 @@
 
 use crate::event::{Decision, Event};
 use crate::pairing;
-use crate::store::{AgentPatch, Device, NewAgent, RuleAction};
+use crate::scheduler;
+use crate::store::{AgentPatch, Device, NewAgent, NewSchedule, RuleAction, SchedulePatch};
 use crate::supervisor::{Inbound, Supervisor};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
@@ -167,6 +168,12 @@ struct RuleParams {
     action: RuleAction,
 }
 #[derive(Deserialize)]
+struct ScheduleUpdate {
+    id: String,
+    #[serde(flatten)]
+    patch: SchedulePatch,
+}
+#[derive(Deserialize)]
 struct RedeemParams {
     code: String,
     device_name: String,
@@ -306,6 +313,46 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
         "rules.delete" => {
             let Id { id } = params(p)?;
             ok(json!({ "deleted": store.rule_delete(&id)? }))
+        }
+
+        "schedules.list" => {
+            let MaybeAgent { agent_id } = params(p)?;
+            ok(store.schedule_list(agent_id.as_deref())?)
+        }
+        "schedules.create" => {
+            let s: NewSchedule = params(p)?;
+            if store.agent_get(&s.agent_id)?.is_none() {
+                return Err(RpcError::new(SERVER_ERROR, format!("no agent {}", s.agent_id)));
+            }
+            if s.prompt.trim().is_empty() {
+                return Err(RpcError::new(INVALID_PARAMS, "prompt is empty"));
+            }
+            let next = scheduler::next_run(&s.cron, &s.tz, crate::store::now_ms())
+                .map_err(|e| RpcError::new(INVALID_PARAMS, e.to_string()))?;
+            ok(store.schedule_create(s, Some(next))?)
+        }
+        "schedules.update" => {
+            let ScheduleUpdate { id, patch } = params(p)?;
+            let Some(cur) = store.schedule_get(&id)? else {
+                return Err(RpcError::new(SERVER_ERROR, format!("no schedule {id}")));
+            };
+            if patch.prompt.as_deref().is_some_and(|t| t.trim().is_empty()) {
+                return Err(RpcError::new(INVALID_PARAMS, "prompt is empty"));
+            }
+            let cron = patch.cron.as_deref().unwrap_or(&cur.cron);
+            let tz = patch.tz.as_deref().unwrap_or(&cur.tz);
+            let next = scheduler::next_run(cron, tz, crate::store::now_ms())
+                .map_err(|e| RpcError::new(INVALID_PARAMS, e.to_string()))?;
+            ok(store.schedule_update(&id, patch, Some(next))?)
+        }
+        "schedules.delete" => {
+            let Id { id } = params(p)?;
+            ok(json!({ "deleted": store.schedule_delete(&id)? }))
+        }
+        "schedules.run_now" => {
+            let Id { id } = params(p)?;
+            scheduler::run_now(&app.sup, &id).await?;
+            ok(json!({}))
         }
 
         "devices.list" => ok(store.device_list()?),
@@ -468,5 +515,117 @@ pub async fn serve(app: Arc<App>, peer: Peer, mut inbox: mpsc::Receiver<String>,
                 Err(broadcast::error::RecvError::Closed) => break,
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::hub::Hub;
+    use crate::runtime::RuntimeKind;
+    use crate::store::{ApprovalMode, NewAgent, Store};
+    use crate::supervisor::Runtimes;
+
+    fn app_with_agent() -> (Arc<App>, String) {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let agent = store
+            .agent_create(NewAgent {
+                name: "Forge".into(),
+                role: String::new(),
+                runtime: RuntimeKind::Claude,
+                model: None,
+                cwd: "/tmp".into(),
+                approval_mode: ApprovalMode::Risky,
+                system_prompt: None,
+            })
+            .unwrap();
+        let sup = Supervisor::new(Hub::new(store), Runtimes::default(), None);
+        (App::new(sup), agent.id)
+    }
+
+    async fn call(app: &App, method: &str, p: Value) -> RpcResult {
+        dispatch(app, &Peer::Local, method, p).await
+    }
+
+    #[tokio::test]
+    async fn schedules_create_validates_input() {
+        let (app, agent) = app_with_agent();
+
+        let err = call(
+            &app,
+            "schedules.create",
+            json!({"agent_id": agent, "cron": "61 * * * *", "prompt": "x"}),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, INVALID_PARAMS);
+        assert!(err.message.contains("invalid schedule"), "{}", err.message);
+
+        let err = call(
+            &app,
+            "schedules.create",
+            json!({"agent_id": agent, "cron": "0 9 * * *", "prompt": "  "}),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err, RpcError::new(INVALID_PARAMS, "prompt is empty"));
+
+        let err = call(
+            &app,
+            "schedules.create",
+            json!({"agent_id": "nope", "cron": "0 9 * * *", "prompt": "x"}),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err, RpcError::new(SERVER_ERROR, "no agent nope"));
+    }
+
+    #[tokio::test]
+    async fn schedules_crud_recomputes_next_run() {
+        let (app, agent) = app_with_agent();
+
+        let created = call(
+            &app,
+            "schedules.create",
+            json!({"agent_id": agent, "cron": "0 2 * * *", "prompt": "report"}),
+        )
+        .await
+        .unwrap();
+        assert_eq!(created["tz"], "UTC");
+        assert_eq!(created["enabled"], true);
+        assert!(created["next_run_at"].as_i64().is_some());
+        let id = created["id"].as_str().unwrap().to_string();
+
+        let listed = call(&app, "schedules.list", json!({"agent_id": agent})).await.unwrap();
+        assert_eq!(listed.as_array().unwrap().len(), 1);
+
+        // The next run moves to 03:00 UTC, i.e. the time of day is 03:00.
+        let updated = call(&app, "schedules.update", json!({"id": id, "cron": "0 3 * * *"}))
+            .await
+            .unwrap();
+        assert_eq!(updated["cron"], "0 3 * * *");
+        assert_eq!(
+            updated["next_run_at"].as_i64().unwrap().rem_euclid(86_400_000),
+            3 * 3_600_000
+        );
+
+        let err = call(&app, "schedules.update", json!({"id": id, "cron": "bad"}))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, INVALID_PARAMS);
+
+        let err = call(&app, "schedules.update", json!({"id": "missing"}))
+            .await
+            .unwrap_err();
+        assert_eq!(err, RpcError::new(SERVER_ERROR, "no schedule missing"));
+
+        assert_eq!(
+            call(&app, "schedules.delete", json!({"id": id})).await.unwrap(),
+            json!({"deleted": true})
+        );
+        assert_eq!(
+            call(&app, "schedules.delete", json!({"id": id})).await.unwrap(),
+            json!({"deleted": false})
+        );
     }
 }

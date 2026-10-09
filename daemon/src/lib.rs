@@ -6,5 +6,6 @@ pub mod pairing;
 pub mod policy;
 pub mod rpc;
 pub mod runtime;
+pub mod scheduler;
 pub mod store;
 pub mod supervisor;
