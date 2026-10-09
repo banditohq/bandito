@@ -500,6 +500,7 @@
   "onboarding.server.err.unsupported": "This server's system or processor is not supported. Bandito needs Linux or macOS on x86_64 or arm64.",
   "onboarding.server.err.localBinary": "The bandito program is missing from this app. Reinstall Bandito.",
   "onboarding.server.err.releaseCheck": "Release signature check failed — the download may have been tampered with. Nothing was installed.",
+  "onboarding.server.err.releasePublishing": "Release {tag} is still being published — try again in a few minutes.",
   "onboarding.server.err.generic": "The install stopped. Look at the log for the step that failed.",
   "onboarding.install.connect": "Connecting over SSH",
   "onboarding.install.check": "Checking the system",

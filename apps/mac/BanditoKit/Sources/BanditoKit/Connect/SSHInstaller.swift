@@ -70,6 +70,8 @@ public enum InstallError: Error, Sendable, Equatable, LocalizedError {
     case releaseCheckFailed(ReleaseVerifier.Failure)
     /// A release file could not be downloaded. The text says what went wrong.
     case downloadFailed(String)
+    /// The latest release is older than this app: its release is still being published. `tag` is that release.
+    case releaseStillPublishing(String)
 
     public var errorDescription: String? {
         switch self {
@@ -97,6 +99,8 @@ public enum InstallError: Error, Sendable, Equatable, LocalizedError {
             return "Release signature check failed — the download may have been tampered with. Nothing was installed."
         case .downloadFailed(let detail):
             return "Downloading Bandito failed: \(detail)"
+        case .releaseStillPublishing(let tag):
+            return "Release \(tag) is still being published — try again in a few minutes."
         }
     }
 }
@@ -123,8 +127,10 @@ public struct SSHInstaller: Sendable {
 
     private let runner: CommandRunner
     private let scriptSource: ScriptSource
+    #if DEBUG
     private let localBinary: URL?
     private let devArchive: URL?
+    #endif
     private let appTag: String?
     private let release: ReleaseSource
     private let releaseKey: ReleaseVerifier.PublicKey
@@ -133,14 +139,16 @@ public struct SSHInstaller: Sendable {
     /// - Parameters:
     ///   - runner: runs ssh and scp.
     ///   - installScript: the install.sh bytes. Default: the copy bundled in the app. The script is never downloaded.
-    ///   - localBinary: a bandito build to copy with scp instead of running install.sh (development).
-    ///   - devArchive: a local release archive, installed without download and without signature check (development,
-    ///     before a release exists). The app passes it in Debug builds only.
     ///   - appVersion: the app's version. The server gets the release with the same tag; when there is none, the latest
     ///     release is used, with a line in the log. Nil asks for the latest release.
     ///   - release: where the release files come from. Default: GitHub.
     ///   - releaseKey: the key the release must be signed with. Default: the Bandito release key.
     ///   - redeem: exchanges the code for a token. Default: over an `SSHTunnel` to the server.
+    #if DEBUG
+    /// - Parameters (Debug builds only):
+    ///   - localBinary: a bandito build to copy with scp instead of the release (development).
+    ///   - devArchive: a local release archive, installed without download and without signature check (development,
+    ///     before a release exists).
     public init(
         runner: CommandRunner,
         installScript: @escaping ScriptSource = SSHInstaller.bundledScript,
@@ -151,10 +159,41 @@ public struct SSHInstaller: Sendable {
         releaseKey: ReleaseVerifier.PublicKey = ReleaseVerifier.release,
         redeem: Redeem? = nil
     ) {
+        self.init(
+            runner: runner, installScript: installScript, development: (localBinary, devArchive),
+            appVersion: appVersion, release: release, releaseKey: releaseKey, redeem: redeem)
+    }
+    #else
+    public init(
+        runner: CommandRunner,
+        installScript: @escaping ScriptSource = SSHInstaller.bundledScript,
+        appVersion: String? = nil,
+        release: ReleaseSource = GitHubReleaseSource(),
+        releaseKey: ReleaseVerifier.PublicKey = ReleaseVerifier.release,
+        redeem: Redeem? = nil
+    ) {
+        self.init(
+            runner: runner, installScript: installScript, development: (nil, nil),
+            appVersion: appVersion, release: release, releaseKey: releaseKey, redeem: redeem)
+    }
+    #endif
+
+    /// The one place that sets the fields. `development` is the Debug-only pair (nil in Release builds).
+    private init(
+        runner: CommandRunner,
+        installScript: @escaping ScriptSource,
+        development: (localBinary: URL?, devArchive: URL?),
+        appVersion: String?,
+        release: ReleaseSource,
+        releaseKey: ReleaseVerifier.PublicKey,
+        redeem: Redeem?
+    ) {
         self.runner = runner
         self.scriptSource = installScript
-        self.localBinary = localBinary
-        self.devArchive = devArchive
+        #if DEBUG
+        self.localBinary = development.localBinary
+        self.devArchive = development.devArchive
+        #endif
         self.appTag = appVersion.flatMap(GitHubReleaseSource.tag(forAppVersion:))
         self.release = release
         self.releaseKey = releaseKey
@@ -244,9 +283,10 @@ public struct SSHInstaller: Sendable {
             stdin: nil)
     }
 
-    /// Puts the binary on the server: a copy of a build on this Mac, or the release archive. The release is checked
-    /// on this Mac before anything is sent, so a bad download never reaches the server.
+    /// Puts the binary on the server: the release from GitHub, checked on this Mac first, or (in Debug builds) a copy
+    /// of a build or a local archive. Nothing is sent to the server before the check passes.
     private func install(on target: SSHTarget, probe: RemoteProbe, emit: (InstallEvent) -> Void) async throws {
+        #if DEBUG
         if let localBinary {
             emit(.step("Installing Bandito"))
             _ = try checked(await remote(target, "mkdir -p ~/.local/bin"), step: "Installing Bandito")
@@ -254,6 +294,7 @@ public struct SSHInstaller: Sendable {
             _ = try checked(await remote(target, "chmod 755 ~/.local/bin/bandito"), step: "Installing Bandito")
             return
         }
+        #endif
         // Read first: a bundle without the script stops here, before anything is downloaded.
         let script = try await scriptSource()
         guard let asset = ReleaseAsset.name(kernel: probe.kernel, machine: probe.arch) else {
@@ -262,53 +303,89 @@ public struct SSHInstaller: Sendable {
         let work = try Self.makeWorkDirectory()
         defer { try? FileManager.default.removeItem(at: work) }
 
-        let archive: URL
+        #if DEBUG
         if let devArchive {
             emit(.step("Installing Bandito"))
-            archive = devArchive
-        } else {
-            emit(.step("Downloading Bandito"))
-            let fetched = try await release.fetch(version: appTag, asset: asset, into: work)
-            if fetched.fellBackToLatest, let appTag {
-                emit(.log("No Bandito \(appTag) release yet: installing the latest release, which may differ from this app."))
-            }
-            emit(.step("Verifying the Bandito release"))
-            do {
-                try ReleaseVerifier.verify(
-                    sums: fetched.sums, signatureBase64: fetched.signatureBase64,
-                    archive: try Data(contentsOf: fetched.archive), assetName: asset, key: releaseKey)
-            } catch let failure as ReleaseVerifier.Failure {
-                throw InstallError.releaseCheckFailed(failure)
-            }
-            archive = fetched.archive
-            emit(.step("Installing Bandito"))
+            try await installArchive(devArchive, asset: asset, script: script, signed: nil, on: target, emit: emit)
+            return
         }
-        try await installArchive(archive, asset: asset, script: script, on: target, emit: emit)
+        #endif
+
+        emit(.step("Downloading Bandito"))
+        let fetched = try await release.fetch(version: appTag, asset: asset, into: work)
+        if let tag = fetched.tag {
+            emit(.log("Bandito release \(tag)"))
+        }
+        if fetched.fellBackToLatest, let appTag {
+            emit(.log("No Bandito \(appTag) release yet: installing \(fetched.tag ?? "the latest release"), a newer one."))
+        }
+        emit(.step("Verifying the Bandito release"))
+        do {
+            try ReleaseVerifier.verify(
+                sums: fetched.sums, signatureBase64: fetched.signatureBase64,
+                archive: try Data(contentsOf: fetched.archive), assetName: asset, key: releaseKey)
+        } catch let failure as ReleaseVerifier.Failure {
+            throw InstallError.releaseCheckFailed(failure)
+        }
+        // The server gets the same signed list, and checks the archive it receives against it.
+        let sums = work.appending(path: "SHA256SUMS")
+        let signature = work.appending(path: "SHA256SUMS.sig")
+        try fetched.sums.write(to: sums)
+        try Data(fetched.signatureBase64.utf8).write(to: signature)
+        emit(.step("Installing Bandito"))
+        try await installArchive(
+            fetched.archive, asset: asset, script: script, signed: SignedFiles(sums: sums, signature: signature),
+            on: target, emit: emit)
     }
 
-    /// Copies the archive to `~/.cache/bandito-install` on the server and runs install.sh on it with
-    /// `BANDITO_REQUIRE_SIGNATURE=1`. The archive is removed afterwards, whatever the outcome.
+    /// The signed list of a release on this Mac, to send along with the archive.
+    struct SignedFiles {
+        var sums: URL
+        var signature: URL
+    }
+
+    /// Copies the files to `~/.cache/bandito-install` on the server and runs install.sh on them. With `signed`, the
+    /// script checks the archive against the list and the list's signature (`BANDITO_REQUIRE_SIGNATURE=1`). The
+    /// files are removed afterwards, whatever the outcome.
     private func installArchive(
-        _ archive: URL, asset: String, script: Data, on target: SSHTarget, emit: (InstallEvent) -> Void
+        _ archive: URL, asset: String, script: Data, signed: SignedFiles?, on target: SSHTarget,
+        emit: (InstallEvent) -> Void
     ) async throws {
         let remoteDirectory = "~/.cache/bandito-install"
         let remoteArchive = "\(remoteDirectory)/\(asset)"
+        let remoteSums = "\(remoteDirectory)/SHA256SUMS"
+        let remoteSignature = "\(remoteDirectory)/SHA256SUMS.sig"
+        let removal = "rm -f \(remoteArchive) \(remoteSums) \(remoteSignature)"
         _ = try checked(
             await remote(target, "mkdir -p \(remoteDirectory) && chmod 700 \(remoteDirectory)"),
             step: "Installing Bandito")
+        let command: String
+        var prefix = ""
+        var options = "--archive \(remoteArchive)"
+        if signed != nil {
+            prefix = "env BANDITO_REQUIRE_SIGNATURE=1 "
+            options += " --sums \(remoteSums) --sig \(remoteSignature)"
+        }
+        command = "\(prefix)sh -s -- \(options) --no-service"
         let result: CommandResult
         do {
             _ = try checked(
                 await scp(archive, to: target, remotePath: ".cache/bandito-install/\(asset)"),
                 step: "Copying Bandito")
-            result = try await remote(
-                target, "env BANDITO_REQUIRE_SIGNATURE=1 sh -s -- --archive \(remoteArchive) --no-service",
-                stdin: script)
+            if let signed {
+                _ = try checked(
+                    await scp(signed.sums, to: target, remotePath: ".cache/bandito-install/SHA256SUMS"),
+                    step: "Copying Bandito")
+                _ = try checked(
+                    await scp(signed.signature, to: target, remotePath: ".cache/bandito-install/SHA256SUMS.sig"),
+                    step: "Copying Bandito")
+            }
+            result = try await remote(target, command, stdin: script)
         } catch {
-            _ = try? await remote(target, "rm -f \(remoteArchive)")
+            _ = try? await remote(target, removal)
             throw error
         }
-        _ = try? await remote(target, "rm -f \(remoteArchive)")
+        _ = try? await remote(target, removal)
         for line in Self.lines(result.stdout + result.stderr) {
             emit(.log(line))
         }

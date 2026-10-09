@@ -321,6 +321,7 @@ struct FirstServerStep: View {
             }
         case .unsupportedPlatform: return L10n.Onboarding.Server.Err.unsupported
         case .releaseCheckFailed: return L10n.Onboarding.Server.Err.releaseCheck
+        case .releaseStillPublishing(let tag): return L10n.Onboarding.Server.Err.releasePublishing(tag: tag)
         case .localBinaryMissing: return L10n.Onboarding.Server.Err.localBinary
         default: return L10n.Onboarding.Server.Err.generic
         }

@@ -49,9 +49,6 @@ enum DaemonAnswers {
     static let probeCommand =
         "uname -sm; command -v bandito || ls ~/.local/bin/bandito 2>/dev/null; cat /etc/os-release 2>/dev/null | head -3"
 
-    /// The remote command that runs the install script on a verified archive.
-    static let archiveInstallPrefix = "env BANDITO_REQUIRE_SIGNATURE=1 sh -s -- --archive "
-
     /// Answers by remote command (the last ssh argument). `probe` is the answer to the first step.
     static func answer(probe: CommandResult, service: CommandResult = serviceOK) -> @Sendable (String, [String]) -> CommandResult {
         { executable, arguments in
@@ -59,7 +56,7 @@ enum DaemonAnswers {
             let command = arguments.last ?? ""
             switch command {
             case probeCommand: return probe
-            case _ where command.hasPrefix(archiveInstallPrefix): return installOK
+            case _ where command.contains("sh -s -- --archive "): return installOK
             case _ where command.hasPrefix("mkdir -p") || command.hasPrefix("chmod") || command.hasPrefix("rm -f"):
                 return CommandResult(status: 0, stdout: "", stderr: "")
             case _ where command.hasSuffix("service install --json"): return service
@@ -107,8 +104,18 @@ private func steps(_ runner: ScriptedRunner) -> [String] {
     private let script = Data("#!/bin/sh\necho installing\n".utf8)
     private let target = "deploy@example.com:2222"
     private let asset = TestRelease.asset
-    private let remoteArchive = "~/.cache/bandito-install/bandito-x86_64-unknown-linux-gnu.tar.gz"
     private let prepareDirectory = "mkdir -p ~/.cache/bandito-install && chmod 700 ~/.cache/bandito-install"
+    /// The install of a verified release: the server checks the archive against the list and the list's signature.
+    private let signedInstall =
+        "env BANDITO_REQUIRE_SIGNATURE=1 sh -s -- --archive ~/.cache/bandito-install/\(TestRelease.asset)"
+        + " --sums ~/.cache/bandito-install/SHA256SUMS --sig ~/.cache/bandito-install/SHA256SUMS.sig --no-service"
+    /// The install of a local build, with nothing to check against.
+    private let unsignedInstall =
+        "sh -s -- --archive ~/.cache/bandito-install/\(TestRelease.asset) --no-service"
+    /// Removes the three files of an install from the server.
+    private let removal =
+        "rm -f ~/.cache/bandito-install/\(TestRelease.asset) ~/.cache/bandito-install/SHA256SUMS"
+        + " ~/.cache/bandito-install/SHA256SUMS.sig"
 
     /// An installer that runs against `runner`. The release comes from `source` (default: `release`, served as it was
     /// published) and is checked with `releaseKey` (default: the key that signed `release`, since the production key
@@ -182,16 +189,21 @@ private func steps(_ runner: ScriptedRunner) -> [String] {
                     DaemonAnswers.probeCommand,
                     prepareDirectory,
                     "scp .cache/bandito-install/\(asset)",
-                    "env BANDITO_REQUIRE_SIGNATURE=1 sh -s -- --archive \(remoteArchive) --no-service",
-                    "rm -f \(remoteArchive)",
+                    "scp .cache/bandito-install/SHA256SUMS",
+                    "scp .cache/bandito-install/SHA256SUMS.sig",
+                    signedInstall,
+                    removal,
                     "~/.local/bin/bandito service install --json",
                     "~/.local/bin/bandito info --json",
                     "~/.local/bin/bandito pair --json",
                 ])
-        #expect(copies.all.map(\.data) == [TestRelease.archive])
-        // The archive lives in a work directory that the install removes.
-        let copied = try #require(copies.all.first)
-        #expect(FileManager.default.fileExists(atPath: copied.path) == false)
+        #expect(
+            copies.all.map(\.data)
+                == [TestRelease.archive, release.sums, Data(release.signatureFile.utf8)])
+        // The copies live in a work directory that the install removes.
+        for copied in copies.all {
+            #expect(FileManager.default.fileExists(atPath: copied.path) == false)
+        }
     }
 
     @Test func theInstallScriptGoesToStdinOfTheArchiveInstall() async throws {
@@ -332,7 +344,7 @@ private func steps(_ runner: ScriptedRunner) -> [String] {
     @Test func aTamperedArchiveStopsBeforeAnythingIsCopied() async throws {
         let release = TestRelease()
         let source = FakeReleaseSource(
-            archive: Data("tampered".utf8), sums: release.sums, signatureBase64: try release.signatureFile())
+            archive: Data("tampered".utf8), sums: release.sums, signatureBase64: release.signatureFile)
         let runner = ScriptedRunner(respond: DaemonAnswers.answer(probe: DaemonAnswers.probeNew))
         let installer = makeInstaller(
             runner: runner, redeem: RedeemLog(), script: { self.script }, release: release, source: source)
@@ -374,8 +386,8 @@ private func steps(_ runner: ScriptedRunner) -> [String] {
     @Test func aReleaseWithoutTheAppsVersionFallsBackToLatestWithAWarning() async throws {
         let release = TestRelease()
         let source = FakeReleaseSource(
-            archive: TestRelease.archive, sums: release.sums, signatureBase64: try release.signatureFile(),
-            fellBackToLatest: true)
+            archive: TestRelease.archive, sums: release.sums, signatureBase64: release.signatureFile,
+            tag: "v0.2.0", fellBackToLatest: true)
         let runner = daemonRunner(copies: CopyRecorder())
         let installer = makeInstaller(
             runner: runner, redeem: RedeemLog(), script: { self.script }, release: release, source: source)
@@ -384,7 +396,7 @@ private func steps(_ runner: ScriptedRunner) -> [String] {
 
         #expect(failure(events) == nil)
         #expect(done(events) != nil)
-        #expect(logs(events).contains { $0.contains("v0.1.0") && $0.contains("latest") })
+        #expect(logs(events).contains { $0.contains("No Bandito v0.1.0 release yet") && $0.contains("v0.2.0") })
     }
 
     @Test func aBuildWithoutAVersionAsksForLatestWithoutAWarning() async throws {
@@ -396,7 +408,7 @@ private func steps(_ runner: ScriptedRunner) -> [String] {
         let events = await collect(installer.install(target: target, deviceName: "Test Mac"))
 
         #expect(source.requests == [FakeReleaseSource.Request(version: nil, asset: asset)])
-        #expect(logs(events).isEmpty)
+        #expect(logs(events).contains { $0.hasPrefix("No Bandito") } == false)
     }
 
     @Test func theArchiveIsRemovedFromTheServerEvenWhenTheInstallFails() async throws {
@@ -413,7 +425,7 @@ private func steps(_ runner: ScriptedRunner) -> [String] {
         let events = await collect(installer.install(target: target, deviceName: "Test Mac"))
 
         #expect(failure(events) == .step("Installing Bandito", detail: "installer exploded"))
-        #expect(steps(runner).last == "rm -f \(remoteArchive)")
+        #expect(steps(runner).last == removal)
         #expect(redeem.calls.isEmpty)
     }
 
@@ -430,7 +442,7 @@ private func steps(_ runner: ScriptedRunner) -> [String] {
         let events = await collect(installer.install(target: target, deviceName: "Test Mac"))
 
         #expect(failure(events) == .step("Copying Bandito", detail: "scp: disk full"))
-        #expect(steps(runner).last == "rm -f \(remoteArchive)")
+        #expect(steps(runner).last == removal)
         #expect(steps(runner).contains { $0.hasPrefix("env BANDITO_") } == false)
     }
 
@@ -460,13 +472,35 @@ private func steps(_ runner: ScriptedRunner) -> [String] {
                     DaemonAnswers.probeCommand,
                     prepareDirectory,
                     "scp .cache/bandito-install/\(asset)",
-                    "env BANDITO_REQUIRE_SIGNATURE=1 sh -s -- --archive \(remoteArchive) --no-service",
-                    "rm -f \(remoteArchive)",
+                    unsignedInstall,
+                    removal,
                     "~/.local/bin/bandito service install --json",
                     "~/.local/bin/bandito info --json",
                     "~/.local/bin/bandito pair --json",
                 ])
         #expect(redeem.calls.count == 1)
+    }
+
+    @Test func aReleaseThatIsStillBeingPublishedStopsBeforeAnythingIsSent() async throws {
+        let source = FakeReleaseSource(
+            archive: TestRelease.archive, sums: Data(), signatureBase64: "",
+            failure: .releaseStillPublishing("v0.1.0"))
+        let runner = ScriptedRunner(respond: DaemonAnswers.answer(probe: DaemonAnswers.probeNew))
+        let installer = makeInstaller(runner: runner, redeem: RedeemLog(), script: { self.script }, source: source)
+
+        let events = await collect(installer.install(target: target, deviceName: "Test Mac"))
+
+        #expect(failure(events) == .releaseStillPublishing("v0.1.0"))
+        #expect(steps(runner) == [DaemonAnswers.probeCommand])
+    }
+
+    @Test func theTagOfTheDownloadedReleaseIsLogged() async throws {
+        let runner = daemonRunner(copies: CopyRecorder())
+        let installer = makeInstaller(runner: runner, redeem: RedeemLog(), script: { self.script })
+
+        let events = await collect(installer.install(target: target, deviceName: "Test Mac"))
+
+        #expect(logs(events).contains("Bandito release v0.1.0"))
     }
 
     @Test func localBinaryIsCopiedWithScpInsteadOfTheInstallScript() async throws {
