@@ -1,0 +1,8 @@
+name: Idea
+description: Something you want Bandito to do
+labels: [idea]
+body:
+  - type: textarea
+    id: problem
+    attributes: {label: What are you trying to do?, description: The problem first, then the solution you imagine.}
+    validations: {required: true}
