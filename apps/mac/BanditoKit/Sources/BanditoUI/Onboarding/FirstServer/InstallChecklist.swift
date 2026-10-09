@@ -54,7 +54,7 @@ struct InstallChecklist: Equatable, Sendable {
     /// The item a step text belongs to. The installer's step texts are fixed; an unknown text is nil.
     static func item(forStep text: String) -> ChecklistItem? {
         if text.contains("Checking") { return .check }
-        if text.contains("Installing") { return .install }
+        if text.contains("Installing") || text.contains("Downloading") || text.contains("Verifying") { return .install }
         if text.contains("Starting") { return .service }
         if text.contains("pairing") || text.contains("Connecting") { return .app }
         return nil

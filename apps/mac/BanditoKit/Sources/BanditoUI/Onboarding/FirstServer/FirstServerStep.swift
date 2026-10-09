@@ -320,6 +320,7 @@ struct FirstServerStep: View {
             case .other: return L10n.Onboarding.Server.Err.generic
             }
         case .unsupportedPlatform: return L10n.Onboarding.Server.Err.unsupported
+        case .releaseCheckFailed: return L10n.Onboarding.Server.Err.releaseCheck
         case .localBinaryMissing: return L10n.Onboarding.Server.Err.localBinary
         default: return L10n.Onboarding.Server.Err.generic
         }

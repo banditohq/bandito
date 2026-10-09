@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import Testing
 
@@ -48,6 +49,9 @@ enum DaemonAnswers {
     static let probeCommand =
         "uname -sm; command -v bandito || ls ~/.local/bin/bandito 2>/dev/null; cat /etc/os-release 2>/dev/null | head -3"
 
+    /// The remote command that runs the install script on a verified archive.
+    static let archiveInstallPrefix = "env BANDITO_REQUIRE_SIGNATURE=1 sh -s -- --archive "
+
     /// Answers by remote command (the last ssh argument). `probe` is the answer to the first step.
     static func answer(probe: CommandResult, service: CommandResult = serviceOK) -> @Sendable (String, [String]) -> CommandResult {
         { executable, arguments in
@@ -55,8 +59,8 @@ enum DaemonAnswers {
             let command = arguments.last ?? ""
             switch command {
             case probeCommand: return probe
-            case "sh -s -- --no-service": return installOK
-            case _ where command.hasPrefix("mkdir -p") || command.hasPrefix("chmod"):
+            case _ where command.hasPrefix(archiveInstallPrefix): return installOK
+            case _ where command.hasPrefix("mkdir -p") || command.hasPrefix("chmod") || command.hasPrefix("rm -f"):
                 return CommandResult(status: 0, stdout: "", stderr: "")
             case _ where command.hasSuffix("service install --json"): return service
             case _ where command.hasSuffix("info --json"): return infoOK
@@ -81,20 +85,53 @@ private func done(_ events: [InstallEvent]) -> PairInfo? {
     return nil
 }
 
+private func logs(_ events: [InstallEvent]) -> [String] {
+    events.compactMap { event in
+        if case .log(let line) = event { return line }
+        return nil
+    }
+}
+
+/// What the runner was asked to do, in order: an ssh call is its remote command, an scp call is `scp <remote path>`
+/// (the `<target>:` part of scp's destination is left out).
+private func steps(_ runner: ScriptedRunner) -> [String] {
+    runner.calls.map { call in
+        let last = call.arguments.last ?? ""
+        guard call.executable.hasSuffix("scp") else { return last }
+        let path = last.split(separator: ":", maxSplits: 1).last.map(String.init) ?? ""
+        return "scp \(path)"
+    }
+}
+
 @Suite struct SSHInstallerTests {
     private let script = Data("#!/bin/sh\necho installing\n".utf8)
     private let target = "deploy@example.com:2222"
+    private let asset = TestRelease.asset
+    private let remoteArchive = "~/.cache/bandito-install/bandito-x86_64-unknown-linux-gnu.tar.gz"
+    private let prepareDirectory = "mkdir -p ~/.cache/bandito-install && chmod 700 ~/.cache/bandito-install"
 
+    /// An installer that runs against `runner`. The release comes from `source` (default: `release`, served as it was
+    /// published) and is checked with `releaseKey` (default: the key that signed `release`, since the production key
+    /// cannot sign in a test).
     private func makeInstaller(
         runner: ScriptedRunner,
         redeem: RedeemLog,
         script: @escaping SSHInstaller.ScriptSource = { Data() },
-        localBinary: URL? = nil
+        localBinary: URL? = nil,
+        devArchive: URL? = nil,
+        appVersion: String? = "0.1.0",
+        release: TestRelease = TestRelease(),
+        source: ReleaseSource? = nil,
+        releaseKey: Curve25519.Signing.PublicKey? = nil
     ) -> SSHInstaller {
         SSHInstaller(
             runner: runner,
             installScript: script,
             localBinary: localBinary,
+            devArchive: devArchive,
+            appVersion: appVersion,
+            release: source ?? FakeReleaseSource(release),
+            releaseKey: releaseKey ?? release.publicKey,
             redeem: { target, remotePort, code, deviceName in
                 redeem.record(
                     RedeemLog.Call(target: target, remotePort: remotePort, code: code, deviceName: deviceName))
@@ -102,10 +139,25 @@ private func done(_ events: [InstallEvent]) -> PairInfo? {
             })
     }
 
-    @Test func freshServerIsInstalledStartedPairedAndRedeemed() async throws {
-        let runner = ScriptedRunner(respond: DaemonAnswers.answer(probe: DaemonAnswers.probeNew))
+    /// A daemon that answers like `bandito` and records what scp copied (the local path, read at copy time).
+    private func daemonRunner(
+        probe: CommandResult = DaemonAnswers.probeNew, copies: CopyRecorder, service: CommandResult = DaemonAnswers.serviceOK
+    ) -> ScriptedRunner {
+        let answers = DaemonAnswers.answer(probe: probe, service: service)
+        return ScriptedRunner { executable, arguments in
+            if executable == "/usr/bin/scp" { copies.record(path: arguments[arguments.count - 2]) }
+            return answers(executable, arguments)
+        }
+    }
+
+    @Test func freshServerIsDownloadedCheckedCopiedInstalledStartedPairedAndRedeemed() async throws {
+        let copies = CopyRecorder()
+        let runner = daemonRunner(copies: copies)
         let redeem = RedeemLog()
-        let installer = makeInstaller(runner: runner, redeem: redeem, script: { self.script })
+        let release = TestRelease()
+        let source = FakeReleaseSource(release)
+        let installer = makeInstaller(
+            runner: runner, redeem: redeem, script: { self.script }, release: release, source: source)
 
         let events = await collect(installer.install(target: target, deviceName: "Test Mac"))
 
@@ -123,20 +175,27 @@ private func done(_ events: [InstallEvent]) -> PairInfo? {
                         code: "alpha-bravo-charlie-delta-echo-foxtrot", deviceName: "Test Mac")
                 ])
 
-        let remote = runner.calls.compactMap(ScriptedRunner.remoteCommand)
+        #expect(source.requests == [FakeReleaseSource.Request(version: "v0.1.0", asset: asset)])
         #expect(
-            remote
+            steps(runner)
                 == [
                     DaemonAnswers.probeCommand,
-                    "sh -s -- --no-service",
+                    prepareDirectory,
+                    "scp .cache/bandito-install/\(asset)",
+                    "env BANDITO_REQUIRE_SIGNATURE=1 sh -s -- --archive \(remoteArchive) --no-service",
+                    "rm -f \(remoteArchive)",
                     "~/.local/bin/bandito service install --json",
                     "~/.local/bin/bandito info --json",
                     "~/.local/bin/bandito pair --json",
                 ])
+        #expect(copies.all.map(\.data) == [TestRelease.archive])
+        // The archive lives in a work directory that the install removes.
+        let copied = try #require(copies.all.first)
+        #expect(FileManager.default.fileExists(atPath: copied.path) == false)
     }
 
-    @Test func sshAlwaysUsesBatchModeAndThePortOption() async throws {
-        let runner = ScriptedRunner(respond: DaemonAnswers.answer(probe: DaemonAnswers.probeNew))
+    @Test func theInstallScriptGoesToStdinOfTheArchiveInstall() async throws {
+        let runner = daemonRunner(copies: CopyRecorder())
         let installer = makeInstaller(runner: runner, redeem: RedeemLog(), script: { self.script })
 
         _ = await collect(installer.install(target: target, deviceName: "Test Mac"))
@@ -149,28 +208,32 @@ private func done(_ events: [InstallEvent]) -> PairInfo? {
                     "-o", "BatchMode=yes", "-o", "ConnectTimeout=15",
                     "-p", "2222", "deploy@example.com", DaemonAnswers.probeCommand,
                 ])
-        let install = try #require(runner.calls.first { $0.arguments.last == "sh -s -- --no-service" })
+        let install = try #require(runner.calls.first { $0.arguments.last?.hasPrefix("env BANDITO_") == true })
         #expect(install.stdin == script)
+        #expect(install.arguments.dropLast() == ["-o", "BatchMode=yes", "-o", "ConnectTimeout=15", "-p", "2222", "deploy@example.com"])
     }
 
-    @Test func aServerWithTheDaemonAlreadyInstalledSkipsTheInstallScript() async throws {
-        let runner = ScriptedRunner(respond: DaemonAnswers.answer(probe: DaemonAnswers.probeInstalled))
+    @Test func aServerWithTheDaemonAlreadyInstalledSkipsTheDownloadAndTheInstallScript() async throws {
+        let runner = daemonRunner(probe: DaemonAnswers.probeInstalled, copies: CopyRecorder())
         let redeem = RedeemLog()
         let scriptCalls = ScriptCounter()
-        let installer = makeInstaller(runner: runner, redeem: redeem) {
-            scriptCalls.bump()
-            return self.script
-        }
+        let source = FakeReleaseSource(TestRelease())
+        let installer = makeInstaller(
+            runner: runner, redeem: redeem,
+            script: {
+                scriptCalls.bump()
+                return self.script
+            }, source: source)
 
         let events = await collect(installer.install(target: target, deviceName: "Test Mac"))
 
         #expect(scriptCalls.count == 0)
-        #expect(runner.calls.compactMap(ScriptedRunner.remoteCommand).contains("sh -s -- --no-service") == false)
+        #expect(source.requests.isEmpty)
+        #expect(steps(runner).contains { $0.hasPrefix("env BANDITO_") || $0.hasPrefix("scp ") } == false)
         let info = try #require(done(events))
         #expect(info.alreadyInstalled == true)
         #expect(
-            runner.calls.compactMap(ScriptedRunner.remoteCommand).contains(
-                "'/home/deploy/.local/bin/bandito' service install --json"))
+            steps(runner).contains("'/home/deploy/.local/bin/bandito' service install --json") == true)
         #expect(redeem.calls.count == 1)
     }
 
@@ -179,24 +242,40 @@ private func done(_ events: [InstallEvent]) -> PairInfo? {
             status: 255, stdout: "", stderr: "deploy@example.com: Permission denied (publickey).\n")
         let runner = ScriptedRunner(respond: DaemonAnswers.answer(probe: denied))
         let redeem = RedeemLog()
-        let installer = makeInstaller(runner: runner, redeem: redeem, script: { self.script })
+        let source = FakeReleaseSource(TestRelease())
+        let installer = makeInstaller(runner: runner, redeem: redeem, script: { self.script }, source: source)
 
         let events = await collect(installer.install(target: target, deviceName: "Test Mac"))
 
         #expect(failure(events) == .sshFailed(.keyNotAccepted))
         #expect(runner.calls.count == 1)
+        #expect(source.requests.isEmpty)
         #expect(redeem.calls.isEmpty)
     }
 
     @Test func unsupportedPlatformStopsAtTheProbe() async throws {
         let freeBSD = CommandResult(status: 0, stdout: "FreeBSD amd64\n\n", stderr: "")
         let runner = ScriptedRunner(respond: DaemonAnswers.answer(probe: freeBSD))
-        let installer = makeInstaller(runner: runner, redeem: RedeemLog(), script: { self.script })
+        let source = FakeReleaseSource(TestRelease())
+        let installer = makeInstaller(runner: runner, redeem: RedeemLog(), script: { self.script }, source: source)
 
         let events = await collect(installer.install(target: target, deviceName: "Test Mac"))
 
         #expect(failure(events) == .unsupportedPlatform("FreeBSD amd64"))
         #expect(runner.calls.count == 1)
+        #expect(source.requests.isEmpty)
+    }
+
+    @Test func anAmd64ServerGetsTheX86Asset() async throws {
+        let amd64 = CommandResult(status: 0, stdout: "Linux amd64\n\n", stderr: "")
+        let source = FakeReleaseSource(TestRelease())
+        let installer = makeInstaller(
+            runner: ScriptedRunner(respond: DaemonAnswers.answer(probe: amd64)), redeem: RedeemLog(),
+            script: { self.script }, source: source)
+
+        _ = await collect(installer.install(target: target, deviceName: "Test Mac"))
+
+        #expect(source.requests.first?.asset == asset)
     }
 
     @Test func serviceFailureCarriesTheWarnings() async throws {
@@ -231,21 +310,182 @@ private func done(_ events: [InstallEvent]) -> PairInfo? {
         #expect(failure(events) == .badResponse("info"))
     }
 
+    // MARK: release checks
+
+    @Test func aBadSignatureStopsBeforeAnythingIsCopied() async throws {
+        let release = TestRelease()
+        let impostor = TestRelease()
+        let runner = ScriptedRunner(respond: DaemonAnswers.answer(probe: DaemonAnswers.probeNew))
+        let redeem = RedeemLog()
+        // The release is signed by another key than the one the installer trusts.
+        let installer = makeInstaller(
+            runner: runner, redeem: redeem, script: { self.script }, release: release,
+            source: FakeReleaseSource(impostor), releaseKey: release.publicKey)
+
+        let events = await collect(installer.install(target: target, deviceName: "Test Mac"))
+
+        #expect(failure(events) == .releaseCheckFailed(.badSignature))
+        #expect(steps(runner) == [DaemonAnswers.probeCommand])
+        #expect(redeem.calls.isEmpty)
+    }
+
+    @Test func aTamperedArchiveStopsBeforeAnythingIsCopied() async throws {
+        let release = TestRelease()
+        let source = FakeReleaseSource(
+            archive: Data("tampered".utf8), sums: release.sums, signatureBase64: try release.signatureFile())
+        let runner = ScriptedRunner(respond: DaemonAnswers.answer(probe: DaemonAnswers.probeNew))
+        let installer = makeInstaller(
+            runner: runner, redeem: RedeemLog(), script: { self.script }, release: release, source: source)
+
+        let events = await collect(installer.install(target: target, deviceName: "Test Mac"))
+
+        #expect(failure(events) == .releaseCheckFailed(.checksumMismatch))
+        #expect(steps(runner) == [DaemonAnswers.probeCommand])
+    }
+
+    @Test func anArchiveTheSignedListDoesNotNameStopsTheInstall() async throws {
+        let release = TestRelease()
+        let sums = Data("\(testSHA256Hex(TestRelease.archive))  bandito-aarch64-apple-darwin.tar.gz\n".utf8)
+        let source = FakeReleaseSource(
+            archive: TestRelease.archive, sums: sums, signatureBase64: try release.signature(of: sums))
+        let runner = ScriptedRunner(respond: DaemonAnswers.answer(probe: DaemonAnswers.probeNew))
+        let installer = makeInstaller(
+            runner: runner, redeem: RedeemLog(), script: { self.script }, release: release, source: source)
+
+        let events = await collect(installer.install(target: target, deviceName: "Test Mac"))
+
+        #expect(failure(events) == .releaseCheckFailed(.notListed))
+        #expect(steps(runner) == [DaemonAnswers.probeCommand])
+    }
+
+    @Test func aFailedDownloadStopsBeforeAnythingIsCopied() async throws {
+        let source = FakeReleaseSource(
+            archive: TestRelease.archive, sums: Data(), signatureBase64: "",
+            failure: .downloadFailed("HTTP 500 from github.com"))
+        let runner = ScriptedRunner(respond: DaemonAnswers.answer(probe: DaemonAnswers.probeNew))
+        let installer = makeInstaller(runner: runner, redeem: RedeemLog(), script: { self.script }, source: source)
+
+        let events = await collect(installer.install(target: target, deviceName: "Test Mac"))
+
+        #expect(failure(events) == .downloadFailed("HTTP 500 from github.com"))
+        #expect(steps(runner) == [DaemonAnswers.probeCommand])
+    }
+
+    @Test func aReleaseWithoutTheAppsVersionFallsBackToLatestWithAWarning() async throws {
+        let release = TestRelease()
+        let source = FakeReleaseSource(
+            archive: TestRelease.archive, sums: release.sums, signatureBase64: try release.signatureFile(),
+            fellBackToLatest: true)
+        let runner = daemonRunner(copies: CopyRecorder())
+        let installer = makeInstaller(
+            runner: runner, redeem: RedeemLog(), script: { self.script }, release: release, source: source)
+
+        let events = await collect(installer.install(target: target, deviceName: "Test Mac"))
+
+        #expect(failure(events) == nil)
+        #expect(done(events) != nil)
+        #expect(logs(events).contains { $0.contains("v0.1.0") && $0.contains("latest") })
+    }
+
+    @Test func aBuildWithoutAVersionAsksForLatestWithoutAWarning() async throws {
+        let source = FakeReleaseSource(TestRelease())
+        let runner = daemonRunner(copies: CopyRecorder())
+        let installer = makeInstaller(
+            runner: runner, redeem: RedeemLog(), script: { self.script }, appVersion: nil, source: source)
+
+        let events = await collect(installer.install(target: target, deviceName: "Test Mac"))
+
+        #expect(source.requests == [FakeReleaseSource.Request(version: nil, asset: asset)])
+        #expect(logs(events).isEmpty)
+    }
+
+    @Test func theArchiveIsRemovedFromTheServerEvenWhenTheInstallFails() async throws {
+        let answers = DaemonAnswers.answer(probe: DaemonAnswers.probeNew)
+        let runner = ScriptedRunner { executable, arguments in
+            if arguments.last?.hasPrefix("env BANDITO_") == true {
+                return CommandResult(status: 1, stdout: "", stderr: "installer exploded\n")
+            }
+            return answers(executable, arguments)
+        }
+        let redeem = RedeemLog()
+        let installer = makeInstaller(runner: runner, redeem: redeem, script: { self.script })
+
+        let events = await collect(installer.install(target: target, deviceName: "Test Mac"))
+
+        #expect(failure(events) == .step("Installing Bandito", detail: "installer exploded"))
+        #expect(steps(runner).last == "rm -f \(remoteArchive)")
+        #expect(redeem.calls.isEmpty)
+    }
+
+    @Test func aFailedCopyDoesNotLeaveTheArchiveBehind() async throws {
+        let answers = DaemonAnswers.answer(probe: DaemonAnswers.probeNew)
+        let runner = ScriptedRunner { executable, arguments in
+            if executable == "/usr/bin/scp" {
+                return CommandResult(status: 1, stdout: "", stderr: "scp: disk full\n")
+            }
+            return answers(executable, arguments)
+        }
+        let installer = makeInstaller(runner: runner, redeem: RedeemLog(), script: { self.script })
+
+        let events = await collect(installer.install(target: target, deviceName: "Test Mac"))
+
+        #expect(failure(events) == .step("Copying Bandito", detail: "scp: disk full"))
+        #expect(steps(runner).last == "rm -f \(remoteArchive)")
+        #expect(steps(runner).contains { $0.hasPrefix("env BANDITO_") } == false)
+    }
+
+    @Test func aDevArchiveIsInstalledWithoutDownloadOrSignatureCheck() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(
+            path: "dev-archive-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let devArchive = directory.appending(path: asset)
+        let devBytes = Data("a local build, not signed".utf8)
+        try devBytes.write(to: devArchive)
+        let copies = CopyRecorder()
+        let source = FakeReleaseSource(TestRelease())
+        let runner = daemonRunner(copies: copies)
+        let redeem = RedeemLog()
+        let installer = makeInstaller(
+            runner: runner, redeem: redeem, script: { self.script }, devArchive: devArchive, source: source)
+
+        let events = await collect(installer.install(target: target, deviceName: "Test Mac"))
+
+        #expect(failure(events) == nil)
+        #expect(done(events) != nil)
+        #expect(source.requests.isEmpty)
+        #expect(copies.all.map(\.data) == [devBytes])
+        #expect(
+            steps(runner)
+                == [
+                    DaemonAnswers.probeCommand,
+                    prepareDirectory,
+                    "scp .cache/bandito-install/\(asset)",
+                    "env BANDITO_REQUIRE_SIGNATURE=1 sh -s -- --archive \(remoteArchive) --no-service",
+                    "rm -f \(remoteArchive)",
+                    "~/.local/bin/bandito service install --json",
+                    "~/.local/bin/bandito info --json",
+                    "~/.local/bin/bandito pair --json",
+                ])
+        #expect(redeem.calls.count == 1)
+    }
+
     @Test func localBinaryIsCopiedWithScpInsteadOfTheInstallScript() async throws {
         let runner = ScriptedRunner(respond: DaemonAnswers.answer(probe: DaemonAnswers.probeNew))
         let scriptCalls = ScriptCounter()
+        let source = FakeReleaseSource(TestRelease())
         let installer = makeInstaller(
             runner: runner, redeem: RedeemLog(),
             script: {
                 scriptCalls.bump()
                 return self.script
             },
-            localBinary: URL(fileURLWithPath: "/Users/dev/build/bandito"))
+            localBinary: URL(fileURLWithPath: "/Users/dev/build/bandito"), source: source)
 
         let events = await collect(installer.install(target: target, deviceName: "Test Mac"))
 
         #expect(failure(events) == nil)
         #expect(scriptCalls.count == 0)
+        #expect(source.requests.isEmpty)
         let remote = runner.calls.compactMap(ScriptedRunner.remoteCommand)
         #expect(remote.contains("mkdir -p ~/.local/bin"))
         #expect(remote.contains("chmod 755 ~/.local/bin/bandito"))
@@ -255,17 +495,19 @@ private func done(_ events: [InstallEvent]) -> PairInfo? {
                 == ["-P", "2222", "/Users/dev/build/bandito", "deploy@example.com:.local/bin/bandito"])
     }
 
-    @Test func withoutAnInstallScriptOrABundledCopyNothingIsRunOnTheServer() async throws {
-        // The test bundle has no install.sh, and nothing is downloaded in its place.
+    @Test func withoutAnInstallScriptOrABundledCopyNothingIsDownloadedOrRunOnTheServer() async throws {
+        // The test bundle has no install.sh. The script is read before the download, so nothing else happens.
         let runner = ScriptedRunner(respond: DaemonAnswers.answer(probe: DaemonAnswers.probeNew))
         let redeem = RedeemLog()
-        let installer = makeInstaller(runner: runner, redeem: redeem, script: SSHInstaller.bundledScript)
+        let source = FakeReleaseSource(TestRelease())
+        let installer = makeInstaller(
+            runner: runner, redeem: redeem, script: SSHInstaller.bundledScript, source: source)
 
         let events = await collect(installer.install(target: target, deviceName: "Test Mac"))
 
         #expect(failure(events) == .missingInstallScript)
-        let remote = runner.calls.compactMap(ScriptedRunner.remoteCommand)
-        #expect(remote == [DaemonAnswers.probeCommand])
+        #expect(steps(runner) == [DaemonAnswers.probeCommand])
+        #expect(source.requests.isEmpty)
         #expect(redeem.calls.isEmpty)
     }
 
@@ -290,6 +532,8 @@ private func done(_ events: [InstallEvent]) -> PairInfo? {
         #expect(debian.arch == "aarch64")
         #expect(debian.installedPath == nil)
         #expect(debian.osName == "Debian GNU/Linux 12")
+
+        #expect(try RemoteProbe.parse("Linux amd64\n\n").arch == "x86_64")
 
         #expect(throws: InstallError.unsupportedPlatform("Linux riscv64")) {
             try RemoteProbe.parse("Linux riscv64\n\n")

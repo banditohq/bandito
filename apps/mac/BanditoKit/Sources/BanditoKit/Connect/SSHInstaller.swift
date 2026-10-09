@@ -66,6 +66,10 @@ public enum InstallError: Error, Sendable, Equatable, LocalizedError {
     case io(String)
     /// No install script was passed in, and the app bundle does not contain one.
     case missingInstallScript
+    /// The release did not pass its check (signature, listing or hash). Nothing was sent to the server.
+    case releaseCheckFailed(ReleaseVerifier.Failure)
+    /// A release file could not be downloaded. The text says what went wrong.
+    case downloadFailed(String)
 
     public var errorDescription: String? {
         switch self {
@@ -89,6 +93,10 @@ public enum InstallError: Error, Sendable, Equatable, LocalizedError {
             return detail
         case .missingInstallScript:
             return "This build does not include the Bandito install script."
+        case .releaseCheckFailed:
+            return "Release signature check failed — the download may have been tampered with. Nothing was installed."
+        case .downloadFailed(let detail):
+            return "Downloading Bandito failed: \(detail)"
         }
     }
 }
@@ -96,9 +104,9 @@ public enum InstallError: Error, Sendable, Equatable, LocalizedError {
 /// Puts Bandito on a server and pairs this app with it (docs/ARCHITECTURE.md#install-and-service,
 /// #setup). Each step is one ssh call through `runner`, so tests run it without a network.
 ///
-/// Steps: check the server (`uname`, is `bandito` there), install it if missing (install.sh, or a copied
-/// binary), `service install --json`, `info --json` for the listen port, `pair --json` for a code, then
-/// `pair.redeem` over an `SSHTunnel` for the token.
+/// Steps: check the server (`uname`, is `bandito` there), install it if missing (the release from GitHub, checked on
+/// this Mac and copied over, or a copied binary), `service install --json`, `info --json` for the listen port,
+/// `pair --json` for a code, then `pair.redeem` over an `SSHTunnel` for the token.
 public struct SSHInstaller: Sendable {
     /// Returns the install script's bytes.
     public typealias ScriptSource = @Sendable () async throws -> Data
@@ -116,22 +124,40 @@ public struct SSHInstaller: Sendable {
     private let runner: CommandRunner
     private let scriptSource: ScriptSource
     private let localBinary: URL?
+    private let devArchive: URL?
+    private let appTag: String?
+    private let release: ReleaseSource
+    private let releaseKey: ReleaseVerifier.PublicKey
     private let redeem: Redeem
 
     /// - Parameters:
     ///   - runner: runs ssh and scp.
     ///   - installScript: the install.sh bytes. Default: the copy bundled in the app. The script is never downloaded.
     ///   - localBinary: a bandito build to copy with scp instead of running install.sh (development).
+    ///   - devArchive: a local release archive, installed without download and without signature check (development,
+    ///     before a release exists). The app passes it in Debug builds only.
+    ///   - appVersion: the app's version. The server gets the release with the same tag; when there is none, the latest
+    ///     release is used, with a line in the log. Nil asks for the latest release.
+    ///   - release: where the release files come from. Default: GitHub.
+    ///   - releaseKey: the key the release must be signed with. Default: the Bandito release key.
     ///   - redeem: exchanges the code for a token. Default: over an `SSHTunnel` to the server.
     public init(
         runner: CommandRunner,
         installScript: @escaping ScriptSource = SSHInstaller.bundledScript,
         localBinary: URL? = nil,
+        devArchive: URL? = nil,
+        appVersion: String? = nil,
+        release: ReleaseSource = GitHubReleaseSource(),
+        releaseKey: ReleaseVerifier.PublicKey = ReleaseVerifier.release,
         redeem: Redeem? = nil
     ) {
         self.runner = runner
         self.scriptSource = installScript
         self.localBinary = localBinary
+        self.devArchive = devArchive
+        self.appTag = appVersion.flatMap(GitHubReleaseSource.tag(forAppVersion:))
+        self.release = release
+        self.releaseKey = releaseKey
         self.redeem = redeem ?? Self.defaultRedeem
     }
 
@@ -165,20 +191,7 @@ public struct SSHInstaller: Sendable {
                 binary = Self.quoted(path)
             } else {
                 binary = Self.remoteBinary
-                emit(.step("Installing Bandito"))
-                if let localBinary {
-                    _ = try checked(await remote(target, "mkdir -p ~/.local/bin"), step: "Installing Bandito")
-                    _ = try checked(await scp(localBinary, to: target), step: "Copying Bandito")
-                    _ = try checked(
-                        await remote(target, "chmod 755 ~/.local/bin/bandito"), step: "Installing Bandito")
-                } else {
-                    let script = try await scriptSource()
-                    let result = try await remote(target, "sh -s -- --no-service", stdin: script)
-                    for line in Self.lines(result.stdout + result.stderr) {
-                        emit(.log(line))
-                    }
-                    _ = try checked(result, step: "Installing Bandito")
-                }
+                try await install(on: target, probe: probe, emit: emit)
             }
 
             emit(.step("Starting the service"))
@@ -224,11 +237,91 @@ public struct SSHInstaller: Sendable {
         try await runner.run(Self.sshExecutable, Self.transportOptions + target.sshArguments + [command], stdin: stdin)
     }
 
-    private func scp(_ local: URL, to target: SSHTarget) async throws -> CommandResult {
+    private func scp(_ local: URL, to target: SSHTarget, remotePath: String = ".local/bin/bandito") async throws -> CommandResult {
         try await runner.run(
             Self.scpExecutable,
-            Self.transportOptions + target.scpArguments(local: local.path, remotePath: ".local/bin/bandito"),
+            Self.transportOptions + target.scpArguments(local: local.path, remotePath: remotePath),
             stdin: nil)
+    }
+
+    /// Puts the binary on the server: a copy of a build on this Mac, or the release archive. The release is checked
+    /// on this Mac before anything is sent, so a bad download never reaches the server.
+    private func install(on target: SSHTarget, probe: RemoteProbe, emit: (InstallEvent) -> Void) async throws {
+        if let localBinary {
+            emit(.step("Installing Bandito"))
+            _ = try checked(await remote(target, "mkdir -p ~/.local/bin"), step: "Installing Bandito")
+            _ = try checked(await scp(localBinary, to: target), step: "Copying Bandito")
+            _ = try checked(await remote(target, "chmod 755 ~/.local/bin/bandito"), step: "Installing Bandito")
+            return
+        }
+        // Read first: a bundle without the script stops here, before anything is downloaded.
+        let script = try await scriptSource()
+        guard let asset = ReleaseAsset.name(kernel: probe.kernel, machine: probe.arch) else {
+            throw InstallError.unsupportedPlatform("\(probe.kernel) \(probe.arch)")
+        }
+        let work = try Self.makeWorkDirectory()
+        defer { try? FileManager.default.removeItem(at: work) }
+
+        let archive: URL
+        if let devArchive {
+            emit(.step("Installing Bandito"))
+            archive = devArchive
+        } else {
+            emit(.step("Downloading Bandito"))
+            let fetched = try await release.fetch(version: appTag, asset: asset, into: work)
+            if fetched.fellBackToLatest, let appTag {
+                emit(.log("No Bandito \(appTag) release yet: installing the latest release, which may differ from this app."))
+            }
+            emit(.step("Verifying the Bandito release"))
+            do {
+                try ReleaseVerifier.verify(
+                    sums: fetched.sums, signatureBase64: fetched.signatureBase64,
+                    archive: try Data(contentsOf: fetched.archive), assetName: asset, key: releaseKey)
+            } catch let failure as ReleaseVerifier.Failure {
+                throw InstallError.releaseCheckFailed(failure)
+            }
+            archive = fetched.archive
+            emit(.step("Installing Bandito"))
+        }
+        try await installArchive(archive, asset: asset, script: script, on: target, emit: emit)
+    }
+
+    /// Copies the archive to `~/.cache/bandito-install` on the server and runs install.sh on it with
+    /// `BANDITO_REQUIRE_SIGNATURE=1`. The archive is removed afterwards, whatever the outcome.
+    private func installArchive(
+        _ archive: URL, asset: String, script: Data, on target: SSHTarget, emit: (InstallEvent) -> Void
+    ) async throws {
+        let remoteDirectory = "~/.cache/bandito-install"
+        let remoteArchive = "\(remoteDirectory)/\(asset)"
+        _ = try checked(
+            await remote(target, "mkdir -p \(remoteDirectory) && chmod 700 \(remoteDirectory)"),
+            step: "Installing Bandito")
+        let result: CommandResult
+        do {
+            _ = try checked(
+                await scp(archive, to: target, remotePath: ".cache/bandito-install/\(asset)"),
+                step: "Copying Bandito")
+            result = try await remote(
+                target, "env BANDITO_REQUIRE_SIGNATURE=1 sh -s -- --archive \(remoteArchive) --no-service",
+                stdin: script)
+        } catch {
+            _ = try? await remote(target, "rm -f \(remoteArchive)")
+            throw error
+        }
+        _ = try? await remote(target, "rm -f \(remoteArchive)")
+        for line in Self.lines(result.stdout + result.stderr) {
+            emit(.log(line))
+        }
+        _ = try checked(result, step: "Installing Bandito")
+    }
+
+    /// A new directory that only this user can read, for the files of one install.
+    static func makeWorkDirectory() throws -> URL {
+        let url = FileManager.default.temporaryDirectory.appending(
+            path: "bandito-install-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(
+            at: url, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        return url
     }
 
     /// Turns a non-zero exit into an error. Status 255 is ssh's own failure and is classified; any other status
@@ -337,7 +430,7 @@ struct RemoteProbe: Equatable {
         let parts = (lines.first ?? "").split(separator: " ").map(String.init)
         guard parts.count == 2 else { throw InstallError.badResponse("check the server") }
         let kernel = parts[0]
-        let arch = parts[1] == "arm64" ? "aarch64" : parts[1]
+        let arch = ["arm64": "aarch64", "amd64": "x86_64"][parts[1]] ?? parts[1]
         guard ["Linux", "Darwin"].contains(kernel), ["x86_64", "aarch64"].contains(arch) else {
             throw InstallError.unsupportedPlatform(parts.joined(separator: " "))
         }
