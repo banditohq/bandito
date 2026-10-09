@@ -37,7 +37,8 @@ struct MainWindow: View {
             sensitivity: gestures.swipeSensitivity,
             onBack: { router.back() },
             onForward: { router.forward() })
-        .sheet(item: $router.sheet) { sheet in
+        // Adding a server may be in the middle of an install: a stray click must not cancel it (Esc still closes).
+        .banditoSheet(item: $router.sheet, dismissOnOutsideClick: router.sheet != .addServer) { sheet in
             sheetView(for: sheet)
         }
         .overlay {

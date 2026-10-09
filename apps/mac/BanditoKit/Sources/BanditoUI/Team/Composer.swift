@@ -120,7 +120,7 @@ struct Composer: View {
         .task {
             await slash.loadMacCommands()
         }
-        .sheet(isPresented: $model.editingSnippet) {
+        .banditoSheet(isPresented: $model.editingSnippet) {
             SnippetEditor { snippet in slash.saveSnippet(snippet) }
         }
         .confirmationDialog(

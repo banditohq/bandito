@@ -226,7 +226,7 @@ struct FirstAgentStep: View {
             await model.loadHome()
             await model.workplaces.load()
         }
-        .sheet(isPresented: $pickingFolder) {
+        .banditoSheet(isPresented: $pickingFolder) {
             FolderPicker(
                 server: model.server,
                 selection: Binding(get: { model.folder }, set: { model.setFolder($0) })
