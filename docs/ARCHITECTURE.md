@@ -95,7 +95,7 @@ JSON-RPC 2.0. Same methods on every transport.
 The daemon always listens on:
 
 1. Unix socket `~/.bandito/bandito.sock` (0600). Trusted: same user.
-2. `127.0.0.1:7878` HTTP + WebSocket (`/v1/rpc`, `/v1/health`, `/v1/files/raw`). Token required.
+2. `127.0.0.1:7878` HTTP + WebSocket (`/v1/rpc`, `/v1/health`, `/v1/files/raw`, `/v1/tunnel`). Token required.
 
 WebSocket upgrades that carry an `Origin` header are refused: native apps don't send one, browsers always do, so a web page can't drive the daemon through the user's browser. Unix socket paths are limited to ~104 bytes on macOS, so keep `BANDITO_HOME` short.
 
@@ -203,6 +203,22 @@ Params are objects; unknown fields are `invalid_params`.
 - `Range`: one `bytes=a-b`, `bytes=a-` or `bytes=-n` gives 206 with `Content-Range`. A range outside the file, a reversed range, or several ranges gives 416 with `Content-Range: bytes */size`.
 - `Content-Type` by extension: video, audio, image and PDF types as usual; text, markdown, code and config files as `text/plain; charset=utf-8`; SVG and HTML are never served as markup; anything else is `application/octet-stream`.
 - Always: `ETag: "<size>-<mtime_ms>"`, `Accept-Ranges: bytes`, `Cache-Control: private, no-cache`, `X-Content-Type-Options: nosniff`, `Content-Security-Policy: sandbox`, `Content-Disposition: inline; filename*=UTF-8''<name>`.
+
+## Tunnel
+
+`GET /v1/tunnel?port=<1..=65535>` is a WebSocket that carries one TCP connection to `127.0.0.1:<port>` on the server. It lets the app reach what agents start on the server, such as a dev server on `localhost:3000`. Later it carries the server's screen (VNC) and a browser's DevTools port (CDP). The client listens on a local port of its own and sends the traffic through this socket: a WKWebView points at the local port, a VNC viewer connects to it.
+
+**Access.** Same as the file routes: a paired device only. Without `Authorization: Bearer` the upgrade is 401, and so is an unknown or revoked token. An `Origin` header is 403. Checks run before the upgrade, so a refusal is a plain HTTP response.
+
+**Target.** The loopback interface only. The only parameter is `port`: no host, no path, so the route cannot reach other machines (no SSRF). The daemon tries `127.0.0.1:<port>`, then `[::1]:<port>`, with 5 s to connect. If neither accepts, the socket closes with code 1011 and reason `connect failed`. A missing `port`, or one outside 1..=65535, is 400 before the upgrade.
+
+**Frames.** The tunnel is a byte stream. Binary WebSocket messages go to the target as they are, and the target's bytes come back in binary messages of up to 64 KiB, so one message does not map to one TCP read. A text message from the client is ignored. A message over 1 MiB closes the tunnel. Ping and pong work as in axum by default.
+
+**Close.** When either side closes or fails, the daemon shuts down the TCP write side and closes the WebSocket with code 1000. The target closing ends the WebSocket the same way.
+
+**Limits.** At most 64 live tunnels per device. The 65th upgrade gets 429 before the upgrade. A slot is freed when its tunnel ends, whichever side ended it.
+
+Feature string: `"tunnel"` in `daemon.info`.
 
 ## Mac app
 
