@@ -4,6 +4,7 @@ pub mod crew;
 pub mod event;
 pub mod files;
 pub mod home;
+pub mod host;
 pub mod hub;
 pub mod pairing;
 pub mod policy;

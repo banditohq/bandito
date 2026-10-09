@@ -82,6 +82,8 @@ impl Runtime for GrokRuntime {
         // `cfg.extra_dirs` is not passed on: Grok has no option for extra directories, so they are ignored here.
         cmd.arg("stdio");
         cmd.current_dir(&cfg.cwd).envs(cfg.env.iter().map(|(k, v)| (k, v)));
+        // Marks the CLI and its children for `host.processes` (see docs/ARCHITECTURE.md#host).
+        cmd.env("BANDITO_AGENT_ID", &cfg.agent_id);
 
         let state = Arc::new(Mutex::new(State::new(cfg.system_prompt.clone())));
         let handshake = Handshake {

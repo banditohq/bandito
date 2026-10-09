@@ -375,15 +375,19 @@ impl TerminalManager {
 
         let (master, slave) = open_pty(spec.cols, spec.rows).context("failed to open a pty")?;
         let master = AsyncFd::new(master).context("failed to register the pty")?;
-        let mut child = spawn_child(&command, &spec.cwd, &spec.env, &slave)
-            .with_context(|| format!("failed to start {program}"))?;
+        let id = new_id();
+        // Marks the terminal's processes for `host.processes`; added last, so `env` cannot override it.
+        let mut env = spec.env.clone();
+        env.push(("BANDITO_TERM_ID".into(), id.clone()));
+        let mut child =
+            spawn_child(&command, &spec.cwd, &env, &slave).with_context(|| format!("failed to start {program}"))?;
         // Only the child may hold the slave now; EOF on the master means it is gone.
         drop(slave);
 
         let pid = child.id() as i32;
         let exited = Arc::new(AtomicBool::new(false));
         let session = Arc::new(Session {
-            id: new_id(),
+            id,
             pid,
             cwd: spec.cwd.to_string_lossy().into_owned(),
             command,

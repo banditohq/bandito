@@ -4,6 +4,7 @@
 use crate::event::{Decision, Event, EventBody, Source};
 use crate::files::FileService;
 use crate::home;
+use crate::host::Sampler;
 use crate::pairing;
 use crate::runtime::RuntimeKind;
 use crate::scheduler;
@@ -21,6 +22,7 @@ use std::time::Duration;
 use tokio::sync::{broadcast, mpsc};
 
 pub mod files;
+pub mod host;
 pub mod term;
 pub mod unix;
 pub mod ws;
@@ -41,6 +43,7 @@ pub const FEATURES: &[&str] = &[
     "history",
     "terminals",
     "files",
+    "host",
 ];
 
 /// Context budget bounds for `smart` memory, in tokens.
@@ -61,6 +64,8 @@ pub struct App {
     redeem_failures: Mutex<VecDeque<i64>>,
     /// Server files for the `fs.*` methods and `GET /v1/files/raw`.
     pub files: Arc<FileService>,
+    /// Load, processes and ports of this server (see docs/ARCHITECTURE.md#host). Sampled by a task started in `main`.
+    pub host: Arc<Sampler>,
 }
 
 impl App {
@@ -79,6 +84,7 @@ impl App {
             terminals: TerminalManager::new(Limits::default()),
             redeem_failures: Mutex::new(VecDeque::new()),
             files: Arc::new(files),
+            host: Sampler::new(),
         })
     }
 }
@@ -121,6 +127,8 @@ pub const RATE_LIMITED: i64 = -32002;
 pub const TERM_ERROR: i64 = -32021;
 /// A file operation failed; `error.data.reason` says why (see rpc::files).
 pub const FS_ERROR: i64 = -32020;
+/// A host method failed; `error.data.reason` says why (see rpc::host).
+pub const HOST_ERROR: i64 = -32023;
 
 impl RpcError {
     fn new(code: i64, message: impl Into<String>) -> Self {
@@ -830,6 +838,10 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
 
         "term.list" | "term.open" | "term.input" | "term.resize" | "term.rename" | "term.close" => {
             term::dispatch(app, method, p).await
+        }
+
+        "host.stats" | "host.history" | "host.processes" | "host.ports" | "host.kill" => {
+            host::dispatch(app, method, p).await
         }
 
         _ => Err(RpcError::new(METHOD_NOT_FOUND, format!("unknown method {method}"))),
