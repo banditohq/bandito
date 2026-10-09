@@ -190,7 +190,7 @@ Per agent `memory_mode`:
 | `daily` | every first message after 04:00 local | assistants with daily routines |
 | `full` | never; the CLI compacts on its own | short projects, debugging one long task |
 
-Before a chapter closes, the daemon sends a wrap-up turn shown in the thread as a quiet line (`source: "system"`), excluded from history search: *update your memory files with what matters from this chapter*. Then the session is dropped and `session.rotated` is emitted.
+Before a chapter closes, the daemon sends a wrap-up turn shown in the thread as a quiet line (`source: "system"`), excluded from history search: *update your memory files with what matters from this chapter*. Then the session is dropped and `session.rotated` is emitted. The check runs when the next message arrives, so an idle agent costs nothing, and that message waits while the wrap-up runs. If the CLI session has gone, Bandito resumes it for the wrap-up. If it cannot resume, the chapter closes without a wrap-up and the thread says `memory not saved`.
 
 **Agent home.** Every agent gets its own folder on the server, `~/bandito/agents/<slug>/`, next to (not inside) the project it works on:
 
@@ -201,11 +201,13 @@ journal/<date>.md one line per finished piece of work
 files/           anything the agent makes for itself
 ```
 
-The agent's instructions (built by the daemon, before the user's own) explain this layout. The CLI is allowed to write there (`--add-dir` for Claude, writable roots for Codex). The user can open, edit or delete these files; they are plain Markdown.
+The agent's instructions (built by the daemon, before the user's own) explain this layout. The CLI is allowed to write there (`--add-dir` for Claude, writable roots for Codex). The user can open, edit or delete these files; they are plain Markdown. The root can be moved with `BANDITO_AGENTS_DIR`, which must be an absolute path (a relative one is ignored with a warning).
 
-**Grok.** Grok does not report context size, so Grok agents start new chapters by day only; its CLI has no extra-folder flag, so the agent's home is reachable through the same approval rules (the home counts as the agent's own folder).
+**Grok.** Grok does not report context size, so Grok agents start new chapters by day only. Its CLI has no extra-folder flag: the approval policy decides whether the agent may act (allow or ask), and the CLI's own sandbox limits access to the home folder.
 
 **Recall instead of remembering.** The crew MCP server also offers `history_search{query}` and `history_day{date}` over the agent's own past messages in the daemon's database, so an agent looks up what was said weeks ago instead of carrying it.
+
+**Changing an agent.** `agents.update` applies name, role, model, effort, system prompt, memory mode, context budget and folder from the next session: an idle agent's session is closed at once, a running one when its turn ends. The chapter goes on, except after a folder change, which starts a new chapter (a CLI session is tied to its folder). The approval mode is read on every request and needs no restart.
 
 **Effort.** Each agent has an `effort` (`low`, `medium`, `high`, `xhigh`, `max`). The daemon maps it to the runtime (`--effort` for Claude, the turn's `effort` for Codex, `--reasoning-effort` for Grok) and refuses levels a runtime does not offer.
 

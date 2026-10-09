@@ -167,9 +167,10 @@ struct AgentPatchParams {
 }
 impl AgentPatchParams {
     /// Whether the patch changes something a running session was started with, so
-    /// the session must be reloaded (the name is part of the system prompt).
-    /// `approval_mode` is not: approvals read it from the store on every request.
-    fn reloads_session(&self) -> bool {
+    /// the session must be reloaded. Compared with the agent's current values: a
+    /// form sent back unchanged changes nothing. `approval_mode` is not part of it:
+    /// approvals read it from the store on every request.
+    fn changes_session(&self, current: &crate::store::Agent) -> bool {
         let Self {
             name,
             role,
@@ -181,14 +182,14 @@ impl AgentPatchParams {
             memory_mode,
             context_budget,
         } = self;
-        name.is_some()
-            || role.is_some()
-            || model.is_some()
-            || cwd.is_some()
-            || system_prompt.is_some()
-            || effort.is_some()
-            || memory_mode.is_some()
-            || context_budget.is_some()
+        name.as_ref().is_some_and(|n| n.trim() != current.name)
+            || role.as_ref().is_some_and(|r| *r != current.role)
+            || model.as_ref().is_some_and(|m| *m != current.model)
+            || cwd.as_ref().is_some_and(|c| *c != current.cwd)
+            || system_prompt.as_ref().is_some_and(|p| *p != current.system_prompt)
+            || effort.as_ref().is_some_and(|e| *e != current.effort)
+            || memory_mode.as_ref().is_some_and(|m| *m != current.memory_mode)
+            || context_budget.as_ref().is_some_and(|b| *b != current.context_budget)
     }
 }
 /// `{"x": null}` → `Some(None)` (clear), missing → `None` (keep).
@@ -512,7 +513,9 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                 .ok_or_else(|| RpcError::new(SERVER_ERROR, format!("no agent {id}")))?;
             check_effort(current.runtime, patch.effort.flatten())?;
             check_context_budget(patch.context_budget.flatten())?;
-            let reload = patch.reloads_session();
+            let reload = patch.changes_session(&current);
+            // A session is tied to its folder: a folder change starts a new chapter.
+            let new_chapter = patch.cwd.as_ref().is_some_and(|cwd| *cwd != current.cwd);
             let a = store.agent_update(
                 &id,
                 AgentPatch {
@@ -528,9 +531,10 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                 },
             )?;
             // New config takes effect with the next session: the running one is
-            // closed when idle, or once its turn ends. The chapter itself goes on.
+            // closed when idle, or once its turn ends. The chapter goes on, unless
+            // the folder changed.
             if reload {
-                app.sup.reload(&id).await;
+                app.sup.reload(&id, new_chapter).await;
             }
             ok(a)
         }
@@ -1447,7 +1451,7 @@ mod memory_tests {
     }
 
     #[tokio::test]
-    async fn update_reloads_the_session_only_when_it_needs_to() {
+    async fn update_reloads_the_session_only_when_it_changes_something() {
         use crate::event::TurnStatus;
         use crate::runtime::RuntimeOutput;
         use crate::store::ApprovalMode;
@@ -1465,13 +1469,14 @@ mod memory_tests {
         }));
         let sup = Supervisor::new(Hub::new(store.clone()), runtimes, None);
         let app = App::new(sup.clone(), PathBuf::from("/unused"));
+        let cwd = std::env::temp_dir().display().to_string();
         let id = store
             .agent_create(NewAgent {
                 name: "Forge".into(),
                 role: String::new(),
                 runtime: RuntimeKind::Claude,
                 model: None,
-                cwd: std::env::temp_dir().display().to_string(),
+                cwd: cwd.clone(),
                 approval_mode: ApprovalMode::Risky,
                 system_prompt: None,
                 effort: None,
@@ -1481,25 +1486,30 @@ mod memory_tests {
             .unwrap()
             .id;
         let has = |line: &str| log.lock().unwrap().iter().any(|l| l == line);
+        let shutdowns = || log.lock().unwrap().iter().filter(|l| *l == "shutdown").count();
         let settle = || tokio::time::sleep(Duration::from_millis(50));
 
         sup.send(&id, Inbound::user("go")).await.unwrap();
         settle().await;
         assert!(has("send go"));
 
-        // a new approval mode during a turn leaves the session running
-        call(&app, "agents.update", json!({ "id": id, "approval_mode": "always" }))
-            .await
-            .unwrap();
+        // the form sent back with nothing changed, and an approval mode change, reload nothing
+        call(
+            &app,
+            "agents.update",
+            json!({ "id": id, "name": "Forge", "role": "", "model": null, "cwd": cwd, "approval_mode": "never" }),
+        )
+        .await
+        .unwrap();
         settle().await;
-        assert!(!has("shutdown"));
+        assert_eq!(shutdowns(), 0);
 
-        // a model change closes the session once the turn has ended
-        call(&app, "agents.update", json!({ "id": id, "model": "sonnet" }))
+        // a rename during the turn waits for the turn to end
+        call(&app, "agents.update", json!({ "id": id, "name": "Scout" }))
             .await
             .unwrap();
         settle().await;
-        assert!(!has("shutdown"), "the turn is not cut");
+        assert_eq!(shutdowns(), 0, "the turn is not cut");
         let tx = out.lock().unwrap().get(&id).cloned().unwrap();
         tx.send(RuntimeOutput::Event(EventBody::TurnCompleted {
             turn_id: String::new(),
@@ -1510,12 +1520,44 @@ mod memory_tests {
         .await
         .unwrap();
         for _ in 0..300 {
-            if has("shutdown") {
+            if shutdowns() == 1 {
                 break;
             }
             settle().await;
         }
-        assert!(has("shutdown"));
+        assert_eq!(shutdowns(), 1);
+
+        // the same rename again is no change: nothing to reload
+        call(&app, "agents.update", json!({ "id": id, "name": "Scout" }))
+            .await
+            .unwrap();
+        settle().await;
+        assert_eq!(shutdowns(), 1);
+    }
+
+    #[tokio::test]
+    async fn a_folder_change_starts_a_new_chapter_even_without_a_running_session() {
+        let (app, dir) = app_in_tempdir();
+        let agent = call(&app, "agents.create", new_agent("Scout", "claude")).await.unwrap();
+        let id = agent["id"].as_str().unwrap().to_string();
+        app.sup.hub().store.agent_set_session(&id, Some("sess-1")).unwrap();
+
+        let other = dir.path().join("other");
+        std::fs::create_dir_all(&other).unwrap();
+        call(
+            &app,
+            "agents.update",
+            json!({ "id": id, "cwd": other.display().to_string() }),
+        )
+        .await
+        .unwrap();
+
+        let stored = app.sup.hub().store.agent_get(&id).unwrap().unwrap();
+        assert_eq!(stored.chapter, 2);
+        assert_eq!(
+            stored.runtime_session_id, None,
+            "the new folder does not resume the old session"
+        );
     }
 
     async fn call(app: &App, method: &str, p: Value) -> RpcResult {

@@ -81,6 +81,10 @@ pub enum RuntimeOutput {
     },
     /// The CLI's own session/thread id, to store for resume.
     SessionId(String),
+    /// Context size the chapter holds after this turn, when the CLI reports it
+    /// separately from the turn's total usage (Claude: the last API call of a
+    /// multi-step turn). Without it, the turn's usage is the context size.
+    ContextSize(u64),
     /// The child process ended; no more output will follow.
     Exited {
         code: Option<i32>,

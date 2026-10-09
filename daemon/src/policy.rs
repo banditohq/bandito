@@ -165,24 +165,27 @@ fn is_assignment(word: &str) -> bool {
         && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
-/// True if `path` lies outside every root (see [`is_outside`]). Inside any one
-/// root is enough to be inside.
+/// True if `path` lies outside every root. A relative path is taken relative to
+/// the first root (the agent's working folder, where the CLI runs). Inside any
+/// one root is enough to be inside. No roots: everything is outside.
 pub fn is_outside_all(path: &str, roots: &[&str]) -> bool {
-    roots.iter().all(|root| is_outside(path, root))
+    let Some(&cwd) = roots.first() else {
+        return true;
+    };
+    let full = if path.starts_with('/') {
+        path.to_string()
+    } else {
+        format!("{cwd}/{path}")
+    };
+    let target = normalize(&full);
+    !roots.iter().any(|root| target.starts_with(&normalize(root)))
 }
 
 /// True if `path` (absolute, or relative to `cwd`) lands outside `cwd` after
 /// lexical normalization of `.` and `..` (no filesystem access). `cwd`
 /// itself and anything under it are inside. `/a/bc` is NOT inside `/a/b`.
 pub fn is_outside(path: &str, cwd: &str) -> bool {
-    let full = if path.starts_with('/') {
-        path.to_string()
-    } else {
-        format!("{cwd}/{path}")
-    };
-    let base = normalize(cwd);
-    let target = normalize(&full);
-    !target.starts_with(&base)
+    is_outside_all(path, &[cwd])
 }
 
 /// Lexical path components: empty and `.` are dropped, `..` pops the last
@@ -446,6 +449,25 @@ mod tests {
     #[test]
     fn risky_write_outside_every_root_asks_naming_the_first() {
         let r = req(None, "Edit /etc/hosts", &["/etc/hosts"]);
+        assert_eq!(
+            evaluate(ApprovalMode::Risky, &r, &[CWD, HOME], &[]),
+            Verdict::Ask("writes outside /home/u/app".into())
+        );
+    }
+
+    #[test]
+    fn risky_relative_path_into_home_is_allowed() {
+        // From /home/u/app, `../bandito/...` and `../../u/bandito/...` both land in the home folder.
+        let r = req(None, "Write notes", &["../bandito/agents/forge/notes/x.md"]);
+        assert_eq!(evaluate(ApprovalMode::Risky, &r, &[CWD, HOME], &[]), Verdict::Allow);
+        let r = req(None, "Write notes", &["../../u/bandito/agents/forge/x"]);
+        assert_eq!(evaluate(ApprovalMode::Risky, &r, &[CWD, HOME], &[]), Verdict::Allow);
+    }
+
+    #[test]
+    fn risky_relative_path_past_the_home_root_asks() {
+        // `../../../bandito/...` climbs to `/`, so it lands in /bandito, outside both roots.
+        let r = req(None, "Write", &["../../../bandito/agents/forge/x"]);
         assert_eq!(
             evaluate(ApprovalMode::Risky, &r, &[CWD, HOME], &[]),
             Verdict::Ask("writes outside /home/u/app".into())

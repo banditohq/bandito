@@ -103,7 +103,11 @@ enum Cmd {
     },
     Stop(oneshot::Sender<()>),
     /// New settings for the next session: close the session now, or after the running turn.
-    Reload(oneshot::Sender<()>),
+    /// `new_chapter`: the folder changed, so the next session starts a new chapter.
+    Reload {
+        new_chapter: bool,
+        reply: oneshot::Sender<()>,
+    },
     /// Checks the per-turn and hop limits and, if they pass, counts one crew
     /// message against the running turn. Done in the actor so the check and the
     /// count are one step.
@@ -172,6 +176,51 @@ fn context_due(agent: &Agent, context_tokens: u64) -> bool {
     agent.memory_mode == MemoryMode::Smart && over_budget(context_tokens, agent.context_budget)
 }
 
+/// Why the chapter should close before the next message, if it should: its
+/// context is over budget, or a new memory day began while it was open. Read
+/// from the store, so it holds after a daemon restart too.
+fn chapter_due(agent: &Agent, now: DateTime<Local>) -> Option<&'static str> {
+    if context_due(agent, agent.context_tokens) {
+        return Some("context");
+    }
+    // A new day closes only a chapter that has something in it.
+    let has_chapter = agent.runtime_session_id.is_some() || agent.context_tokens > 0;
+    (has_chapter && new_day_due(agent, now)).then_some("new day")
+}
+
+/// The reason shown when a chapter closes without its wrap-up turn.
+fn unsaved(reason: &'static str) -> &'static str {
+    match reason {
+        "context" => "context, memory not saved",
+        _ => "new day, memory not saved",
+    }
+}
+
+/// Start the agent's next chapter in the store and tell the clients. The stored
+/// session id is dropped, so the next session cannot resume the old chapter.
+fn next_chapter(hub: &Hub, agent_id: &str, reason: &'static str) {
+    let context_tokens = match hub.store.agent_get(agent_id) {
+        Ok(agent) => agent.map_or(0, |a| a.context_tokens),
+        Err(e) => {
+            tracing::warn!(agent = agent_id, "read context size: {e:#}");
+            0
+        }
+    };
+    match hub.store.agent_next_chapter(agent_id) {
+        Ok(chapter) => {
+            hub.emit(
+                agent_id,
+                EventBody::SessionRotated {
+                    chapter,
+                    reason: reason.to_string(),
+                    context_tokens,
+                },
+            );
+        }
+        Err(e) => tracing::error!(agent = agent_id, "start next chapter: {e:#}"),
+    }
+}
+
 impl Supervisor {
     pub fn new(hub: Hub, runtimes: Runtimes, mcp: Option<(PathBuf, Vec<String>)>) -> Arc<Self> {
         Arc::new(Self {
@@ -229,8 +278,9 @@ impl Supervisor {
             turn_chain: None,
             turn_crew_sends: 0,
             wrap_up: None,
-            rotate_due: None,
+            turn_context: None,
             reload_after_turn: false,
+            new_chapter_after_turn: false,
             queue: VecDeque::new(),
             pending: HashMap::new(),
             status: None,
@@ -361,19 +411,26 @@ impl Supervisor {
     /// Apply changed settings to the agent's next session without interrupting a
     /// running turn: the session is closed now, or when the running turn ends.
     /// The chapter goes on (the runtime session id is kept), so the next message
-    /// resumes it with the new settings. Does nothing for an agent with no actor.
-    pub async fn reload(&self, agent_id: &str) {
+    /// resumes it with the new settings. With `new_chapter` (the folder changed)
+    /// the next session starts a new chapter instead: CLI sessions are tied to
+    /// their folder. An agent with no actor has no session to close; a folder
+    /// change still starts its next chapter in the store.
+    pub async fn reload(&self, agent_id: &str, new_chapter: bool) {
         let tx = self
             .actors
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .get(agent_id)
             .cloned();
-        if let Some(tx) = tx.filter(|tx| !tx.is_closed()) {
-            let (reply, rx) = oneshot::channel();
-            if tx.send(Cmd::Reload(reply)).await.is_ok() {
-                let _ = rx.await;
+        match tx.filter(|tx| !tx.is_closed()) {
+            Some(tx) => {
+                let (reply, rx) = oneshot::channel();
+                if tx.send(Cmd::Reload { new_chapter, reply }).await.is_ok() {
+                    let _ = rx.await;
+                }
             }
+            None if new_chapter => next_chapter(&self.hub, agent_id, "folder changed"),
+            None => {}
         }
     }
 
@@ -411,11 +468,12 @@ struct Actor {
     /// Set while the wrap-up turn of a chapter that is closing runs: the reason
     /// the chapter closes ("context" or "new day"). Messages wait in the queue meanwhile.
     wrap_up: Option<&'static str>,
-    /// Set after a turn that left the chapter over budget: the chapter closes
-    /// when the next message comes ("context"), so nothing runs while the agent is idle.
-    rotate_due: Option<&'static str>,
+    /// Context size the CLI reported for the running turn (see `RuntimeOutput::ContextSize`).
+    turn_context: Option<u64>,
     /// Settings changed while a session was running: close that session once it is idle.
     reload_after_turn: bool,
+    /// The folder changed while a session was running: the next session starts a new chapter.
+    new_chapter_after_turn: bool,
     queue: VecDeque<Inbound>,
     pending: HashMap<String, PendingApproval>,
     status: Option<AgentStatus>,
@@ -482,9 +540,10 @@ impl Actor {
             Cmd::ReserveCrewSend(reply) => {
                 let _ = reply.send(self.reserve_crew_send());
             }
-            Cmd::Reload(reply) => {
+            Cmd::Reload { new_chapter, reply } => {
                 self.reload_after_turn = true;
-                self.release_if_idle().await;
+                self.new_chapter_after_turn |= new_chapter;
+                self.apply_reload_if_idle().await;
                 let _ = reply.send(());
             }
             Cmd::Stop(_) => unreachable!("handled in run"),
@@ -613,36 +672,13 @@ impl Actor {
         if self.queue.is_empty() {
             return Ok(());
         }
-        // A chapter that outgrew its budget closes now, before the message goes out.
-        if let Some(reason) = self.rotate_due.take() {
-            if self.session.is_some() {
-                if self.begin_rotation(reason).await {
-                    return Ok(());
-                }
-            } else {
-                let context_tokens = self
-                    .hub
-                    .store
-                    .agent_get(&self.id)
-                    .ok()
-                    .flatten()
-                    .map_or(0, |a| a.context_tokens);
-                self.start_chapter_without_session(reason, context_tokens);
-            }
-        }
-        // A new day opens a new chapter before the message goes out.
+        // A chapter that is over budget, or a new memory day, closes before the message goes out.
         // (If the agent can't be loaded, `ensure_session` reports it below.)
         if let Ok(agent) = self.agent()
-            && new_day_due(&agent, Local::now())
+            && let Some(reason) = chapter_due(&agent, Local::now())
+            && self.begin_rotation(reason, &agent).await
         {
-            if self.session.is_some() {
-                if self.begin_rotation("new day").await {
-                    return Ok(());
-                }
-            } else if agent.runtime_session_id.is_some() || agent.context_tokens > 0 {
-                // No session to close, but a stored session id would resume the old chapter.
-                self.start_chapter_without_session("new day", agent.context_tokens);
-            }
+            return Ok(());
         }
         let Some(msg) = self.queue.pop_front() else {
             return Ok(());
@@ -650,63 +686,33 @@ impl Actor {
         self.start_turn(msg).await
     }
 
-    /// Start the next chapter when no CLI session is alive to close. The stored
-    /// session id is dropped by the store, so the new session cannot resume the old chapter.
-    fn start_chapter_without_session(&mut self, reason: &'static str, context_tokens: u64) {
-        self.reload_after_turn = false;
-        match self.hub.store.agent_next_chapter(&self.id) {
-            Ok(chapter) => {
-                self.hub.emit(
-                    &self.id,
-                    EventBody::SessionRotated {
-                        chapter,
-                        reason: reason.into(),
-                        context_tokens,
-                    },
-                );
-            }
-            Err(e) => tracing::warn!(agent = self.id, "start next chapter: {e:#}"),
-        }
-    }
-
-    /// Close the CLI session now unless something is running. A pending chapter
-    /// rotation or a running turn leaves `reload_after_turn` set; whoever ends
-    /// that work closes the session.
-    async fn release_if_idle(&mut self) {
-        if self.turn.is_some() || self.wrap_up.is_some() || self.rotate_due.is_some() {
-            return;
-        }
-        self.release_session().await;
-    }
-
-    /// Shut the CLI session down and forget it, but keep the chapter: the next
-    /// session resumes the same runtime session with the current settings.
-    async fn release_session(&mut self) {
-        if let Some(s) = self.session.take() {
-            s.shutdown().await;
-        }
-        self.output = None;
-        self.reload_after_turn = false;
+    /// True when the next message would first close the chapter.
+    fn chapter_pending(&self) -> bool {
+        self.agent()
+            .is_ok_and(|agent| chapter_due(&agent, Local::now()).is_some())
     }
 
     /// Close the running chapter before the next message. With a home folder the
-    /// agent first gets a wrap-up turn. Returns `true` when that turn is running;
-    /// its end then finishes the rotation. Returns `false` when the chapter is
-    /// already closed or there was nothing to close.
-    async fn begin_rotation(&mut self, reason: &'static str) -> bool {
-        if self.session.is_none() {
-            return false;
-        }
-        let has_home = match self.agent() {
-            Ok(agent) => agent.home_dir.is_some(),
-            Err(e) => {
-                tracing::warn!(agent = self.id, "rotation: {e:#}");
-                false
-            }
-        };
-        if !has_home {
+    /// agent first gets a wrap-up turn; if its session is gone, the session is
+    /// resumed for that turn. When that is impossible, the chapter closes without
+    /// a wrap-up (logged, and shown in the thread). Returns `true` when the wrap-up
+    /// turn is running; its end then finishes the rotation.
+    async fn begin_rotation(&mut self, reason: &'static str, agent: &Agent) -> bool {
+        if agent.home_dir.is_none() {
             self.rotate(reason).await;
             return false;
+        }
+        if self.session.is_none() {
+            if agent.runtime_session_id.is_none() {
+                tracing::warn!(agent = self.id, "chapter closes without a wrap-up: nothing to resume");
+                self.rotate(unsaved(reason)).await;
+                return false;
+            }
+            if let Err(e) = self.ensure_session().await {
+                tracing::warn!(agent = self.id, "resume for the wrap-up failed: {e:#}");
+                self.rotate(unsaved(reason)).await;
+                return false;
+            }
         }
         self.wrap_up = Some(reason);
         let msg = Inbound {
@@ -727,51 +733,60 @@ impl Actor {
         }
     }
 
-    /// Drop the CLI session and start the next chapter. Tells the clients.
-    async fn rotate(&mut self, reason: &'static str) {
-        let context_tokens = match self.hub.store.agent_get(&self.id) {
-            Ok(agent) => agent.map_or(0, |a| a.context_tokens),
-            Err(e) => {
-                tracing::warn!(agent = self.id, "read context size: {e:#}");
-                0
-            }
-        };
+    /// Apply a pending reload now, unless a turn is running or a chapter is about to
+    /// close (that close shuts the session down anyway).
+    async fn apply_reload_if_idle(&mut self) {
+        if self.turn.is_some() || self.wrap_up.is_some() || self.chapter_pending() {
+            return;
+        }
+        self.apply_reload().await;
+    }
+
+    /// Apply changed settings: the session is closed, and the next one starts with
+    /// them. A folder change also starts a new chapter.
+    async fn apply_reload(&mut self) {
+        let new_chapter = self.new_chapter_after_turn;
         self.release_session().await;
-        match self.hub.store.agent_next_chapter(&self.id) {
-            Ok(chapter) => {
-                self.hub.emit(
-                    &self.id,
-                    EventBody::SessionRotated {
-                        chapter,
-                        reason: reason.to_string(),
-                        context_tokens,
-                    },
-                );
-            }
-            Err(e) => tracing::error!(agent = self.id, "start next chapter: {e:#}"),
+        if new_chapter {
+            next_chapter(&self.hub, &self.id, "folder changed");
         }
     }
 
-    /// Record a finished turn's context size and time. Without usage the
-    /// context size stays as it was. Returns the context size, if it could be recorded.
-    fn note_turn(&self, usage: Option<Usage>) -> Option<u64> {
+    /// Shut the CLI session down and forget it, keeping the chapter: the next session
+    /// resumes the same runtime session with the current settings. Approvals still
+    /// waiting on the closed session are denied.
+    async fn release_session(&mut self) {
+        if let Some(s) = self.session.take() {
+            s.shutdown().await;
+        }
+        self.output = None;
+        self.reload_after_turn = false;
+        self.new_chapter_after_turn = false;
+        self.expire_pending();
+    }
+
+    /// Drop the CLI session and start the next chapter. Tells the clients.
+    async fn rotate(&mut self, reason: &'static str) {
+        self.release_session().await;
+        next_chapter(&self.hub, &self.id, reason);
+    }
+
+    /// Record a finished turn's context size and time. `context` is the size the CLI
+    /// reported; without it the turn's usage is the size. With neither, the size stays as it was.
+    fn note_turn(&self, context: Option<u64>, usage: Option<Usage>) {
         let store = &self.hub.store;
-        let tokens = match usage {
-            Some(u) => u.input_tokens.saturating_add(u.output_tokens),
+        let tokens = match context.or_else(|| usage.map(|u| u.input_tokens.saturating_add(u.output_tokens))) {
+            Some(tokens) => tokens,
             None => match store.agent_get(&self.id) {
                 Ok(agent) => agent.map_or(0, |a| a.context_tokens),
                 Err(e) => {
                     tracing::warn!(agent = self.id, "read context size: {e:#}");
-                    return None;
+                    return;
                 }
             },
         };
-        match store.agent_note_turn(&self.id, tokens, now_ms()) {
-            Ok(()) => Some(tokens),
-            Err(e) => {
-                tracing::warn!(agent = self.id, "note turn: {e:#}");
-                None
-            }
+        if let Err(e) = store.agent_note_turn(&self.id, tokens, now_ms()) {
+            tracing::warn!(agent = self.id, "note turn: {e:#}");
         }
     }
 
@@ -793,6 +808,7 @@ impl Actor {
         self.turn_hops = msg.hops;
         self.turn_chain = Some(msg.chain.clone().unwrap_or_else(new_id));
         self.turn_crew_sends = 0;
+        self.turn_context = None;
         self.hub.emit(
             &self.id,
             EventBody::TurnStarted {
@@ -855,29 +871,24 @@ impl Actor {
                         cost_usd,
                     },
                 );
-                let context = self.note_turn(usage);
+                let context = self.turn_context.take();
+                self.note_turn(context, usage);
                 // The wrap-up turn ended, however it ended: close the chapter now.
                 if let Some(reason) = self.wrap_up.take() {
                     self.rotate(reason).await;
                     self.after_turn().await;
                     return;
                 }
-                if let Some(tokens) = context
-                    && let Ok(agent) = self.agent()
-                    && context_due(&agent, tokens)
-                {
-                    // Closed lazily: the next message runs the wrap-up first (see `pump`).
-                    self.rotate_due = Some("context");
-                }
-                // A rotation still pending closes the session itself, so only a plain reload happens here.
-                if self.reload_after_turn && self.rotate_due.is_none() {
-                    self.release_session().await;
+                // A chapter over budget closes when the next message comes (see `pump`).
+                if self.reload_after_turn && !self.chapter_pending() {
+                    self.apply_reload().await;
                 }
                 self.after_turn().await;
             }
             RuntimeOutput::Event(body) => {
                 self.hub.emit(&self.id, body);
             }
+            RuntimeOutput::ContextSize(tokens) => self.turn_context = Some(tokens),
             RuntimeOutput::ApprovalCancelled { key } => self.cancel_approval(&key),
             RuntimeOutput::SessionId(sid) => {
                 if let Err(e) = self.hub.store.agent_set_session(&self.id, Some(&sid)) {
@@ -891,8 +902,6 @@ impl Actor {
             }
             RuntimeOutput::Exited { code, stderr_tail } => {
                 self.session = None;
-                // The next session starts with the current settings anyway.
-                self.reload_after_turn = false;
                 let failed = code != Some(0);
                 let detail = if failed {
                     let tail: Vec<&str> = stderr_tail.lines().rev().take(5).collect();
@@ -920,6 +929,11 @@ impl Actor {
                     self.rotate(reason).await;
                     self.after_turn().await;
                     return;
+                }
+                // The next session starts with the current settings anyway; a folder change still starts a chapter.
+                self.reload_after_turn = false;
+                if std::mem::take(&mut self.new_chapter_after_turn) {
+                    next_chapter(&self.hub, &self.id, "folder changed");
                 }
                 if failed {
                     self.set_status(AgentStatus::Error, detail);
@@ -1169,17 +1183,6 @@ mod tests {
 
     fn world(mode: ApprovalMode) -> World {
         let store = Arc::new(Store::open_in_memory().unwrap());
-        let hub = Hub::new(store.clone());
-        let events = hub.subscribe();
-        let log: Log = Arc::default();
-        let out: Outs = Arc::default();
-        let spawns = Arc::new(Mutex::new(Vec::new()));
-        let mut rts = Runtimes::default();
-        rts.insert(Arc::new(MockRuntime {
-            log: log.clone(),
-            out: out.clone(),
-            spawns: spawns.clone(),
-        }));
         let agent = store
             .agent_create(NewAgent {
                 name: "Forge".into(),
@@ -1194,6 +1197,23 @@ mod tests {
                 context_budget: None,
             })
             .unwrap();
+        attach(store, agent.id)
+    }
+
+    /// A world over an existing store and agent, with a fresh supervisor and a mock runtime
+    /// (as after a daemon restart).
+    fn attach(store: Arc<Store>, agent: String) -> World {
+        let hub = Hub::new(store.clone());
+        let events = hub.subscribe();
+        let log: Log = Arc::default();
+        let out: Outs = Arc::default();
+        let spawns = Arc::new(Mutex::new(Vec::new()));
+        let mut rts = Runtimes::default();
+        rts.insert(Arc::new(MockRuntime {
+            log: log.clone(),
+            out: out.clone(),
+            spawns: spawns.clone(),
+        }));
         World {
             sup: Supervisor::new(hub, rts, None),
             store,
@@ -1201,7 +1221,7 @@ mod tests {
             out,
             spawns,
             events,
-            agent: agent.id,
+            agent,
         }
     }
 
@@ -1952,7 +1972,7 @@ mod tests {
         w.push(done()).await;
         w.wait(is_status(AgentStatus::Idle)).await;
 
-        w.sup.reload(&w.agent).await;
+        w.sup.reload(&w.agent, false).await;
         assert!(w.log.lock().unwrap().iter().any(|l| l == "shutdown"));
         let a = w.store.agent_get(&w.agent).unwrap().unwrap();
         assert_eq!(a.runtime_session_id.as_deref(), Some("sess-1"), "the chapter goes on");
@@ -1971,8 +1991,8 @@ mod tests {
         w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
         w.wait_log("send go").await;
         w.push(RuntimeOutput::SessionId("sess-1".into())).await;
-        w.sup.reload(&w.agent).await;
-        w.sup.reload(&w.agent).await;
+        w.sup.reload(&w.agent, false).await;
+        w.sup.reload(&w.agent, false).await;
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert!(
             !w.log.lock().unwrap().iter().any(|l| l == "shutdown"),
@@ -1998,7 +2018,7 @@ mod tests {
         w.wait(is_status(AgentStatus::Idle)).await;
 
         // over budget and idle: the wrap-up still runs before the next message
-        w.sup.reload(&w.agent).await;
+        w.sup.reload(&w.agent, false).await;
         assert!(!w.log.lock().unwrap().iter().any(|l| l == "shutdown"));
         w.sup.send(&w.agent, Inbound::user("next")).await.unwrap();
         w.wait_log(&format!("send {WRAP_UP}")).await;
@@ -2012,8 +2032,8 @@ mod tests {
     #[tokio::test]
     async fn reload_without_an_actor_does_nothing() {
         let w = world(ApprovalMode::Risky);
-        w.sup.reload(&w.agent).await;
-        w.sup.reload("nobody").await;
+        w.sup.reload(&w.agent, false).await;
+        w.sup.reload("nobody", false).await;
         assert!(w.spawns.lock().unwrap().is_empty(), "no session was started");
         assert!(w.log.lock().unwrap().is_empty());
     }
@@ -2052,6 +2072,151 @@ mod tests {
         assert_eq!(w.store.agent_get(&w.agent).unwrap().unwrap().chapter, 2);
         // the thread still shows where the new chapter began
         assert!(w.kinds().iter().any(|k| k == "session.rotated"));
+    }
+
+    #[tokio::test]
+    async fn after_a_restart_an_over_budget_chapter_still_wraps_up() {
+        let w = world(ApprovalMode::Risky);
+        w.store.agent_set_home(&w.agent, HOME).unwrap();
+        w.store.agent_set_session(&w.agent, Some("sess-1")).unwrap();
+        w.store.agent_note_turn(&w.agent, 130_000, now_ms()).unwrap();
+
+        // the daemon restarts: a new supervisor over the same store
+        let mut w = attach(w.store.clone(), w.agent.clone());
+        w.sup.send(&w.agent, Inbound::user("first")).await.unwrap();
+        w.wait_log(&format!("send {WRAP_UP}")).await;
+        assert_eq!(w.spawns.lock().unwrap()[0].resume.as_deref(), Some("sess-1"));
+        w.push(done()).await;
+        let (chapter, reason, context_tokens) = rotated(&mut w).await;
+        assert_eq!((chapter, reason.as_str(), context_tokens), (2, "context", 130_000));
+        w.wait_log("send first").await;
+        let spawns = w.spawns.lock().unwrap();
+        assert_eq!(spawns.len(), 2);
+        assert_eq!(spawns[1].resume, None);
+    }
+
+    #[tokio::test]
+    async fn an_idle_session_that_died_is_resumed_for_the_wrap_up() {
+        let mut w = world(ApprovalMode::Risky);
+        w.store.agent_set_home(&w.agent, HOME).unwrap();
+        w.sup.send(&w.agent, Inbound::user("work")).await.unwrap();
+        w.wait_log("send work").await;
+        w.push(RuntimeOutput::SessionId("sess-1".into())).await;
+        w.push(done_with_usage(130_000, 0)).await;
+        w.wait(is_status(AgentStatus::Idle)).await;
+        // the CLI process exits while the agent is idle
+        w.push(RuntimeOutput::Exited {
+            code: Some(0),
+            stderr_tail: String::new(),
+        })
+        .await;
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        w.sup.send(&w.agent, Inbound::user("next")).await.unwrap();
+        w.wait_log(&format!("send {WRAP_UP}")).await;
+        assert_eq!(w.spawns.lock().unwrap()[1].resume.as_deref(), Some("sess-1"));
+        w.push(done()).await;
+        let (chapter, reason, _) = rotated(&mut w).await;
+        assert_eq!((chapter, reason.as_str()), (2, "context"));
+        w.wait_log("send next").await;
+        assert_eq!(w.spawns.lock().unwrap().len(), 3);
+    }
+
+    #[tokio::test]
+    async fn a_chapter_whose_session_cannot_resume_closes_unsaved() {
+        let w = world(ApprovalMode::Risky);
+        w.store.agent_set_home(&w.agent, HOME).unwrap();
+        w.store.agent_set_session(&w.agent, Some("sess-1")).unwrap();
+        w.store.agent_note_turn(&w.agent, 130_000, now_ms()).unwrap();
+        // no runtime on this server: the resume fails
+        let sup = Supervisor::new(Hub::new(w.store.clone()), Runtimes::default(), None);
+        assert!(sup.send(&w.agent, Inbound::user("first")).await.is_err());
+
+        let rotated = w
+            .store
+            .events_since(0, 1000, None)
+            .unwrap()
+            .into_iter()
+            .find_map(|e| match e.body {
+                EventBody::SessionRotated { chapter, reason, .. } => Some((chapter, reason)),
+                _ => None,
+            });
+        assert_eq!(rotated, Some((2, "context, memory not saved".to_string())));
+        let a = w.store.agent_get(&w.agent).unwrap().unwrap();
+        assert_eq!(
+            a.runtime_session_id, None,
+            "the new chapter does not resume the old one"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_reported_context_size_decides_the_chapter_not_the_turn_total() {
+        let mut w = world(ApprovalMode::Risky);
+        w.sup.send(&w.agent, Inbound::user("work")).await.unwrap();
+        w.wait_log("send work").await;
+        // the turn's total is over budget, but the context the chapter holds is small
+        w.push(RuntimeOutput::ContextSize(20_000)).await;
+        w.push(done_with_usage(400_000, 100_000)).await;
+        w.wait(is_status(AgentStatus::Idle)).await;
+        w.sup.send(&w.agent, Inbound::user("more")).await.unwrap();
+        w.wait_log("send more").await;
+        assert!(!w.kinds().iter().any(|k| k == "session.rotated"));
+        assert_eq!(w.spawns.lock().unwrap().len(), 1);
+        assert_eq!(w.store.agent_get(&w.agent).unwrap().unwrap().context_tokens, 20_000);
+    }
+
+    #[tokio::test]
+    async fn a_folder_change_starts_a_new_chapter_without_resuming() {
+        let mut w = world(ApprovalMode::Risky);
+        w.sup.send(&w.agent, Inbound::user("first")).await.unwrap();
+        w.wait_log("send first").await;
+        w.push(RuntimeOutput::SessionId("sess-1".into())).await;
+        w.push(done()).await;
+        w.wait(is_status(AgentStatus::Idle)).await;
+
+        w.sup.reload(&w.agent, true).await;
+        assert!(w.log.lock().unwrap().iter().any(|l| l == "shutdown"));
+        let (chapter, reason, _) = rotated(&mut w).await;
+        assert_eq!((chapter, reason.as_str()), (2, "folder changed"));
+        let a = w.store.agent_get(&w.agent).unwrap().unwrap();
+        assert_eq!(a.runtime_session_id, None);
+
+        w.sup.send(&w.agent, Inbound::user("second")).await.unwrap();
+        w.wait_log("send second").await;
+        assert_eq!(w.spawns.lock().unwrap()[1].resume, None);
+    }
+
+    #[tokio::test]
+    async fn a_folder_change_during_a_turn_starts_the_chapter_after_it() {
+        let mut w = world(ApprovalMode::Risky);
+        w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
+        w.wait_log("send go").await;
+        w.push(RuntimeOutput::SessionId("sess-1".into())).await;
+        w.sup.reload(&w.agent, true).await;
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert!(
+            !w.log.lock().unwrap().iter().any(|l| l == "shutdown"),
+            "the turn is not cut"
+        );
+
+        w.push(done()).await;
+        let (chapter, reason, _) = rotated(&mut w).await;
+        assert_eq!((chapter, reason.as_str()), (2, "folder changed"));
+        w.wait_log("shutdown").await;
+        assert_eq!(w.store.agent_get(&w.agent).unwrap().unwrap().runtime_session_id, None);
+    }
+
+    #[tokio::test]
+    async fn closing_a_session_denies_its_pending_approvals() {
+        let mut w = world(ApprovalMode::Always);
+        w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
+        w.wait_log("send go").await;
+        w.push(approval("k1", "ls")).await;
+        w.wait(|b| matches!(b, EventBody::ApprovalRequested { .. })).await;
+        w.sup.reload(&w.agent, false).await;
+        w.push(done()).await;
+        w.wait_log("shutdown").await;
+        assert!(w.store.approval_list_pending(None).unwrap().is_empty());
     }
 
     #[test]

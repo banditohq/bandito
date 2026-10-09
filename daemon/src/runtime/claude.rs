@@ -465,29 +465,37 @@ fn map_result(msg: &Value, out: &mut Vec<RuntimeOutput>) {
             message: result_text.unwrap_or("Claude Code reported an error").to_string(),
         }));
     }
-    let usage = msg.get("usage").filter(|u| u.is_object()).map(|u| {
-        // The top level sums every API call of a multi-step turn. The context the
-        // chapter holds now is the last call's, so that is what `iterations` gives.
-        let last = u
-            .get("iterations")
-            .and_then(Value::as_array)
-            .and_then(|calls| calls.last())
-            .unwrap_or(u);
-        let n = |key: &str| last.get(key).and_then(Value::as_u64).unwrap_or(0);
-        Usage {
-            input_tokens: n("input_tokens")
-                .saturating_add(n("cache_creation_input_tokens"))
-                .saturating_add(n("cache_read_input_tokens")),
-            output_tokens: n("output_tokens"),
-        }
-    });
+    let usage = msg.get("usage").filter(|u| u.is_object());
+    // The top level sums every API call of a multi-step turn. The context the
+    // chapter holds now is the last call's, reported in `iterations`.
+    let last_call = usage
+        .and_then(|u| u.get("iterations"))
+        .and_then(Value::as_array)
+        .and_then(|calls| calls.last());
+    if let Some(call) = last_call {
+        let call = call_usage(call);
+        out.push(RuntimeOutput::ContextSize(
+            call.input_tokens.saturating_add(call.output_tokens),
+        ));
+    }
     out.push(RuntimeOutput::Event(EventBody::TurnCompleted {
         // The supervisor fills in the turn id.
         turn_id: String::new(),
         status,
-        usage,
+        usage: usage.map(call_usage),
         cost_usd: msg.get("total_cost_usd").and_then(Value::as_f64),
     }));
+}
+
+/// Usage of one API call: input counts cache writes and reads too.
+fn call_usage(u: &Value) -> Usage {
+    let n = |key: &str| u.get(key).and_then(Value::as_u64).unwrap_or(0);
+    Usage {
+        input_tokens: n("input_tokens")
+            .saturating_add(n("cache_creation_input_tokens"))
+            .saturating_add(n("cache_read_input_tokens")),
+        output_tokens: n("output_tokens"),
+    }
 }
 
 /// Each line of `text` with `prefix`, joined by newlines.
@@ -739,7 +747,7 @@ mod tests {
     }
 
     #[test]
-    fn map_result_takes_context_from_the_last_iteration() {
+    fn map_result_reports_the_last_call_as_context_and_the_total_as_usage() {
         // Two API calls in one turn: the first read a big context, the second is the context now held.
         let msg = json!({"type": "result", "subtype": "success", "is_error": false, "result": "done",
             "usage": {
@@ -752,15 +760,18 @@ mod tests {
         });
         assert_eq!(
             map_message(&msg),
-            vec![RuntimeOutput::Event(EventBody::TurnCompleted {
-                turn_id: String::new(),
-                status: TurnStatus::Ok,
-                usage: Some(Usage {
-                    input_tokens: 20_110,
-                    output_tokens: 100,
+            vec![
+                RuntimeOutput::ContextSize(20_210),
+                RuntimeOutput::Event(EventBody::TurnCompleted {
+                    turn_id: String::new(),
+                    status: TurnStatus::Ok,
+                    usage: Some(Usage {
+                        input_tokens: 150_590,
+                        output_tokens: 900,
+                    }),
+                    cost_usd: None,
                 }),
-                cost_usd: None,
-            })]
+            ]
         );
     }
 
