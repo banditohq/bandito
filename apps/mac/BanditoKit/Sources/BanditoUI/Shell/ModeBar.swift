@@ -34,6 +34,7 @@ struct ModeBar: View {
             }
         }
         .padding(3)
+        .tourAnchor(.modes)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color.Bandito.text.opacity(0.04)))

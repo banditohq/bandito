@@ -38,6 +38,7 @@ private struct SidebarTopRow: View {
             }
             .buttonStyle(IconButtonStyle(size: 30, label: L10n.Palette.search))
             .help(L10n.Sidebar.search)
+            .tourAnchor(.quickOpen)
 
             Button {
                 router.sheet = .newAgent

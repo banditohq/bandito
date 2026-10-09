@@ -124,6 +124,7 @@ struct Composer: View {
         }
         .animation(.easeOut(duration: BanditoMotion.fast), value: query != nil)
         .onAppear { focused = true }
+        .tourAnchor(.composer)
         .onChange(of: router.composerFocusAgentID, initial: true) { _, _ in
             guard let agentID = agent?.id else { return }
             if router.takeComposerFocus(agentID: agentID) { focused = true }

@@ -28,6 +28,8 @@ public final class OnboardingModel {
     public private(set) var step: OnboardingStep
     /// Whether the flow is in front of the main window.
     public private(set) var isActive = false
+    /// The tour over the main window runs after the first agent is created. Cleared by `endTour`.
+    public private(set) var tourRequested = false
     /// True while the signed-in device waits for approval from another device.
     public private(set) var needsApproval = false
 
@@ -80,10 +82,22 @@ public final class OnboardingModel {
 
     /// "Show the introduction again" from the Help menu: starts at welcome, whatever the server state.
     public func replay() {
+        tourRequested = false
         defaults.set(false, forKey: Self.doneKey)
         needsApproval = false
         set(.welcome)
         isActive = true
+    }
+
+    /// The first agent exists: the flow is done and the tour starts over the main window.
+    public func finishWithTour() {
+        tourRequested = true
+        finish()
+    }
+
+    /// The tour ended, by "Finish", "Skip", or because there was nothing to point at.
+    public func endTour() {
+        tourRequested = false
     }
 
     /// The flow is over: the done flag is stored and the main window takes over.

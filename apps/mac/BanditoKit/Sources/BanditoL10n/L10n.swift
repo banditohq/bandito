@@ -892,11 +892,28 @@ public enum L10n {
 
         public enum Agent {
             public static var asks: String { L10n.tr("onboarding.agent.asks") }
+            public static var changeFolder: String { L10n.tr("onboarding.agent.changeFolder") }
+            public static var composerText: String { L10n.tr("onboarding.agent.composerText") }
             public static func firstMessage(name: String) -> String { L10n.tr("onboarding.agent.firstMessage", name) }
+            public static var folderLabel: String { L10n.tr("onboarding.agent.folderLabel") }
             public static func hire(name: String) -> String { L10n.tr("onboarding.agent.hire", name) }
+            public static var nameLabel: String { L10n.tr("onboarding.agent.nameLabel") }
+            public static var needSubscription: String { L10n.tr("onboarding.agent.needSubscription") }
+            public static var noServer: String { L10n.tr("onboarding.agent.noServer") }
+            public static var runtimeLabel: String { L10n.tr("onboarding.agent.runtimeLabel") }
             public static var subtitle: String { L10n.tr("onboarding.agent.subtitle") }
             public static var title: String { L10n.tr("onboarding.agent.title") }
+            public static var toSubscriptions: String { L10n.tr("onboarding.agent.toSubscriptions") }
+            public static var workplace: String { L10n.tr("onboarding.agent.workplace") }
+            public static var workplaceShared: String { L10n.tr("onboarding.agent.workplaceShared") }
             public static var yourFirst: String { L10n.tr("onboarding.agent.yourFirst") }
+
+            public enum Err {
+                public static var badCharacters: String { L10n.tr("onboarding.agent.err.badCharacters") }
+                public static var duplicate: String { L10n.tr("onboarding.agent.err.duplicate") }
+                public static var empty: String { L10n.tr("onboarding.agent.err.empty") }
+                public static var tooLong: String { L10n.tr("onboarding.agent.err.tooLong") }
+            }
         }
 
         public enum Demo {
@@ -986,6 +1003,28 @@ public enum L10n {
             public static var intro: String { L10n.tr("onboarding.steps.intro") }
             public static var server: String { L10n.tr("onboarding.steps.server") }
             public static var tour: String { L10n.tr("onboarding.steps.tour") }
+        }
+
+        public enum Subs {
+            public static var continueLabel: String { L10n.tr("onboarding.subs.continueLabel") }
+            public static var done: String { L10n.tr("onboarding.subs.done") }
+            public static var hintClaude: String { L10n.tr("onboarding.subs.hintClaude") }
+            public static var hintCodex: String { L10n.tr("onboarding.subs.hintCodex") }
+            public static var hintGrok: String { L10n.tr("onboarding.subs.hintGrok") }
+            public static func linkHost(host: String) -> String { L10n.tr("onboarding.subs.linkHost", host) }
+            public static func loginTitle(name: String) -> String { L10n.tr("onboarding.subs.loginTitle", name) }
+            public static var needOne: String { L10n.tr("onboarding.subs.needOne") }
+            public static var notInstalled: String { L10n.tr("onboarding.subs.notInstalled") }
+            public static var openLink: String { L10n.tr("onboarding.subs.openLink") }
+            public static var signIn: String { L10n.tr("onboarding.subs.signIn") }
+            public static var skipLater: String { L10n.tr("onboarding.subs.skipLater") }
+            public static var stateChecking: String { L10n.tr("onboarding.subs.stateChecking") }
+            public static var stateNeedsLogin: String { L10n.tr("onboarding.subs.stateNeedsLogin") }
+            public static var stateNotInstalled: String { L10n.tr("onboarding.subs.stateNotInstalled") }
+            public static var stateSignedIn: String { L10n.tr("onboarding.subs.stateSignedIn") }
+            public static var stateUnverified: String { L10n.tr("onboarding.subs.stateUnverified") }
+            public static var subtitle: String { L10n.tr("onboarding.subs.subtitle") }
+            public static var title: String { L10n.tr("onboarding.subs.title") }
         }
 
         public enum Welcome {
@@ -1709,14 +1748,39 @@ public enum L10n {
         public static var hintAria: String { L10n.tr("tour.hintAria") }
         public static var skip: String { L10n.tr("tour.skip") }
 
+        public enum Agents {
+            public static var text: String { L10n.tr("tour.agents.text") }
+            public static var title: String { L10n.tr("tour.agents.title") }
+        }
+
+        public enum Approvals {
+            public static var text: String { L10n.tr("tour.approvals.text") }
+            public static var title: String { L10n.tr("tour.approvals.title") }
+        }
+
         public enum Approve {
             public static var text: String { L10n.tr("tour.approve.text") }
             public static var title: String { L10n.tr("tour.approve.title") }
         }
 
+        public enum Composer {
+            public static var text: String { L10n.tr("tour.composer.text") }
+            public static var title: String { L10n.tr("tour.composer.title") }
+        }
+
         public enum Limits {
             public static var text: String { L10n.tr("tour.limits.text") }
             public static var title: String { L10n.tr("tour.limits.title") }
+        }
+
+        public enum Modes {
+            public static var text: String { L10n.tr("tour.modes.text") }
+            public static var title: String { L10n.tr("tour.modes.title") }
+        }
+
+        public enum QuickOpen {
+            public static var text: String { L10n.tr("tour.quickOpen.text") }
+            public static var title: String { L10n.tr("tour.quickOpen.title") }
         }
 
         public enum Team {

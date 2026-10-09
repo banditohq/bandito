@@ -57,10 +57,8 @@ public struct OnboardingFlow: View {
                 onboarding.advance()
             }
         case .agent:
-            PlaceholderStep(title: L10n.Mode.soonHere) {
-                onboarding.advance()
-            } action: {
-                Text(L10n.Common.next)
+            AgentStep {
+                onboarding.finishWithTour()
             }
         case .done:
             EmptyView()

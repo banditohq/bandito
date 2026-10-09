@@ -9,6 +9,7 @@ struct MainWindow: View {
     @Environment(Router.self) private var router
     @Environment(GestureSettings.self) private var gestures
     @Environment(AccountHub.self) private var hub
+    @Environment(OnboardingModel.self) private var onboarding
     @Environment(\.scenePhase) private var scenePhase
     /// Shown after a rollback from "What changed", with the undo.
     @State private var rollbackNotice: RollbackNotice?
@@ -53,6 +54,11 @@ struct MainWindow: View {
             }
         }
         .banditoAnimation(BanditoMotion.ease, value: rollbackNotice?.id)
+        .overlayPreferenceValue(TourAnchorKey.self) { anchors in
+            if onboarding.tourRequested {
+                TourLayer(anchors: anchors)
+            }
+        }
         .task {
             // Only with a session: without one nobody can ask for pending devices, and no device key is needed yet.
             guard hub.signedIn else { return }
