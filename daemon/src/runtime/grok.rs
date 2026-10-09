@@ -26,6 +26,8 @@ const FIRST_PROMPT_ID: u64 = 3;
 const INPUT_CLIP_BYTES: usize = 4096;
 /// Max bytes of diff text shown in an approval.
 const APPROVAL_DIFF_LIMIT: usize = 8192;
+/// Reported when an Allow has no one-time option, so the action was denied instead.
+const ALLOW_REFUSED: &str = "Grok offered no one-time approval for this action, so it was denied";
 
 pub struct GrokRuntime {
     program: String,
@@ -132,11 +134,17 @@ struct State {
     prompt_ids: HashSet<u64>,
     /// Texts sent before the session was ready. Sent in order once it is.
     queued: Vec<String>,
+    /// The system prompt is already in the session history (loaded), or was sent.
     first_prompt_sent: bool,
     /// Approvals waiting for an answer, by key.
     pending: HashMap<String, PendingApproval>,
     /// Approvals withdrawn by interrupt. Reported on the next message from the CLI.
     cancelled_keys: Vec<String>,
+    /// Texts dropped by interrupt before the session was ready. Each is reported as an
+    /// interrupted turn on the next message from the CLI.
+    interrupted_queued: usize,
+    /// Errors from answers and the handshake. Reported on the next message from the CLI.
+    notices: Vec<String>,
     /// Agent text not yet emitted as a message.
     text_buf: String,
     /// Tool calls that already produced their `ToolResult`.
@@ -197,40 +205,35 @@ impl Session for GrokSession {
         let mut guard = locked(&self.state);
         let st = &mut *guard;
         let Some(session) = st.session_id.clone() else {
+            // Not ready yet: nothing was sent for these texts, so they are dropped here.
+            st.interrupted_queued += std::mem::take(&mut st.queued).len();
             return Ok(());
         };
         if st.prompt_ids.is_empty() {
             return Ok(());
         }
-        self.proc.send(&json!({
+        // Every frame goes out even if one send fails: open approvals must still be
+        // answered. The first error is returned after all of them.
+        let mut result = self.proc.send(&json!({
             "jsonrpc": "2.0",
             "method": "session/cancel",
             "params": {"sessionId": session}
-        }))?;
+        }));
         // ACP: open permission requests must be answered with `cancelled`.
         // The CLI reports them as ApprovalCancelled on its next message.
         for (key, approval) in st.pending.drain() {
-            self.proc.send(&json!({
-                "jsonrpc": "2.0",
-                "id": approval.request_id,
-                "result": {"outcome": {"outcome": "cancelled"}}
-            }))?;
+            let sent = self.proc.send(&cancelled_frame(&approval.request_id));
+            if result.is_ok() {
+                result = sent;
+            }
             st.cancelled_keys.push(key);
         }
-        Ok(())
+        result
     }
 
     async fn resolve(&mut self, key: &str, decision: Decision) -> anyhow::Result<()> {
-        let approval = take_pending(&self.state, key)?;
-        let outcome = match choose_option(&approval.options, decision) {
-            Some(option_id) => json!({"outcome": "selected", "optionId": option_id}),
-            None => json!({"outcome": "cancelled"}),
-        };
-        self.proc.send(&json!({
-            "jsonrpc": "2.0",
-            "id": approval.request_id,
-            "result": {"outcome": outcome}
-        }))
+        let mut guard = locked(&self.state);
+        answer_pending(&mut guard, key, decision, |frame| self.proc.send(frame))
     }
 
     async fn shutdown(self: Box<Self>) {
@@ -239,25 +242,43 @@ impl Session for GrokSession {
     }
 }
 
-/// Remove a pending approval. Errors when it is unknown or already answered.
-fn take_pending(state: &Mutex<State>, key: &str) -> anyhow::Result<PendingApproval> {
-    locked(state)
-        .pending
-        .remove(key)
-        .ok_or_else(|| anyhow!("unknown approval {key}"))
+/// Answer a pending approval through `send`. The record is removed only once the
+/// answer went out, so a failed send leaves the approval answerable.
+fn answer_pending(
+    st: &mut State,
+    key: &str,
+    decision: Decision,
+    send: impl FnOnce(&Value) -> anyhow::Result<()>,
+) -> anyhow::Result<()> {
+    let approval = st.pending.get(key).ok_or_else(|| anyhow!("unknown approval {key}"))?;
+    let outcome = match choose_option(&approval.options, decision) {
+        Some(option_id) => json!({"outcome": "selected", "optionId": option_id}),
+        None => json!({"outcome": "cancelled"}),
+    };
+    let notice = (decision == Decision::Allow && !approval.options.iter().any(|o| o.kind == "allow_once"))
+        .then(|| ALLOW_REFUSED.to_string());
+    send(&json!({
+        "jsonrpc": "2.0",
+        "id": approval.request_id,
+        "result": {"outcome": outcome}
+    }))?;
+    st.pending.remove(key);
+    st.notices.extend(notice);
+    Ok(())
 }
 
-/// The option an answer selects: the first `allow_once` (or `reject_once`),
-/// else the first option of the same family. `None` means cancel.
+/// The option an answer selects. Allow takes a one-time allow, else a one-time reject.
+/// Deny takes a one-time reject, else a permanent one. `allow_always` is never chosen.
+/// `None` means cancel.
 fn choose_option(options: &[ApprovalOption], decision: Decision) -> Option<&str> {
-    let (exact, family) = match decision {
-        Decision::Allow => ("allow_once", "allow"),
-        Decision::Deny => ("reject_once", "reject"),
+    let (preferred, fallback) = match decision {
+        Decision::Allow => ("allow_once", "reject_once"),
+        Decision::Deny => ("reject_once", "reject_always"),
     };
     options
         .iter()
-        .find(|o| o.kind == exact)
-        .or_else(|| options.iter().find(|o| o.kind.starts_with(family)))
+        .find(|o| o.kind == preferred)
+        .or_else(|| options.iter().find(|o| o.kind == fallback))
         .map(|o| o.option_id.as_str())
 }
 
@@ -265,12 +286,15 @@ fn choose_option(options: &[ApprovalOption], decision: Decision) -> Option<&str>
 fn route(msg: &Value, state: &Mutex<State>, handshake: &Handshake, sink: &LineSink) -> Vec<RuntimeOutput> {
     let mut guard = locked(state);
     let st = &mut *guard;
-    // Approvals withdrawn by interrupt come before anything else the CLI says.
+    // Owed before anything else the CLI says: withdrawn approvals, interrupted queued
+    // turns, and errors from answers that could not be reported at the time.
     let mut out: Vec<RuntimeOutput> = st
         .cancelled_keys
         .drain(..)
         .map(|key| RuntimeOutput::ApprovalCancelled { key })
         .collect();
+    out.extend((0..std::mem::take(&mut st.interrupted_queued)).map(|_| turn_completed(TurnStatus::Interrupted)));
+    out.extend(st.notices.drain(..).map(error_event));
     match (msg.get("method").and_then(Value::as_str), msg.get("id")) {
         (Some(method), Some(id)) => incoming_request(id, method, msg, st, sink, &mut out),
         (Some(method), None) => notification(method, msg, st, &mut out),
@@ -329,7 +353,7 @@ fn response(
     } else if id == SESSION_ID {
         session_ready(msg, handshake, st, sink, out);
     } else if st.prompt_ids.remove(&id) {
-        turn_done(msg, st, out);
+        turn_done(msg, st, sink, out);
     }
 }
 
@@ -337,6 +361,12 @@ fn initialized(msg: &Value, handshake: &Handshake, st: &mut State, sink: &LineSi
     if let Some(err) = msg.get("error") {
         fail(st, out, format!("initialize failed: {}", error_message(err)));
         return;
+    }
+    // Checked, not fatal: the handshake goes on.
+    let version = msg.pointer("/result/protocolVersion");
+    if version.and_then(Value::as_u64) != Some(PROTOCOL_VERSION) {
+        let shown = version.map_or_else(|| "missing".to_string(), Value::to_string);
+        out.push(error_event(format!("Unsupported ACP version {shown} from grok")));
     }
     let servers = match &handshake.mcp {
         Some((program, args)) => json!([{
@@ -348,9 +378,15 @@ fn initialized(msg: &Value, handshake: &Handshake, st: &mut State, sink: &LineSi
         None => json!([]),
     };
     let cwd = handshake.cwd.display().to_string();
+    let can_load = msg
+        .pointer("/result/agentCapabilities/loadSession")
+        .and_then(Value::as_bool)
+        == Some(true);
     let request = match &handshake.resume {
-        Some(session) => {
+        Some(session) if can_load => {
             st.loading = true;
+            // The loaded history already holds the system prompt from the first prompt.
+            st.first_prompt_sent = true;
             json!({
                 "jsonrpc": "2.0",
                 "id": SESSION_ID,
@@ -358,25 +394,35 @@ fn initialized(msg: &Value, handshake: &Handshake, st: &mut State, sink: &LineSi
                 "params": {"sessionId": session, "cwd": cwd, "mcpServers": servers}
             })
         }
-        None => json!({
-            "jsonrpc": "2.0",
-            "id": SESSION_ID,
-            "method": "session/new",
-            "params": {"cwd": cwd, "mcpServers": servers}
-        }),
+        Some(_) => {
+            out.push(error_event("grok can't resume sessions; starting a new one".into()));
+            new_session_request(&cwd, &servers)
+        }
+        None => new_session_request(&cwd, &servers),
     };
     reply(sink, &request, out);
 }
 
+fn new_session_request(cwd: &str, servers: &Value) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": SESSION_ID,
+        "method": "session/new",
+        "params": {"cwd": cwd, "mcpServers": servers}
+    })
+}
+
 fn session_ready(msg: &Value, handshake: &Handshake, st: &mut State, sink: &LineSink, out: &mut Vec<RuntimeOutput>) {
+    // Whether this answers a session/load we sent (not a fallback to session/new).
+    let loading = std::mem::take(&mut st.loading);
     if let Some(err) = msg.get("error") {
         fail(st, out, error_message(err));
         return;
     }
     // session/load may answer with a null result: the id is the one we asked for.
-    let session = match &handshake.resume {
-        Some(id) => id.clone(),
-        None => match msg.pointer("/result/sessionId").and_then(Value::as_str) {
+    let session = match (loading, &handshake.resume) {
+        (true, Some(id)) => id.clone(),
+        _ => match msg.pointer("/result/sessionId").and_then(Value::as_str) {
             Some(id) => id.to_string(),
             None => {
                 fail(st, out, "session/new returned no sessionId".into());
@@ -384,7 +430,6 @@ fn session_ready(msg: &Value, handshake: &Handshake, st: &mut State, sink: &Line
             }
         },
     };
-    st.loading = false;
     st.session_id = Some(session.clone());
     out.push(RuntimeOutput::SessionId(session.clone()));
     for text in std::mem::take(&mut st.queued) {
@@ -403,9 +448,17 @@ fn fail(st: &mut State, out: &mut Vec<RuntimeOutput>, message: String) {
     }
 }
 
-/// A `session/prompt` answer: the turn is over.
-fn turn_done(msg: &Value, st: &mut State, out: &mut Vec<RuntimeOutput>) {
+/// A `session/prompt` answer: the turn is over. Approvals still open are withdrawn first.
+fn turn_done(msg: &Value, st: &mut State, sink: &LineSink, out: &mut Vec<RuntimeOutput>) {
     out.extend(flush_text(st));
+    let mut open: Vec<String> = st.pending.keys().cloned().collect();
+    open.sort_unstable();
+    for key in open {
+        if let Some(approval) = st.pending.remove(&key) {
+            reply(sink, &cancelled_frame(&approval.request_id), out);
+            out.push(RuntimeOutput::ApprovalCancelled { key });
+        }
+    }
     let status = match msg.get("error") {
         Some(err) => {
             let message = str_at(err, "message").unwrap_or("unknown error");
@@ -437,7 +490,7 @@ fn session_update(update: &Value, st: &mut State, out: &mut Vec<RuntimeOutput>) 
             }
         }
         Some("tool_call") => tool_call(update, st, out),
-        Some("tool_call_update") => tool_call_update(update, st, out),
+        Some("tool_call_update") => tool_result(update, st, out),
         // Thoughts, plans, command lists, modes, session info and other vendor updates are not shown.
         _ => {}
     }
@@ -454,9 +507,12 @@ fn tool_call(update: &Value, st: &mut State, out: &mut Vec<RuntimeOutput>) {
         title: title.to_string(),
         input: clip_input(&raw_input, INPUT_CLIP_BYTES),
     }));
+    // A call can arrive already finished: its result follows the same rules as an update.
+    tool_result(update, st, out);
 }
 
-fn tool_call_update(update: &Value, st: &mut State, out: &mut Vec<RuntimeOutput>) {
+/// The `ToolResult` of a call whose status is final (`completed` or `failed`). Once per call.
+fn tool_result(update: &Value, st: &mut State, out: &mut Vec<RuntimeOutput>) {
     let ok = match str_at(update, "status") {
         Some("completed") => true,
         Some("failed") => false,
@@ -503,10 +559,9 @@ fn tool_output(update: &Value) -> String {
 }
 
 fn permission_request(id: &Value, params: &Value, st: &mut State, out: &mut Vec<RuntimeOutput>) {
-    let key = match id {
-        Value::String(s) => s.clone(),
-        other => other.to_string(),
-    };
+    // Text the agent wrote before asking shows up before the approval, as it does before a tool call.
+    out.extend(flush_text(st));
+    let key = request_key(id);
     let call = params.get("toolCall").unwrap_or(&Value::Null);
     let content = array(call, "content");
     let kind = non_empty(call, "kind");
@@ -545,6 +600,22 @@ fn permission_request(id: &Value, params: &Value, st: &mut State, out: &mut Vec<
         paths,
         input: clip_input(&raw_input, INPUT_CLIP_BYTES),
     }));
+}
+
+/// Key of a permission request, from its JSON-RPC id. A string id that could be read as
+/// another id kind gets an `s:` prefix, so it never shares a key with a numeric id.
+fn request_key(id: &Value) -> String {
+    match id {
+        Value::String(s) if looks_like_other_id(s) => format!("s:{s}"),
+        Value::String(s) => s.clone(),
+        other => other.to_string(),
+    }
+}
+
+/// Whether a string id collides with a numeric or `null` id once keyed, or with
+/// the `s:` form itself.
+fn looks_like_other_id(s: &str) -> bool {
+    s.parse::<f64>().is_ok() || s == "null" || s.starts_with("s:")
 }
 
 fn approval_option(o: &Value) -> Option<ApprovalOption> {
@@ -592,6 +663,7 @@ fn prompt_frame(st: &mut State, session: &str, text: &str) -> Value {
 }
 
 /// The first prompt of a session carries the agent's system prompt, since ACP has no field for it.
+/// A loaded session already has it in its history, so it is not repeated there.
 fn wrap_first_prompt(st: &mut State, text: &str) -> String {
     if st.first_prompt_sent {
         return text.to_string();
@@ -624,6 +696,15 @@ fn turn_completed(status: TurnStatus) -> RuntimeOutput {
 
 fn error_event(message: String) -> RuntimeOutput {
     RuntimeOutput::Event(EventBody::Error { message })
+}
+
+/// The answer that withdraws a permission request.
+fn cancelled_frame(request_id: &Value) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": request_id,
+        "result": {"outcome": {"outcome": "cancelled"}}
+    })
 }
 
 /// Queue a frame for the CLI. If the session is closed, the failure becomes an error event.
@@ -685,15 +766,18 @@ mod tests {
     }
 
     #[test]
-    fn allow_takes_allow_once_then_any_allow() {
+    fn allow_takes_allow_once_and_never_allow_always() {
         let options = [option("always", "allow_always"), option("once", "allow_once")];
         assert_eq!(choose_option(&options, Decision::Allow), Some("once"));
+        // Without a one-time allow, Allow falls back to a one-time reject, never to allow_always.
         let only_always = [option("always", "allow_always")];
-        assert_eq!(choose_option(&only_always, Decision::Allow), Some("always"));
+        assert_eq!(choose_option(&only_always, Decision::Allow), None);
+        let always_and_no = [option("always", "allow_always"), option("no", "reject_once")];
+        assert_eq!(choose_option(&always_and_no, Decision::Allow), Some("no"));
     }
 
     #[test]
-    fn deny_takes_reject_once_then_any_reject_or_cancels() {
+    fn deny_takes_reject_once_then_reject_always_then_cancels() {
         let options = [option("never", "reject_always"), option("no", "reject_once")];
         assert_eq!(choose_option(&options, Decision::Deny), Some("no"));
         let only_always = [option("never", "reject_always")];
@@ -701,6 +785,59 @@ mod tests {
         let allow_only = [option("y", "allow_once")];
         assert_eq!(choose_option(&allow_only, Decision::Deny), None);
         assert_eq!(choose_option(&[], Decision::Allow), None);
+    }
+
+    #[test]
+    fn allow_without_one_time_option_is_denied_with_a_notice() {
+        let mut st = State::new(None);
+        st.pending.insert(
+            "7".into(),
+            PendingApproval {
+                request_id: json!(7),
+                options: vec![option("always", "allow_always"), option("no", "reject_once")],
+            },
+        );
+        let mut sent: Vec<Value> = Vec::new();
+        answer_pending(&mut st, "7", Decision::Allow, |frame| {
+            sent.push(frame.clone());
+            Ok(())
+        })
+        .expect("answered");
+        assert_eq!(
+            sent[0]["result"]["outcome"],
+            json!({"outcome": "selected", "optionId": "no"})
+        );
+        assert_eq!(st.notices, vec![ALLOW_REFUSED.to_string()]);
+        assert!(st.pending.is_empty());
+    }
+
+    #[test]
+    fn a_failed_answer_leaves_the_approval_open_and_an_answered_one_is_gone() {
+        let mut st = State::new(None);
+        st.pending.insert(
+            "7".into(),
+            PendingApproval {
+                request_id: json!(7),
+                options: vec![option("y", "allow_once")],
+            },
+        );
+        assert!(answer_pending(&mut st, "7", Decision::Allow, |_| bail!("closed")).is_err());
+        assert!(st.pending.contains_key("7"));
+        assert!(st.notices.is_empty());
+
+        assert!(answer_pending(&mut st, "7", Decision::Allow, |_| Ok(())).is_ok());
+        assert!(!st.pending.contains_key("7"));
+        assert!(answer_pending(&mut st, "7", Decision::Allow, |_| Ok(())).is_err());
+    }
+
+    #[test]
+    fn numeric_and_string_ids_never_share_a_key() {
+        assert_eq!(request_key(&json!(7)), "7");
+        assert_eq!(request_key(&json!("p-1")), "p-1");
+        assert_eq!(request_key(&json!("7")), "s:7");
+        assert_eq!(request_key(&json!("s:7")), "s:s:7");
+        assert_eq!(request_key(&json!("null")), "s:null");
+        assert_eq!(request_key(&json!(null)), "null");
     }
 
     #[test]
@@ -812,16 +949,35 @@ mod tests {
     }
 
     #[test]
-    fn an_approval_is_answered_only_once() {
-        let state = Mutex::new(State::new(None));
-        locked(&state).pending.insert(
-            "7".into(),
-            PendingApproval {
-                request_id: json!(7),
-                options: vec![option("y", "allow_once")],
-            },
+    fn a_call_that_arrives_completed_and_is_repeated_yields_one_result() {
+        let mut st = State::new(None);
+        let mut out = Vec::new();
+        let call = json!({
+            "sessionUpdate": "tool_call",
+            "toolCallId": "c2",
+            "title": "ls",
+            "kind": "execute",
+            "status": "failed",
+            "content": [{"type": "content", "content": {"type": "text", "text": "boom"}}]
+        });
+        let repeat = json!({
+            "sessionUpdate": "tool_call_update",
+            "toolCallId": "c2",
+            "status": "failed"
+        });
+        session_update(&call, &mut st, &mut out);
+        session_update(&repeat, &mut st, &mut out);
+        let results: Vec<&RuntimeOutput> = out
+            .iter()
+            .filter(|o| matches!(o, RuntimeOutput::Event(EventBody::ToolResult { .. })))
+            .collect();
+        assert_eq!(
+            results,
+            vec![&RuntimeOutput::Event(EventBody::ToolResult {
+                call_id: "c2".into(),
+                ok: false,
+                output: "boom".into(),
+            })]
         );
-        assert!(take_pending(&state, "7").is_ok());
-        assert!(take_pending(&state, "7").is_err());
     }
 }

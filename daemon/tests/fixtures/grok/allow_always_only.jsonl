@@ -1,0 +1,12 @@
+// The permission offers allow_always and reject_once only. The host answers Allow: Grok must get
+// reject_once, never allow_always. Agent text before the request goes out as a message first.
+{"expect": {"method": "initialize"}}
+{"send": {"jsonrpc": "2.0", "id": "$last:/id", "result": {"protocolVersion": 1, "agentCapabilities": {}}}}
+{"expect": {"method": "session/new"}}
+{"send": {"jsonrpc": "2.0", "id": "$last:/id", "result": {"sessionId": "sess-a1"}}}
+{"expect": {"method": "session/prompt"}}
+{"send": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "sess-a1", "update": {"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": "Cleaning up."}}}}}
+{"send": {"jsonrpc": "2.0", "id": 8, "method": "session/request_permission", "params": {"sessionId": "sess-a1", "toolCall": {"toolCallId": "call-a1", "title": "rm -rf cache", "kind": "delete", "rawInput": {"command": "rm -rf cache"}}, "options": [{"optionId": "always", "name": "Always allow", "kind": "allow_always"}, {"optionId": "no", "name": "Reject", "kind": "reject_once"}]}}}
+{"expect": {"id": 8, "result": {"outcome": {"outcome": "selected", "optionId": "no"}}}}
+{"send": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "sess-a1", "update": {"sessionUpdate": "tool_call_update", "toolCallId": "call-a1", "status": "failed", "content": [{"type": "content", "content": {"type": "text", "text": "Rejected by user"}}]}}}}
+{"send": {"jsonrpc": "2.0", "id": 3, "result": {"stopReason": "end_turn"}}}

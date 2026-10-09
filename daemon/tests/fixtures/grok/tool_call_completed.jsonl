@@ -1,0 +1,8 @@
+// A tool call that arrives already completed, with no update after it: its result is reported on its own.
+{"expect": {"method": "initialize"}}
+{"send": {"jsonrpc": "2.0", "id": "$last:/id", "result": {"protocolVersion": 1, "agentCapabilities": {}}}}
+{"expect": {"method": "session/new"}}
+{"send": {"jsonrpc": "2.0", "id": "$last:/id", "result": {"sessionId": "sess-c1"}}}
+{"expect": {"method": "session/prompt"}}
+{"send": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "sess-c1", "update": {"sessionUpdate": "tool_call", "toolCallId": "call-c1", "title": "ls", "kind": "execute", "status": "completed", "rawInput": {"command": "ls"}, "content": [{"type": "content", "content": {"type": "text", "text": "Cargo.toml"}}]}}}}
+{"send": {"jsonrpc": "2.0", "id": 3, "result": {"stopReason": "end_turn"}}}
