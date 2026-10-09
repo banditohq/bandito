@@ -2,13 +2,12 @@ import BanditoKit
 import Foundation
 import Observation
 
-/// App-wide state: saved servers and what is selected.
+/// App-wide state: saved servers and which one is in front. What is selected inside a server lives in `Router`.
 @MainActor
 @Observable
 public final class AppModel {
     public private(set) var servers: [ServerModel] = []
     public var selectedServerID: UUID?
-    public var selectedAgentID: String?
     /// The last problem the user should know about (e.g. a token that could not be stored).
     public private(set) var lastError: String?
 
@@ -20,11 +19,6 @@ public final class AppModel {
 
     public var currentServer: ServerModel? {
         servers.first { $0.id == selectedServerID } ?? servers.first
-    }
-
-    public var selectedAgent: Agent? {
-        guard let id = selectedAgentID else { return nil }
-        return currentServer?.agents.first { $0.id == id }
     }
 
     public func connectAll() async {

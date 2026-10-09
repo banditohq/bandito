@@ -1,42 +1,44 @@
 import BanditoDesign
 import BanditoKit
+import BanditoL10n
 import SwiftUI
 
-struct SidebarView: View {
+/// Team sidebar: the agents of the current server. Those who need you come first, under their own heading.
+struct TeamSidebar: View {
     @Environment(AppModel.self) private var app
+    @Environment(Router.self) private var router
 
     var body: some View {
-        @Bindable var app = app
-        List(selection: $app.selectedAgentID) {
-            if let server = app.currentServer {
+        @Bindable var router = router
+        if let server = app.currentServer {
+            let agents = server.sortedAgents
+            let waiting = agents.filter { server.thread(for: $0.id).status == .needsYou }
+            let others = agents.filter { server.thread(for: $0.id).status != .needsYou }
+            List(selection: $router.selectedAgentID) {
+                if !waiting.isEmpty {
+                    Section {
+                        ForEach(waiting) { agent in
+                            AgentRow(agent: agent, thread: server.thread(for: agent.id))
+                                .tag(agent.id)
+                        }
+                    } header: {
+                        SectionLabel(L10n.Sidebar.needsYou, tone: .signal)
+                    }
+                }
                 Section {
-                    ForEach(server.sortedAgents) { agent in
+                    ForEach(others) { agent in
                         AgentRow(agent: agent, thread: server.thread(for: agent.id))
                             .tag(agent.id)
                     }
                 } header: {
-                    ServerHeader(server: server)
+                    SectionLabel(L10n.Sidebar.agents)
                 }
             }
-        }
-        .listStyle(.sidebar)
-        .scrollContentBackground(.hidden)
-        .background(Color.Bandito.surface1)
-    }
-}
-
-private struct ServerHeader: View {
-    var server: ServerModel
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Circle()
-                .fill(server.state == .connected ? Color.Bandito.ok : Color.Bandito.text3)
-                .frame(width: 6, height: 6)
-            Text(server.info?.hostname ?? server.config.name)
-                .font(.system(size: 11, weight: .medium))
-                .textCase(.uppercase)
-                .foregroundStyle(Color.Bandito.text3)
+            .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
+            .background(Color.Bandito.surface1)
+        } else {
+            Color.Bandito.surface1
         }
     }
 }
