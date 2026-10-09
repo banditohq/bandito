@@ -10,6 +10,9 @@ Source of truth is the SVG in `logo/`. PNG, ICO, GIF and MP4 are exports.
 | `logo/bandito-mark-on-light.svg` | Mark on light backgrounds (outlined) |
 | `logo/bandito-mark-mono*.svg` | One-color mark (charcoal / white) |
 | `logo/bandito-lockup-{light,dark}.svg` | Mark + wordmark for site header, README, press |
+| `tokens/` | Design tokens and generator (CSS, Swift, xcassets) |
+| `icons/` | Icon set, 24 grid, 1.6 stroke |
+| `BRAND.md` | Brand book |
 | `png/` | icon-16…1024, favicon.ico, apple-touch-icon, avatar-1000 (X/GitHub) |
 | `anim/` | Looping icon as MP4 and GIF (X, Product Hunt, README) |
 
