@@ -296,7 +296,6 @@ private struct RealWorkspaceCard: View {
             infoRow("cpu", L10n.Workspace.Row.cpu, cpuText)
             infoRow("memorychip", L10n.Workspace.Row.memory, memoryText)
             if !isShared {
-                infoRow("internaldrive", L10n.Workspace.Row.disk, L10n.Workspace.Value.disk)
             }
             infoRow("network", L10n.Workspace.Row.network, networkText)
         }
