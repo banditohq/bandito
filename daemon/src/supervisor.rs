@@ -168,10 +168,10 @@ pub struct Supervisor {
 
 /// Bandito's own files and controls, as the approval policy protects them: the data folder,
 /// the daemon's binary, and the service files of the user's home. `BANDITO_HOME` or `~/.bandito`.
-fn daemon_protected() -> Protected {
+fn daemon_protected(data_home: &std::path::Path) -> Protected {
     let exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("bandito"));
-    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
-    Protected::new(&crate::workspace::data_dir(), &exe, &home)
+    let user_home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
+    Protected::new(data_home, &exe, &user_home)
 }
 
 /// Approvals nobody answered are denied after this long.
@@ -300,6 +300,26 @@ impl Supervisor {
         mcp: Option<(PathBuf, Vec<String>)>,
         workspaces: Arc<WorkspaceManager>,
     ) -> Arc<Self> {
+        Self::new_in(hub, runtimes, mcp, workspaces, &crate::workspace::data_dir())
+    }
+
+    /// The daemon of the data folder `home` (`--home`): the approval policy protects that folder.
+    pub fn new_in_home(
+        hub: Hub,
+        runtimes: Runtimes,
+        mcp: Option<(PathBuf, Vec<String>)>,
+        home: &std::path::Path,
+    ) -> Arc<Self> {
+        Self::new_in(hub, runtimes, mcp, WorkspaceManager::system(), home)
+    }
+
+    fn new_in(
+        hub: Hub,
+        runtimes: Runtimes,
+        mcp: Option<(PathBuf, Vec<String>)>,
+        workspaces: Arc<WorkspaceManager>,
+        home: &std::path::Path,
+    ) -> Arc<Self> {
         Arc::new(Self {
             hub,
             runtimes,
@@ -307,7 +327,7 @@ impl Supervisor {
             actors: Mutex::new(HashMap::new()),
             chains: Mutex::new(HashMap::new()),
             workspaces,
-            protected: Arc::new(daemon_protected()),
+            protected: Arc::new(daemon_protected(home)),
         })
     }
 
@@ -3438,5 +3458,19 @@ mod workspace_tests {
                 .any(|l| l.starts_with(&format!("run -d --name bandito-ws-{} ", box_ws.id))),
             "the container is created for the fallback too"
         );
+    }
+}
+
+#[cfg(test)]
+mod home_policy_tests {
+    use super::*;
+
+    #[test]
+    fn the_policy_protects_the_home_the_daemon_was_started_with() {
+        let store = Arc::new(crate::store::Store::open_in_memory().unwrap());
+        let home = std::path::Path::new("/srv/bandito-home");
+        let sup = Supervisor::new_in_home(Hub::new(store), Runtimes::default(), None, home);
+        assert_eq!(sup.protected.paths[0], PathBuf::from("/srv/bandito-home"));
+        assert!(sup.protected.words.iter().any(|w| w == "/srv/bandito-home"));
     }
 }

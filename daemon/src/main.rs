@@ -310,7 +310,7 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr) -> Result<()> {
         );
         None
     };
-    let sup = Supervisor::new(hub, runtimes, mcp);
+    let sup = Supervisor::new_in_home(hub, runtimes, mcp, home);
     sup.recover()?;
     let app = App::new(sup.clone(), agents_root);
 
