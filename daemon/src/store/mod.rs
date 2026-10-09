@@ -126,6 +126,40 @@ impl Store {
         Ok(out)
     }
 
+    /// One agent's newest events before `before` (exclusive; `None` = latest),
+    /// returned oldest first. For scrolling a thread back page by page.
+    pub fn events_page(&self, agent_id: &str, before: Option<i64>, limit: u32) -> Result<Vec<Event>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT seq, agent_id, ts, kind, payload FROM events
+             WHERE agent_id = ?1 AND (?2 IS NULL OR seq < ?2)
+             ORDER BY seq DESC LIMIT ?3",
+        )?;
+        let rows = stmt.query_map(params![agent_id, before, limit.clamp(1, 1000)], |r| {
+            Ok((
+                r.get::<_, i64>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, i64>(2)?,
+                r.get::<_, String>(3)?,
+                r.get::<_, String>(4)?,
+            ))
+        })?;
+        let mut out = Vec::new();
+        for row in rows {
+            let (seq, agent_id, ts, kind, payload) = row?;
+            let body = EventBody::from_parts(&kind, serde_json::from_str(&payload)?)
+                .with_context(|| format!("decode event {seq} ({kind})"))?;
+            out.push(Event {
+                seq,
+                agent_id,
+                ts,
+                body,
+            });
+        }
+        out.reverse();
+        Ok(out)
+    }
+
     pub fn last_seq(&self) -> Result<i64> {
         Ok(self
             .conn()
@@ -279,6 +313,31 @@ mod tests {
         assert_eq!(s.events_since(e1.seq, 100, None).unwrap(), vec![e2.clone()]);
         assert_eq!(s.events_since(0, 100, Some("a")).unwrap(), vec![e1]);
         assert_eq!(s.last_seq().unwrap(), e2.seq);
+    }
+
+    #[test]
+    fn events_page_walks_back() {
+        let s = Store::open_in_memory().unwrap();
+        let mut seqs = Vec::new();
+        for i in 0..5 {
+            seqs.push(
+                s.append_event("a", EventBody::MessageAssistant { text: format!("{i}") })
+                    .unwrap()
+                    .seq,
+            );
+            s.append_event("b", EventBody::MessageAssistant { text: "x".into() })
+                .unwrap();
+        }
+        let last2: Vec<i64> = s.events_page("a", None, 2).unwrap().iter().map(|e| e.seq).collect();
+        assert_eq!(last2, vec![seqs[3], seqs[4]], "newest page, oldest first");
+        let before: Vec<i64> = s
+            .events_page("a", Some(seqs[3]), 10)
+            .unwrap()
+            .iter()
+            .map(|e| e.seq)
+            .collect();
+        assert_eq!(before, vec![seqs[0], seqs[1], seqs[2]]);
+        assert!(s.events_page("a", Some(seqs[0]), 10).unwrap().is_empty());
     }
 
     #[test]

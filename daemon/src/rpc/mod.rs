@@ -333,6 +333,22 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             ok(store.events_since(s.after, s.limit, s.agent_id.as_deref())?)
         }
 
+        "events.page" => {
+            #[derive(Deserialize)]
+            struct PageParams {
+                agent_id: String,
+                #[serde(default)]
+                before: Option<i64>,
+                #[serde(default = "default_page")]
+                limit: u32,
+            }
+            fn default_page() -> u32 {
+                200
+            }
+            let p: PageParams = params(p)?;
+            ok(store.events_page(&p.agent_id, p.before, p.limit)?)
+        }
+
         "approvals.list" => {
             let MaybeAgent { agent_id } = params(p)?;
             ok(store.approval_list_pending(agent_id.as_deref())?)

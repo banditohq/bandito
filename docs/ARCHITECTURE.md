@@ -42,7 +42,7 @@ Useful extras we surface: Claude's `rate_limit_event` and Codex `account/rateLim
 
 ## Events
 
-Everything an agent does becomes a row in `events` (append-only, global `seq`). Clients render from events and resume with `events.since(seq)`, so a laptop that slept for a night catches up exactly.
+Everything an agent does becomes a row in `events` (append-only, global `seq`). Clients subscribe with `events.subscribe{after}` (live events, backfilled from `after`) and load a thread with `events.page{agent_id, before, limit}` (newest first, page by page). Global `seq` is contiguous on one connection, so a client that sees a jump re-subscribes from its last seq; a laptop that slept for a night catches up exactly.
 
 | kind | payload |
 |---|---|
