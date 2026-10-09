@@ -204,6 +204,9 @@ struct FirstServerStep: View {
             Text(L10n.Onboarding.Server.fingerprintTitle)
                 .font(BanditoFont.font(size: 24, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
+            Text(L10n.Onboarding.Server.keyType(type: preview.keyType))
+                .font(BanditoFont.font(size: 12.5, weight: 500))
+                .foregroundStyle(Color.Bandito.text3)
             Text(preview.fingerprint)
                 .font(BanditoFont.font(size: 16, weight: 600, mono: true))
                 .foregroundStyle(Color.Bandito.text)
@@ -243,6 +246,16 @@ struct FirstServerStep: View {
                 Text(hostKeyError)
                     .font(BanditoFont.font(size: 13, weight: 400))
                     .foregroundStyle(Color.Bandito.danger)
+            }
+            if let command = model.proxyCommand {
+                HStack(spacing: 10) {
+                    Text(command)
+                        .font(BanditoFont.font(size: 13, weight: 400, mono: true))
+                        .foregroundStyle(Color.Bandito.text)
+                        .textSelection(.enabled)
+                    Button(L10n.Onboarding.Server.copy) { SystemActions.copy(command) }
+                        .buttonStyle(QuietButtonStyle(size: .regular))
+                }
             }
             Button(L10n.Onboarding.Server.back) { model.backToChoice() }
                 .buttonStyle(QuietButtonStyle())
@@ -316,6 +329,15 @@ struct FirstServerStep: View {
             Text(config.name)
                 .font(BanditoFont.font(size: 14, weight: 500))
                 .foregroundStyle(Color.Bandito.text2)
+            if let syncError = model.syncError {
+                HStack(spacing: 10) {
+                    Text(syncError)
+                        .font(BanditoFont.font(size: 13, weight: 400))
+                        .foregroundStyle(Color.Bandito.danger)
+                    Button(L10n.Onboarding.Server.retry) { model.syncServers(app: app) }
+                        .buttonStyle(QuietButtonStyle(size: .regular))
+                }
+            }
             componentsBlock(config)
             Button(L10n.Onboarding.Server.nextAgent, action: onFinished)
                 .buttonStyle(SignalButtonStyle())

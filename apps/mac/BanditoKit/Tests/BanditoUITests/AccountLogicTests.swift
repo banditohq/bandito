@@ -14,14 +14,20 @@ actor FakeApprovalBackend: DeviceApprovalBackend {
     private(set) var approveCalls: [String] = []
     private(set) var deleteCalls: [(id: String, force: Bool)] = []
     private var networkFailures: Int
+    private var cancelNext: Bool
 
-    init(envelopes: [Envelope?] = [], networkFailures: Int = 0) {
+    init(envelopes: [Envelope?] = [], networkFailures: Int = 0, cancelNext: Bool = false) {
         self.envelopes = envelopes
         self.networkFailures = networkFailures
+        self.cancelNext = cancelNext
     }
 
     func myEnvelope() async throws -> Envelope? {
         envelopeCalls += 1
+        if cancelNext {
+            cancelNext = false
+            throw CancellationError()
+        }
         if networkFailures > 0 {
             networkFailures -= 1
             throw AccountError.network("offline")
@@ -180,7 +186,7 @@ actor FakeApprovalBackend: DeviceApprovalBackend {
             backend: backend, identity: ids.newcomer, accountID: "acc", deviceID: "dev",
             keys: keys, sleep: { _ in })
         _ = await model.pollOnce()
-        model.reject()
+        _ = await model.refuse()
         #expect(model.phase == .rejected)
         #expect(try SyncKey.load(from: keys) == nil)
     }
@@ -188,6 +194,10 @@ actor FakeApprovalBackend: DeviceApprovalBackend {
 
 @MainActor
 @Suite struct ApproveDeviceModelTests {
+    private func identities() throws -> (approver: DeviceIdentity, newcomer: DeviceIdentity) {
+        (try DeviceIdentity.make(from: MemorySecretStore()), try DeviceIdentity.make(from: MemorySecretStore()))
+    }
+
     private func pendingDevice(for identity: DeviceIdentity) -> PendingDevice {
         PendingDevice(id: "dev-2", name: "iPhone", platform: "ios", publicKey: identity.publicKeyBase64,
                       createdAt: "2026-10-09T10:00:00Z")
@@ -246,6 +256,30 @@ actor FakeApprovalBackend: DeviceApprovalBackend {
         #expect(await model.reject())
         #expect(await backend.deleteCalls.count == 1)
         #expect(await backend.deleteCalls.first?.id == "dev-2")
+        #expect(await backend.deleteCalls.first?.force == false)
+    }
+
+    @Test func cancellationDuringAPollIsNotAFailure() async throws {
+        let ids = try identities()
+        let backend = FakeApprovalBackend(envelopes: [], cancelNext: true)
+        let model = DeviceApprovalModel(
+            backend: backend, identity: ids.newcomer, accountID: "acc", deviceID: "dev",
+            keys: MemorySecretStore(), sleep: { _ in })
+        let stopped = await model.pollOnce()
+        #expect(stopped == false)
+        #expect(model.phase == .waiting)
+    }
+
+    @Test func refusingRemovesThisDeviceFromTheAccount() async throws {
+        let ids = try identities()
+        let backend = FakeApprovalBackend(envelopes: [])
+        let model = DeviceApprovalModel(
+            backend: backend, identity: ids.newcomer, accountID: "acc", deviceID: "dev-me",
+            keys: MemorySecretStore(), sleep: { _ in })
+        let removed = await model.refuse()
+        #expect(removed)
+        #expect(model.phase == .rejected)
+        #expect(await backend.deleteCalls.first?.id == "dev-me")
         #expect(await backend.deleteCalls.first?.force == false)
     }
 }

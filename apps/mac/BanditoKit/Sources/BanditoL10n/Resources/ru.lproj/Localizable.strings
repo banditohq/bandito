@@ -631,11 +631,13 @@
 "onboarding.account.settingsThisMac" = "Код этого Mac";
 "onboarding.account.settingsTitle" = "Аккаунт и синхронизация";
 "onboarding.account.setupFailed" = "Не удалось начать вход. Попробуйте ещё раз.";
+"onboarding.account.signInAgain" = "Войти заново";
 "onboarding.account.signOutAction" = "Выйти из аккаунта";
 "onboarding.account.skip" = "Продолжить без аккаунта";
 "onboarding.account.skipHint" = "всё будет только на этом Mac";
 "onboarding.account.subtitle" = "Он бесплатный и нужен, чтобы устройства узнавали друг друга. Пароль придумывать не придётся.";
 "onboarding.account.title" = "Создайте аккаунт Bandito";
+"onboarding.account.understood" = "Понятно";
 "onboarding.agent.asks" = "Спрашивает";
 "onboarding.agent.changeFolder" = "Сменить";
 "onboarding.agent.composerText" = "Привет! Представься и спроси, с чего начать.";
@@ -702,6 +704,7 @@
 "onboarding.server.installMissing" = "Установить недостающее";
 "onboarding.server.installingTitle" = "Установка";
 "onboarding.server.invalidAddress" = "Введите адрес в виде user@host или user@host:порт.";
+"onboarding.server.keyType" = "Тип ключа: %1$@";
 "onboarding.server.nextAgent" = "Дальше — первый агент";
 "onboarding.server.noPorts" = "Наружу ничего не открываем: сервер слушает только сам себя.";
 "onboarding.server.noServer" = "Сервера нет";
@@ -722,6 +725,7 @@
 "onboarding.server.thisMacDesc" = "Быстро попробовать. Агенты работают, пока Mac не спит и не закрыт.";
 "onboarding.server.title" = "Где будет жить ваша команда?";
 "onboarding.server.trustHost" = "Это мой сервер — доверять";
+"onboarding.server.viaProxy" = "Сервер доступен через промежуточный узел. Подключитесь один раз в Терминале командой ниже и подтвердите ключ там.";
 "onboarding.server.whatHappens" = "Что произойдёт";
 "onboarding.server.whereAria" = "Где запустить";
 "onboarding.showAgain" = "Показать знакомство снова";

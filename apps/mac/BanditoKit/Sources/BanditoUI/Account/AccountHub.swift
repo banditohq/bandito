@@ -3,6 +3,55 @@ import BanditoL10n
 import CryptoKit
 import Foundation
 import Observation
+import OSLog
+
+extension Logger {
+    /// Account events. Never logs tokens, keys or codes.
+    static let account = Logger(subsystem: "dev.bandito", category: "account")
+}
+
+/// Sign-out in the order that keeps this Mac safe: the sync key and the local session are removed first, and only
+/// then is the server asked to end the session. A failed server call is logged and changes nothing locally.
+@MainActor
+enum SignOutSteps {
+    static func run(
+        keys: SecretStore, session: Session?, revoke: (Session) async throws -> Void, log: (String) -> Void
+    ) async throws {
+        try keys.save(nil, account: SyncKey.keychainAccount)
+        try keys.save(nil, account: AccountClient.sessionAccount)
+        guard let session else { return }
+        do {
+            try await revoke(session)
+        } catch {
+            log("Sign-out: the server did not confirm the end of the session (\(error.localizedDescription)).")
+        }
+    }
+}
+
+/// Publishes this Mac's servers into the sync blob. Fetch, merge, write; on a version conflict the blob is fetched
+/// again and merged again, up to `maxAttempts` times. The last conflict is thrown to the caller.
+@MainActor
+enum ServerPublishing {
+    static let maxAttempts = 3
+
+    static func publish(
+        local: SyncPayload,
+        fetch: () async throws -> SyncPayload?,
+        write: (SyncPayload) async throws -> Void
+    ) async throws {
+        var attempt = 1
+        while true {
+            let remote = try await fetch() ?? SyncPayload()
+            do {
+                try await write(ServerSyncPayload.merge(local: local, remote: remote))
+                return
+            } catch AccountError.conflict(let current) {
+                if attempt >= maxAttempts { throw AccountError.conflict(current: current) }
+                attempt += 1
+            }
+        }
+    }
+}
 
 /// Failures of the account hub that are not from the server.
 enum AccountHubError: Error, Equatable, LocalizedError {
@@ -111,7 +160,8 @@ public final class AccountHub {
     public func recoverAccount() async throws {
         _ = try await prepare()
         _ = try await syncStore?.resetAccount()
-        _ = try SyncKey.loadOrCreate(from: keys)
+        // The old key must not be used for the new history: it is replaced, not reused.
+        _ = try SyncKey.rotate(in: keys)
     }
 
     /// Whether this Mac holds the sync key of the signed-in account.
@@ -119,14 +169,29 @@ public final class AccountHub {
         (try? SyncKey.load(from: keys)) != nil
     }
 
-    /// Signs out and forgets the sync key, so a later sign-in to another account starts clean.
+    /// Signs out: the sync key and the local session go first, then the server is asked to end the session
+    /// (best effort, see `SignOutSteps`).
     public func signOut() async throws {
         let client = try await prepare()
-        try await client.logout()
-        try keys.save(nil, account: SyncKey.keychainAccount)
-        pending = []
-        signedIn = false
+        let session = (try? await client.restoreSession()) ?? nil
         stopWatchingPending()
+        pending = []
+        try await SignOutSteps.run(
+            keys: keys, session: session,
+            revoke: { try await client.revoke($0) },
+            log: { Logger.account.error("\($0, privacy: .public)") })
+        signedIn = false
+    }
+
+    /// Writes this Mac's ssh servers into the account's sync blob, keeping the other servers and retrying on
+    /// conflicts (see `ServerPublishing`). Errors reach the caller.
+    public func publishServers(_ configs: [ServerConfig]) async throws {
+        _ = try await prepare()
+        guard let store = syncStore else { throw AccountHubError.notReady }
+        try await ServerPublishing.publish(
+            local: ServerSyncPayload.payload(for: configs),
+            fetch: { try await store.pull() },
+            write: { payload in _ = try await store.push(payload) })
     }
 
     /// Asks for devices waiting for approval. Silent on failure: a device that is not approved yet is not allowed to.
@@ -143,7 +208,8 @@ public final class AccountHub {
         guard watchTask == nil, signedIn else { return }
         watchTask = Task { [weak self] in
             while !Task.isCancelled {
-                await self?.refreshPending()
+                guard let self else { return }
+                await self.refreshPending()
                 try? await Task.sleep(for: .seconds(30))
             }
         }

@@ -24,10 +24,15 @@ struct DeviceCodeText: View {
 /// "Reset the account" confirmation: the person types RESET, then the action runs.
 struct ResetConfirmation: View {
     var onConfirm: () async throws -> Void
+    /// "Cancel": nothing is reset, the screen goes back.
+    var onCancel: (() -> Void)?
+    /// Shown with a too-old session: the reset needs a fresh sign-in.
+    var onSignInAgain: (() -> Void)?
 
     @State private var typed = ""
     @State private var busy = false
     @State private var errorText: String?
+    @State private var sessionTooOld = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -48,11 +53,20 @@ struct ResetConfirmation: View {
                 }
                 .buttonStyle(SignalButtonStyle())
                 .disabled(typed != "RESET" || busy)
+                if let onCancel {
+                    Button(L10n.Common.cancel, action: onCancel)
+                        .buttonStyle(QuietButtonStyle())
+                        .disabled(busy)
+                }
             }
             if let errorText {
                 Text(errorText)
                     .font(BanditoFont.font(size: 13, weight: 400))
                     .foregroundStyle(Color.Bandito.danger)
+            }
+            if sessionTooOld, let onSignInAgain {
+                Button(L10n.Onboarding.Account.signInAgain, action: onSignInAgain)
+                    .buttonStyle(QuietButtonStyle())
             }
         }
     }
@@ -62,6 +76,9 @@ struct ResetConfirmation: View {
         defer { busy = false }
         do {
             try await onConfirm()
+        } catch AccountError.api(code: "session_too_old", status: _) {
+            sessionTooOld = true
+            errorText = SignInMessages.text(for: AccountError.api(code: "session_too_old", status: 403))
         } catch {
             errorText = SignInMessages.text(for: error)
         }
@@ -170,8 +187,12 @@ struct DeviceApprovalStep: View {
                 Button(L10n.Onboarding.Account.codesMatch) { confirm() }
                     .buttonStyle(SignalButtonStyle())
                 Button(L10n.Onboarding.Account.codesDiffer) {
-                    model?.reject()
-                    mode = .refused
+                    Task {
+                        // The other device is not this one: this device is removed and the person signed out.
+                        _ = await model?.refuse()
+                        try? await hub.signOut()
+                        mode = .refused
+                    }
                 }
                 .buttonStyle(QuietButtonStyle())
             }
@@ -187,7 +208,7 @@ struct DeviceApprovalStep: View {
                 .font(BanditoFont.font(size: 14, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .lineSpacing(2)
-            Button(L10n.Onboarding.Account.signOutAction) { Task { await signOut() } }
+            Button(L10n.Onboarding.Account.understood) { onNoAccess() }
                 .buttonStyle(QuietButtonStyle())
         }
     }
@@ -214,7 +235,20 @@ struct DeviceApprovalStep: View {
             ResetConfirmation {
                 try await hub.recoverAccount()
                 onFinished()
+            } onCancel: {
+                // Back to waiting when this came from "no other device"; otherwise there is nothing to go back to.
+                if model != nil {
+                    mode = .waiting
+                } else {
+                    Task { await signOut() }
+                }
+            } onSignInAgain: {
+                Task { await signOut() }
             }
+            Button(L10n.Onboarding.Account.signInAgain) { Task { await signOut() } }
+                .buttonStyle(.plain)
+                .font(BanditoFont.font(size: 13, weight: 500))
+                .foregroundStyle(Color.Bandito.text3)
         }
     }
 
@@ -401,11 +435,13 @@ struct PendingDevicesBanner: View {
 }
 
 /// Settings → Account and sync: who is signed in, the devices with their codes, removing a device, resetting the
-/// account and signing out. Without a session it offers the sign-in.
+/// account and signing out. Without a session it offers the sign-in. After a sign-in the account's route decides:
+/// a device that waits for approval (or needs a reset) gets the same screen as in onboarding.
 struct AccountSheet: View {
     @Environment(AccountHub.self) private var hub
     @Environment(\.dismiss) private var dismiss
     @State private var me: Me?
+    @State private var route: AccountRoute?
     @State private var loading = false
     @State private var errorText: String?
     @State private var resetting = false
@@ -428,6 +464,12 @@ struct AccountSheet: View {
                 AccountSignInView(onFinished: { _ in
                     Task { await reload() }
                 }, onSkipAccount: nil, showsIllustration: false)
+            } else if let route, route == .waitForApproval || route == .recoverRequired {
+                DeviceApprovalStep(onFinished: {
+                    Task { await reload() }
+                }, onNoAccess: {
+                    Task { await signOut() }
+                })
             } else if let me {
                 identityLine(me)
                 devices(me)
@@ -436,6 +478,10 @@ struct AccountSheet: View {
                         try await hub.recoverAccount()
                         resetting = false
                         await reload()
+                    } onCancel: {
+                        resetting = false
+                    } onSignInAgain: {
+                        Task { await signOut() }
                     }
                 } else {
                     HStack(spacing: 10) {
@@ -502,13 +548,21 @@ struct AccountSheet: View {
         }
     }
 
+    /// Reads the route and the account from the server. Without a session there is nothing to read.
     private func reload() async {
-        guard hub.signedIn else { return }
+        guard hub.signedIn else {
+            route = nil
+            me = nil
+            return
+        }
         loading = true
         defer { loading = false }
         do {
             _ = try await hub.prepare()
-            me = try await hub.client?.me()
+            let (current, account) = try await hub.inspect()
+            route = current
+            me = account
+            errorText = nil
         } catch {
             errorText = SignInMessages.text(for: error)
         }
@@ -526,6 +580,7 @@ struct AccountSheet: View {
     private func signOut() async {
         do {
             try await hub.signOut()
+            route = nil
             me = nil
         } catch {
             errorText = SignInMessages.text(for: error)

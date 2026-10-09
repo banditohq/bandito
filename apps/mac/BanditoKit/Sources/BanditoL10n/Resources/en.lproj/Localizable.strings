@@ -631,11 +631,13 @@
 "onboarding.account.settingsThisMac" = "This Mac's code";
 "onboarding.account.settingsTitle" = "Account and sync";
 "onboarding.account.setupFailed" = "Could not start sign-in. Try again.";
+"onboarding.account.signInAgain" = "Sign in again";
 "onboarding.account.signOutAction" = "Sign out";
 "onboarding.account.skip" = "Continue without an account";
 "onboarding.account.skipHint" = "everything stays on this Mac only";
 "onboarding.account.subtitle" = "It's free, and it lets your devices find each other. You won't need to make up a password.";
 "onboarding.account.title" = "Create your Bandito account";
+"onboarding.account.understood" = "Understood";
 "onboarding.agent.asks" = "Asks";
 "onboarding.agent.changeFolder" = "Change";
 "onboarding.agent.composerText" = "Hi! Introduce yourself and ask what to start with.";
@@ -702,6 +704,7 @@
 "onboarding.server.installMissing" = "Install what is missing";
 "onboarding.server.installingTitle" = "Installing";
 "onboarding.server.invalidAddress" = "Enter the address as user@host or user@host:port.";
+"onboarding.server.keyType" = "Key type: %1$@";
 "onboarding.server.nextAgent" = "Next: the first agent";
 "onboarding.server.noPorts" = "We open no ports: the server only listens to itself.";
 "onboarding.server.noServer" = "No server yet";
@@ -722,6 +725,7 @@
 "onboarding.server.thisMacDesc" = "Quick to try. Agents run only while the Mac is awake and open.";
 "onboarding.server.title" = "Where will your team live?";
 "onboarding.server.trustHost" = "This is my server — trust it";
+"onboarding.server.viaProxy" = "This server is reached through a jump host. Connect once in Terminal with the command below, and confirm its key there.";
 "onboarding.server.whatHappens" = "What happens next";
 "onboarding.server.whereAria" = "Where to run";
 "onboarding.showAgain" = "Show the introduction again";

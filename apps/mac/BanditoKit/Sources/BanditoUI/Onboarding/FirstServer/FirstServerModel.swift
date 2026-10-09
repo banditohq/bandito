@@ -30,6 +30,8 @@ final class FirstServerModel {
     var address = ""
     private(set) var addressError: String?
     private(set) var hostKeyError: String?
+    /// For an address behind a jump host: the command to run once in Terminal, to confirm the key there.
+    private(set) var proxyCommand: String?
     /// Known hosts from `~/.ssh/config` and `known_hosts`, shown as chips.
     private(set) var suggestions: [String] = []
     /// The components of the connected server.
@@ -40,6 +42,9 @@ final class FirstServerModel {
     @ObservationIgnored private let runner: CommandRunner
     @ObservationIgnored private let devBinary: URL?
     @ObservationIgnored private var installTask: Task<Void, Never>?
+    @ObservationIgnored private var syncTask: Task<Void, Never>?
+    /// Why the servers could not be published to the account, if they could not.
+    private(set) var syncError: String?
 
     /// - Parameters:
     ///   - runner: runs ssh, scp and the local install (tests pass a fake).
@@ -102,6 +107,10 @@ final class FirstServerModel {
         do {
             let preview = try await SSHHostKeyTrust(runner: runner).preview(target)
             phase = .reviewingHost(preview)
+        } catch SSHHostKeyError.viaProxy {
+            // A jump host: the key cannot be reviewed from here. The person connects once in Terminal.
+            proxyCommand = "ssh " + target.sshArguments.joined(separator: " ")
+            hostKeyError = L10n.Onboarding.Server.viaProxy
         } catch {
             hostKeyError = L10n.Onboarding.Server.hostKeyScanFailed
         }
@@ -114,10 +123,25 @@ final class FirstServerModel {
             try await SSHHostKeyTrust(runner: runner).trust(preview, for: target)
             startOwnServer(app: app)
         } catch {
-            hostKeyError = (error as? SSHHostKeyError) == .changedSinceReview
+            hostKeyError = (error as? SSHHostKeyError) == .changedBetweenChecks
                 ? L10n.Onboarding.Server.hostKeyChangedWhileReviewing
-                : L10n.Onboarding.Server.hostKeyScanFailed
+                : (error as? SSHHostKeyError)?.errorDescription ?? L10n.Onboarding.Server.hostKeyScanFailed
             phase = .failed
+        }
+    }
+
+    /// Publishes the servers of this Mac to the account. A failure is shown to the person, with a retry.
+    func syncServers(app: AppModel) {
+        guard let hub = accountHub else { return }
+        let configs = app.servers.map(\.config)
+        syncTask?.cancel()
+        syncTask = Task { [weak self] in
+            do {
+                try await hub.publishServers(configs)
+                self?.syncError = nil
+            } catch {
+                self?.syncError = SignInMessages.text(for: error)
+            }
         }
     }
 
@@ -154,12 +178,8 @@ final class FirstServerModel {
     private func finish(_ info: PairInfo, app: AppModel) {
         app.add(info.server)
         phase = .connected(info.server)
-        if let hub = accountHub, hub.signedIn {
-            let configs = app.servers.map(\.config)
-            Task {
-                try? await hub.prepare()
-                try? await hub.syncStore?.push(ServerSyncPayload.payload(for: configs))
-            }
+        if accountHub?.signedIn == true {
+            syncServers(app: app)
         }
         if let model = app.servers.first(where: { $0.id == info.server.id }) {
             Task { [weak self] in
@@ -188,5 +208,23 @@ enum ServerSyncPayload {
                 endpoint: .ssh(host: target.host, user: target.user, port: target.port), addedAt: addedAt)
         }
         return payload
+    }
+}
+
+extension ServerSyncPayload {
+    /// The servers of `remote`, with the ones of `local` added or replacing them by id. Other parts of the blob
+    /// (keymap, snippets) are kept from `remote`.
+    static func merge(local: SyncPayload, remote: SyncPayload) -> SyncPayload {
+        var servers = remote.servers
+        for server in local.servers {
+            if let index = servers.firstIndex(where: { $0.id == server.id }) {
+                servers[index] = server
+            } else {
+                servers.append(server)
+            }
+        }
+        var merged = remote
+        merged.servers = servers
+        return merged
     }
 }

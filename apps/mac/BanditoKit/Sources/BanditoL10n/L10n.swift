@@ -870,11 +870,13 @@ public enum L10n {
             public static var settingsThisMac: String { L10n.tr("onboarding.account.settingsThisMac") }
             public static var settingsTitle: String { L10n.tr("onboarding.account.settingsTitle") }
             public static var setupFailed: String { L10n.tr("onboarding.account.setupFailed") }
+            public static var signInAgain: String { L10n.tr("onboarding.account.signInAgain") }
             public static var signOutAction: String { L10n.tr("onboarding.account.signOutAction") }
             public static var skip: String { L10n.tr("onboarding.account.skip") }
             public static var skipHint: String { L10n.tr("onboarding.account.skipHint") }
             public static var subtitle: String { L10n.tr("onboarding.account.subtitle") }
             public static var title: String { L10n.tr("onboarding.account.title") }
+            public static var understood: String { L10n.tr("onboarding.account.understood") }
 
             public enum Github {
                 public static var connecting: String { L10n.tr("onboarding.account.github.connecting") }
@@ -959,6 +961,7 @@ public enum L10n {
             public static var installMissing: String { L10n.tr("onboarding.server.installMissing") }
             public static var installingTitle: String { L10n.tr("onboarding.server.installingTitle") }
             public static var invalidAddress: String { L10n.tr("onboarding.server.invalidAddress") }
+            public static func keyType(type: String) -> String { L10n.tr("onboarding.server.keyType", type) }
             public static func minutes(count: Int) -> String { L10n.tr("onboarding.server.minutes", count) }
             public static var nextAgent: String { L10n.tr("onboarding.server.nextAgent") }
             public static var noPorts: String { L10n.tr("onboarding.server.noPorts") }
@@ -980,6 +983,7 @@ public enum L10n {
             public static var thisMacDesc: String { L10n.tr("onboarding.server.thisMacDesc") }
             public static var title: String { L10n.tr("onboarding.server.title") }
             public static var trustHost: String { L10n.tr("onboarding.server.trustHost") }
+            public static var viaProxy: String { L10n.tr("onboarding.server.viaProxy") }
             public static var whatHappens: String { L10n.tr("onboarding.server.whatHappens") }
             public static var whereAria: String { L10n.tr("onboarding.server.whereAria") }
 

@@ -77,6 +77,7 @@ struct AccountSignInView: View {
     /// A session is stored: the first device creates the sync blob, then the caller decides the next step.
     private func finish() async {
         hub.markSignedIn()
+        setupError = nil
         do {
             let (route, _) = try await hub.inspect()
             if route == .firstDevice {
@@ -100,9 +101,14 @@ struct AccountSignInView: View {
                     .lineSpacing(2)
             }
             if let setupError {
-                Text(setupError)
-                    .font(BanditoFont.font(size: 13, weight: 400))
-                    .foregroundStyle(Color.Bandito.danger)
+                HStack(spacing: 10) {
+                    Text(setupError)
+                        .font(BanditoFont.font(size: 13, weight: 400))
+                        .foregroundStyle(Color.Bandito.danger)
+                    // Checking the account and creating the first blob are safe to repeat.
+                    Button(L10n.Onboarding.Server.retry) { Task { await finish() } }
+                        .buttonStyle(QuietButtonStyle(size: .regular))
+                }
             }
             Button {
                 models?.github.start()

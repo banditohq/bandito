@@ -65,9 +65,13 @@ final class DeviceApprovalModel {
             pending = opened
             phase = .confirmSender(senderCode: opened.senderFingerprint)
             return true
+        } catch is CancellationError {
+            // Leaving the screen is not a failure: the poll just stops.
+            return false
         } catch AccountError.network {
             return false
         } catch {
+            if Task.isCancelled { return false }
             phase = .failed(SignInMessages.text(for: error))
             return true
         }
@@ -94,10 +98,17 @@ final class DeviceApprovalModel {
         phase = .finished
     }
 
-    /// The codes differ: the key is dropped and nothing is stored.
-    func reject() {
+    /// The codes differ: the key is dropped and nothing is stored. The device is removed from the account too:
+    /// the other side is not this device, so this device has no reason to stay. Returns whether the server removed it.
+    func refuse() async -> Bool {
         pending = nil
         phase = .rejected
+        do {
+            try await backend.deleteDevice(id: deviceID, force: false)
+            return true
+        } catch {
+            return false
+        }
     }
 }
 
