@@ -20,7 +20,7 @@ use chrono::{Local, NaiveDate, NaiveTime, TimeZone};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -87,8 +87,8 @@ pub struct App {
     pub agents_root: PathBuf,
     /// Persistent terminals (see docs/ARCHITECTURE.md#terminals). Lives as long as the daemon.
     pub terminals: TerminalManager,
-    /// Timestamps of failed `pair.redeem` calls (rate limit).
-    redeem_failures: Mutex<VecDeque<i64>>,
+    /// Failed `pair.redeem` calls, for the rate limit (see [`RedeemLimiter`]).
+    redeem: Mutex<RedeemLimiter>,
     /// Server files for the `fs.*` methods and `GET /v1/files/raw`.
     pub files: Arc<FileService>,
     /// Live TCP tunnels per device (see docs/ARCHITECTURE.md#tunnel).
@@ -117,7 +117,7 @@ impl App {
             hostname: hostname(),
             agents_root,
             terminals: TerminalManager::new(Limits::default()),
-            redeem_failures: Mutex::new(VecDeque::new()),
+            redeem: Mutex::new(RedeemLimiter::default()),
             files: Arc::new(files),
             tunnels: Arc::new(tunnel::TunnelSlots::default()),
             host: Sampler::new(),
@@ -146,15 +146,99 @@ fn hostname() -> String {
         .unwrap_or_else(|| "server".into())
 }
 
-/// Who is on the other end of a connection.
+/// Who is on the other end of a connection. What each one may call is in [`allowed`]
+/// (see docs/ARCHITECTURE.md#trust-model).
 #[derive(Debug, Clone)]
 pub enum Peer {
-    /// Unix socket: same user on the server.
+    /// The owner's CLI on `bandito.sock`: same user, and not a process under the daemon.
     Local,
     /// A paired app.
     Device(Device),
-    /// Not authenticated yet: only `daemon.hello` and `pair.redeem`.
-    Anonymous,
+    /// Not authenticated yet: only `daemon.hello` and `pair.redeem`. Holds where the
+    /// connection came from (an IP for WebSocket), for the rate limit of `pair.redeem`.
+    Anonymous(String),
+    /// An agent's crew server on `agent.sock`, with the agent its session token names.
+    Agent(String),
+}
+
+/// Methods an agent's crew server may call. Nothing else is open to agents.
+const AGENT_METHODS: &[&str] = &[
+    "daemon.hello",
+    "crew.list",
+    "crew.send",
+    "history.day",
+    "history.search",
+    "browser.agent.back",
+    "browser.agent.click",
+    "browser.agent.open",
+    "browser.agent.press",
+    "browser.agent.screenshot",
+    "browser.agent.snapshot",
+    "browser.agent.switch",
+    "browser.agent.tabs",
+    "browser.agent.type",
+    "screen.agent.click",
+    "screen.agent.key",
+    "screen.agent.launch",
+    "screen.agent.move",
+    "screen.agent.screenshot",
+    "screen.agent.scroll",
+    "screen.agent.type",
+];
+
+/// The calls only agents make (the crew tools). The owner's CLI and the apps may not make them,
+/// so that nothing that speaks as the owner can pass for an agent.
+pub fn is_agent_only(method: &str) -> bool {
+    method == "crew.send"
+        || method.starts_with("history.")
+        || method.starts_with("browser.agent.")
+        || method.starts_with("screen.agent.")
+}
+
+/// Whether `peer` may call `method` at all. [`dispatch`] and the event stream check it first.
+pub fn allowed(peer: &Peer, method: &str) -> bool {
+    match peer {
+        Peer::Anonymous(_) => matches!(method, "daemon.hello" | "pair.redeem"),
+        Peer::Agent(_) => AGENT_METHODS.contains(&method),
+        Peer::Local | Peer::Device(_) => !is_agent_only(method),
+    }
+}
+
+/// The refusal for a call `peer` may not make.
+fn denied(peer: &Peer, method: &str) -> RpcError {
+    match peer {
+        Peer::Anonymous(_) => RpcError::new(UNAUTHORIZED, "not paired: run `bandito pair` on the server"),
+        Peer::Agent(_) => RpcError::new(UNAUTHORIZED, format!("agents cannot call {method}")),
+        Peer::Local | Peer::Device(_) => RpcError::new(UNAUTHORIZED, format!("{method} is only for agents")),
+    }
+}
+
+/// Makes an agent's params its own: `agent_id` and `from` must name the agent its token names
+/// (anything else is refused) and are filled in when missing.
+fn bind_to_agent(agent: &str, mut p: Value) -> Result<Value, RpcError> {
+    if p.is_null() {
+        p = json!({});
+    }
+    let Some(object) = p.as_object_mut() else {
+        return Ok(p);
+    };
+    for key in ["agent_id", "from"] {
+        if object.get(key).is_some_and(|v| v.as_str() != Some(agent)) {
+            return Err(RpcError::new(UNAUTHORIZED, "an agent can only act as itself"));
+        }
+        object.insert(key.to_string(), json!(agent));
+    }
+    Ok(p)
+}
+
+/// Where a `pair.redeem` comes from, for its rate limit.
+fn redeem_source(peer: &Peer) -> String {
+    match peer {
+        Peer::Local => "local".into(),
+        Peer::Anonymous(source) => source.clone(),
+        Peer::Device(device) => format!("device:{}", device.id),
+        Peer::Agent(agent) => format!("agent:{agent}"),
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -230,7 +314,43 @@ fn ok<T: serde::Serialize>(v: T) -> RpcResult {
 
 const MAX_MESSAGE_BYTES: usize = 100 * 1024;
 const REDEEM_WINDOW_MS: i64 = 10 * 60 * 1000;
-const REDEEM_MAX_FAILURES: usize = 20;
+/// Failed `pair.redeem` calls allowed in the window, for the whole daemon.
+const REDEEM_MAX_FAILURES: usize = 100;
+/// Failed `pair.redeem` calls allowed in the window from one source (an IP, or `local`).
+const REDEEM_MAX_FAILURES_PER_SOURCE: usize = 5;
+
+/// Failed `pair.redeem` calls by time, for the whole daemon and for each source.
+#[derive(Default)]
+pub struct RedeemLimiter {
+    all: VecDeque<i64>,
+    by_source: HashMap<String, VecDeque<i64>>,
+}
+
+impl RedeemLimiter {
+    /// Whether a call from `source` may be tried at `now` (unix ms).
+    pub fn allows(&mut self, source: &str, now: i64) -> bool {
+        prune(&mut self.all, now);
+        self.by_source.retain(|_, failures| {
+            prune(failures, now);
+            !failures.is_empty()
+        });
+        self.all.len() < REDEEM_MAX_FAILURES
+            && self.by_source.get(source).map_or(0, VecDeque::len) < REDEEM_MAX_FAILURES_PER_SOURCE
+    }
+
+    /// Records a failed call from `source` at `now`.
+    pub fn failed(&mut self, source: &str, now: i64) {
+        self.all.push_back(now);
+        self.by_source.entry(source.to_string()).or_default().push_back(now);
+    }
+}
+
+/// Drops the failures older than the window.
+fn prune(failures: &mut VecDeque<i64>, now: i64) {
+    while failures.front().is_some_and(|t| *t < now - REDEEM_WINDOW_MS) {
+        failures.pop_front();
+    }
+}
 
 #[derive(Deserialize)]
 struct Id {
@@ -456,18 +576,6 @@ fn check_context_budget(budget: Option<u32>) -> Result<(), RpcError> {
     }
 }
 
-/// History is read by the crew MCP servers (same user, unix socket) only.
-fn ensure_local(peer: &Peer) -> Result<(), RpcError> {
-    if matches!(peer, Peer::Local) {
-        Ok(())
-    } else {
-        Err(RpcError::new(
-            UNAUTHORIZED,
-            "history can only be read by agents on the server",
-        ))
-    }
-}
-
 fn history_agent_name(store: &Store, agent_id: &str) -> Result<String, RpcError> {
     store
         .agent_get(agent_id)?
@@ -582,12 +690,13 @@ fn join_within(lines: &[String], max: usize) -> String {
 /// Handle one request. `events.subscribe` lives in [`serve`] because it needs
 /// connection state.
 pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResult {
-    if matches!(peer, Peer::Anonymous) && !matches!(method, "daemon.hello" | "pair.redeem") {
-        return Err(RpcError::new(
-            UNAUTHORIZED,
-            "not paired: run `bandito pair` on the server",
-        ));
+    if !allowed(peer, method) {
+        return Err(denied(peer, method));
     }
+    let p = match peer {
+        Peer::Agent(agent) => bind_to_agent(agent, p)?,
+        _ => p,
+    };
     if method.starts_with("fs.") {
         // Every `fs.*` name is answered there, unknown ones with METHOD_NOT_FOUND.
         return files::dispatch(app, method, p)
@@ -621,7 +730,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             "name": "bandito",
             "version": VERSION,
             "hostname": app.hostname,
-            "authenticated": !matches!(peer, Peer::Anonymous),
+            "authenticated": !matches!(peer, Peer::Anonymous(_)),
         })),
         "daemon.info" => ok(json!({
             "version": VERSION,
@@ -801,27 +910,18 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             ok(members)
         }
         "crew.send" => {
-            // Only the crew MCP servers (same user, unix socket) may send.
-            if !matches!(peer, Peer::Local) {
-                return Err(RpcError::new(
-                    UNAUTHORIZED,
-                    "crew messages can only come from agents on the server",
-                ));
-            }
             let CrewSendParams { from, to, message } = params(p)?;
             let to_id = app.sup.crew_send(&from, &to, &message).await?;
             ok(json!({ "to_id": to_id }))
         }
 
         "history.search" => {
-            ensure_local(peer)?;
             let h: HistorySearchParams = params(p)?;
             let name = history_agent_name(store, &h.agent_id)?;
             let events = store.history_search(&h.agent_id, &h.query, h.limit)?;
             ok(json!({ "text": format_history(&events, &name) }))
         }
         "history.day" => {
-            ensure_local(peer)?;
             let d: HistoryDayParams = params(p)?;
             let day = parse_day(&d.date)?;
             let (from, to) = local_day_bounds(day)?;
@@ -994,25 +1094,19 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
         "pair.redeem" => {
             let r: RedeemParams = params(p)?;
             let now = crate::store::now_ms();
-            {
-                let mut f = app.redeem_failures.lock().unwrap_or_else(|e| e.into_inner());
-                while f.front().is_some_and(|t| *t < now - REDEEM_WINDOW_MS) {
-                    f.pop_front();
-                }
-                if f.len() >= REDEEM_MAX_FAILURES {
-                    return Err(RpcError::new(
-                        RATE_LIMITED,
-                        "too many attempts, try again in a few minutes",
-                    ));
-                }
+            let source = redeem_source(peer);
+            let mut limiter = app.redeem.lock().unwrap_or_else(|e| e.into_inner());
+            if !limiter.allows(&source, now) {
+                return Err(RpcError::new(
+                    RATE_LIMITED,
+                    "too many attempts, try again in a few minutes",
+                ));
             }
             if !store.pairing_take(&r.code)? {
-                app.redeem_failures
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .push_back(now);
+                limiter.failed(&source, now);
                 return Err(RpcError::new(UNAUTHORIZED, "invalid or expired code"));
             }
+            drop(limiter);
             let name = r.device_name.trim();
             let name = if name.is_empty() { "device" } else { name };
             let token = pairing::new_token();
@@ -1089,7 +1183,7 @@ mod crew_tests {
         let (app, forge, _) = app_with_crew();
         let err = dispatch(
             &app,
-            &Peer::Local,
+            &Peer::Agent(forge.clone()),
             "crew.send",
             json!({ "from": forge, "to": "Nobody", "message": "hi" }),
         )
@@ -1100,8 +1194,8 @@ mod crew_tests {
     }
 
     #[tokio::test]
-    async fn crew_send_is_local_only_while_crew_list_is_open_to_devices() {
-        let (app, forge, _) = app_with_crew();
+    async fn crew_send_is_for_agents_only_while_crew_list_is_open_to_devices() {
+        let (app, forge, scout) = app_with_crew();
         let device = Peer::Device(Device {
             id: "dev-1".into(),
             name: "Mac".into(),
@@ -1116,14 +1210,31 @@ mod crew_tests {
         )
         .await
         .unwrap_err();
-        assert_eq!(
-            err,
-            RpcError::new(UNAUTHORIZED, "crew messages can only come from agents on the server")
-        );
+        assert_eq!(err, RpcError::new(UNAUTHORIZED, "crew.send is only for agents"));
+        // The owner's CLI is not an agent either.
+        let err = dispatch(
+            &app,
+            &Peer::Local,
+            "crew.send",
+            json!({ "from": forge, "to": "Scout", "message": "hi" }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, UNAUTHORIZED);
         let v = dispatch(&app, &device, "crew.list", json!({ "agent_id": forge }))
             .await
             .unwrap();
         assert_eq!(v.as_array().unwrap().len(), 1);
+        // An agent sends as itself: Scout's token cannot send for Forge.
+        let err = dispatch(
+            &app,
+            &Peer::Agent(scout),
+            "crew.send",
+            json!({ "from": forge, "to": "Scout", "message": "hi" }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, UNAUTHORIZED);
     }
 }
 
@@ -1257,6 +1368,7 @@ mod history_tests {
     #[tokio::test]
     async fn history_search_returns_matches_newest_first() {
         let (app, forge) = app_with_agent();
+        let agent = Peer::Agent(forge.clone());
         let store = app.sup.hub().store.clone();
         store
             .append_event(&forge, user("deploy plan", Source::User, None))
@@ -1279,7 +1391,7 @@ mod history_tests {
             .unwrap();
         let v = dispatch(
             &app,
-            &Peer::Local,
+            &agent,
             "history.search",
             json!({ "agent_id": forge, "query": "deploy" }),
         )
@@ -1295,9 +1407,10 @@ mod history_tests {
     #[tokio::test]
     async fn history_search_blank_query_and_unknown_agent() {
         let (app, forge) = app_with_agent();
+        let agent = Peer::Agent(forge.clone());
         let v = dispatch(
             &app,
-            &Peer::Local,
+            &agent,
             "history.search",
             json!({ "agent_id": forge, "query": "  " }),
         )
@@ -1305,9 +1418,19 @@ mod history_tests {
         .unwrap();
         assert_eq!(v["text"], "Nothing found.");
 
+        // An agent names only itself: another id is refused, whether it exists or not.
         let err = dispatch(
             &app,
-            &Peer::Local,
+            &agent,
+            "history.search",
+            json!({ "agent_id": "nope", "query": "x" }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err, RpcError::new(UNAUTHORIZED, "an agent can only act as itself"));
+        let err = dispatch(
+            &app,
+            &Peer::Agent("nope".into()),
             "history.search",
             json!({ "agent_id": "nope", "query": "x" }),
         )
@@ -1319,24 +1442,20 @@ mod history_tests {
     #[tokio::test]
     async fn history_day_reads_today_and_says_when_empty() {
         let (app, forge) = app_with_agent();
+        let agent = Peer::Agent(forge.clone());
         let store = app.sup.hub().store.clone();
         store
             .append_event(&forge, user("standup notes", Source::User, None))
             .unwrap();
         let today = Local::now().format("%Y-%m-%d").to_string();
-        let v = dispatch(
-            &app,
-            &Peer::Local,
-            "history.day",
-            json!({ "agent_id": forge, "date": today }),
-        )
-        .await
-        .unwrap();
+        let v = dispatch(&app, &agent, "history.day", json!({ "agent_id": forge, "date": today }))
+            .await
+            .unwrap();
         assert!(v["text"].as_str().unwrap().ends_with(" · user: standup notes"), "{v}");
 
         let v = dispatch(
             &app,
-            &Peer::Local,
+            &agent,
             "history.day",
             json!({ "agent_id": forge, "date": "2001-01-01" }),
         )
@@ -1348,21 +1467,17 @@ mod history_tests {
     #[tokio::test]
     async fn history_day_rejects_bad_dates() {
         let (app, forge) = app_with_agent();
+        let agent = Peer::Agent(forge.clone());
         for bad in ["2026-13-01", "2026-1-5", "2026-02-30", "yesterday"] {
-            let err = dispatch(
-                &app,
-                &Peer::Local,
-                "history.day",
-                json!({ "agent_id": forge, "date": bad }),
-            )
-            .await
-            .unwrap_err();
+            let err = dispatch(&app, &agent, "history.day", json!({ "agent_id": forge, "date": bad }))
+                .await
+                .unwrap_err();
             assert_eq!(err.code, INVALID_PARAMS, "{bad}");
         }
     }
 
     #[tokio::test]
-    async fn history_is_local_only() {
+    async fn history_is_for_agents_only() {
         let (app, forge) = app_with_agent();
         let device = Peer::Device(Device {
             id: "dev-1".into(),
@@ -1378,10 +1493,17 @@ mod history_tests {
         )
         .await
         .unwrap_err();
-        assert_eq!(
-            search,
-            RpcError::new(UNAUTHORIZED, "history can only be read by agents on the server")
-        );
+        assert_eq!(search, RpcError::new(UNAUTHORIZED, "history.search is only for agents"));
+        // The owner's CLI reads no agent's history either.
+        let owner = dispatch(
+            &app,
+            &Peer::Local,
+            "history.day",
+            json!({ "agent_id": forge, "date": "2026-10-09" }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(owner.code, UNAUTHORIZED);
         let day = dispatch(
             &app,
             &device,
@@ -1471,20 +1593,18 @@ pub async fn serve(app: Arc<App>, peer: Peer, mut inbox: mpsc::Receiver<String>,
                         }
                     },
                 };
-                let result = if req.method == "events.subscribe" {
-                    if matches!(peer, Peer::Anonymous) {
-                        Err(RpcError::new(UNAUTHORIZED, "not paired"))
-                    } else {
-                        match params::<SubscribeParams>(req.params) {
-                            Err(e) => Err(e),
-                            Ok(SubscribeParams { after }) => {
-                                // Subscribe first so nothing falls between backlog and live.
-                                events = Some(app.sup.hub().subscribe());
-                                last = after;
-                                match backfill(&app, &mut last, &outbox).await {
-                                    Ok(()) => Ok(json!({ "last_seq": last })),
-                                    Err(_) => break,
-                                }
+                let result = if !allowed(&peer, &req.method) {
+                    Err(denied(&peer, &req.method))
+                } else if req.method == "events.subscribe" {
+                    match params::<SubscribeParams>(req.params) {
+                        Err(e) => Err(e),
+                        Ok(SubscribeParams { after }) => {
+                            // Subscribe first so nothing falls between backlog and live.
+                            events = Some(app.sup.hub().subscribe());
+                            last = after;
+                            match backfill(&app, &mut last, &outbox).await {
+                                Ok(()) => Ok(json!({ "last_seq": last })),
+                                Err(_) => break,
                             }
                         }
                     }
@@ -2322,5 +2442,220 @@ mod fallback_tests {
         .unwrap();
         assert_eq!(ok["runtime"], "codex");
         assert!(ok["fallback_runtime"].is_null());
+    }
+}
+
+#[cfg(test)]
+mod trust_tests {
+    use super::*;
+    use crate::hub::Hub;
+    use crate::store::Store;
+    use crate::supervisor::{Runtimes, Supervisor};
+
+    fn app() -> Arc<App> {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let sup = Supervisor::new(Hub::new(store), Runtimes::default(), None);
+        App::new(sup, std::env::temp_dir().join("bandito-trust-tests"))
+    }
+
+    fn device() -> Peer {
+        Peer::Device(Device {
+            id: "dev-1".into(),
+            name: "Mac".into(),
+            created_at: 0,
+            last_seen_at: None,
+        })
+    }
+
+    /// Methods an agent must never reach: the owner's tools and the apps' administration.
+    const OWNER_ONLY: &[&str] = &[
+        "pair.create",
+        "pair.redeem",
+        "rules.list",
+        "rules.set",
+        "rules.delete",
+        "approvals.list",
+        "approvals.resolve",
+        "devices.list",
+        "devices.revoke",
+        "secrets.list",
+        "secrets.set",
+        "secrets.delete",
+        "agents.create",
+        "agents.update",
+        "agents.delete",
+        "agents.get",
+        "agents.list",
+        "agents.send",
+        "agents.interrupt",
+        "commands.list",
+        "workspaces.list",
+        "workspaces.create",
+        "workspaces.update",
+        "workspaces.delete",
+        "workspaces.start",
+        "workspaces.stop",
+        "setup.status",
+        "setup.install",
+        "setup.job",
+        "schedules.create",
+        "daemon.info",
+        "fs.list",
+        "term.open",
+        "events.since",
+        "usage.refresh",
+        "host.stats",
+        "changes.checkpoints",
+        "browser.start",
+        "browser.stop",
+        "screen.start",
+        "screen.stop",
+    ];
+
+    #[tokio::test]
+    async fn agents_cannot_reach_the_owners_methods() {
+        let agent = Peer::Agent("agent-a".into());
+        for method in OWNER_ONLY {
+            let err = dispatch(&app(), &agent, method, json!({})).await.unwrap_err();
+            assert_eq!(err.code, UNAUTHORIZED, "{method}");
+        }
+    }
+
+    #[tokio::test]
+    async fn agents_cannot_install_commands_for_the_user() {
+        let agent = Peer::Agent("agent-a".into());
+        let err = dispatch(&app(), &agent, "commands.install", json!({ "scope": "user" }))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn agents_cannot_reach_the_owners_methods_through_a_secret_or_a_rule() {
+        let agent = Peer::Agent("agent-a".into());
+        let cases = [
+            ("rules.set", json!({ "pattern": "rm", "action": "allow" })),
+            ("approvals.resolve", json!({ "approval_id": "x", "decision": "allow" })),
+            ("agents.update", json!({ "id": "agent-a", "name": "Other" })),
+            ("agents.create", json!({ "name": "x" })),
+            ("agents.delete", json!({ "id": "agent-a" })),
+            ("secrets.list", json!({})),
+            ("pair.create", json!({})),
+            ("devices.list", json!({})),
+            ("setup.install", json!({})),
+            ("workspaces.create", json!({ "name": "x" })),
+        ];
+        for (method, params) in cases {
+            let err = dispatch(&app(), &agent, method, params).await.unwrap_err();
+            assert_eq!(err.code, UNAUTHORIZED, "{method}");
+        }
+    }
+
+    #[tokio::test]
+    async fn owner_and_devices_cannot_use_the_agent_tools() {
+        let calls = [
+            ("browser.agent.click", json!({ "node": 1, "agent_id": "agent-a" })),
+            ("screen.agent.click", json!({ "x": 1, "y": 1 })),
+            ("crew.send", json!({ "from": "agent-a", "to": "x", "message": "hi" })),
+            ("history.day", json!({ "agent_id": "agent-a", "date": "2026-10-09" })),
+        ];
+        for (method, params) in calls {
+            for peer in [Peer::Local, device()] {
+                let err = dispatch(&app(), &peer, method, params.clone()).await.unwrap_err();
+                assert_eq!(err.code, UNAUTHORIZED, "{method} from {peer:?}");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn an_agent_may_call_its_crew_tools() {
+        let agent = Peer::Agent("agent-a".into());
+        let v = dispatch(&app(), &agent, "crew.list", json!({})).await.unwrap();
+        assert_eq!(v, json!([]));
+    }
+
+    #[test]
+    fn who_may_call_what() {
+        let agent = Peer::Agent("agent-a".into());
+        let anonymous = Peer::Anonymous("203.0.113.7".into());
+        for method in AGENT_METHODS {
+            assert!(allowed(&agent, method), "{method}");
+        }
+        assert!(allowed(&agent, "daemon.hello"));
+        assert!(!allowed(&agent, "events.subscribe"));
+        assert!(!allowed(&agent, "term.attach"));
+        assert!(!allowed(&agent, "rules.set"));
+        assert!(allowed(&Peer::Local, "rules.set"));
+        assert!(allowed(&Peer::Local, "events.subscribe"));
+        assert!(!allowed(&Peer::Local, "history.day"));
+        assert!(!allowed(&Peer::Local, "crew.send"));
+        assert!(allowed(&device(), "rules.set"));
+        assert!(allowed(&device(), "crew.list"));
+        assert!(!allowed(&device(), "browser.agent.click"));
+        assert!(allowed(&anonymous, "daemon.hello"));
+        assert!(allowed(&anonymous, "pair.redeem"));
+        assert!(!allowed(&anonymous, "crew.list"));
+    }
+
+    #[tokio::test]
+    async fn an_agent_names_only_itself_in_its_params() {
+        let agent = Peer::Agent("agent-a".into());
+        let err = dispatch(&app(), &agent, "crew.list", json!({ "agent_id": "agent-b" }))
+            .await
+            .unwrap_err();
+        assert_eq!(err, RpcError::new(UNAUTHORIZED, "an agent can only act as itself"));
+        assert!(
+            dispatch(&app(), &agent, "crew.list", json!({ "agent_id": "agent-a" }))
+                .await
+                .is_ok()
+        );
+    }
+
+    async fn try_redeem(app: &Arc<App>, peer: &Peer) -> RpcResult {
+        dispatch(
+            app,
+            peer,
+            "pair.redeem",
+            json!({ "code": "not-a-real-code", "device_name": "test" }),
+        )
+        .await
+    }
+
+    #[tokio::test]
+    async fn a_source_gets_five_failed_redeems_then_is_stopped() {
+        let app = app();
+        let attacker = Peer::Anonymous("203.0.113.7".into());
+        for _ in 0..REDEEM_MAX_FAILURES_PER_SOURCE {
+            let err = try_redeem(&app, &attacker).await.unwrap_err();
+            assert_eq!(err.code, UNAUTHORIZED);
+        }
+        let err = try_redeem(&app, &attacker).await.unwrap_err();
+        assert_eq!(err.code, RATE_LIMITED);
+        // Another source is not held back by it.
+        let other = Peer::Anonymous("198.51.100.9".into());
+        let err = try_redeem(&app, &other).await.unwrap_err();
+        assert_eq!(err.code, UNAUTHORIZED);
+    }
+
+    #[test]
+    fn the_daemon_wide_budget_applies_to_every_source() {
+        let mut limiter = RedeemLimiter::default();
+        let now = 1_000_000;
+        for i in 0..REDEEM_MAX_FAILURES {
+            limiter.failed(&format!("ip-{i}"), now);
+        }
+        assert!(!limiter.allows("fresh-source", now));
+        // The failures leave the window after ten minutes.
+        assert!(limiter.allows("fresh-source", now + REDEEM_WINDOW_MS + 1));
+    }
+
+    #[test]
+    fn a_failure_leaves_the_window_after_ten_minutes() {
+        let mut limiter = RedeemLimiter::default();
+        for _ in 0..REDEEM_MAX_FAILURES_PER_SOURCE {
+            limiter.failed("ip", 0);
+        }
+        assert!(!limiter.allows("ip", REDEEM_WINDOW_MS - 1));
+        assert!(limiter.allows("ip", REDEEM_WINDOW_MS + 1));
     }
 }

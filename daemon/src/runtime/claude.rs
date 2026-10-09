@@ -158,10 +158,19 @@ impl Runtime for ClaudeRuntime {
         }
         if let Some((prog, args)) = &cfg.mcp {
             let config = json!({
-                "mcpServers": {"bandito": {"command": prog.display().to_string(), "args": args}}
+                "mcpServers": {"bandito": {"command": crate::runtime::path_text(prog)?, "args": args}}
             })
             .to_string();
-            cmd.arg("--mcp-config").arg(config);
+            match &cfg.agent_mcp_file {
+                // A file of its own, owner-only and removed with the session: the config stays out of argv.
+                Some(file) => {
+                    crate::agent_token::write_private(file, &config)?;
+                    cmd.arg("--mcp-config").arg(file);
+                }
+                None => {
+                    cmd.arg("--mcp-config").arg(config);
+                }
+            }
         }
         // The agent's file tools may not touch Bandito's own folder (see docs/ARCHITECTURE.md#approvals-policy).
         // One argument of inline JSON, so no rule can be split at a space.
@@ -170,10 +179,14 @@ impl Runtime for ClaudeRuntime {
         cmd.current_dir(&cfg.cwd).envs(cfg.env.iter().map(|(k, v)| (k, v)));
         // Marks the CLI and its children for `host.processes` (see docs/ARCHITECTURE.md#host).
         cmd.env("BANDITO_AGENT_ID", &cfg.agent_id);
+        if let Some(token) = &cfg.agent_token {
+            cmd.env("BANDITO_AGENT_TOKEN", token);
+        }
 
         let pending: PendingMap = Arc::new(Mutex::new(HashMap::new()));
         let router_pending = Arc::clone(&pending);
         let router: Router = Box::new(move |msg: &Value, sink: &LineSink| route(msg, &router_pending, sink));
+        let cmd = crate::runtime::sandbox::wrap(cmd, cfg.sandbox.as_ref())?;
         let cmd = crate::workspace::confine(cmd, cfg.workspace.as_ref());
         let (proc, output) = JsonProcess::spawn(cmd, "claude", router)?;
         let init = json!({

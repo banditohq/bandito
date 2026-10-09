@@ -3,6 +3,7 @@
 //! crew MCP tools, which call the `browser.agent.*` methods. See docs/ARCHITECTURE.md#browser.
 
 use crate::cdp::{Cdp, Element};
+use crate::children::TrackedChild;
 use crate::event::Decision;
 use crate::rpc::preview::client;
 use crate::setup;
@@ -91,7 +92,7 @@ pub enum BrowserError {
 
 /// One running Chrome.
 struct Running {
-    child: Child,
+    child: TrackedChild,
     pid: u32,
     port: u16,
     browser_path: String,
@@ -104,7 +105,14 @@ struct Running {
 
 impl Running {
     fn is_alive(&mut self) -> bool {
-        matches!(self.child.try_wait(), Ok(None))
+        match self.child.try_wait() {
+            Ok(None) => true,
+            // Reaped: its registration ends here.
+            _ => {
+                self.child.release();
+                false
+            }
+        }
     }
 
     fn status(&self) -> Status {
@@ -125,6 +133,7 @@ impl Running {
             signal_group(self.pid, libc::SIGKILL);
             let _ = self.child.wait().await;
         }
+        self.child.release();
     }
 }
 
@@ -180,7 +189,7 @@ impl BrowserManager {
         let log_again = log.try_clone().map_err(start_failed)?;
         let port = free_port().map_err(start_failed)?;
         let no_sandbox = std::env::var(NO_SANDBOX_ENV).is_ok_and(|v| v == "1");
-        let mut child = Command::new(&binary)
+        let child = Command::new(&binary)
             .args(chrome_args(&profile, port, no_sandbox))
             .stdin(Stdio::null())
             .stdout(Stdio::from(log))
@@ -190,11 +199,13 @@ impl BrowserManager {
             .spawn()
             .map_err(start_failed)?;
         let pid = child.id().unwrap_or_default();
+        let mut child = TrackedChild::new(child);
         let browser_path = match wait_for_devtools(port, &mut child).await {
             Ok(path) => path,
             Err(e) => {
                 signal_group(pid, libc::SIGKILL);
                 let _ = child.wait().await;
+                child.release();
                 return Err(BrowserError::StartFailed(format!(
                     "{e:#} (log: {})",
                     log_path.display()
@@ -815,7 +826,7 @@ mod tests {
 
     fn fake_running(child: Child, pid: u32, activity: Instant) -> Running {
         Running {
-            child,
+            child: TrackedChild::new(child),
             pid,
             port: 9,
             browser_path: "/devtools/browser/x".into(),

@@ -571,9 +571,14 @@ mod tests {
             .unwrap_err();
         assert_eq!(err.code, INVALID_PARAMS);
 
-        let err = dispatch(&app, &Peer::Anonymous, "fs.list", json!({ "path": root }))
-            .await
-            .unwrap_err();
+        let err = dispatch(
+            &app,
+            &Peer::Anonymous(String::new()),
+            "fs.list",
+            json!({ "path": root }),
+        )
+        .await
+        .unwrap_err();
         assert_eq!(err.code, UNAUTHORIZED);
     }
 

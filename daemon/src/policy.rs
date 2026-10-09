@@ -902,11 +902,10 @@ fn risky(req: &ApprovalRequest, roots: &[&str], prot: &Protected, parsed: Option
                 match target_path(exp.as_deref(), &text, cmd.cwd.as_deref(), true) {
                     None => {}
                     Some(None) => return Verdict::Ask("can't check: unknown path".into()),
-                    Some(Some(abs)) => {
-                        if !DEVICES.contains(&abs.as_str()) && is_outside_all(&abs, roots) {
-                            return Verdict::Ask(format!("writes outside {first}"));
-                        }
+                    Some(Some(abs)) if !DEVICES.contains(&abs.as_str()) && is_outside_all(&abs, roots) => {
+                        return Verdict::Ask(format!("writes outside {first}"));
                     }
+                    Some(Some(_)) => {}
                 }
             }
         }

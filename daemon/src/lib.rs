@@ -1,9 +1,12 @@
 //! Bandito daemon library: store, runtimes, policy, RPC. The `bandito` binary is a thin CLI over it.
 
+pub mod agent_token;
 pub mod browser;
 pub mod cdp;
 pub mod checkpoint;
+pub mod children;
 pub mod commands;
+pub mod config;
 pub mod crew;
 pub mod event;
 pub mod files;

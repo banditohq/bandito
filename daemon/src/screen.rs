@@ -4,6 +4,8 @@
 //! See docs/ARCHITECTURE.md#screen.
 
 #[cfg(target_os = "linux")]
+use crate::children::TrackedChild;
+#[cfg(target_os = "linux")]
 use crate::store::now_ms;
 use serde::Serialize;
 use serde_json::Value;
@@ -30,7 +32,7 @@ use std::time::Duration;
 #[cfg(target_os = "linux")]
 use std::time::Instant;
 #[cfg(target_os = "linux")]
-use tokio::process::{Child, Command};
+use tokio::process::Command;
 #[cfg(target_os = "linux")]
 use tokio::task::JoinHandle;
 
@@ -217,8 +219,8 @@ struct Session {
     controller: Option<Controller>,
     /// Unix milliseconds of the last agent call.
     last_agent_ms: i64,
-    xvfb: Child,
-    openbox: Option<Child>,
+    xvfb: TrackedChild,
+    openbox: Option<TrackedChild>,
     vnc: VncTask,
     /// Process group ids of programs started with `Launch` that are still running.
     launched: Arc<StdMutex<Vec<i32>>>,
@@ -927,7 +929,7 @@ async fn start_vnc(dir: &Path, display: u32, xauth: &Path) -> Result<Vnc, Screen
 
 /// Owns x11vnc: restarts it once if it exits on its own, and reaps it.
 #[cfg(target_os = "linux")]
-fn spawn_vnc_watcher(x_display: u32, port: u16, passwd: PathBuf, xauth: PathBuf, mut child: Child) -> VncTask {
+fn spawn_vnc_watcher(x_display: u32, port: u16, passwd: PathBuf, xauth: PathBuf, mut child: TrackedChild) -> VncTask {
     let pgid = Arc::new(AtomicI32::new(child.id().map_or(0, |p| p as i32)));
     let stopping = Arc::new(AtomicBool::new(false));
     let watch_pgid = Arc::clone(&pgid);
@@ -936,6 +938,7 @@ fn spawn_vnc_watcher(x_display: u32, port: u16, passwd: PathBuf, xauth: PathBuf,
         let mut restarted = false;
         loop {
             let _ = child.wait().await;
+            child.release();
             watch_pgid.store(0, Ordering::SeqCst);
             if watch_stopping.load(Ordering::SeqCst) {
                 return;
@@ -978,7 +981,7 @@ async fn stop_vnc(task: VncTask) {
 
 /// Waits until Xvfb has opened its socket. Fails early if Xvfb exits.
 #[cfg(target_os = "linux")]
-async fn wait_for_socket(child: &mut Child, display: u32) -> Result<(), ScreenError> {
+async fn wait_for_socket(child: &mut TrackedChild, display: u32) -> Result<(), ScreenError> {
     let socket = PathBuf::from(format!("/tmp/.X11-unix/X{display}"));
     if wait_until(START_TIMEOUT, || socket.exists()).await {
         return Ok(());
@@ -993,7 +996,7 @@ async fn wait_for_socket(child: &mut Child, display: u32) -> Result<(), ScreenEr
 
 /// openbox is optional: without it the screen works, but windows have no frames.
 #[cfg(target_os = "linux")]
-fn spawn_openbox(display: u32, xauth: &Path) -> Option<Child> {
+fn spawn_openbox(display: u32, xauth: &Path) -> Option<TrackedChild> {
     match spawn_group(&["openbox".to_string()], &display_env(display, xauth), "openbox") {
         Ok(child) => Some(child),
         Err(e) => {
@@ -1020,7 +1023,11 @@ async fn wait_until(limit: Duration, mut ready: impl FnMut() -> bool) -> bool {
 
 /// Spawns a program in its own process group, with no stdio. `Missing` if the program is not installed.
 #[cfg(target_os = "linux")]
-fn spawn_group(argv: &[String], env: &[(String, String)], component: &'static str) -> Result<Child, ScreenError> {
+fn spawn_group(
+    argv: &[String],
+    env: &[(String, String)],
+    component: &'static str,
+) -> Result<TrackedChild, ScreenError> {
     let mut cmd = Command::new(&argv[0]);
     cmd.args(&argv[1..])
         .envs(env.iter().map(|(k, v)| (k.as_str(), v.as_str())))
@@ -1029,7 +1036,8 @@ fn spawn_group(argv: &[String], env: &[(String, String)], component: &'static st
         .stderr(Stdio::null())
         .kill_on_drop(true);
     cmd.as_std_mut().process_group(0);
-    cmd.spawn().map_err(|e| spawn_error(&e, component))
+    let child = cmd.spawn().map_err(|e| spawn_error(&e, component))?;
+    Ok(TrackedChild::new(child))
 }
 
 #[cfg(target_os = "linux")]
@@ -1142,6 +1150,7 @@ fn launch_program(session: &Session, command: &str) -> Result<(), ScreenError> {
     let launched = Arc::clone(&session.launched);
     tokio::spawn(async move {
         let _ = child.wait().await;
+        child.release();
         lock_std(&launched).retain(|&p| p != pgid);
     });
     Ok(())
@@ -1170,13 +1179,14 @@ async fn shutdown_session(session: Session) {
 
 /// SIGTERM to a child's group, SIGKILL after `GRACE` if it is still there. Reaps the child.
 #[cfg(target_os = "linux")]
-async fn terminate_child(mut child: Child) {
+async fn terminate_child(mut child: TrackedChild) {
     let pgid = child.id().map_or(0, |p| p as i32);
     signal_group(pgid, libc::SIGTERM);
     if tokio::time::timeout(GRACE, child.wait()).await.is_err() {
         signal_group(pgid, libc::SIGKILL);
         let _ = child.wait().await;
     }
+    child.release();
 }
 
 #[cfg(target_os = "linux")]
