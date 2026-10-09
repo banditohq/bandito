@@ -6,6 +6,11 @@ on:
   push:
     branches: [main]
     paths: ["daemon/**", ".github/workflows/daemon.yml"]
+  # macOS-specific code (the agents' sandbox, "This Mac") runs every night and on main; PRs test on Linux,
+  # where runners are plentiful, and locally on a Mac through .claude/verify.sh before they are sent.
+  schedule:
+    - cron: "0 19 * * *"
+  workflow_dispatch:
 
 # A newer push to the same PR or branch cancels the run for the older one.
 concurrency:
@@ -20,7 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: ${{ fromJSON(github.event_name == 'pull_request' && '["ubuntu-latest"]' || '["ubuntu-latest","macos-latest"]') }}
     runs-on: ${{ matrix.os }}
     defaults:
       run:

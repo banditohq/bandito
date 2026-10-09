@@ -1,8 +1,9 @@
 name: apple
 
 on:
+  # A PR that changes only the daemon does not rebuild the app (daemon.yml tests it); main still does.
   pull_request:
-    paths: ["apps/**", "daemon/**", "i18n/**", "brand/tokens/**", "guide/**", "scripts/check_guide.py", ".github/workflows/apple.yml"]
+    paths: ["apps/**", "i18n/**", "brand/tokens/**", "guide/**", "scripts/check_guide.py", ".github/workflows/apple.yml"]
   push:
     branches: [main]
     paths: ["apps/**", "daemon/**", "i18n/**", "brand/tokens/**", "guide/**", "scripts/check_guide.py", ".github/workflows/apple.yml"]
@@ -54,6 +55,15 @@ jobs:
 
       - name: Install XcodeGen
         run: brew install xcodegen
+
+      - name: Cache Xcode build products
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/bandito-xcode
+          key: xcode-${{ runner.os }}-${{ hashFiles('apps/mac/project.yml', 'apps/mac/BanditoKit/Package.resolved') }}-${{ github.sha }}
+          restore-keys: |
+            xcode-${{ runner.os }}-${{ hashFiles('apps/mac/project.yml', 'apps/mac/BanditoKit/Package.resolved') }}-
+            xcode-${{ runner.os }}-
 
       - name: Build the Mac app (unsigned)
         # build.sh builds the daemon through the app's build phase; CARGO_TARGET_DIR puts it where the cache looks.
