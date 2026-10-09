@@ -37,18 +37,19 @@ const CHROME_KEYRING_NAME: &str = "google-chrome.gpg";
 const CHROME_LIST_NAME: &str = "google-chrome.list";
 const CHROME_REPO_LINE: &str = "deb [arch=amd64 signed-by=/etc/apt/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb/ stable main";
 /// npm packages that Bandito installs, each with the version it is pinned to. The versions move
-/// with a Bandito release, never on their own.
-const NPM_PINS: &[(&str, &str)] = &[("@anthropic-ai/claude-code", "2.1.295"), ("@openai/codex", "0.162.0")];
+/// with a Bandito release, never on their own. The default workspace image uses the same table.
+pub const NPM_PINS: &[(&str, &str)] = &[("@anthropic-ai/claude-code", "2.1.295"), ("@openai/codex", "0.162.0")];
 const DOCKER_DOCS: &str = "https://docs.docker.com/engine/install/";
 const GROK_DOCS: &str = "https://x.ai/cli";
 pub const BROWSERS: [&str; 4] = ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser"];
 
 /// Every component id, in the order status reports them.
-pub const COMPONENTS: [&str; 12] = [
+pub const COMPONENTS: [&str; 13] = [
     "xvfb",
     "x11vnc",
     "xdotool",
     "xauth",
+    "imagemagick",
     "window_manager",
     "fonts",
     "browser",
@@ -59,13 +60,22 @@ pub const COMPONENTS: [&str; 12] = [
     "docker",
 ];
 /// What the screen feature needs.
-const SCREEN_COMPONENTS: [&str; 6] = ["xvfb", "x11vnc", "xdotool", "xauth", "window_manager", "fonts"];
-/// Components whose install goes through the system package manager, so through sudo.
-const SUDO_COMPONENTS: [&str; 7] = [
+const SCREEN_COMPONENTS: [&str; 7] = [
     "xvfb",
     "x11vnc",
     "xdotool",
     "xauth",
+    "imagemagick",
+    "window_manager",
+    "fonts",
+];
+/// Components whose install goes through the system package manager, so through sudo.
+const SUDO_COMPONENTS: [&str; 8] = [
+    "xvfb",
+    "x11vnc",
+    "xdotool",
+    "xauth",
+    "imagemagick",
     "window_manager",
     "fonts",
     "browser",
@@ -511,6 +521,10 @@ fn package_names(id: &str, pm: PackageManager) -> Option<&'static [&'static str]
         ("xauth", Apt) => &["xauth"],
         ("xauth", Dnf) => &["xorg-x11-xauth"],
         ("xauth", Pacman) => &["xorg-xauth"],
+        // The `import` and `convert` programs of ImageMagick, for screenshots.
+        ("imagemagick", Apt) => &["imagemagick"],
+        ("imagemagick", Dnf) => &["ImageMagick"],
+        ("imagemagick", Pacman) => &["imagemagick"],
         ("window_manager", Apt | Dnf | Pacman) => &["openbox"],
         ("fonts", Apt) => &["fonts-noto", "fonts-noto-color-emoji"],
         ("fonts", Dnf) => &["google-noto-sans-fonts"],
@@ -968,6 +982,7 @@ impl Setup {
                 let name = match id {
                     "xvfb" => "Xvfb",
                     "window_manager" => "openbox",
+                    "imagemagick" => "import",
                     other => other,
                 };
                 (self.binary(name, false).await.0, None, None)
@@ -1700,10 +1715,12 @@ fpr:::::::::1111222233334444555566667777888899990000:
     }
 
     #[test]
-    fn xauth_is_a_screen_component_installed_with_apt() {
-        assert!(COMPONENTS.contains(&"xauth"));
-        assert!(SCREEN_COMPONENTS.contains(&"xauth"));
-        assert!(SUDO_COMPONENTS.contains(&"xauth"));
+    fn xauth_and_imagemagick_are_screen_components_installed_with_system_packages() {
+        for id in ["xauth", "imagemagick"] {
+            assert!(COMPONENTS.contains(&id), "{id}");
+            assert!(SCREEN_COMPONENTS.contains(&id), "{id}");
+            assert!(SUDO_COMPONENTS.contains(&id), "{id}");
+        }
         assert_eq!(package_names("xauth", PackageManager::Apt), Some(&["xauth"][..]));
         assert_eq!(
             package_names("xauth", PackageManager::Dnf),
@@ -1713,6 +1730,35 @@ fpr:::::::::1111222233334444555566667777888899990000:
             package_names("xauth", PackageManager::Pacman),
             Some(&["xorg-xauth"][..])
         );
+        assert_eq!(
+            package_names("imagemagick", PackageManager::Apt),
+            Some(&["imagemagick"][..])
+        );
+        assert_eq!(
+            package_names("imagemagick", PackageManager::Dnf),
+            Some(&["ImageMagick"][..])
+        );
+        assert_eq!(
+            package_names("imagemagick", PackageManager::Pacman),
+            Some(&["imagemagick"][..])
+        );
+    }
+
+    #[tokio::test]
+    async fn screen_is_missing_until_import_is_on_the_path() {
+        let dir = tempfile::tempdir().unwrap();
+        for name in ["Xvfb", "x11vnc", "xdotool", "xauth", "openbox", "fc-list"] {
+            stub(dir.path(), name);
+        }
+        let mock = Arc::new(MockRunner::default());
+        mock.on("fc-list", ok_reply("Noto Sans:style=Regular\n"));
+        let setup = setup_with(platform(dir.path(), Some(PackageManager::Apt), Distro::Debian), &mock);
+        assert_eq!(setup.status().await.features.screen, Ready::Missing);
+        assert!(!setup.probe("imagemagick").await.installed);
+        stub(dir.path(), "import");
+        let status = setup.status().await;
+        assert!(status.components.iter().any(|c| c.id == "imagemagick" && c.installed));
+        assert_eq!(status.features.screen, Ready::Ready);
     }
 
     /// Installs the Chrome repository with a scripted runner. `key_listing` is what gpg prints for the

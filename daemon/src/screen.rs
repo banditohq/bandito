@@ -511,18 +511,17 @@ pub fn x11vnc_argv(display: u32, port: u16, passwd_file: &Path, xauthority: &Pat
     ]
 }
 
-/// `xauth -f FILE add :N MIT-MAGIC-COOKIE-1 HEX`: writes the cookie that Xvfb accepts.
+/// `xauth -f FILE source -`: runs the xauth commands read from stdin. The cookie travels on stdin
+/// (see [`xauth_source_input`]), so it never shows in the argument list of a process.
 #[cfg(any(target_os = "linux", test))]
-pub fn xauth_add_argv(file: &Path, display: u32, cookie_hex: &str) -> Vec<String> {
-    argv![
-        "xauth",
-        "-f",
-        file.display(),
-        "add",
-        format!(":{display}"),
-        "MIT-MAGIC-COOKIE-1",
-        cookie_hex,
-    ]
+pub fn xauth_source_argv(file: &Path) -> Vec<String> {
+    argv!["xauth", "-f", file.display(), "source", "-"]
+}
+
+/// The stdin of [`xauth_source_argv`]: one line, `add :N MIT-MAGIC-COOKIE-1 HEX`.
+#[cfg(any(target_os = "linux", test))]
+pub fn xauth_source_input(display: u32, cookie_hex: &str) -> Vec<u8> {
+    format!("add :{display} MIT-MAGIC-COOKIE-1 {cookie_hex}\n").into_bytes()
 }
 
 /// Environment that puts a program on the screen of `display`: `DISPLAY` and the screen's `XAUTHORITY`.
@@ -824,9 +823,14 @@ async fn write_xauthority(dir: &Path, display: u32) -> Result<PathBuf, ScreenErr
     let _ = std::fs::remove_file(&path);
     let cookie = random_cookie_hex();
     let written = async {
-        run_capture(&xauth_add_argv(&path, display, &cookie), &[], None, "xauth")
-            .await
-            .map_err(start_failed)?;
+        run_capture(
+            &xauth_source_argv(&path),
+            &[],
+            Some(xauth_source_input(display, &cookie)),
+            "xauth",
+        )
+        .await
+        .map_err(start_failed)?;
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))
             .map_err(|e| ScreenError::StartFailed(format!("cannot protect the X authority file: {e}")))
     }
@@ -1296,10 +1300,14 @@ mod tests {
     }
 
     #[test]
-    fn xauth_adds_a_magic_cookie_for_the_display_to_the_screen_file() {
+    fn xauth_reads_the_cookie_from_stdin_not_from_its_arguments() {
+        let cookie = "00112233445566778899aabbccddeeff";
+        let argv = xauth_source_argv(Path::new(AUTH));
+        assert_eq!(argv, ["xauth", "-f", AUTH, "source", "-"]);
+        assert!(argv.iter().all(|arg| !arg.contains(cookie)), "{argv:?}");
         assert_eq!(
-            xauth_add_argv(Path::new(AUTH), 90, "00ff"),
-            ["xauth", "-f", AUTH, "add", ":90", "MIT-MAGIC-COOKIE-1", "00ff"]
+            xauth_source_input(90, cookie),
+            format!("add :90 MIT-MAGIC-COOKIE-1 {cookie}\n").into_bytes()
         );
     }
 
