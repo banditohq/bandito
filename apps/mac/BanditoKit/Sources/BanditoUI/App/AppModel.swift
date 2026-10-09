@@ -86,11 +86,46 @@ public final class AppModel {
     }
 
     public func connectAll() async {
+        await migrateLocalServers()
         await withTaskGroup(of: Void.self) { group in
             for s in servers {
                 group.addTask { await s.connect() }
             }
         }
+    }
+
+    /// Moves the saved `.local` servers (this Mac, over its unix socket) to the daemon's WebSocket with a device
+    /// token (`LocalDaemonPairing`). It runs at each launch, before the connect, and a server that is moved is no
+    /// longer `.local`, so it happens once. A server that cannot be paired yet stays `.local`; the next launch
+    /// tries again.
+    func migrateLocalServers(
+        pairing: LocalDaemonPairing = .installed(),
+        storeToken: (String, UUID) -> Bool = { Keychain.setToken($0, for: $1) }
+    ) async {
+        let pending = servers.filter { server in
+            if case .local = server.config.endpoint { true } else { false }
+        }.map(\.id)
+        var changed = false
+        for id in pending {
+            guard let old = servers.first(where: { $0.id == id }) else { continue }
+            do {
+                let config = try await pairing.serverConfig(
+                    name: old.config.name, id: id, deviceName: Host.current().localizedName ?? "This Mac")
+                guard let token = config.token, storeToken(token, id) else {
+                    lastError = "Could not save this Mac's device token in the Keychain."
+                    continue
+                }
+                await old.disconnect()
+                guard let index = servers.firstIndex(where: { $0.id == id }) else { continue }
+                let model = ServerModel(config: config)
+                attachNotifications(model)
+                servers[index] = model
+                changed = true
+            } catch {
+                // Still `.local`: the next launch tries again.
+            }
+        }
+        if changed { save() }
     }
 
     public func add(_ config: ServerConfig) {

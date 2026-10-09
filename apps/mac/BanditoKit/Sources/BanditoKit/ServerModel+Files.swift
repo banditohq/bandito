@@ -146,32 +146,14 @@ extension ServerModel {
 
     /// A GET request for `GET /v1/files/raw?path=…`, for streaming a file's bytes (images, video, PDF).
     ///
-    /// - This Mac (unix socket): a `file://` URL to `path`, no network.
-    /// - WebSocket server: the same origin over http(s), with `Authorization: Bearer` when the server has a
-    ///   token. The token is sent only where `WebSocketTransport` allows tokens (TLS or loopback). A server
-    ///   that has a token but is reached without TLS gets `nil`: no request, so no token travels in the clear.
-    ///   A server without a token gets a request without the header.
-    public func rawURLRequest(path: String) -> URLRequest? {
-        switch config.endpoint {
-        case .local:
+    /// - This Mac, not yet paired (`.local`): a `file://` URL to `path`, no network.
+    /// - Any daemon server (WebSocket, or SSH through its tunnel): the daemon's own route with the device token as
+    ///   `Authorization: Bearer`. See `ServerModel.daemonRequest` for the address and the token rule.
+    public func rawURLRequest(path: String) async throws -> URLRequest {
+        if case .local = config.endpoint {
             return URLRequest(url: URL(fileURLWithPath: path))
-        case .ssh:
-            // Not yet: a raw URL needs the SSH tunnel's local port, which the model does not own.
-            return nil
-        case .webSocket(let server):
-            if config.token != nil, !WebSocketTransport.allowsToken(for: server) { return nil }
-            guard var components = URLComponents(url: server, resolvingAgainstBaseURL: false) else { return nil }
-            components.scheme = components.scheme?.lowercased() == "wss" ? "https" : "http"
-            components.path = "/v1/files/raw"
-            components.percentEncodedQuery = "path=" + Self.queryEncoded(path)
-            components.fragment = nil
-            guard let url = components.url else { return nil }
-            var request = URLRequest(url: url)
-            if let token = config.token {
-                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-            }
-            return request
         }
+        return try await daemonRequest(path: "/v1/files/raw", query: [(name: "path", value: path)])
     }
 
     /// Percent-encodes a query value the way the daemon's form decoder reads it: `+`, `&`, `=`, `#`

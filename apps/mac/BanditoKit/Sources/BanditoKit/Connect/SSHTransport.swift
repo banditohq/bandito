@@ -48,6 +48,11 @@ public actor SSHTransport: RPCTransport {
         await tunnel?.stop()
         tunnel = nil
     }
+
+    /// The tunnel's HTTP base, as long as the tunnel is up (see `SSHTunnel.httpBase`).
+    public var httpBase: URL? {
+        get async { await tunnel?.httpBase }
+    }
 }
 
 #endif

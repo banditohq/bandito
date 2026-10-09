@@ -39,7 +39,8 @@ extension ServerModel {
     /// The pages of the running browser (`GET /v1/browser/tabs`). Throws `CDPError.browserNotRunning` (409)
     /// when there is no browser.
     public func browserTabs(workspace: String? = nil) async throws -> [BrowserTab] {
-        let request = try browserRequest(path: "/v1/browser/tabs", workspace: workspace, socket: false)
+        let request = try await daemonRequest(
+            path: "/v1/browser/tabs", query: BrowserRoute.query(workspace: workspace), socket: false)
         let (data, response) = try await URLSession.shared.data(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard status == 200 else { throw CDPError.routeError(status: status) }
@@ -58,15 +59,16 @@ extension ServerModel {
         let tab = tabID.flatMap { id in tabs.first { $0.id == id } } ?? tabs.first
         guard let tab else { throw CDPError.noPage }
         guard BrowserRoute.isValidTargetID(tab.id) else { throw CDPError.badMessage }
-        let request = try browserRequest(
-            path: "/v1/browser/cdp/page/\(tab.id)", workspace: workspace, socket: true)
+        let request = try await daemonRequest(
+            path: "/v1/browser/cdp/page/\(tab.id)", query: BrowserRoute.query(workspace: workspace), socket: true)
         let socket = try await URLSessionCDPSocket.open(request: request)
         return (CDPClient(socket: socket), tab)
     }
 
     /// The browser-level CDP session (`WS /v1/browser/cdp`), for `Target.*` calls such as making a tab.
     public func browserTargetsClient(workspace: String? = nil) async throws -> CDPClient {
-        let request = try browserRequest(path: "/v1/browser/cdp", workspace: workspace, socket: true)
+        let request = try await daemonRequest(
+            path: "/v1/browser/cdp", query: BrowserRoute.query(workspace: workspace), socket: true)
         return CDPClient(socket: try await URLSessionCDPSocket.open(request: request))
     }
 

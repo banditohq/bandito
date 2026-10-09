@@ -233,13 +233,13 @@ import Testing
 
     // MARK: raw URL
 
-    @Test func wssServerGetsHTTPSRawURLWithBearerToken() throws {
+    @Test func wssServerGetsHTTPSRawURLWithBearerToken() async throws {
         let (model, _) = makeModel(
             config: ServerConfig(
                 name: "vps", endpoint: .webSocket(url: URL(string: "wss://srv.example.ts.net/v1/rpc")!), token: "tok"),
             [])
 
-        let request = try #require(model.rawURLRequest(path: "/w/a b+c.txt"))
+        let request = try await model.rawURLRequest(path: "/w/a b+c.txt")
 
         #expect(request.url?.scheme == "https")
         #expect(request.url?.host() == "srv.example.ts.net")
@@ -248,13 +248,13 @@ import Testing
         #expect(request.url?.absoluteString.contains("path=/w/a%20b%2Bc.txt") == true)
     }
 
-    @Test func plusIsNeverSentRaw() throws {
+    @Test func plusIsNeverSentRaw() async throws {
         let (model, _) = makeModel(
             config: ServerConfig(
                 name: "vps", endpoint: .webSocket(url: URL(string: "wss://srv.example.ts.net/v1/rpc")!), token: "tok"),
             [])
 
-        let request = try #require(model.rawURLRequest(path: "/a+b/c&d=e#f%g.txt"))
+        let request = try await model.rawURLRequest(path: "/a+b/c&d=e#f%g.txt")
 
         let query = try #require(request.url?.query(percentEncoded: true))
         #expect(!query.contains("+"))
@@ -267,43 +267,48 @@ import Testing
         #expect(query.contains("%25"))
     }
 
-    @Test func loopbackWebSocketGetsTokenOverHTTP() throws {
+    @Test func loopbackWebSocketGetsTokenOverHTTP() async throws {
         let (model, _) = makeModel(
             config: ServerConfig(
                 name: "tunnel", endpoint: .webSocket(url: URL(string: "ws://127.0.0.1:7878/v1/rpc")!), token: "tok"),
             [])
 
-        let request = try #require(model.rawURLRequest(path: "/w/a.txt"))
+        let request = try await model.rawURLRequest(path: "/w/a.txt")
 
         #expect(request.url?.scheme == "http")
         #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer tok")
     }
 
-    @Test func lanWebSocketNeverGetsTheToken() throws {
+    @Test func lanWebSocketNeverGetsTheToken() async throws {
         let (model, _) = makeModel(
             config: ServerConfig(
                 name: "lan", endpoint: .webSocket(url: URL(string: "ws://192.168.1.20:7878/v1/rpc")!), token: "tok"),
             [])
 
-        // The token may not travel over this connection, so there is no request at all.
-        #expect(model.rawURLRequest(path: "/w/a.txt") == nil)
+        // The token may not travel over this connection: there is no request, and the reason is the error.
+        do {
+            _ = try await model.rawURLRequest(path: "/w/a.txt")
+            Issue.record("the token was allowed over plain HTTP to another host")
+        } catch let error as RPCError {
+            #expect(error.code == RPCError.insecureTransport)
+        }
     }
 
-    @Test func lanWebSocketWithoutTokenSendsNoHeader() throws {
+    @Test func lanWebSocketWithoutTokenSendsNoHeader() async throws {
         let (model, _) = makeModel(
             config: ServerConfig(
                 name: "lan", endpoint: .webSocket(url: URL(string: "ws://192.168.1.20:7878/v1/rpc")!), token: nil),
             [])
 
-        let request = try #require(model.rawURLRequest(path: "/w/a.txt"))
+        let request = try await model.rawURLRequest(path: "/w/a.txt")
 
         #expect(request.value(forHTTPHeaderField: "Authorization") == nil)
     }
 
-    @Test func localServerRawURLIsAFileURL() throws {
+    @Test func localServerRawURLIsAFileURL() async throws {
         let (model, _) = makeModel([])
 
-        let request = try #require(model.rawURLRequest(path: "/Users/me/a.txt"))
+        let request = try await model.rawURLRequest(path: "/Users/me/a.txt")
 
         #expect(request.url == URL(fileURLWithPath: "/Users/me/a.txt"))
         #expect(request.value(forHTTPHeaderField: "Authorization") == nil)

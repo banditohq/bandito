@@ -8,6 +8,15 @@ public protocol RPCTransport: Sendable {
     /// The next message. Throws when the connection is closed.
     func receive() async throws -> String
     func close() async
+    /// `http://127.0.0.1:<port>`, where the daemon's HTTP routes answer through this connection, or nil when it
+    /// has none. Read at every request: a tunnel may have moved.
+    var httpBase: URL? { get async }
+}
+
+extension RPCTransport {
+    public var httpBase: URL? {
+        get async { nil }
+    }
 }
 
 public struct RPCError: Error, Sendable, Equatable, LocalizedError {

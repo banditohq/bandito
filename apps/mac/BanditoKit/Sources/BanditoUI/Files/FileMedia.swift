@@ -11,7 +11,7 @@ enum RemoteFile {
 
     @MainActor
     static func data(path: String, server: ServerModel) async throws -> Data {
-        guard let request = server.rawURLRequest(path: path) else { throw Failure.unavailable }
+        let request = try await server.rawURLRequest(path: path)
         let (data, response) = try await URLSession.shared.data(for: request)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw Failure.status(http.statusCode)
@@ -69,7 +69,7 @@ struct RemoteMediaPlayer: View {
             }
         }
         .task(id: path) {
-            guard let request = server.rawURLRequest(path: path), let url = request.url else { return }
+            guard let request = try? await server.rawURLRequest(path: path), let url = request.url else { return }
             var options: [String: Any] = [:]
             if let headers = request.allHTTPHeaderFields, !headers.isEmpty {
                 options["AVURLAssetHTTPHeaderFieldsKey"] = headers

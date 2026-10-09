@@ -3,20 +3,23 @@ import Testing
 
 @testable import BanditoKit
 
-// Manual integration check against a running daemon: the app's own routes, the tabs, and one page evaluated over
-// `WS /v1/browser/cdp/page/{id}`. Start a daemon on a loopback port with a paired device (its listen port and token
-// are the ones below), then run with BANDITO_BROWSER_APP_IT=1, BANDITO_BROWSER_APP_URL=ws://127.0.0.1:<port>/v1/rpc
-// and BANDITO_BROWSER_APP_TOKEN=<device token>. Skipped in normal runs.
+// Manual integration check on this Mac, through the path the app uses for it: `info --json`, `pair --json`,
+// `pair.redeem` over the WebSocket, then the browser routes. Start a daemon on a temporary home first:
+//   bandito --home <home> daemon --listen 127.0.0.1:17779
+// then run with BANDITO_BROWSER_APP_IT=1, BANDITO_LOCAL_DAEMON_BINARY=<bandito binary> and
+// BANDITO_LOCAL_DAEMON_HOME=<home>. Skipped in normal runs. It never touches the default home.
 
 private let appIT = ProcessInfo.processInfo.environment["BANDITO_BROWSER_APP_IT"] == "1"
 
 @MainActor
 @Test(.enabled(if: appIT))
-func theAppReachesAPageThroughTheDaemonRoutes() async throws {
+func thisMacPairsAndReachesAPageThroughTheDaemonRoutes() async throws {
     let env = ProcessInfo.processInfo.environment
-    let url = try #require(env["BANDITO_BROWSER_APP_URL"].flatMap(URL.init(string:)))
-    let server = ServerModel(
-        config: ServerConfig(name: "it", endpoint: .webSocket(url: url), token: env["BANDITO_BROWSER_APP_TOKEN"]))
+    let binary = try #require(env["BANDITO_LOCAL_DAEMON_BINARY"].map { URL(fileURLWithPath: $0) })
+    let home = try #require(env["BANDITO_LOCAL_DAEMON_HOME"].map { URL(fileURLWithPath: $0) })
+    let pairing = LocalDaemonPairing(runner: ProcessCommandRunner(), binary: binary, home: home)
+    let config = try await pairing.serverConfig(name: "it", deviceName: "app-it")
+    let server = ServerModel(config: config)
     await server.connect()
 
     let status = try await server.browserStart()
@@ -31,7 +34,7 @@ func theAppReachesAPageThroughTheDaemonRoutes() async throws {
     await client.close()
 
     // A tab that does not exist: the route answers 404, which the app reports as no such tab.
-    let request = try server.browserRequest(path: "/v1/browser/cdp/page/NOSUCHTAB", workspace: nil, socket: true)
+    let request = try await server.daemonRequest(path: "/v1/browser/cdp/page/NOSUCHTAB", socket: true)
     await #expect(throws: CDPError.noSuchTab) {
         _ = try await URLSessionCDPSocket.open(request: request)
     }

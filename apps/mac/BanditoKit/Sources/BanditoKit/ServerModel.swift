@@ -82,6 +82,8 @@ public final class ServerModel: Identifiable {
     @ObservationIgnored var terminalStreams: [String: TerminalStream] = [:]
     /// Port forwarders started by `forwardOnce(port:)`; closed by `disconnect()`.
     @ObservationIgnored var forwarders: [PortForwarder] = []
+    /// The transport of the current connection. Its `httpBase` is where the daemon's HTTP routes answer.
+    @ObservationIgnored var transport: RPCTransport?
     /// Bumped whenever a connection attempt starts and on disconnect. An attempt that finds the
     /// number changed has been superseded and throws away its client.
     private var generation = 0
@@ -160,6 +162,7 @@ public final class ServerModel: Identifiable {
         stopPumps()
         let old = client
         client = nil
+        transport = nil
         state = .disconnected
         finishTerminalStreams()
         await stopForwarders()
@@ -172,8 +175,10 @@ public final class ServerModel: Identifiable {
         generation += 1
         let attempt = generation
         await dropClient()
+        let current = makeTransport(config)
+        transport = current
         let c = RPCClient(
-            transport: makeTransport(config),
+            transport: current,
             onDecodeFailure: { [weak self] in
                 Task { @MainActor in self?.noteDecodeFailure() }
             })
