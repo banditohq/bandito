@@ -7,7 +7,9 @@ use crate::event::{Decision, Event, EventBody, Source};
 use crate::files::FileService;
 use crate::home;
 use crate::host::Sampler;
+use crate::logs;
 use crate::pairing;
+use crate::redact::Redactor;
 use crate::runtime::RuntimeKind;
 use crate::scheduler;
 use crate::setup::Setup;
@@ -68,6 +70,8 @@ pub fn features() -> Vec<&'static str> {
         "workspaces",
         "browser",
         "update",
+        "pause",
+        "logs",
     ];
     if cfg!(target_os = "linux") {
         list.push("screen");
@@ -103,16 +107,32 @@ pub struct App {
     pub browser: Arc<BrowserManager>,
     /// The server screen, one per workspace (see docs/ARCHITECTURE.md#screen).
     pub screens: Arc<crate::screen::ScreenManager>,
+    /// The daemon's data folder (`--home`, `BANDITO_HOME` or `~/.bandito`): where its log file is.
+    pub data_home: PathBuf,
 }
 
 impl App {
     /// Files are served from the home folder of the user running the daemon.
     pub fn new(sup: Arc<Supervisor>, agents_root: PathBuf) -> Arc<Self> {
-        let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
-        Self::new_with_files(sup, agents_root, FileService::new(home, None))
+        Self::new_with_files(sup, agents_root, Self::default_files())
+    }
+
+    /// The server files the `fs.*` methods serve: the home folder of the user running the daemon.
+    pub fn default_files() -> FileService {
+        FileService::new(dirs::home_dir().unwrap_or_else(|| PathBuf::from("/")), None)
     }
 
     pub fn new_with_files(sup: Arc<Supervisor>, agents_root: PathBuf, files: FileService) -> Arc<Self> {
+        Self::new_in_home(sup, agents_root, files, crate::setup::default_home())
+    }
+
+    /// The daemon of data folder `data_home` (see `daemon.logs`).
+    pub fn new_in_home(
+        sup: Arc<Supervisor>,
+        agents_root: PathBuf,
+        files: FileService,
+        data_home: PathBuf,
+    ) -> Arc<Self> {
         Arc::new(Self {
             sup,
             started_at: crate::store::now_ms(),
@@ -126,6 +146,7 @@ impl App {
             setup: Setup::system(),
             browser: BrowserManager::system(),
             screens: Arc::new(crate::screen::ScreenManager::new(screens_dir())),
+            data_home,
         })
     }
 }
@@ -403,6 +424,8 @@ struct AgentPatchParams {
     fallback_runtime: Option<Option<RuntimeKind>>,
     #[serde(default, deserialize_with = "double_option")]
     fallback_model: Option<Option<String>>,
+    /// Pauses or resumes the agent (see docs/ARCHITECTURE.md#pause). Not stored with the other fields.
+    paused: Option<bool>,
 }
 impl AgentPatchParams {
     /// Whether the patch changes something a running session was started with, so
@@ -425,6 +448,8 @@ impl AgentPatchParams {
             fallback_runtime: _,
             fallback_model: _,
             workspace_id,
+            // Applied by `Supervisor::set_paused`: a pause starts no new session.
+            paused: _,
         } = self;
         workspace_id.as_ref().is_some_and(|w| *w != current.workspace_id)
             || runtime.as_ref().is_some_and(|r| *r != current.runtime)
@@ -441,6 +466,20 @@ impl AgentPatchParams {
 /// `{"x": null}` → `Some(None)` (clear), missing → `None` (keep).
 fn double_option<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(d: D) -> Result<Option<Option<T>>, D::Error> {
     Option::<T>::deserialize(d).map(Some)
+}
+#[derive(Deserialize)]
+struct PauseAllParams {
+    paused: bool,
+}
+#[derive(Deserialize)]
+struct LogsParams {
+    #[serde(default = "default_log_lines")]
+    lines: u32,
+    #[serde(default)]
+    level: Option<String>,
+}
+fn default_log_lines() -> u32 {
+    logs::DEFAULT_LINES
 }
 #[derive(Deserialize)]
 struct SendParams {
@@ -689,6 +728,23 @@ fn join_within(lines: &[String], max: usize) -> String {
     out
 }
 
+/// `daemon.logs`: the newest daemon log lines, redacted (see docs/ARCHITECTURE.md#logs).
+/// The file or journal is read off the async runtime.
+async fn daemon_logs(app: &App, lines: usize, min: Option<logs::Level>) -> Result<Value, RpcError> {
+    let redactor = Redactor::new(app.sup.hub().store.secrets_all()?);
+    let source = logs::Source::for_home(&app.data_home);
+    let name = source.name();
+    let read = tokio::task::spawn_blocking(move || source.read(lines, min))
+        .await
+        .map_err(|e| RpcError::new(SERVER_ERROR, format!("read the log: {e}")))?;
+    let read = read.map_err(|e| RpcError::new(SERVER_ERROR, format!("read the log: {e}")))?;
+    let lines: Vec<String> = read
+        .iter()
+        .map(|line| logs::mask_tokens(&redactor.redact(line)))
+        .collect();
+    Ok(json!({ "source": name, "lines": lines }))
+}
+
 /// Handle one request. `events.subscribe` lives in [`serve`] because it needs
 /// connection state.
 pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResult {
@@ -788,6 +844,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
         }
         "agents.update" => {
             let UpdateAgent { id, mut patch } = params(p)?;
+            let paused = patch.paused;
             if let Some(cwd) = &patch.cwd {
                 check_cwd(cwd)?;
             }
@@ -850,7 +907,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             } else {
                 None
             };
-            let a = store.agent_update(
+            let mut a = store.agent_update(
                 &id,
                 AgentPatch {
                     name: patch.name,
@@ -874,6 +931,10 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             if reload {
                 app.sup.reload(&id, new_chapter).await;
             }
+            if let Some(paused) = paused {
+                app.sup.set_paused(&id, paused).await?;
+                a.paused = paused;
+            }
             let mut body = serde_json::to_value(&a).map_err(|e| RpcError::new(SERVER_ERROR, e.to_string()))?;
             body["warnings"] = json!(warnings);
             ok(body)
@@ -894,13 +955,43 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             // A slash command is expanded for runtimes that do not run it themselves; the thread keeps what was typed.
             let agent = store.agent_get(&agent_id)?;
             let prepared = prepare_message(agent.as_ref(), &text)?;
-            app.sup.send(&agent_id, prepared.into_inbound(Source::User)).await?;
-            ok(json!({}))
+            // A paused agent takes the message into its thread and starts nothing: `queued` says so.
+            let queued = app
+                .sup
+                .send_held(&agent_id, prepared.into_inbound(Source::User))
+                .await?;
+            ok(if queued { json!({ "queued": true }) } else { json!({}) })
         }
         "agents.interrupt" => {
             let AgentRef { agent_id } = params(p)?;
             app.sup.interrupt(&agent_id).await?;
             ok(json!({}))
+        }
+        "agents.pause_all" => {
+            let PauseAllParams { paused } = params(p)?;
+            let mut changed = 0usize;
+            for agent in store.agent_list()? {
+                if app.sup.set_paused(&agent.id, paused).await? {
+                    changed += 1;
+                }
+            }
+            ok(json!({ "changed": changed }))
+        }
+        "daemon.logs" => {
+            let LogsParams { lines, level } = params(p)?;
+            if lines == 0 || lines > logs::MAX_LINES {
+                return Err(RpcError::new(
+                    INVALID_PARAMS,
+                    format!("lines must be between 1 and {}", logs::MAX_LINES),
+                ));
+            }
+            let min = match level.as_deref() {
+                None => None,
+                Some(name) => Some(logs::Level::parse_min(name).ok_or_else(|| {
+                    RpcError::new(INVALID_PARAMS, format!("level must be info, warn or error, got {name}"))
+                })?),
+            };
+            ok(daemon_logs(app, lines as usize, min).await?)
         }
 
         "crew.list" => {
@@ -2695,5 +2786,188 @@ mod trust_tests {
         }
         assert!(!limiter.allows("ip", REDEEM_WINDOW_MS - 1));
         assert!(limiter.allows("ip", REDEEM_WINDOW_MS + 1));
+    }
+}
+
+#[cfg(test)]
+mod pause_and_logs_tests {
+    use super::*;
+    use crate::hub::Hub;
+    use crate::runtime::RuntimeKind;
+    use crate::store::{ApprovalMode, NewAgent, Store};
+
+    fn new_agent(store: &Store, name: &str) -> String {
+        store
+            .agent_create(NewAgent {
+                name: name.into(),
+                role: String::new(),
+                runtime: RuntimeKind::Claude,
+                model: None,
+                cwd: "/tmp".into(),
+                approval_mode: ApprovalMode::Risky,
+                system_prompt: None,
+                effort: None,
+                memory_mode: crate::store::MemoryMode::Smart,
+                context_budget: None,
+                fallback_runtime: None,
+                fallback_model: None,
+            })
+            .unwrap()
+            .id
+    }
+
+    /// An app whose data folder is `home` (for `daemon.logs`), with two agents.
+    fn app_in(home: &std::path::Path) -> (Arc<App>, Arc<Store>, String, String) {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let forge = new_agent(&store, "Forge");
+        let scout = new_agent(&store, "Scout");
+        let sup = Supervisor::new(Hub::new(store.clone()), crate::supervisor::Runtimes::default(), None);
+        let app = App::new_in_home(sup, home.join("agents"), App::default_files(), home.to_path_buf());
+        (app, store, forge, scout)
+    }
+
+    async fn call(app: &App, method: &str, p: Value) -> RpcResult {
+        dispatch(app, &Peer::Local, method, p).await
+    }
+
+    fn user_texts(store: &Store, agent: &str) -> Vec<String> {
+        store
+            .events_since(0, 1000, Some(agent))
+            .unwrap()
+            .into_iter()
+            .filter_map(|e| match e.body {
+                EventBody::MessageUser { text, .. } => Some(text),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn update_pauses_and_send_reports_it_is_queued() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, store, forge, _) = app_in(dir.path());
+
+        let paused = call(&app, "agents.update", json!({ "id": forge, "paused": true }))
+            .await
+            .unwrap();
+        assert_eq!(paused["paused"], json!(true));
+        assert_eq!(
+            call(&app, "agents.get", json!({ "id": forge })).await.unwrap()["paused"],
+            json!(true)
+        );
+
+        let sent = call(&app, "agents.send", json!({ "agent_id": forge, "text": "hello" }))
+            .await
+            .unwrap();
+        assert_eq!(sent, json!({ "queued": true }));
+        assert_eq!(user_texts(&store, &forge), vec!["hello"]);
+
+        let resumed = call(&app, "agents.update", json!({ "id": forge, "paused": false }))
+            .await
+            .unwrap();
+        assert_eq!(resumed["paused"], json!(false));
+        // A patch without `paused` leaves the flag alone.
+        let renamed = call(&app, "agents.update", json!({ "id": forge, "role": "reviewer" }))
+            .await
+            .unwrap();
+        assert_eq!(renamed["paused"], json!(false));
+    }
+
+    #[tokio::test]
+    async fn pause_all_pauses_every_agent_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, store, _, _) = app_in(dir.path());
+
+        assert_eq!(
+            call(&app, "agents.pause_all", json!({ "paused": true })).await.unwrap(),
+            json!({ "changed": 2 })
+        );
+        assert!(store.agent_list().unwrap().iter().all(|a| a.paused));
+        assert_eq!(
+            call(&app, "agents.pause_all", json!({ "paused": true })).await.unwrap(),
+            json!({ "changed": 0 })
+        );
+        assert_eq!(
+            call(&app, "agents.pause_all", json!({ "paused": false }))
+                .await
+                .unwrap(),
+            json!({ "changed": 2 })
+        );
+        let err = call(&app, "agents.pause_all", json!({})).await.unwrap_err();
+        assert_eq!(err.code, INVALID_PARAMS);
+    }
+
+    #[test]
+    fn pause_methods_are_the_owners_not_the_agents() {
+        for method in ["agents.pause_all", "daemon.logs"] {
+            assert!(allowed(&Peer::Local, method), "{method}");
+            assert!(!allowed(&Peer::Agent("a".into()), method), "{method}");
+        }
+        assert!(allowed(&Peer::Local, "agents.update"));
+        assert!(!allowed(&Peer::Agent("a".into()), "agents.update"));
+    }
+
+    #[tokio::test]
+    async fn logs_return_the_newest_lines_redacted_and_validated() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, store, _, _) = app_in(dir.path());
+        store
+            .secret_set("OPENAI_API_KEY", "sk-test-secret-123456", &["*".to_string()])
+            .unwrap();
+        let token = format!("bat_{}", "A".repeat(43));
+        std::fs::create_dir_all(dir.path().join("logs")).unwrap();
+        std::fs::write(
+            dir.path().join("logs/daemon.log"),
+            format!(
+                "2026-10-09T10:00:00Z  INFO bandito: session {token} key sk-test-secret-123456\n\
+                 2026-10-09T10:00:01Z  WARN bandito::sched: skipped\n\
+                 2026-10-09T10:00:02Z  INFO bandito: idle\n"
+            ),
+        )
+        .unwrap();
+
+        let all = call(&app, "daemon.logs", json!({})).await.unwrap();
+        assert_eq!(all["source"], json!("file"));
+        let lines: Vec<String> = serde_json::from_value(all["lines"].clone()).unwrap();
+        assert_eq!(lines.len(), 3);
+        assert!(lines[0].contains("bat_••••"), "{lines:?}");
+        assert!(!lines.join("\n").contains(&"A".repeat(43)));
+        assert!(!lines.join("\n").contains("sk-test-secret-123456"));
+        assert!(lines[0].contains("••••OPENAI_API_KEY"), "{lines:?}");
+
+        let last = call(&app, "daemon.logs", json!({ "lines": 1 })).await.unwrap();
+        assert_eq!(last["lines"].as_array().unwrap().len(), 1);
+        assert!(last["lines"][0].as_str().unwrap().ends_with("idle"));
+
+        let warnings = call(&app, "daemon.logs", json!({ "level": "warn" })).await.unwrap();
+        assert_eq!(warnings["lines"].as_array().unwrap().len(), 1);
+        assert!(warnings["lines"][0].as_str().unwrap().contains("skipped"));
+
+        for bad in [
+            json!({ "lines": 0 }),
+            json!({ "lines": 2001 }),
+            json!({ "level": "debug" }),
+        ] {
+            let err = call(&app, "daemon.logs", bad.clone()).await.unwrap_err();
+            assert_eq!(err.code, INVALID_PARAMS, "{bad}");
+        }
+        let denied = dispatch(&app, &Peer::Agent("x".into()), "daemon.logs", json!({}))
+            .await
+            .unwrap_err();
+        assert_eq!(denied.code, UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn logs_without_a_file_are_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, _, _, _) = app_in(dir.path());
+        let reply = call(&app, "daemon.logs", json!({})).await.unwrap();
+        assert_eq!(reply["lines"], json!([]));
+    }
+
+    #[test]
+    fn logs_and_pause_are_advertised() {
+        let f = features();
+        assert!(f.contains(&"pause") && f.contains(&"logs"));
     }
 }

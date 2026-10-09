@@ -3,14 +3,13 @@
 Common messages and what to do with them. Each entry starts with the exact text the app shows (English, as in
 `i18n/en.json`), then the Russian text in brackets, then the steps. Where a message has a placeholder such as
 {name}, the entry shows it as {name}.
+## SSH: host key and connection errors
 
-## SSH: host key and permission errors (planned)
-
-<!-- id: ts-ssh; covers: ; status: planned -->
-Connecting a remote server over SSH, with the check of the host key and the login, is not in this build. The Add server sheet says Coming soon (Скоро здесь). Until then, use This Mac, or a server that already runs the daemon and is listed in Settings → Servers.
+<!-- id: ts-ssh; covers: -->
+When a server does not connect over SSH, the server step says why. A host this Mac has not seen before asks for its fingerprint to be checked. A changed key is refused: nothing is trusted until you check the server. A refused or timed-out connection means SSH is not running on that port or the server is not reachable.
 Где: Settings (⌘,) → Servers (Серверы) → Add server (Добавить сервер)
-1. Use This Mac (see [getting-started.md](getting-started.md)).
-2. For a remote server, set it up outside the app and add it when the wizard ships.
+1. Check the fingerprint, or the server's address and port, then click Try again (Try again).
+2. For a refused or timed-out connection, check that SSH runs on the server and that the server is on and reachable.
 
 ## Connecting to the server… (Подключаемся к серверу…)
 
@@ -246,10 +245,3 @@ Two commands in the same context cannot use the same keys.
 The shortcuts Take / give back control and Send the key combination to the server are listed in Settings, but changing them does nothing yet: the screen keeps its fixed keys (⇧⌘C and ⌃⌥⌫).
 Где: Settings (⌘,) → Keys and gestures (Клавиши и жесты) → Keys (Клавиши) → Server screen (Экран сервера)
 1. Use the fixed keys in the Server screen mode.
-
-## Settings-related notes: Coming soon (Скоро здесь)
-
-<!-- id: ts-coming-soon; covers: ; status: planned -->
-Several screens say Coming soon (Скоро здесь). These are not bugs: the feature is in the design but not built yet. The list is in [getting-started.md](getting-started.md) and in the planned entries of this guide.
-Где: Any sheet or step that shows Coming soon (Скоро здесь)
-1. Close the sheet with Close (Закрыть), or use the working alternative described in the entry.

@@ -82,6 +82,8 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
     public var activeRuntime: RuntimeKind?
     /// The workspace the agent's CLI runs in: `shared` (the server) or a container's id (see `Workspace`).
     public var workspaceId: String
+    /// Paused: messages wait in the thread and no session starts until it is resumed (`agents.update {paused}`).
+    public var paused: Bool
 
     public init(
         id: String, name: String, role: String = "", runtime: RuntimeKind, model: String? = nil, cwd: String,
@@ -90,7 +92,8 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
         effort: Effort? = nil, memoryMode: MemoryMode = .smart, contextBudget: Int? = nil, homeDir: String? = nil,
         contextTokens: Int = 0, chapter: Int = 1, lastTurnAt: Int64? = nil,
         fallbackRuntime: RuntimeKind? = nil, fallbackModel: String? = nil, activeRuntime: RuntimeKind? = nil,
-        workspaceId: String = "shared"
+        workspaceId: String = "shared",
+        paused: Bool = false
     ) {
         self.workspaceId = workspaceId
         self.id = id
@@ -114,6 +117,7 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
         self.fallbackRuntime = fallbackRuntime
         self.fallbackModel = fallbackModel
         self.activeRuntime = activeRuntime
+        self.paused = paused
     }
 
     /// Fields added after the first daemon release are optional on the wire; old daemons send none of them.
@@ -141,6 +145,7 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
         fallbackModel = try c.decodeIfPresent(String.self, forKey: .fallbackModel)
         activeRuntime = try c.decodeIfPresent(RuntimeKind.self, forKey: .activeRuntime)
         workspaceId = try c.decodeIfPresent(String.self, forKey: .workspaceId) ?? "shared"
+        paused = try c.decodeIfPresent(Bool.self, forKey: .paused) ?? false
     }
 }
 

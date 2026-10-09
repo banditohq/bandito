@@ -1570,5 +1570,20 @@
   "workspace.error.invalid": "Настройки не подходят: {message}",
   "workspace.error.banditoData": "В этой папке данные самого Bandito, рабочее место её не получит. Выберите папку проекта.",
   "workspace.error.docker": "Docker не справился: {message}",
-  "workspace.error.other": "Рабочее место не удалось изменить: {message}"
+  "workspace.error.other": "Рабочее место не удалось изменить: {message}",
+  "inspector.state": "Состояние",
+  "inspector.stateRunning": "Работает",
+  "inspector.statePaused": "На паузе",
+  "palette.resumeAgent": "Продолжить {name}",
+  "menubar.resumeAll": "Продолжить всех агентов",
+  "mode.connectServer": "Подключите сервер, чтобы им пользоваться.",
+  "journal.levelAll": "Все",
+  "journal.levelWarn": "Предупреждения",
+  "journal.levelError": "Ошибки",
+  "journal.refresh": "Обновить",
+  "journal.copyAll": "Скопировать всё",
+  "journal.loading": "Загрузка…",
+  "journal.empty": "Записей пока нет.",
+  "journal.needsNewer": "Журнал доступен на более новом сервере. Обновите сервер, чтобы увидеть его лог здесь.",
+  "journal.source": "Источник: {name}"
 }

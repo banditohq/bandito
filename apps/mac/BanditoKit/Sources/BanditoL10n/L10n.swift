@@ -622,6 +622,9 @@ public enum L10n {
         public static var schedules: String { L10n.tr("inspector.schedules") }
         public static var server: String { L10n.tr("inspector.server") }
         public static func serverInfo(os: String, version: String, uptime: String) -> String { L10n.tr("inspector.serverInfo", os, version, uptime) }
+        public static var state: String { L10n.tr("inspector.state") }
+        public static var statePaused: String { L10n.tr("inspector.statePaused") }
+        public static var stateRunning: String { L10n.tr("inspector.stateRunning") }
         public static var subscription: String { L10n.tr("inspector.subscription") }
         public static var toggleAria: String { L10n.tr("inspector.toggleAria") }
         public static func uptime(count: Int) -> String { L10n.tr("inspector.uptime", count) }
@@ -633,6 +636,18 @@ public enum L10n {
             public static var fiveHour: String { L10n.tr("inspector.window.fiveHour") }
             public static var sevenDay: String { L10n.tr("inspector.window.sevenDay") }
         }
+    }
+
+    public enum Journal {
+        public static var copyAll: String { L10n.tr("journal.copyAll") }
+        public static var empty: String { L10n.tr("journal.empty") }
+        public static var levelAll: String { L10n.tr("journal.levelAll") }
+        public static var levelError: String { L10n.tr("journal.levelError") }
+        public static var levelWarn: String { L10n.tr("journal.levelWarn") }
+        public static var loading: String { L10n.tr("journal.loading") }
+        public static var needsNewer: String { L10n.tr("journal.needsNewer") }
+        public static var refresh: String { L10n.tr("journal.refresh") }
+        public static func source(name: String) -> String { L10n.tr("journal.source", name) }
     }
 
     public enum Keys {
@@ -762,6 +777,7 @@ public enum L10n {
         public static var openChat: String { L10n.tr("menubar.openChat") }
         public static var pauseAll: String { L10n.tr("menubar.pauseAll") }
         public static func resolveFailed(error: String) -> String { L10n.tr("menubar.resolveFailed", error) }
+        public static var resumeAll: String { L10n.tr("menubar.resumeAll") }
         public static var upNext: String { L10n.tr("menubar.upNext") }
         public static var waiting: String { L10n.tr("menubar.waiting") }
         public static var wantsPush: String { L10n.tr("menubar.wantsPush") }
@@ -770,6 +786,7 @@ public enum L10n {
 
     public enum Mode {
         public static var browser: String { L10n.tr("mode.browser") }
+        public static var connectServer: String { L10n.tr("mode.connectServer") }
         public static var files: String { L10n.tr("mode.files") }
         public static var screen: String { L10n.tr("mode.screen") }
         public static var server: String { L10n.tr("mode.server") }
@@ -1105,6 +1122,7 @@ public enum L10n {
         public static func openFilesOf(name: String) -> String { L10n.tr("palette.openFilesOf", name) }
         public static func pauseAgent(name: String) -> String { L10n.tr("palette.pauseAgent", name) }
         public static func portTitle(port: String, process: String) -> String { L10n.tr("palette.portTitle", port, process) }
+        public static func resumeAgent(name: String) -> String { L10n.tr("palette.resumeAgent", name) }
         public static var search: String { L10n.tr("palette.search") }
         public static var sectionActions: String { L10n.tr("palette.sectionActions") }
         public static var sectionAgents: String { L10n.tr("palette.sectionAgents") }

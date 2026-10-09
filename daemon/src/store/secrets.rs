@@ -134,6 +134,14 @@ impl Store {
 
     /// The `(name, value)` pairs an agent's session gets: the secrets listing its id or `"*"`.
     /// Sorted by name.
+    /// Every secret's `(name, value)`, whichever agents it is for. Used to redact the daemon's own log.
+    pub fn secrets_all(&self) -> Result<Vec<(String, String)>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare("SELECT name, value FROM secrets ORDER BY name")?;
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
     pub fn secrets_for_agent(&self, agent_id: &str) -> Result<Vec<(String, String)>> {
         let conn = self.conn();
         let mut stmt = conn.prepare("SELECT name, value, agents FROM secrets ORDER BY name")?;

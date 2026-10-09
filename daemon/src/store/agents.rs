@@ -37,6 +37,9 @@ pub struct Agent {
     /// The runtime the agent runs on now, when it is not the primary one (see docs/ARCHITECTURE.md#fallback-subscription).
     /// `None` means the primary `runtime`.
     pub active_runtime: Option<RuntimeKind>,
+    /// A paused agent takes messages into its history but starts no session, and its scheduled
+    /// runs are skipped (see docs/ARCHITECTURE.md#pause).
+    pub paused: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -92,7 +95,7 @@ pub struct AgentPatch {
     pub fallback_model: Option<Option<String>>,
 }
 
-const COLS: &str = "id, name, role, runtime, model, cwd, approval_mode, system_prompt, runtime_session_id, created_at, updated_at, effort, memory_mode, context_budget, home_dir, context_tokens, chapter, last_turn_at, fallback_runtime, fallback_model, active_runtime, workspace_id";
+const COLS: &str = "id, name, role, runtime, model, cwd, approval_mode, system_prompt, runtime_session_id, created_at, updated_at, effort, memory_mode, context_budget, home_dir, context_tokens, chapter, last_turn_at, fallback_runtime, fallback_model, active_runtime, workspace_id, paused";
 
 fn runtime_column(r: &Row, i: usize) -> rusqlite::Result<Option<RuntimeKind>> {
     Ok(r.get::<_, Option<String>>(i)?.as_deref().and_then(RuntimeKind::parse))
@@ -124,6 +127,7 @@ fn from_row(r: &Row) -> rusqlite::Result<Agent> {
         fallback_model: r.get(19)?,
         active_runtime: runtime_column(r, 20)?,
         workspace_id: r.get(21)?,
+        paused: r.get(22)?,
     })
 }
 
@@ -178,10 +182,11 @@ impl Store {
             fallback_model: a.fallback_model,
             active_runtime: None,
             workspace_id: workspace_id.to_string(),
+            paused: false,
         };
         let res = self.conn().execute(
             &format!(
-                "INSERT INTO agents ({COLS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)"
+                "INSERT INTO agents ({COLS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)"
             ),
             params![
                 agent.id,
@@ -205,7 +210,8 @@ impl Store {
                 agent.fallback_runtime.map(RuntimeKind::as_str),
                 agent.fallback_model,
                 agent.active_runtime.map(RuntimeKind::as_str),
-                agent.workspace_id
+                agent.workspace_id,
+                agent.paused
             ],
         );
         match res {
@@ -325,6 +331,15 @@ impl Store {
         }
     }
 
+    /// Sets the pause flag. Returns `false` when the agent is missing or already has that value.
+    pub fn agent_set_paused(&self, id: &str, paused: bool) -> Result<bool> {
+        let changed = self.conn().execute(
+            "UPDATE agents SET paused = ?2, updated_at = ?3 WHERE id = ?1 AND paused != ?2",
+            params![id, paused, now_ms()],
+        )?;
+        Ok(changed > 0)
+    }
+
     /// Remember the agent's own folder (set once, when it is created).
     pub fn agent_set_home(&self, id: &str, home_dir: &str) -> Result<()> {
         self.conn()
@@ -441,6 +456,31 @@ mod tests {
         assert!(s.agent_delete(&a.id).unwrap());
         assert!(!s.agent_delete(&a.id).unwrap());
         assert!(s.agent_get(&a.id).unwrap().is_none());
+    }
+
+    #[test]
+    fn pause_flag_is_stored_and_reported_once() {
+        let s = Store::open_in_memory().unwrap();
+        let a = s.agent_create(new("Forge")).unwrap();
+        assert!(!a.paused);
+        assert!(s.agent_set_paused(&a.id, true).unwrap());
+        assert!(s.agent_get(&a.id).unwrap().unwrap().paused);
+        // Setting the value it already has changes nothing.
+        assert!(!s.agent_set_paused(&a.id, true).unwrap());
+        // A patch that does not mention `paused` keeps it.
+        let renamed = s
+            .agent_update(
+                &a.id,
+                AgentPatch {
+                    role: Some("reviewer".into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        assert!(renamed.paused);
+        assert!(s.agent_set_paused(&a.id, false).unwrap());
+        assert!(!s.agent_get(&a.id).unwrap().unwrap().paused);
+        assert!(!s.agent_set_paused("missing", true).unwrap());
     }
 
     #[test]

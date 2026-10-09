@@ -16,6 +16,7 @@ pub mod home;
 pub mod host;
 pub mod hub;
 pub mod limit;
+pub mod logs;
 pub mod pairing;
 pub mod policy;
 pub mod redact;

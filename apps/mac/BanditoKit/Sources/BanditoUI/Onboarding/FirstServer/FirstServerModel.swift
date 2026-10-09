@@ -25,6 +25,12 @@ final class FirstServerModel {
 
     private(set) var option: Option?
     private(set) var phase: Phase = .choosing
+
+    /// Whether the server is connected and set up (the phase is `.connected`).
+    var isConnected: Bool {
+        if case .connected = phase { return true }
+        return false
+    }
     private(set) var checklist = InstallChecklist()
     /// The address as typed (`user@host[:port]`).
     var address = ""

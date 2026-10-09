@@ -37,7 +37,6 @@ The CLI that runs the agent. Claude Code, Codex and Grok run on the server with 
 Где: New agent sheet → Powered by (Чем думает)
 1. Pick Claude Code, Codex or Grok.
 2. Read the state under each runtime: Signed in · N% left (Signed in · N% left) means it is ready. Not installed on the server (Не установлен на сервере) and Not signed in on the server (Вход на сервере не выполнен) mean you must fix it on the server first. Run the command shown there, for example `codex login`.
-3. API key (API-ключ) is in the sheet with the label Coming soon (Скоро здесь): it is not available in this build.
 
 ## Model (Модель) and effort (Effort)
 

@@ -1531,5 +1531,20 @@
   "workspace.error.invalid": "These settings do not fit: {message}",
   "workspace.error.banditoData": "This folder holds Bandito's own data, so a workplace cannot get it. Choose a project folder.",
   "workspace.error.docker": "Docker failed: {message}",
-  "workspace.error.other": "The workplace could not be changed: {message}"
+  "workspace.error.other": "The workplace could not be changed: {message}",
+  "inspector.state": "State",
+  "inspector.stateRunning": "Running",
+  "inspector.statePaused": "Paused",
+  "palette.resumeAgent": "Resume {name}",
+  "menubar.resumeAll": "Resume all agents",
+  "mode.connectServer": "Connect a server to use it.",
+  "journal.levelAll": "All",
+  "journal.levelWarn": "Warnings",
+  "journal.levelError": "Errors",
+  "journal.refresh": "Refresh",
+  "journal.copyAll": "Copy all",
+  "journal.loading": "Loading…",
+  "journal.empty": "No lines yet.",
+  "journal.needsNewer": "The journal needs a newer server. Update the server to see its log here.",
+  "journal.source": "Source: {name}"
 }

@@ -94,16 +94,6 @@ struct Composer: View {
                 contextIndicator
                     .padding(.bottom, 9)
 
-                Button {} label: {
-                    Image(systemName: "mic")
-                        .font(.system(size: 15))
-                        .foregroundStyle(Color.Bandito.text3)
-                        .frame(width: 34, height: 34)
-                }
-                .buttonStyle(.plain)
-                .disabled(true)
-                .help(L10n.Thread.dictate)
-
                 sendOrStop
             }
             .padding(.leading, 14)
@@ -285,9 +275,9 @@ struct Composer: View {
             }
             draft = ""
             perform { try await server.updateAgent(agent.id, effort: level) }
-        case .chapter, .pause:
+        case .pause:
             draft = ""
-            slash.notice = L10n.Slash.soon
+            perform { try await server.setPaused(agentID: agent.id, !agent.paused) }
         case .memory:
             draft = ""
             router.openInspector(.memory)

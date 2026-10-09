@@ -29,6 +29,21 @@ struct DetailsTab: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             InspectorCard {
+                InspectorRow(label: L10n.Inspector.state) {
+                    HStack(spacing: 10) {
+                        Text(agent.paused ? L10n.Inspector.statePaused : L10n.Inspector.stateRunning)
+                            .font(BanditoFont.font(size: 12.5, weight: 500))
+                            .foregroundStyle(agent.paused ? Color.Bandito.text2 : Color.Bandito.text)
+                        Button(agent.paused ? L10n.Agent.Menu.resume : L10n.Agent.Menu.pause) {
+                            change { _ = try await server.setPaused(agentID: agent.id, !agent.paused) }
+                        }
+                        .buttonStyle(.plain)
+                        .font(BanditoFont.font(size: 12.5, weight: 500))
+                        .foregroundStyle(BanditoPalette.peach)
+                        .disabled(!PauseActions.available(on: server))
+                        .help(PauseActions.available(on: server) ? "" : L10n.Team.pauseUnavailable)
+                    }
+                }
                 InspectorRow(label: L10n.Inspector.runsOn) {
                     Menu {
                         ForEach(RuntimeKind.pickable.filter { $0 != agent.runtime }, id: \.self) { kind in

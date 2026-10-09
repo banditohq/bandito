@@ -48,9 +48,11 @@ public struct MenuBarContent: View {
             VStack(alignment: .leading, spacing: 0) {
                 Button(L10n.Menubar.open) { WindowActions.showMainWindow() }
                     .buttonStyle(MenuRowStyle())
-                Button(L10n.Menubar.pauseAll) {}
-                    .buttonStyle(MenuRowStyle())
-                    .disabled(true)
+                Button(PauseActions.pauseAllTitle(app.currentServer)) {
+                    if let server = app.currentServer { PauseActions.toggleAll(on: server) }
+                }
+                .buttonStyle(MenuRowStyle())
+                .disabled(!PauseActions.available(on: app.currentServer))
             }
             .padding(.horizontal, 6)
             .padding(.vertical, 6)

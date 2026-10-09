@@ -440,6 +440,32 @@ public final class ServerModel: Identifiable {
         return created
     }
 
+    /// Pauses or resumes one agent (`agents.update {paused}`). Returns the agent as the daemon now has it.
+    @discardableResult
+    public func setPaused(agentID: String, _ paused: Bool) async throws -> Agent {
+        try await updateAgent(agentID, patch: AgentPatch(paused: paused)).agent
+    }
+
+    /// The newest lines of the daemon's own log (`daemon.logs`). `level` is the lowest level to show.
+    public func daemonLog(lines: Int = 500, level: DaemonLogLevel? = nil) async throws -> DaemonLog {
+        struct P: Encodable {
+            var lines: Int
+            var level: String?
+        }
+        return try await rpc().call("daemon.logs", P(lines: lines, level: level?.rawValue), as: DaemonLog.self)
+    }
+
+    /// Pauses or resumes every agent (`agents.pause_all`). Returns how many changed, and reloads the agents
+    /// (the daemon sends no event for it).
+    @discardableResult
+    public func pauseAll(_ paused: Bool) async throws -> Int {
+        struct P: Encodable { var paused: Bool }
+        struct Reply: Decodable { var changed: Int }
+        let reply = try await rpc().call("agents.pause_all", P(paused: paused), as: Reply.self)
+        agents = try await rpc().call("agents.list", NoParams(), as: [Agent].self)
+        return reply.changed
+    }
+
     public func deleteAgent(_ id: String) async throws {
         struct P: Encodable { var id: String }
         try await rpc().call("agents.delete", P(id: id))
@@ -601,4 +627,17 @@ public enum Pairing {
         struct Revoked: Decodable { var revoked: Bool }
         _ = try await client.call("devices.revoke", P(id: deviceID), as: Revoked.self)
     }
+}
+
+/// The daemon's log lines, as `daemon.logs` returns them.
+public struct DaemonLog: Decodable, Sendable, Equatable {
+    /// Where the lines came from: `journald` or `file`.
+    public var source: String
+    /// Newest last. Secrets and tokens are already masked by the daemon.
+    public var lines: [String]
+}
+
+/// The lowest level `daemon.logs` shows.
+public enum DaemonLogLevel: String, CaseIterable, Sendable {
+    case info, warn, error
 }

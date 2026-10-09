@@ -408,7 +408,7 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr) -> Result<()> {
     let config = bandito::config::load(home)?;
     sup.set_agent_sandbox(config.agent_sandbox);
     sup.recover()?;
-    let app = App::new(sup.clone(), agents_root);
+    let app = App::new_in_home(sup.clone(), agents_root, App::default_files(), home.to_path_buf());
 
     // Children that double-fork away stay under this process, so the owner's socket can tell them apart,
     // and this process reaps them (see docs/ARCHITECTURE.md#trust-model).

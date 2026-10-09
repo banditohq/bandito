@@ -36,7 +36,7 @@ struct ServerMode: View {
             case .ports: PortsView(server: app.currentServer)
             case .devices: DevicesView(server: app.currentServer)
             case .updates: UpdatesView(server: app.currentServer)
-            case .journal: ServerJournalView()
+            case .journal: ServerJournalView(server: app.currentServer)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -136,19 +136,6 @@ struct ServerSidebar: View {
         .padding(.horizontal, 14)
         .padding(.top, 4)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-    }
-}
-
-/// Stand-in for the daemon's log, which the app does not show yet.
-struct ServerJournalView: View {
-    var body: some View {
-        ServerPage(title: L10n.Mode.serverJournal) {
-            ServerCard {
-                Text(L10n.Mode.soonHere)
-                    .font(.system(size: 13))
-                    .foregroundStyle(Color.Bandito.text2)
-            }
-        }
     }
 }
 

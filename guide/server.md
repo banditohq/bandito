@@ -53,7 +53,7 @@ The card on Overview lists the ports that open on the server with their owner. A
 Lists the workplaces where agents run: the shared server first, then the containers. Each card shows the agents in it, the status of the container, its limits, its network and its folders. The screen needs the workplaces feature of the server; without it, the sample cards show only while examples are on (Settings → General → Show examples, see [settings.md](settings.md)).
 Где: Server → Workplaces (Рабочие места)
 1. Read the status chip of a container: Running (Работает), Stopped (Остановлено), or Docker does not answer (Docker не отвечает).
-2. Read the limits: Processor and Memory, or No limit (Без ограничения). Disk is the container's own disk. Network is internet, or off when the container has no network. Without a network the agent cannot reach its model, so it does not answer.
+2. Read the limits: Processor and Memory, or No limit (Без ограничения). Network is internet, or off when the container has no network. Without a network the agent cannot reach its model, so it does not answer.
 3. Agents in a workplace are shown as avatars under Agents (Агенты). Move an agent from its Inspector: Where it works → Change (Сменить). The agent starts a new chapter there, and its CLI session is not carried over.
 
 ## Create a workplace (Создать рабочее место)
@@ -95,9 +95,8 @@ Containers need Docker on the server. Until Docker is ready, the Workplaces scre
 ## Separate and container workplaces (planned)
 
 <!-- id: server-workplaces-planned; covers: ; status: planned -->
-Creating separate and container workplaces is not available in this build. The New agent sheet shows both as coming soon. Use Shared.
+Creating separate and container workplaces is not available in this build. The New agent sheet offers Shared only. Use Shared.
 Где: Server → Workplaces (Рабочие места); New agent sheet → Workplace (Рабочее место)
-1. Use Shared (Общее) for every new agent.
 
 ## Secrets (Секреты)
 
@@ -136,10 +135,12 @@ Shows the version of the daemon on the server and the latest release, and how to
 1. Read Daemon version (Версия демона) and Latest release (Последний релиз). The badge says Update available (Доступно обновление) or Up to date (Актуально).
 2. Click Open in terminal (Открыть в терминале). The update runs the same install script as the first setup. It replaces the daemon and keeps your data and settings.
 3. Run it in the terminal that opens. The Terminals mode shows the output.
-
 ## Daemon log (Журнал демона)
 
-<!-- id: server-daemon-log; covers: ; status: planned -->
-The log of the daemon on the server. In this build the section is a placeholder that says Coming soon (Скоро здесь). Read the server log with a terminal on the server instead.
-Где: Server → Daemon log (Журнал демона)
-1. Nothing to click yet. To read the log, open a terminal on the server (see [terminals.md](terminals.md)).
+<!-- id: server-daemon-log; covers: -->
+The daemon's own log on the server: its newest lines, with the level filter. Secrets and Bandito's tokens are masked before they are shown. The view follows the end of the log. On a server with an older Bandito the section says that the log needs an update.
+Где: Server (⌘6) → Daemon log (Журнал демона)
+1. Open Daemon log. The newest 500 lines are shown, the last one at the bottom.
+2. Choose All (Все), Warnings (Предупреждения) or Errors (Ошибки) to filter the lines by level.
+3. Click Refresh (Обновить) to read the log again, or Copy all (Скопировать всё) to copy the lines on screen.
+

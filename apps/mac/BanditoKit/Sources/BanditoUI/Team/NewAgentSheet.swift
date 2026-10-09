@@ -218,7 +218,6 @@ struct NewAgentSheet: View {
                 ForEach(RuntimeKind.pickable, id: \.self) { kind in
                     runtimeCard(kind, now: context.date)
                 }
-                runtimeSoonCard
             }
         }
     }
@@ -310,36 +309,6 @@ struct NewAgentSheet: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])
-    }
-
-    /// The API-key card: the runtime is not in this build, so it is only shown.
-    private var runtimeSoonCard: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 7) {
-                Text(L10n.AgentSheet.apiKey)
-                    .font(BanditoFont.font(size: 13.5, weight: 600))
-                    .foregroundStyle(Color.Bandito.text2)
-                Spacer(minLength: 0)
-                Text(L10n.Common.comingSoon)
-                    .font(BanditoFont.font(size: 10.5, weight: 600))
-                    .foregroundStyle(Color.Bandito.text3)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 1)
-                    .background(Color.Bandito.text.opacity(0.07), in: Capsule())
-            }
-            Text(L10n.AgentSheet.apiKeyHint)
-                .font(BanditoFont.font(size: 11, weight: 400))
-                .foregroundStyle(Color.Bandito.text3)
-                .lineLimit(2)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Color.Bandito.text.opacity(0.12), style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
-        .opacity(0.7)
-        .accessibilityElement(children: .combine)
     }
 
     @ViewBuilder
@@ -710,7 +679,7 @@ struct NewAgentSheet: View {
 }
 
 extension RuntimeKind {
-    /// The runtimes a new agent can pick today. The API-key runtime has its own card, marked soon.
+    /// The runtimes a new agent can pick. The API-key runtime is not in this build, so it has no card.
     static let pickable: [RuntimeKind] = [.claude, .codex, .grok]
 }
 

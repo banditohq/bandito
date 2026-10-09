@@ -13,15 +13,6 @@ struct AppearanceSection: View {
     var body: some View {
         SettingsPage(title: SettingsSection.appearance.title, intro: L10n.Settings.Appearance.intro) {
             VStack(spacing: 0) {
-                SettingsRow(title: L10n.Settings.Appearance.theme, hint: L10n.Settings.Appearance.themeHint) {
-                    HStack(spacing: 8) {
-                        Text(L10n.Settings.Appearance.dark)
-                            .font(.system(size: 13))
-                            .foregroundStyle(Color.Bandito.text2)
-                        Chip(text: L10n.Common.comingSoon)
-                    }
-                }
-                Divider().padding(.horizontal, 16)
                 SettingsRow(title: L10n.Settings.Appearance.motion, hint: L10n.Settings.Appearance.motionHint) {
                     SegmentedPicker(
                         selection: motion,

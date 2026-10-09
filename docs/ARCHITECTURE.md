@@ -115,7 +115,7 @@ A pending approval blocks only that agent. Approvals time out after 24 h → den
 
 ## Store (SQLite)
 
-- `agents(id, name, role, runtime, model, cwd, approval_mode, system_prompt, runtime_session_id, created_at, updated_at, fallback_runtime, fallback_model, active_runtime)`: the last three are the [fallback subscription](#fallback-subscription); `active_runtime` NULL means the primary `runtime`
+- `agents(id, name, role, runtime, model, cwd, approval_mode, system_prompt, runtime_session_id, created_at, updated_at, fallback_runtime, fallback_model, active_runtime, paused)`: `fallback_runtime`, `fallback_model` and `active_runtime` are the [fallback subscription](#fallback-subscription); `active_runtime` NULL means the primary `runtime`. `paused` is the [pause](#pause) flag
 - `events(seq INTEGER PRIMARY KEY, agent_id, ts, kind, payload JSON)`
 - `approvals(id, agent_id, call_id, tool, title, payload JSON, status, decision, created_at, resolved_at)`
 - `rules(id, agent_id NULL, pattern, action)`
@@ -131,7 +131,7 @@ Migrations: numbered SQL files embedded in the binary, applied by `PRAGMA user_v
 
 JSON-RPC 2.0. Same methods on every transport.
 
-- Requests: `daemon.info`, `runtimes.status`, `agents.list|get|create|update|delete`, `agents.send{agent_id,text}`, `agents.interrupt`, `events.since{seq,limit,agent_id?}`, `approvals.list|resolve{approval_id,decision,remember}`, `rules.list|set|delete`, `schedules.list|create|update|delete|run_now`, `devices.list|revoke`, `pair.redeem{code,device_name}` (only unauthenticated method), `term.list|open|input|resize|rename|close|attach|detach` (see Terminals), `fs.*` (see [Files](#files)), `changes.checkpoints|diff|file|restore` (see [Changes](#changes)), `secrets.list|set|delete` (see [Secrets](#secrets), `host.stats|history|processes|ports|kill`, `setup.status|install|job` (see [Setup](#setup)), `commands.list|install` (see [Commands](#commands)), `browser.start|status|stop|control|touch` (see [Browser](#browser)), `workspaces.list|create|update|delete|start|stop` (see [Workspaces](#workspaces)). `browser.agent.*` is for the crew MCP on the server only.
+- Requests: `daemon.info`, `runtimes.status`, `agents.list|get|create|update|delete` (`update` takes `paused` too, see [Pause](#pause)), `agents.send{agent_id,text}` (replies `{queued: true}` when the agent is paused), `agents.interrupt`, `agents.pause_all{paused}`, `events.since{seq,limit,agent_id?}`, `approvals.list|resolve{approval_id,decision,remember}`, `rules.list|set|delete`, `schedules.list|create|update|delete|run_now`, `devices.list|revoke`, `pair.redeem{code,device_name}` (only unauthenticated method), `term.list|open|input|resize|rename|close|attach|detach` (see Terminals), `fs.*` (see [Files](#files)), `changes.checkpoints|diff|file|restore` (see [Changes](#changes)), `secrets.list|set|delete` (see [Secrets](#secrets), `host.stats|history|processes|ports|kill`, `setup.status|install|job` (see [Setup](#setup)), `commands.list|install` (see [Commands](#commands)), `browser.start|status|stop|control|touch` (see [Browser](#browser)), `workspaces.list|create|update|delete|start|stop` (see [Workspaces](#workspaces)), `daemon.logs{lines,level}` (see [Logs](#logs)). `browser.agent.*` is for the crew MCP on the server only.
 - Notifications (server → client): `event{seq, agent_id, kind, payload, ts}` for every event including `message.delta`; `term.output|gap|exit|closed` for attached terminals (see Terminals).
 
 ## Transports (connect any way you like)
@@ -219,7 +219,29 @@ On macOS, the Claude, Grok and Codex sessions of the shared workspace run under 
 
 ## Scheduler
 
-Cron expressions with a time zone. On fire: `agents.send` with `source:"schedule"`. Missed runs while the daemon was down run once on start if missed by less than 1 h.
+Cron expressions with a time zone. On fire: `agents.send` with `source:"schedule"`. Missed runs while the daemon was down run once on start if missed by less than 1 h. A run that falls due while its agent is [paused](#pause) is skipped (logged): it is not recorded as a run, and the next occurrence is set as usual.
+
+## Pause
+
+A paused agent (`agents.update {paused: true}`, or all agents at once with `agents.pause_all {paused}`) stops working, and keeps its history:
+
+- A message sent to it (`agents.send`, a crew message, a schedule's run) is written to the thread at once, and the reply is `{queued: true}`. No session starts. The message waits in the agent's queue.
+- A pause interrupts the running turn, as `agents.interrupt` does. The queue stays.
+- A resume (`paused: false`) starts the queued messages one turn at a time, as they would have run without the pause. A message that could not start (for example its runtime is not installed) is shown in the thread as usual, and the resume itself still succeeds.
+- Scheduled runs of a paused agent are skipped (see [Scheduler](#scheduler)).
+- The flag is in the store (`agents.paused`), so the apps see it in `agents.list|get`. The queue is in memory: messages held at a daemon restart are lost, as messages waiting for a turn already are. They stay visible in the thread.
+
+`agents.pause_all` is for the owner's CLI and the apps. It returns how many agents changed. Clients show the pause controls when `daemon.info.features` contains `"pause"`.
+
+## Logs
+
+`daemon.logs {lines?, level?}` returns the newest lines of the daemon's own log, for the app's journal view. `lines` is 1–2000 (default 500); `level` is the lowest level to show: `info` (default; debug and trace lines are left out), `warn` or `error`. The reply is `{source, lines}`, where `source` is `journald` or `file`.
+
+Where the lines are: a systemd user unit writes to the journal (read with `journalctl --user -u bandito.service -o cat`), and a launchd agent or a background process writes `<home>/logs/daemon.log`. The reader scans the last 4 MB of the file, or the last 10 000 journal lines, then keeps the newest `lines` lines at the level. A line without a level takes the level of the line before it, so a wrapped error stays with its error. Colour codes are removed.
+
+Clients show the journal when `daemon.info.features` contains `"logs"`.
+
+Before a line is returned, every secret value is replaced as in [Secrets](#secrets) (`••••NAME`), and the secret part of Bandito's tokens (`bdt_` and `bat_`) becomes `••••`. Only the owner's CLI and the apps may call it.
 
 ## Crew
 

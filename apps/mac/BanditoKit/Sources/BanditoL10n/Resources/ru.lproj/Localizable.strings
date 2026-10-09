@@ -422,6 +422,9 @@
 "inspector.schedules" = "Расписания";
 "inspector.server" = "Сервер";
 "inspector.serverInfo" = "%1$@ · Bandito %2$@ · %3$@";
+"inspector.state" = "Состояние";
+"inspector.statePaused" = "На паузе";
+"inspector.stateRunning" = "Работает";
 "inspector.subscription" = "Подписка";
 "inspector.toggleAria" = "Сведения об агенте (⌘I)";
 "inspector.usage" = "Использование";
@@ -429,6 +432,15 @@
 "inspector.window.fiveHour" = "5 часов";
 "inspector.window.sevenDay" = "Неделя";
 "inspector.workplace" = "Рабочее место";
+"journal.copyAll" = "Скопировать всё";
+"journal.empty" = "Записей пока нет.";
+"journal.levelAll" = "Все";
+"journal.levelError" = "Ошибки";
+"journal.levelWarn" = "Предупреждения";
+"journal.loading" = "Загрузка…";
+"journal.needsNewer" = "Журнал доступен на более новом сервере. Обновите сервер, чтобы увидеть его лог здесь.";
+"journal.refresh" = "Обновить";
+"journal.source" = "Источник: %1$@";
 "keys.address" = "Адресная строка";
 "keys.agentDetails" = "Сведения об агенте";
 "keys.approve" = "Разрешить выбранный запрос";
@@ -533,11 +545,13 @@
 "menubar.openChat" = "Открыть чат →";
 "menubar.pauseAll" = "Пауза для всех агентов";
 "menubar.resolveFailed" = "Не удалось отправить ответ: %1$@";
+"menubar.resumeAll" = "Продолжить всех агентов";
 "menubar.upNext" = "ДАЛЬШЕ";
 "menubar.waiting" = "Ждут вас";
 "menubar.wantsPush" = "хочет запушить";
 "menubar.working" = "РАБОТАЮТ";
 "mode.browser" = "Браузер";
+"mode.connectServer" = "Подключите сервер, чтобы им пользоваться.";
 "mode.files" = "Файлы";
 "mode.screen" = "Экран сервера";
 "mode.server" = "Сервер";
@@ -821,6 +835,7 @@
 "palette.openFilesOf" = "Открыть файлы %1$@";
 "palette.pauseAgent" = "Поставить на паузу %1$@";
 "palette.portTitle" = "Порт :%1$@ — %2$@";
+"palette.resumeAgent" = "Продолжить %1$@";
 "palette.search" = "Поиск";
 "palette.sectionActions" = "ДЕЙСТВИЯ";
 "palette.sectionAgents" = "АГЕНТЫ";

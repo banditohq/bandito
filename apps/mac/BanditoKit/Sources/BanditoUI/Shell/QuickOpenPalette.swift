@@ -254,8 +254,15 @@ struct QuickOpenPalette: View {
             ),
         ]
         if let agent = selectedAgent {
+            let server = selectedAgentServer
             actions.append((
-                "action-pause", L10n.Palette.pauseAgent(name: agent.name), "pause", false, {}
+                "action-pause",
+                agent.paused ? L10n.Palette.resumeAgent(name: agent.name) : L10n.Palette.pauseAgent(name: agent.name),
+                "pause", PauseActions.available(on: server),
+                {
+                    close()
+                    if let server { PauseActions.toggle(agent, on: server) }
+                }
             ))
             actions.append((
                 "action-terminal", L10n.Palette.newTerminalHere(name: agent.name), "terminal", true,

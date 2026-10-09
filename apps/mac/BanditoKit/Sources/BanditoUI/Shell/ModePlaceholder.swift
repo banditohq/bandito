@@ -2,7 +2,7 @@ import BanditoDesign
 import BanditoL10n
 import SwiftUI
 
-/// Stand-in for a mode whose screens are not built yet: its icon, its name and "Coming soon".
+/// What a mode shows while there is no server to show it for: its icon, its name and a hint to connect one.
 struct ModePlaceholder: View {
     var mode: AppMode
 
@@ -14,7 +14,7 @@ struct ModePlaceholder: View {
             Text(mode.title)
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(Color.Bandito.text)
-            Text(L10n.Mode.soonHere)
+            Text(L10n.Mode.connectServer)
                 .font(.system(size: 13))
                 .foregroundStyle(Color.Bandito.text2)
         }
@@ -23,7 +23,7 @@ struct ModePlaceholder: View {
     }
 }
 
-/// Sidebar stand-in for a mode whose list is not built yet.
+/// Sidebar stand-in for a mode whose list needs a server.
 struct SidebarPlaceholder: View {
     var mode: AppMode
 
@@ -32,7 +32,7 @@ struct SidebarPlaceholder: View {
             Text(mode.title)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Color.Bandito.text2)
-            Text(L10n.Mode.soonHere)
+            Text(L10n.Mode.connectServer)
                 .font(.system(size: 12))
                 .foregroundStyle(Color.Bandito.text3)
         }

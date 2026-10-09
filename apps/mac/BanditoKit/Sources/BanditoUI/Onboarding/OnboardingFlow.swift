@@ -53,9 +53,9 @@ public struct OnboardingFlow: View {
                 onboarding.returnToSignIn()
             })
         case .server:
-            FirstServerStep {
+            FirstServerStep(onFinished: {
                 onboarding.advance()
-            }
+            })
         case .agent:
             AgentStep {
                 onboarding.finishWithTour()
