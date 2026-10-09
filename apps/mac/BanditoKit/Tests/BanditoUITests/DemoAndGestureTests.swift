@@ -19,14 +19,14 @@ import Testing
         #expect(!demo.workplaces.isEmpty)
     }
 
-    @Test func demoIsOnByDefaultAndPersists() {
+    @Test func demoIsOffByDefaultAndPersists() {
         let defaults = isolatedDefaults()
         let first = DemoStore(defaults: defaults)
-        #expect(first.enabled)
+        #expect(!first.enabled)
 
-        first.enabled = false
+        first.enabled = true
         let second = DemoStore(defaults: defaults)
-        #expect(!second.enabled)
+        #expect(second.enabled)
     }
 }
 
