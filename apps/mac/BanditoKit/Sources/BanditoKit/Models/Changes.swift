@@ -44,4 +44,9 @@ public struct ChangesDiff: Codable, Sendable, Hashable {
     public var from: String?
     public var to: String?
     public var files: [FileChange]
+
+    /// Lines added across all files (binary files count as zero).
+    public var additions: Int { files.reduce(0) { $0 + ($1.additions ?? 0) } }
+    /// Lines removed across all files (binary files count as zero).
+    public var deletions: Int { files.reduce(0) { $0 + ($1.deletions ?? 0) } }
 }

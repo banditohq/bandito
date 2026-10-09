@@ -264,7 +264,7 @@ struct MemoryTab: View {
     var agent: Agent
 
     @Environment(Router.self) private var router
-    @State private var files: [FileEntry] = []
+    @State private var files: [FsEntry] = []
     @State private var error: String?
 
     private var budget: Int { agent.contextBudget ?? ContextUsage.defaultBudget }
@@ -438,7 +438,7 @@ struct MemoryTab: View {
     /// The four places of the design, found among the folder's entries; missing ones are left out.
     private var memoryItems: [MemoryItem] {
         guard let home = agent.homeDir else { return [] }
-        func entry(_ name: String) -> FileEntry? { files.first { $0.name == name } }
+        func entry(_ name: String) -> FsEntry? { files.first { $0.name == name } }
         var items: [MemoryItem] = []
         if let memory = entry("MEMORY.md") {
             let time = TeamTime.label(ms: memory.modifiedMs)
