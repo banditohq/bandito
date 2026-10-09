@@ -1,4 +1,3 @@
-import AppKit
 import BanditoKit
 import SwiftUI
 import Testing
@@ -6,16 +5,9 @@ import Testing
 @testable import BanditoUI
 
 /// Renders key screens to PNG (no window, no app) so changes can be reviewed as
-/// images. Output: $BANDITO_SNAPSHOTS or the temp directory.
+/// images. Rendering helper: `SnapshotSupport`.
 @MainActor
 @Suite struct Snapshots {
-    static var outDir: URL {
-        let path = ProcessInfo.processInfo.environment["BANDITO_SNAPSHOTS"] ?? NSTemporaryDirectory() + "bandito-snapshots"
-        let url = URL(fileURLWithPath: path)
-        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-        return url
-    }
-
     static func demoServer() -> (ServerModel, Agent) {
         let server = ServerModel(config: ServerConfig(name: "vps-tokyo-1", endpoint: .defaultLocal))
         let agent = Agent(
@@ -43,24 +35,13 @@ import Testing
         return (server, agent)
     }
 
-    func render(_ view: some View, _ name: String, size: CGSize) throws -> URL {
-        let renderer = ImageRenderer(content: view.frame(width: size.width, height: size.height).environment(\.colorScheme, .dark))
-        renderer.scale = 2
-        let image = try #require(renderer.nsImage, "render \(name)")
-        let tiff = try #require(image.tiffRepresentation)
-        let png = try #require(NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]))
-        let url = Self.outDir.appending(path: "\(name).png")
-        try png.write(to: url)
-        return url
-    }
-
     @Test func threadWithApproval() throws {
         let (server, agent) = Self.demoServer()
         // ScrollView and text fields are AppKit-backed and don't render offscreen: snapshot the rows.
         let view = ThreadItemsView(items: server.thread(for: agent.id).items, server: server)
             .overlay(alignment: .top) { HeaderPill(agent: agent, status: server.thread(for: agent.id).status) }
             .background(Color(red: 0.07, green: 0.063, blue: 0.055))
-        let url = try render(view, "thread-approval", size: CGSize(width: 900, height: 640))
+        let url = try SnapshotSupport.render(view, "thread-approval", size: CGSize(width: 900, height: 640))
         #expect(FileManager.default.fileExists(atPath: url.path))
     }
 
@@ -76,6 +57,6 @@ import Testing
         }
         .padding()
         .background(Color.black)
-        _ = try render(rows, "sidebar-rows", size: CGSize(width: 280, height: 140))
+        _ = try SnapshotSupport.render(rows, "sidebar-rows", size: CGSize(width: 280, height: 140))
     }
 }
