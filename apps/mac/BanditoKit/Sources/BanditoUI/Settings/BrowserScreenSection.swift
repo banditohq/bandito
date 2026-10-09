@@ -38,7 +38,3 @@ struct BrowserScreenSection: View {
     }
 }
 
-/// How sharp the server's screen and browser pictures are, traded against speed.
-enum ScreenQuality: String, CaseIterable, Hashable {
-    case auto, faster, sharper
-}

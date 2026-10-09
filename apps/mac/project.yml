@@ -37,11 +37,14 @@ targets:
             exit 1
           fi
           target="${CARGO_TARGET_DIR:-$HOME/.cache/bandito-target-app}"
-          (cd "$SRCROOT/../../daemon" && CARGO_TARGET_DIR="$target" cargo build --release -p bandito)
+          (cd "$SRCROOT/../../daemon" && CARGO_TARGET_DIR="$target" cargo build --release --locked -p bandito)
           helpers="$BUILT_PRODUCTS_DIR/$CONTENTS_FOLDER_PATH/Helpers"
           mkdir -p "$helpers"
           cp -f "$target/release/bandito" "$helpers/bandito"
-          codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY:--}" "$helpers/bandito"
+          # Ad-hoc ("-", Debug and CI) needs no timestamp server; a real identity (Developer ID) needs one.
+          identity="${EXPANDED_CODE_SIGN_IDENTITY:--}"
+          if [ "$identity" = "-" ]; then timestamp="--timestamp=none"; else timestamp="--timestamp"; fi
+          codesign --force --options runtime $timestamp --sign "$identity" "$helpers/bandito"
     settings:
       base:
         # The script above reads files outside the target and writes into the product; the sandbox would block it.

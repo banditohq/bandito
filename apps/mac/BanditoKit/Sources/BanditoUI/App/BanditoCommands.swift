@@ -24,7 +24,7 @@ public struct BanditoCommands: Commands {
         CommandGroup(replacing: .appSettings) {
             item("global.settings") { WindowActions.showSettings() }
         }
-        CommandGroup(replacing: .help) {
+        CommandGroup(after: .help) {
             Button(L10n.Onboarding.showAgain) { onboarding.replay() }
         }
         // ⌘W is the terminal close in the Terminals mode, so the window closes with ⇧⌘W.

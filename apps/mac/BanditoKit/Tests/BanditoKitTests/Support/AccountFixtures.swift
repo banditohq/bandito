@@ -83,7 +83,7 @@ func rawBytes(of key: SymmetricKey) -> Data {
 
 /// A fresh identity whose keys live in memory only.
 func makeIdentity() throws -> DeviceIdentity {
-    try DeviceIdentity.load(from: MemorySecretStore())
+    try DeviceIdentity.make(from: MemorySecretStore())
 }
 
 /// An account client on scripted HTTP, with the test device's name and platform.
@@ -92,7 +92,7 @@ func makeClient(
     sessions: SecretStore = MemorySecretStore(),
     identity: DeviceIdentity? = nil
 ) throws -> AccountClient {
-    AccountClient(
+    try AccountClient(
         identity: try identity ?? makeIdentity(),
         sessions: sessions,
         http: http,

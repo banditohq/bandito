@@ -181,4 +181,37 @@ import Testing
         #expect(OnboardingModel.nextStep(after: .agent, needsApproval: false) == .done)
         #expect(OnboardingModel.nextStep(after: .done, needsApproval: false) == .done)
     }
+
+    // MARK: launch decision from local data
+
+    @Test func freshLaunchShowsTheFlowAtOnceWithoutWaitingForServers() {
+        let model = OnboardingModel(defaults: makeDefaults(), hasSavedServers: false)
+        #expect(model.isActive)
+        #expect(!model.isUndecided)
+    }
+
+    @Test func savedServersLeaveTheLaunchUndecidedUntilTheyAreConnected() {
+        let model = OnboardingModel(defaults: makeDefaults(), hasSavedServers: true)
+        #expect(model.isUndecided)
+        #expect(!model.isActive)
+        model.evaluate(hasServerWithAgents: false)
+        #expect(!model.isUndecided)
+        #expect(model.isActive)
+    }
+
+    @Test func connectedServerWithAgentsResolvesToTheMainWindow() {
+        let model = OnboardingModel(defaults: makeDefaults(), hasSavedServers: true)
+        model.evaluate(hasServerWithAgents: true)
+        #expect(!model.isUndecided)
+        #expect(!model.isActive)
+    }
+
+    @Test func finishedFlowIsNeverUndecidedOrActive() {
+        let defaults = makeDefaults()
+        let first = OnboardingModel(defaults: defaults)
+        first.finish()
+        let second = OnboardingModel(defaults: defaults, hasSavedServers: true)
+        #expect(!second.isUndecided)
+        #expect(!second.isActive)
+    }
 }

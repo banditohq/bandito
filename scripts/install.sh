@@ -98,9 +98,9 @@ else
 fi
 
 if command -v curl >/dev/null 2>&1; then
-    fetch() { curl -fsSL --retry 3 -o "$2" "$1"; }
+    fetch() { curl --proto '=https' --tlsv1.2 -fsSL --retry 3 -o "$2" "$1"; }
 elif command -v wget >/dev/null 2>&1; then
-    fetch() { wget -q -O "$2" "$1"; }
+    fetch() { wget --https-only -q -O "$2" "$1"; }
 else
     die "need curl or wget to download Bandito"
 fi

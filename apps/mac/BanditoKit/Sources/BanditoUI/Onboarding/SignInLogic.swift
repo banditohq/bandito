@@ -27,11 +27,12 @@ struct SixDigitCode: Equatable, Sendable {
     }
 
     /// Types or pastes `text` into box `index`. Anything but ASCII digits is dropped, so "12 34-56" counts as six digits.
-    /// Returns true when this input completed the code.
+    /// Returns true only when this input completed the code. Input that changes nothing (no digits, no such box)
+    /// returns false, so a complete code is never reported twice.
     @discardableResult
     mutating func input(_ text: String, at index: Int) -> Bool {
         let digits = text.filter { $0.isASCII && $0.isNumber }.map(String.init)
-        guard !digits.isEmpty, slots.indices.contains(index) else { return isComplete }
+        guard !digits.isEmpty, slots.indices.contains(index) else { return false }
         if digits.count == 1 {
             slots[index] = digits[0]
         } else {
@@ -86,5 +87,16 @@ enum SignInMessages {
             return text
         }
         return L10n.Onboarding.Account.errorGeneric
+    }
+
+    /// The text for a failure while preparing sign-in (reading this Mac's device key, building the client).
+    static func setupText(for error: Error) -> String {
+        if error is DeviceIdentityError {
+            return L10n.Onboarding.Account.keyUnavailable
+        }
+        if let accountError = error as? AccountError, let text = accountError.errorDescription {
+            return text
+        }
+        return L10n.Onboarding.Account.setupFailed
     }
 }

@@ -354,8 +354,7 @@ struct ServerOverview: View {
             }
             Spacer(minLength: 8)
             Button(L10n.Server.Update.howTo) {
-                router.pendingTerminalCommand = ReleaseFeed.installCommand
-                router.select(mode: .terminals)
+                router.requestTerminalCommand(ReleaseFeed.installCommand)
             }
             .buttonStyle(LightPillButtonStyle())
         }

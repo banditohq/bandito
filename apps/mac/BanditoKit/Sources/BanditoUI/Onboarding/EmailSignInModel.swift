@@ -29,6 +29,8 @@ final class EmailSignInModel {
 
     /// Asks the server for a code to `email`. A malformed address is refused here, without a request.
     func sendCode(now: Date) async {
+        // A request already in flight: a second tap must not send a second code.
+        guard !isBusy else { return }
         let address = email.trimmingCharacters(in: .whitespaces)
         guard EmailAddressCheck.isPlausible(address) else {
             errorText = L10n.Onboarding.Account.invalidEmail
@@ -64,7 +66,8 @@ final class EmailSignInModel {
 
     /// Checks the entered code. A wrong code clears the boxes so the person can try again.
     func verify() async {
-        guard phase == .code, !isBusy, code.isComplete else { return }
+        // Once signed in, nothing is checked again.
+        guard phase == .code, !isBusy, signedIn == nil, code.isComplete else { return }
         isBusy = true
         defer { isBusy = false }
         do {

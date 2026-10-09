@@ -3,12 +3,18 @@
 //! output into stored events.
 
 use crate::checkpoint;
+use crate::event::LimitWindow;
 use crate::event::{AgentStatus, DecidedBy, Decision, EventBody, Source, TurnStatus, Usage};
 use crate::hub::Hub;
+use crate::limit;
 use crate::policy::{self, Verdict};
 use crate::redact::Redactor;
 use crate::runtime::{ApprovalRequest, Runtime, RuntimeKind, RuntimeOutput, Session, SpawnConfig};
-use crate::store::{Agent, CheckpointKind, DEFAULT_CONTEXT_BUDGET, MemoryMode, RuleAction, Store, new_id, now_ms};
+use crate::store::{
+    Agent, CheckpointKind, DEFAULT_CONTEXT_BUDGET, MemoryMode, RuleAction, Store, UsageEntry, WorkspaceKind, new_id,
+    now_ms,
+};
+use crate::workspace::{self, WorkspaceManager, WorkspaceSpec};
 use anyhow::{Result, anyhow, bail};
 use chrono::{DateTime, Local, NaiveTime, TimeZone};
 use serde_json::json;
@@ -134,9 +140,9 @@ enum Cmd {
     },
     Stop(oneshot::Sender<()>),
     /// New settings for the next session: close the session now, or after the running turn.
-    /// `new_chapter`: the folder changed, so the next session starts a new chapter.
+    /// `new_chapter`: why the next session starts a new chapter (the folder or the runtime changed).
     Reload {
-        new_chapter: bool,
+        new_chapter: Option<&'static str>,
         reply: oneshot::Sender<()>,
     },
     /// Checks the per-turn and hop limits and, if they pass, counts one crew
@@ -154,6 +160,8 @@ pub struct Supervisor {
     actors: Mutex<HashMap<String, mpsc::Sender<Cmd>>>,
     /// Crew messages accepted so far, per chain id.
     chains: Mutex<HashMap<String, u32>>,
+    /// Docker for the container workspaces (see docs/ARCHITECTURE.md#workspaces).
+    workspaces: Arc<WorkspaceManager>,
 }
 
 /// Approvals nobody answered are denied after this long.
@@ -223,6 +231,21 @@ fn chapter_due(agent: &Agent, now: DateTime<Local>) -> Option<&'static str> {
     (has_chapter && new_day_due(agent, now)).then_some("new day")
 }
 
+/// The runtime an agent runs on now: its fallback while it is active there, else its primary one.
+fn effective_runtime(agent: &Agent) -> RuntimeKind {
+    agent.active_runtime.unwrap_or(agent.runtime)
+}
+
+/// The runtime to switch to when `current` runs out of usage: the fallback from the primary
+/// runtime, the primary one from the fallback. `None` when the agent has no fallback to use.
+fn other_runtime(agent: &Agent, current: RuntimeKind) -> Option<RuntimeKind> {
+    if current == agent.runtime {
+        agent.fallback_runtime.filter(|fb| *fb != current)
+    } else {
+        Some(agent.runtime)
+    }
+}
+
 /// The reason shown when a chapter closes without its wrap-up turn.
 fn unsaved(reason: &'static str) -> &'static str {
     match reason {
@@ -258,13 +281,27 @@ fn next_chapter(hub: &Hub, agent_id: &str, reason: &'static str) {
 
 impl Supervisor {
     pub fn new(hub: Hub, runtimes: Runtimes, mcp: Option<(PathBuf, Vec<String>)>) -> Arc<Self> {
+        Self::new_with_workspaces(hub, runtimes, mcp, WorkspaceManager::system())
+    }
+
+    pub fn new_with_workspaces(
+        hub: Hub,
+        runtimes: Runtimes,
+        mcp: Option<(PathBuf, Vec<String>)>,
+        workspaces: Arc<WorkspaceManager>,
+    ) -> Arc<Self> {
         Arc::new(Self {
             hub,
             runtimes,
             mcp,
             actors: Mutex::new(HashMap::new()),
             chains: Mutex::new(HashMap::new()),
+            workspaces,
         })
+    }
+
+    pub fn workspaces(&self) -> &Arc<WorkspaceManager> {
+        &self.workspaces
     }
 
     pub fn hub(&self) -> &Hub {
@@ -306,6 +343,7 @@ impl Supervisor {
             hub: self.hub.clone(),
             runtimes: self.runtimes.clone(),
             mcp: self.mcp.clone(),
+            workspaces: self.workspaces.clone(),
             session: None,
             output: None,
             redactor: Redactor::default(),
@@ -317,7 +355,12 @@ impl Supervisor {
             turn_context: None,
             turn_checkpoints: false,
             reload_after_turn: false,
-            new_chapter_after_turn: false,
+            new_chapter_after_turn: None,
+            session_kind: None,
+            turn_limit: false,
+            turn_retry: false,
+            next_turn_is_retry: false,
+            last_message: None,
             queue: VecDeque::new(),
             pending: HashMap::new(),
             status: None,
@@ -483,11 +526,11 @@ impl Supervisor {
     /// Apply changed settings to the agent's next session without interrupting a
     /// running turn: the session is closed now, or when the running turn ends.
     /// The chapter goes on (the runtime session id is kept), so the next message
-    /// resumes it with the new settings. With `new_chapter` (the folder changed)
-    /// the next session starts a new chapter instead: CLI sessions are tied to
-    /// their folder. An agent with no actor has no session to close; a folder
-    /// change still starts its next chapter in the store.
-    pub async fn reload(&self, agent_id: &str, new_chapter: bool) {
+    /// resumes it with the new settings. With `new_chapter` (why: "folder changed",
+    /// "runtime changed") the next session starts a new chapter instead: CLI sessions
+    /// are tied to their folder and their runtime. An agent with no actor has no
+    /// session to close; its next chapter still starts in the store.
+    pub async fn reload(&self, agent_id: &str, new_chapter: Option<&'static str>) {
         let tx = self
             .actors
             .lock()
@@ -501,8 +544,11 @@ impl Supervisor {
                     let _ = rx.await;
                 }
             }
-            None if new_chapter => next_chapter(&self.hub, agent_id, "folder changed"),
-            None => {}
+            None => {
+                if let Some(reason) = new_chapter {
+                    next_chapter(&self.hub, agent_id, reason);
+                }
+            }
         }
     }
 
@@ -533,6 +579,7 @@ struct Actor {
     hub: Hub,
     runtimes: Runtimes,
     mcp: Option<(PathBuf, Vec<String>)>,
+    workspaces: Arc<WorkspaceManager>,
     session: Option<Box<dyn Session>>,
     output: Option<mpsc::Receiver<RuntimeOutput>>,
     /// Replaces the values of the secrets this session was started with, in everything it stores or sends.
@@ -550,8 +597,18 @@ struct Actor {
     turn_checkpoints: bool,
     /// Settings changed while a session was running: close that session once it is idle.
     reload_after_turn: bool,
-    /// The folder changed while a session was running: the next session starts a new chapter.
-    new_chapter_after_turn: bool,
+    /// A folder or runtime change while a session was running: the next session starts a new chapter, for this reason.
+    new_chapter_after_turn: Option<&'static str>,
+    /// The runtime of the running session (the primary one or the fallback).
+    session_kind: Option<RuntimeKind>,
+    /// The running turn reported that the runtime's usage is used up (see `marks_limit`).
+    turn_limit: bool,
+    /// The running turn is the retry of a message after a switch: it does not echo the message again.
+    turn_retry: bool,
+    /// The next turn started is a retry (set just before `start_turn`).
+    next_turn_is_retry: bool,
+    /// The last message a turn was started for, to repeat it on another runtime.
+    last_message: Option<Inbound>,
     queue: VecDeque<Inbound>,
     pending: HashMap<String, PendingApproval>,
     status: Option<AgentStatus>,
@@ -626,7 +683,7 @@ impl Actor {
             }
             Cmd::Reload { new_chapter, reply } => {
                 self.reload_after_turn = true;
-                self.new_chapter_after_turn |= new_chapter;
+                self.new_chapter_after_turn = self.new_chapter_after_turn.or(new_chapter);
                 self.apply_reload_if_idle().await;
                 let _ = reply.send(());
             }
@@ -712,10 +769,11 @@ impl Actor {
             return Ok(());
         }
         let agent = self.agent()?;
+        let kind = effective_runtime(&agent);
         let rt = self
             .runtimes
-            .get(agent.runtime)
-            .ok_or_else(|| anyhow!("runtime {} is not available on this server", agent.runtime.as_str()))?;
+            .get(kind)
+            .ok_or_else(|| anyhow!("runtime {} is not available on this server", kind.as_str()))?;
         // Blocks: memory briefing, role, the user's own instructions.
         let mut blocks: Vec<String> = Vec::new();
         if let Some(home) = agent.home_dir.as_deref() {
@@ -733,25 +791,45 @@ impl Actor {
         }
         let prompt = blocks.join("\n\n");
         let secrets = self.hub.store.secrets_for_agent(&agent.id)?;
+        let ws = self
+            .hub
+            .store
+            .workspace_get(&agent.workspace_id)?
+            .ok_or_else(|| anyhow!("workspace {} is gone", agent.workspace_id))?;
+        let (workspace, mcp) = match ws.kind {
+            WorkspaceKind::Shared => (WorkspaceSpec::Shared, self.mcp.clone()),
+            WorkspaceKind::Container => {
+                let mounts = workspace::mounts_for(&self.hub.store, &ws)?;
+                self.workspaces.ensure_running(&ws, &mounts).await?;
+                // The crew server talks to the daemon socket, which is not mounted: no crew inside a container.
+                (self.workspaces.spec(&ws), None)
+            }
+        };
         let spawned = rt
             .spawn(SpawnConfig {
                 agent_id: agent.id.clone(),
                 cwd: PathBuf::from(&agent.cwd),
-                model: agent.model.clone(),
+                model: if kind == agent.runtime {
+                    agent.model.clone()
+                } else {
+                    agent.fallback_model.clone()
+                },
                 system_prompt: (!prompt.is_empty()).then_some(prompt),
                 resume: agent.runtime_session_id.clone(),
                 program: None,
-                mcp: self.mcp.clone().map(|(prog, mut args)| {
+                mcp: mcp.map(|(prog, mut args)| {
                     args.extend(["--agent".to_string(), agent.id.clone()]);
                     (prog, args)
                 }),
                 env: secrets.clone(),
                 effort: agent.effort,
                 extra_dirs: agent.home_dir.iter().map(PathBuf::from).collect(),
+                workspace: Some(workspace),
             })
             .await?;
         self.session = Some(spawned.session);
         self.output = Some(spawned.output);
+        self.session_kind = Some(kind);
         // The same values the child got, so what it prints is redacted exactly for them.
         self.redactor = Redactor::new(secrets);
         Ok(())
@@ -772,6 +850,14 @@ impl Actor {
             && self.begin_rotation(reason, &agent).await
         {
             return Ok(());
+        }
+        // On a fallback: the primary runtime goes back in as soon as its limit has reset.
+        if let Ok(agent) = self.agent()
+            && let Some(active) = agent.active_runtime
+            && self.runtimes.get(agent.runtime).is_some()
+            && self.runtime_free(agent.runtime, now_ms())
+        {
+            self.switch_runtime(&agent, active, agent.runtime, None).await;
         }
         let Some(msg) = self.queue.pop_front() else {
             return Ok(());
@@ -842,8 +928,8 @@ impl Actor {
     async fn apply_reload(&mut self) {
         let new_chapter = self.new_chapter_after_turn;
         self.release_session().await;
-        if new_chapter {
-            next_chapter(&self.hub, &self.id, "folder changed");
+        if let Some(reason) = new_chapter {
+            next_chapter(&self.hub, &self.id, reason);
         }
     }
 
@@ -855,8 +941,9 @@ impl Actor {
             s.shutdown().await;
         }
         self.output = None;
+        self.session_kind = None;
         self.reload_after_turn = false;
-        self.new_chapter_after_turn = false;
+        self.new_chapter_after_turn = None;
         self.expire_pending();
     }
 
@@ -898,6 +985,12 @@ impl Actor {
             self.set_status(AgentStatus::Error, Some(message));
             return Err(e);
         }
+        let retry = std::mem::take(&mut self.next_turn_is_retry);
+        self.turn_retry = retry;
+        self.turn_limit = false;
+        if !retry && msg.source != Source::System {
+            self.last_message = Some(msg.clone());
+        }
         let turn_id = new_id();
         self.turn = Some(turn_id.clone());
         self.turn_hops = msg.hops;
@@ -911,17 +1004,19 @@ impl Actor {
                 source: msg.source,
             },
         );
-        self.hub.emit(
-            &self.id,
-            EventBody::MessageUser {
-                text: msg.typed.clone().unwrap_or_else(|| msg.text.clone()),
-                source: msg.source,
-                from_agent: msg.from_agent.clone(),
-                command: msg.command.clone(),
-            },
-        );
+        if !retry {
+            self.hub.emit(
+                &self.id,
+                EventBody::MessageUser {
+                    text: msg.typed.clone().unwrap_or_else(|| msg.text.clone()),
+                    source: msg.source,
+                    from_agent: msg.from_agent.clone(),
+                    command: msg.command.clone(),
+                },
+            );
+        }
         self.set_status(AgentStatus::Working, None);
-        let dirs = if msg.source == Source::System {
+        let dirs = if msg.source == Source::System || retry {
             None
         } else {
             self.checkpoint_dirs()
@@ -967,6 +1062,8 @@ impl Actor {
                 cost_usd,
                 ..
             }) => {
+                let limited = std::mem::take(&mut self.turn_limit);
+                let retry = self.turn_retry;
                 let turn_id = self.turn.take().unwrap_or_else(new_id);
                 self.hub.emit(
                     &self.id,
@@ -986,6 +1083,10 @@ impl Actor {
                     self.after_turn().await;
                     return;
                 }
+                // Out of usage: another runtime takes the message, once per message.
+                if limited && status == TurnStatus::Error && !retry && self.switch_on_limit().await {
+                    return;
+                }
                 // A chapter over budget closes when the next message comes (see `pump`).
                 if self.reload_after_turn && !self.chapter_pending() {
                     self.apply_reload().await;
@@ -993,6 +1094,9 @@ impl Actor {
                 self.after_turn().await;
             }
             RuntimeOutput::Event(body) => {
+                if self.turn.is_some() && self.marks_limit(&body) {
+                    self.turn_limit = true;
+                }
                 let body = self.redactor.redact_event(body);
                 self.hub.emit(&self.id, body);
             }
@@ -1041,8 +1145,8 @@ impl Actor {
                 }
                 // The next session starts with the current settings anyway; a folder change still starts a chapter.
                 self.reload_after_turn = false;
-                if std::mem::take(&mut self.new_chapter_after_turn) {
-                    next_chapter(&self.hub, &self.id, "folder changed");
+                if let Some(reason) = self.new_chapter_after_turn.take() {
+                    next_chapter(&self.hub, &self.id, reason);
                 }
                 if failed {
                     self.set_status(AgentStatus::Error, detail);
@@ -1053,6 +1157,111 @@ impl Actor {
                 }
             }
         }
+    }
+
+    /// Whether a runtime output says that the running session's usage is used up: an error
+    /// message of the runtime, or a usage window reported full.
+    fn marks_limit(&self, body: &EventBody) -> bool {
+        let Some(kind) = self.session_kind else {
+            return false;
+        };
+        match body {
+            EventBody::Error { message } => limit::error_marks_limit(kind, message),
+            EventBody::UsageLimits { runtime, windows } => {
+                runtime == kind.as_str() && windows.iter().any(limit::window_full)
+            }
+            _ => false,
+        }
+    }
+
+    /// The usage cache entry of `kind`, as the runtime last reported it.
+    fn usage_of(&self, kind: RuntimeKind) -> Option<UsageEntry> {
+        match self.hub.store.usage_list() {
+            Ok(list) => list.into_iter().find(|e| e.runtime == kind.as_str()),
+            Err(e) => {
+                tracing::warn!(agent = self.id, "read usage: {e:#}");
+                None
+            }
+        }
+    }
+
+    /// Whether `kind` can take a message now: no usage window blocks it.
+    fn runtime_free(&self, kind: RuntimeKind, now_ms: i64) -> bool {
+        self.usage_of(kind)
+            .is_none_or(|e| !limit::blocked(&e.windows, e.updated_at, now_ms))
+    }
+
+    /// The running turn ended because its runtime is out of usage. When the other runtime
+    /// (the fallback, or the primary one) is free, switch to it and repeat the last message
+    /// there. Returns `true` when the switch was made and the retry turn was started (or
+    /// failed to start, with its error shown); `false` leaves the turn as a plain error.
+    async fn switch_on_limit(&mut self) -> bool {
+        let Ok(agent) = self.agent() else {
+            return false;
+        };
+        let Some(current) = self.session_kind else {
+            return false;
+        };
+        let Some(target) = other_runtime(&agent, current) else {
+            return false;
+        };
+        let now = now_ms();
+        if self.runtimes.get(target).is_none() || !self.runtime_free(target, now) {
+            tracing::info!(agent = self.id, "no runtime to switch to from {}", current.as_str());
+            return false;
+        }
+        let Some(msg) = self.last_message.clone() else {
+            return false;
+        };
+        // The runtime we leave is recorded as used up, so the primary one waits for its reset
+        // (or for a recheck, when the reset time is unknown).
+        self.mark_exhausted(current, now);
+        let until = self
+            .usage_of(current)
+            .and_then(|e| limit::blocked_until(&e.windows, e.updated_at, now));
+        self.switch_runtime(&agent, current, target, until).await;
+        self.next_turn_is_retry = true;
+        if let Err(e) = self.start_turn(msg).await {
+            tracing::warn!(agent = self.id, "retry on {}: {e:#}", target.as_str());
+        }
+        true
+    }
+
+    /// Records that `kind` is out of usage, when its cache does not say so yet.
+    fn mark_exhausted(&self, kind: RuntimeKind, now: i64) {
+        let entry = self.usage_of(kind);
+        let (mut windows, reported_at) = match entry {
+            Some(e) if limit::blocked(&e.windows, e.updated_at, now) => return,
+            Some(e) => (e.windows, now),
+            None => (Vec::new(), now),
+        };
+        windows.push(LimitWindow {
+            name: "limit".into(),
+            utilization: 1.0,
+            resets_at: None,
+        });
+        if let Err(e) = self.hub.store.usage_set(kind.as_str(), &windows, reported_at) {
+            tracing::warn!(agent = self.id, "record the limit of {}: {e:#}", kind.as_str());
+        }
+    }
+
+    /// Makes `to` the agent's runtime for the next session and starts a new chapter, which
+    /// has no CLI session to resume. The memory carries over in the agent's files.
+    async fn switch_runtime(&mut self, agent: &Agent, from: RuntimeKind, to: RuntimeKind, until: Option<i64>) {
+        self.release_session().await;
+        let active = (to != agent.runtime).then_some(to);
+        if let Err(e) = self.hub.store.agent_set_active_runtime(&self.id, active) {
+            tracing::warn!(agent = self.id, "set the active runtime: {e:#}");
+        }
+        self.hub.emit(
+            &self.id,
+            EventBody::RuntimeSwitched {
+                from: from.as_str().to_string(),
+                to: to.as_str().to_string(),
+                until,
+            },
+        );
+        next_chapter(&self.hub, &self.id, "runtime switched");
     }
 
     async fn after_turn(&mut self) {
@@ -1408,6 +1617,8 @@ mod tests {
                 effort: None,
                 memory_mode: crate::store::MemoryMode::Smart,
                 context_budget: None,
+                fallback_runtime: None,
+                fallback_model: None,
             })
             .unwrap();
         attach(store, agent.id)
@@ -1796,6 +2007,8 @@ mod tests {
                 effort: None,
                 memory_mode: crate::store::MemoryMode::Smart,
                 context_budget: None,
+                fallback_runtime: None,
+                fallback_model: None,
             })
             .unwrap()
             .id
@@ -2079,6 +2292,8 @@ mod tests {
                 effort: None,
                 memory_mode: crate::store::MemoryMode::Smart,
                 context_budget: None,
+                fallback_runtime: None,
+                fallback_model: None,
             })
             .unwrap();
         let err = w.sup.send(&codex.id, Inbound::user("x")).await.unwrap_err();
@@ -2314,7 +2529,7 @@ mod tests {
         w.push(done()).await;
         w.wait(is_status(AgentStatus::Idle)).await;
 
-        w.sup.reload(&w.agent, false).await;
+        w.sup.reload(&w.agent, None).await;
         assert!(w.log.lock().unwrap().iter().any(|l| l == "shutdown"));
         let a = w.store.agent_get(&w.agent).unwrap().unwrap();
         assert_eq!(a.runtime_session_id.as_deref(), Some("sess-1"), "the chapter goes on");
@@ -2333,8 +2548,8 @@ mod tests {
         w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
         w.wait_log("send go").await;
         w.push(RuntimeOutput::SessionId("sess-1".into())).await;
-        w.sup.reload(&w.agent, false).await;
-        w.sup.reload(&w.agent, false).await;
+        w.sup.reload(&w.agent, None).await;
+        w.sup.reload(&w.agent, None).await;
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert!(
             !w.log.lock().unwrap().iter().any(|l| l == "shutdown"),
@@ -2360,7 +2575,7 @@ mod tests {
         w.wait(is_status(AgentStatus::Idle)).await;
 
         // over budget and idle: the wrap-up still runs before the next message
-        w.sup.reload(&w.agent, false).await;
+        w.sup.reload(&w.agent, None).await;
         assert!(!w.log.lock().unwrap().iter().any(|l| l == "shutdown"));
         w.sup.send(&w.agent, Inbound::user("next")).await.unwrap();
         w.wait_log(&format!("send {WRAP_UP}")).await;
@@ -2374,8 +2589,8 @@ mod tests {
     #[tokio::test]
     async fn reload_without_an_actor_does_nothing() {
         let w = world(ApprovalMode::Risky);
-        w.sup.reload(&w.agent, false).await;
-        w.sup.reload("nobody", false).await;
+        w.sup.reload(&w.agent, None).await;
+        w.sup.reload("nobody", None).await;
         assert!(w.spawns.lock().unwrap().is_empty(), "no session was started");
         assert!(w.log.lock().unwrap().is_empty());
     }
@@ -2516,7 +2731,7 @@ mod tests {
         w.push(done()).await;
         w.wait(is_status(AgentStatus::Idle)).await;
 
-        w.sup.reload(&w.agent, true).await;
+        w.sup.reload(&w.agent, Some("folder changed")).await;
         assert!(w.log.lock().unwrap().iter().any(|l| l == "shutdown"));
         let (chapter, reason, _) = rotated(&mut w).await;
         assert_eq!((chapter, reason.as_str()), (2, "folder changed"));
@@ -2534,7 +2749,7 @@ mod tests {
         w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
         w.wait_log("send go").await;
         w.push(RuntimeOutput::SessionId("sess-1".into())).await;
-        w.sup.reload(&w.agent, true).await;
+        w.sup.reload(&w.agent, Some("folder changed")).await;
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert!(
             !w.log.lock().unwrap().iter().any(|l| l == "shutdown"),
@@ -2555,7 +2770,7 @@ mod tests {
         w.wait_log("send go").await;
         w.push(approval("k1", "ls")).await;
         w.wait(|b| matches!(b, EventBody::ApprovalRequested { .. })).await;
-        w.sup.reload(&w.agent, false).await;
+        w.sup.reload(&w.agent, None).await;
         w.push(done()).await;
         w.wait_log("shutdown").await;
         assert!(w.store.approval_list_pending(None).unwrap().is_empty());
@@ -2616,6 +2831,8 @@ mod tests {
                 effort: None,
                 memory_mode: crate::store::MemoryMode::Smart,
                 context_budget: None,
+                fallback_runtime: None,
+                fallback_model: None,
             })
             .unwrap();
         store.agent_set_home(&agent.id, &home.display().to_string()).unwrap();
@@ -2734,5 +2951,470 @@ mod tests {
         w.sup.resolve(&approval_id, Decision::Allow, true).await.unwrap();
         assert_eq!(asking.await.unwrap().unwrap(), Decision::Allow);
         assert!(w.store.rule_list(Some(&w.agent)).unwrap().is_empty());
+    }
+
+    // ---- Fallback subscription -------------------------------------------------------
+
+    use crate::event::LimitWindow;
+
+    /// A mock reporting another runtime kind (the fallback). It shares the output map of the Claude mock.
+    struct AsKind(MockRuntime, RuntimeKind);
+
+    #[async_trait::async_trait]
+    impl Runtime for AsKind {
+        fn kind(&self) -> RuntimeKind {
+            self.1
+        }
+        async fn status(&self) -> crate::runtime::RuntimeStatus {
+            crate::runtime::RuntimeStatus {
+                kind: self.1,
+                installed: true,
+                version: None,
+                logged_in: None,
+                detail: None,
+            }
+        }
+        async fn spawn(&self, cfg: SpawnConfig) -> Result<crate::runtime::Spawned> {
+            self.0.spawn(cfg).await
+        }
+    }
+
+    /// A world whose agent runs on Claude with `fallback`. The Codex mock is in the runtimes only if
+    /// `codex_available`. Returns the world and the log of the Codex mock.
+    fn fallback_world(fallback: Option<RuntimeKind>, codex_available: bool) -> (World, Log) {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let agent = store
+            .agent_create(NewAgent {
+                name: "Forge".into(),
+                role: "builder".into(),
+                runtime: RuntimeKind::Claude,
+                model: None,
+                cwd: "/home/u/app".into(),
+                approval_mode: ApprovalMode::Never,
+                system_prompt: None,
+                effort: None,
+                memory_mode: crate::store::MemoryMode::Smart,
+                context_budget: None,
+                fallback_runtime: fallback,
+                fallback_model: None,
+            })
+            .unwrap();
+        let hub = Hub::new(store.clone());
+        let events = hub.subscribe();
+        let log: Log = Arc::default();
+        let codex_log: Log = Arc::default();
+        let out: Outs = Arc::default();
+        let spawns = Arc::new(Mutex::new(Vec::new()));
+        let mut rts = Runtimes::default();
+        rts.insert(Arc::new(MockRuntime {
+            log: log.clone(),
+            out: out.clone(),
+            spawns: spawns.clone(),
+        }));
+        if codex_available {
+            rts.insert(Arc::new(AsKind(
+                MockRuntime {
+                    log: codex_log.clone(),
+                    out: out.clone(),
+                    spawns: spawns.clone(),
+                },
+                RuntimeKind::Codex,
+            )));
+        }
+        let world = World {
+            sup: Supervisor::new(hub, rts, None),
+            store,
+            log,
+            out,
+            spawns,
+            events,
+            agent: agent.id,
+        };
+        (world, codex_log)
+    }
+
+    /// The Claude turn ends with the usage limit's error.
+    fn limit_error() -> RuntimeOutput {
+        RuntimeOutput::Event(EventBody::Error {
+            message: "Claude AI usage limit reached|1791543600".into(),
+        })
+    }
+
+    fn turn_failed() -> RuntimeOutput {
+        RuntimeOutput::Event(EventBody::TurnCompleted {
+            turn_id: String::new(),
+            status: TurnStatus::Error,
+            usage: None,
+            cost_usd: None,
+        })
+    }
+
+    fn full_window(resets_at: Option<i64>) -> LimitWindow {
+        LimitWindow {
+            name: "five_hour".into(),
+            utilization: 1.0,
+            resets_at,
+        }
+    }
+
+    async fn wait_in(log: &Log, line: &str) {
+        for _ in 0..300 {
+            if log.lock().unwrap().iter().any(|l| l == line) {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        panic!("log never had {line:?}: {:?}", log.lock().unwrap());
+    }
+
+    fn switch_count(w: &World) -> usize {
+        w.kinds().iter().filter(|k| *k == "runtime.switched").count()
+    }
+
+    #[tokio::test]
+    async fn a_limit_error_switches_to_the_fallback_and_repeats_the_message() {
+        let (mut w, codex_log) = fallback_world(Some(RuntimeKind::Codex), true);
+        w.sup.send(&w.agent, Inbound::user("fix the build")).await.unwrap();
+        w.wait_log("send fix the build").await;
+        w.push(limit_error()).await;
+        w.push(turn_failed()).await;
+
+        let switched = w.wait(|b| matches!(b, EventBody::RuntimeSwitched { .. })).await;
+        assert_eq!(
+            switched.body,
+            EventBody::RuntimeSwitched {
+                from: "claude".into(),
+                to: "codex".into(),
+                until: None,
+            }
+        );
+        wait_in(&codex_log, "send fix the build").await;
+        let agent = w.store.agent_get(&w.agent).unwrap().unwrap();
+        assert_eq!(agent.active_runtime, Some(RuntimeKind::Codex));
+        assert_eq!(agent.chapter, 2, "the fallback starts a new chapter");
+        assert!(
+            agent.runtime_session_id.is_none(),
+            "the Claude session id is not reused"
+        );
+        // The message is in the thread once: the retry does not echo it.
+        assert_eq!(w.kinds().iter().filter(|k| *k == "message.user").count(), 1);
+
+        w.push(done()).await;
+        w.wait(|b| {
+            matches!(
+                b,
+                EventBody::TurnCompleted {
+                    status: TurnStatus::Ok,
+                    ..
+                }
+            )
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn a_fallback_that_is_also_out_of_usage_is_not_used() {
+        let (mut w, codex_log) = fallback_world(Some(RuntimeKind::Codex), true);
+        let now = now_ms();
+        w.store
+            .usage_set("codex", &[full_window(Some(now / 1000 + 3600))], now)
+            .unwrap();
+        w.sup.send(&w.agent, Inbound::user("fix")).await.unwrap();
+        w.wait_log("send fix").await;
+        w.push(limit_error()).await;
+        w.push(turn_failed()).await;
+        w.wait(|b| matches!(b, EventBody::TurnCompleted { .. })).await;
+
+        assert_eq!(switch_count(&w), 0);
+        assert!(codex_log.lock().unwrap().is_empty());
+        let agent = w.store.agent_get(&w.agent).unwrap().unwrap();
+        assert_eq!(agent.active_runtime, None);
+        assert_eq!(agent.chapter, 1);
+    }
+
+    #[tokio::test]
+    async fn a_retry_that_hits_the_limit_again_is_a_plain_error() {
+        let (mut w, codex_log) = fallback_world(Some(RuntimeKind::Codex), true);
+        w.sup.send(&w.agent, Inbound::user("fix")).await.unwrap();
+        w.wait_log("send fix").await;
+        w.push(limit_error()).await;
+        w.push(turn_failed()).await;
+        w.wait(|b| matches!(b, EventBody::RuntimeSwitched { .. })).await;
+        wait_in(&codex_log, "send fix").await;
+
+        w.push(limit_error()).await;
+        w.push(turn_failed()).await;
+        w.wait(|b| matches!(b, EventBody::TurnCompleted { .. })).await;
+
+        assert_eq!(switch_count(&w), 1, "one switch per message");
+        assert_eq!(w.log.lock().unwrap().iter().filter(|l| *l == "send fix").count(), 1);
+        assert_eq!(codex_log.lock().unwrap().iter().filter(|l| *l == "send fix").count(), 1);
+    }
+
+    #[tokio::test]
+    async fn without_a_fallback_a_limit_error_is_a_plain_error() {
+        let (mut w, codex_log) = fallback_world(None, true);
+        w.sup.send(&w.agent, Inbound::user("fix")).await.unwrap();
+        w.wait_log("send fix").await;
+        w.push(limit_error()).await;
+        w.push(turn_failed()).await;
+        let ended = w.wait(|b| matches!(b, EventBody::TurnCompleted { .. })).await;
+        assert!(matches!(
+            ended.body,
+            EventBody::TurnCompleted {
+                status: TurnStatus::Error,
+                ..
+            }
+        ));
+        assert_eq!(switch_count(&w), 0);
+        assert!(codex_log.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_fallback_that_is_not_available_on_this_server_is_not_used() {
+        let (mut w, codex_log) = fallback_world(Some(RuntimeKind::Codex), false);
+        w.sup.send(&w.agent, Inbound::user("fix")).await.unwrap();
+        w.wait_log("send fix").await;
+        w.push(limit_error()).await;
+        w.push(turn_failed()).await;
+        w.wait(|b| matches!(b, EventBody::TurnCompleted { .. })).await;
+        assert_eq!(switch_count(&w), 0);
+        assert!(codex_log.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn the_primary_comes_back_once_its_window_has_reset() {
+        let (mut w, codex_log) = fallback_world(Some(RuntimeKind::Codex), true);
+        let now = now_ms();
+        w.store
+            .agent_set_active_runtime(&w.agent, Some(RuntimeKind::Codex))
+            .unwrap();
+        w.store
+            .usage_set("claude", &[full_window(Some(now / 1000 - 10))], now - 3_600_000)
+            .unwrap();
+
+        w.sup.send(&w.agent, Inbound::user("again")).await.unwrap();
+        let switched = w.wait(|b| matches!(b, EventBody::RuntimeSwitched { .. })).await;
+        assert_eq!(
+            switched.body,
+            EventBody::RuntimeSwitched {
+                from: "codex".into(),
+                to: "claude".into(),
+                until: None,
+            }
+        );
+        w.wait_log("send again").await;
+        assert!(codex_log.lock().unwrap().is_empty());
+        let agent = w.store.agent_get(&w.agent).unwrap().unwrap();
+        assert_eq!(agent.active_runtime, None);
+    }
+
+    #[tokio::test]
+    async fn the_fallback_stays_while_the_primary_window_is_still_full() {
+        let (w, codex_log) = fallback_world(Some(RuntimeKind::Codex), true);
+        let now = now_ms();
+        w.store
+            .agent_set_active_runtime(&w.agent, Some(RuntimeKind::Codex))
+            .unwrap();
+        w.store
+            .usage_set("claude", &[full_window(Some(now / 1000 + 3600))], now)
+            .unwrap();
+
+        w.sup.send(&w.agent, Inbound::user("again")).await.unwrap();
+        wait_in(&codex_log, "send again").await;
+        assert_eq!(switch_count(&w), 0);
+        assert!(w.log.lock().unwrap().is_empty());
+    }
+}
+
+#[cfg(test)]
+mod workspace_tests {
+    use super::testing::MockRuntime;
+    use super::*;
+    use crate::store::{ApprovalMode, MemoryMode, Network, NewAgent, NewWorkspace, Store, WorkspaceKind};
+    use crate::workspace::testing::fake_docker;
+    use crate::workspace::{WorkspaceManager, WorkspaceSpec};
+    use std::time::Duration;
+
+    fn rig(store: Arc<Store>, manager: Arc<WorkspaceManager>) -> (Arc<Supervisor>, Arc<Mutex<Vec<SpawnConfig>>>) {
+        let spawns = Arc::new(Mutex::new(Vec::new()));
+        let mut rts = Runtimes::default();
+        rts.insert(Arc::new(MockRuntime {
+            log: Arc::default(),
+            out: Arc::default(),
+            spawns: spawns.clone(),
+        }));
+        let hub = Hub::new(store);
+        (Supervisor::new_with_workspaces(hub, rts, None, manager), spawns)
+    }
+
+    fn agent(store: &Store, name: &str, workspace: &str) -> String {
+        store
+            .agent_create_in(
+                NewAgent {
+                    name: name.into(),
+                    role: String::new(),
+                    runtime: RuntimeKind::Claude,
+                    model: None,
+                    cwd: std::env::temp_dir().display().to_string(),
+                    approval_mode: ApprovalMode::Never,
+                    system_prompt: None,
+                    effort: None,
+                    memory_mode: MemoryMode::Smart,
+                    context_budget: None,
+                    fallback_runtime: None,
+                    fallback_model: None,
+                },
+                workspace,
+            )
+            .unwrap()
+            .id
+    }
+
+    async fn first_spawn(spawns: &Arc<Mutex<Vec<SpawnConfig>>>) -> SpawnConfig {
+        for _ in 0..100 {
+            if let Some(cfg) = spawns.lock().unwrap().first().cloned() {
+                return cfg;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        panic!("no session was spawned");
+    }
+
+    fn scratch_manager() -> Arc<WorkspaceManager> {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().to_path_buf();
+        std::mem::forget(dir);
+        WorkspaceManager::new(PathBuf::from("/nonexistent/bandito-docker"), path.join("build"))
+    }
+
+    #[tokio::test]
+    async fn a_shared_agent_gets_the_shared_spec_and_its_mcp_server() {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let id = agent(&store, "Forge", "shared");
+        let (sup, spawns) = rig(store, scratch_manager());
+        sup.send(&id, Inbound::user("go")).await.unwrap();
+        let cfg = first_spawn(&spawns).await;
+        assert_eq!(cfg.workspace, Some(WorkspaceSpec::Shared));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_container_agent_starts_its_container_and_runs_inside_it() {
+        let fake = fake_docker(None);
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let box_ws = store
+            .workspace_create(NewWorkspace {
+                name: "Box".into(),
+                kind: WorkspaceKind::Container,
+                image: Some("img:1".into()),
+                cpus: None,
+                memory_mb: None,
+                network: Network::Internet,
+                mounts: Vec::new(),
+            })
+            .unwrap();
+        let id = agent(&store, "Scout", &box_ws.id);
+        let manager = WorkspaceManager::new(fake.docker.clone(), fake.dir.path().join("build"));
+        let (sup, spawns) = rig(store, manager);
+        sup.send(&id, Inbound::user("go")).await.unwrap();
+
+        let cfg = first_spawn(&spawns).await;
+        let name = format!("bandito-ws-{}", box_ws.id);
+        assert_eq!(
+            cfg.workspace,
+            Some(WorkspaceSpec::Container {
+                name: name.clone(),
+                docker: fake.docker.clone(),
+            })
+        );
+        assert!(
+            cfg.mcp.is_none(),
+            "a container cannot reach the daemon socket, so no crew server"
+        );
+        let cwd = std::env::temp_dir().display().to_string();
+        let log = fake.calls();
+        let run = log
+            .iter()
+            .find(|l| l.starts_with(&format!("run -d --name {name} ")))
+            .unwrap_or_else(|| panic!("container created: {log:?}"));
+        assert!(
+            run.contains(&format!("source={cwd},target={cwd}")),
+            "the agent's folder is mounted: {run}"
+        );
+    }
+    /// A mock that reports another runtime kind, as the fallback runtime does.
+    struct OtherKind {
+        kind: RuntimeKind,
+        inner: MockRuntime,
+    }
+
+    #[async_trait::async_trait]
+    impl Runtime for OtherKind {
+        fn kind(&self) -> RuntimeKind {
+            self.kind
+        }
+        async fn status(&self) -> crate::runtime::RuntimeStatus {
+            crate::runtime::RuntimeStatus {
+                kind: self.kind,
+                installed: true,
+                version: None,
+                logged_in: None,
+                detail: None,
+            }
+        }
+        async fn spawn(&self, cfg: SpawnConfig) -> Result<crate::runtime::Spawned> {
+            self.inner.spawn(cfg).await
+        }
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_fallback_runtime_runs_in_the_agents_container_too() {
+        let fake = fake_docker(None);
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let box_ws = store
+            .workspace_create(NewWorkspace {
+                name: "Box".into(),
+                kind: WorkspaceKind::Container,
+                image: Some("img:1".into()),
+                cpus: None,
+                memory_mb: None,
+                network: Network::Internet,
+                mounts: Vec::new(),
+            })
+            .unwrap();
+        let id = agent(&store, "Scout", &box_ws.id);
+        // The agent has switched to its fallback (Codex) after a limit error on Claude.
+        store.agent_set_active_runtime(&id, Some(RuntimeKind::Codex)).unwrap();
+
+        let spawns = Arc::new(Mutex::new(Vec::new()));
+        let mut rts = Runtimes::default();
+        rts.insert(Arc::new(OtherKind {
+            kind: RuntimeKind::Codex,
+            inner: MockRuntime {
+                log: Arc::default(),
+                out: Arc::default(),
+                spawns: spawns.clone(),
+            },
+        }));
+        let manager = WorkspaceManager::new(fake.docker.clone(), fake.dir.path().join("build"));
+        let sup = Supervisor::new_with_workspaces(Hub::new(store.clone()), rts, None, manager);
+        sup.send(&id, Inbound::user("go")).await.unwrap();
+
+        let cfg = first_spawn(&spawns).await;
+        assert_eq!(
+            cfg.workspace,
+            Some(WorkspaceSpec::Container {
+                name: format!("bandito-ws-{}", box_ws.id),
+                docker: fake.docker.clone(),
+            })
+        );
+        assert!(
+            fake.calls()
+                .iter()
+                .any(|l| l.starts_with(&format!("run -d --name bandito-ws-{} ", box_ws.id))),
+            "the container is created for the fallback too"
+        );
     }
 }

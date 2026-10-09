@@ -37,18 +37,19 @@ struct AccountSignInView: View {
                 .padding(.leading, 56)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear(perform: build)
+        .task { await build() }
         .onChange(of: finishedSession) { _, session in
             if let session { onSignedIn(session) }
         }
         .sheet(isPresented: $showGitHub) {
             if let github = models?.github {
                 GitHubSignInSheet(model: github) {
-                    github.cancel()
                     showGitHub = false
                 }
             }
         }
+        // Leaving the screen stops a GitHub wait that is still running.
+        .onDisappear { models?.github.cancel() }
     }
 
     /// Set when either way of signing in succeeded.
@@ -58,13 +59,13 @@ struct AccountSignInView: View {
         return nil
     }
 
-    /// Builds the account client and its models. The device keys are created in the Keychain on first use.
-    private func build() {
+    /// Builds the account client and its models. The device key is read (or created once) by the app's identity store.
+    private func build() async {
         guard models == nil else { return }
         do {
-            models = AccountModels(service: try AccountEnvironment.live())
+            models = AccountModels(service: try await AccountEnvironment.live())
         } catch {
-            setupError = SignInMessages.text(for: error)
+            setupError = SignInMessages.setupText(for: error)
         }
     }
 
@@ -215,6 +216,8 @@ private struct CodeBoxes: View {
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(focused == index ? Color.Bandito.signal : Color.Bandito.text.opacity(0.12)))
                     .focused($focused, equals: index)
+                    .accessibilityLabel(L10n.Onboarding.Account.codeDigit(index: String(index + 1)))
+                    .accessibilityValue(model.code.slots[index] ?? "")
             }
         }
         .onAppear { focused = 0 }
@@ -283,6 +286,7 @@ struct GitHubSignInSheet: View {
         .onChange(of: model.state) { _, state in
             if case .signedIn = state { close() }
         }
+        .onDisappear { model.cancel() }
     }
 
     @ViewBuilder
@@ -298,17 +302,11 @@ struct GitHubSignInSheet: View {
                 .foregroundStyle(Color.Bandito.text)
                 .tracking(3)
                 .textSelection(.enabled)
-            HStack(spacing: 10) {
-                Button(L10n.Onboarding.Account.Github.copy) {
-                    SystemActions.copy(flow.userCode)
-                    copiedNote = true
-                }
-                .buttonStyle(QuietButtonStyle())
-                Button(L10n.Onboarding.Account.Github.open) {
-                    SystemActions.open(flow.verificationURI)
-                }
-                .buttonStyle(SignalButtonStyle())
+            Button(L10n.Onboarding.Account.Github.copyAndOpen) {
+                model.copyAndOpen()
+                copiedNote = true
             }
+            .buttonStyle(SignalButtonStyle())
             if copiedNote {
                 Text(L10n.Onboarding.Account.Github.copied)
                     .font(BanditoFont.font(size: 12.5, weight: 400))

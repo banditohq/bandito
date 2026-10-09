@@ -231,6 +231,37 @@ final class SystemCalls {
         #expect(model.code.value == "")
     }
 
+    @Test func inputThatChangesNothingDoesNotComplete() {
+        var code = SixDigitCode()
+        _ = code.input("123456", at: 0)
+        let changed = code.input("x", at: 0)
+        #expect(changed == false)
+        let noBox = code.input("1", at: 9)
+        #expect(noBox == false)
+    }
+
+    @Test func aSecondSendWhileTheFirstIsInFlightIsIgnored() async {
+        let service = FakeSignInService()
+        let model = EmailSignInModel(service: service)
+        model.email = "a@b.dev"
+        let now = Date()
+        async let first: Void = model.sendCode(now: now)
+        async let second: Void = model.sendCode(now: now)
+        _ = await (first, second)
+        #expect(await service.emailStarts.count == 1)
+    }
+
+    @Test func codeIsCheckedOnlyOnceAfterSignIn() async {
+        let service = FakeSignInService()
+        let model = EmailSignInModel(service: service)
+        model.email = "a@b.dev"
+        await model.sendCode(now: Date())
+        await model.enter("123456", at: 0)
+        await model.enter("9", at: 0)
+        await model.verify()
+        #expect(await service.verifyCalls.count == 1)
+    }
+
     // MARK: GitHub device flow
 
     @Test func githubSignsInAfterAPendingPoll() async {
@@ -244,10 +275,55 @@ final class SystemCalls {
             sleep: { await sleeps.record($0) })
         await model.run()
         #expect(model.state == .signedIn(FakeSignInService.session))
-        #expect(calls.copied == ["WDJB-MJHT"])
-        #expect(calls.opened == [FakeSignInService.flow.verificationURI])
         #expect(await service.pollCalls == 2)
         #expect(await sleeps.seconds == [5, 5])
+    }
+
+    @Test func nothingIsCopiedOrOpenedWithoutTheButton() async {
+        let service = FakeSignInService(polls: [.success(.signedIn(FakeSignInService.session))])
+        let calls = SystemCalls()
+        let model = GitHubSignInModel(
+            service: service,
+            copyToPasteboard: { calls.copied.append($0) },
+            openURL: { calls.opened.append($0) },
+            sleep: { _ in })
+        await model.run()
+        #expect(calls.copied.isEmpty)
+        #expect(calls.opened.isEmpty)
+    }
+
+    @Test func copyAndOpenUsesTheFixedPageNotTheResponseAddress() {
+        let evil = GitHubFlow(
+            flowID: "flow-2", userCode: "ABCD-1234", verificationURI: URL(string: "https://phish.example/login")!,
+            interval: 5, expiresIn: 900)
+        let calls = SystemCalls()
+        let model = GitHubSignInModel(
+            service: FakeSignInService(), copyToPasteboard: { calls.copied.append($0) },
+            openURL: { calls.opened.append($0) }, sleep: { _ in })
+        model.state = .waiting(evil)
+        model.copyAndOpen()
+        #expect(calls.copied == ["ABCD-1234"])
+        #expect(calls.opened == [URL(string: "https://github.com/login/device")!])
+    }
+
+    @Test func copyAndOpenDoesNothingOutsideTheWaitingState() {
+        let calls = SystemCalls()
+        let model = GitHubSignInModel(
+            service: FakeSignInService(), copyToPasteboard: { calls.copied.append($0) },
+            openURL: { calls.opened.append($0) }, sleep: { _ in })
+        model.copyAndOpen()
+        #expect(calls.copied.isEmpty && calls.opened.isEmpty)
+    }
+
+    @Test func aFlowPastItsDeadlineExpiresWithoutPolling() async {
+        let short = GitHubFlow(
+            flowID: "flow-3", userCode: "WDJB-MJHT", verificationURI: FakeSignInService.flow.verificationURI,
+            interval: 5, expiresIn: 0)
+        let service = FakeSignInService(start: .success(short), polls: [.success(.pending)])
+        let model = GitHubSignInModel(service: service, copyToPasteboard: { _ in }, openURL: { _ in }, sleep: { _ in })
+        await model.run()
+        #expect(model.state == .expired)
+        #expect(await service.pollCalls == 0)
     }
 
     @Test func slowDownWaitsLongerThanBefore() async {
@@ -283,6 +359,49 @@ final class SystemCalls {
         let model = GitHubSignInModel(service: service, copyToPasteboard: { _ in }, openURL: { _ in }, sleep: { _ in })
         await model.run()
         #expect(model.state == .signedIn(FakeSignInService.session))
+    }
+
+    @Test func fourTransientErrorsInARowStillAllowAnotherPoll() async {
+        let unavailable = Result<PollResult, AccountError>.failure(.api(code: "github_unavailable", status: 503))
+        let service = FakeSignInService(polls: [unavailable, unavailable, unavailable, unavailable,
+            .success(.signedIn(FakeSignInService.session))])
+        let model = GitHubSignInModel(service: service, copyToPasteboard: { _ in }, openURL: { _ in }, sleep: { _ in })
+        await model.run()
+        #expect(model.state == .signedIn(FakeSignInService.session))
+    }
+
+    @Test func fiveTransientErrorsInARowFailTheFlow() async {
+        let unavailable = Result<PollResult, AccountError>.failure(.api(code: "github_unavailable", status: 503))
+        let service = FakeSignInService(polls: [unavailable, unavailable, unavailable, unavailable, unavailable,
+            .success(.signedIn(FakeSignInService.session))])
+        let model = GitHubSignInModel(service: service, copyToPasteboard: { _ in }, openURL: { _ in }, sleep: { _ in })
+        await model.run()
+        guard case .failed = model.state else {
+            Issue.record("expected .failed, got \(model.state)")
+            return
+        }
+        #expect(await service.pollCalls == 5)
+    }
+
+    @Test func aPendingPollResetsTheTransientCount() async {
+        let unavailable = Result<PollResult, AccountError>.failure(.api(code: "github_unavailable", status: 503))
+        var script = [unavailable, unavailable, unavailable, unavailable, .success(.pending)]
+        script += [unavailable, unavailable, unavailable, unavailable, .success(.signedIn(FakeSignInService.session))]
+        let service = FakeSignInService(polls: script)
+        let model = GitHubSignInModel(service: service, copyToPasteboard: { _ in }, openURL: { _ in }, sleep: { _ in })
+        await model.run()
+        #expect(model.state == .signedIn(FakeSignInService.session))
+    }
+
+    @Test func aRejectedDeviceProofIsNotRetried() async {
+        let service = FakeSignInService(polls: [.failure(.api(code: "bad_device_proof", status: 400))])
+        let model = GitHubSignInModel(service: service, copyToPasteboard: { _ in }, openURL: { _ in }, sleep: { _ in })
+        await model.run()
+        guard case .failed = model.state else {
+            Issue.record("expected .failed, got \(model.state)")
+            return
+        }
+        #expect(await service.pollCalls == 1)
     }
 
     @Test func aFailedStartShowsAReadableMessage() async {

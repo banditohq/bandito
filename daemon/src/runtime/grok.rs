@@ -93,6 +93,7 @@ impl Runtime for GrokRuntime {
         };
         let router_state = Arc::clone(&state);
         let router: Router = Box::new(move |msg: &Value, sink: &LineSink| route(msg, &router_state, &handshake, sink));
+        let cmd = crate::workspace::confine(cmd, cfg.workspace.as_ref());
         let (proc, output) = JsonProcess::spawn(cmd, LABEL, router)?;
         let init = json!({
             "jsonrpc": "2.0",

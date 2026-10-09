@@ -3,7 +3,7 @@ import Foundation
 import Observation
 
 /// Where the GitHub device flow stands. `waiting` carries the code the person enters on GitHub.
-enum GitHubSignInState: Equatable {
+enum GitHubSignInState: Equatable, Sendable {
     case idle
     case connecting
     case waiting(GitHubFlow)
@@ -13,59 +13,37 @@ enum GitHubSignInState: Equatable {
     case signedIn(Session)
 }
 
-/// Runs one GitHub device flow: start, show the code (copied and the page opened), poll until the flow ends.
-/// Pauses and the system calls are injected, so the tests run the whole flow without waiting or a browser.
-@MainActor
-@Observable
-final class GitHubSignInModel {
-    private(set) var state: GitHubSignInState = .idle
+/// The one page the code is entered on. The address from the server response is never opened.
+enum GitHubDevicePage {
+    static let url = URL(string: "https://github.com/login/device")!
+}
 
-    @ObservationIgnored private let service: SignInService
-    @ObservationIgnored private let copyToPasteboard: (String) -> Void
-    @ObservationIgnored private let openURL: (URL) -> Void
-    @ObservationIgnored private let sleep: @Sendable (Duration) async throws -> Void
-    @ObservationIgnored private var flowTask: Task<Void, Never>?
+/// The flow itself, without the model: start, wait, poll until a final state. It holds no reference to the
+/// screen, so a Task that runs it never keeps the model alive. Every state change goes to `report`.
+struct GitHubFlowRunner: Sendable {
+    /// Transient errors allowed in a row before the flow fails.
+    static let maxTransientErrors = 5
+    /// `slow_down` never shortens the wait below the previous interval plus this.
+    static let slowDownStep = 5
 
-    init(
-        service: SignInService,
-        copyToPasteboard: @escaping (String) -> Void = SystemActions.copy,
-        openURL: @escaping (URL) -> Void = SystemActions.open,
-        sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
-    ) {
-        self.service = service
-        self.copyToPasteboard = copyToPasteboard
-        self.openURL = openURL
-        self.sleep = sleep
-    }
+    let service: SignInService
+    let sleep: @Sendable (Duration) async throws -> Void
+    let now: @Sendable () -> Date
 
-    /// Button action: runs a flow in the background. A flow already running is cancelled first.
-    func start() {
-        flowTask?.cancel()
-        flowTask = Task { await run() }
-    }
-
-    /// Stops waiting, for example when the sheet is closed.
-    func cancel() {
-        flowTask?.cancel()
-        flowTask = nil
-        state = .idle
-    }
-
-    /// One whole flow. Returns when the state is final (signed in, expired, denied, failed) or the flow was cancelled.
-    func run() async {
-        state = .connecting
+    func execute(report: @Sendable (GitHubSignInState) async -> Void) async {
+        await report(.connecting)
         let flow: GitHubFlow
         do {
             flow = try await service.githubStart()
         } catch {
-            state = .failed(SignInMessages.text(for: error))
+            await report(.failed(SignInMessages.text(for: error)))
             return
         }
-        state = .waiting(flow)
-        copyToPasteboard(flow.userCode)
-        openURL(flow.verificationURI)
+        await report(.waiting(flow))
 
+        let deadline = now().addingTimeInterval(TimeInterval(flow.expiresIn))
         var interval = flow.interval
+        var transientErrors = 0
         while !Task.isCancelled {
             do {
                 try await sleep(.seconds(interval))
@@ -73,41 +51,110 @@ final class GitHubSignInModel {
                 return
             }
             if Task.isCancelled { return }
+            // The code lives for `expiresIn` seconds from the start; after that there is nothing left to poll.
+            if now() >= deadline {
+                await report(.expired)
+                return
+            }
             do {
                 switch try await service.githubPoll(flowID: flow.flowID) {
                 case .pending:
-                    continue
+                    transientErrors = 0
                 case .slowDown(let requested):
-                    // GitHub asked for a longer wait; never shorter than the last one plus five seconds.
-                    interval = max(requested, interval + 5)
+                    transientErrors = 0
+                    interval = max(requested, interval + Self.slowDownStep)
                 case .signedIn(let session):
-                    state = .signedIn(session)
+                    await report(.signedIn(session))
                     return
                 case .expired:
-                    state = .expired
+                    await report(.expired)
                     return
                 case .denied:
-                    state = .denied
+                    await report(.denied)
                     return
                 }
             } catch let error as AccountError where Self.isTransient(error) {
-                continue
+                transientErrors += 1
+                if transientErrors >= Self.maxTransientErrors {
+                    await report(.failed(SignInMessages.text(for: error)))
+                    return
+                }
             } catch {
-                state = .failed(SignInMessages.text(for: error))
+                await report(.failed(SignInMessages.text(for: error)))
                 return
             }
         }
     }
 
-    /// Errors that a later poll can get past: the server or GitHub was briefly unreachable, or the device proof expired.
+    /// Errors a later poll can get past: the server or GitHub was briefly unreachable.
+    /// A rejected device proof is not transient: the same device would fail again.
     static func isTransient(_ error: AccountError) -> Bool {
         switch error {
         case .api(let code, _):
-            return code == "github_unavailable" || code == "bad_device_proof"
+            return code == "github_unavailable"
         case .network:
             return true
         default:
             return false
+        }
+    }
+}
+
+/// The GitHub sign-in on screen. The code is copied and the page opened only when the person asks ("Copy and open");
+/// nothing goes to the pasteboard or the browser by itself.
+@MainActor
+@Observable
+final class GitHubSignInModel {
+    /// Written by the flow; internal so tests can put the model into a state directly.
+    var state: GitHubSignInState = .idle
+
+    @ObservationIgnored private let runner: GitHubFlowRunner
+    @ObservationIgnored private let copyToPasteboard: (String) -> Void
+    @ObservationIgnored private let openURL: (URL) -> Void
+    @ObservationIgnored private var flowTask: Task<Void, Never>?
+
+    init(
+        service: SignInService,
+        copyToPasteboard: @escaping (String) -> Void = SystemActions.copy,
+        openURL: @escaping (URL) -> Void = SystemActions.open,
+        sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
+        now: @escaping @Sendable () -> Date = { Date() }
+    ) {
+        self.runner = GitHubFlowRunner(service: service, sleep: sleep, now: now)
+        self.copyToPasteboard = copyToPasteboard
+        self.openURL = openURL
+    }
+
+    /// Button action: runs a flow in the background. A flow already running is cancelled first.
+    /// The Task holds the model weakly, so leaving the screen does not keep the flow's state alive.
+    func start() {
+        flowTask?.cancel()
+        let runner = runner
+        flowTask = Task { [weak self] in
+            await runner.execute { state in
+                await MainActor.run { self?.state = state }
+            }
+        }
+    }
+
+    /// Stops waiting, for example when the screen or the sheet goes away.
+    func cancel() {
+        flowTask?.cancel()
+        flowTask = nil
+        state = .idle
+    }
+
+    /// The button "Copy and open": the code goes to the pasteboard, the GitHub device page opens.
+    func copyAndOpen() {
+        guard case .waiting(let flow) = state else { return }
+        copyToPasteboard(flow.userCode)
+        openURL(GitHubDevicePage.url)
+    }
+
+    /// One whole flow, awaited. Used by tests; the screen uses `start()`.
+    func run() async {
+        await runner.execute { [weak self] state in
+            await MainActor.run { self?.state = state }
         }
     }
 }

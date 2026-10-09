@@ -83,4 +83,126 @@ import Testing
     @Test func aClosedLocalPortIsNotAccepting() async {
         #expect(await SSHTunnel.isAccepting(port: 1) == false)
     }
+
+    @Test func aPortTakenBySomeoneElseLeadsToAFreshPortThenPortHijacked() async throws {
+        let ssh = try writeListeningSSH()
+        let foreignOwner: Int32 = 1
+        let ports = PortLog()
+        let tunnel = try SSHTunnel(
+            target: "prod-1", remotePort: 7878, sshPath: ssh.path,
+            listeners: { port in
+                ports.record(port)
+                return [foreignOwner]
+            })
+
+        do {
+            try await tunnel.start()
+            Issue.record("expected portHijacked")
+        } catch let error as SSHTunnelError {
+            #expect(error == .portHijacked)
+        }
+
+        #expect(await tunnel.state == .failed(.portHijacked))
+        let attempted = ports.ports
+        #expect(attempted.count == SSHTunnel.maxPortAttempts)
+        #expect(Set(attempted).count == SSHTunnel.maxPortAttempts)
+        #expect(await tunnel.localPort == attempted.last)
+    }
+
+    @Test func aTunnelIsReadyWhenItsOwnSSHListensOnThePort() async throws {
+        // Real `lsof`: the stand-in execs netcat, so the listening process is the ssh process itself.
+        let ssh = try writeListeningSSH()
+        let tunnel = try SSHTunnel(target: "prod-1", remotePort: 7878, sshPath: ssh.path)
+
+        try await tunnel.start()
+
+        #expect(await tunnel.state == .up)
+        #expect(await tunnel.localURL != nil)
+        await tunnel.stop()
+    }
+
+    @Test func aBindFailureWithNoNamedListenerIsAnOrdinaryStartError() async throws {
+        // ssh says the port is taken, but lsof names no other listener: not a takeover, so no retry.
+        let ssh = try writeBindFailingSSH()
+        let ports = PortLog()
+        let tunnel = try SSHTunnel(
+            target: "prod-1", remotePort: 7878, sshPath: ssh.path,
+            listeners: { port in
+                ports.record(port)
+                return []
+            })
+
+        do {
+            try await tunnel.start()
+            Issue.record("expected exited")
+        } catch let error as SSHTunnelError {
+            #expect(error == .exited(detail: "bind [127.0.0.1]:1: Address already in use"))
+        }
+        #expect(ports.ports.count == 1)
+    }
+
+    @Test func aBindFailureWithAForeignListenerLeadsToPortHijacked() async throws {
+        let ssh = try writeBindFailingSSH()
+        let ports = PortLog()
+        let tunnel = try SSHTunnel(
+            target: "prod-1", remotePort: 7878, sshPath: ssh.path,
+            listeners: { port in
+                ports.record(port)
+                return [1]
+            })
+
+        do {
+            try await tunnel.start()
+            Issue.record("expected portHijacked")
+        } catch let error as SSHTunnelError {
+            #expect(error == .portHijacked)
+        }
+        #expect(ports.ports.count == SSHTunnel.maxPortAttempts)
+    }
+
+    @Test func aPortConflictInSSHsOwnWordsIsRecognised() {
+        #expect(SSHTunnel.isPortConflict(stderr: "bind [127.0.0.1]:9000: Address already in use"))
+        #expect(SSHTunnel.isPortConflict(stderr: "channel_setup_fwd_listener_tcpip: cannot listen to port: 9000"))
+        #expect(SSHTunnel.isPortConflict(stderr: "Could not request local forwarding."))
+        #expect(!SSHTunnel.isPortConflict(stderr: "Permission denied (publickey)."))
+    }
+
+    @Test func portHijackedIsPermanent() {
+        #expect(SSHTunnelError.portHijacked.isPermanent)
+    }
+}
+
+/// Records the ports a tunnel asked about, from any thread.
+final class PortLog: @unchecked Sendable {
+    // @unchecked: `recorded` is guarded by `lock`.
+    private let lock = NSLock()
+    private var recorded: [Int] = []
+
+    func record(_ port: Int) {
+        lock.withLock { recorded.append(port) }
+    }
+
+    var ports: [Int] {
+        lock.withLock { recorded }
+    }
+}
+
+/// An ssh stand-in that fails the way ssh does when its forward port is taken.
+private func writeBindFailingSSH() throws -> URL {
+    try writeFakeSSH("echo 'bind [127.0.0.1]:1: Address already in use' >&2; exit 255")
+}
+
+/// An ssh stand-in that listens on the `-L` local port with netcat and then becomes it (`exec`), so the
+/// listening process is the stand-in's own pid.
+private func writeListeningSSH() throws -> URL {
+    try writeFakeSSH(
+        #"""
+        spec=""
+        while [ $# -gt 0 ]; do
+            if [ "$1" = "-L" ]; then spec="$2"; fi
+            shift
+        done
+        port=$(echo "$spec" | cut -d: -f2)
+        exec /usr/bin/nc -lk 127.0.0.1 "$port"
+        """#)
 }

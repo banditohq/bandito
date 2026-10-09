@@ -52,6 +52,11 @@ public enum Sheet: Identifiable, Hashable, Sendable {
     }
 }
 
+/// The tabs of the agent details panel (⌘I, and `/memory` opens the memory one).
+enum InspectorTab: String, CaseIterable, Hashable, Sendable {
+    case details, memory, whereRuns
+}
+
 /// Navigation state of one main window: the current mode, what is selected in each mode,
 /// open sheets and panels, and back/forward history between modes.
 ///
@@ -65,6 +70,8 @@ public final class Router {
     public var selectedAgentID: String?
     /// Files: the folder being browsed, absolute on the server. `nil` means the agent's home.
     public var filesPath: String?
+    /// Files: a file to open in the viewer once its folder (`filesPath`) is listed. Taken once.
+    public private(set) var pendingFilePath: String?
     /// Files: the open files and their editors. Kept here so they survive switching modes.
     let files = FileWorkspace()
     /// Terminals: the terminal pane in focus.
@@ -75,18 +82,24 @@ public final class Router {
     public var pendingAgentCwd: String?
     /// Team: text for the composer of the selected agent ("Ask about this place"). Taken once by the thread.
     public var pendingComposerText: String?
+    /// Team: the composer of this agent should take keyboard focus (⌘↵ in the palette, after opening the agent).
+    /// Taken once, by the composer of that agent only.
+    public private(set) var composerFocusAgentID: String?
     /// Terminals: a command from the menu bar, waiting for the Terminals mode to perform it.
     public var terminalRequest: TerminalRequest?
     /// Browser: the open tab.
     public var browserTabID: String?
+    /// Browser: a port an agent opened ("Open" in the sidebar, or the Agents section). Taken once by the browser mode.
+    public var pendingPreviewPort: Int?
     /// Server screen: the screen being shown.
     public var screenID: String?
     /// Server: the section in view.
     public var serverSection: ServerSection = .overview
-    /// Browser: a port to open a preview of (Server → Open). Taken once by the browser.
-    public var pendingPreviewPort: Int?
     /// Terminals: a command to type into a new terminal (Server → Install, Update). Taken once by the terminals.
     public var pendingTerminalCommand: String?
+
+    /// The tab of the agent details panel. Kept here so `/memory` can open it on the memory tab.
+    var inspectorTab: InspectorTab = .details
 
     public var sheet: Sheet?
     /// The quick-open palette (⌘K).
@@ -132,5 +145,89 @@ public final class Router {
 
     public func toggleSidebar() {
         sidebarVisible.toggle()
+    }
+
+    // MARK: handing actions to a mode
+    //
+    // Each `pending…` field is taken by exactly one view. The take clears the field, so a second
+    // view (or a re-appearing one) does not repeat the action.
+
+    public func takeTerminalCommand() -> String? {
+        defer { pendingTerminalCommand = nil }
+        return pendingTerminalCommand
+    }
+
+    public func takeTerminalCwd() -> String? {
+        defer { pendingTerminalCwd = nil }
+        return pendingTerminalCwd
+    }
+
+    public func takeAgentCwd() -> String? {
+        defer { pendingAgentCwd = nil }
+        return pendingAgentCwd
+    }
+
+    public func takeComposerText() -> String? {
+        defer { pendingComposerText = nil }
+        return pendingComposerText
+    }
+
+    public func takePreviewPort() -> Int? {
+        defer { pendingPreviewPort = nil }
+        return pendingPreviewPort
+    }
+
+    /// Shows a folder or a file in Files: a folder becomes `filesPath`; a file opens in the viewer, in its folder.
+    public func openInFiles(_ path: String, isFile: Bool) {
+        if isFile {
+            filesPath = FilePath.parent(of: path) ?? filesPath
+            pendingFilePath = path
+        } else {
+            filesPath = path
+        }
+        select(mode: .files)
+    }
+
+    public func takePendingFilePath() -> String? {
+        defer { pendingFilePath = nil }
+        return pendingFilePath
+    }
+
+    /// Asks the composer of `agentID` to take focus. The request is taken by `takeComposerFocus(agentID:)`.
+    public func requestComposerFocus(agentID: String) {
+        composerFocusAgentID = agentID
+    }
+
+    /// True once per request, and only for the agent the request names: the first matching call returns true
+    /// and clears the request. Other composers leave it alone.
+    public func takeComposerFocus(agentID: String) -> Bool {
+        guard composerFocusAgentID == agentID else { return false }
+        composerFocusAgentID = nil
+        return true
+    }
+
+    /// A terminal command for the Terminals mode, and the mode switch in the same step, so the command runs
+    /// now and is never left waiting for the mode to open later.
+    public func requestTerminalCommand(_ command: String) {
+        pendingTerminalCommand = command
+        select(mode: .terminals)
+    }
+
+    /// Drops the actions aimed at the server that was in front: a folder, a command, a port, a text or a file
+    /// of another server would be wrong here. Called when the server in front changes.
+    public func dropPendingServerActions() {
+        pendingTerminalCommand = nil
+        pendingTerminalCwd = nil
+        pendingAgentCwd = nil
+        pendingComposerText = nil
+        pendingPreviewPort = nil
+        pendingFilePath = nil
+        composerFocusAgentID = nil
+    }
+
+    /// Opens the agent details panel on `tab`.
+    func openInspector(_ tab: InspectorTab) {
+        inspectorTab = tab
+        inspectorOpen = true
     }
 }

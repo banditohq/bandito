@@ -57,6 +57,7 @@ Everything an agent does becomes a row in `events` (append-only, global `seq`). 
 | `turn.completed` | `{turn_id, status: "ok"\|"error"\|"interrupted", usage?, cost_usd?}` |
 | `agent.status` | `{status: "idle"\|"working"\|"needs_you"\|"error"\|"offline", detail?}` |
 | `usage.limits` | `{runtime, windows:[{name, utilization, resets_at}]}` |
+| `runtime.switched` | `{from, to, until?}`: the agent moved to another runtime (see [Fallback subscription](#fallback-subscription)); `until` is when the limit resets (Unix seconds), if known |
 | `error` | `{message}` |
 
 ## Approvals (policy)
@@ -75,7 +76,7 @@ A pending approval blocks only that agent. Approvals time out after 24 h → den
 
 ## Store (SQLite)
 
-- `agents(id, name, role, runtime, model, cwd, approval_mode, system_prompt, runtime_session_id, created_at, updated_at)`
+- `agents(id, name, role, runtime, model, cwd, approval_mode, system_prompt, runtime_session_id, created_at, updated_at, fallback_runtime, fallback_model, active_runtime)`: the last three are the [fallback subscription](#fallback-subscription); `active_runtime` NULL means the primary `runtime`
 - `events(seq INTEGER PRIMARY KEY, agent_id, ts, kind, payload JSON)`
 - `approvals(id, agent_id, call_id, tool, title, payload JSON, status, decision, created_at, resolved_at)`
 - `rules(id, agent_id NULL, pattern, action)`
@@ -83,6 +84,7 @@ A pending approval blocks only that agent. Approvals time out after 24 h → den
 - `devices(id, name, token_hash, created_at, last_seen_at)`; `pairing(code_hash, expires_at)`
 - `checkpoints(id, agent_id, sha, label, kind, turn_id, created_at)`: points in an agent's folder history (see [Changes](#changes))
 - `secrets(name, value, agents, created_at, updated_at)` for API keys, file mode 0600 (keychain/age later); see [Secrets](#secrets)
+- `workspaces(id, name, kind, image, cpus, memory_mb, network, mounts, created_at)`: where an agent's CLI runs. The row `shared` is created by the migration and always exists. `agents.workspace_id` (default `shared`) says where each agent runs; see [Workspaces](#workspaces)
 
 Migrations: numbered SQL files embedded in the binary, applied by `PRAGMA user_version`.
 
@@ -90,7 +92,7 @@ Migrations: numbered SQL files embedded in the binary, applied by `PRAGMA user_v
 
 JSON-RPC 2.0. Same methods on every transport.
 
-- Requests: `daemon.info`, `runtimes.status`, `agents.list|get|create|update|delete`, `agents.send{agent_id,text}`, `agents.interrupt`, `events.since{seq,limit,agent_id?}`, `approvals.list|resolve{approval_id,decision,remember}`, `rules.list|set|delete`, `schedules.list|create|update|delete|run_now`, `devices.list|revoke`, `pair.redeem{code,device_name}` (only unauthenticated method), `term.list|open|input|resize|rename|close|attach|detach` (see Terminals), `fs.*` (see [Files](#files)), `changes.checkpoints|diff|file|restore` (see [Changes](#changes)), `secrets.list|set|delete` (see [Secrets](#secrets), `host.stats|history|processes|ports|kill`, `setup.status|install|job` (see [Setup](#setup)), `commands.list|install` (see [Commands](#commands)), `browser.start|status|stop|control|touch` (see [Browser](#browser)). `browser.agent.*` is for the crew MCP on the server only.
+- Requests: `daemon.info`, `runtimes.status`, `agents.list|get|create|update|delete`, `agents.send{agent_id,text}`, `agents.interrupt`, `events.since{seq,limit,agent_id?}`, `approvals.list|resolve{approval_id,decision,remember}`, `rules.list|set|delete`, `schedules.list|create|update|delete|run_now`, `devices.list|revoke`, `pair.redeem{code,device_name}` (only unauthenticated method), `term.list|open|input|resize|rename|close|attach|detach` (see Terminals), `fs.*` (see [Files](#files)), `changes.checkpoints|diff|file|restore` (see [Changes](#changes)), `secrets.list|set|delete` (see [Secrets](#secrets), `host.stats|history|processes|ports|kill`, `setup.status|install|job` (see [Setup](#setup)), `commands.list|install` (see [Commands](#commands)), `browser.start|status|stop|control|touch` (see [Browser](#browser)), `workspaces.list|create|update|delete|start|stop` (see [Workspaces](#workspaces)). `browser.agent.*` is for the crew MCP on the server only.
 - Notifications (server → client): `event{seq, agent_id, kind, payload, ts}` for every event including `message.delta`; `term.output|gap|exit|closed` for attached terminals (see Terminals).
 
 ## Transports (connect any way you like)
@@ -252,10 +254,14 @@ Params are objects; unknown fields are `invalid_params`.
 | `fs.upload.append` | `upload_id`, `offset`, `data` (standard base64) | `{written}` |
 | `fs.upload.commit` | `upload_id`, `overwrite?` (default false) | `Entry` |
 | `fs.upload.abort` | `upload_id` | `{}` |
+| `fs.clone` | `url`, `dest` | `{path, default_branch}` (see below) |
 
 **Writing.** Overwriting an existing file needs the `etag` from the last `fs.read`. Without it, or with a stale one, the write is refused with `conflict`, and `error.data.etag` holds the current etag. `create: true` without an etag makes a new file and gives `exists` if the path is taken. `etag` on a missing file gives `not_found`.
 
-**Errors.** File failures use code `-32020` and `error.data.reason`: `not_found`, `exists`, `not_a_directory`, `is_a_directory`, `not_a_file`, `permission_denied`, `too_large` (`size`, `limit`), `binary`, `conflict` (`etag`), `invalid_path`, `outside_roots`, `cross_device`, `io`. Bad params are `-32602`.
+**Errors.** File failures use code `-32020` and `error.data.reason`: `not_found`, `exists`, `not_a_directory`, `is_a_directory`, `not_a_file`, `permission_denied`, `too_large` (`size`, `limit`), `binary`, `conflict` (`etag`), `invalid_path`, `outside_roots`, `cross_device`, `io`, `clone_failed` (`stderr`). Bad params are `-32602`.
+
+**Clone.** `fs.clone` copies a git repository into a new folder. `url` is `https://…` or scp-style `user@host:path` (ssh); anything else (`file://`, `http://`, `ssh://`, options such as `--upload-pack=…`) is `invalid_params`. `dest` is resolved like any path (`~` is home, otherwise absolute, under the roots) and must not exist, though its parent must. The daemon runs `git clone --depth 50 -- <url> <dest>` with a 10-minute limit and `GIT_TERMINAL_PROMPT=0`: nothing prompts, and private repositories work through the server's own ssh keys. The result is `{path, default_branch}` (`default_branch` is `null` when HEAD is detached). A failure is `FS_ERROR` with `reason: "clone_failed"` and `data.stderr`: the last 2 KB of git's stderr, with `user:password@` cut from every URL in it. The partial folder is removed. An existing `dest` gives `exists`.
+
 
 **Upload in chunks.** `begin` creates a temp file next to the destination. Each `append` must send `offset` equal to the bytes already written; a chunk is at most 1 MiB decoded, and the total at most 4 GiB. One WebSocket message may be up to 4 MiB, so a full 1 MiB chunk fits after base64. `commit` moves the file into place (`overwrite: false` gives `exists`). An upload idle for an hour is removed with its temp file (checked every 10 minutes). `abort` removes it at once.
 
@@ -419,6 +425,47 @@ Install writes under the daemon user's home (`user`) or under the agent's folder
 
 Errors: code `-32027` (`COMMANDS_ERROR`) with `error.data.reason`: `invalid_name`, `invalid_path`, `invalid_content`, `file_count`, `too_many_files`, `too_large`, `missing_skill_file`, `exists`, `no_home`, `io`. Bad params are `-32602`.
 
+## Workspaces
+
+A workspace is where an agent's CLI runs: on the server itself, or in a Docker container with its own disk, network and limits. Agents can be mixed freely: some share the server, one sits in a container. Code: `daemon/src/workspace.rs` (Docker, the command each runtime runs), `daemon/src/store/workspaces.rs` (rows), `daemon/src/rpc/workspaces.rs` (methods). Feature string: `"workspaces"`.
+
+**Kinds.**
+
+| kind | where the CLI runs | notes |
+|---|---|---|
+| `shared` | the server, as the daemon's user | built in, always present, cannot be deleted; the default for agents |
+| `container` | Docker container `bandito-ws-<id>`, started by Bandito | own disk layer, network `internet` or `none`, optional `cpus` and `memory_mb`, extra `mounts` |
+
+A separate Linux user for a workspace is the next step, not in this version.
+
+**What a container sees.** Each agent's folder and its home (`~/bandito/agents/<slug>/`) are mounted read-write at the same paths they have on the server, so the paths in messages, approvals and checkpoints match. The workspace's own `mounts` are added (host folders, optionally read-only). The CLI logins are mounted read-write: `~/.claude` as `/root/.claude` and `~/.codex` as `/root/.codex`, when they exist, so the agent inside is logged in with the same subscription. Nothing else from the server is mounted: no other project, no daemon socket, no Docker socket. Agent secrets reach the CLI as environment variables, by name.
+
+**Image.** When a container workspace names no `image`, Bandito builds `bandito/workspace:<hash>` once from a fixed Dockerfile: `FROM node:22-bookworm` plus the global npm packages `@anthropic-ai/claude-code` and `@openai/codex`. The tag changes with the Dockerfile. With `image` set, that image is used as it is, and it must have the CLIs on `PATH` and run as root.
+
+**Lifecycle.** A container starts with the first session of an agent in its workspace. Each start checks it: missing → created; stopped → started; settings that differ (image, limits, network, or mounts, including the folders of the agents in the workspace) → recreated. Containers restart with the Docker daemon (`--restart unless-stopped`). Recreation drops the container's own writable layer, so anything installed inside it (apt or npm packages) is lost; folders on the host stay. Recreation also ends the running sessions of the other agents in that container, which resume with their next message. `workspaces.stop` stops the container; the next message starts it again.
+
+**How a CLI runs.** Runtimes build their command as before, then `workspace::confine` moves it into the workspace. For a container that is `docker exec -i -w <cwd> -e NAME… <container> <program> <args…>`, so stdin, stdout and stderr pass through and the JSON protocols do not change. Environment values are not in the argument list: `-e NAME` takes the value from the environment of the docker client, which keeps secrets out of the process list. The crew MCP server is not given to container agents: it talks to the daemon socket, which is not mounted. Approvals, checkpoints and memory keep working, because they run in the daemon on the server against the same folders.
+
+**Security.** A container isolates the files outside its mounts, the network (`none` means no network at all) and the CPU and memory it may use. It does not isolate the CLI logins: `~/.claude` and `~/.codex` are writable inside, so an agent in a container can read and change that subscription login. A mount may not be the server root, the Docker socket, or a path with `..`, `,` or `"`. Membership of the `docker` group is root-equivalent on the server, so the daemon's user holds that power whenever a container workspace exists.
+
+**Docker.** Bandito uses the `docker` program from `PATH` and runs `docker info` before each start. Without Docker, or when it does not answer, the error is `docker_unavailable` and it names the install guide. The `containers` feature of [Setup](#setup) shows the same check.
+
+**Methods.**
+
+| method | params | result |
+|---|---|---|
+| `workspaces.list` | `{}` | `[Workspace + {agents: [ids], status}]`. `status` is `null` for `shared`; for a container it is `{running, container_id, cpu, mem}`, or `{running: false, error}` when Docker cannot answer |
+| `workspaces.create` | `{name, kind: "shared"\|"container", image?, cpus?, memory_mb?, network?: "internet"\|"none", mounts?: [{host, target, read_only?}]}` | `Workspace` |
+| `workspaces.update` | `{id, name?, image?, cpus?, memory_mb?, network?, mounts?}`; `null` clears `image`, `cpus` or `memory_mb` | `Workspace`. Limits and mounts apply at the container's next start |
+| `workspaces.delete` | `{id}` | `{deleted: true}`. Removes the container of an empty workspace first |
+| `workspaces.start`, `workspaces.stop` | `{id}` | `status` (container workspaces only) |
+
+`agents.create` and `agents.update` take `workspace_id` (default `shared`). Moving an agent starts a new chapter, as a folder change does.
+
+Limits: name 1–64 characters; `cpus` 0.1–64; `memory_mb` 64–262144; mounts are absolute paths without `,`, `"` or `..`. The shared workspace has no container settings, so it refuses them.
+
+Errors: code `-32028` (`WORKSPACE_ERROR`) with `error.data.reason`: `docker_unavailable`, `not_found`, `builtin` (the shared workspace cannot be deleted), `not_empty` (agents still run in it), `invalid` (bad settings or mount), `docker` (Docker failed; its message is in `message`).
+
 ## Mac app
 
 SwiftUI, macOS 14+. Sidebar: servers → crew. Thread view rendered from events; approval cards with Approve / Deny / Always; schedules; connection wizard. Menu bar item with the status dot. Local notifications with Approve / Deny actions while the app runs. Strings in a String Catalog, 9 languages. Colors from `brand/tokens/dist`.
@@ -442,6 +489,7 @@ daemon/            Rust crate `bandito`
   src/screen.rs    the server's virtual desktop (see Screen)
   src/rpc/screen.rs  screen.* methods
   src/commands.rs  slash commands: discovery, expansion, install (see Commands)
+  src/workspace.rs where CLIs run: the server or a Docker container (see Workspaces)
   src/scheduler.rs
   src/crew.rs      MCP server
   tests/fixtures/  recorded protocol transcripts
@@ -502,7 +550,7 @@ The agent's instructions (built by the daemon, before the user's own) explain th
 
 **Recall instead of remembering.** The crew MCP server also offers `history_search{query}` and `history_day{date}` over the agent's own past messages in the daemon's database, so an agent looks up what was said weeks ago instead of carrying it.
 
-**Changing an agent.** `agents.update` applies name, role, model, effort, system prompt, memory mode, context budget and folder from the next session: an idle agent's session is closed at once, a running one when its turn ends. The chapter goes on, except after a folder change, which starts a new chapter (a CLI session is tied to its folder). The approval mode is read on every request and needs no restart.
+**Changing an agent.** `agents.update` applies name, role, model, effort, system prompt, memory mode, context budget, folder, runtime, fallback and workspace from the next session: an idle agent's session is closed at once, a running one when its turn ends. The chapter goes on, except after a folder, runtime or workspace change, which starts a new chapter (a CLI session is tied to its folder, its runtime and where it runs; see [Workspaces](#workspaces)). A runtime change also resets effort to null, with a `warnings` entry in the response, when the new runtime does not offer the old level. The approval mode is read on every request and needs no restart.
 
 **Effort.** Each agent has an `effort` (`low`, `medium`, `high`, `xhigh`, `max`). The daemon maps it to the runtime (`--effort` for Claude, the turn's `effort` for Codex, `--reasoning-effort` for Grok) and refuses levels a runtime does not offer.
 
@@ -515,6 +563,36 @@ The agent's instructions (built by the daemon, before the user's own) explain th
 - Grok and API keys: no plan yet.
 
 A runtime that reports no plan, or fails, leaves the stored plan as it was.
+
+## Fallback subscription
+
+An agent can name a fallback runtime (`fallback_runtime`, one of `claude`, `codex`, `grok`, different from its `runtime`) and a `fallback_model` for it. It is used when the primary runtime's subscription runs out of usage. `agents.create` and `agents.update` take both (`null` clears them), and `agents.get`/`agents.list` return `active_runtime`: the runtime the agent runs on now, `null` for the primary one.
+
+**Recognising a limit.** A turn that ends with an error, and whose runtime reported its usage as used up during it:
+
+| runtime | error message (case-insensitive) | or usage reported |
+|---|---|---|
+| Claude | `usage limit` (`Claude AI usage limit reached…`), `rate limit`, `rate_limit`, `429` | `rate_limit_event` window at utilization 1.0 or more |
+| Codex | `usage_limit_reached`, `usage limit` | `account/rateLimits/updated` window at `usedPercent` 100 or more |
+| Grok | `rate limit` (`Rate limited: …`), `429`, `too many requests` | none |
+
+Only runtime error messages are checked, never the agent's text. The message is the one the adapter reports, so a runtime that words its limit differently is not recognised.
+
+**Switching.** When the limit is recognised, the fallback is free, and the turn had no retry yet, the daemon:
+
+1. closes the session and starts a new chapter (`session.rotated`, reason `runtime switched`). The memory carries over in the agent's files, so no wrap-up turn runs;
+2. sets `active_runtime` to the other runtime and emits `runtime.switched {from, to, until?}`;
+3. sends the same message again on the new runtime. The thread shows the user's message once. A retry that hits the limit again is a plain error: one switch per message.
+
+Without a fallback, or when the fallback is out of usage too, the turn is an ordinary error.
+
+**Coming back.** Before a message goes out, an agent on its fallback returns to the primary runtime once that runtime's windows do not block: a full window (utilization 1.0 or more) blocks while its `resets_at` is in the future. A full window with no reset time blocks for one hour after it was reported; after that the primary runtime is tried again, and if its limit is still there, the message switches to the fallback again. The return emits `runtime.switched {from: fallback, to: primary}` and starts a new chapter.
+
+**Usage cache.** The runtime left is recorded as used up: its own windows if it reported them, else a window named `limit` at 100% with no reset time. The app shows that window under the runtime's usage.
+
+**Changing the primary runtime.** `agents.update {runtime}` checks that the runtime is installed on this server, clears `active_runtime`, starts a new chapter (`session.rotated`, reason `runtime changed`) and drops the CLI session. The fallback must differ from the new runtime: switching to the current fallback is refused unless the same patch clears it.
+
+**Limits of this design.** Codex limits are recognised by the words in the error message the adapter passes on. A switch does not run a wrap-up turn, so what the agent did not write to its memory files during the chapter is not saved.
 
 ## Accounts, sync and push (planned)
 

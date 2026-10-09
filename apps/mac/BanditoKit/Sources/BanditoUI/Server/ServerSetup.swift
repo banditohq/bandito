@@ -124,8 +124,7 @@ struct ServerFeaturesCard: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(Color.Bandito.bg, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                     Button(L10n.Setup.openTerminal) {
-                        router.pendingTerminalCommand = command
-                        router.select(mode: .terminals)
+                        router.requestTerminalCommand(command)
                     }
                     .buttonStyle(QuietButtonStyle())
                 }

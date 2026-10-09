@@ -45,6 +45,7 @@ struct ThreadView: View {
                         onLoadEarlier: loadEarlier,
                         onError: { actionError = $0 },
                         agentName: agent.name,
+                        primaryRuntime: agent.runtime.rawValue,
                         typing: thread.turnRunning && !isStreaming)
                 }
                 // Follow the newest item only: prepending older history must not jump to the bottom.
@@ -71,6 +72,8 @@ struct ThreadView: View {
                 agentName: agent.name,
                 running: thread.turnRunning,
                 contextFraction: ContextUsage.fraction(tokens: agent.contextTokens, budget: agent.contextBudget),
+                agent: agent,
+                server: server,
                 onSend: send,
                 onStop: stop)
                 .frame(maxWidth: 780)
@@ -84,10 +87,9 @@ struct ThreadView: View {
             await loadChanges()
         }
         // Text put here by another screen ("Ask about this place") goes into the composer, once.
-        .onChange(of: router.pendingComposerText, initial: true) { _, text in
-            guard let text else { return }
+        .onChange(of: router.pendingComposerText, initial: true) { _, _ in
+            guard let text = router.takeComposerText() else { return }
             draft = draft.isEmpty ? text : draft + "\n" + text
-            router.pendingComposerText = nil
         }
         // The change counts are refreshed when a turn ends.
         .onChange(of: thread.turnRunning) { wasRunning, isRunning in
@@ -155,6 +157,7 @@ struct ThreadItemsView: View {
     var onLoadEarlier: () -> Void = {}
     var onError: (String) -> Void = { _ in }
     var agentName = ""
+    var primaryRuntime = ""
     /// Shows the typing indicator after the last row while a turn runs.
     var typing = false
 
@@ -167,7 +170,8 @@ struct ThreadItemsView: View {
                     .onAppear(perform: onLoadEarlier)
             }
             ForEach(rows) { row in
-                ThreadRowView(row: row, agentName: agentName, server: server, onError: onError)
+                ThreadRowView(
+                    row: row, agentName: agentName, primaryRuntime: primaryRuntime, server: server, onError: onError)
                     .banditoRise()
             }
             if typing {
