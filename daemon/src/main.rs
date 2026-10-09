@@ -114,6 +114,8 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr) -> Result<()> {
         }
     });
 
+    bandito::scheduler::spawn_loop(sup.clone());
+
     {
         let sup = sup.clone();
         tokio::spawn(async move {
