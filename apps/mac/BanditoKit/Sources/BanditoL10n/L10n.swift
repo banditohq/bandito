@@ -210,6 +210,145 @@ public enum L10n {
         public static func generic(message: String) -> String { L10n.tr("error.generic", message) }
     }
 
+    public enum Files {
+        public static var agentsWorking: String { L10n.tr("files.agentsWorking") }
+        public static var back: String { L10n.tr("files.back") }
+        public static var cancel: String { L10n.tr("files.cancel") }
+        public static var connecting: String { L10n.tr("files.connecting") }
+        public static var copyPath: String { L10n.tr("files.copyPath") }
+        public static var create: String { L10n.tr("files.create") }
+        public static var empty: String { L10n.tr("files.empty") }
+        public static var favorites: String { L10n.tr("files.favorites") }
+        public static var forward: String { L10n.tr("files.forward") }
+        public static var hidden: String { L10n.tr("files.hidden") }
+        public static var loading: String { L10n.tr("files.loading") }
+        public static var noResults: String { L10n.tr("files.noResults") }
+        public static func search(folder: String) -> String { L10n.tr("files.search", folder) }
+        public static func skipped(count: Int) -> String { L10n.tr("files.skipped", count) }
+        public static var terminalHere: String { L10n.tr("files.terminalHere") }
+        public static var trash: String { L10n.tr("files.trash") }
+        public static func truncated(count: Int) -> String { L10n.tr("files.truncated", count) }
+        public static var unsupported: String { L10n.tr("files.unsupported") }
+
+        public enum Banner {
+            public static var dismiss: String { L10n.tr("files.banner.dismiss") }
+        }
+
+        public enum Column {
+            public static var by: String { L10n.tr("files.column.by") }
+            public static var changed: String { L10n.tr("files.column.changed") }
+            public static var name: String { L10n.tr("files.column.name") }
+            public static var size: String { L10n.tr("files.column.size") }
+        }
+
+        public enum Conflict {
+            public static var keepBoth: String { L10n.tr("files.conflict.keepBoth") }
+            public static var replace: String { L10n.tr("files.conflict.replace") }
+            public static func title(name: String) -> String { L10n.tr("files.conflict.title", name) }
+        }
+
+        public enum Create {
+            public static var file: String { L10n.tr("files.create.file") }
+            public static var folder: String { L10n.tr("files.create.folder") }
+        }
+
+        public enum Dialog {
+            public static var create: String { L10n.tr("files.dialog.create") }
+            public static var name: String { L10n.tr("files.dialog.name") }
+            public static var newFile: String { L10n.tr("files.dialog.newFile") }
+            public static var newFolder: String { L10n.tr("files.dialog.newFolder") }
+        }
+
+        public enum Disk {
+            public static func free(size: String) -> String { L10n.tr("files.disk.free", size) }
+            public static var title: String { L10n.tr("files.disk.title") }
+        }
+
+        public enum Download {
+            public static func failed(error: String) -> String { L10n.tr("files.download.failed", error) }
+        }
+
+        public enum Error {
+            public static var binary: String { L10n.tr("files.error.binary") }
+            public static var conflict: String { L10n.tr("files.error.conflict") }
+            public static var exists: String { L10n.tr("files.error.exists") }
+            public static func generic(error: String) -> String { L10n.tr("files.error.generic", error) }
+            public static var invalidPath: String { L10n.tr("files.error.invalidPath") }
+            public static var io: String { L10n.tr("files.error.io") }
+            public static var isDirectory: String { L10n.tr("files.error.isDirectory") }
+            public static var notDirectory: String { L10n.tr("files.error.notDirectory") }
+            public static var notFile: String { L10n.tr("files.error.notFile") }
+            public static var notFound: String { L10n.tr("files.error.notFound") }
+            public static var outsideRoots: String { L10n.tr("files.error.outsideRoots") }
+            public static var permissionDenied: String { L10n.tr("files.error.permissionDenied") }
+            public static var tooLarge: String { L10n.tr("files.error.tooLarge") }
+        }
+
+        public enum Kind {
+            public static var audio: String { L10n.tr("files.kind.audio") }
+            public static var binary: String { L10n.tr("files.kind.binary") }
+            public static var code: String { L10n.tr("files.kind.code") }
+            public static var config: String { L10n.tr("files.kind.config") }
+            public static var folder: String { L10n.tr("files.kind.folder") }
+            public static var image: String { L10n.tr("files.kind.image") }
+            public static var markdown: String { L10n.tr("files.kind.markdown") }
+            public static var other: String { L10n.tr("files.kind.other") }
+            public static var pdf: String { L10n.tr("files.kind.pdf") }
+            public static var text: String { L10n.tr("files.kind.text") }
+            public static var video: String { L10n.tr("files.kind.video") }
+        }
+
+        public enum Layout {
+            public static var grid: String { L10n.tr("files.layout.grid") }
+            public static var list: String { L10n.tr("files.layout.list") }
+        }
+
+        public enum Menu {
+            public static var agent: String { L10n.tr("files.menu.agent") }
+            public static var copyPath: String { L10n.tr("files.menu.copyPath") }
+            public static var download: String { L10n.tr("files.menu.download") }
+            public static var duplicate: String { L10n.tr("files.menu.duplicate") }
+            public static var `open`: String { L10n.tr("files.menu.open") }
+            public static var rename: String { L10n.tr("files.menu.rename") }
+            public static var terminal: String { L10n.tr("files.menu.terminal") }
+            public static var trash: String { L10n.tr("files.menu.trash") }
+        }
+
+        public enum Places {
+            public static var downloads: String { L10n.tr("files.places.downloads") }
+            public static var home: String { L10n.tr("files.places.home") }
+            public static var logs: String { L10n.tr("files.places.logs") }
+            public static var memory: String { L10n.tr("files.places.memory") }
+            public static var projects: String { L10n.tr("files.places.projects") }
+        }
+
+        public enum Preview {
+            public static var access: String { L10n.tr("files.preview.access") }
+            public static var changed: String { L10n.tr("files.preview.changed") }
+            public static var download: String { L10n.tr("files.preview.download") }
+            public static var `open`: String { L10n.tr("files.preview.open") }
+            public static var path: String { L10n.tr("files.preview.path") }
+            public static var placeholder: String { L10n.tr("files.preview.placeholder") }
+            public static var readOnly: String { L10n.tr("files.preview.readOnly") }
+            public static var readWrite: String { L10n.tr("files.preview.readWrite") }
+            public static var tooLarge: String { L10n.tr("files.preview.tooLarge") }
+        }
+
+        public enum Time {
+            public static var justNow: String { L10n.tr("files.time.justNow") }
+            public static func minutes(count: Int) -> String { L10n.tr("files.time.minutes", count) }
+            public static func today(time: String) -> String { L10n.tr("files.time.today", time) }
+            public static func yesterday(time: String) -> String { L10n.tr("files.time.yesterday", time) }
+        }
+
+        public enum Upload {
+            public static func count(done: String, total: String) -> String { L10n.tr("files.upload.count", done, total) }
+            public static func failed(name: String, error: String) -> String { L10n.tr("files.upload.failed", name, error) }
+            public static var hint: String { L10n.tr("files.upload.hint") }
+            public static func title(name: String, folder: String) -> String { L10n.tr("files.upload.title", name, folder) }
+        }
+    }
+
     public enum Gestures {
         public static var sensitivity: String { L10n.tr("gestures.sensitivity") }
         public static var sharper: String { L10n.tr("gestures.sharper") }
@@ -807,5 +946,49 @@ public enum L10n {
         public static func resetTime(time: String) -> String { L10n.tr("usage.resetTime", time) }
         public static func resetToday(time: String) -> String { L10n.tr("usage.resetToday", time) }
         public static var title: String { L10n.tr("usage.title") }
+    }
+
+    public enum Viewer {
+        public static var closeTab: String { L10n.tr("viewer.closeTab") }
+        public static var empty: String { L10n.tr("viewer.empty") }
+        public static func error(error: String) -> String { L10n.tr("viewer.error", error) }
+        public static var folder: String { L10n.tr("viewer.folder") }
+        public static var readOnly: String { L10n.tr("viewer.readOnly") }
+        public static var save: String { L10n.tr("viewer.save") }
+        public static func saveError(error: String) -> String { L10n.tr("viewer.saveError", error) }
+        public static var tooLarge: String { L10n.tr("viewer.tooLarge") }
+        public static var unsaved: String { L10n.tr("viewer.unsaved") }
+
+        public enum Binary {
+            public static var title: String { L10n.tr("viewer.binary.title") }
+        }
+
+        public enum CloseUnsaved {
+            public static var discard: String { L10n.tr("viewer.closeUnsaved.discard") }
+            public static func title(name: String) -> String { L10n.tr("viewer.closeUnsaved.title", name) }
+        }
+
+        public enum Conflict {
+            public static var diff: String { L10n.tr("viewer.conflict.diff") }
+            public static var keepMine: String { L10n.tr("viewer.conflict.keepMine") }
+            public static var takeServer: String { L10n.tr("viewer.conflict.takeServer") }
+            public static var title: String { L10n.tr("viewer.conflict.title") }
+        }
+
+        public enum Diff {
+            public static var mine: String { L10n.tr("viewer.diff.mine") }
+            public static var server: String { L10n.tr("viewer.diff.server") }
+            public static var title: String { L10n.tr("viewer.diff.title") }
+        }
+
+        public enum Media {
+            public static var unavailable: String { L10n.tr("viewer.media.unavailable") }
+        }
+
+        public enum Mode {
+            public static var edit: String { L10n.tr("viewer.mode.edit") }
+            public static var read: String { L10n.tr("viewer.mode.read") }
+            public static var split: String { L10n.tr("viewer.mode.split") }
+        }
     }
 }

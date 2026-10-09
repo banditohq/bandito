@@ -62,8 +62,14 @@ public final class Router {
     public var selectedAgentID: String?
     /// Files: the folder being browsed, absolute on the server. `nil` means the agent's home.
     public var filesPath: String?
+    /// Files: the open files and their editors. Kept here so they survive switching modes.
+    let files = FileWorkspace()
     /// Terminals: the terminal pane in focus.
     public var terminalID: String?
+    /// Terminals: the folder a new terminal should start in ("Terminal here"). Taken once by the terminals.
+    public var pendingTerminalCwd: String?
+    /// New agent sheet: the folder the agent should work in ("Create agent in this folder"). Taken once by the sheet.
+    public var pendingAgentCwd: String?
     /// Browser: the open tab.
     public var browserTabID: String?
     /// Server screen: the screen being shown.
