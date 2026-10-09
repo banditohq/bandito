@@ -1,0 +1,3 @@
+// The CLI fails to start (e.g. not logged in) and exits with an error.
+{"stderr": "Invalid API key · Please run /login"}
+{"exit": 1}

@@ -1,0 +1,11 @@
+// The host denies a git push; Claude reports it and ends the turn.
+{"expect": {"type": "control_request", "request": {"subtype": "initialize"}}}
+{"send": {"type": "control_response", "response": {"subtype": "success", "request_id": "$last:/request_id", "response": {"commands": []}}}}
+{"expect": {"type": "user"}}
+{"send": {"type": "system", "subtype": "init", "cwd": "/home/user/work", "session_id": "22222222-2222-4222-8222-222222222222", "tools": ["Bash"], "model": "claude-haiku-5-5", "permissionMode": "default"}}
+{"send": {"type": "assistant", "message": {"id": "msg_1", "type": "message", "role": "assistant", "content": [{"type": "tool_use", "id": "toolu_9", "name": "Bash", "input": {"command": "git push origin main", "description": "Push"}}]}, "parent_tool_use_id": null, "session_id": "22222222-2222-4222-8222-222222222222"}}
+{"send": {"type": "control_request", "request_id": "perm-9", "request": {"subtype": "can_use_tool", "tool_name": "Bash", "input": {"command": "git push origin main", "description": "Push"}, "tool_use_id": "toolu_9"}}}
+{"expect": {"type": "control_response", "response": {"request_id": "perm-9", "response": {"behavior": "deny"}}}}
+{"send": {"type": "user", "message": {"role": "user", "content": [{"tool_use_id": "toolu_9", "type": "tool_result", "content": [{"type": "text", "text": "Denied by the user in Bandito"}], "is_error": true}]}, "parent_tool_use_id": null, "session_id": "22222222-2222-4222-8222-222222222222"}}
+{"send": {"type": "assistant", "message": {"id": "msg_2", "type": "message", "role": "assistant", "content": [{"type": "text", "text": "The push was denied."}]}, "parent_tool_use_id": null, "session_id": "22222222-2222-4222-8222-222222222222"}}
+{"send": {"type": "result", "subtype": "success", "is_error": false, "result": "The push was denied.", "session_id": "22222222-2222-4222-8222-222222222222", "total_cost_usd": 0.001, "usage": {"input_tokens": 10, "output_tokens": 20}}}
