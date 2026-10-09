@@ -143,7 +143,7 @@ fn overlaps(host: &Path, data: &Path) -> bool {
 
 /// A path as the file system resolves it. The longest part that exists is canonicalised (so symlinks
 /// count), and the rest is joined on as it was written.
-fn resolve(path: &Path) -> PathBuf {
+pub(crate) fn resolve(path: &Path) -> PathBuf {
     let mut rest: Vec<std::ffi::OsString> = Vec::new();
     let mut current = path;
     loop {

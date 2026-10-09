@@ -811,7 +811,11 @@ fn spawn_vnc_watcher(x_display: u32, port: u16, passwd: PathBuf, mut child: Chil
     let handle = tokio::spawn(async move {
         let mut restarted = false;
         loop {
+            let pid = child.id();
             let _ = child.wait().await;
+            if let Some(pid) = pid {
+                crate::children::unregister(pid);
+            }
             watch_pgid.store(0, Ordering::SeqCst);
             if watch_stopping.load(Ordering::SeqCst) {
                 return;
@@ -904,7 +908,11 @@ fn spawn_group(argv: &[String], env: &[(String, String)], component: &'static st
         .stderr(Stdio::null())
         .kill_on_drop(true);
     cmd.as_std_mut().process_group(0);
-    cmd.spawn().map_err(|e| spawn_error(&e, component))
+    let child = cmd.spawn().map_err(|e| spawn_error(&e, component))?;
+    if let Some(pid) = child.id() {
+        crate::children::register(pid);
+    }
+    Ok(child)
 }
 
 #[cfg(target_os = "linux")]
@@ -986,6 +994,9 @@ fn launch_program(session: &Session, command: &str) -> Result<(), ScreenError> {
     let launched = Arc::clone(&session.launched);
     tokio::spawn(async move {
         let _ = child.wait().await;
+        if pgid > 0 {
+            crate::children::unregister(pgid as u32);
+        }
         lock_std(&launched).retain(|&p| p != pgid);
     });
     Ok(())
@@ -1017,6 +1028,9 @@ async fn terminate_child(mut child: Child) {
     if tokio::time::timeout(GRACE, child.wait()).await.is_err() {
         signal_group(pgid, libc::SIGKILL);
         let _ = child.wait().await;
+    }
+    if pgid > 0 {
+        crate::children::unregister(pgid as u32);
     }
 }
 

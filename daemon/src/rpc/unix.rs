@@ -332,6 +332,10 @@ async fn reap_zombies(daemon: u32, interval: Duration) {
             .collect();
         let mut first_time = HashSet::new();
         for pid in zombies {
+            // Its owner waits for it: the exit status is theirs.
+            if crate::children::is_registered(pid) {
+                continue;
+            }
             if seen.contains(&pid) {
                 reap_one(pid);
             } else {

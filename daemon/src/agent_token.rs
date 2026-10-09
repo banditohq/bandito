@@ -44,9 +44,25 @@ impl AgentTokens {
         Arc::new(Self::default())
     }
 
+    /// The daemon's data folder: the parent of the run folder, once one is set.
+    pub fn home(&self) -> Option<PathBuf> {
+        let run = self.run_dir.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        run.and_then(|dir| dir.parent().map(Path::to_path_buf))
+    }
+
     /// Makes `dir` the run folder (mode 0700) and removes the session files a previous daemon left in it.
     pub fn set_run_dir(&self, dir: &Path) -> io::Result<()> {
+        // A symlink where the folder should be is removed, and a folder made in its place.
+        if std::fs::symlink_metadata(dir).is_ok_and(|m| m.file_type().is_symlink()) {
+            std::fs::remove_file(dir)?;
+        }
         DirBuilder::new().recursive(true).mode(0o700).create(dir)?;
+        if !std::fs::symlink_metadata(dir)?.is_dir() {
+            return Err(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                "the run folder is not a folder",
+            ));
+        }
         std::fs::set_permissions(dir, Permissions::from_mode(0o700))?;
         for entry in std::fs::read_dir(dir)? {
             let entry = entry?;
@@ -146,23 +162,43 @@ impl Drop for SessionToken {
     }
 }
 
-/// Writes `contents` to `path` as an owner-only file (mode 0600, created under umask 077 as well). It goes
-/// through a temporary file and a rename, so a reader never sees half of it.
+/// Writes `contents` to `path` as an owner-only file. The file is first made under a random temporary
+/// name, with `O_EXCL` and `O_NOFOLLOW` (a symlink planted in the folder is never followed), and then
+/// renamed into place, so a reader never sees half of it.
 pub fn write_private(path: &Path, contents: &str) -> io::Result<()> {
-    let mut temp = path.as_os_str().to_owned();
-    temp.push(TEMP_SUFFIX);
-    let temp = PathBuf::from(temp);
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(0o600)
-        .open(&temp)?;
-    file.write_all(contents.as_bytes())?;
-    file.sync_all()?;
+    let (temp, mut file) = create_temp(path)?;
+    let written = file
+        .write_all(contents.as_bytes())
+        .and_then(|()| file.sync_all())
+        .and_then(|()| std::fs::set_permissions(&temp, Permissions::from_mode(0o600)));
     drop(file);
-    std::fs::set_permissions(&temp, Permissions::from_mode(0o600))?;
+    if let Err(e) = written {
+        let _ = std::fs::remove_file(&temp);
+        return Err(e);
+    }
     std::fs::rename(&temp, path)
+}
+
+/// A new file next to `path`, with a random name. A name already taken is not used: another is drawn.
+fn create_temp(path: &Path) -> io::Result<(PathBuf, std::fs::File)> {
+    for _ in 0..16 {
+        let id: [u8; 8] = rand::random();
+        let mut name = path.as_os_str().to_owned();
+        name.push(format!(".{}{TEMP_SUFFIX}", hex::encode(id)));
+        let temp = PathBuf::from(name);
+        match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .custom_flags(libc::O_NOFOLLOW)
+            .mode(0o600)
+            .open(&temp)
+        {
+            Ok(file) => return Ok((temp, file)),
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e),
+        }
+    }
+    Err(io::Error::new(io::ErrorKind::AlreadyExists, "no free temporary name"))
 }
 
 fn hash_of(token: &str) -> Hash {
@@ -258,5 +294,32 @@ mod tests {
         let (_token, guard) = tokens.issue("agent-a").unwrap();
         assert!(guard.token_file().is_none());
         assert!(guard.config_file().is_none());
+    }
+
+    #[test]
+    fn a_symlink_planted_as_the_run_folder_is_replaced() {
+        let dir = tempfile::tempdir().unwrap();
+        let victim = dir.path().join("victim");
+        std::fs::create_dir(&victim).unwrap();
+        let run = dir.path().join("run");
+        std::os::unix::fs::symlink(&victim, &run).unwrap();
+        AgentTokens::new().set_run_dir(&run).unwrap();
+        assert!(!std::fs::symlink_metadata(&run).unwrap().file_type().is_symlink());
+        assert!(run.is_dir());
+        assert_eq!(std::fs::metadata(&run).unwrap().permissions().mode() & 0o777, 0o700);
+    }
+
+    #[test]
+    fn a_file_planted_at_the_target_is_not_followed() {
+        let dir = tempfile::tempdir().unwrap();
+        let victim = dir.path().join("victim.txt");
+        std::fs::write(&victim, "keep").unwrap();
+        let target = dir.path().join("agent-x.token");
+        std::os::unix::fs::symlink(&victim, &target).unwrap();
+        write_private(&target, "bat_new").unwrap();
+        // The link is replaced by the new file, and the file it pointed to is untouched.
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "bat_new");
+        assert_eq!(std::fs::read_to_string(&victim).unwrap(), "keep");
+        assert_eq!(std::fs::metadata(&target).unwrap().permissions().mode() & 0o777, 0o600);
     }
 }

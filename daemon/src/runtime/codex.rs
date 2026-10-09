@@ -122,6 +122,14 @@ impl Runtime for CodexRuntime {
         let router_launch = launch.clone();
         let router: Router =
             Box::new(move |msg: &Value, sink: &LineSink| route(msg, &router_state, &router_launch, sink));
+        if cfg.sandbox.is_some() {
+            // Codex runs its own commands under sandbox-exec, and a nested sandbox cannot be applied
+            // inside one (sandbox_apply: Operation not permitted). So the agent runs unsandboxed here.
+            static WARNED: std::sync::Once = std::sync::Once::new();
+            WARNED.call_once(|| {
+                tracing::warn!("codex sessions are not sandboxed: nested sandbox-exec is refused on macOS")
+            });
+        }
         let cmd = crate::workspace::confine(cmd, cfg.workspace.as_ref());
         let (proc, output) = JsonProcess::spawn(cmd, LABEL, router)?;
         let sink = proc.sink();

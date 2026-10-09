@@ -9,11 +9,22 @@ use std::path::Path;
 /// The file name in the data folder.
 pub const FILE: &str = "config.json";
 
-#[derive(Debug, Default, Deserialize, PartialEq)]
-#[serde(deny_unknown_fields)]
+#[derive(Debug, Deserialize, PartialEq)]
+#[serde(default, deny_unknown_fields)]
 pub struct Config {
-    #[serde(default)]
+    /// Extra `Host` names for a loopback listener (see docs/ARCHITECTURE.md#trust-model).
     pub allowed_hosts: Vec<String>,
+    /// Run agent CLIs under the macOS sandbox (`runtime::sandbox`). Has no effect elsewhere.
+    pub agent_sandbox: bool,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            allowed_hosts: Vec::new(),
+            agent_sandbox: true,
+        }
+    }
 }
 
 /// Reads `<home>/config.json`. A missing file is an empty config. A broken one stops the daemon
@@ -56,6 +67,12 @@ mod tests {
             let text = serde_json::json!({ "allowed_hosts": [bad] }).to_string();
             assert!(parse(&text).is_err(), "{bad:?} should be refused");
         }
+    }
+
+    #[test]
+    fn the_sandbox_is_on_unless_switched_off() {
+        assert!(parse("{}").unwrap().agent_sandbox);
+        assert!(!parse(r#"{"agent_sandbox": false}"#).unwrap().agent_sandbox);
     }
 
     #[test]

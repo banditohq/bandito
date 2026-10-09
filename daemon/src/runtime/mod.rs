@@ -14,6 +14,7 @@ pub mod claude;
 pub mod codex;
 pub mod grok;
 pub mod process;
+pub mod sandbox;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -120,6 +121,8 @@ pub struct SpawnConfig {
     pub agent_token: Option<String>,
     /// Where a Claude MCP config file goes (owner-only, removed with the session). `None`: inline.
     pub agent_mcp_file: Option<PathBuf>,
+    /// The sandbox for this session, on macOS (see `sandbox`). `None`: not sandboxed.
+    pub sandbox: Option<sandbox::SandboxPolicy>,
 }
 
 /// A live session with one agent CLI.

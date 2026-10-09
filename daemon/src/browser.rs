@@ -125,6 +125,7 @@ impl Running {
             signal_group(self.pid, libc::SIGKILL);
             let _ = self.child.wait().await;
         }
+        crate::children::unregister(self.pid);
     }
 }
 
@@ -190,11 +191,13 @@ impl BrowserManager {
             .spawn()
             .map_err(start_failed)?;
         let pid = child.id().unwrap_or_default();
+        crate::children::register(pid);
         let browser_path = match wait_for_devtools(port, &mut child).await {
             Ok(path) => path,
             Err(e) => {
                 signal_group(pid, libc::SIGKILL);
                 let _ = child.wait().await;
+                crate::children::unregister(pid);
                 return Err(BrowserError::StartFailed(format!(
                     "{e:#} (log: {})",
                     log_path.display()

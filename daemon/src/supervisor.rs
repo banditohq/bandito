@@ -10,6 +10,7 @@ use crate::hub::Hub;
 use crate::limit;
 use crate::policy::{self, Verdict};
 use crate::redact::Redactor;
+use crate::runtime::sandbox::SandboxPolicy;
 use crate::runtime::{ApprovalRequest, Runtime, RuntimeKind, RuntimeOutput, Session, SpawnConfig};
 use crate::store::{
     Agent, CheckpointKind, DEFAULT_CONTEXT_BUDGET, MemoryMode, RuleAction, Store, UsageEntry, WorkspaceKind, new_id,
@@ -21,6 +22,7 @@ use chrono::{DateTime, Local, NaiveTime, TimeZone};
 use serde_json::json;
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
@@ -165,6 +167,8 @@ pub struct Supervisor {
     workspaces: Arc<WorkspaceManager>,
     /// Live session tokens of the agents (see docs/ARCHITECTURE.md#trust-model).
     agent_tokens: Arc<AgentTokens>,
+    /// Whether agent sessions run under the macOS sandbox (see `runtime::sandbox`).
+    agent_sandbox: Arc<AtomicBool>,
 }
 
 /// Approvals nobody answered are denied after this long.
@@ -301,7 +305,13 @@ impl Supervisor {
             chains: Mutex::new(HashMap::new()),
             workspaces,
             agent_tokens: AgentTokens::new(),
+            agent_sandbox: Arc::new(AtomicBool::new(true)),
         })
+    }
+
+    /// Turns the sandbox for agent sessions on or off (from the config file, at start).
+    pub fn set_agent_sandbox(&self, on: bool) {
+        self.agent_sandbox.store(on, Ordering::Relaxed);
     }
 
     /// The live agent session tokens, for `agent.sock`.
@@ -354,6 +364,7 @@ impl Supervisor {
             mcp: self.mcp.clone(),
             workspaces: self.workspaces.clone(),
             tokens: self.agent_tokens.clone(),
+            sandbox_on: self.agent_sandbox.clone(),
             agent_token: None,
             session: None,
             output: None,
@@ -592,6 +603,7 @@ struct Actor {
     mcp: Option<(PathBuf, Vec<String>)>,
     workspaces: Arc<WorkspaceManager>,
     tokens: Arc<AgentTokens>,
+    sandbox_on: Arc<AtomicBool>,
     /// The token of the running session. Dropping it (when the session ends) revokes the token.
     agent_token: Option<SessionToken>,
     session: Option<Box<dyn Session>>,
@@ -806,6 +818,24 @@ impl Actor {
         let prompt = blocks.join("\n\n");
         let secrets = self.hub.store.secrets_for_agent(&agent.id)?;
         let (token, token_guard) = self.tokens.issue(&agent.id)?;
+        // Containers are isolated already; the sandbox is for the agents that run on the server itself.
+        let sandbox = match self.tokens.home() {
+            Some(home)
+                if agent.workspace_id == crate::store::SHARED_WORKSPACE && self.sandbox_on.load(Ordering::Relaxed) =>
+            {
+                Some(SandboxPolicy {
+                    home,
+                    exe: std::env::current_exe().ok(),
+                    session_files: token_guard
+                        .token_file()
+                        .into_iter()
+                        .chain(token_guard.config_file())
+                        .map(Path::to_path_buf)
+                        .collect(),
+                })
+            }
+            _ => None,
+        };
         let ws = self
             .hub
             .store
@@ -846,6 +876,7 @@ impl Actor {
                 workspace: Some(workspace),
                 agent_token: Some(token.clone()),
                 agent_mcp_file: token_guard.config_file().map(Path::to_path_buf),
+                sandbox,
             })
             .await?;
         self.session = Some(spawned.session);

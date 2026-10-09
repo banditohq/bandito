@@ -291,6 +291,8 @@ async fn status(sock: &Path) -> Result<()> {
 }
 
 async fn daemon(home: &Path, sock: &Path, listen: SocketAddr) -> Result<()> {
+    // Before anything starts: sessions recovered below are children too.
+    rpc::unix::become_subreaper();
     let store = Arc::new(Store::open(&home.join("bandito.db"))?);
     let agents_root = home::default_agents_root(home);
     let created = home::backfill(&store, &agents_root);
@@ -321,12 +323,12 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr) -> Result<()> {
         .set_run_dir(&home.join("run"))
         .context("prepare the run folder")?;
     let config = bandito::config::load(home)?;
+    sup.set_agent_sandbox(config.agent_sandbox);
     sup.recover()?;
     let app = App::new(sup.clone(), agents_root);
 
     // Children that double-fork away stay under this process, so the owner's socket can tell them apart,
     // and this process reaps them (see docs/ARCHITECTURE.md#trust-model).
-    rpc::unix::become_subreaper();
     rpc::unix::spawn_zombie_reaper(rpc::unix::REAP_INTERVAL);
     let unix = rpc::unix::bind(sock)?;
     // Agents reach the daemon only through this socket, with their session token (docs/ARCHITECTURE.md#trust-model).
