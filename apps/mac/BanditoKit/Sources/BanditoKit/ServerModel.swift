@@ -490,13 +490,19 @@ extension ServerModel {
 
     @discardableResult
     public func updateAgent(
-        _ id: String, name: String? = nil, role: String? = nil, cwd: String? = nil, approvalMode: ApprovalMode? = nil
+        _ id: String, name: String? = nil, role: String? = nil, cwd: String? = nil, approvalMode: ApprovalMode? = nil,
+        effort: Effort? = nil, memoryMode: MemoryMode? = nil, contextBudget: Int? = nil
     ) async throws -> Agent {
         struct P: Encodable {
             var id: String; var name: String?; var role: String?; var cwd: String?; var approvalMode: ApprovalMode?
+            var effort: Effort?; var memoryMode: MemoryMode?; var contextBudget: Int?
         }
         let a = try await rpc().call(
-            "agents.update", P(id: id, name: name, role: role, cwd: cwd, approvalMode: approvalMode), as: Agent.self)
+            "agents.update",
+            P(
+                id: id, name: name, role: role, cwd: cwd, approvalMode: approvalMode, effort: effort,
+                memoryMode: memoryMode, contextBudget: contextBudget),
+            as: Agent.self)
         replaceAgent(a)
         return a
     }
@@ -506,6 +512,12 @@ extension ServerModel {
 /// from `bandito pair` for a device token.
 public enum Pairing {
     public static func redeem(url: URL, code: String, deviceName: String) async throws -> PairResult {
+        // The code is as good as a token for ten minutes: same rule as for tokens.
+        guard WebSocketTransport.allowsToken(for: url) else {
+            throw RPCError(
+                code: RPCError.insecureTransport,
+                message: "refusing to send the pairing code over an unencrypted connection")
+        }
         let client = RPCClient(transport: WebSocketTransport(url: url, token: nil))
         try await client.start()
         defer { Task { await client.close() } }
