@@ -72,6 +72,8 @@ public final class Router {
     public var pendingAgentCwd: String?
     /// Browser: the open tab.
     public var browserTabID: String?
+    /// Browser: a port an agent opened ("Open" in the sidebar, or the Agents section). Taken once by the browser mode.
+    public var pendingPreviewPort: Int?
     /// Server screen: the screen being shown.
     public var screenID: String?
     /// Server: the section in view.

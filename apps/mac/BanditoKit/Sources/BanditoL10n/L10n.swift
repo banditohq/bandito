@@ -121,6 +121,40 @@ public enum L10n {
         public static var retry: String { L10n.tr("banner.retry") }
     }
 
+    public enum Browser {
+        public static var address: String { L10n.tr("browser.address") }
+        public static var agentsOpened: String { L10n.tr("browser.agentsOpened") }
+        public static var askTakeControl: String { L10n.tr("browser.askTakeControl") }
+        public static var back: String { L10n.tr("browser.back") }
+        public static var banner: String { L10n.tr("browser.banner") }
+        public static var bannerGive: String { L10n.tr("browser.bannerGive") }
+        public static var bannerPause: String { L10n.tr("browser.bannerPause") }
+        public static var bannerTake: String { L10n.tr("browser.bannerTake") }
+        public static var connecting: String { L10n.tr("browser.connecting") }
+        public static var controlAgent: String { L10n.tr("browser.controlAgent") }
+        public static var controlNone: String { L10n.tr("browser.controlNone") }
+        public static var controlUser: String { L10n.tr("browser.controlUser") }
+        public static var emptyPage: String { L10n.tr("browser.emptyPage") }
+        public static var error: String { L10n.tr("browser.error") }
+        public static var forward: String { L10n.tr("browser.forward") }
+        public static var hint: String { L10n.tr("browser.hint") }
+        public static var install: String { L10n.tr("browser.install") }
+        public static var missingChrome: String { L10n.tr("browser.missingChrome") }
+        public static var newTab: String { L10n.tr("browser.newTab") }
+        public static var onServer: String { L10n.tr("browser.onServer") }
+        public static var openOnMac: String { L10n.tr("browser.openOnMac") }
+        public static var openPreview: String { L10n.tr("browser.openPreview") }
+        public static var openServer: String { L10n.tr("browser.openServer") }
+        public static var previewError: String { L10n.tr("browser.previewError") }
+        public static var previewTitle: String { L10n.tr("browser.previewTitle") }
+        public static var reload: String { L10n.tr("browser.reload") }
+        public static var start: String { L10n.tr("browser.start") }
+        public static var stopped: String { L10n.tr("browser.stopped") }
+        public static var tabs: String { L10n.tr("browser.tabs") }
+        public static var title: String { L10n.tr("browser.title") }
+        public static var unsupported: String { L10n.tr("browser.unsupported") }
+    }
+
     public enum Chapter {
         public static func explainer(name: String) -> String { L10n.tr("chapter.explainer", name) }
         public static func nextAt(limit: String) -> String { L10n.tr("chapter.nextAt", limit) }
@@ -719,6 +753,36 @@ public enum L10n {
         public static var claude: String { L10n.tr("runtime.claude") }
         public static var codex: String { L10n.tr("runtime.codex") }
         public static var grok: String { L10n.tr("runtime.grok") }
+    }
+
+    public enum Screen {
+        public static var agentBusy: String { L10n.tr("screen.agentBusy") }
+        public static var agentControls: String { L10n.tr("screen.agentControls") }
+        public static var askTakeControl: String { L10n.tr("screen.askTakeControl") }
+        public static var asleep: String { L10n.tr("screen.asleep") }
+        public static var clipboard: String { L10n.tr("screen.clipboard") }
+        public static var clipboardOff: String { L10n.tr("screen.clipboardOff") }
+        public static var clipboardShared: String { L10n.tr("screen.clipboardShared") }
+        public static var connecting: String { L10n.tr("screen.connecting") }
+        public static var error: String { L10n.tr("screen.error") }
+        public static var fullscreen: String { L10n.tr("screen.fullscreen") }
+        public static var hint: String { L10n.tr("screen.hint") }
+        public static func latency(ms: String) -> String { L10n.tr("screen.latency", ms) }
+        public static var quality: String { L10n.tr("screen.quality") }
+        public static var qualityAuto: String { L10n.tr("screen.qualityAuto") }
+        public static var qualityFaster: String { L10n.tr("screen.qualityFaster") }
+        public static var qualitySharper: String { L10n.tr("screen.qualitySharper") }
+        public static var sendCAD: String { L10n.tr("screen.sendCAD") }
+        public static var shared: String { L10n.tr("screen.shared") }
+        public static var sharedSub: String { L10n.tr("screen.sharedSub") }
+        public static var sleepHint: String { L10n.tr("screen.sleepHint") }
+        public static var start: String { L10n.tr("screen.start") }
+        public static var title: String { L10n.tr("screen.title") }
+        public static var transfer: String { L10n.tr("screen.transfer") }
+        public static var unsupported: String { L10n.tr("screen.unsupported") }
+        public static var who: String { L10n.tr("screen.who") }
+        public static var workplaces: String { L10n.tr("screen.workplaces") }
+        public static var youWatch: String { L10n.tr("screen.youWatch") }
     }
 
     public enum Search {

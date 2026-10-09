@@ -16,11 +16,21 @@ let package = Package(
         .library(name: "BanditoL10n", targets: ["BanditoL10n"]),
         .library(name: "BanditoUI", targets: ["BanditoUI"]),
     ],
+    // VNC for the server screen (Screen mode). Only BanditoUI uses it; the Kit stays free of it.
+    dependencies: [
+        // 1.1.0 (latest tag). Pinned by revision: RoyalVNCKit depends on a CryptoSwift branch, which SwiftPM refuses for tag requirements.
+        .package(url: "https://github.com/royalapplications/royalvnc", revision: "92d4427c73817d8f849bb289ff190aa4b40c44ea"),
+    ],
     targets: [
         .target(name: "BanditoKit"),
         .target(name: "BanditoDesign", resources: [.process("Colors.xcassets")]),
         .target(name: "BanditoL10n", resources: [.process("Resources")]),
-        .target(name: "BanditoUI", dependencies: ["BanditoKit", "BanditoDesign", "BanditoL10n"]),
+        .target(
+            name: "BanditoUI",
+            dependencies: [
+                "BanditoKit", "BanditoDesign", "BanditoL10n",
+                .product(name: "RoyalVNCKit", package: "royalvnc"),
+            ]),
         .testTarget(name: "BanditoKitTests", dependencies: ["BanditoKit", "BanditoL10n"]),
         .testTarget(name: "BanditoUITests", dependencies: ["BanditoUI", "BanditoKit", "BanditoL10n"]),
     ]
