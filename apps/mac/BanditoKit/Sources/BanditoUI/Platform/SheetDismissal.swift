@@ -68,11 +68,18 @@ import AppKit
 final class OutsideClickMonitor {
     static let shared = OutsideClickMonitor()
 
-    private var handlers: [ObjectIdentifier: () -> Void] = [:]
+    private struct Entry {
+        weak var sheet: NSWindow?
+        let dismiss: () -> Void
+    }
+
+    private var handlers: [ObjectIdentifier: Entry] = [:]
     private var monitor: Any?
 
     func register(sheet: NSWindow, dismiss: @escaping () -> Void) {
-        handlers[ObjectIdentifier(sheet)] = dismiss
+        // Sheets that are gone drop out here, so an identifier reused by a new window never finds an old closure.
+        handlers = handlers.filter { $0.value.sheet != nil }
+        handlers[ObjectIdentifier(sheet)] = Entry(sheet: sheet, dismiss: dismiss)
         guard monitor == nil else { return }
         monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { event in
             // Local monitors run on the main thread. Only the window's number crosses into the main actor.
@@ -89,9 +96,9 @@ final class OutsideClickMonitor {
     /// True when the event closed a sheet and must not reach its window.
     private func handleClick(inWindowNumber number: Int) -> Bool {
         guard let window = NSApp.window(withWindowNumber: number), let sheet = window.attachedSheet,
-            let dismiss = handlers[ObjectIdentifier(sheet)]
+            let entry = handlers[ObjectIdentifier(sheet)], entry.sheet === sheet
         else { return false }
-        dismiss()
+        entry.dismiss()
         return true
     }
 }
@@ -122,6 +129,11 @@ private struct SheetWindowReader: NSViewRepresentable {
         var onAttach: ((NSWindow) -> Void)?
         var onDetach: ((NSWindow) -> Void)?
         private weak var current: NSWindow?
+
+        deinit {
+            // The sheet's content can go away without moving out of its window first.
+            if let current { MainActor.assumeIsolated { onDetach?(current) } }
+        }
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
