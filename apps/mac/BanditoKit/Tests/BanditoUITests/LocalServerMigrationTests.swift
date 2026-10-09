@@ -125,6 +125,8 @@ private func restoreSaved(_ previous: Data?) {
 
             #expect(app.servers.first?.config.endpoint == local.endpoint)
             #expect(stored.token(for: id) == nil)
+            // The failure is reported, not silently dropped.
+            #expect(app.lastError != nil)
         }
     }
 
