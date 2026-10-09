@@ -3251,11 +3251,12 @@ mod tests {
         assert!(line.len() > 57_000 && line.len() < 64 * 1024, "{}", line.len());
         let prot = prot();
         let r = req(Some(&line), "Bash", &[]);
-        // CPU time of this thread, not the wall clock: other tests running alongside would otherwise count.
+        // CPU time of this thread, not the wall clock: other tests running alongside would otherwise count. The budget
+        // is a guard against quadratic work (that took seconds), with room for slow CI machines (~450 ms seen).
         let started = thread_cpu_time();
         let judgement = judge_line(ApprovalMode::Risky, &r, &[CWD], &[], &prot, &ShellCwd::Unknown);
         let took = thread_cpu_time() - started;
-        assert!(took < Duration::from_millis(300), "took {took:?}");
+        assert!(took < Duration::from_millis(1_000), "took {took:?}");
         assert!(
             matches!(judgement.verdict, Verdict::Ask(_) | Verdict::Allow),
             "{:?}",
