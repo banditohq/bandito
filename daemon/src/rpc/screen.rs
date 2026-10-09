@@ -106,7 +106,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             ok(status)
         }
         _ if method.starts_with("screen.agent.") => {
-            if !matches!(peer, Peer::Local) {
+            if !matches!(peer, Peer::Agent(_)) {
                 return Err(RpcError::new(
                     UNAUTHORIZED,
                     "screen agent calls only come from agents on the server",
@@ -395,9 +395,14 @@ mod tests {
             .unwrap_err();
         assert_eq!(err.code, SCREEN_ERROR);
         assert_eq!(err.data, Some(json!({"reason": "unsupported"})));
-        let err = dispatch(&app(), &Peer::Local, "screen.agent.screenshot", json!({}))
-            .await
-            .unwrap_err();
+        let err = dispatch(
+            &app(),
+            &Peer::Agent("agent-a".into()),
+            "screen.agent.screenshot",
+            json!({}),
+        )
+        .await
+        .unwrap_err();
         assert_eq!(err.code, SCREEN_ERROR);
     }
 

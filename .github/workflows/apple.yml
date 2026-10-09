@@ -2,10 +2,10 @@ name: apple
 
 on:
   pull_request:
-    paths: ["apps/**", "daemon/**", "i18n/**", "brand/tokens/**", ".github/workflows/apple.yml"]
+    paths: ["apps/**", "daemon/**", "i18n/**", "brand/tokens/**", "guide/**", "scripts/check_guide.py", ".github/workflows/apple.yml"]
   push:
     branches: [main]
-    paths: ["apps/**", "daemon/**", "i18n/**", "brand/tokens/**", ".github/workflows/apple.yml"]
+    paths: ["apps/**", "daemon/**", "i18n/**", "brand/tokens/**", "guide/**", "scripts/check_guide.py", ".github/workflows/apple.yml"]
 
 permissions:
   contents: read
@@ -16,6 +16,9 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
+
+      - name: Guide covers every screen, setting and command
+        run: python3 scripts/check_guide.py
 
       - name: Select the newest Xcode
         run: |
