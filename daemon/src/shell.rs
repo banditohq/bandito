@@ -1177,3 +1177,30 @@ mod tests {
         assert!(opaque(&line).contains(&"nesting"));
     }
 }
+
+#[cfg(test)]
+mod probes_shell {
+    use super::*;
+
+    #[test]
+    fn brace_expansion_is_opaque_but_plain_braces_are_not() {
+        for cmd in ["{rm,-rf,~}", "sh -c '{rm,-rf,x}'", "zsh -c \"{rm,-rf,x}\"", "echo {a..b}"] {
+            assert!(parse(cmd).opaque.contains(&"brace expansion"), "{cmd}");
+        }
+        for cmd in ["echo {}", "find . -exec x {} +", "git log --format='{x}'"] {
+            assert!(parse(cmd).opaque.is_empty(), "{cmd}");
+        }
+    }
+
+    #[test]
+    fn zsh_equals_word_is_opaque() {
+        assert!(parse("=rm -rf x").opaque.contains(&"zsh =word"));
+    }
+
+    #[test]
+    fn option_values_at_the_end_do_not_panic() {
+        for cmd in ["sudo -u", "env -S", "xargs -I", "nice -n", "exec -a", "timeout", "stdbuf -o"] {
+            let _ = parse(cmd);
+        }
+    }
+}

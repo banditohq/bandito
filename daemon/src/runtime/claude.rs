@@ -1335,3 +1335,27 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+mod approval_path_tests {
+    use super::*;
+
+    fn control(tool: &str, input: Value) -> Value {
+        json!({"type": "control_request", "request_id": "k1", "request": {
+            "subtype": "can_use_tool", "tool_name": tool, "tool_use_id": "t1", "input": input}})
+    }
+
+    #[test]
+    fn search_tools_path_is_checked() {
+        let req = approval_from_control(&control("Grep", json!({"pattern": "x", "path": "/home/u/.bandito"}))).unwrap();
+        assert!(req.paths.iter().any(|p| p == "/home/u/.bandito"), "{:?}", req.paths);
+        let req = approval_from_control(&control("Glob", json!({"pattern": "*", "path": "/home/u/.bandito"}))).unwrap();
+        assert!(req.paths.iter().any(|p| p == "/home/u/.bandito"), "{:?}", req.paths);
+    }
+
+    #[test]
+    fn unknown_tool_path_like_fields_are_checked() {
+        let req = approval_from_control(&control("SomeNewTool", json!({"target": "~/.bandito/x", "n": 3}))).unwrap();
+        assert!(req.paths.iter().any(|p| p == "~/.bandito/x"), "{:?}", req.paths);
+    }
+}
