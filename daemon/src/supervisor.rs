@@ -2,17 +2,19 @@
 //! single turn runs at a time, applies the approval policy, and turns runtime
 //! output into stored events.
 
+use crate::checkpoint;
 use crate::event::{AgentStatus, DecidedBy, Decision, EventBody, Source, TurnStatus, Usage};
 use crate::hub::Hub;
 use crate::policy::{self, Verdict};
 use crate::runtime::{ApprovalRequest, Runtime, RuntimeKind, RuntimeOutput, Session, SpawnConfig};
-use crate::store::{Agent, DEFAULT_CONTEXT_BUDGET, MemoryMode, RuleAction, new_id, now_ms};
+use crate::store::{Agent, CheckpointKind, DEFAULT_CONTEXT_BUDGET, MemoryMode, RuleAction, Store, new_id, now_ms};
 use anyhow::{Result, anyhow, bail};
 use chrono::{DateTime, Local, NaiveTime, TimeZone};
 use serde_json::json;
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
 
 /// Available runtimes by kind.
@@ -126,6 +128,9 @@ pub struct Supervisor {
 
 /// Approvals nobody answered are denied after this long.
 pub const APPROVAL_TTL_MS: i64 = 24 * 60 * 60 * 1000;
+
+/// The snapshot before a turn may take this long. Past it, the turn goes on without a checkpoint.
+const CHECKPOINT_BEFORE_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Put first in the system prompt of an agent that has a home folder. `{home}` is replaced by the folder.
 const MEMORY_BRIEFING: &str = "Your memory lives in {home} — plain Markdown files that you own:
@@ -279,6 +284,7 @@ impl Supervisor {
             turn_crew_sends: 0,
             wrap_up: None,
             turn_context: None,
+            turn_checkpoints: false,
             reload_after_turn: false,
             new_chapter_after_turn: false,
             queue: VecDeque::new(),
@@ -470,6 +476,8 @@ struct Actor {
     wrap_up: Option<&'static str>,
     /// Context size the CLI reported for the running turn (see `RuntimeOutput::ContextSize`).
     turn_context: Option<u64>,
+    /// The running turn is checkpointed: a "before" snapshot was attempted and an "after" one is due.
+    turn_checkpoints: bool,
     /// Settings changed while a session was running: close that session once it is idle.
     reload_after_turn: bool,
     /// The folder changed while a session was running: the next session starts a new chapter.
@@ -825,6 +833,15 @@ impl Actor {
             },
         );
         self.set_status(AgentStatus::Working, None);
+        let dirs = if msg.source == Source::System {
+            None
+        } else {
+            self.checkpoint_dirs()
+        };
+        self.turn_checkpoints = dirs.is_some();
+        if let Some((home, cwd)) = dirs {
+            snapshot_before(&self.hub.store, &self.id, &home, &cwd, &msg.text, &turn_id).await;
+        }
         let sent = match &mut self.session {
             Some(s) => s.send(&msg.text).await,
             None => Err(anyhow!("no session")),
@@ -844,12 +861,13 @@ impl Actor {
             self.hub.emit(
                 &self.id,
                 EventBody::TurnCompleted {
-                    turn_id,
+                    turn_id: turn_id.clone(),
                     status,
                     usage: None,
                     cost_usd: None,
                 },
             );
+            self.spawn_after_checkpoint(turn_id);
         }
     }
 
@@ -865,12 +883,13 @@ impl Actor {
                 self.hub.emit(
                     &self.id,
                     EventBody::TurnCompleted {
-                        turn_id,
+                        turn_id: turn_id.clone(),
                         status,
                         usage: usage.clone(),
                         cost_usd,
                     },
                 );
+                self.spawn_after_checkpoint(turn_id);
                 let context = self.turn_context.take();
                 self.note_turn(context, usage);
                 // The wrap-up turn ended, however it ended: close the chapter now.
@@ -1078,6 +1097,41 @@ impl Actor {
         Ok(a.id)
     }
 
+    /// The folders a checkpoint needs: the agent's home folder and its working folder, which must
+    /// exist. `None` when the agent has no home folder or its folder is gone.
+    fn checkpoint_dirs(&self) -> Option<(PathBuf, PathBuf)> {
+        let agent = self.agent().ok()?;
+        let home = PathBuf::from(agent.home_dir?);
+        let cwd = PathBuf::from(agent.cwd);
+        cwd.is_dir().then_some((home, cwd))
+    }
+
+    /// Snapshot after a turn, in the background: the actor does not wait for git.
+    fn spawn_after_checkpoint(&mut self, turn_id: String) {
+        if !std::mem::take(&mut self.turn_checkpoints) {
+            return;
+        }
+        let Some((home, cwd)) = self.checkpoint_dirs() else {
+            return;
+        };
+        let store = self.hub.store.clone();
+        let agent = self.id.clone();
+        tokio::spawn(async move {
+            match checkpoint::snapshot(&home, &cwd, "after").await {
+                Ok(Some(snap)) => save_checkpoint(
+                    &store,
+                    &agent,
+                    &snap.sha,
+                    "after",
+                    CheckpointKind::After,
+                    Some(&turn_id),
+                ),
+                Ok(None) => {}
+                Err(e) => tracing::warn!(agent = %agent, "checkpoint after the turn: {e}"),
+            }
+        });
+    }
+
     async fn close(&mut self) {
         if let Some(s) = self.session.take() {
             s.shutdown().await;
@@ -1090,6 +1144,43 @@ impl Actor {
         if self.status.is_some() {
             self.set_status(AgentStatus::Offline, None);
         }
+    }
+}
+
+/// The start of a message as a checkpoint label: its first 60 characters on one line.
+fn checkpoint_label(text: &str) -> String {
+    text.split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .chars()
+        .take(60)
+        .collect()
+}
+
+/// Snapshot before a turn's message reaches the session. A slow or failing snapshot is
+/// logged and the turn goes on without it.
+async fn snapshot_before(
+    store: &Store,
+    agent: &str,
+    home: &std::path::Path,
+    cwd: &std::path::Path,
+    text: &str,
+    turn_id: &str,
+) {
+    let label = format!("before: {}", checkpoint_label(text));
+    let snap = tokio::time::timeout(CHECKPOINT_BEFORE_TIMEOUT, checkpoint::snapshot(home, cwd, &label));
+    match snap.await {
+        Ok(Ok(Some(snap))) => save_checkpoint(store, agent, &snap.sha, &label, CheckpointKind::Before, Some(turn_id)),
+        Ok(Ok(None)) => {}
+        Ok(Err(e)) => tracing::warn!(agent = %agent, "checkpoint before the turn: {e}"),
+        Err(_) => tracing::warn!(agent = %agent, "checkpoint before the turn timed out"),
+    }
+}
+
+/// Store a checkpoint. A failure is logged; the turn is not affected.
+fn save_checkpoint(store: &Store, agent: &str, sha: &str, label: &str, kind: CheckpointKind, turn_id: Option<&str>) {
+    if let Err(e) = store.checkpoint_add(agent, sha, label, kind, turn_id) {
+        tracing::warn!(agent = %agent, "save checkpoint: {e:#}");
     }
 }
 
@@ -1167,7 +1258,7 @@ mod tests {
     use super::testing::{Log, MockRuntime, Outs};
     use super::*;
     use crate::event::Event;
-    use crate::store::{AgentPatch, ApprovalMode, ApprovalStatus, Effort, NewAgent, Store};
+    use crate::store::{AgentPatch, ApprovalMode, ApprovalStatus, CheckpointKind, Effort, NewAgent, Store};
     use std::time::Duration;
     use tokio::sync::broadcast;
 
@@ -2252,5 +2343,106 @@ mod tests {
         assert!(over_budget(50_001, Some(50_000)));
         assert!(!over_budget(50_000, Some(50_000)));
         assert!(!over_budget(100_000, Some(120_000)));
+    }
+
+    /// An agent that works in a real folder and has a home folder, so its turns are checkpointed.
+    fn checkpoint_world(root: &std::path::Path) -> (World, PathBuf, PathBuf) {
+        let proj = root.join("proj");
+        let home = root.join("home");
+        std::fs::create_dir_all(&proj).unwrap();
+        std::fs::create_dir_all(&home).unwrap();
+        std::fs::write(proj.join("a.txt"), "v1\n").unwrap();
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let agent = store
+            .agent_create(NewAgent {
+                name: "Forge".into(),
+                role: "builder".into(),
+                runtime: RuntimeKind::Claude,
+                model: None,
+                cwd: proj.display().to_string(),
+                approval_mode: ApprovalMode::Risky,
+                system_prompt: None,
+                effort: None,
+                memory_mode: crate::store::MemoryMode::Smart,
+                context_budget: None,
+            })
+            .unwrap();
+        store.agent_set_home(&agent.id, &home.display().to_string()).unwrap();
+        (attach(store, agent.id), proj, home)
+    }
+
+    /// The agent's checkpoints once there are at least `n` (the "after" one is written in the background).
+    async fn wait_checkpoints(store: &Store, agent: &str, n: usize) -> Vec<crate::store::Checkpoint> {
+        for _ in 0..300 {
+            let list = store.checkpoint_list(agent, 50).unwrap();
+            if list.len() >= n {
+                return list;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        panic!("the agent never had {n} checkpoints");
+    }
+
+    #[tokio::test]
+    async fn a_turn_is_checkpointed_before_and_after() {
+        let root = tempfile::tempdir().unwrap();
+        let (mut w, proj, home) = checkpoint_world(root.path());
+        w.sup.send(&w.agent, Inbound::user("make it v2")).await.unwrap();
+        let started = w.wait(|b| matches!(b, EventBody::TurnStarted { .. })).await;
+        let EventBody::TurnStarted { turn_id, .. } = started.body else {
+            unreachable!()
+        };
+        w.wait_log("send make it v2").await;
+        // The "before" checkpoint is taken before the message reaches the session.
+        let before = w.store.checkpoint_list(&w.agent, 10).unwrap();
+        assert_eq!(before.len(), 1, "{before:?}");
+        assert_eq!(before[0].kind, CheckpointKind::Before);
+        assert_eq!(before[0].turn_id.as_deref(), Some(turn_id.as_str()));
+        assert_eq!(before[0].label, "before: make it v2");
+
+        std::fs::write(proj.join("a.txt"), "v2\n").unwrap(); // what the agent does
+        w.push(done()).await;
+        w.wait(|b| matches!(b, EventBody::TurnCompleted { .. })).await;
+
+        let all = wait_checkpoints(&w.store, &w.agent, 2).await;
+        assert_eq!(all[0].kind, CheckpointKind::After);
+        assert_eq!(all[0].label, "after");
+        assert_eq!(all[0].turn_id.as_deref(), Some(turn_id.as_str()));
+        let files = crate::checkpoint::changes(&home, &proj, &before[0].sha, Some(&all[0].sha))
+            .await
+            .unwrap();
+        assert_eq!(files.len(), 1, "{files:?}");
+        assert_eq!(files[0].path, "a.txt");
+        assert_eq!((files[0].additions, files[0].deletions), (Some(1), Some(1)));
+    }
+
+    #[tokio::test]
+    async fn a_missing_folder_runs_the_turn_without_checkpoints() {
+        let root = tempfile::tempdir().unwrap();
+        let (mut w, proj, _home) = checkpoint_world(root.path());
+        std::fs::remove_dir_all(&proj).unwrap();
+        w.sup.send(&w.agent, Inbound::user("hello")).await.unwrap();
+        w.wait_log("send hello").await;
+        w.push(done()).await;
+        w.wait(|b| matches!(b, EventBody::TurnCompleted { .. })).await;
+        assert!(w.store.checkpoint_list(&w.agent, 10).unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn wrap_up_turns_are_not_checkpointed() {
+        let root = tempfile::tempdir().unwrap();
+        let (mut w, _proj, _home) = checkpoint_world(root.path());
+        let wrap_up = Inbound {
+            text: "wrap up".into(),
+            source: Source::System,
+            from_agent: None,
+            hops: 0,
+            chain: None,
+        };
+        w.sup.send(&w.agent, wrap_up).await.unwrap();
+        w.wait_log("send wrap up").await;
+        w.push(done()).await;
+        w.wait(|b| matches!(b, EventBody::TurnCompleted { .. })).await;
+        assert!(w.store.checkpoint_list(&w.agent, 10).unwrap().is_empty());
     }
 }

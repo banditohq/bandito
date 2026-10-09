@@ -20,6 +20,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::{broadcast, mpsc};
 
+pub mod changes;
 pub mod files;
 pub mod term;
 pub mod tunnel;
@@ -43,6 +44,7 @@ pub const FEATURES: &[&str] = &[
     "terminals",
     "files",
     "tunnel",
+    "changes",
 ];
 
 /// Context budget bounds for `smart` memory, in tokens.
@@ -126,6 +128,8 @@ pub const RATE_LIMITED: i64 = -32002;
 pub const TERM_ERROR: i64 = -32021;
 /// A file operation failed; `error.data.reason` says why (see rpc::files).
 pub const FS_ERROR: i64 = -32020;
+/// A checkpoint or git operation failed; `error.data.reason` says why (see rpc::changes).
+pub const CHANGES_ERROR: i64 = -32022;
 
 impl RpcError {
     fn new(code: i64, message: impl Into<String>) -> Self {
@@ -487,6 +491,12 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
     if method.starts_with("fs.") {
         // Every `fs.*` name is answered there, unknown ones with METHOD_NOT_FOUND.
         return files::dispatch(app, method, p)
+            .await
+            .unwrap_or_else(|| Err(RpcError::new(METHOD_NOT_FOUND, format!("unknown method {method}"))));
+    }
+    if method.starts_with("changes.") {
+        // Every `changes.*` name is answered there, unknown ones with METHOD_NOT_FOUND.
+        return changes::dispatch(app, method, p)
             .await
             .unwrap_or_else(|| Err(RpcError::new(METHOD_NOT_FOUND, format!("unknown method {method}"))));
     }

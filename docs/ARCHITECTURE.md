@@ -79,6 +79,7 @@ A pending approval blocks only that agent. Approvals time out after 24 h → den
 - `rules(id, agent_id NULL, pattern, action)`
 - `schedules(id, agent_id, cron, tz, prompt, enabled, last_run_at, next_run_at)`
 - `devices(id, name, token_hash, created_at, last_seen_at)`; `pairing(code_hash, expires_at)`
+- `checkpoints(id, agent_id, sha, label, kind, turn_id, created_at)`: points in an agent's folder history (see [Changes](#changes))
 - `secrets(name, value)` for API keys, file mode 0600 (keychain/age later)
 
 Migrations: numbered SQL files embedded in the binary, applied by `PRAGMA user_version`.
@@ -87,7 +88,7 @@ Migrations: numbered SQL files embedded in the binary, applied by `PRAGMA user_v
 
 JSON-RPC 2.0. Same methods on every transport.
 
-- Requests: `daemon.info`, `runtimes.status`, `agents.list|get|create|update|delete`, `agents.send{agent_id,text}`, `agents.interrupt`, `events.since{seq,limit,agent_id?}`, `approvals.list|resolve{approval_id,decision,remember}`, `rules.list|set|delete`, `schedules.list|create|update|delete|run_now`, `devices.list|revoke`, `pair.redeem{code,device_name}` (only unauthenticated method), `term.list|open|input|resize|rename|close|attach|detach` (see Terminals), `fs.*` (see [Files](#files)).
+- Requests: `daemon.info`, `runtimes.status`, `agents.list|get|create|update|delete`, `agents.send{agent_id,text}`, `agents.interrupt`, `events.since{seq,limit,agent_id?}`, `approvals.list|resolve{approval_id,decision,remember}`, `rules.list|set|delete`, `schedules.list|create|update|delete|run_now`, `devices.list|revoke`, `pair.redeem{code,device_name}` (only unauthenticated method), `term.list|open|input|resize|rename|close|attach|detach` (see Terminals), `fs.*` (see [Files](#files)), `changes.checkpoints|diff|file|restore` (see [Changes](#changes)).
 - Notifications (server → client): `event{seq, agent_id, kind, payload, ts}` for every event including `message.delta`; `term.output|gap|exit|closed` for attached terminals (see Terminals).
 
 ## Transports (connect any way you like)
@@ -219,6 +220,31 @@ Params are objects; unknown fields are `invalid_params`.
 **Limits.** At most 64 live tunnels per device. The 65th upgrade gets 429 before the upgrade. A slot is freed when its tunnel ends, whichever side ended it.
 
 Feature string: `"tunnel"` in `daemon.info`.
+
+## Changes
+
+Bandito records what an agent changes in its folder, so the app can show it and undo it. The working folder does not need to be a git repository.
+
+**Checkpoints.** Before a turn that starts from a user, schedule or crew message, the daemon takes a snapshot of the agent's working folder (its `cwd`): a `before` checkpoint, labelled with the start of the message. When the turn ends, an `after` checkpoint is taken in the background. Wrap-up turns (saving memory) are not checkpointed. A snapshot is a commit in a shadow git repository, `.checkpoints/` inside the agent's home folder, driven with `GIT_DIR` and `GIT_WORK_TREE` set to the working folder. A project's own `.git` is never touched, and its `.gitignore` is honored. An unchanged folder gives the same commit, so a turn that changed nothing adds no new commit.
+
+Not checkpointed: credentials (`.env`, `.env.*`, keys, certificates, `.npmrc`, `.netrc`), files over 5 MiB (they are dropped from the index and stay out), `node_modules/`, `target/`, `.venv/`, `venv/`, `__pycache__/`, `dist/`, `build/`, `.next/`, `.cache/` and `*.log` (the full list is in `daemon/src/checkpoint.rs`), and whole folders with more than 20 000 files. A `before` snapshot that takes more than 10 s is abandoned, and the turn goes on without it. The shadow repository holds file contents, including files that the project ignores in git but this list does not exclude (such as `.env`). It sits in the agent's home folder, which only the daemon's user can read.
+
+**Restore.** A restore first takes a `restore` checkpoint of the current state, so it can be undone with the same method. Paths must be relative and stay inside the working folder; `.git` and `.checkpoints` are refused. Without `paths`, every file that differs from the checkpoint comes back, and files that did not exist then are removed.
+
+**Methods.**
+
+| method | params | result |
+|---|---|---|
+| `changes.checkpoints` | `agent_id`, `limit?` (1–200, default 50) | `[{id, sha, label, kind, turn_id, created_at}]`, newest first |
+| `changes.diff` | `agent_id`, `from?`, `to?` (checkpoint ids) | `{from, to, files}` |
+| `changes.file` | `agent_id`, `path`, `from?`, `to?` | `{diff, truncated}` |
+| `changes.restore` | `agent_id`, `checkpoint_id`, `paths?` | `{restored, undo_checkpoint_id}` |
+
+`from` defaults to the agent's last `before` checkpoint, `to` to the working folder as it is now (`to` is then `null`). A `file` is `{path, status, from?, additions, deletions}` with `status` one of `added`, `modified`, `deleted`, `renamed` (`from` is the old path of a rename). `additions` and `deletions` are `null` for binary files. `changes.file` gives a unified diff with 3 lines of context, cut at 512 KiB (`truncated: true`).
+
+**Errors.** An unknown agent, a checkpoint of another agent, a bad path or a bad id is `INVALID_PARAMS`. A git or file failure is `CHANGES_ERROR` (`-32022`) with `error.data.reason`: `missing_folder`, `too_many_files`, `undo_unavailable`, `git` or `io`. An agent with no checkpoints gets empty lists, not an error.
+
+Feature string: `"changes"`.
 
 ## Mac app
 
