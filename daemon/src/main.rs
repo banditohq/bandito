@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use bandito::home;
 use bandito::hub::Hub;
 use bandito::rpc::{self, App};
 use bandito::runtime::claude::ClaudeRuntime;
@@ -124,7 +125,7 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr) -> Result<()> {
     };
     let sup = Supervisor::new(hub, runtimes, mcp);
     sup.recover()?;
-    let app = App::new(sup.clone());
+    let app = App::new(sup.clone(), home::default_agents_root());
 
     let unix = rpc::unix::bind(sock)?;
     tokio::spawn(rpc::unix::run(app.clone(), unix));

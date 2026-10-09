@@ -13,12 +13,14 @@ mod approvals;
 pub mod auth;
 mod rules;
 mod schedules;
+mod usage;
 
 pub use agents::{Agent, AgentPatch, NewAgent};
 pub use approvals::{Approval, ApprovalStatus};
 pub use auth::Device;
 pub use rules::{Rule, RuleAction};
 pub use schedules::{NewSchedule, NextRun, Schedule, SchedulePatch};
+pub use usage::UsageEntry;
 
 const MIGRATIONS: &[&str] = &[
     include_str!("../../migrations/0001_init.sql"),
