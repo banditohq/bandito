@@ -71,7 +71,7 @@ targets:
         PRODUCT_NAME: Bandito
         PRODUCT_BUNDLE_IDENTIFIER: dev.bandito.mac
         MARKETING_VERSION: 0.1.0
-        CURRENT_PROJECT_VERSION: 191
+        CURRENT_PROJECT_VERSION: 203
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Bandito
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools

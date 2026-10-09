@@ -10,7 +10,7 @@
 #
 # Environment:
 #   BANDITO_PLATFORM_DIR   platform checkout that gets public/appcast.xml (default: ../platform next to this repo)
-#   BANDITO_DERIVED_DATA   Xcode derived data (default: apps/mac/build/DerivedData)
+#   BANDITO_DERIVED_DATA   Xcode derived data (default: ~/.cache/bandito-xcode/release, off the repo disk)
 #   CARGO_TARGET_DIR       Rust target of the daemon build (default: ~/.cache/bandito-target-app)
 #   SPARKLE_BIN            Sparkle's bin directory with sign_update (default: ~/.cache/sparkle/2.10.0/extracted/bin)
 set -euo pipefail
@@ -43,7 +43,7 @@ fi
 
 here="$(cd "$(dirname "$0")/.." && pwd)"
 repo="$(cd "$here/../.." && pwd)"
-derived="${BANDITO_DERIVED_DATA:-$here/build/DerivedData}"
+derived="${BANDITO_DERIVED_DATA:-$HOME/.cache/bandito-xcode/release}"
 release="$here/build/release"
 work="$here/build/work"
 platform="${BANDITO_PLATFORM_DIR:-$repo/../platform}"
