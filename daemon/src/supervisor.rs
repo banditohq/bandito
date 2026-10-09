@@ -653,6 +653,8 @@ struct PendingApproval {
     subject: String,
     /// Set for a daemon-asked approval: the answer goes here instead of to a runtime session.
     external: Option<oneshot::Sender<Decision>>,
+    /// For a Bash line asked about: the shell's folder after it, applied only if the user allows it.
+    shell_after: Option<policy::ShellCwd>,
 }
 
 struct Actor {
@@ -855,6 +857,10 @@ impl Actor {
             bail!("approval {approval_id} was already answered");
         }
         let external = p.external.is_some();
+        // The folder a line asked about leaves the shell in: it holds only if the user allows the line.
+        if let (Decision::Allow, Some(next)) = (decision, p.shell_after.clone()) {
+            self.shell_cwd = next;
+        }
         match p.external {
             // The daemon's own question: whoever asked is waiting for this answer.
             Some(answer) => {
@@ -1495,19 +1501,27 @@ impl Actor {
         roots.extend(agent.home_dir.as_deref());
         // A Bash line is judged where the session's shell was left (both folders, when that is not known); the
         // state moves on with the line.
-        let shell = self.shell_cwd.clone();
-        let verdict = policy::guarded(|| {
-            policy::evaluate_shell(agent.approval_mode, &req, &roots, &rules, &self.protected, &shell)
-        });
-        if let Some(command) = req.command.as_deref() {
-            self.shell_cwd = shell.after_line(command, &agent.cwd, &self.protected);
-        }
+        // The verdict, and the folder the line leaves the shell in. The folder is applied when the line goes ahead:
+        // at once when it is allowed, on the user's yes when it is asked about, and never after a refusal.
+        let policy::Judgement { verdict, shell_after } = policy::judge_guarded(
+            agent.approval_mode,
+            &req,
+            &roots,
+            &rules,
+            &self.protected,
+            &self.shell_cwd,
+        );
         let subject = req.command.clone().unwrap_or_else(|| req.title.clone());
         match verdict {
-            Verdict::Allow => match self.session.as_mut() {
-                Some(s) => s.resolve(&req.key, Decision::Allow).await,
-                None => Ok(()),
-            },
+            Verdict::Allow => {
+                if let Some(next) = shell_after {
+                    self.shell_cwd = next;
+                }
+                match self.session.as_mut() {
+                    Some(s) => s.resolve(&req.key, Decision::Allow).await,
+                    None => Ok(()),
+                }
+            }
             Verdict::Deny(reason) => {
                 let a = self.record(&req, &reason)?;
                 self.hub.store.approval_resolve(&a, Decision::Deny)?;
@@ -1533,6 +1547,7 @@ impl Actor {
                         key: req.key.clone(),
                         subject,
                         external: None,
+                        shell_after,
                     },
                 );
                 self.set_status(AgentStatus::NeedsYou, None);
@@ -1563,6 +1578,7 @@ impl Actor {
                 key: req.key,
                 subject: String::new(),
                 external: Some(answer),
+                shell_after: None,
             },
         );
         self.set_status(AgentStatus::NeedsYou, None);
@@ -2162,6 +2178,52 @@ mod tests {
         w.wait(is_status(AgentStatus::Working)).await;
         assert!(w.sup.resolve(&approval_id, Decision::Allow, false).await.is_err());
         assert!(!w.log.lock().unwrap().iter().any(|l| l.starts_with("resolve k1")));
+    }
+
+    #[tokio::test]
+    async fn a_cd_moves_the_folder_only_when_it_is_allowed() {
+        // A `cd` the policy refuses does not move the shell. A `cd` the user is asked about moves it only when the
+        // user allows it.
+        // The request for a command: the feed also holds the earlier refused ones.
+        fn asked_for(b: &EventBody, command: &str) -> bool {
+            matches!(b, EventBody::ApprovalRequested { title, .. } if title.as_str() == command)
+        }
+        let mut w = world(ApprovalMode::Risky);
+        w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
+        w.wait_log("send go").await;
+        // Refused by the protected rule: into the data folder.
+        w.push(approval("k1", "cd ~/.bandito")).await;
+        w.wait_log("resolve k1 Deny").await;
+        // Still the agent's folder: `.ssh/id_rsa` there is a routine read.
+        w.push(approval("k2", "cat .ssh/id_rsa")).await;
+        w.wait_log("resolve k2 Allow").await;
+
+        // Asked, and the user says no: the folder does not move either.
+        w.store.rule_set(None, "cd ~", RuleAction::Ask).unwrap();
+        w.push(approval("k3", "cd ~")).await;
+        let e = w.wait(|b| asked_for(b, "cd ~")).await;
+        let EventBody::ApprovalRequested { approval_id, .. } = e.body else {
+            unreachable!()
+        };
+        w.sup.resolve(&approval_id, Decision::Deny, false).await.unwrap();
+        w.wait_log("resolve k3 Deny").await;
+        w.push(approval("k4", "cat .ssh/id_rsa")).await;
+        w.wait_log("resolve k4 Allow").await;
+
+        // Asked, and the user allows it: now the folder is home.
+        w.push(approval("k5", "cd ~")).await;
+        let e = w.wait(|b| asked_for(b, "cd ~")).await;
+        let EventBody::ApprovalRequested { approval_id, .. } = e.body else {
+            unreachable!()
+        };
+        w.sup.resolve(&approval_id, Decision::Allow, false).await.unwrap();
+        w.wait_log("resolve k5 Allow").await;
+        w.push(approval("k6", "cat .ssh/id_rsa")).await;
+        let e = w.wait(|b| asked_for(b, "cat .ssh/id_rsa")).await;
+        let EventBody::ApprovalRequested { reason, .. } = e.body else {
+            unreachable!()
+        };
+        assert_eq!(reason, "reads credentials: ~/.ssh");
     }
 
     #[tokio::test]

@@ -347,10 +347,30 @@ pub fn evaluate_from(
     protected: &Protected,
     start: Option<&str>,
 ) -> Verdict {
+    let parsed = req
+        .command
+        .as_deref()
+        .map(|command| shell::parse(command, start, &protected.env));
+    evaluate_base(mode, req, roots, rules, protected, parsed.as_ref(), false)
+}
+
+/// [`evaluate_from`] for a folder that was assumed (the home folder, when the shell's folder is unknown): a
+/// recursive reach into Bandito's files is asked about, not refused.
+fn evaluate_base(
+    mode: ApprovalMode,
+    req: &ApprovalRequest,
+    roots: &[&str],
+    rules: &[Rule],
+    protected: &Protected,
+    parsed: Option<&Parsed>,
+    assumed: bool,
+) -> Verdict {
     // Links are followed inside the home folder and the agent's folders only.
     let mut folders = vec![canon(&protected.env.home)];
     folders.extend(roots.iter().map(|root| canon(root)));
-    with_scope(folders, || evaluate_scoped(mode, req, roots, rules, protected, start))
+    with_scope(folders, || {
+        evaluate_scoped(mode, req, roots, rules, protected, parsed, assumed)
+    })
 }
 
 fn evaluate_scoped(
@@ -359,13 +379,10 @@ fn evaluate_scoped(
     roots: &[&str],
     rules: &[Rule],
     protected: &Protected,
-    start: Option<&str>,
+    parsed: Option<&Parsed>,
+    assumed: bool,
 ) -> Verdict {
-    let parsed = req
-        .command
-        .as_deref()
-        .map(|command| shell::parse(command, start, &protected.env));
-    match own_files(req, roots, protected, parsed.as_ref()) {
+    match own_files(req, roots, protected, parsed, assumed) {
         Some(Verdict::Deny(reason)) => return Verdict::Deny(reason),
         Some(ask @ Verdict::Ask(_)) if mode != ApprovalMode::Never => return ask,
         _ => {}
@@ -381,7 +398,7 @@ fn evaluate_scoped(
     match mode {
         ApprovalMode::Never => Verdict::Allow,
         ApprovalMode::Always => Verdict::Ask("approval required for every action".into()),
-        ApprovalMode::Risky => risky(req, roots, protected, parsed.as_ref()),
+        ApprovalMode::Risky => risky(req, roots, protected, parsed),
     }
 }
 
@@ -419,12 +436,16 @@ impl ShellCwd {
     /// folder, or that has a part the reader cannot follow, leaves the folder unknown. Otherwise the folder the
     /// line ends in is known, after an explicit `cd` or from the start.
     pub fn after(command: &str, start: Option<&str>, prot: &Protected) -> ShellCwd {
-        let parsed = shell::parse(command, start, &prot.env);
+        ShellCwd::from_parsed(&shell::parse(command, start, &prot.env))
+    }
+
+    /// The state after a line that was parsed from the shell's folder `start` (see [`ShellCwd::after`]).
+    fn from_parsed(parsed: &Parsed) -> ShellCwd {
         if parsed.hides_cwd || !parsed.opaque.is_empty() {
             return ShellCwd::Unknown;
         }
-        match parsed.end_cwd {
-            Some(folder) => ShellCwd::Known(folder),
+        match &parsed.end_cwd {
+            Some(folder) => ShellCwd::Known(folder.clone()),
             None => ShellCwd::Unknown,
         }
     }
@@ -432,6 +453,78 @@ impl ShellCwd {
     /// The state after `command` runs in this shell, with the agent's folder for a new session.
     pub fn after_line(&self, command: &str, agent_folder: &str, prot: &Protected) -> ShellCwd {
         ShellCwd::after(command, self.start(agent_folder).as_deref(), prot)
+    }
+}
+
+/// What a call decides, and what it does to the shell's folder: the verdict, and the folder the shell is in once the
+/// line goes ahead (None for a call that is not a Bash line). The supervisor applies the folder only when the line
+/// goes ahead (see `ShellCwd`).
+pub struct Judgement {
+    pub verdict: Verdict,
+    pub shell_after: Option<ShellCwd>,
+}
+
+/// Judges a call in the shell's state. A Bash line is parsed once for each folder it may start in (one, or both
+/// bases of an unknown folder), and the folder after it is taken from those same parses.
+pub fn judge_line(
+    mode: ApprovalMode,
+    req: &ApprovalRequest,
+    roots: &[&str],
+    rules: &[Rule],
+    protected: &Protected,
+    shell: &ShellCwd,
+) -> Judgement {
+    let agent = roots.first().copied().unwrap_or("/");
+    let home = protected.env.home.as_str();
+    let Some(command) = req.command.as_deref() else {
+        return Judgement {
+            verdict: evaluate_base(mode, req, roots, rules, protected, None, false),
+            shell_after: None,
+        };
+    };
+    let unknown = matches!(shell, ShellCwd::Unknown);
+    let mut starts = shell.starts(agent, home);
+    starts.dedup();
+    let parses: Vec<(String, Parsed)> = starts
+        .into_iter()
+        .map(|start| {
+            let parsed = shell::parse(command, Some(&start), &protected.env);
+            (start, parsed)
+        })
+        .collect();
+    let verdicts: Vec<Verdict> = parses
+        .iter()
+        .map(|(start, parsed)| {
+            // The home folder of an unknown shell is only assumed: a question, not a refusal, for a reach into
+            // Bandito's files.
+            let assumed = unknown && start == home;
+            evaluate_base(mode, req, roots, rules, protected, Some(parsed), assumed)
+        })
+        .collect();
+    let shell_after = match shell {
+        ShellCwd::Start | ShellCwd::Known(_) => ShellCwd::from_parsed(&parses[0].1),
+        ShellCwd::Unknown => match parses.as_slice() {
+            // The agent's folder is the home folder: the one parse says nothing about where the shell was. The
+            // line is parsed without a start once more.
+            [_] => ShellCwd::from_parsed(&shell::parse(command, None, &protected.env)),
+            [(_, a), (_, h), ..] => {
+                if a.hides_cwd || h.hides_cwd || !a.opaque.is_empty() || !h.opaque.is_empty() {
+                    ShellCwd::Unknown
+                } else {
+                    // Both bases end in the same folder only when the line set it itself (an absolute `cd`), so
+                    // it is known. Otherwise where it ends depends on where the shell started.
+                    match (&a.end_cwd, &h.end_cwd) {
+                        (Some(x), Some(y)) if x == y => ShellCwd::Known(x.clone()),
+                        _ => ShellCwd::Unknown,
+                    }
+                }
+            }
+            [] => ShellCwd::Unknown,
+        },
+    };
+    Judgement {
+        verdict: most_restrictive(verdicts),
+        shell_after: Some(shell_after),
     }
 }
 
@@ -445,16 +538,34 @@ pub fn evaluate_shell(
     protected: &Protected,
     shell: &ShellCwd,
 ) -> Verdict {
-    let agent = roots.first().copied().unwrap_or("/");
-    let starts = if req.command.is_some() {
-        shell.starts(agent, &protected.env.home)
-    } else {
-        vec![agent.to_string()]
-    };
-    let verdicts: Vec<Verdict> = starts
-        .iter()
-        .map(|start| evaluate_from(mode, req, roots, rules, protected, Some(start)))
-        .collect();
+    judge_line(mode, req, roots, rules, protected, shell).verdict
+}
+
+/// [`judge_line`], guarded: a panic while deciding becomes `Ask("policy error")`, and the folder stays as it was.
+pub fn judge_guarded(
+    mode: ApprovalMode,
+    req: &ApprovalRequest,
+    roots: &[&str],
+    rules: &[Rule],
+    protected: &Protected,
+    shell: &ShellCwd,
+) -> Judgement {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        judge_line(mode, req, roots, rules, protected, shell)
+    })) {
+        Ok(judgement) => judgement,
+        Err(_) => {
+            tracing::error!("approval policy failed; the human decides");
+            Judgement {
+                verdict: Verdict::Ask("policy error".into()),
+                shell_after: None,
+            }
+        }
+    }
+}
+
+/// The most careful of several verdicts: refused, then asked, then allowed.
+fn most_restrictive(verdicts: Vec<Verdict>) -> Verdict {
     verdicts
         .iter()
         .find(|v| matches!(v, Verdict::Deny(_)))
@@ -495,7 +606,13 @@ pub fn always_pattern(subject: &str, prot: &Protected) -> Option<String> {
 }
 
 /// What is known about Bandito's own files in this call, if anything: a refusal, or a question.
-fn own_files(req: &ApprovalRequest, roots: &[&str], prot: &Protected, parsed: Option<&Parsed>) -> Option<Verdict> {
+fn own_files(
+    req: &ApprovalRequest,
+    roots: &[&str],
+    prot: &Protected,
+    parsed: Option<&Parsed>,
+    assumed: bool,
+) -> Option<Verdict> {
     let cwd = roots.first().copied().unwrap_or("/");
     // A search's pattern is text to find, not a command or a path: only the folders it searches are checked.
     let searching = matches!(req.tool.as_str(), "Grep" | "Glob");
@@ -508,9 +625,10 @@ fn own_files(req: &ApprovalRequest, roots: &[&str], prot: &Protected, parsed: Op
             .map(|t| t.to_lowercase())
             .collect()
     };
+    // The data folder's name counts as a whole path component: `~/.bandito-backup` is another folder.
     if texts
         .iter()
-        .any(|text| prot.words.iter().any(|word| text.contains(word.as_str())))
+        .any(|text| prot.words.iter().any(|word| names_whole(text, word)))
     {
         return Some(Verdict::Deny(PROTECTED_MESSAGE.into()));
     }
@@ -532,11 +650,15 @@ fn own_files(req: &ApprovalRequest, roots: &[&str], prot: &Protected, parsed: Op
         }
     }
     let mut unknown = false;
+    let mut reach = false;
+    let mut maybe = false;
     if let Some(parsed) = parsed {
         for cmd in &parsed.commands {
-            match check_command(cmd, prot) {
+            match check_command(cmd, prot, assumed) {
                 Check::Deny => return Some(Verdict::Deny(PROTECTED_MESSAGE.into())),
                 Check::Unknown => unknown = true,
+                Check::Reach => reach = true,
+                Check::Maybe => maybe = true,
                 Check::Clear => {}
             }
         }
@@ -545,24 +667,81 @@ fn own_files(req: &ApprovalRequest, roots: &[&str], prot: &Protected, parsed: Op
     if unknown && parsed.is_none_or(|p| p.opaque.is_empty()) {
         return Some(Verdict::Ask("can't check: unknown path".into()));
     }
-    if texts
-        .iter()
-        .any(|text| prot.ask_words.iter().any(|word| text.contains(word.as_str())))
-    {
-        return Some(Verdict::Ask("touches Bandito's files by name".into()));
+    if reach {
+        return Some(Verdict::Ask("can't check: unknown folder".into()));
+    }
+    if maybe {
+        return Some(Verdict::Ask("can't check: pattern may match Bandito's files".into()));
+    }
+    // A bare name of Bandito's files is a question only where it is a path argument, not text to search for.
+    if let Some(parsed) = parsed {
+        let named = parsed.commands.iter().any(|cmd| {
+            cmd.expanded
+                .iter()
+                .flatten()
+                .chain(cmd.redirects.iter().filter_map(|r| r.expanded.as_ref()))
+                .any(|word| names_bandito_file(word, &prot.ask_words))
+        });
+        if named {
+            return Some(Verdict::Ask("touches Bandito's files by name".into()));
+        }
     }
     None
 }
 
 /// The result of checking one simple command against Bandito's own files.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Check {
     Clear,
     /// A path it touches cannot be known.
     Unknown,
+    /// A recursive reach into Bandito's files from a folder that was only assumed (the home folder of an unknown
+    /// shell): a question, not a refusal.
+    Reach,
+    /// A wildcard that may match Bandito's files (`ls ~/.*`): a question, not a refusal.
+    Maybe,
     Deny,
 }
 
-fn check_command(cmd: &SimpleCommand, prot: &Protected) -> Check {
+/// The more careful of two checks: refused, then unknown, then a reach, then clear.
+fn merged(result: Check, next: Check) -> Check {
+    match (result, next) {
+        (Check::Deny, _) | (_, Check::Deny) => Check::Deny,
+        (Check::Unknown, _) | (_, Check::Unknown) => Check::Unknown,
+        (Check::Reach, _) | (_, Check::Reach) => Check::Reach,
+        (Check::Maybe, _) | (_, Check::Maybe) => Check::Maybe,
+        _ => Check::Clear,
+    }
+}
+
+/// One path of a command against Bandito's files. Its own path (inside a protected one) is refused. A folder
+/// that holds one is refused too, when the folder is known; when it was assumed, it is a question.
+fn touched(prot: &Protected, abs: &str, recursive: bool, assumed: bool) -> Check {
+    // `[.]bandito` names one character: it is the literal name, not a pattern.
+    let plain = plain_classes(abs);
+    let abs: &str = &plain;
+    if abs.contains(['*', '?', '[']) {
+        // A pattern names its folder by the part before the first wildcard, which is refused when it is the data
+        // folder; the rest may match anything, so a match in it is only a question.
+        if prot.touches(&literal_prefix(abs), false) {
+            return Check::Deny;
+        }
+        return if prot.touches(abs, true) {
+            Check::Maybe
+        } else {
+            Check::Clear
+        };
+    }
+    if prot.touches(abs, false) {
+        Check::Deny
+    } else if prot.touches(abs, recursive) {
+        if assumed { Check::Reach } else { Check::Deny }
+    } else {
+        Check::Clear
+    }
+}
+
+fn check_command(cmd: &SimpleCommand, prot: &Protected, assumed: bool) -> Check {
     if let Some(name) = cmd.argv.first() {
         let name = name.to_lowercase();
         if name == "bandito" || (!prot.exe_name.is_empty() && name == prot.exe_name) || kills_bandito(cmd, prot.pid) {
@@ -572,24 +751,20 @@ fn check_command(cmd: &SimpleCommand, prot: &Protected) -> Check {
     let recursive = recursive_action(cmd);
     let program = cmd.argv.first().map(|n| n.to_lowercase()).unwrap_or_default();
     let cwd = cmd.cwd.as_deref();
-    let mut result = Check::Clear;
-    let mut look = |exp: Option<&str>, text: &str, strict: bool| -> bool {
+    let look = |exp: Option<&str>, text: &str, strict: bool| -> Check {
         match target_path(exp, text, cwd, strict) {
-            None => false,
-            Some(None) => {
-                result = Check::Unknown;
-                false
-            }
-            Some(Some(abs)) => prot.touches(&abs, recursive),
+            None => Check::Clear,
+            Some(None) => Check::Unknown,
+            Some(Some(abs)) => touched(prot, &abs, recursive, assumed),
         }
     };
+    let mut result = Check::Clear;
     // The program's own word is a name, not a path unless it looks like one.
-    if cmd
-        .expanded
-        .first()
-        .is_some_and(|exp| look(exp.as_deref(), &cmd.program, false))
-    {
-        return Check::Deny;
+    if let Some(exp) = cmd.expanded.first() {
+        match look(exp.as_deref(), &cmd.program, false) {
+            Check::Deny => return Check::Deny,
+            next => result = merged(result, next),
+        }
     }
     let strict = cwd.is_none() && !NO_PATH_ARGS.contains(&program.as_str());
     // An argument that is not known can name a file only for a command that reads or writes files.
@@ -598,17 +773,22 @@ fn check_command(cmd: &SimpleCommand, prot: &Protected) -> Check {
         if exp.is_none() && !reads_paths {
             continue;
         }
-        if look(exp.as_deref(), &cmd.argv[i], strict) {
-            return Check::Deny;
+        match look(exp.as_deref(), &cmd.argv[i], strict) {
+            Check::Deny => return Check::Deny,
+            next => result = merged(result, next),
         }
     }
     for redirect in cmd.redirects.iter().filter(|r| !r.is_duplication()) {
-        if look(redirect.expanded.as_deref(), &redirect.target, true) {
-            return Check::Deny;
+        match look(redirect.expanded.as_deref(), &redirect.target, true) {
+            Check::Deny => return Check::Deny,
+            next => result = merged(result, next),
         }
     }
-    if implicit_cwd(cmd) && look(Some("."), ".", true) {
-        return Check::Deny;
+    if implicit_cwd(cmd) {
+        match look(Some("."), ".", true) {
+            Check::Deny => return Check::Deny,
+            next => result = merged(result, next),
+        }
     }
     result
 }
@@ -618,9 +798,10 @@ fn check_command(cmd: &SimpleCommand, prot: &Protected) -> Check {
 fn target_path(exp: Option<&str>, text: &str, cwd: Option<&str>, strict: bool) -> Option<Option<String>> {
     match exp {
         None => Some(None),
-        Some(e) if e.starts_with('/') => Some(Some(canon(e))),
+        // Not normalized here: `..` must be applied after the links on the way are followed (see `resolved`).
+        Some(e) if e.starts_with('/') => Some(Some(e.to_string())),
         Some(e) => match cwd {
-            Some(c) => Some(Some(canon(&format!("{c}/{e}")))),
+            Some(c) => Some(Some(format!("{c}/{e}"))),
             None if strict || path_like(e) || path_like(text) => Some(None),
             None => None,
         },
@@ -1382,6 +1563,39 @@ fn search_roots(req: &ApprovalRequest, cwd: &str, home: &str) -> Vec<String> {
     roots
 }
 
+/// A bracket class of one plain character (`[.]`) matches that character only: it is replaced by the character.
+fn plain_classes(abs: &str) -> std::borrow::Cow<'_, str> {
+    if !abs.contains('[') {
+        return std::borrow::Cow::Borrowed(abs);
+    }
+    let chars: Vec<char> = abs.chars().collect();
+    let mut out = String::with_capacity(abs.len());
+    let mut i = 0;
+    while i < chars.len() {
+        let one_plain = chars[i] == '['
+            && i + 2 < chars.len()
+            && chars[i + 2] == ']'
+            && !matches!(chars[i + 1], '!' | '^' | '[' | ']' | '*' | '?' | '\\' | '/');
+        if one_plain {
+            out.push(chars[i + 1]);
+            i += 3;
+        } else {
+            out.push(chars[i]);
+            i += 1;
+        }
+    }
+    std::borrow::Cow::Owned(out)
+}
+
+/// The part of the path `abs` before its first wildcard component. The `..` in it is left for `resolved`, which
+/// applies it after the links on the way.
+fn literal_prefix(abs: &str) -> String {
+    abs.split('/')
+        .take_while(|part| !part.contains(['*', '?', '[']))
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
 /// The folder a glob starts in: the components of the absolute path `abs` before the first wildcard.
 fn static_prefix(abs: &str) -> String {
     let parts: Vec<&str> = normalize(abs)
@@ -1429,6 +1643,16 @@ fn names_under_home(lowered: &str, home: &str, folder: &str) -> bool {
     ["~/", "$home/", "${home}/", &format!("{home}/")]
         .iter()
         .any(|anchor| names_whole(lowered, &format!("{anchor}{folder}")))
+}
+
+/// Whether the path `word` ends in one of Bandito's file names (`./bandito.db`, `~/x/agent.sock`). A word without a
+/// slash is text, not a path.
+fn names_bandito_file(word: &str, names: &[String]) -> bool {
+    word.contains('/')
+        && word
+            .rsplit('/')
+            .next()
+            .is_some_and(|base| names.iter().any(|name| base.eq_ignore_ascii_case(name)))
 }
 
 /// Whether `needle` occurs in `text` as a whole path: no name character right before it, and none right after.
@@ -2268,6 +2492,41 @@ mod tests {
     }
 
     #[test]
+    fn a_relative_cd_from_an_unknown_folder_stays_unknown_and_an_absolute_one_gives_it_back() {
+        // Guard for the rule: where a relative `cd` ends depends on where the unknown shell was, so the folder stays
+        // unknown; an absolute `cd` ends in the same place from either base, so the folder is known again.
+        let prot = prot();
+        let relative = judge_line(
+            ApprovalMode::Risky,
+            &req(Some("cd sub"), "Bash", &[]),
+            &[CWD],
+            &[],
+            &prot,
+            &ShellCwd::Unknown,
+        );
+        assert_eq!(relative.shell_after, Some(ShellCwd::Unknown));
+        let absolute = judge_line(
+            ApprovalMode::Risky,
+            &req(Some("cd /home/u/app"), "Bash", &[]),
+            &[CWD],
+            &[],
+            &prot,
+            &ShellCwd::Unknown,
+        );
+        assert_eq!(absolute.shell_after, Some(ShellCwd::Known("/home/u/app".into())));
+        // A cd after an absolute one is relative to that known folder again.
+        let then = judge_line(
+            ApprovalMode::Risky,
+            &req(Some("cd /home/u && cd app"), "Bash", &[]),
+            &[CWD],
+            &[],
+            &prot,
+            &ShellCwd::Unknown,
+        );
+        assert_eq!(then.shell_after, Some(ShellCwd::Known("/home/u/app".into())));
+    }
+
+    #[test]
     fn an_unknown_folder_judges_relative_paths_from_the_agent_folder_and_from_home() {
         // From home, `.bandito/x` is the data folder and `.ssh/id_rsa` a credential folder; from the agent's folder
         // neither is. The unknown shell is judged from both, and the more careful verdict is the answer.
@@ -2321,6 +2580,78 @@ mod tests {
     }
 
     #[test]
+    fn an_assumed_home_folder_asks_about_recursive_reach_and_refuses_only_direct_hits() {
+        // With the folder unknown, the home folder is one of the two bases. From there a recursive search covers the
+        // data folder, but the line did not say it would: that is a question, not a refusal. A name that is the
+        // data folder itself is refused.
+        let prot = prot();
+        let unknown = ShellCwd::Unknown;
+        for line in [
+            "git log $(git rev-parse HEAD)",
+            "rg TODO",
+            "find . -name x",
+            "grep -r foo .",
+            "git grep foo",
+        ] {
+            let r = req(Some(line), "Bash", &[]);
+            assert_eq!(
+                evaluate_shell(ApprovalMode::Never, &r, &[CWD], &[], &prot, &unknown),
+                Verdict::Allow,
+                "never: {line}"
+            );
+            let v = evaluate_shell(ApprovalMode::Risky, &r, &[CWD], &[], &prot, &unknown);
+            assert!(!matches!(v, Verdict::Deny(_)), "risky: {line}: {v:?}");
+        }
+        assert_eq!(
+            evaluate_shell(
+                ApprovalMode::Risky,
+                &req(Some("grep -r foo ."), "Bash", &[]),
+                &[CWD],
+                &[],
+                &prot,
+                &unknown
+            ),
+            Verdict::Ask("can't check: unknown folder".into())
+        );
+        // Always asks about every call anyway: the question is there, whatever its reason.
+        assert!(matches!(
+            evaluate_shell(
+                ApprovalMode::Always,
+                &req(Some("grep -r foo ."), "Bash", &[]),
+                &[CWD],
+                &[],
+                &prot,
+                &unknown
+            ),
+            Verdict::Ask(_)
+        ));
+        // A known home folder is a known folder: the same search there is refused, as before.
+        assert_eq!(
+            evaluate_shell(
+                ApprovalMode::Risky,
+                &req(Some("grep -r foo ."), "Bash", &[]),
+                &[CWD],
+                &[],
+                &prot,
+                &ShellCwd::Known("/home/u".into())
+            ),
+            Verdict::Deny(PROTECTED_MESSAGE.into())
+        );
+        // A direct hit in the unknown case is refused in every mode.
+        assert_eq!(
+            evaluate_shell(
+                ApprovalMode::Never,
+                &req(Some("cat .bandito/x"), "Bash", &[]),
+                &[CWD],
+                &[],
+                &prot,
+                &unknown
+            ),
+            Verdict::Deny(PROTECTED_MESSAGE.into())
+        );
+    }
+
+    #[test]
     fn command_cd_then_cat_bandito_is_refused() {
         let prot = prot();
         let shell = ShellCwd::Start.after_line("command cd ~", CWD, &prot);
@@ -2356,6 +2687,106 @@ mod tests {
         assert!(inside_scope("/home/u/.ssh/id_rsa", &scope));
         // `..` is applied before the check, so a path that climbs out is outside.
         assert!(!inside_scope("/home/u/app/../../../Volumes/x", &scope));
+    }
+
+    #[test]
+    fn a_data_folder_word_counts_only_as_a_whole_path_component() {
+        // `~/.bandito-backup` is another folder: the raw-text rule must not refuse it.
+        let prot = prot();
+        let r = req(Some("cat ~/.bandito-backup/x"), "Bash", &[]);
+        assert_eq!(run(ApprovalMode::Risky, &r, &[CWD], &[]), Verdict::Allow);
+        assert_eq!(
+            run(
+                ApprovalMode::Risky,
+                &req(Some("cat ~/.bandito/x"), "Bash", &[]),
+                &[CWD],
+                &[]
+            ),
+            Verdict::Deny(PROTECTED_MESSAGE.into())
+        );
+        assert_eq!(evaluate(ApprovalMode::Risky, &r, &[CWD], &[], &prot), Verdict::Allow);
+    }
+
+    #[test]
+    fn a_wildcard_that_may_match_the_data_folder_asks_and_a_literal_one_is_refused() {
+        // `ls ~/.*` may list and reach `.bandito`: a question in risky and always, and allowed in never. It is not
+        // refused. `~/.bandito/*` names the data folder, so it is refused.
+        for mode in [ApprovalMode::Risky, ApprovalMode::Always] {
+            let v = run(mode, &req(Some("ls ~/.*"), "Bash", &[]), &[CWD], &[]);
+            assert!(matches!(v, Verdict::Ask(_)), "{mode:?}: {v:?}");
+        }
+        assert_eq!(
+            run(ApprovalMode::Never, &req(Some("ls ~/.*"), "Bash", &[]), &[CWD], &[]),
+            Verdict::Allow
+        );
+        // `~/.ban*/bandito.*` may be the data folder's file: a question, allowed in never mode.
+        let v = run(
+            ApprovalMode::Risky,
+            &req(Some("cat ~/.ban*/bandito.*"), "Bash", &[]),
+            &[CWD],
+            &[],
+        );
+        assert!(matches!(v, Verdict::Ask(_)), "{v:?}");
+        assert_eq!(
+            run(
+                ApprovalMode::Never,
+                &req(Some("cat ~/.ban*/bandito.*"), "Bash", &[]),
+                &[CWD],
+                &[]
+            ),
+            Verdict::Allow
+        );
+        for mode in [ApprovalMode::Never, ApprovalMode::Risky, ApprovalMode::Always] {
+            assert_eq!(
+                run(mode, &req(Some("cat ~/.bandito/*"), "Bash", &[]), &[CWD], &[]),
+                Verdict::Deny(PROTECTED_MESSAGE.into()),
+                "{mode:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_bandito_file_name_counts_only_as_a_path_argument() {
+        // `grep -rn "bandito.db" daemon/src` searches for the text: not a path, so not a question.
+        assert_eq!(
+            shell_verdict(ApprovalMode::Risky, "grep -rn \"bandito.db\" daemon/src"),
+            Verdict::Allow
+        );
+        assert_eq!(
+            shell_verdict(ApprovalMode::Risky, "git commit -m \"fix bandito.db path\""),
+            Verdict::Allow
+        );
+        // A path that names the file is asked about.
+        assert_eq!(
+            shell_verdict(ApprovalMode::Risky, "cat ./bandito.db"),
+            Verdict::Ask("touches Bandito's files by name".into())
+        );
+    }
+
+    #[test]
+    fn dot_dot_after_a_link_in_a_bash_argument_is_resolved_before_the_folder_is_taken() {
+        // `k -> ~/x`: `~/proj/k/../.bandito/logs/l` goes through the link first, so `..` is ~ and the path is the
+        // data folder. Collapsing `..` before following the link would read it as ~/proj/.bandito/logs/l.
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().join("home");
+        let data = home.join(".bandito");
+        let proj = home.join("proj");
+        std::fs::create_dir_all(data.join("logs")).unwrap();
+        std::fs::write(data.join("logs/l"), "log").unwrap();
+        std::fs::create_dir_all(home.join("x")).unwrap();
+        std::fs::create_dir_all(&proj).unwrap();
+        std::os::unix::fs::symlink(home.join("x"), proj.join("k")).unwrap();
+        let prot = Protected::new(&data, Path::new("/usr/local/bin/bandito"), &home);
+        let cwd = proj.display().to_string();
+        let roots = [cwd.as_str()];
+        let r = req(Some("cat ~/proj/k/../.bandito/logs/l"), "Bash", &[]);
+        for mode in [ApprovalMode::Never, ApprovalMode::Risky, ApprovalMode::Always] {
+            assert_eq!(
+                evaluate(mode, &r, &roots, &[], &prot),
+                Verdict::Deny(PROTECTED_MESSAGE.into()),
+                "{mode:?}"
+            );
+        }
     }
 
     #[test]
@@ -2673,7 +3104,6 @@ mod tests {
             ("bandito pair --json", CWD),
             ("/usr/local/bin/bandito pair", CWD),
             ("cd .. && cat .bandito/bandito.db", "/home/u/proj"),
-            ("cat ~/.ban*/bandito.*", CWD),
             ("rm -r ~", CWD),
             ("rm -r ~/", CWD),
             ("rsync -a ~ /tmp/x", CWD),
@@ -2739,19 +3169,23 @@ mod tests {
 
     #[test]
     fn protected_word_is_case_insensitive() {
-        // A bare name is asked about in risky mode, and allowed in never mode.
-        assert_eq!(ask_reason("cat BANDITO.DB"), "touches Bandito's files by name");
-        assert_eq!(shell_verdict(ApprovalMode::Never, "cat BANDITO.DB"), Verdict::Allow);
+        // A path that ends in the file name is asked about in risky mode, and allowed in never mode. A bare name
+        // is the project's own file, not a path to Bandito's, so it is not asked about.
+        assert_eq!(ask_reason("cat ./BANDITO.DB"), "touches Bandito's files by name");
+        assert_eq!(shell_verdict(ApprovalMode::Never, "cat ./BANDITO.DB"), Verdict::Allow);
+        assert_eq!(shell_verdict(ApprovalMode::Risky, "cat BANDITO.DB"), Verdict::Allow);
     }
 
     #[test]
     fn bare_names_are_asked_about_in_risky_mode_and_allowed_in_never() {
-        let r = req(Some("echo agent.sock"), "Bash", &[]);
+        let r = req(Some("cat ./agent.sock"), "Bash", &[]);
         assert_eq!(
             run(ApprovalMode::Risky, &r, &[CWD], &[]),
             Verdict::Ask("touches Bandito's files by name".into())
         );
         assert_eq!(run(ApprovalMode::Never, &r, &[CWD], &[]), Verdict::Allow);
+        // Text to search for is not a path to the file.
+        assert_eq!(shell_verdict(ApprovalMode::Risky, "echo agent.sock"), Verdict::Allow);
     }
 
     #[test]
@@ -2799,6 +3233,36 @@ mod tests {
         let home = system_home("root").expect("root has a home folder");
         assert!(home.starts_with('/'), "{home}");
         assert!(system_home("no-such-user-for-bandito-tests").is_none());
+    }
+
+    /// CPU time the calling thread has used so far.
+    fn thread_cpu_time() -> Duration {
+        let mut spec = libc::timespec { tv_sec: 0, tv_nsec: 0 };
+        // SAFETY: `spec` is a valid timespec for the call to write into.
+        unsafe { libc::clock_gettime(libc::CLOCK_THREAD_CPUTIME_ID, &mut spec) };
+        Duration::new(spec.tv_sec as u64, spec.tv_nsec as u32)
+    }
+
+    #[test]
+    fn a_58_kilobyte_line_with_an_unknown_folder_is_judged_within_budget() {
+        // The worst routine case: an unknown folder judges the line from two bases, and works out the folder after
+        // it from the same parses. The budget holds in a debug build.
+        let line = format!("{}git log", "echo x; ".repeat(7_200));
+        assert!(line.len() > 57_000 && line.len() < 64 * 1024, "{}", line.len());
+        let prot = prot();
+        let r = req(Some(&line), "Bash", &[]);
+        // CPU time of this thread, not the wall clock: other tests running alongside would otherwise count.
+        let started = thread_cpu_time();
+        let judgement = judge_line(ApprovalMode::Risky, &r, &[CWD], &[], &prot, &ShellCwd::Unknown);
+        let took = thread_cpu_time() - started;
+        assert!(took < Duration::from_millis(300), "took {took:?}");
+        assert!(
+            matches!(judgement.verdict, Verdict::Ask(_) | Verdict::Allow),
+            "{:?}",
+            judgement.verdict
+        );
+        // No `cd` on the line: the folder after it depends on where the shell was, so it stays unknown.
+        assert_eq!(judgement.shell_after, Some(ShellCwd::Unknown));
     }
 
     #[test]
@@ -2908,8 +3372,8 @@ mod probes {
             ("r", APP, "cat ~/.BAN\"\"DITO/ban*.db", "deny"),
             ("r", APP, "cat $UNSET/ban*", "ask"),
             ("r", APP, "cat ~/.bandito/*", "deny"),
-            ("r", APP, "cat ~/.bandit?/*", "deny"),
-            ("r", APP, "cat ~/.BAN*/x", "deny"),
+            ("r", APP, "cat ~/.bandit?/*", "ask"),
+            ("r", APP, "cat ~/.BAN*/x", "ask"),
             ("r", APP, "cat /HOME/U/.BANDITO/x", "deny"),
             ("r", APP, "cat ~/proj/x", "allow"),
             ("r", APP, "cat ~u/proj/x", "allow"),
@@ -3029,9 +3493,9 @@ mod probes {
     #[test]
     fn probe_10_bare_names_ask_and_deploy_is_argv0() {
         check(&[
-            ("r", APP, "grep -rn \"agent.sock\" daemon/src", "ask"),
+            ("r", APP, "grep -rn \"agent.sock\" daemon/src", "allow"),
             ("n", APP, "grep -rn \"agent.sock\" daemon/src", "allow"),
-            ("r", APP, "echo bandito.db", "ask"),
+            ("r", APP, "echo bandito.db", "allow"),
             ("r", APP, "cat deploy.md", "allow"),
             ("r", APP, "grep -r deploy .", "allow"),
             ("r", APP, "git log --grep=deploy", "allow"),
