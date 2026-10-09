@@ -1,8 +1,8 @@
 import Foundation
 import Network
 
-/// WebSocket to `/v1/rpc` with an optional device token.
-public final class WebSocketTransport: RPCTransport, @unchecked Sendable {
+/// WebSocket to `/v1/rpc` with an optional device token. Single use: create one per connection.
+public actor WebSocketTransport: RPCTransport {
     private let url: URL
     private let token: String?
     private let session: URLSession
@@ -14,7 +14,19 @@ public final class WebSocketTransport: RPCTransport, @unchecked Sendable {
         self.session = URLSession(configuration: .ephemeral)
     }
 
+    /// The device token may only travel over TLS or to this Mac's own loopback address.
+    static func allowsToken(for url: URL) -> Bool {
+        if url.scheme?.lowercased() == "wss" { return true }
+        let host = (url.host() ?? "").lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
+        return ["127.0.0.1", "::1", "localhost"].contains(host)
+    }
+
     public func connect() async throws {
+        if token != nil, !Self.allowsToken(for: url) {
+            throw RPCError(
+                code: RPCError.insecureTransport,
+                message: "refusing to send the device token over an unencrypted connection")
+        }
         var req = URLRequest(url: url)
         if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         let t = session.webSocketTask(with: req)
@@ -40,6 +52,7 @@ public final class WebSocketTransport: RPCTransport, @unchecked Sendable {
     public func close() async {
         task?.cancel(with: .normalClosure, reason: nil)
         task = nil
+        session.invalidateAndCancel()
     }
 }
 

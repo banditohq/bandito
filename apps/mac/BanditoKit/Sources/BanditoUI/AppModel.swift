@@ -9,6 +9,8 @@ public final class AppModel {
     public private(set) var servers: [ServerModel] = []
     public var selectedServerID: UUID?
     public var selectedAgentID: String?
+    /// The last problem the user should know about (e.g. a token that could not be stored).
+    public private(set) var lastError: String?
 
     private static let storeKey = "servers.v1"
 
@@ -34,7 +36,12 @@ public final class AppModel {
     }
 
     public func add(_ config: ServerConfig) {
-        Keychain.setToken(config.token, for: config.id)
+        // A server whose token cannot be stored could never authenticate: refuse it instead of adding a dead entry.
+        guard Keychain.setToken(config.token, for: config.id) else {
+            lastError = "Could not save the device token in the Keychain. The server was not added."
+            return
+        }
+        lastError = nil
         let model = ServerModel(config: config)
         servers.append(model)
         selectedServerID = model.id
