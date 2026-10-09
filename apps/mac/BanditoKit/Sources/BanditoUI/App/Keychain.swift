@@ -1,9 +1,10 @@
+import BanditoKit
 import Foundation
 import Security
 
 /// Device tokens live in the login Keychain, one item per server.
 enum Keychain {
-    private static let service = "dev.bandito.mac.server-token"
+    private static let service = KeychainNamespace.scoped("dev.bandito.mac.server-token")
 
     static func token(for server: UUID) -> String? {
         let query: [String: Any] = [

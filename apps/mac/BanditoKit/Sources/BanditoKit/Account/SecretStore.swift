@@ -19,7 +19,7 @@ public struct KeychainStore: SecretStore {
     public let service: String
 
     public init(service: String) {
-        self.service = service
+        self.service = KeychainNamespace.scoped(service)
     }
 
     public func load(account: String) throws -> Data? {

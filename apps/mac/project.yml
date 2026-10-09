@@ -69,6 +69,11 @@ targets:
         CFBundleLocalizations: [en, ru, ja, zh-Hans, ko, es, pt-BR, de, fr]
         CFBundleAllowMixedLocalizations: true
     settings:
+      configs:
+        # Debug builds are a separate app: their own defaults, Keychain items (KeychainNamespace) and process,
+        # so testing never touches the installed Bandito.
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: dev.bandito.mac.debug
       base:
         # The script above reads files outside the target and writes into the product; the sandbox would block it.
         ENABLE_USER_SCRIPT_SANDBOXING: NO

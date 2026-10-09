@@ -267,7 +267,15 @@ fn parent_pid(pid: u32) -> Option<u32> {
             size,
         )
     };
-    (n == size).then_some(info.pbi_ppid)
+    if n == size {
+        return Some(info.pbi_ppid);
+    }
+    // EPERM: the process belongs to another user (root's `login` above every Terminal shell, for one).
+    // Every process the daemon starts runs as the daemon's own user, so a chain that reaches a process
+    // of another user has left the daemon's tree: end it there, as at pid 1. Any other failure (the
+    // process is gone) still refuses the caller.
+    let permission_denied = std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM);
+    permission_denied.then_some(1)
 }
 
 /// Other systems: the parent is unknown, so every caller is refused (fail closed).
