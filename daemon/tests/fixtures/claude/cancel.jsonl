@@ -1,0 +1,9 @@
+// The CLI withdraws a permission request (e.g. after an interrupt) before the host answers it.
+{"expect": {"type": "control_request", "request": {"subtype": "initialize"}}}
+{"send": {"type": "control_response", "response": {"subtype": "success", "request_id": "$last:/request_id", "response": {}}}}
+{"expect": {"type": "user"}}
+{"send": {"type": "system", "subtype": "init", "session_id": "44444444-4444-4444-8444-444444444444"}}
+{"send": {"type": "assistant", "message": {"id": "msg_1", "type": "message", "role": "assistant", "content": [{"type": "tool_use", "id": "toolu_c", "name": "Bash", "input": {"command": "sleep 99"}}]}, "parent_tool_use_id": null, "session_id": "44444444-4444-4444-8444-444444444444"}}
+{"send": {"type": "control_request", "request_id": "perm-c", "request": {"subtype": "can_use_tool", "tool_name": "Bash", "input": {"command": "sleep 99"}, "tool_use_id": "toolu_c"}}}
+{"send": {"type": "control_cancel_request", "request_id": "perm-c"}}
+{"send": {"type": "result", "subtype": "success", "is_error": false, "result": "Stopped.", "session_id": "44444444-4444-4444-8444-444444444444", "total_cost_usd": 0.001, "usage": {"input_tokens": 5, "output_tokens": 6}}}

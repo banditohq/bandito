@@ -5,3 +5,4 @@ xcuserdata/
 DerivedData/
 .env
 .env.*
+target/

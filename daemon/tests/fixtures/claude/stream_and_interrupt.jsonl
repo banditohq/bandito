@@ -1,0 +1,11 @@
+// Streaming deltas (--include-partial-messages), then the host interrupts.
+{"expect": {"type": "control_request", "request": {"subtype": "initialize"}}}
+{"send": {"type": "control_response", "response": {"subtype": "success", "request_id": "$last:/request_id", "response": {}}}}
+{"expect": {"type": "user"}}
+{"send": {"type": "system", "subtype": "init", "session_id": "33333333-3333-4333-8333-333333333333"}}
+{"send": {"type": "stream_event", "event": {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "Hel"}}, "session_id": "33333333-3333-4333-8333-333333333333"}}
+{"send": {"type": "stream_event", "event": {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "lo"}}, "session_id": "33333333-3333-4333-8333-333333333333"}}
+{"send": {"type": "stream_event", "event": {"type": "content_block_delta", "index": 0, "delta": {"type": "thinking_delta", "thinking": "hmm"}}, "session_id": "33333333-3333-4333-8333-333333333333"}}
+{"expect": {"type": "control_request", "request": {"subtype": "interrupt"}}}
+{"send": {"type": "control_response", "response": {"subtype": "success", "request_id": "$last:/request_id", "response": {}}}}
+{"send": {"type": "result", "subtype": "error_during_execution", "is_error": true, "result": "Interrupted", "session_id": "33333333-3333-4333-8333-333333333333", "usage": {"input_tokens": 1, "output_tokens": 2}}}
