@@ -6,7 +6,7 @@ the approval rules and the server list, which live on the server and in your acc
 
 ## Settings window (⌘,)
 
-<!-- id: set-window; covers: sheet:settings, command:global.settings -->
+<!-- id: set-window; covers: command:global.settings -->
 Opens the Settings window. It is a separate window, not a sheet over the main window.
 Где: Bandito → Settings (Настройки); shortcut ⌘,
 1. Press ⌘, to open Settings. Choose a section on the left.
@@ -48,7 +48,7 @@ Starts Bandito when you sign in to this Mac. It uses the macOS login items; the 
 Shows whether this Mac is signed in and syncs servers, shortcuts and prompts. Without an account everything works on this Mac.
 Где: Settings (⌘,) → Account and sync (Аккаунт и синхронизация)
 1. Read the state: Account (Аккаунт). Without sign-in, the line says Not signed in. Everything works on this Mac and without an account.
-2. Sign in: the Sign in (Войти) button opens a sheet that says Coming soon in this build. To sign in now, use the account step of the first-run introduction (see [account.md](account.md)).
+2. Sign in: the Sign in (Войти) button opens the account sheet, the same sign-in as the account step of the introduction (see [account.md](account.md)).
 
 ## Servers (Серверы)
 
@@ -57,7 +57,7 @@ The servers this app connects to. Each keeps its own agents and settings. You ca
 Где: Settings (⌘,) → Servers (Серверы)
 1. Read the state chip of each server: Online (В сети), Offline (Не в сети), or Connecting (Подключение).
 2. To remove a server, click Delete (Удалить) in its row and confirm Delete (Удалить) in Remove {name}?. The app forgets the server and its token. Nothing on the server is deleted.
-3. Add server (Добавить сервер) opens a sheet that says Coming soon in this build. The SSH, Tailscale and pairing wizard is not connected yet (see [getting-started.md](getting-started.md)).
+3. Add server (Добавить сервер) opens the add-server sheet: the server step of the introduction, without its steps (see [getting-started.md](getting-started.md)).
 
 ## Approvals (Одобрения)
 
@@ -69,21 +69,19 @@ The rules for what agents may do without asking, and the checks that always run.
 3. If two rules match, the rule for one agent wins over All agents, then the newer rule wins.
 4. To delete a rule, click its delete button (Delete rule {pattern}).
 5. Built-in checks are always on: writes outside the project folder, Pay and Buy, Send in forms, Delete on sites, sign-in with a password. A rule for one agent can override them.
-6. Two switches are shown off and marked as not built yet: Dangerous steps need Touch ID (Опасное — через Touch ID) and If you do not answer within 30 minutes (Если вы не ответили за 30 минут). Approvals in this build wait up to 24 hours and then are denied.
-
+6. Touch ID for dangerous steps and auto-deny after 30 minutes are not offered in this build, so no switch for them is shown. Approvals wait up to 24 hours and then are denied.
 ## Approvals: Touch ID for dangerous steps (planned)
 
 <!-- id: set-approvals-touchid; covers: ; status: planned -->
-Asks for a fingerprint or Face ID before a push to main, a deploy or a deletion. The switch is shown on, but it is not built yet and cannot be changed.
-Где: Settings (⌘,) → Approvals (Одобрения) → Dangerous steps need Touch ID (Опасное — через Touch ID)
-1. Nothing to change yet. Dangerous steps are asked about with the normal approval card.
-
+Touch ID (or Face ID) for pushes to main, deploys and deletions is planned. It is not in this build, and Settings → Approvals shows no switch for it.
+Где: Settings (⌘,) → Approvals (Одобрения)
+1. Nothing to set yet. Approve dangerous steps in the approval card.
 ## Approvals: auto-deny after 30 minutes (planned)
 
 <!-- id: set-approvals-autodeny; covers: ; status: planned -->
-Would decline a request that waits 30 minutes, and ask the agent to find another way. The switch is shown off and cannot be changed yet. The approval waits for up to 24 hours before it is denied automatically.
-Где: Settings (⌘,) → Approvals (Одобрения) → If you do not answer within 30 minutes (Если вы не ответили за 30 минут)
-1. Nothing to change yet.
+An automatic denial after 30 minutes without an answer is planned. It is not in this build: a request waits up to 24 hours, and Settings → Approvals shows no switch for it.
+Где: Settings (⌘,) → Approvals (Одобрения)
+1. Answer approval requests in time.
 
 ## Subscriptions and limits (Подписки и лимиты)
 
@@ -204,7 +202,7 @@ A notification when an agent stops because of a failure.
 <!-- id: set-appearance; covers: settings:appearance -->
 How the app looks and how much it moves.
 Где: Settings (⌘,) → Appearance and motion (Внешний вид и анимации)
-1. Theme (Тема): Dark (Тёмная) is the theme now. Light and system themes come later.
+1. Theme (Тема): the app is dark in this build. There is no theme switch yet.
 
 ## Animation level (motion.level)
 

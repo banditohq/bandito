@@ -101,10 +101,10 @@ The risky checks read the command line. They stop a mistake. They do not stop an
 Где: Team → agent → Agent details → Details → Approvals (Одобрения)
 1. Keep the agents' rights small: a separate user on the server for each agent, and no keys you do not need.
 2. Keep Risky only (Только рискованное) or Everything (Всё подряд) on for agents that touch production.
-
 ## Touch ID and auto-deny (planned)
 
 <!-- id: sec-touchid; covers: ; status: planned -->
-Two safety features are planned, not in this build: Touch ID (or Face ID) for pushes to main, deploys and deletions, and an automatic denial after 30 minutes without an answer. Their switches are shown in Settings → Approvals, but they cannot be changed yet.
-Где: Settings (⌘,) → Approvals (Одобрения) → Dangerous steps need Touch ID (Опасное — через Touch ID); If you do not answer within 30 minutes (Если вы не ответили за 30 минут)
+Two safety features are planned, not in this build: Touch ID (or Face ID) for pushes to main, deploys and deletions, and an automatic denial after 30 minutes without an answer. Settings → Approvals shows no switch for either.
+Где: Settings (⌘,) → Approvals (Одобрения)
 1. Answer approvals in time. The request waits up to 24 hours before it is denied.
+

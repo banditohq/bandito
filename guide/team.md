@@ -22,22 +22,23 @@ Each agent has one status. Agents that need you are sorted to the top and get th
 3. Needs you (ждёт вас): an approval is waiting, or the agent asked a question. The orange dot appears.
 4. Error (Ошибка): the agent stopped because of a failure. A banner gives the reason and Retry (Повторить).
 5. Offline (Не в сети): the server is not reachable.
-
 ## Sidebar: pin, delete, pause
 
 <!-- id: team-sidebar-menu; covers: -->
-Pinned agents are listed at the top. The context menu of an agent has Pin (Закрепить) or Unpin (Открепить), Pause (Приостановить), and Delete… (Удалить…).
-Где: Team → sidebar → right-click an agent
-1. Right-click the agent. Choose Pin (Закрепить) to keep it at the top; Unpin (Открепить) puts it back.
-2. Choose Delete… (Удалить…), read the question, and click Delete (Удалить). The agent's history stays on the server; only the agent is removed from the list.
-3. Pause (Приостановить) is not working in this build: the button does nothing, and the tooltip says Pausing needs a newer server (Пауза требует более новой версии сервера). Use Stop agent (⌘.) to stop a turn.
-
+Pinned agents are listed at the top. The context menu of an agent has Pin (Закрепить) or Unpin (Открепить), Pause (Приостановить) or Resume (Продолжить), and Delete… (Удалить…). A paused agent shows a pause mark next to its name, and its avatar sleeps.
+Где: Team → sidebar → agent → right click
+1. Right-click an agent and choose Pause (Приостановить). The mark appears and the avatar goes to sleep.
+2. Right-click it again and choose Resume (Продолжить) to bring it back.
 ## Pause (Приостановить)
 
-<!-- id: team-pause; covers: ; status: planned -->
-Pausing an agent and pausing all agents are not implemented yet. The agent menu item Pause is inactive. The menu bar item Pause all agents and the command Pause all agents (⌘⇧P) are disabled too, because the server method is missing.
-Где: Team → sidebar → agent → Pause (Приостановить); Agent menu → Pause all agents (Пауза для всех агентов)
-1. Nothing to do yet. To stop the current work, use Stop agent (⌘.) instead.
+<!-- id: team-pause; covers: -->
+A paused agent keeps its chat and its memory and starts no work. A message you send to it appears in the chat at once and waits there; it runs when you resume the agent. Pausing also stops the turn that is running, as Stop agent (⌘.) does. Scheduled runs of a paused agent are skipped.
+Pause all agents (Пауза для всех агентов) pauses every agent of the server at once, or resumes them all when they are all paused.
+Где: Team → Inspector (⌘I) → State (Состояние) → Pause (Приостановить); Agent menu → Pause all agents (Пауза для всех агентов); the composer → /pause
+1. Open the Inspector with ⌘I and find State (Состояние). Click Pause (Приостановить); the state reads Paused (На паузе).
+2. To pause every agent, press ⌘⇧P or choose Agent → Pause all agents. Choose it again to resume them all.
+3. To resume one agent, click Resume (Продолжить) in the same place.
+4. On a server with an older Bandito the pause items are disabled (see [troubleshooting.md](troubleshooting.md)).
 
 ## Search and quick open (⌘K)
 
@@ -55,7 +56,6 @@ The composer sits at the bottom of the thread. It sends the message to the selec
 Где: Team → agent thread → composer (Message {name})
 1. Click in the field and type. Press ↵ to send (↵ send). Press ⇧↵ for a new line (⇧↵ new line).
 2. While the agent is working, the send button becomes Stop (Остановить). Press ⌘. to stop the turn (⌘. stop).
-3. Dictate (Диктовка) is in the composer but disabled in this build.
 
 ## Attach a file to a message
 
@@ -100,13 +100,12 @@ Five commands that open other places for the selected agent.
 3. /terminal opens the Terminals mode with a new terminal in the agent's project folder.
 4. /files opens the Files mode in the agent's project folder.
 5. /usage opens the Subscription limits popover.
+## /pause
 
-## /chapter and /pause
-
-<!-- id: team-slash-soon; covers: ; status: planned -->
-These two commands are in the list but not working yet. Typing them shows Coming soon (Скоро здесь) and nothing else happens. /chapter (start a new chapter now) and /pause (pause the agent) need server methods that are not in this build.
-Где: Team → agent thread → composer → /chapter, /pause
-1. Use the chapter settings in the inspector (Memory tab) instead. To stop work, use ⌘.
+<!-- id: team-slash-pause; covers: -->
+Typing /pause in the composer pauses the agent, or resumes it when it is paused. It does the same as the State switch in the Inspector (see Pause above). /chapter is not in the list in this build: the chapter settings are in the Inspector, Memory tab.
+Где: Team → agent thread → composer → /pause
+1. Type /pause and press Return. The state changes at once.
 
 ## My snippets
 

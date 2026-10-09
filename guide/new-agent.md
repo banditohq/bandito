@@ -37,7 +37,6 @@ The CLI that runs the agent. Claude Code, Codex and Grok run on the server with 
 Где: New agent sheet → Powered by (Чем думает)
 1. Pick Claude Code, Codex or Grok.
 2. Read the state under each runtime: Signed in · N% left (Signed in · N% left) means it is ready. Not installed on the server (Не установлен на сервере) and Not signed in on the server (Вход на сервере не выполнен) mean you must fix it on the server first. Run the command shown there, for example `codex login`.
-3. API key (API-ключ) is in the sheet with the label Coming soon (Скоро здесь): it is not available in this build.
 
 ## Model (Модель) and effort (Effort)
 
@@ -73,13 +72,12 @@ The folder on the server where the agent works. Pick one that exists, create a n
 Where the agent's files, browser, screen and terminals live. In this build only Shared is available: the agent works on the same server, as your user, with the same files and browser as you.
 Где: New agent sheet → Workplace (Рабочее место) → Shared (Общее)
 1. Leave Shared (Общее) selected. It is the only choice that works.
-
-## Separate and container workplaces (Separate, Container)
+## Separate and container workplaces (planned)
 
 <!-- id: na-workplace-separate; covers: ; status: planned -->
-Separate (Отдельное) means a separate user on the server with its own files, browser and screen. Container (Контейнер) means full isolation in Docker or Podman, with its own disk, network and CPU and memory limits. Both cards are shown but disabled; the sheet says Separate and container workplaces are coming soon (Separate and container workplaces are coming soon).
-Где: New agent sheet → Workplace (Рабочее место) → Separate (Отдельное), Container (Контейнер)
-1. Nothing to choose yet. Use Shared (Общее).
+Separate (Отдельное) means a separate user on the server with its own files, browser and screen. Container (Контейнер) means full isolation in Docker or Podman. Neither is offered in this build: the sheet shows Shared (Общее) only.
+Где: New agent sheet → Workplace (Рабочее место)
+1. Use Shared (Общее).
 
 ## Memory (Память)
 

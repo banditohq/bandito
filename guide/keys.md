@@ -180,14 +180,11 @@ Stops the turn that is running for the selected agent.
 1. Select an agent.
 2. Press ⌘. to stop its turn. The item is greyed out with no agent selected.
 Хоткей: ⌘.
-
 ## Pause all agents (Пауза для всех агентов)
 
-<!-- id: key-team-pauseall; covers: command:team.pauseAll; status: planned -->
-Would pause all agents. Not working in this build: the menu item is disabled.
+<!-- id: key-team-pauseall; covers: command:team.pauseAll -->
+Pauses every agent of the current server, or resumes them all when they are all paused already. Paused agents keep their messages and start nothing until they are resumed (see [team.md](team.md)).
 Где: Agent → Pause all agents (Пауза для всех агентов)
-1. Nothing to do yet: the item is greyed out in this build, because the server method for pausing all agents is missing.
-Хоткей: ⇧⌘P
 
 ## What changed (Что изменил агент)
 

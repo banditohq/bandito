@@ -22,21 +22,21 @@ Sign-in is optional. The account only syncs your server list, shortcuts and prom
 3. If the code did not arrive, wait for the countdown (Send a new code in N s) and click Send a new code (Прислать новый код). Use another email (Другая почта) to change the address.
 4. To go on without an account, click Continue without an account (Продолжить без аккаунта). Everything stays on this Mac.
 5. If the sign-in fails, the message says so: the code expired, the GitHub sign-in was declined, or the device key could not be read. Click Try again (Ещё раз).
-
 ## Device approval
 
-<!-- id: gs-approval; covers: onboarding:approval; status: planned -->
-After a sign-in, a device that is not approved yet should go to this step. In this build the step is a placeholder: its title is Coming soon (Скоро здесь) and the only control is Next (Дальше). Approval by code is not in the app yet.
-Где: Introduction → step 2 of 5 (Account) → Approval → Next (Дальше)
-1. Click Next (Дальше) to go on to the server step.
-2. Until device approval ships, a signed-in device is not blocked by this step.
-
+<!-- id: gs-approval; covers: onboarding:approval -->
+After a sign-in, a Mac that no other device has approved yet waits on this step: Confirm this Mac on another device. Open Bandito on another Mac or iPhone, where a request appears. Compare the code shown there with the one here. If you have no other device, choose I don't have another device to restore sync instead.
+Где: Introduction → step 2 of 5 (Account) → Approval
+1. On the other device, check the code: They match (They match) means it is this Mac; They differ (They differ) means reject.
+2. Approve the request on the other device, or reject it.
 ## Server step
 
-<!-- id: gs-server; covers: onboarding:server; status: planned -->
-This step is meant to choose where the team lives. In this build it is a placeholder: the title Where will your team live? (Где будет жить ваша команда?) and Next (Дальше). A Mac is connected as a server automatically (see "This Mac is your first server" below). Connecting a remote server over SSH is not in the app yet.
-Где: Introduction → step 3 of 5 → Next (Дальше)
-1. Click Next (Дальше) to go to the first agent step.
+<!-- id: gs-server; covers: onboarding:server -->
+The step where your team lives: Where will your team live? You choose On this Mac or On your own server. On this Mac, Bandito runs the daemon here. On your own server, type its address and click Connect (Connect). Bandito shows the server's fingerprint and asks you to trust it once (This is my server — trust it). It then installs what is missing (On the server) and shows the server as connected. Next: the first agent goes on.
+Где: Introduction → step 3 of 5 → On this Mac or On your own server
+1. Pick the server and, for your own server, type the address and click Connect.
+2. Compare the fingerprint with the one your server shows, then click This is my server — trust it. If you are not sure, cancel: nothing is trusted until you confirm.
+3. Wait for the install to end, then click Next: the first agent.
 
 ## This Mac is your first server
 
@@ -44,21 +44,21 @@ This step is meant to choose where the team lives. In this build it is a placeho
 On the first launch Bandito adds a server named after this Mac (the host name, or "This Mac"). It runs the Bandito daemon on this Mac, so agents and their CLIs run here. Other servers are listed in Settings → Servers.
 Где: Settings (⌘,) → Servers (Серверы) → the server list
 1. Open Settings with ⌘, and choose Servers (Серверы). Your Mac is listed with its state: Online (В сети) or Offline (Не в сети).
+## Add a server
 
-## Add a server: SSH, Tailscale, pairing code
-
-<!-- id: gs-add-server; covers: sheet:addServer; status: planned -->
-The Add server wizard (SSH with ~/.ssh/config, Tailscale, or a pairing code) is not connected in this build. The button opens a sheet that says Coming soon (Скоро здесь) and a Close (Закрыть) button. Use this Mac or a server that is already set up.
+<!-- id: gs-add-server; covers: sheet:addServer -->
+The Add server sheet is the same server step as in the introduction, without the step bar. Choose On your own server, type the address, trust the fingerprint, and the server is added and selected. The sheet then closes by itself. Close (Закрыть) leaves the sheet without adding anything.
 Где: Settings (⌘,) → Servers (Серверы) → Add server (Добавить сервер)
-1. Click Add server (Добавить сервер). The sheet opens and says Coming soon (Скоро здесь).
-2. Click Close (Закрыть).
+1. Click Add server (Добавить сервер). The sheet opens on the server step.
+2. Choose On your own server, type the address and click Connect.
+3. Trust the fingerprint. When the server is connected, the sheet closes.
+## Trust the server's host key (SSH)
 
-## Trust the server's host key (SSH) (planned)
-
-<!-- id: gs-host-key; covers: ; status: planned -->
-When a server is added over SSH, Bandito should show the server's host key fingerprint and ask you to trust it once before it connects. The check and the question are not in this build, because the SSH wizard is not connected yet.
-Где: Settings (⌘,) → Servers (Серверы) → Add server (Добавить сервер) → SSH (SSH)
-1. Nothing to confirm yet. This Mac needs no host key.
+<!-- id: gs-host-key; covers: -->
+When a server is added over SSH, Bandito shows its host key fingerprint and asks you to trust it once before it connects. If the key of a known server changes, Bandito says so and trusts nothing until you check the server.
+Где: Introduction → Server step, or Settings (⌘,) → Servers (Серверы) → Add server (Добавить сервер)
+1. Compare the fingerprint with the one on the server. Trust it only if it is yours.
+2. If the key changed, check the server first. Bandito does not connect in the meantime.
 
 ## Install the components on the server (Установка компонентов)
 
@@ -78,20 +78,19 @@ Agents run on the official CLIs and your existing subscriptions. Bandito does no
 Где: Team (⌘1) → New agent (⌘N) → Powered by (Чем думает)
 1. Open New agent with ⌘N.
 2. Read the state under each runtime. Runtimes that are not ready are shown with the reason. Run the command the sheet names on the server, for example `codex login`.
-
 ## First agent (Первый агент)
 
-<!-- id: gs-first-agent; covers: onboarding:agent; status: planned -->
-The first-agent step of the introduction is a placeholder in this build (Coming soon). Create the first agent with New agent (⌘N): see [new-agent.md](new-agent.md).
-Где: Introduction → step 4 of 5 → Next (Дальше)
-1. Click Next (Дальше). Create the agent later with ⌘N.
+<!-- id: gs-first-agent; covers: onboarding:agent -->
+The first-agent step creates your first agent: a template or a blank one, a name, a runtime that is signed in on the server, a project folder and the workplace (Shared). Connect your subscriptions shows which runtimes are ready and what to do with the others. The agent is created with the same options as in New agent (see [new-agent.md](new-agent.md)).
+Где: Introduction → step 4 of 5 (Agent)
+1. Pick a runtime that is signed in, type a name and click Next to finish the step.
+2. Create more agents later with New agent (⌘N).
+## Tour: your first look
 
-## Tour: How it works (Как пользоваться)
-
-<!-- id: gs-tour; covers: ; status: planned -->
-The tour has four cards (This is your team; Write to it like a colleague; Risky things need your yes; See what's left). It is not in the flow in this build: the step bar shows the label How it works (Как пользоваться), but there is no screen for it. Read [team.md](team.md) and [security.md](security.md) instead.
-Где: Introduction → step bar → How it works (Как пользоваться)
-1. Nothing to click yet. Use this guide.
+<!-- id: gs-tour; covers: -->
+After the first agent, a short tour starts over the main window: a dimmed layer with a bubble that points at one part of the screen after another, for example Your agents and Files and terminals. Skip ends it at any step. A step whose part is not on screen is left out.
+Где: Introduction → last step of the first agent
+1. Read the bubble and go on, or skip the tour.
 
 ## Skip the introduction
 

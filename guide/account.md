@@ -2,14 +2,15 @@
 
 The account is optional. It syncs the list of your servers, shortcuts and prompts between your devices. Code, API keys
 and conversations stay on your servers. Everything works on one Mac without an account.
-
 ## Account sheet
 
-<!-- id: acc-sheet; covers: sheet:account; status: planned -->
-The sign-in sheet that Settings → Account and sync opens. In this build the sheet is a placeholder: its title is Account and sync (Аккаунт и синхронизация), and it says Coming soon (Скоро здесь), with Close (Закрыть). The working sign-in is in the first-run introduction (see below).
+<!-- id: acc-sheet; covers: sheet:account -->
+The sheet that Settings → Account and sync opens. Without an account it offers the sign-in, the same as the account step of the introduction. With an account it shows who is signed in, the devices of the account and the actions for them.
 Где: Settings (⌘,) → Account and sync (Аккаунт и синхронизация) → Sign in (Войти)
-1. Click Sign in (Войти). The sheet says Coming soon (Скоро здесь).
-2. Click Close (Закрыть). To sign in now, start the introduction again: Help → Show the introduction again (Показать знакомство снова), then sign in on the Account step.
+1. Click Sign in (Войти) to sign in with GitHub or by an email code, as in the introduction.
+2. With an account, read the devices. To drop a device from the list, click Remove device (Remove device) on its row.
+3. Reset account (Reset account) signs the other devices out and erases the sync settings. Your servers and the agents on them stay as they are.
+4. Close the sheet with Close (Закрыть).
 
 ## Sign in with GitHub
 
@@ -51,13 +52,13 @@ Only the list of your servers is stored in the account: encrypted, and only your
 Sign-in needs a key that identifies this Mac. If the key cannot be read, the step shows Could not read this Mac's device key. Try again.
 Где: First-run introduction → Account → message
 1. Click Try again (Ещё раз). If it keeps failing, see [troubleshooting.md](troubleshooting.md).
+## Device approval after sign-in
 
-## Device approval after sign-in (planned)
-
-<!-- id: acc-approval; covers: ; status: planned -->
-A new device should be approved on the Approval step before it gets your servers. The step is a placeholder in this build (Coming soon), so it is not in the flow for signed-in devices that are approved; approval by code is not in the app yet.
-Где: First-run introduction → Approval
-1. Click Next (Дальше). See [getting-started.md](getting-started.md).
+<!-- id: acc-approval; covers: -->
+A new device must be approved before it gets your servers. After the sign-in, a Mac that no other device has approved waits on the Approval step: Confirm this Mac on another device. The same screen appears in the account sheet when the account asks for it.
+Где: First-run introduction → Account → Approval (Подтверждение)
+1. On the other device, compare the codes: They match (They match) or They differ (They differ).
+2. On the other device, approve the request or reject it. Reject (Reject) refuses this Mac.
 
 ## Devices of a server (Devices)
 
@@ -66,13 +67,12 @@ The phones and Macs that connect to a server. Adding and revoking are on the ser
 Где: Server (⌘6) → Devices (Устройства)
 1. To pair a new device, click Add device (Добавить устройство) and enter the code on the device.
 2. To cut one device off, click Revoke (Отозвать) in its row.
+## Sign out
 
-## Sign out (Sign out of this server)
-
-<!-- id: acc-sign-out; covers: ; status: planned -->
-Sign-out is not available in this build: the app has no sign-out action. To remove a server from this Mac, use Settings → Servers → Delete (see [settings.md](settings.md)).
-Где: Settings (⌘,) → Servers (Серверы) → Delete (Удалить)
-1. Remove the server in Settings → Servers. The app forgets the server and its token; nothing on the server is deleted.
+<!-- id: acc-sign-out; covers: -->
+Sign out (Sign out) in the account sheet signs this Mac out of the account. Sync stops on this Mac until you sign in again. To remove a server from this Mac, use Settings → Servers → Delete (see [settings.md](settings.md)).
+Где: Settings (⌘,) → Account and sync (Аккаунт и синхронизация) → Sign out (Sign out)
+1. Click Sign out (Sign out) and confirm.
 
 ## Reset (Сбросить)
 
