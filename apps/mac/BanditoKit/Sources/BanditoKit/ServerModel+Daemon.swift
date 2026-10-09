@@ -44,6 +44,21 @@ extension ServerModel {
     public func daemonRequest(
         path: String, query: [(name: String, value: String)] = [], socket: Bool = false
     ) async throws -> URLRequest {
+        let encodedQuery =
+            query.isEmpty
+            ? nil
+            : query.map { "\($0.name)=" + Self.queryEncoded($0.value) }.joined(separator: "&")
+        return try await makeDaemonRequest(path: path, pathIsEncoded: false, encodedQuery: encodedQuery, socket: socket)
+    }
+
+    /// The same, for a path and query that are already percent-encoded: a preview's own URL, `/v1/proxy/<port>/…`.
+    public func daemonRequest(encodedPath: String, encodedQuery: String?, socket: Bool = false) async throws -> URLRequest {
+        try await makeDaemonRequest(path: encodedPath, pathIsEncoded: true, encodedQuery: encodedQuery, socket: socket)
+    }
+
+    private func makeDaemonRequest(
+        path: String, pathIsEncoded: Bool, encodedQuery: String?, socket: Bool
+    ) async throws -> URLRequest {
         let base = try await daemonHTTPBase()
         if config.token != nil, !tokenMayTravel() {
             throw RPCError(
@@ -55,11 +70,12 @@ extension ServerModel {
         }
         let secure = ["https", "wss"].contains(components.scheme?.lowercased() ?? "")
         components.scheme = socket ? (secure ? "wss" : "ws") : (secure ? "https" : "http")
-        components.path = path
-        components.percentEncodedQuery =
-            query.isEmpty
-            ? nil
-            : query.map { "\($0.name)=" + Self.queryEncoded($0.value) }.joined(separator: "&")
+        if pathIsEncoded {
+            components.percentEncodedPath = path
+        } else {
+            components.path = path
+        }
+        components.percentEncodedQuery = encodedQuery
         components.fragment = nil
         guard let url = components.url else {
             throw RPCError(code: RPCError.invalidParams, message: "the request address is not usable")

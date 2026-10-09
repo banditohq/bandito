@@ -163,21 +163,11 @@ public actor PortForwarder {
     private var stopped = false
 
     /// - Parameters:
-    ///   - tunnelURL: the server's `ws(s)://…/v1/tunnel?port=N`.
-    ///   - token: the device token. It is sent only where `WebSocketTransport` allows tokens.
+    ///   - request: the upgrade to the server's `/v1/tunnel?port=N`, with its token (see `ServerModel.forwardRequest`).
     ///   - oneShot: accept exactly one connection, then close the listener.
-    public init(tunnelURL: URL, token: String?, oneShot: Bool = true) throws {
-        var request = URLRequest(url: tunnelURL)
-        if let token {
-            guard WebSocketTransport.allowsToken(for: tunnelURL) else {
-                throw RPCError(
-                    code: RPCError.insecureTransport,
-                    message: "refusing to send the device token over an unencrypted connection")
-            }
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
+    public init(request: URLRequest, oneShot: Bool = true) {
         let session = URLSession(configuration: .ephemeral)
-        // A copy: the closure below is @Sendable and cannot capture the `var`.
+        // A copy: the closure below is @Sendable and cannot capture the request.
         let upgrade = request
         self.session = session
         self.oneShot = oneShot

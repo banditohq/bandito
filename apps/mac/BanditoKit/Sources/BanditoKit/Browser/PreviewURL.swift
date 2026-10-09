@@ -14,32 +14,25 @@ public enum PreviewURL {
         return URL(string: "\(scheme)://p\(port)\(tail)")
     }
 
-    /// The HTTP proxy URL of a preview URL, on the server at `serverBase` (an `http(s)` URL).
-    /// The query string is kept. Nil for another scheme, a host that is not `p<port>`, or a bad port.
-    public static func proxyURL(for url: URL, serverBase: URL) -> URL? {
+    /// The daemon's proxy path and query for a preview URL: `/v1/proxy/<port><path>`, percent-encoded as the URL
+    /// had it, and the query as it was. Nil for another scheme, a host that is not `p<port>`, or a bad port.
+    public static func proxyParts(for url: URL) -> (path: String, query: String?)? {
         guard url.scheme == scheme, let host = url.host, host.hasPrefix("p"),
-              let port = Int(host.dropFirst()), (1...65_535).contains(port),
-              var components = URLComponents(url: serverBase, resolvingAgainstBaseURL: false)
+              let port = Int(host.dropFirst()), (1...65_535).contains(port)
         else { return nil }
         let raw = URLComponents(url: url, resolvingAgainstBaseURL: false)
         let tail = raw?.percentEncodedPath ?? ""
-        components.percentEncodedPath = "/v1/proxy/\(port)" + (tail.isEmpty ? "/" : tail)
-        components.percentEncodedQuery = raw?.percentEncodedQuery
-        components.fragment = nil
-        return components.url
+        return ("/v1/proxy/\(port)" + (tail.isEmpty ? "/" : tail), raw?.percentEncodedQuery)
     }
 
-    /// The `http(s)` base of a server address: `ws` becomes `http` and `wss` becomes `https`; the path, query and
-    /// fragment are dropped.
-    public static func httpBase(for server: URL) -> URL? {
-        guard var components = URLComponents(url: server, resolvingAgainstBaseURL: false) else { return nil }
-        switch components.scheme?.lowercased() {
-        case "ws", "http": components.scheme = "http"
-        case "wss", "https": components.scheme = "https"
-        default: return nil
-        }
-        components.path = ""
-        components.query = nil
+    /// The HTTP proxy URL of a preview URL, on the server at `serverBase` (an `http(s)` URL).
+    /// The query string is kept. Nil where `proxyParts` is nil. The app itself asks the daemon through
+    /// `ServerModel.daemonRequest(encodedPath:encodedQuery:)` instead.
+    public static func proxyURL(for url: URL, serverBase: URL) -> URL? {
+        guard let parts = proxyParts(for: url), var components = URLComponents(url: serverBase, resolvingAgainstBaseURL: false)
+        else { return nil }
+        components.percentEncodedPath = parts.path
+        components.percentEncodedQuery = parts.query
         components.fragment = nil
         return components.url
     }

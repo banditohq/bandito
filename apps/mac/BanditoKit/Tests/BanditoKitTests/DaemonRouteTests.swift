@@ -113,3 +113,48 @@ private func sshServer(token: String? = "tok") -> ServerConfig {
         #expect(error.code == RPCError.insecureTransport)
     }
 }
+
+// MARK: tunnels (VNC, and the port of a dev server)
+
+@MainActor
+@Test func aSSHServersTunnelRequestGoesThroughTheTunnelWithTheToken() async throws {
+    let tunnel = FakeTransport(handlers: daemonHandlers(), httpBase: URL(string: "http://127.0.0.1:51000"))
+    let (model, _) = makeModel(config: sshServer(token: "tok"), [tunnel])
+    await model.connect()
+    let request = try await model.forwardRequest(port: 5901)
+    #expect(request.url?.absoluteString == "ws://127.0.0.1:51000/v1/tunnel?port=5901")
+    #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer tok")
+}
+
+@MainActor
+@Test func aWebSocketServersTunnelIsItsOwnTunnelRoute() async throws {
+    let (model, _) = makeModel(config: try webSocket("wss://srv.example.ts.net/v1/rpc", token: "tok"), [])
+    let request = try await model.forwardRequest(port: 3000)
+    #expect(request.url?.absoluteString == "wss://srv.example.ts.net/v1/tunnel?port=3000")
+    #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer tok")
+}
+
+@MainActor
+@Test func anSSHServerForwardsOnALocalPortAndStopsOnDisconnect() async throws {
+    let tunnel = FakeTransport(handlers: daemonHandlers(), httpBase: URL(string: "http://127.0.0.1:51000"))
+    let (model, _) = makeModel(config: sshServer(token: "tok"), [tunnel])
+    await model.connect()
+    let local = try await model.forwardOnce(port: 5901)
+    #expect(local.host() == "127.0.0.1")
+    #expect((local.port ?? 0) > 0)
+    #expect(model.forwarders.count == 1)
+    await model.disconnect()
+    #expect(model.forwarders.isEmpty)
+}
+
+@MainActor
+@Test func aSSHTunnelForwardWithoutAConnectionThrowsDisconnected() async throws {
+    let (model, _) = makeModel(config: sshServer(), [])
+    do {
+        _ = try await model.forwardOnce(port: 5901)
+        Issue.record("a forwarder was started without a tunnel")
+    } catch let error as RPCError {
+        #expect(error.code == RPCError.disconnected)
+    }
+    #expect(model.forwarders.isEmpty)
+}

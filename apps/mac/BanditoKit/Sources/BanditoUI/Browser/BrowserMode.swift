@@ -441,7 +441,7 @@ private struct PreviewPane: View {
         VStack(spacing: 0) {
             #if os(macOS)
             if let url = model.previewURL(port: port) {
-                PreviewWebView(url: url, serverBase: serverBase, token: model.server.config.token)
+                PreviewWebView(url: url, server: model.server)
                     .id(port)
                     .clipShape(RoundedRectangle(cornerRadius: BanditoRadius.md))
                     .padding(14)
@@ -451,13 +451,6 @@ private struct PreviewPane: View {
             #endif
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private var serverBase: URL? {
-        if case .webSocket(let url) = model.server.config.endpoint {
-            return PreviewURL.httpBase(for: url)
-        }
-        return nil
     }
 }
 
