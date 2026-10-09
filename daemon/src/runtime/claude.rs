@@ -145,13 +145,20 @@ impl Runtime for ClaudeRuntime {
             cmd.arg("--resume").arg(id);
         }
         if let Some((prog, args)) = &cfg.mcp {
-            let mut server = json!({"command": prog.display().to_string(), "args": args});
-            // The MCP client does not pass the environment on, so the token is given to the server here.
-            if let Some(token) = &cfg.agent_token {
-                server["env"] = json!({"BANDITO_AGENT_TOKEN": token});
+            let config = json!({
+                "mcpServers": {"bandito": {"command": prog.display().to_string(), "args": args}}
+            })
+            .to_string();
+            match &cfg.agent_mcp_file {
+                // A file of its own, owner-only and removed with the session: the config stays out of argv.
+                Some(file) => {
+                    crate::agent_token::write_private(file, &config)?;
+                    cmd.arg("--mcp-config").arg(file);
+                }
+                None => {
+                    cmd.arg("--mcp-config").arg(config);
+                }
             }
-            let config = json!({ "mcpServers": {"bandito": server} }).to_string();
-            cmd.arg("--mcp-config").arg(config);
         }
         cmd.current_dir(&cfg.cwd).envs(cfg.env.iter().map(|(k, v)| (k, v)));
         // Marks the CLI and its children for `host.processes` (see docs/ARCHITECTURE.md#host).

@@ -239,14 +239,17 @@ fn peer_pid(_fd: RawFd) -> Option<u32> {
 #[cfg(target_os = "linux")]
 fn parent_pid(pid: u32) -> Option<u32> {
     let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
-    parse_stat_ppid(&stat)
+    parse_stat(&stat).map(|(_, ppid)| ppid)
 }
 
-/// Field 4 of `/proc/<pid>/stat`. The command name sits in parentheses and may hold spaces and
-/// parentheses, so the fields are read after the last `)`.
+/// State and parent pid from `/proc/<pid>/stat`: fields 3 and 4. The command name sits in parentheses
+/// and may hold spaces and parentheses, so the fields are read after the last `)`.
 #[cfg(any(target_os = "linux", test))]
-fn parse_stat_ppid(stat: &str) -> Option<u32> {
-    stat.rsplit_once(')')?.1.split_whitespace().nth(1)?.parse().ok()
+fn parse_stat(stat: &str) -> Option<(char, u32)> {
+    let mut fields = stat.rsplit_once(')')?.1.split_whitespace();
+    let state = fields.next()?.chars().next()?;
+    let ppid = fields.next()?.parse().ok()?;
+    Some((state, ppid))
 }
 
 /// The parent of a process, from the OS. `None` when it cannot be read.
@@ -298,6 +301,73 @@ pub fn become_subreaper() {
 /// Only Linux has the subreaper flag. Elsewhere a double-forked process is re-parented to init.
 #[cfg(not(target_os = "linux"))]
 pub fn become_subreaper() {}
+
+/// How often the daemon looks for zombie children (Linux, see [`spawn_zombie_reaper`]).
+pub const REAP_INTERVAL: Duration = Duration::from_secs(10);
+
+/// Reaps the zombie children of this process (Linux). Children that double-forked away end up under the
+/// daemon (it is a subreaper), and nothing else waits for them. Every `interval` the processes under the
+/// daemon are read from `/proc`. A zombie seen in two scans in a row has lived at least one interval, so
+/// any child whose owner waits for it (a tokio child is reaped at once) has had its chance. Only then is
+/// it reaped, by its pid.
+#[cfg(target_os = "linux")]
+pub fn spawn_zombie_reaper(interval: Duration) {
+    tokio::spawn(reap_zombies(std::process::id(), interval));
+}
+
+/// Other systems re-parent orphans to init, which reaps them.
+#[cfg(not(target_os = "linux"))]
+pub fn spawn_zombie_reaper(_interval: Duration) {}
+
+#[cfg(target_os = "linux")]
+async fn reap_zombies(daemon: u32, interval: Duration) {
+    let mut tick = tokio::time::interval(interval);
+    let mut seen: HashSet<u32> = HashSet::new();
+    loop {
+        tick.tick().await;
+        let zombies: HashSet<u32> = child_states(daemon)
+            .into_iter()
+            .filter(|(_, state)| *state == 'Z')
+            .map(|(pid, _)| pid)
+            .collect();
+        let mut first_time = HashSet::new();
+        for pid in zombies {
+            if seen.contains(&pid) {
+                reap_one(pid);
+            } else {
+                first_time.insert(pid);
+            }
+        }
+        seen = first_time;
+    }
+}
+
+/// Waits for one zombie, without blocking. Its status is dropped: nobody asked for it.
+#[cfg(target_os = "linux")]
+fn reap_one(pid: u32) {
+    let mut status: libc::c_int = 0;
+    // SAFETY: waitpid with WNOHANG on one pid writes only to `status`, which lives for the call.
+    let rc = unsafe { libc::waitpid(pid as libc::pid_t, &mut status, libc::WNOHANG) };
+    if rc == pid as libc::pid_t {
+        tracing::debug!(pid, "reaped a zombie child");
+    }
+}
+
+/// Every process whose parent is `parent`, with its state letter, from `/proc`.
+#[cfg(target_os = "linux")]
+fn child_states(parent: u32) -> Vec<(u32, char)> {
+    let Ok(entries) = std::fs::read_dir("/proc") else {
+        return Vec::new();
+    };
+    entries
+        .filter_map(|entry| {
+            let pid: u32 = entry.ok()?.file_name().to_str()?.parse().ok()?;
+            let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+            let (state, ppid) = parse_stat(&stat)?;
+            (ppid == parent).then_some((pid, state))
+        })
+        .collect()
+}
 
 /// Longest a client waits for the daemon to answer one request.
 const CALL_TIMEOUT: Duration = Duration::from_secs(30);
@@ -423,10 +493,71 @@ mod tests {
     }
 
     #[test]
-    fn stat_ppid_is_field_four_even_when_the_name_has_brackets() {
-        assert_eq!(parse_stat_ppid("1234 (node) S 42 1234 1234 0 -1"), Some(42));
-        assert_eq!(parse_stat_ppid("1234 (my (weird) name) S 7 1 1 0 -1"), Some(7));
-        assert_eq!(parse_stat_ppid("garbage"), None);
+    fn stat_gives_state_and_parent_even_when_the_name_has_brackets() {
+        assert_eq!(parse_stat("1234 (node) S 42 1234 1234 0 -1"), Some(('S', 42)));
+        assert_eq!(parse_stat("1234 (my (weird) name) Z 7 1 1 0 -1"), Some(('Z', 7)));
+        assert_eq!(parse_stat("garbage"), None);
+    }
+
+    /// Not a test of its own. The reaper test below runs it in a child process, which plays the daemon.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn reaper_probe() {
+        let Some(out) = std::env::var_os("BANDITO_TEST_REAPER_OUT") else {
+            return;
+        };
+        // This process plays the daemon: a child subreaper, with the reaper running.
+        become_subreaper();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let verdict = runtime.block_on(async {
+            let me = std::process::id();
+            // The shell starts a sleep in the background and exits. The sleep is re-parented to this process.
+            let status = std::process::Command::new("sh")
+                .args(["-c", "(sleep 0.1 &)"])
+                .status()
+                .unwrap();
+            assert!(status.success());
+            // Once the sleep has exited it is a zombie of this process, and nothing has reaped it yet.
+            let mut zombies = Vec::new();
+            for _ in 0..50 {
+                tokio::time::sleep(Duration::from_millis(20)).await;
+                zombies = child_states(me).into_iter().filter(|(_, s)| *s == 'Z').collect();
+                if !zombies.is_empty() {
+                    break;
+                }
+            }
+            if zombies.is_empty() {
+                return "no zombie appeared".to_string();
+            }
+            // Now the reaper starts: within a few scans it must take the zombie.
+            spawn_zombie_reaper(Duration::from_millis(50));
+            for _ in 0..200 {
+                tokio::time::sleep(Duration::from_millis(25)).await;
+                if child_states(me).iter().all(|(_, s)| *s != 'Z') {
+                    return "reaped".to_string();
+                }
+            }
+            "zombie remains".to_string()
+        });
+        std::fs::write(out, verdict).unwrap();
+    }
+
+    /// A process that double-forks leaves a zombie under the daemon, and the daemon reaps it.
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn a_double_forked_child_does_not_stay_a_zombie() {
+        let dir = tempfile::tempdir().unwrap();
+        let out = dir.path().join("reaper.out");
+        let status = std::process::Command::new(probe_exe())
+            .args(["--exact", "rpc::unix::tests::reaper_probe"])
+            .env("BANDITO_TEST_REAPER_OUT", &out)
+            .status()
+            .unwrap();
+        assert!(status.success());
+        assert_eq!(std::fs::read_to_string(&out).unwrap(), "reaped");
     }
 
     fn probe_exe() -> PathBuf {
@@ -530,7 +661,7 @@ mod tests {
     async fn agent_sock_needs_a_valid_hello_first() {
         let dir = tempfile::tempdir().unwrap();
         let app = test_app(dir.path());
-        let (token, _guard) = app.sup.agent_tokens().issue("agent-a");
+        let (token, _guard) = app.sup.agent_tokens().issue("agent-a").unwrap();
 
         // No hello: refused and closed.
         let replies = talk_agent(app.clone(), &[request(1, "crew.list", json!({}))]).await;
@@ -563,7 +694,7 @@ mod tests {
     async fn agent_sock_refuses_what_agents_may_not_call() {
         let dir = tempfile::tempdir().unwrap();
         let app = test_app(dir.path());
-        let (token, _guard) = app.sup.agent_tokens().issue("agent-a");
+        let (token, _guard) = app.sup.agent_tokens().issue("agent-a").unwrap();
         let forbidden = [
             ("events.subscribe", json!({ "after": 0 })),
             ("pair.create", json!({})),
@@ -587,7 +718,7 @@ mod tests {
     async fn an_agent_cannot_act_as_another_agent() {
         let dir = tempfile::tempdir().unwrap();
         let app = test_app(dir.path());
-        let (token, _guard) = app.sup.agent_tokens().issue("agent-a");
+        let (token, _guard) = app.sup.agent_tokens().issue("agent-a").unwrap();
         let replies = talk_agent(
             app.clone(),
             &[
@@ -607,7 +738,7 @@ mod tests {
     async fn a_session_that_ended_loses_its_token() {
         let dir = tempfile::tempdir().unwrap();
         let app = test_app(dir.path());
-        let (token, guard) = app.sup.agent_tokens().issue("agent-a");
+        let (token, guard) = app.sup.agent_tokens().issue("agent-a").unwrap();
         drop(guard);
         let replies = talk_agent(app.clone(), &[hello(1, &token)]).await;
         assert_eq!(replies[0]["error"]["code"], json!(UNAUTHORIZED), "{replies:?}");
@@ -621,7 +752,7 @@ mod tests {
         let mode = std::fs::metadata(&sock).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode, 0o600);
         let app = test_app(dir.path());
-        let (token, _guard) = app.sup.agent_tokens().issue("agent-a");
+        let (token, _guard) = app.sup.agent_tokens().issue("agent-a").unwrap();
         tokio::spawn(run_agents(app.clone(), listener));
         let listed = call_agent(&sock, &token, "crew.list", json!({})).await.unwrap();
         assert_eq!(listed, json!([]));

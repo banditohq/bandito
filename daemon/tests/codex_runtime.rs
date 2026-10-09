@@ -522,3 +522,41 @@ async fn turn_end_cancels_approvals_that_are_still_open() {
     );
     s.session.shutdown().await;
 }
+
+#[tokio::test]
+async fn the_crew_server_gets_the_token_file_and_no_token_in_argv() {
+    let dir = tempfile::tempdir().unwrap();
+    let args_out = dir.path().join("args.json");
+    let token_file = dir.path().join("agent-x.token");
+    let mut c = cfg("resume_and_unknown_request.jsonl");
+    c.env.push(("FAKECLI_ARGS_OUT".into(), args_out.display().to_string()));
+    c.mcp = Some((
+        PathBuf::from("/usr/local/bin/bandito"),
+        vec![
+            "mcp".into(),
+            "--agent".into(),
+            "a1".into(),
+            "--token-file".into(),
+            token_file.display().to_string(),
+        ],
+    ));
+    c.agent_token = Some("bat_secret_value".into());
+    let s = spawn(c).await;
+    let mut args: Vec<String> = Vec::new();
+    for _ in 0..50 {
+        if let Ok(text) = std::fs::read_to_string(&args_out)
+            && let Ok(v) = serde_json::from_str::<Vec<String>>(&text)
+        {
+            args = v;
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    assert!(args.iter().all(|a| !a.contains("bat_")), "{args:?}");
+    let expected = format!(
+        r#"mcp_servers.bandito.args=["mcp","--agent","a1","--token-file","{}"]"#,
+        token_file.display()
+    );
+    assert!(args.contains(&expected), "{args:?}");
+    s.session.shutdown().await;
+}

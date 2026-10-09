@@ -32,43 +32,58 @@ use tokio_util::io::ReaderStream;
 
 /// The router for a daemon that listens on loopback only (also used by tests).
 pub fn router(app: Arc<App>) -> Router {
-    router_listening(app, None)
+    router_listening(app, IpAddr::V4(Ipv4Addr::LOCALHOST), Vec::new())
 }
 
-/// The router for a daemon that listens on `listen`, a concrete IP address (`None` for a wildcard
-/// or loopback-only listener). Every route checks the `Host` header first, see [`HostGuard`].
-pub fn router_listening(app: Arc<App>, listen: Option<IpAddr>) -> Router {
+/// The router for a daemon that listens on `listen`. `allowed_hosts` are extra `Host` names from the
+/// config, honoured on loopback listeners only (see [`HostGuard`]).
+pub fn router_listening(app: Arc<App>, listen: IpAddr, allowed_hosts: Vec<String>) -> Router {
     Router::new()
         .route("/v1/health", get(|| async { "ok" }))
         .route("/v1/rpc", get(rpc))
         .route("/v1/files/raw", get(files_raw))
         .route("/v1/tunnel", get(tunnel_upgrade))
         .route("/v1/proxy/{*rest}", any(preview_proxy))
-        .layer(axum::middleware::from_fn_with_state(HostGuard { listen }, check_host))
+        .layer(axum::middleware::from_fn_with_state(
+            HostGuard::new(listen, allowed_hosts),
+            check_host,
+        ))
         .with_state(app)
 }
 
-/// Which `Host` names a request may carry (DNS rebinding defence): loopback names, and the address
-/// the daemon listens on. Anything else gets 421 Misdirected Request.
+/// DNS rebinding defence for a loopback listener: a web page on another name is pointed at the daemon
+/// through the user's browser, and its `Host` is that other name. So on a loopback listener only loopback
+/// names, and the names in `allowed_hosts` (for a reverse proxy or tunnel on this server), get through;
+/// anything else gets 421 Misdirected Request. A listener on any other address is not checked: the
+/// bearer token and the refused `Origin` header protect it instead.
 #[derive(Clone)]
 struct HostGuard {
-    listen: Option<IpAddr>,
+    check: bool,
+    /// Lower-case names from `allowed_hosts`.
+    names: Vec<String>,
 }
 
 impl HostGuard {
-    fn allows(&self, header: &str) -> bool {
-        let Some(name) = host_name(header) else {
+    fn new(listen: IpAddr, allowed_hosts: Vec<String>) -> Self {
+        Self {
+            check: listen.is_loopback(),
+            names: allowed_hosts.iter().map(|n| n.trim().to_ascii_lowercase()).collect(),
+        }
+    }
+
+    /// Whether a request with this `Host` header (absent: `None`) may proceed.
+    fn allows(&self, header: Option<&str>) -> bool {
+        if !self.check {
+            return true;
+        }
+        let Some(name) = header.and_then(host_name) else {
             return false;
         };
-        if name.eq_ignore_ascii_case("localhost") {
+        if name.eq_ignore_ascii_case("localhost") || self.names.iter().any(|n| n.eq_ignore_ascii_case(name)) {
             return true;
         }
         match name.parse::<IpAddr>() {
-            Ok(ip) => {
-                ip == IpAddr::V4(Ipv4Addr::LOCALHOST)
-                    || ip == IpAddr::V6(Ipv6Addr::LOCALHOST)
-                    || Some(ip) == self.listen
-            }
+            Ok(ip) => ip == IpAddr::V4(Ipv4Addr::LOCALHOST) || ip == IpAddr::V6(Ipv6Addr::LOCALHOST),
             Err(_) => false,
         }
     }
@@ -92,12 +107,8 @@ struct ClientAddr(String);
 
 /// Refuses a request whose `Host` is not allowed, and records the client's address for the handlers.
 async fn check_host(State(guard): State<HostGuard>, mut req: Request, next: Next) -> Response {
-    let allowed = req
-        .headers()
-        .get(header::HOST)
-        .and_then(|v| v.to_str().ok())
-        .is_some_and(|host| guard.allows(host));
-    if !allowed {
+    let header = req.headers().get(header::HOST).and_then(|v| v.to_str().ok());
+    if !guard.allows(header) {
         return (StatusCode::MISDIRECTED_REQUEST, "unknown host name").into_response();
     }
     let addr = req
@@ -846,14 +857,15 @@ mod host_tests {
         App::new(sup, std::env::temp_dir().join("bandito-host-tests"))
     }
 
-    /// Status of `GET /v1/health` with the given `Host` header, through a router listening on `listen`.
-    async fn health(listen: Option<IpAddr>, host: &str) -> StatusCode {
-        let req = Request::builder()
-            .uri("/v1/health")
-            .header(header::HOST, host)
-            .body(Body::empty())
-            .unwrap();
-        router_listening(app(), listen).oneshot(req).await.unwrap().status()
+    /// Status of `GET /v1/health` with the given `Host` header (none: `None`), through a router for `listen`.
+    async fn health(listen: &str, allowed: &[&str], host: Option<&str>) -> StatusCode {
+        let mut req = Request::builder().uri("/v1/health");
+        if let Some(host) = host {
+            req = req.header(header::HOST, host);
+        }
+        let allowed = allowed.iter().map(|n| n.to_string()).collect();
+        let router = router_listening(app(), listen.parse().unwrap(), allowed);
+        router.oneshot(req.body(Body::empty()).unwrap()).await.unwrap().status()
     }
 
     #[test]
@@ -867,35 +879,55 @@ mod host_tests {
     }
 
     #[tokio::test]
-    async fn loopback_hosts_are_allowed_on_every_route() {
-        assert_eq!(health(None, "127.0.0.1:7878").await, StatusCode::OK);
-        assert_eq!(health(None, "localhost:17777").await, StatusCode::OK);
-        assert_eq!(health(None, "LOCALHOST").await, StatusCode::OK);
-        assert_eq!(health(None, "[::1]:7878").await, StatusCode::OK);
+    async fn loopback_names_are_allowed_on_a_loopback_listener() {
+        assert_eq!(health("127.0.0.1", &[], Some("127.0.0.1:7878")).await, StatusCode::OK);
+        assert_eq!(health("127.0.0.1", &[], Some("localhost:17777")).await, StatusCode::OK);
+        assert_eq!(health("127.0.0.1", &[], Some("LOCALHOST")).await, StatusCode::OK);
+        assert_eq!(health("::1", &[], Some("[::1]:7878")).await, StatusCode::OK);
     }
 
     #[tokio::test]
-    async fn other_hosts_get_421() {
-        assert_eq!(health(None, "evil.example").await, StatusCode::MISDIRECTED_REQUEST);
-        assert_eq!(health(None, "evil.example:7878").await, StatusCode::MISDIRECTED_REQUEST);
-        assert_eq!(health(None, "127.0.0.2:7878").await, StatusCode::MISDIRECTED_REQUEST);
-    }
-
-    #[tokio::test]
-    async fn a_request_without_host_gets_421() {
-        let req = Request::builder().uri("/v1/health").body(Body::empty()).unwrap();
-        let status = router(app()).oneshot(req).await.unwrap().status();
-        assert_eq!(status, StatusCode::MISDIRECTED_REQUEST);
-    }
-
-    #[tokio::test]
-    async fn the_listen_address_is_an_allowed_host() {
-        let listen: IpAddr = "100.64.0.5".parse().unwrap();
-        assert_eq!(health(Some(listen), "100.64.0.5:7879").await, StatusCode::OK);
-        assert_eq!(health(Some(listen), "127.0.0.1:7879").await, StatusCode::OK);
+    async fn loopback_listener_refuses_a_foreign_host_with_421() {
         assert_eq!(
-            health(Some(listen), "100.64.0.6:7879").await,
+            health("127.0.0.1", &[], Some("evil.example")).await,
             StatusCode::MISDIRECTED_REQUEST
+        );
+        assert_eq!(
+            health("127.0.0.1", &[], Some("evil.example:7878")).await,
+            StatusCode::MISDIRECTED_REQUEST
+        );
+        assert_eq!(
+            health("127.0.0.1", &[], Some("127.0.0.2:7878")).await,
+            StatusCode::MISDIRECTED_REQUEST
+        );
+        assert_eq!(health("127.0.0.1", &[], None).await, StatusCode::MISDIRECTED_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn allowed_hosts_are_added_on_a_loopback_listener() {
+        // A reverse proxy or tunnel on this server connects to loopback and sends its own name.
+        let allowed = ["Proxy.Example"];
+        assert_eq!(
+            health("127.0.0.1", &allowed, Some("proxy.example")).await,
+            StatusCode::OK
+        );
+        assert_eq!(
+            health("127.0.0.1", &allowed, Some("proxy.example:443")).await,
+            StatusCode::OK
+        );
+        assert_eq!(
+            health("127.0.0.1", &allowed, Some("other.example")).await,
+            StatusCode::MISDIRECTED_REQUEST
+        );
+    }
+
+    #[tokio::test]
+    async fn a_wildcard_listener_checks_no_host() {
+        assert_eq!(health("0.0.0.0", &[], Some("evil.example")).await, StatusCode::OK);
+        assert_eq!(health("0.0.0.0", &[], None).await, StatusCode::OK);
+        assert_eq!(
+            health("100.64.0.5", &[], Some("mac.tailnet.ts.net:7879")).await,
+            StatusCode::OK
         );
     }
 }

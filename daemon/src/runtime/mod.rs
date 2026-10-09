@@ -115,9 +115,11 @@ pub struct SpawnConfig {
     pub extra_dirs: Vec<PathBuf>,
     /// Where the CLI runs (see docs/ARCHITECTURE.md#workspaces). `None` = the server itself.
     pub workspace: Option<crate::workspace::WorkspaceSpec>,
-    /// This session's agent token: the CLI gets it as `BANDITO_AGENT_TOKEN`, and so does its crew
-    /// server. See docs/ARCHITECTURE.md#trust-model.
+    /// This session's agent token: the CLI gets it as `BANDITO_AGENT_TOKEN`. Its crew server reads
+    /// it from a file instead (see docs/ARCHITECTURE.md#trust-model).
     pub agent_token: Option<String>,
+    /// Where a Claude MCP config file goes (owner-only, removed with the session). `None`: inline.
+    pub agent_mcp_file: Option<PathBuf>,
 }
 
 /// A live session with one agent CLI.

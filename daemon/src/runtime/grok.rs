@@ -93,7 +93,6 @@ impl Runtime for GrokRuntime {
             cwd: cfg.cwd.clone(),
             resume: cfg.resume.clone(),
             mcp: cfg.mcp.clone(),
-            agent_token: cfg.agent_token.clone(),
         };
         let router_state = Arc::clone(&state);
         let router: Router = Box::new(move |msg: &Value, sink: &LineSink| route(msg, &router_state, &handshake, sink));
@@ -137,8 +136,6 @@ struct Handshake {
     /// ACP session id to load; `None` creates a new session.
     resume: Option<String>,
     mcp: Option<(PathBuf, Vec<String>)>,
-    /// Passed to the crew server in its own `env` list: ACP servers get no environment otherwise.
-    agent_token: Option<String>,
 }
 
 /// State shared by the router (pump task) and the session (caller task).
@@ -392,19 +389,12 @@ fn initialized(msg: &Value, handshake: &Handshake, st: &mut State, sink: &LineSi
         out.push(error_event(format!("Unsupported ACP version {shown} from grok")));
     }
     let servers = match &handshake.mcp {
-        Some((program, args)) => {
-            let env: Vec<Value> = handshake
-                .agent_token
-                .iter()
-                .map(|token| json!({"name": "BANDITO_AGENT_TOKEN", "value": token}))
-                .collect();
-            json!([{
-                "name": "bandito",
-                "command": program.display().to_string(),
-                "args": args,
-                "env": env
-            }])
-        }
+        Some((program, args)) => json!([{
+            "name": "bandito",
+            "command": program.display().to_string(),
+            "args": args,
+            "env": []
+        }]),
         None => json!([]),
     };
     let cwd = handshake.cwd.display().to_string();
@@ -796,7 +786,6 @@ mod tests {
             cwd: PathBuf::from("/work"),
             resume: None,
             mcp: None,
-            agent_token: None,
         }
     }
 

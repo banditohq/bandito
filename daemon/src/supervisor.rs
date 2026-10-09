@@ -20,7 +20,7 @@ use anyhow::{Result, anyhow, bail};
 use chrono::{DateTime, Local, NaiveTime, TimeZone};
 use serde_json::json;
 use std::collections::{HashMap, VecDeque};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
@@ -805,7 +805,7 @@ impl Actor {
         }
         let prompt = blocks.join("\n\n");
         let secrets = self.hub.store.secrets_for_agent(&agent.id)?;
-        let (token, token_guard) = self.tokens.issue(&agent.id);
+        let (token, token_guard) = self.tokens.issue(&agent.id)?;
         let ws = self
             .hub
             .store
@@ -834,6 +834,10 @@ impl Actor {
                 program: None,
                 mcp: mcp.map(|(prog, mut args)| {
                     args.extend(["--agent".to_string(), agent.id.clone()]);
+                    // The bridge reads the token from this file, so the token stays out of argument lists.
+                    if let Some(file) = token_guard.token_file() {
+                        args.extend(["--token-file".to_string(), file.display().to_string()]);
+                    }
                     (prog, args)
                 }),
                 env: secrets.clone(),
@@ -841,6 +845,7 @@ impl Actor {
                 extra_dirs: agent.home_dir.iter().map(PathBuf::from).collect(),
                 workspace: Some(workspace),
                 agent_token: Some(token.clone()),
+                agent_mcp_file: token_guard.config_file().map(Path::to_path_buf),
             })
             .await?;
         self.session = Some(spawned.session);

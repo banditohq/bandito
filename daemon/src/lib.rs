@@ -5,6 +5,7 @@ pub mod browser;
 pub mod cdp;
 pub mod checkpoint;
 pub mod commands;
+pub mod config;
 pub mod crew;
 pub mod event;
 pub mod files;

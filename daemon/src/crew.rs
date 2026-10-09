@@ -685,19 +685,31 @@ async fn history_day(args: &Value, backend: &dyn CrewBackend) -> Result<String, 
     backend.history_day(date).await.map_err(|e| format!("{e:#}"))
 }
 
-/// Run the crew MCP server on stdin/stdout, for the agent whose session token is in `BANDITO_AGENT_TOKEN`.
-/// The daemon starts it with that variable set; without it the server cannot say whom it speaks for.
-pub async fn serve_stdio(sock: PathBuf) -> Result<()> {
-    let token = token_from_env(std::env::var("BANDITO_AGENT_TOKEN").ok())?;
+/// Run the crew MCP server on stdin/stdout, for the agent whose session token it is given: from
+/// `token_file` when one is named (the daemon's way), else from `BANDITO_AGENT_TOKEN`.
+pub async fn serve_stdio(sock: PathBuf, token_file: Option<PathBuf>) -> Result<()> {
+    let from_file = match &token_file {
+        Some(path) => Some(
+            std::fs::read_to_string(path).with_context(|| format!("read the agent token file {}", path.display()))?,
+        ),
+        None => None,
+    };
+    let token = token_from(from_file.as_deref(), std::env::var("BANDITO_AGENT_TOKEN").ok())?;
     let backend = DaemonBackend { sock, token };
     serve(BufReader::new(tokio::io::stdin()), tokio::io::stdout(), &backend).await
 }
 
-/// The session token the daemon gave this crew server. An empty value counts as missing.
-fn token_from_env(value: Option<String>) -> Result<String> {
-    value
-        .filter(|t| !t.is_empty())
-        .context("BANDITO_AGENT_TOKEN is not set: the Bandito crew server only runs inside an agent session")
+/// The session token: the token file's contents when a file is named, else `BANDITO_AGENT_TOKEN`.
+/// Blank values count as missing.
+fn token_from(file: Option<&str>, env: Option<String>) -> Result<String> {
+    if let Some(text) = file {
+        let token = text.trim();
+        anyhow::ensure!(!token.is_empty(), "the agent token file is empty");
+        return Ok(token.to_string());
+    }
+    env.filter(|t| !t.trim().is_empty()).map(|t| t.trim().to_string()).context(
+        "no agent token: the Bandito crew server only runs inside an agent session (BANDITO_AGENT_TOKEN is not set)",
+    )
 }
 
 #[cfg(test)]
@@ -705,11 +717,20 @@ mod token_tests {
     use super::*;
 
     #[test]
-    fn the_bridge_needs_its_session_token() {
-        let missing = token_from_env(None).unwrap_err().to_string();
+    fn the_token_file_wins_and_the_environment_is_the_fallback() {
+        assert_eq!(
+            token_from(Some("  bat_file \n"), Some("bat_env".into())).unwrap(),
+            "bat_file"
+        );
+        assert_eq!(token_from(None, Some("bat_env".into())).unwrap(), "bat_env");
+    }
+
+    #[test]
+    fn a_missing_or_blank_token_is_an_error() {
+        let missing = token_from(None, None).unwrap_err().to_string();
         assert!(missing.contains("BANDITO_AGENT_TOKEN is not set"), "{missing}");
-        assert!(token_from_env(Some(String::new())).is_err());
-        assert_eq!(token_from_env(Some("bat_abc".into())).unwrap(), "bat_abc");
+        assert!(token_from(None, Some(String::new())).is_err());
+        assert!(token_from(Some("  \n"), Some("bat_env".into())).is_err());
     }
 }
 

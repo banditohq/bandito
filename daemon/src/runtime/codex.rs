@@ -102,11 +102,6 @@ impl Runtime for CodexRuntime {
                 json!(prog.display().to_string())
             ));
             cmd.arg("-c").arg(format!("mcp_servers.bandito.args={}", json!(args)));
-            if let Some(token) = &cfg.agent_token {
-                // A TOML inline table; the token is base64url, so it needs no escaping.
-                cmd.arg("-c")
-                    .arg(format!("mcp_servers.bandito.env={{BANDITO_AGENT_TOKEN = \"{token}\"}}"));
-            }
         }
         if !cfg.extra_dirs.is_empty() {
             // The workspace-write sandbox also writes to these roots. One override carries the whole list.

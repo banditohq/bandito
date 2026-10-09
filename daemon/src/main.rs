@@ -10,7 +10,7 @@ use bandito::store::Store;
 use bandito::supervisor::{Runtimes, Supervisor};
 use clap::{Parser, Subcommand};
 use serde_json::{Value, json};
-use std::net::{IpAddr, SocketAddr};
+use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -53,10 +53,14 @@ enum Cmd {
         cmd: ServiceCmd,
     },
     /// Crew MCP server of an agent (started by the daemon; speaks MCP on stdio). The agent comes
-    /// from `BANDITO_AGENT_TOKEN`; `--agent` is accepted for older configs and changes nothing.
+    /// from its session token: read from `--token-file`, else from `BANDITO_AGENT_TOKEN`. `--agent`
+    /// is accepted for older configs and changes nothing.
     Mcp {
         #[arg(long)]
         agent: Option<String>,
+        /// The file the daemon wrote the session token to (under `$BANDITO_HOME/run`).
+        #[arg(long)]
+        token_file: Option<PathBuf>,
     },
 }
 
@@ -140,7 +144,7 @@ async fn run_command(cmd: Cmd, home: PathBuf) -> Result<()> {
         Cmd::Pair { json } => pair(&sock, json).await,
         Cmd::Info { json } => info(&home, &sock, json).await,
         Cmd::Service { cmd } => service_cmd(cmd, &home).await,
-        Cmd::Mcp { .. } => bandito::crew::serve_stdio(home.join("agent.sock")).await,
+        Cmd::Mcp { token_file, .. } => bandito::crew::serve_stdio(home.join("agent.sock"), token_file).await,
     }
 }
 
@@ -312,11 +316,18 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr) -> Result<()> {
         None
     };
     let sup = Supervisor::new(hub, runtimes, mcp);
+    // Session tokens are files in `run/`: a previous daemon's leftovers go, and no token outlives a restart.
+    sup.agent_tokens()
+        .set_run_dir(&home.join("run"))
+        .context("prepare the run folder")?;
+    let config = bandito::config::load(home)?;
     sup.recover()?;
     let app = App::new(sup.clone(), agents_root);
 
-    // Children that double-fork away stay under this process, so the owner's socket can tell them apart.
+    // Children that double-fork away stay under this process, so the owner's socket can tell them apart,
+    // and this process reaps them (see docs/ARCHITECTURE.md#trust-model).
     rpc::unix::become_subreaper();
+    rpc::unix::spawn_zombie_reaper(rpc::unix::REAP_INTERVAL);
     let unix = rpc::unix::bind(sock)?;
     // Agents reach the daemon only through this socket, with their session token (docs/ARCHITECTURE.md#trust-model).
     let agent_unix = rpc::unix::bind(&home.join("agent.sock"))?;
@@ -331,9 +342,7 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr) -> Result<()> {
     if let Err(e) = std::fs::write(home.join(LISTEN_FILE), tcp.local_addr()?.to_string()) {
         tracing::warn!("could not record the listen address: {e}");
     }
-    // A wildcard listener has no address of its own to allow in the Host check; a concrete one does.
-    let own_ip: Option<IpAddr> = Some(listen.ip()).filter(|ip| !ip.is_unspecified());
-    let router = rpc::ws::router_listening(app.clone(), own_ip);
+    let router = rpc::ws::router_listening(app.clone(), listen.ip(), config.allowed_hosts);
     tokio::spawn(async move {
         if let Err(e) = axum::serve(tcp, router.into_make_service_with_connect_info::<SocketAddr>()).await {
             tracing::error!("http server: {e}");
