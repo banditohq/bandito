@@ -18,6 +18,11 @@ pub mod ws;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+/// Capabilities this daemon offers. Clients show a feature only when it is
+/// listed, so new apps keep working with older daemons. Add a string here in
+/// the same PR that adds the feature.
+pub const FEATURES: &[&str] = &["approvals", "rules", "schedules", "crew", "pairing"];
+
 /// Shared state for all connections.
 pub struct App {
     pub sup: Arc<Supervisor>,
@@ -226,6 +231,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             "arch": std::env::consts::ARCH,
             "started_at": app.started_at,
             "last_seq": store.last_seq()?,
+            "features": FEATURES,
         })),
         "runtimes.status" => {
             let mut out = Vec::new();

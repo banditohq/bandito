@@ -231,6 +231,10 @@ public struct DaemonInfo: Codable, Sendable, Hashable {
     public var arch: String
     public var startedAt: Int64
     public var lastSeq: Int64
+    /// What this daemon supports (e.g. "schedules", "crew"). Missing on very old daemons.
+    public var features: [String]?
+
+    public func supports(_ feature: String) -> Bool { features?.contains(feature) ?? false }
 }
 
 public struct Device: Codable, Sendable, Identifiable, Hashable {

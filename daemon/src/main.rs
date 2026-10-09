@@ -2,6 +2,8 @@ use anyhow::{Context, Result};
 use bandito::hub::Hub;
 use bandito::rpc::{self, App};
 use bandito::runtime::claude::ClaudeRuntime;
+use bandito::runtime::codex::CodexRuntime;
+use bandito::runtime::grok::GrokRuntime;
 use bandito::store::Store;
 use bandito::supervisor::{Runtimes, Supervisor};
 use clap::{Parser, Subcommand};
@@ -105,6 +107,8 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr) -> Result<()> {
     let hub = Hub::new(store);
     let mut runtimes = Runtimes::default();
     runtimes.insert(Arc::new(ClaudeRuntime::new()));
+    runtimes.insert(Arc::new(CodexRuntime::new()));
+    runtimes.insert(Arc::new(GrokRuntime::new()));
     // Each agent gets `bandito --home <home> mcp --agent <id>` as its crew MCP server.
     let mcp = (
         std::env::current_exe()?,
