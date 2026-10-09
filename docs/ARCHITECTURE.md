@@ -21,7 +21,7 @@ Status: working design, October 2026. This file is the source of truth for the M
 ```
 
 - The daemon runs as the user who owns the CLI logins (`~/.claude`, `~/.codex`, `~/.grok`), never as root.
-- One binary: `bandito daemon` (foreground), `bandito pair`, `bandito info`, `bandito status`, `bandito mcp [--token-file <path>]` (crew MCP over stdio, proxies to the daemon's `agent.sock` with the agent's session token), `bandito service install|uninstall|status` (see [Install and service](#install-and-service)).
+- One binary: `bandito daemon` (foreground), `bandito pair`, `bandito info`, `bandito status`, `bandito mcp [--token-file <path>]` (crew MCP over stdio, proxies to the daemon's `agent.sock` with the agent's session token), `bandito service install|uninstall|status` (see [Install and service](#install-and-service)), `bandito update` (see [Self-update](#self-update)).
 
 ## Runtimes
 
@@ -449,6 +449,26 @@ Release signing: the last job of the release workflow lists the SHA-256 of every
 `bandito service install` writes `~/.config/systemd/user/bandito.service` (Linux) or `~/Library/LaunchAgents/dev.bandito.daemon.plist` (macOS), starts it, and waits up to 10 s for `daemon.info` on the socket. Linux machines without a user systemd manager (WSL without systemd, containers) get a detached background process with its pid in `<home>/daemon.pid` and output in `<home>/logs/daemon.log`; it does not survive a reboot. On Linux the installer also asks for lingering (`loginctl enable-linger`), so the daemon outlives the SSH session that installed it; if that is refused, the command prints the `sudo` line. `service uninstall` removes the unit or plist and stops the daemon; data is kept. `service install --dry-run` prints what would be written and run, and changes nothing.
 
 Machine-readable output for scripts and the app: `bandito pair --json` prints `{"code","expires_in_ms"}`; `bandito info --json` prints version, paths, `listen`, `running`, and the `features` the daemon reports (empty when it is down); `service install --json` prints `{"ok","mode","listen","socket","warnings"}`; `service status --json` prints `{"installed","mode","running","pid"?}`.
+
+## Self-update
+
+`bandito update [--check] [--json] [--version vX.Y.Z] [--allow-downgrade]` installs a newer release; `daemon.update_check` → `UpdateInfo {current, latest, available}` and `daemon.update_apply {version}` → `{ok, restarting}` do the same over RPC (feature `update`; the server's own user and paired apps). Code: `daemon/src/update.rs`. Nothing installs by itself: only the owner asks.
+
+**Newest release.** A `curl` (https only, TLS 1.2 or newer) of `https://github.com/banditohq/bandito/releases/latest` ends at `releases/tag/vX.Y.Z`; the tag is the version. Only `MAJOR.MINOR.PATCH` is accepted. A downgrade is refused unless `--allow-downgrade` is given; the same version is not installed twice.
+
+**Install.** In `<data dir>/run/update-<id>` (mode 0700, removed afterwards) the daemon downloads `SHA256SUMS`, `SHA256SUMS.sig` and `bandito-<target>.tar.gz`, targets as in `scripts/install.sh`. Checks, in this order, and nothing is replaced before all of them pass:
+1. Ed25519 `verify_strict` of the exact bytes of `SHA256SUMS` with the release key (`RELEASE_PUBKEY_B64` in `daemon/src/update.rs`, the same key as `RELEASE_PUBKEY` in `install.sh`; a test keeps them equal). Failure: `signature check failed`. The archive is not downloaded before this passes.
+2. The archive is listed in `SHA256SUMS` (`<hash>  <name>` or `<hash> *<name>`). Failure: `asset not listed`.
+3. The archive's SHA-256 equals its line. Failure: `checksum mismatch`.
+4. The unpacked `bandito --version` prints `bandito <version>`. Failure: `version mismatch`.
+
+The binary is then copied next to the running one as `.bandito.new.<pid>`, chmod 755, and renamed over it: a running daemon keeps its old inode.
+
+**Restart.** The daemon restarts only when a service manager runs the process that answers on the socket (its pid is the service's pid). systemd: `systemctl --user --no-block restart bandito.service`. launchd: `launchctl kickstart -k gui/<uid>/dev.bandito.daemon`. Background process: a shell waits (up to 30 s) for the old pid to exit, then starts the new daemon with the same arguments in its own process group, and the old one gets SIGTERM. Over RPC the restart runs one second after the reply, so the app gets it. Any other process (`bandito daemon` by hand) is not restarted: the binary is replaced and the reply says `restarting: false`.
+
+**Background check.** The daemon checks for a newer release 10 minutes after start and then every 24 hours (`update::spawn_background_check`). A newer release is written to the log. Nothing is installed. Each successful check (background or `update_check`) is kept: `daemon.info` carries it as `update: {current, latest, available, checked_at}` (`null` until the first check succeeds), and the app shows its button from that. If the repository has no published release, the check fails with `no releases published yet`.
+
+Only one update runs at a time (`busy`). `daemon.update_*` is for the owner (`bandito.sock`) and paired apps; agents and anonymous peers are refused by `allowed()`. Errors use `SERVER_ERROR` with the message above.
 
 ## Setup
 
