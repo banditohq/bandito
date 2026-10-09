@@ -13,6 +13,7 @@ pub mod redact;
 pub mod rpc;
 pub mod runtime;
 pub mod scheduler;
+pub mod service;
 pub mod store;
 pub mod supervisor;
 pub mod terminal;
