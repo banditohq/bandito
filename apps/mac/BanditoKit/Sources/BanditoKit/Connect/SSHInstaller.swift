@@ -539,7 +539,10 @@ struct RemoteProbe: Equatable {
         guard ["Linux", "Darwin"].contains(kernel), ["x86_64", "aarch64"].contains(arch) else {
             throw InstallError.unsupportedPlatform(parts.joined(separator: " "))
         }
-        let path = lines.count > 1 ? lines[1].trimmingCharacters(in: .whitespaces) : ""
+        // The second line is the installed binary only when it is an absolute path: without bandito, `command -v`
+        // and `ls` print nothing and the os-release lines move up.
+        let second = lines.count > 1 ? lines[1].trimmingCharacters(in: .whitespaces) : ""
+        let path = second.hasPrefix("/") ? second : ""
         let prefix = "PRETTY_NAME="
         let osName = lines.first { $0.hasPrefix(prefix) }.map { line -> String in
             var value = String(line.dropFirst(prefix.count))

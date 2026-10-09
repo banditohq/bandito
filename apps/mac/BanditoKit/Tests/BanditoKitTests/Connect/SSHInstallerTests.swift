@@ -580,6 +580,17 @@ private func steps(_ runner: ScriptedRunner) -> [String] {
 
         #expect(try RemoteProbe.parse("Linux amd64\n\n").arch == "x86_64")
 
+        // The real output when bandito is missing: `command -v` and `ls` print nothing, so os-release comes second.
+        let ubuntu = try RemoteProbe.parse(
+            "Linux x86_64\nPRETTY_NAME=\"Ubuntu 24.04.4 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\n")
+        #expect(ubuntu.installedPath == nil)
+        #expect(ubuntu.osName == "Ubuntu 24.04.4 LTS")
+
+        // `command -v` gives an absolute path; anything else on that line is not an install.
+        #expect(try RemoteProbe.parse("Linux x86_64\n/usr/local/bin/bandito\nPRETTY_NAME=\"X\"\n").installedPath
+            == "/usr/local/bin/bandito")
+        #expect(try RemoteProbe.parse("Linux x86_64\nNAME=\"Ubuntu\"\n").installedPath == nil)
+
         #expect(throws: InstallError.unsupportedPlatform("Linux riscv64")) {
             try RemoteProbe.parse("Linux riscv64\n\n")
         }
