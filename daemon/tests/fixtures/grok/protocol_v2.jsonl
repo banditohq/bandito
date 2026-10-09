@@ -1,0 +1,7 @@
+// The agent answers initialize with another ACP version: reported as an error, and the handshake goes on.
+{"expect": {"method": "initialize"}}
+{"send": {"jsonrpc": "2.0", "id": "$last:/id", "result": {"protocolVersion": 2, "agentCapabilities": {}}}}
+{"expect": {"method": "session/new"}}
+{"send": {"jsonrpc": "2.0", "id": "$last:/id", "result": {"sessionId": "sess-v2"}}}
+{"expect": {"method": "session/prompt", "params": {"sessionId": "sess-v2", "prompt": [{"type": "text", "text": "hi"}]}}}
+{"send": {"jsonrpc": "2.0", "id": 3, "result": {"stopReason": "end_turn"}}}

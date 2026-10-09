@@ -210,3 +210,141 @@ async fn status_reports_missing_binary() {
     let st = GrokRuntime::with_program("/nonexistent/grok").status().await;
     assert!(!st.installed);
 }
+
+#[tokio::test]
+async fn resume_does_not_repeat_the_system_prompt() {
+    let mut c = cfg("resume_prompt.jsonl");
+    c.resume = Some("sess-r1".into());
+    c.system_prompt = Some("You are Night Owl.".into());
+    let mut s = spawn(c).await;
+    s.session.send("again").await.unwrap();
+    let out = until(&mut s, is_turn_end).await;
+    assert!(out.contains(&RuntimeOutput::SessionId("sess-r1".into())));
+    assert_eq!(texts(&out), vec!["ok".to_string()]);
+    let RuntimeOutput::Event(EventBody::TurnCompleted { status, .. }) = out.last().unwrap() else {
+        unreachable!()
+    };
+    assert_eq!(*status, TurnStatus::Ok);
+    s.session.shutdown().await;
+}
+
+#[tokio::test]
+async fn interrupt_before_session_is_ready_drops_queued_texts() {
+    let mut s = spawn(cfg("interrupt_before_ready.jsonl")).await;
+    s.session.send("first").await.unwrap();
+    s.session.send("second").await.unwrap();
+    s.session.interrupt().await.unwrap();
+    let out = until(&mut s, |o| matches!(o, RuntimeOutput::SessionId(_))).await;
+    let interrupted = out
+        .iter()
+        .filter(|o| {
+            matches!(o, RuntimeOutput::Event(EventBody::TurnCompleted { turn_id, status: TurnStatus::Interrupted, usage: None, cost_usd: None })
+                if turn_id.is_empty())
+        })
+        .count();
+    assert_eq!(interrupted, 2);
+    let Spawned { session, mut output } = s;
+    session.shutdown().await;
+    // The script expects session/prompt and exits 3 when stdin closes without one. Exit 0 would mean a prompt went out.
+    let exit = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            if let Some(RuntimeOutput::Exited { code, .. }) = output.recv().await {
+                return code;
+            }
+        }
+    })
+    .await
+    .expect("timed out waiting for the CLI exit");
+    assert_eq!(exit, Some(3), "no session/prompt may follow an interrupt before ready");
+}
+
+#[tokio::test]
+async fn allow_without_a_one_time_option_is_denied_with_an_error() {
+    let mut s = spawn(cfg("allow_always_only.jsonl")).await;
+    s.session.send("clean the cache").await.unwrap();
+    let before = until(&mut s, is_approval).await;
+    // text before a permission request is flushed as a message first
+    assert_eq!(texts(&before), vec!["Cleaning up.".to_string()]);
+    let RuntimeOutput::Approval(req) = before.last().unwrap().clone() else {
+        unreachable!()
+    };
+    assert_eq!(req.key, "8");
+
+    s.session.resolve("8", Decision::Allow).await.unwrap();
+    let after = until(&mut s, is_turn_end).await;
+    assert!(after.iter().any(|o| matches!(o,
+        RuntimeOutput::Event(EventBody::Error { message })
+            if message == "Grok offered no one-time approval for this action, so it was denied")));
+    assert!(after.iter().any(|o| matches!(o,
+        RuntimeOutput::Event(EventBody::ToolResult { call_id, ok: false, .. }) if call_id == "call-a1")));
+    s.session.shutdown().await;
+}
+
+#[tokio::test]
+async fn open_approval_is_withdrawn_when_the_turn_ends() {
+    let mut s = spawn(cfg("turn_end_open_approval.jsonl")).await;
+    s.session.send("touch x").await.unwrap();
+    let before = until(&mut s, is_approval).await;
+    assert!(matches!(before.last(), Some(RuntimeOutput::Approval(req)) if req.key == "11"));
+
+    let after = until(&mut s, is_turn_end).await;
+    let withdrawn = after
+        .iter()
+        .position(|o| *o == RuntimeOutput::ApprovalCancelled { key: "11".into() })
+        .expect("ApprovalCancelled before the turn ends");
+    assert!(withdrawn < after.len() - 1);
+    assert!(s.session.resolve("11", Decision::Allow).await.is_err());
+    s.session.shutdown().await;
+}
+
+#[tokio::test]
+async fn tool_call_that_arrives_completed_yields_one_result() {
+    let mut s = spawn(cfg("tool_call_completed.jsonl")).await;
+    s.session.send("list").await.unwrap();
+    let out = until(&mut s, is_turn_end).await;
+    let calls = out
+        .iter()
+        .filter(|o| matches!(o, RuntimeOutput::Event(EventBody::ToolCall { call_id, .. }) if call_id == "call-c1"))
+        .count();
+    assert_eq!(calls, 1);
+    let results: Vec<RuntimeOutput> = out
+        .iter()
+        .filter(|o| matches!(o, RuntimeOutput::Event(EventBody::ToolResult { .. })))
+        .cloned()
+        .collect();
+    assert_eq!(
+        results,
+        vec![RuntimeOutput::Event(EventBody::ToolResult {
+            call_id: "call-c1".into(),
+            ok: true,
+            output: "Cargo.toml".into(),
+        })]
+    );
+    s.session.shutdown().await;
+}
+
+#[tokio::test]
+async fn resume_without_load_capability_starts_a_new_session() {
+    let mut c = cfg("resume_without_load.jsonl");
+    c.resume = Some("sess-old".into());
+    c.system_prompt = Some("You are Night Owl.".into());
+    let mut s = spawn(c).await;
+    s.session.send("again").await.unwrap();
+    let out = until(&mut s, is_turn_end).await;
+    assert!(out.contains(&RuntimeOutput::SessionId("sess-n1".into())));
+    assert!(out.contains(&RuntimeOutput::Event(EventBody::Error {
+        message: "grok can't resume sessions; starting a new one".into(),
+    })));
+    s.session.shutdown().await;
+}
+
+#[tokio::test]
+async fn unsupported_protocol_version_is_reported() {
+    let mut s = spawn(cfg("protocol_v2.jsonl")).await;
+    s.session.send("hi").await.unwrap();
+    let out = until(&mut s, is_turn_end).await;
+    assert!(out.contains(&RuntimeOutput::Event(EventBody::Error {
+        message: "Unsupported ACP version 2 from grok".into(),
+    })));
+    s.session.shutdown().await;
+}
