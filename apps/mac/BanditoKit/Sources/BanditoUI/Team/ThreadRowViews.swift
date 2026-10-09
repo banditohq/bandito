@@ -7,6 +7,8 @@ import SwiftUI
 struct ThreadRowView: View {
     var row: ThreadRow
     var agentName: String
+    /// The agent's primary runtime, to tell a return from a limit switch.
+    var primaryRuntime: String
     var server: ServerModel
     var onError: (String) -> Void
 
@@ -19,7 +21,7 @@ struct ThreadRowView: View {
         case .toolGroup(let tools):
             ToolGroupCard(tools: tools, duration: nil)
         case .item(let item):
-            ItemView(item: item, agentName: agentName, server: server, onError: onError)
+            ItemView(item: item, agentName: agentName, primaryRuntime: primaryRuntime, server: server, onError: onError)
         }
     }
 }
@@ -28,6 +30,7 @@ struct ThreadRowView: View {
 private struct ItemView: View {
     var item: ThreadItem
     var agentName: String
+    var primaryRuntime: String
     var server: ServerModel
     var onError: (String) -> Void
 
@@ -65,6 +68,10 @@ private struct ItemView: View {
             }
         case .note(_, let text, let kind, _):
             NoteLine(text: text, isError: kind == .error)
+        case .runtimeSwitch(_, let from, let to, let until, _):
+            NoteLine(
+                text: RuntimeSwitchNote.text(from: from, to: to, until: until, primary: primaryRuntime),
+                isError: false)
         }
     }
 }
@@ -140,10 +147,13 @@ struct AgentBubble: View {
 /// Live text of a reply still being written: the same bubble, with three dots after it.
 struct TypingIndicator: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage(MotionLevel.storageKey) private var motionLevel = MotionLevel.full.rawValue
+    /// Repeating motion stands still: Reduce Motion, or "Less" / "Off" in settings.
+    private var still: Bool { reduceMotion || !MotionLevel(stored: motionLevel).allowsRepeatingMotion }
 
     var body: some View {
         HStack(spacing: 4) {
-            TimelineView(.animation(minimumInterval: 1.0 / 20, paused: reduceMotion)) { context in
+            TimelineView(.animation(minimumInterval: 1.0 / 20, paused: still)) { context in
                 let time = context.date.timeIntervalSinceReferenceDate
                 ForEach(0..<3, id: \.self) { index in
                     Circle()

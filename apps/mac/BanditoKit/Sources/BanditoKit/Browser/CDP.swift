@@ -39,6 +39,8 @@ public enum CDPCommand: Sendable {
     case key(type: CDPKeyType, key: CDPKeyDescriptor, modifiers: KeyModifiers)
     /// Text typed as a whole (IME-friendly), without key events.
     case insertText(String)
+    /// A ⌘ edit shortcut sent as a key press with a `commands` entry, so the page edits its selection.
+    case editing(BrowserEdit, key: CDPKeyDescriptor, modifiers: KeyModifiers)
     case getTargets
     case createTarget(url: String)
     case activateTarget(id: String)
@@ -55,6 +57,7 @@ public enum CDPCommand: Sendable {
         case .mouse: "Input.dispatchMouseEvent"
         case .key: "Input.dispatchKeyEvent"
         case .insertText: "Input.insertText"
+        case .editing: "Input.dispatchKeyEvent"
         case .getTargets: "Target.getTargets"
         case .createTarget: "Target.createTarget"
         case .activateTarget: "Target.activateTarget"
@@ -106,6 +109,19 @@ public enum CDPCommand: Sendable {
             return .object(object)
         case .insertText(let text):
             return .object(["text": .string(text)])
+        case .editing(let edit, let key, let modifiers):
+            var object: [String: JSONValue] = [
+                "type": .string(CDPKeyType.keyDown.rawValue),
+                "key": .string(key.key),
+                "code": .string(key.code),
+                "windowsVirtualKeyCode": .number(Double(key.windowsVirtualKeyCode)),
+                "modifiers": .number(Double(BrowserKeys.bitmask(modifiers))),
+            ]
+            // No text: a shortcut must not type its letter.
+            if let name = edit.cdpCommandName {
+                object["commands"] = .array([.string(name)])
+            }
+            return .object(object)
         case .createTarget(let url):
             return .object(["url": .string(url)])
         case .activateTarget(let id):

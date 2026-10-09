@@ -52,6 +52,11 @@ public enum Sheet: Identifiable, Hashable, Sendable {
     }
 }
 
+/// The tabs of the agent details panel (⌘I, and `/memory` opens the memory one).
+enum InspectorTab: String, CaseIterable, Hashable, Sendable {
+    case details, memory, whereRuns
+}
+
 /// Navigation state of one main window: the current mode, what is selected in each mode,
 /// open sheets and panels, and back/forward history between modes.
 ///
@@ -65,6 +70,8 @@ public final class Router {
     public var selectedAgentID: String?
     /// Files: the folder being browsed, absolute on the server. `nil` means the agent's home.
     public var filesPath: String?
+    /// Files: a file to open in the viewer once its folder (`filesPath`) is listed. Taken once.
+    public private(set) var pendingFilePath: String?
     /// Files: the open files and their editors. Kept here so they survive switching modes.
     let files = FileWorkspace()
     /// Terminals: the terminal pane in focus.
@@ -75,6 +82,8 @@ public final class Router {
     public var pendingAgentCwd: String?
     /// Team: text for the composer of the selected agent ("Ask about this place"). Taken once by the thread.
     public var pendingComposerText: String?
+    /// Team: the composer should take keyboard focus (⌘↵ in the palette, after opening the agent). Taken once.
+    public private(set) var composerFocusRequested = false
     /// Terminals: a command from the menu bar, waiting for the Terminals mode to perform it.
     public var terminalRequest: TerminalRequest?
     /// Browser: the open tab.
@@ -87,6 +96,9 @@ public final class Router {
     public var serverSection: ServerSection = .overview
     /// Terminals: a command to type into a new terminal (Server → Install, Update). Taken once by the terminals.
     public var pendingTerminalCommand: String?
+
+    /// The tab of the agent details panel. Kept here so `/memory` can open it on the memory tab.
+    var inspectorTab: InspectorTab = .details
 
     public var sheet: Sheet?
     /// The quick-open palette (⌘K).
@@ -132,5 +144,68 @@ public final class Router {
 
     public func toggleSidebar() {
         sidebarVisible.toggle()
+    }
+
+    // MARK: handing actions to a mode
+    //
+    // Each `pending…` field is taken by exactly one view. The take clears the field, so a second
+    // view (or a re-appearing one) does not repeat the action.
+
+    public func takeTerminalCommand() -> String? {
+        defer { pendingTerminalCommand = nil }
+        return pendingTerminalCommand
+    }
+
+    public func takeTerminalCwd() -> String? {
+        defer { pendingTerminalCwd = nil }
+        return pendingTerminalCwd
+    }
+
+    public func takeAgentCwd() -> String? {
+        defer { pendingAgentCwd = nil }
+        return pendingAgentCwd
+    }
+
+    public func takeComposerText() -> String? {
+        defer { pendingComposerText = nil }
+        return pendingComposerText
+    }
+
+    public func takePreviewPort() -> Int? {
+        defer { pendingPreviewPort = nil }
+        return pendingPreviewPort
+    }
+
+    /// Shows a folder or a file in Files: a folder becomes `filesPath`; a file opens in the viewer, in its folder.
+    public func openInFiles(_ path: String, isFile: Bool) {
+        if isFile {
+            filesPath = FilePath.parent(of: path) ?? filesPath
+            pendingFilePath = path
+        } else {
+            filesPath = path
+        }
+        select(mode: .files)
+    }
+
+    public func takePendingFilePath() -> String? {
+        defer { pendingFilePath = nil }
+        return pendingFilePath
+    }
+
+    /// Asks the composer to take focus. The thread takes the request with `takeComposerFocus()`.
+    public func requestComposerFocus() {
+        composerFocusRequested = true
+    }
+
+    /// True once per request: the first call returns true and clears it.
+    public func takeComposerFocus() -> Bool {
+        defer { composerFocusRequested = false }
+        return composerFocusRequested
+    }
+
+    /// Opens the agent details panel on `tab`.
+    func openInspector(_ tab: InspectorTab) {
+        inspectorTab = tab
+        inspectorOpen = true
     }
 }

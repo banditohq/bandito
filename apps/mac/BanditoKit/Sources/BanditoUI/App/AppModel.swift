@@ -12,6 +12,8 @@ public final class AppModel {
     public private(set) var lastError: String?
     /// Text size of every terminal pane (⌘+ ⌘− ⌘0 and pinch).
     public let terminalFont = TerminalFontStore()
+    /// System notifications for agent events; nil until `startNotifications` runs.
+    public private(set) var notifications: NotificationService?
 
     private static let storeKey = "servers.v1"
     #if os(macOS)
@@ -25,6 +27,48 @@ public final class AppModel {
 
     public var currentServer: ServerModel? {
         servers.first { $0.id == selectedServerID } ?? servers.first
+    }
+
+    /// Starts system notifications for live agent events (see `NotificationService`). Call once at launch.
+    /// `selectedAgentID` and `windowActive` tell the rules what the user is looking at.
+    public func startNotifications(selectedAgentID: @escaping () -> String?, windowActive: @escaping () -> Bool) {
+        guard notifications == nil else { return }
+        let sink = SystemNotificationSink()
+        let service = NotificationService(
+            sink: sink,
+            settings: { NotificationSettings(defaults: .standard) },
+            windowActive: windowActive,
+            selectedAgentID: selectedAgentID,
+            resolve: { [weak self] agentID, approvalID, decision in
+                guard let server = self?.servers.first(where: { $0.agents.contains { $0.id == agentID } }) else { return }
+                try? await server.resolve(approvalID, decision, remember: false)
+            })
+        sink.service = service
+        sink.start()
+        notifications = service
+    }
+
+    /// Feeds one server's live events to the notifications. Servers added later are attached as they come.
+    private func attachNotifications(_ server: ServerModel) {
+        server.onLiveEvent = { [weak self, weak server] event in
+            guard let self, let server, let notice = Self.notice(for: event, in: server) else { return }
+            self.notifications?.handle(notice)
+        }
+    }
+
+    /// The notice an event makes, if any: an approval waiting, a finished turn, or an error.
+    static func notice(for event: Event, in server: ServerModel) -> AgentNotice? {
+        let name = server.agents.first { $0.id == event.agentId }?.name ?? ""
+        switch event.body {
+        case .approvalRequested(let approvalID, _, _, let title, _, _, _):
+            return .approval(agentID: event.agentId, agentName: name, approvalID: approvalID, title: title)
+        case .turnCompleted(_, .ok, _, _):
+            return .finished(agentID: event.agentId, agentName: name)
+        case .error(let message):
+            return .failed(agentID: event.agentId, agentName: name, message: message)
+        default:
+            return nil
+        }
     }
 
     public func connectAll() async {
@@ -43,6 +87,7 @@ public final class AppModel {
         }
         lastError = nil
         let model = ServerModel(config: config)
+        attachNotifications(model)
         servers.append(model)
         selectedServerID = model.id
         save()
@@ -88,7 +133,9 @@ public final class AppModel {
         servers = configs.map { c in
             var c = c
             c.token = Keychain.token(for: c.id)
-            return ServerModel(config: c)
+            let model = ServerModel(config: c)
+            attachNotifications(model)
+            return model
         }
         selectedServerID = servers.first?.id
     }

@@ -7,16 +7,15 @@ import SwiftUI
 struct TeamMode: View {
     @Environment(AppModel.self) private var app
     @Environment(Router.self) private var router
-    @State private var inspectorTab: InspectorTab = .details
 
     var body: some View {
         if let server = app.currentServer, let agent = selectedAgent(on: server) {
             HStack(spacing: 0) {
-                ThreadView(server: server, agent: agent, inspectorTab: $inspectorTab)
+                ThreadView(server: server, agent: agent, inspectorTab: Bindable(router).inspectorTab)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 if router.inspectorOpen {
                     InspectorView(
-                        server: server, agent: agent, tab: $inspectorTab,
+                        server: server, agent: agent, tab: Bindable(router).inspectorTab,
                         onClose: { router.inspectorOpen = false })
                         .frame(width: 400)
                         .transition(.move(edge: .trailing).combined(with: .opacity))

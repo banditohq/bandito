@@ -131,7 +131,11 @@
 "browser.forward" = "Вперёд";
 "browser.hint" = "Браузер живёт на сервере. Входы на сайты сохраняются, агенты видят те же вкладки, что и вы. У изолированных агентов — свой браузер.";
 "browser.install" = "Установить";
+"browser.installFailed" = "Установка не завершилась. Смотрите лог сервера.";
+"browser.installing" = "Устанавливаю… это может занять несколько минут.";
 "browser.missingChrome" = "Нужно установить Chrome";
+"browser.needsChrome" = "Для браузера нужен Chrome";
+"browser.needsChromeHint" = "Bandito может установить Google Chrome на этот сервер. Браузер хранит на нём ваши входы.";
 "browser.newTab" = "Новая вкладка";
 "browser.onServer" = "открыто на сервере";
 "browser.openOnMac" = "Открыть на Mac";
@@ -356,6 +360,11 @@
 "files.upload.title" = "%1$@ загружается с Mac в %2$@";
 "folderPicker.choose" = "Выбрать %1$@";
 "folderPicker.clone" = "Склонировать по ссылке";
+"folderPicker.cloneGo" = "Клонировать";
+"folderPicker.cloneHint" = "Git скопирует репозиторий в новую папку внутри %1$@ на этом сервере.";
+"folderPicker.cloneName" = "Имя папки";
+"folderPicker.cloneURL" = "Адрес репозитория (https:// или git@host:путь)";
+"folderPicker.cloning" = "Клонирую… это может занять несколько минут.";
 "folderPicker.hidden" = "скрытая";
 "folderPicker.newFolder" = "Новая папка";
 "folderPicker.newFolderPlaceholder" = "Имя папки, Enter — создать";
@@ -454,6 +463,7 @@
 "keys.newAgent" = "Новый агент";
 "keys.newFile" = "Новый файл";
 "keys.newFolder" = "Новая папка";
+"keys.newTab" = "Новая вкладка";
 "keys.newTerminal" = "Новый терминал";
 "keys.nextAgent" = "Следующий агент";
 "keys.nextTab" = "Следующая вкладка";
@@ -547,6 +557,11 @@
 "new.to" = "Кому:";
 "notification.approval" = "%1$@ ждёт вас";
 "notification.finished" = "%1$@ завершил работу";
+"notify.allow" = "Разрешить";
+"notify.deny" = "Отклонить";
+"notify.failed" = "%1$@: ошибка";
+"notify.finished" = "%1$@ закончил";
+"notify.needsYou" = "%1$@ ждёт вас: %2$@";
 "onboarding.account.continueApple" = "Продолжить с Apple";
 "onboarding.account.continueGithub" = "Продолжить с GitHub";
 "onboarding.account.emailLabel" = "Почта";
@@ -1099,6 +1114,9 @@
 "thread.react" = "Реакция";
 "thread.reply" = "Ответить";
 "thread.reviewApproved" = "%1$@ проверил изменения · одобрил";
+"thread.runtimeLimit" = "Лимит %1$@ кончился — продолжаю на %2$@";
+"thread.runtimeLimitUntil" = "Лимит %1$@ кончился — продолжаю на %2$@ до %3$@";
+"thread.runtimeReturned" = "Вернулся на %1$@";
 "thread.scheduledRun" = "Запуск по расписанию";
 "thread.send" = "Отправить";
 "thread.stop" = "Остановить";

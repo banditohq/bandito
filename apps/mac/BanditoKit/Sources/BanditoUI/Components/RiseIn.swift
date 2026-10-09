@@ -7,6 +7,7 @@ public struct RiseInModifier: ViewModifier {
     var delay: Double
     @State private var shown = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage(MotionLevel.storageKey) private var motionLevel = MotionLevel.full.rawValue
 
     public func body(content: Content) -> some View {
         let visible = shown || reduceMotion
@@ -15,7 +16,8 @@ public struct RiseInModifier: ViewModifier {
             .offset(y: visible ? 0 : 8)
             .onAppear {
                 guard !shown else { return }
-                withAnimation(.easeOut(duration: 0.35).delay(delay)) {
+                let level = MotionLevel(stored: motionLevel)
+                withAnimation(.easeOut(duration: level.scaled(0.35)).delay(level.scaled(delay))) {
                     shown = true
                 }
             }

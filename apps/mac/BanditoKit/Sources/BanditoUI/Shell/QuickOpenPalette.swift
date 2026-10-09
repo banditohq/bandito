@@ -90,7 +90,13 @@ struct QuickOpenPalette: View {
             case .upArrow: move(-1)
             case .downArrow: move(1)
             case .escape: close()
-            default: activate(rows.indices.contains(selected) ? rows[selected] : nil)
+            default:
+                let row = rows.indices.contains(selected) ? rows[selected] : nil
+                // ⌘↵ on an agent opens it and puts the cursor in its message field.
+                if press.modifiers.contains(.command), row?.kind == .agents {
+                    router.requestComposerFocus()
+                }
+                activate(row)
             }
             return .handled
         }

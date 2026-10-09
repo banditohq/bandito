@@ -187,7 +187,11 @@ public enum L10n {
         public static var forward: String { L10n.tr("browser.forward") }
         public static var hint: String { L10n.tr("browser.hint") }
         public static var install: String { L10n.tr("browser.install") }
+        public static var installFailed: String { L10n.tr("browser.installFailed") }
+        public static var installing: String { L10n.tr("browser.installing") }
         public static var missingChrome: String { L10n.tr("browser.missingChrome") }
+        public static var needsChrome: String { L10n.tr("browser.needsChrome") }
+        public static var needsChromeHint: String { L10n.tr("browser.needsChromeHint") }
         public static var newTab: String { L10n.tr("browser.newTab") }
         public static var onServer: String { L10n.tr("browser.onServer") }
         public static var openOnMac: String { L10n.tr("browser.openOnMac") }
@@ -532,6 +536,11 @@ public enum L10n {
     public enum FolderPicker {
         public static func choose(name: String) -> String { L10n.tr("folderPicker.choose", name) }
         public static var clone: String { L10n.tr("folderPicker.clone") }
+        public static var cloneGo: String { L10n.tr("folderPicker.cloneGo") }
+        public static func cloneHint(folder: String) -> String { L10n.tr("folderPicker.cloneHint", folder) }
+        public static var cloneName: String { L10n.tr("folderPicker.cloneName") }
+        public static var cloneURL: String { L10n.tr("folderPicker.cloneURL") }
+        public static var cloning: String { L10n.tr("folderPicker.cloning") }
         public static var hidden: String { L10n.tr("folderPicker.hidden") }
         public static var newFolder: String { L10n.tr("folderPicker.newFolder") }
         public static var newFolderPlaceholder: String { L10n.tr("folderPicker.newFolderPlaceholder") }
@@ -654,6 +663,7 @@ public enum L10n {
         public static var newAgent: String { L10n.tr("keys.newAgent") }
         public static var newFile: String { L10n.tr("keys.newFile") }
         public static var newFolder: String { L10n.tr("keys.newFolder") }
+        public static var newTab: String { L10n.tr("keys.newTab") }
         public static var newTerminal: String { L10n.tr("keys.newTerminal") }
         public static var nextAgent: String { L10n.tr("keys.nextAgent") }
         public static var nextTab: String { L10n.tr("keys.nextTab") }
@@ -785,6 +795,14 @@ public enum L10n {
     public enum Notification {
         public static func approval(name: String) -> String { L10n.tr("notification.approval", name) }
         public static func finished(name: String) -> String { L10n.tr("notification.finished", name) }
+    }
+
+    public enum Notify {
+        public static var allow: String { L10n.tr("notify.allow") }
+        public static var deny: String { L10n.tr("notify.deny") }
+        public static func failed(name: String) -> String { L10n.tr("notify.failed", name) }
+        public static func finished(name: String) -> String { L10n.tr("notify.finished", name) }
+        public static func needsYou(name: String, title: String) -> String { L10n.tr("notify.needsYou", name, title) }
     }
 
     public enum Onboarding {
@@ -1540,6 +1558,9 @@ public enum L10n {
         public static var react: String { L10n.tr("thread.react") }
         public static var reply: String { L10n.tr("thread.reply") }
         public static func reviewApproved(name: String) -> String { L10n.tr("thread.reviewApproved", name) }
+        public static func runtimeLimit(from: String, to: String) -> String { L10n.tr("thread.runtimeLimit", from, to) }
+        public static func runtimeLimitUntil(from: String, to: String, time: String) -> String { L10n.tr("thread.runtimeLimitUntil", from, to, time) }
+        public static func runtimeReturned(runtime: String) -> String { L10n.tr("thread.runtimeReturned", runtime) }
         public static var scheduledRun: String { L10n.tr("thread.scheduledRun") }
         public static var send: String { L10n.tr("thread.send") }
         public static var stop: String { L10n.tr("thread.stop") }

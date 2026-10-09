@@ -37,6 +37,10 @@ public struct NewAgentDraft: Equatable, Sendable {
     public var cwd = ""
     public var approval: ApprovalChoice = .risky
     public var memory: MemoryMode = .smart
+    /// "If the limit runs out": the runtime to continue on. `nil` = do not switch.
+    public var fallbackRuntime: RuntimeKind?
+    /// Empty means the fallback runtime's default model.
+    public var fallbackModel = ""
 
     public init() {}
 
@@ -49,6 +53,16 @@ public struct NewAgentDraft: Equatable, Sendable {
     public mutating func setRuntime(_ next: RuntimeKind) {
         runtime = next
         effort = next.clampedEffort(effort)
+        // The fallback must be another runtime: a fallback that became the primary is dropped.
+        if fallbackRuntime == next {
+            fallbackRuntime = nil
+            fallbackModel = ""
+        }
+    }
+
+    /// The runtimes that can be the fallback of `runtime`: the other pickable ones.
+    public static func fallbackOptions(for runtime: RuntimeKind) -> [RuntimeKind] {
+        RuntimeKind.pickable.filter { $0 != runtime }
     }
 
     public func makeNewAgent() -> NewAgent {
@@ -63,7 +77,9 @@ public struct NewAgentDraft: Equatable, Sendable {
             approvalMode: approval.mode,
             systemPrompt: instructions.isEmpty ? nil : instructions,
             effort: effort,
-            memoryMode: memory)
+            memoryMode: memory,
+            fallbackRuntime: fallbackRuntime,
+            fallbackModel: trimmed(fallbackModel).isEmpty ? nil : trimmed(fallbackModel))
     }
 
     /// Model names offered in the menu. Other runtimes take free text only.

@@ -75,13 +75,19 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
     public var chapter: Int
     /// Unix milliseconds of the last finished turn.
     public var lastTurnAt: Int64?
+    /// The fallback subscription, used when the primary runtime's usage runs out. `nil` = none.
+    public var fallbackRuntime: RuntimeKind?
+    public var fallbackModel: String?
+    /// The runtime the agent runs on now; `nil` = the primary `runtime`.
+    public var activeRuntime: RuntimeKind?
 
     public init(
         id: String, name: String, role: String = "", runtime: RuntimeKind, model: String? = nil, cwd: String,
         approvalMode: ApprovalMode = .risky, systemPrompt: String? = nil, runtimeSessionId: String? = nil,
         createdAt: Int64 = 0, updatedAt: Int64 = 0,
         effort: Effort? = nil, memoryMode: MemoryMode = .smart, contextBudget: Int? = nil, homeDir: String? = nil,
-        contextTokens: Int = 0, chapter: Int = 1, lastTurnAt: Int64? = nil
+        contextTokens: Int = 0, chapter: Int = 1, lastTurnAt: Int64? = nil,
+        fallbackRuntime: RuntimeKind? = nil, fallbackModel: String? = nil, activeRuntime: RuntimeKind? = nil
     ) {
         self.id = id
         self.name = name
@@ -101,6 +107,9 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
         self.contextTokens = contextTokens
         self.chapter = chapter
         self.lastTurnAt = lastTurnAt
+        self.fallbackRuntime = fallbackRuntime
+        self.fallbackModel = fallbackModel
+        self.activeRuntime = activeRuntime
     }
 
     /// Fields added after the first daemon release are optional on the wire; old daemons send none of them.
@@ -124,6 +133,9 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
         contextTokens = try c.decodeIfPresent(Int.self, forKey: .contextTokens) ?? 0
         chapter = try c.decodeIfPresent(Int.self, forKey: .chapter) ?? 1
         lastTurnAt = try c.decodeIfPresent(Int64.self, forKey: .lastTurnAt)
+        fallbackRuntime = try c.decodeIfPresent(RuntimeKind.self, forKey: .fallbackRuntime)
+        fallbackModel = try c.decodeIfPresent(String.self, forKey: .fallbackModel)
+        activeRuntime = try c.decodeIfPresent(RuntimeKind.self, forKey: .activeRuntime)
     }
 }
 
@@ -138,12 +150,18 @@ public struct NewAgent: Codable, Sendable {
     public var effort: Effort?
     public var memoryMode: MemoryMode
     public var contextBudget: Int?
+    /// Optional fallback subscription; omitted from the request when `nil`.
+    public var fallbackRuntime: RuntimeKind?
+    public var fallbackModel: String?
 
     public init(
         name: String, role: String = "", runtime: RuntimeKind, model: String? = nil, cwd: String,
         approvalMode: ApprovalMode = .risky, systemPrompt: String? = nil,
-        effort: Effort? = nil, memoryMode: MemoryMode = .smart, contextBudget: Int? = nil
+        effort: Effort? = nil, memoryMode: MemoryMode = .smart, contextBudget: Int? = nil,
+        fallbackRuntime: RuntimeKind? = nil, fallbackModel: String? = nil
     ) {
+        self.fallbackRuntime = fallbackRuntime
+        self.fallbackModel = fallbackModel
         self.name = name
         self.role = role
         self.runtime = runtime
@@ -257,6 +275,9 @@ public enum EventBody: Sendable, Hashable {
     case usageLimits(runtime: String, windows: [LimitWindow])
     /// The agent closed one chapter (its session) and started the next.
     case sessionRotated(chapter: Int, reason: String, contextTokens: Int)
+    /// The agent moved to another runtime: to its fallback when the limit ran out, or back to the primary.
+    /// `until` is when the limit resets (Unix seconds), if the daemon knows it.
+    case runtimeSwitched(from: String, to: String, until: Int64?)
     case error(message: String)
     /// A kind this app version doesn't know yet. Shown as nothing; kept for forward compatibility.
     case unknown(kind: String)
@@ -301,6 +322,7 @@ extension Event: Decodable {
     private struct AgentStatusP: Decodable { var status: AgentStatus; var detail: String? }
     private struct UsageLimitsP: Decodable { var runtime: String; var windows: [LimitWindow] }
     private struct SessionRotatedP: Decodable { var chapter: Int; var reason: String; var contextTokens: Int }
+    private struct RuntimeSwitchedP: Decodable { var from: String; var to: String; var until: Int64? }
     private struct ErrorP: Decodable { var message: String }
 
     public init(from decoder: Decoder) throws {
@@ -340,6 +362,9 @@ extension Event: Decodable {
         case "session.rotated":
             let x = try p(SessionRotatedP.self)
             body = .sessionRotated(chapter: x.chapter, reason: x.reason, contextTokens: x.contextTokens)
+        case "runtime.switched":
+            let x = try p(RuntimeSwitchedP.self)
+            body = .runtimeSwitched(from: x.from, to: x.to, until: x.until)
         case "error": body = .error(message: try p(ErrorP.self).message)
         default: body = .unknown(kind: kind)
         }

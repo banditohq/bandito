@@ -40,6 +40,9 @@ public struct RaccoonAvatar: View {
     public let size: CGFloat
     public let mood: AvatarMood
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage(MotionLevel.storageKey) private var motionLevel = MotionLevel.full.rawValue
+    /// Repeating motion stands still: Reduce Motion, or "Less" / "Off" in settings.
+    private var still: Bool { reduceMotion || !MotionLevel(stored: motionLevel).allowsRepeatingMotion }
 
     /// - Parameters:
     ///   - name: Agent name; also the seed for the automatic color and face and for the rhythm.
@@ -61,10 +64,10 @@ public struct RaccoonAvatar: View {
     public var body: some View {
         let resolved = AvatarResolver.resolve(name: name, color: color, face: face)
         let phase = AvatarPose.phase(for: name)
-        TimelineView(.animation(minimumInterval: 1.0 / 20, paused: reduceMotion)) { context in
+        TimelineView(.animation(minimumInterval: 1.0 / 20, paused: still)) { context in
             let pose = AvatarPose.make(
                 mood: mood, time: context.date.timeIntervalSinceReferenceDate, phase: phase,
-                reduceMotion: reduceMotion)
+                reduceMotion: still)
             RaccoonFace(resolved: resolved, pose: pose, size: size)
         }
         .frame(width: size, height: size)

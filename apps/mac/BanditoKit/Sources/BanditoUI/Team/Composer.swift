@@ -124,6 +124,9 @@ struct Composer: View {
         }
         .animation(.easeOut(duration: BanditoMotion.fast), value: query != nil)
         .onAppear { focused = true }
+        .onChange(of: router.composerFocusRequested, initial: true) { _, _ in
+            if router.takeComposerFocus() { focused = true }
+        }
         .onChange(of: draft) { _, _ in
             slash.suppressed = false
             slash.notice = nil
@@ -285,7 +288,7 @@ struct Composer: View {
             slash.notice = L10n.Slash.soon
         case .memory:
             draft = ""
-            router.inspectorOpen = true
+            router.openInspector(.memory)
         case .changes:
             draft = ""
             router.sheet = .changes(agentID: agent.id)

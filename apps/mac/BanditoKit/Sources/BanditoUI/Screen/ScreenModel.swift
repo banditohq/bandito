@@ -45,6 +45,11 @@ final class ScreenModel {
     }
     var clipboard: ScreenClipboard = .shared
 
+    /// The clipboard choice from Settings → Browser and screen (`screen.sharedClipboard`, on by default).
+    static func storedClipboard(_ defaults: UserDefaults = .standard) -> ScreenClipboard {
+        (defaults.object(forKey: "screen.sharedClipboard") as? Bool ?? true) ? .shared : .off
+    }
+
     private var pollTask: Task<Void, Never>?
 
     init(server: ServerModel) {
@@ -109,6 +114,8 @@ final class ScreenModel {
     func connect() async {
         guard let status, status.running, let vncPort = status.vncPort, let password = status.vncPassword else { return }
         disconnect()
+        // Settings → Browser and screen: the clipboard choice applies to each connection.
+        clipboard = Self.storedClipboard()
         do {
             let local = try await server.forwardOnce(port: vncPort)
             guard let host = local.host, let port = local.port, let port16 = UInt16(exactly: port) else {

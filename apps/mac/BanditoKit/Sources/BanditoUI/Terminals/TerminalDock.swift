@@ -122,6 +122,9 @@ struct PulsingDot: View {
     let size: CGFloat
     @State private var expanded = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage(MotionLevel.storageKey) private var motionLevel = MotionLevel.full.rawValue
+    /// Repeating motion stands still: Reduce Motion, or "Less" / "Off" in settings.
+    private var still: Bool { reduceMotion || !MotionLevel(stored: motionLevel).allowsRepeatingMotion }
 
     var body: some View {
         Circle()
@@ -131,7 +134,7 @@ struct PulsingDot: View {
             .scaleEffect(expanded ? 1.25 : 1)
             .opacity(expanded ? 0.75 : 1)
             .onAppear {
-                guard !reduceMotion else { return }
+                guard !still else { return }
                 withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
                     expanded = true
                 }
