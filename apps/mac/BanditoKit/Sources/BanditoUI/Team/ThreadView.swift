@@ -71,6 +71,8 @@ struct ThreadView: View {
                 agentName: agent.name,
                 running: thread.turnRunning,
                 contextFraction: ContextUsage.fraction(tokens: agent.contextTokens, budget: agent.contextBudget),
+                agent: agent,
+                server: server,
                 onSend: send,
                 onStop: stop)
                 .frame(maxWidth: 780)

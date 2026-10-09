@@ -520,17 +520,18 @@ extension ServerModel {
     public func updateAgent(
         _ id: String, name: String? = nil, role: String? = nil, cwd: String? = nil, approvalMode: ApprovalMode? = nil,
         effort: Effort? = nil, memoryMode: MemoryMode? = nil, contextBudget: Int? = nil,
-        systemPrompt: String? = nil
+        systemPrompt: String? = nil, model: String? = nil
     ) async throws -> Agent {
         struct P: Encodable {
             var id: String; var name: String?; var role: String?; var cwd: String?; var approvalMode: ApprovalMode?
             var effort: Effort?; var memoryMode: MemoryMode?; var contextBudget: Int?; var systemPrompt: String?
+            var model: String?
         }
         let a = try await rpc().call(
             "agents.update",
             P(
                 id: id, name: name, role: role, cwd: cwd, approvalMode: approvalMode, effort: effort,
-                memoryMode: memoryMode, contextBudget: contextBudget, systemPrompt: systemPrompt),
+                memoryMode: memoryMode, contextBudget: contextBudget, systemPrompt: systemPrompt, model: model),
             as: Agent.self)
         replaceAgent(a)
         return a
