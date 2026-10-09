@@ -2,7 +2,7 @@ import BanditoDesign
 import BanditoL10n
 import SwiftUI
 
-/// Settings → Appearance and motion. Only the dark theme exists for now; motion can be reduced.
+/// Settings → Appearance. Only the dark theme exists for now; motion can be reduced.
 struct AppearanceSection: View {
     @AppStorage(MotionLevel.storageKey) private var motionRaw = MotionLevel.full.rawValue
 
@@ -22,7 +22,7 @@ struct AppearanceSection: View {
                             (MotionLevel.off, L10n.Settings.Appearance.motionOff),
                         ]
                     )
-                    .frame(width: 300)
+                    .fixedSize()
                 }
             }
             .banditoCard()

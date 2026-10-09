@@ -414,7 +414,10 @@
 "settings.language" = "Langue";
 "settings.language.system" = "Système";
 "settings.launchAtLogin" = "Lancer à l'ouverture de session";
+"settings.launchAtLoginHint" = "Bandito s'ouvre tout seul à l'ouverture de session sur ce Mac.";
 "settings.menuBar" = "Afficher dans la barre des menus";
+"settings.nav.account" = "Compte";
+"settings.nav.appearance" = "Apparence";
 "settings.notifications" = "Notifications";
 "settings.sectionsAria" = "Sections des réglages";
 "settings.servers" = "Serveurs";

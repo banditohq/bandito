@@ -24,7 +24,7 @@ struct BrowserScreenSection: View {
                             (ScreenQuality.sharper, L10n.Settings.BrowserScreen.qualitySharper),
                         ]
                     )
-                    .frame(width: 280)
+                    .fixedSize()
                 }
                 Divider().padding(.horizontal, 16)
                 SettingsRow(title: L10n.Settings.BrowserScreen.clipboard, hint: L10n.Settings.BrowserScreen.clipboardHint) {

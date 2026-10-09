@@ -20,6 +20,23 @@ enum BanditoPalette {
     /// Idle status dot (#6E655A), darker than `text3`. Used for dots only.
     static let idle = Color(hex: 0x6E655A)
 
+    // MARK: Settings sidebar badges
+
+    // One fill per Settings section, as System Settings colors its icons. These are separate from the brand tokens on
+    // purpose. In the dark theme `ok`, `info` and `danger` are pastel (about #A9C7A2, #A3BDEB, #F2A093): a white glyph
+    // on them is unreadable, so the badges use darker fills of the same hues. Purple, teal, indigo and the grays have
+    // no brand token at all. Orange is `signal`, the brand's "needs you" color, so Approvals uses it.
+    static let badgeGray = Color(hex: 0x7D786F)
+    static let badgeDarkGray = Color(hex: 0x4A463F)
+    static let badgeBlue = Color(hex: 0x3B6FC4)
+    static let badgeLightBlue = Color(hex: 0x2E8BC0)
+    static let badgeGreen = Color(hex: 0x4C8A4A)
+    static let badgeOrange = Color.Bandito.signal
+    static let badgePurple = Color(hex: 0x7E57C2)
+    static let badgeTeal = Color(hex: 0x2A9D8F)
+    static let badgeRed = Color(hex: 0xC9453A)
+    static let badgeIndigo = Color(hex: 0x5B5BD6)
+
     // MARK: Avatars
 
     // Fixed brand avatar colors, same in light and dark. They do not follow theme tokens.

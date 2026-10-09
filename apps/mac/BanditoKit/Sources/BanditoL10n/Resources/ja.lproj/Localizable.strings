@@ -414,7 +414,10 @@
 "settings.language" = "言語";
 "settings.language.system" = "システム";
 "settings.launchAtLogin" = "ログイン時に起動";
+"settings.launchAtLoginHint" = "このMacにサインインすると、Banditoが自動で起動します。";
 "settings.menuBar" = "メニューバーに表示";
+"settings.nav.account" = "アカウント";
+"settings.nav.appearance" = "外観";
 "settings.notifications" = "通知";
 "settings.sectionsAria" = "設定のセクション";
 "settings.servers" = "サーバー";

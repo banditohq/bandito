@@ -1646,6 +1646,7 @@ public enum L10n {
         public static var language: String { L10n.tr("settings.language") }
         public static var languageRestart: String { L10n.tr("settings.languageRestart") }
         public static var launchAtLogin: String { L10n.tr("settings.launchAtLogin") }
+        public static var launchAtLoginHint: String { L10n.tr("settings.launchAtLoginHint") }
         public static func launchFailed(error: String) -> String { L10n.tr("settings.launchFailed", error) }
         public static var menuBar: String { L10n.tr("settings.menuBar") }
         public static var notifications: String { L10n.tr("settings.notifications") }
@@ -1735,7 +1736,6 @@ public enum L10n {
             public static var browserScreen: String { L10n.tr("settings.nav.browserScreen") }
             public static var general: String { L10n.tr("settings.nav.general") }
             public static var keysGestures: String { L10n.tr("settings.nav.keysGestures") }
-            public static var language: String { L10n.tr("settings.nav.language") }
             public static var notifications: String { L10n.tr("settings.nav.notifications") }
             public static var servers: String { L10n.tr("settings.nav.servers") }
             public static var terminalFiles: String { L10n.tr("settings.nav.terminalFiles") }

@@ -21,6 +21,7 @@ struct NotificationsSection: View {
                         .banditoButton(.signal())
                     } else {
                         Chip(text: Self.statusText(status), tone: status == .authorized ? .ok : .neutral)
+                            .fixedSize()
                     }
                 }
                 Divider().padding(.horizontal, 16)

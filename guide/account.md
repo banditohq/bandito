@@ -5,8 +5,8 @@ and conversations stay on your servers. Everything works on one Mac without an a
 ## Account sheet
 
 <!-- id: acc-sheet; covers: sheet:account -->
-The sheet that the profile button at the bottom of the sidebar opens, and that Settings → Account and sync opens too. Without an account it offers the sign-in, the same as the account step of the introduction. With an account it shows who is signed in, the devices of the account and the actions for them.
-Где: Sidebar → bottom left, the profile button (person icon); or Settings (⌘,) → Account and sync (Аккаунт и синхронизация) → Sign in (Войти)
+The sheet that the profile button at the bottom of the sidebar opens, and that Settings → Account (Аккаунт) opens too. Without an account it offers the sign-in, the same as the account step of the introduction. With an account it shows who is signed in, the devices of the account and the actions for them.
+Где: Sidebar → bottom left, the profile button (person icon); or Settings (⌘,) → Account (Аккаунт) → Sign in (Войти)
 1. Click the profile button at the bottom left of the sidebar. The sheet opens on the account, or on the sign-in when nobody is signed in.
 2. Click Sign in (Войти) to sign in with GitHub or by an email code, as in the introduction.
 2. With an account, read the devices. To drop a device from the list, click Remove device (Remove device) on its row.
@@ -44,7 +44,7 @@ Skips the sign-in. Everything stays on this Mac, and you can sign in later from 
 
 <!-- id: acc-privacy; covers: -->
 Only the list of your servers is stored in the account: encrypted, and only your devices hold the key. Tokens are kept in the Mac's Keychain, not in the settings file.
-Где: Settings (⌘,) → Account and sync (Аккаунт и синхронизация) → intro text; first-run introduction → Account → privacy line
+Где: Settings (⌘,) → Account (Аккаунт) → intro text; first-run introduction → Account → privacy line
 1. Read the privacy line on the Account step. It says code, API keys and conversations stay on your servers.
 
 ## Device key error (Could not read this Mac's device key)
@@ -72,7 +72,7 @@ The phones and Macs that connect to a server. Adding and revoking are on the ser
 
 <!-- id: acc-sign-out; covers: -->
 Sign out (Sign out) in the account sheet signs this Mac out of the account. Sync stops on this Mac until you sign in again. To remove a server from this Mac, use Settings → Servers → Delete (see [settings.md](settings.md)).
-Где: Settings (⌘,) → Account and sync (Аккаунт и синхронизация) → Sign out (Sign out)
+Где: Settings (⌘,) → Account (Аккаунт) → Sign out (Sign out)
 1. Click Sign out (Sign out) and confirm.
 
 ## Reset (Сбросить)

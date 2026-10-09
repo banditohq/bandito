@@ -414,7 +414,10 @@
 "settings.language" = "语言";
 "settings.language.system" = "跟随系统";
 "settings.launchAtLogin" = "登录时打开";
+"settings.launchAtLoginHint" = "登录这台 Mac 时自动打开 Bandito。";
 "settings.menuBar" = "在菜单栏中显示";
+"settings.nav.account" = "账户";
+"settings.nav.appearance" = "外观";
 "settings.notifications" = "通知";
 "settings.sectionsAria" = "设置分区";
 "settings.servers" = "服务器";

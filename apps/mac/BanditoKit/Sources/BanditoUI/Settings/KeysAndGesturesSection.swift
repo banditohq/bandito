@@ -81,6 +81,7 @@ struct KeysAndGesturesSection: View {
             }
             .padding(.horizontal, 12)
             .frame(height: 34)
+            .frame(maxWidth: .infinity)
             .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.Bandito.text.opacity(0.05)))
             .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.Bandito.text.opacity(0.08)))
             SegmentedPicker(
@@ -135,7 +136,7 @@ struct KeysAndGesturesSection: View {
             Text(command.title)
                 .font(.system(size: 13))
                 .foregroundStyle(custom ? Color.Bandito.signalGlow : Color.Bandito.text)
-                .lineLimit(1)
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if let waiting, let taken = waiting.conflicts.first {
                 Text(L10n.Keys.conflict(name: taken.title))
@@ -291,7 +292,8 @@ struct KeysAndGesturesSection: View {
         @Bindable var gestures = gestures
         return ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                // Two cards when there is room, one when the window is narrow, so the card text is never squeezed.
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 12)], spacing: 12) {
                     ForEach(Gesture.allCases, id: \.self) { gesture in
                         gestureCard(gesture)
                     }
