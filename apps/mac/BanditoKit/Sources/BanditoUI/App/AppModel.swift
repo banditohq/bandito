@@ -165,6 +165,11 @@ public final class AppModel {
             lastError = "Could not save the device token in the Keychain. The server was not added."
             return
         }
+        // Connecting the same server again (a reinstall, "This Mac" twice) replaces its entry instead of
+        // adding a second one: the new token is the valid one.
+        if let existing = servers.first(where: { $0.config.endpoint == config.endpoint && $0.id != config.id }) {
+            remove(existing.id)
+        }
         lastError = nil
         let model = ServerModel(config: config)
         attachNotifications(model)
