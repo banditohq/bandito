@@ -62,6 +62,8 @@ public enum InstallError: Error, Sendable, Equatable, LocalizedError {
     case localBinaryMissing
     /// A local file or process failed.
     case io(String)
+    /// No install script was passed in, and the app bundle does not contain one.
+    case missingInstallScript
 
     public var errorDescription: String? {
         switch self {
@@ -81,6 +83,8 @@ public enum InstallError: Error, Sendable, Equatable, LocalizedError {
             return "This build does not include the bandito tool."
         case .io(let detail):
             return detail
+        case .missingInstallScript:
+            return "This build does not include the Bandito install script."
         }
     }
 }
@@ -99,8 +103,6 @@ public struct SSHInstaller: Sendable {
 
     public static let sshExecutable = "/usr/bin/ssh"
     public static let scpExecutable = "/usr/bin/scp"
-    /// The install script of the latest release.
-    public static let releaseScriptURL = URL(string: "https://github.com/banditohq/bandito/releases/latest/download/install.sh")!
     /// Every ssh and scp call: never prompt, and give up on an unreachable host.
     static let transportOptions = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=15"]
     static let remoteBinary = "~/.local/bin/bandito"
@@ -114,12 +116,12 @@ public struct SSHInstaller: Sendable {
 
     /// - Parameters:
     ///   - runner: runs ssh and scp.
-    ///   - installScript: the install.sh bytes. Default: the copy bundled in the app, else the release script.
+    ///   - installScript: the install.sh bytes. Default: the copy bundled in the app. The script is never downloaded.
     ///   - localBinary: a bandito build to copy with scp instead of running install.sh (development).
     ///   - redeem: exchanges the code for a token. Default: over an `SSHTunnel` to the server.
     public init(
         runner: CommandRunner,
-        installScript: @escaping ScriptSource = SSHInstaller.bundledOrReleaseScript,
+        installScript: @escaping ScriptSource = SSHInstaller.bundledScript,
         localBinary: URL? = nil,
         redeem: Redeem? = nil
     ) {
@@ -278,16 +280,13 @@ public struct SSHInstaller: Sendable {
 
     // MARK: defaults
 
-    /// The install script bundled with the app, or the release script when none is bundled.
-    public static let bundledOrReleaseScript: ScriptSource = {
-        if let url = Bundle.main.url(forResource: "install", withExtension: "sh") {
-            return try Data(contentsOf: url)
+    /// The install script copied into the app bundle. Nothing is downloaded: a bundle without the script
+    /// is `InstallError.missingInstallScript`.
+    public static let bundledScript: ScriptSource = {
+        guard let url = Bundle.main.url(forResource: "install", withExtension: "sh") else {
+            throw InstallError.missingInstallScript
         }
-        let (data, response) = try await URLSession.shared.data(from: SSHInstaller.releaseScriptURL)
-        guard (response as? HTTPURLResponse)?.statusCode == 200 else {
-            throw InstallError.io("Could not download install.sh from the release page.")
-        }
-        return data
+        return try Data(contentsOf: url)
     }
 
     /// Opens an `SSHTunnel` to the daemon's listen port, redeems the code there, and closes the tunnel.

@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 /// Sign-in, devices and sync against the Bandito accounts API (docs/ACCOUNTS_API.md).
@@ -13,18 +14,33 @@ public actor AccountClient {
     private let baseURL: URL
     private let device: DeviceDescriptor
 
+    /// - Throws: `AccountError.insecureBaseURL` unless `baseURL` is `validate(baseURL:)`-clean.
     public init(
         identity: DeviceIdentity,
         sessions: SecretStore,
         http: HTTPClient = URLSessionHTTPClient(),
         baseURL: URL = AccountClient.defaultBaseURL,
         device: DeviceDescriptor = .current
-    ) {
+    ) throws {
+        try Self.validate(baseURL: baseURL)
         self.identity = identity
         self.sessions = sessions
         self.http = http
         self.baseURL = baseURL
         self.device = device
+    }
+
+    /// The base URL must be `https://bandito.dev` with no port or port 443, and no user info. Plain `http` is
+    /// allowed only to a loopback host on any port (local development, `wrangler dev`), also without user info.
+    /// Anything else would send tokens in the clear or to another server.
+    public static func validate(baseURL: URL) throws {
+        guard let scheme = baseURL.scheme?.lowercased(), let host = baseURL.host?.lowercased() else {
+            throw AccountError.insecureBaseURL
+        }
+        guard baseURL.user == nil, baseURL.password == nil else { throw AccountError.insecureBaseURL }
+        if scheme == "https", host == "bandito.dev", baseURL.port == nil || baseURL.port == 443 { return }
+        if scheme == "http", ["127.0.0.1", "localhost"].contains(host) { return }
+        throw AccountError.insecureBaseURL
     }
 
     // MARK: session
@@ -122,11 +138,28 @@ public actor AccountClient {
         return try decodeOK(Wire.self, reply).devices
     }
 
-    /// Hands a pending device its sync-key envelope. Only an approved device may send it.
-    public func approve(deviceID: String, envelope: String) async throws {
+    /// Hands a pending device the sync key. Only an approved device may call it.
+    ///
+    /// The code of `device.publicKey` must equal `confirmedFingerprint`, the code the user compared on the new
+    /// device's screen. Otherwise nothing is sealed or sent: `AccountError.fingerprintMismatch`. This is what
+    /// stops a server that swapped the public key from receiving the sync key.
+    ///
+    /// The envelope is bound to this account (the signed-in session) and to `device.id`. Only that device of
+    /// that account can open it.
+    public func approve(
+        _ device: PendingDevice, confirmedFingerprint: String, syncKey: SymmetricKey, identity: DeviceIdentity
+    ) async throws {
+        let computed = try DeviceFingerprint.code(publicKeyBase64: device.publicKey)
+        guard DeviceFingerprint.matches(computed, confirmedFingerprint) else {
+            throw AccountError.fingerprintMismatch
+        }
         struct Body: Encodable { var envelope: String }
-        let reply = try await send(
-            "POST", "/devices/\(Self.segment(deviceID))/approve", body: Body(envelope: envelope), authenticated: true)
+        let path = "/devices/\(try Self.segment(device.id))/approve"
+        let session = try requireSession()
+        let envelope = try SyncKey.seal(
+            syncKey, forPublicKey: device.publicKey, sender: identity,
+            accountID: session.user.id, deviceID: device.id)
+        let reply = try await send("POST", path, body: Body(envelope: envelope), authenticated: true)
         try checkOK(reply)
     }
 
@@ -142,7 +175,7 @@ public actor AccountClient {
     /// Removes a device. `force` confirms removing the last approved device, which resets the account's sync data.
     public func deleteDevice(id: String, force: Bool) async throws {
         let query = force ? "?force=1" : ""
-        let reply = try await send("DELETE", "/devices/\(Self.segment(id))\(query)", authenticated: true)
+        let reply = try await send("DELETE", "/devices/\(try Self.segment(id))\(query)", authenticated: true)
         try checkOK(reply)
     }
 
@@ -180,6 +213,9 @@ public actor AccountClient {
 
     /// Recovery for an account whose key is lost: discards the sync data and the other devices.
     /// Needs a session created in the last 10 minutes. Returns this device's state.
+    ///
+    /// The UI must not call this directly. Use `SyncStore.resetAccount()`: it also forgets the version history
+    /// of the account on this device. Without that, the new blob (version 1) would be refused as a rollback.
     public func reset() async throws -> DeviceRef {
         struct Body: Encodable { var confirm = "RESET" }
         struct Wire: Decodable { var device: DeviceRef }
@@ -262,10 +298,14 @@ public actor AccountClient {
         .api(code: failure?.error ?? "http_\(reply.status)", status: reply.status)
     }
 
-    /// A device ID as a single URL path segment.
-    private static func segment(_ id: String) -> String {
-        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_.~"))
-        return id.addingPercentEncoding(withAllowedCharacters: allowed) ?? id
+    /// An ID as a URL path segment. Only `^[A-Za-z0-9_-]{1,128}$` passes, so `..`, slashes and empty IDs
+    /// cannot reach another endpoint.
+    static func segment(_ id: String) throws -> String {
+        guard (1...128).contains(id.count), id.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-" || $0 == "_") })
+        else {
+            throw AccountError.invalidIdentifier
+        }
+        return id
     }
 }
 

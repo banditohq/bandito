@@ -185,7 +185,8 @@ Devices of the same account that are not approved yet:
 
 ### `POST /devices/:id/approve` (approved device only)
 
-The approving device seals the sync key to the target's `public_key` and sends the envelope here.
+The approving device first compares the device's fingerprint with the code the user reads on the new device
+(see [Encryption model](#encryption-model)). Only then does it seal the sync key to the target's `public_key` and send the envelope here.
 
 Request: `{ "envelope": "<base64, at most 4096 characters>" }`.
 
@@ -217,6 +218,8 @@ Response: `{ "ok": true }`.
 
 ### `POST /account/reset` (any valid session, at most 10 minutes old)
 
+Clients call it through `SyncStore.resetAccount()` (see Sync blob), not directly.
+
 Recovery for an account whose key is lost. Request: `{ "confirm": "RESET" }` (any other value is `400 invalid`).
 
 The session must have been created within the last 10 minutes (a fresh sign-in), otherwise `403 session_too_old`. Effects in one transaction:
@@ -247,12 +250,40 @@ Request: `{ "version": 3, "blob": "<base64, at most 262144 characters>" }`.
 
 ## Encryption model
 
-- The server stores only ciphertext (`sync.blob`) and envelopes (`key_envelopes.envelope`). It cannot read any synced content.
+- The server stores only ciphertext (`sync.blob`) and envelopes (`key_envelopes.envelope`). It cannot read synced content **as long as both comparisons below are made**. Without them the server can read the sync key: it could replace a pending device's `public_key`, or replace an envelope with one sealed by itself.
 - The sync key is created by the first approved device of an account. That device is approved automatically when the account has no approved device and no sync blob.
 - A new device is pending. It has an X25519 key pair (`public_key` is public, the private part stays on the device) and an Ed25519 key pair (`signing_key`). Until approved it cannot read or write sync data.
-- An approved device opens the pending device's `public_key`, seals the sync key to it (X25519 envelope) and calls `POST /devices/:id/approve`. The new device fetches the envelope with `GET /devices/me/envelope` and opens it with its private key, which never leaves the device.
+- Approval, in order. Both code comparisons are mandatory: the app does not seal an envelope, and does not release a sync key, without them.
+  1. The new device shows its own code (the fingerprint of its X25519 key, below).
+  2. The approving device takes `public_key` from `GET /devices/pending`, computes its code, and the user compares it with the code on the new device. The approving device must not continue on a mismatch: nothing is sealed or sent (`fingerprintMismatch`).
+  3. The approving device shows its own code, seals the sync key (below) and calls `POST /devices/:id/approve`.
+  4. The new device fetches the envelope with `GET /devices/me/envelope` and opens it with its private key. It shows the sender's code ("approved by the device with code …") and asks the user to confirm that it matches the code on the approving device. Only a confirmed code releases the sync key (`PendingSyncKey.accept`). A mismatch is `senderMismatch`, and the key is not used.
 - Ed25519 signatures prove that the login comes from the holder of `signing_key`. A stolen session token alone cannot register a new device.
 - If every approved device is lost, the sync key is lost too, and the server cannot recover it. Recovery is `POST /account/reset`, which discards the encrypted sync data.
+
+### Device fingerprint
+
+```
+code = base32( first 10 bytes of SHA-256( "bandito-device-fp:v1" (UTF-8) || public_key ) )
+```
+
+`public_key` is the raw 32-byte X25519 public key. Base32 is RFC 4648 with the alphabet `ABCDEFGHIJKLMNOPQRSTUVWXYZ234567` and no padding. The result has 16 symbols, shown in groups of four separated by `-`, for example `45IU-3YV7-MGPV-EGLY`. Comparison ignores case, spaces and dashes.
+
+### Sync key envelope, version 2
+
+- Standard base64 of 113 bytes: `0x02 || sender_x25519_pub (32) || enc (32) || ct (48)`. That is 152 characters, within the 4096-character limit.
+- HPKE (RFC 9180) in **auth mode**, with the sender's X25519 private key as `authenticatedBy`. Suite `DHKEM(X25519)/HKDF-SHA256/ChaCha20-Poly1305`, `info` = `bandito-sync-key:v1` (UTF-8). `enc` is the encapsulated key. `ct` is the 32-byte sync key with its 16-byte tag.
+- Associated data (`authenticating:`): UTF-8 `bandito-sync-key:v2:<accountID>:<newDeviceID>`, where `newDeviceID` is the id of the pending device the envelope is for. An envelope opens only for that device of that account. Changing either id makes it fail.
+- Opening: the length must be exactly 113 bytes and the first byte `0x02`. Anything else is refused before any decryption. The sender's public key is read from the envelope; HPKE fails if it was changed. A successful open returns the sender's fingerprint and a pending key. The key is released only by a confirmation of that fingerprint (step 4 above); a different code is `senderMismatch`.
+- Version 1 (no sender authentication) is not accepted. No release has used it.
+
+### Sync blob
+
+- Standard base64 of ChaCha20-Poly1305 "combined" output (12-byte nonce, ciphertext, 16-byte tag), under the sync key.
+- Associated data: UTF-8 `bandito-sync-blob:v1:<accountID>:<version>`. `version` is the version the blob is stored under: the `version` of the `PUT` plus one, which is what the server assigns on a match. A blob moved to another account, or labelled with another version, does not open.
+- Rollback: each device keeps, per account, the newest blob version it has read. A blob with a lower version is refused and not applied (`rollback`).
+- Reset: the app resets an account only through `SyncStore.resetAccount()`. It calls `POST /account/reset` and then clears this device's version history for the account, so the new version 1 is accepted. Calling `POST /account/reset` directly does not clear it.
+- Known limit: `GET /sync` has no reset marker. Its answer after a reset (version `0`, no blob) is the same as for a new account. A device that did not perform the reset and still holds an older history refuses the new blobs as `rollback`. Such a device has to be re-approved with a new key, which the app does not do yet.
 
 ## Limits
 
