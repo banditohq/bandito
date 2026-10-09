@@ -49,11 +49,36 @@ import Testing
         #expect(router.pendingAgentCwd == "/b")
     }
 
-    @Test func focusComposerIsConsumedByTheThread() {
+    @Test func composerFocusIsTakenOnceByThatAgentOnly() {
         let router = Router()
-        router.requestComposerFocus()
-        #expect(router.takeComposerFocus())
-        #expect(!router.takeComposerFocus())
+        router.requestComposerFocus(agentID: "forge")
+        // Another agent's composer does not take it, and the request stays for the right one.
+        #expect(!router.takeComposerFocus(agentID: "scout"))
+        #expect(router.takeComposerFocus(agentID: "forge"))
+        #expect(!router.takeComposerFocus(agentID: "forge"))
+    }
+
+    @Test func terminalCommandComesWithTheModeSwitch() {
+        let router = Router()
+        router.requestTerminalCommand("curl -fsSL https://example.com/install.sh | sh")
+        #expect(router.mode == .terminals)
+        #expect(router.pendingTerminalCommand == "curl -fsSL https://example.com/install.sh | sh")
+        #expect(router.takeTerminalCommand() != nil)
+    }
+
+    @Test func changingServerDropsActionsAimedAtTheOldOne() {
+        let router = Router()
+        router.pendingTerminalCommand = "make"
+        router.pendingTerminalCwd = "/old/server/path"
+        router.pendingAgentCwd = "/old/server/path"
+        router.pendingPreviewPort = 3000
+        router.requestComposerFocus(agentID: "forge")
+        router.dropPendingServerActions()
+        #expect(router.pendingTerminalCommand == nil)
+        #expect(router.pendingTerminalCwd == nil)
+        #expect(router.pendingAgentCwd == nil)
+        #expect(router.pendingPreviewPort == nil)
+        #expect(!router.takeComposerFocus(agentID: "forge"))
     }
 
     @Test func inspectorTabIsKeptInTheRouter() {

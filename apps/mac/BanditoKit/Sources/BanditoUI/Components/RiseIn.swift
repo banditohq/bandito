@@ -10,13 +10,19 @@ public struct RiseInModifier: ViewModifier {
     @AppStorage(MotionLevel.storageKey) private var motionLevel = MotionLevel.full.rawValue
 
     public func body(content: Content) -> some View {
-        let visible = shown || reduceMotion
+        let level = MotionLevel(stored: motionLevel)
+        // Reduce Motion, or "Off" in settings: the row is shown at once, as its final frame.
+        let still = level.reducesMotion(systemReduceMotion: reduceMotion)
+        let visible = shown || still
         content
             .opacity(visible ? 1 : 0)
             .offset(y: visible ? 0 : 8)
             .onAppear {
                 guard !shown else { return }
-                let level = MotionLevel(stored: motionLevel)
+                if still {
+                    shown = true
+                    return
+                }
                 withAnimation(.easeOut(duration: level.scaled(0.35)).delay(level.scaled(delay))) {
                     shown = true
                 }

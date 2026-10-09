@@ -1,4 +1,5 @@
 import BanditoKit
+import BanditoL10n
 import Testing
 
 @testable import BanditoUI
@@ -7,11 +8,19 @@ import Testing
 @MainActor
 final class FakeNotificationSink: NotificationService.Sink {
     var posted: [NotificationContent] = []
+    var removed: [String] = []
 
     func post(_ content: NotificationContent) {
         posted.append(content)
     }
+
+    func removeDelivered(approvalID: String) {
+        removed.append(approvalID)
+    }
 }
+
+/// A resolve that fails, the way an approval already answered (or stale) does.
+struct StaleApproval: Error {}
 
 @MainActor
 @Suite struct NotificationServiceTests {
@@ -19,13 +28,17 @@ final class FakeNotificationSink: NotificationService.Sink {
         var calls: [(agentID: String, approvalID: String, decision: Decision)] = []
     }
 
-    func service(sink: FakeNotificationSink, answers: Answers, windowActive: Bool = false, selected: String? = nil) -> NotificationService {
+    func service(
+        sink: FakeNotificationSink, answers: Answers, windowActive: Bool = false, selected: String? = nil,
+        fails: Bool = false
+    ) -> NotificationService {
         NotificationService(
             sink: sink,
             settings: { NotificationSettings() },
             windowActive: { windowActive },
             selectedAgentID: { selected },
             resolve: { agentID, approvalID, decision in
+                if fails { throw StaleApproval() }
                 answers.calls.append((agentID, approvalID, decision))
             })
     }
@@ -63,5 +76,39 @@ final class FakeNotificationSink: NotificationService.Sink {
         let service = service(sink: FakeNotificationSink(), answers: answers)
         await service.handleAction("com.apple.UNNotificationDefaultActionIdentifier", agentID: "a1", approvalID: "ap1")
         #expect(answers.calls.isEmpty)
+    }
+
+    @Test func answeredApprovalLosesItsNotification() async {
+        let sink = FakeNotificationSink()
+        let service = service(sink: sink, answers: Answers())
+        await service.handleAction(NotificationContent.allowAction, agentID: "a1", approvalID: "ap1")
+        #expect(sink.removed == ["ap1"])
+        #expect(sink.posted.isEmpty)
+    }
+
+    @Test func failedAnswerIsLoggedAndShownNotRemoved() async {
+        let sink = FakeNotificationSink()
+        let service = service(sink: sink, answers: Answers(), fails: true)
+        await service.handleAction(NotificationContent.denyAction, agentID: "a1", approvalID: "ap1")
+        #expect(sink.removed.isEmpty)
+        #expect(sink.posted.count == 1)
+        #expect(sink.posted[0].title == L10n.Notify.resolveFailed)
+        #expect(sink.posted[0].approvalID == nil)
+    }
+
+    @Test func emptyApprovalIDAnswersNothing() async {
+        let sink = FakeNotificationSink()
+        let answers = Answers()
+        let service = service(sink: sink, answers: answers)
+        await service.handleAction(NotificationContent.allowAction, agentID: "a1", approvalID: "")
+        #expect(answers.calls.isEmpty)
+        #expect(sink.removed.isEmpty)
+    }
+
+    @Test func approvalAnsweredElsewhereRemovesItsNotification() {
+        let sink = FakeNotificationSink()
+        let service = service(sink: sink, answers: Answers())
+        service.approvalSettled("ap9")
+        #expect(sink.removed == ["ap9"])
     }
 }

@@ -561,7 +561,12 @@
 "notify.deny" = "Deny";
 "notify.failed" = "%1$@: error";
 "notify.finished" = "%1$@ finished";
+"notify.hiddenPreview" = "Open Bandito to see it";
+"notify.needsApproval" = "%1$@ needs approval";
 "notify.needsYou" = "%1$@ needs you: %2$@";
+"notify.resolveFailed" = "Could not answer: the request is already answered or out of date";
+"notify.reviewLines" = "Command of %1$lld lines — open Bandito to review it";
+"notify.reviewLong" = "Long command — open Bandito to review it";
 "onboarding.account.continueApple" = "Continue with Apple";
 "onboarding.account.continueGithub" = "Continue with GitHub";
 "onboarding.account.emailLabel" = "Email";

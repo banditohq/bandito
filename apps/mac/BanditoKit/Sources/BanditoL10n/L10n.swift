@@ -802,7 +802,12 @@ public enum L10n {
         public static var deny: String { L10n.tr("notify.deny") }
         public static func failed(name: String) -> String { L10n.tr("notify.failed", name) }
         public static func finished(name: String) -> String { L10n.tr("notify.finished", name) }
+        public static var hiddenPreview: String { L10n.tr("notify.hiddenPreview") }
+        public static func needsApproval(name: String) -> String { L10n.tr("notify.needsApproval", name) }
         public static func needsYou(name: String, title: String) -> String { L10n.tr("notify.needsYou", name, title) }
+        public static var resolveFailed: String { L10n.tr("notify.resolveFailed") }
+        public static func reviewLines(count: Int) -> String { L10n.tr("notify.reviewLines", count) }
+        public static var reviewLong: String { L10n.tr("notify.reviewLong") }
     }
 
     public enum Onboarding {

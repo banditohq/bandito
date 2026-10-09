@@ -19,6 +19,8 @@ struct BanditoApp: App {
                 .environment(gestures)
                 .environment(demo)
                 .task {
+                    // Actions aimed at the server that was in front are dropped when another one is chosen.
+                    model.onServerChanged = { [router] in router.dropPendingServerActions() }
                     model.startNotifications(
                         selectedAgentID: { [router] in
                             router.mode == .team ? router.selectedAgentID : nil

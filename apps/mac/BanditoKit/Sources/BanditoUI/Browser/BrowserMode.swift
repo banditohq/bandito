@@ -187,16 +187,20 @@ private struct BrowserToolbar: View {
 @MainActor
 enum BrowserKeyRouting {
     static func forward(_ type: CDPKeyType, _ descriptor: CDPKeyDescriptor, _ modifiers: KeyModifiers, to model: BrowserModel) async {
-        let edit = type == .keyDown
-            ? BrowserEdit.shortcut(
-                key: descriptor.key, command: modifiers.contains(.meta), shift: modifiers.contains(.shift))
-            : nil
-        switch edit {
-        case .paste?:
+        let shortcut = BrowserEdit.shortcut(
+            key: descriptor.key, command: modifiers.contains(.meta), shift: modifiers.contains(.shift))
+        if shortcut == .paste {
+            // Only the first press pastes. A held ⌘V sends repeats (rawKeyDown, from isARepeat) that must not
+            // paste again, nor reach the page as a key.
+            guard type == .keyDown else { return }
             // Chrome's paste reads its own clipboard, so the Mac's text is typed in instead.
             if let text = NSPasteboard.general.string(forType: .string), !text.isEmpty {
                 await model.send(.insertText(text))
             }
+            return
+        }
+        let edit = type == .keyDown ? shortcut : nil
+        switch edit {
         case let edit?:
             await model.send(.editing(edit, key: descriptor, modifiers: modifiers))
         case nil:

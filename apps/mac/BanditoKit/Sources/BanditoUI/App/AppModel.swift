@@ -7,7 +7,13 @@ import Observation
 @Observable
 public final class AppModel {
     public private(set) var servers: [ServerModel] = []
-    public var selectedServerID: UUID?
+    public var selectedServerID: UUID? {
+        didSet {
+            if oldValue != selectedServerID { onServerChanged?() }
+        }
+    }
+    /// Called when the server in front changes. The app drops the actions that were aimed at the old server.
+    @ObservationIgnored public var onServerChanged: (() -> Void)?
     /// The last problem the user should know about (e.g. a token that could not be stored).
     public private(set) var lastError: String?
     /// Text size of every terminal pane (⌘+ ⌘− ⌘0 and pinch).
@@ -40,8 +46,10 @@ public final class AppModel {
             windowActive: windowActive,
             selectedAgentID: selectedAgentID,
             resolve: { [weak self] agentID, approvalID, decision in
-                guard let server = self?.servers.first(where: { $0.agents.contains { $0.id == agentID } }) else { return }
-                try? await server.resolve(approvalID, decision, remember: false)
+                guard let server = self?.servers.first(where: { $0.agents.contains { $0.id == agentID } }) else {
+                    throw AgentNotFoundError()
+                }
+                try await server.resolve(approvalID, decision, remember: false)
             })
         sink.service = service
         sink.start()
@@ -51,7 +59,12 @@ public final class AppModel {
     /// Feeds one server's live events to the notifications. Servers added later are attached as they come.
     private func attachNotifications(_ server: ServerModel) {
         server.onLiveEvent = { [weak self, weak server] event in
-            guard let self, let server, let notice = Self.notice(for: event, in: server) else { return }
+            guard let self, let server else { return }
+            // Answered in the app or on another device: the notification of that approval goes away.
+            if case .approvalResolved(let approvalID, _, _, _) = event.body {
+                self.notifications?.approvalSettled(approvalID)
+            }
+            guard let notice = Self.notice(for: event, in: server) else { return }
             self.notifications?.handle(notice)
         }
     }
@@ -60,8 +73,9 @@ public final class AppModel {
     static func notice(for event: Event, in server: ServerModel) -> AgentNotice? {
         let name = server.agents.first { $0.id == event.agentId }?.name ?? ""
         switch event.body {
-        case .approvalRequested(let approvalID, _, _, let title, _, _, _):
-            return .approval(agentID: event.agentId, agentName: name, approvalID: approvalID, title: title)
+        case .approvalRequested(let approvalID, _, _, let title, let command, _, _):
+            return .approval(
+                agentID: event.agentId, agentName: name, approvalID: approvalID, title: title, command: command)
         case .turnCompleted(_, .ok, _, _):
             return .finished(agentID: event.agentId, agentName: name)
         case .error(let message):

@@ -82,8 +82,9 @@ public final class Router {
     public var pendingAgentCwd: String?
     /// Team: text for the composer of the selected agent ("Ask about this place"). Taken once by the thread.
     public var pendingComposerText: String?
-    /// Team: the composer should take keyboard focus (⌘↵ in the palette, after opening the agent). Taken once.
-    public private(set) var composerFocusRequested = false
+    /// Team: the composer of this agent should take keyboard focus (⌘↵ in the palette, after opening the agent).
+    /// Taken once, by the composer of that agent only.
+    public private(set) var composerFocusAgentID: String?
     /// Terminals: a command from the menu bar, waiting for the Terminals mode to perform it.
     public var terminalRequest: TerminalRequest?
     /// Browser: the open tab.
@@ -192,15 +193,36 @@ public final class Router {
         return pendingFilePath
     }
 
-    /// Asks the composer to take focus. The thread takes the request with `takeComposerFocus()`.
-    public func requestComposerFocus() {
-        composerFocusRequested = true
+    /// Asks the composer of `agentID` to take focus. The request is taken by `takeComposerFocus(agentID:)`.
+    public func requestComposerFocus(agentID: String) {
+        composerFocusAgentID = agentID
     }
 
-    /// True once per request: the first call returns true and clears it.
-    public func takeComposerFocus() -> Bool {
-        defer { composerFocusRequested = false }
-        return composerFocusRequested
+    /// True once per request, and only for the agent the request names: the first matching call returns true
+    /// and clears the request. Other composers leave it alone.
+    public func takeComposerFocus(agentID: String) -> Bool {
+        guard composerFocusAgentID == agentID else { return false }
+        composerFocusAgentID = nil
+        return true
+    }
+
+    /// A terminal command for the Terminals mode, and the mode switch in the same step, so the command runs
+    /// now and is never left waiting for the mode to open later.
+    public func requestTerminalCommand(_ command: String) {
+        pendingTerminalCommand = command
+        select(mode: .terminals)
+    }
+
+    /// Drops the actions aimed at the server that was in front: a folder, a command, a port, a text or a file
+    /// of another server would be wrong here. Called when the server in front changes.
+    public func dropPendingServerActions() {
+        pendingTerminalCommand = nil
+        pendingTerminalCwd = nil
+        pendingAgentCwd = nil
+        pendingComposerText = nil
+        pendingPreviewPort = nil
+        pendingFilePath = nil
+        composerFocusAgentID = nil
     }
 
     /// Opens the agent details panel on `tab`.

@@ -561,7 +561,12 @@
 "notify.deny" = "Отклонить";
 "notify.failed" = "%1$@: ошибка";
 "notify.finished" = "%1$@ закончил";
+"notify.hiddenPreview" = "Откройте Bandito, чтобы посмотреть";
+"notify.needsApproval" = "%1$@ ждёт одобрения";
 "notify.needsYou" = "%1$@ ждёт вас: %2$@";
+"notify.resolveFailed" = "Не удалось: запрос уже решён или устарел";
+"notify.reviewLines" = "Команда из %1$lld строк — откройте, чтобы проверить";
+"notify.reviewLong" = "Длинная команда — откройте, чтобы проверить";
 "onboarding.account.continueApple" = "Продолжить с Apple";
 "onboarding.account.continueGithub" = "Продолжить с GitHub";
 "onboarding.account.emailLabel" = "Почта";

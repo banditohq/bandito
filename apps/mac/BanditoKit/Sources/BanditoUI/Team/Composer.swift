@@ -124,8 +124,9 @@ struct Composer: View {
         }
         .animation(.easeOut(duration: BanditoMotion.fast), value: query != nil)
         .onAppear { focused = true }
-        .onChange(of: router.composerFocusRequested, initial: true) { _, _ in
-            if router.takeComposerFocus() { focused = true }
+        .onChange(of: router.composerFocusAgentID, initial: true) { _, _ in
+            guard let agentID = agent?.id else { return }
+            if router.takeComposerFocus(agentID: agentID) { focused = true }
         }
         .onChange(of: draft) { _, _ in
             slash.suppressed = false

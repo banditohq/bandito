@@ -1296,5 +1296,10 @@
   "browser.needsChrome": "Для браузера нужен Chrome",
   "browser.needsChromeHint": "Bandito может установить Google Chrome на этот сервер. Браузер хранит на нём ваши входы.",
   "browser.installing": "Устанавливаю… это может занять несколько минут.",
-  "browser.installFailed": "Установка не завершилась. Смотрите лог сервера."
+  "browser.installFailed": "Установка не завершилась. Смотрите лог сервера.",
+  "notify.needsApproval": "{name} ждёт одобрения",
+  "notify.resolveFailed": "Не удалось: запрос уже решён или устарел",
+  "notify.reviewLines": "Команда из {count} строк — откройте, чтобы проверить",
+  "notify.reviewLong": "Длинная команда — откройте, чтобы проверить",
+  "notify.hiddenPreview": "Откройте Bandito, чтобы посмотреть"
 }

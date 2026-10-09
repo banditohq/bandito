@@ -1257,5 +1257,10 @@
   "browser.needsChrome": "Chrome is needed for the browser",
   "browser.needsChromeHint": "Bandito can install Google Chrome on this server. The browser keeps its sign-ins there.",
   "browser.installing": "Installing… this can take a few minutes.",
-  "browser.installFailed": "The install did not finish. See the server log."
+  "browser.installFailed": "The install did not finish. See the server log.",
+  "notify.needsApproval": "{name} needs approval",
+  "notify.resolveFailed": "Could not answer: the request is already answered or out of date",
+  "notify.reviewLines": "Command of {count} lines — open Bandito to review it",
+  "notify.reviewLong": "Long command — open Bandito to review it",
+  "notify.hiddenPreview": "Open Bandito to see it"
 }
