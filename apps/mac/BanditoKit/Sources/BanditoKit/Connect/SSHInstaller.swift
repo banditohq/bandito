@@ -48,6 +48,8 @@ public struct PairInfo: Sendable, Equatable {
 public enum InstallError: Error, Sendable, Equatable, LocalizedError {
     /// ssh itself failed: the classified reason.
     case ssh(SSHTunnelError)
+    /// ssh failed with its own message, classified finely enough to act on (host key, key, network).
+    case sshFailed(SSHFailure)
     /// Kernel and architecture the install script does not cover. The text is what `uname` said.
     case unsupportedPlatform(String)
     /// A remote step exited with an error. `detail` is its last line of output.
@@ -69,6 +71,8 @@ public enum InstallError: Error, Sendable, Equatable, LocalizedError {
         switch self {
         case .ssh(let error):
             return error.errorDescription
+        case .sshFailed(let failure):
+            return failure.englishDescription
         case .unsupportedPlatform(let uname):
             return "\(uname) is not supported. Bandito runs on Linux and macOS, on x86_64 or arm64."
         case .step(let step, let detail):
@@ -233,7 +237,7 @@ public struct SSHInstaller: Sendable {
         guard result.status != 0 else { return result }
         let text = result.stderr.isEmpty ? result.stdout : result.stderr
         if result.status == 255 {
-            throw InstallError.ssh(SSHTunnelError.from(stderr: text))
+            throw InstallError.sshFailed(SSHFailure.classify(stderr: text))
         }
         throw InstallError.step(step, detail: SSHTunnelError.lastLine(of: text))
     }

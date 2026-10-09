@@ -10,13 +10,3 @@ public protocol SignInService: Sendable {
 }
 
 extension AccountClient: SignInService {}
-
-/// The account client the app uses. The device keys come from the one `DeviceIdentityStore` of the app;
-/// the session is kept in the Keychain under its own service.
-public enum AccountEnvironment {
-    public static func live() async throws -> AccountClient {
-        let identity = try await DeviceIdentityStore.shared.load()
-        return try AccountClient(
-            identity: identity, sessions: KeychainStore(service: "dev.bandito.account"))
-    }
-}

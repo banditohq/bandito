@@ -183,7 +183,7 @@ private func done(_ events: [InstallEvent]) -> PairInfo? {
 
         let events = await collect(installer.install(target: target, deviceName: "Test Mac"))
 
-        #expect(failure(events) == .ssh(.authFailed))
+        #expect(failure(events) == .sshFailed(.keyNotAccepted))
         #expect(runner.calls.count == 1)
         #expect(redeem.calls.isEmpty)
     }

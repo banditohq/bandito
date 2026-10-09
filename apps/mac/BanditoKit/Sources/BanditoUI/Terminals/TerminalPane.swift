@@ -89,6 +89,12 @@ final class TerminalViewBridge: TerminalViewDelegate, @unchecked Sendable {
 
     nonisolated func scrolled(source: TerminalView, position: Double) {}
 
+    /// A link in the output was clicked. Only https opens; http, file and other schemes are ignored.
+    nonisolated func requestOpenLink(source: TerminalView, link: String, params: [String: String]) {
+        guard let url = URL(string: link), url.scheme == "https" else { return }
+        Task { @MainActor in SystemActions.open(url) }
+    }
+
     nonisolated func bell(source: TerminalView) {
         NSSound.beep()
     }

@@ -10,7 +10,7 @@ public enum DeviceFingerprint {
     static let alphabet = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZ234567".utf8)
 
     /// The code of a raw X25519 public key (32 bytes): SHA-256 of the domain and the key, first 80 bits in
-    /// base32 (RFC 4648 alphabet, no padding), grouped by four. Example: `K7QF-2MXA-9RTE-H4WB`.
+    /// base32 (RFC 4648 alphabet, no padding), grouped by four. Example: `K7QF-2MXA-7RTE-H4WB` (base32 uses A-Z and 2-7 only).
     public static func code(publicKey: Data) -> String {
         var input = Data(domain.utf8)
         input.append(publicKey)

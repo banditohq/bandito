@@ -74,6 +74,13 @@ public enum SyncKey {
         return SymmetricKey(data: raw)
     }
 
+    /// Replaces the sync key with a new one: the old key is removed first, then a new one is made.
+    /// Used after a reset, where the old key must not seal anything for the new account history.
+    public static func rotate(in store: SecretStore) throws -> SymmetricKey {
+        try store.save(nil, account: keychainAccount)
+        return try loadOrCreate(from: store)
+    }
+
     public static func save(_ key: SymmetricKey, to store: SecretStore) throws {
         try store.save(bytes(of: key), account: keychainAccount)
     }

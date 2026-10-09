@@ -11,10 +11,7 @@ public struct RootView: View {
 
     public var body: some View {
         Group {
-            if onboarding.isUndecided {
-                // Saved servers are not connected yet: neither the flow nor the main window is known to be right.
-                Color.Bandito.bg
-            } else if onboarding.isActive {
+            if onboarding.isActive {
                 OnboardingFlow()
             } else {
                 MainWindow()

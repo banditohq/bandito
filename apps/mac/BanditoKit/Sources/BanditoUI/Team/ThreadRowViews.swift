@@ -66,6 +66,7 @@ private struct ItemView: View {
                     }
                 }
             }
+            .tourAnchor(.approvals)
         case .note(_, let text, let kind, _):
             NoteLine(text: text, isError: kind == .error)
         case .runtimeSwitch(_, let from, let to, let until, _):

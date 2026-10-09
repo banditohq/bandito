@@ -4,7 +4,7 @@ import SwiftUI
 
 /// The first-run flow, shown in the main window's place until the person has a server with an agent or skips.
 /// This is the shell: the step counter, Skip and the order of steps (`OnboardingModel`). Step screens that are
-/// not built yet are placeholders; Welcome and Account are built, FirstServer, FirstAgent and Tour are next.
+/// not built yet are placeholders; Welcome, Account and approval are built.
 public struct OnboardingFlow: View {
     @Environment(OnboardingModel.self) private var onboarding
 
@@ -40,28 +40,25 @@ public struct OnboardingFlow: View {
         case .welcome:
             WelcomeView { onboarding.advance() }
         case .account:
-            AccountSignInView { session in
-                onboarding.signedIn(deviceApproved: session.device.approved)
-            } onSkipAccount: {
+            AccountSignInView(onFinished: { route in
+                // A first device or a ready device goes on; anything else needs the approval step.
+                onboarding.signedIn(deviceApproved: route == .firstDevice || route == .ready)
+            }, onSkipAccount: {
                 onboarding.advance()
-            }
+            })
         case .approval:
-            PlaceholderStep(title: L10n.Mode.soonHere) {
+            DeviceApprovalStep(onFinished: {
                 onboarding.advance()
-            } action: {
-                Text(L10n.Common.next)
-            }
+            }, onNoAccess: {
+                onboarding.returnToSignIn()
+            })
         case .server:
-            PlaceholderStep(title: L10n.Onboarding.Server.title) {
+            FirstServerStep {
                 onboarding.advance()
-            } action: {
-                Text(L10n.Common.next)
             }
         case .agent:
-            PlaceholderStep(title: L10n.Mode.soonHere) {
-                onboarding.advance()
-            } action: {
-                Text(L10n.Common.next)
+            AgentStep {
+                onboarding.finishWithTour()
             }
         case .done:
             EmptyView()

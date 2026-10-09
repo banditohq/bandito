@@ -46,6 +46,8 @@ final class TerminalSession {
     @ObservationIgnored var onPinch: ((Double) -> Void)?
     /// The terminal reported `closed` (it was closed on the server).
     @ObservationIgnored var onClosed: (() -> Void)?
+    /// Output bytes as they are drawn. The login step looks for the link in them.
+    @ObservationIgnored var onOutput: ((Data) -> Void)?
 
     init(info: TermInfo, server: ServerModel, fontSize: Double) {
         self.id = info.id
@@ -58,6 +60,8 @@ final class TerminalSession {
         view.nativeBackgroundColor = TerminalTheme.background
         view.nativeForegroundColor = TerminalTheme.foreground
         view.caretColor = TerminalTheme.caret
+        // Links in the output are underlined on hover and opened with a click (see the bridge: https only).
+        view.linkHighlightMode = .hoverWithModifier
         // The emulator must match the daemon's size before the first output arrives.
         view.resize(cols: info.cols, rows: info.rows)
 
@@ -121,6 +125,7 @@ final class TerminalSession {
             activity.record(data, at: .now)
             let bytes = [UInt8](data)
             view.feed(byteArray: bytes[...])
+            onOutput?(data)
         case .gap(let lost):
             printLine(L10n.Terminals.gap(kb: String(max(1, Int(lost / 1024)))))
         case .exit(let code, let signal):

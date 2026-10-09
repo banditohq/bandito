@@ -28,21 +28,18 @@ public final class OnboardingModel {
     public private(set) var step: OnboardingStep
     /// Whether the flow is in front of the main window.
     public private(set) var isActive = false
-    /// True until the servers are connected and `evaluate` has run, when saved servers exist and it is not known yet
-    /// whether they have agents. The window shows a neutral background meanwhile, never the main window or the flow.
-    public private(set) var isUndecided = false
+    /// The tour over the main window runs after the first agent is created. Cleared by `endTour`.
+    public private(set) var tourRequested = false
     /// True while the signed-in device waits for approval from another device.
     public private(set) var needsApproval = false
 
     @ObservationIgnored private let defaults: UserDefaults
-    /// The launch check runs once; after that only `replay()` brings the flow back.
-    @ObservationIgnored private var evaluated = false
 
-    /// The launch decision is made here from local data, so the first frame is already right:
-    /// - done: the main window, at once;
-    /// - not done, no saved servers: the flow, at once;
-    /// - not done, saved servers: undecided until `evaluate` knows their agents.
-    /// - Parameter hasSavedServers: whether the app has servers stored on this Mac (read before connecting).
+    /// The launch decision, made once and for good here, from local data only:
+    /// the main window when the flow is done or when servers are saved on this Mac; the flow otherwise.
+    /// Connecting afterwards never switches it. If the person removes every server, nothing changes: the flow
+    /// comes back only from the Help menu.
+    /// - Parameter hasSavedServers: whether servers are stored on this Mac (read before connecting).
     public init(defaults: UserDefaults = .standard, hasSavedServers: Bool = false) {
         self.defaults = defaults
         let saved = defaults.string(forKey: Self.stepKey).flatMap(OnboardingStep.init(rawValue:))
@@ -52,22 +49,12 @@ public final class OnboardingModel {
         } else {
             step = .welcome
         }
-        let done = defaults.bool(forKey: Self.doneKey)
-        isActive = !done && !hasSavedServers
-        isUndecided = !done && hasSavedServers
+        isActive = !(defaults.bool(forKey: Self.doneKey) || hasSavedServers)
     }
 
     /// True once the person has finished or skipped the flow.
     public var isDone: Bool {
         defaults.bool(forKey: Self.doneKey)
-    }
-
-    /// Launch check: the flow shows while it is not done and no server has an agent yet.
-    public func evaluate(hasServerWithAgents: Bool) {
-        guard !evaluated else { return }
-        evaluated = true
-        isActive = !isDone && !hasServerWithAgents
-        isUndecided = false
     }
 
     /// Moves to the next step. Reaching `.done` finishes the flow.
@@ -95,11 +82,22 @@ public final class OnboardingModel {
 
     /// "Show the introduction again" from the Help menu: starts at welcome, whatever the server state.
     public func replay() {
+        tourRequested = false
         defaults.set(false, forKey: Self.doneKey)
         needsApproval = false
         set(.welcome)
         isActive = true
-        isUndecided = false
+    }
+
+    /// The first agent exists: the flow is done and the tour starts over the main window.
+    public func finishWithTour() {
+        tourRequested = true
+        finish()
+    }
+
+    /// The tour ended, by "Finish", "Skip", or because there was nothing to point at.
+    public func endTour() {
+        tourRequested = false
     }
 
     /// The flow is over: the done flag is stored and the main window takes over.

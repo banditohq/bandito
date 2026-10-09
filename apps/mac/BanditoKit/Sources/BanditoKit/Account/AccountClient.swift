@@ -112,6 +112,18 @@ public actor AccountClient {
         try decodeOK(Me.self, try await send("GET", "/me", authenticated: true))
     }
 
+    /// Ends the session `session` on the server, using its own token. Works after the local copy is gone:
+    /// the caller keeps the session in memory and forgets the local copy first. A session the server no longer
+    /// knows counts as ended.
+    public func revoke(_ session: Session) async throws {
+        do {
+            let reply = try await send("POST", "/auth/logout", body: EmptyBody(), token: session.token)
+            try checkOK(reply)
+        } catch AccountError.api(code: "unauthorized", status: _) {
+            return
+        }
+    }
+
     /// Ends the server session, then forgets it here. A session the server no longer knows is forgotten
     /// too. A network failure keeps the session, so the call can be retried.
     public func logout() async throws {
@@ -246,10 +258,11 @@ public actor AccountClient {
     }
 
     private func send(
-        _ method: String, _ path: String, body: (any Encodable)? = nil, authenticated: Bool = false
+        _ method: String, _ path: String, body: (any Encodable)? = nil, authenticated: Bool = false,
+        token explicitToken: String? = nil
     ) async throws -> Reply {
-        var token: String?
-        if authenticated {
+        var token: String? = explicitToken
+        if authenticated, token == nil {
             token = try requireSession().token
         }
         var request = URLRequest(url: try url(for: path))
