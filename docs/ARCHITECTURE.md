@@ -208,3 +208,19 @@ The agent's instructions (built by the daemon, before the user's own) explain th
 **Effort.** Each agent has an `effort` (`low`, `medium`, `high`, `xhigh`, `max`). The daemon maps it to the runtime (`--effort` for Claude, the turn's `effort` for Codex, `--reasoning-effort` for Grok) and refuses levels a runtime does not offer.
 
 **Usage.** Rate-limit windows reported by the CLIs are cached per runtime (`usage.limits`), so the app shows remaining quota even when no turn is running; `usage.refresh` asks runtimes that can be asked (Codex: `account/rateLimits/read`).
+
+## Accounts, sync and push (planned)
+
+An account is optional: without one the app works on one Mac. With one, every device of the person sees the same servers and agents, and approvals reach the phone.
+
+**Service.** `api.bandito.dev` (Cloudflare Worker + D1, in the private `platform` repo; the protocol is documented here so anyone can run their own). Sign in with Apple, GitHub, or an email link. No passwords.
+
+**What the service stores.** Account (id, email), devices (name, platform, public key, push token), and one **encrypted vault** per account. The vault holds the server list (names, how to reach them) and per-device settings. It is encrypted on the device with a vault key the service never sees.
+
+**Vault key.** Created on the first device and kept in the Keychain. A new device signs in, shows a short code, and an existing device approves it: the existing device encrypts the vault key to the new device's public key (X25519 + XChaCha20-Poly1305). An optional printed recovery key restores the vault if every device is lost; without it the person re-pairs servers, and nothing on the servers is lost.
+
+**Server access per device.** Devices never share daemon tokens. When a device joins, an existing device asks each server for a pairing code (`pair.create`) and passes it through the vault channel; the new device redeems it for its own token. Revoking a device revokes only its tokens.
+
+**Push.** Approvals and finished turns reach phones through `push.bandito.dev`: the daemon sends an end-to-end encrypted payload addressed to device push tokens; a notification service extension decrypts it on the phone. Approve and Deny from the notification call the daemon directly (through whatever connection the phone has: Tailscale, SSH, relay).
+
+**Reaching servers from a phone.** Tailscale and direct TLS work as on the Mac; SSH works through an in-app SSH client; the Bandito Relay (outbound-only, end-to-end encrypted) covers servers behind NAT without any setup.
