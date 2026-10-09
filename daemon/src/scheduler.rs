@@ -75,6 +75,26 @@ pub async fn tick(sup: &Supervisor, now_ms: i64) -> Result<usize> {
             }
         };
         if now_ms - due_at <= MISSED_GRACE_MS {
+            // A paused agent keeps its schedule: this run is skipped (not recorded as run) and the next one is set.
+            let paused = match store.agent_get(&s.agent_id) {
+                Ok(agent) => agent.is_some_and(|a| a.paused),
+                Err(e) => {
+                    tracing::warn!(schedule = %s.id, "could not read the agent of a scheduled run: {e:#}");
+                    continue;
+                }
+            };
+            if paused {
+                match store.schedule_reschedule(&s.id, due_at, Some(next)) {
+                    Ok(true) => {
+                        tracing::info!(schedule = %s.id, agent = %s.agent_id, "scheduled run skipped: agent is paused")
+                    }
+                    Ok(false) => {
+                        tracing::info!(schedule = %s.id, "schedule changed during tick, paused run left alone")
+                    }
+                    Err(e) => tracing::warn!(schedule = %s.id, "could not reschedule a paused run: {e:#}"),
+                }
+                continue;
+            }
             match store.schedule_claim(&s.id, due_at, now_ms, Some(next)) {
                 Ok(true) => {}
                 Ok(false) => {
@@ -323,6 +343,28 @@ mod tests {
         let after = store.schedule_get(&s.id).unwrap().unwrap();
         assert_eq!(after.last_run_at, Some(now));
         assert_eq!(after.next_run_at, Some(ms("2026-10-09T11:00:00Z")));
+    }
+
+    #[tokio::test]
+    async fn tick_skips_the_run_of_a_paused_agent_and_keeps_the_schedule() {
+        let (sup, store, agent) = setup();
+        let now = ms(NOW);
+        let s = store
+            .schedule_create(new_schedule(&agent, "0 * * * *", true), Some(now - 1000))
+            .unwrap();
+        store.agent_set_paused(&agent, true).unwrap();
+
+        assert_eq!(tick(&sup, now).await.unwrap(), 0);
+
+        assert!(agent_events(&store, &agent).is_empty());
+        let after = store.schedule_get(&s.id).unwrap().unwrap();
+        assert_eq!(after.last_run_at, None, "a skipped run is not recorded as run");
+        assert_eq!(after.next_run_at, Some(ms("2026-10-09T11:00:00Z")));
+        assert!(after.enabled);
+
+        // Resumed: the next due run goes ahead.
+        store.agent_set_paused(&agent, false).unwrap();
+        assert_eq!(tick(&sup, ms("2026-10-09T11:00:05Z")).await.unwrap(), 1);
     }
 
     #[tokio::test]

@@ -125,8 +125,15 @@ pub struct ApprovalSpec {
     pub input: serde_json::Value,
 }
 
+/// A message waiting for its turn. `echoed`: it is already in the thread, because it arrived while the agent was paused.
+struct Queued {
+    msg: Inbound,
+    echoed: bool,
+}
+
 enum Cmd {
-    Send(Inbound, oneshot::Sender<Result<()>>),
+    /// Replies `true` when the agent is paused and the message waits for the pause to end.
+    Send(Inbound, oneshot::Sender<Result<bool>>),
     /// A daemon-asked approval (see [`Supervisor::ask_external`]). Replies with the approval id and
     /// the channel that carries the answer.
     AskExternal {
@@ -134,6 +141,8 @@ enum Cmd {
         reply: oneshot::Sender<Result<(String, oneshot::Receiver<Decision>)>>,
     },
     Interrupt(oneshot::Sender<Result<()>>),
+    /// The pause flag changed in the store: interrupt the running turn when paused, else start the held messages.
+    PauseChanged(oneshot::Sender<Result<()>>),
     Resolve {
         approval_id: String,
         decision: Decision,
@@ -434,7 +443,24 @@ impl Supervisor {
     }
 
     pub async fn send(&self, agent_id: &str, msg: Inbound) -> Result<()> {
+        self.send_held(agent_id, msg).await.map(|_| ())
+    }
+
+    /// Sends a message like [`Supervisor::send`]. Returns `true` when the agent is paused: the message is
+    /// in its thread and waits there until the pause ends (see docs/ARCHITECTURE.md#pause).
+    pub async fn send_held(&self, agent_id: &str, msg: Inbound) -> Result<bool> {
         self.call(agent_id, |r| Cmd::Send(msg, r)).await
+    }
+
+    /// Pauses or resumes an agent. Pausing interrupts the running turn, as [`Supervisor::interrupt`] does;
+    /// resuming starts the messages held meanwhile. Returns `false` when the agent already has that state
+    /// or does not exist.
+    pub async fn set_paused(&self, agent_id: &str, paused: bool) -> Result<bool> {
+        if !self.hub.store.agent_set_paused(agent_id, paused)? {
+            return Ok(false);
+        }
+        self.call(agent_id, Cmd::PauseChanged).await?;
+        Ok(true)
     }
 
     /// One agent messages another by name (the crew MCP tool `crew_send`).
@@ -668,7 +694,7 @@ struct Actor {
     next_turn_is_retry: bool,
     /// The last message a turn was started for, to repeat it on another runtime.
     last_message: Option<Inbound>,
-    queue: VecDeque<Inbound>,
+    queue: VecDeque<Queued>,
     pending: HashMap<String, PendingApproval>,
     status: Option<AgentStatus>,
 }
@@ -712,13 +738,27 @@ impl Actor {
     async fn command(&mut self, cmd: Cmd) {
         match cmd {
             Cmd::Send(msg, reply) => {
-                self.queue.push_back(msg);
-                let _ = reply.send(self.pump().await);
+                let held = self.is_paused();
+                if held {
+                    self.echo(&msg);
+                }
+                self.queue.push_back(Queued { msg, echoed: held });
+                let res = self.pump().await.map(|()| held);
+                let _ = reply.send(res);
             }
             Cmd::Interrupt(reply) => {
-                let res = match (&mut self.session, &self.turn) {
-                    (Some(s), Some(_)) => s.interrupt().await,
-                    _ => Ok(()),
+                let res = self.interrupt_turn().await;
+                let _ = reply.send(res);
+            }
+            Cmd::PauseChanged(reply) => {
+                let res = if self.is_paused() {
+                    self.interrupt_turn().await
+                } else {
+                    // A held message that cannot start is already shown in the thread (`start_turn` reports it).
+                    if let Err(e) = self.pump().await {
+                        tracing::warn!(agent = self.id, "held message after resume: {e:#}");
+                    }
+                    Ok(())
                 };
                 let _ = reply.send(res);
             }
@@ -748,6 +788,32 @@ impl Actor {
             }
             Cmd::Stop(_) => unreachable!("handled in run"),
         }
+    }
+
+    /// Asks the running session to stop its turn. Nothing happens when no turn runs.
+    async fn interrupt_turn(&mut self) -> Result<()> {
+        match (&mut self.session, &self.turn) {
+            (Some(s), Some(_)) => s.interrupt().await,
+            _ => Ok(()),
+        }
+    }
+
+    /// Whether the agent is paused now. Read from the store, so a pause holds messages that are already queued.
+    fn is_paused(&self) -> bool {
+        self.agent().is_ok_and(|a| a.paused)
+    }
+
+    /// Shows a message in the thread: what the person typed, or its text when no expansion was typed.
+    fn echo(&self, msg: &Inbound) {
+        self.hub.emit(
+            &self.id,
+            EventBody::MessageUser {
+                text: msg.typed.clone().unwrap_or_else(|| msg.text.clone()),
+                source: msg.source,
+                from_agent: msg.from_agent.clone(),
+                command: msg.command.clone(),
+            },
+        );
     }
 
     /// Check the hop and per-turn limits, then count one crew message for the
@@ -938,12 +1004,12 @@ impl Actor {
         Ok(())
     }
 
-    /// Start the next queued message if no turn is running.
+    /// Start the next queued message if no turn is running. A paused agent starts none.
     async fn pump(&mut self) -> Result<()> {
         if self.turn.is_some() || self.wrap_up.is_some() {
             return Ok(());
         }
-        if self.queue.is_empty() {
+        if self.queue.is_empty() || self.is_paused() {
             return Ok(());
         }
         // A chapter that is over budget, or a new memory day, closes before the message goes out.
@@ -962,10 +1028,10 @@ impl Actor {
         {
             self.switch_runtime(&agent, active, agent.runtime, None).await;
         }
-        let Some(msg) = self.queue.pop_front() else {
+        let Some(Queued { msg, echoed }) = self.queue.pop_front() else {
             return Ok(());
         };
-        self.start_turn(msg).await
+        self.start_turn(msg, echoed).await
     }
 
     /// True when the next message would first close the chapter.
@@ -1006,7 +1072,7 @@ impl Actor {
             typed: None,
             command: None,
         };
-        match self.start_turn(msg).await {
+        match self.start_turn(msg, false).await {
             Ok(()) => true,
             Err(e) => {
                 tracing::warn!(agent = self.id, "wrap-up turn: {e:#}");
@@ -1076,8 +1142,8 @@ impl Actor {
         }
     }
 
-    /// Start a turn for `msg` on the session, spawning it if needed.
-    async fn start_turn(&mut self, msg: Inbound) -> Result<()> {
+    /// Start a turn for `msg` on the session, spawning it if needed. `echoed`: the message is already in the thread.
+    async fn start_turn(&mut self, msg: Inbound, echoed: bool) -> Result<()> {
         if let Err(e) = self.ensure_session().await {
             let message = format!("could not start the agent: {e:#}");
             self.hub.emit(
@@ -1108,16 +1174,8 @@ impl Actor {
                 source: msg.source,
             },
         );
-        if !retry {
-            self.hub.emit(
-                &self.id,
-                EventBody::MessageUser {
-                    text: msg.typed.clone().unwrap_or_else(|| msg.text.clone()),
-                    source: msg.source,
-                    from_agent: msg.from_agent.clone(),
-                    command: msg.command.clone(),
-                },
-            );
+        if !retry && !echoed {
+            self.echo(&msg);
         }
         self.set_status(AgentStatus::Working, None);
         let dirs = if msg.source == Source::System || retry {
@@ -1326,7 +1384,7 @@ impl Actor {
             .and_then(|e| limit::blocked_until(&e.windows, e.updated_at, now));
         self.switch_runtime(&agent, current, target, until).await;
         self.next_turn_is_retry = true;
-        if let Err(e) = self.start_turn(msg).await {
+        if let Err(e) = self.start_turn(msg, false).await {
             tracing::warn!(agent = self.id, "retry on {}: {e:#}", target.as_str());
         }
         true
@@ -1370,7 +1428,8 @@ impl Actor {
     }
 
     async fn after_turn(&mut self) {
-        if self.queue.is_empty() {
+        // A paused agent holds its queue: it is idle until the pause ends.
+        if self.queue.is_empty() || self.is_paused() {
             self.set_status(AgentStatus::Idle, None);
         } else if let Err(e) = self.pump().await {
             tracing::warn!(agent = self.id, "next message: {e:#}");
@@ -1938,6 +1997,89 @@ mod tests {
         w.push(done()).await;
         w.wait_log("send second").await;
         assert_eq!(w.spawns.lock().unwrap().len(), 1, "one session for both turns");
+    }
+
+    fn user_texts(w: &World) -> Vec<String> {
+        w.store
+            .events_since(0, 1000, Some(&w.agent))
+            .unwrap()
+            .into_iter()
+            .filter_map(|e| match e.body {
+                EventBody::MessageUser { text, .. } => Some(text),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn paused_agent_keeps_messages_in_the_thread_and_starts_no_session() {
+        let w = world(ApprovalMode::Risky);
+        assert!(w.sup.set_paused(&w.agent, true).await.unwrap());
+        assert!(w.store.agent_get(&w.agent).unwrap().unwrap().paused);
+
+        assert!(w.sup.send_held(&w.agent, Inbound::user("held")).await.unwrap());
+        assert!(w.sup.send_held(&w.agent, Inbound::user("also held")).await.unwrap());
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        assert_eq!(user_texts(&w), vec!["held", "also held"]);
+        assert!(w.spawns.lock().unwrap().is_empty(), "no session starts while paused");
+        assert!(w.log.lock().unwrap().is_empty());
+        let turns = w
+            .store
+            .events_since(0, 1000, Some(&w.agent))
+            .unwrap()
+            .into_iter()
+            .filter(|e| matches!(e.body, EventBody::TurnStarted { .. }))
+            .count();
+        assert_eq!(turns, 0);
+    }
+
+    #[tokio::test]
+    async fn resuming_starts_the_held_messages_in_order_and_echoes_each_once() {
+        let w = world(ApprovalMode::Risky);
+        w.sup.set_paused(&w.agent, true).await.unwrap();
+        w.sup.send(&w.agent, Inbound::user("first")).await.unwrap();
+        w.sup.send(&w.agent, Inbound::user("second")).await.unwrap();
+
+        assert!(w.sup.set_paused(&w.agent, false).await.unwrap());
+        w.wait_log("send first").await;
+        w.push(done()).await;
+        w.wait_log("send second").await;
+
+        assert_eq!(user_texts(&w), vec!["first", "second"]);
+        assert_eq!(w.spawns.lock().unwrap().len(), 1, "one session for both turns");
+    }
+
+    #[tokio::test]
+    async fn a_message_queued_before_the_pause_waits_without_a_second_echo() {
+        let w = world(ApprovalMode::Risky);
+        w.sup.send(&w.agent, Inbound::user("running")).await.unwrap();
+        w.wait_log("send running").await;
+        // Queued while the first turn runs: not in the thread yet.
+        assert!(!w.sup.send_held(&w.agent, Inbound::user("queued")).await.unwrap());
+        assert_eq!(user_texts(&w), vec!["running"]);
+
+        // Pausing interrupts the turn; the queued message stays where it is.
+        assert!(w.sup.set_paused(&w.agent, true).await.unwrap());
+        w.wait_log("interrupt").await;
+        w.push(done()).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert!(!w.log.lock().unwrap().iter().any(|l| l == "send queued"));
+        assert!(w.store.agent_get(&w.agent).unwrap().unwrap().paused);
+
+        assert!(w.sup.set_paused(&w.agent, false).await.unwrap());
+        w.wait_log("send queued").await;
+        assert_eq!(user_texts(&w), vec!["running", "queued"]);
+    }
+
+    #[tokio::test]
+    async fn set_paused_reports_only_real_changes() {
+        let w = world(ApprovalMode::Risky);
+        assert!(!w.sup.set_paused(&w.agent, false).await.unwrap());
+        assert!(w.sup.set_paused(&w.agent, true).await.unwrap());
+        assert!(!w.sup.set_paused(&w.agent, true).await.unwrap());
+        assert!(w.sup.set_paused(&w.agent, false).await.unwrap());
+        assert!(!w.sup.set_paused("no-such-agent", true).await.unwrap());
     }
 
     #[tokio::test]
