@@ -1786,3 +1786,48 @@ mod probes {
         }
     }
 }
+
+#[cfg(test)]
+mod everyday_commands {
+    use super::*;
+
+    fn verdict(command: &str) -> Verdict {
+        let prot = Protected::new(Path::new("/home/u/.bandito"), Path::new("/usr/local/bin/bandito"), Path::new("/home/u"));
+        let req = ApprovalRequest {
+            key: "k".into(),
+            call_id: "c".into(),
+            tool: "Bash".into(),
+            title: "Bash".into(),
+            command: Some(command.into()),
+            diff: None,
+            paths: vec![],
+            input: serde_json::Value::Null,
+        };
+        evaluate(ApprovalMode::Risky, &req, &["/home/u/app"], &[], &prot)
+    }
+
+    #[test]
+    fn print_everyday() {
+        for c in [
+            "awk '{print $1}' data.txt",
+            "git log --oneline -5 | head",
+            "npm run build && npm test",
+            "cargo test -q 2>&1 | tail -20",
+            "pytest -x tests/",
+            "grep -rn 'TODO' src | wc -l",
+            "ls -la && cat README.md",
+            "find . -name '*.rs' | xargs wc -l",
+            "sed -n '1,40p' src/main.rs",
+            "python3 -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt",
+            "docker compose up -d",
+            "echo \"$PATH\"",
+            "git commit -m 'feat: x'",
+            "mkdir -p build && cd build && cmake ..",
+            "jq '.items[] | {name}' data.json",
+            "curl -s https://api.github.com/repos/x/y | jq .stargazers_count",
+            "node -e 'console.log(1)'",
+        ] {
+            eprintln!("{:?} <- {c}", verdict(c));
+        }
+    }
+}
