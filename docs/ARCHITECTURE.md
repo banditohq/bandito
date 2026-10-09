@@ -133,7 +133,7 @@ daemon/            Rust crate `bandito`
   src/main.rs      CLI entry
   src/rpc/         JSON-RPC, transports, auth, pairing
   src/store/       SQLite + migrations
-  src/runtime/     claude.rs, codex.rs, grok.rs, api/, fake test CLIs
+  src/runtime/     process.rs (shared child-process plumbing), claude.rs, codex.rs, grok.rs, api/
   src/policy.rs    approval rules
   src/scheduler.rs
   src/crew.rs      MCP server

@@ -11,6 +11,7 @@ use tokio::sync::mpsc;
 pub mod claude;
 pub mod codex;
 pub mod grok;
+pub mod process;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
