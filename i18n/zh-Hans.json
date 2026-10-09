@@ -536,5 +536,12 @@
   "empty.noServers.title": "没有服务器",
   "empty.noServers.action": "连接服务器",
   "ports.onlyPreview": "仅预览",
-  "server.tile.freeWord": "可用"
+  "server.tile.freeWord": "可用",
+  "onboarding.agent.createLater": "稍后创建代理",
+  "onboarding.subs.installing": "正在安装…",
+  "onboarding.subs.installFailed": "无法安装 {name}。请重试，或手动安装。",
+  "onboarding.subs.loginAfter": "在终端中登录，然后点击“再次检查”。",
+  "onboarding.server.agentsGroup": "代理订阅",
+  "onboarding.server.featuresGroup": "服务器功能",
+  "onboarding.server.optional": "可选"
 }

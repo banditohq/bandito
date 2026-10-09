@@ -536,5 +536,12 @@
   "empty.noServers.title": "サーバーがありません",
   "empty.noServers.action": "サーバーを接続",
   "ports.onlyPreview": "プレビュー対象のみ",
-  "server.tile.freeWord": "空き"
+  "server.tile.freeWord": "空き",
+  "onboarding.agent.createLater": "エージェントは後で作成",
+  "onboarding.subs.installing": "インストール中…",
+  "onboarding.subs.installFailed": "{name} をインストールできませんでした。もう一度試すか、手動でインストールしてください。",
+  "onboarding.subs.loginAfter": "ターミナルでサインインしてから「もう一度確認」を押してください。",
+  "onboarding.server.agentsGroup": "エージェントのサブスクリプション",
+  "onboarding.server.featuresGroup": "サーバーの機能",
+  "onboarding.server.optional": "任意"
 }

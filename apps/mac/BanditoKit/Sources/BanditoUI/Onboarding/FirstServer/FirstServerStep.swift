@@ -623,22 +623,11 @@ struct FirstServerStep: View {
 
     private func componentsBlock(_ config: ServerConfig) -> some View {
         let server = app.servers.first { $0.id == config.id }
-        return VStack(alignment: .leading, spacing: 10) {
-            Text(L10n.Onboarding.Server.componentsTitle)
-                .font(BanditoFont.font(size: 13, weight: 500))
-                .foregroundStyle(Color.Bandito.text2)
-            ForEach(model.setup.lines) { line in
-                HStack {
-                    Text(line.title)
-                        .font(BanditoFont.font(size: 13.5, weight: 400))
-                        .foregroundStyle(Color.Bandito.text)
-                    Spacer()
-                    let ready = line.state == .ready
-                    Text(ready ? L10n.Onboarding.Server.componentReady : L10n.Onboarding.Server.componentMissing)
-                        .font(BanditoFont.font(size: 12.5, weight: 500))
-                        .foregroundStyle(ready ? AvatarColor.sage.color : Color.Bandito.text3)
-                }
-            }
+        return VStack(alignment: .leading, spacing: 16) {
+            componentGroup(L10n.Onboarding.Server.agentsGroup, note: nil, ids: ["claude", "codex", "grok"])
+            componentGroup(
+                L10n.Onboarding.Server.featuresGroup, note: L10n.Onboarding.Server.optional,
+                ids: ["screen", "browser", "containers"])
             if model.setup.error != nil {
                 Text(L10n.Onboarding.Server.componentsFailed)
                     .font(BanditoFont.font(size: 12.5, weight: 400))
@@ -668,6 +657,67 @@ struct FirstServerStep: View {
         .padding(16)
         .background(Color.Bandito.surface1, in: RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.Bandito.text.opacity(0.1)))
+    }
+
+    /// One group of the server's components: a heading (with a note for the optional ones) and a row per component.
+    /// A group with no components yet is not shown.
+    @ViewBuilder
+    private func componentGroup(_ title: String, note: String?, ids: [String]) -> some View {
+        let lines = model.setup.lines.filter { ids.contains($0.id) }
+        if !lines.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Text(title)
+                        .font(BanditoFont.font(size: 13, weight: 500))
+                        .foregroundStyle(Color.Bandito.text2)
+                    if let note {
+                        Text(note)
+                            .font(BanditoFont.font(size: 12, weight: 400))
+                            .foregroundStyle(Color.Bandito.text3)
+                    }
+                }
+                ForEach(lines) { line in
+                    componentRow(line)
+                }
+            }
+        }
+    }
+
+    private func componentRow(_ line: SetupLine) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: Self.componentIcon(line.id))
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Color.Bandito.text2)
+                .frame(width: 28, height: 28)
+                .background(Color.Bandito.text.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            Text(line.title)
+                .font(BanditoFont.font(size: 13.5, weight: 400))
+                .foregroundStyle(Color.Bandito.text)
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            Text(Self.componentStatus(line.state))
+                .font(BanditoFont.font(size: 12.5, weight: 500))
+                .foregroundStyle(line.state == .ready ? AvatarColor.sage.color : Color.Bandito.text3)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+        }
+    }
+
+    static func componentIcon(_ id: String) -> String {
+        switch id {
+        case "screen": "display"
+        case "browser": "globe"
+        case "containers": "shippingbox"
+        default: "terminal"
+        }
+    }
+
+    static func componentStatus(_ state: SetupReady) -> String {
+        switch state {
+        case .ready: L10n.Setup.ready
+        case .missing: L10n.Setup.missing
+        case .unsupported: L10n.Setup.unsupported
+        }
     }
 
     /// The administrator password is never asked for or kept by Bandito: the person runs the command in a terminal.

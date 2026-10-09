@@ -248,6 +248,7 @@
 "onboarding.account.subtitle" = "Gratuit. Vos serveurs apparaissent sur tous vos appareils.";
 "onboarding.account.title" = "Connectez-vous à Bandito";
 "onboarding.agent.asks" = "Demande";
+"onboarding.agent.createLater" = "Créer un agent plus tard";
 "onboarding.agent.firstMessage" = "Le premier message ne prend que quelques secondes : %1$@ se présente et demande par où commencer.";
 "onboarding.agent.hire" = "Engager %1$@ et dire bonjour";
 "onboarding.agent.subtitle" = "Choisissez un rôle prêt à l'emploi : nous réglons le modèle, les instructions et le planning. Tout est modifiable plus tard, et vous pouvez ajouter des agents à tout moment.";
@@ -255,6 +256,7 @@
 "onboarding.agent.yourFirst" = "VOTRE PREMIER AGENT";
 "onboarding.server.addressHint" = "C'est ainsi que vous vous connectez habituellement en SSH : utilisateur@adresse. Nous utilisons vos clés de %1$@ et ne demandons pas de mot de passe.";
 "onboarding.server.addressTitle" = "Adresse du serveur";
+"onboarding.server.agentsGroup" = "Abonnements des agents";
 "onboarding.server.allOptions" = "toutes les options";
 "onboarding.server.commandConnectHint" = "L'app se connecte en SSH et crée une clé d'accès pour ce Mac.";
 "onboarding.server.commandHint" = "Le script vérifie la signature de la version.";
@@ -263,6 +265,7 @@
 "onboarding.server.copiedNote" = "Copié";
 "onboarding.server.copyJournal" = "Copier le journal";
 "onboarding.server.detailsTitle" = "Détails";
+"onboarding.server.featuresGroup" = "Fonctions du serveur";
 "onboarding.server.foundInConfig" = "Trouvé dans vos réglages :";
 "onboarding.server.getServer" = "Comment obtenir un serveur →";
 "onboarding.server.hideJournal" = "Masquer le journal";
@@ -286,6 +289,7 @@
 "onboarding.server.noServer" = "Pas encore de serveur";
 "onboarding.server.noServerDesc" = "Nous vous indiquerons où en trouver un pour environ 5 $ par mois.";
 "onboarding.server.onThisMac" = "Sur ce Mac";
+"onboarding.server.optional" = "facultatif";
 "onboarding.server.otherWays" = "Autres méthodes : Tailscale, connexion directe, adresse personnalisée — %1$@";
 "onboarding.server.ownServer" = "Sur votre propre serveur";
 "onboarding.server.ownServerDesc" = "24 h/24. Un VPS, un PC domestique ou un serveur de travail.";
@@ -301,6 +305,9 @@
 "onboarding.server.whereAria" = "Où exécuter";
 "onboarding.skip" = "Configurer plus tard";
 "onboarding.skipHint" = "Ouvre l’app maintenant. Vous pourrez ajouter un serveur et un agent à tout moment.";
+"onboarding.subs.installFailed" = "Impossible d'installer %1$@. Réessayez ou installez-le manuellement.";
+"onboarding.subs.installing" = "Installation…";
+"onboarding.subs.loginAfter" = "Connectez-vous dans le terminal, puis appuyez sur « Vérifier à nouveau ».";
 "onboarding.welcome.askText" = "Push, déploiements, suppressions : seulement avec votre accord. Répondez depuis le Mac, une notification ou un iPhone.";
 "onboarding.welcome.askTitle" = "Ils demandent avant toute action risquée";
 "onboarding.welcome.footer" = "Open source · votre code et vos clés ne quittent jamais vos serveurs";

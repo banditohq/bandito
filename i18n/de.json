@@ -536,5 +536,12 @@
   "empty.noServers.title": "Keine Server",
   "empty.noServers.action": "Server verbinden",
   "ports.onlyPreview": "Nur Vorschau",
-  "server.tile.freeWord": "frei"
+  "server.tile.freeWord": "frei",
+  "onboarding.agent.createLater": "Agent später erstellen",
+  "onboarding.subs.installing": "Wird installiert…",
+  "onboarding.subs.installFailed": "{name} konnte nicht installiert werden. Versuche es erneut oder installiere es manuell.",
+  "onboarding.subs.loginAfter": "Melde dich im Terminal an und drücke dann „Erneut prüfen“.",
+  "onboarding.server.agentsGroup": "Agent-Abos",
+  "onboarding.server.featuresGroup": "Funktionen des Servers",
+  "onboarding.server.optional": "optional"
 }

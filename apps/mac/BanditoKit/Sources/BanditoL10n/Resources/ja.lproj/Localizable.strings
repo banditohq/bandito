@@ -248,6 +248,7 @@
 "onboarding.account.subtitle" = "無料です。サーバーはすべてのデバイスに表示されます。";
 "onboarding.account.title" = "Banditoにサインイン";
 "onboarding.agent.asks" = "確認";
+"onboarding.agent.createLater" = "エージェントは後で作成";
 "onboarding.agent.firstMessage" = "最初のメッセージは数秒で済みます。%1$@ が自己紹介し、どこから始めるか尋ねます。";
 "onboarding.agent.hire" = "%1$@ を雇って挨拶する";
 "onboarding.agent.subtitle" = "用意された役割から選ぶと、モデル、指示、スケジュールを自動で設定します。すべてあとから変更でき、新しいエージェントはいつでも追加できます。";
@@ -255,6 +256,7 @@
 "onboarding.agent.yourFirst" = "最初のエージェント";
 "onboarding.server.addressHint" = "普段の SSH 接続は user@address の形式です。鍵は %1$@ のものを使い、パスワードは聞きません。";
 "onboarding.server.addressTitle" = "サーバーのアドレス";
+"onboarding.server.agentsGroup" = "エージェントのサブスクリプション";
 "onboarding.server.allOptions" = "すべての方法";
 "onboarding.server.commandConnectHint" = "アプリは SSH で接続し、この Mac 用のアクセスキーを作成します。";
 "onboarding.server.commandHint" = "スクリプトがリリースの署名を検証します。";
@@ -263,6 +265,7 @@
 "onboarding.server.copiedNote" = "コピーしました";
 "onboarding.server.copyJournal" = "ログをコピー";
 "onboarding.server.detailsTitle" = "詳細";
+"onboarding.server.featuresGroup" = "サーバーの機能";
 "onboarding.server.foundInConfig" = "設定から見つかりました:";
 "onboarding.server.getServer" = "サーバーの入手方法 →";
 "onboarding.server.hideJournal" = "ログを隠す";
@@ -286,6 +289,7 @@
 "onboarding.server.noServer" = "サーバーがありません";
 "onboarding.server.noServerDesc" = "月額約5ドルで借りられる場所をご案内します。";
 "onboarding.server.onThisMac" = "この Mac で";
+"onboarding.server.optional" = "任意";
 "onboarding.server.otherWays" = "その他の方法: Tailscale、直接接続、カスタムアドレス — %1$@";
 "onboarding.server.ownServer" = "自分のサーバーで";
 "onboarding.server.ownServerDesc" = "24時間稼働。VPS、自宅のPC、業務用サーバーなど。";
@@ -301,6 +305,9 @@
 "onboarding.server.whereAria" = "実行場所";
 "onboarding.skip" = "あとで設定";
 "onboarding.skipHint" = "アプリを開きます。サーバーとエージェントはいつでも追加できます。";
+"onboarding.subs.installFailed" = "%1$@ をインストールできませんでした。もう一度試すか、手動でインストールしてください。";
+"onboarding.subs.installing" = "インストール中…";
+"onboarding.subs.loginAfter" = "ターミナルでサインインしてから「もう一度確認」を押してください。";
 "onboarding.welcome.askText" = "push、デプロイ、削除はあなたが「はい」と答えた場合のみ。Mac、通知、iPhone のどこからでも答えられます。";
 "onboarding.welcome.askTitle" = "危険な操作の前に確認します";
 "onboarding.welcome.footer" = "オープンソース · コードとキーはあなたのサーバーから出ません";

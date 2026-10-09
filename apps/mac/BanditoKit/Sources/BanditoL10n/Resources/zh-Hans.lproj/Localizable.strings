@@ -248,6 +248,7 @@
 "onboarding.account.subtitle" = "免费。你的服务器会出现在所有设备上。";
 "onboarding.account.title" = "登录 Bandito";
 "onboarding.agent.asks" = "询问方式";
+"onboarding.agent.createLater" = "稍后创建代理";
 "onboarding.agent.firstMessage" = "第一条消息只需几秒：%1$@ 会自我介绍，并询问从哪里开始。";
 "onboarding.agent.hire" = "雇用 %1$@ 并打个招呼";
 "onboarding.agent.subtitle" = "选一个现成的角色，我们会帮你设置模型、指令和计划。之后都可以修改，也能随时添加新代理。";
@@ -255,6 +256,7 @@
 "onboarding.agent.yourFirst" = "你的第一个代理";
 "onboarding.server.addressHint" = "你平时通过 SSH 登录的格式：用户@地址。我们会使用 %1$@ 中的密钥，不会索要密码。";
 "onboarding.server.addressTitle" = "服务器地址";
+"onboarding.server.agentsGroup" = "代理订阅";
 "onboarding.server.allOptions" = "全部选项";
 "onboarding.server.commandConnectHint" = "应用通过 SSH 连接，并为这台 Mac 创建访问密钥。";
 "onboarding.server.commandHint" = "脚本会验证发布版本的签名。";
@@ -263,6 +265,7 @@
 "onboarding.server.copiedNote" = "已复制";
 "onboarding.server.copyJournal" = "复制日志";
 "onboarding.server.detailsTitle" = "详细信息";
+"onboarding.server.featuresGroup" = "服务器功能";
 "onboarding.server.foundInConfig" = "在你的设置中找到：";
 "onboarding.server.getServer" = "如何获取服务器 →";
 "onboarding.server.hideJournal" = "隐藏日志";
@@ -286,6 +289,7 @@
 "onboarding.server.noServer" = "还没有服务器";
 "onboarding.server.noServerDesc" = "告诉你哪里能以每月约 5 美元获取一台。";
 "onboarding.server.onThisMac" = "在这台 Mac 上";
+"onboarding.server.optional" = "可选";
 "onboarding.server.otherWays" = "其他方式：Tailscale、直连、自定义地址 — %1$@";
 "onboarding.server.ownServer" = "在你自己的服务器上";
 "onboarding.server.ownServerDesc" = "全天候运行。VPS、家用电脑或工作服务器。";
@@ -301,6 +305,9 @@
 "onboarding.server.whereAria" = "运行位置";
 "onboarding.skip" = "稍后设置";
 "onboarding.skipHint" = "立即打开应用。随时可以添加服务器和智能体。";
+"onboarding.subs.installFailed" = "无法安装 %1$@。请重试，或手动安装。";
+"onboarding.subs.installing" = "正在安装…";
+"onboarding.subs.loginAfter" = "在终端中登录，然后点击“再次检查”。";
 "onboarding.welcome.askText" = "推送、部署、删除都必须得到你的同意。可以在 Mac、通知或 iPhone 上回复。";
 "onboarding.welcome.askTitle" = "有风险的操作前会先询问";
 "onboarding.welcome.footer" = "开源 · 你的代码和密钥永远不会离开你的服务器";

@@ -74,6 +74,12 @@ import Testing
         #expect(LoginLink.lastHTTPS(in: text) == URL(string: "https://auth.example/login"))
     }
 
+    @Test func colourCodesInsideTheLinkAreRemoved() {
+        // A colour change in the middle of the link must not cut it short.
+        let text = "open https://auth.example/\u{1B}[1mdevice\u{1B}[0m?code=ABC\r\n"
+        #expect(LoginLink.lastHTTPS(in: text) == URL(string: "https://auth.example/device?code=ABC"))
+    }
+
     @Test func noLinkMeansNil() {
         #expect(LoginLink.lastHTTPS(in: "Waiting for input…") == nil)
     }
@@ -222,5 +228,107 @@ import Testing
         tour.next()
         tour.skip()
         #expect(tour.isFinished)
+    }
+}
+
+// MARK: - subscriptions: installing a missing agent CLI
+
+@Suite struct SubscriptionRowActionTests {
+    @Test func aMissingCLIThatBanditoCanInstallShowsInstall() {
+        #expect(SubscriptionRowAction.resolve(state: .notInstalled, installable: true, installing: false) == .install)
+    }
+
+    @Test func aMissingCLIWithoutAnInstallerHereIsInstalledByHand() {
+        #expect(SubscriptionRowAction.resolve(state: .notInstalled, installable: false, installing: false)
+            == .installByHand)
+    }
+
+    @Test func aMissingCLIWhoseStatusIsNotKnownYetIsChecking() {
+        #expect(SubscriptionRowAction.resolve(state: .notInstalled, installable: nil, installing: false) == .checking)
+        #expect(SubscriptionRowAction.resolve(state: nil, installable: true, installing: false) == .checking)
+    }
+
+    @Test func anInstallInProgressShowsInstalling() {
+        #expect(SubscriptionRowAction.resolve(state: .notInstalled, installable: true, installing: true) == .installing)
+    }
+
+    @Test func afterTheInstallTheCLIIsSignedInOrNot() {
+        #expect(SubscriptionRowAction.resolve(state: .needsLogin, installable: true, installing: false) == .signIn)
+        #expect(SubscriptionRowAction.resolve(state: .unverified, installable: true, installing: false) == .confirm)
+        #expect(SubscriptionRowAction.resolve(state: .loggedIn(plan: nil), installable: true, installing: false) == .ready)
+    }
+}
+
+@Suite struct InstallPermissionTests {
+    @Test func aSudoOrPasswordOrPermissionFailureNeedsTheServerOwner() {
+        #expect(InstallPermission.isPermissionProblem("sudo: a password is required"))
+        #expect(InstallPermission.isPermissionProblem("EACCES: Permission denied, mkdir '/usr/lib/node'"))
+        #expect(InstallPermission.isPermissionProblem("sudo is not installed, so system packages cannot be installed"))
+    }
+
+    @Test func aNetworkFailureIsNotAPermissionProblem() {
+        #expect(!InstallPermission.isPermissionProblem("npm ERR! network timeout at registry.npmjs.org"))
+        #expect(!InstallPermission.isPermissionProblem(""))
+    }
+}
+
+@Suite struct InstallLogTests {
+    @Test func theLastLineWithTextIsWhatTheInstallIsDoingNow() {
+        #expect(InstallLog.lastLine("Installing node\n\n  added 3 packages  \n\n") == "added 3 packages")
+    }
+
+    @Test func anEmptyLogHasNoLastLine() {
+        #expect(InstallLog.lastLine("") == nil)
+        #expect(InstallLog.lastLine(" \n\n") == nil)
+    }
+}
+
+@Suite struct ManualInstallTests {
+    @Test func claudeAndCodexHaveTheirPinnedCommandGrokHasNone() {
+        #expect(ManualInstall.command(for: .claude) == "npm install -g @anthropic-ai/claude-code@2.1.295")
+        #expect(ManualInstall.command(for: .codex) == "npm install -g @openai/codex@0.162.0")
+        #expect(ManualInstall.command(for: .grok) == nil)
+        #expect(ManualInstall.command(for: .api) == nil)
+    }
+}
+
+@Suite struct ManualInstallPinTests {
+    /// The pins of the daemon's `NPM_PINS`, read from the repository's `daemon/src/setup.rs`.
+    @Test func theManualPinsMatchTheDaemonPins() throws {
+        // This file is apps/mac/BanditoKit/Tests/BanditoUITests/<file>. Six steps up reach the repository root:
+        // BanditoUITests, Tests, BanditoKit, mac, apps, and the root itself.
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(contentsOf: root.appending(path: "daemon/src/setup.rs"), encoding: .utf8)
+        let declaration = try #require(source.components(separatedBy: "pub const NPM_PINS").dropFirst().first)
+        let body = try #require(declaration.components(separatedBy: "];").first)
+        let pair = try Regex(#"\("([^"]+)", "([^"]+)"\)"#)
+        let daemonPins = body.matches(of: pair).map { match in
+            "\(match.output[1].substring ?? "")@\(match.output[2].substring ?? "")"
+        }
+        #expect(!daemonPins.isEmpty)
+        let manualPins = ManualInstall.npmPins.map { "\($0.package)@\($0.version)" }
+        #expect(manualPins == daemonPins)
+    }
+}
+
+@Suite struct LoginEpochTests {
+    @Test func aLoginThatStartsAfterTheCancelIsCurrent() {
+        var epoch = LoginEpoch()
+        epoch.cancel()
+        let ticket = epoch.ticket
+        #expect(epoch.isCurrent(ticket))
+    }
+
+    @Test func aLoginOpeningWhenTheStepIsLeftIsNoLongerCurrent() {
+        var epoch = LoginEpoch()
+        let ticket = epoch.ticket
+        epoch.cancel()
+        #expect(!epoch.isCurrent(ticket))
     }
 }

@@ -753,6 +753,7 @@
 "onboarding.agent.asks" = "Asks";
 "onboarding.agent.changeFolder" = "Change";
 "onboarding.agent.composerText" = "Hi! Introduce yourself and ask what to start with.";
+"onboarding.agent.createLater" = "Create an agent later";
 "onboarding.agent.err.badCharacters" = "Use letters, digits, spaces, dashes and underscores.";
 "onboarding.agent.err.duplicate" = "An agent with this name already exists.";
 "onboarding.agent.err.empty" = "Give the agent a name.";
@@ -761,7 +762,7 @@
 "onboarding.agent.folderLabel" = "Folder";
 "onboarding.agent.hire" = "Hire %1$@ and say hi";
 "onboarding.agent.nameLabel" = "Name";
-"onboarding.agent.needSubscription" = "No agent is signed in yet. Sign in to a subscription first.";
+"onboarding.agent.needSubscription" = "Subscriptions aren't connected yet. Connect at least one, so an agent can work.";
 "onboarding.agent.noServer" = "No server is connected.";
 "onboarding.agent.runtimeLabel" = "Runtime (signed in only)";
 "onboarding.agent.subtitle" = "Pick a ready-made role and we'll set the model, instructions and schedule. You can change everything later, and add new agents any time.";
@@ -819,6 +820,7 @@
 "onboarding.install.service" = "Starting the service";
 "onboarding.server.addressHint" = "This is how you usually sign in over SSH: user@address. We use your keys from %1$@, and we won't ask for a password.";
 "onboarding.server.addressTitle" = "Server address";
+"onboarding.server.agentsGroup" = "Agent subscriptions";
 "onboarding.server.allOptions" = "all options";
 "onboarding.server.back" = "Back";
 "onboarding.server.checkAgain" = "Check again";
@@ -826,10 +828,7 @@
 "onboarding.server.commandHint" = "The script checks the release signature.";
 "onboarding.server.commandStep1" = "1. Run this on the server";
 "onboarding.server.commandStep2" = "2. Enter the server address";
-"onboarding.server.componentMissing" = "missing";
-"onboarding.server.componentReady" = "ready";
 "onboarding.server.componentsFailed" = "Could not read the components of the server. Check the connection and try again.";
-"onboarding.server.componentsTitle" = "On the server";
 "onboarding.server.connect" = "Connect";
 "onboarding.server.connectFailedTitle" = "The connection failed";
 "onboarding.server.connectRetry" = "Retry";
@@ -857,6 +856,7 @@
 "onboarding.server.err.unknownHost" = "The server name does not resolve. Check the address.";
 "onboarding.server.err.unsupported" = "This server's system or processor is not supported. Bandito needs Linux or macOS on x86_64 or arm64.";
 "onboarding.server.failedTitle" = "The install did not finish";
+"onboarding.server.featuresGroup" = "Server features";
 "onboarding.server.fingerprintHint" = "Compare it with the fingerprint your provider or your server shows. If you are not sure, cancel: nothing is trusted until you confirm.";
 "onboarding.server.fingerprintTitle" = "Is this your server's fingerprint?";
 "onboarding.server.foundInConfig" = "Found in your settings:";
@@ -889,6 +889,7 @@
 "onboarding.server.noServer" = "No server yet";
 "onboarding.server.noServerDesc" = "We'll show where to get one for about $5 a month.";
 "onboarding.server.onThisMac" = "On this Mac";
+"onboarding.server.optional" = "optional";
 "onboarding.server.otherWays" = "Other ways: Tailscale, direct connection, custom address — %1$@";
 "onboarding.server.ownServer" = "On your own server";
 "onboarding.server.ownServerDesc" = "Round the clock. A VPS, a home PC or a work server.";
@@ -924,10 +925,12 @@
 "onboarding.subs.hintClaude" = "Type /login and choose sign-in with your subscription. A link appears: open it on this Mac, then paste the code here.";
 "onboarding.subs.hintCodex" = "Follow the prompts. If a link appears, open it on this Mac and paste the code back here.";
 "onboarding.subs.hintGrok" = "Grok shows a device code and a link. Open the link on this Mac, enter the code, then press Done.";
+"onboarding.subs.installFailed" = "Could not install %1$@. Try again, or install it by hand.";
+"onboarding.subs.installing" = "Installing…";
 "onboarding.subs.linkHost" = "Opens %1$@";
+"onboarding.subs.loginAfter" = "Sign in in the terminal, then press “Check again”.";
 "onboarding.subs.loginTitle" = "Sign in: %1$@";
 "onboarding.subs.needOne" = "You need at least one signed-in agent to create an agent.";
-"onboarding.subs.notInstalled" = "Not installed";
 "onboarding.subs.openLink" = "Open link";
 "onboarding.subs.signIn" = "Sign in";
 "onboarding.subs.skipLater" = "Skip — I'll sign in later";

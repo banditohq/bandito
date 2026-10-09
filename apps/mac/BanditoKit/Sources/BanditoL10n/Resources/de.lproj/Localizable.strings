@@ -248,6 +248,7 @@
 "onboarding.account.subtitle" = "Kostenlos. Deine Server erscheinen auf allen Geräten.";
 "onboarding.account.title" = "Bei Bandito anmelden";
 "onboarding.agent.asks" = "Fragt nach";
+"onboarding.agent.createLater" = "Agent später erstellen";
 "onboarding.agent.firstMessage" = "Die erste Nachricht dauert nur Sekunden: %1$@ stellt sich vor und fragt, wo es losgehen soll.";
 "onboarding.agent.hire" = "%1$@ einstellen und Hallo sagen";
 "onboarding.agent.subtitle" = "Wähle eine fertige Rolle, dann stellen wir Modell, Anweisungen und Zeitplan ein. Alles lässt sich später ändern, und neue Agenten kannst du jederzeit hinzufügen.";
@@ -255,6 +256,7 @@
 "onboarding.agent.yourFirst" = "DEIN ERSTER AGENT";
 "onboarding.server.addressHint" = "So meldest du dich normalerweise per SSH an: benutzer@adresse. Wir verwenden deine Schlüssel aus %1$@ und fragen nicht nach einem Passwort.";
 "onboarding.server.addressTitle" = "Serveradresse";
+"onboarding.server.agentsGroup" = "Agent-Abos";
 "onboarding.server.allOptions" = "alle Optionen";
 "onboarding.server.commandConnectHint" = "Die App verbindet sich per SSH und erstellt einen Zugangsschlüssel für diesen Mac.";
 "onboarding.server.commandHint" = "Das Skript prüft die Signatur der Version.";
@@ -263,6 +265,7 @@
 "onboarding.server.copiedNote" = "Kopiert";
 "onboarding.server.copyJournal" = "Protokoll kopieren";
 "onboarding.server.detailsTitle" = "Details";
+"onboarding.server.featuresGroup" = "Funktionen des Servers";
 "onboarding.server.foundInConfig" = "In deinen Einstellungen gefunden:";
 "onboarding.server.getServer" = "So bekommst du einen Server →";
 "onboarding.server.hideJournal" = "Protokoll ausblenden";
@@ -286,6 +289,7 @@
 "onboarding.server.noServer" = "Noch kein Server";
 "onboarding.server.noServerDesc" = "Wir zeigen dir, wo du einen für etwa 5 $ im Monat bekommst.";
 "onboarding.server.onThisMac" = "Auf diesem Mac";
+"onboarding.server.optional" = "optional";
 "onboarding.server.otherWays" = "Andere Wege: Tailscale, direkte Verbindung, eigene Adresse — %1$@";
 "onboarding.server.ownServer" = "Auf deinem eigenen Server";
 "onboarding.server.ownServerDesc" = "Rund um die Uhr. Ein VPS, ein Heim-PC oder ein Arbeitsserver.";
@@ -301,6 +305,9 @@
 "onboarding.server.whereAria" = "Wo ausführen";
 "onboarding.skip" = "Später einrichten";
 "onboarding.skipHint" = "Öffnet die App. Server und Agenten können Sie jederzeit hinzufügen.";
+"onboarding.subs.installFailed" = "%1$@ konnte nicht installiert werden. Versuche es erneut oder installiere es manuell.";
+"onboarding.subs.installing" = "Wird installiert…";
+"onboarding.subs.loginAfter" = "Melde dich im Terminal an und drücke dann „Erneut prüfen“.";
 "onboarding.welcome.askText" = "Pushes, Deployments und Löschungen nur mit deinem Ja. Antworte am Mac, über eine Benachrichtigung oder am iPhone.";
 "onboarding.welcome.askTitle" = "Sie fragen, bevor es riskant wird";
 "onboarding.welcome.footer" = "Open Source · dein Code und deine Schlüssel verlassen nie deine Server";

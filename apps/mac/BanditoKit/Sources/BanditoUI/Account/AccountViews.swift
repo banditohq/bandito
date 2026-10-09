@@ -212,8 +212,13 @@ struct DeviceApprovalStep: View {
     private var failed: some View {
         VStack(alignment: .leading, spacing: 16) {
             UserFacingErrorView(message: errorText ?? UserFacingMessage(text: L10n.Onboarding.Account.errorGeneric))
-            Button(L10n.Onboarding.Account.signOutAction) { Task { await signOut() } }
-                .banditoButton(.quiet())
+            HStack(spacing: 10) {
+                // Checking the device again is safe: it reads the account state from the start.
+                Button(L10n.Onboarding.Server.retry) { Task { await retryStart() } }
+                    .banditoButton(.signal(size: .regular))
+                Button(L10n.Onboarding.Account.signOutAction) { Task { await signOut() } }
+                    .banditoButton(.quiet())
+            }
         }
     }
 
@@ -303,6 +308,13 @@ struct DeviceApprovalStep: View {
             errorText = SignInMessages.text(for: error)
             mode = .failed
         }
+    }
+
+    /// "Try again" after a failure: the error goes, and the device is checked from the start.
+    private func retryStart() async {
+        errorText = nil
+        mode = .loading
+        await start()
     }
 
     private func signOut() async {

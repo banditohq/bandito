@@ -536,5 +536,12 @@
   "empty.noServers.title": "Nenhum servidor",
   "empty.noServers.action": "Conectar um servidor",
   "ports.onlyPreview": "Só pré-visualização",
-  "server.tile.freeWord": "livres"
+  "server.tile.freeWord": "livres",
+  "onboarding.agent.createLater": "Criar um agente depois",
+  "onboarding.subs.installing": "Instalando…",
+  "onboarding.subs.installFailed": "Não foi possível instalar {name}. Tente de novo ou instale manualmente.",
+  "onboarding.subs.loginAfter": "Entre no terminal e depois toque em “Verificar de novo”.",
+  "onboarding.server.agentsGroup": "Assinaturas dos agentes",
+  "onboarding.server.featuresGroup": "Recursos do servidor",
+  "onboarding.server.optional": "opcional"
 }

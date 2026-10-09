@@ -753,6 +753,7 @@
 "onboarding.agent.asks" = "Спрашивает";
 "onboarding.agent.changeFolder" = "Сменить";
 "onboarding.agent.composerText" = "Привет! Представься и спроси, с чего начать.";
+"onboarding.agent.createLater" = "Создам агента позже";
 "onboarding.agent.err.badCharacters" = "Используйте буквы, цифры, пробелы, дефисы и подчёркивания.";
 "onboarding.agent.err.duplicate" = "Агент с таким именем уже есть.";
 "onboarding.agent.err.empty" = "Дайте агенту имя.";
@@ -761,7 +762,7 @@
 "onboarding.agent.folderLabel" = "Папка";
 "onboarding.agent.hire" = "Нанять %1$@ и поздороваться";
 "onboarding.agent.nameLabel" = "Имя";
-"onboarding.agent.needSubscription" = "Пока ни один агент не вошёл. Сначала войдите в подписку.";
+"onboarding.agent.needSubscription" = "Подписки ещё не подключены. Подключите хотя бы одну, чтобы агент мог работать.";
 "onboarding.agent.noServer" = "Сервер не подключён.";
 "onboarding.agent.runtimeLabel" = "Рантайм (только вошедшие)";
 "onboarding.agent.subtitle" = "Выберите готовую роль — мы подставим модель, инструкции и расписание. Всё можно поменять потом, а новых агентов добавить в любой момент.";
@@ -819,6 +820,7 @@
 "onboarding.install.service" = "Запуск службы";
 "onboarding.server.addressHint" = "Как вы обычно заходите по SSH: пользователь@адрес. Мы используем ваши ключи из %1$@ — пароль не спросим.";
 "onboarding.server.addressTitle" = "Адрес сервера";
+"onboarding.server.agentsGroup" = "Подписки агентов";
 "onboarding.server.allOptions" = "все варианты";
 "onboarding.server.back" = "Назад";
 "onboarding.server.checkAgain" = "Проверить снова";
@@ -826,10 +828,7 @@
 "onboarding.server.commandHint" = "Скрипт проверит подпись релиза.";
 "onboarding.server.commandStep1" = "1. Выполните на сервере";
 "onboarding.server.commandStep2" = "2. Укажите адрес сервера";
-"onboarding.server.componentMissing" = "нет";
-"onboarding.server.componentReady" = "готов";
 "onboarding.server.componentsFailed" = "Не удалось прочитать компоненты сервера. Проверьте соединение и попробуйте снова.";
-"onboarding.server.componentsTitle" = "На сервере";
 "onboarding.server.connect" = "Подключить";
 "onboarding.server.connectFailedTitle" = "Подключение не удалось";
 "onboarding.server.connectRetry" = "Повторить";
@@ -857,6 +856,7 @@
 "onboarding.server.err.unknownHost" = "Имя сервера не находится. Проверьте адрес.";
 "onboarding.server.err.unsupported" = "Система или процессор сервера не поддерживаются. Bandito нужен Linux или macOS на x86_64 или arm64.";
 "onboarding.server.failedTitle" = "Установка не завершилась";
+"onboarding.server.featuresGroup" = "Возможности сервера";
 "onboarding.server.fingerprintHint" = "Сверьте его с тем, что показывает ваш хостинг или сам сервер. Если не уверены — отмените: ничего не доверяется без вашего подтверждения.";
 "onboarding.server.fingerprintTitle" = "Это отпечаток вашего сервера?";
 "onboarding.server.foundInConfig" = "Нашли в ваших настройках:";
@@ -889,12 +889,13 @@
 "onboarding.server.noServer" = "Сервера нет";
 "onboarding.server.noServerDesc" = "Подскажем, где взять за $5 в месяц.";
 "onboarding.server.onThisMac" = "На этом Mac";
+"onboarding.server.optional" = "необязательно";
 "onboarding.server.otherWays" = "Другие способы: Tailscale, прямое подключение, свой адрес — %1$@";
 "onboarding.server.ownServer" = "На своём сервере";
 "onboarding.server.ownServerDesc" = "Круглосуточно. VPS, домашний ПК или рабочий сервер.";
 "onboarding.server.passwordHint" = "Для части установки нужен пароль администратора. Bandito его не спрашивает и не хранит: выполните эту команду в терминале сервера и проверьте снова.";
 "onboarding.server.removeOldKey" = "Сначала удалите старую запись, затем попробуйте снова:";
-"onboarding.server.retry" = "Проверить снова";
+"onboarding.server.retry" = "Повторить";
 "onboarding.server.reviewHost" = "Посмотреть отпечаток сервера";
 "onboarding.server.showJournal" = "Показать журнал";
 "onboarding.server.showLog" = "Журнал установки";
@@ -924,10 +925,12 @@
 "onboarding.subs.hintClaude" = "Введите /login и выберите вход по подписке. Появится ссылка: откройте её на этом Mac и вставьте код сюда.";
 "onboarding.subs.hintCodex" = "Следуйте подсказкам. Если появилась ссылка, откройте её на этом Mac и вставьте код сюда.";
 "onboarding.subs.hintGrok" = "Grok покажет код и ссылку. Откройте ссылку на этом Mac, введите код и нажмите «Готово».";
+"onboarding.subs.installFailed" = "Не удалось установить %1$@. Повторите или установите вручную.";
+"onboarding.subs.installing" = "Устанавливаем…";
 "onboarding.subs.linkHost" = "Откроется: %1$@";
+"onboarding.subs.loginAfter" = "Войдите в терминале, затем нажмите «Проверить снова».";
 "onboarding.subs.loginTitle" = "Вход: %1$@";
 "onboarding.subs.needOne" = "Чтобы создать агента, нужна хотя бы одна вошедшая подписка.";
-"onboarding.subs.notInstalled" = "Не установлен";
 "onboarding.subs.openLink" = "Открыть ссылку";
 "onboarding.subs.signIn" = "Войти";
 "onboarding.subs.skipLater" = "Пропустить — войду позже";

@@ -536,5 +536,12 @@
   "empty.noServers.title": "서버 없음",
   "empty.noServers.action": "서버 연결",
   "ports.onlyPreview": "미리보기만",
-  "server.tile.freeWord": "여유"
+  "server.tile.freeWord": "여유",
+  "onboarding.agent.createLater": "나중에 에이전트 만들기",
+  "onboarding.subs.installing": "설치 중…",
+  "onboarding.subs.installFailed": "{name}을(를) 설치하지 못했습니다. 다시 시도하거나 직접 설치하세요.",
+  "onboarding.subs.loginAfter": "터미널에서 로그인한 다음 “다시 확인”을(를) 누르세요.",
+  "onboarding.server.agentsGroup": "에이전트 구독",
+  "onboarding.server.featuresGroup": "서버 기능",
+  "onboarding.server.optional": "선택 사항"
 }
