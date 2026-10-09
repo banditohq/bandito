@@ -40,6 +40,9 @@ pub struct Inbound {
     pub from_agent: Option<String>,
     /// Crew messages in a row since a human or a schedule last spoke.
     pub hops: u8,
+    /// Crew conversation this message belongs to. `None` for user and schedule
+    /// messages: the turn they start gets a new chain id.
+    pub chain: Option<String>,
 }
 
 impl Inbound {
@@ -49,6 +52,7 @@ impl Inbound {
             source: Source::User,
             from_agent: None,
             hops: 0,
+            chain: None,
         }
     }
 
@@ -58,12 +62,33 @@ impl Inbound {
             source: Source::Schedule,
             from_agent: None,
             hops: 0,
+            chain: None,
         }
     }
 }
 
-/// A crew chain stops after this many agent-to-agent messages without a human.
+/// Crew loop guards. They stop accidental loops between agents; they are not a
+/// security boundary (an agent with shell access can do anything you can).
+///
+/// Depth: a crew chain stops after this many agent-to-agent hops without a human.
 pub const MAX_CREW_HOPS: u8 = 8;
+/// Crew messages one turn may send.
+pub const MAX_CREW_SENDS_PER_TURN: u8 = 3;
+/// Crew messages one chain may carry in total, across all its turns.
+pub const MAX_CREW_MESSAGES_PER_CHAIN: u32 = 20;
+/// Chain counters are dropped all at once when there are more than this many.
+const MAX_TRACKED_CHAINS: usize = 10_000;
+
+/// Crew state of the turn that is running for one agent.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CrewContext {
+    /// Hops of the running turn's message (0 when no turn is running).
+    pub hops: u8,
+    /// Chain of the running turn (`None` when no turn is running).
+    pub chain: Option<String>,
+    /// Crew messages this turn has sent, including the one being reserved.
+    pub sends: u8,
+}
 
 enum Cmd {
     Send(Inbound, oneshot::Sender<Result<()>>),
@@ -76,8 +101,10 @@ enum Cmd {
         reply: oneshot::Sender<Result<()>>,
     },
     Stop(oneshot::Sender<()>),
-    /// Hops of the turn that is running now (0 when idle).
-    Hops(oneshot::Sender<Result<u8>>),
+    /// Checks the per-turn and hop limits and, if they pass, counts one crew
+    /// message against the running turn. Done in the actor so the check and the
+    /// count are one step.
+    ReserveCrewSend(oneshot::Sender<Result<CrewContext>>),
 }
 
 pub struct Supervisor {
@@ -86,6 +113,8 @@ pub struct Supervisor {
     /// Crew MCP server injected into every session.
     mcp: Option<(PathBuf, Vec<String>)>,
     actors: Mutex<HashMap<String, mpsc::Sender<Cmd>>>,
+    /// Crew messages accepted so far, per chain id.
+    chains: Mutex<HashMap<String, u32>>,
 }
 
 /// Approvals nobody answered are denied after this long.
@@ -98,6 +127,7 @@ impl Supervisor {
             runtimes,
             mcp,
             actors: Mutex::new(HashMap::new()),
+            chains: Mutex::new(HashMap::new()),
         })
     }
 
@@ -144,6 +174,8 @@ impl Supervisor {
             output: None,
             turn: None,
             turn_hops: 0,
+            turn_chain: None,
+            turn_crew_sends: 0,
             queue: VecDeque::new(),
             pending: HashMap::new(),
             status: None,
@@ -180,20 +212,39 @@ impl Supervisor {
         if text.trim().is_empty() {
             bail!("message is empty");
         }
-        let hops = self.call(from_id, Cmd::Hops).await?.saturating_add(1);
-        if hops > MAX_CREW_HOPS {
-            bail!(
-                "crew chain limit reached ({MAX_CREW_HOPS} messages between agents without a human); report back to the user instead"
-            );
-        }
+        // Depth and per-turn limits are checked and counted by the sender's actor.
+        let ctx = self.call(from_id, Cmd::ReserveCrewSend).await?;
+        let chain = ctx.chain.unwrap_or_else(new_id);
+        self.reserve_chain_message(&chain)?;
         let msg = Inbound {
             text: text.to_string(),
             source: Source::Crew,
             from_agent: Some(from.name),
-            hops,
+            hops: ctx.hops.saturating_add(1),
+            chain: Some(chain),
         };
         self.send(&to.id, msg).await?;
         Ok(to.id)
+    }
+
+    /// Count one crew message against its chain, refusing past the chain limit.
+    fn reserve_chain_message(&self, chain: &str) -> Result<()> {
+        let mut chains = self.chains.lock().unwrap_or_else(|e| e.into_inner());
+        if chains.len() > MAX_TRACKED_CHAINS {
+            tracing::warn!(
+                tracked = chains.len(),
+                "crew chain counters exceeded {MAX_TRACKED_CHAINS}; clearing them"
+            );
+            chains.clear();
+        }
+        let count = chains.entry(chain.to_string()).or_insert(0);
+        if *count >= MAX_CREW_MESSAGES_PER_CHAIN {
+            bail!(
+                "this crew conversation reached its limit ({MAX_CREW_MESSAGES_PER_CHAIN} messages); report back to the user"
+            );
+        }
+        *count += 1;
+        Ok(())
     }
 
     pub async fn interrupt(&self, agent_id: &str) -> Result<()> {
@@ -281,6 +332,8 @@ struct Actor {
     output: Option<mpsc::Receiver<RuntimeOutput>>,
     turn: Option<String>,
     turn_hops: u8,
+    turn_chain: Option<String>,
+    turn_crew_sends: u8,
     queue: VecDeque<Inbound>,
     pending: HashMap<String, PendingApproval>,
     status: Option<AgentStatus>,
@@ -344,12 +397,39 @@ impl Actor {
             } => {
                 let _ = reply.send(self.resolve(&approval_id, decision, by, remember).await);
             }
-            Cmd::Hops(reply) => {
-                let hops = if self.turn.is_some() { self.turn_hops } else { 0 };
-                let _ = reply.send(Ok(hops));
+            Cmd::ReserveCrewSend(reply) => {
+                let _ = reply.send(self.reserve_crew_send());
             }
             Cmd::Stop(_) => unreachable!("handled in run"),
         }
+    }
+
+    /// Check the hop and per-turn limits, then count one crew message for the
+    /// running turn. Without a running turn there is nothing to count against.
+    fn reserve_crew_send(&mut self) -> Result<CrewContext> {
+        if self.turn.is_none() {
+            return Ok(CrewContext {
+                hops: 0,
+                chain: None,
+                sends: 0,
+            });
+        }
+        if self.turn_hops.saturating_add(1) > MAX_CREW_HOPS {
+            bail!(
+                "crew chain limit reached ({MAX_CREW_HOPS} messages between agents without a human); report back to the user instead"
+            );
+        }
+        if self.turn_crew_sends >= MAX_CREW_SENDS_PER_TURN {
+            bail!(
+                "crew message limit reached for this turn ({MAX_CREW_SENDS_PER_TURN}); finish the turn and report back to the user"
+            );
+        }
+        self.turn_crew_sends += 1;
+        Ok(CrewContext {
+            hops: self.turn_hops,
+            chain: self.turn_chain.clone(),
+            sends: self.turn_crew_sends,
+        })
     }
 
     async fn resolve(&mut self, approval_id: &str, decision: Decision, by: DecidedBy, remember: bool) -> Result<()> {
@@ -456,6 +536,8 @@ impl Actor {
         let turn_id = new_id();
         self.turn = Some(turn_id.clone());
         self.turn_hops = msg.hops;
+        self.turn_chain = Some(msg.chain.clone().unwrap_or_else(new_id));
+        self.turn_crew_sends = 0;
         self.hub.emit(
             &self.id,
             EventBody::TurnStarted {
@@ -724,11 +806,13 @@ mod tests {
 
     /// What the mock session was asked to do.
     type Log = Arc<Mutex<Vec<String>>>;
+    /// Output channel of each spawned session, by agent id.
+    type Outs = Arc<Mutex<HashMap<String, mpsc::Sender<RuntimeOutput>>>>;
 
     struct MockRuntime {
         log: Log,
-        /// The test pushes runtime output through this.
-        out: Arc<Mutex<Option<mpsc::Sender<RuntimeOutput>>>>,
+        /// The test pushes runtime output through these.
+        out: Outs,
         spawns: Arc<Mutex<Vec<SpawnConfig>>>,
     }
 
@@ -771,7 +855,7 @@ mod tests {
         }
         async fn spawn(&self, cfg: SpawnConfig) -> Result<Spawned> {
             let (tx, rx) = mpsc::channel(64);
-            *self.out.lock().unwrap() = Some(tx);
+            self.out.lock().unwrap().insert(cfg.agent_id.clone(), tx);
             self.spawns.lock().unwrap().push(cfg);
             Ok(Spawned {
                 session: Box::new(MockSession { log: self.log.clone() }),
@@ -784,7 +868,7 @@ mod tests {
         sup: Arc<Supervisor>,
         store: Arc<Store>,
         log: Log,
-        out: Arc<Mutex<Option<mpsc::Sender<RuntimeOutput>>>>,
+        out: Outs,
         spawns: Arc<Mutex<Vec<SpawnConfig>>>,
         events: broadcast::Receiver<Event>,
         agent: String,
@@ -795,7 +879,7 @@ mod tests {
         let hub = Hub::new(store.clone());
         let events = hub.subscribe();
         let log: Log = Arc::default();
-        let out = Arc::new(Mutex::new(None));
+        let out: Outs = Arc::default();
         let spawns = Arc::new(Mutex::new(Vec::new()));
         let mut rts = Runtimes::default();
         rts.insert(Arc::new(MockRuntime {
@@ -826,8 +910,13 @@ mod tests {
     }
 
     impl World {
+        /// Runtime output for this world's agent.
         async fn push(&self, o: RuntimeOutput) {
-            let tx = self.out.lock().unwrap().clone().expect("session spawned");
+            self.push_as(&self.agent, o).await;
+        }
+
+        async fn push_as(&self, agent: &str, o: RuntimeOutput) {
+            let tx = self.out.lock().unwrap().get(agent).cloned().expect("session spawned");
             tx.send(o).await.unwrap();
         }
 
@@ -1187,6 +1276,7 @@ mod tests {
             source: Source::Crew,
             from_agent: Some("Scout".into()),
             hops: MAX_CREW_HOPS,
+            chain: Some("chain-1".into()),
         };
         w.sup.send(&w.agent, msg).await.unwrap();
         w.wait_log("send hi").await;
@@ -1204,6 +1294,94 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn crew_sends_are_limited_per_turn() {
+        let mut w = world(ApprovalMode::Risky);
+        add_agent(&w.store, "Scout");
+        w.sup.send(&w.agent, Inbound::user("review everything")).await.unwrap();
+        w.wait_log("send review everything").await;
+        for i in 0..MAX_CREW_SENDS_PER_TURN {
+            w.sup.crew_send(&w.agent, "Scout", &format!("task {i}")).await.unwrap();
+        }
+        let err = w.sup.crew_send(&w.agent, "Scout", "one more").await.unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "crew message limit reached for this turn (3); finish the turn and report back to the user"
+        );
+        // The next turn gets a fresh allowance.
+        w.push(done()).await;
+        w.sup.send(&w.agent, Inbound::user("next")).await.unwrap();
+        w.wait(|b| matches!(b, EventBody::MessageUser { text, .. } if text == "next"))
+            .await;
+        w.sup.crew_send(&w.agent, "Scout", "after").await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn crew_chain_stops_at_the_chain_limit() {
+        let mut w = world(ApprovalMode::Risky);
+        let forge = w.agent.clone();
+        let scout = add_agent(&w.store, "Scout");
+        w.sup.send(&forge, Inbound::user("start the relay")).await.unwrap();
+        // Every turn that starts sends the maximum per turn to the other agent,
+        // then ends. Messages to a busy agent wait in its queue and start later
+        // turns. Each turn adds one level of depth and three messages, so the
+        // chain reaches 20 messages at depth 7, below MAX_CREW_HOPS: the chain
+        // limit is what refuses the 21st.
+        let mut accepted = 0;
+        let refusal = loop {
+            let e = w.wait(|b| matches!(b, EventBody::TurnStarted { .. })).await;
+            let (me, to) = if e.agent_id == forge {
+                (forge.clone(), "Scout")
+            } else {
+                (scout.clone(), "Forge")
+            };
+            let mut refusal = None;
+            for _ in 0..MAX_CREW_SENDS_PER_TURN {
+                match w.sup.crew_send(&me, to, "ping").await {
+                    Ok(_) => accepted += 1,
+                    Err(e) => {
+                        refusal = Some(e.to_string());
+                        break;
+                    }
+                }
+            }
+            w.push_as(&me, done()).await;
+            if let Some(r) = refusal {
+                break r;
+            }
+        };
+        assert_eq!(accepted, MAX_CREW_MESSAGES_PER_CHAIN);
+        assert!(refusal.contains("reached its limit (20 messages)"), "{refusal}");
+    }
+
+    #[tokio::test]
+    async fn user_message_starts_a_new_chain() {
+        let mut w = world(ApprovalMode::Risky);
+        add_agent(&w.store, "Scout");
+        // A chain that has already used all its messages.
+        w.sup
+            .chains
+            .lock()
+            .unwrap()
+            .insert("spent".into(), MAX_CREW_MESSAGES_PER_CHAIN);
+        let msg = Inbound {
+            text: "hi".into(),
+            source: Source::Crew,
+            from_agent: Some("Scout".into()),
+            hops: 1,
+            chain: Some("spent".into()),
+        };
+        w.sup.send(&w.agent, msg).await.unwrap();
+        w.wait_log("send hi").await;
+        let err = w.sup.crew_send(&w.agent, "Scout", "again").await.unwrap_err();
+        assert!(err.to_string().contains("reached its limit"), "{err}");
+        w.push(done()).await;
+        w.sup.send(&w.agent, Inbound::user("continue")).await.unwrap();
+        w.wait(|b| matches!(b, EventBody::MessageUser { text, .. } if text == "continue"))
+            .await;
+        w.sup.crew_send(&w.agent, "Scout", "fresh").await.unwrap();
+    }
+
+    #[tokio::test]
     async fn mcp_server_gets_the_agent_id() {
         let store = Arc::new(Store::open_in_memory().unwrap());
         let hub = Hub::new(store.clone());
@@ -1212,7 +1390,7 @@ mod tests {
         let mut rts = Runtimes::default();
         rts.insert(Arc::new(MockRuntime {
             log: log.clone(),
-            out: Arc::new(Mutex::new(None)),
+            out: Arc::default(),
             spawns: spawns.clone(),
         }));
         let id = add_agent(&store, "Forge");

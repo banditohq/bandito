@@ -307,6 +307,13 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             ok(members)
         }
         "crew.send" => {
+            // Only the crew MCP servers (same user, unix socket) may send.
+            if !matches!(peer, Peer::Local) {
+                return Err(RpcError::new(
+                    UNAUTHORIZED,
+                    "crew messages can only come from agents on the server",
+                ));
+            }
             let CrewSendParams { from, to, message } = params(p)?;
             let to_id = app.sup.crew_send(&from, &to, &message).await?;
             ok(json!({ "to_id": to_id }))
@@ -496,6 +503,33 @@ mod crew_tests {
         .unwrap_err();
         assert_eq!(err.code, SERVER_ERROR);
         assert!(err.message.contains("no agent named"), "{}", err.message);
+    }
+
+    #[tokio::test]
+    async fn crew_send_is_local_only_while_crew_list_is_open_to_devices() {
+        let (app, forge, _) = app_with_crew();
+        let device = Peer::Device(Device {
+            id: "dev-1".into(),
+            name: "Mac".into(),
+            created_at: 0,
+            last_seen_at: None,
+        });
+        let err = dispatch(
+            &app,
+            &device,
+            "crew.send",
+            json!({ "from": forge, "to": "Scout", "message": "hi" }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(
+            err,
+            RpcError::new(UNAUTHORIZED, "crew messages can only come from agents on the server")
+        );
+        let v = dispatch(&app, &device, "crew.list", json!({ "agent_id": forge }))
+            .await
+            .unwrap();
+        assert_eq!(v.as_array().unwrap().len(), 1);
     }
 }
 

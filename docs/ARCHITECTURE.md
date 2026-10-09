@@ -120,7 +120,19 @@ Cron expressions with a time zone. On fire: `agents.send` with `source:"schedule
 
 ## Crew
 
-`bandito mcp` is an MCP server (stdio) injected into every agent: `--mcp-config` for Claude, `mcp_servers` config for Codex, `mcpServers` in ACP `session/new` for Grok. Tools: `crew_list`, `crew_send{to, message}` (becomes `message.user` with `source:"crew"` for the target), `report{text}` (shows in the user's inbox). Loop guard: a crew message chain stops after 8 hops without a human.
+`bandito mcp` is an MCP server (stdio) injected into every agent: `--mcp-config` for Claude, `mcp_servers` config for Codex, `mcpServers` in ACP `session/new` for Grok. It answers `initialize` with the client's protocol version when it is one of `2025-06-18`, `2025-03-26`, `2024-11-05`, otherwise with `2025-06-18`. Input lines over 1 MB get a parse error and are skipped.
+
+Tools today: `crew_list` and `crew_send{to, message}` (becomes `message.user` with `source:"crew"` for the target). `report{text}` (shows in the user's inbox) is later, not in the MVP yet. `crew.send` over RPC is accepted only from the local socket, i.e. from the crew MCP servers on the server; paired apps can call `crew.list` only.
+
+Loop guards: every crew message belongs to a chain, which starts with each user or schedule message. The daemon counts three limits:
+
+- depth: a chain stops after 8 hops without a human (`MAX_CREW_HOPS`);
+- per turn: one turn sends at most 3 crew messages (`MAX_CREW_SENDS_PER_TURN`);
+- per chain: a chain carries at most 20 crew messages in total, across all its turns (`MAX_CREW_MESSAGES_PER_CHAIN`).
+
+A refused `crew_send` comes back to the agent as a tool error that tells it to report to the user. The counters are in memory: a daemon restart resets them, and they are dropped all at once when more than 10 000 chains are tracked. A crew message sent while the agent has no running turn is not counted against the per-turn limit.
+
+These limits stop accidental loops. They are not a security boundary: an agent with shell access runs as your user and can do anything you can.
 
 ## Mac app
 

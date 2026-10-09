@@ -110,11 +110,19 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr) -> Result<()> {
     runtimes.insert(Arc::new(CodexRuntime::new()));
     runtimes.insert(Arc::new(GrokRuntime::new()));
     // Each agent gets `bandito --home <home> mcp --agent <id>` as its crew MCP server.
-    let mcp = (
-        std::env::current_exe()?,
-        vec!["--home".into(), home.display().to_string(), "mcp".into()],
-    );
-    let sup = Supervisor::new(hub, runtimes, Some(mcp));
+    // If the binary was replaced while the daemon runs, its path is gone from disk
+    // (Linux shows it with " (deleted)"): start agents without the crew instead of failing.
+    let exe = std::env::current_exe()?;
+    let mcp = if exe.exists() {
+        Some((exe, vec!["--home".into(), home.display().to_string(), "mcp".into()]))
+    } else {
+        tracing::warn!(
+            path = %exe.display(),
+            "bandito binary is no longer on disk (updated while running?); agents start without the crew MCP server"
+        );
+        None
+    };
+    let sup = Supervisor::new(hub, runtimes, mcp);
     sup.recover()?;
     let app = App::new(sup.clone());
 
