@@ -462,9 +462,10 @@ pub fn node_is_supported(version_output: &str) -> bool {
 }
 
 /// Finds the Node tarball of `platform` (such as `linux-x64`) in a `SHASUMS256.txt`.
-/// Returns the file name and its lowercase sha256.
+/// Returns the file name and its lowercase sha256. The gzip tarball, not the xz one: minimal servers (Ubuntu cloud and
+/// container images) have no `xz`, while every `tar` reads gzip.
 pub fn pick_node_tarball(shasums: &str, platform: &str) -> Option<(String, String)> {
-    let suffix = format!("-{platform}.tar.xz");
+    let suffix = format!("-{platform}.tar.gz");
     shasums.lines().find_map(|line| {
         let mut parts = line.split_whitespace();
         let (hash, file) = (parts.next()?, parts.next()?);
@@ -1404,7 +1405,7 @@ impl Setup {
             &CommandSpec::new(
                 "tar",
                 [
-                    "-xJf",
+                    "-xzf",
                     tarball_arg.as_str(),
                     "-C",
                     staging_arg.as_str(),
@@ -1992,18 +1993,18 @@ fpr:::::::::EB4C1BFD4F042F6DDDCCEC917721F63BD38B4796:
         let shasums = "\
 aaa111  node-v22.11.0-linux-arm64.tar.gz
 bbb222  node-v22.11.0-linux-arm64.tar.xz
-ccc333  node-v22.11.0-linux-x64.tar.xz
+ccc333  node-v22.11.0-linux-x64.tar.gz
 ddd444  node-v22.11.0-darwin-arm64.tar.xz
 eee555  node-v22.11.0-headers.tar.xz
 fff666  node-v22.11.0.pkg
 ";
         assert_eq!(
             pick_node_tarball(shasums, "linux-arm64"),
-            Some(("node-v22.11.0-linux-arm64.tar.xz".into(), "bbb222".into()))
+            Some(("node-v22.11.0-linux-arm64.tar.gz".into(), "aaa111".into()))
         );
         assert_eq!(
             pick_node_tarball(shasums, "linux-x64"),
-            Some(("node-v22.11.0-linux-x64.tar.xz".into(), "ccc333".into()))
+            Some(("node-v22.11.0-linux-x64.tar.gz".into(), "ccc333".into()))
         );
         assert_eq!(pick_node_tarball(shasums, "linux-x86"), None);
     }
