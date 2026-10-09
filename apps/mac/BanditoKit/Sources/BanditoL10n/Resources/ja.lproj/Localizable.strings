@@ -170,6 +170,8 @@
 "files.panelAgent" = "ここにエージェントを作成";
 "files.panelTerminal" = "ここでターミナル";
 "files.searchButton" = "検索";
+"files.searchHelp" = "このフォルダ内を検索";
+"files.searchPlaceholder" = "検索";
 "files.showDetails" = "詳細を表示";
 "files.showHiddenPlaces" = "非表示の場所を表示";
 "files.showInFinder" = "Finder で表示";
@@ -505,14 +507,13 @@
 "tour.team.title" = "これがあなたのチームです";
 "tour.write.text" = "普通の言葉で書きます：「決済のテストを追加して PR を開いて」。何を実行するかはエージェントが判断します。";
 "tour.write.title" = "同僚に話すように書きます";
-"usage.buttonAria" = "使用量: 残り %1$@";
+"usage.buttonAria" = "使用量: %1$@ 使用済み";
 "usage.claudeWaitsForReply" = "上限は、エージェントの最初の返信の後に表示されます";
 "usage.createAgent" = "エージェントを作成";
 "usage.days" = "%1$lld 日";
-"usage.exhausted" = "使い切り";
 "usage.footnote" = "このサーバーのサブスクリプション上限です。更新: %1$@。";
+"usage.fullestHelp" = "最も使われている上限の %1$@ を使用中 (%2$@, %3$@)";
 "usage.hours" = "%1$lld 時間";
-"usage.left" = "残り %1$@";
 "usage.noLimitsYet" = "上限をまだ取得していません";
 "usage.noSubscriptions" = "サブスクリプションが未接続です";
 "usage.readFailed" = "上限を読み取れません: %1$@";
@@ -521,3 +522,4 @@
 "usage.resetIn" = "%1$@ 後にリセット";
 "usage.resetTime" = "%1$@ にリセット";
 "usage.title" = "使用量";
+"usage.used" = "%1$@ 使用済み";

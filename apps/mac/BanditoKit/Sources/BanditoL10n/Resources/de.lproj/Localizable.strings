@@ -170,6 +170,8 @@
 "files.panelAgent" = "Agent hier erstellen";
 "files.panelTerminal" = "Terminal hier";
 "files.searchButton" = "Suche";
+"files.searchHelp" = "In diesem Ordner suchen";
+"files.searchPlaceholder" = "Suchen";
 "files.showDetails" = "Details anzeigen";
 "files.showHiddenPlaces" = "Ausgeblendete Orte anzeigen";
 "files.showInFinder" = "Im Finder zeigen";
@@ -505,14 +507,13 @@
 "tour.team.title" = "Das ist dein Team";
 "tour.write.text" = "Schreib einfach: „Füge Tests für die Zahlung hinzu und öffne einen PR“. Der Agent findet selbst heraus, was er ausführen muss.";
 "tour.write.title" = "Schreib wie an einen Kollegen";
-"usage.buttonAria" = "Nutzung: %1$@ übrig";
+"usage.buttonAria" = "Nutzung: %1$@ verbraucht";
 "usage.claudeWaitsForReply" = "Limits erscheinen nach der ersten Antwort des Agenten";
 "usage.createAgent" = "Agent erstellen";
 "usage.days" = "%1$lld T.";
-"usage.exhausted" = "Aufgebraucht";
 "usage.footnote" = "Limits deiner Abos auf diesem Server. Aktualisiert %1$@.";
+"usage.fullestHelp" = "%1$@ des am stärksten genutzten Limits verbraucht (%2$@, %3$@)";
 "usage.hours" = "%1$lld Std.";
-"usage.left" = "%1$@ übrig";
 "usage.noLimitsYet" = "Limits noch nicht erhalten";
 "usage.noSubscriptions" = "Keine Abos verbunden";
 "usage.readFailed" = "Limits konnten nicht gelesen werden: %1$@";
@@ -521,3 +522,4 @@
 "usage.resetIn" = "Setzt sich in %1$@ zurück";
 "usage.resetTime" = "Setzt sich um %1$@ zurück";
 "usage.title" = "Nutzung";
+"usage.used" = "%1$@ verbraucht";

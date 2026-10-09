@@ -430,8 +430,9 @@
 "files.preview.readOnly" = "Только чтение";
 "files.preview.readWrite" = "Чтение и запись";
 "files.preview.tooLarge" = "Слишком большой для превью";
-"files.search" = "Искать в %1$@";
 "files.searchButton" = "Поиск";
+"files.searchHelp" = "Искать в этой папке";
+"files.searchPlaceholder" = "Поиск";
 "files.showDetails" = "Показать сведения";
 "files.showHiddenPlaces" = "Вернуть скрытые места";
 "files.showInFinder" = "Показать в Finder";
@@ -1522,16 +1523,15 @@
 "updates.latestVersion" = "Последний релиз";
 "updates.unknown" = "неизвестно";
 "updates.upToDate" = "Актуально";
-"usage.buttonAria" = "Использование: осталось %1$@";
+"usage.buttonAria" = "Использование: израсходовано %1$@";
 "usage.claudeWaitsForReply" = "Лимиты появятся после первого ответа агента";
 "usage.createAgent" = "Создать агента";
 "usage.days" = "%1$lld дн.";
 "usage.empty" = "Лимиты ещё не получены. Появятся после первого ответа или обновления.";
-"usage.exhausted" = "Исчерпано";
 "usage.fallbackNote" = "Кончится лимит — агент сам перейдёт на запасную подписку и вернётся после сброса. Настраивается у каждого агента. Обновлено %1$@.";
 "usage.footnote" = "Лимиты ваших подписок на этом сервере. Обновлено %1$@.";
+"usage.fullestHelp" = "Израсходовано %1$@ самого заполненного лимита (%2$@, %3$@)";
 "usage.hours" = "%1$lld ч";
-"usage.left" = "Осталось %1$@";
 "usage.limits" = "Лимиты подписок";
 "usage.noLimitsYet" = "Лимиты ещё не получены";
 "usage.noSubscriptions" = "Подписки не подключены";
@@ -1542,6 +1542,7 @@
 "usage.resetTime" = "Сброс в %1$@";
 "usage.resetToday" = "в %1$@";
 "usage.title" = "Использование";
+"usage.used" = "Израсходовано %1$@";
 "viewer.binary.title" = "Не умею показывать этот файл";
 "viewer.closeTab" = "Закрыть вкладку";
 "viewer.closeUnsaved.discard" = "Не сохранять";

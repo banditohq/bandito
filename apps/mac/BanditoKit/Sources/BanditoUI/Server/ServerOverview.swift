@@ -17,6 +17,8 @@ struct ServerOverview: View {
     @State private var actionError: UserFacingMessage?
     /// The metric whose detail is open, if any.
     @State private var detail: OverviewMetric?
+    /// Two columns of cards or one. Starts narrow; changes only when the measured page width crosses the threshold.
+    @State private var isWide = false
 
     var body: some View {
         ServerPage(title: L10n.Mode.serverOverview, trailing: { trailing }) {
@@ -31,21 +33,39 @@ struct ServerOverview: View {
                 if let error = monitor.error {
                     UserFacingErrorView(message: error)
                 }
-                HStack(alignment: .top, spacing: 12) {
-                    processesCard(server)
+                if isWide {
+                    HStack(alignment: .top, spacing: 12) {
+                        VStack(spacing: 12) {
+                            processesCard(server)
+                            featuresCard(server)
+                        }
                         .frame(maxWidth: .infinity, alignment: .topLeading)
+                        VStack(spacing: 12) {
+                            portsCard
+                            secretsCard(server)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                    }
+                } else {
                     VStack(spacing: 12) {
+                        processesCard(server)
+                        featuresCard(server)
                         portsCard
                         secretsCard(server)
-                        if server.supports("setup") {
-                            ServerFeaturesCard(server: server, setup: setup)
-                        }
                     }
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
             } else {
                 ServerUnavailable(server: server)
             }
+        }
+        .background(
+            GeometryReader { proxy in
+                Color.clear.preference(key: PageWidthKey.self, value: proxy.size.width)
+            }
+        )
+        .onPreferenceChange(PageWidthKey.self) { width in
+            let wide = Self.isTwoColumns(width: width)
+            if wide != isWide { isWide = wide }
         }
         .task(id: server?.id) {
             guard let server else { return }
@@ -93,6 +113,13 @@ struct ServerOverview: View {
             .fixedSize()
         }
         .fixedSize()
+    }
+
+    /// Page width from which the cards sit in two columns; narrower pages stack them in one.
+    static let twoColumnsMinWidth: CGFloat = 1000
+
+    static func isTwoColumns(width: CGFloat) -> Bool {
+        width >= twoColumnsMinWidth
     }
 
     static func healthText(_ health: HostHealth) -> String {
@@ -294,6 +321,14 @@ struct ServerOverview: View {
         }
     }
 
+    /// "Capabilities": only for a daemon that reports setup; otherwise the card is not shown at all.
+    @ViewBuilder
+    private func featuresCard(_ server: ServerModel) -> some View {
+        if server.supports("setup") {
+            ServerFeaturesCard(server: server, setup: setup)
+        }
+    }
+
     // MARK: - Ports, secrets
 
     private var portsCard: some View {
@@ -410,6 +445,25 @@ struct ServerOverview: View {
     }
 }
 
+/// Fixed heights of the parts of a metric tile, so all four tiles are the same height whatever they show.
+private enum TileHeight {
+    /// The label line.
+    static let header: CGFloat = 18
+    /// The big number (26 pt type).
+    static let value: CGFloat = 32
+    /// The chart, or the fill bar and its caption.
+    static let chart: CGFloat = 44
+}
+
+/// Width of the page, read from the layout.
+private struct PageWidthKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 /// One metric of the overview: its label, the number, a note, and a sparkline of its history.
 private struct MetricTile: View {
     let label: String
@@ -436,6 +490,7 @@ private struct MetricTile: View {
                     .foregroundStyle(Color.Bandito.text3)
                     .lineLimit(1)
             }
+            .frame(height: TileHeight.header)
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(value)
                     .font(.system(size: 26, weight: .semibold))
@@ -449,21 +504,27 @@ private struct MetricTile: View {
                         .lineLimit(1)
                 }
             }
+            .frame(height: TileHeight.value, alignment: .leading)
+            // The chart area has the same fixed height in every tile, so the row of four cards lines up.
             if let fill {
-                FillBar(fraction: fill, tint: tint)
-                    .frame(height: 6)
-                    .padding(.top, 4)
-                if let caption {
-                    Text(caption)
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(Color.Bandito.text3)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
+                VStack(alignment: .leading, spacing: 4) {
+                    FillBar(fraction: fill, tint: tint)
+                        .frame(height: 6)
                         .padding(.top, 4)
+                    if let caption {
+                        Text(caption)
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(Color.Bandito.text3)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                            .padding(.top, 4)
+                    }
                 }
+                .frame(height: TileHeight.chart, alignment: .top)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
             } else {
                 Sparkline(values: series, tint: tint)
-                    .frame(height: 44)
+                    .frame(height: TileHeight.chart)
             }
         }
         .padding(.horizontal, 14)

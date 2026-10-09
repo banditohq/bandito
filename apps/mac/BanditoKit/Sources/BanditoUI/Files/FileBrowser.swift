@@ -486,7 +486,7 @@ private struct BrowserWidthKey: PreferenceKey {
 ///
 /// It has three layouts and shows the first one that fits the width: full (words on the terminal and create
 /// buttons), icons (those two as icons), and compact (search as a loupe that opens a popover). The search field
-/// takes 140 to 320 pt; the path trail takes what is left and never less than 180 pt.
+/// takes 200 to 360 pt; the path trail takes what is left and never less than 180 pt.
 struct FilesToolbar: View {
     @Bindable var model: FolderModel
     let crumbs: [PathCrumb]
@@ -545,7 +545,7 @@ struct FilesToolbar: View {
             switch search {
             case .field:
                 searchField
-                    .frame(minWidth: 140, idealWidth: 140, maxWidth: 320)
+                    .frame(minWidth: 200, idealWidth: 260, maxWidth: 360)
                     .frame(height: 32)
             case .loupe:
                 loupe
@@ -590,19 +590,18 @@ struct FilesToolbar: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 12.5))
                 .foregroundStyle(Color.Bandito.text3)
-            TextField(
-                L10n.Files.search(folder: model.path.map { FilePath.lastComponent($0) } ?? ""), text: $model.searchText
-            )
-            .textFieldStyle(.plain)
-            .font(.system(size: 13))
-            .lineLimit(1)
-            .focused($searchFocused)
-            .onChange(of: model.searchText) { onSearchChange() }
-            .onExitCommand { model.clearSearch() }
+            TextField(L10n.Files.searchPlaceholder, text: $model.searchText)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
+                .lineLimit(1)
+                .focused($searchFocused)
+                .onChange(of: model.searchText) { onSearchChange() }
+                .onExitCommand { model.clearSearch() }
         }
         .padding(.horizontal, 10)
         .background(Color.Bandito.text.opacity(0.05), in: RoundedRectangle(cornerRadius: 9))
         .overlay(RoundedRectangle(cornerRadius: 9).stroke(Color.Bandito.text.opacity(0.07)))
+        .help(L10n.Files.searchHelp)
     }
 
     /// The compact search: a loupe that opens the field in a popover.

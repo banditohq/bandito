@@ -170,6 +170,8 @@
 "files.panelAgent" = "Criar agente aqui";
 "files.panelTerminal" = "Terminal aqui";
 "files.searchButton" = "Pesquisar";
+"files.searchHelp" = "Buscar nesta pasta";
+"files.searchPlaceholder" = "Buscar";
 "files.showDetails" = "Mostrar detalhes";
 "files.showHiddenPlaces" = "Mostrar locais ocultos";
 "files.showInFinder" = "Mostrar no Finder";
@@ -505,14 +507,13 @@
 "tour.team.title" = "Esta é a sua equipe";
 "tour.write.text" = "Use palavras simples: “adicione testes para pagamentos e abra um PR”. O agente descobre o que rodar.";
 "tour.write.title" = "Escreva como se fosse a um colega";
-"usage.buttonAria" = "Uso: restam %1$@";
+"usage.buttonAria" = "Uso: %1$@ usado";
 "usage.claudeWaitsForReply" = "Os limites aparecem após a primeira resposta do agente";
 "usage.createAgent" = "Criar agente";
 "usage.days" = "%1$lld d";
-"usage.exhausted" = "Esgotado";
 "usage.footnote" = "Limites das suas assinaturas neste servidor. Atualizado %1$@.";
+"usage.fullestHelp" = "%1$@ do limite mais usado consumido (%2$@, %3$@)";
 "usage.hours" = "%1$lld h";
-"usage.left" = "Restam %1$@";
 "usage.noLimitsYet" = "Limites ainda não recebidos";
 "usage.noSubscriptions" = "Nenhuma assinatura conectada";
 "usage.readFailed" = "Não foi possível ler os limites: %1$@";
@@ -521,3 +522,4 @@
 "usage.resetIn" = "Redefine em %1$@";
 "usage.resetTime" = "Redefine às %1$@";
 "usage.title" = "Uso";
+"usage.used" = "Usado %1$@";

@@ -178,10 +178,13 @@ public struct MenuBarContent: View {
                     Text(card.name)
                         .font(.system(size: 12.5, weight: .semibold))
                     Spacer(minLength: 6)
-                    if let line = card.windows.min(by: { $0.remaining < $1.remaining }) {
-                        Text("\(Int((line.remaining * 100).rounded()))%")
+                    if let fullest = UsageCards.fullestWindow([card], runtime: nil) {
+                        Text("\(fullest.usedPercent)%")
                             .font(.system(size: 12.5, weight: .semibold))
-                            .foregroundStyle(line.remaining < 0.25 ? Color.Bandito.signal : Color.Bandito.text)
+                            .foregroundStyle(UsageLevel(usedPercent: fullest.usedPercent).color)
+                            .help(L10n.Usage.fullestHelp(
+                                percent: "\(fullest.usedPercent)%", runtime: fullest.runtimeName,
+                                window: fullest.windowLabel))
                     }
                 }
             }

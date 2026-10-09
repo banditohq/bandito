@@ -430,8 +430,9 @@
 "files.preview.readOnly" = "Read only";
 "files.preview.readWrite" = "Read and write";
 "files.preview.tooLarge" = "Too large to preview";
-"files.search" = "Search in %1$@";
 "files.searchButton" = "Search";
+"files.searchHelp" = "Search in this folder";
+"files.searchPlaceholder" = "Search";
 "files.showDetails" = "Show details";
 "files.showHiddenPlaces" = "Show hidden places";
 "files.showInFinder" = "Show in Finder";
@@ -1522,16 +1523,15 @@
 "updates.latestVersion" = "Latest release";
 "updates.unknown" = "unknown";
 "updates.upToDate" = "Up to date";
-"usage.buttonAria" = "Usage: %1$@ left";
+"usage.buttonAria" = "Usage: %1$@ used";
 "usage.claudeWaitsForReply" = "Limits appear after the agent's first reply";
 "usage.createAgent" = "Create agent";
 "usage.days" = "%1$lld d";
 "usage.empty" = "No limits received yet. They appear after the first reply or a refresh.";
-"usage.exhausted" = "Used up";
 "usage.fallbackNote" = "If a limit runs out, the agent switches to its backup subscription and returns after the reset. You set this per agent. Updated %1$@.";
 "usage.footnote" = "Subscription limits on this server. Updated %1$@.";
+"usage.fullestHelp" = "Used %1$@ of the fullest limit (%2$@, %3$@)";
 "usage.hours" = "%1$lld h";
-"usage.left" = "%1$@ left";
 "usage.limits" = "Subscription limits";
 "usage.noLimitsYet" = "Limits not received yet";
 "usage.noSubscriptions" = "Subscriptions aren't connected";
@@ -1542,6 +1542,7 @@
 "usage.resetTime" = "Resets at %1$@";
 "usage.resetToday" = "at %1$@";
 "usage.title" = "Usage";
+"usage.used" = "Used %1$@";
 "viewer.binary.title" = "Can’t show this file";
 "viewer.closeTab" = "Close tab";
 "viewer.closeUnsaved.discard" = "Don’t save";

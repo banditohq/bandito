@@ -170,6 +170,8 @@
 "files.panelAgent" = "在此创建智能体";
 "files.panelTerminal" = "在此打开终端";
 "files.searchButton" = "搜索";
+"files.searchHelp" = "在此文件夹中搜索";
+"files.searchPlaceholder" = "搜索";
 "files.showDetails" = "显示详细信息";
 "files.showHiddenPlaces" = "显示隐藏的位置";
 "files.showInFinder" = "在访达中显示";
@@ -505,14 +507,13 @@
 "tour.team.title" = "这是你的团队";
 "tour.write.text" = "用普通的话说：“给支付加上测试，然后开个 PR”。代理会自己判断该运行什么。";
 "tour.write.title" = "像对同事一样跟它说";
-"usage.buttonAria" = "用量：剩余 %1$@";
+"usage.buttonAria" = "用量：已用 %1$@";
 "usage.claudeWaitsForReply" = "限额会在智能体首次回复后显示";
 "usage.createAgent" = "创建智能体";
 "usage.days" = "%1$lld 天";
-"usage.exhausted" = "已用完";
 "usage.footnote" = "这台服务器上订阅的限额。更新于 %1$@。";
+"usage.fullestHelp" = "已用最满上限的 %1$@（%2$@，%3$@）";
 "usage.hours" = "%1$lld 小时";
-"usage.left" = "剩余 %1$@";
 "usage.noLimitsYet" = "尚未获取限额";
 "usage.noSubscriptions" = "未连接订阅";
 "usage.readFailed" = "无法读取限额：%1$@";
@@ -521,3 +522,4 @@
 "usage.resetIn" = "%1$@ 后重置";
 "usage.resetTime" = "%1$@ 重置";
 "usage.title" = "用量";
+"usage.used" = "已用 %1$@";

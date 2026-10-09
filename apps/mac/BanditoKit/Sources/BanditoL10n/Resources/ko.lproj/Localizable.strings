@@ -170,6 +170,8 @@
 "files.panelAgent" = "여기에 에이전트 만들기";
 "files.panelTerminal" = "여기에서 터미널";
 "files.searchButton" = "검색";
+"files.searchHelp" = "이 폴더에서 검색";
+"files.searchPlaceholder" = "검색";
 "files.showDetails" = "세부 정보 보기";
 "files.showHiddenPlaces" = "숨긴 위치 다시 보기";
 "files.showInFinder" = "Finder에서 보기";
@@ -505,14 +507,13 @@
 "tour.team.title" = "이것이 당신의 팀입니다";
 "tour.write.text" = "평범한 말로 쓰세요: “결제 테스트를 추가하고 PR을 열어줘”. 무엇을 실행할지는 에이전트가 알아서 정합니다.";
 "tour.write.title" = "동료에게 말하듯 쓰세요";
-"usage.buttonAria" = "사용량: %1$@ 남음";
+"usage.buttonAria" = "사용량: %1$@ 사용";
 "usage.claudeWaitsForReply" = "한도는 에이전트의 첫 응답 후에 표시됩니다";
 "usage.createAgent" = "에이전트 만들기";
 "usage.days" = "%1$lld일";
-"usage.exhausted" = "모두 사용함";
 "usage.footnote" = "이 서버의 구독 한도입니다. 업데이트: %1$@.";
+"usage.fullestHelp" = "가장 많이 쓴 한도의 %1$@ 사용 (%2$@, %3$@)";
 "usage.hours" = "%1$lld시간";
-"usage.left" = "%1$@ 남음";
 "usage.noLimitsYet" = "아직 한도를 받지 못했습니다";
 "usage.noSubscriptions" = "연결된 구독이 없습니다";
 "usage.readFailed" = "한도를 읽을 수 없습니다: %1$@";
@@ -521,3 +522,4 @@
 "usage.resetIn" = "%1$@ 후 초기화";
 "usage.resetTime" = "%1$@에 초기화";
 "usage.title" = "사용량";
+"usage.used" = "%1$@ 사용";

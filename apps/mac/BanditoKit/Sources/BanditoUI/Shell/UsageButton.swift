@@ -2,8 +2,8 @@ import BanditoDesign
 import BanditoL10n
 import SwiftUI
 
-/// The gauge button in the sidebar footer. It shows the smallest share left among the windows of the
-/// current agent's runtime (all runtimes when no agent is selected) and opens the usage popover.
+/// The gauge button in the sidebar footer. It shows the share used in the most filled window of the current
+/// agent's runtime (all runtimes when no agent is selected), coloured by level, and opens the usage popover.
 struct UsageButton: View {
     @Environment(AppModel.self) private var app
     @Environment(Router.self) private var router
@@ -13,9 +13,10 @@ struct UsageButton: View {
         @Bindable var router = router
         let open = router.usagePopoverOpen
         let snapshot = UsageCards.snapshot(server: app.currentServer, demo: demo)
-        // The share left in the window that is closest to its limit; with no limits known, only the icon.
-        let percent = UsageCards.percentLeft(snapshot.cards, runtime: selectedRuntime)
-        let text = percent.map { "\(Int(($0 * 100).rounded()))%" }
+        // The share used in the window that is closest to its limit; with no limits known, only the icon.
+        let fullest = UsageCards.fullestWindow(snapshot.cards, runtime: selectedRuntime)
+        let text = fullest.map { "\($0.usedPercent)%" }
+        let level = fullest.map { UsageLevel(usedPercent: $0.usedPercent) }
 
         Button {
             router.usagePopoverOpen.toggle()
@@ -27,6 +28,7 @@ struct UsageButton: View {
                     Text(text)
                         .font(.system(size: 12.5, weight: .semibold))
                         .monospacedDigit()
+                        .foregroundStyle(level?.color ?? Color.Bandito.text)
                         .lineLimit(1)
                         .fixedSize()
                 }
@@ -39,7 +41,11 @@ struct UsageButton: View {
             .contentShape(Capsule())
         }
         .banditoButton(.row(cornerRadius: 17))
-        .help(L10n.Usage.limits)
+        .help(
+            fullest.map {
+                L10n.Usage.fullestHelp(percent: "\($0.usedPercent)%", runtime: $0.runtimeName, window: $0.windowLabel)
+            } ?? L10n.Usage.limits
+        )
         .accessibilityLabel(text.map { L10n.Usage.buttonAria(percent: $0) } ?? L10n.Usage.limits)
         .popover(isPresented: $router.usagePopoverOpen, arrowEdge: .top) {
             UsagePopover()

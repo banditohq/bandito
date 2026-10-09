@@ -551,8 +551,9 @@ public enum L10n {
         public static var noResults: String { L10n.tr("files.noResults") }
         public static var panelAgent: String { L10n.tr("files.panelAgent") }
         public static var panelTerminal: String { L10n.tr("files.panelTerminal") }
-        public static func search(folder: String) -> String { L10n.tr("files.search", folder) }
         public static var searchButton: String { L10n.tr("files.searchButton") }
+        public static var searchHelp: String { L10n.tr("files.searchHelp") }
+        public static var searchPlaceholder: String { L10n.tr("files.searchPlaceholder") }
         public static var showDetails: String { L10n.tr("files.showDetails") }
         public static var showHiddenPlaces: String { L10n.tr("files.showHiddenPlaces") }
         public static var showInFinder: String { L10n.tr("files.showInFinder") }
@@ -2119,11 +2120,10 @@ public enum L10n {
         public static var createAgent: String { L10n.tr("usage.createAgent") }
         public static func days(count: Int) -> String { L10n.tr("usage.days", count) }
         public static var empty: String { L10n.tr("usage.empty") }
-        public static var exhausted: String { L10n.tr("usage.exhausted") }
         public static func fallbackNote(time: String) -> String { L10n.tr("usage.fallbackNote", time) }
         public static func footnote(time: String) -> String { L10n.tr("usage.footnote", time) }
+        public static func fullestHelp(percent: String, runtime: String, window: String) -> String { L10n.tr("usage.fullestHelp", percent, runtime, window) }
         public static func hours(count: Int) -> String { L10n.tr("usage.hours", count) }
-        public static func left(percent: String) -> String { L10n.tr("usage.left", percent) }
         public static var limits: String { L10n.tr("usage.limits") }
         public static var noLimitsYet: String { L10n.tr("usage.noLimitsYet") }
         public static var noSubscriptions: String { L10n.tr("usage.noSubscriptions") }
@@ -2134,6 +2134,7 @@ public enum L10n {
         public static func resetTime(time: String) -> String { L10n.tr("usage.resetTime", time) }
         public static func resetToday(time: String) -> String { L10n.tr("usage.resetToday", time) }
         public static var title: String { L10n.tr("usage.title") }
+        public static func used(percent: String) -> String { L10n.tr("usage.used", percent) }
     }
 
     public enum Viewer {

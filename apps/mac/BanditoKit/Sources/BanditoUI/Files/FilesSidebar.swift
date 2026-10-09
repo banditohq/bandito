@@ -110,17 +110,15 @@ private struct FilesSidebarContent: View {
                     .padding(.horizontal, 14)
                     .padding(.bottom, 12)
             }
-            Button {
+            // The trash is a place like the favorites: a full-width row with the same icon-and-name style.
+            PlaceRow(
+                place: Place(
+                    title: L10n.Files.trash, path: trashPath, icon: "trash", tint: Color(hex: 0xBDB2A0), isBuiltIn: true),
+                isCurrent: router.filesPath == trashPath
+            ) {
                 router.filesPath = trashPath
-            } label: {
-                Label(L10n.Files.trash, systemImage: "trash")
-                    .font(.system(size: 12.5, weight: .medium))
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 34)
             }
-            .banditoButton(.quiet())
-            .padding(.horizontal, 14)
+            .padding(.horizontal, 8)
             .padding(.bottom, 14)
         }
         .frame(maxHeight: .infinity)

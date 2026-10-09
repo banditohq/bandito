@@ -225,25 +225,27 @@ struct UsageCardView: View {
     }
 }
 
-/// One window: "Remaining N%", the bar, the countdown on the left and the reset time on the right.
+/// One window: "Used N%", the bar filled by the share used, the countdown on the left and the reset time on the right.
+/// The colour of the number, the bar and the countdown comes from `UsageLevel`, the same as the sidebar button.
 private struct UsageWindowRow: View {
     var line: UsageWindowLine
     var now: Date
 
     var body: some View {
+        let level = UsageLevel(usedPercent: usedPercent)
         VStack(alignment: .leading, spacing: 5) {
             HStack {
                 Text(line.label)
                     .font(.system(size: 12.5))
                     .foregroundStyle(Color.Bandito.text2)
                 Spacer()
-                Text(leftText)
+                Text(L10n.Usage.used(percent: "\(usedPercent)%"))
                     .font(.system(size: 12.5, weight: .semibold))
-                    .foregroundStyle(leftColor)
+                    .foregroundStyle(level.color)
             }
-            UsageBar(fraction: line.remaining, height: 5)
+            UsageBar(fraction: line.used, tint: level.color, height: 5)
             HStack {
-                bottomLeft
+                bottomLeft(level: level)
                 Spacer(minLength: 8)
                 if let resetsAt = line.resetsAt {
                     Text(Countdown.resetText(to: resetsAt, now: now))
@@ -254,8 +256,10 @@ private struct UsageWindowRow: View {
         }
     }
 
+    private var usedPercent: Int { Int((line.used * 100).rounded()) }
+
     @ViewBuilder
-    private var bottomLeft: some View {
+    private func bottomLeft(level: UsageLevel) -> some View {
         if let note = line.note {
             Text(note).foregroundStyle(Color.Bandito.text3)
         } else if let resetsAt = line.resetsAt {
@@ -265,18 +269,7 @@ private struct UsageWindowRow: View {
                 Text(Countdown.text(to: resetsAt, now: now, exhausted: line.exhausted))
                     .font(.system(size: 11.5, design: .monospaced))
             }
-            .foregroundStyle(line.exhausted ? Color.Bandito.danger : (line.remaining < 0.25 ? Color.Bandito.signal : Color.Bandito.text2))
+            .foregroundStyle(level == .ok ? Color.Bandito.text2 : level.color)
         }
-    }
-
-    private var leftText: String {
-        line.exhausted
-            ? L10n.Usage.exhausted
-            : L10n.Usage.left(percent: "\(Int((line.remaining * 100).rounded()))%")
-    }
-
-    private var leftColor: Color {
-        if line.exhausted { return Color.Bandito.danger }
-        return line.remaining < 0.25 ? Color.Bandito.signal : Color.Bandito.text
     }
 }
