@@ -130,8 +130,9 @@ public struct OnboardingFlow: View {
             GeometryReader { geometry in
                 ScrollView {
                     // The top inset keeps the mascot's float (8 pt up) inside the scroll view, not clipped by it.
+                    // Short content is centered vertically in the area between the bars.
                     stepBody
-                        .frame(maxWidth: .infinity, minHeight: geometry.size.height, alignment: .topLeading)
+                        .frame(maxWidth: .infinity, minHeight: geometry.size.height, alignment: .center)
                         .padding(.top, 12)
                 }
                 .scrollIndicators(.hidden)
