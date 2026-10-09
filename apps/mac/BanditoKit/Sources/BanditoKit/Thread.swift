@@ -91,16 +91,22 @@ public struct AgentThread: Sendable, Hashable {
         case .turnStarted:
             turnRunning = true
         case .messageUser(let text, let source, let from):
-            dropStreaming()
             switch source {
             case .user:
+                dropStreaming()
                 items.append(.user(id: e.id, text: text, source: source, from: nil, ts: e.ts))
             case .crew:
+                dropStreaming()
                 items.append(.note(id: e.id + "-n", text: "Message from \(from ?? "a teammate")", kind: .crew, ts: e.ts))
                 items.append(.user(id: e.id, text: text, source: source, from: from, ts: e.ts))
             case .schedule:
+                dropStreaming()
                 items.append(.note(id: e.id + "-n", text: "Scheduled run", kind: .schedule, ts: e.ts))
                 items.append(.user(id: e.id, text: text, source: source, from: nil, ts: e.ts))
+            case .system:
+                // Hidden wrap-up turn before a new chapter: no bubble, just a quiet line.
+                finalizeStreaming(e)
+                items.append(.note(id: e.id, text: "Saving memory before a new chapter", kind: .info, ts: e.ts))
             }
         case .messageDelta(let text):
             if case .streaming(let t)? = items.last {
@@ -112,7 +118,7 @@ public struct AgentThread: Sendable, Hashable {
             dropStreaming()
             items.append(.assistant(id: e.id, text: text, ts: e.ts))
         case .toolCall(let callId, let tool, let title, _):
-            dropStreaming()
+            finalizeStreaming(e)
             if let i = toolIndex(callId) {
                 if case .tool(var row) = items[i] {
                     row.title = title
@@ -130,7 +136,7 @@ public struct AgentThread: Sendable, Hashable {
                 items.append(.tool(ToolRow(callId: callId, tool: "tool", title: "Tool", ok: ok, output: output)))
             }
         case .approvalRequested(let id, _, let tool, let title, let command, let diff, let reason):
-            dropStreaming()
+            finalizeStreaming(e)
             items.append(
                 .approval(
                     ApprovalRow(
@@ -155,13 +161,24 @@ public struct AgentThread: Sendable, Hashable {
             statusDetail = detail
         case .error(let message):
             items.append(.note(id: e.id, text: message, kind: .error, ts: e.ts))
+        case .sessionRotated(let chapter, _, _):
+            items.append(.note(id: e.id, text: "Chapter \(chapter) · memory saved", kind: .info, ts: e.ts))
         case .usageLimits, .unknown:
             break
         }
     }
 
+    /// A final message replaces the streamed text, so the stream is dropped.
     private mutating func dropStreaming() {
         if case .streaming? = items.last { items.removeLast() }
+    }
+
+    /// Something else starts after the stream (tool, approval, system line): the text
+    /// streamed so far is kept as an assistant message instead of vanishing.
+    private mutating func finalizeStreaming(_ e: Event) {
+        if case .streaming(let t)? = items.last {
+            items[items.count - 1] = .assistant(id: e.id + "-s", text: t, ts: e.ts)
+        }
     }
 
     private func toolIndex(_ callId: String) -> Int? {

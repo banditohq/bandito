@@ -7,6 +7,8 @@ struct ThreadView: View {
     var agent: Agent
     @State private var draft = ""
     @State private var sendError: String?
+    /// Failures of interrupt, approval and history loading.
+    @State private var actionError: String?
 
     private var thread: AgentThread { server.thread(for: agent.id) }
 
@@ -14,9 +16,14 @@ struct ThreadView: View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
                 ScrollView {
-                    ThreadItemsView(items: thread.items, server: server)
+                    ThreadItemsView(
+                        items: thread.items, server: server,
+                        showsLoadEarlier: server.hasMoreHistory[agent.id] == true,
+                        onLoadEarlier: loadEarlier,
+                        onError: { actionError = $0 })
                 }
-                .onChange(of: thread.items.count) { _, _ in
+                // Follow the newest item only: prepending older history must not jump to the bottom.
+                .onChange(of: thread.items.last?.id) { _, _ in
                     withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo("bottom", anchor: .bottom) }
                 }
                 .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
@@ -26,19 +33,41 @@ struct ThreadView: View {
             if thread.status == .error, let detail = thread.statusDetail {
                 Banner(text: detail)
             }
+            if let text = server.lastError {
+                Banner(text: text)
+            }
             if let sendError {
                 Banner(text: sendError)
             }
+            if let actionError {
+                Banner(text: actionError)
+            }
             Composer(
                 draft: $draft, agentName: agent.name, running: thread.turnRunning,
-                onSend: send, onStop: { Task { try? await server.interrupt(agent.id) } }
+                onSend: send, onStop: stop
             )
             .frame(maxWidth: 800)
             .padding(.horizontal, 20)
             .padding(.bottom, 16)
         }
         .background(Color.Bandito.bg)
-        .task(id: agent.id) { try? await server.loadHistory(agent.id) }
+        .task(id: agent.id) { await loadHistory() }
+    }
+
+    private func loadHistory() async {
+        do { try await server.loadHistory(agent.id) } catch { actionError = error.localizedDescription }
+    }
+
+    private func loadEarlier() {
+        Task {
+            do { try await server.loadOlder(agent.id) } catch { actionError = error.localizedDescription }
+        }
+    }
+
+    private func stop() {
+        Task {
+            do { try await server.interrupt(agent.id) } catch { actionError = error.localizedDescription }
+        }
     }
 
     private func send() {
@@ -60,11 +89,19 @@ struct ThreadView: View {
 struct ThreadItemsView: View {
     var items: [ThreadItem]
     var server: ServerModel
+    var showsLoadEarlier = false
+    var onLoadEarlier: () -> Void = {}
+    var onError: (String) -> Void = { _ in }
 
     var body: some View {
         LazyVStack(alignment: .leading, spacing: 10) {
+            if showsLoadEarlier {
+                Button("Load earlier", action: onLoadEarlier)
+                    .buttonStyle(QuietButtonStyle())
+                    .frame(maxWidth: .infinity)
+            }
             ForEach(items) { item in
-                ThreadItemView(item: item, server: server)
+                ThreadItemView(item: item, server: server, onError: onError)
                     .id(item.id)
             }
             Color.clear.frame(height: 1).id("bottom")
@@ -157,6 +194,7 @@ struct Composer: View {
 struct ThreadItemView: View {
     var item: ThreadItem
     var server: ServerModel
+    var onError: (String) -> Void
 
     var body: some View {
         switch item {
@@ -176,7 +214,7 @@ struct ThreadItemView: View {
         case .tool(let row):
             ToolRowView(row: row)
         case .approval(let row):
-            ApprovalCard(row: row, server: server)
+            ApprovalCard(row: row, server: server, onError: onError)
         case .note(_, let text, let kind, _):
             HStack {
                 Spacer()
@@ -192,16 +230,25 @@ struct ThreadItemView: View {
     }
 }
 
+/// Agent text. Inline Markdown is rendered; anything that does not parse is shown verbatim.
 private struct Bubble: View {
     var text: String
 
     var body: some View {
         HStack {
-            Text(LocalizedStringKey(text))
-                .textSelection(.enabled)
-                .lineSpacing(3)
-                .padding(.horizontal, 14).padding(.vertical, 10)
-                .background(Color.Bandito.surface1, in: RoundedRectangle(cornerRadius: 16))
+            Group {
+                if let rendered = try? AttributedString(
+                    markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))
+                {
+                    Text(rendered)
+                } else {
+                    Text(verbatim: text)
+                }
+            }
+            .textSelection(.enabled)
+            .lineSpacing(3)
+            .padding(.horizontal, 14).padding(.vertical, 10)
+            .background(Color.Bandito.surface1, in: RoundedRectangle(cornerRadius: 16))
             Spacer(minLength: 80)
         }
     }
@@ -256,6 +303,7 @@ private struct ToolRowView: View {
 struct ApprovalCard: View {
     var row: ApprovalRow
     var server: ServerModel
+    var onError: (String) -> Void
     @State private var always = false
     @State private var busy = false
 
@@ -287,12 +335,11 @@ struct ApprovalCard: View {
                     .background(Color.Bandito.bg, in: RoundedRectangle(cornerRadius: 10))
                 }
                 HStack(spacing: 10) {
+                    // Deliberately no keyboard shortcuts: approving a command is a click, never a stray Return.
                     Button("Deny") { decide(.deny) }
                         .buttonStyle(QuietButtonStyle())
-                        .keyboardShortcut(.escape, modifiers: [])
                     Button("Approve") { decide(.allow) }
                         .buttonStyle(SignalButtonStyle())
-                        .keyboardShortcut(.return, modifiers: [])
                     Toggle("Always allow this here", isOn: $always)
                         .toggleStyle(.checkbox)
                         .font(.system(size: 12))
@@ -324,7 +371,11 @@ struct ApprovalCard: View {
     private func decide(_ d: Decision) {
         busy = true
         Task {
-            try? await server.resolve(row.approvalId, d, remember: always && d == .allow)
+            do {
+                try await server.resolve(row.approvalId, d, remember: always && d == .allow)
+            } catch {
+                onError(error.localizedDescription)
+            }
             busy = false
         }
     }

@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// A bidirectional text channel to the daemon (one JSON-RPC message per call).
 public protocol RPCTransport: Sendable {
@@ -20,18 +21,41 @@ public struct RPCError: Error, Sendable, Equatable, LocalizedError {
     public static let invalidParams = -32602
     /// Client-side: the connection closed before an answer.
     public static let disconnected = -1
+    /// Client-side: the server did not answer within the call's timeout.
+    public static let timedOut = -2
+    /// Client-side: refused to send a credential over an unencrypted connection.
+    public static let insecureTransport = -3
 }
 
 /// JSON-RPC 2.0 client: matches responses to requests and turns `event`
 /// notifications into an async stream.
 public actor RPCClient {
+    /// Where one request's answer is at. Written before the request is sent, so an
+    /// answer that arrives while the send is still suspended is not lost.
+    private enum Slot {
+        /// Request written or being written; no caller is suspended yet.
+        case sent
+        /// The caller is suspended and waiting for the answer.
+        case waiting(CheckedContinuation<Data, Error>)
+        /// The answer (or the timeout) arrived before the caller started waiting.
+        case settled(Result<Data, Error>)
+    }
+
+    private static let log = Logger(subsystem: "dev.bandito", category: "rpc")
+
     private let transport: RPCTransport
+    private let onDecodeFailure: (@Sendable () -> Void)?
     private var nextId = 1
-    private var waiting: [Int: CheckedContinuation<Data, Error>] = [:]
+    private var slots: [Int: Slot] = [:]
+    private var timers: [Int: Task<Void, Never>] = [:]
     private var readTask: Task<Void, Never>?
     private var closed = false
 
-    /// Live events (`event` notifications) in arrival order.
+    /// Event notifications that could not be decoded and were skipped.
+    public private(set) var decodeFailures = 0
+
+    /// Live events (`event` notifications) in arrival order. Never drops: a slow consumer
+    /// only grows memory, and the daemon's `seq` lets the model detect any gap.
     public nonisolated let events: AsyncStream<Event>
     private let eventSink: AsyncStream<Event>.Continuation
 
@@ -47,9 +71,11 @@ public actor RPCClient {
         return d
     }()
 
-    public init(transport: RPCTransport) {
+    /// - Parameter onDecodeFailure: called (on the actor) each time an event is skipped.
+    public init(transport: RPCTransport, onDecodeFailure: (@Sendable () -> Void)? = nil) {
         self.transport = transport
-        (events, eventSink) = AsyncStream.makeStream(of: Event.self, bufferingPolicy: .bufferingNewest(10_000))
+        self.onDecodeFailure = onDecodeFailure
+        (events, eventSink) = AsyncStream.makeStream(of: Event.self, bufferingPolicy: .unbounded)
     }
 
     public func start() async throws {
@@ -60,6 +86,7 @@ public actor RPCClient {
     public func close() async {
         closed = true
         readTask?.cancel()
+        readTask = nil
         await transport.close()
         failAll()
     }
@@ -76,68 +103,125 @@ public actor RPCClient {
         failAll()
     }
 
+    /// Ends every pending call with `disconnected` and finishes the event stream.
     private func failAll() {
-        let pending = waiting
-        waiting.removeAll()
-        for (_, c) in pending {
-            c.resume(throwing: RPCError(code: RPCError.disconnected, message: "disconnected from the server"))
+        closed = true
+        let pending = slots
+        slots.removeAll()
+        for timer in timers.values { timer.cancel() }
+        timers.removeAll()
+        let error = RPCError(code: RPCError.disconnected, message: "disconnected from the server")
+        for (_, slot) in pending {
+            if case .waiting(let c) = slot { c.resume(throwing: error) }
         }
         eventSink.finish()
     }
 
     private func handle(_ text: String) {
         guard let data = text.data(using: .utf8),
-            let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { return }
+            let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        else {
+            Self.log.error("dropped a message that is not JSON")
+            return
+        }
         if let method = obj["method"] as? String {
-            guard method == "event", let params = obj["params"],
+            guard method == "event" else { return }
+            guard let params = obj["params"],
                 let pdata = try? JSONSerialization.data(withJSONObject: params),
                 let ev = try? Self.decoder.decode(Event.self, from: pdata)
-            else { return }
+            else {
+                noteDecodeFailure()
+                return
+            }
             eventSink.yield(ev)
             return
         }
-        guard let id = (obj["id"] as? NSNumber)?.intValue, let c = waiting.removeValue(forKey: id) else { return }
+        guard let id = (obj["id"] as? NSNumber)?.intValue else { return }
         if let err = obj["error"] as? [String: Any] {
-            c.resume(
-                throwing: RPCError(
-                    code: (err["code"] as? NSNumber)?.intValue ?? 0, message: err["message"] as? String ?? "error"))
+            settle(
+                id,
+                .failure(
+                    RPCError(
+                        code: (err["code"] as? NSNumber)?.intValue ?? 0,
+                        message: err["message"] as? String ?? "error")))
             return
         }
         let result = obj["result"] ?? NSNull()
         // Wrap so scalars and null survive JSONSerialization.
         let wrapped = (try? JSONSerialization.data(withJSONObject: ["r": result])) ?? Data("{\"r\":null}".utf8)
-        c.resume(returning: wrapped)
+        settle(id, .success(wrapped))
+    }
+
+    private func noteDecodeFailure() {
+        decodeFailures += 1
+        Self.log.error("could not decode an event; skipped it")
+        onDecodeFailure?()
     }
 
     /// Call `method` and decode its result.
-    public func call<R: Decodable>(_ method: String, _ params: some Encodable, as: R.Type = R.self) async throws -> R {
-        if closed { throw RPCError(code: RPCError.disconnected, message: "disconnected from the server") }
-        let id = nextId
-        nextId += 1
-        let paramsJSON = try Self.encoder.encode(params)
-        let paramsString = String(decoding: paramsJSON, as: UTF8.self)
-        let request = "{\"jsonrpc\":\"2.0\",\"id\":\(id),\"method\":\(jsonString(method)),\"params\":\(paramsString)}"
-        let data: Data = try await withCheckedThrowingContinuation { c in
-            waiting[id] = c
-            Task {
-                do {
-                    try await self.transport.send(request)
-                } catch {
-                    self.fail(id, error)
-                }
-            }
-        }
+    ///
+    /// Throws `RPCError` with `RPCError.timedOut` if no answer arrives within `timeout`
+    /// (the timer covers the send as well).
+    public func call<R: Decodable>(
+        _ method: String, _ params: some Encodable, as: R.Type = R.self, timeout: Duration = .seconds(30)
+    ) async throws -> R {
+        let data = try await perform(method, params, timeout: timeout)
         return try Self.decoder.decode(ResultBox<R>.self, from: data).r
     }
 
     /// Call a method whose result the caller doesn't need.
-    public func call(_ method: String, _ params: some Encodable) async throws {
-        _ = try await call(method, params, as: JSONValue.self)
+    public func call(_ method: String, _ params: some Encodable, timeout: Duration = .seconds(30)) async throws {
+        _ = try await call(method, params, as: JSONValue.self, timeout: timeout)
     }
 
-    private func fail(_ id: Int, _ error: Error) {
-        waiting.removeValue(forKey: id)?.resume(throwing: error)
+    private func perform(_ method: String, _ params: some Encodable, timeout: Duration) async throws -> Data {
+        if closed { throw RPCError(code: RPCError.disconnected, message: "disconnected from the server") }
+        let id = nextId
+        nextId += 1
+        let paramsString = String(decoding: try Self.encoder.encode(params), as: UTF8.self)
+        let request = "{\"jsonrpc\":\"2.0\",\"id\":\(id),\"method\":\(jsonString(method)),\"params\":\(paramsString)}"
+
+        slots[id] = .sent
+        timers[id] = Task {
+            do { try await Task.sleep(for: timeout) } catch { return }
+            self.settle(id, .failure(RPCError(code: RPCError.timedOut, message: "the server did not answer in time")))
+        }
+        do {
+            try await transport.send(request)
+        } catch {
+            timers.removeValue(forKey: id)?.cancel()
+            slots[id] = nil
+            throw error
+        }
+        // Suspend for the answer unless it (or the timeout) has already settled the slot.
+        return try await withCheckedThrowingContinuation { (c: CheckedContinuation<Data, Error>) in
+            switch slots[id] {
+            case .settled(let result)?:
+                slots[id] = nil
+                c.resume(with: result)
+            case .sent?:
+                slots[id] = .waiting(c)
+            case .waiting?, nil:
+                // Unreachable: only this call moves a slot out of `.sent`. `nil` means
+                // the client was failed while the request was being sent.
+                c.resume(throwing: RPCError(code: RPCError.disconnected, message: "disconnected from the server"))
+            }
+        }
+    }
+
+    /// Resolves one request exactly once: a waiting caller is resumed and its slot removed,
+    /// so a late or duplicate answer (or a timer that lost the race) finds nothing to resume.
+    private func settle(_ id: Int, _ result: Result<Data, Error>) {
+        timers.removeValue(forKey: id)?.cancel()
+        switch slots[id] {
+        case .waiting(let c)?:
+            slots[id] = nil
+            c.resume(with: result)
+        case .sent?:
+            slots[id] = .settled(result)
+        case .settled?, nil:
+            break
+        }
     }
 
     private nonisolated func jsonString(_ s: String) -> String {
