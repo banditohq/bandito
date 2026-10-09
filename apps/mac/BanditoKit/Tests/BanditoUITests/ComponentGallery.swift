@@ -49,6 +49,8 @@ struct GalleryPage: View {
                 }
             }
 
+            LightAvatarsSection()
+
             GallerySection(title: "Status") {
                 HStack(spacing: 22) {
                     ForEach(AgentStatus.allCases, id: \.self) { status in
@@ -175,6 +177,38 @@ struct GalleryPage: View {
         .padding(28)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color.Bandito.bg)
+    }
+}
+
+/// Avatars on a light ground, forced into the light color scheme. Tile colors must match the dark view.
+private struct LightAvatarsSection: View {
+    private let faces: [AvatarFace] = [.chevronDash, .dots, .carets]
+    private let names = ["Forge", "Scout", "Night Owl", "Watch", "Quill"]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionLabel("Avatars · light")
+            HStack(spacing: 14) {
+                ForEach(AvatarColor.allCases.indices, id: \.self) { index in
+                    RaccoonAvatar(
+                        name: "Gallery",
+                        color: AvatarColor.allCases[index],
+                        face: faces[index % faces.count],
+                        size: 56)
+                }
+            }
+            HStack(spacing: 18) {
+                ForEach(names, id: \.self) { name in
+                    RaccoonAvatar(name: name, size: 40)
+                }
+            }
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.Bandito.bg)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        // Outermost, so the background and labels resolve in the light scheme too.
+        .environment(\.colorScheme, .light)
     }
 }
 

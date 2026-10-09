@@ -1,21 +1,19 @@
 import BanditoDesign
 import SwiftUI
 
-/// Tile color of an avatar. Each case maps to a brand token (or `BanditoPalette` when no token
-/// exists). The dark-theme values are identical to the mockup colors; in the light theme the
-/// tokens switch to their light variants, so tiles follow the theme.
+/// Tile color of an avatar. Fixed brand colors, the same in light and dark themes.
 public enum AvatarColor: CaseIterable, Sendable {
     case peach, sky, sage, rose, lilac, cream
 
     /// Fill of the avatar tile.
     public var color: Color {
         switch self {
-        case .peach: BanditoPalette.peach
-        case .sky: Color.Bandito.info
-        case .sage: Color.Bandito.ok
-        case .rose: Color.Bandito.danger
-        case .lilac: BanditoPalette.lilac
-        case .cream: Color.Bandito.text
+        case .peach: BanditoPalette.avatarPeach
+        case .sky: BanditoPalette.avatarSky
+        case .sage: BanditoPalette.avatarSage
+        case .rose: BanditoPalette.avatarRose
+        case .lilac: BanditoPalette.avatarLilac
+        case .cream: BanditoPalette.avatarCream
         }
     }
 }
@@ -60,7 +58,7 @@ public struct RaccoonAvatar: View {
             RoundedRectangle(cornerRadius: size * 17 / DesignGrid.edge, style: .continuous)
                 .fill(tint)
             RaccoonMask()
-                .fill(Color.Bandito.bg)
+                .fill(BanditoPalette.avatarMask)
             switch resolved.face {
             case .dots:
                 RaccoonDots()
