@@ -151,3 +151,15 @@ scripts/install.sh
 5. Mac app: connections (local, SSH, Tailscale, direct), crew, thread, approvals, notifications.
 6. Install script, systemd/launchd service, release builds; tested on a real Linux box.
 7. API-key runtime.
+
+## Extending Bandito (contributions land on every platform)
+
+Bandito is built so a PR adds something once and every client gets it.
+
+**Behavior lives in the daemon.** Policy, scheduling, crew, runtimes, history: all server-side. Clients render state and send intents over RPC, so a new capability is implemented once. `daemon.info` returns `features` (strings like `"schedules"`, `"crew"`); clients show a feature only when the server has it, so new apps work with old daemons and the other way round.
+
+**Apple clients share one core.** `apps/mac/BanditoKit` (Swift package: models, RPC client, thread reducer, server model, design tokens, strings) is used by the Mac app and the future iPhone app. Platform targets hold only views.
+
+**One source of strings.** `i18n/en.json` is the reference; every language is one file next to it (`i18n/ru.json`, …) and is listed in `i18n/languages.json`. Keys are flat and dotted (`thread.approve`). Plurals are objects with CLDR categories (`{"one": "…", "other": "…"}`), placeholders are `{name}`; a placeholder named `count` is an integer, any other is text. `i18n/build.py` generates platform files (now: `Localizable.xcstrings` + typed `L10n` accessors in BanditoKit; later Android `strings.xml`, web JSON). CI fails if a language has missing or extra keys, placeholders that differ from English, or generated files that are out of date. A missing translation falls back to English at runtime.
+
+**Protocol is described, not implied.** The daemon's RPC types are the contract; `docs/ARCHITECTURE.md#rpc` lists methods, and types for non-Swift clients will be generated from a JSON Schema exported by the daemon.
