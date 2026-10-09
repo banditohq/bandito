@@ -240,7 +240,7 @@ The server stores one opaque ciphertext blob per account. It never sees the sync
 { "ok": true, "version": 3, "blob": "<base64>" }
 ```
 
-For an account without data: `{ "ok": true, "version": 0, "blob": null }`.
+For an account without data: `{ "ok": true, "version": 0, "blob": null }`. After a reset (`POST /account/reset`, or removing the last approved device with `?force=1`) the blob is `null` but `version` keeps its last value: the version of an account never goes back, so a client may treat a lower version than it has seen as a rollback.
 
 ### `PUT /sync`
 
