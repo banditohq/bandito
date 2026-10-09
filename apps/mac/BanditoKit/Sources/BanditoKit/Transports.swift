@@ -124,6 +124,7 @@ public actor UnixSocketTransport: RPCTransport {
 }
 
 /// Runs a closure at most once (for continuation callbacks that may fire repeatedly).
+// @unchecked: `done` is guarded by `lock`.
 final class Once: @unchecked Sendable {
     private let lock = NSLock()
     private var done = false

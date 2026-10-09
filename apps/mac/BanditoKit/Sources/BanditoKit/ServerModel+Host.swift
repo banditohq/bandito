@@ -7,10 +7,10 @@ extension ServerModel {
         try await rpc().call("host.stats", NoParams(), as: HostStats.self)
     }
 
-    /// Samples over a time range such as `"1h"` (the range names are the daemon's).
-    public func hostHistory(range: String) async throws -> [HostPoint] {
+    /// Samples of the last hour or day, at most 360 points, each the average of its span.
+    public func hostHistory(range: HostHistoryRange) async throws -> [HostPoint] {
         struct P: Encodable { var range: String }
-        return try await rpc().call("host.history", P(range: range), as: HostHistory.self).points
+        return try await rpc().call("host.history", P(range: range.rawValue), as: HostHistory.self).points
     }
 
     public func hostProcesses() async throws -> HostProcesses {

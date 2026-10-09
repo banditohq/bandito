@@ -14,7 +14,9 @@ private struct TwoPathParams: Encodable {
 
 extension ServerModel {
     /// Upload chunk size before base64: 1 MiB, the daemon's limit per `fs.upload.append`.
-    static let uploadChunkSize = 1 << 20
+    nonisolated static let uploadChunkSize = 1 << 20
+    /// Largest file `upload` sends: the daemon's total limit per upload.
+    nonisolated static let uploadSizeLimit: Int64 = 4 << 30
 
     public func list(_ path: String, hidden: Bool = false) async throws -> FsListing {
         struct P: Encodable { var path: String; var hidden: Bool }
@@ -80,11 +82,12 @@ extension ServerModel {
         return try await rpc().call("fs.projects", P(limit: limit), as: [ProjectHint].self)
     }
 
-    /// Copies a local file to `remotePath` on the server in 1 MiB chunks.
+    /// Copies a local file to `remotePath` on the server in 1 MiB chunks. Files larger than 4 GiB are
+    /// refused before anything is sent (`reason == "too_large"`).
     ///
-    /// `progress` gets the fraction sent (0…1) after each chunk. On any failure the upload is aborted
-    /// on the server and the error is thrown again. `overwrite: false` fails with `reason == "exists"`
-    /// if the path is taken.
+    /// `progress` gets the fraction sent (0…1) after each chunk. Reading and base64 encoding run off the
+    /// main actor. On any failure the upload is aborted on the server and the error is thrown again.
+    /// `overwrite: false` fails with `reason == "exists"` if the path is taken.
     public func upload(
         local: URL, to remotePath: String, overwrite: Bool = false, progress: (Double) -> Void
     ) async throws -> FsEntry {
@@ -96,22 +99,27 @@ extension ServerModel {
         struct Abort: Encodable { var uploadId: String }
 
         let client = try rpc()
-        let total = ((try FileManager.default.attributesOfItem(atPath: local.path)[.size]) as? NSNumber)?.int64Value ?? 0
-        let file = try FileHandle(forReadingFrom: local)
-        defer { try? file.close() }
+        let source = try UploadSource(url: local)
+        defer { source.close() }
+        guard source.size <= Self.uploadSizeLimit else {
+            throw RPCError(
+                code: RPCError.fileError, message: "too_large: the file is larger than 4 GiB",
+                data: .object(["reason": .string("too_large")]))
+        }
+        let total = source.size
 
         let begun = try await client.call("fs.upload.begin", Begin(path: remotePath), as: Begun.self)
         var offset: Int64 = 0
         do {
-            while let chunk = try file.read(upToCount: Self.uploadChunkSize), !chunk.isEmpty {
+            while let piece = try await Task.detached(priority: .utility, operation: { try source.nextChunk() }).value {
                 let reply = try await client.call(
                     "fs.upload.append",
-                    Append(uploadId: begun.uploadId, offset: offset, data: chunk.base64EncodedString()),
+                    Append(uploadId: begun.uploadId, offset: offset, data: piece.base64),
                     as: Written.self)
-                guard reply.written == Int64(chunk.count) else {
+                guard reply.written == Int64(piece.count) else {
                     throw RPCError(code: RPCError.fileError, message: "io: the server stored fewer bytes than sent")
                 }
-                offset += Int64(chunk.count)
+                offset += Int64(piece.count)
                 progress(total > 0 ? Double(offset) / Double(total) : 1)
             }
             if total == 0 { progress(1) }
@@ -156,5 +164,27 @@ extension ServerModel {
         var allowed = CharacterSet.urlQueryAllowed
         allowed.remove(charactersIn: "+&=#;")
         return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? ""
+    }
+}
+
+/// Reads an upload's source in chunks. `FileHandle` is not Sendable; the upload loop reads one chunk at a
+/// time, never in parallel, so the handle is only touched by one task at once.
+final class UploadSource: @unchecked Sendable {
+    let size: Int64
+    private let handle: FileHandle
+
+    init(url: URL) throws {
+        handle = try FileHandle(forReadingFrom: url)
+        size = ((try FileManager.default.attributesOfItem(atPath: url.path)[.size]) as? NSNumber)?.int64Value ?? 0
+    }
+
+    /// The next chunk, base64-encoded with its raw byte count, or nil at the end of the file.
+    func nextChunk() throws -> (base64: String, count: Int)? {
+        guard let data = try handle.read(upToCount: ServerModel.uploadChunkSize), !data.isEmpty else { return nil }
+        return (data.base64EncodedString(), data.count)
+    }
+
+    func close() {
+        try? handle.close()
     }
 }

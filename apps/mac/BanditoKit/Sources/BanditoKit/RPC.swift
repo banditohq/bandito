@@ -39,6 +39,8 @@ public struct RPCError: Error, Sendable, Equatable, LocalizedError {
     public static let terminalError = -32021
     /// Checkpoint or git operation failed; `data.reason` says why.
     public static let changesError = -32022
+    /// Host operation failed; `data.reason` is `forbidden`, `not_found` or `io`.
+    public static let hostError = -32023
     /// Client-side: the connection closed before an answer.
     public static let disconnected = -1
     /// Client-side: the server did not answer within the call's timeout.

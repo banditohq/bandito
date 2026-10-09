@@ -11,7 +11,7 @@ import Testing
     nonisolated static let diff = #"{"from":"c1","to":null,"files":[{"path":"a.txt","status":"modified","additions":1,"deletions":1}]}"#
 
     nonisolated static let hostStats =
-        #"{"os":"macos","kernel":"25","arch":"arm64","hostname":"mini","cpus":8,"cpu_percent":5.0,"load":[0.1,0.2,0.3],"mem_total":10,"mem_used":5,"swap_total":0,"swap_used":0,"disks":[],"net_rx_bps":0,"net_tx_bps":0,"uptime_s":60}"#
+        #"{"os":"macos","kernel":"25","arch":"arm64","hostname":"mini","cpus":8,"cpu_percent":5.0,"load":[0.1,0.2,0.3],"mem_total":10,"mem_used":5,"swap_total":0,"swap_used":0,"disks":[],"net_rx_bps":0,"net_tx_bps":0,"net_supported":true,"uptime_s":60}"#
 
     nonisolated static let secret = #"{"name":"OPENAI_API_KEY","tail":"wxyz","agents":["*"],"updated_at":7}"#
 
@@ -110,7 +110,7 @@ import Testing
         await model.connect()
 
         #expect(try await model.hostStats().hostname == "mini")
-        #expect(try await model.hostHistory(range: "1h").map(\.cpu) == [1.5])
+        #expect(try await model.hostHistory(range: .hour).map(\.cpu) == [1.5])
         #expect(await lastParams("host.history", fake)["range"] as? String == "1h")
         #expect(try await model.hostProcesses().supported)
         #expect(try await model.hostPorts().ports.isEmpty)

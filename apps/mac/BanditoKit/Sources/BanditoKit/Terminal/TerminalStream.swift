@@ -3,22 +3,35 @@ import Foundation
 /// One thing that happens on an attached terminal, in order.
 public enum TerminalChunk: Sendable, Equatable {
     case output(Data)
-    /// `lost` bytes of output were not delivered (scrollback overflow, or the connection lagged).
+    /// `lost` bytes of output were not delivered (scrollback overflow, a lagging connection, or
+    /// too much output held back while an attach was in flight).
     case gap(lost: UInt64)
     /// The program ended. The terminal stays open until it is closed.
     case exit(code: Int?, signal: Int?)
     /// The terminal was closed; the stream ends after this chunk.
     case closed
+    /// Re-attaching failed (the message is the daemon's or the transport's). The stream stays open:
+    /// the next reconnect attaches again from `nextOffset`.
+    case error(String)
 }
 
 /// The output of one attached terminal. Created by `ServerModel.attach(_:from:)`.
 ///
 /// Output is tracked by byte offset: `nextOffset` is the offset just past the last byte delivered.
 /// Bytes that were already delivered (overlap after a re-attach) are dropped; a jump forward
-/// becomes a `.gap`. Chunks that arrive while the attach call is still in flight are held back
-/// until the snapshot has been applied, so the order always matches the terminal's output.
+/// becomes a `.gap`. Chunks that arrive while an attach is in flight are held back until the snapshot
+/// has been applied, so the order always matches the terminal's output.
+///
+/// Limits: at most `maxHeldBytes` are held back; older held chunks are dropped and the jump shows as a
+/// `.gap`. The chunk buffer keeps the newest `chunkBufferLimit` chunks for a consumer that falls behind,
+/// so the oldest chunks are lost there without a `.gap`: consume `chunks` promptly.
 @MainActor
 public final class TerminalStream {
+    /// Held-back output while an attach is in flight, in bytes.
+    static let maxHeldBytes = 4 << 20
+    /// Chunks kept for a slow consumer.
+    static let chunkBufferLimit = 1024
+
     public let id: String
     public let chunks: AsyncStream<TerminalChunk>
     private let continuation: AsyncStream<TerminalChunk>.Continuation
@@ -26,9 +39,10 @@ public final class TerminalStream {
     /// Offset just past the last byte delivered. A re-attach continues from here.
     public private(set) var nextOffset: UInt64 = 0
 
-    /// True until the attach reply has been applied.
+    /// True until the attach reply has been applied (or the attach failed).
     private var attaching = true
     private var held: [Incoming] = []
+    private var heldBytes = 0
     private var finished = false
 
     /// What the daemon sent for this terminal, held back while `attaching`.
@@ -37,11 +51,17 @@ public final class TerminalStream {
         case gap(lost: UInt64)
         case exit(code: Int?, signal: Int?)
         case closed
+
+        var byteCount: Int {
+            if case .output(_, let data) = self { return data.count }
+            return 0
+        }
     }
 
     init(id: String) {
         self.id = id
-        (chunks, continuation) = AsyncStream.makeStream(of: TerminalChunk.self, bufferingPolicy: .unbounded)
+        (chunks, continuation) = AsyncStream.makeStream(
+            of: TerminalChunk.self, bufferingPolicy: .bufferingNewest(Self.chunkBufferLimit))
     }
 
     // MARK: attach lifecycle (driven by ServerModel)
@@ -56,21 +76,29 @@ public final class TerminalStream {
         nextOffset = from ?? start
         attaching = false
         deliver(offset: start, data: data)
-        let pending = held
-        held = []
-        for item in pending {
-            apply(item)
+        flushHeld()
+    }
+
+    /// The attach failed: stops holding back, delivers what was held, and reports the error.
+    /// The stream stays open for the next attach.
+    func abortAttach(error: String) {
+        attaching = false
+        flushHeld()
+        if !finished {
+            continuation.yield(.error(error))
         }
     }
 
     /// The daemon no longer has the terminal: yields `.closed` and ends, whatever the attach state.
     func terminate() {
         guard !finished else { return }
+        held = []
+        heldBytes = 0
         continuation.yield(.closed)
         finish()
     }
 
-    /// Ends the stream without a `closed` chunk (the caller detached, or the attach failed).
+    /// Ends the stream without a `closed` chunk (the caller detached, or the attach failed for good).
     func finish() {
         guard !finished else { return }
         finished = true
@@ -98,8 +126,27 @@ public final class TerminalStream {
     private func receive(_ item: Incoming) {
         guard !finished else { return }
         if attaching {
-            held.append(item)
+            hold(item)
         } else {
+            apply(item)
+        }
+    }
+
+    private func hold(_ item: Incoming) {
+        held.append(item)
+        heldBytes += item.byteCount
+        // Drop the oldest output until the cap holds. The jump in offsets shows as a gap on flush.
+        while heldBytes > Self.maxHeldBytes, let oldest = held.first {
+            held.removeFirst()
+            heldBytes -= oldest.byteCount
+        }
+    }
+
+    private func flushHeld() {
+        let pending = held
+        held = []
+        heldBytes = 0
+        for item in pending {
             apply(item)
         }
     }

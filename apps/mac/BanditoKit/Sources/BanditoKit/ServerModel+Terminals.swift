@@ -4,15 +4,20 @@ import Foundation
 // the `term.*` notifications to them.
 
 extension ServerModel {
+    /// Largest `term.input` payload, decoded (the daemon's limit).
+    nonisolated static let maxInputBytes = 64 << 10
+
     public func terminals() async throws -> [TermInfo] {
         try await rpc().call("term.list", NoParams(), as: [TermInfo].self)
     }
 
     /// Starts a terminal. `cwd` defaults to the daemon user's home, `command` to the login shell.
+    /// `cols` and `rows` are 1…1000.
     public func openTerminal(
         cwd: String? = nil, command: [String]? = nil, title: String? = nil, cols: Int, rows: Int,
         env: [String: String]? = nil
     ) async throws -> TermInfo {
+        try Self.checkSize(cols: cols, rows: rows)
         struct P: Encodable {
             var cwd: String?; var command: [String]?; var title: String?; var cols: Int; var rows: Int
             var env: [String: String]?
@@ -22,14 +27,21 @@ extension ServerModel {
             as: TermInfo.self)
     }
 
-    /// Sends keyboard bytes. At most 64 KiB per call.
+    /// Sends keyboard bytes. At most 64 KiB per call; a larger payload is refused before it is sent.
     public func input(_ data: Data, to id: String) async throws {
+        guard data.count <= Self.maxInputBytes else {
+            throw RPCError(
+                code: RPCError.invalidParams,
+                message: "input is \(data.count) bytes; the limit is 64 KiB per call")
+        }
         struct P: Encodable { var id: String; var data: String }
         try await rpc().call("term.input", P(id: id, data: data.base64EncodedString()))
     }
 
+    /// `cols` and `rows` are 1…1000.
     @discardableResult
     public func resize(_ id: String, cols: Int, rows: Int) async throws -> TermInfo {
+        try Self.checkSize(cols: cols, rows: rows)
         struct P: Encodable { var id: String; var cols: Int; var rows: Int }
         return try await rpc().call("term.resize", P(id: id, cols: cols, rows: rows), as: TermInfo.self)
     }
@@ -51,6 +63,7 @@ extension ServerModel {
     /// from its `nextOffset` by itself. Attaching again to the same id ends the earlier stream.
     public func attach(_ id: String, from: UInt64? = nil) async throws -> TerminalStream {
         struct P: Encodable { var id: String; var from: UInt64? }
+
         let stream = TerminalStream(id: id)
         terminalStreams.removeValue(forKey: id)?.finish()
         terminalStreams[id] = stream
@@ -59,6 +72,7 @@ extension ServerModel {
             stream.completeAttach(from: from, start: reply.start, data: reply.bytes)
         } catch {
             if terminalStreams[id] === stream { terminalStreams[id] = nil }
+            stream.abortAttach(error: error.localizedDescription)
             stream.finish()
             throw error
         }
@@ -76,21 +90,37 @@ extension ServerModel {
 
     // MARK: internals
 
+    static func checkSize(cols: Int, rows: Int) throws {
+        guard (1...1000).contains(cols), (1...1000).contains(rows) else {
+            throw RPCError(code: RPCError.invalidParams, message: "cols and rows must be 1…1000")
+        }
+    }
+
     /// After a (re)connect: re-attaches every stream from its own offset. A terminal the daemon no
-    /// longer has ends its stream; any other failure leaves the stream waiting for the next reconnect.
+    /// longer has ends its stream. Any other failure reports `.error` on the stream and leaves it open
+    /// for the next reconnect.
     func reattachTerminals(_ c: RPCClient) async {
         struct P: Encodable { var id: String; var from: UInt64 }
+        struct Detach: Encodable { var id: String }
         for (id, stream) in terminalStreams {
             stream.beginAttach()
             do {
                 let reply = try await c.call(
                     "term.attach", P(id: id, from: stream.nextOffset), as: AttachReply.self)
+                guard terminalStreams[id] === stream else {
+                    // Detached while the attach was in flight: the daemon must not keep sending. A stream
+                    // replaced by a newer attach is left alone; that attach already holds the subscription.
+                    if terminalStreams[id] == nil {
+                        _ = try? await c.call("term.detach", Detach(id: id))
+                    }
+                    continue
+                }
                 stream.completeAttach(from: stream.nextOffset, start: reply.start, data: reply.bytes)
             } catch let error as RPCError where error.code == RPCError.terminalError && error.message.hasPrefix("not_found") {
                 terminalStreams[id] = nil
                 stream.terminate()
             } catch {
-                lastError = error.localizedDescription
+                stream.abortAttach(error: error.localizedDescription)
             }
         }
     }

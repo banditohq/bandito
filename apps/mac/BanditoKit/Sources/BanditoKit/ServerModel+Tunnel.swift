@@ -3,12 +3,19 @@ import Foundation
 // Reaching what runs on a server's localhost (docs/ARCHITECTURE.md#tunnel).
 
 extension ServerModel {
-    /// A local URL that reaches `127.0.0.1:<port>` on the server.
+    /// A local URL that reaches `127.0.0.1:<port>` on the server, for one client inside this app
+    /// (a VNC or DevTools client, for example). Each call makes a new one-shot forwarder.
     ///
-    /// - This Mac: `http://127.0.0.1:<port>` directly.
-    /// - WebSocket server: a `PortForwarder` on a loopback port of this Mac, one per remote port, reused
-    ///   by later calls and closed by `disconnect()`.
-    public func forward(port: Int) async throws -> URL {
+    /// Why one-shot: a forwarder that stays open would give every local process on this Mac a
+    /// loopback port that goes to the server with the device token. Here the port serves exactly one
+    /// connection, the one the app makes right after this call returns.
+    /// HTTP previews of sites will go through the daemon's HTTP proxy with `Authorization`, not through
+    /// a local port.
+    ///
+    /// - This Mac: `http://127.0.0.1:<port>` directly, no forwarder.
+    /// - WebSocket server: a `PortForwarder` on a loopback port of this Mac. It is closed by
+    ///   `disconnect()`, or at once after its one connection.
+    public func forwardOnce(port: Int) async throws -> URL {
         guard (1...65_535).contains(port) else {
             throw RPCError(code: RPCError.invalidParams, message: "port must be 1…65535")
         }
@@ -17,25 +24,20 @@ extension ServerModel {
             // Force unwrap: the string is built from an Int and always a valid URL.
             return URL(string: "http://127.0.0.1:\(port)")!
         case .webSocket(let server):
-            let forwarder: PortForwarder
-            if let existing = forwarders[port] {
-                forwarder = existing
-            } else {
-                guard let tunnel = Self.tunnelURL(for: server, port: port) else {
-                    throw RPCError(code: RPCError.invalidParams, message: "the server address is not usable")
-                }
-                forwarder = try PortForwarder(tunnelURL: tunnel, token: config.token)
-                forwarders[port] = forwarder
+            guard let tunnel = Self.tunnelURL(for: server, port: port) else {
+                throw RPCError(code: RPCError.invalidParams, message: "the server address is not usable")
             }
-            let local: UInt16
+            let forwarder = try PortForwarder(tunnelURL: tunnel, token: config.token, oneShot: true)
+            forwarders.append(forwarder)
             do {
-                local = try await forwarder.localPort()
+                let local = try await forwarder.localPort()
+                // Force unwrap: the string is built from a UInt16 and always a valid URL.
+                return URL(string: "http://127.0.0.1:\(local)")!
             } catch {
-                forwarders[port] = nil
+                await forwarder.stop()
+                forwarders.removeAll { $0 === forwarder }
                 throw error
             }
-            // Force unwrap: the string is built from a UInt16 and always a valid URL.
-            return URL(string: "http://127.0.0.1:\(local)")!
         }
     }
 
@@ -49,7 +51,7 @@ extension ServerModel {
     }
 
     func stopForwarders() async {
-        let all = Array(forwarders.values)
+        let all = forwarders
         forwarders.removeAll()
         for forwarder in all {
             await forwarder.stop()

@@ -4,6 +4,7 @@ import Testing
 @testable import BanditoKit
 
 /// Hands out transports in order: the first connection gets the first one, a reconnect the next.
+// @unchecked: `pending` and `made` are guarded by `lock`.
 final class TransportQueue: @unchecked Sendable {
     private let lock = NSLock()
     private var pending: [FakeTransport]

@@ -211,6 +211,26 @@ import Testing
         await model.disconnect()
     }
 
+    @Test func fileLargerThanFourGiBIsRefusedBeforeBegin() async throws {
+        // A sparse file: its size is over the limit, but no data is written.
+        let url = FileManager.default.temporaryDirectory.appending(path: "bandito-test-big-\(UUID().uuidString).bin")
+        FileManager.default.createFile(atPath: url.path, contents: nil)
+        defer { try? FileManager.default.removeItem(at: url) }
+        #expect(truncate(url.path, (4 << 30) + 1) == 0)
+        let fake = FakeTransport(handlers: daemonHandlers(extra: Self.fsHandlers()))
+        let (model, _) = makeModel([fake])
+        await model.connect()
+
+        do {
+            _ = try await model.upload(local: url, to: "/w/huge.bin") { _ in }
+            Issue.record("expected the upload to be refused")
+        } catch let error as RPCError {
+            #expect(error.reason == "too_large")
+        }
+        #expect(JSONRPC.requests(of: "fs.upload.begin", in: await fake.sentTexts()).isEmpty)
+        await model.disconnect()
+    }
+
     // MARK: raw URL
 
     @Test func wssServerGetsHTTPSRawURLWithBearerToken() throws {

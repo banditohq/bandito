@@ -3,46 +3,60 @@ import Network
 
 /// One side of a tunnel: a local TCP connection or a WebSocket.
 protocol ByteChannel: Sendable {
-    /// The next chunk from the peer, or nil when the peer has finished.
+    /// The next chunk from the peer, or nil when the peer has finished sending.
     func read() async throws -> Data?
     func write(_ data: Data) async throws
+    /// Tells the peer that nothing more will be written (half-close). A no-op where the
+    /// transport has no half-close, such as the WebSocket of the daemon's tunnel.
+    func finishWrite() async
     /// Closes this side. A read that is waiting returns nil or throws.
     func close() async
 }
 
-/// Copies bytes both ways between two channels. When one direction ends, both sides are closed.
+/// Copies bytes both ways between two channels.
+///
+/// The end of one direction (EOF from the source) half-closes the destination's write side and the
+/// other direction keeps running, so a response still arrives after the client finished its request.
+/// An error on either side closes both. When both directions have ended, both sides are closed.
 enum TunnelRelay {
     static func run(_ a: ByteChannel, _ b: ByteChannel) async {
-        await withTaskGroup(of: Void.self) { group in
+        await withTaskGroup(of: Bool.self) { group in
             group.addTask { await pump(from: a, to: b) }
             group.addTask { await pump(from: b, to: a) }
-            _ = await group.next()
-            // Closing both sides unblocks the other direction's pending read.
-            await a.close()
-            await b.close()
-            await group.waitForAll()
+            // `false` means that direction failed: closing both sides unblocks the other direction's read.
+            for await ok in group where !ok {
+                await a.close()
+                await b.close()
+            }
         }
+        await a.close()
+        await b.close()
     }
 
-    private static func pump(from source: ByteChannel, to destination: ByteChannel) async {
+    /// Returns true on a clean end of the source, false on an error.
+    private static func pump(from source: ByteChannel, to destination: ByteChannel) async -> Bool {
         while true {
             let chunk: Data?
             do {
                 chunk = try await source.read()
             } catch {
-                return
+                return false
             }
-            guard let chunk else { return }
+            guard let chunk else {
+                await destination.finishWrite()
+                return true
+            }
             do {
                 try await destination.write(chunk)
             } catch {
-                return
+                return false
             }
         }
     }
 }
 
 /// A local TCP connection on this Mac, read and written through Network.framework.
+// @unchecked: the only state is the NWConnection, used through its own thread-safe API (receive, send, cancel).
 final class TCPChannel: ByteChannel, @unchecked Sendable {
     private let connection: NWConnection
 
@@ -81,6 +95,11 @@ final class TCPChannel: ByteChannel, @unchecked Sendable {
         }
     }
 
+    /// Sends the FIN: the client sees end of stream, and can still send nothing more but may read.
+    func finishWrite() async {
+        connection.send(content: nil, contentContext: .finalMessage, isComplete: true, completion: .idempotent)
+    }
+
     func close() async {
         connection.cancel()
     }
@@ -114,25 +133,40 @@ actor WebSocketByteChannel: ByteChannel {
         try await task.send(.data(data))
     }
 
+    /// No-op: the daemon's tunnel has no half-close. The socket stays open until the target ends.
+    func finishWrite() async {}
+
     func close() async {
         task.cancel(with: .normalClosure, reason: nil)
     }
 }
 
-/// Makes one loopback TCP port on this Mac reach `127.0.0.1:<remote port>` on a WebSocket
-/// server. Each accepted TCP connection gets its own `/v1/tunnel` WebSocket.
+/// Makes one loopback TCP port on this Mac reach `127.0.0.1:<remote port>` on a WebSocket server.
+/// Each accepted TCP connection gets its own `/v1/tunnel` WebSocket.
+///
+/// By default (`oneShot`) the forwarder accepts exactly one connection and closes its listener at once.
+/// A forwarder that stays open would let any local process connect to the loopback port and reach the
+/// server with the device token. A one-shot forwarder serves a single client that the app starts itself.
 public actor PortForwarder {
+    /// Returned by calls made after `stop()`, and by a start that was overtaken by `stop()`.
+    static let stoppedError = RPCError(code: RPCError.disconnected, message: "the port forwarder was stopped")
+
     private let makeRemote: @Sendable () -> ByteChannel
     private let session: URLSession
+    private let oneShot: Bool
     private var listener: NWListener?
     private var startTask: Task<UInt16, Error>?
     /// Both sides of every live connection, so `stop()` can close them.
     private var live: [UUID: [ByteChannel]] = [:]
+    private var acceptedOne = false
+    /// Set by `stop()` and never cleared: a stopped forwarder does not start again.
+    private var stopped = false
 
     /// - Parameters:
     ///   - tunnelURL: the server's `ws(s)://…/v1/tunnel?port=N`.
     ///   - token: the device token. It is sent only where `WebSocketTransport` allows tokens.
-    public init(tunnelURL: URL, token: String?) throws {
+    ///   - oneShot: accept exactly one connection, then close the listener.
+    public init(tunnelURL: URL, token: String?, oneShot: Bool = true) throws {
         var request = URLRequest(url: tunnelURL)
         if let token {
             guard WebSocketTransport.allowsToken(for: tunnelURL) else {
@@ -143,19 +177,23 @@ public actor PortForwarder {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         let session = URLSession(configuration: .ephemeral)
+        // A copy: the closure below is @Sendable and cannot capture the `var`.
         let upgrade = request
         self.session = session
+        self.oneShot = oneShot
         self.makeRemote = { WebSocketByteChannel(request: upgrade, session: session) }
     }
 
     /// Test seam: each accepted connection gets the channel `makeRemote` returns.
-    init(makeRemote: @escaping @Sendable () -> ByteChannel) {
+    init(makeRemote: @escaping @Sendable () -> ByteChannel, oneShot: Bool = true) {
         self.makeRemote = makeRemote
         self.session = URLSession(configuration: .ephemeral)
+        self.oneShot = oneShot
     }
 
     /// The loopback port that the forwarder listens on. Starts the listener on first use.
     public func localPort() async throws -> UInt16 {
+        if stopped { throw Self.stoppedError }
         if let startTask {
             return try await startTask.value
         }
@@ -169,8 +207,9 @@ public actor PortForwarder {
         }
     }
 
-    /// Stops listening and closes every live connection.
+    /// Stops listening and closes every live connection. Pending `localPort()` calls throw.
     public func stop() async {
+        stopped = true
         startTask?.cancel()
         startTask = nil
         listener?.cancel()
@@ -183,7 +222,13 @@ public actor PortForwarder {
         session.invalidateAndCancel()
     }
 
+    /// Number of connections being relayed right now.
+    var liveConnectionCount: Int {
+        live.count
+    }
+
     private func startListener() async throws -> UInt16 {
+        guard !stopped else { throw Self.stoppedError }
         // Only the loopback interface: other machines cannot reach the port.
         let parameters = NWParameters.tcp
         parameters.requiredInterfaceType = .loopback
@@ -202,6 +247,9 @@ public actor PortForwarder {
                     }
                 case .failed(let error):
                     once.run { k.resume(throwing: error) }
+                case .cancelled:
+                    // stop() cancelled the listener, possibly while a start was waiting for `.ready`.
+                    once.run { k.resume(throwing: Self.stoppedError) }
                 default:
                     break
                 }
@@ -210,7 +258,18 @@ public actor PortForwarder {
         }
     }
 
-    private func accept(_ connection: NWConnection) {
+    /// Relays one accepted connection. A connection that arrives after `stop()`, or a second one for a
+    /// one-shot forwarder, is refused at once and nothing is recorded for it.
+    func accept(_ connection: NWConnection) {
+        guard !stopped, !(oneShot && acceptedOne) else {
+            connection.cancel()
+            return
+        }
+        acceptedOne = true
+        if oneShot {
+            listener?.cancel()
+            listener = nil
+        }
         let id = UUID()
         let local = TCPChannel(connection)
         let remote = makeRemote()

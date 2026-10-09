@@ -144,7 +144,7 @@ import Testing
     @Test func hostStatsDecodes() throws {
         let s = try decode(
             HostStats.self,
-            #"{"os":"macos 26.0","kernel":"25.6.0","arch":"arm64","hostname":"mini","cpus":10,"cpu_percent":12.5,"load":[1.5,1.25,1.0],"mem_total":17179869184,"mem_used":8589934592,"swap_total":0,"swap_used":0,"disks":[{"mount":"/","total":500,"used":200}],"net_rx_bps":1024,"net_tx_bps":2048,"uptime_s":3600}"#)
+            #"{"os":"macos 26.0","kernel":"25.6.0","arch":"arm64","hostname":"mini","cpus":10,"cpu_percent":12.5,"load":[1.5,1.25,1.0],"mem_total":17179869184,"mem_used":8589934592,"swap_total":0,"swap_used":0,"disks":[{"mount":"/","total":500,"used":200}],"net_rx_bps":1024,"net_tx_bps":2048,"net_supported":true,"uptime_s":3600}"#)
         #expect(s.hostname == "mini")
         #expect(s.cpus == 10)
         #expect(s.cpuPercent == 12.5)
@@ -155,7 +155,38 @@ import Testing
         #expect(s.disks == [HostDisk(mount: "/", total: 500, used: 200)])
         #expect(s.netRxBps == 1024)
         #expect(s.netTxBps == 2048)
+        #expect(s.netSupported)
         #expect(s.uptimeS == 3600)
+
+        // Without network counters the daemon sends net_supported false, with zeros.
+        let noNet = try decode(
+            HostStats.self,
+            #"{"os":"macos","kernel":"25","arch":"arm64","hostname":"mini","cpus":8,"cpu_percent":0.0,"load":[0.0,0.0,0.0],"mem_total":1,"mem_used":0,"swap_total":0,"swap_used":0,"disks":[],"net_rx_bps":0,"net_tx_bps":0,"net_supported":false,"uptime_s":1}"#)
+        #expect(!noNet.netSupported)
+    }
+
+    @Test func daemonOwnerHasNoIdAndUnknownKindFallsBack() throws {
+        // Shapes from daemon/src/host.rs: the daemon's own process has `id: null`; a kind this app
+        // doesn't know must not decode as an agent.
+        let p = try decode(
+            HostProcesses.self,
+            #"{"supported":true,"owners":[{"owner":{"kind":"daemon","id":null},"cpu_percent":0.5,"rss_bytes":10,"processes":[{"pid":7,"name":"bandito","cmd":"bandito daemon"}]},{"owner":{"kind":"robot","id":"x"},"cpu_percent":0.0,"rss_bytes":0,"processes":[]}]}"#)
+        #expect(p.owners[0].owner == ProcessOwnerRef(kind: .daemon, id: nil))
+        #expect(p.owners[1].owner.kind == .daemon)
+        #expect(p.owners[1].owner.id == "x")
+    }
+
+    @Test func portOwnerIsOptionalAndPidMayBeNull() throws {
+        let p = try decode(
+            HostPorts.self,
+            #"{"supported":true,"ports":[{"port":5173,"addr":"*","pid":99,"process":"node","owner":{"kind":"terminal","id":"t9"}}]}"#)
+        #expect(p.ports[0].addr == "*")
+        #expect(p.ports[0].owner == ProcessOwnerRef(kind: .terminal, id: "t9"))
+    }
+
+    @Test func historyRangeHasTheDaemonNames() {
+        #expect(HostHistoryRange.hour.rawValue == "1h")
+        #expect(HostHistoryRange.day.rawValue == "24h")
     }
 
     @Test func hostHistoryPointsDecode() throws {
@@ -171,7 +202,7 @@ import Testing
             #"{"supported":true,"owners":[{"owner":{"kind":"agent","id":"a1"},"cpu_percent":3.5,"rss_bytes":1024,"processes":[{"pid":1,"name":"node","cmd":"node x.js"}]}]}"#)
         #expect(p.supported)
         #expect(p.owners.count == 1)
-        #expect(p.owners[0].owner == ProcessOwnerRef(kind: "agent", id: "a1"))
+        #expect(p.owners[0].owner == ProcessOwnerRef(kind: .agent, id: "a1"))
         #expect(p.owners[0].cpuPercent == 3.5)
         #expect(p.owners[0].rssBytes == 1024)
         #expect(p.owners[0].processes == [HostProcess(pid: 1, name: "node", cmd: "node x.js")])
@@ -188,7 +219,7 @@ import Testing
         #expect(p.ports.count == 2)
         #expect(p.ports[0].port == 3000)
         #expect(p.ports[0].pid == 12)
-        #expect(p.ports[0].owner == ProcessOwnerRef(kind: "agent", id: "a1"))
+        #expect(p.ports[0].owner == ProcessOwnerRef(kind: .agent, id: "a1"))
         #expect(p.ports[1].pid == nil)
         #expect(p.ports[1].process == nil)
         #expect(p.ports[1].owner == nil)

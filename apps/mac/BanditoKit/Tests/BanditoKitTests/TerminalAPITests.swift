@@ -184,4 +184,93 @@ import Testing
         #expect(paramsOf(JSONRPC.requests(of: "term.close", in: await fake.sentTexts())[0])["id"] as? String == "t1")
         await model.disconnect()
     }
+
+    // MARK: held output, aborted attaches, limits
+
+    @Test func abortingAnAttachDeliversWhatWasHeldThenTheError() async throws {
+        let stream = TerminalStream(id: "t1")
+        stream.receiveOutput(offset: 0, data: Data("ab".utf8))
+
+        stream.abortAttach(error: "io: link lost")
+        #expect(await collect(stream, count: 2) == [.output(Data("ab".utf8)), .error("io: link lost")])
+
+        // The stream is still open and follows output again.
+        stream.receiveOutput(offset: 2, data: Data("c".utf8))
+        #expect(await collect(stream, count: 1) == [.output(Data("c".utf8))])
+        #expect(stream.nextOffset == 3)
+    }
+
+    @Test func heldOutputIsCappedAndTheLossShowsAsAGap() async throws {
+        let stream = TerminalStream(id: "t1")
+        let mib = 1 << 20
+        // Five MiB arrive while the attach is in flight; the cap is four.
+        for i in 0..<5 {
+            stream.receiveOutput(offset: UInt64(i * mib), data: Data(count: mib))
+        }
+
+        stream.completeAttach(from: nil, start: 0, data: Data())
+
+        let chunks = await collect(stream, count: 5)
+        #expect(chunks.first == .gap(lost: UInt64(mib)))
+        #expect(chunks.dropFirst().count == 4)
+        #expect(chunks.dropFirst().allSatisfy { $0 == .output(Data(count: mib)) })
+        #expect(stream.nextOffset == UInt64(5 * mib))
+    }
+
+    @Test func aFailedReattachReportsTheErrorAndKeepsTheStream() async throws {
+        let first = FakeTransport(
+            handlers: daemonHandlers(extra: ["term.attach": { _ in Self.attachReply(start: 0, data: "YWJj") }]))
+        let second = FakeTransport(
+            handlers: daemonHandlers(),
+            errors: [
+                "term.attach": { _ in
+                    #"{"code":-32000,"message":"io: boom"}"#
+                }
+            ])
+        let (model, queue) = makeModel([first, second], reconnectDelay: .milliseconds(20))
+        await model.connect()
+        let stream = try await model.attach("t1")
+        #expect(await collect(stream, count: 1) == [.output(Data("abc".utf8))])
+
+        await first.dropConnection()
+
+        try await eventually { model.state == .connected && queue.made.count == 2 }
+        #expect(await collect(stream, count: 1) == [.error("io: boom")])
+        await model.disconnect()
+    }
+
+    @Test func inputOverTheLimitIsRefusedBeforeItIsSent() async throws {
+        let fake = FakeTransport(handlers: daemonHandlers(extra: ["term.input": { _ in "{}" }]))
+        let (model, _) = makeModel([fake])
+        await model.connect()
+
+        await #expect(throws: RPCError.self) {
+            try await model.input(Data(count: (64 << 10) + 1), to: "t1")
+        }
+        try await model.input(Data(count: 64 << 10), to: "t1")
+
+        let inputs = JSONRPC.requests(of: "term.input", in: await fake.sentTexts())
+        #expect(inputs.count == 1)
+        await model.disconnect()
+    }
+
+    @Test func terminalSizeOutsideOneToAThousandIsRefusedBeforeItIsSent() async throws {
+        let fake = FakeTransport(
+            handlers: daemonHandlers(
+                extra: [
+                    "term.open": { _ in Self.info },
+                    "term.resize": { _ in Self.info },
+                ]))
+        let (model, _) = makeModel([fake])
+        await model.connect()
+
+        await #expect(throws: RPCError.self) { _ = try await model.openTerminal(cols: 0, rows: 24) }
+        await #expect(throws: RPCError.self) { _ = try await model.openTerminal(cols: 80, rows: 1001) }
+        await #expect(throws: RPCError.self) { _ = try await model.resize("t1", cols: 1001, rows: 24) }
+        _ = try await model.openTerminal(cols: 1000, rows: 1)
+
+        #expect(JSONRPC.requests(of: "term.open", in: await fake.sentTexts()).count == 1)
+        #expect(JSONRPC.requests(of: "term.resize", in: await fake.sentTexts()).isEmpty)
+        await model.disconnect()
+    }
 }

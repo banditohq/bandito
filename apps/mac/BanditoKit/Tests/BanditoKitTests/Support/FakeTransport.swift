@@ -73,6 +73,7 @@ actor FakeTransport: RPCTransport {
 }
 
 /// Holds the single-reader iterator outside the actor's isolation so it can be advanced across `await`.
+// @unchecked: only the client's read loop advances the iterator.
 private final class InboundIterator: @unchecked Sendable {
     private var iterator: AsyncThrowingStream<String, Error>.AsyncIterator
 

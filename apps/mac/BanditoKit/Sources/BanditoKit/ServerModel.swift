@@ -77,8 +77,8 @@ public final class ServerModel: Identifiable {
     private var reconnectTask: Task<Void, Never>?
     /// Attached terminals, by id. Their streams are re-attached after every reconnect.
     @ObservationIgnored var terminalStreams: [String: TerminalStream] = [:]
-    /// Local listeners for remote ports, by port (see `forward(port:)`).
-    @ObservationIgnored var forwarders: [Int: PortForwarder] = [:]
+    /// Port forwarders started by `forwardOnce(port:)`; closed by `disconnect()`.
+    @ObservationIgnored var forwarders: [PortForwarder] = []
     /// Bumped whenever a connection attempt starts and on disconnect. An attempt that finds the
     /// number changed has been superseded and throws away its client.
     private var generation = 0
