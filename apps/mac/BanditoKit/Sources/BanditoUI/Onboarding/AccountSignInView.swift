@@ -62,7 +62,8 @@ struct AccountSignInView: View {
         .onChange(of: finishedSession) { _, session in
             if session != nil { Task { await finish() } }
         }
-        .sheet(isPresented: $showGitHub) {
+        // The GitHub sign-in waits for the code to be entered in the browser: a stray click must not cancel it.
+        .banditoSheet(isPresented: $showGitHub, dismissOnOutsideClick: false) {
             if let github = models?.github {
                 GitHubSignInSheet(model: github) {
                     showGitHub = false

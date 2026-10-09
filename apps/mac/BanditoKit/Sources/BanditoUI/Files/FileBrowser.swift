@@ -145,7 +145,7 @@ struct FileBrowser: View {
                     .allowsHitTesting(false)
             }
         }
-        .sheet(item: $nameSheet) { sheet in
+        .banditoSheet(item: $nameSheet) { sheet in
             FileNameSheet(sheet: sheet, existing: Set(model.entries.map(\.name))) { name in
                 Task {
                     switch sheet {

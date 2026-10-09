@@ -433,7 +433,7 @@ struct PendingDevicesBanner: View {
             .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.Bandito.signal.opacity(0.35)))
             .padding(.horizontal, 16)
             .padding(.top, 10)
-            .sheet(item: $checking) { device in
+            .banditoSheet(item: $checking) { device in
                 ApproveDeviceSheet(device: device) { checking = nil }
             }
         }

@@ -53,7 +53,7 @@ struct DevicesView: View {
         .task(id: server?.info != nil) {
             await reload()
         }
-        .sheet(isPresented: $pairing) {
+        .banditoSheet(isPresented: $pairing) {
             if let server {
                 PairSheet(server: server)
             }
