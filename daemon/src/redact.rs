@@ -26,7 +26,7 @@ impl Redactor {
             .filter(|(_, value)| value.len() >= MIN_VALUE_BYTES)
             .map(|(name, value)| (value, name))
             .collect();
-        entries.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+        entries.sort_by_key(|e| std::cmp::Reverse(e.0.len()));
         Self { entries }
     }
 

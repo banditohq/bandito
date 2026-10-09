@@ -4,6 +4,7 @@
 use crate::event::{Decision, Event, EventBody, Source};
 use crate::files::FileService;
 use crate::home;
+use crate::host::Sampler;
 use crate::pairing;
 use crate::runtime::RuntimeKind;
 use crate::scheduler;
@@ -22,6 +23,7 @@ use tokio::sync::{broadcast, mpsc};
 
 pub mod changes;
 pub mod files;
+pub mod host;
 pub mod secrets;
 pub mod term;
 pub mod tunnel;
@@ -47,6 +49,7 @@ pub const FEATURES: &[&str] = &[
     "tunnel",
     "changes",
     "secrets",
+    "host",
 ];
 
 /// Context budget bounds for `smart` memory, in tokens.
@@ -69,6 +72,8 @@ pub struct App {
     pub files: Arc<FileService>,
     /// Live TCP tunnels per device (see docs/ARCHITECTURE.md#tunnel).
     pub tunnels: Arc<tunnel::TunnelSlots>,
+    /// Load, processes and ports of this server (see docs/ARCHITECTURE.md#host). Sampled by a task started in `main`.
+    pub host: Arc<Sampler>,
 }
 
 impl App {
@@ -88,6 +93,7 @@ impl App {
             redeem_failures: Mutex::new(VecDeque::new()),
             files: Arc::new(files),
             tunnels: Arc::new(tunnel::TunnelSlots::default()),
+            host: Sampler::new(),
         })
     }
 }
@@ -132,6 +138,8 @@ pub const TERM_ERROR: i64 = -32021;
 pub const FS_ERROR: i64 = -32020;
 /// A checkpoint or git operation failed; `error.data.reason` says why (see rpc::changes).
 pub const CHANGES_ERROR: i64 = -32022;
+/// A host method failed; `error.data.reason` says why (see rpc::host).
+pub const HOST_ERROR: i64 = -32023;
 
 impl RpcError {
     fn new(code: i64, message: impl Into<String>) -> Self {
@@ -849,6 +857,10 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             term::dispatch(app, method, p).await
         }
         "secrets.list" | "secrets.set" | "secrets.delete" => secrets::dispatch(app, method, p).await,
+
+        "host.stats" | "host.history" | "host.processes" | "host.ports" | "host.kill" => {
+            host::dispatch(app, method, p).await
+        }
 
         _ => Err(RpcError::new(METHOD_NOT_FOUND, format!("unknown method {method}"))),
     }

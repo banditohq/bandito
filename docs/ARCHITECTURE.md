@@ -21,7 +21,7 @@ Status: working design, October 2026. This file is the source of truth for the M
 ```
 
 - The daemon runs as the user who owns the CLI logins (`~/.claude`, `~/.codex`, `~/.grok`), never as root.
-- One binary: `bandito daemon` (service), `bandito pair`, `bandito status`, `bandito mcp` (crew MCP over stdio, proxies to the daemon socket), `bandito install-service`.
+- One binary: `bandito daemon` (foreground), `bandito pair`, `bandito info`, `bandito status`, `bandito mcp` (crew MCP over stdio, proxies to the daemon socket), `bandito service install|uninstall|status` (see [Install and service](#install-and-service)).
 
 ## Runtimes
 
@@ -88,7 +88,7 @@ Migrations: numbered SQL files embedded in the binary, applied by `PRAGMA user_v
 
 JSON-RPC 2.0. Same methods on every transport.
 
-- Requests: `daemon.info`, `runtimes.status`, `agents.list|get|create|update|delete`, `agents.send{agent_id,text}`, `agents.interrupt`, `events.since{seq,limit,agent_id?}`, `approvals.list|resolve{approval_id,decision,remember}`, `rules.list|set|delete`, `schedules.list|create|update|delete|run_now`, `devices.list|revoke`, `pair.redeem{code,device_name}` (only unauthenticated method), `term.list|open|input|resize|rename|close|attach|detach` (see Terminals), `fs.*` (see [Files](#files)), `changes.checkpoints|diff|file|restore` (see [Changes](#changes)), `secrets.list|set|delete` (see [Secrets](#secrets).
+- Requests: `daemon.info`, `runtimes.status`, `agents.list|get|create|update|delete`, `agents.send{agent_id,text}`, `agents.interrupt`, `events.since{seq,limit,agent_id?}`, `approvals.list|resolve{approval_id,decision,remember}`, `rules.list|set|delete`, `schedules.list|create|update|delete|run_now`, `devices.list|revoke`, `pair.redeem{code,device_name}` (only unauthenticated method), `term.list|open|input|resize|rename|close|attach|detach` (see Terminals), `fs.*` (see [Files](#files)), `changes.checkpoints|diff|file|restore` (see [Changes](#changes)), `secrets.list|set|delete` (see [Secrets](#secrets), `host.stats|history|processes|ports|kill`.
 - Notifications (server → client): `event{seq, agent_id, kind, payload, ts}` for every event including `message.delta`; `term.output|gap|exit|closed` for attached terminals (see Terminals).
 
 ## Transports (connect any way you like)
@@ -164,7 +164,7 @@ Offsets: each terminal counts its output bytes from 0 and never resets. A client
 
 Limits: 16 live terminals (an exited one keeps its slot until closed); 512 KiB of output history per terminal; 64 KiB per `term.input`. An input that cannot be written within 5 s fails with `busy`, and a prefix of it may already have been written.
 
-Environment: a terminal gets only a whitelist of the daemon's variables (`PATH`, `HOME`, `USER`, `LOGNAME`, `LANG`, `LC_ALL`, `LC_CTYPE`, `SHELL`, `TZ`, `TMPDIR`, `XDG_RUNTIME_DIR`) plus the `env` given to `term.open`. The daemon's secrets (API keys, tokens) never reach a terminal.
+Environment: a terminal gets only a whitelist of the daemon's variables (`PATH`, `HOME`, `USER`, `LOGNAME`, `LANG`, `LC_ALL`, `LC_CTYPE`, `SHELL`, `TZ`, `TMPDIR`, `XDG_RUNTIME_DIR`) plus the `env` given to `term.open`. The daemon's secrets (API keys, tokens) never reach a terminal. It also sets `BANDITO_TERM=1` and `BANDITO_TERM_ID=<terminal id>`, which mark the terminal's processes for [Host](#host).
 
 Errors: code `-32021` (`TERM_ERROR`), message `<code>: <text>`, where `<code>` is `too_many`, `not_found`, `invalid_size`, `exited` or `busy`.
 
@@ -270,6 +270,44 @@ Not checkpointed: credentials (`.env`, `.env.*`, keys, certificates, `.npmrc`, `
 
 Feature string: `"changes"`.
 
+## Host
+
+The app shows what the server is doing: CPU, memory, disks, network, the processes of each agent and terminal, and the ports they listen on. Clients show it when `daemon.info.features` contains `"host"`. Code: `daemon/src/host.rs` (readers and sampler), `daemon/src/rpc/host.rs` (methods).
+
+**Methods.** Error code `HOST_ERROR` = `-32023`; `error.data.reason` is `forbidden`, `not_found` or `io`. A bad `pid` or `range` is `-32602`.
+
+| method | params | result |
+|---|---|---|
+| `host.stats` | `{}` | `HostStats`: the last sample, or a fresh one if the daemon has not sampled yet |
+| `host.history` | `range`: `"1h"` or `"24h"` | `{points: [{t, cpu, mem_used, net_rx_bps, net_tx_bps}]}`, at most 360 points, each the average of its span; `t` is Unix ms |
+| `host.processes` | `{}` | `{supported, owners: [{owner, cpu_percent, rss_bytes, processes: [{pid, name, cmd}]}]}` |
+| `host.ports` | `{}` | `{supported, ports: [{port, addr, pid, process, owner?}]}`, unique by port and address |
+| `host.kill` | `pid` | `{}` |
+
+`HostStats` fields: `os`, `kernel`, `arch`, `hostname`, `cpus`, `cpu_percent` (busy share of all CPUs), `load` (1, 5, 15 min), `mem_total`, `mem_used`, `swap_total`, `swap_used`, `disks: [{mount, total, used}]` (`/` and the daemon user's home, one entry per device), `net_rx_bps`, `net_tx_bps`, `net_supported`, `uptime_s`. Bytes everywhere unless a name says `_bps`.
+
+**Sampling.** The daemon samples every 10 s and keeps the last 24 h (8640 samples) in memory. The history is lost on restart.
+
+**Sources.** Linux: `/proc/stat`, `loadavg`, `meminfo` (used = total − available), `net/dev` (loopback excluded), `uptime`, `sys/kernel/osrelease`, `/etc/os-release` (`PRETTY_NAME`), `statvfs`. macOS: `sysctl` (`hw.ncpu`, `hw.memsize`, `kern.boottime`, `kern.osrelease`, `kern.osproductversion`, `vm.loadavg`), `vm_stat` (used = active + wired + compressed pages), `netstat -ib`, `ps`, `lsof`, `statvfs`.
+
+**Owners.** Every agent CLI is started with `BANDITO_AGENT_ID=<agent id>` in its environment, and every terminal's process with `BANDITO_TERM_ID=<terminal id>`. Children inherit the variable, so a test run or a dev server started by an agent is listed under that agent. The daemon's own process is `{kind: "daemon", id: null}`. Other processes have no owner and are not listed. An owner's `cpu_percent` is summed over its processes, so it can exceed 100.
+
+**CPU per process.** Linux: the share of one core between two `host.processes` calls, from the process's utime + stime. The first call reports 0. macOS: the `%cpu` that `ps` gives, which is an average over the process's life, not a current rate.
+
+**Ports.** Linux: `/proc/net/tcp` and `tcp6`, state LISTEN. The socket's owner is found through `/proc/<pid>/fd`, so a port of another user's process has `pid: null`. IPv4-mapped IPv6 addresses print as IPv4. macOS: `lsof -nP -iTCP -sTCP:LISTEN`; `addr` `*` means all interfaces.
+
+**Kill.** `host.kill` sends SIGTERM to a process that belongs to an agent or a terminal. The daemon itself, processes without an owner (init, other users) and `pid` ≤ 0 are refused with `reason: "forbidden"` (or `-32602` for `pid` ≤ 0, since `kill(0)` and `kill(-1)` would signal whole groups). After 3 s SIGKILL follows if the process is still there with the same owner.
+
+**Limits on macOS.** `ps -E` shows the environment only of processes of the same user that are not Apple system binaries. So agent CLIs (node, Rust, Python) and what they start count, while short system tools (`/bin/sleep`, `/bin/sh`, `/bin/zsh`) have no owner. Swap is not read (0). Without `netstat` the network fields are 0 and `net_supported` is `false`. `supported: false` in a process or port reply means the platform has no reader (not Linux or macOS, or `ps`/`lsof` missing).
+
+## Install and service
+
+`scripts/install.sh` (served as `https://bandito.dev/install.sh`) picks the release asset for the machine (`bandito-<target>.tar.gz`, targets `x86_64|aarch64` × `unknown-linux-gnu|apple-darwin`), checks its `.sha256`, installs `bandito` to `~/.local/bin`, and runs `bandito service install` unless `--no-service` is given. Releases are built by `.github/workflows/release.yml` on tag publish or by manual dispatch with a tag.
+
+`bandito service install` writes `~/.config/systemd/user/bandito.service` (Linux) or `~/Library/LaunchAgents/dev.bandito.daemon.plist` (macOS), starts it, and waits up to 10 s for `daemon.info` on the socket. Linux machines without a user systemd manager (WSL without systemd, containers) get a detached background process with its pid in `<home>/daemon.pid` and output in `<home>/logs/daemon.log`; it does not survive a reboot. On Linux the installer also asks for lingering (`loginctl enable-linger`), so the daemon outlives the SSH session that installed it; if that is refused, the command prints the `sudo` line. `service uninstall` removes the unit or plist and stops the daemon; data is kept. `service install --dry-run` prints what would be written and run, and changes nothing.
+
+Machine-readable output for scripts and the app: `bandito pair --json` prints `{"code","expires_in_ms"}`; `bandito info --json` prints version, paths, `listen`, `running`, and the `features` the daemon reports (empty when it is down); `service install --json` prints `{"ok","mode","listen","socket","warnings"}`; `service status --json` prints `{"installed","mode","running","pid"?}`.
+
 ## Mac app
 
 SwiftUI, macOS 14+. Sidebar: servers → crew. Thread view rendered from events; approval cards with Approve / Deny / Always; schedules; connection wizard. Menu bar item with the status dot. Local notifications with Approve / Deny actions while the app runs. Strings in a String Catalog, 9 languages. Colors from `brand/tokens/dist`.
@@ -279,10 +317,12 @@ SwiftUI, macOS 14+. Sidebar: servers → crew. Thread view rendered from events;
 ```
 daemon/            Rust crate `bandito`
   src/main.rs      CLI entry
+  src/service.rs   user service: systemd unit, launchd plist, background fallback
   src/rpc/         JSON-RPC, transports, auth, pairing
   src/store/       SQLite + migrations
   src/runtime/     process.rs (shared child-process plumbing), claude.rs, codex.rs, grok.rs, api/
   src/policy.rs    approval rules
+  src/host.rs      host load, processes, ports, kill (see Host)
   src/scheduler.rs
   src/crew.rs      MCP server
   tests/fixtures/  recorded protocol transcripts
