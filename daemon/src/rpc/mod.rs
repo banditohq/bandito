@@ -741,6 +741,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             "arch": std::env::consts::ARCH,
             "started_at": app.started_at,
             "last_seq": store.last_seq()?,
+            "pid": std::process::id(),
             "features": features(),
             "update": update::last_check(),
         })),
@@ -2053,6 +2054,11 @@ mod memory_tests {
         assert!(
             info.get("update").is_some(),
             "daemon.info carries the last update check"
+        );
+        assert_eq!(
+            info["pid"],
+            std::process::id(),
+            "daemon.info names the daemon's own pid"
         );
     }
 
