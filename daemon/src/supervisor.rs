@@ -7,7 +7,7 @@ use crate::event::LimitWindow;
 use crate::event::{AgentStatus, DecidedBy, Decision, EventBody, Source, TurnStatus, Usage};
 use crate::hub::Hub;
 use crate::limit;
-use crate::policy::{self, Verdict};
+use crate::policy::{self, Protected, Verdict};
 use crate::redact::Redactor;
 use crate::runtime::{ApprovalRequest, Runtime, RuntimeKind, RuntimeOutput, Session, SpawnConfig};
 use crate::store::{
@@ -162,6 +162,16 @@ pub struct Supervisor {
     chains: Mutex<HashMap<String, u32>>,
     /// Docker for the container workspaces (see docs/ARCHITECTURE.md#workspaces).
     workspaces: Arc<WorkspaceManager>,
+    /// Bandito's own files and controls, for the approval policy. Built once at start.
+    protected: Arc<Protected>,
+}
+
+/// Bandito's own files and controls, as the approval policy protects them: the data folder,
+/// the daemon's binary, and the service files of the user's home. `BANDITO_HOME` or `~/.bandito`.
+fn daemon_protected() -> Protected {
+    let exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("bandito"));
+    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
+    Protected::new(&crate::workspace::data_dir(), &exe, &home)
 }
 
 /// Approvals nobody answered are denied after this long.
@@ -297,6 +307,7 @@ impl Supervisor {
             actors: Mutex::new(HashMap::new()),
             chains: Mutex::new(HashMap::new()),
             workspaces,
+            protected: Arc::new(daemon_protected()),
         })
     }
 
@@ -344,6 +355,7 @@ impl Supervisor {
             runtimes: self.runtimes.clone(),
             mcp: self.mcp.clone(),
             workspaces: self.workspaces.clone(),
+            protected: self.protected.clone(),
             session: None,
             output: None,
             redactor: Redactor::default(),
@@ -580,6 +592,7 @@ struct Actor {
     runtimes: Runtimes,
     mcp: Option<(PathBuf, Vec<String>)>,
     workspaces: Arc<WorkspaceManager>,
+    protected: Arc<Protected>,
     session: Option<Box<dyn Session>>,
     output: Option<mpsc::Receiver<RuntimeOutput>>,
     /// Replaces the values of the secrets this session was started with, in everything it stores or sends.
@@ -1331,7 +1344,7 @@ impl Actor {
         // The agent's own folders: its working folder, and its home when it has one.
         let mut roots = vec![agent.cwd.as_str()];
         roots.extend(agent.home_dir.as_deref());
-        let verdict = policy::evaluate(agent.approval_mode, &req, &roots, &rules);
+        let verdict = policy::evaluate(agent.approval_mode, &req, &roots, &rules, &self.protected);
         let subject = req.command.clone().unwrap_or_else(|| req.title.clone());
         match verdict {
             Verdict::Allow => match self.session.as_mut() {
@@ -1855,7 +1868,7 @@ mod tests {
         else {
             unreachable!()
         };
-        assert_eq!(reason, "risky: git push*");
+        assert_eq!(reason, "risky: git push");
         assert_eq!(command.as_deref(), Some("git push origin main"));
         w.wait(is_status(AgentStatus::NeedsYou)).await;
         assert_eq!(w.store.approval_list_pending(None).unwrap().len(), 1);

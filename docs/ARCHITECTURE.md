@@ -68,7 +68,30 @@ Per agent `approval_mode`:
 - `always`: every tool call that the CLI asks about goes to the human.
 - `never`: auto-allow everything (for sandboxes).
 
-Risky = matches a rule. Built-in rules (editable): `git push*`, `git reset --hard*`, `rm -rf*`, `*deploy*`, `npm publish*`, `cargo publish*`, `kubectl delete*`, `terraform apply*`, `DROP TABLE*`, `prisma migrate deploy*`, writes outside the agent's own folders (its `cwd` and its home folder). Agent rules (`allow` / `ask` / `deny` patterns) win over built-ins. "Always allow here" on an approval adds an `allow` rule to that agent.
+**Protected: always denied.** Bandito's own files and controls are off limits to agents, in every mode, and no rule can allow them. A call is denied with `Bandito's own files and controls are off limits to agents` when it touches:
+
+- the data folder (`$BANDITO_HOME`, else `~/.bandito`): the raw command line contains the folder in any form (`~/.bandito`, `$HOME/.bandito`, `${HOME}/.bandito`) or the words `bandito.db`, `bandito.sock`, `agent.sock`; or a path the command uses (an argument, a redirect target, a file the call writes) lands inside it, after `~`, `$HOME`, `${HOME}` and relative paths are resolved. Glob names count (`~/.ban*/bandito.*`);
+- a folder that contains the data folder, when the command removes, copies, moves or archives it (`rm -r ~`, `cp -r ~ /tmp`, `tar czf h.tgz ~`, `rsync … ~`);
+- the daemon's own binary, or a command named `bandito`;
+- the service files of the daemon: `~/.config/systemd/user/bandito*`, `/etc/systemd/system/bandito*`, `~/Library/LaunchAgents/dev.bandito*`.
+
+The Claude runtime also starts with `--disallowedTools` for `Read`, `Edit` and `Write` under the data folder, so the file tools refuse it too.
+
+**Risky (default): a safety net, not a boundary.** `risky` reads the command line itself (`daemon/src/shell.rs`: quotes, `&&`, `;`, pipes, redirections, heredocs, `$(…)`, `sh -c`, and wrappers such as `sudo`, `env`, `timeout`, `nice`, `xargs` and `find -exec`, which are taken off so the command underneath is judged). It asks the human when a command means something risky, by meaning and not by prefix:
+
+- `git`: `push` (any form), `reset --hard`, `clean` with `-f`, `branch -D`, `checkout`/`restore .`, `filter-branch`, `filter-repo`;
+- `rm` with a recursive flag, `find -delete`, `shred`, `dd of=`, `mkfs*`, `truncate`, `chmod -R`, `chown -R`;
+- publishing: `npm`/`pnpm`/`yarn publish`, `cargo publish`, `twine upload`, `gem push`; any word containing `deploy`;
+- `kubectl delete|apply|replace|patch|drain`, `helm install|upgrade|uninstall|delete`, `terraform apply|destroy`, `pulumi up|destroy`, `docker system prune`, `docker volume rm`, `docker rm -f`, `docker compose down -v`;
+- SQL `drop table`, `drop database`, `truncate table`, `delete from` anywhere in the line (matched in the raw text on purpose);
+- `shutdown`, `reboot`, `halt`, `poweroff`, `systemctl` except `status`/`show`/`list-*`/`is-*`, `launchctl`, `crontab` except `-l`, `at`, `systemd-run`, `useradd`, `usermod`, `passwd`, `visudo`;
+- sending data out: `curl` with `-d`, `-F`, `-T`, `--data*`, `--form*`, or a write method; `wget --post-*`, `scp`, `rsync` to a remote host, `nc`, `ncat`, `socat`, `telnet`, `ssh` with a command.
+
+The reason reads `risky: <rule>`. Two more asks: a write (redirect, or `cp`, `mv`, `rm`, `tee`, `touch`, `mkdir`, `sed -i`, …) to a path outside the agent's folders (`writes outside <folder>`); and any part of the line the reader cannot follow (`can't check: <reason>`): command substitution, backticks, process substitution, heredocs, `eval`, `source`, a variable or a glob as the program, an unclosed quote, a pipe into a shell or interpreter with no script (`curl x | sh`), inline code from a pipe, a line over 64 KiB, or nesting deeper than 8. Everything else is allowed.
+
+Agent rules (`allow` / `ask` / `deny`) are checked after the protected rule and before the risky checks, and they win over the risky checks. "Always allow here" on an approval adds an `allow` rule to that agent. None of them can allow a protected call.
+
+**Limits, stated plainly.** Risky mode guards against an agent making a mistake. It does not stop an agent that is trying to get around it: the reader runs no code, so a script file (`./deploy.sh` is only caught by its name), `python -c`, `node -e`, or a program's own shell escape is not read. Protected checks are lexical: they do not follow symbolic links. The data folder is taken from `BANDITO_HOME` or `~/.bandito`; a daemon started with `--home` elsewhere is protected by its file names only, not by its folder. The real boundary is a separate machine or a workspace container (see [Workspaces](#workspaces)).
 
 The daemon can also ask the human itself, for something no runtime asked about (a risky browser click, see [Browser](#browser)). Such a request goes into the agent's feed like any other approval: `approval.requested`, answered with `approvals.resolve`. Nothing is remembered from it. No answer within the time limit denies it, and so does a stop of the agent while it waits. This works the same for every runtime.
 
@@ -479,7 +502,8 @@ daemon/            Rust crate `bandito`
   src/rpc/         JSON-RPC, transports, auth, pairing
   src/store/       SQLite + migrations
   src/runtime/     process.rs (shared child-process plumbing), claude.rs, codex.rs, grok.rs, api/
-  src/policy.rs    approval rules
+  src/policy.rs    approval rules: protected paths, risky checks (see Approvals)
+  src/shell.rs     reads a command line for the policy: simple commands, wrappers, redirections
   src/host.rs      host load, processes, ports, kill (see Host)
   src/setup.rs     components per feature, install jobs (see Setup)
   src/browser.rs   the server's Chrome: start, stop, agent actions, risky clicks (see Browser)

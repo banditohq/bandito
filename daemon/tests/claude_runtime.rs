@@ -235,6 +235,26 @@ async fn passes_flags() {
     s.session.shutdown().await;
 }
 
+#[tokio::test]
+async fn bandito_home_is_off_limits_to_the_file_tools() {
+    let dir = tempfile::tempdir().unwrap();
+    let args_out = dir.path().join("args.json");
+    let c = cfg("deny.jsonl", Some(&args_out));
+    let s = ClaudeRuntime::new().spawn(c).await.unwrap();
+    let args = written_args(&args_out).await;
+    // The daemon's data folder: `$BANDITO_HOME` or `~/.bandito`, as an absolute path in `//` form.
+    let home = std::path::absolute(bandito::workspace::data_dir()).unwrap();
+    for tool in ["Read", "Edit", "Write"] {
+        let rule = format!("{tool}(/{}/**)", home.display());
+        let i = args
+            .iter()
+            .position(|a| *a == rule)
+            .unwrap_or_else(|| panic!("missing {rule} in {args:?}"));
+        assert_eq!(args[i - 1], "--disallowedTools", "{args:?}");
+    }
+    s.session.shutdown().await;
+}
+
 /// Argv of a fake CLI, read once it has written it (it does so at startup).
 async fn written_args(path: &std::path::Path) -> Vec<String> {
     for _ in 0..250 {

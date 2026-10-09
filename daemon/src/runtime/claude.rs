@@ -35,6 +35,18 @@ const BASE_ARGS: [&str; 11] = [
     "default",
 ];
 
+/// Permission rules that keep the agent's Read, Edit and Write tools out of `home`, Bandito's
+/// own folder. Claude Code writes an absolute path with a `//` prefix: `Read(//home/u/.bandito/**)`.
+fn bandito_home_rules(home: &std::path::Path) -> Vec<String> {
+    let home = std::path::absolute(home).unwrap_or_else(|_| home.to_path_buf());
+    let text = home.display().to_string();
+    let text = text.trim_end_matches('/');
+    ["Read", "Edit", "Write"]
+        .iter()
+        .map(|tool| format!("{tool}(/{text}/**)"))
+        .collect()
+}
+
 const INIT_REQUEST_ID: &str = "init";
 /// Tool input strings longer than this are clipped in events and approvals.
 const INPUT_CLIP_BYTES: usize = 4096;
@@ -150,6 +162,10 @@ impl Runtime for ClaudeRuntime {
             })
             .to_string();
             cmd.arg("--mcp-config").arg(config);
+        }
+        // The agent's file tools may not touch Bandito's own folder (see docs/ARCHITECTURE.md#approvals-policy).
+        for rule in bandito_home_rules(&crate::workspace::data_dir()) {
+            cmd.arg("--disallowedTools").arg(rule);
         }
         cmd.current_dir(&cfg.cwd).envs(cfg.env.iter().map(|(k, v)| (k, v)));
         // Marks the CLI and its children for `host.processes` (see docs/ARCHITECTURE.md#host).
