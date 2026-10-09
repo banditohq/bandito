@@ -78,10 +78,10 @@ private struct EntryDetails: View {
 
             HStack(spacing: 8) {
                 Button(L10n.Files.Preview.open) { onOpen(entry) }
-                    .buttonStyle(LightPillButtonStyle())
+                    .banditoButton(.lightPill())
                 if entry.kind == .file {
                     Button(L10n.Files.Preview.download) { onDownload(entry) }
-                        .buttonStyle(QuietButtonStyle())
+                        .banditoButton(.quiet())
                 }
             }
             .padding(18)

@@ -186,6 +186,7 @@ struct FileBrowser: View {
         }
         .contentShape(Rectangle())
         .focusable()
+        .focusEffectDisabled()
         .onKeyPress(phases: .down) { press in handleKey(press) }
         .onTapGesture { model.selection = nil }
     }
@@ -341,10 +342,12 @@ private struct BrowserToolbar: View {
     var body: some View {
         HStack(spacing: 8) {
             Button(action: onBack) { Image(systemName: "chevron.left") }
-                .buttonStyle(IconButtonStyle(size: 30, label: L10n.Files.back))
+                .banditoButton(.icon(size: 30, label: L10n.Files.back))
+                .focusable(false)
                 .disabled(!canGoBack)
             Button(action: onForward) { Image(systemName: "chevron.right") }
-                .buttonStyle(IconButtonStyle(size: 30, label: L10n.Files.forward))
+                .banditoButton(.icon(size: 30, label: L10n.Files.forward))
+                .focusable(false)
                 .disabled(!canGoForward)
 
             HStack(spacing: 2) {
@@ -356,7 +359,7 @@ private struct BrowserToolbar: View {
                     }
                     let isLast = index == crumbs.count - 1
                     Button(crumb.title) { onCrumb(crumb.path) }
-                        .buttonStyle(.plain)
+                        .banditoButton(.link)
                         .font(.system(size: 13.5, weight: isLast ? .semibold : .regular))
                         .foregroundStyle(isLast ? Color.Bandito.text : Color.Bandito.text3)
                         .padding(.horizontal, 6)
@@ -367,7 +370,7 @@ private struct BrowserToolbar: View {
             .padding(.leading, 4)
 
             Button(action: onCopyPath) { Image(systemName: "doc.on.doc") }
-                .buttonStyle(IconButtonStyle(size: 26, label: L10n.Files.copyPath))
+                .banditoButton(.icon(size: 26, label: L10n.Files.copyPath))
 
             Spacer(minLength: 8)
 
@@ -401,7 +404,7 @@ private struct BrowserToolbar: View {
                     .font(.system(size: 12.5))
                     .padding(.horizontal, 6)
             }
-            .buttonStyle(QuietButtonStyle())
+            .banditoButton(.quiet())
 
             Menu {
                 Button(L10n.Files.Create.folder) { onCreate(.folder) }
@@ -418,7 +421,8 @@ private struct BrowserToolbar: View {
                             endPoint: .bottom),
                         in: Capsule())
             }
-            .menuStyle(.borderlessButton)
+            .menuStyle(.button)
+            .banditoButton(.brighten)
             .menuIndicator(.hidden)
             .fixedSize()
         }
@@ -441,7 +445,7 @@ private struct BrowserToolbar: View {
                     in: RoundedRectangle(cornerRadius: 7))
                 .foregroundStyle(model.layout == layout ? Color.Bandito.text : Color.Bandito.text3)
         }
-        .buttonStyle(.plain)
+        .banditoButton(.row(cornerRadius: 7, hoverOpacity: 0.08))
         .accessibilityLabel(label)
     }
 }
@@ -474,7 +478,7 @@ private struct ErrorBanner: View {
                 .foregroundStyle(Color.Bandito.text)
             Spacer(minLength: 8)
             Button(L10n.Files.Banner.dismiss, action: dismiss)
-                .buttonStyle(QuietButtonStyle(size: .regular))
+                .banditoButton(.quiet(size: .regular))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)

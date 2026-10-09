@@ -99,7 +99,7 @@ struct ThreadHeader: View {
             .background(Color.Bandito.text.opacity(0.05), in: Capsule())
             .overlay(Capsule().stroke(Color.Bandito.line, lineWidth: 1))
         }
-        .buttonStyle(.plain)
+        .banditoButton(.row(cornerRadius: 15, hoverOpacity: 0.08))
         .help(L10n.Team.changes)
     }
 
@@ -111,7 +111,7 @@ struct ThreadHeader: View {
                 .frame(width: 30, height: 30)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .banditoButton(.row(cornerRadius: 8, hoverOpacity: 0.08))
         .help(help)
     }
 }

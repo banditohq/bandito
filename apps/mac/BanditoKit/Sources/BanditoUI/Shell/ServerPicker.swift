@@ -48,7 +48,8 @@ struct ServerPicker: View {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .strokeBorder(Color.Bandito.text.opacity(0.08)))
             }
-            .menuStyle(.borderlessButton)
+            .menuStyle(.button)
+            .banditoButton(.row(cornerRadius: 12))
             .menuIndicator(.hidden)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityLabel(Self.name(server))

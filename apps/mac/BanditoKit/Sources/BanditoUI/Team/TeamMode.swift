@@ -48,7 +48,7 @@ private struct EmptyTeam: View {
                     .foregroundStyle(Color.Bandito.text2)
                     .multilineTextAlignment(.center)
                 Button(L10n.Banner.retry) { Task { await app.currentServer?.connect() } }
-                    .buttonStyle(QuietButtonStyle())
+                    .banditoButton(.quiet())
             case .connecting:
                 ProgressView().controlSize(.small)
             default:

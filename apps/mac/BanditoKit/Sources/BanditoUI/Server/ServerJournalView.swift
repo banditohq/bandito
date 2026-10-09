@@ -30,12 +30,12 @@ struct ServerJournalView: View {
                         )
                         .frame(width: 300)
                         Button(L10n.Journal.refresh) { reload() }
-                            .buttonStyle(QuietButtonStyle())
+                            .banditoButton(.quiet())
                             .disabled(loading)
                         Button(L10n.Journal.copyAll) {
                             SystemActions.copy((log?.lines ?? []).joined(separator: "\n"))
                         }
-                        .buttonStyle(QuietButtonStyle())
+                        .banditoButton(.quiet())
                         .disabled((log?.lines ?? []).isEmpty)
                     }
                 }

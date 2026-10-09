@@ -208,7 +208,7 @@ struct ServerOverview: View {
                 } label: {
                     Image(systemName: "stop.fill")
                 }
-                .buttonStyle(IconButtonStyle(size: 26, label: L10n.Server.Processes.stopAria(name: name)))
+                .banditoButton(.icon(size: 26, label: L10n.Server.Processes.stopAria(name: name)))
             } else {
                 Color.clear.frame(width: 26, height: 26)
             }
@@ -283,7 +283,7 @@ struct ServerOverview: View {
                         .lineLimit(1)
                     Spacer(minLength: 8)
                     Button(L10n.Server.Ports.open) { openPreview(port.port) }
-                        .buttonStyle(QuietButtonStyle(size: .regular))
+                        .banditoButton(.quiet(size: .regular))
                 }
             }
         }
@@ -295,7 +295,7 @@ struct ServerOverview: View {
                 SectionLabel(L10n.Server.Secrets.title)
                 Spacer(minLength: 8)
                 Button(L10n.Server.Secrets.all) { router.serverSection = .secrets }
-                    .buttonStyle(QuietButtonStyle())
+                    .banditoButton(.quiet())
             }
             if !server.supports("secrets") {
                 Text(L10n.Server.updateNote).foregroundStyle(Color.Bandito.text2)
@@ -364,7 +364,7 @@ struct ServerOverview: View {
             Button(L10n.Server.Update.howTo) {
                 router.requestTerminalCommand(ReleaseFeed.installCommand)
             }
-            .buttonStyle(LightPillButtonStyle())
+            .banditoButton(.lightPill())
         }
         .padding(14)
         .background(Color.Bandito.signal.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))

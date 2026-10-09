@@ -37,12 +37,12 @@ struct UpdatesSection: View {
                 Button(L10n.Settings.Updates.check) {
                     Task { await release.load() }
                 }
-                .buttonStyle(QuietButtonStyle())
+                .banditoButton(.quiet())
                 Button(L10n.Settings.Updates.openServer) {
                     router.select(mode: .server)
                     router.serverSection = .updates
                 }
-                .buttonStyle(SignalButtonStyle())
+                .banditoButton(.signal())
             }
             .padding(.top, 16)
         }

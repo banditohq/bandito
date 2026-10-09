@@ -76,7 +76,7 @@ struct ApprovalsSection: View {
                 }
                 .frame(width: 170)
                 Button(L10n.Settings.Approvals.add) { add(server) }
-                    .buttonStyle(LightPillButtonStyle())
+                    .banditoButton(.lightPill())
                     .disabled(pattern.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             Text(L10n.Settings.Approvals.wildcardNote)
@@ -128,7 +128,7 @@ struct ApprovalsSection: View {
                     } label: {
                         Image(systemName: "trash")
                     }
-                    .buttonStyle(IconButtonStyle(size: 26, label: L10n.Settings.Approvals.deleteAria(pattern: rule.pattern)))
+                    .banditoButton(.icon(size: 26, label: L10n.Settings.Approvals.deleteAria(pattern: rule.pattern)))
                     .frame(width: 30)
                 }
                 .padding(.horizontal, 16)

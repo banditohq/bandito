@@ -18,5 +18,7 @@ public struct RootView: View {
             }
         }
         .background(Color.Bandito.bg)
+        // The system focus ring is off for the whole scene; Bandito draws its own (brandFocusRing).
+        .focusEffectDisabled()
     }
 }

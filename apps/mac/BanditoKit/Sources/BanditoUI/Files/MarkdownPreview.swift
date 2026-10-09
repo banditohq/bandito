@@ -126,7 +126,7 @@ private struct MarkdownBlockView: View {
                         .font(.system(size: 14))
                         .foregroundStyle(checked ? Self.signal : Color.Bandito.text3)
                 }
-                .buttonStyle(.plain)
+                .banditoButton(.row(cornerRadius: 4, hoverOpacity: 0.08))
             } else {
                 Text("•")
                     .font(.system(size: 14.5))

@@ -59,7 +59,7 @@ public struct RadioRow: View {
             .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             .banditoCard(selected: isSelected)
         }
-        .buttonStyle(.plain)
+        .banditoButton(.row(cornerRadius: 14))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

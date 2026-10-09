@@ -71,7 +71,7 @@ private struct FilesSidebarContent: View {
                     .frame(maxWidth: .infinity)
                     .frame(height: 34)
             }
-            .buttonStyle(QuietButtonStyle())
+            .banditoButton(.quiet())
             .padding(.horizontal, 14)
             .padding(.bottom, 14)
         }
@@ -159,7 +159,7 @@ private struct PlaceRow: View {
             .background(isCurrent ? Color.Bandito.text.opacity(0.07) : .clear, in: RoundedRectangle(cornerRadius: 10))
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .banditoButton(.row(cornerRadius: 10))
     }
 }
 
@@ -187,7 +187,7 @@ private struct AgentPlaceRow: View {
             .background(isCurrent ? Color.Bandito.text.opacity(0.07) : .clear, in: RoundedRectangle(cornerRadius: 10))
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .banditoButton(.row(cornerRadius: 10))
     }
 }
 

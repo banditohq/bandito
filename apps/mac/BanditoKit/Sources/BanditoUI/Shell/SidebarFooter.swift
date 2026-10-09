@@ -27,7 +27,7 @@ struct SidebarFooter: View {
                 .background(Capsule().fill(Color.Bandito.text.opacity(0.04)))
                 .overlay(Capsule().strokeBorder(Color.Bandito.text.opacity(0.10)))
             }
-            .buttonStyle(.plain)
+            .banditoButton(.row(cornerRadius: 17))
             .disabled(true)
 
             UsageButton()

@@ -75,7 +75,7 @@ struct ApprovalCard: View {
                         KeyCap(text: "esc")
                     }
                 }
-                .buttonStyle(QuietButtonStyle())
+                .banditoButton(.quiet())
 
                 Button {
                     onDecide(.allow, remember)
@@ -85,7 +85,7 @@ struct ApprovalCard: View {
                         KeyCap(text: "⌘↵")
                     }
                 }
-                .buttonStyle(SignalButtonStyle())
+                .banditoButton(.signal())
 
                 Spacer(minLength: 8)
 
@@ -189,7 +189,7 @@ struct CheckBoxRow: View {
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .banditoButton(.row(cornerRadius: 6))
         .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 }

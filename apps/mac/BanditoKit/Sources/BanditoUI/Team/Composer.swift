@@ -67,7 +67,7 @@ struct Composer: View {
                         .overlay(Circle().stroke(Color.Bandito.line, lineWidth: 1))
                         .contentShape(Circle())
                 }
-                .buttonStyle(.plain)
+                .banditoButton(.row(cornerRadius: 17, hoverOpacity: 0.08))
                 .help(L10n.Thread.attach)
 
                 TextField(L10n.Thread.placeholder(name: agentName), text: $draft, axis: .vertical)
@@ -168,7 +168,7 @@ struct Composer: View {
                     .frame(width: 34, height: 34)
                     .background(Color.Bandito.text, in: Circle())
             }
-            .buttonStyle(.plain)
+            .banditoButton(.brighten)
             .help(L10n.Thread.stop)
         } else {
             Button(action: submit) {
@@ -178,7 +178,7 @@ struct Composer: View {
                     .frame(width: 34, height: 34)
                     .background(Color.Bandito.text, in: Circle())
             }
-            .buttonStyle(.plain)
+            .banditoButton(.brighten)
             .disabled(!canSend)
             .opacity(canSend ? 1 : 0.4)
             .help(L10n.Thread.send)

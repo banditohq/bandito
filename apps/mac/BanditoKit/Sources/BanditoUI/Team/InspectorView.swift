@@ -67,7 +67,7 @@ struct InspectorView: View {
                     .overlay(Circle().stroke(Color.Bandito.line, lineWidth: 1))
                     .contentShape(Circle())
             }
-            .buttonStyle(.plain)
+            .banditoButton(.row(cornerRadius: 15, hoverOpacity: 0.08))
             .help(L10n.Common.close)
         }
         .padding(.horizontal, 20)

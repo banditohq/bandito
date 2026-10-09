@@ -36,7 +36,8 @@ private struct SidebarTopRow: View {
             } label: {
                 Image(systemName: "magnifyingglass")
             }
-            .buttonStyle(IconButtonStyle(size: 30, label: L10n.Palette.search))
+            .banditoButton(.icon(size: 30, label: L10n.Palette.search))
+            .focusable(false)
             .help(L10n.Sidebar.search)
             .tourAnchor(.quickOpen)
 
@@ -45,7 +46,8 @@ private struct SidebarTopRow: View {
             } label: {
                 Image(systemName: "plus")
             }
-            .buttonStyle(IconButtonStyle(size: 30, label: L10n.Sidebar.newAgent))
+            .banditoButton(.icon(size: 30, label: L10n.Sidebar.newAgent))
+            .focusable(false)
             .help(L10n.Sidebar.newAgent)
         }
         .padding(.horizontal, 16)

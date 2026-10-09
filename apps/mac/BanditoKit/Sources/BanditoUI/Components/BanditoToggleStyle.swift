@@ -33,6 +33,6 @@ public struct BanditoToggleStyle: ToggleStyle {
                 }
             }
         }
-        .buttonStyle(.plain)
+        .banditoButton(.row())
     }
 }

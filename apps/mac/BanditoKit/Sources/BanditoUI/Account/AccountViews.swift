@@ -51,11 +51,11 @@ struct ResetConfirmation: View {
                 Button(L10n.Onboarding.Account.resetAction) {
                     Task { await run() }
                 }
-                .buttonStyle(SignalButtonStyle())
+                .banditoButton(.signal())
                 .disabled(typed != "RESET" || busy)
                 if let onCancel {
                     Button(L10n.Common.cancel, action: onCancel)
-                        .buttonStyle(QuietButtonStyle())
+                        .banditoButton(.quiet())
                         .disabled(busy)
                 }
             }
@@ -66,7 +66,7 @@ struct ResetConfirmation: View {
             }
             if sessionTooOld, let onSignInAgain {
                 Button(L10n.Onboarding.Account.signInAgain, action: onSignInAgain)
-                    .buttonStyle(QuietButtonStyle())
+                    .banditoButton(.quiet())
             }
         }
     }
@@ -132,7 +132,7 @@ struct DeviceApprovalStep: View {
             }
             if refuseFailed {
                 Button(L10n.Onboarding.Server.retry) { Task { await refuseThenSignOut() } }
-                    .buttonStyle(QuietButtonStyle(size: .regular))
+                    .banditoButton(.quiet(size: .regular))
             }
         }
         .frame(maxWidth: 480, alignment: .leading)
@@ -160,7 +160,7 @@ struct DeviceApprovalStep: View {
                     .foregroundStyle(Color.Bandito.text2)
             }
             Button(L10n.Onboarding.Account.noOtherDevice) { mode = .recover }
-                .buttonStyle(.plain)
+                .banditoButton(.link)
                 .font(BanditoFont.font(size: 13, weight: 500))
                 .foregroundStyle(Color.Bandito.signal)
         }
@@ -190,11 +190,11 @@ struct DeviceApprovalStep: View {
                 .lineSpacing(2)
             HStack(spacing: 10) {
                 Button(L10n.Onboarding.Account.codesMatch) { confirm() }
-                    .buttonStyle(SignalButtonStyle())
+                    .banditoButton(.signal())
                 Button(L10n.Onboarding.Account.codesDiffer) {
                     Task { await refuseThenSignOut() }
                 }
-                .buttonStyle(QuietButtonStyle())
+                .banditoButton(.quiet())
             }
         }
     }
@@ -209,7 +209,7 @@ struct DeviceApprovalStep: View {
                 .foregroundStyle(Color.Bandito.text2)
                 .lineSpacing(2)
             Button(L10n.Onboarding.Account.understood) { onNoAccess() }
-                .buttonStyle(QuietButtonStyle())
+                .banditoButton(.quiet())
         }
     }
 
@@ -219,7 +219,7 @@ struct DeviceApprovalStep: View {
                 .font(BanditoFont.font(size: 14, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
             Button(L10n.Onboarding.Account.signOutAction) { Task { await signOut() } }
-                .buttonStyle(QuietButtonStyle())
+                .banditoButton(.quiet())
         }
     }
 
@@ -246,7 +246,7 @@ struct DeviceApprovalStep: View {
                 Task { await signOut() }
             }
             Button(L10n.Onboarding.Account.signInAgain) { Task { await signOut() } }
-                .buttonStyle(.plain)
+                .banditoButton(.link)
                 .font(BanditoFont.font(size: 13, weight: 500))
                 .foregroundStyle(Color.Bandito.text3)
         }
@@ -358,7 +358,7 @@ struct ApproveDeviceSheet: View {
                         }
                     }
                 }
-                .buttonStyle(SignalButtonStyle())
+                .banditoButton(.signal())
                 .disabled(!(model?.canApprove ?? false))
                 Button(L10n.Onboarding.Account.rejectAction) {
                     Task {
@@ -368,10 +368,10 @@ struct ApproveDeviceSheet: View {
                         }
                     }
                 }
-                .buttonStyle(QuietButtonStyle())
+                .banditoButton(.quiet())
                 Spacer()
                 Button(L10n.Common.close, action: close)
-                    .buttonStyle(.plain)
+                    .banditoButton(.link)
                     .foregroundStyle(Color.Bandito.text3)
             }
         }
@@ -433,7 +433,7 @@ struct PendingDevicesBanner: View {
                     .foregroundStyle(Color.Bandito.text)
                 Spacer()
                 Button(L10n.Onboarding.Account.bannerCheck) { checking = device }
-                    .buttonStyle(SignalButtonStyle(size: .regular))
+                    .banditoButton(.signal(size: .regular))
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
@@ -468,7 +468,7 @@ struct AccountSheet: View {
                     .foregroundStyle(Color.Bandito.text)
                 Spacer()
                 Button(L10n.Common.close) { dismiss() }
-                    .buttonStyle(.plain)
+                    .banditoButton(.link)
                     .foregroundStyle(Color.Bandito.text3)
             }
             if !hub.signedIn {
@@ -500,9 +500,9 @@ struct AccountSheet: View {
                 } else {
                     HStack(spacing: 10) {
                         Button(L10n.Onboarding.Account.resetAccountAction) { resetting = true }
-                            .buttonStyle(QuietButtonStyle())
+                            .banditoButton(.quiet())
                         Button(L10n.Onboarding.Account.signOutAction) { Task { await signOut() } }
-                            .buttonStyle(QuietButtonStyle())
+                            .banditoButton(.quiet())
                     }
                 }
             } else if loading {
@@ -553,7 +553,7 @@ struct AccountSheet: View {
                         Button(L10n.Onboarding.Account.settingsRemoveDevice) {
                             Task { await remove(device) }
                         }
-                        .buttonStyle(.plain)
+                        .banditoButton(.link)
                         .font(BanditoFont.font(size: 12.5, weight: 500))
                         .foregroundStyle(Color.Bandito.danger)
                     }

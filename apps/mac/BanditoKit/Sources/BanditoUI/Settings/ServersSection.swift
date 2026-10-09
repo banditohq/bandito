@@ -22,7 +22,7 @@ struct ServersSection: View {
                             Button(L10n.Common.delete) {
                                 removing = server
                             }
-                            .buttonStyle(QuietButtonStyle())
+                            .banditoButton(.quiet())
                         }
                     }
                 }
@@ -39,7 +39,7 @@ struct ServersSection: View {
                 Button(L10n.Settings.Servers.add) {
                     router.sheet = .addServer
                 }
-                .buttonStyle(SignalButtonStyle())
+                .banditoButton(.signal())
             }
             .padding(.top, 16)
         }

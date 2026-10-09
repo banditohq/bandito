@@ -77,7 +77,7 @@ struct UsagePopover: View {
                     .frame(width: 28, height: 28)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .banditoButton(.row(cornerRadius: 6, hoverOpacity: 0.08))
             .foregroundStyle(Color.Bandito.text3)
             .help(L10n.Usage.refresh)
             .accessibilityLabel(L10n.Usage.refresh)

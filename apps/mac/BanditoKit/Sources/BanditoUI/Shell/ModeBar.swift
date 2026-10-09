@@ -27,7 +27,8 @@ struct ModeBar: View {
                         }
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .banditoButton(.row(cornerRadius: 10))
+                .focusable(false)
                 .help(mode.title)
                 .accessibilityLabel(mode.title)
                 .accessibilityAddTraits(selected ? .isSelected : [])

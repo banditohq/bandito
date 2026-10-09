@@ -47,6 +47,6 @@ public struct SegmentedPicker<T: Hashable>: View {
                 .contentShape(Rectangle())
                 .accessibilityAddTraits(isSelected ? .isSelected : [])
         }
-        .buttonStyle(.plain)
+        .banditoButton(.row(cornerRadius: 9))
     }
 }

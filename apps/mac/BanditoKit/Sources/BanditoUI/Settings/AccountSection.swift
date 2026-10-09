@@ -13,7 +13,7 @@ struct AccountSection: View {
                     Button(L10n.Settings.Account.signIn) {
                         router.sheet = .account
                     }
-                    .buttonStyle(SignalButtonStyle())
+                    .banditoButton(.signal())
                 }
             }
             .banditoCard()

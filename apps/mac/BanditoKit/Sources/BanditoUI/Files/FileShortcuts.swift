@@ -36,6 +36,7 @@ private struct ShortcutButton: View {
     var body: some View {
         Button(action: action) { EmptyView() }
             .keyboardShortcut(shortcut)
+            .focusable(false)
             .frame(width: 0, height: 0)
             .opacity(0)
             .accessibilityHidden(true)

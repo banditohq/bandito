@@ -82,7 +82,7 @@ private struct ScreenToolbar: View {
                 Text("⌃⌥⌫")
                     .font(.system(size: 12, design: .monospaced))
             }
-            .buttonStyle(QuietButtonStyle())
+            .banditoButton(.quiet())
             .keyboardShortcut(.delete, modifiers: [.control, .option])
             .help(L10n.Screen.sendCAD)
 
@@ -91,19 +91,19 @@ private struct ScreenToolbar: View {
             } label: {
                 Image(systemName: "arrow.up.left.and.arrow.down.right")
             }
-            .buttonStyle(IconButtonStyle(size: 30, label: L10n.Screen.fullscreen))
+            .banditoButton(.icon(size: 30, label: L10n.Screen.fullscreen))
             .help(L10n.Screen.fullscreen)
 
             if holder == .user {
                 Button(L10n.Browser.bannerGive) {
                     Task { await model.giveBack() }
                 }
-                .buttonStyle(QuietButtonStyle())
+                .banditoButton(.quiet())
             } else {
                 Button(L10n.Keys.takeControl) {
                     Task { await model.takeControl() }
                 }
-                .buttonStyle(LightPillButtonStyle())
+                .banditoButton(.lightPill())
                 .keyboardShortcut("c", modifiers: [.command, .shift])
             }
         }
@@ -179,7 +179,7 @@ private struct ScreenCanvas: View {
                 Button(L10n.Screen.start) {
                     Task { await model.start() }
                 }
-                .buttonStyle(SignalButtonStyle())
+                .banditoButton(.signal())
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }

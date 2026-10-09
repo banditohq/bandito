@@ -98,7 +98,7 @@ struct DockCard: View {
                     .strokeBorder(waiting ? Color.Bandito.signal.opacity(0.35) : Color.Bandito.text.opacity(0.08))
             )
         }
-        .buttonStyle(.plain)
+        .banditoButton(.row(cornerRadius: 12))
         .help(L10n.Terminals.Dock.restore)
     }
 

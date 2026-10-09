@@ -139,7 +139,7 @@ private struct TerminalsSidebarList: View {
                 in: RoundedRectangle(cornerRadius: 10, style: .continuous)
             )
         }
-        .buttonStyle(.plain)
+        .banditoButton(.row(cornerRadius: 10))
     }
 
     @ViewBuilder
