@@ -15,7 +15,7 @@ BASE="https://github.com/banditohq/bandito/releases"
 
 # The release signing key: Ed25519, base64 of its SubjectPublicKeyInfo. scripts/release-key.sh
 # writes it. SHA256SUMS of every release is signed with the matching private key.
-RELEASE_PUBKEY=""
+RELEASE_PUBKEY="MCowBQYDK2VwAyEA0H7rMV2eLDmjqQ403ipWCERN6K+aZNuWTW5IKuLSpWY="
 
 usage() {
     cat <<'EOF'
