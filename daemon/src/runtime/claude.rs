@@ -146,7 +146,7 @@ impl Runtime for ClaudeRuntime {
         }
         if let Some((prog, args)) = &cfg.mcp {
             let config = json!({
-                "mcpServers": {"bandito": {"command": prog.display().to_string(), "args": args}}
+                "mcpServers": {"bandito": {"command": crate::runtime::path_text(prog)?, "args": args}}
             })
             .to_string();
             match &cfg.agent_mcp_file {

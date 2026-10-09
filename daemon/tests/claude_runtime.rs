@@ -564,3 +564,19 @@ async fn dropping_the_session_kills_the_child_tree() {
     drop(s);
     assert!(wait_gone(pid).await, "background child {pid} survived the drop");
 }
+
+#[tokio::test]
+async fn a_crew_server_path_that_is_not_utf8_refuses_the_session() {
+    use std::os::unix::ffi::OsStrExt;
+    let mut c = cfg("deny.jsonl", None);
+    c.mcp = Some((
+        PathBuf::from(std::ffi::OsStr::from_bytes(b"/tmp/\xff/bandito")),
+        vec!["mcp".into()],
+    ));
+    let err = ClaudeRuntime::new()
+        .spawn(c)
+        .await
+        .err()
+        .expect("the session is refused");
+    assert!(err.to_string().contains("not valid UTF-8"), "{err}");
+}

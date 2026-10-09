@@ -415,9 +415,9 @@ impl TerminalManager {
         let spawned = std::thread::Builder::new()
             .name("terminal-reaper".into())
             .spawn(move || {
-                let pid = child.id();
+                // Registered from the thread that waits: it holds the child until its exit.
+                let _registration = crate::children::register(child.id());
                 let status = child.wait().ok();
-                crate::children::unregister(pid);
                 exited.store(true, Ordering::SeqCst);
                 // The receiver is gone only if nobody reads the session any more.
                 let _ = exit_tx.send(status);
@@ -663,9 +663,7 @@ fn spawn_child(command: &[String], cwd: &Path, env: &[(String, String)], slave: 
             Ok(())
         });
     }
-    let child = cmd.spawn()?;
-    crate::children::register(child.id());
-    Ok(child)
+    cmd.spawn()
 }
 
 /// Open a PTY pair of the given size. Both ends are close-on-exec; the master is non-blocking.

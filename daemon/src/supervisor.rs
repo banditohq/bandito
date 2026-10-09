@@ -818,6 +818,11 @@ impl Actor {
         let prompt = blocks.join("\n\n");
         let secrets = self.hub.store.secrets_for_agent(&agent.id)?;
         let (token, token_guard) = self.tokens.issue(&agent.id)?;
+        // The token file's path goes into an argument list: it must be text, or the session does not start.
+        let token_file_arg = match token_guard.token_file() {
+            Some(file) => Some(crate::runtime::path_text(file)?.to_string()),
+            None => None,
+        };
         // Containers are isolated already; the sandbox is for the agents that run on the server itself.
         let sandbox = match self.tokens.home() {
             Some(home)
@@ -825,6 +830,9 @@ impl Actor {
             {
                 Some(SandboxPolicy {
                     home,
+                    // Without a home folder the profile cannot protect the login files: the session is refused.
+                    user_home: dirs::home_dir()
+                        .ok_or_else(|| anyhow!("no home folder: the agent cannot be sandboxed"))?,
                     exe: std::env::current_exe().ok(),
                     session_files: token_guard
                         .token_file()
@@ -865,8 +873,8 @@ impl Actor {
                 mcp: mcp.map(|(prog, mut args)| {
                     args.extend(["--agent".to_string(), agent.id.clone()]);
                     // The bridge reads the token from this file, so the token stays out of argument lists.
-                    if let Some(file) = token_guard.token_file() {
-                        args.extend(["--token-file".to_string(), file.display().to_string()]);
+                    if let Some(file) = &token_file_arg {
+                        args.extend(["--token-file".to_string(), file.clone()]);
                     }
                     (prog, args)
                 }),

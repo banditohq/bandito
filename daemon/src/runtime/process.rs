@@ -68,9 +68,8 @@ impl JsonProcess {
         // Unix: the child leads its own process group, so the whole tree can be killed.
         let pid = child.id();
         let pgid = if cfg!(unix) { pid } else { None };
-        if let Some(pid) = pid {
-            crate::children::register(pid);
-        }
+        // Registered now that the spawn succeeded; it ends with the pump, which waits for the child.
+        let registration = pid.map(crate::children::register);
         let stdin = piped(child.stdin.take(), "stdin", label)?;
         let stdout = piped(child.stdout.take(), "stdout", label)?;
         let stderr = piped(child.stderr.take(), "stderr", label)?;
@@ -85,7 +84,7 @@ impl JsonProcess {
         let (kill_tx, kill_rx) = oneshot::channel();
         let pump = Pump {
             child,
-            pid,
+            _registration: registration,
             pgid,
             router,
             sink: Arc::clone(&sink),
@@ -143,7 +142,7 @@ impl JsonProcess {
 struct Pump {
     child: Child,
     /// The child's pid, registered while its exit is still to be waited for.
-    pid: Option<u32>,
+    _registration: Option<crate::children::Registration>,
     /// Process group id (unix). Kills go to the whole group.
     pgid: Option<u32>,
     router: Router,
@@ -218,9 +217,6 @@ impl Pump {
                     }
                 },
                 status = self.child.wait(), if exit.is_none() => {
-                    if let Some(pid) = self.pid {
-                        crate::children::unregister(pid);
-                    }
                     exit = Some(status.ok().and_then(|s| s.code()));
                     drain_until = Some(tokio::time::Instant::now() + OUTPUT_AFTER_EXIT);
                 }
@@ -238,9 +234,6 @@ impl Pump {
             None => loop {
                 tokio::select! {
                     status = self.child.wait() => {
-                        if let Some(pid) = self.pid {
-                            crate::children::unregister(pid);
-                        }
                         break status.ok().and_then(|s| s.code());
                     }
                     _ = &mut self.kill, if !self.killed => self.kill_now(),

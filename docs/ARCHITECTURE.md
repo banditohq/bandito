@@ -146,8 +146,8 @@ The agent tools (`crew.send`, `history.*`, `browser.agent.*`, `screen.agent.*`) 
 
 **What this does not stop.**
 - A process of the same user that is not under the daemon passes as the owner. Examples are one started by `systemd-run --user`, by cron, or in a tmux server the owner already runs. The check asks "is this under the daemon", not "is this trusted".
-- On macOS a double-forked process is re-parented to launchd, so it is not seen as the daemon's. The [macOS sandbox](#macos-sandbox) closes this for agent sessions: their processes, orphans included, cannot reach `bandito.sock`. It does not cover processes of the owner's own shells, or Codex sessions (see below).
-- Agents of the same user can read each other's token files: on Linux, and on macOS when the sandbox is off or the session is Codex. An agent that reads another agent's token can speak as that agent (`crew.send`, `history.*`). The sandbox on macOS denies the other sessions' files.
+- On macOS a double-forked process is re-parented to launchd, so it is not seen as the daemon's. The [macOS sandbox](#macos-sandbox) closes the known channels for agent sessions: their processes, orphans included, cannot reach `bandito.sock`. It is a layer, not a boundary (see there).
+- Agents of the same user can read each other's token files: on Linux, and on macOS when the sandbox is off (`agent_sandbox: false`). An agent that reads another agent's token can speak as that agent (`crew.send`, `history.*`). The sandbox on macOS denies the other sessions' files.
 - An agent with shell access runs as the daemon's user and can do what that user can on disk. The token only opens the agent tools, but the agent can read its own environment. For real isolation use a container workspace (see [Workspaces](#workspaces)), not these checks.
 
 **What agents share.** The browser (one per workspace) and the screen (one per workspace) are shared by all agents in that workspace, and the daemon starts them, so they run outside any agent sandbox. An agent can drive them through the browser and screen tools, but it cannot run commands through them. Anything an agent does in the browser or on the screen is visible to the other agents of the workspace.
@@ -156,21 +156,27 @@ The agent tools (`crew.send`, `history.*`, `browser.agent.*`, `screen.agent.*`) 
 
 ## macOS sandbox
 
-On macOS, a Claude or Grok session on the shared workspace runs under `sandbox-exec` with a Seatbelt profile that the daemon writes per session. Every process the CLI starts inherits it, orphans included. The profile:
+On macOS, the Claude, Grok and Codex sessions of the shared workspace run under `sandbox-exec`, with a Seatbelt profile that the daemon writes for each session. The processes a session starts run under the same profile. This is an additional layer. It closes the channels we know that start something outside a session. It is not a boundary (see below).
 
-- denies reading and writing the data folder (`$BANDITO_HOME`), except the session's own two files (its token file and its MCP config);
-- denies connecting to `bandito.sock`, and allows `agent.sock`. A denial on the folder does not stop a connect to a unix socket, so the network rule is the one that counts (checked on macOS: a connect to `bandito.sock` is refused, and the same connect to `agent.sock` works);
-- denies writing to the daemon's binary.
+**What the profile closes.**
+- Starting programs that hand work to other services: `open` (Launch Services), `osascript` (Apple events), `launchctl`, `lsappinfo`, and the scheduler programs `crontab`, `at`, `batch` and `cron`. Their exec is refused, and so is a Launch Services connection (`mach-lookup` of `launchservicesd`).
+- Apple events: `appleevent-send` is denied. `osascript` cannot run at all under the profile, so `osascript -e 'return 1'` fails there too.
+- Autostart and later execution: writes to the login files (`.zshrc`, `.zprofile`, `.zshenv`, `.zlogin`, `.bashrc`, `.bash_profile`, `.profile`, `.ssh/rc`, `.ssh/authorized_keys`), to `~/.config/fish`, to `~/Library/LaunchAgents`, and to the background task manager's folder under `~/Library/Application Support`.
+- The daemon's data folder (`$BANDITO_HOME`): nothing in it is readable or writable, except the session's own two files (its token file and its MCP config). Connecting to `bandito.sock` is denied, and `agent.sock` is allowed. A denial on the folder does not stop a connect to a unix socket, so the network rule is the one that counts. Writing the daemon's binary is denied.
 
-Everything else stays open: the project folders, the network, and other folders of the user. It is a targeted profile, not an allowlist. Paths in it are resolved first, so the rules name what the kernel sees.
+**What the profile does not close.** Everything else stays open: project folders, the network, and the rest of the user's files. The profile is a list of known channels, not an allowlist, and it is not a boundary. A copy of a system binary that is not on the list, an unknown channel, or a process of the owner's own shells is outside what it checks. The real isolation is a container workspace (see [Workspaces](#workspaces)), or in future a separate macOS user.
 
-**Codex is not sandboxed.** Codex runs its own commands under `sandbox-exec`, and a nested `sandbox-exec` cannot apply a profile inside a sandbox (`sandbox_apply: Operation not permitted`). So a Codex session runs unsandboxed here; the daemon logs one warning when it starts one.
+**Codex.** Codex is wrapped in the same profile, and its own sandbox is turned off: the `-c sandbox_mode="danger-full-access"` override, and the same `sandbox` value for its threads (checked against `codex-cli` 0.161.0). Approvals stay with Codex's approval policy (`untrusted`), and so with Bandito's policy. A nested sandbox cannot be applied inside a sandbox (`sandbox_apply: Operation not permitted`), which is why Codex's own is the one that goes.
 
-**Container workspaces are not sandboxed here**, as they are isolated already.
+**Containers** are not wrapped: they are isolated already.
 
-**Switching it off.** `"agent_sandbox": false` in `$BANDITO_HOME/config.json` turns the sandbox off for new sessions. It is on by default. The setting has no effect on Linux.
+**Paths.** A path that is not valid UTF-8 cannot be written into a profile or an argument list faithfully. Such a session does not start, with an error that names the path. Nothing is converted lossily.
 
-**Not verified.** The Claude and Grok CLIs themselves may run their shell tool under `sandbox-exec`. If so, their commands fail inside this profile, since nested sandboxes are refused. This was not tested with the real CLIs; check it before relying on the sandbox.
+**Switching it off.** `"agent_sandbox": false` in `$BANDITO_HOME/config.json` turns the sandbox off for new sessions. It is on by default. It has no effect on Linux.
+
+**Checked on macOS** (tests in `daemon/src/runtime/sandbox.rs`): a read of the database is denied; a connect to `bandito.sock` is denied, also from an orphan started by a shell; a connect to `agent.sock` and a read of the own token file work; other sessions' token files are denied; `open` and `launchctl` cannot start; an Apple event sent by a small program is refused under the profile and accepted without it; writes to `~/.zshrc` and `~/Library/LaunchAgents` are denied in a temporary home, and a file elsewhere in the home stays writable; writes into the project, `git`, `node` and `curl` work; `nc` to the network works where there is a network.
+
+**Not verified.** The Claude and Grok CLIs may run their own shell tool under `sandbox-exec`. Then their commands fail inside this profile, since nested sandboxes are refused. This was not tested with the real CLIs; check it before relying on the sandbox.
 
 ## Scheduler
 

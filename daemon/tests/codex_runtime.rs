@@ -560,3 +560,72 @@ async fn the_crew_server_gets_the_token_file_and_no_token_in_argv() {
     assert!(args.contains(&expected), "{args:?}");
     s.session.shutdown().await;
 }
+
+/// Argv that Codex was started with, read once the fake has written it.
+async fn codex_argv(c: SpawnConfig, args_out: &std::path::Path) -> Vec<String> {
+    let s = spawn(c).await;
+    let mut args: Vec<String> = Vec::new();
+    for _ in 0..50 {
+        if let Ok(text) = std::fs::read_to_string(args_out)
+            && let Ok(v) = serde_json::from_str::<Vec<String>>(&text)
+        {
+            args = v;
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    s.session.shutdown().await;
+    args
+}
+
+#[cfg(target_os = "macos")]
+#[tokio::test]
+async fn codex_runs_under_the_sandbox_with_its_own_sandbox_off() {
+    use bandito::runtime::sandbox::SandboxPolicy;
+    let dir = tempfile::tempdir().unwrap();
+    let args_out = dir.path().join("args.json");
+    let mut c = cfg("resume_and_unknown_request.jsonl");
+    c.env.push(("FAKECLI_ARGS_OUT".into(), args_out.display().to_string()));
+    c.agent_token = Some("bat_secret_value".into());
+    c.sandbox = Some(SandboxPolicy {
+        home: dir.path().join(".bandito"),
+        user_home: dir.path().join("home"),
+        exe: None,
+        session_files: Vec::new(),
+    });
+    let args = codex_argv(c, &args_out).await;
+    assert!(
+        args.iter().any(|a| a == r#"sandbox_mode="danger-full-access""#),
+        "{args:?}"
+    );
+    assert!(args.iter().all(|a| !a.contains("bat_")), "{args:?}");
+}
+
+#[cfg(target_os = "macos")]
+#[tokio::test]
+async fn codex_without_a_sandbox_keeps_its_own_settings() {
+    let dir = tempfile::tempdir().unwrap();
+    let args_out = dir.path().join("args.json");
+    let mut c = cfg("resume_and_unknown_request.jsonl");
+    c.env.push(("FAKECLI_ARGS_OUT".into(), args_out.display().to_string()));
+    let args = codex_argv(c, &args_out).await;
+    assert!(args.iter().all(|a| !a.contains("sandbox_mode")), "{args:?}");
+}
+
+#[cfg(not(target_os = "macos"))]
+#[tokio::test]
+async fn codex_keeps_its_own_sandbox_where_there_is_no_macos_sandbox() {
+    use bandito::runtime::sandbox::SandboxPolicy;
+    let dir = tempfile::tempdir().unwrap();
+    let args_out = dir.path().join("args.json");
+    let mut c = cfg("resume_and_unknown_request.jsonl");
+    c.env.push(("FAKECLI_ARGS_OUT".into(), args_out.display().to_string()));
+    c.sandbox = Some(SandboxPolicy {
+        home: dir.path().join(".bandito"),
+        user_home: dir.path().join("home"),
+        exe: None,
+        session_files: Vec::new(),
+    });
+    let args = codex_argv(c, &args_out).await;
+    assert!(args.iter().all(|a| !a.contains("sandbox_mode")), "{args:?}");
+}

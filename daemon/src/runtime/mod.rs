@@ -5,7 +5,7 @@ use crate::event::{Decision, EventBody, truncate_output};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tokio::sync::mpsc;
 
 pub use crate::event::Plan;
@@ -93,6 +93,17 @@ pub enum RuntimeOutput {
         code: Option<i32>,
         stderr_tail: String,
     },
+}
+
+/// A path as text for an argument list or a config file. A path that is not valid UTF-8 cannot be
+/// given faithfully, so the session that needs it does not start (fail closed).
+pub fn path_text(path: &Path) -> anyhow::Result<&str> {
+    path.to_str().ok_or_else(|| {
+        anyhow::anyhow!(
+            "the path {} is not valid UTF-8; the agent session cannot start",
+            path.to_string_lossy()
+        )
+    })
 }
 
 #[derive(Debug, Clone, Default)]
@@ -201,4 +212,18 @@ pub async fn probe_version(program: &str) -> Option<String> {
         .next()
         .map(|l| l.trim().to_string())
         .filter(|l| !l.is_empty())
+}
+
+#[cfg(all(test, unix))]
+mod path_tests {
+    use super::*;
+    use std::os::unix::ffi::OsStrExt;
+
+    #[test]
+    fn a_path_that_is_not_utf8_has_no_text_form() {
+        let bad = Path::new(std::ffi::OsStr::from_bytes(b"/tmp/\xff/bandito"));
+        let err = path_text(bad).unwrap_err().to_string();
+        assert!(err.contains("not valid UTF-8"), "{err}");
+        assert_eq!(path_text(Path::new("/tmp/ok")).unwrap(), "/tmp/ok");
+    }
 }

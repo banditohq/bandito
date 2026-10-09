@@ -88,6 +88,10 @@ impl Runtime for GrokRuntime {
             cmd.env("BANDITO_AGENT_TOKEN", token);
         }
 
+        // The crew server's program goes into the ACP handshake as text: a path that is not UTF-8 stops the session.
+        if let Some((program, _)) = &cfg.mcp {
+            crate::runtime::path_text(program)?;
+        }
         let state = Arc::new(Mutex::new(State::new(cfg.system_prompt.clone())));
         let handshake = Handshake {
             cwd: cfg.cwd.clone(),
