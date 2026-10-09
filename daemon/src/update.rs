@@ -2,7 +2,7 @@
 //! `SHA256SUMS` carries a valid signature from the release key. Nothing installs by itself: the owner
 //! asks (`bandito update`, or the app's `daemon.update_apply`). See docs/ARCHITECTURE.md#self-update.
 
-use crate::service::{self, Mode, Paths, Status};
+use crate::service::{self, Mode, Paths};
 use anyhow::{Context, Result, anyhow, bail};
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
@@ -10,12 +10,12 @@ use ed25519_dalek::{Signature, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fmt;
+use std::future::Future;
 use std::io::Read;
-use std::os::unix::fs::PermissionsExt;
+use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
@@ -26,11 +26,16 @@ pub const RELEASE_PUBKEY_B64: &str = "0H7rMV2eLDmjqQ403ipWCERN6K+aZNuWTW5IKuLSpW
 pub const RELEASES_URL: &str = "https://github.com/banditohq/bandito/releases";
 pub const SUMS_FILE: &str = "SHA256SUMS";
 pub const SUMS_SIG_FILE: &str = "SHA256SUMS.sig";
+/// Largest release archive accepted (200 MiB), and largest `SHA256SUMS` or signature file (64 KiB).
+pub const MAX_ARCHIVE_BYTES: u64 = 200 * 1024 * 1024;
+pub const MAX_SUMS_BYTES: u64 = 64 * 1024;
 /// File in the data directory where the daemon records its listen address (the same one `main` writes).
 const LISTEN_FILE: &str = "listen";
 /// The first background check runs this long after the daemon starts, then one per day.
 pub const FIRST_CHECK_AFTER: Duration = Duration::from_secs(10 * 60);
 pub const CHECK_EVERY: Duration = Duration::from_secs(24 * 60 * 60);
+/// A successful check is reused this long, by `daemon.update_check` and by the background check.
+pub const CHECK_CACHE_FOR: Duration = Duration::from_secs(10 * 60);
 /// A restart requested over RPC waits this long, so the reply reaches the app first.
 const RESTART_AFTER_REPLY: Duration = Duration::from_secs(1);
 
@@ -98,13 +103,15 @@ pub fn tag_from_url(url: &str) -> Result<String> {
 
 /// How the update reaches the network. The daemon uses [`Curl`]; tests inject a fake.
 pub trait Fetcher {
-    /// The URL that `url` ends at after redirects. The body is not downloaded.
+    /// The URL that `url` ends at after redirects. Only the headers are requested (a HEAD request),
+    /// so no release body is read.
     fn effective_url(&self, url: &str) -> Result<String>;
-    /// Save the body of `url` as `dest`.
-    fn download(&self, url: &str, dest: &Path) -> Result<()>;
+    /// Save the body of `url` as `dest`. A body larger than `max_bytes` is an error.
+    fn download(&self, url: &str, dest: &Path, max_bytes: u64) -> Result<()>;
 }
 
-/// The real fetcher: `curl`, https only, TLS 1.2 or newer, as in `scripts/install.sh`.
+/// The real fetcher: `curl`, https only, TLS 1.2 or newer, as in `scripts/install.sh`. Redirects must
+/// stay on https too.
 pub struct Curl;
 
 impl Fetcher for Curl {
@@ -112,7 +119,10 @@ impl Fetcher for Curl {
         let out = Command::new("curl")
             .args([
                 "-fsSL",
+                "-I",
                 "--proto",
+                "=https",
+                "--proto-redir",
                 "=https",
                 "--tlsv1.2",
                 "--max-time",
@@ -121,8 +131,8 @@ impl Fetcher for Curl {
                 "/dev/null",
                 "-w",
                 "%{url_effective}",
-                url,
             ])
+            .arg(url)
             .stdin(Stdio::null())
             .output()
             .context("cannot run curl")?;
@@ -132,29 +142,42 @@ impl Fetcher for Curl {
         Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
     }
 
-    fn download(&self, url: &str, dest: &Path) -> Result<()> {
+    fn download(&self, url: &str, dest: &Path, max_bytes: u64) -> Result<()> {
         let out = Command::new("curl")
             .args([
                 "-fsSL",
                 "--proto",
+                "=https",
+                "--proto-redir",
                 "=https",
                 "--tlsv1.2",
                 "--retry",
                 "3",
                 "--max-time",
                 "600",
-                "-o",
+                "--max-filesize",
             ])
+            .arg(max_bytes.to_string())
+            .arg("-o")
             .arg(dest)
             .arg(url)
             .stdin(Stdio::null())
             .output()
             .context("cannot run curl")?;
         if !out.status.success() {
+            let _ = std::fs::remove_file(dest);
             bail!(
                 "download failed: {url}: {}",
                 String::from_utf8_lossy(&out.stderr).trim()
             );
+        }
+        // curl checks `--max-filesize` against Content-Length only; the size on disk is the real limit.
+        let len = std::fs::metadata(dest)
+            .with_context(|| format!("stat {}", dest.display()))?
+            .len();
+        if len > max_bytes {
+            let _ = std::fs::remove_file(dest);
+            bail!("download too large: {url} is more than {max_bytes} bytes");
         }
         Ok(())
     }
@@ -191,6 +214,20 @@ pub fn verify_signature(key: &VerifyingKey, sums: &[u8], sig_b64: &str) -> Resul
         .map_err(|_| anyhow!("signature check failed: the signature is not 64 bytes"))?;
     key.verify_strict(sums, &Signature::from_bytes(&raw))
         .map_err(|_| anyhow!("signature check failed: SHA256SUMS is not signed by the Bandito release key"))
+}
+
+/// Reads a file that must not be larger than `max` bytes. The read itself stops at `max + 1`.
+fn read_bounded(path: &Path, max: u64) -> Result<Vec<u8>> {
+    let mut buf = Vec::new();
+    std::fs::File::open(path)
+        .with_context(|| format!("open {}", path.display()))?
+        .take(max + 1)
+        .read_to_end(&mut buf)
+        .with_context(|| format!("read {}", path.display()))?;
+    if buf.len() as u64 > max {
+        bail!("{} is larger than {max} bytes", path.display());
+    }
+    Ok(buf)
 }
 
 fn is_sha256_hex(s: &str) -> bool {
@@ -237,8 +274,9 @@ pub fn check(fetcher: &dyn Fetcher, current: &str) -> Result<UpdateInfo> {
 
 /// Installs release `version` (`X.Y.Z`) over `exe`. The checks run in this order, and nothing is replaced
 /// before all of them pass: not a downgrade (unless `allow_downgrade`), the signature of `SHA256SUMS`,
-/// the archive is listed there and its SHA-256 matches, and the archive's `bandito --version` says
-/// `bandito <version>`. Returns the installed version. Temporary files live in `<home>/run/update-*`.
+/// the archive is listed there and its SHA-256 matches, the archive's `bandito` is a regular file, and it
+/// says `bandito <version>`. Returns the installed version. Temporary files live in `<home>/run/update-*`.
+/// The whole call holds the update lock (see [`lock_updates`]).
 pub fn apply(
     fetcher: &dyn Fetcher,
     key: &VerifyingKey,
@@ -248,6 +286,7 @@ pub fn apply(
     version: &str,
     allow_downgrade: bool,
 ) -> Result<String> {
+    let _lock = lock_updates(home)?;
     let current_v = Version::parse(current)?;
     let target = Version::parse(version.strip_prefix('v').unwrap_or(version))?;
     if target == current_v {
@@ -261,18 +300,18 @@ pub fn apply(
     let work = WorkDir::create(home)?;
 
     let sums_path = work.path().join(SUMS_FILE);
-    fetcher.download(&format!("{base}/{SUMS_FILE}"), &sums_path)?;
+    fetcher.download(&format!("{base}/{SUMS_FILE}"), &sums_path, MAX_SUMS_BYTES)?;
     let sig_path = work.path().join(SUMS_SIG_FILE);
-    fetcher.download(&format!("{base}/{SUMS_SIG_FILE}"), &sig_path)?;
-    let sums = std::fs::read(&sums_path).with_context(|| format!("read {}", sums_path.display()))?;
-    let sig = std::fs::read_to_string(&sig_path).unwrap_or_default();
-    verify_signature(key, &sums, &sig)?;
+    fetcher.download(&format!("{base}/{SUMS_SIG_FILE}"), &sig_path, MAX_SUMS_BYTES)?;
+    let sums = read_bounded(&sums_path, MAX_SUMS_BYTES)?;
+    let sig = read_bounded(&sig_path, MAX_SUMS_BYTES).context("signature check failed")?;
+    verify_signature(key, &sums, &String::from_utf8_lossy(&sig))?;
     let sums_text = String::from_utf8_lossy(&sums);
     let expected = sums_lookup(&sums_text, &asset)
         .ok_or_else(|| anyhow!("asset not listed: {asset} is not in the signed SHA256SUMS of v{target}"))?;
 
     let archive = work.path().join(&asset);
-    fetcher.download(&format!("{base}/{asset}"), &archive)?;
+    fetcher.download(&format!("{base}/{asset}"), &archive, MAX_ARCHIVE_BYTES)?;
     if sha256_file(&archive)? != expected {
         bail!("checksum mismatch for {asset}: the download is corrupt or was tampered with");
     }
@@ -284,6 +323,7 @@ pub fn apply(
         .arg(&archive)
         .arg("-C")
         .arg(&unpack)
+        .args(["--no-same-owner", "bandito"])
         .stdin(Stdio::null())
         .output()
         .context("cannot run tar")?;
@@ -291,8 +331,10 @@ pub fn apply(
         bail!("cannot unpack {asset}: {}", String::from_utf8_lossy(&tar.stderr).trim());
     }
     let new_bin = unpack.join("bandito");
-    if !new_bin.is_file() {
-        bail!("archive has no bandito binary");
+    // The entry itself, not what it points to: a link must never be chmod'ed or run.
+    let meta = std::fs::symlink_metadata(&new_bin).map_err(|_| anyhow!("archive has no bandito binary"))?;
+    if !meta.file_type().is_file() {
+        bail!("archive entry is not a regular file");
     }
     std::fs::set_permissions(&new_bin, std::fs::Permissions::from_mode(0o755))
         .with_context(|| format!("chmod {}", new_bin.display()))?;
@@ -311,13 +353,42 @@ pub fn apply(
     Ok(target.to_string())
 }
 
+/// The update lock: an exclusive `flock` on `<home>/run/update.lock`, held while an update runs. The RPC
+/// and the CLI share it; the lock goes with the file descriptor, so a crashed update does not leave it.
+pub struct UpdateLock(#[allow(dead_code)] std::fs::File);
+
+pub fn lock_updates(home: &Path) -> Result<UpdateLock> {
+    let dir = home.join("run");
+    std::fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(&dir)
+        .with_context(|| format!("create {}", dir.display()))?;
+    let path = dir.join("update.lock");
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(&path)
+        .with_context(|| format!("open {}", path.display()))?;
+    match file.try_lock() {
+        Ok(()) => Ok(UpdateLock(file)),
+        Err(std::fs::TryLockError::WouldBlock) => bail!("busy: an update is already running"),
+        Err(std::fs::TryLockError::Error(e)) => Err(e).with_context(|| format!("lock {}", path.display())),
+    }
+}
+
 /// Temporary directory `<home>/run/update-<id>` (0700), removed when dropped.
 struct WorkDir(PathBuf);
 
 impl WorkDir {
     fn create(home: &Path) -> Result<Self> {
         let parent = home.join("run");
-        std::fs::create_dir_all(&parent).with_context(|| format!("create {}", parent.display()))?;
+        std::fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(&parent)
+            .with_context(|| format!("create {}", parent.display()))?;
         let dir = parent.join(format!("update-{}", crate::store::new_id()));
         std::fs::create_dir(&dir).with_context(|| format!("create {}", dir.display()))?;
         std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))
@@ -370,8 +441,8 @@ fn replace_exe(new_bin: &Path, exe: &Path) -> Result<()> {
     result
 }
 
-/// How the new binary gets running. Only a daemon that a service manager started is restarted;
-/// anything else is `Manual`, and the user restarts it.
+/// How the new binary gets running. Only the daemon that answers on the socket, and that a service
+/// manager runs, is restarted. Anything else is `Manual`, and the user restarts it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Restart {
     /// systemd user unit: `systemctl --user restart`.
@@ -391,11 +462,25 @@ pub enum Restart {
     Manual,
 }
 
-/// The restart for the running daemon, from its service status. `argv` is the command line of a new daemon.
-pub fn restart_plan(status: &Status, uid: u32, paths: &Paths, argv: Vec<String>) -> Restart {
-    let (Some(mode), Some(pid), true) = (status.mode, status.pid, status.running) else {
+/// The restart for the daemon that reported `daemon_pid` on its socket (`None`: it did not answer).
+/// `mode` is how the service is installed, from its files. `manager_pid` is the pid the service manager
+/// gives (systemd MainPID, launchd PID, or the pid file of a background daemon). The daemon's own pid is
+/// the one signalled, and it must be the manager's: a stale pid file or another service's pid means this
+/// daemon is not the service's, and it is left alone.
+pub fn restart_plan(
+    mode: Option<Mode>,
+    manager_pid: Option<u32>,
+    daemon_pid: Option<u32>,
+    uid: u32,
+    paths: &Paths,
+    argv: Vec<String>,
+) -> Restart {
+    let (Some(mode), Some(pid)) = (mode, daemon_pid) else {
         return Restart::Manual;
     };
+    if service::signal_pid(pid).is_none() || manager_pid != Some(pid) {
+        return Restart::Manual;
+    }
     match mode {
         Mode::Systemd => Restart::Systemd,
         Mode::Launchd => Restart::Launchd { uid },
@@ -406,6 +491,63 @@ pub fn restart_plan(status: &Status, uid: u32, paths: &Paths, argv: Vec<String>)
             pid_file: paths.pid_file.clone(),
         },
     }
+}
+
+/// The pid the service manager gives for this service (for a background daemon, its pid file).
+fn manager_pid(paths: &Paths, mode: Mode) -> Option<u32> {
+    match mode {
+        Mode::Systemd => stdout_of(&[
+            "systemctl",
+            "--user",
+            "show",
+            "-p",
+            "MainPID",
+            "--value",
+            service::UNIT_NAME,
+        ])
+        .and_then(|s| service::parse_main_pid(&s)),
+        Mode::Launchd => {
+            stdout_of(&["launchctl", "list", service::LABEL]).and_then(|s| service::parse_launchctl_pid(&s))
+        }
+        Mode::Background => std::fs::read_to_string(&paths.pid_file)
+            .ok()
+            .and_then(|s| service::parse_main_pid(&s)),
+    }
+}
+
+/// Trimmed stdout of a command, or `None` when it fails.
+fn stdout_of(argv: &[&str]) -> Option<String> {
+    let out = Command::new(argv[0])
+        .args(&argv[1..])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+        .ok()?;
+    out.status
+        .success()
+        .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+/// The pid the daemon on `socket` reports for itself (`daemon.info`), or `None` when nothing answers.
+pub async fn daemon_pid(socket: &Path) -> Option<u32> {
+    let info = service::probe_daemon(socket).await?;
+    info["pid"].as_u64().and_then(|p| u32::try_from(p).ok())
+}
+
+/// The restart plan for the daemon in `home`. `daemon_pid` is the pid that daemon reported; the service
+/// files and the service manager are asked on a blocking thread.
+pub async fn restart_for(home: PathBuf, exe: PathBuf, daemon_pid: Option<u32>) -> Result<Restart> {
+    tokio::task::spawn_blocking(move || -> Result<Restart> {
+        let user_home = dirs::home_dir().context("no home directory")?;
+        let paths = Paths::new(&home, &user_home);
+        let mode = service::installed_mode(&paths);
+        let manager = mode.and_then(|m| manager_pid(&paths, m));
+        let (_, uid) = service::current_user()?;
+        let argv = daemon_argv(&home, &user_home, &exe);
+        Ok(restart_plan(mode, manager, daemon_pid, uid, &paths, argv))
+    })
+    .await
+    .context("restart check stopped")?
 }
 
 /// The command line a daemon is started with: this binary, `--home` when the data directory is not the
@@ -492,9 +634,11 @@ fn start_after_exit(pid: u32, argv: &[String], log: &Path, pid_file: &Path) -> R
 }
 
 fn terminate(pid: u32) {
-    // SAFETY: plain kill(2) on a pid that is the running bandito daemon (the caller found it on the socket).
-    unsafe {
-        libc::kill(pid as libc::pid_t, libc::SIGTERM);
+    if let Some(raw) = service::signal_pid(pid) {
+        // SAFETY: plain kill(2) on the pid of the running bandito daemon, which fits pid_t and is > 1.
+        unsafe {
+            libc::kill(raw, libc::SIGTERM);
+        }
     }
 }
 
@@ -517,31 +661,89 @@ pub struct CheckedUpdate {
     pub checked_at: i64,
 }
 
-static LAST_CHECK: Mutex<Option<CheckedUpdate>> = Mutex::new(None);
-
-/// The last successful check, or `None` when none has succeeded since start.
-pub fn last_check() -> Option<CheckedUpdate> {
-    LAST_CHECK.lock().ok().and_then(|g| g.clone())
+/// The last successful check, and the gate that lets one lookup run at a time.
+pub struct UpdateCache {
+    last: Mutex<Option<CheckedUpdate>>,
+    gate: tokio::sync::Mutex<()>,
 }
 
-fn remember(info: &UpdateInfo, checked_at: i64) {
-    if let Ok(mut slot) = LAST_CHECK.lock() {
-        *slot = Some(CheckedUpdate {
-            info: info.clone(),
-            checked_at,
-        });
+impl UpdateCache {
+    pub fn new() -> Self {
+        UpdateCache {
+            last: Mutex::new(None),
+            gate: tokio::sync::Mutex::new(()),
+        }
+    }
+
+    pub fn last(&self) -> Option<CheckedUpdate> {
+        self.last.lock().ok().and_then(|g| g.clone())
+    }
+
+    fn remember(&self, info: &UpdateInfo, checked_at: i64) {
+        if let Ok(mut slot) = self.last.lock() {
+            *slot = Some(CheckedUpdate {
+                info: info.clone(),
+                checked_at,
+            });
+        }
+    }
+
+    /// The remembered result, when it is for `current` and younger than [`CHECK_CACHE_FOR`] at `now`.
+    fn fresh(&self, current: &str, now: i64) -> Option<UpdateInfo> {
+        let last = self.last()?;
+        let age = now - last.checked_at;
+        let limit = i64::try_from(CHECK_CACHE_FOR.as_millis()).unwrap_or(i64::MAX);
+        (last.info.current == current && (0..limit).contains(&age)).then_some(last.info)
+    }
+
+    /// The fresh result, or one `fetch`. Callers that come while a fetch runs wait for it and reuse its
+    /// result (single flight). A failed fetch is not remembered.
+    pub async fn check_with<F, Fut>(&self, current: &str, fetch: F) -> Result<UpdateInfo>
+    where
+        F: FnOnce() -> Fut,
+        Fut: Future<Output = Result<UpdateInfo>>,
+    {
+        if let Some(info) = self.fresh(current, crate::store::now_ms()) {
+            return Ok(info);
+        }
+        let _gate = self.gate.lock().await;
+        if let Some(info) = self.fresh(current, crate::store::now_ms()) {
+            return Ok(info);
+        }
+        let info = fetch().await?;
+        self.remember(&info, crate::store::now_ms());
+        Ok(info)
     }
 }
 
-/// The newest release, looked up with curl on a blocking thread. A successful check is remembered
-/// for `daemon.info` (the background check goes through here too).
+impl Default for UpdateCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+fn cache() -> &'static UpdateCache {
+    static CACHE: OnceLock<UpdateCache> = OnceLock::new();
+    CACHE.get_or_init(UpdateCache::new)
+}
+
+/// The last successful check, or `None` when none has succeeded since start.
+pub fn last_check() -> Option<CheckedUpdate> {
+    cache().last()
+}
+
+/// The newest release, looked up with curl on a blocking thread. Reuses a fresh result (see
+/// [`CHECK_CACHE_FOR`]) and shares one lookup between concurrent callers. The background check goes
+/// through here too.
 pub async fn check_async(current: &str) -> Result<UpdateInfo> {
-    let current = current.to_string();
-    let info = tokio::task::spawn_blocking(move || check(&Curl, &current))
+    let owned = current.to_string();
+    cache()
+        .check_with(current, || async move {
+            tokio::task::spawn_blocking(move || check(&Curl, &owned))
+                .await
+                .context("update check stopped")?
+        })
         .await
-        .context("update check stopped")??;
-    remember(&info, crate::store::now_ms());
-    Ok(info)
 }
 
 /// Installs `version` over `exe`, from a blocking thread. Returns the installed version.
@@ -560,36 +762,9 @@ pub async fn apply_async(
     .context("update stopped")?
 }
 
-/// The restart that fits the daemon running in `home`, from its service status.
-pub async fn restart_for(home: &Path, exe: &Path) -> Result<Restart> {
-    let user_home = dirs::home_dir().context("no home directory")?;
-    let paths = Paths::new(home, &user_home);
-    let status = service::status(&paths).await;
-    let (_, uid) = service::current_user()?;
-    Ok(restart_plan(&status, uid, &paths, daemon_argv(home, &user_home, exe)))
-}
-
-static APPLYING: AtomicBool = AtomicBool::new(false);
-
-/// Clears the busy flag of `APPLYING` when an update ends, however it ends.
-struct BusyGuard;
-
-impl Drop for BusyGuard {
-    fn drop(&mut self) {
-        APPLYING.store(false, Ordering::SeqCst);
-    }
-}
-
 /// `daemon.update_apply`: installs `version` over this daemon's binary. When a service manager runs the
 /// daemon, it is restarted a moment later, after the reply is sent. Returns whether a restart was scheduled.
 pub async fn rpc_apply(version: &str) -> Result<bool> {
-    if APPLYING
-        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-        .is_err()
-    {
-        bail!("busy: an update is already running");
-    }
-    let _busy = BusyGuard;
     let home = data_home();
     let exe = std::env::current_exe()?
         .canonicalize()
@@ -602,7 +777,8 @@ pub async fn rpc_apply(version: &str) -> Result<bool> {
         false,
     )
     .await?;
-    let restart = restart_for(&home, &exe).await?;
+    // This process is the daemon: its own pid is the one to restart.
+    let restart = restart_for(home, exe, Some(std::process::id())).await?;
     if restart == Restart::Manual {
         return Ok(false);
     }
@@ -639,10 +815,12 @@ mod tests {
     use ed25519_dalek::{Signer, SigningKey};
     use std::cell::RefCell;
     use std::collections::HashMap;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     const SPKI_PREFIX: [u8; 12] = [0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00];
 
-    /// Serves files from memory and remembers what was asked for.
+    /// Serves files from memory, enforces the size limit like curl, and remembers what was asked for.
     struct FakeFetcher {
         files: HashMap<String, Vec<u8>>,
         final_url: String,
@@ -664,9 +842,12 @@ mod tests {
             Ok(self.final_url.clone())
         }
 
-        fn download(&self, url: &str, dest: &Path) -> Result<()> {
+        fn download(&self, url: &str, dest: &Path, max_bytes: u64) -> Result<()> {
             self.requested.borrow_mut().push(url.to_string());
             let body = self.files.get(url).with_context(|| format!("no such asset {url}"))?;
+            if body.len() as u64 > max_bytes {
+                bail!("download too large: {url} is more than {max_bytes} bytes");
+            }
             std::fs::write(dest, body)?;
             Ok(())
         }
@@ -676,20 +857,11 @@ mod tests {
         SigningKey::from_bytes(&[7u8; 32])
     }
 
-    /// Files of a signed fake release `version`. The archive holds a shell script that answers
-    /// `--version` with `answer`. `asset_override` names the archive in `SHA256SUMS` instead of the real name.
-    fn fake_release(
-        scratch: &Path,
-        version: &str,
-        answer: &str,
-        signer: &SigningKey,
-        asset_override: Option<&str>,
-    ) -> HashMap<String, Vec<u8>> {
+    /// The `tar.gz` of a scratch `src` directory, which `prepare` fills.
+    fn archive_of(scratch: &Path, prepare: impl FnOnce(&Path)) -> Vec<u8> {
         let src = scratch.join("src");
         std::fs::create_dir_all(&src).unwrap();
-        let script = format!("#!/bin/sh\necho \"{answer}\"\n");
-        std::fs::write(src.join("bandito"), script).unwrap();
-        std::fs::set_permissions(src.join("bandito"), std::fs::Permissions::from_mode(0o755)).unwrap();
+        prepare(&src);
         let archive = scratch.join("archive.tar.gz");
         let status = Command::new("tar")
             .arg("-czf")
@@ -700,19 +872,45 @@ mod tests {
             .status()
             .unwrap();
         assert!(status.success());
-        let bytes = std::fs::read(&archive).unwrap();
+        std::fs::read(&archive).unwrap()
+    }
+
+    /// The files of a release `version` whose archive is `bytes`, with `SHA256SUMS` signed by `signer`.
+    /// `asset_override` names the archive in `SHA256SUMS` instead of the real name.
+    fn signed_release(
+        version: &str,
+        bytes: Vec<u8>,
+        signer: &SigningKey,
+        asset_override: Option<&str>,
+    ) -> HashMap<String, Vec<u8>> {
         let asset = asset_override
             .map(str::to_string)
             .unwrap_or_else(|| asset_name().unwrap());
         let hash = hex::encode(Sha256::digest(&bytes));
         let sums = format!("{hash}  {asset}\n").into_bytes();
         let sig = STANDARD.encode(signer.sign(&sums).to_bytes());
-        let base = format!("{RELEASES_URL}/download/v{version}");
+        let base = base_of(version);
         HashMap::from([
             (format!("{base}/{SUMS_FILE}"), sums),
             (format!("{base}/{SUMS_SIG_FILE}"), sig.into_bytes()),
             (format!("{base}/{asset}"), bytes),
         ])
+    }
+
+    /// A signed fake release whose archive holds a shell script that answers `--version` with `answer`.
+    fn fake_release(
+        scratch: &Path,
+        version: &str,
+        answer: &str,
+        signer: &SigningKey,
+        asset_override: Option<&str>,
+    ) -> HashMap<String, Vec<u8>> {
+        let bytes = archive_of(scratch, |src| {
+            let script = format!("#!/bin/sh\necho \"{answer}\"\n");
+            std::fs::write(src.join("bandito"), script).unwrap();
+            std::fs::set_permissions(src.join("bandito"), std::fs::Permissions::from_mode(0o755)).unwrap();
+        });
+        signed_release(version, bytes, signer, asset_override)
     }
 
     fn base_of(version: &str) -> String {
@@ -730,10 +928,13 @@ mod tests {
         (dir, home, exe)
     }
 
-    fn run_dir_is_empty(home: &Path) -> bool {
-        std::fs::read_dir(home.join("run"))
-            .map(|mut d| d.next().is_none())
-            .unwrap_or(true)
+    /// No unpacking directory is left behind (the lock file may stay).
+    fn no_work_dirs_left(home: &Path) -> bool {
+        std::fs::read_dir(home.join("run")).map_or(true, |entries| {
+            entries
+                .flatten()
+                .all(|e| !e.file_name().to_string_lossy().starts_with("update-"))
+        })
     }
 
     #[test]
@@ -803,19 +1004,86 @@ mod tests {
 
     #[test]
     fn last_check_is_remembered_with_its_time() {
+        let cache = UpdateCache::new();
         let info = UpdateInfo {
             current: "0.1.0".into(),
             latest: "0.2.0".into(),
             available: true,
         };
-        remember(&info, 1_700_000_000_000);
-        let last = last_check().unwrap();
+        cache.remember(&info, 1_700_000_000_000);
+        let last = cache.last().unwrap();
         assert_eq!(last.info, info);
         let v = serde_json::to_value(&last).unwrap();
         assert_eq!(v["current"], "0.1.0");
         assert_eq!(v["latest"], "0.2.0");
         assert_eq!(v["available"], true);
         assert_eq!(v["checked_at"], 1_700_000_000_000i64);
+    }
+
+    #[test]
+    fn a_check_is_reused_for_ten_minutes_and_only_for_its_version() {
+        let cache = UpdateCache::new();
+        let info = UpdateInfo {
+            current: "0.1.0".into(),
+            latest: "0.2.0".into(),
+            available: true,
+        };
+        let t0 = 1_700_000_000_000i64;
+        cache.remember(&info, t0);
+        let ten_min = i64::try_from(CHECK_CACHE_FOR.as_millis()).unwrap();
+        assert_eq!(cache.fresh("0.1.0", t0 + 1), Some(info.clone()));
+        assert_eq!(cache.fresh("0.1.0", t0 + ten_min - 1), Some(info.clone()));
+        assert_eq!(
+            cache.fresh("0.1.0", t0 + ten_min),
+            None,
+            "after ten minutes it is checked again"
+        );
+        assert_eq!(
+            cache.fresh("0.1.0", t0 - 1),
+            None,
+            "a clock that went back is not trusted"
+        );
+        assert_eq!(cache.fresh("0.9.0", t0 + 1), None, "another running version");
+    }
+
+    #[tokio::test]
+    async fn concurrent_checks_share_one_lookup() {
+        let cache = Arc::new(UpdateCache::new());
+        let lookups = Arc::new(AtomicUsize::new(0));
+        let mut tasks = Vec::new();
+        for _ in 0..3 {
+            let (cache, lookups) = (cache.clone(), lookups.clone());
+            tasks.push(tokio::spawn(async move {
+                cache
+                    .check_with("0.1.0", || async {
+                        lookups.fetch_add(1, Ordering::SeqCst);
+                        tokio::time::sleep(Duration::from_millis(50)).await;
+                        Ok(UpdateInfo {
+                            current: "0.1.0".into(),
+                            latest: "0.2.0".into(),
+                            available: true,
+                        })
+                    })
+                    .await
+            }));
+        }
+        for task in tasks {
+            task.await.unwrap().unwrap();
+        }
+        assert_eq!(lookups.load(Ordering::SeqCst), 1, "one lookup for three callers");
+    }
+
+    #[tokio::test]
+    async fn a_failed_lookup_is_not_remembered() {
+        let cache = UpdateCache::new();
+        let err = cache
+            .check_with("0.1.0", || async {
+                Err::<UpdateInfo, _>(anyhow!("cannot reach GitHub"))
+            })
+            .await
+            .unwrap_err();
+        assert!(format!("{err:#}").contains("cannot reach GitHub"));
+        assert!(cache.last().is_none());
     }
 
     #[test]
@@ -874,6 +1142,35 @@ mod tests {
     }
 
     #[test]
+    fn sums_and_signature_files_are_size_limited() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("SHA256SUMS");
+        std::fs::write(&path, vec![b'a'; MAX_SUMS_BYTES as usize]).unwrap();
+        assert_eq!(
+            read_bounded(&path, MAX_SUMS_BYTES).unwrap().len(),
+            MAX_SUMS_BYTES as usize
+        );
+        std::fs::write(&path, vec![b'a'; MAX_SUMS_BYTES as usize + 1]).unwrap();
+        let err = read_bounded(&path, MAX_SUMS_BYTES).unwrap_err();
+        assert!(format!("{err:#}").contains("larger than"), "{err:#}");
+    }
+
+    #[test]
+    fn an_oversized_sums_file_is_refused_before_it_is_read() {
+        let (dir, home, exe) = setup();
+        let key = test_key();
+        let mut files = fake_release(dir.path(), "0.2.0", "bandito 0.2.0", &key, None);
+        files.insert(
+            format!("{}/{SUMS_FILE}", base_of("0.2.0")),
+            vec![b'a'; MAX_SUMS_BYTES as usize + 1],
+        );
+        let fake = FakeFetcher::new(files);
+        let err = apply(&fake, &key.verifying_key(), &home, &exe, "0.1.0", "0.2.0", false).unwrap_err();
+        assert!(format!("{err:#}").contains("too large"), "{err:#}");
+        assert_eq!(std::fs::read_to_string(&exe).unwrap(), "old binary");
+    }
+
+    #[test]
     fn apply_installs_a_signed_release() {
         let (dir, home, exe) = setup();
         let key = test_key();
@@ -885,7 +1182,7 @@ mod tests {
         assert!(body.contains("bandito 0.2.0"), "new binary in place: {body}");
         let mode = std::fs::metadata(&exe).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode, 0o755);
-        assert!(run_dir_is_empty(&home), "the temporary directory is removed");
+        assert!(no_work_dirs_left(&home), "the temporary directory is removed");
         assert!(
             !exe.parent()
                 .unwrap()
@@ -908,7 +1205,7 @@ mod tests {
         let err = apply(&fake, &key.verifying_key(), &home, &exe, "0.1.0", "0.2.0", false).unwrap_err();
         assert!(format!("{err:#}").contains("signature check failed"), "{err:#}");
         assert_eq!(std::fs::read_to_string(&exe).unwrap(), "old binary");
-        assert!(run_dir_is_empty(&home));
+        assert!(no_work_dirs_left(&home));
         let archive_url = format!("{}/{}", base_of("0.2.0"), asset_name().unwrap());
         assert!(
             !fake.requested.borrow().contains(&archive_url),
@@ -931,7 +1228,7 @@ mod tests {
         let err = apply(&fake, &key.verifying_key(), &home, &exe, "0.1.0", "0.2.0", false).unwrap_err();
         assert!(format!("{err:#}").contains("checksum mismatch"), "{err:#}");
         assert_eq!(std::fs::read_to_string(&exe).unwrap(), "old binary");
-        assert!(run_dir_is_empty(&home));
+        assert!(no_work_dirs_left(&home));
     }
 
     #[test]
@@ -960,7 +1257,61 @@ mod tests {
         let err = apply(&fake, &key.verifying_key(), &home, &exe, "0.1.0", "0.2.0", false).unwrap_err();
         assert!(format!("{err:#}").contains("version mismatch"), "{err:#}");
         assert_eq!(std::fs::read_to_string(&exe).unwrap(), "old binary");
-        assert!(run_dir_is_empty(&home));
+        assert!(no_work_dirs_left(&home));
+    }
+
+    #[test]
+    fn an_archive_whose_bandito_is_a_link_is_refused_and_the_link_target_is_untouched() {
+        let (dir, home, exe) = setup();
+        let key = test_key();
+        // The link points at a real system file: it must never be chmod'ed or run.
+        let target = dir.path().join("elsewhere");
+        std::fs::write(&target, "not ours").unwrap();
+        let before = std::fs::metadata(&target).unwrap().permissions().mode();
+        let bytes = archive_of(dir.path(), |src| {
+            std::os::unix::fs::symlink(&target, src.join("bandito")).unwrap();
+        });
+        let files = signed_release("0.2.0", bytes, &key, None);
+        let fake = FakeFetcher::new(files);
+        let err = apply(&fake, &key.verifying_key(), &home, &exe, "0.1.0", "0.2.0", false).unwrap_err();
+        assert!(
+            format!("{err:#}").contains("archive entry is not a regular file"),
+            "{err:#}"
+        );
+        assert_eq!(std::fs::read_to_string(&exe).unwrap(), "old binary");
+        assert!(no_work_dirs_left(&home));
+        assert_eq!(std::fs::metadata(&target).unwrap().permissions().mode(), before);
+    }
+
+    #[test]
+    fn a_running_update_makes_another_one_busy() {
+        let (dir, home, exe) = setup();
+        let key = test_key();
+        let _held = lock_updates(&home).unwrap();
+        let files = fake_release(dir.path(), "0.2.0", "bandito 0.2.0", &key, None);
+        let fake = FakeFetcher::new(files);
+        let err = apply(&fake, &key.verifying_key(), &home, &exe, "0.1.0", "0.2.0", false).unwrap_err();
+        assert!(format!("{err:#}").starts_with("busy"), "{err:#}");
+        assert!(fake.requested.borrow().is_empty(), "nothing is fetched while busy");
+        assert_eq!(std::fs::read_to_string(&exe).unwrap(), "old binary");
+    }
+
+    #[test]
+    fn the_lock_is_free_again_after_an_update() {
+        let (dir, home, exe) = setup();
+        let key = test_key();
+        let files = fake_release(dir.path(), "0.2.0", "bandito 0.2.0", &key, None);
+        apply(
+            &FakeFetcher::new(files),
+            &key.verifying_key(),
+            &home,
+            &exe,
+            "0.1.0",
+            "0.2.0",
+            false,
+        )
+        .unwrap();
+        assert!(lock_updates(&home).is_ok());
     }
 
     #[test]
@@ -993,21 +1344,13 @@ mod tests {
     fn restart_follows_the_service_that_runs_this_daemon() {
         let paths = Paths::new(Path::new("/h/.bandito"), Path::new("/h"));
         let argv = vec!["/bin/bandito".to_string(), "daemon".to_string()];
-        let running = |mode, pid| Status {
-            installed: true,
-            mode,
-            running: true,
-            pid,
-        };
+        let plan = |mode, manager, daemon| restart_plan(mode, manager, daemon, 501, &paths, argv.clone());
+        assert_eq!(plan(Some(Mode::Systemd), Some(42), Some(42)), Restart::Systemd);
         assert_eq!(
-            restart_plan(&running(Some(Mode::Systemd), Some(42)), 501, &paths, argv.clone()),
-            Restart::Systemd
-        );
-        assert_eq!(
-            restart_plan(&running(Some(Mode::Launchd), Some(42)), 501, &paths, argv.clone()),
+            plan(Some(Mode::Launchd), Some(42), Some(42)),
             Restart::Launchd { uid: 501 }
         );
-        match restart_plan(&running(Some(Mode::Background), Some(42)), 501, &paths, argv.clone()) {
+        match plan(Some(Mode::Background), Some(42), Some(42)) {
             Restart::Background {
                 pid, argv: a, pid_file, ..
             } => {
@@ -1018,18 +1361,38 @@ mod tests {
             other => panic!("expected background, got {other:?}"),
         }
         // Not started by a service: the user restarts it.
-        assert_eq!(
-            restart_plan(&running(None, Some(42)), 501, &paths, argv.clone()),
-            Restart::Manual
+        assert_eq!(plan(None, None, Some(42)), Restart::Manual);
+        // The daemon did not answer on the socket.
+        assert_eq!(plan(Some(Mode::Systemd), Some(42), None), Restart::Manual);
+        // The service manager names another process (the daemon is not this service's).
+        assert_eq!(plan(Some(Mode::Systemd), Some(77), Some(42)), Restart::Manual);
+        // A pid that kill(2) cannot take.
+        assert_eq!(plan(Some(Mode::Background), Some(1), Some(1)), Restart::Manual);
+    }
+
+    #[test]
+    fn a_stale_pid_file_never_names_the_process_to_signal() {
+        let paths = Paths::new(Path::new("/h/.bandito"), Path::new("/h"));
+        let argv = vec!["/bin/bandito".to_string(), "daemon".to_string()];
+        // The pid file left by an earlier daemon names 999999; the running daemon is 42.
+        let stale = restart_plan(
+            Some(Mode::Background),
+            Some(999_999),
+            Some(42),
+            501,
+            &paths,
+            argv.clone(),
         );
-        // Service installed but the daemon does not answer.
-        let down = Status {
-            installed: true,
-            mode: Some(Mode::Systemd),
-            running: false,
-            pid: None,
-        };
-        assert_eq!(restart_plan(&down, 501, &paths, argv), Restart::Manual);
+        assert_eq!(
+            stale,
+            Restart::Manual,
+            "a stale pid file must not restart or signal anything"
+        );
+        // The pid file names this daemon: the restart signals the daemon's own pid.
+        match restart_plan(Some(Mode::Background), Some(42), Some(42), 501, &paths, argv) {
+            Restart::Background { pid, .. } => assert_eq!(pid, 42),
+            other => panic!("expected background, got {other:?}"),
+        }
     }
 
     #[test]

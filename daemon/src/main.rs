@@ -210,16 +210,20 @@ async fn update_cmd(
         allow_downgrade,
     )
     .await?;
-    let restart = bandito::update::restart_for(home, &exe).await?;
+    // The pid to restart is the one the running daemon reports on its socket. No answer, no restart.
+    let daemon_pid = bandito::update::daemon_pid(&home.join("bandito.sock")).await;
+    let restart = bandito::update::restart_for(home.to_path_buf(), exe, daemon_pid).await?;
     bandito::update::run_restart(&restart)?;
     let restarting = restart != bandito::update::Restart::Manual;
     if json {
         println!(
             "{}",
-            json!({ "ok": true, "version": installed, "restarting": restarting })
+            json!({ "ok": true, "version": installed, "restarting": restarting, "daemon_answered": daemon_pid.is_some() })
         );
     } else if restarting {
         println!("Installed bandito {installed}. The daemon restarts with it.");
+    } else if daemon_pid.is_none() {
+        println!("Installed bandito {installed}. The daemon did not answer, so it was not restarted.");
     } else {
         println!("Installed bandito {installed}. Restart the daemon to run it.");
     }

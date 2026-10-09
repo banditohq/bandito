@@ -394,14 +394,25 @@ pub fn describe(plan: &Plan) -> String {
 
 /// A pid number from a file or from `systemctl show -p MainPID`. Zero or junk means "no process".
 pub fn parse_main_pid(s: &str) -> Option<u32> {
-    s.trim().parse::<u32>().ok().filter(|pid| *pid > 0)
+    s.trim().parse::<u32>().ok().filter(|pid| signal_pid(*pid).is_some())
+}
+
+/// A pid that `kill(2)` may signal for a bandito daemon: it must fit `pid_t`, and 0, 1 and negative
+/// values (process groups, init) are refused.
+pub fn signal_pid(pid: u32) -> Option<libc::pid_t> {
+    i32::try_from(pid).ok().filter(|p| *p > 1)
 }
 
 /// The `"PID" = 123;` line from `launchctl list <label>`.
 pub fn parse_launchctl_pid(s: &str) -> Option<u32> {
     s.lines().find_map(|line| {
         let value = line.trim().strip_prefix("\"PID\" = ")?;
-        value.trim_end_matches(';').trim().parse::<u32>().ok()
+        value
+            .trim_end_matches(';')
+            .trim()
+            .parse::<u32>()
+            .ok()
+            .filter(|pid| signal_pid(*pid).is_some())
     })
 }
 
@@ -528,10 +539,10 @@ fn stop_pid_file(path: &Path) -> Result<()> {
     };
     let pid_arg = pid.to_string();
     let is_bandito = stdout_of(&["ps", "-o", "comm=", "-p", &pid_arg]).is_some_and(|c| c.contains("bandito"));
-    if is_bandito {
-        // SAFETY: plain kill(2) on a pid that was just checked to be a bandito process.
+    if let (true, Some(raw)) = (is_bandito, signal_pid(pid)) {
+        // SAFETY: plain kill(2) on a pid that was just checked to be a bandito process and fits pid_t.
         unsafe {
-            libc::kill(pid as libc::pid_t, libc::SIGTERM);
+            libc::kill(raw, libc::SIGTERM);
         }
     }
     Ok(())
@@ -634,8 +645,9 @@ pub async fn install(paths: &Paths, spec: &InstallSpec, os: Os, probe: &Probe) -
 }
 
 /// Current state of the service, for `bandito service status`.
-pub async fn status(paths: &Paths) -> Status {
-    let mode = if paths.unit_file.exists() {
+/// How the service is installed, from the files: a unit, then a plist, then a pid file.
+pub fn installed_mode(paths: &Paths) -> Option<Mode> {
+    if paths.unit_file.exists() {
         Some(Mode::Systemd)
     } else if paths.plist_file.exists() {
         Some(Mode::Launchd)
@@ -643,7 +655,11 @@ pub async fn status(paths: &Paths) -> Status {
         Some(Mode::Background)
     } else {
         None
-    };
+    }
+}
+
+pub async fn status(paths: &Paths) -> Status {
+    let mode = installed_mode(paths);
     let running = probe_daemon(&paths.socket).await.is_some();
     let pid = if !running {
         None
@@ -988,6 +1004,15 @@ mod tests {
     fn parses_main_pid_from_systemctl_output() {
         assert_eq!(parse_main_pid("4242\n"), Some(4242));
         assert_eq!(parse_main_pid("0\n"), None);
+        // Pids that kill(2) cannot take: init, group wide values, and numbers past pid_t.
+        assert_eq!(parse_main_pid("1\n"), None);
+        assert_eq!(parse_main_pid("4294967295\n"), None);
+        assert_eq!(parse_main_pid("2147483648\n"), None);
+        assert_eq!(parse_main_pid("2147483647\n"), Some(2147483647));
+        assert_eq!(parse_launchctl_pid("\t\"PID\" = 4294967295;\n"), None);
+        assert_eq!(signal_pid(1), None);
+        assert_eq!(signal_pid(4294967295), None);
+        assert_eq!(signal_pid(42), Some(42));
         assert_eq!(parse_main_pid(""), None);
         assert_eq!(parse_main_pid("junk"), None);
     }
