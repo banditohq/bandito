@@ -25,6 +25,7 @@ use tokio::sync::{broadcast, mpsc};
 pub mod changes;
 pub mod files;
 pub mod host;
+pub mod screen;
 pub mod secrets;
 pub mod setup;
 pub mod term;
@@ -36,24 +37,30 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Capabilities this daemon offers. Clients show a feature only when it is
 /// listed, so new apps keep working with older daemons. Add a string here in
-/// the same PR that adds the feature.
-pub const FEATURES: &[&str] = &[
-    "approvals",
-    "rules",
-    "schedules",
-    "crew",
-    "pairing",
-    "usage",
-    "memory",
-    "history",
-    "terminals",
-    "files",
-    "tunnel",
-    "changes",
-    "secrets",
-    "host",
-    "setup",
-];
+/// the same PR that adds the feature. `screen` is offered on Linux only.
+pub fn features() -> Vec<&'static str> {
+    let mut list = vec![
+        "approvals",
+        "rules",
+        "schedules",
+        "crew",
+        "pairing",
+        "usage",
+        "memory",
+        "history",
+        "terminals",
+        "files",
+        "tunnel",
+        "changes",
+        "secrets",
+        "host",
+        "setup",
+    ];
+    if cfg!(target_os = "linux") {
+        list.push("screen");
+    }
+    list
+}
 
 /// Context budget bounds for `smart` memory, in tokens.
 const CONTEXT_BUDGET: std::ops::RangeInclusive<u32> = 20_000..=1_000_000;
@@ -79,6 +86,8 @@ pub struct App {
     pub host: Arc<Sampler>,
     /// Components the features need, and installing them (see docs/ARCHITECTURE.md#setup).
     pub setup: Arc<Setup>,
+    /// The server screen, one per workspace (see docs/ARCHITECTURE.md#screen).
+    pub screens: Arc<crate::screen::ScreenManager>,
 }
 
 impl App {
@@ -100,8 +109,18 @@ impl App {
             tunnels: Arc::new(tunnel::TunnelSlots::default()),
             host: Sampler::new(),
             setup: Setup::system(),
+            screens: Arc::new(crate::screen::ScreenManager::new(screens_dir())),
         })
     }
+}
+
+/// VNC password files of the screens live here, one folder per workspace.
+/// Where screen state (VNC password files) lives: `$BANDITO_HOME/screens`, else `~/.bandito/screens`.
+fn screens_dir() -> PathBuf {
+    std::env::var_os("BANDITO_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| dirs::home_dir().unwrap_or_else(|| PathBuf::from("/")).join(".bandito"))
+        .join("screens")
 }
 
 fn hostname() -> String {
@@ -148,6 +167,8 @@ pub const CHANGES_ERROR: i64 = -32022;
 pub const HOST_ERROR: i64 = -32023;
 /// A setup method failed; `error.data.reason` says why (see rpc::setup).
 pub const SETUP_ERROR: i64 = -32024;
+/// A screen call failed; `error.data.reason` says why (see rpc::screen).
+pub const SCREEN_ERROR: i64 = -32025;
 
 impl RpcError {
     fn new(code: i64, message: impl Into<String>) -> Self {
@@ -512,6 +533,9 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             .await
             .unwrap_or_else(|| Err(RpcError::new(METHOD_NOT_FOUND, format!("unknown method {method}"))));
     }
+    if method.starts_with("screen.") {
+        return screen::dispatch(app, peer, method, p).await;
+    }
     if method.starts_with("changes.") {
         // Every `changes.*` name is answered there, unknown ones with METHOD_NOT_FOUND.
         return changes::dispatch(app, method, p)
@@ -533,7 +557,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             "arch": std::env::consts::ARCH,
             "started_at": app.started_at,
             "last_seq": store.last_seq()?,
-            "features": FEATURES,
+            "features": features(),
         })),
         "runtimes.status" => {
             let mut out = Vec::new();

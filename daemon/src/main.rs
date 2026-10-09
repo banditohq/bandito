@@ -331,6 +331,8 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr) -> Result<()> {
     });
 
     bandito::scheduler::spawn_loop(sup.clone());
+    // Stops server screens that nobody has used for 30 minutes (see docs/ARCHITECTURE.md#screen).
+    app.screens.spawn_idle_reaper();
 
     {
         let sup = sup.clone();
@@ -381,6 +383,7 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr) -> Result<()> {
     shutdown_signal().await;
     tracing::info!("shutting down");
     app.terminals.shutdown_all();
+    app.screens.shutdown_all().await;
     sup.stop_all().await;
     let _ = std::fs::remove_file(sock);
     Ok(())
