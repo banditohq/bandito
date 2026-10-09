@@ -24,6 +24,8 @@ const INPUT_CLIP_BYTES: usize = 4096;
 const APPROVAL_DIFF_LIMIT: usize = 8192;
 /// Max chars of a command used as a tool title.
 const TITLE_LIMIT: usize = 200;
+/// Shown when `thread/resume` fails and a new thread is started instead.
+const RESUME_FALLBACK: &str = "codex could not resume the previous thread; started a new one";
 
 /// Stands in for a missing field, so lookups can borrow a `&Value`.
 static NULL: Value = Value::Null;
@@ -128,6 +130,8 @@ impl Launch {
 enum Pending {
     Init,
     ThreadStart,
+    /// `thread/resume`. A failed answer falls back to `thread/start`.
+    ThreadResume,
     TurnStart,
     Other,
 }
@@ -138,8 +142,14 @@ struct State {
     next_id: i64,
     thread_id: Option<String>,
     turn_id: Option<String>,
+    /// A `turn/start` was sent and its turn has not ended yet.
+    turn_active: bool,
+    /// `interrupt()` came while the turn id was not known yet. Sent once it is.
+    interrupt_pending: bool,
     /// Messages sent before the thread exists, in order.
     queued: Vec<String>,
+    /// Texts that `interrupt()` dropped from `queued`. Their turn ends go out with the CLI's next message.
+    withdrawn_texts: usize,
     /// Approval key → the server's JSON-RPC id, echoed back in the answer unchanged.
     approvals: HashMap<String, Value>,
     /// Our requests still waiting for an answer.
@@ -155,7 +165,10 @@ impl State {
             next_id: 1,
             thread_id: None,
             turn_id: None,
+            turn_active: false,
+            interrupt_pending: false,
             queued: Vec::new(),
+            withdrawn_texts: 0,
             approvals: HashMap::new(),
             requests: HashMap::new(),
             file_changes: HashMap::new(),
@@ -176,21 +189,21 @@ impl State {
         Ok(())
     }
 
-    /// Start or resume the thread, as the spawn options say.
+    /// Resume the stored thread, or start one, as the spawn options say.
     fn thread_request(&mut self, sink: &LineSink, launch: &Launch) -> anyhow::Result<()> {
-        let (method, mut params) = match &launch.resume {
-            Some(thread_id) => ("thread/resume", json!({"threadId": thread_id})),
-            None => ("thread/start", json!({"cwd": launch.cwd})),
-        };
-        params["approvalPolicy"] = json!("untrusted");
-        params["sandbox"] = json!("workspace-write");
-        if let Some(model) = &launch.model {
-            params["model"] = json!(model);
+        match &launch.resume {
+            Some(thread_id) => {
+                let params = thread_params(launch, json!({"threadId": thread_id}));
+                self.request(sink, "thread/resume", params, Pending::ThreadResume)
+            }
+            None => self.start_thread(sink, launch),
         }
-        if let Some(prompt) = &launch.system_prompt {
-            params["developerInstructions"] = json!(prompt);
-        }
-        self.request(sink, method, params, Pending::ThreadStart)
+    }
+
+    /// `thread/start` with the spawn options.
+    fn start_thread(&mut self, sink: &LineSink, launch: &Launch) -> anyhow::Result<()> {
+        let params = thread_params(launch, json!({"cwd": launch.cwd}));
+        self.request(sink, "thread/start", params, Pending::ThreadStart)
     }
 
     /// `turn/start` for `text` on the current thread.
@@ -205,8 +218,56 @@ impl State {
             "turn/start",
             json!({"threadId": thread_id, "input": input}),
             Pending::TurnStart,
+        )?;
+        self.turn_active = true;
+        Ok(())
+    }
+
+    /// `turn/interrupt` for the current turn. Needs both the thread and the turn id.
+    fn send_interrupt(&mut self, sink: &LineSink) -> anyhow::Result<()> {
+        let (Some(thread_id), Some(turn_id)) = (self.thread_id.clone(), self.turn_id.clone()) else {
+            bail!("codex turn id is not known");
+        };
+        self.request(
+            sink,
+            "turn/interrupt",
+            json!({"threadId": thread_id, "turnId": turn_id}),
+            Pending::Other,
         )
     }
+
+    /// The turn id is known (from the `turn/start` answer or `turn/started`).
+    /// An interrupt that was waiting for it goes out now.
+    fn turn_known(&mut self, sink: &LineSink, turn_id: String) -> Vec<RuntimeOutput> {
+        self.turn_id = Some(turn_id);
+        if !std::mem::take(&mut self.interrupt_pending) {
+            return Vec::new();
+        }
+        match self.send_interrupt(sink) {
+            Ok(()) => Vec::new(),
+            Err(e) => vec![error_event(format!("codex: could not interrupt the turn: {e}"))],
+        }
+    }
+
+    /// The turn is over: it completed, failed, or never started.
+    fn forget_turn(&mut self) {
+        self.turn_id = None;
+        self.turn_active = false;
+        self.interrupt_pending = false;
+    }
+}
+
+/// Thread options shared by `thread/start` and `thread/resume`.
+fn thread_params(launch: &Launch, mut params: Value) -> Value {
+    params["approvalPolicy"] = json!("untrusted");
+    params["sandbox"] = json!("workspace-write");
+    if let Some(model) = &launch.model {
+        params["model"] = json!(model);
+    }
+    if let Some(prompt) = &launch.system_prompt {
+        params["developerInstructions"] = json!(prompt);
+    }
+    params
 }
 
 /// A live Codex app-server process. Our calls go out through the shared state;
@@ -231,15 +292,21 @@ impl Session for CodexSession {
 
     async fn interrupt(&mut self) -> anyhow::Result<()> {
         let mut st = locked(&self.state);
-        let (Some(thread_id), Some(turn_id)) = (st.thread_id.clone(), st.turn_id.clone()) else {
+        if st.thread_id.is_none() {
+            // The thread does not exist yet, so the queued texts will never run.
+            // Their turn ends are reported with the CLI's next message.
+            let dropped = std::mem::take(&mut st.queued);
+            st.withdrawn_texts += dropped.len();
             return Ok(());
-        };
-        st.request(
-            &self.sink,
-            "turn/interrupt",
-            json!({"threadId": thread_id, "turnId": turn_id}),
-            Pending::Other,
-        )
+        }
+        if st.turn_id.is_some() {
+            return st.send_interrupt(&self.sink);
+        }
+        // `turn/start` is on its way (or nothing runs). Interrupt only a turn that exists.
+        if st.turn_active {
+            st.interrupt_pending = true;
+        }
+        Ok(())
     }
 
     async fn resolve(&mut self, key: &str, decision: Decision) -> anyhow::Result<()> {
@@ -265,21 +332,25 @@ impl Session for CodexSession {
 /// requests, `method` alone are notifications, `id` alone are answers to ours.
 fn route(msg: &Value, state: &Mutex<State>, launch: &Launch, sink: &LineSink) -> Vec<RuntimeOutput> {
     let mut st = locked(state);
+    // Texts dropped by an interrupt before the thread existed end first, before anything else the CLI says.
+    let mut out: Vec<RuntimeOutput> = (0..std::mem::take(&mut st.withdrawn_texts))
+        .map(|_| turn_end(TurnStatus::Interrupted))
+        .collect();
     let params = msg.get("params").unwrap_or(&NULL);
     match (msg.get("method").and_then(Value::as_str), msg.get("id")) {
-        (Some(method), Some(id)) => server_request(&mut st, method, id, params, sink),
-        (Some(method), None) => notification(&mut st, method, params),
+        (Some(method), Some(id)) => out.extend(server_request(&mut st, method, id, params, sink)),
+        (Some(method), None) => out.extend(notification(&mut st, method, params, sink)),
         (None, Some(id)) => {
             let Some(request_id) = id.as_i64() else {
-                return Vec::new();
+                return out;
             };
-            match st.requests.remove(&request_id) {
-                Some(kind) => answer(&mut st, msg, request_id, kind, launch, sink),
-                None => Vec::new(),
+            if let Some(kind) = st.requests.remove(&request_id) {
+                out.extend(answer(&mut st, msg, kind, launch, sink));
             }
         }
-        (None, None) => Vec::new(),
+        (None, None) => {}
     }
+    out
 }
 
 /// A request from the server: approvals are kept for the host's answer; anything else gets an error reply.
@@ -310,16 +381,17 @@ fn server_request(st: &mut State, method: &str, id: &Value, params: &Value, sink
 }
 
 /// Our answer to a request we sent. `kind` says what the request was.
-fn answer(st: &mut State, msg: &Value, id: i64, kind: Pending, launch: &Launch, sink: &LineSink) -> Vec<RuntimeOutput> {
+fn answer(st: &mut State, msg: &Value, kind: Pending, launch: &Launch, sink: &LineSink) -> Vec<RuntimeOutput> {
     if let Some(error) = msg.get("error") {
         let message = error_text(error, "request failed");
         return match kind {
-            Pending::Init | Pending::ThreadStart => vec![error_event(format!("codex: {message}"))],
-            Pending::TurnStart => turn_failed(format!("codex: {message}")),
-            Pending::Other => {
-                tracing::debug!("codex request {id} failed: {message}");
-                Vec::new()
+            Pending::Init | Pending::ThreadStart => startup_failed(st, format!("codex: {message}")),
+            Pending::ThreadResume => resume_failed(st, launch, sink),
+            Pending::TurnStart => {
+                st.forget_turn();
+                turn_failed(format!("codex: {message}"))
             }
+            Pending::Other => vec![error_event(format!("codex: {message}"))],
         };
     }
     let result = msg.get("result").unwrap_or(&NULL);
@@ -329,28 +401,28 @@ fn answer(st: &mut State, msg: &Value, id: i64, kind: Pending, launch: &Launch, 
             let started = process::push_line(sink, LABEL, &initialized).and_then(|()| st.thread_request(sink, launch));
             match started {
                 Ok(()) => Vec::new(),
-                Err(e) => vec![error_event(format!("codex: could not start the thread: {e}"))],
+                Err(e) => startup_failed(st, format!("codex: could not start the thread: {e}")),
             }
         }
-        Pending::ThreadStart => thread_started(st, result, sink),
-        Pending::TurnStart => {
-            st.turn_id = result.pointer("/turn/id").and_then(Value::as_str).map(str::to_string);
-            Vec::new()
-        }
+        Pending::ThreadStart => match id_at(result, "/thread/id") {
+            Some(thread_id) => thread_started(st, thread_id, sink),
+            None => startup_failed(st, "codex: thread response has no thread id".to_string()),
+        },
+        // A resume answer without a thread id is as unusable as an error: start a new thread.
+        Pending::ThreadResume => match id_at(result, "/thread/id") {
+            Some(thread_id) => thread_started(st, thread_id, sink),
+            None => resume_failed(st, launch, sink),
+        },
+        Pending::TurnStart => match id_at(result, "/turn/id") {
+            Some(turn_id) => st.turn_known(sink, turn_id),
+            None => Vec::new(),
+        },
         Pending::Other => Vec::new(),
     }
 }
 
 /// The thread exists: announce it, then send the messages queued before it.
-fn thread_started(st: &mut State, result: &Value, sink: &LineSink) -> Vec<RuntimeOutput> {
-    let Some(thread_id) = result
-        .pointer("/thread/id")
-        .and_then(Value::as_str)
-        .filter(|id| !id.is_empty())
-    else {
-        return vec![error_event("codex: thread response has no thread id".to_string())];
-    };
-    let thread_id = thread_id.to_string();
+fn thread_started(st: &mut State, thread_id: String, sink: &LineSink) -> Vec<RuntimeOutput> {
     st.thread_id = Some(thread_id.clone());
     let mut out = vec![RuntimeOutput::SessionId(thread_id)];
     for text in std::mem::take(&mut st.queued) {
@@ -361,10 +433,31 @@ fn thread_started(st: &mut State, result: &Value, sink: &LineSink) -> Vec<Runtim
     out
 }
 
+/// The thread cannot be started. The queued texts never run: one error, then an error turn end for each.
+fn startup_failed(st: &mut State, message: String) -> Vec<RuntimeOutput> {
+    let queued = std::mem::take(&mut st.queued);
+    let mut out = vec![error_event(message)];
+    out.extend(queued.iter().map(|_| turn_end(TurnStatus::Error)));
+    out
+}
+
+/// `thread/resume` failed: start a new thread with the same options. The queued texts wait for it.
+fn resume_failed(st: &mut State, launch: &Launch, sink: &LineSink) -> Vec<RuntimeOutput> {
+    match st.start_thread(sink, launch) {
+        Ok(()) => vec![error_event(RESUME_FALLBACK.to_string())],
+        Err(e) => startup_failed(st, format!("codex: could not start the thread: {e}")),
+    }
+}
+
 /// Notifications (no `id`): stream deltas, items, usage and turn ends.
-fn notification(st: &mut State, method: &str, params: &Value) -> Vec<RuntimeOutput> {
+fn notification(st: &mut State, method: &str, params: &Value, sink: &LineSink) -> Vec<RuntimeOutput> {
     let mut out = Vec::new();
     match method {
+        "turn/started" => {
+            if let Some(turn_id) = id_at(params, "/turn/id") {
+                out.extend(st.turn_known(sink, turn_id));
+            }
+        }
         "serverRequest/resolved" => {
             let key = request_key(params.get("requestId").unwrap_or(&NULL));
             // Only a request we still hold is a cancellation; our own answer also triggers this.
@@ -485,6 +578,12 @@ fn item_completed(st: &mut State, item: &Value, out: &mut Vec<RuntimeOutput>) {
 }
 
 fn turn_completed(st: &mut State, turn: &Value, out: &mut Vec<RuntimeOutput>) {
+    // The server closes the requests still open with the turn itself. Nothing is answered for them.
+    let mut open: Vec<String> = st.approvals.drain().map(|(key, _)| key).collect();
+    open.sort();
+    out.extend(open.into_iter().map(|key| RuntimeOutput::ApprovalCancelled { key }));
+    st.file_changes.clear();
+
     let status = match raw_str(turn, "status") {
         "completed" => TurnStatus::Ok,
         "interrupted" => TurnStatus::Interrupted,
@@ -501,7 +600,7 @@ fn turn_completed(st: &mut State, turn: &Value, out: &mut Vec<RuntimeOutput>) {
         usage: st.last_usage.take(),
         cost_usd: None,
     }));
-    st.turn_id = None;
+    st.forget_turn();
 }
 
 /// Approval for a shell command.
@@ -556,15 +655,17 @@ fn error_event(message: String) -> RuntimeOutput {
 
 /// An error and the end of its turn, for a turn that never started.
 fn turn_failed(message: String) -> Vec<RuntimeOutput> {
-    vec![
-        error_event(message),
-        RuntimeOutput::Event(EventBody::TurnCompleted {
-            turn_id: String::new(),
-            status: TurnStatus::Error,
-            usage: None,
-            cost_usd: None,
-        }),
-    ]
+    vec![error_event(message), turn_end(TurnStatus::Error)]
+}
+
+/// The end of a turn. The supervisor fills in the turn id.
+fn turn_end(status: TurnStatus) -> RuntimeOutput {
+    RuntimeOutput::Event(EventBody::TurnCompleted {
+        turn_id: String::new(),
+        status,
+        usage: None,
+        cost_usd: None,
+    })
 }
 
 /// Key of an approval: the JSON-RPC id as text (strings as they are, numbers via `to_string`).
@@ -663,7 +764,9 @@ pub fn mcp_result(item: &Value) -> (bool, String) {
                     .join("\n")
             })
             .unwrap_or_default();
-        (true, text)
+        // A tool that reports `isError` failed, even though the call itself completed.
+        let is_error = item.pointer("/result/isError").and_then(Value::as_bool) == Some(true);
+        (!is_error, text)
     } else {
         (false, error_text(item.get("error").unwrap_or(&NULL), "failed"))
     }
@@ -694,6 +797,14 @@ pub fn rate_limit_windows(rate_limits: &Value) -> Vec<LimitWindow> {
 /// Non-empty string field of a JSON object.
 fn str_field<'a>(v: &'a Value, key: &str) -> Option<&'a str> {
     v.get(key).and_then(Value::as_str).filter(|s| !s.is_empty())
+}
+
+/// Non-empty string at a JSON pointer (e.g. `/thread/id`), as an owned id.
+fn id_at(v: &Value, pointer: &str) -> Option<String> {
+    v.pointer(pointer)
+        .and_then(Value::as_str)
+        .filter(|id| !id.is_empty())
+        .map(str::to_string)
 }
 
 /// String field of a JSON object, or "" if missing.

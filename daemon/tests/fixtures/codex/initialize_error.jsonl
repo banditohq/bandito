@@ -1,0 +1,4 @@
+// initialize is refused. The sleep keeps the test's send ahead of the failure: it is queued.
+{"expect": {"method": "initialize"}}
+{"sleep_ms": 200}
+{"send": {"id": "$last:/id", "error": {"code": -32000, "message": "server busy"}}}

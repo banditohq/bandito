@@ -1,0 +1,12 @@
+// The turn id comes with turn/started, and the turn/start answer never arrives. interrupt() after
+// turn/started goes out at once with that id.
+{"expect": {"method": "initialize"}}
+{"send": {"id": "$last:/id", "result": {}}}
+{"expect": {"method": "initialized"}}
+{"expect": {"method": "thread/start"}}
+{"send": {"id": "$last:/id", "result": {"thread": {"id": "thr-10"}}}}
+{"expect": {"method": "turn/start"}}
+{"send": {"method": "turn/started", "params": {"threadId": "thr-10", "turn": {"id": "turn-7", "items": [], "status": "inProgress", "error": null}}}}
+{"send": {"method": "item/agentMessage/delta", "params": {"threadId": "thr-10", "turnId": "turn-7", "itemId": "m-7", "delta": "working"}}}
+{"expect": {"method": "turn/interrupt", "params": {"threadId": "thr-10", "turnId": "turn-7"}}}
+{"send": {"method": "turn/completed", "params": {"threadId": "thr-10", "turn": {"id": "turn-7", "items": [], "status": "interrupted", "error": null}}}}

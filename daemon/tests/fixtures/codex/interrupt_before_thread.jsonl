@@ -1,0 +1,5 @@
+// The host interrupts while the thread is still being created: the queued texts are dropped. Their turn
+// ends come before whatever the CLI says next (here: a rate-limit notification after the sleep).
+{"expect": {"method": "initialize"}}
+{"sleep_ms": 300}
+{"send": {"method": "account/rateLimits/updated", "params": {"rateLimits": {"limitId": "codex", "primary": {"usedPercent": 3, "windowDurationMins": 300, "resetsAt": 1791543600}}}}}
