@@ -13,12 +13,34 @@ public protocol RPCTransport: Sendable {
 public struct RPCError: Error, Sendable, Equatable, LocalizedError {
     public var code: Int
     public var message: String
+    /// `error.data` from the daemon, when it sent one.
+    public var data: JSONValue?
+
+    public init(code: Int, message: String, data: JSONValue? = nil) {
+        self.code = code
+        self.message = message
+        self.data = data
+    }
 
     public var errorDescription: String? { message }
+
+    /// `data.reason` of a file or checkpoint error: `conflict`, `not_found`, `exists`, …
+    public var reason: String? { data?["reason"]?.string }
+
+    /// `data.etag` of a `conflict`: the file's current etag.
+    public var etag: String? { data?["etag"]?.string }
 
     public static let unauthorized = -32001
     public static let rateLimited = -32002
     public static let invalidParams = -32602
+    /// File operation failed; `data.reason` says why (see docs/ARCHITECTURE.md#files).
+    public static let fileError = -32020
+    /// Terminal operation failed; the message starts with the reason (`not_found: …`).
+    public static let terminalError = -32021
+    /// Checkpoint or git operation failed; `data.reason` says why.
+    public static let changesError = -32022
+    /// Host operation failed; `data.reason` is `forbidden`, `not_found` or `io`.
+    public static let hostError = -32023
     /// Client-side: the connection closed before an answer.
     public static let disconnected = -1
     /// Client-side: the server did not answer within the call's timeout.
@@ -27,8 +49,20 @@ public struct RPCError: Error, Sendable, Equatable, LocalizedError {
     public static let insecureTransport = -3
 }
 
+/// A JSON-RPC notification other than `event` (for example `term.output`), with its raw params.
+public struct RPCNotification: Sendable {
+    public var method: String
+    /// The `params` object as JSON. Decode it with `RPCClient.decoder`.
+    public var params: Data
+
+    public init(method: String, params: Data) {
+        self.method = method
+        self.params = params
+    }
+}
+
 /// JSON-RPC 2.0 client: matches responses to requests and turns `event`
-/// notifications into an async stream.
+/// notifications into an async stream, and every other notification into `notifications`.
 public actor RPCClient {
     /// Where one request's answer is at. Written before the request is sent, so an
     /// answer that arrives while the send is still suspended is not lost.
@@ -59,6 +93,10 @@ public actor RPCClient {
     public nonisolated let events: AsyncStream<Event>
     private let eventSink: AsyncStream<Event>.Continuation
 
+    /// Notifications other than `event`, such as `term.output`, in arrival order. Never drops either.
+    public nonisolated let notifications: AsyncStream<RPCNotification>
+    private let notificationSink: AsyncStream<RPCNotification>.Continuation
+
     public static let encoder: JSONEncoder = {
         let e = JSONEncoder()
         e.keyEncodingStrategy = .convertToSnakeCase
@@ -76,6 +114,7 @@ public actor RPCClient {
         self.transport = transport
         self.onDecodeFailure = onDecodeFailure
         (events, eventSink) = AsyncStream.makeStream(of: Event.self, bufferingPolicy: .unbounded)
+        (notifications, notificationSink) = AsyncStream.makeStream(of: RPCNotification.self, bufferingPolicy: .unbounded)
     }
 
     public func start() async throws {
@@ -115,6 +154,7 @@ public actor RPCClient {
             if case .waiting(let c) = slot { c.resume(throwing: error) }
         }
         eventSink.finish()
+        notificationSink.finish()
     }
 
     private func handle(_ text: String) {
@@ -125,7 +165,11 @@ public actor RPCClient {
             return
         }
         if let method = obj["method"] as? String {
-            guard method == "event" else { return }
+            if method != "event" {
+                let params = (try? JSONSerialization.data(withJSONObject: obj["params"] ?? [String: Any](), options: .fragmentsAllowed)) ?? Data("{}".utf8)
+                notificationSink.yield(RPCNotification(method: method, params: params))
+                return
+            }
             guard let params = obj["params"],
                 let pdata = try? JSONSerialization.data(withJSONObject: params),
                 let ev = try? Self.decoder.decode(Event.self, from: pdata)
@@ -143,13 +187,22 @@ public actor RPCClient {
                 .failure(
                     RPCError(
                         code: (err["code"] as? NSNumber)?.intValue ?? 0,
-                        message: err["message"] as? String ?? "error")))
+                        message: err["message"] as? String ?? "error",
+                        data: Self.errorData(err["data"]))))
             return
         }
         let result = obj["result"] ?? NSNull()
         // Wrap so scalars and null survive JSONSerialization.
         let wrapped = (try? JSONSerialization.data(withJSONObject: ["r": result])) ?? Data("{\"r\":null}".utf8)
         settle(id, .success(wrapped))
+    }
+
+    /// `error.data` as a JSON value, or nil when absent or not representable.
+    private static func errorData(_ raw: Any?) -> JSONValue? {
+        guard let raw, let bytes = try? JSONSerialization.data(withJSONObject: raw, options: .fragmentsAllowed) else {
+            return nil
+        }
+        return try? Self.decoder.decode(JSONValue.self, from: bytes)
     }
 
     private func noteDecodeFailure() {

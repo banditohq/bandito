@@ -67,13 +67,18 @@ public final class ServerModel: Identifiable {
     /// Rate-limit windows per runtime, as last learned (from `usage.*` calls or live events).
     public private(set) var usage: [UsageEntry] = []
     /// The last failure of a background operation (subscription, reconnect, unreadable updates).
-    public private(set) var lastError: String?
+    public internal(set) var lastError: String?
     /// Whether an agent's thread has events older than the ones loaded.
     public private(set) var hasMoreHistory: [String: Bool] = [:]
 
     private var client: RPCClient?
     private var pump: Task<Void, Never>?
+    private var notificationPump: Task<Void, Never>?
     private var reconnectTask: Task<Void, Never>?
+    /// Attached terminals, by id. Their streams are re-attached after every reconnect.
+    @ObservationIgnored var terminalStreams: [String: TerminalStream] = [:]
+    /// Port forwarders started by `forwardOnce(port:)`; closed by `disconnect()`.
+    @ObservationIgnored var forwarders: [PortForwarder] = []
     /// Bumped whenever a connection attempt starts and on disconnect. An attempt that finds the
     /// number changed has been superseded and throws away its client.
     private var generation = 0
@@ -143,11 +148,12 @@ public final class ServerModel: Identifiable {
         reconnectTask?.cancel()
         reconnectTask = nil
         generation += 1
-        pump?.cancel()
-        pump = nil
+        stopPumps()
         let old = client
         client = nil
         state = .disconnected
+        finishTerminalStreams()
+        await stopForwarders()
         await old?.close()
     }
 
@@ -167,6 +173,7 @@ public final class ServerModel: Identifiable {
             try checkCurrent(attempt)
             client = c
             pump = startPump(c)
+            notificationPump = startNotificationPump(c)
             let daemon = try await c.call("daemon.info", NoParams(), as: DaemonInfo.self)
             info = daemon
             agents = try await c.call("agents.list", NoParams(), as: [Agent].self)
@@ -180,14 +187,14 @@ public final class ServerModel: Identifiable {
             struct Subscribed: Decodable { var lastSeq: Int64 }
             let subscribed = try await c.call("events.subscribe", Subscribe(after: from), as: Subscribed.self)
             lastSeq = max(lastSeq, subscribed.lastSeq)
+            await reattachTerminals(c)
             try checkCurrent(attempt)
             state = .connected
             lastError = decodeFailureCount > 0 ? Self.decodeWarning : nil
         } catch {
             if client === c {
                 client = nil
-                pump?.cancel()
-                pump = nil
+                stopPumps()
             }
             await c.close()
             throw error
@@ -200,8 +207,7 @@ public final class ServerModel: Identifiable {
     }
 
     private func dropClient() async {
-        pump?.cancel()
-        pump = nil
+        stopPumps()
         let old = client
         client = nil
         await old?.close()
@@ -218,11 +224,28 @@ public final class ServerModel: Identifiable {
         }
     }
 
+    /// Consumes the client's notifications (terminal output and the like).
+    private func startNotificationPump(_ c: RPCClient) -> Task<Void, Never> {
+        Task { [weak self] in
+            for await n in c.notifications {
+                guard let self else { return }
+                self.routeNotification(n)
+            }
+        }
+    }
+
+    private func stopPumps() {
+        pump?.cancel()
+        pump = nil
+        notificationPump?.cancel()
+        notificationPump = nil
+    }
+
     private func connectionLost(_ lost: RPCClient) async {
         // Stale clients (superseded, or closed by disconnect) are ignored.
         guard client === lost else { return }
         client = nil
-        pump = nil
+        stopPumps()
         await lost.close()
         scheduleReconnect()
     }
@@ -251,7 +274,7 @@ public final class ServerModel: Identifiable {
         }
     }
 
-    private func noteDecodeFailure() {
+    func noteDecodeFailure() {
         decodeFailureCount += 1
         lastError = Self.decodeWarning
     }
@@ -321,7 +344,7 @@ public final class ServerModel: Identifiable {
         if let i = agents.firstIndex(where: { $0.id == a.id }) { agents[i] = a } else { agents.append(a) }
     }
 
-    private func rpc() throws -> RPCClient {
+    func rpc() throws -> RPCClient {
         guard let client else { throw RPCError(code: RPCError.disconnected, message: "not connected to \(config.name)") }
         return client
     }
@@ -405,6 +428,11 @@ public final class ServerModel: Identifiable {
         threads[id] = nil
         oldestSeq[id] = nil
         hasMoreHistory[id] = nil
+    }
+
+    /// Whether the daemon reports `feature` in `daemon.info` (for example `files`, `terminals`).
+    public func supports(_ feature: String) -> Bool {
+        info?.supports(feature) ?? false
     }
 
     /// Current rate-limit windows of every runtime (cached by the daemon).
