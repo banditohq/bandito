@@ -79,12 +79,12 @@ public final class Router {
     public var terminalRequest: TerminalRequest?
     /// Browser: the open tab.
     public var browserTabID: String?
+    /// Browser: a port an agent opened ("Open" in the sidebar, or the Agents section). Taken once by the browser mode.
+    public var pendingPreviewPort: Int?
     /// Server screen: the screen being shown.
     public var screenID: String?
     /// Server: the section in view.
     public var serverSection: ServerSection = .overview
-    /// Browser: a port to open a preview of (Server → Open). Taken once by the browser.
-    public var pendingPreviewPort: Int?
     /// Terminals: a command to type into a new terminal (Server → Install, Update). Taken once by the terminals.
     public var pendingTerminalCommand: String?
 
