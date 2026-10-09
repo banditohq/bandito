@@ -44,7 +44,8 @@ pub const SCREENSHOT_MAX_WIDTH: u32 = 1280;
 pub const IDLE_STOP_MS: i64 = 30 * 60 * 1000;
 /// How often the idle check runs.
 pub const IDLE_CHECK_INTERVAL: Duration = Duration::from_secs(60);
-pub const PASSWORD_LEN: usize = 16;
+/// RFB (VNC) uses only the first 8 characters of a password, so the whole password is 8.
+pub const PASSWORD_LEN: usize = 8;
 pub const MAX_WORKSPACE_LEN: usize = 32;
 /// Scroll notches when `amount` is not given, and the largest accepted amount.
 pub const DEFAULT_SCROLL: u32 = 3;
@@ -54,6 +55,9 @@ pub const MAX_SCROLL: u32 = 20;
 const FIRST_DISPLAY: u32 = 90;
 #[cfg(any(target_os = "linux", test))]
 const LAST_DISPLAY: u32 = 199;
+/// File name of a screen's X authority, inside its folder.
+#[cfg(target_os = "linux")]
+const XAUTH_FILE: &str = "Xauthority";
 #[cfg(target_os = "linux")]
 const MIN_SIZE: (u32, u32) = (320, 240);
 #[cfg(target_os = "linux")]
@@ -207,6 +211,8 @@ struct Session {
     height: u32,
     vnc_port: u16,
     vnc_password: String,
+    /// `Xauthority` of this screen: the cookie Xvfb accepts. Removed when the screen stops.
+    xauth: PathBuf,
     started_at: i64,
     controller: Option<Controller>,
     /// Unix milliseconds of the last agent call.
@@ -297,12 +303,12 @@ impl ScreenManager {
         Ok(session.status(now_ms()))
     }
 
-    /// Environment that puts a program on this screen (`DISPLAY=:N`). Empty if it is not running.
+    /// Environment that puts a program on this screen (`DISPLAY=:N`, `XAUTHORITY`). Empty if it is not running.
     pub async fn env_for(&self, workspace: &str) -> Vec<(String, String)> {
         let sessions = self.sessions.lock().await;
         sessions
             .get(workspace)
-            .map(|s| display_env(s.display))
+            .map(|s| display_env(s.display, &s.xauth))
             .unwrap_or_default()
     }
 
@@ -316,10 +322,10 @@ impl ScreenManager {
         agent_gate(session.controller)?;
         session.last_agent_ms = now_ms();
         let (display, width, height) = (session.display, session.width, session.height);
-        let env = display_env(display);
+        let env = display_env(display, &session.xauth);
         match action {
             AgentAction::Screenshot => {
-                let png = screenshot(display).await?;
+                let png = screenshot(display, &env).await?;
                 let (image_width, _) =
                     png_size(&png).ok_or_else(|| ScreenError::ActionFailed("screenshot is not a PNG".into()))?;
                 let scale = (f64::from(image_width) / f64::from(width) * 1000.0).round() / 1000.0;
@@ -466,9 +472,9 @@ pub fn pick_display(busy: &[u32]) -> Option<u32> {
     (FIRST_DISPLAY..=LAST_DISPLAY).find(|n| !busy.contains(n))
 }
 
-/// `Xvfb :N -screen 0 WxHx24 -nolisten tcp -dpi 96`, program name first.
+/// `Xvfb :N -screen 0 WxHx24 -nolisten tcp -dpi 96 -auth FILE`, program name first.
 #[cfg(any(target_os = "linux", test))]
-pub fn xvfb_argv(display: u32, width: u32, height: u32) -> Vec<String> {
+pub fn xvfb_argv(display: u32, width: u32, height: u32, xauthority: &Path) -> Vec<String> {
     argv![
         "Xvfb",
         format!(":{display}"),
@@ -478,13 +484,15 @@ pub fn xvfb_argv(display: u32, width: u32, height: u32) -> Vec<String> {
         "-nolisten",
         "tcp",
         "-dpi",
-        "96"
+        "96",
+        "-auth",
+        xauthority.display(),
     ]
 }
 
-/// `x11vnc -display :N -rfbport P -localhost -rfbauth FILE -forever -shared -noxdamage -quiet`.
+/// `x11vnc -display :N -rfbport P -localhost -rfbauth FILE -forever -shared -noxdamage -quiet -auth FILE`.
 #[cfg(any(target_os = "linux", test))]
-pub fn x11vnc_argv(display: u32, port: u16, passwd_file: &Path) -> Vec<String> {
+pub fn x11vnc_argv(display: u32, port: u16, passwd_file: &Path, xauthority: &Path) -> Vec<String> {
     argv![
         "x11vnc",
         "-display",
@@ -498,7 +506,42 @@ pub fn x11vnc_argv(display: u32, port: u16, passwd_file: &Path) -> Vec<String> {
         "-shared",
         "-noxdamage",
         "-quiet",
+        "-auth",
+        xauthority.display(),
     ]
+}
+
+/// `xauth -f FILE add :N MIT-MAGIC-COOKIE-1 HEX`: writes the cookie that Xvfb accepts.
+#[cfg(any(target_os = "linux", test))]
+pub fn xauth_add_argv(file: &Path, display: u32, cookie_hex: &str) -> Vec<String> {
+    argv![
+        "xauth",
+        "-f",
+        file.display(),
+        "add",
+        format!(":{display}"),
+        "MIT-MAGIC-COOKIE-1",
+        cookie_hex,
+    ]
+}
+
+/// Environment that puts a program on the screen of `display`: `DISPLAY` and the screen's `XAUTHORITY`.
+#[cfg(any(target_os = "linux", test))]
+pub fn display_env(display: u32, xauthority: &Path) -> Vec<(String, String)> {
+    vec![
+        ("DISPLAY".to_string(), format!(":{display}")),
+        ("XAUTHORITY".to_string(), xauthority.display().to_string()),
+    ]
+}
+
+/// 16 random bytes from the system RNG, as 32 hex digits: the MIT-MAGIC-COOKIE-1 of a screen.
+#[cfg(any(target_os = "linux", test))]
+pub fn random_cookie_hex() -> String {
+    let mut bytes = [0u8; 16];
+    for b in &mut bytes {
+        *b = rand::random();
+    }
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 /// `x11vnc -storepasswd PASSWORD FILE`.
@@ -605,16 +648,40 @@ pub fn is_listening(table: &str, port: u16) -> bool {
     tcp_rows(table).any(|(p, state)| p == port && state == "0A")
 }
 
-/// `PASSWORD_LEN` characters from `[A-Za-z0-9]`, from the system RNG.
+/// Printable ASCII from `!` to `~`, without `"` and `\` (so a password needs no escaping): 92 characters.
+#[cfg(any(target_os = "linux", test))]
+const PASSWORD_ALPHABET: [u8; 92] = {
+    let mut out = [0u8; 92];
+    let mut n = 0;
+    let mut c = b'!';
+    while c <= b'~' {
+        if c != b'"' && c != b'\\' {
+            out[n] = c;
+            n += 1;
+        }
+        c += 1;
+    }
+    assert!(n == 92, "the password alphabet has 92 characters");
+    out
+};
+
+/// The character for a random byte, or `None` when the byte must be drawn again. Bytes from 184 up
+/// are refused: 184 is the largest multiple of 92 below 256, so every character gets exactly two bytes.
+#[cfg(any(target_os = "linux", test))]
+pub fn password_char(byte: u8) -> Option<char> {
+    let n = PASSWORD_ALPHABET.len();
+    let limit = 256 - 256 % n;
+    (usize::from(byte) < limit).then(|| char::from(PASSWORD_ALPHABET[usize::from(byte) % n]))
+}
+
+/// `PASSWORD_LEN` characters from `PASSWORD_ALPHABET`, from the system RNG.
 #[cfg(any(target_os = "linux", test))]
 pub fn generate_password() -> String {
-    const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    // 62 symbols. Random bytes from 248 up are skipped, so every symbol is equally likely.
     let mut out = String::with_capacity(PASSWORD_LEN);
     while out.len() < PASSWORD_LEN {
         let byte: u8 = rand::random();
-        if usize::from(byte) < 248 {
-            out.push(char::from(ALPHABET[usize::from(byte) % ALPHABET.len()]));
+        if let Some(c) = password_char(byte) {
+            out.push(c);
         }
     }
     out
@@ -693,11 +760,6 @@ fn lock_std<T>(m: &StdMutex<T>) -> MutexGuard<'_, T> {
 }
 
 #[cfg(target_os = "linux")]
-fn display_env(display: u32) -> Vec<(String, String)> {
-    vec![("DISPLAY".to_string(), format!(":{display}"))]
-}
-
-#[cfg(target_os = "linux")]
 fn start_failed(e: ScreenError) -> ScreenError {
     match e {
         ScreenError::ActionFailed(why) => ScreenError::StartFailed(why),
@@ -729,16 +791,71 @@ async fn start_locked(
     Ok(())
 }
 
-/// Starts Xvfb, openbox and x11vnc. On failure, what already started is stopped again.
+/// Writes the screen's `Xauthority`, then starts Xvfb, openbox and x11vnc. On failure, what already
+/// started is stopped again and the authority file is removed.
 #[cfg(target_os = "linux")]
 async fn launch(dir: &Path, display: u32, width: u32, height: u32) -> Result<Session, ScreenError> {
-    let mut xvfb = spawn_group(&xvfb_argv(display, width, height), &[], "xvfb")?;
+    let xauth = write_xauthority(dir, display).await?;
+    match start_processes(dir, display, width, height, &xauth).await {
+        Ok(session) => Ok(session),
+        Err(e) => {
+            let _ = std::fs::remove_file(&xauth);
+            Err(e)
+        }
+    }
+}
+
+/// Creates the folder of a screen, mode 0700. An existing folder keeps its mode.
+#[cfg(target_os = "linux")]
+fn create_screen_dir(dir: &Path) -> Result<(), ScreenError> {
+    std::fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(dir)
+        .map_err(|e| ScreenError::StartFailed(format!("cannot create {}: {e}", dir.display())))
+}
+
+/// Writes `<dir>/Xauthority` with a new cookie for `:display`, mode 0600. A file left by a crashed
+/// screen is replaced. Missing `xauth` gives `MissingComponent("xauth")`.
+#[cfg(target_os = "linux")]
+async fn write_xauthority(dir: &Path, display: u32) -> Result<PathBuf, ScreenError> {
+    create_screen_dir(dir)?;
+    let path = dir.join(XAUTH_FILE);
+    let _ = std::fs::remove_file(&path);
+    let cookie = random_cookie_hex();
+    let written = async {
+        run_capture(&xauth_add_argv(&path, display, &cookie), &[], None, "xauth")
+            .await
+            .map_err(start_failed)?;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))
+            .map_err(|e| ScreenError::StartFailed(format!("cannot protect the X authority file: {e}")))
+    }
+    .await;
+    match written {
+        Ok(()) => Ok(path),
+        Err(e) => {
+            let _ = std::fs::remove_file(&path);
+            Err(e)
+        }
+    }
+}
+
+/// Starts the processes of a screen whose `Xauthority` is written.
+#[cfg(target_os = "linux")]
+async fn start_processes(
+    dir: &Path,
+    display: u32,
+    width: u32,
+    height: u32,
+    xauth: &Path,
+) -> Result<Session, ScreenError> {
+    let mut xvfb = spawn_group(&xvfb_argv(display, width, height, xauth), &[], "xvfb")?;
     if let Err(e) = wait_for_socket(&mut xvfb, display).await {
         terminate_child(xvfb).await;
         return Err(e);
     }
-    let openbox = spawn_openbox(display);
-    let vnc = match start_vnc(dir, display).await {
+    let openbox = spawn_openbox(display, xauth);
+    let vnc = match start_vnc(dir, display, xauth).await {
         Ok(vnc) => vnc,
         Err(e) => {
             terminate_child(xvfb).await;
@@ -754,6 +871,7 @@ async fn launch(dir: &Path, display: u32, width: u32, height: u32) -> Result<Ses
         height,
         vnc_port: vnc.port,
         vnc_password: vnc.password,
+        xauth: xauth.to_path_buf(),
         started_at: now_ms(),
         controller: None,
         last_agent_ms: now_ms(),
@@ -772,14 +890,9 @@ struct Vnc {
     password: String,
 }
 
-/// Writes a new password file, then starts x11vnc on a free localhost port.
+/// Writes a new password file, then starts x11vnc on a free localhost port, authorized by `xauth`.
 #[cfg(target_os = "linux")]
-async fn start_vnc(dir: &Path, display: u32) -> Result<Vnc, ScreenError> {
-    std::fs::DirBuilder::new()
-        .recursive(true)
-        .mode(0o700)
-        .create(dir)
-        .map_err(|e| ScreenError::StartFailed(format!("cannot create {}: {e}", dir.display())))?;
+async fn start_vnc(dir: &Path, display: u32, xauth: &Path) -> Result<Vnc, ScreenError> {
     let passwd = dir.join("passwd");
     let password = generate_password();
     run_capture(&storepasswd_argv(&password, &passwd), &[], None, "x11vnc")
@@ -789,8 +902,12 @@ async fn start_vnc(dir: &Path, display: u32) -> Result<Vnc, ScreenError> {
         .map_err(|e| ScreenError::StartFailed(format!("cannot protect the password file: {e}")))?;
 
     let port = free_port()?;
-    let child = spawn_group(&x11vnc_argv(display, port, &passwd), &[], "x11vnc")?;
-    let task = spawn_vnc_watcher(display, port, passwd, child);
+    let child = spawn_group(
+        &x11vnc_argv(display, port, &passwd, xauth),
+        &display_env(display, xauth),
+        "x11vnc",
+    )?;
+    let task = spawn_vnc_watcher(display, port, passwd, xauth.to_path_buf(), child);
     let listening = wait_until(START_TIMEOUT, || vnc_listening(port) || task.handle.is_finished()).await;
     if !listening || !vnc_listening(port) {
         stop_vnc(task).await;
@@ -803,7 +920,7 @@ async fn start_vnc(dir: &Path, display: u32) -> Result<Vnc, ScreenError> {
 
 /// Owns x11vnc: restarts it once if it exits on its own, and reaps it.
 #[cfg(target_os = "linux")]
-fn spawn_vnc_watcher(x_display: u32, port: u16, passwd: PathBuf, mut child: Child) -> VncTask {
+fn spawn_vnc_watcher(x_display: u32, port: u16, passwd: PathBuf, xauth: PathBuf, mut child: Child) -> VncTask {
     let pgid = Arc::new(AtomicI32::new(child.id().map_or(0, |p| p as i32)));
     let stopping = Arc::new(AtomicBool::new(false));
     let watch_pgid = Arc::clone(&pgid);
@@ -825,7 +942,8 @@ fn spawn_vnc_watcher(x_display: u32, port: u16, passwd: PathBuf, mut child: Chil
             }
             restarted = true;
             tracing::warn!(x_display = x_display, "x11vnc exited; restarting it once");
-            match spawn_group(&x11vnc_argv(x_display, port, &passwd), &[], "x11vnc") {
+            let env = display_env(x_display, &xauth);
+            match spawn_group(&x11vnc_argv(x_display, port, &passwd, &xauth), &env, "x11vnc") {
                 Ok(next) => {
                     watch_pgid.store(next.id().map_or(0, |p| p as i32), Ordering::SeqCst);
                     child = next;
@@ -868,8 +986,8 @@ async fn wait_for_socket(child: &mut Child, display: u32) -> Result<(), ScreenEr
 
 /// openbox is optional: without it the screen works, but windows have no frames.
 #[cfg(target_os = "linux")]
-fn spawn_openbox(display: u32) -> Option<Child> {
-    match spawn_group(&["openbox".to_string()], &display_env(display), "openbox") {
+fn spawn_openbox(display: u32, xauth: &Path) -> Option<Child> {
+    match spawn_group(&["openbox".to_string()], &display_env(display, xauth), "openbox") {
         Ok(child) => Some(child),
         Err(e) => {
             tracing::warn!("openbox is not available ({e}); the screen runs without a window manager");
@@ -948,15 +1066,14 @@ async fn run_capture(
     Ok(out.stdout)
 }
 
-/// One PNG of the whole screen, scaled down to `SCREENSHOT_MAX_WIDTH`.
+/// One PNG of the whole screen, scaled down to `SCREENSHOT_MAX_WIDTH`. `env` puts the capture on the screen.
 #[cfg(target_os = "linux")]
-async fn screenshot(display: u32) -> Result<Vec<u8>, ScreenError> {
-    let env = display_env(display);
-    match run_capture(&import_argv(display), &env, None, "imagemagick").await {
+async fn screenshot(display: u32, env: &[(String, String)]) -> Result<Vec<u8>, ScreenError> {
+    match run_capture(&import_argv(display), env, None, "imagemagick").await {
         Ok(png) => run_capture(&resize_argv("png"), &[], Some(png), "imagemagick").await,
         // Without `import` (ImageMagick), fall back to `xwd`; `convert` then reads its output.
         Err(ScreenError::MissingComponent(_)) => {
-            let raw = run_capture(&xwd_argv(display), &env, None, "imagemagick").await?;
+            let raw = run_capture(&xwd_argv(display), env, None, "imagemagick").await?;
             run_capture(&resize_argv("xwd"), &[], Some(raw), "imagemagick").await
         }
         Err(e) => Err(e),
@@ -978,7 +1095,7 @@ fn check_point(x: u32, y: u32, width: u32, height: u32) -> Result<(), ScreenErro
 fn launch_program(session: &Session, command: &str) -> Result<(), ScreenError> {
     let mut child = spawn_group(
         &["sh".to_string(), "-c".to_string(), command.to_string()],
-        &display_env(session.display),
+        &display_env(session.display, &session.xauth),
         "sh",
     )?;
     let pgid = child.id().map_or(0, |p| p as i32);
@@ -991,7 +1108,8 @@ fn launch_program(session: &Session, command: &str) -> Result<(), ScreenError> {
     Ok(())
 }
 
-/// Stops a screen: its VNC first, then the window manager, Xvfb and the programs on it.
+/// Stops a screen: its VNC first, then the window manager, Xvfb and the programs on it. Then the
+/// screen's `Xauthority` is removed, since its cookie no longer opens anything.
 #[cfg(target_os = "linux")]
 async fn shutdown_session(session: Session) {
     let Session {
@@ -999,6 +1117,7 @@ async fn shutdown_session(session: Session) {
         openbox,
         vnc,
         launched,
+        xauth,
         ..
     } = session;
     stop_vnc(vnc).await;
@@ -1007,6 +1126,7 @@ async fn shutdown_session(session: Session) {
     }
     terminate_child(xvfb).await;
     stop_launched(&launched).await;
+    let _ = std::fs::remove_file(&xauth);
 }
 
 /// SIGTERM to a child's group, SIGKILL after `GRACE` if it is still there. Reaps the child.
@@ -1125,10 +1245,12 @@ mod tests {
         assert_eq!(pick_display(&almost), Some(199));
     }
 
+    const AUTH: &str = "/home/u/.bandito/screens/shared/Xauthority";
+
     #[test]
-    fn xvfb_argv_matches_the_documented_command() {
+    fn xvfb_argv_matches_the_documented_command_and_checks_cookies() {
         assert_eq!(
-            xvfb_argv(90, 1600, 1000),
+            xvfb_argv(90, 1600, 1000, Path::new(AUTH)),
             [
                 "Xvfb",
                 ":90",
@@ -1138,15 +1260,22 @@ mod tests {
                 "-nolisten",
                 "tcp",
                 "-dpi",
-                "96"
+                "96",
+                "-auth",
+                AUTH,
             ]
         );
     }
 
     #[test]
-    fn x11vnc_argv_listens_on_localhost_with_the_password_file() {
+    fn x11vnc_argv_listens_on_localhost_with_the_password_file_and_the_cookie() {
         assert_eq!(
-            x11vnc_argv(91, 5901, Path::new("/home/u/.bandito/screens/shared/passwd")),
+            x11vnc_argv(
+                91,
+                5901,
+                Path::new("/home/u/.bandito/screens/shared/passwd"),
+                Path::new(AUTH)
+            ),
             [
                 "x11vnc",
                 "-display",
@@ -1160,8 +1289,40 @@ mod tests {
                 "-shared",
                 "-noxdamage",
                 "-quiet",
+                "-auth",
+                AUTH,
             ]
         );
+    }
+
+    #[test]
+    fn xauth_adds_a_magic_cookie_for_the_display_to_the_screen_file() {
+        assert_eq!(
+            xauth_add_argv(Path::new(AUTH), 90, "00ff"),
+            ["xauth", "-f", AUTH, "add", ":90", "MIT-MAGIC-COOKIE-1", "00ff"]
+        );
+    }
+
+    #[test]
+    fn programs_on_the_screen_get_display_and_xauthority() {
+        assert_eq!(
+            display_env(90, Path::new(AUTH)),
+            [
+                ("DISPLAY".to_string(), ":90".to_string()),
+                ("XAUTHORITY".to_string(), AUTH.to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn screen_cookie_is_16_random_bytes_as_hex() {
+        let a = random_cookie_hex();
+        assert_eq!(a.len(), 32, "{a}");
+        assert!(
+            a.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()),
+            "{a}"
+        );
+        assert_ne!(a, random_cookie_hex());
     }
 
     #[test]
@@ -1259,11 +1420,50 @@ mod tests {
     }
 
     #[test]
-    fn password_is_16_letters_and_digits() {
+    fn password_is_8_printable_characters_without_quote_or_backslash() {
+        assert_eq!(PASSWORD_LEN, 8, "RFB uses only the first 8 characters");
         let p = generate_password();
         assert_eq!(p.chars().count(), PASSWORD_LEN);
-        assert!(p.chars().all(|c| c.is_ascii_alphanumeric()), "{p}");
-        assert_ne!(generate_password(), generate_password());
+        assert!(p.bytes().all(|b| PASSWORD_ALPHABET.contains(&b)), "{p}");
+        assert!(
+            p.bytes().all(|b| (0x21..=0x7E).contains(&b) && b != b'"' && b != b'\\'),
+            "{p}"
+        );
+    }
+
+    #[test]
+    fn password_alphabet_is_printable_ascii_minus_quote_and_backslash() {
+        assert_eq!(PASSWORD_ALPHABET.len(), 92);
+        assert_eq!(PASSWORD_ALPHABET.first(), Some(&b'!'));
+        assert_eq!(PASSWORD_ALPHABET.last(), Some(&b'~'));
+        assert!(!PASSWORD_ALPHABET.contains(&b'"'));
+        assert!(!PASSWORD_ALPHABET.contains(&b'\\'));
+        let mut sorted = PASSWORD_ALPHABET.to_vec();
+        sorted.dedup();
+        assert_eq!(sorted.len(), 92, "no repeated characters");
+    }
+
+    #[test]
+    fn password_bytes_are_drawn_again_above_184_so_no_character_is_favored() {
+        // 184 = 2 * 92: bytes 0..184 give every character exactly two values.
+        assert_eq!(password_char(0), Some('!'));
+        assert_eq!(
+            password_char(183),
+            password_char(91),
+            "183 = 91 + 92 gives the same character"
+        );
+        assert_eq!(password_char(184), None);
+        assert_eq!(password_char(255), None);
+        for c in PASSWORD_ALPHABET {
+            let hits = (0..=255u8).filter(|&b| password_char(b) == Some(char::from(c))).count();
+            assert_eq!(hits, 2, "{}", char::from(c));
+        }
+    }
+
+    #[test]
+    fn a_thousand_passwords_do_not_repeat() {
+        let all: std::collections::HashSet<String> = (0..1000).map(|_| generate_password()).collect();
+        assert_eq!(all.len(), 1000);
     }
 
     #[test]
@@ -1350,12 +1550,29 @@ mod tests {
         mgr.shutdown_all().await;
     }
 
-    // Linux integration: needs Xvfb, x11vnc, xdotool and ImageMagick installed.
+    // Linux integration: needs Xvfb, x11vnc, xdotool, ImageMagick, openbox, xauth and xdpyinfo.
     // Run with: BANDITO_SCREEN_IT=1 cargo test -- --ignored screen_lifecycle
+    // A container with all of them: the `bandito-screen-it` image (Debian bookworm).
 
     #[cfg(target_os = "linux")]
     fn it_enabled() -> bool {
         std::env::var("BANDITO_SCREEN_IT").as_deref() == Ok("1")
+    }
+
+    /// Whether `xdpyinfo` opens `:display`, with `xauthority` as the cookie file. `None` means no
+    /// `XAUTHORITY` at all (the variable is removed, and the test's HOME has no cookie for the display).
+    #[cfg(target_os = "linux")]
+    fn display_opens(display: u32, xauthority: Option<&Path>) -> bool {
+        let mut cmd = std::process::Command::new("xdpyinfo");
+        cmd.arg("-display")
+            .arg(format!(":{display}"))
+            .env_remove("XAUTHORITY")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        if let Some(auth) = xauthority {
+            cmd.env("XAUTHORITY", auth);
+        }
+        cmd.status().is_ok_and(|status| status.success())
     }
 
     #[cfg(target_os = "linux")]
@@ -1373,13 +1590,15 @@ mod tests {
 
     #[cfg(target_os = "linux")]
     #[tokio::test]
-    #[ignore = "needs Xvfb, x11vnc, xdotool, imagemagick; BANDITO_SCREEN_IT=1 cargo test -- --ignored"]
+    #[ignore = "needs Xvfb, x11vnc, xdotool, imagemagick, openbox, xauth, xdpyinfo; BANDITO_SCREEN_IT=1 cargo test -- --ignored"]
     async fn screen_lifecycle_end_to_end() {
         if !it_enabled() {
             return;
         }
+        use std::os::unix::fs::PermissionsExt;
         let dir = tempfile::tempdir().unwrap();
         let mgr = ScreenManager::new(dir.path().to_path_buf());
+        let auth = dir.path().join(DEFAULT_WORKSPACE).join(XAUTH_FILE);
 
         let st = mgr.start(DEFAULT_WORKSPACE, 800, 600).await.unwrap();
         assert!(st.running, "{st:?}");
@@ -1389,6 +1608,20 @@ mod tests {
         let port = st.vnc_port.expect("vnc port");
         assert!(listening_on(port), "vnc port {port} is not listening");
         assert_eq!(st.vnc_password.as_deref().map(str::len), Some(PASSWORD_LEN));
+
+        // The screen is protected by its cookie: without XAUTHORITY the display refuses, with it, opens.
+        let display = st.display.expect("display");
+        let mode = std::fs::metadata(&auth)
+            .expect("Xauthority exists")
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(mode, 0o600, "Xauthority must be owner-only");
+        assert!(!display_opens(display, None), ":{display} opened without XAUTHORITY");
+        assert!(
+            display_opens(display, Some(&auth)),
+            ":{display} did not open with XAUTHORITY"
+        );
 
         // Starting again returns the same screen.
         let again = mgr.start(DEFAULT_WORKSPACE, 800, 600).await.unwrap();
@@ -1439,6 +1672,10 @@ mod tests {
             env.contains(&("DISPLAY".to_string(), format!(":{}", st.display.unwrap()))),
             "{env:?}"
         );
+        assert!(
+            env.contains(&("XAUTHORITY".to_string(), auth.display().to_string())),
+            "{env:?}"
+        );
 
         let pids = mgr.pids_for_test(DEFAULT_WORKSPACE).await;
         assert!(!pids.is_empty());
@@ -1447,5 +1684,6 @@ mod tests {
         mgr.stop(DEFAULT_WORKSPACE).await.unwrap();
         assert!(!mgr.status(DEFAULT_WORKSPACE).await.unwrap().running);
         assert!(pids.iter().all(|&p| !alive(p)), "processes still alive: {pids:?}");
+        assert!(!auth.exists(), "the Xauthority file stays after the screen stops");
     }
 }

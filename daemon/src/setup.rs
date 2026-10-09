@@ -29,16 +29,26 @@ const PROBE_TIMEOUT: Duration = Duration::from_secs(10);
 const INSTALL_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 const NODE_MIN_MAJOR: u32 = 18;
 const NODE_INDEX: &str = "https://nodejs.org/dist/latest-v22.x/";
-const CHROME_DEB_URL: &str = "https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb";
+/// Google's signing key for its apt repositories. Its fingerprint is checked before it is used.
+const CHROME_KEY_URL: &str = "https://dl.google.com/linux/linux_signing_key.pub";
+/// Primary key of Google's Linux Package Signing Authority, the key that signs the Chrome repository.
+const CHROME_KEY_FINGERPRINT: &str = "EB4C1BFD4F042F6DDDCCEC917721F63BD38B4796";
+const CHROME_KEYRING_NAME: &str = "google-chrome.gpg";
+const CHROME_LIST_NAME: &str = "google-chrome.list";
+const CHROME_REPO_LINE: &str = "deb [arch=amd64 signed-by=/etc/apt/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb/ stable main";
+/// npm packages that Bandito installs, each with the version it is pinned to. The versions move
+/// with a Bandito release, never on their own.
+const NPM_PINS: &[(&str, &str)] = &[("@anthropic-ai/claude-code", "2.1.295"), ("@openai/codex", "0.162.0")];
 const DOCKER_DOCS: &str = "https://docs.docker.com/engine/install/";
 const GROK_DOCS: &str = "https://x.ai/cli";
 pub const BROWSERS: [&str; 4] = ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser"];
 
 /// Every component id, in the order status reports them.
-pub const COMPONENTS: [&str; 11] = [
+pub const COMPONENTS: [&str; 12] = [
     "xvfb",
     "x11vnc",
     "xdotool",
+    "xauth",
     "window_manager",
     "fonts",
     "browser",
@@ -49,9 +59,17 @@ pub const COMPONENTS: [&str; 11] = [
     "docker",
 ];
 /// What the screen feature needs.
-const SCREEN_COMPONENTS: [&str; 5] = ["xvfb", "x11vnc", "xdotool", "window_manager", "fonts"];
+const SCREEN_COMPONENTS: [&str; 6] = ["xvfb", "x11vnc", "xdotool", "xauth", "window_manager", "fonts"];
 /// Components whose install goes through the system package manager, so through sudo.
-const SUDO_COMPONENTS: [&str; 6] = ["xvfb", "x11vnc", "xdotool", "window_manager", "fonts", "browser"];
+const SUDO_COMPONENTS: [&str; 7] = [
+    "xvfb",
+    "x11vnc",
+    "xdotool",
+    "xauth",
+    "window_manager",
+    "fonts",
+    "browser",
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -158,6 +176,8 @@ pub struct Platform {
     pub path: OsString,
     /// Where Bandito installs what it needs without root (`<data dir>/tools`).
     pub tools: PathBuf,
+    /// apt's configuration folder, where the Chrome key and sources line go.
+    pub apt_etc: PathBuf,
 }
 
 impl Platform {
@@ -173,6 +193,7 @@ impl Platform {
                 .unwrap_or(Distro::Other),
             path,
             tools: tools_dir(),
+            apt_etc: PathBuf::from("/etc/apt"),
         }
     }
 }
@@ -422,6 +443,27 @@ pub fn has_noto_font(fc_list_output: &str) -> bool {
     fc_list_output.to_lowercase().contains("noto")
 }
 
+/// True when the output of `gpg --show-keys --with-colons` lists `fingerprint`, as the primary key
+/// or as a subkey. Case and spaces in either side do not matter.
+pub fn lists_fingerprint(show_keys_output: &str, fingerprint: &str) -> bool {
+    let wanted = normalize_fingerprint(fingerprint);
+    show_keys_output
+        .lines()
+        .filter(|line| line.starts_with("fpr:"))
+        .any(|line| {
+            line.split(':')
+                .skip(1)
+                .any(|field| normalize_fingerprint(field) == wanted)
+        })
+}
+
+fn normalize_fingerprint(text: &str) -> String {
+    text.chars()
+        .filter(|c| !c.is_whitespace())
+        .collect::<String>()
+        .to_ascii_uppercase()
+}
+
 /// One way to install a component on a platform.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Plan {
@@ -432,19 +474,29 @@ enum Plan {
         id: &'static str,
         names: &'static [&'static str],
     },
-    /// Google Chrome .deb, for Ubuntu on x86_64.
-    ChromeDeb,
-    /// `npm install -g <package>` into `<tools>`.
-    Npm { id: &'static str, package: &'static str },
+    /// Google Chrome from Google's signed apt repository, for Ubuntu on x86_64.
+    ChromeRepo,
+    /// `npm install -g <package>@<version>` into `<tools>`.
+    Npm {
+        id: &'static str,
+        package: &'static str,
+        version: &'static str,
+    },
 }
 
 fn plan_rank(plan: &Plan) -> u8 {
     match plan {
         Plan::Node => 0,
         Plan::Packages { .. } => 1,
-        Plan::ChromeDeb => 2,
+        Plan::ChromeRepo => 2,
         Plan::Npm { .. } => 3,
     }
+}
+
+/// The npm plan of a CLI, pinned by `NPM_PINS`. `None` when the package has no pin.
+fn npm_plan(id: &'static str, package: &'static str) -> Option<Plan> {
+    let version = NPM_PINS.iter().find(|(name, _)| *name == package)?.1;
+    Some(Plan::Npm { id, package, version })
 }
 
 /// Package names of a component for a package manager.
@@ -456,6 +508,9 @@ fn package_names(id: &str, pm: PackageManager) -> Option<&'static [&'static str]
         ("xvfb", Pacman) => &["xorg-server-xvfb"],
         ("x11vnc", Apt | Dnf | Pacman) => &["x11vnc"],
         ("xdotool", Apt | Dnf | Pacman) => &["xdotool"],
+        ("xauth", Apt) => &["xauth"],
+        ("xauth", Dnf) => &["xorg-x11-xauth"],
+        ("xauth", Pacman) => &["xorg-xauth"],
         ("window_manager", Apt | Dnf | Pacman) => &["openbox"],
         ("fonts", Apt) => &["fonts-noto", "fonts-noto-color-emoji"],
         ("fonts", Dnf) => &["google-noto-sans-fonts"],
@@ -478,18 +533,12 @@ fn packages_for(id: &str, p: &Platform) -> Option<&'static [&'static str]> {
 fn plan_for(id: &'static str, p: &Platform) -> Option<Plan> {
     match id {
         "node" => node_platform(p).map(|_| Plan::Node),
-        "claude" => node_platform(p).map(|_| Plan::Npm {
-            id: "claude",
-            package: "@anthropic-ai/claude-code",
-        }),
-        "codex" => node_platform(p).map(|_| Plan::Npm {
-            id: "codex",
-            package: "@openai/codex",
-        }),
+        "claude" => node_platform(p).and_then(|_| npm_plan("claude", "@anthropic-ai/claude-code")),
+        "codex" => node_platform(p).and_then(|_| npm_plan("codex", "@openai/codex")),
         "browser" => {
             if p.os == "linux" && p.package_manager == Some(PackageManager::Apt) && p.distro == Distro::Ubuntu {
-                // Ubuntu's chromium-browser is a snap. Google Chrome is the .deb instead, on x86_64 only.
-                return (p.arch == "x86_64").then_some(Plan::ChromeDeb);
+                // Ubuntu's chromium-browser is a snap. Google Chrome comes from Google's apt repository instead, on x86_64 only.
+                return (p.arch == "x86_64").then_some(Plan::ChromeRepo);
             }
             packages_for(id, p).map(|names| Plan::Packages { id, names })
         }
@@ -571,52 +620,102 @@ pub fn package_commands(pm: PackageManager, pkgs: &[&str], non_interactive: bool
     }
 }
 
-/// Where the Google Chrome .deb is downloaded to.
-fn chrome_deb_path(tools: &Path) -> PathBuf {
-    tools.join("downloads").join("google-chrome-stable_current_amd64.deb")
+/// The files of Google's Chrome repository. The key is downloaded and checked in `<tools>/downloads`,
+/// then the keyring and the sources line are installed where apt reads them (`apt_etc`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ChromeRepo {
+    /// The key as downloaded (ASCII armored).
+    key_download: PathBuf,
+    /// The key as a keyring, from `gpg --dearmor`.
+    keyring: PathBuf,
+    /// The sources line, written by Bandito.
+    list: PathBuf,
+    keyring_target: PathBuf,
+    list_target: PathBuf,
 }
 
-/// Download the Chrome .deb, then install it with apt (which pulls in its dependencies).
-pub fn chrome_deb_commands(deb: &Path, non_interactive: bool) -> Vec<CommandSpec> {
-    let deb = deb.display().to_string();
-    vec![
-        CommandSpec::new("curl", ["--create-dirs", "-fsSL", "-o", deb.as_str(), CHROME_DEB_URL]),
-        apt_update(non_interactive),
-        sudo_command(
-            non_interactive,
-            [
-                "env",
-                "DEBIAN_FRONTEND=noninteractive",
-                "apt-get",
-                "install",
-                "-y",
-                deb.as_str(),
-            ],
-        ),
-    ]
+fn chrome_repo(tools: &Path, apt_etc: &Path) -> ChromeRepo {
+    let downloads = tools.join("downloads");
+    ChromeRepo {
+        key_download: downloads.join("google-linux-signing-key.pub"),
+        keyring: downloads.join(CHROME_KEYRING_NAME),
+        list: downloads.join(CHROME_LIST_NAME),
+        keyring_target: apt_etc.join("keyrings").join(CHROME_KEYRING_NAME),
+        list_target: apt_etc.join("sources.list.d").join(CHROME_LIST_NAME),
+    }
 }
 
-/// Every sudo step of the plans, in order: one package batch, then Chrome.
-fn sudo_steps(plans: &[Plan], p: &Platform, non_interactive: bool) -> Vec<CommandSpec> {
+/// The sudo steps of Google Chrome, in order. Unless the key and the sources line are in place
+/// (`configured`), they are installed first. Then apt updates from the Chrome list alone, and
+/// installs Chrome.
+fn chrome_repo_commands(repo: &ChromeRepo, configured: bool, non_interactive: bool) -> Vec<CommandSpec> {
+    let keyring = repo.keyring.display().to_string();
+    let keyring_target = repo.keyring_target.display().to_string();
+    let list = repo.list.display().to_string();
+    let list_target = repo.list_target.display().to_string();
+    let source_list = format!("Dir::Etc::sourcelist=sources.list.d/{CHROME_LIST_NAME}");
     let mut steps = Vec::new();
-    let names: Vec<&str> = plans
+    if !configured {
+        steps.push(sudo_command(
+            non_interactive,
+            ["install", "-D", "-m", "0644", keyring.as_str(), keyring_target.as_str()],
+        ));
+        steps.push(sudo_command(
+            non_interactive,
+            ["install", "-D", "-m", "0644", list.as_str(), list_target.as_str()],
+        ));
+    }
+    steps.push(sudo_command(
+        non_interactive,
+        [
+            "env",
+            "DEBIAN_FRONTEND=noninteractive",
+            "apt-get",
+            "update",
+            "-o",
+            source_list.as_str(),
+            "-o",
+            "Dir::Etc::sourceparts=-",
+            "-o",
+            "APT::Get::List-Cleanup=0",
+        ],
+    ));
+    steps.push(sudo_command(
+        non_interactive,
+        [
+            "env",
+            "DEBIAN_FRONTEND=noninteractive",
+            "apt-get",
+            "install",
+            "-y",
+            "google-chrome-stable",
+        ],
+    ));
+    steps
+}
+
+/// The package batch of the plans as commands: one update and one install with apt. `gpg` joins
+/// the batch when the Chrome key needs it and it is missing.
+fn batch_commands(p: &Platform, plans: &[Plan], need_gpg: bool, non_interactive: bool) -> Vec<CommandSpec> {
+    let mut names: Vec<&str> = plans
         .iter()
         .flat_map(|plan| match plan {
             Plan::Packages { names, .. } => names.to_vec(),
             _ => Vec::new(),
         })
         .collect();
-    if let Some(pm) = p.package_manager {
-        steps.extend(package_commands(pm, &names, non_interactive));
+    if need_gpg {
+        names.push("gpg");
     }
-    if plans.contains(&Plan::ChromeDeb) {
-        steps.extend(chrome_deb_commands(&chrome_deb_path(&p.tools), non_interactive));
+    match p.package_manager {
+        Some(pm) => package_commands(pm, &names, non_interactive),
+        None => Vec::new(),
     }
-    steps
 }
 
-fn npm_install(package: &str, tools: &Path) -> CommandSpec {
-    CommandSpec::new("npm", ["install", "-g", package]).with_env("NPM_CONFIG_PREFIX", tools.display().to_string())
+fn npm_install(package: &str, version: &str, tools: &Path) -> CommandSpec {
+    let spec = format!("{package}@{version}");
+    CommandSpec::new("npm", ["install", "-g", spec.as_str()]).with_env("NPM_CONFIG_PREFIX", tools.display().to_string())
 }
 
 /// Whether a component is installed, with its version and a hint when it is not.
@@ -974,7 +1073,8 @@ impl Setup {
     }
 
     /// The whole install of the requested components, in order: Node, then system packages (one
-    /// batch, sudo), then npm packages. Nothing runs when sudo would need a password.
+    /// batch, sudo), then Google Chrome, then npm packages. Nothing runs when sudo would need a
+    /// password.
     async fn install(&self, job: &Job, requested: &[&'static str]) -> Outcome {
         let mut missing: Vec<&'static str> = Vec::new();
         for &id in requested {
@@ -1011,15 +1111,29 @@ impl Setup {
         }
         plans.sort_by_key(|(_, plan)| plan_rank(plan));
         let all_plans: Vec<Plan> = plans.iter().map(|(_, plan)| plan.clone()).collect();
+        let chrome = all_plans.contains(&Plan::ChromeRepo);
+        // The Chrome key is checked with gpg. When gpg is missing, it joins the package batch.
+        let need_gpg = chrome && which("gpg", &self.platform.path).is_none();
+        let repo = chrome_repo(&self.platform.tools, &self.platform.apt_etc);
 
         if all_plans
             .iter()
-            .any(|plan| matches!(plan, Plan::Packages { .. } | Plan::ChromeDeb))
+            .any(|plan| matches!(plan, Plan::Packages { .. } | Plan::ChromeRepo))
         {
             match self.sudo_state().await {
                 Sudo::Passwordless => {}
                 Sudo::Password => {
-                    let command = sudo_steps(&all_plans, &self.platform, false)
+                    let mut commands = batch_commands(&self.platform, &all_plans, need_gpg, false);
+                    // The key is checked now, before the user is asked to run the commands, so that
+                    // their Chrome steps name files that exist. The check needs gpg: without it, the
+                    // commands are the package batch only, and the Chrome steps come on the next run.
+                    if chrome && !need_gpg {
+                        match self.prepare_chrome_repo(job, &repo).await {
+                            Ok(configured) => commands.extend(chrome_repo_commands(&repo, configured, false)),
+                            Err(message) => return self.failed(&missing, message).await,
+                        }
+                    }
+                    let command = commands
                         .iter()
                         .map(CommandSpec::display)
                         .collect::<Vec<_>>()
@@ -1041,24 +1155,36 @@ impl Setup {
                 return self.failed(&missing, message).await;
             }
         }
-        let steps = sudo_steps(&all_plans, &self.platform, true);
-        if !steps.is_empty() {
+        let batch = batch_commands(&self.platform, &all_plans, need_gpg, true);
+        if !batch.is_empty() {
             job.set_step("Installing system packages");
-            for spec in &steps {
+            for spec in &batch {
                 if let Err(message) = self.run_step(job, spec, INSTALL_TIMEOUT).await {
                     return self.failed(&missing, message).await;
                 }
             }
         }
+        if chrome {
+            job.set_step("Installing Google Chrome");
+            let configured = match self.prepare_chrome_repo(job, &repo).await {
+                Ok(configured) => configured,
+                Err(message) => return self.failed(&missing, message).await,
+            };
+            for spec in chrome_repo_commands(&repo, configured, true) {
+                if let Err(message) = self.run_step(job, &spec, INSTALL_TIMEOUT).await {
+                    return self.failed(&missing, message).await;
+                }
+            }
+        }
         for (id, plan) in &plans {
-            if let Plan::Npm { package, .. } = plan {
+            if let Plan::Npm { package, version, .. } = plan {
                 job.set_step(format!("Installing {id}"));
                 if let Err(e) = std::fs::create_dir_all(&self.platform.tools) {
                     return self
                         .failed(&missing, format!("create {}: {e}", self.platform.tools.display()))
                         .await;
                 }
-                let spec = npm_install(package, &self.platform.tools);
+                let spec = npm_install(package, version, &self.platform.tools);
                 if let Err(message) = self.run_step(job, &spec, INSTALL_TIMEOUT).await {
                     return self.failed(&missing, message).await;
                 }
@@ -1073,6 +1199,86 @@ impl Setup {
             }
         }
         Outcome::Done
+    }
+
+    /// `gpg --show-keys --with-colons FILE`: its output. Errors when gpg cannot read the file.
+    async fn show_keys(&self, file: &Path) -> Result<String, String> {
+        let file = file.display().to_string();
+        let spec = CommandSpec::new("gpg", ["--show-keys", "--with-colons", file.as_str()]);
+        match self.runner.run(&spec, PROBE_TIMEOUT, &|_: String| {}).await {
+            Ok(r) if r.success => Ok(r.output),
+            Ok(_) => Err(format!("gpg could not read {file}")),
+            Err(e) => Err(format!("gpg could not run: {e}")),
+        }
+    }
+
+    /// Whether the Chrome key and the sources line are in place already, with the right key.
+    /// Changes nothing.
+    async fn chrome_repo_configured(&self, repo: &ChromeRepo) -> bool {
+        let list_ok = std::fs::read_to_string(&repo.list_target).is_ok_and(|text| text.trim_end() == CHROME_REPO_LINE);
+        if !list_ok || !repo.keyring_target.is_file() {
+            return false;
+        }
+        self.show_keys(&repo.keyring_target)
+            .await
+            .is_ok_and(|listing| lists_fingerprint(&listing, CHROME_KEY_FINGERPRINT))
+    }
+
+    /// Gets Google's key, checks that it has the fingerprint of the Chrome signing key, and writes
+    /// the keyring and the sources line into `<tools>/downloads`. Returns `true` when the repository
+    /// was configured already, and then writes nothing. A key with another fingerprint stops here.
+    async fn prepare_chrome_repo(&self, job: &Job, repo: &ChromeRepo) -> Result<bool, String> {
+        if self.chrome_repo_configured(repo).await {
+            job.push_log("The Google Chrome key and repository are in place already.");
+            return Ok(true);
+        }
+        let downloads = self.platform.tools.join("downloads");
+        std::fs::create_dir_all(&downloads).map_err(|e| format!("create {}: {e}", downloads.display()))?;
+        job.set_step("Checking the Google Chrome signing key");
+        let key_arg = repo.key_download.display().to_string();
+        self.run_step(
+            job,
+            &CommandSpec::new(
+                "curl",
+                [
+                    "--proto",
+                    "=https",
+                    "--tlsv1.2",
+                    "-fsSL",
+                    "-o",
+                    key_arg.as_str(),
+                    CHROME_KEY_URL,
+                ],
+            ),
+            INSTALL_TIMEOUT,
+        )
+        .await?;
+        let listing = self.show_keys(&repo.key_download).await?;
+        if !lists_fingerprint(&listing, CHROME_KEY_FINGERPRINT) {
+            let _ = std::fs::remove_file(&repo.key_download);
+            job.push_log(&format!("expected the fingerprint {CHROME_KEY_FINGERPRINT}"));
+            return Err("Google signing key fingerprint mismatch".into());
+        }
+        let keyring_arg = repo.keyring.display().to_string();
+        self.run_step(
+            job,
+            &CommandSpec::new(
+                "gpg",
+                [
+                    "--batch",
+                    "--yes",
+                    "--dearmor",
+                    "-o",
+                    keyring_arg.as_str(),
+                    key_arg.as_str(),
+                ],
+            ),
+            PROBE_TIMEOUT,
+        )
+        .await?;
+        std::fs::write(&repo.list, format!("{CHROME_REPO_LINE}\n"))
+            .map_err(|e| format!("write {}: {e}", repo.list.display()))?;
+        Ok(false)
     }
 
     /// Runs one command and logs its output to the job.
@@ -1265,6 +1471,7 @@ mod tests {
             distro,
             path: dir.as_os_str().to_owned(),
             tools: dir.join("tools"),
+            apt_etc: dir.join("apt"),
         }
     }
 
@@ -1352,7 +1559,7 @@ mod tests {
             })
         );
         let ubuntu = platform(dir.path(), Some(PackageManager::Apt), Distro::Ubuntu);
-        assert_eq!(plan_for("browser", &ubuntu), Some(Plan::ChromeDeb));
+        assert_eq!(plan_for("browser", &ubuntu), Some(Plan::ChromeRepo));
         let ubuntu_arm = Platform {
             arch: "aarch64",
             ..ubuntu.clone()
@@ -1373,18 +1580,250 @@ mod tests {
         );
     }
 
+    /// The Chrome repository as the sudo steps name it, for `/x/tools` and `/etc/apt`.
+    fn chrome_repo_at_etc() -> ChromeRepo {
+        chrome_repo(Path::new("/x/tools"), Path::new("/etc/apt"))
+    }
+
     #[test]
-    fn chrome_deb_is_downloaded_then_installed_with_apt() {
-        let steps = chrome_deb_commands(Path::new("/x/downloads/chrome.deb"), true);
-        let shown = texts(&steps);
-        assert_eq!(shown.len(), 3);
-        assert!(shown[0].starts_with("curl --create-dirs -fsSL -o /x/downloads/chrome.deb "));
-        assert!(shown[0].ends_with(CHROME_DEB_URL));
-        assert_eq!(shown[1], "sudo -n apt-get update");
+    fn chrome_steps_install_the_key_and_list_then_update_only_chrome_and_install() {
+        let shown = texts(&chrome_repo_commands(&chrome_repo_at_etc(), false, true));
         assert_eq!(
-            shown[2],
-            "sudo -n env DEBIAN_FRONTEND=noninteractive apt-get install -y /x/downloads/chrome.deb"
+            shown,
+            [
+                "sudo -n install -D -m 0644 /x/tools/downloads/google-chrome.gpg /etc/apt/keyrings/google-chrome.gpg",
+                "sudo -n install -D -m 0644 /x/tools/downloads/google-chrome.list /etc/apt/sources.list.d/google-chrome.list",
+                "sudo -n env DEBIAN_FRONTEND=noninteractive apt-get update -o Dir::Etc::sourcelist=sources.list.d/google-chrome.list -o Dir::Etc::sourceparts=- -o APT::Get::List-Cleanup=0",
+                "sudo -n env DEBIAN_FRONTEND=noninteractive apt-get install -y google-chrome-stable",
+            ]
         );
+    }
+
+    #[test]
+    fn chrome_steps_skip_the_key_when_the_repository_is_configured() {
+        let shown = texts(&chrome_repo_commands(&chrome_repo_at_etc(), true, false));
+        assert_eq!(
+            shown,
+            [
+                "sudo env DEBIAN_FRONTEND=noninteractive apt-get update -o Dir::Etc::sourcelist=sources.list.d/google-chrome.list -o Dir::Etc::sourceparts=- -o APT::Get::List-Cleanup=0",
+                "sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y google-chrome-stable",
+            ]
+        );
+    }
+
+    #[test]
+    fn chrome_repo_line_is_signed_by_the_keyring_apt_reads() {
+        assert_eq!(
+            CHROME_REPO_LINE,
+            "deb [arch=amd64 signed-by=/etc/apt/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb/ stable main"
+        );
+        assert_eq!(
+            chrome_repo_at_etc().keyring_target,
+            Path::new("/etc/apt/keyrings/google-chrome.gpg")
+        );
+        assert_eq!(
+            chrome_repo_at_etc().list_target,
+            Path::new("/etc/apt/sources.list.d/google-chrome.list")
+        );
+    }
+
+    /// `gpg --show-keys --with-colons` of Google's key: the primary key, one subkey.
+    const CHROME_KEY_LISTING: &str = "\
+tru::1:1700000000:0:3:1:5
+pub:-:4096:1:7721F63BD38B4796:1234567890:::-:::scESC::::::23::0:
+fpr:::::::::EB4C1BFD4F042F6DDDCCEC917721F63BD38B4796:
+uid:-::::1234567890::ABCDEF::Google Inc. (Linux Packages Signing Authority) <linux-packages-keymaster@google.com>::::::::::0:
+sub:-:4096:1:A1B2C3D4E5F60718:1234567890::::::e::::::23:
+fpr:::::::::1111222233334444555566667777888899990000:
+";
+
+    #[test]
+    fn key_is_accepted_only_with_the_chrome_signing_fingerprint() {
+        assert!(lists_fingerprint(CHROME_KEY_LISTING, CHROME_KEY_FINGERPRINT));
+        // Lower case, and spaces between the groups of the fingerprint.
+        let loose = CHROME_KEY_LISTING.replace(
+            "EB4C1BFD4F042F6DDDCCEC917721F63BD38B4796",
+            "eb4c 1bfd 4f04 2f6d ddcc ec91 7721 f63b d38b 4796",
+        );
+        assert!(lists_fingerprint(&loose, CHROME_KEY_FINGERPRINT));
+        // A subkey's fingerprint counts when it is the one asked for.
+        assert!(lists_fingerprint(
+            CHROME_KEY_LISTING,
+            "1111222233334444555566667777888899990000"
+        ));
+    }
+
+    #[test]
+    fn key_with_another_fingerprint_is_refused() {
+        // Same key id (the last 16 hex digits), different fingerprint.
+        let forged = CHROME_KEY_LISTING.replace(
+            "EB4C1BFD4F042F6DDDCCEC917721F63BD38B4796",
+            "0000000000000000000000007721F63BD38B4796",
+        );
+        assert!(!lists_fingerprint(&forged, CHROME_KEY_FINGERPRINT));
+        assert!(!lists_fingerprint("", CHROME_KEY_FINGERPRINT));
+        assert!(!lists_fingerprint(
+            "pub:-:4096:1:7721F63BD38B4796:::\n",
+            CHROME_KEY_FINGERPRINT
+        ));
+    }
+
+    #[test]
+    fn npm_packages_are_pinned_to_exact_versions() {
+        assert_eq!(NPM_PINS.len(), 2);
+        for (package, version) in NPM_PINS {
+            let parts: Vec<&str> = version.split('.').collect();
+            assert_eq!(parts.len(), 3, "{package} is pinned to {version}");
+            assert!(
+                parts
+                    .iter()
+                    .all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit())),
+                "{package} is pinned to {version}"
+            );
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let claude = plan_for("claude", &platform(dir.path(), None, Distro::Other));
+        assert_eq!(
+            claude,
+            Some(Plan::Npm {
+                id: "claude",
+                package: "@anthropic-ai/claude-code",
+                version: "2.1.295",
+            })
+        );
+        let spec = npm_install("@openai/codex", "0.162.0", Path::new("/x/tools"));
+        assert_eq!(
+            texts(std::slice::from_ref(&spec)),
+            ["npm install -g @openai/codex@0.162.0"]
+        );
+        assert_eq!(spec.env, [("NPM_CONFIG_PREFIX".to_string(), "/x/tools".to_string())]);
+    }
+
+    #[test]
+    fn xauth_is_a_screen_component_installed_with_apt() {
+        assert!(COMPONENTS.contains(&"xauth"));
+        assert!(SCREEN_COMPONENTS.contains(&"xauth"));
+        assert!(SUDO_COMPONENTS.contains(&"xauth"));
+        assert_eq!(package_names("xauth", PackageManager::Apt), Some(&["xauth"][..]));
+        assert_eq!(
+            package_names("xauth", PackageManager::Dnf),
+            Some(&["xorg-x11-xauth"][..])
+        );
+        assert_eq!(
+            package_names("xauth", PackageManager::Pacman),
+            Some(&["xorg-xauth"][..])
+        );
+    }
+
+    /// Installs the Chrome repository with a scripted runner. `key_listing` is what gpg prints for the
+    /// downloaded key. Returns the job snapshot and the commands the runner was asked for, and waits
+    /// for the apt install to be asked for before it lets it finish (`finish_chrome` then runs).
+    async fn run_chrome_install(
+        key_listing: &str,
+        finish_chrome: Option<Arc<Notify>>,
+    ) -> (Value, Vec<String>, tempfile::TempDir) {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().to_path_buf();
+        stub(&root, "gpg");
+        stub(&root, "sudo");
+        let tools = root.join("tools");
+        let repo = chrome_repo(&tools, &root.join("apt"));
+        let mock = Arc::new(MockRunner::default());
+        let key = repo.key_download.display().to_string();
+        let keyring = repo.keyring.display().to_string();
+        let list = repo.list.display().to_string();
+        let keyring_target = repo.keyring_target.display().to_string();
+        let list_target = repo.list_target.display().to_string();
+        mock.on("sudo -n true", ok_reply(""));
+        mock.on(
+            &format!("curl --proto =https --tlsv1.2 -fsSL -o {key} {CHROME_KEY_URL}"),
+            ok_reply(""),
+        );
+        mock.on(&format!("gpg --show-keys --with-colons {key}"), ok_reply(key_listing));
+        mock.on(&format!("gpg --batch --yes --dearmor -o {keyring} {key}"), ok_reply(""));
+        mock.on(
+            &format!("sudo -n install -D -m 0644 {keyring} {keyring_target}"),
+            ok_reply(""),
+        );
+        mock.on(
+            &format!("sudo -n install -D -m 0644 {list} {list_target}"),
+            ok_reply(""),
+        );
+        mock.on(
+            "sudo -n env DEBIAN_FRONTEND=noninteractive apt-get update -o Dir::Etc::sourcelist=sources.list.d/google-chrome.list -o Dir::Etc::sourceparts=- -o APT::Get::List-Cleanup=0",
+            ok_reply(""),
+        );
+        let install = "sudo -n env DEBIAN_FRONTEND=noninteractive apt-get install -y google-chrome-stable";
+        match &finish_chrome {
+            Some(gate) => mock.on(install, Reply::Gate(gate.clone())),
+            None => mock.on(install, ok_reply("")),
+        }
+        let mut p = platform(&root, Some(PackageManager::Apt), Distro::Ubuntu);
+        p.tools = tools;
+        p.apt_etc = root.join("apt");
+        let setup = setup_with(p, &mock);
+        let id = setup.start_install(&["browser".to_string()]).unwrap();
+        if let Some(gate) = finish_chrome {
+            // Chrome is "installed" once the apt install has run: a stub on the path, as dpkg would leave it.
+            for _ in 0..1000 {
+                if mock.calls().iter().any(|c| c == install) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+            stub(&root, "google-chrome-stable");
+            gate.notify_one();
+        }
+        let snap = wait_done(&setup, &id).await;
+        (snap, mock.calls(), dir)
+    }
+
+    #[tokio::test]
+    async fn chrome_key_with_another_fingerprint_stops_before_anything_is_installed() {
+        let forged = CHROME_KEY_LISTING.replace(
+            "EB4C1BFD4F042F6DDDCCEC917721F63BD38B4796",
+            "0000000000000000000000000000000000000000",
+        );
+        let (snap, calls, dir) = run_chrome_install(&forged, None).await;
+        let root = dir.path();
+        assert_eq!(snap["state"], "failed", "{snap:?}");
+        assert_eq!(snap["step"], "Google signing key fingerprint mismatch");
+        assert_eq!(snap["failed_component"], "browser");
+        let check = calls
+            .iter()
+            .position(|c| c.starts_with("gpg --show-keys"))
+            .expect("the key is checked");
+        assert_eq!(calls.len(), check + 1, "nothing may run after a bad key: {calls:?}");
+        assert!(!root.join("apt").exists(), "no keyring or list may be written");
+    }
+
+    #[tokio::test]
+    async fn chrome_key_with_the_right_fingerprint_is_installed_in_order() {
+        let gate = Arc::new(Notify::new());
+        let (snap, calls, dir) = run_chrome_install(CHROME_KEY_LISTING, Some(gate)).await;
+        let root = dir.path();
+        assert_eq!(snap["state"], "done", "{snap:?}");
+        let repo = chrome_repo(&root.join("tools"), &root.join("apt"));
+        let key = repo.key_download.display().to_string();
+        let keyring = repo.keyring.display().to_string();
+        let list = repo.list.display().to_string();
+        assert_eq!(
+            calls,
+            [
+                "sudo -n true".to_string(),
+                format!("curl --proto =https --tlsv1.2 -fsSL -o {key} {CHROME_KEY_URL}"),
+                format!("gpg --show-keys --with-colons {key}"),
+                format!("gpg --batch --yes --dearmor -o {keyring} {key}"),
+                format!(
+                    "sudo -n install -D -m 0644 {keyring} {}",
+                    repo.keyring_target.display()
+                ),
+                format!("sudo -n install -D -m 0644 {list} {}", repo.list_target.display()),
+                "sudo -n env DEBIAN_FRONTEND=noninteractive apt-get update -o Dir::Etc::sourcelist=sources.list.d/google-chrome.list -o Dir::Etc::sourceparts=- -o APT::Get::List-Cleanup=0".to_string(),
+                "sudo -n env DEBIAN_FRONTEND=noninteractive apt-get install -y google-chrome-stable".to_string(),
+            ]
+        );
+        assert_eq!(std::fs::read_to_string(&list).unwrap(), format!("{CHROME_REPO_LINE}\n"));
     }
 
     #[test]
