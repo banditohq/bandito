@@ -6,17 +6,18 @@
 //! tunnel need a token.
 
 use super::tunnel;
-use super::{App, Peer, serve};
+use super::{App, Peer, preview, serve};
 use crate::files::{EntryKind, FsError};
 use crate::store::Device;
 use axum::Router;
 use axum::body::Body;
 use axum::extract::Query;
+use axum::extract::Request;
 use axum::extract::State;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::http::{HeaderMap, Method, StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use axum::routing::get;
+use axum::routing::{any, get};
 use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
 use std::io::{self, ErrorKind, SeekFrom};
@@ -31,6 +32,7 @@ pub fn router(app: Arc<App>) -> Router {
         .route("/v1/rpc", get(rpc))
         .route("/v1/files/raw", get(files_raw))
         .route("/v1/tunnel", get(tunnel_upgrade))
+        .route("/v1/proxy/{*rest}", any(preview_proxy))
         .with_state(app)
 }
 
@@ -198,6 +200,40 @@ async fn tunnel_upgrade(
     };
     ws.max_message_size(tunnel::MAX_MESSAGE_SIZE)
         .on_upgrade(move |socket| tunnel::run(socket, port, slot))
+}
+
+/// `/v1/proxy/<port>/<path>`: forwards to `127.0.0.1:<port>` (see rpc/preview.rs). Same checks as
+/// the file routes: a paired device, and no browser origin.
+async fn preview_proxy(State(app): State<Arc<App>>, request: Request) -> Response {
+    let (parts, body) = request.into_parts();
+    if let Err(e) = require_device(&app, &parts.headers) {
+        return e.into_response();
+    }
+    let Some(rest) = parts.uri.path().strip_prefix("/v1/proxy/") else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let (port_text, path) = rest.split_once('/').unwrap_or((rest, ""));
+    let port = match port_text.parse::<u16>() {
+        Ok(port) if port != 0 => port,
+        _ => return (StatusCode::BAD_REQUEST, "port must be 1..=65535").into_response(),
+    };
+    let methods = [
+        Method::GET,
+        Method::HEAD,
+        Method::POST,
+        Method::PUT,
+        Method::PATCH,
+        Method::DELETE,
+        Method::OPTIONS,
+    ];
+    if !methods.contains(&parts.method) {
+        return (StatusCode::METHOD_NOT_ALLOWED, "method not allowed").into_response();
+    }
+    let path_and_query = match parts.uri.query() {
+        Some(query) => format!("/{path}?{query}"),
+        None => format!("/{path}"),
+    };
+    preview::forward(port, parts.method, &path_and_query, &parts.headers, body).await
 }
 
 fn raw_error(e: FsError) -> Response {
@@ -572,5 +608,143 @@ mod tests {
     #[test]
     fn percent_encoding_keeps_only_unreserved_characters() {
         assert_eq!(percent_encode("a-b_c.d~E9/ é"), "a-b_c.d~E9%2F%20%C3%A9");
+    }
+
+    /// A small HTTP server on 127.0.0.1 that stands in for a dev server. Returns its port.
+    async fn target_server() -> u16 {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let target = axum::Router::new()
+            .route(
+                "/hello",
+                axum::routing::get(|headers: HeaderMap, uri: axum::http::Uri| async move {
+                    let auth = headers.contains_key(header::AUTHORIZATION);
+                    let host = headers
+                        .get(header::HOST)
+                        .and_then(|h| h.to_str().ok())
+                        .unwrap_or_default()
+                        .to_string();
+                    let query = uri.query().unwrap_or_default().to_string();
+                    (
+                        StatusCode::CREATED,
+                        [("x-target", "yes")],
+                        format!("hello q={query} auth={auth} host={host}"),
+                    )
+                }),
+            )
+            .route(
+                "/go",
+                axum::routing::get(move || async move {
+                    (
+                        StatusCode::FOUND,
+                        [(header::LOCATION, format!("http://127.0.0.1:{port}/hello?from=go"))],
+                    )
+                }),
+            )
+            .route(
+                "/echo",
+                axum::routing::post(|body: String| async move { format!("echo {body}") }),
+            );
+        tokio::spawn(async move { axum::serve(listener, target).await.unwrap() });
+        port
+    }
+
+    #[tokio::test]
+    async fn preview_forwards_to_loopback_and_never_passes_the_device_token() {
+        let port = target_server().await;
+        let dir = tempfile::tempdir().unwrap();
+        let app = served(dir.path());
+        let res = send(&app, Method::GET, &format!("/v1/proxy/{port}/hello?x=1"), &[AUTH]).await;
+        assert_eq!(res.status(), StatusCode::CREATED);
+        assert_eq!(header(&res, "x-target"), "yes");
+        assert_eq!(
+            String::from_utf8(body_of(res).await).unwrap(),
+            format!("hello q=x=1 auth=false host=127.0.0.1:{port}")
+        );
+    }
+
+    #[tokio::test]
+    async fn preview_needs_a_device_token_and_refuses_browser_origins() {
+        let port = target_server().await;
+        let dir = tempfile::tempdir().unwrap();
+        let app = served(dir.path());
+        let uri = format!("/v1/proxy/{port}/hello");
+        assert_eq!(
+            send(&app, Method::GET, &uri, &[]).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
+        let revoked = [("authorization", "Bearer bdt_revoked")];
+        assert_eq!(
+            send(&app, Method::GET, &uri, &revoked).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
+        let evil = [AUTH, ("origin", "https://evil.example")];
+        assert_eq!(
+            send(&app, Method::GET, &uri, &evil).await.status(),
+            StatusCode::FORBIDDEN
+        );
+    }
+
+    #[tokio::test]
+    async fn preview_rewrites_redirects_into_the_proxy_prefix() {
+        let port = target_server().await;
+        let dir = tempfile::tempdir().unwrap();
+        let app = served(dir.path());
+        let res = send(&app, Method::GET, &format!("/v1/proxy/{port}/go"), &[AUTH]).await;
+        assert_eq!(res.status(), StatusCode::FOUND);
+        assert_eq!(header(&res, "location"), format!("/v1/proxy/{port}/hello?from=go"));
+    }
+
+    #[tokio::test]
+    async fn preview_forwards_request_bodies() {
+        let port = target_server().await;
+        let dir = tempfile::tempdir().unwrap();
+        let app = served(dir.path());
+        let req = Request::builder()
+            .method(Method::POST)
+            .uri(format!("/v1/proxy/{port}/echo"))
+            .header(AUTH.0, AUTH.1)
+            .body(Body::from("ping"))
+            .unwrap();
+        let res = router(app.clone()).oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        assert_eq!(body_of(res).await, b"echo ping");
+    }
+
+    #[tokio::test]
+    async fn preview_checks_port_and_method_and_refuses_websockets() {
+        let port = target_server().await;
+        let dir = tempfile::tempdir().unwrap();
+        let app = served(dir.path());
+        for uri in ["/v1/proxy/0/x", "/v1/proxy/70000/x", "/v1/proxy/abc/x"] {
+            assert_eq!(
+                send(&app, Method::GET, uri, &[AUTH]).await.status(),
+                StatusCode::BAD_REQUEST,
+                "{uri}"
+            );
+        }
+        let uri = format!("/v1/proxy/{port}/hello");
+        assert_eq!(
+            send(&app, Method::TRACE, &uri, &[AUTH]).await.status(),
+            StatusCode::METHOD_NOT_ALLOWED
+        );
+        let upgrade = [AUTH, ("upgrade", "websocket")];
+        assert_eq!(
+            send(&app, Method::GET, &uri, &upgrade).await.status(),
+            StatusCode::NOT_IMPLEMENTED
+        );
+    }
+
+    #[tokio::test]
+    async fn preview_to_a_closed_port_is_bad_gateway() {
+        let port = std::net::TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        let dir = tempfile::tempdir().unwrap();
+        let app = served(dir.path());
+        let res = send(&app, Method::GET, &format!("/v1/proxy/{port}/x"), &[AUTH]).await;
+        assert_eq!(res.status(), StatusCode::BAD_GATEWAY);
     }
 }

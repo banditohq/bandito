@@ -1,6 +1,7 @@
 //! JSON-RPC 2.0, the same on every transport (unix socket, WebSocket).
 //! See docs/ARCHITECTURE.md#rpc.
 
+use crate::browser::BrowserManager;
 use crate::event::{Decision, Event, EventBody, Source};
 use crate::files::FileService;
 use crate::home;
@@ -22,9 +23,11 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::{broadcast, mpsc};
 
+pub mod browser;
 pub mod changes;
 pub mod files;
 pub mod host;
+pub mod preview;
 pub mod secrets;
 pub mod setup;
 pub mod term;
@@ -53,6 +56,7 @@ pub const FEATURES: &[&str] = &[
     "secrets",
     "host",
     "setup",
+    "browser",
 ];
 
 /// Context budget bounds for `smart` memory, in tokens.
@@ -79,6 +83,8 @@ pub struct App {
     pub host: Arc<Sampler>,
     /// Components the features need, and installing them (see docs/ARCHITECTURE.md#setup).
     pub setup: Arc<Setup>,
+    /// The server's browser, one per workspace (see docs/ARCHITECTURE.md#browser).
+    pub browser: Arc<BrowserManager>,
 }
 
 impl App {
@@ -100,6 +106,7 @@ impl App {
             tunnels: Arc::new(tunnel::TunnelSlots::default()),
             host: Sampler::new(),
             setup: Setup::system(),
+            browser: BrowserManager::system(),
         })
     }
 }
@@ -148,6 +155,8 @@ pub const CHANGES_ERROR: i64 = -32022;
 pub const HOST_ERROR: i64 = -32023;
 /// A setup method failed; `error.data.reason` says why (see rpc::setup).
 pub const SETUP_ERROR: i64 = -32024;
+/// A browser method failed; `error.data.reason` says why (see rpc::browser).
+pub const BROWSER_ERROR: i64 = -32026;
 
 impl RpcError {
     fn new(code: i64, message: impl Into<String>) -> Self {
@@ -511,6 +520,10 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
         return files::dispatch(app, method, p)
             .await
             .unwrap_or_else(|| Err(RpcError::new(METHOD_NOT_FOUND, format!("unknown method {method}"))));
+    }
+    if method.starts_with("browser.") {
+        // Every `browser.*` name is answered there, unknown ones with METHOD_NOT_FOUND.
+        return browser::dispatch(app, peer, method, p).await;
     }
     if method.starts_with("changes.") {
         // Every `changes.*` name is answered there, unknown ones with METHOD_NOT_FOUND.

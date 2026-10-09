@@ -69,6 +69,8 @@ Per agent `approval_mode`:
 
 Risky = matches a rule. Built-in rules (editable): `git push*`, `git reset --hard*`, `rm -rf*`, `*deploy*`, `npm publish*`, `cargo publish*`, `kubectl delete*`, `terraform apply*`, `DROP TABLE*`, `prisma migrate deploy*`, writes outside the agent's own folders (its `cwd` and its home folder). Agent rules (`allow` / `ask` / `deny` patterns) win over built-ins. "Always allow here" on an approval adds an `allow` rule to that agent.
 
+The daemon can also ask the human itself, for something no runtime asked about (a risky browser click, see [Browser](#browser)). Such a request goes into the agent's feed like any other approval: `approval.requested`, answered with `approvals.resolve`. Nothing is remembered from it. No answer within the time limit denies it, and so does a stop of the agent while it waits. This works the same for every runtime.
+
 A pending approval blocks only that agent. Approvals time out after 24 h → deny.
 
 ## Store (SQLite)
@@ -88,7 +90,7 @@ Migrations: numbered SQL files embedded in the binary, applied by `PRAGMA user_v
 
 JSON-RPC 2.0. Same methods on every transport.
 
-- Requests: `daemon.info`, `runtimes.status`, `agents.list|get|create|update|delete`, `agents.send{agent_id,text}`, `agents.interrupt`, `events.since{seq,limit,agent_id?}`, `approvals.list|resolve{approval_id,decision,remember}`, `rules.list|set|delete`, `schedules.list|create|update|delete|run_now`, `devices.list|revoke`, `pair.redeem{code,device_name}` (only unauthenticated method), `term.list|open|input|resize|rename|close|attach|detach` (see Terminals), `fs.*` (see [Files](#files)), `changes.checkpoints|diff|file|restore` (see [Changes](#changes)), `secrets.list|set|delete` (see [Secrets](#secrets), `host.stats|history|processes|ports|kill`, `setup.status|install|job` (see [Setup](#setup)).
+- Requests: `daemon.info`, `runtimes.status`, `agents.list|get|create|update|delete`, `agents.send{agent_id,text}`, `agents.interrupt`, `events.since{seq,limit,agent_id?}`, `approvals.list|resolve{approval_id,decision,remember}`, `rules.list|set|delete`, `schedules.list|create|update|delete|run_now`, `devices.list|revoke`, `pair.redeem{code,device_name}` (only unauthenticated method), `term.list|open|input|resize|rename|close|attach|detach` (see Terminals), `fs.*` (see [Files](#files)), `changes.checkpoints|diff|file|restore` (see [Changes](#changes)), `secrets.list|set|delete` (see [Secrets](#secrets), `host.stats|history|processes|ports|kill`, `setup.status|install|job` (see [Setup](#setup)), `browser.start|status|stop|control|touch` (see [Browser](#browser)). `browser.agent.*` is for the crew MCP on the server only.
 - Notifications (server → client): `event{seq, agent_id, kind, payload, ts}` for every event including `message.delta`; `term.output|gap|exit|closed` for attached terminals (see Terminals).
 
 ## Transports (connect any way you like)
@@ -134,6 +136,40 @@ Loop guards: every crew message belongs to a chain, which starts with each user 
 A refused `crew_send` comes back to the agent as a tool error that tells it to report to the user. The counters are in memory: a daemon restart resets them, and they are dropped all at once when more than 10 000 chains are tracked. A crew message sent while the agent has no running turn is not counted against the per-turn limit.
 
 These limits stop accidental loops. They are not a security boundary: an agent with shell access runs as your user and can do anything you can.
+
+Browser tools are on the same server, through the same crew MCP: `browser_open`, `browser_snapshot`, `browser_click`, `browser_type`, `browser_press`, `browser_back`, `browser_screenshot`, `browser_tabs`, `browser_switch`. They are described in [Browser](#browser).
+
+## Browser
+
+The server runs one Chrome per workspace (`shared` by default). The app watches it, and agents drive it, through the same daemon. Code: `daemon/src/browser.rs` (manager, approvals), `daemon/src/cdp.rs` (DevTools client, snapshot), `daemon/src/rpc/browser.rs` (methods). Feature string: `"browser"`. The screen feature (Xvfb) is separate; the browser runs `--headless=new` for now.
+
+**Start.** `browser.start{workspace?}` finds `google-chrome`, `google-chrome-stable`, `chromium` or `chromium-browser` on `PATH`, and on macOS `/Applications/Google Chrome.app` first. It starts Chrome on a free loopback port, in its own process group, with `--headless=new --remote-debugging-address=127.0.0.1` and the profile `<data dir>/workspaces/<workspace>/browser` (`<data dir>` is `$BANDITO_HOME` or `~/.bandito`). Chrome's output goes to `browser.log` in the workspace folder. The daemon waits up to 10 s for the DevTools port. Without a browser the error has `reason: "missing_component"` and `component: "browser"`, and the app offers the install from setup.
+
+**The app.** The app opens the page's DevTools WebSocket through the tunnel (`GET /v1/tunnel?port=<cdp_port>`, see [Tunnel](#tunnel)) and runs a CDP screencast on it. The daemon does not relay frames. `browser.status` answers `{running, cdp_port, browser_ws_path, pid, started_at, controller}`, where `controller` is `user`, `agent` or `none`. `browser.control{workspace?, holder}` sets who drives it. `browser.stop` stops it, and `browser.touch` only counts as activity.
+
+**Idle stop.** A browser with no agent call and no `browser.status` or `browser.touch` for 30 minutes is stopped; the check runs every minute. The app calls `browser.touch` while it shows the browser.
+
+**Errors.** `BROWSER_ERROR` (-32026), with `error.data.reason`: `missing_component`, `start_failed`, `unsupported` (not Linux or macOS), `not_running`, `user_controls`, `declined`, `failed`. A bad workspace name (letters, digits, `-`, `_`, up to 64) or a URL that is not `http`, `https`, `data:` or `about:blank` is `-32602`.
+
+**Agent tools.** The crew MCP server offers the browser tools, and each one calls `browser.agent.*` on the unix socket. Those methods accept only local peers. The browser starts on the first use. While `controller` is `user`, every tool call fails with "The user is using the browser. Wait or ask them to hand it back.". Refs come from the latest snapshot and are the DOM node's `backendDOMNodeId`.
+- `browser_snapshot` returns the title, the URL, and one line per link, button, textbox, searchbox, combobox, checkbox, radio, menuitem, tab, heading, or named image: `[ref] role "name" (value)`. Names are cut at 120 characters; there are at most 600 element lines.
+- `browser_open{url, new_tab?}` navigates the agent's tab, or opens a new one, and waits for the load event for up to 30 s.
+- `browser_click{ref}`, `browser_type{ref, text, submit?}`, `browser_press{key}` (named keys only, such as `Enter`, `Tab`, `Escape`, `ArrowDown`), `browser_back`, `browser_screenshot` (PNG, at most 1280 px wide, returned as an image), `browser_tabs` (`*` marks the agent's tab), `browser_switch{index}`.
+
+**Risky clicks.** `browser.agent.click{agent_id, ref}` reads the element's role, name and value first. If the name or the value contains one of the words below (case-insensitive substring match), the daemon asks the human before it clicks. It does this itself, not through the runtime, so every runtime behaves the same. The request is an approval in the agent's feed: tool `browser_click`, title `Нажать «<the element's real name>» на <host>`, the page URL as command, reason `browser: risky click`. The user answers it in the app with `approvals.resolve`, as with any approval. Allow: the click happens. Deny, or no answer within 10 minutes: the agent gets "The user declined this click.", and the click does not happen. Ordinary clicks and typing are not asked about. Words: `pay`, `buy`, `purchase`, `checkout`, `order`, `subscribe`, `send`, `submit`, `delete`, `remove`, `transfer`, `confirm`, `оплат`, `куп`, `заказ`, `подпис`, `отправ`, `удал`, `перев`, `подтверд`.
+
+**Orphans.** When the daemon starts, it stops Chrome processes an earlier daemon left behind: processes whose command line has this server's `workspaces/` folder in `--user-data-dir`. On Linux it reads `/proc`; on macOS it uses `pgrep -f`. Other Chrome processes, such as the user's own, are not touched.
+
+**Profile.** The profile keeps the browser's sign-ins to websites. Agents and the app share it, and it stays on the server, with the same owner as the daemon. Deleting `workspaces/<workspace>` signs out everywhere.
+
+## Preview proxy
+
+`GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE` and `OPTIONS` on `/v1/proxy/<port>/<path>` forward to `127.0.0.1:<port>` on the server, so the app can show a dev server an agent started. Access is the same as for the file routes: a paired device (`Authorization: Bearer`), and no browser `Origin` (403). A port outside 1..=65535 is 400. Code: `daemon/src/rpc/preview.rs`; the route is in `rpc/ws.rs`.
+
+- Request: the hop-by-hop headers (`Connection` and the names it lists, `Keep-Alive`, `Proxy-*`, `TE`, `Trailer`, `Transfer-Encoding`, `Upgrade`) are not passed on. Neither are `Authorization` (the device token) and `Host`; the target gets `Host: 127.0.0.1:<port>`. The body is streamed.
+- Response: status, headers (without hop-by-hop ones) and body are streamed back. A `Location` of `http://127.0.0.1:<port>` or `http://localhost:<port>`, or a root path (`/x`), is rewritten under the proxy prefix (`/v1/proxy/<port>/x`), so a redirect stays in the preview.
+- Connecting to the target takes at most 5 s; otherwise 502.
+- WebSocket upgrades are refused with 501. Root-relative links inside HTML and JavaScript are not rewritten, so a page that uses them shows, but its links to `/x` go to the server root.
 
 ## Terminals
 
@@ -359,6 +395,10 @@ daemon/            Rust crate `bandito`
   src/policy.rs    approval rules
   src/host.rs      host load, processes, ports, kill (see Host)
   src/setup.rs     components per feature, install jobs (see Setup)
+  src/browser.rs   the server's Chrome: start, stop, agent actions, risky clicks (see Browser)
+  src/cdp.rs       DevTools WebSocket client, page operations, snapshot text
+  src/rpc/browser.rs  browser.* and browser.agent.* methods
+  src/rpc/preview.rs  preview proxy to loopback ports (see Preview proxy)
   src/scheduler.rs
   src/crew.rs      MCP server
   tests/fixtures/  recorded protocol transcripts

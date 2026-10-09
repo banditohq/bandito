@@ -1,0 +1,9 @@
+Title: Checkout
+URL: https://shop.example/cart
+[5] heading "Your order"
+[7] link "Home"
+[8] textbox "Email" (a@b.c)
+[10] image "Logo"
+[11] button "Pay now"
+[13] checkbox "Subscribe to news"
+[14] button "Very long label that goes on and on and on past the one hundred and twenty character limit used by the snapshot renderer…"

@@ -94,8 +94,27 @@ pub struct CrewContext {
     pub sends: u8,
 }
 
+/// An approval the daemon asks for itself, not a runtime (such as a risky browser click).
+#[derive(Debug, Clone)]
+pub struct ApprovalSpec {
+    /// Tool name shown in the app, e.g. `browser_click`.
+    pub tool: String,
+    pub title: String,
+    pub command: Option<String>,
+    /// Why the human is asked; shown with the approval.
+    pub reason: String,
+    /// What the answer is about. Stored and shown with the approval.
+    pub input: serde_json::Value,
+}
+
 enum Cmd {
     Send(Inbound, oneshot::Sender<Result<()>>),
+    /// A daemon-asked approval (see [`Supervisor::ask_external`]). Replies with the approval id and
+    /// the channel that carries the answer.
+    AskExternal {
+        spec: ApprovalSpec,
+        reply: oneshot::Sender<Result<(String, oneshot::Receiver<Decision>)>>,
+    },
     Interrupt(oneshot::Sender<Result<()>>),
     Resolve {
         approval_id: String,
@@ -389,6 +408,32 @@ impl Supervisor {
         .await
     }
 
+    /// Ask the human before the daemon acts for the agent. The request is recorded and shown in the
+    /// agent's feed like a runtime approval, and answered with `approvals.resolve`. No answer within
+    /// `limit` denies it, and so does a stop of the agent while it waits (its pending approvals are
+    /// expired then). `remember` is ignored for these: no rule is created.
+    pub async fn ask_external(&self, agent_id: &str, spec: ApprovalSpec, limit: Duration) -> Result<Decision> {
+        let (approval_id, mut answer) = self.call(agent_id, |reply| Cmd::AskExternal { spec, reply }).await?;
+        match tokio::time::timeout(limit, &mut answer).await {
+            Ok(Ok(decision)) => Ok(decision),
+            Ok(Err(_)) => Ok(Decision::Deny),
+            Err(_) => {
+                // Too late: deny it through the actor, so the store and the feed record it. An answer
+                // that arrived meanwhile is kept.
+                let _ = self
+                    .call(agent_id, |reply| Cmd::Resolve {
+                        approval_id,
+                        decision: Decision::Deny,
+                        by: DecidedBy::Policy,
+                        remember: false,
+                        reply,
+                    })
+                    .await;
+                Ok(answer.try_recv().unwrap_or(Decision::Deny))
+            }
+        }
+    }
+
     /// Deny approvals older than [`APPROVAL_TTL_MS`]. Call periodically.
     pub async fn expire_stale_approvals(&self) -> Result<()> {
         let cutoff = now_ms() - APPROVAL_TTL_MS;
@@ -468,6 +513,8 @@ struct PendingApproval {
     key: String,
     /// What a "remember" rule should match: the command, or the title.
     subject: String,
+    /// Set for a daemon-asked approval: the answer goes here instead of to a runtime session.
+    external: Option<oneshot::Sender<Decision>>,
 }
 
 struct Actor {
@@ -557,6 +604,9 @@ impl Actor {
             } => {
                 let _ = reply.send(self.resolve(&approval_id, decision, by, remember).await);
             }
+            Cmd::AskExternal { spec, reply } => {
+                let _ = reply.send(self.ask_external(spec));
+            }
             Cmd::ReserveCrewSend(text, reply) => {
                 let result = self
                     .reserve_crew_send()
@@ -602,21 +652,27 @@ impl Actor {
     }
 
     async fn resolve(&mut self, approval_id: &str, decision: Decision, by: DecidedBy, remember: bool) -> Result<()> {
-        let Some(p) = self.pending.get(approval_id) else {
+        let Some(p) = self.pending.remove(approval_id) else {
             bail!("approval {approval_id} is not pending");
         };
         if self.hub.store.approval_resolve(approval_id, decision)?.is_none() {
-            self.pending.remove(approval_id);
             bail!("approval {approval_id} was already answered");
         }
-        let (key, subject) = (p.key.clone(), p.subject.clone());
-        self.pending.remove(approval_id);
-        if let Some(s) = &mut self.session {
-            s.resolve(&key, decision).await?;
+        let external = p.external.is_some();
+        match p.external {
+            // The daemon's own question: whoever asked is waiting for this answer.
+            Some(answer) => {
+                let _ = answer.send(decision);
+            }
+            None => {
+                if let Some(s) = &mut self.session {
+                    s.resolve(&p.key, decision).await?;
+                }
+            }
         }
-        let remember = remember && decision == Decision::Allow;
+        let remember = remember && decision == Decision::Allow && !external;
         if remember {
-            self.hub.store.rule_set(Some(&self.id), &subject, RuleAction::Allow)?;
+            self.hub.store.rule_set(Some(&self.id), &p.subject, RuleAction::Allow)?;
         }
         self.hub.emit(
             &self.id,
@@ -1083,12 +1139,41 @@ impl Actor {
                     PendingApproval {
                         key: req.key.clone(),
                         subject,
+                        external: None,
                     },
                 );
                 self.set_status(AgentStatus::NeedsYou, None);
                 Ok(())
             }
         }
+    }
+
+    /// Record a daemon-asked approval. Its answer channel waits in `pending`, and it shows in the feed
+    /// like a policy `Ask`. Returns the approval id and the receiver for the answer.
+    fn ask_external(&mut self, spec: ApprovalSpec) -> Result<(String, oneshot::Receiver<Decision>)> {
+        let mut req = ApprovalRequest {
+            key: new_id(),
+            call_id: new_id(),
+            tool: spec.tool,
+            title: spec.title,
+            command: spec.command,
+            diff: None,
+            paths: Vec::new(),
+            input: spec.input,
+        };
+        self.redactor.redact_approval(&mut req);
+        let approval_id = self.record(&req, &spec.reason)?;
+        let (answer, received) = oneshot::channel();
+        self.pending.insert(
+            approval_id.clone(),
+            PendingApproval {
+                key: req.key,
+                subject: String::new(),
+                external: Some(answer),
+            },
+        );
+        self.set_status(AgentStatus::NeedsYou, None);
+        Ok((approval_id, received))
     }
 
     /// Store an approval and emit `approval.requested`. Returns its id.
@@ -2590,5 +2675,42 @@ mod tests {
         w.push(done()).await;
         w.wait(|b| matches!(b, EventBody::TurnCompleted { .. })).await;
         assert!(w.store.checkpoint_list(&w.agent, 10).unwrap().is_empty());
+    }
+
+    fn external_spec() -> ApprovalSpec {
+        ApprovalSpec {
+            tool: "browser_click".into(),
+            title: "Нажать «Оплатить» на shop.example".into(),
+            command: Some("https://shop.example/cart".into()),
+            reason: "browser: risky click".into(),
+            input: json!({"name": "Оплатить"}),
+        }
+    }
+
+    #[tokio::test]
+    async fn external_ask_is_denied_when_the_agent_stops_while_it_waits() {
+        let mut w = world(ApprovalMode::Risky);
+        let (sup, agent) = (w.sup.clone(), w.agent.clone());
+        let asking =
+            tokio::spawn(async move { sup.ask_external(&agent, external_spec(), Duration::from_secs(30)).await });
+        w.wait(|b| matches!(b, EventBody::ApprovalRequested { .. })).await;
+        w.sup.stop(&w.agent).await;
+        assert_eq!(asking.await.unwrap().unwrap(), Decision::Deny);
+        assert!(w.store.approval_list_pending(None).unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn external_ask_never_creates_a_remember_rule() {
+        let mut w = world(ApprovalMode::Risky);
+        let (sup, agent) = (w.sup.clone(), w.agent.clone());
+        let asking =
+            tokio::spawn(async move { sup.ask_external(&agent, external_spec(), Duration::from_secs(5)).await });
+        let e = w.wait(|b| matches!(b, EventBody::ApprovalRequested { .. })).await;
+        let EventBody::ApprovalRequested { approval_id, .. } = e.body else {
+            unreachable!()
+        };
+        w.sup.resolve(&approval_id, Decision::Allow, true).await.unwrap();
+        assert_eq!(asking.await.unwrap().unwrap(), Decision::Allow);
+        assert!(w.store.rule_list(Some(&w.agent)).unwrap().is_empty());
     }
 }
