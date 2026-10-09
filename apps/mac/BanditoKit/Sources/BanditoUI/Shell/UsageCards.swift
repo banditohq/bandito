@@ -27,6 +27,15 @@ public struct UsageWindowLine: Identifiable, Hashable, Sendable {
     public let note: String?
 
     public var exhausted: Bool { remaining <= 0 }
+
+    /// Share of the window used, 0...1. Read from `remaining` clamped to 0...1, so a value outside that range
+    /// cannot take the bar past its ends.
+    public var used: Double { 1 - UsageWindowLine.clampedShare(remaining) }
+
+    /// `value` clamped to 0...1. NaN counts as a full share left (nothing used).
+    static func clampedShare(_ value: Double) -> Double {
+        value.isNaN ? 1 : min(max(value, 0), 1)
+    }
 }
 
 /// Builds the usage cards from the server's limits, or from the sample data when the server has none.
@@ -81,6 +90,19 @@ public enum UsageCards {
         return scoped.flatMap(\.windows).map(\.remaining).min()
     }
 
+    /// The most filled window across the windows of `runtime`'s card, or across all cards when there is no
+    /// runtime or no card for it. On a tie the first one wins. `nil` when there are no windows at all.
+    public static func fullestWindow(_ cards: [UsageCard], runtime: String?) -> FullestWindow? {
+        let scoped = runtime.flatMap { id in cards.first { $0.runtime == id }.map { [$0] } } ?? cards
+        let lines = scoped.flatMap { card in card.windows.map { (card: card, window: $0) } }
+        // `max(by:)` keeps the first of equal elements, so a tie goes to the window listed first.
+        guard let fullest = lines.max(by: { $0.window.used < $1.window.used }) else { return nil }
+        return FullestWindow(
+            runtimeName: RuntimeKind(rawValue: fullest.card.runtime)?.title ?? fullest.card.name,
+            windowLabel: fullest.window.label,
+            used: fullest.window.used)
+    }
+
     @MainActor
     static func demoCards(_ demo: DemoStore) -> [UsageCard] {
         demo.usage.map { usage in
@@ -127,6 +149,62 @@ public enum UsageCards {
         case "seven_day": L10n.Inspector.Window.sevenDay
         default: name
         }
+    }
+}
+
+/// The most filled limit window, as the sidebar button tells it: which runtime and window, and how much of it is used.
+public struct FullestWindow: Hashable, Sendable {
+    /// The runtime as people see it, e.g. "Claude Code".
+    public let runtimeName: String
+    /// The window's label, e.g. "5 hours".
+    public let windowLabel: String
+    /// Share of the window used, 0...1.
+    public let used: Double
+
+    /// The share used as a whole percent, e.g. 73.
+    public var usedPercent: Int { Int((used * 100).rounded()) }
+}
+
+/// One line of the usage popover: a runtime's card, or a runtime that has no limits yet. `error` is the daemon's
+/// reason the last refresh could not read it, shown in grey.
+public enum UsageRow: Identifiable, Hashable, Sendable {
+    case card(UsageCard, error: String?)
+    case waiting(runtime: String, name: String, text: String, error: String?)
+
+    public var id: String {
+        switch self {
+        case .card(let card, _): card.runtime
+        case .waiting(let runtime, _, _, _): runtime
+        }
+    }
+
+    /// The popover's lines for the server's runtimes. Installed runtimes come first in a fixed order (then by id):
+    /// a runtime that is not signed in says so; one with a card shows it; one without says its limits are to come.
+    /// A card of a runtime the server reports as not installed is left out. With no runtime status yet, the cards
+    /// are shown as they are.
+    public static func make(cards: [UsageCard], runtimes: [RuntimeStatus], errors: [String: String]) -> [UsageRow] {
+        let order = ["claude", "codex", "grok", "api"]
+        func rank(_ runtime: String) -> Int { order.firstIndex(of: runtime) ?? order.count }
+        let notInstalled = Set(runtimes.filter { !$0.installed }.map { $0.kind.rawValue })
+        let signedOut = Set(runtimes.filter { $0.installed && $0.loggedIn == false }.map { $0.kind.rawValue })
+        let installed = runtimes.filter(\.installed).map { $0.kind.rawValue }
+
+        var rows: [UsageRow] = cards
+            .filter { !notInstalled.contains($0.runtime) && !signedOut.contains($0.runtime) }
+            .map { .card($0, error: errors[$0.runtime]) }
+        for runtime in installed {
+            if signedOut.contains(runtime) {
+                rows.append(.waiting(
+                    runtime: runtime, name: UsageCards.displayName(runtime),
+                    text: L10n.AgentSheet.statusNeedsLogin, error: errors[runtime]))
+            } else if !cards.contains(where: { $0.runtime == runtime }) {
+                rows.append(.waiting(
+                    runtime: runtime, name: UsageCards.displayName(runtime),
+                    text: runtime == "claude" ? L10n.Usage.claudeWaitsForReply : L10n.Usage.noLimitsYet,
+                    error: errors[runtime]))
+            }
+        }
+        return rows.sorted { (rank($0.id), $0.id) < (rank($1.id), $1.id) }
     }
 }
 

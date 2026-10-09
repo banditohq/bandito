@@ -54,6 +54,14 @@ struct TerminalsContent: View {
             router.terminalRequest = nil
             perform(request.action, controller: controller)
         }
+        // "Open terminal here" waits for the list, then opens a terminal in the folder. It must not wait for a
+        // click: the mode is often entered for this alone, and an empty pane would look like nothing happened.
+        .onChange(of: controller.isListed, initial: true) { _, _ in
+            openPendingFolder(controller)
+        }
+        .onChange(of: router.pendingTerminalCwd) { _, _ in
+            openPendingFolder(controller)
+        }
         .onChange(of: router.pendingTerminalCommand, initial: true) { _, _ in
             guard let command = router.takeTerminalCommand() else { return }
             runInNewTerminal(command, controller: controller)
@@ -82,6 +90,13 @@ struct TerminalsContent: View {
             cwd = router.takeTerminalCwd()
         }
         Task { await controller.openNew(cwd: cwd, afterFocused: split) }
+    }
+
+    /// Takes the folder waiting in the Router (once) and opens a new terminal there, as soon as the server lists
+    /// its terminals.
+    private func openPendingFolder(_ controller: TerminalController) {
+        guard controller.isListed, server.supports("terminals"), let cwd = router.takeTerminalCwd() else { return }
+        Task { await controller.openNew(cwd: cwd, afterFocused: false) }
     }
 
     /// A new terminal that starts with a command typed into it (Server → Install, Update): the command goes in
@@ -171,13 +186,16 @@ struct TerminalToolbar: View {
         let workspace = controller.workspace
         let inputToAll = workspace.inputToAll
         HStack(spacing: 10) {
-            Text(desktopTitle)
+            Text(L10n.Mode.terminals)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Color.Bandito.text)
                 .lineLimit(1)
+                .fixedSize()
             Text(L10n.Terminals.windowCount(count: workspace.onScreen.count))
                 .font(.system(size: 12))
                 .foregroundStyle(Color.Bandito.text3)
+                .lineLimit(1)
+                .fixedSize()
             Spacer(minLength: 12)
             Text(L10n.Terminals.layoutTitle)
                 .font(.system(size: 12))
@@ -220,13 +238,6 @@ struct TerminalToolbar: View {
         .overlay(alignment: .bottom) {
             Rectangle().fill(Color.Bandito.text.opacity(0.05)).frame(height: 1)
         }
-    }
-
-    private var desktopTitle: String {
-        if let name = controller.focusedSession?.info.title, !name.isEmpty {
-            return L10n.Terminals.desktop(name: name)
-        }
-        return L10n.Terminals.desktopDefault
     }
 
     private var layoutPicker: some View {

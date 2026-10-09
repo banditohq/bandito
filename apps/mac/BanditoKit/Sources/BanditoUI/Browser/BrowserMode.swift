@@ -42,6 +42,7 @@ private struct BrowserContent: View {
                 }
             }
             .keymapShortcut("browser.newTab", keymap: keymap) { Task { await model.newTab() } }
+            .keymapShortcut("browser.closeTab", keymap: keymap) { Task { await model.closeCurrentTab() } }
             .task(id: server.id) {
                 model.attach()
             }
@@ -70,8 +71,20 @@ private struct BrowserMainArea: View {
             } else {
                 VStack(spacing: 0) {
                     BrowserToolbar(model: model)
-                    if model.status?.running == true {
-                        ControlBanner(model: model)
+                    if let error = model.addressError {
+                        Text(error)
+                            .font(.system(size: 12))
+                            .foregroundStyle(Color.Bandito.danger)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 14)
+                            .padding(.top, 6)
+                    }
+                    if model.status?.running == true,
+                       let note = BrowserControlNote.make(
+                        holder: model.status?.controller ?? .none, asksToTake: model.asksToTakeControl) {
+                        ControlBanner(note: note, model: model)
                     }
                     content
                 }
@@ -161,17 +174,31 @@ private struct BrowserToolbar: View {
             Image(systemName: "lock")
                 .font(.system(size: 11))
                 .foregroundStyle(Color.Bandito.ok)
-            TextField(L10n.Browser.address, text: $model.addressText)
+            TextField(L10n.Browser.addressPlaceholder, text: $model.addressText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13, design: .monospaced))
                 .foregroundStyle(Color.Bandito.text)
+                .accessibilityLabel(L10n.Browser.address)
                 .focused($addressFocused)
                 .onSubmit {
-                    Task { await model.navigate(to: model.addressText) }
+                    model.submitAddress()
+                    // A refused address keeps the focus, so the person can correct it.
+                    if model.addressError == nil { addressFocused = false }
                 }
-            Text(L10n.Browser.onServer)
-                .font(.system(size: 11.5))
-                .foregroundStyle(Color.Bandito.text3)
+                .onChange(of: addressFocused) { _, focused in
+                    model.addressEditingChanged(focused)
+                }
+                .onChange(of: model.addressText) { _, _ in
+                    model.addressTextEdited()
+                }
+            if model.status?.running == true {
+                Text(L10n.Browser.onServer)
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Color.Bandito.text3)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .help(L10n.Browser.onServerHelp)
+            }
         }
         .padding(.horizontal, 12)
         .frame(height: 32)
@@ -293,19 +320,40 @@ private struct LoadingBar: View {
 
 // MARK: Control banner
 
-/// "Forge управляет браузером" while an agent holds the browser, with Pause and Take control.
-/// When the person holds it, a quiet strip offers to give it back. Also used for "Take control to click here?".
+/// What the strip above the page says about who drives the browser. Nil when nobody holds it: the page is
+/// then interactive at once, and no strip is shown. Pure, so the rules are easy to read and test.
+enum BrowserControlNote: Equatable {
+    /// An agent drives the browser: the strip says so and offers to take control.
+    case agentDriving
+    /// The person clicked while an agent drives: the strip asks before taking control.
+    case askToTake
+    /// The person holds the browser: a quiet strip to give it back.
+    case userHolds
+
+    static func make(holder: ControlHolder, asksToTake: Bool) -> BrowserControlNote? {
+        switch holder {
+        case .agent: asksToTake ? .askToTake : .agentDriving
+        case .user: .userHolds
+        case .none: nil
+        }
+    }
+}
+
+/// The strip above the page for a `BrowserControlNote`.
 private struct ControlBanner: View {
+    let note: BrowserControlNote
     @Bindable var model: BrowserModel
 
     var body: some View {
-        let holder = model.status?.controller ?? .none
         HStack(spacing: 10) {
-            if holder == .agent {
+            switch note {
+            case .agentDriving:
                 AgentDots()
-                Text(L10n.Browser.banner)
+                Text(L10n.Browser.agentDrivingNow)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color.Bandito.text)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
                 Spacer(minLength: 8)
                 Button(L10n.Browser.bannerPause) {
                     Task { await model.pause() }
@@ -315,28 +363,25 @@ private struct ControlBanner: View {
                     Task { await model.takeControl() }
                 }
                 .banditoButton(.lightPill())
-            } else if model.asksToTakeControl {
+            case .askToTake:
                 Text(L10n.Browser.askTakeControl)
                     .font(.system(size: 13))
                     .foregroundStyle(Color.Bandito.text)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
                 Spacer(minLength: 8)
                 Button(L10n.Browser.bannerTake) {
                     Task { await model.takeControl() }
                 }
                 .banditoButton(.lightPill())
-            } else {
-                Text(holder == .user ? L10n.Browser.controlUser : L10n.Browser.controlNone)
+            case .userHolds:
+                Text(L10n.Browser.userHolds)
                     .font(.system(size: 12.5))
                     .foregroundStyle(Color.Bandito.text2)
+                    .lineLimit(1)
                 Spacer(minLength: 8)
-                Button(holder == .user ? L10n.Browser.bannerGive : L10n.Browser.bannerTake) {
-                    Task {
-                        if holder == .user {
-                            await model.giveBack()
-                        } else {
-                            await model.takeControl()
-                        }
-                    }
+                Button(L10n.Browser.bannerGive) {
+                    Task { await model.giveBack() }
                 }
                 .banditoButton(.quiet())
             }
@@ -344,14 +389,14 @@ private struct ControlBanner: View {
         .padding(.horizontal, 12)
         .frame(height: 42)
         .background(
-            holder == .agent
+            note == .agentDriving || note == .askToTake
                 ? AnyShapeStyle(Color.Bandito.signal.opacity(0.12))
                 : AnyShapeStyle(Color.Bandito.surface2.opacity(0.6)),
             in: RoundedRectangle(cornerRadius: BanditoRadius.md)
         )
         .overlay {
             RoundedRectangle(cornerRadius: BanditoRadius.md)
-                .strokeBorder(holder == .agent ? Color.Bandito.signal.opacity(0.3) : Color.Bandito.line)
+                .strokeBorder(note == .userHolds ? Color.Bandito.line : Color.Bandito.signal.opacity(0.3))
         }
         .padding(.horizontal, 14)
         .padding(.top, 10)
@@ -381,6 +426,8 @@ private struct AgentDots: View {
 /// The picture of the page, with the input that goes to it.
 private struct PageSurface: View {
     @Bindable var model: BrowserModel
+    /// Device pixels per point of the window the page is in. Read from the window (see `WindowScaleReader`).
+    @State private var scale: CGFloat = 2
 
     var body: some View {
         GeometryReader { geo in
@@ -426,11 +473,84 @@ private struct PageSurface: View {
                 )
                 #endif
             }
+            // The page is sized to the area the picture is drawn in, so the picture fills it with no bars.
+            .onAppear { reportArea(size) }
+            .onChange(of: size) { _, area in reportArea(area) }
+            .onChange(of: scale) { _, _ in reportArea(size) }
+            .onDisappear { model.pageAreaHidden() }
+            .background { scaleReader }
         }
         .clipShape(RoundedRectangle(cornerRadius: BanditoRadius.md))
         .padding(14)
     }
+
+    @ViewBuilder
+    private var scaleReader: some View {
+        #if os(macOS)
+        WindowScaleReader { scale = $0 }
+        #else
+        Color.clear
+        #endif
+    }
+
+    private func reportArea(_ area: CGSize) {
+        model.pageAreaChanged(width: area.width, height: area.height, scale: Double(scale))
+    }
 }
+
+#if os(macOS)
+/// Reports the backing scale of the window the view is in: at once, and again when the window moves to a screen
+/// with another scale.
+private struct WindowScaleReader: NSViewRepresentable {
+    let onChange: (CGFloat) -> Void
+
+    func makeNSView(context: Context) -> ScaleView {
+        ScaleView(onChange: onChange)
+    }
+
+    func updateNSView(_ view: ScaleView, context: Context) {
+        view.onChange = onChange
+    }
+
+    static func dismantleNSView(_ view: ScaleView, coordinator: ()) {
+        view.stopWatching()
+    }
+
+    final class ScaleView: NSView {
+        var onChange: (CGFloat) -> Void = { _ in }
+        private var observer: NSObjectProtocol?
+
+        init(onChange: @escaping (CGFloat) -> Void) {
+            self.onChange = onChange
+            super.init(frame: .zero)
+        }
+
+        required init?(coder: NSCoder) {
+            super.init(coder: coder)
+        }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            stopWatching()
+            guard let window else { return }
+            onChange(window.backingScaleFactor)
+            observer = NotificationCenter.default.addObserver(
+                forName: NSWindow.didChangeBackingPropertiesNotification, object: window, queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    guard let self, let window = self.window else { return }
+                    self.onChange(window.backingScaleFactor)
+                }
+            }
+        }
+
+        func stopWatching() {
+            if let observer { NotificationCenter.default.removeObserver(observer) }
+            observer = nil
+        }
+    }
+}
+#endif
 
 /// A preview of a port an agent opened, in a web view (see `PreviewWebView`).
 private struct PreviewPane: View {
@@ -463,9 +583,15 @@ private struct BrowserStopped: View {
             Image(systemName: "globe")
                 .font(.system(size: 34))
                 .foregroundStyle(Color.Bandito.text3)
-            Text(L10n.Browser.stopped)
-                .font(.system(size: 13))
-                .foregroundStyle(Color.Bandito.text2)
+            VStack(spacing: 6) {
+                Text(L10n.Browser.stopped)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.Bandito.text2)
+                Text(L10n.Browser.stoppedHint)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.Bandito.text3)
+                    .multilineTextAlignment(.center)
+            }
             if model.needsChrome {
                 ChromeInstallCard(model: model)
             } else {
@@ -534,14 +660,28 @@ struct BrowserSidebar: View {
 private struct BrowserSidebarContent: View {
     @Bindable var model: BrowserModel
     @State private var ports: [ListeningPort] = []
+    /// The first-visit hint, closed once for good.
+    @AppStorage("browser.sidebarHintClosed") private var hintClosed = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 2) {
-                SectionLabel(L10n.Browser.tabs)
-                    .padding(.horizontal, 18)
-                    .padding(.top, 14)
-                    .padding(.bottom, 6)
+                HStack(spacing: 6) {
+                    SectionLabel(L10n.Browser.tabs)
+                    Spacer(minLength: 6)
+                    Button {
+                        Task { await model.newTab() }
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 11, weight: .semibold))
+                    }
+                    .banditoButton(.icon(size: 22, label: L10n.Browser.newTab))
+                    .focusable(false)
+                    .help(L10n.Browser.newTabHelp)
+                }
+                .padding(.horizontal, 10)
+                .padding(.top, 14)
+                .padding(.bottom, 6)
                 ForEach(model.tabs) { tab in
                     tabRow(tab)
                 }
@@ -549,12 +689,15 @@ private struct BrowserSidebarContent: View {
                     previewRow(port)
                 }
 
-                SectionLabel(L10n.Browser.agentsOpened)
-                    .padding(.horizontal, 18)
-                    .padding(.top, 16)
-                    .padding(.bottom, 6)
-                ForEach(ports, id: \.self) { port in
-                    portRow(port)
+                // Only when an agent has opened something: an empty section says nothing.
+                if !ports.isEmpty {
+                    SectionLabel(L10n.Browser.agentsOpened)
+                        .padding(.horizontal, 10)
+                        .padding(.top, 16)
+                        .padding(.bottom, 6)
+                    ForEach(ports, id: \.self) { port in
+                        portRow(port)
+                    }
                 }
             }
             .padding(.horizontal, 8)
@@ -562,16 +705,9 @@ private struct BrowserSidebarContent: View {
         }
         .scrollIndicators(.never)
         .safeAreaInset(edge: .bottom) {
-            Text(L10n.Browser.hint)
-                .font(.system(size: 12))
-                .lineSpacing(2)
-                .foregroundStyle(Color.Bandito.text2)
-                .padding(12)
-                .background(Color.Bandito.info.opacity(0.07), in: RoundedRectangle(cornerRadius: BanditoRadius.md))
-                .overlay {
-                    RoundedRectangle(cornerRadius: BanditoRadius.md).strokeBorder(Color.Bandito.info.opacity(0.18))
-                }
-                .padding(14)
+            if !hintClosed {
+                hintCard
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.Bandito.surface1)
@@ -583,37 +719,49 @@ private struct BrowserSidebarContent: View {
         }
     }
 
-    private func tabRow(_ tab: BrowserTab) -> some View {
-        let selected = model.selection == .page(tab.id)
-        return Button {
-            Task { await model.selectPage(tab.id) }
-        } label: {
-            HStack(spacing: 10) {
-                Text(String(tab.title.prefix(1)).uppercased())
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(Color.Bandito.onSignal)
-                    .frame(width: 26, height: 26)
-                    .background(Color.Bandito.text2.opacity(0.25), in: RoundedRectangle(cornerRadius: 8))
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(tab.title.isEmpty ? tab.url : tab.title)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(Color.Bandito.text)
-                        .lineLimit(1)
-                    Text(selected ? controllerText : tab.url)
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(selected && model.isAgentControlling ? Color.Bandito.signal : Color.Bandito.text3)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 0)
+    private var hintCard: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text(L10n.Browser.hintShort)
+                .font(.system(size: 12))
+                .lineSpacing(2)
+                .foregroundStyle(Color.Bandito.text2)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            Button {
+                hintClosed = true
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 9, weight: .semibold))
+                    .frame(width: 20, height: 20)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background(
-                selected ? Color.Bandito.signal.opacity(0.1) : Color.clear,
-                in: RoundedRectangle(cornerRadius: 11))
-            .contentShape(Rectangle())
+            .banditoButton(.row(cornerRadius: 6, hoverOpacity: 0.08))
+            .foregroundStyle(Color.Bandito.text3)
+            .help(L10n.Common.close)
+            .accessibilityLabel(L10n.Common.close)
         }
-        .banditoButton(.row(cornerRadius: 11))
+        .padding(12)
+        .background(Color.Bandito.info.opacity(0.07), in: RoundedRectangle(cornerRadius: BanditoRadius.md))
+        .overlay {
+            RoundedRectangle(cornerRadius: BanditoRadius.md).strokeBorder(Color.Bandito.info.opacity(0.18))
+        }
+        .padding(14)
+    }
+
+    private func tabRow(_ tab: BrowserTab) -> some View {
+        BrowserTabRow(
+            tab: tab,
+            selected: model.selection == .page(tab.id),
+            // The address of the shown tab is the live one; the others show the last list of tabs.
+            url: model.selection == .page(tab.id) ? model.currentURL : tab.url,
+            agentDrives: model.selection == .page(tab.id) && model.isAgentControlling,
+            onSelect: { Task { await model.selectPage(tab.id) } },
+            onReload: {
+                Task {
+                    await model.selectPage(tab.id)
+                    await model.reload()
+                }
+            },
+            onClose: { Task { await model.closeTab(tab.id) } })
     }
 
     private func previewRow(_ port: Int) -> some View {
@@ -627,7 +775,7 @@ private struct BrowserSidebarContent: View {
                     .frame(width: 26, height: 26)
                     .foregroundStyle(Color.Bandito.info)
                     .background(Color.Bandito.info.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
-                Text("\(L10n.Browser.previewTitle) :\(port)")
+                Text(verbatim: "\(L10n.Browser.previewTitle) :\(port)")
                     .font(.system(size: 13))
                     .foregroundStyle(Color.Bandito.text)
                 Spacer(minLength: 0)
@@ -650,7 +798,7 @@ private struct BrowserSidebarContent: View {
 
     private func portRow(_ port: ListeningPort) -> some View {
         HStack(spacing: 10) {
-            Text(":\(port.port)")
+            Text(verbatim: ":\(port.port)")
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundStyle(Color.Bandito.ok)
                 .padding(.horizontal, 7)
@@ -670,17 +818,127 @@ private struct BrowserSidebarContent: View {
         .padding(.vertical, 6)
     }
 
-    private var controllerText: String {
-        switch model.status?.controller ?? .none {
-        case .agent: L10n.Browser.controlAgent
-        case .user: L10n.Browser.controlUser
-        case .none: L10n.Browser.controlNone
-        }
-    }
-
     /// Ports listening on the server that an agent started.
     private func loadPorts() async {
         guard let all = try? await model.server.hostPorts(), all.supported else { return }
         ports = all.ports.filter { $0.owner?.kind == .agent }
+    }
+}
+
+/// One tab of the server's browser: a letter, its title (or domain), the close button on hover, and a context menu.
+private struct BrowserTabRow: View {
+    let tab: BrowserTab
+    let selected: Bool
+    /// The address to show under the title: the live one for the shown tab.
+    let url: String
+    /// The agent drives the browser now, and this is its tab: a small dot says so.
+    let agentDrives: Bool
+    let onSelect: () -> Void
+    let onReload: () -> Void
+    let onClose: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        let label = BrowserTabLabel.make(title: tab.title, url: url, newTabTitle: L10n.Browser.newTab)
+        HStack(spacing: 6) {
+            Button(action: onSelect) {
+                HStack(spacing: 10) {
+                    Text(label.initial)
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Color.Bandito.onSignal)
+                        .frame(width: 26, height: 26)
+                        .background(Color.Bandito.text2.opacity(0.25), in: RoundedRectangle(cornerRadius: 8))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(label.title)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Color.Bandito.text)
+                            .lineLimit(1)
+                        HStack(spacing: 5) {
+                            if agentDrives {
+                                Circle()
+                                    .fill(Color.Bandito.signal)
+                                    .frame(width: 5, height: 5)
+                                    .help(L10n.Browser.controlAgent)
+                                    .accessibilityLabel(L10n.Browser.controlAgent)
+                            }
+                            Text(label.domain)
+                                .font(.system(size: 11.5))
+                                .foregroundStyle(Color.Bandito.text3)
+                                .lineLimit(1)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .banditoButton(.row(cornerRadius: 11))
+
+            if hovering {
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .semibold))
+                        .frame(width: 22, height: 22)
+                }
+                .banditoButton(.icon(size: 22, label: L10n.Browser.closeTab))
+                .foregroundStyle(Color.Bandito.text3)
+                .focusable(false)
+                .help(L10n.Browser.closeTabHelp)
+            }
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(
+            selected ? Color.Bandito.signal.opacity(0.1) : Color.clear,
+            in: RoundedRectangle(cornerRadius: 11))
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+        .contextMenu {
+            Button(L10n.Browser.reload, action: onReload)
+            Button(L10n.Browser.copyAddress) {
+                #if os(macOS)
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(url, forType: .string)
+                #endif
+            }
+            Divider()
+            Button(L10n.Browser.closeTab, action: onClose)
+        }
+    }
+}
+
+/// The text of a tab row. A page without a title shows its domain; a blank or new-tab page shows the new-tab name.
+/// Pure, so the rules are easy to read and test.
+enum BrowserTabLabel {
+    struct Parts: Equatable {
+        let title: String
+        /// The domain shown under the title, without "www.". Empty for a blank page.
+        let domain: String
+        let initial: String
+    }
+
+    static func make(title: String, url: String, newTabTitle: String) -> Parts {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let host = domain(of: url)
+        let blank = isBlank(url)
+        let shown: String
+        if blank {
+            shown = newTabTitle
+        } else if trimmed.isEmpty || trimmed == url {
+            shown = host.isEmpty ? url : host
+        } else {
+            shown = trimmed
+        }
+        return Parts(title: shown, domain: blank ? "" : host, initial: String(shown.prefix(1)).uppercased())
+    }
+
+    static func domain(of url: String) -> String {
+        guard let host = URL(string: url)?.host, !host.isEmpty else { return "" }
+        return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+    }
+
+    static func isBlank(_ url: String) -> Bool {
+        let lower = url.lowercased()
+        return lower.isEmpty || lower == "about:blank" || lower.hasPrefix("chrome://newtab")
+            || lower.hasPrefix("chrome://new-tab-page") || lower.hasPrefix("chrome-search://local-ntp")
     }
 }

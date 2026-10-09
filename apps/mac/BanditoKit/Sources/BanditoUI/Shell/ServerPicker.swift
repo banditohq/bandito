@@ -6,19 +6,25 @@ import SwiftUI
 /// The server button at the top of the sidebar: name, online state, a summary line, and a menu to switch.
 struct ServerPicker: View {
     @Environment(AppModel.self) private var app
+    @Environment(Router.self) private var router
 
     var body: some View {
         if let server = app.currentServer {
             Menu {
                 ForEach(app.servers) { candidate in
                     Button { app.selectedServerID = candidate.id } label: {
-                        // A dot marks a server whose daemon has a newer release to install.
-                        if DaemonUpdateOffer.offer(for: candidate.info) != nil {
-                            Label(Self.name(candidate), systemImage: "circle.fill")
-                        } else {
-                            Text(Self.name(candidate))
-                        }
+                        Self.menuLabel(candidate, isCurrent: candidate.id == server.id)
                     }
+                }
+                Divider()
+                Button { router.sheet = .addServer } label: {
+                    Label(L10n.Server.Picker.connect, systemImage: "plus")
+                }
+                Button {
+                    SettingsNavigation.shared.requested = .servers
+                    WindowActions.showSettings()
+                } label: {
+                    Label(L10n.Server.Picker.manage, systemImage: "gearshape")
                 }
             } label: {
                 HStack(spacing: 10) {
@@ -53,11 +59,48 @@ struct ServerPicker: View {
             .menuIndicator(.hidden)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityLabel(Self.name(server))
+        } else {
+            // No server yet: the place of the picker says so and offers the way to connect one.
+            VStack(alignment: .leading, spacing: 8) {
+                Text(L10n.Empty.NoServers.title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.Bandito.text)
+                    .lineLimit(1)
+                Button(L10n.Empty.NoServers.action) {
+                    router.sheet = .addServer
+                }
+                .banditoButton(.signal())
+                .frame(maxWidth: .infinity)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
     static func name(_ server: ServerModel) -> String {
         server.info?.hostname ?? server.config.name
+    }
+
+    /// Where the server is: this Mac, the host of a WebSocket URL, or the ssh target.
+    static func address(_ server: ServerModel) -> String {
+        switch server.config.endpoint {
+        case .local: L10n.Server.Add.thisMac
+        case .webSocket(let url): url.host ?? url.absoluteString
+        case .ssh(let target, _): target
+        }
+    }
+
+    /// One server in the menu: the name and its address, a check on the current one, and a dot on a server whose
+    /// daemon has a newer release to install.
+    @ViewBuilder
+    static func menuLabel(_ server: ServerModel, isCurrent: Bool) -> some View {
+        let title = "\(name(server)) · \(address(server))"
+        if isCurrent {
+            Label(title, systemImage: "checkmark")
+        } else if DaemonUpdateOffer.offer(for: server.info) != nil {
+            Label(title, systemImage: "circle.fill")
+        } else {
+            Text(title)
+        }
     }
 
     static func statusColor(_ server: ServerModel) -> Color {

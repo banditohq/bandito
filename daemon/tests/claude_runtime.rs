@@ -1,6 +1,6 @@
 //! Claude Code adapter against the fake CLI replaying `tests/fixtures/claude/*.jsonl`.
 
-use bandito::event::{Decision, EventBody, TurnStatus};
+use bandito::event::{Decision, EventBody, Plan, TurnStatus};
 use bandito::runtime::claude::ClaudeRuntime;
 use bandito::runtime::{Runtime, RuntimeOutput, SpawnConfig, Spawned};
 use bandito::store::Effort;
@@ -314,6 +314,81 @@ async fn bandito_home_is_off_limits_to_the_file_tools() {
     s.session.shutdown().await;
 }
 
+/// The inline JSON of the one `--settings` argument.
+fn settings_arg(args: &[String]) -> serde_json::Value {
+    let i = args
+        .iter()
+        .position(|a| a == "--settings")
+        .unwrap_or_else(|| panic!("missing --settings in {args:?}"));
+    serde_json::from_str(&args[i + 1]).expect("settings are JSON")
+}
+
+/// The string list at `permissions.<key>` of the settings.
+fn permission_list(settings: &serde_json::Value, key: &str) -> Vec<String> {
+    settings["permissions"][key]
+        .as_array()
+        .unwrap_or_else(|| panic!("permissions.{key} is not a list: {settings}"))
+        .iter()
+        .map(|v| v.as_str().unwrap_or_default().to_string())
+        .collect()
+}
+
+#[tokio::test]
+async fn tools_the_policy_decides_are_asked_so_user_allow_rules_cannot_skip_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let args_out = dir.path().join("args.json");
+    let s = ClaudeRuntime::new()
+        .spawn(cfg("deny.jsonl", Some(&args_out)))
+        .await
+        .unwrap();
+    let args = written_args(&args_out).await;
+    let settings = settings_arg(&args);
+    // Claude Code checks deny, then ask, then allow, whatever file the rule came from. An `ask` here
+    // sends the call to `can_use_tool`, where the policy decides; a user or project `allow` no longer skips it.
+    assert_eq!(
+        permission_list(&settings, "ask"),
+        [
+            "Bash",
+            "Edit",
+            "Write",
+            "MultiEdit",
+            "NotebookEdit",
+            "WebFetch",
+            "Read",
+            "Grep",
+            "Glob"
+        ]
+    );
+    // The Bandito folder deny stays next to it.
+    let home = std::path::absolute(bandito::workspace::data_dir()).unwrap();
+    let deny = permission_list(&settings, "deny");
+    for tool in ["Read", "Edit", "Write"] {
+        let rule = format!("{tool}(/{}/**)", home.display());
+        assert!(deny.contains(&rule), "missing {rule} in {deny:?}");
+    }
+    s.session.shutdown().await;
+}
+
+#[tokio::test]
+async fn permission_mode_default_is_passed_once_so_a_user_default_mode_cannot_win() {
+    let dir = tempfile::tempdir().unwrap();
+    let args_out = dir.path().join("args.json");
+    let s = ClaudeRuntime::new()
+        .spawn(cfg("deny.jsonl", Some(&args_out)))
+        .await
+        .unwrap();
+    let args = written_args(&args_out).await;
+    let modes: Vec<&String> = args
+        .iter()
+        .enumerate()
+        .filter(|(_, a)| a.as_str() == "--permission-mode")
+        .map(|(i, _)| &args[i + 1])
+        .collect();
+    // One flag with `default`: a second value could override the first.
+    assert_eq!(modes, vec!["default"], "{args:?}");
+    s.session.shutdown().await;
+}
+
 /// Argv of a fake CLI, read once it has written it (it does so at startup).
 async fn written_args(path: &std::path::Path) -> Vec<String> {
     for _ in 0..250 {
@@ -607,4 +682,152 @@ async fn a_crew_server_path_that_is_not_utf8_refuses_the_session() {
         .err()
         .expect("the session is refused");
     assert!(err.to_string().contains("not valid UTF-8"), "{err}");
+}
+
+// Login probe: `claude auth status` against tests/fixtures/login/fake-cli.sh. Its answers come
+// from the environment; FAKE_CALLS counts the probes (one line each).
+
+fn login_cli() -> String {
+    format!("{}/tests/fixtures/login/fake-cli.sh", env!("CARGO_MANIFEST_DIR"))
+}
+
+fn login_env(calls: &std::path::Path, answer: &[(&str, &str)]) -> Vec<(String, String)> {
+    let mut env = vec![("FAKE_CALLS".to_string(), calls.display().to_string())];
+    env.extend(answer.iter().map(|(k, v)| (k.to_string(), v.to_string())));
+    env
+}
+
+fn login_runtime(calls: &std::path::Path, answer: &[(&str, &str)]) -> ClaudeRuntime {
+    ClaudeRuntime::with_program(&login_cli()).with_env(login_env(calls, answer))
+}
+
+fn probes(calls: &std::path::Path) -> usize {
+    std::fs::read_to_string(calls).map(|s| s.lines().count()).unwrap_or(0)
+}
+
+#[tokio::test]
+async fn status_reads_logged_in_from_auth_status() {
+    let dir = tempfile::tempdir().unwrap();
+    let calls = dir.path().join("calls");
+    let rt = login_runtime(
+        &calls,
+        &[(
+            "FAKE_OUT",
+            r#"{"loggedIn": true, "subscriptionType": "max", "email": "owner@example.com", "orgName": "Acme"}"#,
+        )],
+    );
+    let st = rt.status().await;
+    assert!(st.installed);
+    assert_eq!(st.logged_in, Some(true));
+    assert_eq!(std::fs::read_to_string(&calls).unwrap().trim(), "auth status");
+    let text = format!("{st:?}");
+    assert!(
+        !text.contains("owner@example.com") && !text.contains("Acme"),
+        "account details kept: {text}"
+    );
+}
+
+#[tokio::test]
+async fn status_reads_logged_out_as_false() {
+    let dir = tempfile::tempdir().unwrap();
+    let rt = login_runtime(&dir.path().join("calls"), &[("FAKE_OUT", r#"{"loggedIn": false}"#)]);
+    assert_eq!(rt.status().await.logged_in, Some(false));
+}
+
+#[tokio::test]
+async fn status_reads_logged_out_with_exit_1() {
+    // claude 2.1.295 exits 1 when logged out and still prints the JSON.
+    let dir = tempfile::tempdir().unwrap();
+    let rt = login_runtime(
+        &dir.path().join("calls"),
+        &[("FAKE_OUT", r#"{"loggedIn": false}"#), ("FAKE_CODE", "1")],
+    );
+    assert_eq!(rt.status().await.logged_in, Some(false));
+}
+
+#[tokio::test]
+async fn status_is_unknown_when_auth_status_fails() {
+    let dir = tempfile::tempdir().unwrap();
+    let rt = login_runtime(
+        &dir.path().join("calls"),
+        &[("FAKE_ERR", "network down"), ("FAKE_CODE", "1")],
+    );
+    assert_eq!(
+        rt.status().await.logged_in,
+        None,
+        "a failed check is unknown, not false"
+    );
+}
+
+#[tokio::test]
+async fn status_is_unknown_for_unreadable_output_and_stderr_only() {
+    let dir = tempfile::tempdir().unwrap();
+    let garbage = login_runtime(&dir.path().join("a"), &[("FAKE_OUT", "please sign in")]);
+    assert_eq!(garbage.status().await.logged_in, None);
+    let stderr_only = login_runtime(&dir.path().join("b"), &[("FAKE_ERR", "Error: no session")]);
+    assert_eq!(stderr_only.status().await.logged_in, None);
+}
+
+#[tokio::test]
+async fn status_is_unknown_when_auth_status_hangs() {
+    let dir = tempfile::tempdir().unwrap();
+    let rt = login_runtime(&dir.path().join("calls"), &[("FAKE_SLEEP", "30")]);
+    let started = std::time::Instant::now();
+    assert_eq!(rt.status().await.logged_in, None);
+    assert!(started.elapsed() < Duration::from_secs(15), "the probe has a 5 s limit");
+}
+
+#[tokio::test]
+async fn status_is_unknown_without_the_cli() {
+    let st = ClaudeRuntime::with_program("/nonexistent/claude").status().await;
+    assert!(!st.installed);
+    assert_eq!(st.logged_in, None);
+}
+
+#[tokio::test]
+async fn status_asks_the_cli_once_a_minute_even_when_called_at_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let calls = dir.path().join("calls");
+    let rt = login_runtime(&calls, &[("FAKE_OUT", r#"{"loggedIn": true}"#)]);
+    let (a, b, c) = tokio::join!(rt.status(), rt.status(), rt.status());
+    assert_eq!([a.logged_in, b.logged_in, c.logged_in], [Some(true); 3]);
+    assert_eq!(probes(&calls), 1, "concurrent calls share one probe");
+    rt.status().await;
+    assert_eq!(probes(&calls), 1, "the answer is reused within 60 s");
+}
+
+#[tokio::test]
+async fn account_plan_falls_back_to_auth_status_without_the_credentials_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let calls = dir.path().join("calls");
+    let rt = login_runtime(
+        &calls,
+        &[("FAKE_OUT", r#"{"loggedIn": true, "subscriptionType": "pro"}"#)],
+    )
+    .with_config_dir(dir.path());
+    assert_eq!(
+        rt.account_plan().await.unwrap(),
+        Some(Plan {
+            id: "pro".into(),
+            label: "Pro".into()
+        })
+    );
+}
+
+#[tokio::test]
+async fn account_plan_prefers_the_credentials_file_and_asks_no_cli() {
+    let dir = tempfile::tempdir().unwrap();
+    let calls = dir.path().join("calls");
+    std::fs::write(
+        dir.path().join(".credentials.json"),
+        r#"{"claudeAiOauth": {"subscriptionType": "max", "rateLimitTier": "default_claude_max_20x"}}"#,
+    )
+    .unwrap();
+    let rt = login_runtime(
+        &calls,
+        &[("FAKE_OUT", r#"{"loggedIn": true, "subscriptionType": "pro"}"#)],
+    )
+    .with_config_dir(dir.path());
+    assert_eq!(rt.account_plan().await.unwrap().map(|p| p.id), Some("max_20x".into()));
+    assert_eq!(probes(&calls), 0);
 }

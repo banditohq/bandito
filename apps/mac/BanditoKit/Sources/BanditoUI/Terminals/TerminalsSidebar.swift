@@ -29,6 +29,8 @@ struct TerminalsSidebar: View {
 private struct TerminalsSidebarList: View {
     let controller: TerminalController
     @Environment(Router.self) private var router
+    /// The "collapse is not close" reminder, closed once for good.
+    @AppStorage("terminals.sidebarHintClosed") private var hintClosed = false
 
     var body: some View {
         let workspace = controller.workspace
@@ -36,13 +38,24 @@ private struct TerminalsSidebarList: View {
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 2) {
-                        if workspace.onScreen.isEmpty && workspace.collapsed.isEmpty {
-                            Text(L10n.Terminals.Sidebar.none)
-                                .font(.system(size: 12.5))
-                                .foregroundStyle(Color.Bandito.text3)
-                                .padding(.horizontal, 10)
-                                .padding(.top, 10)
+                        // The section has its own "+", like the tabs of the browser. With no terminals the main area
+                        // says so; the list itself stays silent.
+                        HStack(spacing: 6) {
+                            SectionLabel(L10n.Mode.terminals)
+                            Spacer(minLength: 6)
+                            Button {
+                                Task { await controller.openNew(cwd: nil, afterFocused: false) }
+                            } label: {
+                                Image(systemName: "plus")
+                                    .font(.system(size: 11, weight: .semibold))
+                            }
+                            .banditoButton(.icon(size: 22, label: L10n.Keys.newTerminal))
+                            .focusable(false)
+                            .help(L10n.Keys.newTerminal)
                         }
+                        .padding(.horizontal, 10)
+                        .padding(.top, 14)
+                        .padding(.bottom, 6)
                         if !workspace.onScreen.isEmpty {
                             SectionLabel(L10n.Terminals.Sidebar.onScreen)
                                 .padding(.horizontal, 10)
@@ -75,23 +88,36 @@ private struct TerminalsSidebarList: View {
             }
             .frame(maxHeight: .infinity)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(L10n.Terminals.Sidebar.noteTitle)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.Bandito.text)
-                Text(L10n.Terminals.Sidebar.noteBody)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.Bandito.text2)
-                    .lineSpacing(2)
+            if !hintClosed {
+                HStack(alignment: .top, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(L10n.Terminals.Sidebar.noteTitle)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Color.Bandito.text)
+                        Text(L10n.Terminals.Sidebar.noteBody)
+                            .font(.system(size: 12))
+                            .foregroundStyle(Color.Bandito.text2)
+                            .lineSpacing(2)
+                    }
+                    Spacer(minLength: 0)
+                    Button {
+                        hintClosed = true
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 9, weight: .semibold))
+                    }
+                    .banditoButton(.icon(size: 20, label: L10n.Common.close))
+                    .help(L10n.Common.close)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.Bandito.text.opacity(0.03), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(Color.Bandito.text.opacity(0.06))
+                )
+                .padding(14)
             }
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.Bandito.text.opacity(0.03), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(Color.Bandito.text.opacity(0.06))
-            )
-            .padding(14)
         }
     }
 

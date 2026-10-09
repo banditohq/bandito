@@ -114,10 +114,24 @@ final class TerminalController {
         let size = focusedSize()
         do {
             let info = try await server.openTerminal(cwd: cwd, cols: size.cols, rows: size.rows)
-            workspace.add(info.id, afterFocused: afterFocused, at: .now)
+            let placement = workspace.add(info.id, afterFocused: afterFocused, at: .now)
             await makeSession(info, attachFrom: nil)
+            // A new terminal takes the keyboard at once, so typing starts without a click. One in the dock has no pane yet.
+            if placement == .screen {
+                focusKeyboard(on: info.id)
+            }
         } catch {
             notice = UserFacingError.message(for: error).wrapped { L10n.Terminals.newFailed(message: $0) }
+        }
+    }
+
+    /// Moves keyboard focus to the pane of `id`: now when it is in a window, else as soon as it is put in one.
+    func focusKeyboard(on id: String) {
+        guard let view = session(for: id)?.view else { return }
+        if let window = view.window {
+            window.makeFirstResponder(view)
+        } else {
+            view.wantsFocus = true
         }
     }
 

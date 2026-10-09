@@ -23,7 +23,7 @@ let package = Package(
         .package(url: "https://github.com/royalapplications/royalvnc", revision: "92d4427c73817d8f849bb289ff190aa4b40c44ea"),
     ],
     targets: [
-        .target(name: "BanditoKit"),
+        .target(name: "BanditoKit", dependencies: ["BanditoL10n"]),
         .target(name: "BanditoDesign", resources: [.process("Colors.xcassets")]),
         .target(name: "BanditoL10n", resources: [.process("Resources")]),
         .target(

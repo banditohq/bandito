@@ -208,7 +208,14 @@ struct FirstAgentStep: View {
                     }
                 }
                 if let errorText = model.errorText {
-                    UserFacingErrorView(message: errorText)
+                    HStack(spacing: 10) {
+                        UserFacingErrorView(message: errorText)
+                        // Without the home folder no folder can be chosen: the step reads it again.
+                        if model.home == nil {
+                            Button(L10n.Onboarding.Server.retry) { Task { await model.loadHome() } }
+                                .banditoButton(.quiet(size: .regular))
+                        }
+                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -226,7 +233,7 @@ struct FirstAgentStep: View {
             await model.loadHome()
             await model.workplaces.load()
         }
-        .sheet(isPresented: $pickingFolder) {
+        .banditoSheet(isPresented: $pickingFolder) {
             FolderPicker(
                 server: model.server,
                 selection: Binding(get: { model.folder }, set: { model.setFolder($0) })
@@ -316,8 +323,13 @@ struct FirstAgentStep: View {
                 .font(BanditoFont.font(size: 14, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .lineSpacing(2)
-            Button(L10n.Onboarding.Agent.toSubscriptions, action: onNeedSubscription)
-                .banditoButton(.signal())
+            HStack(spacing: 10) {
+                Button(L10n.Onboarding.Agent.toSubscriptions, action: onNeedSubscription)
+                    .banditoButton(.signal())
+                // The way out without an agent: the flow ends, the tour shows what is on screen.
+                Button(L10n.Onboarding.Agent.createLater, action: onCreated)
+                    .banditoButton(.quiet())
+            }
         }
         .padding(16)
         .background(Color.Bandito.surface1, in: RoundedRectangle(cornerRadius: 16))
@@ -488,7 +500,7 @@ struct FirstAgentStep: View {
 
     private func hire() async {
         guard let agent = await model.create() else { return }
-        router.selectedAgentID = agent.id
+        router.selectAgent(agent.id, on: model.server)
         router.select(mode: .team)
         router.pendingComposerText = L10n.Onboarding.Agent.composerText
         onCreated()
@@ -539,9 +551,13 @@ struct AgentStep: View {
             if let subscriptions, let first {
                 content(subscriptions, first)
             } else {
-                Text(L10n.Onboarding.Agent.noServer)
-                    .font(BanditoFont.font(size: 14, weight: 400))
-                    .foregroundStyle(Color.Bandito.text2)
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(L10n.Onboarding.Agent.noServer)
+                        .font(BanditoFont.font(size: 14, weight: 400))
+                        .foregroundStyle(Color.Bandito.text2)
+                    Button(L10n.Onboarding.Agent.createLater, action: onCreated)
+                        .banditoButton(.quiet())
+                }
             }
         }
         .onAppear(perform: build)

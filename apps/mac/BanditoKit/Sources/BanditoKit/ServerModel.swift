@@ -56,6 +56,8 @@ public enum ConnectionState: Sendable, Hashable {
 public final class ServerModel: Identifiable {
     /// Messages per history request (`events.page`).
     public nonisolated static let historyPageSize = 200
+    /// Newest events read per agent when the daemon predates `last_message` (see `fillLegacyPreviews`).
+    public nonisolated static let legacyPreviewPageSize = 40
     /// Shown when some events could not be decoded: this app is older than the daemon, or a bug.
     /// Some events were skipped because this app does not know their shape: update the app.
     public nonisolated static let decodeWarning = FailureKind.reason("decode_failed")
@@ -68,8 +70,18 @@ public final class ServerModel: Identifiable {
     public private(set) var agents: [Agent] = []
     public private(set) var threads: [String: AgentThread] = [:]
     public private(set) var runtimes: [RuntimeStatus] = []
+    /// When `runtimes` was last read from the daemon; nil until the first answer.
+    public private(set) var runtimesFetchedAt: Date?
     /// Rate-limit windows per runtime, as last learned (from `usage.*` calls or live events).
     public private(set) var usage: [UsageEntry] = []
+    /// Why the last `refreshUsage` could not read a runtime, by runtime id.
+    public private(set) var usageErrors: [String: String] = [:]
+    /// The `usage.refresh` request in flight, if any.
+    private var usageRefresh: Task<[UsageEntry], Error>?
+    /// When the last `usage.refresh` request started.
+    private var usageRefreshStartedAt: Date?
+    /// How long an automatic refresh waits after the last request before it asks the runtimes again.
+    public static let usageRefreshInterval: TimeInterval = 30
     /// The last failure of a background operation (subscription, reconnect, unreadable updates).
     public internal(set) var lastError: FailureKind?
     /// Whether an agent's thread has events older than the ones loaded.
@@ -130,11 +142,34 @@ public final class ServerModel: Identifiable {
     /// Agents that need a human first, then by name.
     public var sortedAgents: [Agent] {
         agents.sorted { a, b in
-            let na = thread(for: a.id).status == .needsYou
-            let nb = thread(for: b.id).status == .needsYou
+            let na = needsPerson(a.id)
+            let nb = needsPerson(b.id)
             if na != nb { return na }
             return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
         }
+    }
+
+    /// The status the team shows for an agent, whether or not its thread is loaded: the newest `agent.status` the app
+    /// knows (the daemon's answer, then the live events), else the thread's, else idle.
+    public func status(of agentId: String) -> AgentStatus {
+        agents.first { $0.id == agentId }?.status ?? threads[agentId]?.status ?? .idle
+    }
+
+    /// Approvals of the agent that wait for an answer. A daemon that sends the ids counts the ids (a replayed event
+    /// adds or removes nothing twice). An older one sends only a count: the larger of that and the loaded thread's.
+    public func pendingApprovalCount(of agentId: String) -> Int {
+        guard let agent = agents.first(where: { $0.id == agentId }) else {
+            return thread(for: agentId).pendingApprovals.count
+        }
+        if agent.reportsPendingApprovalIds {
+            return agent.pendingApprovalIds.count
+        }
+        return max(agent.pendingApprovals, thread(for: agentId).pendingApprovals.count)
+    }
+
+    /// Needs a person: the status says so, or an approval waits. Drives the "needs you" group and the menu bar.
+    public func needsPerson(_ agentId: String) -> Bool {
+        status(of: agentId) == .needsYou || pendingApprovalCount(of: agentId) > 0
     }
 
     // MARK: connection
@@ -193,6 +228,7 @@ public final class ServerModel: Identifiable {
             info = daemon
             agents = try await c.call("agents.list", NoParams(), as: [Agent].self)
             runtimes = try await c.call("runtimes.status", NoParams(), as: [RuntimeStatus].self)
+            runtimesFetchedAt = Date()
             try checkCurrent(attempt)
             // First connection: live events only (the thread is loaded separately).
             // Later connections: everything after what has already been applied.
@@ -206,6 +242,8 @@ public final class ServerModel: Identifiable {
             try checkCurrent(attempt)
             state = .connected
             lastError = decodeFailureCount > 0 ? Self.decodeWarning : nil
+            // A daemon from before `last_message` sends no preview: read the newest messages once, in the background.
+            Task { [weak self] in await self?.fillLegacyPreviews(c) }
         } catch {
             if client === c {
                 client = nil
@@ -344,7 +382,51 @@ public final class ServerModel: Identifiable {
         if case .usageLimits(let runtime, let windows) = e.body {
             recordUsage(runtime: runtime, windows: windows)
         }
+        // The team's view of the agent follows its live events: newest message, status, pending approvals.
+        if let i = agents.firstIndex(where: { $0.id == e.agentId }) {
+            switch e.body {
+            case .agentStatus(let status, _):
+                agents[i].status = status
+            case .approvalRequested(let approvalId, _, _, _, _, _, _):
+                if agents[i].reportsPendingApprovalIds {
+                    agents[i].pendingApprovalIds.insert(approvalId)
+                } else {
+                    agents[i].pendingApprovals += 1
+                }
+            case .approvalResolved(let approvalId, _, _, _):
+                if agents[i].reportsPendingApprovalIds {
+                    agents[i].pendingApprovalIds.remove(approvalId)
+                } else {
+                    agents[i].pendingApprovals = max(0, agents[i].pendingApprovals - 1)
+                }
+            default:
+                break
+            }
+            if let message = LastMessage(event: e) {
+                agents[i].lastMessage = message
+            }
+        }
         threads[e.agentId, default: AgentThread()].apply(e)
+    }
+
+    /// Reads the newest messages of agents that a daemon from before `last_message` did not report, so the sidebar can
+    /// show a preview. One page per agent (`legacyPreviewPageSize` events); a message that arrived live meanwhile wins.
+    /// An agent whose read fails is tried again at the next connection.
+    func fillLegacyPreviews(_ c: RPCClient) async {
+        let ids = agents.filter { !$0.reportsLastMessage }.map(\.id)
+        for id in ids {
+            guard let page = try? await c.call(
+                "events.page",
+                PageRequest(agentId: id, before: nil, limit: Self.legacyPreviewPageSize),
+                as: [Event].self)
+            else { continue }
+            guard client === c, let i = agents.firstIndex(where: { $0.id == id }) else { return }
+            let newest = page.reversed().lazy.compactMap { LastMessage(event: $0) }.first
+            if let newest, newest.ts > (agents[i].lastMessage?.ts ?? 0) {
+                agents[i].lastMessage = newest
+            }
+            agents[i].reportsLastMessage = true
+        }
     }
 
     private func recordUsage(runtime: String, windows: [LimitWindow]) {
@@ -489,13 +571,37 @@ public final class ServerModel: Identifiable {
         return entries
     }
 
-    /// Asks the runtimes that can be asked for fresh limits, then returns them.
+    /// Asks the runtimes that can be asked for fresh limits, then returns them. A runtime that could not be asked
+    /// is listed in `usageErrors` with the reason; the limits it had before stay.
+    ///
+    /// One request is in flight at a time: a call while one runs waits for it. Without `force`, a call within
+    /// `usageRefreshInterval` of the last request returns the limits already known. `force` (the refresh button)
+    /// skips that wait, but still does not run in parallel.
     @discardableResult
-    public func refreshUsage() async throws -> [UsageEntry] {
-        struct Reply: Decodable { var limits: [UsageEntry] }
-        let entries = try await rpc().call("usage.refresh", NoParams(), as: Reply.self).limits
-        usage = entries
-        return entries
+    public func refreshUsage(force: Bool = false) async throws -> [UsageEntry] {
+        if let inFlight = usageRefresh {
+            return try await inFlight.value
+        }
+        if !force, let last = usageRefreshStartedAt, Date().timeIntervalSince(last) < Self.usageRefreshInterval {
+            return usage
+        }
+        usageRefreshStartedAt = Date()
+        let task = Task { () throws -> [UsageEntry] in
+            try await self.askRuntimesForUsage()
+        }
+        usageRefresh = task
+        defer { usageRefresh = nil }
+        return try await task.value
+    }
+
+    /// The `usage.refresh` call itself.
+    private func askRuntimesForUsage() async throws -> [UsageEntry] {
+        struct Refusal: Decodable { var runtime: String; var message: String }
+        struct Reply: Decodable { var limits: [UsageEntry]; var errors: [Refusal] }
+        let reply = try await rpc().call("usage.refresh", NoParams(), as: Reply.self)
+        usage = reply.limits
+        usageErrors = Dictionary(reply.errors.map { ($0.runtime, $0.message) }, uniquingKeysWith: { first, _ in first })
+        return reply.limits
     }
 }
 
@@ -504,6 +610,7 @@ public final class ServerModel: Identifiable {
 extension ServerModel {
     public func refreshRuntimes() async throws {
         runtimes = try await rpc().call("runtimes.status", NoParams(), as: [RuntimeStatus].self)
+        runtimesFetchedAt = Date()
     }
 
     public func rules(agentId: String? = nil) async throws -> [Rule] {

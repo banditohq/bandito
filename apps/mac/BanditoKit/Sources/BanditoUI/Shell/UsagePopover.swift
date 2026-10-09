@@ -8,6 +8,9 @@ import SwiftUI
 struct UsagePopover: View {
     @Environment(AppModel.self) private var app
     @Environment(DemoStore.self) private var demo
+    @Environment(Router.self) private var router
+    /// True while a refresh asks the runtimes; the refresh button shows a spinner meanwhile.
+    @State private var refreshing = false
 
     var body: some View {
         let snapshot = UsageCards.snapshot(server: app.currentServer, demo: demo)
@@ -16,22 +19,44 @@ struct UsagePopover: View {
         }
         .frame(width: 344)
         .task {
-            // Cached limits are read from the server; a refresh asks the runtimes themselves.
-            _ = try? await app.currentServer?.usageLimits()
+            // Opening the popover asks the runtimes for fresh limits, unless they were asked a moment ago.
+            await refresh(force: false)
         }
     }
 
     private func content(_ snapshot: UsageSnapshot, now: Date) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let server = app.currentServer
+        let rows: [UsageRow] = snapshot.isExample
+            ? snapshot.cards.map { .card($0, error: nil) }
+            : UsageRow.make(cards: snapshot.cards, runtimes: server?.runtimes ?? [], errors: server?.usageErrors ?? [:])
+        let noneInstalled = !snapshot.isExample && rows.isEmpty && !(server?.runtimes.isEmpty ?? true)
+        return VStack(alignment: .leading, spacing: 10) {
             header(snapshot)
-            if snapshot.cards.isEmpty {
+            if noneInstalled {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(L10n.Usage.noSubscriptions)
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(Color.Bandito.text2)
+                    Button(L10n.Usage.createAgent) {
+                        router.usagePopoverOpen = false
+                        router.sheet = .newAgent
+                    }
+                    .banditoButton(.quiet(size: .regular))
+                }
+                .padding(.vertical, 12)
+            } else if rows.isEmpty {
                 Text(L10n.Usage.empty)
                     .font(.system(size: 12.5))
                     .foregroundStyle(Color.Bandito.text3)
                     .padding(.vertical, 12)
             }
-            ForEach(snapshot.cards) { card in
-                UsageCardView(card: card, example: snapshot.isExample, now: now)
+            ForEach(rows) { row in
+                switch row {
+                case .card(let card, let error):
+                    UsageCardView(card: card, example: snapshot.isExample, now: now, error: error)
+                case .waiting(_, let name, let text, let error):
+                    UsageWaitingView(name: name, text: text, error: error)
+                }
             }
             HStack(alignment: .top, spacing: 9) {
                 Image(systemName: "arrow.right")
@@ -70,19 +95,37 @@ struct UsagePopover: View {
             }
             Spacer()
             Button {
-                Task { _ = try? await app.currentServer?.refreshUsage() }
+                Task { await refresh(force: true) }
             } label: {
-                Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 13, weight: .semibold))
-                    .frame(width: 28, height: 28)
-                    .contentShape(Rectangle())
+                Group {
+                    if refreshing {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                }
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
             }
             .banditoButton(.row(cornerRadius: 6, hoverOpacity: 0.08))
             .foregroundStyle(Color.Bandito.text3)
+            .disabled(refreshing)
             .help(L10n.Usage.refresh)
             .accessibilityLabel(L10n.Usage.refresh)
         }
         .padding(.horizontal, 2)
+    }
+
+    /// Reads the runtimes and asks them for fresh limits. `force` is the refresh button: it asks at once, but never
+    /// in parallel with a request that runs. A failure is not shown as an error: the rows say why.
+    private func refresh(force: Bool) async {
+        guard let server = app.currentServer else { return }
+        refreshing = true
+        defer { refreshing = false }
+        _ = try? await server.refreshRuntimes()
+        _ = try? await server.refreshUsage(force: force)
     }
 
     /// "now" or "N min ago", for the footnote.
@@ -93,11 +136,47 @@ struct UsagePopover: View {
     }
 }
 
+/// A runtime that is installed but has no limits yet: its name and why there are none.
+struct UsageWaitingView: View {
+    var name: String
+    var text: String
+    var error: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(name)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Color.Bandito.text)
+            Text(text)
+                .font(.system(size: 11.5))
+                .foregroundStyle(Color.Bandito.text3)
+                .fixedSize(horizontal: false, vertical: true)
+            if let error {
+                Text(L10n.Usage.readFailed(reason: error))
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Color.Bandito.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 11)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.Bandito.text.opacity(0.03)))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color.Bandito.text.opacity(0.06)))
+    }
+}
+
 /// One runtime: name, plan, who uses it, and a block per limit window.
 struct UsageCardView: View {
     var card: UsageCard
     var example: Bool
     var now: Date
+    /// The reason the last refresh could not read this runtime; shown in grey under the windows.
+    var error: String? = nil
 
     var body: some View {
         let warn = card.windows.contains(where: \.exhausted)
@@ -128,6 +207,12 @@ struct UsageCardView: View {
             ForEach(card.windows) { line in
                 UsageWindowRow(line: line, now: now)
             }
+            if let error {
+                Text(L10n.Usage.readFailed(reason: error))
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Color.Bandito.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 11)
@@ -140,25 +225,27 @@ struct UsageCardView: View {
     }
 }
 
-/// One window: "Remaining N%", the bar, the countdown on the left and the reset time on the right.
+/// One window: "Used N%", the bar filled by the share used, the countdown on the left and the reset time on the right.
+/// The colour of the number, the bar and the countdown comes from `UsageLevel`, the same as the sidebar button.
 private struct UsageWindowRow: View {
     var line: UsageWindowLine
     var now: Date
 
     var body: some View {
+        let level = UsageLevel(usedPercent: usedPercent)
         VStack(alignment: .leading, spacing: 5) {
             HStack {
                 Text(line.label)
                     .font(.system(size: 12.5))
                     .foregroundStyle(Color.Bandito.text2)
                 Spacer()
-                Text(leftText)
+                Text(L10n.Usage.used(percent: "\(usedPercent)%"))
                     .font(.system(size: 12.5, weight: .semibold))
-                    .foregroundStyle(leftColor)
+                    .foregroundStyle(level.color)
             }
-            UsageBar(fraction: line.remaining, height: 5)
+            UsageBar(fraction: line.used, tint: level.color, height: 5)
             HStack {
-                bottomLeft
+                bottomLeft(level: level)
                 Spacer(minLength: 8)
                 if let resetsAt = line.resetsAt {
                     Text(Countdown.resetText(to: resetsAt, now: now))
@@ -169,8 +256,10 @@ private struct UsageWindowRow: View {
         }
     }
 
+    private var usedPercent: Int { Int((line.used * 100).rounded()) }
+
     @ViewBuilder
-    private var bottomLeft: some View {
+    private func bottomLeft(level: UsageLevel) -> some View {
         if let note = line.note {
             Text(note).foregroundStyle(Color.Bandito.text3)
         } else if let resetsAt = line.resetsAt {
@@ -180,18 +269,7 @@ private struct UsageWindowRow: View {
                 Text(Countdown.text(to: resetsAt, now: now, exhausted: line.exhausted))
                     .font(.system(size: 11.5, design: .monospaced))
             }
-            .foregroundStyle(line.exhausted ? Color.Bandito.danger : (line.remaining < 0.25 ? Color.Bandito.signal : Color.Bandito.text2))
+            .foregroundStyle(level == .ok ? Color.Bandito.text2 : level.color)
         }
-    }
-
-    private var leftText: String {
-        line.exhausted
-            ? L10n.Usage.exhausted
-            : L10n.Usage.left(percent: "\(Int((line.remaining * 100).rounded()))%")
-    }
-
-    private var leftColor: Color {
-        if line.exhausted { return Color.Bandito.danger }
-        return line.remaining < 0.25 ? Color.Bandito.signal : Color.Bandito.text
     }
 }

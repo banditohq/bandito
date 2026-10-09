@@ -3,21 +3,27 @@ import BanditoKit
 import BanditoL10n
 import SwiftUI
 
-/// Column titles above the list. Widths match `FileRow`.
+/// Column titles above the list. The name takes the rest of the width; the date and size take what they need.
+/// The size column is there only when some entry is a file (`FileColumns.showsSize`).
 struct FileListHeader: View {
+    let showsSize: Bool
+
     var body: some View {
         HStack(spacing: 12) {
             Text(L10n.Files.Column.name)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Text(L10n.Files.Column.changed)
-                .frame(width: 150, alignment: .leading)
-            Text(L10n.Files.Column.size)
-                .frame(width: 90, alignment: .trailing)
-            Text(L10n.Files.Column.by)
-                .frame(width: 170, alignment: .leading)
+                .fixedSize()
+                .frame(minWidth: FileColumns.changedMinWidth, alignment: .leading)
+            if showsSize {
+                Text(L10n.Files.Column.size)
+                    .fixedSize()
+                    .frame(minWidth: FileColumns.sizeMinWidth, alignment: .trailing)
+            }
         }
         .font(.system(size: 11.5))
         .foregroundStyle(Color.Bandito.text3)
+        .lineLimit(1)
         .padding(.horizontal, 22)
         .padding(.vertical, 8)
         .overlay(alignment: .bottom) {
@@ -26,12 +32,13 @@ struct FileListHeader: View {
     }
 }
 
-/// One entry in the list: icon and name (or the rename field), when it changed, size, and who changed it.
-/// Who changed it is not known yet, so that column shows a dash.
+/// One entry in the list: icon and name (or the rename field), when it changed, and size for files.
+/// Folders have no size, so their size cell is empty.
 struct FileRow: View {
     let entry: FsEntry
     let isSelected: Bool
     let isRenaming: Bool
+    let showsSize: Bool
     @Binding var renameDraft: String
     let onSelect: () -> Void
     let onOpen: () -> Void
@@ -61,14 +68,16 @@ struct FileRow: View {
             Text(FileFormat.changed(ms: entry.modifiedMs))
                 .foregroundStyle(Color.Bandito.text2)
                 .lineLimit(1)
-                .frame(width: 150, alignment: .leading)
-            Text(FileFormat.size(of: entry))
-                .font(.system(size: 12, design: .monospaced))
-                .foregroundStyle(Color.Bandito.text2)
-                .frame(width: 90, alignment: .trailing)
-            Text("—")
-                .foregroundStyle(Color.Bandito.text3)
-                .frame(width: 170, alignment: .leading)
+                .fixedSize()
+                .frame(minWidth: FileColumns.changedMinWidth, alignment: .leading)
+            if showsSize {
+                Text(FileFormat.size(of: entry))
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundStyle(Color.Bandito.text2)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .frame(minWidth: FileColumns.sizeMinWidth, alignment: .trailing)
+            }
         }
         .font(.system(size: 13))
         .foregroundStyle(entry.hidden ? Color.Bandito.text3 : Color.Bandito.text)

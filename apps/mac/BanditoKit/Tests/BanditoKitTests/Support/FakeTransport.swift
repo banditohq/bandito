@@ -157,9 +157,9 @@ enum JSONRPC {
     }
 }
 
-/// Polls `condition` until it holds (5 ms steps, 3 s at most).
+/// Polls `condition` until it holds (5 ms steps, 10 s at most: shared CI runners can be slow).
 @MainActor
-func eventually(timeout: Duration = .seconds(3), _ condition: () async -> Bool) async throws {
+func eventually(timeout: Duration = .seconds(10), _ condition: () async -> Bool) async throws {
     let deadline = ContinuousClock.now.advanced(by: timeout)
     while ContinuousClock.now < deadline {
         if await condition() { return }

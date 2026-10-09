@@ -15,6 +15,11 @@ struct NewAgentSheet: View {
     @State private var error: UserFacingMessage?
     /// The server's workplaces, loaded when the sheet opens: what the workplace section can offer.
     @State private var workplaces: WorkspacesModel?
+    /// True once the `runtimes.status` request has finished, with or without an answer.
+    @State private var runtimesAnswered = false
+    /// The workplace made by an earlier attempt to create the agent, reused when the attempt is repeated.
+    @State private var preparedWorkplace: PreparedWorkplace?
+    @Environment(\.openURL) private var openURL
 
     private var server: ServerModel? { app.currentServer }
 
@@ -29,33 +34,65 @@ struct NewAgentSheet: View {
                     .foregroundStyle(Color.Bandito.text2)
                 Spacer()
             } else {
-                HStack(alignment: .top, spacing: 26) {
-                    leftColumn.frame(maxWidth: .infinity, alignment: .topLeading)
-                    rightColumn.frame(maxWidth: .infinity, alignment: .topLeading)
+                // Short windows scroll; the footer with the buttons always stays visible.
+                GeometryReader { proxy in
+                    ScrollView {
+                        Group {
+                            if proxy.size.width < Self.narrowWidth {
+                                VStack(alignment: .leading, spacing: 26) {
+                                    leftColumn.frame(maxWidth: .infinity, alignment: .topLeading)
+                                    rightColumn.frame(maxWidth: .infinity, alignment: .topLeading)
+                                }
+                            } else {
+                                HStack(alignment: .top, spacing: 26) {
+                                    leftColumn.frame(maxWidth: .infinity, alignment: .topLeading)
+                                    rightColumn.frame(maxWidth: .infinity, alignment: .topLeading)
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 28)
+                        .padding(.vertical, 16)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                    }
                 }
-                .padding(.horizontal, 28)
-                .padding(.vertical, 16)
-                .frame(maxHeight: .infinity, alignment: .top)
             }
             footer
         }
-        .frame(width: 1080, height: 820)
+        .frame(minWidth: 640, idealWidth: 1080, maxWidth: .infinity, minHeight: 540, idealHeight: 820, maxHeight: .infinity)
         .background(Color.Bandito.surface2)
         .onAppear {
             if let cwd = router.takeAgentCwd() {
                 draft.cwd = cwd
             }
+            if let template = router.takePendingTemplate() {
+                template.apply(to: &draft)
+            }
+        }
+        // A server that takes an agent without a folder lets the agent work in its own folder. Follows `server.info`,
+        // so a daemon that answers late (or is updated while the sheet is open) is picked up.
+        .onChange(of: server?.supports("agent_own_folder") ?? false, initial: true) { _, optional in
+            draft.folderOptional = optional
         }
         .task {
             guard let server else { return }
             let loaded = WorkspacesModel(server: server)
             workplaces = loaded
-            // Limits and runtime status are shown when they arrive; a failure leaves the cards in "checking".
-            do { try await server.refreshRuntimes() } catch {}
-            _ = try? await server.usageLimits()
+            // Limits are read in the background and their failure is not shown. The runtime status is asked again
+            // when the last answer is more than a minute old; until it arrives the cards say "checking".
+            Task { _ = try? await server.refreshUsage() }
+            let fresh = server.runtimesFetchedAt.map { Date().timeIntervalSince($0) < Self.runtimesMaxAge } ?? false
+            if !fresh {
+                _ = try? await server.refreshRuntimes()
+            }
+            runtimesAnswered = true
             await loaded.load()
         }
     }
+
+    /// Below this window width the two columns of the sheet stack one under the other.
+    static let narrowWidth: CGFloat = 1000
+    /// How old the last `runtimes.status` answer may be when the sheet opens.
+    static let runtimesMaxAge: TimeInterval = 60
 
     // MARK: Header
 
@@ -146,7 +183,7 @@ struct NewAgentSheet: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top, spacing: 12) {
                 labeled(L10n.AgentSheet.name) {
-                    TextField("", text: $draft.name)
+                    TextField(defaultName, text: $draft.name)
                         .textFieldStyle(.plain)
                         .modifier(FieldBox())
                 }
@@ -162,19 +199,14 @@ struct NewAgentSheet: View {
                 runtimeGrid
             }
 
-            HStack(alignment: .top, spacing: 12) {
-                labeled(L10n.AgentSheet.model) {
-                    modelField
-                }
-                .frame(maxWidth: .infinity)
-                labeled(L10n.Effort.title) {
-                    SegmentedPicker(
-                        selection: $draft.effort,
-                        options: draft.runtime.supportedEfforts.map { ($0, effortName($0)) })
-                        .frame(maxWidth: .infinity)
-                }
-                .frame(maxWidth: .infinity)
-                .layoutPriority(1)
+            labeled(L10n.AgentSheet.model) {
+                modelField
+            }
+            labeled(L10n.Effort.title) {
+                SegmentedPicker(
+                    selection: $draft.effort,
+                    options: draft.runtime.supportedEfforts.map { ($0, effortName($0)) })
+                    .frame(maxWidth: .infinity)
             }
             Text(effortHint(draft.effort))
                 .font(BanditoFont.font(size: 12, weight: 400))
@@ -255,61 +287,94 @@ struct NewAgentSheet: View {
         // Only this runtime's card counts: `percentLeft` falls back to all cards when given no runtime.
         let remaining = card.flatMap { UsageCards.percentLeft([$0], runtime: nil) }
         let state = RuntimeCardState.make(
-            installed: runtimeStatus(kind)?.installed, loggedIn: runtimeStatus(kind)?.loggedIn,
-            remaining: remaining, resetsAt: card?.windows.compactMap(\.resetsAt).min(),
-            hasUsage: card != nil, now: now)
-        return Button {
-            draft.setRuntime(kind)
-        } label: {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 7) {
-                    Text(runtimeName(kind))
-                        .font(BanditoFont.font(size: 13.5, weight: 600))
-                        .foregroundStyle(Color.Bandito.text)
-                    if let plan = card?.plan {
-                        Text(plan)
-                            .font(BanditoFont.font(size: 10.5, weight: 600))
-                            .foregroundStyle(BanditoPalette.peach)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 1)
-                            .background(BanditoPalette.peach.opacity(0.13), in: RoundedRectangle(cornerRadius: 6))
+            runtime: kind, status: runtimeStatus(kind), requestDone: runtimesAnswered, remaining: remaining,
+            resetsAt: card?.windows.compactMap(\.resetsAt).min(), now: now)
+        return VStack(alignment: .leading, spacing: 4) {
+            Button {
+                draft.setRuntime(kind)
+            } label: {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 7) {
+                        Text(runtimeName(kind))
+                            .font(BanditoFont.font(size: 13.5, weight: 600))
+                            .foregroundStyle(Color.Bandito.text)
+                        if let plan = card?.plan {
+                            Text(plan)
+                                .font(BanditoFont.font(size: 10.5, weight: 600))
+                                .foregroundStyle(BanditoPalette.peach)
+                                .lineLimit(1)
+                                .fixedSize()
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 1)
+                                .background(BanditoPalette.peach.opacity(0.13), in: RoundedRectangle(cornerRadius: 6))
+                        }
+                        Spacer(minLength: 0)
+                        if selected {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(.white)
+                                .frame(width: 17, height: 17)
+                                .background(Color.Bandito.signal, in: Circle())
+                        }
                     }
-                    Spacer(minLength: 0)
-                    if selected {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(width: 17, height: 17)
-                            .background(Color.Bandito.signal, in: Circle())
+                    HStack(spacing: 6) {
+                        if state.kind == .checking {
+                            ProgressView()
+                                .controlSize(.mini)
+                                .frame(width: 10, height: 10)
+                        } else {
+                            Circle().fill(state.tint).frame(width: 6, height: 6)
+                        }
+                        Text(state.text)
+                            .font(BanditoFont.font(size: 11.5, weight: 400))
+                            .foregroundStyle(state.tint)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
+                    }
+                    if state.showsLimit {
+                        UsageBar(fraction: remaining ?? 0, tint: state.barTint, height: 4)
+                    }
+                    if let command = state.command {
+                        Text(L10n.AgentSheet.statusNeedsLoginHint)
+                            .font(BanditoFont.font(size: 11, weight: 400))
+                            .foregroundStyle(Color.Bandito.text3)
+                            .lineLimit(1)
+                        Text(command)
+                            .font(BanditoFont.font(size: 11.5, weight: 500, mono: true))
+                            .foregroundStyle(Color.Bandito.text)
+                            .lineLimit(1)
+                            .textSelection(.enabled)
+                    }
+                    if !state.hint.isEmpty {
+                        Text(state.hint)
+                            .font(BanditoFont.font(size: 11, weight: 400))
+                            .foregroundStyle(Color.Bandito.text3)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
                     }
                 }
-                HStack(spacing: 5) {
-                    Circle().fill(state.tint).frame(width: 6, height: 6)
-                    Text(state.text)
-                        .font(BanditoFont.font(size: 11.5, weight: 400))
-                        .foregroundStyle(state.tint)
-                        .lineLimit(1)
-                }
-                UsageBar(fraction: remaining ?? 0, tint: state.barTint, height: 4)
-                    .opacity(remaining == nil ? 0.35 : 1)
-                Text(state.hint)
-                    .font(BanditoFont.font(size: 11, weight: 400))
-                    .foregroundStyle(Color.Bandito.text3)
-                    .lineLimit(1)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    selected ? Color.Bandito.signal.opacity(0.08) : Color.Bandito.text.opacity(0.03),
+                    in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(selected ? Color.Bandito.signal.opacity(0.5) : Color.Bandito.text.opacity(0.09)))
+                .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                selected ? Color.Bandito.signal.opacity(0.08) : Color.Bandito.text.opacity(0.03),
-                in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(selected ? Color.Bandito.signal.opacity(0.5) : Color.Bandito.text.opacity(0.09)))
-            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .banditoButton(.row(cornerRadius: 14))
+            .accessibilityAddTraits(selected ? .isSelected : [])
+
+            // Outside the card's button: a link inside a button would not be clickable on its own.
+            if let url = state.installURL {
+                Button(L10n.AgentSheet.installGuide) { openURL(url) }
+                    .font(BanditoFont.font(size: 11.5, weight: 500))
+                    .banditoButton(.link)
+                    .padding(.leading, 12)
+            }
         }
-        .banditoButton(.row(cornerRadius: 14))
-        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     @ViewBuilder
@@ -365,6 +430,14 @@ struct NewAgentSheet: View {
                         }
                 }
                 .modifier(FieldBox())
+            }
+
+            if draft.folderOptional && draft.cwd.isEmpty {
+                Text(L10n.AgentSheet.ownFolderHint)
+                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .foregroundStyle(Color.Bandito.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .offset(y: -8)
             }
 
             workplaceSection
@@ -535,15 +608,16 @@ struct NewAgentSheet: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             HStack(spacing: 10) {
-                Text(L10n.AgentSheet.changeLater)
+                Text(blockerText ?? L10n.AgentSheet.changeLater)
                     .font(BanditoFont.font(size: 12, weight: 400))
-                    .foregroundStyle(Color.Bandito.text3)
-                Spacer(minLength: 0)
+                    .foregroundStyle(blockerText == nil ? Color.Bandito.text3 : BanditoPalette.peach)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 Button(L10n.AgentSheet.cancel) { router.sheet = nil }
                     .banditoButton(.quiet(size: .regular))
-                Button(L10n.AgentSheet.create(name: trimmedName)) { create() }
+                Button(L10n.AgentSheet.create) { create() }
                     .banditoButton(.signal(size: .regular))
-                    .disabled(!draft.canCreate || creating || server == nil)
+                    .disabled(blocker != nil || creating || server == nil)
             }
         }
         .padding(.horizontal, 28)
@@ -562,13 +636,16 @@ struct NewAgentSheet: View {
         error = nil
         Task {
             do {
-                let workspaceID = try await WorkplaceCreation.prepare(
-                    draft.workplace, new: draft.newWorkplace, on: server)
-                let agent = try await server.createAgent(draft.makeNewAgent(workspaceID: workspaceID))
-                var recent = RecentFolders.load(serverID: server.id.uuidString)
-                recent.remember(agent.cwd)
-                recent.save(serverID: server.id.uuidString)
-                router.selectedAgentID = agent.id
+                let workspaceID = try await workplaceForCreate(on: server)
+                let agent = try await server.createAgent(
+                    draft.makeNewAgent(workspaceID: workspaceID, existingNames: agentNames))
+                // Only a folder the person chose is a recent project folder; an agent's own folder is not.
+                if !draft.cwd.isEmpty {
+                    var recent = RecentFolders.load(serverID: server.id.uuidString)
+                    recent.remember(agent.cwd)
+                    recent.save(serverID: server.id.uuidString)
+                }
+                router.selectAgent(agent.id, on: server)
                 router.select(mode: .team)
                 router.sheet = nil
             } catch {
@@ -578,10 +655,42 @@ struct NewAgentSheet: View {
         }
     }
 
+    /// The workplace id for `agents.create`. A new container is made once: when creating the agent fails and the
+    /// person presses Create again, the container made by the first attempt is used, not a second one.
+    private func workplaceForCreate(on server: ServerModel) async throws -> String? {
+        if let made = preparedWorkplace, made.choice == draft.workplace, made.form == draft.newWorkplace {
+            return made.id
+        }
+        let id = try await WorkplaceCreation.prepare(draft.workplace, new: draft.newWorkplace, on: server)
+        preparedWorkplace = PreparedWorkplace(choice: draft.workplace, form: draft.newWorkplace, id: id)
+        return id
+    }
+
     // MARK: Helpers
 
-    private var trimmedName: String {
-        draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
+    /// The name the agent gets when the field is empty: shown as the field's placeholder and on the button.
+    private var defaultName: String {
+        draft.resolvedName(existing: agentNames)
+    }
+
+    private var agentNames: [String] {
+        server?.agents.map(\.name) ?? []
+    }
+
+    /// Why "Create" is off right now, in words. Nil when it can be pressed.
+    private var blocker: CreateBlocker? {
+        draft.createBlocker(status: runtimeStatus(draft.runtime))
+    }
+
+    private var blockerText: String? {
+        switch blocker {
+        case nil: nil
+        case .runtimeMissing(let kind): L10n.AgentSheet.runtimeMissing(runtime: runtimeName(kind), server: serverName)
+        case .runtimeLogin(let kind, let command):
+            L10n.AgentSheet.runtimeLogin(runtime: runtimeName(kind), server: serverName, command: command)
+        case .folder: L10n.AgentSheet.createBlockedFolder
+        case .workplace: L10n.AgentSheet.createBlockedWorkplace
+        }
     }
 
     private var serverName: String {
@@ -696,45 +805,109 @@ extension AvatarFace {
     }
 }
 
-/// Text and tint of a runtime card. Pure, so the rules are easy to read.
+/// Where to read how to install each CLI, for a runtime the server does not have.
+enum RuntimeInstallLinks {
+    static func url(for runtime: RuntimeKind) -> URL? {
+        switch runtime {
+        case .claude: URL(string: "https://docs.claude.com/en/docs/claude-code/setup")
+        case .codex: URL(string: "https://developers.openai.com/codex/cli")
+        case .grok: URL(string: "https://x.ai/cli")
+        case .api: nil
+        }
+    }
+}
+
+/// What a runtime card shows: text, tint, the hint line and whether the limit bar is drawn. Pure, so the rules are
+/// easy to read and test.
 struct RuntimeCardState: Equatable {
+    enum Kind: Equatable {
+        /// `runtimes.status` is on its way.
+        case checking
+        /// The status request finished without an answer for this runtime.
+        case unknown
+        case notInstalled
+        case needsLogin
+        /// Installed and signed in; no limits are known yet (Claude reports them after the first reply).
+        case ready
+        case limits
+        case exhausted
+    }
+
+    let kind: Kind
     let text: String
+    /// The reset countdown, or empty.
     let hint: String
     let tint: Color
     let barTint: Color
+    /// Where to read how to install the CLI. Only for a runtime that is not installed.
+    let installURL: URL?
+    /// The command that signs the person in, shown in monospace. Only when the runtime is not signed in.
+    var command: String?
+
+    var showsLimit: Bool { kind == .limits || kind == .exhausted }
 
     static func make(
-        installed: Bool?, loggedIn: Bool?, remaining: Double?, resetsAt: Date?, hasUsage: Bool, now: Date
+        runtime: RuntimeKind, status: RuntimeStatus?, requestDone: Bool, remaining: Double?, resetsAt: Date?,
+        now: Date
     ) -> RuntimeCardState {
-        if installed == false {
+        guard let status else {
+            if requestDone {
+                return RuntimeCardState(
+                    kind: .unknown, text: L10n.AgentSheet.statusUnknown, hint: "", tint: Color.Bandito.text3,
+                    barTint: Color.Bandito.text3, installURL: nil)
+            }
             return RuntimeCardState(
-                text: L10n.AgentSheet.statusNotInstalled, hint: "", tint: Color.Bandito.danger,
-                barTint: Color.Bandito.danger)
+                kind: .checking, text: L10n.AgentSheet.statusChecking, hint: "", tint: Color.Bandito.text3,
+                barTint: Color.Bandito.text3, installURL: nil)
         }
-        if loggedIn == false {
+        if !status.installed {
             return RuntimeCardState(
-                text: L10n.AgentSheet.statusNotSignedIn, hint: "", tint: Color.Bandito.danger,
-                barTint: Color.Bandito.danger)
+                kind: .notInstalled, text: L10n.AgentSheet.statusNotInstalled, hint: "", tint: Color.Bandito.danger,
+                barTint: Color.Bandito.danger, installURL: RuntimeInstallLinks.url(for: runtime))
+        }
+        if status.loggedIn == false {
+            return RuntimeCardState(
+                kind: .needsLogin, text: L10n.AgentSheet.statusNeedsLogin, hint: "", tint: BanditoPalette.peach,
+                barTint: BanditoPalette.peach, installURL: nil,
+                command: LoginCommand.arguments(for: runtime).joined(separator: " "))
         }
         guard let remaining else {
+            let text = versionLabel(status.version).map { L10n.AgentSheet.statusReadyVersion(version: $0) }
+                ?? L10n.AgentSheet.statusReady
             return RuntimeCardState(
-                text: hasUsage ? L10n.AgentSheet.statusSignedInPlain : L10n.AgentSheet.statusChecking, hint: "",
-                tint: Color.Bandito.ok, barTint: Color.Bandito.ok)
+                kind: .ready, text: text, hint: "", tint: Color.Bandito.ok, barTint: Color.Bandito.ok,
+                installURL: nil)
         }
         let percent = Int((remaining * 100).rounded())
         let reset = resetsAt.map { Countdown.text(to: $0, now: now) } ?? ""
         if remaining <= 0 {
             let again = resetsAt.map { Countdown.text(to: $0, now: now, exhausted: true) } ?? ""
             return RuntimeCardState(
-                text: L10n.AgentSheet.statusExhausted(time: again), hint: "", tint: Color.Bandito.danger,
-                barTint: Color.Bandito.danger)
+                kind: .exhausted, text: L10n.AgentSheet.statusExhausted(time: again), hint: "",
+                tint: Color.Bandito.danger, barTint: Color.Bandito.danger, installURL: nil)
         }
         let tint = remaining < 0.25 ? BanditoPalette.peach : Color.Bandito.ok
         return RuntimeCardState(
-            text: L10n.AgentSheet.statusSignedIn(percent: "\(percent)"),
+            kind: .limits, text: L10n.AgentSheet.statusSignedIn(percent: "\(percent)"),
             hint: reset.isEmpty ? "" : L10n.AgentSheet.resetsIn(time: reset), tint: tint,
-            barTint: remaining < 0.25 ? BanditoPalette.peach : Color.Bandito.ok)
+            barTint: remaining < 0.25 ? BanditoPalette.peach : Color.Bandito.ok, installURL: nil)
     }
+
+    /// "v2.0.5" from a CLI's version line such as "2.0.5 (Claude Code)": the first number with a dot in it.
+    static func versionLabel(_ raw: String?) -> String? {
+        guard let raw, let match = raw.range(of: #"\d+(\.\d+)+"#, options: .regularExpression) else {
+            return nil
+        }
+        return "v" + raw[match]
+    }
+}
+
+/// The workplace that an attempt to create an agent prepared, with the choice and form it was made from.
+struct PreparedWorkplace: Equatable {
+    let choice: WorkplaceChoice
+    let form: NewWorkplaceDraft
+    /// The container's id; nil for the shared server.
+    let id: String?
 }
 
 /// A rounded field surface used by the sheet's inputs.
@@ -750,7 +923,7 @@ private struct FieldBox: ViewModifier {
     }
 }
 
-/// Wrapping row of informative tags ("What it may do").
+/// Wrapping row of informative tags ("What it may do"). Whole chips move to the next line; a chip's text never wraps.
 private struct FlowTags: View {
     struct Tag: Identifiable {
         let text: String
@@ -761,11 +934,13 @@ private struct FlowTags: View {
     let tags: [Tag]
 
     var body: some View {
-        HStack(spacing: 6) {
+        WrapLayout(spacing: 6, lineSpacing: 6) {
             ForEach(tags) { tag in
                 Text(tag.text)
                     .font(BanditoFont.font(size: 12, weight: 400))
                     .foregroundStyle(tag.on ? Color.Bandito.text : Color.Bandito.text3)
+                    .lineLimit(1)
+                    .fixedSize()
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
                     .background(
@@ -776,6 +951,49 @@ private struct FlowTags: View {
                             tag.on ? Color.Bandito.text.opacity(0.12) : Color.Bandito.text.opacity(0.14),
                             style: StrokeStyle(lineWidth: 1, dash: tag.on ? [] : [3, 2])))
             }
+        }
+    }
+}
+
+/// Lays subviews out left to right and moves a whole subview to the next line when it does not fit.
+private struct WrapLayout: Layout {
+    var spacing: CGFloat
+    var lineSpacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var lineHeight: CGFloat = 0
+        var widest: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > maxWidth {
+                x = 0
+                y += lineHeight + lineSpacing
+                lineHeight = 0
+            }
+            x += size.width + spacing
+            lineHeight = max(lineHeight, size.height)
+            widest = max(widest, x - spacing)
+        }
+        return CGSize(width: min(widest, maxWidth), height: y + lineHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX
+        var y = bounds.minY
+        var lineHeight: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x > bounds.minX, x + size.width > bounds.maxX {
+                x = bounds.minX
+                y += lineHeight + lineSpacing
+                lineHeight = 0
+            }
+            view.place(at: CGPoint(x: x, y: y), anchor: .topLeading, proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            lineHeight = max(lineHeight, size.height)
         }
     }
 }

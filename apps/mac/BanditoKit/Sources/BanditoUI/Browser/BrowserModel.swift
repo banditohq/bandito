@@ -41,12 +41,27 @@ final class BrowserModel {
     private(set) var needsChrome = false
     /// Text of the address bar. Edited by the person; reset to the page's URL on navigation.
     var addressText = ""
+    /// Shown under the address bar when what was typed cannot be opened (a scheme other than http, https).
+    private(set) var addressError: String?
 
     private var client: CDPClient?
+    /// True while the address field has focus: the page's address then does not replace the typed text.
+    private(set) var isEditingAddress = false
+    /// The id of the page's main frame, from `Page.frameNavigated`. Same-document changes of the address
+    /// (`Page.navigatedWithinDocument`) count only for this frame.
+    private var mainFrameID: String?
     private var clientTabID: String?
     private var eventTask: Task<Void, Never>?
     private var pollTask: Task<Void, Never>?
     private var pollTick = 0
+    /// The size the shown page is set to: the picture area on screen. Nil while no page is on screen.
+    private var viewport: BrowserViewport?
+    /// The wait for the picture area to settle (300 ms) before the page is resized.
+    private var viewportTask: Task<Void, Never>?
+    /// The tail of the viewport command queue: each command starts after the one before it has ended.
+    private var viewportQueue: Task<Void, Never>?
+    /// True while a title read is waiting for the page's answer. Only one read runs at a time.
+    private var titleReadInFlight = false
     private var lastTouch: Date = .distantPast
     /// Reopens the page connection after it drops. Its count restarts once a connection shows an event.
     private var reconnect = BrowserReconnectPolicy()
@@ -101,10 +116,48 @@ final class BrowserModel {
         }
     }
 
-    /// Opens a new tab on `about:blank` and shows it (⌘T). The new tab is made on the browser connection,
-    /// because `Target.createTarget` is a browser command, not a page one.
+    /// Opens a new tab on `about:blank` and shows it (⌘T). While an agent drives the browser, it asks to take control
+    /// instead. The new tab is made on the browser connection, because `Target.createTarget` is a browser command.
     func newTab() async {
-        guard canInteract, status?.isRelay == true else { return }
+        guard status?.isRelay == true else { return }
+        guard canInteract else {
+            noteAgentHasControl()
+            return
+        }
+        guard let id = await createBlankTab() else { return }
+        tabs = (try? await server.browserTabs()) ?? tabs
+        await selectPage(id)
+    }
+
+    /// Makes one blank tab on the browser connection and returns its id. Nil (with `errorText` set) on failure.
+    private func createBlankTab() async -> String? {
+        let browser: CDPClient
+        do {
+            browser = try await server.browserTargetsClient()
+        } catch {
+            errorText = Self.describe(error)
+            return nil
+        }
+        defer { Task { await browser.close() } }
+        do {
+            let result = try await browser.send(.createTarget(url: "about:blank"))
+            guard case .object(let object) = result, case .string(let id)? = object["targetId"] else { return nil }
+            return id
+        } catch {
+            errorText = Self.describe(error)
+            return nil
+        }
+    }
+
+    /// Closes a tab (`Target.closeTarget`). The tab is removed from the list only when the browser closed it.
+    /// When the shown page is the one closed, the next tab takes its place (see `BrowserTabPolicy`); when none is
+    /// left, a blank tab opens. While an agent drives the browser, it asks to take control instead.
+    func closeTab(_ id: String) async {
+        guard status?.isRelay == true else { return }
+        guard canInteract else {
+            noteAgentHasControl()
+            return
+        }
         let browser: CDPClient
         do {
             browser = try await server.browserTargetsClient()
@@ -112,22 +165,37 @@ final class BrowserModel {
             errorText = Self.describe(error)
             return
         }
-        let result: JSONValue
         do {
-            result = try await browser.send(.createTarget(url: "about:blank"))
+            _ = try await browser.send(.closeTarget(id: id))
         } catch {
             await browser.close()
             errorText = Self.describe(error)
             return
         }
         await browser.close()
-        guard case .object(let object) = result, case .string(let id)? = object["targetId"] else { return }
-        do {
-            tabs = try await server.browserTabs()
-        } catch {
-            errorText = Self.describe(error)
+        let before = tabs.map(\.id)
+        let fresh = (try? await server.browserTabs()) ?? tabs
+        tabs = fresh.filter { $0.id != id }
+        let shown: String? = { if case .page(let shown) = selection { return shown } else { return nil } }()
+        switch BrowserTabPolicy.afterClosing(closedID: id, shownID: shown, before: before, remaining: tabs.map(\.id)) {
+        case .keep:
+            return
+        case .show(let next):
+            await selectPage(next)
+        case .openBlank:
+            await closeClient()
+            selection = nil
+            if let blank = await createBlankTab() {
+                tabs = (try? await server.browserTabs()) ?? tabs
+                await selectPage(blank)
+            }
         }
-        await selectPage(id)
+    }
+
+    /// Closes the shown page (⌘W). Does nothing when a preview is shown: a hidden page tab is never closed by it.
+    func closeCurrentTab() async {
+        guard case .page(let id) = selection else { return }
+        await closeTab(id)
     }
 
     /// One poll: the status, the tabs every few polls, a reconnect when the page connection is down, and a
@@ -264,12 +332,25 @@ final class BrowserModel {
 
     // MARK: Navigation
 
-    /// Opens the typed address. Text without a scheme is taken as `http://`.
-    func navigate(to text: String) async {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        let url = trimmed.contains("://") ? trimmed : "http://" + trimmed
-        await send(.navigate(url: url))
+    /// Enter in the address field: opens what was typed (an address, or a search) and shows the address it opens.
+    /// The view then takes the focus away, which ends the editing (see `addressEditingChanged`).
+    func submitAddress() {
+        switch BrowserAddress.destination(for: addressText) {
+        case .nothing:
+            return
+        case .refused:
+            addressError = L10n.Browser.addressRefused
+        case .open(let url):
+            addressError = nil
+            isEditingAddress = false
+            addressText = url
+            Task { await send(.navigate(url: url)) }
+        }
+    }
+
+    /// The person changes the text of the address bar: an error about the text before it no longer applies.
+    func addressTextEdited() {
+        addressError = nil
     }
 
     func reload() async {
@@ -328,6 +409,61 @@ final class BrowserModel {
         }
     }
 
+    // MARK: Picture area
+
+    /// The picture area of the shown page changed size, or its window moved to a screen with another scale. The page
+    /// follows it after 300 ms without another change, so a window drag sends one resize, not one per pixel.
+    /// Only the page on screen is resized.
+    func pageAreaChanged(width: Double, height: Double, scale: Double) {
+        viewportTask?.cancel()
+        viewportTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled, let self else { return }
+            self.applyViewport(BrowserViewport.fitting(width: width, height: height, scale: scale))
+        }
+    }
+
+    /// The picture area is gone: another tab or a preview is shown, or the browser stopped. The page gets its own size back.
+    func pageAreaHidden() {
+        viewportTask?.cancel()
+        viewportTask = nil
+        guard viewport != nil else { return }
+        viewport = nil
+        if let page = client { queueViewport(.clearViewport, on: page) }
+    }
+
+    /// Sizes the page to `next` and restarts the screencast with frames of that size. Nil (no usable area) changes nothing.
+    private func applyViewport(_ next: BrowserViewport?) {
+        guard let next, next != viewport else { return }
+        viewport = next
+        guard let client else { return }
+        queueViewport(.setViewport(next), on: client)
+        // Restarted rather than re-asked: a running screencast may keep its first frame size.
+        let box = next.screencastBox
+        queueViewport(.stopScreencast, on: client)
+        queueViewport(.startScreencast(maxWidth: box.width, maxHeight: box.height, quality: 70), on: client)
+    }
+
+    /// Sends one viewport command to `page`, after the viewport commands queued before it. All of them go through
+    /// this one queue, so a set and a clear never race. The queue moves on when the page answers or its socket closes.
+    private func queueViewport(_ command: CDPCommand, on page: CDPClient) {
+        let previous = viewportQueue
+        viewportQueue = Task {
+            await previous?.value
+            _ = try? await page.send(command)
+        }
+    }
+
+    /// Waits for `task` for at most `seconds`: returns when the task ends or the time is up, whichever is first.
+    private static func waitBriefly(_ task: Task<Void, Never>?, seconds: Double) async {
+        guard let task else { return }
+        await withCheckedContinuation { (resume: CheckedContinuation<Void, Never>) in
+            let once = ResumeOnce(resume)
+            Task { await task.value; once.finish() }
+            Task { try? await Task.sleep(for: .seconds(seconds)); once.finish() }
+        }
+    }
+
     /// Whether the start failed because Chrome is not installed on the server (the install card is shown).
     static func isMissingChrome(_ error: Error) -> Bool {
         (error as? RPCError)?.reason == "missing_component"
@@ -351,7 +487,7 @@ final class BrowserModel {
             clientTabID = tab.id
             if selection == nil { selection = .page(tab.id) }
             currentURL = tab.url
-            addressText = tab.url
+            addressText = BrowserAddressRule.shownAddress(tab.url)
             pageTitle = tab.title
             eventTask = Task { [weak self] in
                 for await event in client.events {
@@ -362,7 +498,11 @@ final class BrowserModel {
                 guard let self else { return }
                 self.connectionEnded(client)
             }
-            _ = try await client.send(.startScreencast(maxWidth: 1280, maxHeight: 800, quality: 70))
+            // The page takes the size of the picture area (queued: a page that does not answer must not hold the
+            // connection), and the screencast asks for frames of that size.
+            if let viewport { queueViewport(.setViewport(viewport), on: client) }
+            let box = viewport?.screencastBox ?? BrowserViewport.defaultScreencast
+            _ = try await client.send(.startScreencast(maxWidth: box.width, maxHeight: box.height, quality: 70))
         } catch {
             isLoading = false
             throw error
@@ -381,28 +521,87 @@ final class BrowserModel {
             pageSize = CGSize(width: frame.deviceWidth, height: frame.deviceHeight)
             isLoading = false
         case "Page.frameNavigated":
-            if let url = event.params["frame"]?["url"]?.string, event.params["frame"]?["parentId"] == nil {
-                currentURL = url
-                addressText = url
+            if let frame = event.params["frame"], frame["parentId"] == nil {
+                mainFrameID = frame["id"]?.string
+                if let url = frame["url"]?.string { movePage(to: url) }
+                requestTitle(client: client)
             }
-            if let title = event.params["frame"]?["name"]?.string { pageTitle = title }
+            await refreshHistoryFlags(client: client)
+        case "Page.navigatedWithinDocument":
+            // Pushed and replaced URLs of single-page sites. Only the main frame counts, and only once it is known.
+            if let mainFrameID, event.params["frameId"]?.string == mainFrameID,
+               let url = event.params["url"]?.string {
+                movePage(to: url)
+                requestTitle(client: client)
+            }
             await refreshHistoryFlags(client: client)
         case "Page.loadEventFired", "Page.domContentEventFired":
+            // Page events are the main frame's. The title is final once the document has loaded.
             isLoading = false
+            requestTitle(client: client)
         default:
             break
         }
     }
 
+    /// The back and forward flags. The address is not read here: the page's own events move it (`movePage`).
     private func refreshHistoryFlags(client: CDPClient) async {
         guard let history = try? await client.send(.navigationHistory) else { return }
         let index = Int(history["currentIndex"]?.numberValue ?? 0)
-        let count: Int = {
-            if case .array(let items) = history["entries"] ?? .null { return items.count }
-            return 0
-        }()
+        let entries = Self.historyEntries(history)
         canGoBack = index > 0
-        canGoForward = index < count - 1
+        canGoForward = index < entries.count - 1
+    }
+
+    /// Reads the title of the page (`document.title`) in a task of its own: the event loop never waits for the page,
+    /// because a JS dialog or a busy page would hold the call for good. One read at a time; an answer later than
+    /// one second is dropped, but the read counts as running until the page answers.
+    private func requestTitle(client: CDPClient) {
+        guard !titleReadInFlight else { return }
+        titleReadInFlight = true
+        let deadline = TitleDeadline()
+        Task {
+            try? await Task.sleep(for: .seconds(1))
+            deadline.expire()
+        }
+        Task { [weak self] in
+            let reply = try? await client.send(.evaluate(expression: "document.title"))
+            guard let self else { return }
+            self.titleReadInFlight = false
+            guard !deadline.expired, self.client === client,
+                  let title = reply?["result"]?["value"]?.string
+            else { return }
+            self.setPageTitle(title)
+        }
+    }
+
+    /// The title of the shown page. The tab row shows the title of its entry in the list of tabs, so both are kept.
+    private func setPageTitle(_ title: String) {
+        guard title != pageTitle else { return }
+        pageTitle = title
+        if let clientTabID, let index = tabs.firstIndex(where: { $0.id == clientTabID }) {
+            tabs[index].title = title
+        }
+    }
+
+    /// The page moved to `url`: the address and, unless it is being typed, the text of the address field follow.
+    private func movePage(to url: String) {
+        let next = BrowserAddressRule.afterPageMoved(to: url, currentURL: currentURL, typed: addressText, editing: isEditingAddress)
+        currentURL = next.currentURL
+        addressText = next.typed
+    }
+
+    /// Called by the address field when focus comes or goes. When focus leaves, the field shows the page's address.
+    func addressEditingChanged(_ editing: Bool) {
+        // Already ended by `submitAddress`: the field then keeps the address it opens.
+        guard editing != isEditingAddress else { return }
+        isEditingAddress = editing
+        addressText = BrowserAddressRule.afterEditingEnded(currentURL: currentURL, typed: addressText, editing: editing)
+    }
+
+    static func historyEntries(_ history: JSONValue) -> [JSONValue] {
+        if case .array(let items) = history["entries"] ?? .null { return items }
+        return []
     }
 
     /// The socket closed under us. Drops the connection; the next poll reconnects, under the policy.
@@ -410,6 +609,7 @@ final class BrowserModel {
         guard client === ended else { return }
         client = nil
         clientTabID = nil
+        mainFrameID = nil
         frame = nil
         isLoading = false
     }
@@ -420,8 +620,13 @@ final class BrowserModel {
         let old = client
         client = nil
         clientTabID = nil
+        mainFrameID = nil
         frame = nil
-        await old?.close()
+        guard let old else { return }
+        // The page gets its own size back before its socket closes. A page that does not answer waits one second at most.
+        if viewport != nil { queueViewport(.clearViewport, on: old) }
+        await Self.waitBriefly(viewportQueue, seconds: 1)
+        await old.close()
     }
 
     // MARK: Helpers
@@ -440,6 +645,31 @@ final class BrowserModel {
     }
 }
 
+/// Resumes a continuation once, whichever of two events comes first.
+@MainActor
+private final class ResumeOnce {
+    private var resume: CheckedContinuation<Void, Never>?
+
+    init(_ resume: CheckedContinuation<Void, Never>) {
+        self.resume = resume
+    }
+
+    func finish() {
+        resume?.resume()
+        resume = nil
+    }
+}
+
+/// Whether a title read ran out of time: set by the timer, read by the read when it answers.
+@MainActor
+private final class TitleDeadline {
+    private(set) var expired = false
+
+    func expire() {
+        expired = true
+    }
+}
+
 /// One `BrowserModel` per server, so the sidebar and the main area show the same browser.
 @MainActor
 final class BrowserStore {
@@ -451,5 +681,51 @@ final class BrowserStore {
         let model = BrowserModel(server: server)
         models[server.id] = model
         return model
+    }
+}
+
+/// What to show after a tab closed. Pure, so the choice is easy to read and test.
+enum BrowserTabPolicy {
+    enum Outcome: Equatable {
+        /// The shown page did not change: nothing to do.
+        case keep
+        /// The shown page closed: show this tab.
+        case show(String)
+        /// The shown page closed and no tab is left: open a blank one.
+        case openBlank
+    }
+
+    /// `before` is the tab ids before the close, `remaining` the ids after it (without `closedID`). The tab that takes
+    /// the place of the closed one is the one on its right, or the last one when it was the last of the row.
+    static func afterClosing(closedID: String, shownID: String?, before: [String], remaining: [String]) -> Outcome {
+        guard shownID == closedID else { return .keep }
+        guard !remaining.isEmpty else { return .openBlank }
+        let index = before.firstIndex(of: closedID) ?? 0
+        return .show(remaining[min(index, remaining.count - 1)])
+    }
+}
+
+/// How the address follows the page. Pure, so the rules are easy to read and test.
+enum BrowserAddressRule {
+    struct Fields: Equatable {
+        var currentURL: String
+        /// The text of the address field.
+        var typed: String
+    }
+
+    /// The text the address field shows for a page at `url`: the address, or nothing for a new tab.
+    static func shownAddress(_ url: String) -> String {
+        BrowserTabLabel.isBlank(url) ? "" : url
+    }
+
+    /// The page moved to `url`. The field shows the new address, unless the person is typing in it.
+    static func afterPageMoved(to url: String, currentURL: String, typed: String, editing: Bool) -> Fields {
+        guard url != currentURL else { return Fields(currentURL: currentURL, typed: typed) }
+        return Fields(currentURL: url, typed: editing ? typed : shownAddress(url))
+    }
+
+    /// Focus left or came to the address field. When it leaves, the field shows the page's address again.
+    static func afterEditingEnded(currentURL: String, typed: String, editing: Bool) -> String {
+        editing ? typed : shownAddress(currentURL)
     }
 }

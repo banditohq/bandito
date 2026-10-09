@@ -2,7 +2,17 @@ import BanditoDesign
 import BanditoL10n
 import SwiftUI
 
-/// The Settings window (⌘,): 13 sections in a left navigation, 1040 × 760 pt, like the design.
+/// A section the Settings window should open on, asked for from elsewhere (for example "Manage servers" in the
+/// server menu). The window takes it once; without a request it opens on General.
+@MainActor
+@Observable
+final class SettingsNavigation {
+    static let shared = SettingsNavigation()
+
+    var requested: SettingsSection?
+}
+
+/// The Settings window (⌘,): 12 sections in a left navigation. Opens at 1040 × 760 pt, never smaller than 820 × 560.
 public struct SettingsWindow: View {
     @State private var section: SettingsSection = .general
 
@@ -18,50 +28,61 @@ public struct SettingsWindow: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color.Bandito.surface1)
         }
-        .frame(width: 1040, height: 760)
+        .frame(minWidth: 820, idealWidth: 1040, maxWidth: .infinity, minHeight: 560, idealHeight: 760, maxHeight: .infinity)
         .preferredColorScheme(.dark)
+        .onAppear(perform: takeRequest)
+        .onChange(of: SettingsNavigation.shared.requested) { _, _ in takeRequest() }
+    }
+
+    private func takeRequest() {
+        guard let requested = SettingsNavigation.shared.requested else { return }
+        section = requested
+        SettingsNavigation.shared.requested = nil
     }
 
     private var navigation: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(L10n.Settings.title)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(Color.Bandito.text)
-                .padding(.horizontal, 10)
-                .padding(.top, 26)
-                .padding(.bottom, 14)
-            ForEach(SettingsSection.allCases) { item in
-                let selected = item == section
-                Button {
-                    section = item
-                } label: {
-                    HStack(spacing: 10) {
-                        Text(item.glyph)
-                            .font(.system(size: 11, design: .monospaced))
-                            .frame(width: 22, height: 22)
-                            .foregroundStyle(selected ? Color.white : Color.Bandito.text3)
-                            .background(
-                                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                    .fill(selected ? Color.Bandito.signal : Color.Bandito.text.opacity(0.06)))
-                        Text(item.title)
-                            .font(.system(size: 13, weight: selected ? .semibold : .regular))
-                            .foregroundStyle(selected ? Color.Bandito.text : Color.Bandito.text2)
-                            .lineLimit(1)
-                        Spacer(minLength: 0)
-                    }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(L10n.Settings.title)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(Color.Bandito.text)
                     .padding(.horizontal, 10)
-                    .padding(.vertical, 7)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(selected ? Color.Bandito.text.opacity(0.08) : .clear))
-                    .contentShape(Rectangle())
+                    .padding(.top, 26)
+                    .padding(.bottom, 14)
+                ForEach(SettingsSection.allCases) { item in
+                    let selected = item == section
+                    Button {
+                        section = item
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: item.symbol)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(Color.white)
+                                .frame(width: 24, height: 24)
+                                .background(item.tint, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                                .accessibilityHidden(true)
+                            Text(item.title)
+                                .font(.system(size: 13, weight: selected ? .semibold : .regular))
+                                .foregroundStyle(selected ? Color.Bandito.text : Color.Bandito.text2)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(selected ? Color.Bandito.text.opacity(0.08) : .clear))
+                        .contentShape(Rectangle())
+                    }
+                    .banditoButton(.row(cornerRadius: 10))
+                    .accessibilityAddTraits(selected ? .isSelected : [])
                 }
-                .banditoButton(.row(cornerRadius: 10))
-                .accessibilityAddTraits(selected ? .isSelected : [])
             }
-            Spacer(minLength: 0)
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .padding(.horizontal, 12)
+        .scrollIndicators(.never)
     }
 
     @ViewBuilder
@@ -78,7 +99,6 @@ public struct SettingsWindow: View {
         case .keysGestures: KeysAndGesturesSection()
         case .notifications: NotificationsSection()
         case .appearance: AppearanceSection()
-        case .language: LanguageSection()
         case .updates: UpdatesSection()
         }
     }

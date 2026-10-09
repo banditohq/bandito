@@ -4,8 +4,8 @@
 
 use super::process::{self, JsonProcess, LineSink, Router, locked};
 use super::{
-    ApprovalRequest, Plan, Runtime, RuntimeKind, RuntimeOutput, RuntimeStatus, Session, SpawnConfig, Spawned,
-    capitalized, clip_input,
+    ApprovalRequest, LoginCache, LoginCheck, Plan, ProbeOutput, Runtime, RuntimeKind, RuntimeOutput, RuntimeStatus,
+    Session, SpawnConfig, Spawned, capitalized, clip_input,
 };
 use crate::event::{Decision, EventBody, LimitWindow, TOOL_OUTPUT_LIMIT, TurnStatus, Usage, truncate_output};
 use anyhow::bail;
@@ -40,12 +40,37 @@ const BASE_ARGS: [&str; 11] = [
 fn bandito_home_rules(home: &std::path::Path) -> Vec<String> {
     let home = std::path::absolute(home).unwrap_or_else(|_| home.to_path_buf());
     let text = home.display().to_string();
-    let text = text.trim_end_matches('/');
+    // The rule is a glob. A glob character in the folder's own name becomes a bracket class that matches
+    // it (`(`, `)`, `[`, `]`, `*`, `?`, `{`, `}`); `!` and `\` are escaped with a backslash.
+    let text: String = text
+        .trim_end_matches('/')
+        .chars()
+        .map(|c| match c {
+            '(' | ')' | '[' | ']' | '*' | '?' | '{' | '}' => format!("[{c}]"),
+            '!' | '\\' => format!("\\{c}"),
+            c => c.to_string(),
+        })
+        .collect();
     ["Read", "Edit", "Write"]
         .iter()
         .map(|tool| format!("{tool}(/{text}/**)"))
         .collect()
 }
+
+/// Tools whose calls go through `can_use_tool` and the policy. Listed as `permissions.ask` in the
+/// `--settings` JSON. Grep (reads file contents) and Glob (reads names under a folder) are checked for
+/// credential folders and Bandito's folder too. LS only lists names and stays out.
+const POLICY_TOOLS: [&str; 9] = [
+    "Bash",
+    "Edit",
+    "Write",
+    "MultiEdit",
+    "NotebookEdit",
+    "WebFetch",
+    "Read",
+    "Grep",
+    "Glob",
+];
 
 const INIT_REQUEST_ID: &str = "init";
 /// Tool input strings longer than this are clipped in events and approvals.
@@ -67,6 +92,8 @@ pub struct ClaudeRuntime {
     env: Vec<(String, String)>,
     /// Folder with `.credentials.json`. `None` = from the environment. Tests point it at a temp dir.
     config_dir: Option<PathBuf>,
+    /// The answer of `claude auth status`, asked at most once a minute.
+    login: LoginCache,
 }
 
 impl ClaudeRuntime {
@@ -79,6 +106,7 @@ impl ClaudeRuntime {
             program: program.to_string(),
             env: Vec::new(),
             config_dir: None,
+            login: LoginCache::default(),
         }
     }
 
@@ -112,6 +140,51 @@ impl ClaudeRuntime {
             .map(|(_, v)| v.clone())
             .or_else(|| std::env::var(key).ok())
     }
+
+    /// Whether the CLI is logged in and its plan, from `claude auth status` (cached, see [`LoginCache`]).
+    async fn login(&self) -> LoginCheck {
+        self.login
+            .check(|| async {
+                let probe = super::run_probe(
+                    &self.program,
+                    &["auth", "status"],
+                    &self.env,
+                    super::LOGIN_PROBE_TIMEOUT,
+                )
+                .await;
+                login_from_auth_status(probe.as_ref())
+            })
+            .await
+    }
+}
+
+/// The two fields of `claude auth status` that Bandito keeps. The account's email and organisation are not in this struct.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AuthStatus {
+    logged_in: bool,
+    subscription_type: Option<String>,
+}
+
+/// What `claude auth status` says. The CLI exits 1 when logged out and still prints its JSON, so the JSON decides
+/// whatever the exit code; a run that was killed, or output that is not that JSON, is unknown: never "logged out".
+pub fn login_from_auth_status(probe: Option<&ProbeOutput>) -> LoginCheck {
+    let Some(probe) = probe.filter(|p| p.code.is_some()) else {
+        return LoginCheck::unknown();
+    };
+    match serde_json::from_str::<AuthStatus>(&probe.stdout) {
+        Ok(status) => LoginCheck {
+            logged_in: Some(status.logged_in),
+            plan: status
+                .subscription_type
+                .as_deref()
+                .and_then(|subscription| plan_from_claude(subscription, None)),
+        },
+        Err(_) => {
+            tracing::debug!("claude: auth status printed no readable answer");
+            LoginCheck::unknown()
+        }
+    }
 }
 
 impl Default for ClaudeRuntime {
@@ -128,11 +201,13 @@ impl Runtime for ClaudeRuntime {
 
     async fn status(&self) -> RuntimeStatus {
         let version = super::probe_version(&self.program).await;
+        let installed = version.is_some();
+        let logged_in = if installed { self.login().await.logged_in } else { None };
         RuntimeStatus {
             kind: RuntimeKind::Claude,
-            installed: version.is_some(),
+            installed,
             version,
-            logged_in: None,
+            logged_in,
             detail: None,
         }
     }
@@ -173,8 +248,13 @@ impl Runtime for ClaudeRuntime {
             }
         }
         // The agent's file tools may not touch Bandito's own folder (see docs/ARCHITECTURE.md#approvals-policy).
+        // The tools the policy decides are asked, so an `allow` in the user's or the project's settings
+        // cannot run them without `can_use_tool`. Claude Code checks deny, then ask, then allow.
         // One argument of inline JSON, so no rule can be split at a space.
-        let settings = json!({"permissions": {"deny": bandito_home_rules(&crate::workspace::data_dir())}});
+        let settings = json!({"permissions": {
+            "deny": bandito_home_rules(&crate::workspace::data_dir()),
+            "ask": POLICY_TOOLS,
+        }});
         cmd.arg("--settings").arg(settings.to_string());
         cmd.current_dir(&cfg.cwd).envs(cfg.env.iter().map(|(k, v)| (k, v)));
         // Marks the CLI and its children for `host.processes` (see docs/ARCHITECTURE.md#host).
@@ -208,21 +288,21 @@ impl Runtime for ClaudeRuntime {
         })
     }
 
-    /// Reads the subscription from `.credentials.json`; no process is started.
-    /// On macOS the CLI keeps its login in the Keychain and writes no such file: then this is `Ok(None)`, which is normal.
+    /// The subscription from `.credentials.json`. Without that file (macOS keeps the login in the Keychain)
+    /// the plan is the one `claude auth status` names. An unreadable file gives `Ok(None)`.
     async fn account_plan(&self) -> anyhow::Result<Option<Plan>> {
-        let Some(dir) = self.credentials_dir() else {
-            return Ok(None);
-        };
-        let path = dir.join(CREDENTIALS_FILE);
-        match tokio::fs::read(&path).await {
-            Ok(bytes) => Ok(plan_from_credentials(&bytes)),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(e) => {
-                tracing::warn!(path = %path.display(), kind = ?e.kind(), "claude: could not read the account file");
-                Ok(None)
+        if let Some(dir) = self.credentials_dir() {
+            let path = dir.join(CREDENTIALS_FILE);
+            match tokio::fs::read(&path).await {
+                Ok(bytes) => return Ok(plan_from_credentials(&bytes)),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => {
+                    tracing::warn!(path = %path.display(), kind = ?e.kind(), "claude: could not read the account file");
+                    return Ok(None);
+                }
             }
         }
+        Ok(self.login().await.plan)
     }
 }
 
@@ -1360,9 +1440,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn account_plan_is_none_without_the_file() {
+    async fn account_plan_is_none_without_the_file_or_a_cli() {
+        // No real `claude` here: with no file, the plan comes from `claude auth status` (see login_tests).
         let dir = tempfile::tempdir().unwrap();
-        let plan = ClaudeRuntime::new()
+        let plan = ClaudeRuntime::with_program("/nonexistent/claude")
             .with_config_dir(dir.path())
             .account_plan()
             .await
@@ -1411,5 +1492,127 @@ mod approval_path_tests {
     fn unknown_tool_path_like_fields_are_checked() {
         let req = approval_from_control(&control("SomeNewTool", json!({"target": "~/.bandito/x", "n": 3}))).unwrap();
         assert!(req.paths.iter().any(|p| p == "~/.bandito/x"), "{:?}", req.paths);
+    }
+}
+
+#[cfg(test)]
+mod login_tests {
+    use super::*;
+    use crate::runtime::{LoginCheck, ProbeOutput};
+
+    fn exit0(stdout: &str) -> ProbeOutput {
+        ProbeOutput {
+            code: Some(0),
+            stdout: stdout.into(),
+            stderr: String::new(),
+        }
+    }
+
+    #[test]
+    fn logged_in_with_a_subscription_names_the_plan() {
+        let check = login_from_auth_status(Some(&exit0(
+            r#"{"loggedIn": true, "subscriptionType": "pro", "email": "a@b.example", "orgId": "org-1"}"#,
+        )));
+        assert_eq!(check.logged_in, Some(true));
+        assert_eq!(
+            check.plan,
+            Some(Plan {
+                id: "pro".into(),
+                label: "Pro".into()
+            })
+        );
+        assert!(
+            !format!("{check:?}").contains("a@b.example"),
+            "the account email is not kept"
+        );
+    }
+
+    #[test]
+    fn logged_out_is_false_without_a_plan() {
+        assert_eq!(
+            login_from_auth_status(Some(&exit0(r#"{"loggedIn": false}"#))),
+            LoginCheck {
+                logged_in: Some(false),
+                plan: None
+            }
+        );
+    }
+
+    #[test]
+    fn logged_in_without_a_subscription_has_no_plan() {
+        assert_eq!(
+            login_from_auth_status(Some(&exit0(r#"{"loggedIn": true}"#))),
+            LoginCheck {
+                logged_in: Some(true),
+                plan: None
+            }
+        );
+    }
+
+    #[test]
+    fn logged_out_exits_1_and_still_answers() {
+        // Real output of claude 2.1.295 on a server where nobody signed in: exit 1 with the JSON.
+        let logged_out = ProbeOutput {
+            code: Some(1),
+            stdout: r#"{"loggedIn": false, "authMethod": "none", "apiProvider": "firstParty"}"#.into(),
+            stderr: String::new(),
+        };
+        assert_eq!(
+            login_from_auth_status(Some(&logged_out)),
+            LoginCheck {
+                logged_in: Some(false),
+                plan: None
+            }
+        );
+        let failed = ProbeOutput {
+            code: Some(1),
+            stdout: String::new(),
+            stderr: "boom".into(),
+        };
+        assert_eq!(login_from_auth_status(Some(&failed)), LoginCheck::unknown());
+    }
+
+    #[test]
+    fn a_killed_run_or_no_answer_is_unknown() {
+        assert_eq!(login_from_auth_status(None), LoginCheck::unknown());
+        let killed = ProbeOutput {
+            code: None,
+            stdout: r#"{"loggedIn": true}"#.into(),
+            stderr: String::new(),
+        };
+        assert_eq!(login_from_auth_status(Some(&killed)), LoginCheck::unknown());
+    }
+
+    #[test]
+    fn unreadable_output_is_unknown() {
+        for stdout in ["", "hello", r#"{"loggedOn": true}"#, r#"{"loggedIn": "yes"}"#, "[1, 2]"] {
+            assert_eq!(
+                login_from_auth_status(Some(&exit0(stdout))),
+                LoginCheck::unknown(),
+                "{stdout}"
+            );
+        }
+    }
+
+    #[test]
+    fn bandito_home_rules_escape_glob_characters_in_the_folder_name() {
+        // Parentheses, brackets and wildcards in the folder's own name match themselves, not the pattern.
+        let rules = bandito_home_rules(std::path::Path::new("/srv/a(b)[c]*d?"));
+        assert_eq!(
+            rules,
+            [
+                "Read(//srv/a[(]b[)][[]c[]][*]d[?]/**)",
+                "Edit(//srv/a[(]b[)][[]c[]][*]d[?]/**)",
+                "Write(//srv/a[(]b[)][[]c[]][*]d[?]/**)",
+            ]
+        );
+        // Braces and `!` and backslashes match themselves too.
+        let rules = bandito_home_rules(std::path::Path::new("/srv/a{b}!c\\d"));
+        assert_eq!(rules[0], "Read(//srv/a[{]b[}]\\!c\\\\d/**)");
+        // A plain path is unchanged.
+        assert_eq!(
+            bandito_home_rules(std::path::Path::new("/home/u/.bandito"))[0],
+            "Read(//home/u/.bandito/**)"
+        );
     }
 }

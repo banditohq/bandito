@@ -50,6 +50,12 @@ pub struct Parsed {
     pub commands: Vec<SimpleCommand>,
     /// Why some part of the line could not be read. Each reason appears once.
     pub opaque: Vec<&'static str>,
+    /// The folder the shell is in after the line, when known: a `cd` on the line counts, a subshell's does not.
+    /// The next line of the same shell starts there.
+    pub end_cwd: Option<String>,
+    /// The line runs a word that can move the shell's folder in a way the reader does not follow: a `cd` inside
+    /// `command` or `builtin`, `eval`, `source` or `.`, `exec`. The folder is then not known after it.
+    pub hides_cwd: bool,
 }
 
 /// One command with its arguments and redirections.
@@ -183,7 +189,8 @@ fn parse_state(cmd: &str, depth: usize, env: &Env, state: State) -> Parsed {
     let mut st = state;
     // Each `(` saves the state, and the matching `)` brings it back: a subshell changes nothing outside.
     let mut saved: Vec<State> = Vec::new();
-    for raw in build(&tokens) {
+    let (raws, trailing_closes) = build(&tokens);
+    for raw in raws {
         for _ in 0..raw.closes {
             if let Some(prev) = saved.pop() {
                 st = prev;
@@ -197,6 +204,12 @@ fn parse_state(cmd: &str, depth: usize, env: &Env, state: State) -> Parsed {
         }
         run_raw(&raw, &mut st, depth, env, &mut out);
     }
+    for _ in 0..trailing_closes {
+        if let Some(prev) = saved.pop() {
+            st = prev;
+        }
+    }
+    out.end_cwd = st.cwd.clone();
     out
 }
 
@@ -262,6 +275,11 @@ fn run_raw(raw: &Raw, st: &mut State, depth: usize, env: &Env, out: &mut Parsed)
 
 /// The shell's own changes made by a command: `cd`, `pushd`, `popd`, `export`, `unset`, `read`, …
 fn effects(words: &[Word], st: &mut State, piped: bool) {
+    // `command cd x` and `builtin cd x` run the shell's own `cd`: the wrapper word is skipped.
+    let words = match words.first().map(|w| basename(&w.text)) {
+        Some("command" | "builtin") if words.len() > 1 => &words[1..],
+        _ => words,
+    };
     let Some(first) = words.first() else {
         return;
     };
@@ -1095,7 +1113,8 @@ impl Raw {
 }
 
 /// Groups tokens into simple commands, split at operators; keeps subshell nesting and pipes.
-fn build(tokens: &[Tok]) -> Vec<Raw> {
+/// The commands of the line, and how many subshells the line closes after its last command (`(cd x)`).
+fn build(tokens: &[Tok]) -> (Vec<Raw>, usize) {
     let mut raws = Vec::new();
     let mut cur = Raw::default();
     let mut started = false;
@@ -1153,7 +1172,7 @@ fn build(tokens: &[Tok]) -> Vec<Raw> {
         i += 1;
     }
     finish(&mut raws, &mut cur, &mut started);
-    raws
+    (raws, pend_close)
 }
 
 /// Marks the start of a command: it takes the pipe and subshell marks waiting for it.
@@ -1232,6 +1251,9 @@ fn normalize(words: &[Word], redirects: &[Redirect], ctx: &Ctx, env: &Env, state
     let name = basename(&program.text);
     if name == "eval" {
         out.note("eval");
+    }
+    if matches!(name, "command" | "builtin" | "exec" | "eval" | "source" | ".") {
+        out.hides_cwd = true;
     }
     let rest = &words[1..];
     let texts: Vec<&str> = rest.iter().map(|w| w.text.as_str()).collect();
@@ -1975,6 +1997,38 @@ mod tests {
         let parsed = p("cd ~ | cat; cat .bandito/x");
         let cat = parsed.commands.iter().rfind(|c| c.argv[0] == "cat").expect("cat");
         assert_eq!(cat.cwd, None);
+    }
+
+    #[test]
+    fn hides_cwd_marks_the_lines_that_can_move_the_shell_out_of_reach() {
+        assert!(p("command cd ~").hides_cwd);
+        assert!(p("builtin cd ~").hides_cwd);
+        assert!(p("eval \"cd ~\"").hides_cwd);
+        assert!(p(". ./s.sh").hides_cwd);
+        assert!(p("source ./s.sh").hides_cwd);
+        assert!(p("exec cd ~").hides_cwd);
+        assert!(!p("cd ~ && ls").hides_cwd);
+        // Inside one line a `cd` behind a wrapper still moves the folder for the commands after it.
+        let parsed = p("command cd ~/.ssh; cat id_rsa");
+        let cat = parsed.commands.iter().rfind(|c| c.argv[0] == "cat").expect("cat");
+        assert_eq!(cat.cwd.as_deref(), Some("/home/u/.ssh"));
+    }
+
+    #[test]
+    fn end_cwd_is_the_folder_the_line_leaves_the_shell_in() {
+        // The next call of the same shell starts there.
+        assert_eq!(p("cd ~").end_cwd.as_deref(), Some("/home/u"));
+        assert_eq!(p("cd ~/.ssh && ls").end_cwd.as_deref(), Some("/home/u/.ssh"));
+        assert_eq!(p("cd ~; pushd .ssh; popd").end_cwd.as_deref(), Some("/home/u"));
+        assert_eq!(p("cd ~; pushd .ssh").end_cwd.as_deref(), Some("/home/u/.ssh"));
+        // A subshell changes nothing outside it.
+        assert_eq!(p("(cd ~/.ssh)").end_cwd.as_deref(), Some("/home/u/app"));
+        // Inside `sh -c` the change stays in that shell.
+        assert_eq!(p("sh -c 'cd ~/.ssh'").end_cwd.as_deref(), Some("/home/u/app"));
+        // Not known: a pipeline, or an unknown folder, or no start.
+        assert_eq!(p("cd ~ | cat").end_cwd, None);
+        assert_eq!(p("cd $NOPE").end_cwd, None);
+        assert_eq!(parse("ls", None, &test_env()).end_cwd, None);
     }
 
     #[test]

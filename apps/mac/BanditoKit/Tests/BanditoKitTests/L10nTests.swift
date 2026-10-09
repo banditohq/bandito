@@ -5,7 +5,7 @@ import Testing
 @Suite struct L10nTests {
     @Test func plainAndPlaceholderStrings() {
         #expect(L10n.Approval.approve == "Approve")
-        #expect(L10n.Thread.placeholder(name: "Forge") == "Message Forge")
+        #expect(L10n.Thread.placeholder == "Write a task or a question…")
     }
 
     @Test func pluralCategories() {

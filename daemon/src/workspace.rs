@@ -86,11 +86,9 @@ pub fn container_name(id: &str) -> String {
     format!("{CONTAINER_PREFIX}{id}")
 }
 
-/// Bandito's data folder: `$BANDITO_HOME`, else `~/.bandito`.
+/// Bandito's data folder: `--home`, else `$BANDITO_HOME`, else `~/.bandito` (see [`crate::home::data_home`]).
 pub fn data_dir() -> PathBuf {
-    std::env::var_os("BANDITO_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| dirs::home_dir().unwrap_or_else(|| PathBuf::from("/")).join(".bandito"))
+    crate::home::data_home()
 }
 
 /// The tag of the image Bandito builds from [`dockerfile`]. The tag changes with the Dockerfile.

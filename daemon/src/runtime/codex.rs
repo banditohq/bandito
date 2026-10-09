@@ -3,8 +3,8 @@
 
 use super::process::{self, JsonProcess, LineSink, Router, locked};
 use super::{
-    ApprovalRequest, Plan, Runtime, RuntimeKind, RuntimeOutput, RuntimeStatus, Session, SpawnConfig, Spawned,
-    capitalized, clip_input,
+    ApprovalRequest, LoginCache, LoginCheck, Plan, ProbeOutput, Runtime, RuntimeKind, RuntimeOutput, RuntimeStatus,
+    Session, SpawnConfig, Spawned, capitalized, clip_input,
 };
 use crate::event::{Decision, EventBody, LimitWindow, TOOL_OUTPUT_LIMIT, TurnStatus, Usage, truncate_output};
 use crate::store::Effort;
@@ -47,6 +47,8 @@ pub struct CodexRuntime {
     program: String,
     /// Extra environment for the usage read (`refresh_usage`). Turns get theirs from the spawn config.
     env: Vec<(String, String)>,
+    /// The answer of `codex login status`, asked at most once a minute.
+    login: LoginCache,
 }
 
 impl CodexRuntime {
@@ -58,7 +60,28 @@ impl CodexRuntime {
         Self {
             program: program.to_string(),
             env: Vec::new(),
+            login: LoginCache::default(),
         }
+    }
+
+    /// Whether the CLI is logged in, from `codex login status` (cached, see [`LoginCache`]).
+    async fn login(&self) -> Option<bool> {
+        self.login
+            .check(|| async {
+                let probe = super::run_probe(
+                    &self.program,
+                    &["login", "status"],
+                    &self.env,
+                    super::LOGIN_PROBE_TIMEOUT,
+                )
+                .await;
+                LoginCheck {
+                    logged_in: login_from_status(probe.as_ref()),
+                    plan: None,
+                }
+            })
+            .await
+            .logged_in
     }
 
     /// Environment for the usage read. Tests point it at a fake CLI.
@@ -82,11 +105,13 @@ impl Runtime for CodexRuntime {
 
     async fn status(&self) -> RuntimeStatus {
         let version = super::probe_version(&self.program).await;
+        let installed = version.is_some();
+        let logged_in = if installed { self.login().await } else { None };
         RuntimeStatus {
             kind: RuntimeKind::Codex,
-            installed: version.is_some(),
+            installed,
             version,
-            logged_in: None,
+            logged_in,
             detail: None,
         }
     }
@@ -193,6 +218,17 @@ impl Runtime for CodexRuntime {
             Ok(answer) => answer,
             Err(_) => bail!("codex: account read timed out"),
         }
+    }
+}
+
+/// What `codex login status` says: exit 0 is logged in; exit 1 with "Not logged in" on either stream is logged out.
+/// Anything else is unknown (`None`).
+pub fn login_from_status(probe: Option<&ProbeOutput>) -> Option<bool> {
+    let probe = probe?;
+    match probe.code {
+        Some(0) => Some(true),
+        Some(1) if probe.stdout.contains("Not logged in") || probe.stderr.contains("Not logged in") => Some(false),
+        _ => None,
     }
 }
 
@@ -1289,5 +1325,48 @@ mod tests {
         assert_eq!(plan_of_account(&only_limits), plan("team", "Team"));
         assert_eq!(plan_of_account(&json!({"account": {"type": "apiKey"}})), None);
         assert_eq!(plan_of_account(&NULL), None);
+    }
+}
+
+#[cfg(test)]
+mod login_tests {
+    use super::*;
+    use crate::runtime::ProbeOutput;
+
+    fn probe(code: Option<i32>, stdout: &str, stderr: &str) -> ProbeOutput {
+        ProbeOutput {
+            code,
+            stdout: stdout.into(),
+            stderr: stderr.into(),
+        }
+    }
+
+    #[test]
+    fn exit_zero_is_logged_in_whatever_it_prints() {
+        assert_eq!(
+            login_from_status(Some(&probe(Some(0), "Logged in using ChatGPT", ""))),
+            Some(true)
+        );
+        assert_eq!(login_from_status(Some(&probe(Some(0), "", ""))), Some(true));
+    }
+
+    #[test]
+    fn not_logged_in_on_exit_one_from_either_stream() {
+        assert_eq!(
+            login_from_status(Some(&probe(Some(1), "Not logged in", ""))),
+            Some(false)
+        );
+        assert_eq!(
+            login_from_status(Some(&probe(Some(1), "", "Not logged in\n"))),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn anything_else_is_unknown() {
+        assert_eq!(login_from_status(Some(&probe(Some(1), "", "network down"))), None);
+        assert_eq!(login_from_status(Some(&probe(Some(2), "Not logged in", ""))), None);
+        assert_eq!(login_from_status(Some(&probe(None, "Not logged in", ""))), None);
+        assert_eq!(login_from_status(None), None);
     }
 }

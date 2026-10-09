@@ -114,6 +114,20 @@
 			<string>「%1$@」 · %2$lld 件一致、%3$@</string>
 		</dict>
 	</dict>
+	<key>menubar.approvalsWaiting</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>other</key>
+			<string>%1$lld 件の承認待ち</string>
+		</dict>
+	</dict>
 	<key>menubar.needsYou</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
@@ -139,7 +153,7 @@
 			<key>NSStringFormatValueTypeKey</key>
 			<string>lld</string>
 			<key>other</key>
-			<string>約 %1$lld 分</string>
+			<string>約 ≈ %1$lld 分</string>
 		</dict>
 	</dict>
 	<key>thread.ranCommands</key>

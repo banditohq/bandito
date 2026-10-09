@@ -112,6 +112,9 @@ pub enum EventBody {
         diff: Option<String>,
         reason: String,
     },
+    /// The runtime took the request back (its CLI cancelled it): nobody answered it, so no decision.
+    #[serde(rename = "approval.withdrawn")]
+    ApprovalWithdrawn { approval_id: String },
     #[serde(rename = "approval.resolved")]
     ApprovalResolved {
         approval_id: String,
@@ -208,6 +211,20 @@ pub struct Event {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn withdrawn_approval_event_names_only_the_approval() {
+        // The CLI took the request back: no decision, so no `decision` or `by` field.
+        let body = EventBody::ApprovalWithdrawn {
+            approval_id: "a1".into(),
+        };
+        assert_eq!(
+            serde_json::to_value(&body).unwrap(),
+            serde_json::json!({"kind": "approval.withdrawn", "payload": {"approval_id": "a1"}})
+        );
+        let back: EventBody = serde_json::from_value(serde_json::to_value(&body).unwrap()).unwrap();
+        assert_eq!(back, body);
+    }
 
     #[test]
     fn roundtrip_parts() {

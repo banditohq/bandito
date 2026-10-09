@@ -1,3 +1,4 @@
+import BanditoL10n
 import Testing
 
 @testable import BanditoKit
@@ -43,13 +44,11 @@ import Testing
         #expect(draft.runtime == .claude)
     }
 
-    @Test func createNeedsAName() {
+    @Test func nameIsOptional() {
         var draft = NewAgentDraft()
         draft.cwd = "/home/me/billing"
-        #expect(!draft.canCreate)
+        #expect(draft.canCreate)
         draft.name = "   "
-        #expect(!draft.canCreate)
-        draft.name = "  Forge "
         #expect(draft.canCreate)
     }
 
@@ -57,8 +56,96 @@ import Testing
         var draft = NewAgentDraft()
         draft.name = "Forge"
         #expect(!draft.canCreate)
+        draft.cwd = "   "
+        #expect(!draft.canCreate)
         draft.cwd = "/home/me/billing"
         #expect(draft.canCreate)
+    }
+
+    @Test func typedNameWinsOverTheDefault() {
+        var draft = NewAgentDraft()
+        draft.name = "  Forge "
+        draft.role = "reviewer"
+        #expect(draft.resolvedName(existing: []) == "Forge")
+    }
+
+    @Test func emptyNameTakesTheRoleWhenItIsFree() {
+        var draft = NewAgentDraft()
+        draft.role = "  reviewer "
+        #expect(draft.resolvedName(existing: ["Forge"]) == "reviewer")
+        #expect(draft.resolvedName(existing: ["Reviewer"]) == NewAgentDraft.defaultName(1))
+    }
+
+    @Test func emptyNameWithoutRoleIsNumbered() {
+        let draft = NewAgentDraft()
+        #expect(draft.resolvedName(existing: []) == NewAgentDraft.defaultName(1))
+    }
+
+    @Test func numberingSkipsTakenNames() {
+        let draft = NewAgentDraft()
+        let existing = [NewAgentDraft.defaultName(1), NewAgentDraft.defaultName(2).uppercased(), "Forge"]
+        #expect(draft.resolvedName(existing: existing) == NewAgentDraft.defaultName(3))
+    }
+
+    @Test func roleWithCharactersTheNameRuleRefusesIsNotUsed() {
+        var draft = NewAgentDraft()
+        draft.role = "e.g. reviewer!"
+        #expect(draft.resolvedName(existing: []) == NewAgentDraft.defaultName(1))
+    }
+
+    @Test func makeNewAgentUsesTheResolvedName() {
+        var draft = NewAgentDraft()
+        draft.cwd = "/home/me/billing"
+        #expect(draft.makeNewAgent(existingNames: [NewAgentDraft.defaultName(1)]).name == NewAgentDraft.defaultName(2))
+        draft.name = "Forge"
+        #expect(draft.makeNewAgent(existingNames: []).name == "Forge")
+    }
+
+    @Test func runtimeMissingBlocksCreation() {
+        var draft = NewAgentDraft()
+        draft.cwd = "/home/me/billing"
+        draft.runtime = .codex
+        let missing = RuntimeStatus(kind: .codex, installed: false, version: nil, loggedIn: nil, detail: nil)
+        #expect(draft.createBlocker(status: missing) == .runtimeMissing(.codex))
+    }
+
+    @Test func notSignedInBlocksCreationWithTheLoginCommand() {
+        var draft = NewAgentDraft()
+        draft.cwd = "/home/me/billing"
+        draft.runtime = .codex
+        let out = RuntimeStatus(kind: .codex, installed: true, version: "0.46.0", loggedIn: false, detail: nil)
+        #expect(draft.createBlocker(status: out) == .runtimeLogin(.codex, command: "codex login"))
+    }
+
+    @Test func runtimeIsNotBlockingWhileItIsUnknownOrReady() {
+        var draft = NewAgentDraft()
+        draft.cwd = "/home/me/billing"
+        #expect(draft.createBlocker(status: nil) == nil)
+        let ready = RuntimeStatus(kind: .claude, installed: true, version: "2.0.5", loggedIn: nil, detail: nil)
+        #expect(draft.createBlocker(status: ready) == nil)
+    }
+
+    @Test func missingFolderBlocksCreation() {
+        var draft = NewAgentDraft()
+        let ready = RuntimeStatus(kind: .claude, installed: true, version: nil, loggedIn: true, detail: nil)
+        #expect(draft.createBlocker(status: ready) == .folder)
+        draft.cwd = "/home/me/billing"
+        #expect(draft.createBlocker(status: ready) == nil)
+    }
+
+    @Test func runtimeProblemIsReportedBeforeTheFolder() {
+        let draft = NewAgentDraft()
+        let missing = RuntimeStatus(kind: .claude, installed: false, version: nil, loggedIn: nil, detail: nil)
+        #expect(draft.createBlocker(status: missing) == .runtimeMissing(.claude))
+    }
+
+    @Test func invalidNewWorkplaceBlocksCreation() {
+        var draft = NewAgentDraft()
+        draft.cwd = "/home/me/billing"
+        draft.workplace = .new
+        #expect(draft.createBlocker(status: nil) == .workplace)
+        draft.newWorkplace.name = "Box"
+        #expect(draft.createBlocker(status: nil) == nil)
     }
 
     @Test func makeNewAgentCarriesEveryChoice() {
@@ -135,5 +222,16 @@ import Testing
         draft.setRuntime(.codex)
         #expect(draft.fallbackRuntime == nil)
         #expect(draft.fallbackModel.isEmpty)
+    }
+
+    @Test func folderIsRequiredUnlessTheServerTakesAnAgentWithoutOne() {
+        var draft = NewAgentDraft()
+        #expect(draft.canCreate == false)
+        #expect(draft.createBlocker(status: nil) == .folder)
+
+        draft.folderOptional = true
+        #expect(draft.canCreate)
+        #expect(draft.createBlocker(status: nil) == nil)
+        #expect(draft.makeNewAgent().cwd == "", "an empty folder is sent as is: the agent gets its own")
     }
 }

@@ -94,6 +94,7 @@ public struct OnboardingFlow: View {
             } else {
                 Button(L10n.Onboarding.skip) { onboarding.skip() }
                     .banditoButton(.quiet())
+                    .help(L10n.Onboarding.skipHint)
             }
         }
     }
@@ -109,7 +110,10 @@ public struct OnboardingFlow: View {
                         .disabled(!next.isEnabled)
                 }
             }
-            .frame(width: OnboardingLayout.nextSlotWidth, alignment: .trailing)
+            // At least the usual slot, so the button keeps its place from step to step; a longer label widens the
+            // slot and the step bar gives way (it drops the other steps' labels), instead of the two overlapping.
+            .frame(minWidth: OnboardingLayout.nextSlotWidth, alignment: .trailing)
+            .fixedSize(horizontal: true, vertical: false)
         }
     }
 
@@ -135,7 +139,8 @@ public struct OnboardingFlow: View {
                         .frame(maxWidth: .infinity, minHeight: geometry.size.height, alignment: .center)
                         .padding(.top, 12)
                 }
-                .scrollIndicators(.hidden)
+                // Visible when the step is taller than the window, so it is clear there is more below.
+                .scrollIndicators(.automatic)
             }
             .clipped()
         }

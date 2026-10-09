@@ -50,6 +50,40 @@ public enum MemoryMode: String, ForwardCompatibleEnum, CaseIterable {
     public static var fallback: MemoryMode { .smart }
 }
 
+/// The newest user or assistant message of an agent: the sidebar preview. Sent as `last_message` by `agents.list` and
+/// `agents.get` (the daemon cuts the text to 200 characters); the app keeps it current from live events.
+public struct LastMessage: Codable, Sendable, Hashable {
+    /// `user` or `assistant`.
+    public var role: String
+    public var text: String
+    /// Unix milliseconds.
+    public var ts: Int64
+
+    public init(role: String, text: String, ts: Int64) {
+        self.role = role
+        self.text = text
+        self.ts = ts
+    }
+
+    /// The preview entry a live event makes, with the daemon's rules: a message Bandito sent itself (`system`) is none,
+    /// and nothing but user and assistant messages counts. Nil for any other event.
+    init?(event e: Event) {
+        switch e.body {
+        case .messageUser(let text, let source, _) where source != .system:
+            self.init(role: "user", text: Self.cut(text), ts: e.ts)
+        case .messageAssistant(let text):
+            self.init(role: "assistant", text: Self.cut(text), ts: e.ts)
+        default:
+            return nil
+        }
+    }
+
+    /// The first 200 characters (Unicode scalars, as the daemon counts them).
+    static func cut(_ text: String) -> String {
+        String(String.UnicodeScalarView(text.unicodeScalars.prefix(200)))
+    }
+}
+
 public struct Agent: Codable, Sendable, Identifiable, Hashable {
     public var id: String
     public var name: String
@@ -84,6 +118,22 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
     public var workspaceId: String
     /// Paused: messages wait in the thread and no session starts until it is resumed (`agents.update {paused}`).
     public var paused: Bool
+    /// The newest user or assistant message; `nil` when there is none, or when the daemon predates the field.
+    public var lastMessage: LastMessage?
+    /// The status from the agent's newest `agent.status` event; `nil` before any, or when the daemon predates the field.
+    /// Live `agent.status` events keep it current.
+    public var status: AgentStatus?
+    /// Approvals of this agent that wait for an answer, as a count (`pending_approvals`). Only a daemon from before
+    /// `pending_approval_ids` sends it; see `pendingApprovalIds`.
+    public var pendingApprovals: Int
+    /// The ids of the approvals that wait for an answer (`pending_approval_ids`). The set is what counts: a live
+    /// `approval.requested` adds its id and `approval.resolved` removes it, so a replayed event changes nothing.
+    public var pendingApprovalIds: Set<String>
+    /// Whether the daemon sent `pending_approval_ids`. Without it, the count is kept from live events alone.
+    public var reportsPendingApprovalIds: Bool
+    /// Whether the daemon sent `last_message` at all. A daemon from before the field does not, and the app then reads
+    /// the newest messages once to show a preview (see `ServerModel`).
+    public var reportsLastMessage: Bool
 
     public init(
         id: String, name: String, role: String = "", runtime: RuntimeKind, model: String? = nil, cwd: String,
@@ -93,7 +143,13 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
         contextTokens: Int = 0, chapter: Int = 1, lastTurnAt: Int64? = nil,
         fallbackRuntime: RuntimeKind? = nil, fallbackModel: String? = nil, activeRuntime: RuntimeKind? = nil,
         workspaceId: String = "shared",
-        paused: Bool = false
+        paused: Bool = false,
+        lastMessage: LastMessage? = nil,
+        status: AgentStatus? = nil,
+        pendingApprovals: Int = 0,
+        pendingApprovalIds: Set<String> = [],
+        reportsPendingApprovalIds: Bool = false,
+        reportsLastMessage: Bool = true
     ) {
         self.workspaceId = workspaceId
         self.id = id
@@ -118,6 +174,12 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
         self.fallbackModel = fallbackModel
         self.activeRuntime = activeRuntime
         self.paused = paused
+        self.lastMessage = lastMessage
+        self.status = status
+        self.pendingApprovals = pendingApprovals
+        self.pendingApprovalIds = pendingApprovalIds
+        self.reportsPendingApprovalIds = reportsPendingApprovalIds
+        self.reportsLastMessage = reportsLastMessage
     }
 
     /// Fields added after the first daemon release are optional on the wire; old daemons send none of them.
@@ -146,6 +208,12 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
         activeRuntime = try c.decodeIfPresent(RuntimeKind.self, forKey: .activeRuntime)
         workspaceId = try c.decodeIfPresent(String.self, forKey: .workspaceId) ?? "shared"
         paused = try c.decodeIfPresent(Bool.self, forKey: .paused) ?? false
+        lastMessage = try c.decodeIfPresent(LastMessage.self, forKey: .lastMessage)
+        reportsLastMessage = c.contains(.lastMessage)
+        status = try c.decodeIfPresent(AgentStatus.self, forKey: .status)
+        pendingApprovals = try c.decodeIfPresent(Int.self, forKey: .pendingApprovals) ?? 0
+        pendingApprovalIds = Set(try c.decodeIfPresent([String].self, forKey: .pendingApprovalIds) ?? [])
+        reportsPendingApprovalIds = c.contains(.pendingApprovalIds)
     }
 }
 
@@ -283,6 +351,8 @@ public enum EventBody: Sendable, Hashable {
         approvalId: String, callId: String, tool: String, title: String, command: String?, diff: String?,
         reason: String)
     case approvalResolved(approvalId: String, decision: Decision, by: DecidedBy, remember: Bool)
+    /// The runtime took the request back: nobody decided it.
+    case approvalWithdrawn(approvalId: String)
     case turnCompleted(turnId: String, status: TurnStatus, usage: Usage?, costUsd: Double?)
     case agentStatus(status: AgentStatus, detail: String?)
     case usageLimits(runtime: String, windows: [LimitWindow])
@@ -329,6 +399,7 @@ extension Event: Decodable {
     private struct ApprovalResolvedP: Decodable {
         var approvalId: String; var decision: Decision; var by: DecidedBy; var remember: Bool
     }
+    private struct ApprovalWithdrawnP: Decodable { var approvalId: String }
     private struct TurnCompletedP: Decodable {
         var turnId: String; var status: TurnStatus; var usage: Usage?; var costUsd: Double?
     }
@@ -365,6 +436,8 @@ extension Event: Decodable {
         case "approval.resolved":
             let x = try p(ApprovalResolvedP.self)
             body = .approvalResolved(approvalId: x.approvalId, decision: x.decision, by: x.by, remember: x.remember)
+        case "approval.withdrawn":
+            body = .approvalWithdrawn(approvalId: try p(ApprovalWithdrawnP.self).approvalId)
         case "turn.completed":
             let x = try p(TurnCompletedP.self)
             body = .turnCompleted(turnId: x.turnId, status: x.status, usage: x.usage, costUsd: x.costUsd)
@@ -436,6 +509,10 @@ public struct Device: Codable, Sendable, Identifiable, Hashable {
     public var name: String
     public var createdAt: Int64
     public var lastSeenAt: Int64?
+    /// True for the device this request comes from. Nil while the daemon does not report it.
+    public var current: Bool?
+    /// `macos` or `ios` when the daemon reports the platform. Nil otherwise.
+    public var platform: String?
 }
 
 public struct PairResult: Codable, Sendable {

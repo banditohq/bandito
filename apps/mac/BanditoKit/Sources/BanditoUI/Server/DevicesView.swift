@@ -18,6 +18,7 @@ struct DevicesView: View {
                 if let server, server.supports("pairing") {
                     Button(L10n.Devices.add) { pairing = true }
                         .banditoButton(.signal())
+                        .fixedSize()
                 }
             }
         ) {
@@ -31,27 +32,15 @@ struct DevicesView: View {
                             .font(.system(size: 13))
                             .foregroundStyle(Color.Bandito.text2)
                     }
-                    ForEach(devices) { device in
-                        HStack(spacing: 12) {
-                            Image(systemName: "iphone")
-                                .font(.system(size: 15))
-                                .foregroundStyle(Color.Bandito.text2)
-                                .frame(width: 30, height: 30)
-                                .background(Color.Bandito.text.opacity(0.06), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(device.name)
-                                    .font(.system(size: 13.5, weight: .medium))
-                                    .foregroundStyle(Color.Bandito.text)
-                                Text(Self.detail(device))
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(Color.Bandito.text3)
+                    ForEach(Array(devices.enumerated()), id: \.element.id) { index, device in
+                        deviceRow(device)
+                            .padding(.vertical, 4)
+                            // A line between rows only, not above the first one.
+                            .overlay(alignment: .top) {
+                                if index > 0 {
+                                    Rectangle().fill(Color.Bandito.text.opacity(0.05)).frame(height: 1)
+                                }
                             }
-                            Spacer(minLength: 8)
-                            Button(L10n.Devices.revoke) { revoking = device }
-                                .banditoButton(.quiet())
-                        }
-                        .padding(.vertical, 4)
-                        .overlay(alignment: .top) { Rectangle().fill(Color.Bandito.text.opacity(0.05)).frame(height: 1) }
                     }
                     if let error {
                         UserFacingErrorView(message: error)
@@ -64,7 +53,7 @@ struct DevicesView: View {
         .task(id: server?.info != nil) {
             await reload()
         }
-        .sheet(isPresented: $pairing) {
+        .banditoSheet(isPresented: $pairing) {
             if let server {
                 PairSheet(server: server)
             }
@@ -81,6 +70,49 @@ struct DevicesView: View {
             Button(L10n.Common.cancel, role: .cancel) {}
         } message: { _ in
             Text(L10n.Devices.revokeMessage)
+        }
+    }
+
+    /// One paired device. This Mac is marked, and it cannot be revoked from itself.
+    private func deviceRow(_ device: Device) -> some View {
+        // Only the daemon's own word counts: a device named like this Mac is not necessarily this Mac.
+        let isThisMac = device.current == true
+        return HStack(spacing: 12) {
+            Image(systemName: DeviceIcon.symbol(platform: device.platform, name: device.name))
+                .font(.system(size: 15))
+                .foregroundStyle(Color.Bandito.text2)
+                .frame(width: 30, height: 30)
+                .background(Color.Bandito.text.opacity(0.06), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 8) {
+                    Text(device.name)
+                        .font(.system(size: 13.5, weight: .medium))
+                        .foregroundStyle(Color.Bandito.text)
+                        .lineLimit(1)
+                    if isThisMac {
+                        Text(L10n.Server.Add.thisMac)
+                            .font(.system(size: 11.5, weight: .medium))
+                            .foregroundStyle(Color.Bandito.signal)
+                            .lineLimit(1)
+                            .fixedSize()
+                    }
+                }
+                Text(Self.detail(device))
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.Bandito.text3)
+            }
+            Spacer(minLength: 8)
+            if isThisMac {
+                Button(L10n.Devices.revoke) {}
+                    .banditoButton(.quiet())
+                    .fixedSize()
+                    .disabled(true)
+                    .help(L10n.Devices.thisDeviceHint)
+            } else {
+                Button(L10n.Devices.revoke) { revoking = device }
+                    .banditoButton(.quiet())
+                    .fixedSize()
+            }
         }
     }
 

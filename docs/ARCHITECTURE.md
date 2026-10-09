@@ -38,7 +38,7 @@ Recorded protocol transcripts live in `daemon/tests/fixtures/`. Adapter tests ru
 
 Every adapter turns its protocol into the same internal events (below). Resuming after a daemon restart uses each CLI's own session id (`--resume`, `thread/resume`, `session/load`), stored on the agent.
 
-Useful extras we surface: Claude's `rate_limit_event` and Codex `account/rateLimits/updated` → subscription usage in the app; `runtimes.status` reports installed / version / logged in for each CLI.
+Useful extras we surface: Claude's `rate_limit_event` and Codex `account/rateLimits/updated` → subscription usage in the app; `runtimes.status` reports installed / version / logged in for each CLI. `logged_in` is `true` or `false` from `claude auth status` (Claude) and `codex login status` (Codex: exit 0 is logged in, exit 1 with "Not logged in" is logged out). It is `null` when the CLI does not say, fails, or takes more than 5 s, and Grok always reports `null`. The answer is cached per runtime for 60 s, and concurrent requests share one probe. The probe reads no account details: the email and organisation are not kept. Without `.credentials.json` (macOS keeps the Claude login in the Keychain), Claude's plan for usage comes from `claude auth status` too.
 
 ## Events
 
@@ -54,6 +54,7 @@ Everything an agent does becomes a row in `events` (append-only, global `seq`). 
 | `tool.result` | `{call_id, ok, output}` (output truncated to 16 KB) |
 | `approval.requested` | `{approval_id, call_id, tool, title, command?, diff?, reason}` |
 | `approval.resolved` | `{approval_id, decision: "allow"\|"deny", by: "user"\|"policy", remember}` |
+| `approval.withdrawn` | `{approval_id}`: the CLI took the request back (`control_cancel_request`); nobody decided it, so the approval is closed with status `withdrawn` and no decision |
 | `turn.completed` | `{turn_id, status: "ok"\|"error"\|"interrupted", usage?, cost_usd?}` |
 | `agent.status` | `{status: "idle"\|"working"\|"needs_you"\|"error"\|"offline", detail?}` |
 | `usage.limits` | `{runtime, windows:[{name, utilization, resets_at}]}` |
@@ -70,7 +71,7 @@ Per agent `approval_mode`:
 
 **Protected: always denied.** Bandito's own files and controls are off limits to agents, in every mode, and no rule can allow them. A call is refused with `Bandito's own files and controls are off limits to agents` when a path it reaches is known to be one of them:
 
-- the data folder (`$BANDITO_HOME`, else `~/.bandito`), reached by a path the command uses (an argument, a redirect target, the program, a file the tool edits or reads), once `~`, `~user` (looked up in the system's account database), `$HOME`, `${HOME}`, `$BANDITO_HOME`, variables set earlier on the same line, `cd`, `pushd` and `popd` are followed. Glob names count (`~/.ban*/bandito.*`, `~/[.]bandito`), and so do case differences (APFS and most Linux setups are case-insensitive);
+- the data folder (`$BANDITO_HOME`, else `~/.bandito`), reached by a path the command uses (an argument, a redirect target, the program, a file the tool edits or reads), once `~`, `~user` (looked up in the system's account database), `$HOME`, `${HOME}`, `$BANDITO_HOME`, variables set earlier on the same line, `cd`, `pushd` and `popd` are followed. a one-character class names that character (`~/[.]bandito` is the data folder), so it counts; a wildcard that may match the data folder (`~/.ban*/bandito.*`, `~/.*`) is a question (see the next paragraphs), not a refusal, and only a literal path into the data folder is refused (`~/.bandito/*`); the data folder's name counts as a whole path component (`~/.bandito-backup` is another folder), and case differences count (APFS and most Linux setups are case-insensitive);
 - a folder that contains the data folder, when the command reaches everything under it: removal, copying, moving or archiving (`rm -r ~`, `cp -r ~ /tmp`, `tar czf h.tgz ~`, `rsync … ~`), a recursive search (`grep -r x ~`, `rg`, `ag`, `ack`, `du`, `tree`, `ls -R`, `find` deeper than depth 1, `git grep` from such a folder), or `ditto`;
 - the daemon's own binary, or a command named `bandito`;
 - a command that stops, restarts, disables or kills Bandito: `kill` of the daemon's pid or of anything named `bandito`, `pkill`/`killall bandito`, `systemctl … stop|restart|disable bandito*`, `launchctl … bandito`;
@@ -79,12 +80,18 @@ Per agent `approval_mode`:
 
 The Claude runtime also starts with `--settings` carrying `permissions.deny` for `Read`, `Edit` and `Write` under the data folder, so the file tools refuse it without asking.
 
+It also carries `permissions.ask` for `Bash`, `Edit`, `Write`, `MultiEdit`, `NotebookEdit`, `WebFetch` and `Read`. Claude Code checks deny, then ask, then allow, whatever file a rule came from. So an `allow` in `~/.claude/settings.json`, `.claude/settings.json` or `.claude/settings.local.json` (a user's own, or one in a cloned repository) does not run these tools without the policy: the call goes to `can_use_tool`, and the policy decides as below. The CLI is started with `--permission-mode default` (once), so a `defaultMode` in those files does not win. Grep and Glob are asked about too: Grep reads file contents, Glob lists names under a folder. The policy checks both for credential folders and for Bandito's folder. A search whose folder is inside the data folder is refused in every mode. A search whose folder holds the data folder (its root is above it) is asked about in risky and always modes, and allowed in never mode. Only the folder the search covers is checked (`path`, and a Glob pattern's folder): the pattern and the title are text to find, so `Grep` for `~/.bandito` is not a read of it. LS only lists names and is not asked about.
+
+**Known limit, not fixed in this version.** Tools outside that list (`mcp__*` tools, `WebSearch`, `Task`, `TodoWrite`, `LS`) still run without the policy when a user's or a project's `allow` rule names them. Their calls are not checked for paths, commands or approvals. A cloned repository's `.claude/settings.json` can allow such a tool.
+
+**Known limit, not fixed in this version: hooks.** The user's and the project's `PermissionRequest` hooks of Claude Code can approve a call before Bandito does. Bandito does not read or change them.
+
 **Asked: what cannot be known, or names Bandito's files without a path.** The rule is: a path, folder or command that cannot be worked out is asked about, never allowed. In risky and always modes a call is asked about when:
 
 - a word the command uses cannot be expanded (a variable not set on the line, `$1`, `${X:-y}`, a substitution, an unknown user) and it can name a file: it is the program itself, a redirect target, or an argument of a command that reads or writes files (`cat`, `less`, `head`, `tail`, `grep`, `sed`, `awk`, `jq`, `sqlite3`, `strings`, `xxd`, `base64`, `openssl`, `nc`, `socat`, `tar`, `cp`, `mv`, `rm`, `python`, `node`, `sh`, `source`, …). `echo "$PATH"`, `printf '%s' "$HOME"` and `git commit -m "$MSG"` are allowed. Inside single quotes, `$` is literal: `awk '{print $1}' f` is not unknown;
 - a folder the command runs in is unknown (after `cd -`, `popd` with nothing pushed, a `cd` in a pipeline, or a `cd` to an unknown folder), and the command takes path arguments (a plain name in `cd $X && rm a` counts; `cargo test` and `echo` do not);
 - `source FILE` or `. FILE` where FILE is unknown, or known but outside the agent's folders (`source ~/.bashrc`). A file inside the folder is allowed (`. .venv/bin/activate`): what it contains is not read, as with `python script.py`;
-- a bare name of Bandito's files (`bandito.db`, `bandito.sock`, `agent.sock`) appears in the command line without a path that reaches them: asked, not refused, so `grep -rn agent.sock daemon/src` can still be asked and answered;
+- a path argument (or a redirect target) whose file name is one of Bandito's file names (`./bandito.db`, `~/x/agent.sock`) is asked about, not refused. A word without a slash is text, not a path: `grep -rn agent.sock daemon/src` and `git commit -m "... bandito.db ..."` are allowed.
 - a line contains brace expansion (`{a,b}`, `{a..b}`), a zsh `=word`, a substitution, a process substitution, a heredoc, `eval`, a variable or glob as the program, an unclosed quote, a pipe into a shell or interpreter with no script, inline code from a pipe, a line over 64 KiB, or nesting deeper than 8.
 
 Never mode allows what is only asked about; it still refuses what is proven to reach Bandito's files.
@@ -101,13 +108,29 @@ Never mode allows what is only asked about; it still refuses what is proven to r
 
 The reason reads `risky: <rule>`. Two more asks: a write (redirect, or `cp`, `mv`, `rm`, `tee`, `touch`, `mkdir`, `sed -i`, `curl -o`, `wget -O`, `tar -C`, `unzip -d`, `rsync`'s destination, the start paths of a `find -exec`) to a path outside the agent's folders (`writes outside <folder>`); and any part of the line the reader cannot follow, as above (`can't check: <reason>`). Everything else is allowed.
 
+**Credential folders.** A read with the `Read`, `Grep` or `Glob` tool is not a write, so it is allowed anywhere, outside the agent's folders too, unless it is a credential read below. The folders and files `~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.config/gh`, `~/Library/Keychains`, `~/.netrc`, `~/.docker`, `~/.kube`, `~/.git-credentials`, `~/.npmrc` and `~/.pypirc` hold credentials. In risky mode a call that reaches one is asked about, reads included, with the reason `reads credentials: ~/<folder>`:
+
+- the `Read`, `Grep` or `Glob` tool on a path in one of them, or a `Glob` pattern that starts in one (`~/.aws/*`);
+- a shell command with a word in one of them, after `~`, `$HOME` and `${HOME}` are expanded (`cat ~/.ssh/id_rsa`, `cp $HOME/.aws/credentials /tmp/x`, `ls ~/.ssh`, `cat < ~/.config/gh/hosts.yml`). The folder the command runs in counts, so `cd ~/.ssh && cat id_rsa` is asked about, and so does the part after `=` or `:` (`--file=$HOME/.ssh/k`), and a command inside `sh -c`;
+- a command that reads a whole folder that holds one (`tar czf h.tgz ~/Library`, `cp -r ~/.config …`). Such folders are refused by the protected rule above anyway, because the Bandito service files sit under them.
+
+Matching is by whole path components, case-insensitively. Project files such as `.env` are not on the list. Never mode allows these calls; always mode asks about every call. The data folder is refused in every mode, before this check. Limit: the check reads the command line (see *What is modelled* below). A credential folder reached through an interpreter's inline code (see below), or through a script's contents, is not seen.
+
+**Inline code.** An interpreter given code on the line runs code the policy does not read: `python -c` (and `-Sc`), `node -e` and `-p`, `ruby -e`, `perl -e` and `-E`, `php -r`, `bun -e`, `deno eval`. A credential folder named in such a line is asked about (`reads credentials: ~/<folder>`), as a whole path: `~/<folder>`, `$HOME/<folder>`, `${HOME}/<folder>` or the home folder's absolute path followed by it. Bandito's folder is asked about by its absolute path or as `~/.bandito`. Names in other forms (`os.environ['HOME'] + '/.ssh'`, `os.path.join(home, '.ssh')`) are not seen: this is a known gap. `-r` is php's flag only (pip's `-r requirements.txt` and node's `-r module` run no code on the line). A script file given by name is not read: its contents are not seen.
+
+**Links.** A path is judged as written and also where its symbolic links lead. Links are followed only for paths inside the home folder or the agent's own folders: a path elsewhere (a network or external volume) is judged as written and is not looked up. The path is resolved one component at a time: a link is replaced by its target (an absolute target restarts from the root), and `..` is applied to the resolved folder after the link, so `lnk/../bandito.db` with `lnk` pointing at Bandito's `logs` folder is the data folder (refused). A link whose target does not exist yet is still a link: a write through it is a write to its target, judged by where that target lies (`writes outside <folder>` when it is outside the project). The credential folders and Bandito's paths are resolved when the policy is built; any other path at most once per decision.
+
 Agent rules (`allow` / `ask` / `deny`) are checked after the protected rule and before the risky checks, and they win over the risky checks. None of them can allow a protected call. "Always allow here" stores the exact command, with `*` escaped so the rule matches only that command; a command with a part that cannot be known is not remembered.
 
 A panic while deciding is logged without the command and becomes `Ask("policy error")`.
 
 **What is modelled, and what is not.** Modelled: quoting and escapes (including `$'…'` and `$"…"`), redirections, `~`, `~user`, `$HOME`, `${HOME}`, `$BANDITO_HOME`, variables set on the line (assignments, `export`, `unset`, `read`, prefix assignments for their own command only), `cd`, `pushd`, `popd`, subshells `( … )` (state restored after them), pipelines (`cd` or an assignment on one side of a pipe leaves the state unknown), wrappers, `sh -c` and `find -exec` bodies, `xargs`. Not modelled, so the call is asked about or only partly checked: the code run by an interpreter (`python -c`, `node -e`, `perl -e`), the contents of a script file (`./deploy.sh` is judged by its name only), npm and make script bodies, shell functions, aliases and startup files, `PATH` lookups (a program named `rm` may not be the system's), symbolic links (paths are compared lexically, the file system is not read), `$PWD`, `$OLDPWD`, `cd -`, parameters set by the shell itself, and the environment of the agent's shell beyond `HOME` and `BANDITO_HOME`.
 
+**The folder between calls.** A session's shell keeps the folder its last Bash call left it in: a `cd` on the line holds for the next call of the same session, and a new session starts in the agent's folder. The folder moves only when the line goes ahead: at once when the policy allows it, or on the user's yes when it was asked about. A refused line, or one the user denies, leaves the folder where it was. The folder is only known while the policy can follow the line. A line that runs `command` or `builtin`, `eval`, `source` or `.`, or `exec`, or that has a part the reader cannot follow (a brace expansion, a substitution, a subshell it cannot close), leaves the folder unknown. A `cd` inside `command cd x` or `builtin cd x` still moves the folder for the commands after it on the same line. While the folder is unknown, a Bash call is judged from both the agent's folder and the home folder, and the most careful verdict wins: a relative path can then name the data folder or a credential folder whichever way the shell went. The home folder of an unknown shell is only assumed, so a recursive reach from it into Bandito's files (`grep -r foo .`, `find . -name x`, `rg`, `git grep`) is a question (`can't check: unknown folder`), in risky and always modes; only a direct name of the data folder (`cat .bandito/x`) is refused. An explicit absolute `cd` (`cd /path`) brings the folder back to known. A subshell's `cd` does not count.
+
 **Limits, stated plainly.** Risky mode guards against an agent making a mistake. It does not stop an agent that is trying to get around it: an interpreter, a script or a symlink can reach what the reader does not follow. The data folder is the one the daemon runs in: `--home`, else `BANDITO_HOME`, else `~/.bandito` (the daemon passes it to the policy at start). The real boundary is a separate machine or a workspace container (see [Workspaces](#workspaces)).
+
+**Protection boundary.** The policy checks tool calls: the tool, the text of its command, and the paths it reaches (followed through `~`, `$HOME`, `${HOME}`, links, and the forms named above). It does not check what the programs it runs do inside. A script the agent wrote and runs (`python3 x.py`, `npm test`, a `build.rs`, a git hook, a Makefile target) can read anything the server user can read, and nothing on the command line shows it. Symbolic links are followed only inside the home folder and the agent's own folders. A path elsewhere (a network share, an external volume) is judged as written, with no file-system call, so a link there is not followed: a deliberate limit, for speed on network volumes and for paths that are not Bandito's. That is the boundary of this check, and it is not a sandbox. For isolation use a container workplace ([Workspaces](#workspaces)); on macOS an agent's shell can also run under the Seatbelt profile of the [macOS sandbox](#macos-sandbox), which is a second layer and not a substitute for the container.
 
 The daemon can also ask the human itself, for something no runtime asked about (a risky browser click, see [Browser](#browser)). Such a request goes into the agent's feed like any other approval: `approval.requested`, answered with `approvals.resolve`. Nothing is remembered from it. No answer within the time limit denies it, and so does a stop of the agent while it waits. This works the same for every runtime.
 
@@ -131,6 +154,7 @@ Migrations: numbered SQL files embedded in the binary, applied by `PRAGMA user_v
 
 JSON-RPC 2.0. Same methods on every transport.
 
+- `devices.list` returns the paired devices as `{id, name, created_at, last_seen_at, current}`. `current` is `true` for the device whose token made the request; the owner's CLI is no device, so every row is `false` for it. Old apps ignore the field.
 - Requests: `daemon.info`, `runtimes.status`, `agents.list|get|create|update|delete` (`update` takes `paused` too, see [Pause](#pause)), `agents.send{agent_id,text}` (replies `{queued: true}` when the agent is paused), `agents.interrupt`, `agents.pause_all{paused}`, `events.since{seq,limit,agent_id?}`, `approvals.list|resolve{approval_id,decision,remember}`, `rules.list|set|delete`, `schedules.list|create|update|delete|run_now`, `devices.list|revoke`, `pair.redeem{code,device_name}` (only unauthenticated method), `term.list|open|input|resize|rename|close|attach|detach` (see Terminals), `fs.*` (see [Files](#files)), `changes.checkpoints|diff|file|restore` (see [Changes](#changes)), `secrets.list|set|delete` (see [Secrets](#secrets), `host.stats|history|processes|ports|kill`, `setup.status|install|job` (see [Setup](#setup)), `commands.list|install` (see [Commands](#commands)), `browser.start|status|stop|control|touch` (see [Browser](#browser)), `workspaces.list|create|update|delete|start|stop` (see [Workspaces](#workspaces)), `daemon.logs{lines,level}` (see [Logs](#logs)). `browser.agent.*` is for the crew MCP on the server only.
 - Notifications (server → client): `event{seq, agent_id, kind, payload, ts}` for every event including `message.delta`; `term.output|gap|exit|closed` for attached terminals (see Terminals).
 
@@ -552,7 +576,7 @@ On macOS, Bandito installs only `node`, `claude` and `codex`. The screen feature
 
 Poll `setup.job` about once a second with the last `offset`. The daemon keeps only the most recent job, so an unknown id is `not_found`. Errors: code `-32024` (`SETUP_ERROR`) with `error.data.reason`: `busy` or `not_found`.
 
-**PATH.** At start the daemon puts `<data dir>/tools/bin` first on its `PATH`, before the runtime starts, so the tools reach agents and terminals. The data dir is `$BANDITO_HOME` or `~/.bandito`; `--home` does not move it.
+**PATH.** At start the daemon puts `<data dir>/tools/bin` first on its `PATH`, before the runtime starts, so the tools reach agents and terminals. The data dir is `--home`, else `$BANDITO_HOME`, else `~/.bandito`. One value, set by `main` at start, is read by everything under the data dir (PATH, tools, screens, browser, the run folder).
 
 ## Commands
 
@@ -631,9 +655,28 @@ A separate Linux user for a workspace is the next step, not in this version.
 
 `agents.create` and `agents.update` take `workspace_id` (default `shared`). Moving an agent starts a new chapter, as a folder change does.
 
+`agents.create` with no `cwd`, or an empty one, runs the agent in its own folder: the folder is made first, and its path becomes the agent's `cwd`. A `cwd` that is given must exist on the server, as before. Clients show that a folder is optional when `daemon.info.features` contains `"agent_own_folder"`.
+
 Limits: name 1–64 characters; `cpus` 0.1–64; `memory_mb` 64–262144; mounts are absolute paths without `,`, `"` or `..`. The shared workspace has no container settings, so it refuses them.
 
 Errors: code `-32028` (`WORKSPACE_ERROR`) with `error.data.reason`: `docker_unavailable`, `not_found`, `builtin` (the shared workspace cannot be deleted), `not_empty` (agents still run in it), `invalid` (bad settings or mount), `docker` (Docker failed; its message is in `message`).
+
+## Team preview
+
+`agents.list`, `agents.get`, `agents.create` and `agents.update` return each agent with three fields the team view needs, without loading its thread:
+
+- `last_message`: the newest user or assistant message, `{role: "user"|"assistant", text, ts}`, or `null`. `text` is cut to 200 characters on a character boundary. Messages Bandito sent itself (`source: "system"`, the wrap-up turn) are skipped, as in `history.search`.
+- `status`: the status of the agent's newest `agent.status` event (`idle`, `working`, `needs_you`, `error`, `offline`), or `null` before any.
+- `pending_approval_ids`: the ids of the agent's approvals that still wait for an answer (`approvals.status = 'pending'`), oldest first.
+- `pending_approvals`: the number of those ids, for clients that only count.
+
+The daemon reads them in one query per list: correlated subqueries per agent (`store/agents.rs`, `LAST_MESSAGE_SQL`, `STATUS_SQL`, `PENDING_IDS_SQL`). The status lookup uses `events_agent_kind_seq`, and the pending ids `approvals_agent_status`, both from migration 0010; the message lookup uses `events_agent_seq`. The daemon's own checks use `agent_get` and `agent_list`, which do not read these fields; the RPC reads use `agent_view` and `agent_list_view`.
+
+Clients keep the fields current from live events: `message.user` and `message.assistant` (not `system`) replace `last_message`; `agent.status` replaces `status`; `approval.requested` adds its id to the agent's pending set and `approval.resolved` removes it. The count is the size of that set, so an event that arrives twice (a replay) changes nothing. A daemon that sends only `pending_approvals` (a number) is counted by live events alone.
+
+Before a thread is open, the app shows the agent's preview from `last_message`, and the status and pending count from these fields. A thread that is loaded wins for its own messages.
+
+A daemon from before this section sends none of the three fields. A missing `last_message` (the key absent, not `null`) makes the app read the newest page of events (40 events) for that agent once, in the background, to build the preview. The status then comes from the thread's live events, and the pending count from the approvals the app has seen.
 
 ## Mac app
 
@@ -715,7 +758,7 @@ Per agent `memory_mode`:
 
 Before a chapter closes, the daemon sends a wrap-up turn shown in the thread as a quiet line (`source: "system"`), excluded from history search: *update your memory files with what matters from this chapter*. Then the session is dropped and `session.rotated` is emitted. The check runs when the next message arrives, so an idle agent costs nothing, and that message waits while the wrap-up runs. If the CLI session has gone, Bandito resumes it for the wrap-up. If it cannot resume, the chapter closes without a wrap-up and the thread says `memory not saved`.
 
-**Agent home.** Every agent gets its own folder on the server, `~/bandito/agents/<slug>/`, next to (not inside) the project it works on:
+**Agent home.** Every agent gets its own folder on the server, `~/bandito/agents/<slug>/`, next to (not inside) the project it works on. The root is `$BANDITO_AGENTS_DIR` when it is set to an absolute path; otherwise, when the daemon runs with its own `--home` (and not `~/.bandito`), it is `<home>-agents/` next to the data folder (never inside it: agents may not touch Bandito's own files), so a second daemon never writes into the first one's folders. `<slug>` is the agent's name in lowercase ASCII: Cyrillic is transliterated (`Ёж` → `yozh`, `Щи` → `shchi`, `ъ` and `ь` are dropped), other letters are dropped, and any other character becomes `-`. An empty result is `agent`. A name taken by another agent gets `-2`, `-3`, and so on:
 
 ```
 MEMORY.md        short index, read at the start of every chapter (≤ 200 lines)

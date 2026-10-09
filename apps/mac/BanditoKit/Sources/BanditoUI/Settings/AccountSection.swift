@@ -2,7 +2,7 @@ import BanditoDesign
 import BanditoL10n
 import SwiftUI
 
-/// Settings → Account and sync. Sign-in itself happens in the account sheet (shared with onboarding).
+/// Settings → Account. Sign-in itself happens in the account sheet (shared with onboarding).
 struct AccountSection: View {
     @Environment(Router.self) private var router
 

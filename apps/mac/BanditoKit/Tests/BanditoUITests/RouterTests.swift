@@ -22,13 +22,14 @@ import Testing
         #expect(!router.canGoBack)
     }
 
+    // Files is not in these: there back and forward walk its folder history (see FilesNavigationTests).
     @Test func backAndForwardWalkTheModes() {
         let router = Router()
-        router.select(mode: .files)
+        router.select(mode: .browser)
         router.select(mode: .terminals)
 
         router.back()
-        #expect(router.mode == .files)
+        #expect(router.mode == .browser)
         #expect(router.canGoForward)
 
         router.back()
@@ -36,7 +37,7 @@ import Testing
         #expect(!router.canGoBack)
 
         router.forward()
-        #expect(router.mode == .files)
+        #expect(router.mode == .browser)
         router.forward()
         #expect(router.mode == .terminals)
         #expect(!router.canGoForward)
@@ -44,7 +45,7 @@ import Testing
 
     @Test func newSelectionDropsForwardHistory() {
         let router = Router()
-        router.select(mode: .files)
+        router.select(mode: .browser)
         router.back()
         #expect(router.canGoForward)
 

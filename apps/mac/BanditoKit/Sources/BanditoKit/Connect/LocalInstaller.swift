@@ -18,6 +18,7 @@ public struct LocalInstaller: Sendable {
     private let binary: URL
     private let pollInterval: Duration
     private let pollTimeout: Duration
+    private let qaBuild: Bool
 
     /// Where the app bundle keeps the daemon: `Contents/Helpers/bandito`. Helpers, not MacOS: on a
     /// case-insensitive volume `MacOS/bandito` would be the app's own `Bandito` executable.
@@ -34,6 +35,7 @@ public struct LocalInstaller: Sendable {
     ///   - redeem: exchanges the pairing code for a token. Default: over the WebSocket on loopback.
     ///   - pollInterval: how long to wait between two `info --json` asks while the daemon starts.
     ///   - pollTimeout: how long the daemon may take to answer `running: true` before the install fails.
+    ///   - qaBuild: a QA copy of the app (`QABuild`). It never installs: the owner's CLI and service stay untouched.
     public init(
         runner: CommandRunner,
         bundledBinary: URL? = LocalInstaller.bundledDaemonURL(),
@@ -42,13 +44,15 @@ public struct LocalInstaller: Sendable {
         fallbackName: String,
         redeem: LocalDaemonPairing.Redeem? = nil,
         pollInterval: Duration = .milliseconds(500),
-        pollTimeout: Duration = .seconds(20)
+        pollTimeout: Duration = .seconds(20),
+        qaBuild: Bool = QABuild.isRunningQA
     ) {
         self.runner = runner
         self.bundledBinary = bundledBinary
         self.home = home
         self.hostName = hostName
         self.fallbackName = fallbackName
+        self.qaBuild = qaBuild
         self.binary = home.appending(path: ".local/bin/bandito")
         self.pairing = LocalDaemonPairing(runner: runner, binary: binary, redeem: redeem)
         self.pollInterval = pollInterval
@@ -73,6 +77,11 @@ public struct LocalInstaller: Sendable {
     }
 
     private func run(emit: (InstallEvent) -> Void) async {
+        // Checked before anything is copied or started: a QA copy must not touch the owner's ~/.local/bin or service.
+        if qaBuild {
+            emit(.failed(.io("QA builds do not install Bandito on this Mac.")))
+            return
+        }
         let existed = FileManager.default.fileExists(atPath: binary.path)
         do {
             emit(.step(.install, "Installing Bandito on this Mac"))

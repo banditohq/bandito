@@ -132,6 +132,7 @@ private func parsed(_ text: String) throws -> [String: Any] {
     #expect(CDPCommand.insertText("héllo").method == "Input.insertText")
     #expect(CDPCommand.createTarget(url: "about:blank").method == "Target.createTarget")
     #expect(CDPCommand.activateTarget(id: "T1").method == "Target.activateTarget")
+    #expect(CDPCommand.closeTarget(id: "T1").method == "Target.closeTarget")
     #expect(CDPCommand.getTargets.method == "Target.getTargets")
     #expect(CDPCommand.reload.method == "Page.reload")
     #expect(CDPCommand.navigationHistory.method == "Page.getNavigationHistory")

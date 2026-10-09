@@ -67,7 +67,7 @@ struct FileViewer: View {
             }
             Button(L10n.Files.cancel, role: .cancel) { closing = nil }
         }
-        .sheet(isPresented: $showsDiff) {
+        .banditoSheet(isPresented: $showsDiff) {
             if let document = workspace.selectedDocument, let copy = document.conflict {
                 ConflictDiffSheet(serverText: copy.text, mineText: document.text)
             }

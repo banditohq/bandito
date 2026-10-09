@@ -6,6 +6,7 @@ import SwiftUI
 /// Settings → Approvals: rules for what agents may do without asking, and the checks the daemon always runs.
 struct ApprovalsSection: View {
     @Environment(AppModel.self) private var app
+    @Environment(Router.self) private var router
     @State private var rules: [Rule] = []
     @State private var pattern = ""
     @State private var action: RuleAction = .ask
@@ -22,24 +23,36 @@ struct ApprovalsSection: View {
     var body: some View {
         let server = app.currentServer
         SettingsPage(title: SettingsSection.approvals.title, intro: L10n.Settings.Approvals.intro) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    if let server, server.supports("rules") {
-                        newRule(server)
-                        rulesTable(server)
-                    } else {
-                        Text(L10n.Server.updateNote)
-                            .font(.system(size: 13))
-                            .foregroundStyle(Color.Bandito.text2)
-                    }
-                    builtinChecks
+            VStack(alignment: .leading, spacing: 18) {
+                if let server, server.supports("rules") {
+                    newRule(server)
+                    rulesTable(server)
+                } else if server == nil {
+                    noServer
+                } else {
+                    Text(L10n.Server.updateNote)
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.Bandito.text2)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                builtinChecks
             }
-            .scrollIndicators(.never)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .task(id: server?.info != nil) {
             await reload(server)
+        }
+    }
+
+    /// No server selected: say so and offer the way to add one. Same action as Settings → Servers.
+    private var noServer: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(L10n.Server.noServer)
+                .font(.system(size: 13))
+                .foregroundStyle(Color.Bandito.text2)
+            Button(L10n.Settings.Servers.add) {
+                router.sheet = .addServer
+            }
+            .banditoButton(.signal())
         }
     }
 
@@ -48,14 +61,15 @@ struct ApprovalsSection: View {
             Text(L10n.Settings.Approvals.newRule)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Color.Bandito.text)
+            // The pattern gets the full width; the choices and the button share the row below, so nothing is squeezed
+            // at the smallest window size.
+            labeled(L10n.Settings.Approvals.when) {
+                TextField(L10n.Settings.Approvals.patternPlaceholder, text: $pattern)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 13, design: .monospaced))
+                    .onSubmit { add(server) }
+            }
             HStack(alignment: .bottom, spacing: 10) {
-                labeled(L10n.Settings.Approvals.when) {
-                    TextField(L10n.Settings.Approvals.patternPlaceholder, text: $pattern)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.system(size: 13, design: .monospaced))
-                        .onSubmit { add(server) }
-                }
-                .frame(maxWidth: .infinity)
                 labeled(L10n.Settings.Approvals.then) {
                     Picker("", selection: $action) {
                         Text(L10n.Settings.Approvals.allow).tag(RuleAction.allow)
@@ -75,6 +89,7 @@ struct ApprovalsSection: View {
                     .labelsHidden()
                 }
                 .frame(width: 170)
+                Spacer(minLength: 0)
                 Button(L10n.Settings.Approvals.add) { add(server) }
                     .banditoButton(.lightPill())
                     .disabled(pattern.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -112,7 +127,7 @@ struct ApprovalsSection: View {
                     Text(rule.pattern)
                         .font(.system(size: 13, design: .monospaced))
                         .foregroundStyle(Color.Bandito.text)
-                        .lineLimit(1)
+                        .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     behaviorPill(rule.action)
                         .frame(width: 130, alignment: .leading)
@@ -127,6 +142,7 @@ struct ApprovalsSection: View {
                         Image(systemName: "trash")
                     }
                     .banditoButton(.icon(size: 26, label: L10n.Settings.Approvals.deleteAria(pattern: rule.pattern)))
+                    .help(L10n.Settings.Approvals.deleteAria(pattern: rule.pattern))
                     .frame(width: 30)
                 }
                 .padding(.horizontal, 16)
@@ -143,14 +159,14 @@ struct ApprovalsSection: View {
             Text(L10n.Settings.Approvals.builtinHint)
                 .font(.system(size: 12))
                 .foregroundStyle(Color.Bandito.text3)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 6, alignment: .leading)], alignment: .leading, spacing: 6) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 6, alignment: .leading)], alignment: .leading, spacing: 6) {
                 ForEach(Self.builtin, id: \.self) { item in
                     chip(item, font: .system(size: 12, design: .monospaced), color: Color.Bandito.text2)
                 }
                 chip(L10n.Settings.Approvals.outsideProject, font: .system(size: 12), color: Color.Bandito.text2)
             }
             SectionLabel(L10n.Settings.Approvals.browserChecks)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 6, alignment: .leading)], alignment: .leading, spacing: 6) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 6, alignment: .leading)], alignment: .leading, spacing: 6) {
                 ForEach(Self.browserChecks, id: \.self) { item in
                     chip(item, font: .system(size: 12), color: Color(hex: 0xA3BDEB))
                 }
@@ -175,10 +191,13 @@ struct ApprovalsSection: View {
     }
 
     private func chip(_ text: String, font: Font, color: Color) -> some View {
+        // A chip stays inside its grid cell: a long text is cut in the middle and the full text shows on hover.
         Text(text)
             .font(font)
             .foregroundStyle(color)
             .lineLimit(1)
+            .truncationMode(.middle)
+            .help(text)
             .padding(.horizontal, 9)
             .padding(.vertical, 4)
             .background(Color.Bandito.text.opacity(0.05), in: RoundedRectangle(cornerRadius: 8, style: .continuous))

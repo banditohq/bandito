@@ -26,6 +26,7 @@ Sets the language of the interface. It applies after you restart Bandito.
 Где: Settings (⌘,) → General (Общие) → Language (Язык)
 1. Pick a language in the list, or System (Системная) to follow the system language.
 2. Quit and open Bandito again: the language changes after the restart (Applies after you restart Bandito).
+3. The label on the first screen shows the language the interface uses now, written in that language (Русский, English, 日本語). Picking a language there works the same way: it applies after a restart, and the app says so.
 
 ## Show examples (Показывать примеры)
 
@@ -58,11 +59,11 @@ Stable (Стабильный) gets the released versions. Beta (Бета) also g
 1. Pick Stable (Стабильный) for the released versions only, or Beta (Бета) for the preview builds too.
 2. Check for Updates… (Проверить обновления…) uses the channel that is picked now.
 
-## Account and sync (Аккаунт и синхронизация)
+## Account (Аккаунт)
 
 <!-- id: set-account; covers: settings:account -->
 Shows whether this Mac is signed in and syncs servers, shortcuts and prompts. Without an account everything works on this Mac.
-Где: Settings (⌘,) → Account and sync (Аккаунт и синхронизация)
+Где: Settings (⌘,) → Account (Аккаунт)
 1. Read the state: Account (Аккаунт). Without sign-in, the line says Not signed in. Everything works on this Mac and without an account.
 2. Sign in: the Sign in (Войти) button opens the account sheet, the same sign-in as the account step of the introduction (see [account.md](account.md)).
 
@@ -213,27 +214,19 @@ A notification when an agent stops because of a failure.
 Где: Settings (⌘,) → Notifications (Уведомления) → Error (Ошибка)
 1. Turn the switch on or off. It is on by default.
 
-## Appearance and motion (Внешний вид и анимации)
+## Appearance (Внешний вид)
 
 <!-- id: set-appearance; covers: settings:appearance -->
 How the app looks and how much it moves.
-Где: Settings (⌘,) → Appearance and motion (Внешний вид и анимации)
+Где: Settings (⌘,) → Appearance (Внешний вид)
 1. Theme (Тема): the app is dark in this build. There is no theme switch yet.
 
 ## Animation level (motion.level)
 
 <!-- id: set-motion; covers: setting:motion.level -->
 The amount of motion in the app: Full (Полные), Less (Меньше), or Off (Выключены). Off stops all motion, like Reduce Motion in the system.
-Где: Settings (⌘,) → Appearance and motion (Внешний вид и анимации) → Animation (Анимации)
+Где: Settings (⌘,) → Appearance (Внешний вид) → Animation (Анимации)
 1. Pick Full, Less, or Off. The change applies at once.
-
-## Language (Язык)
-
-<!-- id: set-language; covers: settings:language -->
-The same language choice as in General, shown in its own section. It applies after you restart Bandito.
-Где: Settings (⌘,) → Language (Язык)
-1. Pick a language, or System (Системная). Quit and open Bandito again.
-2. The label on the first screen shows the language the interface uses now, written in that language (Русский, English, 日本語). Picking a language there works like here: it applies after a restart, and the app says so.
 
 ## Updates (Обновления)
 

@@ -8,26 +8,29 @@ struct SettingsPage<Content: View>: View {
     @ViewBuilder var content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title)
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(Color.Bandito.text)
-                if let intro {
-                    Text(intro)
-                        .font(.system(size: 13.5))
-                        .foregroundStyle(Color.Bandito.text3)
-                        .lineSpacing(2)
-                        .fixedSize(horizontal: false, vertical: true)
+        // The whole page scrolls, so nothing is cut off at the smallest window size.
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(title)
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(Color.Bandito.text)
+                    if let intro {
+                        Text(intro)
+                            .font(.system(size: 13.5))
+                            .foregroundStyle(Color.Bandito.text3)
+                            .lineSpacing(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
+                .padding(.bottom, 22)
+                content
             }
-            .padding(.bottom, 22)
-            content
-            Spacer(minLength: 0)
+            .padding(.horizontal, 34)
+            .padding(.vertical, 26)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .padding(.horizontal, 34)
-        .padding(.vertical, 26)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .scrollIndicators(.never)
     }
 }
 

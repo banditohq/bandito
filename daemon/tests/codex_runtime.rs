@@ -629,3 +629,90 @@ async fn codex_keeps_its_own_sandbox_where_there_is_no_macos_sandbox() {
     let args = codex_argv(c, &args_out).await;
     assert!(args.iter().all(|a| !a.contains("sandbox_mode")), "{args:?}");
 }
+
+// Login probe: `codex login status` against tests/fixtures/login/fake-cli.sh (see claude_runtime.rs).
+
+fn login_cli() -> String {
+    format!("{}/tests/fixtures/login/fake-cli.sh", env!("CARGO_MANIFEST_DIR"))
+}
+
+fn login_runtime(calls: &std::path::Path, answer: &[(&str, &str)]) -> CodexRuntime {
+    let mut env = vec![("FAKE_CALLS".to_string(), calls.display().to_string())];
+    env.extend(answer.iter().map(|(k, v)| (k.to_string(), v.to_string())));
+    CodexRuntime::with_program(&login_cli()).with_env(env)
+}
+
+fn probes(calls: &std::path::Path) -> usize {
+    std::fs::read_to_string(calls).map(|s| s.lines().count()).unwrap_or(0)
+}
+
+#[tokio::test]
+async fn status_is_logged_in_when_login_status_exits_zero() {
+    let dir = tempfile::tempdir().unwrap();
+    let calls = dir.path().join("calls");
+    let rt = login_runtime(&calls, &[("FAKE_OUT", "Logged in using ChatGPT")]);
+    let st = rt.status().await;
+    assert!(st.installed);
+    assert_eq!(st.logged_in, Some(true));
+    assert_eq!(std::fs::read_to_string(&calls).unwrap().trim(), "login status");
+}
+
+#[tokio::test]
+async fn status_is_logged_out_on_not_logged_in_from_either_stream() {
+    let dir = tempfile::tempdir().unwrap();
+    let on_stdout = login_runtime(
+        &dir.path().join("a"),
+        &[("FAKE_OUT", "Not logged in"), ("FAKE_CODE", "1")],
+    );
+    assert_eq!(on_stdout.status().await.logged_in, Some(false));
+    let on_stderr = login_runtime(
+        &dir.path().join("b"),
+        &[("FAKE_ERR", "Error: Not logged in"), ("FAKE_CODE", "1")],
+    );
+    assert_eq!(on_stderr.status().await.logged_in, Some(false));
+}
+
+#[tokio::test]
+async fn status_is_unknown_for_other_failures_and_garbage() {
+    let dir = tempfile::tempdir().unwrap();
+    let other = login_runtime(
+        &dir.path().join("a"),
+        &[("FAKE_ERR", "network down"), ("FAKE_CODE", "1")],
+    );
+    assert_eq!(other.status().await.logged_in, None);
+    let wrong_code = login_runtime(
+        &dir.path().join("b"),
+        &[("FAKE_OUT", "Not logged in"), ("FAKE_CODE", "2")],
+    );
+    assert_eq!(wrong_code.status().await.logged_in, None);
+}
+
+#[tokio::test]
+async fn status_is_unknown_when_login_status_hangs() {
+    let dir = tempfile::tempdir().unwrap();
+    let rt = login_runtime(&dir.path().join("calls"), &[("FAKE_SLEEP", "30")]);
+    let started = std::time::Instant::now();
+    assert_eq!(rt.status().await.logged_in, None);
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(15),
+        "the probe has a 5 s limit"
+    );
+}
+
+#[tokio::test]
+async fn status_is_unknown_without_the_cli() {
+    let st = CodexRuntime::with_program("/nonexistent/codex").status().await;
+    assert_eq!(st.logged_in, None);
+}
+
+#[tokio::test]
+async fn status_asks_the_cli_once_a_minute_even_when_called_at_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let calls = dir.path().join("calls");
+    let rt = login_runtime(&calls, &[("FAKE_OUT", "Logged in")]);
+    let (a, b) = tokio::join!(rt.status(), rt.status());
+    assert_eq!([a.logged_in, b.logged_in], [Some(true); 2]);
+    assert_eq!(probes(&calls), 1);
+    rt.status().await;
+    assert_eq!(probes(&calls), 1, "the answer is reused within 60 s");
+}

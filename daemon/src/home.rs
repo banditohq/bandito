@@ -5,6 +5,7 @@ use crate::store::Store;
 use anyhow::{Context, Result, bail};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 /// Marks a folder as belonging to one agent: its file holds the agent id.
 const MARKER: &str = ".bandito-agent";
@@ -33,15 +34,52 @@ const MEMORY_TEMPLATE: &str = "\
 <!-- One line per file in notes/: - notes/<topic>.md — what it holds. -->
 ";
 
-/// Root for all agent folders: `$BANDITO_AGENTS_DIR`, else `~/bandito/agents`.
-/// `fallback` (the daemon's data dir) is used when there is no home directory.
-/// A relative `BANDITO_AGENTS_DIR` is ignored: the folders must not depend on the
-/// daemon's working directory.
-pub fn default_agents_root(fallback: &Path) -> PathBuf {
-    agents_root_from(std::env::var_os("BANDITO_AGENTS_DIR"), dirs::home_dir(), fallback)
+/// The daemon's data folder as `main` resolved it (`--home`, else `BANDITO_HOME`, else `~/.bandito`).
+static DATA_HOME: OnceLock<PathBuf> = OnceLock::new();
+
+/// Records the data folder for the whole process. Called once by `main`, before anything reads it.
+pub fn set_data_home(home: &Path) {
+    let _ = DATA_HOME.set(home.to_path_buf());
 }
 
-fn agents_root_from(env: Option<OsString>, home: Option<PathBuf>, fallback: &Path) -> PathBuf {
+/// Bandito's data folder: the one `main` set, else `$BANDITO_HOME`, else `~/.bandito`.
+pub fn data_home() -> PathBuf {
+    data_home_from(
+        DATA_HOME.get().map(PathBuf::as_path),
+        std::env::var_os("BANDITO_HOME"),
+        dirs::home_dir(),
+    )
+}
+
+/// The rule behind [`data_home`]: `configured` first, then `BANDITO_HOME`, then `<user home>/.bandito`.
+pub fn data_home_from(configured: Option<&Path>, env_home: Option<OsString>, user_home: Option<PathBuf>) -> PathBuf {
+    if let Some(dir) = configured {
+        return dir.to_path_buf();
+    }
+    if let Some(dir) = env_home {
+        return PathBuf::from(dir);
+    }
+    match user_home {
+        Some(user_home) => user_home.join(".bandito"),
+        None => PathBuf::from(".bandito"),
+    }
+}
+
+/// Root for all agent folders: `$BANDITO_AGENTS_DIR`, else `<home>/agents` when the daemon was given its own
+/// `--home` (so a second daemon does not write into the first one's folders), else `~/bandito/agents`.
+/// `home` is the daemon's data folder; `home_given` says whether `--home` was passed.
+pub fn default_agents_root(home: &Path, home_given: bool) -> PathBuf {
+    agents_root_from(
+        std::env::var_os("BANDITO_AGENTS_DIR"),
+        dirs::home_dir(),
+        home,
+        home_given,
+    )
+}
+
+/// The rule behind [`default_agents_root`]. A relative `BANDITO_AGENTS_DIR` is ignored: the folders must not
+/// depend on the daemon's working directory.
+fn agents_root_from(env: Option<OsString>, user_home: Option<PathBuf>, home: &Path, home_given: bool) -> PathBuf {
     let custom = env.map(PathBuf::from).filter(|dir| {
         let absolute = dir.is_absolute();
         if !absolute {
@@ -49,10 +87,21 @@ fn agents_root_from(env: Option<OsString>, home: Option<PathBuf>, fallback: &Pat
         }
         absolute
     });
-    match (custom, home) {
+    let default_home = user_home.as_ref().map(|user_home| user_home.join(".bandito"));
+    match (custom, user_home) {
         (Some(dir), _) => dir,
-        (None, Some(home)) => home.join("bandito").join("agents"),
-        (None, None) => fallback.join("agents"),
+        // Next to the data folder, never inside it: agents may not touch Bandito's own files, so a folder under the
+        // data folder would be one they cannot write (`/srv/second` → `/srv/second-agents`).
+        (None, Some(_)) if home_given && Some(home) != default_home.as_deref() => {
+            let home = std::path::absolute(home).unwrap_or_else(|_| home.to_path_buf());
+            let name = home
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "bandito".into());
+            home.with_file_name(format!("{name}-agents"))
+        }
+        (None, Some(user_home)) => user_home.join("bandito").join("agents"),
+        (None, None) => home.join("agents"),
     }
 }
 
@@ -81,18 +130,71 @@ pub fn backfill(store: &Store, root: &Path) -> usize {
     created
 }
 
-/// A folder name for an agent: lowercase ASCII letters and digits, other
-/// characters become single `-`, no leading or trailing `-`. Empty → `agent`.
+/// The Latin spelling of a lowercase Cyrillic letter (a simple GOST-like table, Ukrainian letters included).
+/// `""` drops the letter (ъ, ь). `None` for anything else.
+fn cyrillic_latin(c: char) -> Option<&'static str> {
+    Some(match c {
+        'а' => "a",
+        'б' => "b",
+        'в' => "v",
+        'г' => "g",
+        'д' => "d",
+        'е' => "e",
+        'ё' => "yo",
+        'ж' => "zh",
+        'з' => "z",
+        'и' => "i",
+        'й' => "y",
+        'к' => "k",
+        'л' => "l",
+        'м' => "m",
+        'н' => "n",
+        'о' => "o",
+        'п' => "p",
+        'р' => "r",
+        'с' => "s",
+        'т' => "t",
+        'у' => "u",
+        'ф' => "f",
+        'х' => "kh",
+        'ц' => "ts",
+        'ч' => "ch",
+        'ш' => "sh",
+        'щ' => "shch",
+        'ъ' | 'ь' => "",
+        'ы' => "y",
+        'э' => "e",
+        'ю' => "yu",
+        'я' => "ya",
+        'і' => "i",
+        'ї' => "yi",
+        'є' => "ye",
+        'ґ' => "g",
+        _ => return None,
+    })
+}
+
+/// A folder name for an agent: lowercase ASCII letters and digits. Cyrillic is transliterated, other letters
+/// are dropped, any other character becomes a single `-`, no leading or trailing `-`. Empty → `agent`.
 pub fn slug(name: &str) -> String {
     let mut out = String::new();
     let mut dash = false;
-    for c in name.chars() {
-        if c.is_ascii_alphanumeric() {
-            out.push(c.to_ascii_lowercase());
-            dash = false;
-        } else if !dash {
-            out.push('-');
-            dash = true;
+    for upper in name.chars() {
+        for c in upper.to_lowercase() {
+            if c.is_ascii_alphanumeric() {
+                out.push(c);
+                dash = false;
+            } else if let Some(latin) = cyrillic_latin(c) {
+                if !latin.is_empty() {
+                    out.push_str(latin);
+                    dash = false;
+                }
+            } else if c.is_alphabetic() {
+                // A letter with no Latin form is dropped.
+            } else if !dash {
+                out.push('-');
+                dash = true;
+            }
         }
     }
     let s = out.trim_matches('-');
@@ -182,7 +284,8 @@ mod tests {
     #[test]
     fn slug_cases() {
         assert_eq!(slug("Night Owl"), "night-owl");
-        assert_eq!(slug("Ёж 2"), "2");
+        assert_eq!(slug("Ёж 2"), "yozh-2");
+        assert_eq!(slug("Тестер"), "tester");
         assert_eq!(slug("!!!"), "agent");
         assert_eq!(slug("  Forge__Builder  "), "forge-builder");
         assert_eq!(slug("A--B"), "a-b");
@@ -191,17 +294,39 @@ mod tests {
     }
 
     #[test]
+    fn slug_transliterates_cyrillic() {
+        assert_eq!(slug("Щи"), "shchi");
+        assert_eq!(slug("Объём"), "obyom", "ъ and ь are dropped");
+        assert_eq!(slug("Юля Яна"), "yulya-yana");
+        assert_eq!(slug("Їжак Єнот Ґудзик"), "yizhak-yenot-gudzik");
+        assert_eq!(slug("Хлеб ЦЕХ Чай"), "khleb-tsekh-chay");
+    }
+
+    #[test]
+    fn slug_drops_other_letters_and_keeps_symbols_as_separators() {
+        assert_eq!(slug("aéb"), "ab", "a letter without a table entry is dropped");
+        assert_eq!(slug("Café 2"), "caf-2");
+        assert_eq!(slug("🦝🦝🦝"), "agent", "emoji only falls back to agent");
+        assert_eq!(slug("Night🦝Owl"), "night-owl");
+    }
+
+    #[test]
     fn root_comes_from_env_or_home() {
         assert_eq!(
-            agents_root_from(Some("/srv/agents".into()), Some("/home/u".into()), Path::new("/var/b")),
+            agents_root_from(
+                Some("/srv/agents".into()),
+                Some("/home/u".into()),
+                Path::new("/var/b"),
+                false
+            ),
             PathBuf::from("/srv/agents")
         );
         assert_eq!(
-            agents_root_from(None, Some("/home/u".into()), Path::new("/var/b")),
+            agents_root_from(None, Some("/home/u".into()), Path::new("/var/b"), false),
             PathBuf::from("/home/u/bandito/agents")
         );
         assert_eq!(
-            agents_root_from(None, None, Path::new("/var/b")),
+            agents_root_from(None, None, Path::new("/var/b"), false),
             PathBuf::from("/var/b/agents")
         );
     }
@@ -212,10 +337,57 @@ mod tests {
             agents_root_from(
                 Some("relative/agents".into()),
                 Some("/home/u".into()),
-                Path::new("/var/b")
+                Path::new("/var/b"),
+                false
             ),
             PathBuf::from("/home/u/bandito/agents")
         );
+    }
+
+    #[test]
+    fn a_given_home_moves_the_agents_root_with_it() {
+        // A second daemon with its own --home must not write into the first one's folder.
+        assert_eq!(
+            agents_root_from(None, Some("/home/u".into()), Path::new("/srv/second"), true),
+            PathBuf::from("/srv/second-agents")
+        );
+        // BANDITO_AGENTS_DIR still wins over the home.
+        assert_eq!(
+            agents_root_from(
+                Some("/srv/agents".into()),
+                Some("/home/u".into()),
+                Path::new("/srv/second"),
+                true
+            ),
+            PathBuf::from("/srv/agents")
+        );
+        // --home pointing at the default ~/.bandito keeps the default folder.
+        assert_eq!(
+            agents_root_from(None, Some("/home/u".into()), Path::new("/home/u/.bandito"), true),
+            PathBuf::from("/home/u/bandito/agents")
+        );
+        // Without --home (BANDITO_HOME or default) nothing changes.
+        assert_eq!(
+            agents_root_from(None, Some("/home/u".into()), Path::new("/srv/second"), false),
+            PathBuf::from("/home/u/bandito/agents")
+        );
+    }
+
+    #[test]
+    fn data_home_comes_from_the_flag_first() {
+        assert_eq!(
+            data_home_from(Some(Path::new("/flag")), Some("/env".into()), Some("/home/u".into())),
+            PathBuf::from("/flag")
+        );
+        assert_eq!(
+            data_home_from(None, Some("/env".into()), Some("/home/u".into())),
+            PathBuf::from("/env")
+        );
+        assert_eq!(
+            data_home_from(None, None, Some("/home/u".into())),
+            PathBuf::from("/home/u/.bandito")
+        );
+        assert_eq!(data_home_from(None, None, None), PathBuf::from(".bandito"));
     }
 
     #[test]

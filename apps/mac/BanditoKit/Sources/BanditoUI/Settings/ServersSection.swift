@@ -19,6 +19,7 @@ struct ServersSection: View {
                     SettingsRow(title: server.config.name, hint: server.config.description) {
                         HStack(spacing: 12) {
                             Chip(text: Self.stateText(server.state), tone: server.state == .connected ? .ok : .neutral)
+                                .fixedSize()
                             Button(L10n.Common.delete) {
                                 removing = server
                             }

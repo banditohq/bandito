@@ -11,7 +11,6 @@ struct ThreadView: View {
     @Binding var inspectorTab: InspectorTab
 
     @Environment(Router.self) private var router
-    @State private var draft = ""
     @State private var sendError: UserFacingMessage?
     /// Failures of interrupt, approval and history loading.
     @State private var actionError: UserFacingMessage?
@@ -21,6 +20,11 @@ struct ThreadView: View {
 
     private var thread: AgentThread { server.thread(for: agent.id) }
 
+    /// The composer text of this agent, kept by the Router (see `Router.drafts`).
+    private var draft: Binding<String> {
+        Binding(get: { router.drafts[agent.id] ?? "" }, set: { router.drafts[agent.id] = $0 })
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             ThreadHeader(
@@ -29,8 +33,9 @@ struct ThreadView: View {
                 turnRunning: thread.turnRunning,
                 changes: server.info?.supports("changes") == true ? changes : nil,
                 showsChanges: server.info?.supports("changes") == true,
+                showsTerminal: server.supports("terminals"),
                 onChanges: { router.sheet = .changes(agentID: agent.id) },
-                onTerminal: { router.select(mode: .terminals) },
+                onTerminal: { router.openTerminalHere(agent.cwd) },
                 onSchedules: {
                     inspectorTab = .details
                     router.inspectorOpen = true
@@ -72,7 +77,7 @@ struct ThreadView: View {
                 }
             }
             Composer(
-                draft: $draft,
+                draft: draft,
                 agentName: agent.name,
                 running: thread.turnRunning,
                 contextFraction: ContextUsage.fraction(tokens: agent.contextTokens, budget: agent.contextBudget),
@@ -93,7 +98,7 @@ struct ThreadView: View {
         // Text put here by another screen ("Ask about this place") goes into the composer, once.
         .onChange(of: router.pendingComposerText, initial: true) { _, _ in
             guard let text = router.takeComposerText() else { return }
-            draft = draft.isEmpty ? text : draft + "\n" + text
+            router.appendDraft(text, for: agent.id)
         }
         // The change counts are refreshed when a turn ends.
         .onChange(of: thread.turnRunning) { wasRunning, isRunning in
@@ -139,15 +144,17 @@ struct ThreadView: View {
         }
     }
 
+    /// Sends the draft of this agent. The id is taken now: a failure puts the text back into the draft of the agent it
+    /// was sent to, even when the person has gone to another agent by then.
     private func send() {
-        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let id = agent.id
+        let text = router.takeDraft(for: id)
         guard !text.isEmpty else { return }
-        draft = ""
         sendError = nil
         Task {
-            do { try await server.send(text, to: agent.id) } catch {
+            do { try await server.send(text, to: id) } catch {
                 sendError = UserFacingError.message(for: error)
-                draft = text
+                router.restoreDraft(text, for: id)
             }
         }
     }

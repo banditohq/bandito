@@ -8,7 +8,19 @@ struct SetupLine: Identifiable, Hashable {
     var id: String
     var title: String
     var state: SetupReady
+    /// What to do about a line that is not ready, in a word or two. Nil when there is nothing to add.
+    var hint: String?
 }
+
+/// The calls the setup model makes to a server. `ServerModel` is the real one; tests pass a fake.
+@MainActor
+protocol SetupServer: AnyObject {
+    func setupStatus() async throws -> SetupStatus
+    func setupInstall(components: [String]) async throws -> String
+    func setupJob(_ id: String, from offset: UInt64) async throws -> SetupJob
+}
+
+extension ServerModel: SetupServer {}
 
 /// Setup state of the server: what is missing, and the install job the app runs for it (`setup.*`).
 @MainActor
@@ -19,17 +31,24 @@ final class SetupModel {
     /// The job's log so far. The daemon sends only what is new since `offset`.
     private(set) var log = ""
     private(set) var error: UserFacingMessage?
+    /// Whether this model is sending install requests right now. Only `install` sets it, so a job that was lost
+    /// can never keep the buttons disabled.
+    private(set) var installing = false
+    /// How long to wait between two reads of the job. Tests make it short.
+    @ObservationIgnored var pollInterval: Duration = .seconds(1)
 
     /// The state of each feature and runtime, in the order of the design.
     var lines: [SetupLine] {
         guard let f = status?.features else { return [] }
         return [
-            SetupLine(id: "screen", title: L10n.Setup.Feature.screen, state: f.screen),
-            SetupLine(id: "browser", title: L10n.Setup.Feature.browser, state: f.browser),
-            SetupLine(id: "containers", title: L10n.Setup.Feature.containers, state: f.containers),
-            SetupLine(id: "claude", title: L10n.Runtime.claude, state: f.agents.claude),
-            SetupLine(id: "codex", title: L10n.Runtime.codex, state: f.agents.codex),
-            SetupLine(id: "grok", title: L10n.Runtime.grok, state: f.agents.grok),
+            SetupLine(
+                id: "screen", title: L10n.Setup.Feature.screen, state: f.screen,
+                hint: f.screen == .unsupported ? L10n.Setup.screenLinuxOnly : nil),
+            SetupLine(id: "browser", title: L10n.Setup.Feature.browser, state: f.browser, hint: nil),
+            SetupLine(id: "containers", title: L10n.Setup.Feature.containers, state: f.containers, hint: nil),
+            SetupLine(id: "claude", title: L10n.Runtime.claude, state: f.agents.claude, hint: nil),
+            SetupLine(id: "codex", title: L10n.Runtime.codex, state: f.agents.codex, hint: nil),
+            SetupLine(id: "grok", title: L10n.Runtime.grok, state: f.agents.grok, hint: nil),
         ]
     }
 
@@ -38,7 +57,7 @@ final class SetupModel {
         (status?.components ?? []).filter { !$0.installed && $0.installable }.map(\.id)
     }
 
-    var isRunning: Bool { job?.state == .running }
+    var isRunning: Bool { installing }
 
     /// The command to type in a terminal when the install needs an administrator password.
     var passwordCommand: String? {
@@ -46,7 +65,11 @@ final class SetupModel {
         return job?.command
     }
 
-    func load(_ server: ServerModel) async {
+    func load(_ server: SetupServer) async {
+        // A job still marked running while no install is sent is left over: it is dropped, not shown as running.
+        if !installing, job?.state == .running {
+            job = nil
+        }
         do {
             status = try await server.setupStatus()
             error = nil
@@ -55,9 +78,12 @@ final class SetupModel {
         }
     }
 
-    /// Starts an install and follows its log about once a second until the job ends.
-    func install(_ components: [String], server: ServerModel) async {
-        guard !components.isEmpty, !isRunning else { return }
+    /// Starts an install and follows its log until the job ends. A read that fails is repeated once; if it fails
+    /// again, the job is dropped (so nothing looks as if it still runs) and the error is shown.
+    func install(_ components: [String], server: SetupServer) async {
+        guard !components.isEmpty, !installing else { return }
+        installing = true
+        defer { installing = false }
         log = ""
         job = nil
         error = nil
@@ -65,16 +91,27 @@ final class SetupModel {
             let id = try await server.setupInstall(components: components)
             var offset: UInt64 = 0
             while true {
-                let snapshot = try await server.setupJob(id, from: offset)
+                let snapshot = try await readJob(id, from: offset, server: server)
                 job = snapshot
                 log += snapshot.log
                 offset = snapshot.offset
                 if snapshot.state != .running { break }
-                try await Task.sleep(for: .seconds(1))
+                try await Task.sleep(for: pollInterval)
             }
             await load(server)
         } catch {
+            job = nil
             self.error = UserFacingError.message(for: error)
+        }
+    }
+
+    /// Reads the job from `offset`. A failed read is repeated once after a short wait, before the error is thrown.
+    private func readJob(_ id: String, from offset: UInt64, server: SetupServer) async throws -> SetupJob {
+        do {
+            return try await server.setupJob(id, from: offset)
+        } catch {
+            try await Task.sleep(for: pollInterval)
+            return try await server.setupJob(id, from: offset)
         }
     }
 }
@@ -104,7 +141,15 @@ struct ServerFeaturesCard: View {
                     Text(line.title)
                         .font(.system(size: 13))
                         .foregroundStyle(Color.Bandito.text)
+                        .lineLimit(1)
                     Spacer(minLength: 8)
+                    if let hint = line.hint, line.state != .ready {
+                        Text(hint)
+                            .font(.system(size: 12))
+                            .foregroundStyle(Color.Bandito.text3)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
+                    }
                     Chip(text: Self.label(line.state), tone: line.state == .ready ? .ok : .neutral)
                 }
             }

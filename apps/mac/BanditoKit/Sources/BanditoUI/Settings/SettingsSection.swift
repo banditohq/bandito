@@ -1,9 +1,10 @@
 import BanditoL10n
+import SwiftUI
 
-/// The sections of the Settings window, in the order of the left navigation.
+/// The sections of the Settings window, in the order of the left navigation. The interface language lives in General.
 public enum SettingsSection: String, CaseIterable, Identifiable, Hashable, Sendable {
     case general, account, servers, approvals, usage, workplaces, terminalFiles, browserScreen
-    case keysGestures, notifications, appearance, language, updates
+    case keysGestures, notifications, appearance, updates
 
     public var id: String { rawValue }
 
@@ -20,27 +21,41 @@ public enum SettingsSection: String, CaseIterable, Identifiable, Hashable, Senda
         case .keysGestures: L10n.Settings.Nav.keysGestures
         case .notifications: L10n.Settings.Nav.notifications
         case .appearance: L10n.Settings.Nav.appearance
-        case .language: L10n.Settings.Nav.language
         case .updates: L10n.Settings.Nav.updates
         }
     }
 
-    /// Glyph in the navigation badge, as in the design.
-    public var glyph: String {
+    /// SF Symbol in the navigation badge, as in System Settings.
+    var symbol: String {
         switch self {
-        case .general: "◐"
-        case .account: "☁"
-        case .servers: "⌁"
-        case .approvals: "✓"
-        case .usage: "▮"
-        case .workplaces: "▣"
-        case .terminalFiles: "›_"
-        case .browserScreen: "◎"
-        case .keysGestures: "⌘"
-        case .notifications: "◔"
-        case .appearance: "✦"
-        case .language: "Aa"
-        case .updates: "↻"
+        case .general: "gearshape"
+        case .account: "person.crop.circle"
+        case .servers: "server.rack"
+        case .approvals: "checkmark.shield"
+        case .usage: "gauge.medium"
+        case .workplaces: "square.stack.3d.up"
+        case .terminalFiles: "terminal"
+        case .browserScreen: "globe"
+        case .keysGestures: "keyboard"
+        case .notifications: "bell.badge"
+        case .appearance: "paintbrush"
+        case .updates: "arrow.triangle.2.circlepath"
+        }
+    }
+
+    /// Fill of the navigation badge: one color per section, as in System Settings.
+    var tint: Color {
+        switch self {
+        case .general, .keysGestures, .updates: BanditoPalette.badgeGray
+        case .account: BanditoPalette.badgeBlue
+        case .servers: BanditoPalette.badgeGreen
+        case .approvals: BanditoPalette.badgeOrange
+        case .usage: BanditoPalette.badgePurple
+        case .workplaces: BanditoPalette.badgeTeal
+        case .terminalFiles: BanditoPalette.badgeDarkGray
+        case .browserScreen: BanditoPalette.badgeLightBlue
+        case .notifications: BanditoPalette.badgeRed
+        case .appearance: BanditoPalette.badgeIndigo
         }
     }
 }

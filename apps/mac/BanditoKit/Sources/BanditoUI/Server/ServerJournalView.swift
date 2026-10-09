@@ -4,10 +4,12 @@ import BanditoL10n
 import SwiftUI
 
 /// Server → Journal: the daemon's own log, newest line last. A level filter, refresh, copy all, and it follows the end.
+/// Runs of identical lines are shown once with a count.
 struct ServerJournalView: View {
     let server: ServerModel?
     @State private var level: DaemonLogLevel = .info
     @State private var log: DaemonLog?
+    @State private var entries: [JournalEntry] = []
     @State private var error: UserFacingMessage?
     @State private var loading = false
 
@@ -19,24 +21,10 @@ struct ServerJournalView: View {
             title: L10n.Mode.serverJournal,
             trailing: {
                 if let server, server.supports("logs") {
-                    HStack(spacing: 10) {
-                        SegmentedPicker(
-                            selection: $level,
-                            options: [
-                                (DaemonLogLevel.info, L10n.Journal.levelAll),
-                                (DaemonLogLevel.warn, L10n.Journal.levelWarn),
-                                (DaemonLogLevel.error, L10n.Journal.levelError),
-                            ]
-                        )
-                        .frame(width: 300)
-                        Button(L10n.Journal.refresh) { reload() }
-                            .banditoButton(.quiet())
-                            .disabled(loading)
-                        Button(L10n.Journal.copyAll) {
-                            SystemActions.copy((log?.lines ?? []).joined(separator: "\n"))
-                        }
-                        .banditoButton(.quiet())
-                        .disabled((log?.lines ?? []).isEmpty)
+                    // Icons with hints on a narrow window, icons with words when there is room.
+                    ViewThatFits(in: .horizontal) {
+                        toolbar(iconsOnly: false)
+                        toolbar(iconsOnly: true)
                     }
                 }
             }
@@ -59,14 +47,57 @@ struct ServerJournalView: View {
         .onChange(of: server?.id) { _, _ in reload() }
     }
 
+    private func toolbar(iconsOnly: Bool) -> some View {
+        HStack(spacing: 8) {
+            SegmentedPicker(
+                selection: $level,
+                options: [
+                    (DaemonLogLevel.info, L10n.Journal.levelAll),
+                    (DaemonLogLevel.warn, L10n.Journal.levelWarn),
+                    (DaemonLogLevel.error, L10n.Journal.levelError),
+                ]
+            )
+            .fixedSize()
+            if iconsOnly {
+                Button { reload() } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .banditoButton(.icon(label: L10n.Journal.refresh))
+                .help(L10n.Journal.refresh)
+                .disabled(loading)
+                Button { copyAll() } label: {
+                    Image(systemName: "doc.on.doc")
+                }
+                .banditoButton(.icon(label: L10n.Journal.copyAll))
+                .help(L10n.Journal.copyAll)
+                .disabled(entries.isEmpty)
+            } else {
+                Button { reload() } label: {
+                    Label(L10n.Journal.refresh, systemImage: "arrow.clockwise")
+                }
+                .banditoButton(.quiet())
+                .fixedSize()
+                .help(L10n.Journal.refresh)
+                .disabled(loading)
+                Button { copyAll() } label: {
+                    Label(L10n.Journal.copyAll, systemImage: "doc.on.doc")
+                }
+                .banditoButton(.quiet())
+                .fixedSize()
+                .help(L10n.Journal.copyAll)
+                .disabled(entries.isEmpty)
+            }
+        }
+        .fixedSize()
+    }
+
     @ViewBuilder
     private var logBody: some View {
-        let lines = log?.lines ?? []
         if log == nil {
             Text(loading ? L10n.Journal.loading : L10n.Journal.empty)
                 .font(.system(size: 13))
                 .foregroundStyle(Color.Bandito.text3)
-        } else if lines.isEmpty {
+        } else if entries.isEmpty {
             Text(L10n.Journal.empty)
                 .font(.system(size: 13))
                 .foregroundStyle(Color.Bandito.text3)
@@ -74,27 +105,83 @@ struct ServerJournalView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 2) {
-                        ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
-                            Text(line)
-                                .font(BanditoFont.font(size: 12, weight: 400, mono: true))
-                                .foregroundStyle(Color.Bandito.text2)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .textSelection(.enabled)
-                                .id(index)
+                        ForEach(entries) { entry in
+                            row(entry)
+                                .id(entry.id)
                         }
                     }
                     .padding(.vertical, 2)
                 }
                 .frame(height: 460)
-                .onAppear { proxy.scrollTo(lines.count - 1, anchor: .bottom) }
-                .onChange(of: lines.count) { _, count in
-                    proxy.scrollTo(count - 1, anchor: .bottom)
-                }
+                .onAppear { scrollToEnd(proxy) }
+                .onChange(of: entries.last?.id) { _, _ in scrollToEnd(proxy) }
             }
-            Text(L10n.Journal.source(name: log?.source ?? ""))
+            Text(sourceText)
                 .font(.system(size: 11.5))
                 .foregroundStyle(Color.Bandito.text3)
         }
+    }
+
+    private func row(_ entry: JournalEntry) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(entry.line.time ?? "")
+                .font(BanditoFont.font(size: 12, weight: 400, mono: true))
+                .foregroundStyle(Color.Bandito.text3)
+                .frame(width: 62, alignment: .leading)
+            Group {
+                if let level = entry.line.level {
+                    Text(level.rawValue)
+                        .font(BanditoFont.font(size: 10.5, weight: 600, mono: true))
+                        .foregroundStyle(Self.color(for: level))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 1)
+                        .background(Self.color(for: level).opacity(0.14), in: Capsule())
+                }
+            }
+            .fixedSize()
+            .frame(width: 58, alignment: .leading)
+            Text(entry.line.module ?? "")
+                .font(BanditoFont.font(size: 12, weight: 400, mono: true))
+                .foregroundStyle(Color.Bandito.text3)
+                .lineLimit(1)
+                .frame(width: 150, alignment: .leading)
+            Text(entry.line.message)
+                .font(BanditoFont.font(size: 12, weight: 400, mono: true))
+                .foregroundStyle(Color.Bandito.text2)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if entry.repeats > 1 {
+                Text(verbatim: "×\(entry.repeats)")
+                    .font(BanditoFont.font(size: 11.5, weight: 600, mono: true))
+                    .foregroundStyle(Color.Bandito.text3)
+                    .fixedSize()
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    private static func color(for level: JournalLine.Level) -> Color {
+        switch level {
+        case .error: Color.Bandito.danger
+        // The warm highlight of the palette: the warning colour of the journal.
+        case .warn: BanditoPalette.peach
+        case .info: Color.Bandito.info
+        case .debug, .trace: Color.Bandito.text3
+        }
+    }
+
+    private var sourceText: String {
+        log?.source == "journald" ? L10n.Journal.sourceJournald : L10n.Journal.sourceFile
+    }
+
+    private func scrollToEnd(_ proxy: ScrollViewProxy) {
+        guard let last = entries.last?.id else { return }
+        proxy.scrollTo(last, anchor: .bottom)
+    }
+
+    private func copyAll() {
+        SystemActions.copy((log?.lines ?? []).joined(separator: "\n"))
     }
 
     private func reload() {
@@ -102,7 +189,9 @@ struct ServerJournalView: View {
         loading = true
         Task {
             do {
-                log = try await server.daemonLog(lines: Self.lineCount, level: level)
+                let fetched = try await server.daemonLog(lines: Self.lineCount, level: level)
+                log = fetched
+                entries = JournalEntry.collapsed(fetched.lines)
                 error = nil
             } catch {
                 self.error = UserFacingError.message(for: error)

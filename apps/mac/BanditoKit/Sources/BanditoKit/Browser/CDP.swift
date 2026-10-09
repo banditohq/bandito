@@ -31,6 +31,10 @@ public enum CDPCommand: Sendable {
     case navigateToHistoryEntry(id: Int)
     case startScreencast(maxWidth: Int, maxHeight: Int, quality: Int)
     case stopScreencast
+    /// Sizes the page to a view of this size (`Emulation.setDeviceMetricsOverride`), so the picture fills the view.
+    case setViewport(BrowserViewport)
+    /// Gives the page its own size back (`Emulation.clearDeviceMetricsOverride`).
+    case clearViewport
     /// Tells the page that the frame was received; the next frame comes only after this.
     case ackScreencastFrame(sessionId: Int)
     case mouse(
@@ -44,6 +48,8 @@ public enum CDPCommand: Sendable {
     case getTargets
     case createTarget(url: String)
     case activateTarget(id: String)
+    /// Closes a tab on the browser-level connection (`Target.closeTarget`).
+    case closeTarget(id: String)
     /// Runs `expression` in the page and returns its value (`returnByValue`).
     case evaluate(expression: String)
 
@@ -55,6 +61,8 @@ public enum CDPCommand: Sendable {
         case .navigateToHistoryEntry: "Page.navigateToHistoryEntry"
         case .startScreencast: "Page.startScreencast"
         case .stopScreencast: "Page.stopScreencast"
+        case .setViewport: "Emulation.setDeviceMetricsOverride"
+        case .clearViewport: "Emulation.clearDeviceMetricsOverride"
         case .ackScreencastFrame: "Page.screencastFrameAck"
         case .mouse: "Input.dispatchMouseEvent"
         case .key: "Input.dispatchKeyEvent"
@@ -63,6 +71,7 @@ public enum CDPCommand: Sendable {
         case .getTargets: "Target.getTargets"
         case .createTarget: "Target.createTarget"
         case .activateTarget: "Target.activateTarget"
+        case .closeTarget: "Target.closeTarget"
         case .evaluate: "Runtime.evaluate"
         }
     }
@@ -71,8 +80,15 @@ public enum CDPCommand: Sendable {
         switch self {
         case .navigate(let url):
             return .object(["url": .string(url)])
-        case .reload, .navigationHistory, .stopScreencast, .getTargets:
+        case .reload, .navigationHistory, .stopScreencast, .getTargets, .clearViewport:
             return .object([:])
+        case .setViewport(let viewport):
+            return .object([
+                "width": .number(Double(viewport.width)),
+                "height": .number(Double(viewport.height)),
+                "deviceScaleFactor": .number(viewport.scale),
+                "mobile": .bool(false),
+            ])
         case .navigateToHistoryEntry(let id):
             return .object(["entryId": .number(Double(id))])
         case .startScreencast(let maxWidth, let maxHeight, let quality):
@@ -127,7 +143,7 @@ public enum CDPCommand: Sendable {
             return .object(object)
         case .createTarget(let url):
             return .object(["url": .string(url)])
-        case .activateTarget(let id):
+        case .activateTarget(let id), .closeTarget(let id):
             return .object(["targetId": .string(id)])
         case .evaluate(let expression):
             return .object(["expression": .string(expression), "returnByValue": .bool(true)])

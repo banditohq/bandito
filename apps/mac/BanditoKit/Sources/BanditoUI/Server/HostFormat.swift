@@ -75,6 +75,16 @@ public enum HostFormat {
         return (scaled, names[index])
     }
 
+    /// Used and total space of a disk in one unit, such as ("692", "994 ГБ"): the number of the used part is
+    /// scaled to the unit of the total, so the two read as one sentence.
+    public static func diskUsage(
+        used: Int64, total: Int64, locale: Locale = .current, units: Units = .app
+    ) -> (used: String, total: String) {
+        let (totalValue, unit) = scale(Double(total), units)
+        let factor = total > 0 ? totalValue / Double(total) : 0
+        return (number(Double(used) * factor, locale: locale), "\(number(totalValue, locale: locale)) \(unit)")
+    }
+
     static func number(_ value: Double, locale: Locale) -> String {
         let separator = locale.decimalSeparator ?? "."
         if value == 0 { return "0" }

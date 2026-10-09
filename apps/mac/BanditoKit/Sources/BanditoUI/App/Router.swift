@@ -1,3 +1,4 @@
+import BanditoKit
 import BanditoL10n
 import Observation
 
@@ -78,6 +79,8 @@ public final class Router {
     public var pendingTerminalCwd: String?
     /// New agent sheet: the folder the agent should work in ("Create agent in this folder"). Taken once by the sheet.
     public var pendingAgentCwd: String?
+    /// New agent sheet: the starting template chosen on the empty team. Taken once by the sheet.
+    public var pendingTemplate: AgentTemplate?
     /// Team: text for the composer of the selected agent ("Ask about this place"). Taken once by the thread.
     public var pendingComposerText: String?
     /// Team: the composer of this agent should take keyboard focus (⌘↵ in the palette, after opening the agent).
@@ -116,8 +119,14 @@ public final class Router {
         self.mode = mode
     }
 
-    public var canGoBack: Bool { !backStack.isEmpty }
-    public var canGoForward: Bool { !forwardStack.isEmpty }
+    /// In Files, back and forward walk the folders visited on the server (`FolderHistory`), not the modes.
+    public var canGoBack: Bool {
+        mode == .files ? files.canStepBack || files.showsViewer : !backStack.isEmpty
+    }
+
+    public var canGoForward: Bool {
+        mode == .files ? files.canStepForward : !forwardStack.isEmpty
+    }
 
     /// Switches to `next`. Selecting the current mode does nothing. A new switch clears forward history.
     public func select(mode next: AppMode) {
@@ -127,18 +136,37 @@ public final class Router {
         mode = next
     }
 
-    /// Returns to the previous mode (⌘[ or a swipe to the right).
+    /// Returns to the previous mode (⌘[ or a swipe to the right). In Files it goes back one folder instead; with
+    /// no folder left to go back to, an open file viewer closes and the folder shows.
     public func back() {
+        if mode == .files {
+            if let path = files.stepBack() {
+                showFolder(path)
+            } else if files.showsViewer {
+                files.showsViewer = false
+            }
+            return
+        }
         guard let previous = backStack.popLast() else { return }
         forwardStack.append(mode)
         mode = previous
     }
 
-    /// Goes forward again after `back()` (⌘] or a swipe to the left).
+    /// Goes forward again after `back()` (⌘] or a swipe to the left). In Files it goes forward one folder.
     public func forward() {
+        if mode == .files {
+            if let path = files.stepForward() { showFolder(path) }
+            return
+        }
         guard let next = forwardStack.popLast() else { return }
         backStack.append(mode)
         mode = next
+    }
+
+    /// A folder chosen with the history steps: the browser shows it, even when a file was open in the viewer.
+    private func showFolder(_ path: String) {
+        filesPath = path
+        files.showsViewer = false
     }
 
     public func toggleSidebar() {
@@ -163,6 +191,44 @@ public final class Router {
     public func takeAgentCwd() -> String? {
         defer { pendingAgentCwd = nil }
         return pendingAgentCwd
+    }
+
+    /// The person chose an agent (a click, a shortcut, a new agent). It is selected and remembered as the one to open
+    /// first on its server. Selection the app makes by itself (the team's fallback, a deleted agent) does not go through here.
+    public func selectAgent(_ agentID: String, on server: ServerModel?) {
+        selectedAgentID = agentID
+        if let server {
+            LastOpenedAgent.save(agentID, serverID: server.id.uuidString)
+        }
+    }
+
+    public func takePendingTemplate() -> AgentTemplate? {
+        defer { pendingTemplate = nil }
+        return pendingTemplate
+    }
+
+    /// The composer's text of each agent, by agent id. Kept here rather than in the thread view, so a draft stays with
+    /// its agent when the view is recreated or the person goes to another agent.
+    public var drafts: [String: String] = [:]
+
+    /// The draft of an agent, trimmed, for sending; the draft is cleared.
+    public func takeDraft(for agentID: String) -> String {
+        let text = (drafts[agentID] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        drafts[agentID] = nil
+        return text
+    }
+
+    /// Puts text that could not be sent back into the draft of its own agent, in front of anything typed since.
+    public func restoreDraft(_ text: String, for agentID: String) {
+        let typed = drafts[agentID] ?? ""
+        let typedNothing = typed.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        drafts[agentID] = typedNothing ? text : text + "\n" + typed
+    }
+
+    /// Adds text to the draft of an agent, after what is there (a line break in between).
+    public func appendDraft(_ text: String, for agentID: String) {
+        let current = drafts[agentID] ?? ""
+        drafts[agentID] = current.isEmpty ? text : current + "\n" + text
     }
 
     public func takeComposerText() -> String? {
@@ -202,6 +268,13 @@ public final class Router {
         guard composerFocusAgentID == agentID else { return false }
         composerFocusAgentID = nil
         return true
+    }
+
+    /// "Open terminal here": the Terminals mode opens a new terminal in `folder` once the server's terminals
+    /// are listed (the folder waits in `pendingTerminalCwd` until then).
+    public func openTerminalHere(_ folder: String) {
+        pendingTerminalCwd = folder
+        select(mode: .terminals)
     }
 
     /// A terminal command for the Terminals mode, and the mode switch in the same step, so the command runs

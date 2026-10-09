@@ -170,6 +170,7 @@ public struct Command: Identifiable, Hashable, Sendable {
         command("browser.address", L10n.Keys.address, .browser, "l", .command),
         command("browser.reload", L10n.Keys.reload, .browser, "r", .command),
         command("browser.newTab", L10n.Keys.newTab, .browser, "t", .command),
+        command("browser.closeTab", L10n.Keys.closeTab, .browser, "w", .command),
         command("browser.takeControl", L10n.Keys.takeControl, .browser, "c", .shift, .command),
         // Server screen
         command("screen.takeControl", L10n.Keys.takeControl, .screen, "c", .shift, .command),

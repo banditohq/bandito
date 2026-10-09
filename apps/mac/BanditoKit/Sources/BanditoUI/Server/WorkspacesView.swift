@@ -48,7 +48,7 @@ struct WorkspacesView: View {
             model = loaded
             await loaded.load()
         }
-        .sheet(isPresented: $creating) {
+        .banditoSheet(isPresented: $creating) {
             if let model {
                 WorkspaceCreateSheet(model: model) { creating = false }
             }
@@ -227,7 +227,7 @@ private struct RealWorkspaceCard: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .banditoCard()
-        .sheet(isPresented: $pickingFolder) {
+        .banditoSheet(isPresented: $pickingFolder) {
             FolderPicker(server: model.server, selection: $pickedFolder) {
                 pickingFolder = false
                 let path = pickedFolder

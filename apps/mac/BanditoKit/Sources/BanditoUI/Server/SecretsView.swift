@@ -84,7 +84,7 @@ struct SecretsView: View {
         .task(id: server?.info != nil) {
             await reload()
         }
-        .sheet(item: $editing) { draft in
+        .banditoSheet(item: $editing) { draft in
             if let server {
                 SecretEditor(draft: draft, server: server) { await reload() }
             }

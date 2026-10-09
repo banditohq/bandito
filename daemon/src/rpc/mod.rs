@@ -72,6 +72,7 @@ pub fn features() -> Vec<&'static str> {
         "update",
         "pause",
         "logs",
+        "agent_own_folder",
     ];
     if cfg!(target_os = "linux") {
         list.push("screen");
@@ -151,13 +152,9 @@ impl App {
     }
 }
 
-/// VNC password files of the screens live here, one folder per workspace.
-/// Where screen state (VNC password files) lives: `$BANDITO_HOME/screens`, else `~/.bandito/screens`.
+/// Where screen state (VNC password files, one folder per workspace) lives: `<data dir>/screens`.
 fn screens_dir() -> PathBuf {
-    std::env::var_os("BANDITO_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| dirs::home_dir().unwrap_or_else(|| PathBuf::from("/")).join(".bandito"))
-        .join("screens")
+    crate::setup::default_home().join("screens")
 }
 
 fn hostname() -> String {
@@ -745,6 +742,14 @@ async fn daemon_logs(app: &App, lines: usize, min: Option<logs::Level>) -> Resul
     Ok(json!({ "source": name, "lines": lines }))
 }
 
+/// One row of `devices.list`: the device, and whether it is the one asking.
+#[derive(serde::Serialize)]
+struct DeviceRow<'a> {
+    #[serde(flatten)]
+    device: &'a Device,
+    current: bool,
+}
+
 /// Handle one request. `events.subscribe` lives in [`serve`] because it needs
 /// connection state.
 pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResult {
@@ -810,16 +815,20 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             ok(out)
         }
 
-        "agents.list" => ok(store.agent_list()?),
+        "agents.list" => ok(store.agent_list_view()?),
         "agents.get" => {
             let Id { id } = params(p)?;
             ok(store
-                .agent_get(&id)?
+                .agent_view(&id)?
                 .ok_or_else(|| RpcError::new(SERVER_ERROR, format!("no agent {id}")))?)
         }
         "agents.create" => {
             let CreateAgent { agent: a, workspace_id } = params(p)?;
-            check_cwd(&a.cwd)?;
+            // No cwd given: the agent's own folder is its cwd, which only exists once it is created.
+            let own_folder = a.cwd.trim().is_empty();
+            if !own_folder {
+                check_cwd(&a.cwd)?;
+            }
             check_effort(a.runtime, a.effort)?;
             check_context_budget(a.context_budget)?;
             if let Some(fallback) = a.fallback_runtime {
@@ -828,6 +837,16 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             let created = store.agent_create_in(a, workspace_id.as_deref().unwrap_or(SHARED_WORKSPACE))?;
             let folder = home::ensure_agent_home(&app.agents_root, &created.id, &created.name).and_then(|dir| {
                 store.agent_set_home(&created.id, &dir.display().to_string())?;
+                if own_folder {
+                    let cwd = dir.display().to_string();
+                    store.agent_update(
+                        &created.id,
+                        AgentPatch {
+                            cwd: Some(cwd),
+                            ..Default::default()
+                        },
+                    )?;
+                }
                 Ok(dir)
             });
             if let Err(e) = folder {
@@ -839,7 +858,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                 ));
             }
             ok(store
-                .agent_get(&created.id)?
+                .agent_view(&created.id)?
                 .ok_or_else(|| RpcError::new(SERVER_ERROR, format!("no agent {}", created.id)))?)
         }
         "agents.update" => {
@@ -935,6 +954,14 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                 app.sup.set_paused(&id, paused).await?;
                 a.paused = paused;
             }
+            // The wire-only fields come from the view read, as in agents.get.
+            let view = store
+                .agent_view(&id)?
+                .ok_or_else(|| RpcError::new(SERVER_ERROR, format!("no agent {id}")))?;
+            a.last_message = view.last_message;
+            a.status = view.status;
+            a.pending_approval_ids = view.pending_approval_ids;
+            a.pending_approvals = view.pending_approvals;
             let mut body = serde_json::to_value(&a).map_err(|e| RpcError::new(SERVER_ERROR, e.to_string()))?;
             body["warnings"] = json!(warnings);
             ok(body)
@@ -1134,7 +1161,22 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             ok(json!({}))
         }
 
-        "devices.list" => ok(store.device_list()?),
+        "devices.list" => {
+            // `current` is the device whose token made this request; the owner's CLI is no device.
+            let asking = match peer {
+                Peer::Device(me) => Some(me.id.as_str()),
+                _ => None,
+            };
+            let devices = store.device_list()?;
+            let rows: Vec<DeviceRow> = devices
+                .iter()
+                .map(|device| DeviceRow {
+                    device,
+                    current: asking == Some(device.id.as_str()),
+                })
+                .collect();
+            ok(rows)
+        }
         "devices.revoke" => {
             let Id { id } = params(p)?;
             ok(json!({ "revoked": store.device_revoke(&id)? }))
@@ -2843,6 +2885,101 @@ mod pause_and_logs_tests {
     }
 
     #[tokio::test]
+    async fn agents_list_and_get_carry_the_last_message() {
+        use crate::event::Source;
+        let dir = tempfile::tempdir().unwrap();
+        let (app, store, forge, scout) = app_in(dir.path());
+        store
+            .append_event(
+                &forge,
+                EventBody::MessageUser {
+                    text: "hi".into(),
+                    source: Source::User,
+                    from_agent: None,
+                    command: None,
+                },
+            )
+            .unwrap();
+        store
+            .append_event(&forge, EventBody::MessageAssistant { text: "hello".into() })
+            .unwrap();
+        store
+            .append_event(
+                &scout,
+                EventBody::MessageUser {
+                    text: "wrap up".into(),
+                    source: Source::System,
+                    from_agent: None,
+                    command: None,
+                },
+            )
+            .unwrap();
+
+        let got = call(&app, "agents.get", json!({ "id": forge })).await.unwrap();
+        assert_eq!(got["last_message"]["role"], json!("assistant"));
+        assert_eq!(got["last_message"]["text"], json!("hello"));
+        assert!(got["last_message"]["ts"].is_i64());
+
+        let list = call(&app, "agents.list", json!({})).await.unwrap();
+        let of = |id: &str| {
+            list.as_array()
+                .unwrap()
+                .iter()
+                .find(|a| a["id"] == json!(id))
+                .unwrap()
+                .clone()
+        };
+        assert_eq!(of(&forge)["last_message"]["text"], json!("hello"));
+        assert!(
+            of(&scout)["last_message"].is_null(),
+            "a message Bandito sent itself is no preview"
+        );
+    }
+
+    #[tokio::test]
+    async fn agents_list_carries_status_and_pending_approvals() {
+        use crate::event::{AgentStatus, Decision};
+        let dir = tempfile::tempdir().unwrap();
+        let (app, store, forge, scout) = app_in(dir.path());
+        store
+            .append_event(
+                &forge,
+                EventBody::AgentStatus {
+                    status: AgentStatus::NeedsYou,
+                    detail: None,
+                },
+            )
+            .unwrap();
+        // Waiting for an answer before anyone opens the thread: the list is what the team shows from.
+        let asked = store
+            .approval_create(&forge, "call-1", "Bash", "git push", json!({}))
+            .unwrap();
+        let waiting = store
+            .approval_create(&forge, "call-2", "Bash", "rm", json!({}))
+            .unwrap();
+        store.approval_resolve(&asked.id, Decision::Deny).unwrap();
+
+        let list = call(&app, "agents.list", json!({})).await.unwrap();
+        let of = |id: &str| {
+            list.as_array()
+                .unwrap()
+                .iter()
+                .find(|a| a["id"] == json!(id))
+                .unwrap()
+                .clone()
+        };
+        assert_eq!(of(&forge)["status"], json!("needs_you"));
+        assert_eq!(of(&forge)["pending_approvals"], json!(1));
+        assert_eq!(of(&forge)["pending_approval_ids"], json!([waiting.id]));
+        assert_eq!(of(&scout)["status"], json!(null), "no status event yet");
+        assert_eq!(of(&scout)["pending_approvals"], json!(0));
+
+        let got = call(&app, "agents.get", json!({ "id": forge })).await.unwrap();
+        assert_eq!(got["pending_approvals"], json!(1));
+        assert_eq!(got["pending_approval_ids"], json!([waiting.id]));
+    }
+
+    #[tokio::test]
     async fn update_pauses_and_send_reports_it_is_queued() {
         let dir = tempfile::tempdir().unwrap();
         let (app, store, forge, _) = app_in(dir.path());
@@ -2969,5 +3106,70 @@ mod pause_and_logs_tests {
     fn logs_and_pause_are_advertised() {
         let f = features();
         assert!(f.contains(&"pause") && f.contains(&"logs"));
+    }
+}
+
+#[cfg(test)]
+mod folder_and_device_tests {
+    use super::*;
+    use crate::hub::Hub;
+    use crate::store::Store;
+    use crate::supervisor::{Runtimes, Supervisor};
+
+    fn app_with(store: Arc<Store>, root: PathBuf) -> Arc<App> {
+        let sup = Supervisor::new(Hub::new(store), Runtimes::default(), None);
+        App::new(sup, root)
+    }
+
+    #[tokio::test]
+    async fn create_without_a_cwd_uses_the_agent_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let app = app_with(store, dir.path().join("agents"));
+        // No `cwd` key at all, then an empty one: both mean "the agent's own folder".
+        for (name, p) in [
+            ("Night Owl", json!({"name": "Night Owl", "runtime": "claude"})),
+            ("Forge", json!({"name": "Forge", "runtime": "claude", "cwd": "  "})),
+        ] {
+            let agent = dispatch(&app, &Peer::Local, "agents.create", p).await.unwrap();
+            let home = agent["home_dir"].as_str().unwrap();
+            assert_eq!(agent["cwd"].as_str(), Some(home), "{name}: cwd is the agent folder");
+            assert!(PathBuf::from(home).join("MEMORY.md").is_file());
+        }
+    }
+
+    #[tokio::test]
+    async fn create_with_a_missing_cwd_still_fails() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let app = app_with(store.clone(), dir.path().join("agents"));
+        let p = json!({"name": "Forge", "runtime": "claude", "cwd": "/nonexistent/folder/for/test"});
+        assert!(dispatch(&app, &Peer::Local, "agents.create", p).await.is_err());
+        assert!(store.agent_list().unwrap().is_empty(), "nothing is left behind");
+    }
+
+    #[tokio::test]
+    async fn devices_list_marks_the_device_that_asks() {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let mine = store.device_add("My phone", "tok-1").unwrap();
+        store.device_add("Other Mac", "tok-2").unwrap();
+        let app = app_with(store, PathBuf::from("/unused"));
+
+        let asked = dispatch(&app, &Peer::Device(mine), "devices.list", json!({}))
+            .await
+            .unwrap();
+        let rows: Vec<(String, bool)> = asked
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|d| (d["name"].as_str().unwrap().to_string(), d["current"].as_bool().unwrap()))
+            .collect();
+        assert_eq!(
+            rows,
+            vec![("My phone".to_string(), true), ("Other Mac".to_string(), false)]
+        );
+
+        let local = dispatch(&app, &Peer::Local, "devices.list", json!({})).await.unwrap();
+        assert!(local.as_array().unwrap().iter().all(|d| d["current"] == json!(false)));
     }
 }

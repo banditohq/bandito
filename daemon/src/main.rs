@@ -142,19 +142,22 @@ fn main() -> Result<()> {
         .with_env_filter(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
         .init();
     let cli = Cli::parse();
+    let home_given = cli.home.is_some();
     let home = home_dir(cli.home)?;
+    // One source for the data folder: every module reads it through `home::data_home()` from here on.
+    bandito::home::set_data_home(&home);
     // Tools installed by `setup` go first on PATH. Done before the runtime starts any thread.
     bandito::setup::prepend_tools_to_path();
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?
-        .block_on(run_command(cli.cmd, home))
+        .block_on(run_command(cli.cmd, home, home_given))
 }
 
-async fn run_command(cmd: Cmd, home: PathBuf) -> Result<()> {
+async fn run_command(cmd: Cmd, home: PathBuf, home_given: bool) -> Result<()> {
     let sock = home.join("bandito.sock");
     match cmd {
-        Cmd::Daemon { listen } => daemon(&home, &sock, listen).await,
+        Cmd::Daemon { listen } => daemon(&home, &sock, listen, home_given).await,
         Cmd::Status => status(&sock).await,
         Cmd::Pair { json } => pair(&sock, json).await,
         Cmd::Info { json } => info(&home, &sock, json).await,
@@ -372,12 +375,12 @@ async fn status(sock: &Path) -> Result<()> {
     Ok(())
 }
 
-async fn daemon(home: &Path, sock: &Path, listen: SocketAddr) -> Result<()> {
+async fn daemon(home: &Path, sock: &Path, listen: SocketAddr, home_given: bool) -> Result<()> {
     // Before anything starts: sessions recovered below are children too.
     rpc::unix::become_subreaper();
     bandito::update::set_data_home(home);
     let store = Arc::new(Store::open(&home.join("bandito.db"))?);
-    let agents_root = home::default_agents_root(home);
+    let agents_root = home::default_agents_root(home, home_given);
     let created = home::backfill(&store, &agents_root);
     if created > 0 {
         tracing::info!(count = created, "created folders for agents that had none");

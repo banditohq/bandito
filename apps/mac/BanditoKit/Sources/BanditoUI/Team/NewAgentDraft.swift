@@ -22,6 +22,15 @@ public enum ApprovalChoice: CaseIterable, Sendable {
     }
 }
 
+/// Why "Create" cannot be pressed yet, and what the sheet shows under the button. Nil means it can.
+public enum CreateBlocker: Equatable, Sendable {
+    case runtimeMissing(RuntimeKind)
+    /// The runtime is installed but not signed in; `command` is what to run on the server.
+    case runtimeLogin(RuntimeKind, command: String)
+    case folder
+    case workplace
+}
+
 /// Everything the new agent sheet collects before `agents.create`. Pure: the sheet only binds to it.
 public struct NewAgentDraft: Equatable, Sendable {
     public var name = ""
@@ -35,6 +44,8 @@ public struct NewAgentDraft: Equatable, Sendable {
     public var instructions = ""
     /// The project folder on the server. Empty until one is picked.
     public var cwd = ""
+    /// The server takes an agent without a folder (`agent_own_folder`): the agent then works in its own folder.
+    public var folderOptional = false
     public var approval: ApprovalChoice = .risky
     public var memory: MemoryMode = .smart
     /// "If the limit runs out": the runtime to continue on. `nil` = do not switch.
@@ -48,9 +59,52 @@ public struct NewAgentDraft: Equatable, Sendable {
 
     public init() {}
 
-    /// Name and folder are the only required fields. A new container needs a valid name and limits.
+    /// "Agent N": the name of an agent created without one.
+    public static func defaultName(_ number: Int) -> String {
+        L10n.AgentSheet.autoName(number: "\(number)")
+    }
+
+    /// The project folder is required unless the server takes an agent without one (`folderOptional`); the name is
+    /// optional, see `resolvedName`. A new container needs a valid name and limits. The runtime is checked by
+    /// `createBlocker`.
     public var canCreate: Bool {
-        !trimmed(name).isEmpty && !trimmed(cwd).isEmpty && workplaceReady
+        (folderOptional || !trimmed(cwd).isEmpty) && workplaceReady
+    }
+
+    /// The first reason creation cannot happen, in the order the sheet explains it: the runtime, then the folder,
+    /// then the workplace. `status` is nil while `runtimes.status` has not answered yet: nothing is blocked then.
+    public func createBlocker(status: RuntimeStatus?) -> CreateBlocker? {
+        if let status, !status.installed {
+            return .runtimeMissing(runtime)
+        }
+        if let status, status.loggedIn == false {
+            return .runtimeLogin(runtime, command: LoginCommand.arguments(for: runtime).joined(separator: " "))
+        }
+        if !folderOptional && trimmed(cwd).isEmpty {
+            return .folder
+        }
+        if !workplaceReady {
+            return .workplace
+        }
+        return nil
+    }
+
+    /// The name the agent is created with. A typed name wins. Otherwise the role is used when it is a valid name
+    /// nobody has yet, and failing that "Agent N", where N is the first number no agent of the server has.
+    public func resolvedName(existing: [String]) -> String {
+        let typed = trimmed(name)
+        if !typed.isEmpty {
+            return typed
+        }
+        let role = trimmed(role)
+        if !role.isEmpty, AgentNameRule.problem(for: role, existing: existing) == nil {
+            return role
+        }
+        var number = 1
+        while existing.contains(where: { $0.caseInsensitiveCompare(NewAgentDraft.defaultName(number)) == .orderedSame }) {
+            number += 1
+        }
+        return NewAgentDraft.defaultName(number)
     }
 
     /// The chosen workplace can be used: the shared server, an existing container, or a new one with a valid form.
@@ -75,8 +129,9 @@ public struct NewAgentDraft: Equatable, Sendable {
     }
 
     /// The request for `agents.create`. `workspaceID` is the id of the container made for `.new` (see
-    /// `WorkplaceCreation.prepare`); the other choices name their workspace themselves.
-    public func makeNewAgent(workspaceID: String? = nil) -> NewAgent {
+    /// `WorkplaceCreation.prepare`); the other choices name their workspace themselves. `existingNames` are the
+    /// names of the server's agents, used for the default name.
+    public func makeNewAgent(workspaceID: String? = nil, existingNames: [String] = []) -> NewAgent {
         let model = trimmed(model)
         let instructions = trimmed(instructions)
         let workspace: String?
@@ -86,7 +141,7 @@ public struct NewAgentDraft: Equatable, Sendable {
         case .new: workspace = workspaceID
         }
         return NewAgent(
-            name: trimmed(name),
+            name: resolvedName(existing: existingNames),
             role: trimmed(role),
             runtime: runtime,
             model: model.isEmpty ? nil : model,

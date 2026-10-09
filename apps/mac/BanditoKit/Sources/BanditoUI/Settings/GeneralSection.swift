@@ -13,8 +13,7 @@ struct GeneralSection: View {
     @AppStorage(AppUpdatePreferences.automaticChecksKey) private var autoCheckUpdates = true
     @AppStorage(AppUpdatePreferences.channelKey) private var updateChannel = AppUpdatePreferences.Channel.stable.rawValue
 
-    private static let languageKey = "AppleLanguages"
-    private static let systemLanguage = "system"
+    private static let systemLanguage = InterfaceLanguageChoice.systemTag
 
     var body: some View {
         @Bindable var demo = demo
@@ -37,7 +36,7 @@ struct GeneralSection: View {
                         .toggleStyle(BanditoToggleStyle())
                 }
                 Divider().padding(.horizontal, 16)
-                SettingsRow(title: L10n.Settings.launchAtLogin, hint: launchError) {
+                SettingsRow(title: L10n.Settings.launchAtLogin, hint: launchError ?? L10n.Settings.launchAtLoginHint) {
                     Toggle("", isOn: $launchAtLogin)
                         .labelsHidden()
                         .toggleStyle(BanditoToggleStyle())
@@ -68,18 +67,15 @@ struct GeneralSection: View {
         }
     }
 
-    /// The language code the app was told to use, or "system".
+    /// The language code the app was told to use, or "system". Reads only the app's own domain: the global
+    /// `AppleLanguages` always exists and holds the system's list ("ru-RU", …), which matches no picker row.
     static func storedLanguage() -> String {
-        (UserDefaults.standard.array(forKey: languageKey) as? [String])?.first ?? systemLanguage
+        InterfaceLanguageStore.read(from: .standard, domain: Bundle.main.bundleIdentifier ?? "")
     }
 
     /// Writes the choice where the system reads it at launch, so it applies after a restart.
     static func storeLanguage(_ code: String) {
-        if code == systemLanguage {
-            UserDefaults.standard.removeObject(forKey: languageKey)
-        } else {
-            UserDefaults.standard.set([code], forKey: languageKey)
-        }
+        InterfaceLanguageStore.write(code, to: .standard)
     }
 
     private func setLaunchAtLogin(_ on: Bool) {

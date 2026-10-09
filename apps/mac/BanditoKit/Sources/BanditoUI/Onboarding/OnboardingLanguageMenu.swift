@@ -4,7 +4,7 @@ import SwiftUI
 
 /// The language control of the top bar (Welcome only): a capsule with the language the interface runs in,
 /// a list of the nine languages in a popover, and after a pick a hint with a restart button. The choice applies
-/// at launch, as in Settings → Language.
+/// at launch, as in Settings → General → Language.
 struct OnboardingLanguageMenu: View {
     @State private var isOpen = false
     @State private var picked = false

@@ -44,6 +44,8 @@ public struct SignalButtonStyle: ButtonStyle {
             configuration.label
                 .font(BanditoFont.font(size: size.fontSize, weight: 600))
                 .foregroundStyle(Color.Bandito.onSignal)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
                 .padding(.horizontal, size.horizontalPadding)
                 .frame(height: size.height)
                 .background(
@@ -82,6 +84,8 @@ public struct QuietButtonStyle: ButtonStyle {
             configuration.label
                 .font(BanditoFont.font(size: size.fontSize, weight: 500))
                 .foregroundStyle(Color.Bandito.text)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
                 .padding(.horizontal, size.horizontalPadding)
                 .frame(height: size.height)
                 .background(Color.Bandito.text.opacity(hovered ? 0.10 : 0.06), in: Capsule())
@@ -104,10 +108,13 @@ public struct LightPillButtonStyle: ButtonStyle {
             configuration.label
                 .font(BanditoFont.font(size: size.fontSize, weight: 600))
                 .foregroundStyle(Color.Bandito.bg)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
                 .padding(.horizontal, size.horizontalPadding)
                 .frame(height: size.height)
                 .background(Color.Bandito.text, in: Capsule())
-                .brightness(hovered ? 0.05 : 0)
+                .brightness(hovered ? 0.08 : 0)
+                .shadow(color: Color.Bandito.text.opacity(hovered ? 0.28 : 0), radius: hovered ? 14 : 0, x: 0, y: 4)
         }
     }
 }
@@ -117,7 +124,8 @@ public struct LightPillButtonStyle: ButtonStyle {
 public struct IconButtonStyle: ButtonStyle {
     /// Edge of the square button in points.
     public var size: CGFloat
-    /// Accessibility name of the icon, e.g. "Search". Shown to VoiceOver only.
+    /// Name of the icon's action, e.g. "Search". VoiceOver reads it, and `banditoButton(.icon)` shows it as the
+    /// tooltip, so it says what the button does.
     public var label: String
 
     /// - Parameters:
@@ -181,6 +189,7 @@ private struct BanditoButtonModifier: ViewModifier {
         case .icon(let size, let label):
             content.buttonStyle(IconButtonStyle(size: size, label: label))
                 .brandFocusRing(shape: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .help(label)
         case .row(let cornerRadius, let hoverOpacity):
             content.buttonStyle(RowButtonStyle(cornerRadius: cornerRadius, hoverOpacity: hoverOpacity))
                 .brandFocusRing(shape: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))

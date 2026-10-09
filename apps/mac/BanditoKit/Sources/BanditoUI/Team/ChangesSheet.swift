@@ -394,7 +394,7 @@ struct ChangesSheet: View {
 
     private func askAgent(_ agent: Agent) {
         guard let path = selectedPath, let line = placeLine else { return }
-        router.selectedAgentID = agent.id
+        router.selectAgent(agent.id, on: server)
         router.pendingComposerText = L10n.Changes.askPlace(path: path, line: String(line))
         router.select(mode: .team)
         dismiss()

@@ -21,9 +21,8 @@ public struct BanditoCommands: Commands {
     }
 
     public var body: some Commands {
-        CommandGroup(replacing: .appSettings) {
-            item("global.settings") { WindowActions.showSettings() }
-        }
+        // Settings… (⌘,) is the system item of the Settings scene. Replacing it left two items in the app menu, and the
+        // replacement could not open the window on recent macOS.
         CommandGroup(after: .help) {
             Button(L10n.Onboarding.showAgain) { onboarding.replay() }
         }
@@ -132,7 +131,7 @@ public struct BanditoCommands: Commands {
         guard let agent = server.sortedAgents.first(where: { server.thread(for: $0.id).status == .needsYou }) else {
             return
         }
-        router.selectedAgentID = agent.id
+        router.selectAgent(agent.id, on: app.currentServer)
         router.select(mode: .team)
     }
 
@@ -142,7 +141,7 @@ public struct BanditoCommands: Commands {
         let agents = server.sortedAgents
         let index = agents.firstIndex { $0.id == router.selectedAgentID } ?? (step > 0 ? -1 : agents.count)
         let next = (index + step + agents.count) % agents.count
-        router.selectedAgentID = agents[next].id
+        router.selectAgent(agents[next].id, on: app.currentServer)
         router.select(mode: .team)
     }
 

@@ -212,8 +212,13 @@ struct DeviceApprovalStep: View {
     private var failed: some View {
         VStack(alignment: .leading, spacing: 16) {
             UserFacingErrorView(message: errorText ?? UserFacingMessage(text: L10n.Onboarding.Account.errorGeneric))
-            Button(L10n.Onboarding.Account.signOutAction) { Task { await signOut() } }
-                .banditoButton(.quiet())
+            HStack(spacing: 10) {
+                // Checking the device again is safe: it reads the account state from the start.
+                Button(L10n.Onboarding.Server.retry) { Task { await retryStart() } }
+                    .banditoButton(.signal(size: .regular))
+                Button(L10n.Onboarding.Account.signOutAction) { Task { await signOut() } }
+                    .banditoButton(.quiet())
+            }
         }
     }
 
@@ -303,6 +308,13 @@ struct DeviceApprovalStep: View {
             errorText = SignInMessages.text(for: error)
             mode = .failed
         }
+    }
+
+    /// "Try again" after a failure: the error goes, and the device is checked from the start.
+    private func retryStart() async {
+        errorText = nil
+        mode = .loading
+        await start()
     }
 
     private func signOut() async {
@@ -433,161 +445,9 @@ struct PendingDevicesBanner: View {
             .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.Bandito.signal.opacity(0.35)))
             .padding(.horizontal, 16)
             .padding(.top, 10)
-            .sheet(item: $checking) { device in
+            .banditoSheet(item: $checking) { device in
                 ApproveDeviceSheet(device: device) { checking = nil }
             }
-        }
-    }
-}
-
-/// Settings → Account and sync: who is signed in, the devices with their codes, removing a device, resetting the
-/// account and signing out. Without a session it offers the sign-in. After a sign-in the account's route decides:
-/// a device that waits for approval (or needs a reset) gets the same screen as in onboarding.
-struct AccountSheet: View {
-    @Environment(AccountHub.self) private var hub
-    @Environment(\.dismiss) private var dismiss
-    @State private var me: Me?
-    @State private var route: AccountRoute?
-    @State private var loading = false
-    @State private var errorText: UserFacingMessage?
-    @State private var resetting = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack {
-                Text(L10n.Onboarding.Account.settingsTitle)
-                    .font(BanditoFont.font(size: 20, weight: 600))
-                    .foregroundStyle(Color.Bandito.text)
-                Spacer()
-                Button(L10n.Common.close) { dismiss() }
-                    .banditoButton(.link)
-                    .foregroundStyle(Color.Bandito.text3)
-            }
-            if !hub.signedIn {
-                Text(L10n.Onboarding.Account.settingsSignedOut)
-                    .font(BanditoFont.font(size: 14, weight: 400))
-                    .foregroundStyle(Color.Bandito.text2)
-                AccountSignInView(onFinished: { _ in
-                    Task { await reload() }
-                }, onSkipAccount: nil, showsIllustration: false)
-            } else if let route, route == .waitForApproval || route == .recoverRequired {
-                DeviceApprovalStep(onFinished: {
-                    Task { await reload() }
-                }, onNoAccess: {
-                    Task { await signOut() }
-                })
-            } else if let me {
-                identityLine(me)
-                devices(me)
-                if resetting {
-                    ResetConfirmation {
-                        try await hub.recoverAccount()
-                        resetting = false
-                        await reload()
-                    } onCancel: {
-                        resetting = false
-                    } onSignInAgain: {
-                        Task { await signOut() }
-                    }
-                } else {
-                    HStack(spacing: 10) {
-                        Button(L10n.Onboarding.Account.resetAccountAction) { resetting = true }
-                            .banditoButton(.quiet())
-                        Button(L10n.Onboarding.Account.signOutAction) { Task { await signOut() } }
-                            .banditoButton(.quiet())
-                    }
-                }
-            } else if loading {
-                ProgressView().controlSize(.small)
-            }
-            if let errorText {
-                UserFacingErrorView(message: errorText)
-            }
-        }
-        .padding(28)
-        .frame(width: 520)
-        .background(Color.Bandito.surface2)
-        .task { await reload() }
-    }
-
-    private func identityLine(_ me: Me) -> some View {
-        let who = me.user.email ?? me.user.githubLogin.map { "@\($0)" } ?? me.user.name ?? ""
-        return VStack(alignment: .leading, spacing: 6) {
-            Text(L10n.Onboarding.Account.settingsSignedInAs(who: who))
-                .font(BanditoFont.font(size: 14, weight: 500))
-                .foregroundStyle(Color.Bandito.text)
-            Text(L10n.Onboarding.Account.settingsThisMac)
-                .font(BanditoFont.font(size: 12.5, weight: 500))
-                .foregroundStyle(Color.Bandito.text3)
-            DeviceCodeText(code: hub.identity?.fingerprint ?? "")
-        }
-    }
-
-    private func devices(_ me: Me) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ForEach(me.devices) { device in
-                HStack(spacing: 10) {
-                    Text(device.name)
-                        .font(BanditoFont.font(size: 13.5, weight: 500))
-                        .foregroundStyle(Color.Bandito.text)
-                    Text(device.platform)
-                        .font(BanditoFont.font(size: 12, weight: 400))
-                        .foregroundStyle(Color.Bandito.text3)
-                    if device.current {
-                        Text(L10n.Onboarding.Account.settingsThisDevice)
-                            .font(BanditoFont.font(size: 11.5, weight: 500))
-                            .foregroundStyle(Color.Bandito.signal)
-                    }
-                    Spacer()
-                    if !device.current {
-                        Button(L10n.Onboarding.Account.settingsRemoveDevice) {
-                            Task { await remove(device) }
-                        }
-                        .banditoButton(.link)
-                        .font(BanditoFont.font(size: 12.5, weight: 500))
-                        .foregroundStyle(Color.Bandito.danger)
-                    }
-                }
-            }
-        }
-    }
-
-    /// Reads the route and the account from the server. Without a session there is nothing to read.
-    private func reload() async {
-        guard hub.signedIn else {
-            route = nil
-            me = nil
-            return
-        }
-        loading = true
-        defer { loading = false }
-        do {
-            _ = try await hub.prepare()
-            let (current, account) = try await hub.inspect()
-            route = current
-            me = account
-            errorText = nil
-        } catch {
-            errorText = SignInMessages.text(for: error)
-        }
-    }
-
-    private func remove(_ device: AccountDevice) async {
-        do {
-            try await hub.client?.deleteDevice(id: device.id, force: false)
-            await reload()
-        } catch {
-            errorText = SignInMessages.text(for: error)
-        }
-    }
-
-    private func signOut() async {
-        do {
-            try await hub.signOut()
-            route = nil
-            me = nil
-        } catch {
-            errorText = SignInMessages.text(for: error)
         }
     }
 }

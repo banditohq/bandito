@@ -43,6 +43,8 @@ final class FolderModel {
     private(set) var truncated = false
     private(set) var skipped = 0
     private(set) var loadError: UserFacingMessage?
+    /// The folder could not be read because the system or the server does not allow it (`permission_denied`).
+    private(set) var loadDenied = false
     private(set) var isLoading = false
     private(set) var searchResults: [FsEntry]?
     private(set) var upload: UploadJob?
@@ -62,6 +64,8 @@ final class FolderModel {
     }
 
     @ObservationIgnored private var searchTask: Task<Void, Never>?
+    /// The last path asked for, as typed (`~` or absolute). Kept so a failed folder can be listed again.
+    @ObservationIgnored private var lastRequested: String?
 
     /// What the browser shows: search results while a query is set, otherwise the folder.
     var visibleEntries: [FsEntry] {
@@ -72,6 +76,7 @@ final class FolderModel {
     func load(_ requested: String, server: ServerModel) async {
         isLoading = true
         defer { isLoading = false }
+        lastRequested = requested
         do {
             let listing = try await server.list(requested, hidden: showHidden)
             path = listing.path
@@ -79,9 +84,15 @@ final class FolderModel {
             truncated = listing.truncated
             skipped = listing.skipped
             loadError = nil
+            loadDenied = false
             if let selection, !entries.contains(where: { $0.path == selection }) { self.selection = nil }
         } catch {
+            // The folder that failed is not the one on screen any more: the requested path stands for it.
+            path = nil
             entries = []
+            truncated = false
+            skipped = 0
+            loadDenied = (error as? RPCError)?.reason == "permission_denied"
             loadError = FileErrorText.message(for: error)
         }
         if home == nil {
@@ -89,10 +100,10 @@ final class FolderModel {
         }
     }
 
-    /// Re-lists the folder on screen, after a change.
+    /// Re-lists the folder on screen, after a change. A folder that failed to list is tried again.
     func reload(server: ServerModel) async {
-        guard let path else { return }
-        await load(path, server: server)
+        guard let target = path ?? lastRequested else { return }
+        await load(target, server: server)
     }
 
     // MARK: Search

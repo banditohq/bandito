@@ -173,7 +173,7 @@ struct DetailsTab: View {
             instructions = agent.systemPrompt ?? ""
             await loadSchedules()
         }
-        .sheet(isPresented: $showingNewSchedule, onDismiss: { Task { await loadSchedules() } }) {
+        .banditoSheet(isPresented: $showingNewSchedule, onDismiss: { Task { await loadSchedules() } }) {
             ScheduleEditor(server: server, agentID: agent.id)
         }
     }

@@ -184,6 +184,8 @@ pub struct Platform {
     pub distro: Distro,
     /// Where components are looked for (`PATH`).
     pub path: OsString,
+    /// Browser app bundles that count as installed, besides the names on `PATH` (macOS: Google Chrome).
+    pub browser_apps: Vec<PathBuf>,
     /// Where Bandito installs what it needs without root (`<data dir>/tools`).
     pub tools: PathBuf,
     /// apt's configuration folder, where the Chrome key and sources line go.
@@ -202,18 +204,20 @@ impl Platform {
                 .map(|text| distro_from_os_release(&text))
                 .unwrap_or(Distro::Other),
             path,
+            browser_apps: if os == "macos" {
+                vec![PathBuf::from(crate::browser::MAC_CHROME)]
+            } else {
+                Vec::new()
+            },
             tools: tools_dir(),
             apt_etc: PathBuf::from("/etc/apt"),
         }
     }
 }
 
-/// `$BANDITO_HOME`, or `~/.bandito`: the daemon's data directory when `--home` is not given.
+/// The daemon's data directory: `--home`, else `$BANDITO_HOME`, else `~/.bandito` (see [`crate::home::data_home`]).
 pub fn default_home() -> PathBuf {
-    std::env::var_os("BANDITO_HOME")
-        .map(PathBuf::from)
-        .or_else(|| dirs::home_dir().map(|home| home.join(".bandito")))
-        .unwrap_or_else(|| PathBuf::from(".bandito"))
+    crate::home::data_home()
 }
 
 /// `<data dir>/tools`: where Bandito puts Node and the agent CLIs.
@@ -241,6 +245,11 @@ pub fn which(name: &str, path: &OsStr) -> Option<PathBuf> {
     std::env::split_paths(path)
         .map(|dir| dir.join(name))
         .find(|candidate| is_executable(candidate))
+}
+
+/// Whether a browser is installed: one of the app bundles, or one of `BROWSERS` on `PATH`.
+fn browser_installed(p: &Platform) -> bool {
+    p.browser_apps.iter().any(|app| app.is_file()) || BROWSERS.iter().any(|b| which(b, &p.path).is_some())
 }
 
 fn is_executable(path: &Path) -> bool {
@@ -453,9 +462,10 @@ pub fn node_is_supported(version_output: &str) -> bool {
 }
 
 /// Finds the Node tarball of `platform` (such as `linux-x64`) in a `SHASUMS256.txt`.
-/// Returns the file name and its lowercase sha256.
+/// Returns the file name and its lowercase sha256. The gzip tarball, not the xz one: minimal servers (Ubuntu cloud and
+/// container images) have no `xz`, while every `tar` reads gzip.
 pub fn pick_node_tarball(shasums: &str, platform: &str) -> Option<(String, String)> {
-    let suffix = format!("-{platform}.tar.xz");
+    let suffix = format!("-{platform}.tar.gz");
     shasums.lines().find_map(|line| {
         let mut parts = line.split_whitespace();
         let (hash, file) = (parts.next()?, parts.next()?);
@@ -994,7 +1004,8 @@ impl Setup {
         let p = &self.platform;
         let (installed, version, hint) = match id {
             "fonts" => (self.fonts_installed().await, None, None),
-            "browser" => (BROWSERS.iter().any(|b| which(b, &p.path).is_some()), None, None),
+            // The same lookup the browser feature starts Chrome with, so the status matches what runs.
+            "browser" => (browser_installed(p), None, None),
             "docker" => self.docker_probe().await,
             "node" => {
                 let (_, version) = self.binary("node", true).await;
@@ -1394,7 +1405,7 @@ impl Setup {
             &CommandSpec::new(
                 "tar",
                 [
-                    "-xJf",
+                    "-xzf",
                     tarball_arg.as_str(),
                     "-C",
                     staging_arg.as_str(),
@@ -1522,9 +1533,23 @@ mod tests {
             package_manager: pm,
             distro,
             path: dir.as_os_str().to_owned(),
+            browser_apps: Vec::new(),
             tools: dir.join("tools"),
             apt_etc: dir.join("apt"),
         }
+    }
+
+    #[test]
+    fn browser_is_installed_as_an_app_bundle_or_on_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let app = dir.path().join("Google Chrome");
+        std::fs::write(&app, b"").unwrap();
+        let mut p = platform(dir.path(), None, Distro::Other);
+        assert!(!browser_installed(&p), "nothing installed yet");
+        p.browser_apps = vec![dir.path().join("missing.app")];
+        assert!(!browser_installed(&p), "a missing bundle does not count");
+        p.browser_apps = vec![app];
+        assert!(browser_installed(&p), "an installed bundle counts");
     }
 
     fn setup_with(platform: Platform, mock: &Arc<MockRunner>) -> Arc<Setup> {
@@ -1968,18 +1993,18 @@ fpr:::::::::EB4C1BFD4F042F6DDDCCEC917721F63BD38B4796:
         let shasums = "\
 aaa111  node-v22.11.0-linux-arm64.tar.gz
 bbb222  node-v22.11.0-linux-arm64.tar.xz
-ccc333  node-v22.11.0-linux-x64.tar.xz
+ccc333  node-v22.11.0-linux-x64.tar.gz
 ddd444  node-v22.11.0-darwin-arm64.tar.xz
 eee555  node-v22.11.0-headers.tar.xz
 fff666  node-v22.11.0.pkg
 ";
         assert_eq!(
             pick_node_tarball(shasums, "linux-arm64"),
-            Some(("node-v22.11.0-linux-arm64.tar.xz".into(), "bbb222".into()))
+            Some(("node-v22.11.0-linux-arm64.tar.gz".into(), "aaa111".into()))
         );
         assert_eq!(
             pick_node_tarball(shasums, "linux-x64"),
-            Some(("node-v22.11.0-linux-x64.tar.xz".into(), "ccc333".into()))
+            Some(("node-v22.11.0-linux-x64.tar.gz".into(), "ccc333".into()))
         );
         assert_eq!(pick_node_tarball(shasums, "linux-x86"), None);
     }

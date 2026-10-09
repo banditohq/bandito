@@ -43,6 +43,17 @@ import Testing
         #expect(t.lastSeq == seq)
     }
 
+    @Test mutating func withdrawnApprovalLeavesThePendingListAsAQuietLine() {
+        var t = AgentThread()
+        t.apply(ev(.approvalRequested(approvalId: "ap", callId: "c1", tool: "Bash", title: "rm x", command: "rm x", diff: nil, reason: "risky: rm")))
+        #expect(t.pendingApprovals.map(\.approvalId) == ["ap"])
+        // The CLI took the request back: nobody decided it, so the card is no longer pending.
+        t.apply(ev(.approvalWithdrawn(approvalId: "ap")))
+        #expect(t.pendingApprovals.isEmpty)
+        guard case .approval(let row)? = t.items.last else { Issue.record("expected approval row"); return }
+        #expect(row.state == .withdrawn)
+    }
+
     @Test mutating func replayedEventsAreIgnored() {
         var t = AgentThread()
         let e = ev(.messageAssistant(text: "hi"))

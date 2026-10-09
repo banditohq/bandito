@@ -46,10 +46,28 @@ struct LoginGate: Equatable, Sendable {
     }
 }
 
+/// Tells a login that was opened from one that was cancelled meanwhile. A login takes a ticket before it asks the
+/// server for a terminal; leaving the step cancels the tickets, so a terminal that opens late is closed again.
+struct LoginEpoch: Equatable, Sendable {
+    private(set) var current = 0
+
+    /// The ticket of a login that starts now.
+    var ticket: Int { current }
+
+    /// Cancels every login that is still opening.
+    mutating func cancel() {
+        current += 1
+    }
+
+    func isCurrent(_ ticket: Int) -> Bool {
+        ticket == current
+    }
+}
+
 /// The address a login terminal printed, to open in the browser. Only https is ever offered.
 enum LoginLink {
-    private static let pattern = #"https?://[^\s"'<>\u{1B}]+"#
-    private static let ansi = #"\u{1B}\[[0-9;?]*[ -/]*[@-~]"#
+    private static let pattern = #"https?://[^\s"'<>\x{1B}]+"#
+    private static let ansi = #"\x{1B}\[[0-9;?]*[ -/]*[@-~]"#
 
     /// The last https link in `text` (terminal colour codes removed). Trailing punctuation is not part of it.
     static func lastHTTPS(in text: String) -> URL? {
@@ -75,6 +93,84 @@ enum LoginCommand {
         case .grok: ["grok", "login", "--device-auth"]
         case .api: []
         }
+    }
+}
+
+/// What the person can do with one agent CLI row: install it, sign in, or nothing while the status is not known.
+enum SubscriptionRowAction: Equatable, Sendable {
+    /// Not on the server, and Bandito can install it here: the "Install" button.
+    case install
+    /// The install of this CLI is running.
+    case installing
+    /// Not on the server, and Bandito has no installer for it here: the hint says how to install it by hand.
+    case installByHand
+    /// Installed, not signed in: "Sign in" and "Check again".
+    case signIn
+    /// Installed, the server cannot check the sign-in: "Sign in" and "Done".
+    case confirm
+    /// Signed in.
+    case ready
+    /// The server's status is not known yet.
+    case checking
+
+    /// `installable` is nil while the server's setup status is not known. `state` is nil while the runtimes are not.
+    static func resolve(state: SubscriptionState?, installable: Bool?, installing: Bool) -> SubscriptionRowAction {
+        switch state {
+        case nil: .checking
+        case .some(.notInstalled):
+            if installing {
+                .installing
+            } else {
+                switch installable {
+                case nil: .checking
+                case .some(true): .install
+                case .some(false): .installByHand
+                }
+            }
+        case .some(.needsLogin): .signIn
+        case .some(.unverified): .confirm
+        case .some(.loggedIn): .ready
+        }
+    }
+}
+
+/// Whether a failed install says that the server's owner has to act (sudo, a password, a permission).
+enum InstallPermission {
+    static func isPermissionProblem(_ text: String) -> Bool {
+        let lower = text.lowercased()
+        return ["sudo", "password", "permission"].contains { lower.contains($0) }
+    }
+}
+
+/// The install log, read for the row: the last line that has text is what the install is doing now.
+enum InstallLog {
+    static func lastLine(_ log: String) -> String? {
+        log.split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .last { !$0.isEmpty }
+    }
+}
+
+/// The command that installs one agent CLI by hand, for the person to copy. `setup.status` does not carry the install
+/// command or the pin, so the pins live here. Keep them in sync with `daemon/src/setup.rs` (`NPM_PINS`):
+/// `ManualInstallPinTests` reads that file and fails when the versions differ.
+enum ManualInstall {
+    /// (npm package, pinned version), as in `daemon/src/setup.rs`.
+    static let npmPins: [(package: String, version: String)] = [
+        ("@anthropic-ai/claude-code", "2.1.295"),
+        ("@openai/codex", "0.162.0"),
+    ]
+
+    /// Nil when the CLI has no npm package (Grok) or no pin.
+    static func command(for runtime: RuntimeKind) -> String? {
+        let package: String
+        switch runtime {
+        case .claude: package = "@anthropic-ai/claude-code"
+        case .codex: package = "@openai/codex"
+        case .grok, .api: return nil
+        }
+        guard let pin = npmPins.first(where: { $0.package == package }) else { return nil }
+        return "npm install -g \(pin.package)@\(pin.version)"
     }
 }
 

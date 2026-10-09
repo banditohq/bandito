@@ -15,6 +15,10 @@ struct ServerOverview: View {
     @State private var secrets: [SecretInfo] = []
     @State private var stopping: ProcessRow?
     @State private var actionError: UserFacingMessage?
+    /// The metric whose detail is open, if any.
+    @State private var detail: OverviewMetric?
+    /// Two columns of cards or one. Starts narrow; changes only when the measured page width crosses the threshold.
+    @State private var isWide = false
 
     var body: some View {
         ServerPage(title: L10n.Mode.serverOverview, trailing: { trailing }) {
@@ -29,21 +33,39 @@ struct ServerOverview: View {
                 if let error = monitor.error {
                     UserFacingErrorView(message: error)
                 }
-                HStack(alignment: .top, spacing: 12) {
-                    processesCard(server)
+                if isWide {
+                    HStack(alignment: .top, spacing: 12) {
+                        VStack(spacing: 12) {
+                            processesCard(server)
+                            featuresCard(server)
+                        }
                         .frame(maxWidth: .infinity, alignment: .topLeading)
+                        VStack(spacing: 12) {
+                            portsCard
+                            secretsCard(server)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                    }
+                } else {
                     VStack(spacing: 12) {
+                        processesCard(server)
+                        featuresCard(server)
                         portsCard
                         secretsCard(server)
-                        if server.supports("setup") {
-                            ServerFeaturesCard(server: server, setup: setup)
-                        }
                     }
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
             } else {
                 ServerUnavailable(server: server)
             }
+        }
+        .background(
+            GeometryReader { proxy in
+                Color.clear.preference(key: PageWidthKey.self, value: proxy.size.width)
+            }
+        )
+        .onPreferenceChange(PageWidthKey.self) { width in
+            let wide = Self.isTwoColumns(width: width)
+            if wide != isWide { isWide = wide }
         }
         .task(id: server?.id) {
             guard let server else { return }
@@ -88,8 +110,16 @@ struct ServerOverview: View {
                         Task { await monitor.setRange(range, server: server) }
                     }),
                 options: [(HostHistoryRange.hour, L10n.Server.range1h), (HostHistoryRange.day, L10n.Server.range24h)])
-            .frame(width: 150)
+            .fixedSize()
         }
+        .fixedSize()
+    }
+
+    /// Page width from which the cards sit in two columns; narrower pages stack them in one.
+    static let twoColumnsMinWidth: CGFloat = 1000
+
+    static func isTwoColumns(width: CGFloat) -> Bool {
+        width >= twoColumnsMinWidth
     }
 
     static func healthText(_ health: HostHealth) -> String {
@@ -109,32 +139,71 @@ struct ServerOverview: View {
         let root = stats?.disks.first { $0.mount == "/" } ?? stats?.disks.first
         let rx = stats?.netRxBps ?? 0
         let tx = stats?.netTxBps ?? 0
-        return HStack(alignment: .top, spacing: 12) {
-            MetricTile(
-                label: L10n.Server.Tile.cpu,
-                value: HostFormat.percent(stats?.cpuPercent ?? 0),
-                note: L10n.Server.cores(count: stats?.cpus ?? 0),
-                series: HostFormat.downsample(points.map(\.cpu), to: 120),
-                tint: Color.Bandito.ok)
-            MetricTile(
-                label: L10n.Server.Tile.memory,
-                value: HostFormat.bytes(stats?.memUsed ?? 0),
-                note: L10n.Server.Tile.memoryOf(total: HostFormat.bytes(stats?.memTotal ?? 0)),
-                series: HostFormat.downsample(
-                    points.map { HostHealth.fraction(used: $0.memUsed, total: stats?.memTotal ?? 0) * 100 }, to: 120),
-                tint: Color.Bandito.signal)
-            MetricTile(
-                label: L10n.Server.Tile.disk,
-                value: HostFormat.bytes(root?.used ?? 0),
-                note: L10n.Server.Tile.diskFree(free: HostFormat.bytes(max(0, (root?.total ?? 0) - (root?.used ?? 0)))),
-                series: [],
-                tint: Color.Bandito.text)
-            MetricTile(
-                label: L10n.Server.Tile.network,
-                value: HostFormat.rate(rx + tx),
-                note: L10n.Server.Tile.netSplit(down: HostFormat.rate(rx), up: HostFormat.rate(tx)),
-                series: HostFormat.downsample(points.map { Double($0.netRxBps + $0.netTxBps) }, to: 120),
-                tint: Color.Bandito.info)
+        let diskTotal = root?.total ?? 0
+        let diskUsed = root?.used ?? 0
+        // Four in a row on a wide page, two by two otherwise: a narrow card would cut its numbers.
+        return LazyVGrid(
+            columns: Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: isWide ? 4 : 2),
+            alignment: .leading, spacing: 12
+        ) {
+            openable(.cpu) {
+                MetricTile(
+                    label: L10n.Server.Tile.cpu,
+                    value: HostFormat.percent(stats?.cpuPercent ?? 0),
+                    note: L10n.Server.cores(count: stats?.cpus ?? 0),
+                    series: HostFormat.downsample(points.map(\.cpu), to: 120),
+                    tint: Color.Bandito.ok)
+            }
+            openable(.memory) {
+                MetricTile(
+                    label: L10n.Server.Tile.memory,
+                    value: HostFormat.bytes(stats?.memUsed ?? 0),
+                    note: L10n.Server.Tile.memoryOf(total: HostFormat.bytes(stats?.memTotal ?? 0)),
+                    series: HostFormat.downsample(
+                        points.map { HostHealth.fraction(used: $0.memUsed, total: stats?.memTotal ?? 0) * 100 }, to: 120),
+                    tint: Color.Bandito.signal)
+            }
+            openable(.disk) {
+                let usage = HostFormat.diskUsage(used: diskUsed, total: diskTotal)
+                MetricTile(
+                    label: L10n.Server.Tile.disk,
+                    value: HostFormat.bytes(max(0, diskTotal - diskUsed)),
+                    note: "",
+                    series: [],
+                    tint: Color.Bandito.text,
+                    valueNote: L10n.Server.Tile.freeWord,
+                    fill: diskTotal > 0 ? Double(diskUsed) / Double(diskTotal) : nil,
+                    caption: L10n.Server.Tile.diskUsed(used: usage.used, total: usage.total))
+            }
+            openable(.network) {
+                MetricTile(
+                    label: L10n.Server.Tile.network,
+                    value: HostFormat.rate(rx + tx),
+                    note: L10n.Server.Tile.netSplit(down: HostFormat.rate(rx), up: HostFormat.rate(tx)),
+                    series: HostFormat.downsample(points.map { Double($0.netRxBps + $0.netTxBps) }, to: 120),
+                    tint: Color.Bandito.info)
+            }
+        }
+    }
+
+    /// A metric card that opens its detail: the chart for the chosen period, with averages and the top processes.
+    private func openable<Tile: View>(_ metric: OverviewMetric, @ViewBuilder tile: () -> Tile) -> some View {
+        Button {
+            detail = metric
+        } label: {
+            tile()
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
+        .banditoButton(.row(cornerRadius: 16))
+        .popover(
+            isPresented: Binding(get: { detail == metric }, set: { if !$0 { detail = nil } }),
+            arrowEdge: .bottom
+        ) {
+            if let server {
+                MetricDetailView(
+                    metric: metric, monitor: monitor, server: server,
+                    ownerName: { ownerName($0, server: server) })
+            }
         }
     }
 
@@ -256,6 +325,14 @@ struct ServerOverview: View {
         }
     }
 
+    /// "Capabilities": only for a daemon that reports setup; otherwise the card is not shown at all.
+    @ViewBuilder
+    private func featuresCard(_ server: ServerModel) -> some View {
+        if server.supports("setup") {
+            ServerFeaturesCard(server: server, setup: setup)
+        }
+    }
+
     // MARK: - Ports, secrets
 
     private var portsCard: some View {
@@ -266,7 +343,7 @@ struct ServerOverview: View {
             } else if monitor.ports.isEmpty {
                 Text(L10n.Server.Ports.empty).foregroundStyle(Color.Bandito.text2)
             }
-            ForEach(monitor.ports.prefix(4), id: \.self) { port in
+            ForEach(monitor.ports.filter(PreviewPorts.isPreviewable).prefix(4), id: \.self) { port in
                 HStack(spacing: 10) {
                     PortBadge(port: port.port)
                     Text(port.process ?? "—")
@@ -320,11 +397,13 @@ struct ServerOverview: View {
         }
     }
 
+    /// Who opened the port: an agent or a terminal, or the daemon itself. Anything else has no owner to name.
     private func ownerLabel(_ port: ListeningPort) -> String {
         switch port.owner?.kind {
         case .agent: server?.agents.first { $0.id == port.owner?.id }?.name ?? L10n.Server.Owner.agent
         case .terminal: L10n.Server.Owner.terminal
-        case .daemon, nil: L10n.Server.Owner.daemon
+        case .daemon: L10n.Server.Owner.daemon
+        case nil: ""
         }
     }
 
@@ -370,6 +449,25 @@ struct ServerOverview: View {
     }
 }
 
+/// Fixed heights of the parts of a metric tile, so all four tiles are the same height whatever they show.
+private enum TileHeight {
+    /// The label line.
+    static let header: CGFloat = 18
+    /// The big number (26 pt type).
+    static let value: CGFloat = 32
+    /// The chart, or the fill bar and its caption.
+    static let chart: CGFloat = 44
+}
+
+/// Width of the page, read from the layout.
+private struct PageWidthKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 /// One metric of the overview: its label, the number, a note, and a sparkline of its history.
 private struct MetricTile: View {
     let label: String
@@ -377,6 +475,12 @@ private struct MetricTile: View {
     let note: String
     let series: [Double]
     let tint: Color
+    /// A word after the value in small type, such as "free" after the free space.
+    var valueNote: String?
+    /// Share of the capacity in use, 0...1. Shown as a bar in place of the sparkline.
+    var fill: Double?
+    /// A line under the value that says what the number means.
+    var caption: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -390,13 +494,42 @@ private struct MetricTile: View {
                     .foregroundStyle(Color.Bandito.text3)
                     .lineLimit(1)
             }
-            Text(value)
-                .font(.system(size: 26, weight: .semibold))
-                .foregroundStyle(Color.Bandito.text)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-            Sparkline(values: series, tint: tint)
-                .frame(height: 44)
+            .frame(height: TileHeight.header)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(value)
+                    .font(.system(size: 26, weight: .semibold))
+                    .foregroundStyle(Color.Bandito.text)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                if let valueNote {
+                    Text(valueNote)
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(Color.Bandito.text3)
+                        .lineLimit(1)
+                }
+            }
+            .frame(height: TileHeight.value, alignment: .leading)
+            // The chart area has the same fixed height in every tile, so the row of four cards lines up.
+            if let fill {
+                VStack(alignment: .leading, spacing: 4) {
+                    FillBar(fraction: fill, tint: tint)
+                        .frame(height: 6)
+                        .padding(.top, 4)
+                    if let caption {
+                        Text(caption)
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(Color.Bandito.text3)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                            .padding(.top, 4)
+                    }
+                }
+                .frame(height: TileHeight.chart, alignment: .top)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+            } else {
+                Sparkline(values: series, tint: tint)
+                    .frame(height: TileHeight.chart)
+            }
         }
         .padding(.horizontal, 14)
         .padding(.top, 14)
@@ -441,7 +574,7 @@ struct PortBadge: View {
     let port: Int
 
     var body: some View {
-        Text(":\(port)")
+        Text(verbatim: ":\(port)")
             .font(.system(size: 12, design: .monospaced))
             .foregroundStyle(Color.Bandito.ok)
             .padding(.horizontal, 7)

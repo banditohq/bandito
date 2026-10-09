@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// How much the app animates, from Settings → Appearance and motion. `off` acts like Reduce Motion.
+/// How much the app animates, from Settings → Appearance. `off` acts like Reduce Motion.
 public enum MotionLevel: String, CaseIterable, Sendable {
     case full, less, off
 

@@ -64,7 +64,7 @@ public struct RaccoonAvatar: View {
     public var body: some View {
         let resolved = AvatarResolver.resolve(name: name, color: color, face: face)
         let phase = AvatarPose.phase(for: name)
-        TimelineView(.animation(minimumInterval: 1.0 / 20, paused: still)) { context in
+        TimelineView(AvatarSchedule(mood: mood, phase: phase, paused: still)) { context in
             let pose = AvatarPose.make(
                 mood: mood, time: context.date.timeIntervalSinceReferenceDate, phase: phase,
                 reduceMotion: still)
@@ -280,5 +280,54 @@ struct RaccoonDashEyes: Shape {
         path.move(to: grid.point(31, 26.5))
         path.addLine(to: grid.point(37, 26.5))
         return path
+    }
+}
+
+/// When an avatar needs a new frame: 20 times a second while its mood moves, and not at all in between. An idle
+/// raccoon blinks for a third of a second every five seconds, so it is drawn about seven times per blink instead of
+/// a hundred times; a row of agents in the sidebar costs next to nothing.
+struct AvatarSchedule: TimelineSchedule {
+    let mood: AvatarMood
+    let phase: Double
+    let paused: Bool
+
+    static let frameInterval: TimeInterval = 1.0 / 20
+
+    func entries(from startDate: Date, mode: TimelineScheduleMode) -> AnyIterator<Date> {
+        // Paused, or the system asks for few updates (low power, window hidden): one frame, then nothing.
+        if paused || mode == .lowFrequency {
+            var done = false
+            return AnyIterator {
+                if done { return nil }
+                done = true
+                return startDate
+            }
+        }
+        let window = AvatarPose.activeWindow(for: mood)
+        var next = startDate
+        return AnyIterator {
+            let date = next
+            next = Self.after(date, window: window, phase: phase)
+            return date
+        }
+    }
+
+    /// The frame after `date`: the next tick inside the moving part of the cycle, or the start of the next one.
+    static func after(_ date: Date, window: (period: Double, start: Double, end: Double)?, phase: Double) -> Date {
+        let tick = date.addingTimeInterval(frameInterval)
+        guard let window else { return tick }
+        func inside(_ d: Date) -> Bool {
+            let p = (d.timeIntervalSinceReferenceDate + phase).truncatingRemainder(dividingBy: window.period) / window.period
+            return p >= window.start && p <= window.end
+        }
+        // Inside the moving part, and the first frame after it (so the pose comes back to rest), are drawn.
+        if inside(tick) || inside(date) { return tick }
+        let t = tick.timeIntervalSinceReferenceDate + phase
+        let position = t.truncatingRemainder(dividingBy: window.period) / window.period
+        // Jump to the start of the next moving part (this cycle's, or the next cycle's).
+        let cycleStart = t - position * window.period
+        var start = cycleStart + window.start * window.period
+        if start <= t { start += window.period }
+        return Date(timeIntervalSinceReferenceDate: start - phase)
     }
 }

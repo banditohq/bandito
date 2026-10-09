@@ -9,9 +9,24 @@ struct PortsView: View {
     @Environment(Router.self) private var router
     @State private var reply: HostPorts?
     @State private var error: UserFacingMessage?
+    /// Off: every listening port. On: only the ports the overview previews.
+    @State private var onlyPreview = false
 
     var body: some View {
-        ServerPage(title: L10n.Mode.serverPorts) {
+        ServerPage(
+            title: L10n.Mode.serverPorts,
+            trailing: {
+                if let server, server.supports("host") {
+                    Button {
+                        onlyPreview.toggle()
+                    } label: {
+                        Label(L10n.Ports.onlyPreview, systemImage: onlyPreview ? "checkmark.circle.fill" : "circle")
+                    }
+                    .banditoButton(.quiet())
+                    .fixedSize()
+                }
+            }
+        ) {
             if let server, server.supports("host") {
                 ServerCard {
                     HStack(spacing: 12) {
@@ -36,7 +51,7 @@ struct PortsView: View {
                                     .foregroundStyle(Color.Bandito.text)
                                     .lineLimit(1)
                                 if let pid = port.pid {
-                                    Text("pid \(pid)")
+                                    Text(verbatim: "pid \(pid)")
                                         .font(.system(size: 11, design: .monospaced))
                                         .foregroundStyle(Color.Bandito.text3)
                                 }
@@ -85,14 +100,18 @@ struct PortsView: View {
     }
 
     private var sortedPorts: [ListeningPort] {
-        (reply?.ports ?? []).sorted { $0.port < $1.port }
+        (reply?.ports ?? [])
+            .filter { !onlyPreview || PreviewPorts.isPreviewable($0) }
+            .sorted { $0.port < $1.port }
     }
 
+    /// Who opened the port: an agent or a terminal, or the daemon itself. Anything else has no owner to name.
     private func ownerLabel(_ port: ListeningPort, server: ServerModel) -> String {
         switch port.owner?.kind {
         case .agent: server.agents.first { $0.id == port.owner?.id }?.name ?? L10n.Server.Owner.agent
         case .terminal: L10n.Server.Owner.terminal
-        case .daemon, nil: L10n.Server.Owner.daemon
+        case .daemon: L10n.Server.Owner.daemon
+        case nil: ""
         }
     }
 }
