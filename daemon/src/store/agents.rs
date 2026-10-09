@@ -294,7 +294,7 @@ impl Store {
         Ok(())
     }
 
-    /// Deletes the agent with its approvals, rules and schedules. Events stay
+    /// Deletes the agent with its approvals, rules, schedules and checkpoints. Events stay
     /// (history), keyed by the old id.
     pub fn agent_delete(&self, id: &str) -> Result<bool> {
         let conn = self.conn();
@@ -303,6 +303,7 @@ impl Store {
         tx.execute("DELETE FROM approvals WHERE agent_id=?1", [id])?;
         tx.execute("DELETE FROM rules WHERE agent_id=?1", [id])?;
         tx.execute("DELETE FROM schedules WHERE agent_id=?1", [id])?;
+        tx.execute("DELETE FROM checkpoints WHERE agent_id=?1", [id])?;
         tx.commit()?;
         Ok(n > 0)
     }

@@ -11,6 +11,7 @@ use std::sync::Mutex;
 mod agents;
 mod approvals;
 pub mod auth;
+mod checkpoints;
 mod history;
 mod rules;
 mod schedules;
@@ -19,6 +20,7 @@ mod usage;
 pub use agents::{Agent, AgentPatch, NewAgent};
 pub use approvals::{Approval, ApprovalStatus};
 pub use auth::Device;
+pub use checkpoints::{Checkpoint, CheckpointKind};
 pub use rules::{Rule, RuleAction};
 pub use schedules::{NewSchedule, NextRun, Schedule, SchedulePatch};
 pub use usage::UsageEntry;
@@ -27,6 +29,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../../migrations/0001_init.sql"),
     include_str!("../../migrations/0002_memory.sql"),
     include_str!("../../migrations/0003_usage_plan.sql"),
+    include_str!("../../migrations/0004_checkpoints.sql"),
 ];
 
 pub struct Store {
