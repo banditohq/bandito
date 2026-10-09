@@ -32,10 +32,12 @@ struct MainWindow: View {
             onBack: { router.back() },
             onForward: { router.forward() })
         .sheet(item: $router.sheet) { sheet in
-            if case .changes(let agentID) = sheet {
-                ChangesSheet(agentID: agentID) { rollbackNotice = $0 }
-            } else {
-                SheetPlaceholder(sheet: sheet)
+            sheetView(for: sheet)
+        }
+        .overlay {
+            if router.paletteOpen {
+                QuickOpenPalette()
+                    .transition(.opacity)
             }
         }
         .overlay(alignment: .bottom) {
@@ -46,6 +48,15 @@ struct MainWindow: View {
             }
         }
         .banditoAnimation(BanditoMotion.ease, value: rollbackNotice?.id)
+    }
+
+    @ViewBuilder
+    private func sheetView(for sheet: Sheet) -> some View {
+        switch sheet {
+        case .newAgent: NewAgentSheet()
+        case .changes(let agentID): ChangesSheet(agentID: agentID) { rollbackNotice = $0 }
+        default: SheetPlaceholder(sheet: sheet)
+        }
     }
 }
 
@@ -77,7 +88,7 @@ private struct ModeArea: View {
     }
 }
 
-/// Stand-in for the sheets whose screens come later (new agent, what changed, add server).
+/// Stand-in for the sheets whose screens come later (what changed, add server, settings).
 private struct SheetPlaceholder: View {
     var sheet: Sheet
     @Environment(\.dismiss) private var dismiss
