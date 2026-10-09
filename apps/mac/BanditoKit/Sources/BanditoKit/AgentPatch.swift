@@ -23,12 +23,15 @@ public struct AgentPatch: Sendable {
     public var runtime: RuntimeKind?
     public var fallbackRuntime: FieldChange<RuntimeKind>?
     public var fallbackModel: FieldChange<String>?
+    /// Pauses (`true`) or resumes the agent. The daemon interrupts a running turn on pause.
+    public var paused: Bool?
 
     public init(
         name: String? = nil, role: String? = nil, cwd: String? = nil, approvalMode: ApprovalMode? = nil,
         effort: Effort? = nil, memoryMode: MemoryMode? = nil, contextBudget: Int? = nil,
         systemPrompt: String? = nil, model: FieldChange<String>? = nil, runtime: RuntimeKind? = nil,
-        fallbackRuntime: FieldChange<RuntimeKind>? = nil, fallbackModel: FieldChange<String>? = nil
+        fallbackRuntime: FieldChange<RuntimeKind>? = nil, fallbackModel: FieldChange<String>? = nil,
+        paused: Bool? = nil
     ) {
         self.name = name
         self.role = role
@@ -42,13 +45,14 @@ public struct AgentPatch: Sendable {
         self.runtime = runtime
         self.fallbackRuntime = fallbackRuntime
         self.fallbackModel = fallbackModel
+        self.paused = paused
     }
 
     /// Keys on the wire (camelCase here; the RPC encoder makes them snake_case). `id` is not a patch
     /// field: the request that carries a patch adds it.
     public enum Key: String, CodingKey {
         case id, name, role, cwd, approvalMode, effort, memoryMode, contextBudget, systemPrompt, model, runtime
-        case fallbackRuntime, fallbackModel
+        case fallbackRuntime, fallbackModel, paused
     }
 
     /// Writes the set fields into an object that may also hold other keys (such as `id`).
@@ -65,6 +69,7 @@ public struct AgentPatch: Sendable {
         try c.encodeIfPresent(runtime, forKey: .runtime)
         try Self.encodeChange(fallbackRuntime, forKey: .fallbackRuntime, into: &c)
         try Self.encodeChange(fallbackModel, forKey: .fallbackModel, into: &c)
+        try c.encodeIfPresent(paused, forKey: .paused)
     }
 
     private static func encodeChange<T: Encodable & Sendable>(

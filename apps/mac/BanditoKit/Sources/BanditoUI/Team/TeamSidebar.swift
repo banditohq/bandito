@@ -104,7 +104,8 @@ struct TeamSidebar: View {
                     VStack(spacing: 8) {
                         AgentAvatar(
                             name: agent.name, size: 52,
-                            mood: AvatarMood.make(status: thread.status, turnRunning: thread.turnRunning))
+                            mood: AvatarMood.make(
+                                status: thread.status, turnRunning: thread.turnRunning, paused: agent.paused))
                         Text(agent.name)
                             .font(BanditoFont.font(size: 13, weight: 600))
                             .foregroundStyle(Color.Bandito.text)
@@ -202,10 +203,11 @@ struct TeamSidebar: View {
         Button(pins.isPinned(agent.id) ? L10n.Agent.Menu.unpin : L10n.Agent.Menu.pin) {
             pins.toggle(agent.id)
         }
-        // The daemon has no pause method yet.
-        Button(L10n.Agent.Menu.pause) {}
-            .disabled(true)
-            .help(L10n.Team.pauseUnavailable)
+        Button(agent.paused ? L10n.Agent.Menu.resume : L10n.Agent.Menu.pause) {
+            PauseActions.toggle(agent, on: server) { actionError = $0 }
+        }
+        .disabled(!PauseActions.available(on: server))
+        .help(PauseActions.available(on: server) ? "" : L10n.Team.pauseUnavailable)
         Divider()
         Button(L10n.Agent.Menu.delete, role: .destructive) {
             pendingDelete = agent
@@ -257,7 +259,9 @@ struct AgentRow: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 11) {
-            AgentAvatar(name: agent.name, size: 40, mood: AvatarMood.make(status: thread.status, turnRunning: thread.turnRunning))
+            AgentAvatar(
+                name: agent.name, size: 40,
+                mood: AvatarMood.make(status: thread.status, turnRunning: thread.turnRunning, paused: agent.paused))
                 .overlay(alignment: .bottomTrailing) {
                     StatusDot(status: thread.status, size: 11, ringColor: Color.Bandito.surface1)
                         .offset(x: 2, y: 2)
@@ -268,6 +272,13 @@ struct AgentRow: View {
                         .font(BanditoFont.font(size: 13, weight: 600))
                         .foregroundStyle(Color.Bandito.text)
                         .lineLimit(1)
+                    if agent.paused {
+                        Image(systemName: "pause.fill")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(Color.Bandito.text3)
+                            .accessibilityLabel(L10n.Inspector.statePaused)
+                            .help(L10n.Inspector.statePaused)
+                    }
                     if !agent.role.isEmpty { Chip(text: agent.role) }
                     Spacer(minLength: 4)
                     if !lastActivity.isEmpty {

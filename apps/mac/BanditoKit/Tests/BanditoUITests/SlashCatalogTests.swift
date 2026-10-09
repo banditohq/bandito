@@ -65,7 +65,7 @@ import Testing
     @Test func builtinListIsFixed() {
         #expect(
             BuiltinSlash.allCases.map(\.name)
-                == ["new", "model", "effort", "chapter", "memory", "changes", "terminal", "files", "usage", "pause"])
+                == ["new", "model", "effort", "memory", "changes", "terminal", "files", "usage", "pause"])
         #expect(BuiltinSlash.named("effort") == .effort)
         #expect(BuiltinSlash.named("nope") == nil)
     }

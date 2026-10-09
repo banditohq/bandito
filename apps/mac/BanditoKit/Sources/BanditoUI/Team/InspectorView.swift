@@ -48,7 +48,7 @@ struct InspectorView: View {
         HStack(spacing: 14) {
             AgentAvatar(
                 name: agent.name, size: 56,
-                mood: AvatarMood.make(status: server.thread(for: agent.id).status))
+                mood: AvatarMood.make(status: server.thread(for: agent.id).status, paused: agent.paused))
             VStack(alignment: .leading, spacing: 3) {
                 Text(agent.name)
                     .font(BanditoFont.font(size: 19, weight: 650))

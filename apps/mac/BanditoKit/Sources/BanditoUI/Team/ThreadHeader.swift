@@ -41,7 +41,9 @@ struct ThreadHeader: View {
 
     private var capsule: some View {
         HStack(spacing: 9) {
-            AgentAvatar(name: agent.name, size: 26, mood: AvatarMood.make(status: status, turnRunning: turnRunning))
+            AgentAvatar(
+                name: agent.name, size: 26,
+                mood: AvatarMood.make(status: status, turnRunning: turnRunning, paused: agent.paused))
             Text(agent.name)
                 .font(BanditoFont.font(size: 13, weight: 600))
                 .foregroundStyle(Color.Bandito.text)

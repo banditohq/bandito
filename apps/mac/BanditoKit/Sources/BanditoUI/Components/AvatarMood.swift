@@ -18,8 +18,12 @@ public enum AvatarMood: CaseIterable, Sendable {
 
     /// Mood for an agent with `status`. A streamed reply reads as thinking, a running turn of an idle agent too.
     /// Waiting for a person and errors always win.
-    public static func make(status: AgentStatus, turnRunning: Bool = false, streaming: Bool = false) -> AvatarMood {
-        switch status {
+    /// A paused agent sleeps whatever it was doing: the pause interrupted its turn.
+    public static func make(
+        status: AgentStatus, turnRunning: Bool = false, streaming: Bool = false, paused: Bool = false
+    ) -> AvatarMood {
+        if paused { return .sleeping }
+        return switch status {
         case .needsYou: .needsYou
         case .error: .error
         case .offline: .sleeping

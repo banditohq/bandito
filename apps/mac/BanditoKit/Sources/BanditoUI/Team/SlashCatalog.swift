@@ -94,14 +94,13 @@ public enum SlashMatcher {
 
 /// Commands the app handles itself: `/new`, `/model`, and the rest of the Bandito group.
 public enum BuiltinSlash: CaseIterable, Sendable {
-    case new, model, effort, chapter, memory, changes, terminal, files, usage, pause
+    case new, model, effort, memory, changes, terminal, files, usage, pause
 
     public var name: String {
         switch self {
         case .new: "new"
         case .model: "model"
         case .effort: "effort"
-        case .chapter: "chapter"
         case .memory: "memory"
         case .changes: "changes"
         case .terminal: "terminal"
@@ -125,7 +124,6 @@ public enum BuiltinSlash: CaseIterable, Sendable {
         case .new: L10n.Slash.newSummary
         case .model: L10n.Slash.modelSummary
         case .effort: L10n.Slash.effortSummary
-        case .chapter: L10n.Slash.chapterSummary
         case .memory: L10n.Slash.memorySummary
         case .changes: L10n.Slash.changesSummary
         case .terminal: L10n.Slash.terminalSummary

@@ -33,7 +33,6 @@ struct ApprovalsSection: View {
                             .foregroundStyle(Color.Bandito.text2)
                     }
                     builtinChecks
-                    toggles
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -166,40 +165,6 @@ struct ApprovalsSection: View {
             L10n.Settings.Approvals.Browser.pay, L10n.Settings.Approvals.Browser.send,
             L10n.Settings.Approvals.Browser.delete, L10n.Settings.Approvals.Browser.login,
         ]
-    }
-
-    /// Two switches that are not built yet: they show as off-limits until the features land.
-    private var toggles: some View {
-        VStack(spacing: 12) {
-            comingSoonToggle(
-                title: L10n.Settings.Approvals.touchID, text: L10n.Settings.Approvals.touchIDHint, on: true)
-            comingSoonToggle(
-                title: L10n.Settings.Approvals.autoDeny, text: L10n.Settings.Approvals.autoDenyHint, on: false)
-        }
-    }
-
-    private func comingSoonToggle(title: String, text: String, on: Bool) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
-                    Text(title)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Color.Bandito.text)
-                    Chip(text: L10n.Common.comingSoon)
-                }
-                Text(text)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.Bandito.text3)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 8)
-            Toggle("", isOn: .constant(on))
-                .labelsHidden()
-                .toggleStyle(BanditoToggleStyle())
-                .disabled(true)
-        }
-        .padding(14)
-        .banditoCard()
     }
 
     private func labeled<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {

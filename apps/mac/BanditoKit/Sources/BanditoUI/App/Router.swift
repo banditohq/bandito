@@ -39,7 +39,6 @@ public enum Sheet: Identifiable, Hashable, Sendable {
     case addServer
     /// Sign in or create an account (Onboarding's account step, reused from Settings).
     case account
-    case settings(SettingsSection)
 
     public var id: String {
         switch self {
@@ -47,7 +46,6 @@ public enum Sheet: Identifiable, Hashable, Sendable {
         case .changes(let agentID): "changes-\(agentID)"
         case .addServer: "addServer"
         case .account: "account"
-        case .settings(let section): "settings-\(section.rawValue)"
         }
     }
 }

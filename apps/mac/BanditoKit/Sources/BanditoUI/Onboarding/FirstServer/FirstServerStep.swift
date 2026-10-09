@@ -5,8 +5,10 @@ import SwiftUI
 
 /// Step 3 of 5 on screen: choose "This Mac" or "your server", watch the install, then see what the server has.
 struct FirstServerStep: View {
-    /// Goes on to the first agent.
+    /// Goes on to the first agent (onboarding), or closes the add-server sheet.
     var onFinished: () -> Void
+    /// Called once when the server is connected. The add-server sheet closes then.
+    var onConnected: () -> Void = {}
 
     @Environment(AppModel.self) private var app
     @Environment(AccountHub.self) private var hub
@@ -35,6 +37,9 @@ struct FirstServerStep: View {
             let config = (try? String(contentsOf: ssh.appending(path: "config"), encoding: .utf8)) ?? ""
             let known = (try? String(contentsOf: ssh.appending(path: "known_hosts"), encoding: .utf8)) ?? ""
             model.loadSuggestions(config: config, knownHosts: known)
+        }
+        .onChange(of: model.isConnected) { _, connected in
+            if connected { onConnected() }
         }
     }
 

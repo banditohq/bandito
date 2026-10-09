@@ -80,6 +80,8 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
     public var fallbackModel: String?
     /// The runtime the agent runs on now; `nil` = the primary `runtime`.
     public var activeRuntime: RuntimeKind?
+    /// Paused: messages wait in the thread and no session starts until it is resumed (`agents.update {paused}`).
+    public var paused: Bool
 
     public init(
         id: String, name: String, role: String = "", runtime: RuntimeKind, model: String? = nil, cwd: String,
@@ -87,7 +89,8 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
         createdAt: Int64 = 0, updatedAt: Int64 = 0,
         effort: Effort? = nil, memoryMode: MemoryMode = .smart, contextBudget: Int? = nil, homeDir: String? = nil,
         contextTokens: Int = 0, chapter: Int = 1, lastTurnAt: Int64? = nil,
-        fallbackRuntime: RuntimeKind? = nil, fallbackModel: String? = nil, activeRuntime: RuntimeKind? = nil
+        fallbackRuntime: RuntimeKind? = nil, fallbackModel: String? = nil, activeRuntime: RuntimeKind? = nil,
+        paused: Bool = false
     ) {
         self.id = id
         self.name = name
@@ -110,6 +113,7 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
         self.fallbackRuntime = fallbackRuntime
         self.fallbackModel = fallbackModel
         self.activeRuntime = activeRuntime
+        self.paused = paused
     }
 
     /// Fields added after the first daemon release are optional on the wire; old daemons send none of them.
@@ -136,6 +140,7 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
         fallbackRuntime = try c.decodeIfPresent(RuntimeKind.self, forKey: .fallbackRuntime)
         fallbackModel = try c.decodeIfPresent(String.self, forKey: .fallbackModel)
         activeRuntime = try c.decodeIfPresent(RuntimeKind.self, forKey: .activeRuntime)
+        paused = try c.decodeIfPresent(Bool.self, forKey: .paused) ?? false
     }
 }
 

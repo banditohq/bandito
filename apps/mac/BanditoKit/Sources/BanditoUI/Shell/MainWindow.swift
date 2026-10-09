@@ -79,7 +79,7 @@ struct MainWindow: View {
         case .newAgent: NewAgentSheet()
         case .changes(let agentID): ChangesSheet(agentID: agentID) { rollbackNotice = $0 }
         case .account: AccountSheet()
-        default: SheetPlaceholder(sheet: sheet)
+        case .addServer: AddServerSheet()
         }
     }
 }
@@ -108,38 +108,6 @@ private struct ModeArea: View {
         case .browser: BrowserMode()
         case .screen: ScreenMode()
         case .server: ServerMode()
-        }
-    }
-}
-
-/// Stand-in for the sheets whose screens come later (what changed, add server, settings).
-private struct SheetPlaceholder: View {
-    var sheet: Sheet
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        VStack(spacing: 14) {
-            Text(title)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(Color.Bandito.text)
-            Text(L10n.Mode.soonHere)
-                .font(.system(size: 13))
-                .foregroundStyle(Color.Bandito.text2)
-            Button(L10n.Common.close) { dismiss() }
-                .buttonStyle(QuietButtonStyle())
-        }
-        .padding(28)
-        .frame(minWidth: 420, minHeight: 240)
-        .background(Color.Bandito.surface2)
-    }
-
-    private var title: String {
-        switch sheet {
-        case .newAgent: L10n.AgentSheet.title
-        case .changes: L10n.Keys.whatChanged
-        case .addServer: L10n.Profile.addServer
-        case .account: L10n.Settings.Nav.account
-        case .settings: L10n.Settings.title
         }
     }
 }

@@ -213,7 +213,6 @@ struct NewAgentSheet: View {
                 ForEach(RuntimeKind.pickable, id: \.self) { kind in
                     runtimeCard(kind, now: context.date)
                 }
-                runtimeSoonCard
             }
         }
     }
@@ -307,36 +306,6 @@ struct NewAgentSheet: View {
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
-    /// The API-key card: the runtime is not in this build, so it is only shown.
-    private var runtimeSoonCard: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 7) {
-                Text(L10n.AgentSheet.apiKey)
-                    .font(BanditoFont.font(size: 13.5, weight: 600))
-                    .foregroundStyle(Color.Bandito.text2)
-                Spacer(minLength: 0)
-                Text(L10n.Common.comingSoon)
-                    .font(BanditoFont.font(size: 10.5, weight: 600))
-                    .foregroundStyle(Color.Bandito.text3)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 1)
-                    .background(Color.Bandito.text.opacity(0.07), in: Capsule())
-            }
-            Text(L10n.AgentSheet.apiKeyHint)
-                .font(BanditoFont.font(size: 11, weight: 400))
-                .foregroundStyle(Color.Bandito.text3)
-                .lineLimit(2)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Color.Bandito.text.opacity(0.12), style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
-        .opacity(0.7)
-        .accessibilityElement(children: .combine)
-    }
-
     @ViewBuilder
     private var modelField: some View {
         let presets = NewAgentDraft.modelPresets(for: draft.runtime)
@@ -395,19 +364,8 @@ struct NewAgentSheet: View {
             VStack(alignment: .leading, spacing: 7) {
                 labeledHeader(L10n.AgentSheet.workplace, hint: L10n.AgentSheet.workplaceHint)
                 HStack(spacing: 8) {
-                    workplaceCard(
-                        name: L10n.AgentSheet.workplaceShared, text: L10n.AgentSheet.workplaceSharedText,
-                        selected: true, enabled: true)
-                    workplaceCard(
-                        name: L10n.AgentSheet.workplaceSeparate, text: L10n.AgentSheet.workplaceSeparateText,
-                        selected: false, enabled: false)
-                    workplaceCard(
-                        name: L10n.AgentSheet.workplaceContainer, text: L10n.AgentSheet.workplaceContainerText,
-                        selected: false, enabled: false)
+                    workplaceCard(name: L10n.AgentSheet.workplaceShared, text: L10n.AgentSheet.workplaceSharedText)
                 }
-                Text(L10n.AgentSheet.workplaceSoonHint)
-                    .font(BanditoFont.font(size: 12, weight: 400))
-                    .foregroundStyle(Color.Bandito.text3)
             }
 
             labeled(L10n.AgentSheet.memory, hint: nil) {
@@ -457,7 +415,8 @@ struct NewAgentSheet: View {
         }
     }
 
-    private func workplaceCard(name: String, text: String, selected: Bool, enabled: Bool) -> some View {
+    /// The workplace an agent runs in. Only the shared one exists today, so it is the one card shown.
+    private func workplaceCard(name: String, text: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(name)
                 .font(BanditoFont.font(size: 13, weight: 600))
@@ -470,14 +429,10 @@ struct NewAgentSheet: View {
         .padding(.horizontal, 11)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            selected ? Color.Bandito.signal.opacity(0.08) : Color.Bandito.text.opacity(0.03),
-            in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+        .background(Color.Bandito.signal.opacity(0.08), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .stroke(selected ? Color.Bandito.signal.opacity(0.5) : Color.Bandito.text.opacity(0.09)))
-        .opacity(enabled ? 1 : 0.5)
-        .help(enabled ? "" : L10n.Common.comingSoon)
+                .stroke(Color.Bandito.signal.opacity(0.5)))
     }
 
     private var toolTags: [FlowTags.Tag] {
@@ -643,7 +598,7 @@ struct NewAgentSheet: View {
 }
 
 extension RuntimeKind {
-    /// The runtimes a new agent can pick today. The API-key runtime has its own card, marked soon.
+    /// The runtimes a new agent can pick. The API-key runtime is not in this build, so it has no card.
     static let pickable: [RuntimeKind] = [.claude, .codex, .grok]
 }
 

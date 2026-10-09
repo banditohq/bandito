@@ -9,6 +9,12 @@ import Testing
 @Suite struct TeamLogicTests {
     // MARK: avatar mood
 
+    @Test func pausedAgentSleepsWhateverItWasDoing() {
+        #expect(AvatarMood.make(status: .working, paused: true) == .sleeping)
+        #expect(AvatarMood.make(status: .needsYou, turnRunning: true, paused: true) == .sleeping)
+        #expect(AvatarMood.make(status: .idle, paused: false) == .idle)
+    }
+
     @Test func statusMapsToMood() {
         #expect(AvatarMood.make(status: .idle) == .idle)
         #expect(AvatarMood.make(status: .working) == .working)

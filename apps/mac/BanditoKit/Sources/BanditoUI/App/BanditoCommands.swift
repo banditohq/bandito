@@ -88,10 +88,18 @@ public struct BanditoCommands: Commands {
             Divider()
             item("team.stop") { interruptSelected() }
                 .disabled(selectedAgentID == nil)
-            // Pausing every agent needs a daemon method that does not exist yet.
-            item("team.pauseAll") {}
-                .disabled(true)
+            pauseAllButton
         }
+    }
+
+    /// Pauses every agent of the current server, or resumes them all when they are paused (⌘⇧P).
+    private var pauseAllButton: some View {
+        let server = app.currentServer
+        return Button(PauseActions.pauseAllTitle(server)) {
+            if let server { PauseActions.toggleAll(on: server) }
+        }
+        .banditoShortcut(keymap.binding(for: "team.pauseAll"))
+        .disabled(!PauseActions.available(on: server))
     }
 
     /// A menu item for `commandID`, titled and shortcut from the registry.

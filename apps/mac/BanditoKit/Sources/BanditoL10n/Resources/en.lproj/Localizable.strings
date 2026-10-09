@@ -422,6 +422,9 @@
 "inspector.schedules" = "Schedules";
 "inspector.server" = "Server";
 "inspector.serverInfo" = "%1$@ · Bandito %2$@ · %3$@";
+"inspector.state" = "State";
+"inspector.statePaused" = "Paused";
+"inspector.stateRunning" = "Running";
 "inspector.subscription" = "Subscription";
 "inspector.toggleAria" = "Agent details (⌘I)";
 "inspector.usage" = "Usage";
@@ -429,6 +432,15 @@
 "inspector.window.fiveHour" = "5 hours";
 "inspector.window.sevenDay" = "Week";
 "inspector.workplace" = "Workplace";
+"journal.copyAll" = "Copy all";
+"journal.empty" = "No lines yet.";
+"journal.levelAll" = "All";
+"journal.levelError" = "Errors";
+"journal.levelWarn" = "Warnings";
+"journal.loading" = "Loading…";
+"journal.needsNewer" = "The journal needs a newer server. Update the server to see its log here.";
+"journal.refresh" = "Refresh";
+"journal.source" = "Source: %1$@";
 "keys.address" = "Address bar";
 "keys.agentDetails" = "Agent details";
 "keys.approve" = "Approve focused request";
@@ -533,11 +545,13 @@
 "menubar.openChat" = "Open chat →";
 "menubar.pauseAll" = "Pause all agents";
 "menubar.resolveFailed" = "Could not send your answer: %1$@";
+"menubar.resumeAll" = "Resume all agents";
 "menubar.upNext" = "UP NEXT";
 "menubar.waiting" = "Waiting for you";
 "menubar.wantsPush" = "wants to push";
 "menubar.working" = "WORKING";
 "mode.browser" = "Browser";
+"mode.connectServer" = "Connect a server to use it.";
 "mode.files" = "Files";
 "mode.screen" = "Server screen";
 "mode.server" = "Server";
@@ -820,6 +834,7 @@
 "palette.openFilesOf" = "Open %1$@'s files";
 "palette.pauseAgent" = "Pause %1$@";
 "palette.portTitle" = "Open :%1$@ — %2$@";
+"palette.resumeAgent" = "Resume %1$@";
 "palette.search" = "Search";
 "palette.sectionActions" = "ACTIONS";
 "palette.sectionAgents" = "AGENTS";
@@ -1193,7 +1208,7 @@
 "slash.newSnippet" = "+ New snippet";
 "slash.newSummary" = "New agent";
 "slash.none" = "No commands match";
-"slash.pauseSummary" = "Pause the agent";
+"slash.pauseSummary" = "Pause the agent, or resume it";
 "slash.snippetHint" = "Parts to fill in go in curly braces. The cursor goes to the first one.";
 "slash.snippetName" = "Name, for example standup";
 "slash.snippetTitle" = "New snippet";
