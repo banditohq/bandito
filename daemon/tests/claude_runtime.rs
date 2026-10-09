@@ -198,14 +198,18 @@ async fn passes_flags() {
         vec!["mcp".into(), "--agent".into(), "a1".into()],
     ));
     let s = ClaudeRuntime::new().spawn(c).await.unwrap();
-    // the fake writes args at startup; give it a moment
+    // the fake writes args at startup; poll until the file parses (it may be half-written)
+    let mut parsed: Option<Vec<String>> = None;
     for _ in 0..50 {
-        if args_out.exists() {
+        parsed = std::fs::read_to_string(&args_out)
+            .ok()
+            .and_then(|text| serde_json::from_str::<Vec<String>>(&text).ok());
+        if parsed.is_some() {
             break;
         }
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
-    let args: Vec<String> = serde_json::from_str(&std::fs::read_to_string(&args_out).unwrap()).unwrap();
+    let args = parsed.expect("args file written and parseable");
     let has = |pair: &[&str]| {
         args.windows(pair.len())
             .any(|w| w.iter().zip(pair).all(|(a, b)| a == b))
@@ -235,4 +239,202 @@ async fn status_reports_missing_binary() {
     let st = ClaudeRuntime::with_program("/nonexistent/claude").status().await;
     assert!(!st.installed);
     assert_eq!(st.version, None);
+}
+
+/// Spawn config for a fixture by absolute path (for scripts written at test time).
+fn cfg_for_path(script: &std::path::Path, env: Vec<(String, String)>) -> SpawnConfig {
+    let mut all = vec![("FAKECLI_SCRIPT".to_string(), script.display().to_string())];
+    all.extend(env);
+    SpawnConfig {
+        agent_id: "a1".into(),
+        cwd: std::env::temp_dir(),
+        program: Some(PathBuf::from(env!("CARGO_BIN_EXE_fakecli"))),
+        env: all,
+        ..Default::default()
+    }
+}
+
+#[tokio::test]
+async fn cancelled_approval_cannot_be_answered() {
+    let mut s = ClaudeRuntime::new().spawn(cfg("cancel.jsonl", None)).await.unwrap();
+    s.session.send("go").await.unwrap();
+    let before = until(&mut s, is_approval).await;
+    let RuntimeOutput::Approval(req) = before.last().unwrap().clone() else {
+        unreachable!()
+    };
+    assert_eq!(req.key, "perm-c");
+
+    let cancelled = until(&mut s, |o| matches!(o, RuntimeOutput::ApprovalCancelled { .. })).await;
+    assert_eq!(
+        cancelled.last().unwrap(),
+        &RuntimeOutput::ApprovalCancelled { key: "perm-c".into() }
+    );
+    assert!(s.session.resolve("perm-c", Decision::Allow).await.is_err());
+
+    let rest = until(&mut s, is_turn_end).await;
+    assert!(matches!(
+        rest.last(),
+        Some(RuntimeOutput::Event(EventBody::TurnCompleted {
+            status: TurnStatus::Ok,
+            ..
+        }))
+    ));
+    s.session.shutdown().await;
+}
+
+#[tokio::test]
+async fn unsupported_control_request_gets_an_error_reply() {
+    let mut s = ClaudeRuntime::new()
+        .spawn(cfg("unknown_control.jsonl", None))
+        .await
+        .unwrap();
+    s.session.send("go").await.unwrap();
+    // The fake only sends the result after it has read the error reply (its `expect`).
+    let out = until(&mut s, is_turn_end).await;
+    assert!(out.iter().all(|o| !is_approval(o)), "a hook request is not an approval");
+    assert!(matches!(
+        out.last(),
+        Some(RuntimeOutput::Event(EventBody::TurnCompleted {
+            status: TurnStatus::Ok,
+            ..
+        }))
+    ));
+    s.session.shutdown().await;
+}
+
+#[tokio::test]
+async fn non_json_stdout_lines_are_skipped() {
+    let mut s = ClaudeRuntime::new().spawn(cfg("not_json.jsonl", None)).await.unwrap();
+    s.session.send("hi").await.unwrap();
+    let out = until(&mut s, is_turn_end).await;
+    assert!(out.contains(&RuntimeOutput::SessionId("55555555-5555-4555-8555-555555555555".into())));
+    assert!(out.iter().any(|o| matches!(o,
+        RuntimeOutput::Event(EventBody::MessageAssistant { text }) if text == "Hi there.")));
+    s.session.shutdown().await;
+}
+
+#[tokio::test]
+async fn big_write_is_clipped_in_events_but_answered_in_full() {
+    let big = "w".repeat(100 * 1024);
+    let dir = tempfile::tempdir().unwrap();
+    let script = dir.path().join("write_big.jsonl");
+    let steps = [
+        serde_json::json!({"expect": {"type": "control_request", "request": {"subtype": "initialize"}}}),
+        serde_json::json!({"send": {"type": "control_response", "response": {
+            "subtype": "success", "request_id": "$last:/request_id", "response": {}}}}),
+        serde_json::json!({"expect": {"type": "user"}}),
+        serde_json::json!({"send": {"type": "system", "subtype": "init",
+            "session_id": "66666666-6666-4666-8666-666666666666"}}),
+        serde_json::json!({"send": {"type": "assistant", "message": {"content": [
+            {"type": "tool_use", "id": "toolu_w", "name": "Write",
+             "input": {"file_path": "/w/big.txt", "content": big}}]}}}),
+        serde_json::json!({"send": {"type": "control_request", "request_id": "perm-w", "request": {
+            "subtype": "can_use_tool", "tool_name": "Write", "tool_use_id": "toolu_w",
+            "input": {"file_path": "/w/big.txt", "content": big}}}}),
+        // The answer must echo the original input, not the clipped copy.
+        serde_json::json!({"expect": {"type": "control_response", "response": {
+            "subtype": "success", "request_id": "perm-w",
+            "response": {"behavior": "allow", "updatedInput": {"file_path": "/w/big.txt", "content": big}}}}}),
+        serde_json::json!({"send": {"type": "result", "subtype": "success", "is_error": false,
+            "result": "Written.", "session_id": "66666666-6666-4666-8666-666666666666"}}),
+    ];
+    let text: String = steps.iter().map(|s| format!("{s}\n")).collect();
+    std::fs::write(&script, text).unwrap();
+
+    let mut s = ClaudeRuntime::new()
+        .spawn(cfg_for_path(&script, Vec::new()))
+        .await
+        .unwrap();
+    s.session.send("write it").await.unwrap();
+    let before = until(&mut s, is_approval).await;
+
+    let tool_input = before
+        .iter()
+        .find_map(|o| match o {
+            RuntimeOutput::Event(EventBody::ToolCall { input, .. }) => Some(input.clone()),
+            _ => None,
+        })
+        .expect("tool call event");
+    let clipped = tool_input["content"].as_str().expect("content").len();
+    assert!(clipped <= 4096 + 64, "tool call input clipped to {clipped} bytes");
+
+    let RuntimeOutput::Approval(req) = before.last().unwrap().clone() else {
+        unreachable!()
+    };
+    assert!(req.input["content"].as_str().expect("content").len() <= 4096 + 64);
+
+    s.session.resolve(&req.key, Decision::Allow).await.unwrap();
+    let after = until(&mut s, is_turn_end).await;
+    assert!(matches!(
+        after.last(),
+        Some(RuntimeOutput::Event(EventBody::TurnCompleted {
+            status: TurnStatus::Ok,
+            ..
+        }))
+    ));
+    s.session.shutdown().await;
+}
+
+/// Poll until the fake CLI has written the pid of its background `sleep`.
+#[cfg(unix)]
+async fn wait_pid(path: &std::path::Path) -> u32 {
+    for _ in 0..100 {
+        let pid = std::fs::read_to_string(path)
+            .ok()
+            .and_then(|text| text.trim().parse::<u32>().ok());
+        if let Some(pid) = pid {
+            return pid;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    panic!("fake CLI did not report a pid");
+}
+
+/// True when no process with this pid exists any more. Zombies count as alive.
+#[cfg(unix)]
+fn process_alive(pid: u32) -> bool {
+    // SAFETY: signal 0 only checks that the pid exists; it sends nothing.
+    unsafe { libc::kill(pid as i32, 0) == 0 }
+}
+
+/// Wait up to 3 s for `pid` to disappear.
+#[cfg(unix)]
+async fn wait_gone(pid: u32) -> bool {
+    for _ in 0..150 {
+        if !process_alive(pid) {
+            return true;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    false
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn shutdown_kills_the_whole_process_group() {
+    let dir = tempfile::tempdir().unwrap();
+    let pid_out = dir.path().join("pid");
+    let env = vec![("FAKECLI_PID_OUT".to_string(), pid_out.display().to_string())];
+    let script = PathBuf::from(fixture("spawn_sleep.jsonl"));
+    let s = ClaudeRuntime::new().spawn(cfg_for_path(&script, env)).await.unwrap();
+    let pid = wait_pid(&pid_out).await;
+    assert!(process_alive(pid), "background child runs before shutdown");
+
+    s.session.shutdown().await;
+    assert!(wait_gone(pid).await, "background child {pid} survived shutdown");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn dropping_the_session_kills_the_child_tree() {
+    let dir = tempfile::tempdir().unwrap();
+    let pid_out = dir.path().join("pid");
+    let env = vec![("FAKECLI_PID_OUT".to_string(), pid_out.display().to_string())];
+    let script = PathBuf::from(fixture("spawn_sleep.jsonl"));
+    let s = ClaudeRuntime::new().spawn(cfg_for_path(&script, env)).await.unwrap();
+    let pid = wait_pid(&pid_out).await;
+    assert!(process_alive(pid), "background child runs before drop");
+
+    drop(s);
+    assert!(wait_gone(pid).await, "background child {pid} survived the drop");
 }
