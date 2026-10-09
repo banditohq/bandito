@@ -632,11 +632,28 @@ A separate Linux user for a workspace is the next step, not in this version.
 
 `agents.create` and `agents.update` take `workspace_id` (default `shared`). Moving an agent starts a new chapter, as a folder change does.
 
-`agents.create` with no `cwd`, or an empty one, runs the agent in its own folder: the folder is made first, and its path becomes the agent's `cwd`. A `cwd` that is given must exist on the server, as before.
+`agents.create` with no `cwd`, or an empty one, runs the agent in its own folder: the folder is made first, and its path becomes the agent's `cwd`. A `cwd` that is given must exist on the server, as before. Clients show that a folder is optional when `daemon.info.features` contains `"agent_own_folder"`.
 
 Limits: name 1–64 characters; `cpus` 0.1–64; `memory_mb` 64–262144; mounts are absolute paths without `,`, `"` or `..`. The shared workspace has no container settings, so it refuses them.
 
 Errors: code `-32028` (`WORKSPACE_ERROR`) with `error.data.reason`: `docker_unavailable`, `not_found`, `builtin` (the shared workspace cannot be deleted), `not_empty` (agents still run in it), `invalid` (bad settings or mount), `docker` (Docker failed; its message is in `message`).
+
+## Team preview
+
+`agents.list`, `agents.get`, `agents.create` and `agents.update` return each agent with three fields the team view needs, without loading its thread:
+
+- `last_message`: the newest user or assistant message, `{role: "user"|"assistant", text, ts}`, or `null`. `text` is cut to 200 characters on a character boundary. Messages Bandito sent itself (`source: "system"`, the wrap-up turn) are skipped, as in `history.search`.
+- `status`: the status of the agent's newest `agent.status` event (`idle`, `working`, `needs_you`, `error`, `offline`), or `null` before any.
+- `pending_approval_ids`: the ids of the agent's approvals that still wait for an answer (`approvals.status = 'pending'`), oldest first.
+- `pending_approvals`: the number of those ids, for clients that only count.
+
+The daemon reads them in one query per list: correlated subqueries per agent (`store/agents.rs`, `LAST_MESSAGE_SQL`, `STATUS_SQL`, `PENDING_IDS_SQL`). The status lookup uses `events_agent_kind_seq`, and the pending ids `approvals_agent_status`, both from migration 0010; the message lookup uses `events_agent_seq`. The daemon's own checks use `agent_get` and `agent_list`, which do not read these fields; the RPC reads use `agent_view` and `agent_list_view`.
+
+Clients keep the fields current from live events: `message.user` and `message.assistant` (not `system`) replace `last_message`; `agent.status` replaces `status`; `approval.requested` adds its id to the agent's pending set and `approval.resolved` removes it. The count is the size of that set, so an event that arrives twice (a replay) changes nothing. A daemon that sends only `pending_approvals` (a number) is counted by live events alone.
+
+Before a thread is open, the app shows the agent's preview from `last_message`, and the status and pending count from these fields. A thread that is loaded wins for its own messages.
+
+A daemon from before this section sends none of the three fields. A missing `last_message` (the key absent, not `null`) makes the app read the newest page of events (40 events) for that agent once, in the background, to build the preview. The status then comes from the thread's live events, and the pending count from the approvals the app has seen.
 
 ## Mac app
 

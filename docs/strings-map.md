@@ -458,7 +458,6 @@
 | прочее | `sidebar.new` | Создать |
 | прочее | `sidebar.pinned` | Закреплённые |
 | прочее | `sidebar.servers` | Серверы |
-| прочее | `sidebar.empty` | Агентов пока нет. Создайте первого. |
 | прочее | `common.serverCount` | one: {count} сервер; few: {count} сервера; many: {count} серверов; other: {count} сервера (plural) |
 | прочее | `common.comingSoon` | скоро |
 | прочее | `agent.menu.pin` | Закрепить |

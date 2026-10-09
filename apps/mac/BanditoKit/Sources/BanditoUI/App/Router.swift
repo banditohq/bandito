@@ -1,3 +1,4 @@
+import BanditoKit
 import BanditoL10n
 import Observation
 
@@ -78,6 +79,8 @@ public final class Router {
     public var pendingTerminalCwd: String?
     /// New agent sheet: the folder the agent should work in ("Create agent in this folder"). Taken once by the sheet.
     public var pendingAgentCwd: String?
+    /// New agent sheet: the starting template chosen on the empty team. Taken once by the sheet.
+    public var pendingTemplate: AgentTemplate?
     /// Team: text for the composer of the selected agent ("Ask about this place"). Taken once by the thread.
     public var pendingComposerText: String?
     /// Team: the composer of this agent should take keyboard focus (⌘↵ in the palette, after opening the agent).
@@ -188,6 +191,44 @@ public final class Router {
     public func takeAgentCwd() -> String? {
         defer { pendingAgentCwd = nil }
         return pendingAgentCwd
+    }
+
+    /// The person chose an agent (a click, a shortcut, a new agent). It is selected and remembered as the one to open
+    /// first on its server. Selection the app makes by itself (the team's fallback, a deleted agent) does not go through here.
+    public func selectAgent(_ agentID: String, on server: ServerModel?) {
+        selectedAgentID = agentID
+        if let server {
+            LastOpenedAgent.save(agentID, serverID: server.id.uuidString)
+        }
+    }
+
+    public func takePendingTemplate() -> AgentTemplate? {
+        defer { pendingTemplate = nil }
+        return pendingTemplate
+    }
+
+    /// The composer's text of each agent, by agent id. Kept here rather than in the thread view, so a draft stays with
+    /// its agent when the view is recreated or the person goes to another agent.
+    public var drafts: [String: String] = [:]
+
+    /// The draft of an agent, trimmed, for sending; the draft is cleared.
+    public func takeDraft(for agentID: String) -> String {
+        let text = (drafts[agentID] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        drafts[agentID] = nil
+        return text
+    }
+
+    /// Puts text that could not be sent back into the draft of its own agent, in front of anything typed since.
+    public func restoreDraft(_ text: String, for agentID: String) {
+        let typed = drafts[agentID] ?? ""
+        let typedNothing = typed.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        drafts[agentID] = typedNothing ? text : text + "\n" + typed
+    }
+
+    /// Adds text to the draft of an agent, after what is there (a line break in between).
+    public func appendDraft(_ text: String, for agentID: String) {
+        let current = drafts[agentID] ?? ""
+        drafts[agentID] = current.isEmpty ? text : current + "\n" + text
     }
 
     public func takeComposerText() -> String? {

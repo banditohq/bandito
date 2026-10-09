@@ -16,7 +16,6 @@
   "sidebar.messageTeam": "팀에 메시지…",
   "sidebar.pinned": "고정됨",
   "sidebar.servers": "서버",
-  "sidebar.empty": "아직 에이전트가 없습니다. 첫 에이전트를 만들어 보세요.",
   "common.now": "지금",
   "common.agentCount": {"other": "에이전트 {count}개"},
   "common.serverCount": {"other": "서버 {count}대"},
@@ -85,7 +84,7 @@
   "agentSheet.memoryAuto": "자동으로 생성됨",
   "agentSheet.memoryHint": "자체 폴더에 메모를 남겨 모든 것을 기억하며, 메시지 비용도 늘지 않습니다.",
   "agentSheet.changeLater": "이 모든 설정은 나중에 바꿀 수 있습니다.",
-  "agentSheet.create": "{name} 만들기",
+  "agentSheet.create": "만들기",
   "agentSheet.cancel": "취소",
   "agentSheet.runtimeMissing": "{server}에 {runtime}이(가) 설치되어 있지 않습니다",
   "agentSheet.runtimeLogin": "{server}에서 {runtime}에 로그인되어 있지 않습니다. 거기서 실행: {command}",
@@ -124,7 +123,7 @@
   "approvalMode.risky": "위험한 작업만",
   "approvalMode.always": "전부",
   "approvalMode.never": "없음",
-  "thread.placeholder": "{name}에게 메시지 보내기",
+  "thread.placeholder": "작업이나 질문을 입력하세요…",
   "thread.send": "보내기",
   "thread.stop": "중지",
   "thread.attach": "파일 첨부",
@@ -543,5 +542,11 @@
   "onboarding.subs.loginAfter": "터미널에서 로그인한 다음 “다시 확인”을(를) 누르세요.",
   "onboarding.server.agentsGroup": "에이전트 구독",
   "onboarding.server.featuresGroup": "서버 기능",
-  "onboarding.server.optional": "선택 사항"
+  "onboarding.server.optional": "선택 사항",
+  "agentSheet.ownFolderHint": "폴더가 없으면 에이전트는 자신의 개인 폴더에서 작업합니다",
+  "menubar.approvalsWaiting": {"other": "{count}개 승인 대기"},
+  "team.welcomeTitle": "팀을 꾸려 보세요",
+  "team.welcomeBody": "에이전트는 서버에서 일합니다. 각자 역할과 폴더를 따로 가집니다.",
+  "team.header.terminal": "에이전트 폴더에서 터미널 열기",
+  "team.header.schedules": "일정: 에이전트가 스스로 실행되는 시점"
 }

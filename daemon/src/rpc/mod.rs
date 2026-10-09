@@ -72,6 +72,7 @@ pub fn features() -> Vec<&'static str> {
         "update",
         "pause",
         "logs",
+        "agent_own_folder",
     ];
     if cfg!(target_os = "linux") {
         list.push("screen");
@@ -814,11 +815,11 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             ok(out)
         }
 
-        "agents.list" => ok(store.agent_list()?),
+        "agents.list" => ok(store.agent_list_view()?),
         "agents.get" => {
             let Id { id } = params(p)?;
             ok(store
-                .agent_get(&id)?
+                .agent_view(&id)?
                 .ok_or_else(|| RpcError::new(SERVER_ERROR, format!("no agent {id}")))?)
         }
         "agents.create" => {
@@ -857,7 +858,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                 ));
             }
             ok(store
-                .agent_get(&created.id)?
+                .agent_view(&created.id)?
                 .ok_or_else(|| RpcError::new(SERVER_ERROR, format!("no agent {}", created.id)))?)
         }
         "agents.update" => {
@@ -953,6 +954,14 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                 app.sup.set_paused(&id, paused).await?;
                 a.paused = paused;
             }
+            // The wire-only fields come from the view read, as in agents.get.
+            let view = store
+                .agent_view(&id)?
+                .ok_or_else(|| RpcError::new(SERVER_ERROR, format!("no agent {id}")))?;
+            a.last_message = view.last_message;
+            a.status = view.status;
+            a.pending_approval_ids = view.pending_approval_ids;
+            a.pending_approvals = view.pending_approvals;
             let mut body = serde_json::to_value(&a).map_err(|e| RpcError::new(SERVER_ERROR, e.to_string()))?;
             body["warnings"] = json!(warnings);
             ok(body)
@@ -2873,6 +2882,101 @@ mod pause_and_logs_tests {
                 _ => None,
             })
             .collect()
+    }
+
+    #[tokio::test]
+    async fn agents_list_and_get_carry_the_last_message() {
+        use crate::event::Source;
+        let dir = tempfile::tempdir().unwrap();
+        let (app, store, forge, scout) = app_in(dir.path());
+        store
+            .append_event(
+                &forge,
+                EventBody::MessageUser {
+                    text: "hi".into(),
+                    source: Source::User,
+                    from_agent: None,
+                    command: None,
+                },
+            )
+            .unwrap();
+        store
+            .append_event(&forge, EventBody::MessageAssistant { text: "hello".into() })
+            .unwrap();
+        store
+            .append_event(
+                &scout,
+                EventBody::MessageUser {
+                    text: "wrap up".into(),
+                    source: Source::System,
+                    from_agent: None,
+                    command: None,
+                },
+            )
+            .unwrap();
+
+        let got = call(&app, "agents.get", json!({ "id": forge })).await.unwrap();
+        assert_eq!(got["last_message"]["role"], json!("assistant"));
+        assert_eq!(got["last_message"]["text"], json!("hello"));
+        assert!(got["last_message"]["ts"].is_i64());
+
+        let list = call(&app, "agents.list", json!({})).await.unwrap();
+        let of = |id: &str| {
+            list.as_array()
+                .unwrap()
+                .iter()
+                .find(|a| a["id"] == json!(id))
+                .unwrap()
+                .clone()
+        };
+        assert_eq!(of(&forge)["last_message"]["text"], json!("hello"));
+        assert!(
+            of(&scout)["last_message"].is_null(),
+            "a message Bandito sent itself is no preview"
+        );
+    }
+
+    #[tokio::test]
+    async fn agents_list_carries_status_and_pending_approvals() {
+        use crate::event::{AgentStatus, Decision};
+        let dir = tempfile::tempdir().unwrap();
+        let (app, store, forge, scout) = app_in(dir.path());
+        store
+            .append_event(
+                &forge,
+                EventBody::AgentStatus {
+                    status: AgentStatus::NeedsYou,
+                    detail: None,
+                },
+            )
+            .unwrap();
+        // Waiting for an answer before anyone opens the thread: the list is what the team shows from.
+        let asked = store
+            .approval_create(&forge, "call-1", "Bash", "git push", json!({}))
+            .unwrap();
+        let waiting = store
+            .approval_create(&forge, "call-2", "Bash", "rm", json!({}))
+            .unwrap();
+        store.approval_resolve(&asked.id, Decision::Deny).unwrap();
+
+        let list = call(&app, "agents.list", json!({})).await.unwrap();
+        let of = |id: &str| {
+            list.as_array()
+                .unwrap()
+                .iter()
+                .find(|a| a["id"] == json!(id))
+                .unwrap()
+                .clone()
+        };
+        assert_eq!(of(&forge)["status"], json!("needs_you"));
+        assert_eq!(of(&forge)["pending_approvals"], json!(1));
+        assert_eq!(of(&forge)["pending_approval_ids"], json!([waiting.id]));
+        assert_eq!(of(&scout)["status"], json!(null), "no status event yet");
+        assert_eq!(of(&scout)["pending_approvals"], json!(0));
+
+        let got = call(&app, "agents.get", json!({ "id": forge })).await.unwrap();
+        assert_eq!(got["pending_approvals"], json!(1));
+        assert_eq!(got["pending_approval_ids"], json!([waiting.id]));
     }
 
     #[tokio::test]

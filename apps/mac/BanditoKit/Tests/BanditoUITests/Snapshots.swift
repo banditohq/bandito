@@ -47,12 +47,13 @@ import Testing
     @Test func sidebarRows() throws {
         let (server, agent) = Self.demoServer()
         let rows = VStack(alignment: .leading, spacing: 4) {
-            AgentRow(agent: agent, thread: server.thread(for: agent.id))
+            AgentRow(agent: agent, thread: server.thread(for: agent.id), status: server.status(of: agent.id))
             AgentRow(
                 agent: Agent(
                     id: "scout", name: "Scout", role: "reviewer", runtime: .codex, model: nil, cwd: "/home/me/api",
                     approvalMode: .risky, systemPrompt: nil, runtimeSessionId: nil, createdAt: 0, updatedAt: 0),
-                thread: AgentThread())
+                thread: AgentThread(),
+                status: .idle)
         }
         .padding()
         .background(Color.black)

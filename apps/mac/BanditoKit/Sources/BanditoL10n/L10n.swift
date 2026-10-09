@@ -148,7 +148,7 @@ public enum L10n {
         public static var colorRose: String { L10n.tr("agentSheet.colorRose") }
         public static var colorSage: String { L10n.tr("agentSheet.colorSage") }
         public static var colorSky: String { L10n.tr("agentSheet.colorSky") }
-        public static func create(name: String) -> String { L10n.tr("agentSheet.create", name) }
+        public static var create: String { L10n.tr("agentSheet.create") }
         public static var createBlockedFolder: String { L10n.tr("agentSheet.createBlockedFolder") }
         public static var createBlockedWorkplace: String { L10n.tr("agentSheet.createBlockedWorkplace") }
         public static var effortHintHigh: String { L10n.tr("agentSheet.effortHintHigh") }
@@ -178,6 +178,7 @@ public enum L10n {
         public static var name: String { L10n.tr("agentSheet.name") }
         public static var noFolder: String { L10n.tr("agentSheet.noFolder") }
         public static var noServer: String { L10n.tr("agentSheet.noServer") }
+        public static var ownFolderHint: String { L10n.tr("agentSheet.ownFolderHint") }
         public static func resetsIn(time: String) -> String { L10n.tr("agentSheet.resetsIn", time) }
         public static var role: String { L10n.tr("agentSheet.role") }
         public static var roleHint: String { L10n.tr("agentSheet.roleHint") }
@@ -941,6 +942,7 @@ public enum L10n {
     }
 
     public enum Menubar {
+        public static func approvalsWaiting(count: Int) -> String { L10n.tr("menubar.approvalsWaiting", count) }
         public static func needsYou(count: Int) -> String { L10n.tr("menubar.needsYou", count) }
         public static var noneWaiting: String { L10n.tr("menubar.noneWaiting") }
         public static var nothingRunning: String { L10n.tr("menubar.nothingRunning") }
@@ -1830,7 +1832,6 @@ public enum L10n {
     public enum Sidebar {
         public static var agentRail: String { L10n.tr("sidebar.agentRail") }
         public static var agents: String { L10n.tr("sidebar.agents") }
-        public static var empty: String { L10n.tr("sidebar.empty") }
         public static var messageTeam: String { L10n.tr("sidebar.messageTeam") }
         public static var needsYou: String { L10n.tr("sidebar.needsYou") }
         public static var new: String { L10n.tr("sidebar.new") }
@@ -1901,12 +1902,17 @@ public enum L10n {
         public static var pickAgent: String { L10n.tr("team.pickAgent") }
         public static var resolvedAllowed: String { L10n.tr("team.resolvedAllowed") }
         public static var resolvedDenied: String { L10n.tr("team.resolvedDenied") }
-        public static var schedules: String { L10n.tr("team.schedules") }
-        public static var terminal: String { L10n.tr("team.terminal") }
+        public static var welcomeBody: String { L10n.tr("team.welcomeBody") }
+        public static var welcomeTitle: String { L10n.tr("team.welcomeTitle") }
         public static var workplaceShared: String { L10n.tr("team.workplaceShared") }
 
         public enum Delete {
             public static var action: String { L10n.tr("team.delete.action") }
+        }
+
+        public enum Header {
+            public static var schedules: String { L10n.tr("team.header.schedules") }
+            public static var terminal: String { L10n.tr("team.header.terminal") }
         }
     }
 
@@ -1958,8 +1964,6 @@ public enum L10n {
 
     public enum Terminals {
         public static func connecting(server: String) -> String { L10n.tr("terminals.connecting", server) }
-        public static func desktop(name: String) -> String { L10n.tr("terminals.desktop", name) }
-        public static var desktopDefault: String { L10n.tr("terminals.desktopDefault") }
         public static var empty: String { L10n.tr("terminals.empty") }
         public static var emptyHint: String { L10n.tr("terminals.emptyHint") }
         public static func error(message: String) -> String { L10n.tr("terminals.error", message) }
@@ -2016,7 +2020,6 @@ public enum L10n {
         public enum Sidebar {
             public static var collapsed: String { L10n.tr("terminals.sidebar.collapsed") }
             public static var collapsedHint: String { L10n.tr("terminals.sidebar.collapsedHint") }
-            public static var none: String { L10n.tr("terminals.sidebar.none") }
             public static var noteBody: String { L10n.tr("terminals.sidebar.noteBody") }
             public static var noteTitle: String { L10n.tr("terminals.sidebar.noteTitle") }
             public static var onScreen: String { L10n.tr("terminals.sidebar.onScreen") }
@@ -2036,7 +2039,7 @@ public enum L10n {
         public static func messageFor(name: String) -> String { L10n.tr("thread.messageFor", name) }
         public static func messageFrom(name: String) -> String { L10n.tr("thread.messageFrom", name) }
         public static var more: String { L10n.tr("thread.more") }
-        public static func placeholder(name: String) -> String { L10n.tr("thread.placeholder", name) }
+        public static var placeholder: String { L10n.tr("thread.placeholder") }
         public static func ranCommands(count: Int) -> String { L10n.tr("thread.ranCommands", count) }
         public static var react: String { L10n.tr("thread.react") }
         public static var reply: String { L10n.tr("thread.reply") }

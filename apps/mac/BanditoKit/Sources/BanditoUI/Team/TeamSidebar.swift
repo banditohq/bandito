@@ -22,11 +22,12 @@ struct TeamSidebar: View {
     @ViewBuilder
     private func content(_ server: ServerModel) -> some View {
         let agents = server.sortedAgents
-        let waiting = agents.filter { isWaiting(server.thread(for: $0.id)) }
+        let shown = TeamSelection.shownAgentID(server: server, selected: router.selectedAgentID, pinned: Set(pins.ids))
+        let waiting = agents.filter { server.needsPerson($0.id) }
         let waitingIDs = Set(waiting.map(\.id))
         let others = agents.filter { !waitingIDs.contains($0.id) }
         // The grid holds two tiles; further pins stay pinned but are not shown as tiles.
-        let pinned = Array(agents.filter { pins.isPinned($0.id) }.prefix(2))
+        let pinned = Array(agents.filter { pins.isPinned($0.id) }.prefix(TeamSidebarOrder.pinnedTiles))
 
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
@@ -38,7 +39,7 @@ struct TeamSidebar: View {
                             .padding(.horizontal, 18)
                             .padding(.top, 14)
                             .padding(.bottom, 6)
-                        pinnedGrid(pinned, server: server)
+                        pinnedGrid(pinned, server: server, shown: shown)
                     }
                     if !waiting.isEmpty {
                         SectionLabel(L10n.Sidebar.needsYou, tone: .signal)
@@ -58,7 +59,7 @@ struct TeamSidebar: View {
                         .padding(.bottom, 6)
                     VStack(spacing: 2) {
                         ForEach(Array(others.enumerated()), id: \.element.id) { index, agent in
-                            teamRow(agent, thread: server.thread(for: agent.id), server: server)
+                            teamRow(agent, thread: server.thread(for: agent.id), server: server, selected: shown == agent.id)
                                 .banditoRise(delay: Double(index) * 0.06)
                         }
                     }
@@ -85,25 +86,20 @@ struct TeamSidebar: View {
         }
     }
 
-    /// Needs a person: the status says so, or an approval is waiting.
-    private func isWaiting(_ thread: AgentThread) -> Bool {
-        thread.status == .needsYou || !thread.pendingApprovals.isEmpty
-    }
-
     // MARK: pinned
 
-    private func pinnedGrid(_ agents: [Agent], server: ServerModel) -> some View {
+    private func pinnedGrid(_ agents: [Agent], server: ServerModel, shown: String?) -> some View {
         HStack(spacing: 8) {
             ForEach(agents) { agent in
                 let thread = server.thread(for: agent.id)
                 Button {
-                    router.selectedAgentID = agent.id
+                    router.selectAgent(agent.id, on: server)
                 } label: {
                     VStack(spacing: 8) {
                         AgentAvatar(
                             name: agent.name, size: 52,
                             mood: AvatarMood.make(
-                                status: thread.status, turnRunning: thread.turnRunning, paused: agent.paused))
+                                status: server.status(of: agent.id), turnRunning: thread.turnRunning, paused: agent.paused))
                         Text(agent.name)
                             .font(BanditoFont.font(size: 13, weight: 600))
                             .foregroundStyle(Color.Bandito.text)
@@ -115,7 +111,7 @@ struct TeamSidebar: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
                     .background(
-                        Color.Bandito.text.opacity(router.selectedAgentID == agent.id ? 0.08 : 0.035),
+                        Color.Bandito.text.opacity(shown == agent.id ? 0.08 : 0.035),
                         in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -137,7 +133,7 @@ struct TeamSidebar: View {
 
     private func waitingCard(_ agent: Agent, thread: AgentThread, server: ServerModel) -> some View {
         Button {
-            router.selectedAgentID = agent.id
+            router.selectAgent(agent.id, on: server)
         } label: {
             HStack(spacing: 11) {
                 AgentAvatar(name: agent.name, size: 40, mood: .needsYou)
@@ -152,7 +148,7 @@ struct TeamSidebar: View {
                             .font(BanditoFont.font(size: 11, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                     }
-                    Text(thread.pendingApprovals.first?.title ?? thread.preview ?? "")
+                    Text(thread.pendingApprovals.first?.title ?? AgentPreview.text(thread: thread, agent: agent) ?? "")
                         .font(BanditoFont.font(size: 12.5, weight: 400))
                         .foregroundStyle(Color.Bandito.signalGlow)
                         .lineLimit(1)
@@ -177,12 +173,13 @@ struct TeamSidebar: View {
 
     // MARK: team
 
-    private func teamRow(_ agent: Agent, thread: AgentThread, server: ServerModel) -> some View {
-        let selected = router.selectedAgentID == agent.id
+    private func teamRow(_ agent: Agent, thread: AgentThread, server: ServerModel, selected: Bool) -> some View {
         return Button {
-            router.selectedAgentID = agent.id
+            router.selectAgent(agent.id, on: server)
         } label: {
-            AgentRow(agent: agent, thread: thread, isSelected: selected, lastActivity: lastActivityLabel(agent, thread: thread))
+            AgentRow(
+                agent: agent, thread: thread, status: server.status(of: agent.id), isSelected: selected,
+                lastActivity: lastActivityLabel(agent, thread: thread))
                 .contentShape(Rectangle())
         }
         .banditoButton(.row(cornerRadius: 10))
@@ -190,8 +187,7 @@ struct TeamSidebar: View {
     }
 
     private func lastActivityLabel(_ agent: Agent, thread: AgentThread) -> String {
-        let ts = thread.items.reversed().lazy.compactMap { ThreadRows.timestamp(of: $0) }.first
-        return TeamTime.label(ms: ts ?? agent.lastTurnAt ?? agent.updatedAt)
+        TeamTime.label(ms: AgentPreview.timestamp(thread: thread, agent: agent))
     }
 
     // MARK: menu
@@ -217,6 +213,7 @@ struct TeamSidebar: View {
         Task {
             do {
                 try await server.deleteAgent(agent.id)
+                router.drafts[agent.id] = nil
                 if router.selectedAgentID == agent.id { router.selectedAgentID = nil }
             } catch {
                 actionError = UserFacingError.message(for: error)
@@ -224,26 +221,14 @@ struct TeamSidebar: View {
         }
     }
 
+    /// One line only: the way to make an agent is in the main area (`TeamWelcome`).
     private var emptyState: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 26))
-                .foregroundStyle(Color.Bandito.text3)
-            Text(L10n.Team.emptyTitle)
-                .font(BanditoFont.font(size: 13, weight: 600))
-                .foregroundStyle(Color.Bandito.text)
-            Text(L10n.Sidebar.empty)
-                .font(BanditoFont.font(size: 12, weight: 400))
-                .foregroundStyle(Color.Bandito.text3)
-                .multilineTextAlignment(.center)
-            Button(L10n.New.agent) {
-                router.sheet = .newAgent
-            }
-            .banditoButton(.quiet())
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 24)
-        .padding(.top, 60)
+        Text(L10n.Team.emptyTitle)
+            .font(BanditoFont.font(size: 12.5, weight: 400))
+            .foregroundStyle(Color.Bandito.text3)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 18)
+            .padding(.top, 24)
     }
 }
 
@@ -251,6 +236,8 @@ struct TeamSidebar: View {
 struct AgentRow: View {
     var agent: Agent
     var thread: AgentThread
+    /// The status the team shows (see `ServerModel.status(of:)`); the thread may not be loaded.
+    var status: AgentStatus
     var isSelected = false
     /// Time of the last event, already formatted.
     var lastActivity = ""
@@ -259,9 +246,9 @@ struct AgentRow: View {
         HStack(alignment: .center, spacing: 11) {
             AgentAvatar(
                 name: agent.name, size: 40,
-                mood: AvatarMood.make(status: thread.status, turnRunning: thread.turnRunning, paused: agent.paused))
+                mood: AvatarMood.make(status: status, turnRunning: thread.turnRunning, paused: agent.paused))
                 .overlay(alignment: .bottomTrailing) {
-                    StatusDot(status: thread.status, size: 11, ringColor: Color.Bandito.surface1)
+                    StatusDot(status: status, size: 11, ringColor: Color.Bandito.surface1)
                         .offset(x: 2, y: 2)
                 }
             VStack(alignment: .leading, spacing: 2) {
@@ -285,9 +272,9 @@ struct AgentRow: View {
                             .foregroundStyle(Color.Bandito.text3)
                     }
                 }
-                Text(thread.preview ?? L10n.Team.noMessages)
+                Text(AgentPreview.text(thread: thread, agent: agent) ?? L10n.Team.noMessages)
                     .font(BanditoFont.font(size: 12.5, weight: 400))
-                    .foregroundStyle(thread.status == .needsYou ? Color.Bandito.signalGlow : Color.Bandito.text3)
+                    .foregroundStyle(status == .needsYou ? Color.Bandito.signalGlow : Color.Bandito.text3)
                     .lineLimit(1)
             }
         }

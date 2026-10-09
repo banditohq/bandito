@@ -16,7 +16,6 @@
   "sidebar.messageTeam": "チームにメッセージ…",
   "sidebar.pinned": "ピン留め",
   "sidebar.servers": "サーバー",
-  "sidebar.empty": "エージェントはまだありません。最初のエージェントを作成してください。",
   "common.now": "たった今",
   "common.agentCount": {"other": "{count} 件のエージェント"},
   "common.serverCount": {"other": "{count} 台のサーバー"},
@@ -85,7 +84,7 @@
   "agentSheet.memoryAuto": "自動で作成されます",
   "agentSheet.memoryHint": "自分のフォルダにメモを残すので、すべて覚えていて、メッセージが高くなりません。",
   "agentSheet.changeLater": "これらはあとからいつでも変更できます。",
-  "agentSheet.create": "{name} を作成",
+  "agentSheet.create": "作成",
   "agentSheet.cancel": "キャンセル",
   "agentSheet.runtimeMissing": "{server} に {runtime} がインストールされていません",
   "agentSheet.runtimeLogin": "{server} では {runtime} にログインしていません。そこで実行: {command}",
@@ -124,7 +123,7 @@
   "approvalMode.risky": "危険な操作のみ",
   "approvalMode.always": "すべて",
   "approvalMode.never": "なし",
-  "thread.placeholder": "{name} へのメッセージ",
+  "thread.placeholder": "タスクや質問を入力…",
   "thread.send": "送信",
   "thread.stop": "停止",
   "thread.attach": "ファイルを添付",
@@ -543,5 +542,11 @@
   "onboarding.subs.loginAfter": "ターミナルでサインインしてから「もう一度確認」を押してください。",
   "onboarding.server.agentsGroup": "エージェントのサブスクリプション",
   "onboarding.server.featuresGroup": "サーバーの機能",
-  "onboarding.server.optional": "任意"
+  "onboarding.server.optional": "任意",
+  "agentSheet.ownFolderHint": "フォルダなしの場合、エージェントは専用の個人フォルダで作業します",
+  "menubar.approvalsWaiting": {"other": "{count} 件の承認待ち"},
+  "team.welcomeTitle": "チームを作りましょう",
+  "team.welcomeBody": "エージェントはサーバー上で動きます。役割とフォルダはそれぞれ別です。",
+  "team.header.terminal": "エージェントのフォルダでターミナルを開く",
+  "team.header.schedules": "スケジュール：エージェントが自動で動く時間"
 }

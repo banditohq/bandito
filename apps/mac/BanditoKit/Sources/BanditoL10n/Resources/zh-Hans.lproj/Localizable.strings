@@ -49,7 +49,7 @@
 "agentSheet.avatar" = "头像";
 "agentSheet.cancel" = "取消";
 "agentSheet.changeLater" = "这些以后都可以修改。";
-"agentSheet.create" = "创建 %1$@";
+"agentSheet.create" = "创建";
 "agentSheet.createBlockedFolder" = "请选择项目文件夹以创建智能体。";
 "agentSheet.createBlockedWorkplace" = "请检查新工作区的名称和限制。";
 "agentSheet.folder" = "服务器上的项目";
@@ -62,6 +62,7 @@
 "agentSheet.model" = "模型";
 "agentSheet.modelDefault" = "默认";
 "agentSheet.name" = "名称";
+"agentSheet.ownFolderHint" = "不选文件夹时，代理在自己的个人文件夹中工作";
 "agentSheet.role" = "角色";
 "agentSheet.roleHint" = "显示在名称旁的标签";
 "agentSheet.rolePlaceholder" = "例如：审查员";
@@ -445,7 +446,6 @@
 "setup.screenLinuxOnly" = "屏幕功能只在 Linux 服务器上可用";
 "sidebar.agentRail" = "代理";
 "sidebar.agents" = "团队";
-"sidebar.empty" = "还没有智能体。创建第一个吧。";
 "sidebar.messageTeam" = "给团队发消息…";
 "sidebar.needsYou" = "等待你处理";
 "sidebar.new" = "新建";
@@ -462,6 +462,10 @@
 "status.needsYou" = "需要你处理";
 "status.offline" = "离线";
 "status.working" = "工作中";
+"team.header.schedules" = "计划：代理自动运行的时间";
+"team.header.terminal" = "在代理的文件夹中打开终端";
+"team.welcomeBody" = "代理在你的服务器上工作，每个都有自己的角色和文件夹。";
+"team.welcomeTitle" = "组建你的团队";
 "template.assistant.desc" = "邮件、日历、笔记、提醒——用日常语言即可。";
 "template.assistant.meta" = "Claude Code · 中 · 每天 09:00 汇总";
 "template.assistant.title" = "助手";
@@ -495,7 +499,7 @@
 "thread.messageFor" = "发给 %1$@ 的消息";
 "thread.messageFrom" = "来自 %1$@ 的消息";
 "thread.more" = "更多";
-"thread.placeholder" = "发送给 %1$@ 的消息";
+"thread.placeholder" = "输入任务或问题…";
 "thread.react" = "回应";
 "thread.reply" = "回复";
 "thread.reviewApproved" = "%1$@ 已审阅更改 · 已批准";

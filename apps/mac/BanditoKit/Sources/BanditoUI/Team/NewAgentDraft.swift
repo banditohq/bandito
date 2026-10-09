@@ -44,6 +44,8 @@ public struct NewAgentDraft: Equatable, Sendable {
     public var instructions = ""
     /// The project folder on the server. Empty until one is picked.
     public var cwd = ""
+    /// The server takes an agent without a folder (`agent_own_folder`): the agent then works in its own folder.
+    public var folderOptional = false
     public var approval: ApprovalChoice = .risky
     public var memory: MemoryMode = .smart
     /// "If the limit runs out": the runtime to continue on. `nil` = do not switch.
@@ -62,10 +64,11 @@ public struct NewAgentDraft: Equatable, Sendable {
         L10n.AgentSheet.autoName(number: "\(number)")
     }
 
-    /// The project folder is required (the daemon refuses an agent without one); the name is optional, see
-    /// `resolvedName`. A new container needs a valid name and limits. The runtime is checked by `createBlocker`.
+    /// The project folder is required unless the server takes an agent without one (`folderOptional`); the name is
+    /// optional, see `resolvedName`. A new container needs a valid name and limits. The runtime is checked by
+    /// `createBlocker`.
     public var canCreate: Bool {
-        !trimmed(cwd).isEmpty && workplaceReady
+        (folderOptional || !trimmed(cwd).isEmpty) && workplaceReady
     }
 
     /// The first reason creation cannot happen, in the order the sheet explains it: the runtime, then the folder,
@@ -77,7 +80,7 @@ public struct NewAgentDraft: Equatable, Sendable {
         if let status, status.loggedIn == false {
             return .runtimeLogin(runtime, command: LoginCommand.arguments(for: runtime).joined(separator: " "))
         }
-        if trimmed(cwd).isEmpty {
+        if !folderOptional && trimmed(cwd).isEmpty {
             return .folder
         }
         if !workplaceReady {

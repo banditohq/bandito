@@ -30,6 +30,7 @@ public struct MenuBarLabel: View {
 public struct MenuBarContent: View {
     @Environment(AppModel.self) private var app
     @Environment(DemoStore.self) private var demo
+    @Environment(Router.self) private var router
     @State private var failure: UserFacingMessage?
 
     public init() {}
@@ -90,7 +91,8 @@ public struct MenuBarContent: View {
             SectionLabel(L10n.Menubar.waiting, tone: .signal)
                 .padding(.horizontal, 8)
             let rows = Self.waiting(app)
-            if rows.isEmpty {
+            let unlisted = Self.unlisted(app)
+            if rows.isEmpty && unlisted.isEmpty {
                 Text(L10n.Menubar.noneWaiting)
                     .font(.system(size: 12.5))
                     .foregroundStyle(Color.Bandito.text3)
@@ -98,6 +100,10 @@ public struct MenuBarContent: View {
             }
             ForEach(rows) { row in
                 approvalRow(row)
+            }
+            // Approvals of agents whose chat is not open: the count is known, the details come with the chat.
+            ForEach(unlisted) { row in
+                unlistedRow(row)
             }
             if let failure {
                 UserFacingErrorView(message: failure)
@@ -135,6 +141,34 @@ public struct MenuBarContent: View {
         .padding(.horizontal, 8)
     }
 
+    private func unlistedRow(_ row: WaitingAgent) -> some View {
+        HStack(spacing: 9) {
+            AgentAvatar(name: row.agent.name, size: 26)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(row.agent.name)
+                    .font(.system(size: 13, weight: .semibold))
+                Text(L10n.Menubar.approvalsWaiting(count: row.count))
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.Bandito.text2)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 6)
+            Button(L10n.Menubar.openChat) {
+                // The same as choosing the agent in the main window: it is selected, remembered and shown in Team.
+                router.selectAgent(row.agent.id, on: row.server)
+                router.select(mode: .team)
+                WindowActions.showMainWindow()
+            }
+                .banditoButton(.quiet(size: .regular))
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.Bandito.signal.opacity(0.09)))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.Bandito.signal.opacity(0.28)))
+        .padding(.horizontal, 8)
+    }
+
     private var workingSection: some View {
         let rows = Self.working(app)
         return VStack(alignment: .leading, spacing: 2) {
@@ -154,7 +188,7 @@ public struct MenuBarContent: View {
                         .frame(width: 7, height: 7)
                     Text(row.agent.name)
                         .font(.system(size: 13, weight: .medium))
-                    Text(row.thread.preview ?? row.agent.cwd)
+                    Text(AgentPreview.text(thread: row.thread, agent: row.agent) ?? row.agent.cwd)
                         .font(.system(size: 12.5))
                         .foregroundStyle(Color.Bandito.text3)
                         .lineLimit(1)
@@ -206,6 +240,14 @@ public struct MenuBarContent: View {
         var id: String { approval.approvalId }
     }
 
+    /// An agent with approvals the app has not listed (its chat is not loaded): the count only.
+    struct WaitingAgent: Identifiable {
+        var server: ServerModel
+        var agent: Agent
+        var count: Int
+        var id: String { agent.id }
+    }
+
     struct WorkingAgent: Identifiable {
         var agent: Agent
         var thread: AgentThread
@@ -222,15 +264,29 @@ public struct MenuBarContent: View {
         }
     }
 
+    /// Approvals of agents whose chat is not loaded, as a count per agent. Together with `waiting` this is every
+    /// approval the server reports (`ServerModel.pendingApprovalCount`).
+    static func unlisted(_ app: AppModel) -> [WaitingAgent] {
+        app.servers.flatMap { server in
+            server.agents.compactMap { agent -> WaitingAgent? in
+                let listed = server.thread(for: agent.id).pendingApprovals.count
+                let count = server.pendingApprovalCount(of: agent.id) - listed
+                return count > 0 ? WaitingAgent(server: server, agent: agent, count: count) : nil
+            }
+        }
+    }
+
     static func waitingCount(_ app: AppModel) -> Int {
-        waiting(app).count
+        app.servers.reduce(0) { total, server in
+            total + server.agents.reduce(0) { $0 + server.pendingApprovalCount(of: $1.id) }
+        }
     }
 
     static func working(_ app: AppModel) -> [WorkingAgent] {
         app.servers.flatMap { server in
             server.agents.compactMap { agent -> WorkingAgent? in
-                let thread = server.thread(for: agent.id)
-                return thread.status == .working ? WorkingAgent(agent: agent, thread: thread) : nil
+                guard server.status(of: agent.id) == .working else { return nil }
+                return WorkingAgent(agent: agent, thread: server.thread(for: agent.id))
             }
         }
     }

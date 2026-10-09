@@ -223,4 +223,15 @@ import Testing
         #expect(draft.fallbackRuntime == nil)
         #expect(draft.fallbackModel.isEmpty)
     }
+
+    @Test func folderIsRequiredUnlessTheServerTakesAnAgentWithoutOne() {
+        var draft = NewAgentDraft()
+        #expect(draft.canCreate == false)
+        #expect(draft.createBlocker(status: nil) == .folder)
+
+        draft.folderOptional = true
+        #expect(draft.canCreate)
+        #expect(draft.createBlocker(status: nil) == nil)
+        #expect(draft.makeNewAgent().cwd == "", "an empty folder is sent as is: the agent gets its own")
+    }
 }

@@ -16,7 +16,6 @@
   "sidebar.messageTeam": "Escreva para a equipe…",
   "sidebar.pinned": "Fixados",
   "sidebar.servers": "Servidores",
-  "sidebar.empty": "Nenhum agente ainda. Crie o primeiro.",
   "common.now": "agora",
   "common.agentCount": {"one": "{count} agente", "other": "{count} agentes"},
   "common.serverCount": {"one": "{count} servidor", "other": "{count} servidores"},
@@ -85,7 +84,7 @@
   "agentSheet.memoryAuto": "será criada automaticamente",
   "agentSheet.memoryHint": "Mantém notas na própria pasta, então lembra de tudo e as mensagens não ficam mais caras.",
   "agentSheet.changeLater": "Você pode mudar tudo isso depois.",
-  "agentSheet.create": "Criar {name}",
+  "agentSheet.create": "Criar",
   "agentSheet.cancel": "Cancelar",
   "agentSheet.runtimeMissing": "{runtime} não está instalado em {server}",
   "agentSheet.runtimeLogin": "{runtime} não está conectado em {server}. Execute ali: {command}",
@@ -124,7 +123,7 @@
   "approvalMode.risky": "Só o arriscado",
   "approvalMode.always": "Tudo",
   "approvalMode.never": "Nada",
-  "thread.placeholder": "Mensagem para {name}",
+  "thread.placeholder": "Escreva uma tarefa ou uma pergunta…",
   "thread.send": "Enviar",
   "thread.stop": "Parar",
   "thread.attach": "Anexar arquivos",
@@ -543,5 +542,11 @@
   "onboarding.subs.loginAfter": "Entre no terminal e depois toque em “Verificar de novo”.",
   "onboarding.server.agentsGroup": "Assinaturas dos agentes",
   "onboarding.server.featuresGroup": "Recursos do servidor",
-  "onboarding.server.optional": "opcional"
+  "onboarding.server.optional": "opcional",
+  "agentSheet.ownFolderHint": "Sem pasta, o agente trabalha na sua própria pasta pessoal",
+  "menubar.approvalsWaiting": {"one": "{count} aprovação aguardando", "other": "{count} aprovações aguardando"},
+  "team.welcomeTitle": "Monte sua equipe",
+  "team.welcomeBody": "Os agentes trabalham no seu servidor, cada um com seu papel e sua pasta.",
+  "team.header.terminal": "Abrir um terminal na pasta do agente",
+  "team.header.schedules": "Agendamentos: quando o agente roda sozinho"
 }

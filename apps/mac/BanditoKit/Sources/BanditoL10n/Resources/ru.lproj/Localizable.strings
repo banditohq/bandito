@@ -58,7 +58,7 @@
 "agentSheet.colorRose" = "Розовый";
 "agentSheet.colorSage" = "Шалфей";
 "agentSheet.colorSky" = "Голубой";
-"agentSheet.create" = "Создать %1$@";
+"agentSheet.create" = "Создать";
 "agentSheet.createBlockedFolder" = "Выберите папку проекта, чтобы создать агента.";
 "agentSheet.createBlockedWorkplace" = "Проверьте имя и лимиты нового рабочего места.";
 "agentSheet.effortHintHigh" = "Для сложных задач: дольше думает, тратит лимит заметно быстрее.";
@@ -88,6 +88,7 @@
 "agentSheet.name" = "Имя";
 "agentSheet.noFolder" = "Выберите папку проекта";
 "agentSheet.noServer" = "Сначала выберите сервер.";
+"agentSheet.ownFolderHint" = "Без папки агент работает в своей личной папке";
 "agentSheet.resetsIn" = "сбросится %1$@";
 "agentSheet.role" = "Роль";
 "agentSheet.roleHint" = "видна как метка у имени";
@@ -1334,7 +1335,6 @@
 "setup.unsupported" = "Недоступно";
 "sidebar.agentRail" = "Агенты";
 "sidebar.agents" = "КОМАНДА";
-"sidebar.empty" = "Агентов пока нет. Создайте первого.";
 "sidebar.messageTeam" = "Написать команде…";
 "sidebar.needsYou" = "ЖДУТ ВАС";
 "sidebar.new" = "Создать";
@@ -1392,13 +1392,15 @@
 "team.changes" = "Изменения";
 "team.delete.action" = "Удалить";
 "team.emptyTitle" = "Агентов пока нет";
+"team.header.schedules" = "Расписания: когда агент запускается сам";
+"team.header.terminal" = "Открыть терминал в папке агента";
 "team.noMessages" = "Сообщений пока нет";
 "team.pauseUnavailable" = "Пауза требует более новой версии сервера";
 "team.pickAgent" = "Выберите агента, чтобы открыть его чат";
 "team.resolvedAllowed" = "Разрешено вами · только что";
 "team.resolvedDenied" = "Отклонено вами · только что";
-"team.schedules" = "Расписания";
-"team.terminal" = "Терминал агента (только просмотр)";
+"team.welcomeBody" = "Агенты работают на вашем сервере. У каждого — своя роль и папка.";
+"team.welcomeTitle" = "Соберите свою команду";
 "team.workplaceShared" = "Общее";
 "template.assistant.desc" = "Почта, календарь, заметки, напоминания — на обычном языке.";
 "template.assistant.instructions" = "Помогаешь с почтой, календарём, заметками и напоминаниями. Отвечай простым языком. Каждое утро в 09:00 присылай короткую сводку.";
@@ -1429,8 +1431,6 @@
 "terminals.confirmClose.end" = "Завершить";
 "terminals.confirmClose.title" = "Процесс ещё работает. Завершить?";
 "terminals.connecting" = "Подключение к %1$@…";
-"terminals.desktop" = "Рабочий стол «%1$@»";
-"terminals.desktopDefault" = "Рабочий стол";
 "terminals.dock.empty" = "Ничего не свёрнуто";
 "terminals.dock.lastHint" = "%1$@ — вернуть последний";
 "terminals.dock.restore" = "Вернуть";
@@ -1464,7 +1464,6 @@
 "terminals.restart" = "Перезапустить";
 "terminals.sidebar.collapsed" = "Свёрнуты";
 "terminals.sidebar.collapsedHint" = "работают дальше";
-"terminals.sidebar.none" = "Терминалов нет";
 "terminals.sidebar.noteBody" = "Свёрнутый терминал продолжает работать на сервере, даже если Mac выключен. Вернётесь — увидите всё, что он успел вывести.";
 "terminals.sidebar.noteTitle" = "Свернуть ≠ закрыть.";
 "terminals.sidebar.onScreen" = "На экране";
@@ -1481,7 +1480,7 @@
 "thread.messageFor" = "Сообщение для %1$@";
 "thread.messageFrom" = "Сообщение от %1$@";
 "thread.more" = "Ещё";
-"thread.placeholder" = "Сообщение для %1$@…";
+"thread.placeholder" = "Напишите задачу или вопрос…";
 "thread.react" = "Реакция";
 "thread.reply" = "Ответить";
 "thread.reviewApproved" = "%1$@ проверил изменения · одобрил";

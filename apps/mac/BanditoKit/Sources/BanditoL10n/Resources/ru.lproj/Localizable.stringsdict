@@ -262,6 +262,26 @@
 			<string>«%1$@» · %2$lld совпадения, %3$@</string>
 		</dict>
 	</dict>
+	<key>menubar.approvalsWaiting</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%1$lld одобрения ждут вас</string>
+			<key>many</key>
+			<string>%1$lld одобрений ждут вас</string>
+			<key>one</key>
+			<string>%1$lld одобрение ждёт вас</string>
+			<key>other</key>
+			<string>%1$lld одобрения ждут вас</string>
+		</dict>
+	</dict>
 	<key>menubar.needsYou</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>

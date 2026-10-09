@@ -49,7 +49,7 @@
 "agentSheet.avatar" = "Avatar";
 "agentSheet.cancel" = "Cancelar";
 "agentSheet.changeLater" = "Todo esto se puede cambiar después.";
-"agentSheet.create" = "Crear %1$@";
+"agentSheet.create" = "Crear";
 "agentSheet.createBlockedFolder" = "Elige la carpeta del proyecto para crear el agente.";
 "agentSheet.createBlockedWorkplace" = "Revisa el nombre y los límites del nuevo espacio de trabajo.";
 "agentSheet.folder" = "Proyecto en el servidor";
@@ -62,6 +62,7 @@
 "agentSheet.model" = "Modelo";
 "agentSheet.modelDefault" = "Predeterminado";
 "agentSheet.name" = "Nombre";
+"agentSheet.ownFolderHint" = "Sin carpeta: el agente trabaja en su propia carpeta personal";
 "agentSheet.role" = "Rol";
 "agentSheet.roleHint" = "se muestra como etiqueta junto al nombre";
 "agentSheet.rolePlaceholder" = "p. ej., revisor";
@@ -445,7 +446,6 @@
 "setup.screenLinuxOnly" = "La pantalla solo funciona en un servidor Linux";
 "sidebar.agentRail" = "Agentes";
 "sidebar.agents" = "EQUIPO";
-"sidebar.empty" = "Todavía no hay agentes. Crea el primero.";
 "sidebar.messageTeam" = "Escribe al equipo…";
 "sidebar.needsYou" = "TE NECESITAN";
 "sidebar.new" = "Nuevo";
@@ -462,6 +462,10 @@
 "status.needsYou" = "Necesita tu atención";
 "status.offline" = "Sin conexión";
 "status.working" = "Trabajando";
+"team.header.schedules" = "Horarios: cuándo se ejecuta el agente solo";
+"team.header.terminal" = "Abrir una terminal en la carpeta del agente";
+"team.welcomeBody" = "Los agentes trabajan en tu servidor, cada uno con su propio rol y carpeta.";
+"team.welcomeTitle" = "Forma tu equipo";
 "template.assistant.desc" = "Correo, calendario, notas y recordatorios, en lenguaje normal.";
 "template.assistant.meta" = "Claude Code · medio · resumen diario a las 09:00";
 "template.assistant.title" = "Asistente";
@@ -495,7 +499,7 @@
 "thread.messageFor" = "Mensaje para %1$@";
 "thread.messageFrom" = "Mensaje de %1$@";
 "thread.more" = "Más";
-"thread.placeholder" = "Mensaje para %1$@";
+"thread.placeholder" = "Escribe una tarea o una pregunta…";
 "thread.react" = "Reaccionar";
 "thread.reply" = "Responder";
 "thread.reviewApproved" = "%1$@ revisó los cambios · aprobado";

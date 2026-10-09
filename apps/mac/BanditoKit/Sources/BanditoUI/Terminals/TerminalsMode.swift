@@ -186,13 +186,16 @@ struct TerminalToolbar: View {
         let workspace = controller.workspace
         let inputToAll = workspace.inputToAll
         HStack(spacing: 10) {
-            Text(desktopTitle)
+            Text(L10n.Mode.terminals)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Color.Bandito.text)
                 .lineLimit(1)
+                .fixedSize()
             Text(L10n.Terminals.windowCount(count: workspace.onScreen.count))
                 .font(.system(size: 12))
                 .foregroundStyle(Color.Bandito.text3)
+                .lineLimit(1)
+                .fixedSize()
             Spacer(minLength: 12)
             Text(L10n.Terminals.layoutTitle)
                 .font(.system(size: 12))
@@ -235,13 +238,6 @@ struct TerminalToolbar: View {
         .overlay(alignment: .bottom) {
             Rectangle().fill(Color.Bandito.text.opacity(0.05)).frame(height: 1)
         }
-    }
-
-    private var desktopTitle: String {
-        if let name = controller.focusedSession?.info.title, !name.isEmpty {
-            return L10n.Terminals.desktop(name: name)
-        }
-        return L10n.Terminals.desktopDefault
     }
 
     private var layoutPicker: some View {

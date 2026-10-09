@@ -71,6 +71,18 @@ public struct AgentThread: Sendable, Hashable {
         }
     }
 
+    /// Text of the newest message in the thread: a user or assistant message, or the reply still streaming.
+    /// Approvals and notes are not messages.
+    public var lastMessageText: String? {
+        for item in items.reversed() {
+            switch item {
+            case .assistant(_, let t, _), .user(_, let t, _, _, _), .streaming(let t): return t
+            default: continue
+            }
+        }
+        return nil
+    }
+
     /// The last thing worth showing in the sidebar preview.
     public var preview: String? {
         for item in items.reversed() {

@@ -49,7 +49,7 @@
 "agentSheet.avatar" = "アバター";
 "agentSheet.cancel" = "キャンセル";
 "agentSheet.changeLater" = "これらはあとからいつでも変更できます。";
-"agentSheet.create" = "%1$@ を作成";
+"agentSheet.create" = "作成";
 "agentSheet.createBlockedFolder" = "エージェントを作成するにはプロジェクトのフォルダを選んでください。";
 "agentSheet.createBlockedWorkplace" = "新しい作業場所の名前と上限を確認してください。";
 "agentSheet.folder" = "サーバー上のプロジェクト";
@@ -62,6 +62,7 @@
 "agentSheet.model" = "モデル";
 "agentSheet.modelDefault" = "デフォルト";
 "agentSheet.name" = "名前";
+"agentSheet.ownFolderHint" = "フォルダなしの場合、エージェントは専用の個人フォルダで作業します";
 "agentSheet.role" = "役割";
 "agentSheet.roleHint" = "名前の横にラベルとして表示";
 "agentSheet.rolePlaceholder" = "例: レビュアー";
@@ -445,7 +446,6 @@
 "setup.screenLinuxOnly" = "画面共有はLinuxサーバーでのみ使えます";
 "sidebar.agentRail" = "エージェント";
 "sidebar.agents" = "チーム";
-"sidebar.empty" = "エージェントはまだありません。最初のエージェントを作成してください。";
 "sidebar.messageTeam" = "チームにメッセージ…";
 "sidebar.needsYou" = "要対応";
 "sidebar.new" = "新規";
@@ -462,6 +462,10 @@
 "status.needsYou" = "対応が必要";
 "status.offline" = "オフライン";
 "status.working" = "作業中";
+"team.header.schedules" = "スケジュール：エージェントが自動で動く時間";
+"team.header.terminal" = "エージェントのフォルダでターミナルを開く";
+"team.welcomeBody" = "エージェントはサーバー上で動きます。役割とフォルダはそれぞれ別です。";
+"team.welcomeTitle" = "チームを作りましょう";
 "template.assistant.desc" = "メール、カレンダー、メモ、リマインダー。普通の言葉で頼めます。";
 "template.assistant.meta" = "Claude Code · 中 · 毎日 09:00 にまとめ";
 "template.assistant.title" = "アシスタント";
@@ -495,7 +499,7 @@
 "thread.messageFor" = "%1$@ へのメッセージ";
 "thread.messageFrom" = "%1$@ からのメッセージ";
 "thread.more" = "その他";
-"thread.placeholder" = "%1$@ へのメッセージ";
+"thread.placeholder" = "タスクや質問を入力…";
 "thread.react" = "リアクション";
 "thread.reply" = "返信";
 "thread.reviewApproved" = "%1$@ が変更を確認 · 承認";

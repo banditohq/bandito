@@ -191,3 +191,63 @@ enum TeamTime {
         return date.formatted(.dateTime.day().month(.abbreviated))
     }
 }
+
+// MARK: - Team sidebar: preview, order, the agent on screen
+
+/// What the sidebar says about an agent's last message. The loaded thread wins when it has a message, else the
+/// daemon's `last_message` (the thread is not loaded until the agent is opened).
+public enum AgentPreview {
+    public static func text(thread: AgentThread, agent: Agent) -> String? {
+        thread.lastMessageText ?? agent.lastMessage?.text
+    }
+
+    /// The time shown on the row: the newest of the thread's last event and the daemon's last message. Without
+    /// either, the last finished turn, else the last update.
+    public static func timestamp(thread: AgentThread, agent: Agent) -> Int64 {
+        let fromThread = thread.items.reversed().lazy.compactMap { ThreadRows.timestamp(of: $0) }.first
+        return [fromThread, agent.lastMessage?.ts].compactMap { $0 }.max() ?? agent.lastTurnAt ?? agent.updatedAt
+    }
+}
+
+/// The order the team sidebar shows agents in, and so what "the first one" means: the pinned tiles at the top,
+/// then the agents that need a person, then the rest. Each group keeps the order it is given (`sortedAgents`).
+public enum TeamSidebarOrder {
+    /// The sidebar's tiles hold this many pinned agents; a further pin stays pinned but sorts with the rest.
+    public static let pinnedTiles = 2
+
+    public static func ids(agents: [Agent], pinned: Set<String>, needsPerson: (String) -> Bool) -> [String] {
+        let tiles = agents.filter { pinned.contains($0.id) }.prefix(pinnedTiles).map(\.id)
+        let waiting = agents.filter { needsPerson($0.id) }.map(\.id)
+        var out: [String] = []
+        for id in tiles + waiting + agents.map(\.id) where !out.contains(id) {
+            out.append(id)
+        }
+        return out
+    }
+}
+
+/// The agent the team shows on a server, and so the one highlighted in the sidebar.
+public enum TeamSelection {
+    /// The chosen agent when it is on this server; else the one last chosen here; else the first in sidebar order.
+    /// Nil when the server has no agents.
+    public static func resolve(selected: String?, remembered: String?, order: [String]) -> String? {
+        LastOpenedAgent.resolve(selected: selected, remembered: remembered, agentIDs: order)
+    }
+
+    /// The agent the team shows now: `resolve` over this server's sidebar order.
+    @MainActor
+    public static func shownAgentID(server: ServerModel, selected: String?, pinned: Set<String>) -> String? {
+        let order = TeamSidebarOrder.ids(agents: server.sortedAgents, pinned: pinned) { server.needsPerson($0) }
+        return resolve(
+            selected: selected,
+            remembered: LastOpenedAgent.load(serverID: server.id.uuidString),
+            order: order)
+    }
+
+    /// What the choice becomes once the shown agent is on screen: the shown agent is kept as the chosen one, so it
+    /// stays on screen when the sidebar order changes (an approval elsewhere, a status change). Not saved: only an
+    /// explicit choice is remembered (`Router.selectAgent`).
+    public static func keptChoice(shown: String?) -> String? {
+        shown
+    }
+}

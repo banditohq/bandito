@@ -49,7 +49,7 @@
 "agentSheet.avatar" = "Avatar";
 "agentSheet.cancel" = "Abbrechen";
 "agentSheet.changeLater" = "Das alles kannst du später ändern.";
-"agentSheet.create" = "%1$@ erstellen";
+"agentSheet.create" = "Erstellen";
 "agentSheet.createBlockedFolder" = "Wähle den Projektordner, um den Agenten zu erstellen.";
 "agentSheet.createBlockedWorkplace" = "Prüfe Name und Limits des neuen Arbeitsplatzes.";
 "agentSheet.folder" = "Projekt auf dem Server";
@@ -62,6 +62,7 @@
 "agentSheet.model" = "Modell";
 "agentSheet.modelDefault" = "Standard";
 "agentSheet.name" = "Name";
+"agentSheet.ownFolderHint" = "Ohne Ordner arbeitet der Agent in seinem eigenen persönlichen Ordner";
 "agentSheet.role" = "Rolle";
 "agentSheet.roleHint" = "wird als Marke neben dem Namen angezeigt";
 "agentSheet.rolePlaceholder" = "z. B. Reviewer";
@@ -445,7 +446,6 @@
 "setup.screenLinuxOnly" = "Der Bildschirm funktioniert nur auf einem Linux-Server";
 "sidebar.agentRail" = "Agenten";
 "sidebar.agents" = "TEAM";
-"sidebar.empty" = "Noch keine Agenten. Erstelle deinen ersten.";
 "sidebar.messageTeam" = "Nachricht an das Team…";
 "sidebar.needsYou" = "WARTEN AUF DICH";
 "sidebar.new" = "Neu";
@@ -462,6 +462,10 @@
 "status.needsYou" = "Wartet auf dich";
 "status.offline" = "Offline";
 "status.working" = "Arbeitet";
+"team.header.schedules" = "Zeitpläne: wann der Agent von selbst läuft";
+"team.header.terminal" = "Terminal im Ordner des Agenten öffnen";
+"team.welcomeBody" = "Agenten arbeiten auf Ihrem Server, jeder mit eigener Rolle und eigenem Ordner.";
+"team.welcomeTitle" = "Stellen Sie Ihr Team zusammen";
 "template.assistant.desc" = "Mails, Kalender, Notizen, Erinnerungen — in normaler Sprache.";
 "template.assistant.meta" = "Claude Code · mittel · tägliche Zusammenfassung um 09:00";
 "template.assistant.title" = "Assistent";
@@ -495,7 +499,7 @@
 "thread.messageFor" = "Nachricht für %1$@";
 "thread.messageFrom" = "Nachricht von %1$@";
 "thread.more" = "Mehr";
-"thread.placeholder" = "Nachricht an %1$@";
+"thread.placeholder" = "Schreiben Sie eine Aufgabe oder eine Frage…";
 "thread.react" = "Reagieren";
 "thread.reply" = "Antworten";
 "thread.reviewApproved" = "%1$@ hat die Änderungen geprüft · genehmigt";

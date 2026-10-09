@@ -131,7 +131,7 @@ public struct BanditoCommands: Commands {
         guard let agent = server.sortedAgents.first(where: { server.thread(for: $0.id).status == .needsYou }) else {
             return
         }
-        router.selectedAgentID = agent.id
+        router.selectAgent(agent.id, on: app.currentServer)
         router.select(mode: .team)
     }
 
@@ -141,7 +141,7 @@ public struct BanditoCommands: Commands {
         let agents = server.sortedAgents
         let index = agents.firstIndex { $0.id == router.selectedAgentID } ?? (step > 0 ? -1 : agents.count)
         let next = (index + step + agents.count) % agents.count
-        router.selectedAgentID = agents[next].id
+        router.selectAgent(agents[next].id, on: app.currentServer)
         router.select(mode: .team)
     }
 

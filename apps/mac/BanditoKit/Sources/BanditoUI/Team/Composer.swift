@@ -59,10 +59,11 @@ struct Composer: View {
             HStack(alignment: .bottom, spacing: 10) {
                 // Attaching files returns with uploads; a name-only "@file" was misleading.
 
-                TextField(L10n.Thread.placeholder(name: agentName), text: $draft, axis: .vertical)
+                TextField(L10n.Thread.placeholder, text: $draft, axis: .vertical)
                     .textFieldStyle(.plain)
                     .font(BanditoFont.font(size: 14.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text)
+                    .tint(Color.Bandito.signal)
                     .lineLimit(1...8)
                     .focused($focused)
                     .padding(.vertical, 8)

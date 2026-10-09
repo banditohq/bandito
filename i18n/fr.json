@@ -16,7 +16,6 @@
   "sidebar.messageTeam": "Écrire à l'équipe…",
   "sidebar.pinned": "Épinglés",
   "sidebar.servers": "Serveurs",
-  "sidebar.empty": "Aucun agent pour l'instant. Créez le premier.",
   "common.now": "maintenant",
   "common.agentCount": {"one": "{count} agent", "other": "{count} agents"},
   "common.serverCount": {"one": "{count} serveur", "other": "{count} serveurs"},
@@ -85,7 +84,7 @@
   "agentSheet.memoryAuto": "créé automatiquement",
   "agentSheet.memoryHint": "Il tient ses notes dans son propre dossier : il se souvient de tout, et les messages ne coûtent pas plus cher.",
   "agentSheet.changeLater": "Vous pourrez tout modifier plus tard.",
-  "agentSheet.create": "Créer {name}",
+  "agentSheet.create": "Créer",
   "agentSheet.cancel": "Annuler",
   "agentSheet.runtimeMissing": "{runtime} n'est pas installé sur {server}",
   "agentSheet.runtimeLogin": "{runtime} n'est pas connecté sur {server}. Exécutez là-bas : {command}",
@@ -124,7 +123,7 @@
   "approvalMode.risky": "Seulement le risqué",
   "approvalMode.always": "Tout",
   "approvalMode.never": "Rien",
-  "thread.placeholder": "Message pour {name}",
+  "thread.placeholder": "Écrivez une tâche ou une question…",
   "thread.send": "Envoyer",
   "thread.stop": "Arrêter",
   "thread.attach": "Joindre des fichiers",
@@ -543,5 +542,11 @@
   "onboarding.subs.loginAfter": "Connectez-vous dans le terminal, puis appuyez sur « Vérifier à nouveau ».",
   "onboarding.server.agentsGroup": "Abonnements des agents",
   "onboarding.server.featuresGroup": "Fonctions du serveur",
-  "onboarding.server.optional": "facultatif"
+  "onboarding.server.optional": "facultatif",
+  "agentSheet.ownFolderHint": "Sans dossier, l'agent travaille dans son propre dossier personnel",
+  "menubar.approvalsWaiting": {"one": "{count} approbation en attente", "other": "{count} approbations en attente"},
+  "team.welcomeTitle": "Composez votre équipe",
+  "team.welcomeBody": "Les agents travaillent sur votre serveur, chacun avec son rôle et son dossier.",
+  "team.header.terminal": "Ouvrir un terminal dans le dossier de l'agent",
+  "team.header.schedules": "Planning : quand l'agent se lance seul"
 }

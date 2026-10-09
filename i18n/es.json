@@ -16,7 +16,6 @@
   "sidebar.messageTeam": "Escribe al equipo…",
   "sidebar.pinned": "Fijados",
   "sidebar.servers": "Servidores",
-  "sidebar.empty": "Todavía no hay agentes. Crea el primero.",
   "common.now": "ahora",
   "common.agentCount": {"one": "{count} agente", "other": "{count} agentes"},
   "common.serverCount": {"one": "{count} servidor", "other": "{count} servidores"},
@@ -85,7 +84,7 @@
   "agentSheet.memoryAuto": "se creará automáticamente",
   "agentSheet.memoryHint": "Lleva notas en su propia carpeta, así recuerda todo y los mensajes no encarecen.",
   "agentSheet.changeLater": "Todo esto se puede cambiar después.",
-  "agentSheet.create": "Crear {name}",
+  "agentSheet.create": "Crear",
   "agentSheet.cancel": "Cancelar",
   "agentSheet.runtimeMissing": "{runtime} no está instalado en {server}",
   "agentSheet.runtimeLogin": "{runtime} no ha iniciado sesión en {server}. Ejecuta allí: {command}",
@@ -124,7 +123,7 @@
   "approvalMode.risky": "Solo lo arriesgado",
   "approvalMode.always": "Todo",
   "approvalMode.never": "Nada",
-  "thread.placeholder": "Mensaje para {name}",
+  "thread.placeholder": "Escribe una tarea o una pregunta…",
   "thread.send": "Enviar",
   "thread.stop": "Detener",
   "thread.attach": "Adjuntar archivos",
@@ -543,5 +542,11 @@
   "onboarding.subs.loginAfter": "Inicia sesión en la terminal y luego pulsa “Comprobar de nuevo”.",
   "onboarding.server.agentsGroup": "Suscripciones de agentes",
   "onboarding.server.featuresGroup": "Funciones del servidor",
-  "onboarding.server.optional": "opcional"
+  "onboarding.server.optional": "opcional",
+  "agentSheet.ownFolderHint": "Sin carpeta: el agente trabaja en su propia carpeta personal",
+  "menubar.approvalsWaiting": {"one": "{count} aprobación pendiente", "other": "{count} aprobaciones pendientes"},
+  "team.welcomeTitle": "Forma tu equipo",
+  "team.welcomeBody": "Los agentes trabajan en tu servidor, cada uno con su propio rol y carpeta.",
+  "team.header.terminal": "Abrir una terminal en la carpeta del agente",
+  "team.header.schedules": "Horarios: cuándo se ejecuta el agente solo"
 }

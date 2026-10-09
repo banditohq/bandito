@@ -64,6 +64,14 @@ struct NewAgentSheet: View {
             if let cwd = router.takeAgentCwd() {
                 draft.cwd = cwd
             }
+            if let template = router.takePendingTemplate() {
+                template.apply(to: &draft)
+            }
+        }
+        // A server that takes an agent without a folder lets the agent work in its own folder. Follows `server.info`,
+        // so a daemon that answers late (or is updated while the sheet is open) is picked up.
+        .onChange(of: server?.supports("agent_own_folder") ?? false, initial: true) { _, optional in
+            draft.folderOptional = optional
         }
         .task {
             guard let server else { return }
@@ -424,6 +432,14 @@ struct NewAgentSheet: View {
                 .modifier(FieldBox())
             }
 
+            if draft.folderOptional && draft.cwd.isEmpty {
+                Text(L10n.AgentSheet.ownFolderHint)
+                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .foregroundStyle(Color.Bandito.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .offset(y: -8)
+            }
+
             workplaceSection
 
             labeled(L10n.AgentSheet.memory, hint: nil) {
@@ -599,7 +615,7 @@ struct NewAgentSheet: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Button(L10n.AgentSheet.cancel) { router.sheet = nil }
                     .banditoButton(.quiet(size: .regular))
-                Button(L10n.AgentSheet.create(name: defaultName)) { create() }
+                Button(L10n.AgentSheet.create) { create() }
                     .banditoButton(.signal(size: .regular))
                     .disabled(blocker != nil || creating || server == nil)
             }
@@ -623,10 +639,13 @@ struct NewAgentSheet: View {
                 let workspaceID = try await workplaceForCreate(on: server)
                 let agent = try await server.createAgent(
                     draft.makeNewAgent(workspaceID: workspaceID, existingNames: agentNames))
-                var recent = RecentFolders.load(serverID: server.id.uuidString)
-                recent.remember(agent.cwd)
-                recent.save(serverID: server.id.uuidString)
-                router.selectedAgentID = agent.id
+                // Only a folder the person chose is a recent project folder; an agent's own folder is not.
+                if !draft.cwd.isEmpty {
+                    var recent = RecentFolders.load(serverID: server.id.uuidString)
+                    recent.remember(agent.cwd)
+                    recent.save(serverID: server.id.uuidString)
+                }
+                router.selectAgent(agent.id, on: server)
                 router.select(mode: .team)
                 router.sheet = nil
             } catch {

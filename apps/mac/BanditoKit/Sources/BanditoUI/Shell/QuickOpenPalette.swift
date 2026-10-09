@@ -350,7 +350,7 @@ struct QuickOpenPalette: View {
 
     private func openAgent(_ server: ServerModel, _ agent: Agent) {
         app.selectedServerID = server.id
-        router.selectedAgentID = agent.id
+        router.selectAgent(agent.id, on: server)
         router.select(mode: .team)
         close()
     }

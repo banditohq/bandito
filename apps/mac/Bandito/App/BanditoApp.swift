@@ -75,6 +75,7 @@ struct BanditoApp: App {
             MenuBarContent()
                 .environment(model)
                 .environment(demo)
+                .environment(router)
                 .focusEffectDisabled()
         } label: {
             MenuBarLabel(app: model)

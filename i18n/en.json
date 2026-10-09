@@ -13,7 +13,6 @@
   "sidebar.messageTeam": "Message the team…",
   "sidebar.pinned": "Pinned",
   "sidebar.servers": "Servers",
-  "sidebar.empty": "No agents yet. Create your first one.",
   "common.now": "now",
   "common.agentCount": {
     "one": "{count} agent",
@@ -82,6 +81,7 @@
   "agentSheet.modelDefault": "Default",
   "agentSheet.folder": "Project on the server",
   "agentSheet.folderHint": "Where the code it works on lives.",
+  "agentSheet.ownFolderHint": "No folder: the agent works in its own personal folder",
   "agentSheet.approvals": "Approvals",
   "agentSheet.askAbout": "Ask me about",
   "agentSheet.approvalsHint": "Pushes, deploys, deletes and writes outside {path} wait for your go-ahead. It handles the rest on its own.",
@@ -90,7 +90,7 @@
   "agentSheet.memoryAuto": "created automatically",
   "agentSheet.memoryHint": "Keeps notes in its own folder, so it remembers everything and messages don't get more expensive.",
   "agentSheet.changeLater": "You can change all of this later.",
-  "agentSheet.create": "Create {name}",
+  "agentSheet.create": "Create",
   "agentSheet.cancel": "Cancel",
   "agentSheet.runtimeMissing": "{runtime} is not installed on {server}",
   "agentSheet.runtimeLogin": "{runtime} is not signed in on {server}. Run this there: {command}",
@@ -129,7 +129,7 @@
   "approvalMode.risky": "Risky only",
   "approvalMode.always": "Everything",
   "approvalMode.never": "Nothing",
-  "thread.placeholder": "Message {name}",
+  "thread.placeholder": "Write a task or a question…",
   "thread.send": "Send",
   "thread.stop": "Stop",
   "thread.attach": "Attach files",
@@ -344,6 +344,10 @@
   "server.stepOf": "STEP {step} OF {total}",
   "server.status.online": "Online",
   "server.status.offline": "Offline",
+  "menubar.approvalsWaiting": {
+    "one": "{count} approval waiting",
+    "other": "{count} approvals waiting"
+  },
   "menubar.needsYou": {
     "one": "{count} agent needs you",
     "other": "{count} agents need you"
@@ -698,6 +702,8 @@
   "mode.serverSecrets": "Secrets",
   "mode.serverPorts": "Ports",
   "team.pickAgent": "Pick an agent to see its chat",
+  "team.welcomeTitle": "Build your team",
+  "team.welcomeBody": "Agents work on your server, each with its own role and folder.",
   "usage.limits": "Subscription limits",
   "usage.resetToday": "at {time}",
   "usage.fallbackNote": "If a limit runs out, the agent switches to its backup subscription and returns after the reset. You set this per agent. Updated {time}.",
@@ -842,6 +848,8 @@
   "menubar.resolveFailed": "Could not send your answer: {error}",
   "team.delete.action": "Delete",
   "team.changes": "Changes",
+  "team.header.terminal": "Open a terminal in the agent's folder",
+  "team.header.schedules": "Schedules: when the agent runs by itself",
   "changes.title": "What {name} changed",
   "changes.task": "Task «{task}»",
   "changes.fileCount": {
@@ -892,8 +900,6 @@
   "changes.truncated": "The diff is cut at 512 KiB",
   "changes.agentGone": "This agent no longer exists",
   "changes.selectFile": "Pick a file to see what changed",
-  "team.terminal": "Agent terminal (view only)",
-  "team.schedules": "Schedules",
   "team.emptyTitle": "No agents yet",
   "team.noMessages": "No messages yet",
   "team.workplaceShared": "Shared",
@@ -1299,8 +1305,6 @@
   "terminals.empty": "No terminals yet",
   "terminals.emptyHint": "A terminal keeps running on the server, even when this app is closed.",
   "terminals.connecting": "Connecting to {server}…",
-  "terminals.desktop": "Desktop «{name}»",
-  "terminals.desktopDefault": "Desktop",
   "terminals.windowCount": {
     "one": "{count} window",
     "other": "{count} windows"
@@ -1340,7 +1344,6 @@
     "other": "+{count} lines"
   },
   "terminals.dock.lastHint": "{shortcut} restores the last one",
-  "terminals.sidebar.none": "No terminals",
   "terminals.sidebar.onScreen": "On screen",
   "terminals.sidebar.collapsed": "Collapsed",
   "terminals.sidebar.collapsedHint": "keep running",

@@ -16,7 +16,6 @@
   "sidebar.messageTeam": "Nachricht an das Team…",
   "sidebar.pinned": "Angeheftet",
   "sidebar.servers": "Server",
-  "sidebar.empty": "Noch keine Agenten. Erstelle deinen ersten.",
   "common.now": "jetzt",
   "common.agentCount": {"one": "{count} Agent", "other": "{count} Agenten"},
   "common.serverCount": {"one": "{count} Server", "other": "{count} Server"},
@@ -85,7 +84,7 @@
   "agentSheet.memoryAuto": "wird automatisch angelegt",
   "agentSheet.memoryHint": "Führt Notizen in einem eigenen Ordner, daher merkt er sich alles, und Nachrichten werden nicht teurer.",
   "agentSheet.changeLater": "Das alles kannst du später ändern.",
-  "agentSheet.create": "{name} erstellen",
+  "agentSheet.create": "Erstellen",
   "agentSheet.cancel": "Abbrechen",
   "agentSheet.runtimeMissing": "{runtime} ist auf {server} nicht installiert",
   "agentSheet.runtimeLogin": "{runtime} ist auf {server} nicht angemeldet. Führe dort aus: {command}",
@@ -124,7 +123,7 @@
   "approvalMode.risky": "Nur Riskantes",
   "approvalMode.always": "Alles",
   "approvalMode.never": "Nichts",
-  "thread.placeholder": "Nachricht an {name}",
+  "thread.placeholder": "Schreiben Sie eine Aufgabe oder eine Frage…",
   "thread.send": "Senden",
   "thread.stop": "Stopp",
   "thread.attach": "Dateien anhängen",
@@ -543,5 +542,11 @@
   "onboarding.subs.loginAfter": "Melde dich im Terminal an und drücke dann „Erneut prüfen“.",
   "onboarding.server.agentsGroup": "Agent-Abos",
   "onboarding.server.featuresGroup": "Funktionen des Servers",
-  "onboarding.server.optional": "optional"
+  "onboarding.server.optional": "optional",
+  "agentSheet.ownFolderHint": "Ohne Ordner arbeitet der Agent in seinem eigenen persönlichen Ordner",
+  "menubar.approvalsWaiting": {"one": "{count} Freigabe wartet", "other": "{count} Freigaben warten"},
+  "team.welcomeTitle": "Stellen Sie Ihr Team zusammen",
+  "team.welcomeBody": "Agenten arbeiten auf Ihrem Server, jeder mit eigener Rolle und eigenem Ordner.",
+  "team.header.terminal": "Terminal im Ordner des Agenten öffnen",
+  "team.header.schedules": "Zeitpläne: wann der Agent von selbst läuft"
 }

@@ -208,4 +208,147 @@ func eventPage(_ seqs: ClosedRange<Int>) -> String {
         #expect(model.usage.count == 1)
         #expect(model.usage.first?.windows.first?.utilization == 0.9)
     }
+
+    /// The sidebar preview is the daemon's `last_message`, and a live message replaces it without a reload.
+    @Test func liveMessagesKeepTheAgentsLastMessageCurrent() async throws {
+        let agents =
+            #"[{"id":"a","name":"Forge","runtime":"claude","cwd":"/x","#
+            + #""last_message":{"role":"assistant","text":"old","ts":5}}]"#
+        let fake = FakeTransport(
+            handlers: daemonHandlers(lastSeq: 42, extra: ["agents.list": { _ in agents }]))
+        let (model, _) = makeModel([fake])
+        await model.connect()
+        #expect(model.agents.first?.lastMessage == LastMessage(role: "assistant", text: "old", ts: 5))
+
+        await fake.push(JSONRPC.notification(JSONRPC.messageEvent(seq: 43, text: "new")))
+        try await eventually { model.agents.first?.lastMessage?.text == "new" }
+        #expect(model.agents.first?.lastMessage?.ts == 43)
+
+        // Bandito's own wrap-up message is not a preview, and neither is a tool call or a delta.
+        await fake.push(
+            JSONRPC.notification(
+                #"{"seq":44,"agent_id":"a","ts":44,"kind":"message.user","payload":{"text":"save memory","source":"system"}}"#))
+        await fake.push(
+            JSONRPC.notification(#"{"seq":0,"agent_id":"a","ts":45,"kind":"message.delta","payload":{"text":"Hi"}}"#))
+        await fake.push(JSONRPC.notification(JSONRPC.messageEvent(seq: 45, text: "last")))
+        try await eventually { model.agents.first?.lastMessage?.text == "last" }
+        #expect(model.agents.first?.lastMessage?.ts == 45)
+        await model.disconnect()
+    }
+
+    /// An agent that waits for an approval is "needs you" before anyone opens its thread: the daemon's list carries
+    /// the status and the count, and the sidebar and the menu bar read them without any thread.
+    @Test func agentWaitingForAnApprovalIsNeedsYouBeforeItsThreadIsOpened() async throws {
+        let agents =
+            #"[{"id":"a","name":"Forge","runtime":"claude","cwd":"/x","status":"needs_you","pending_approvals":1,"#
+            + #""last_message":null},{"id":"b","name":"Scout","runtime":"claude","cwd":"/y","status":"idle","#
+            + #""pending_approvals":0,"last_message":null}]"#
+        let fake = FakeTransport(handlers: daemonHandlers(lastSeq: 42, extra: ["agents.list": { _ in agents }]))
+        let (model, _) = makeModel([fake])
+        await model.connect()
+
+        #expect(model.threads["a"] == nil, "no thread is loaded")
+        #expect(model.status(of: "a") == .needsYou)
+        #expect(model.pendingApprovalCount(of: "a") == 1)
+        #expect(model.needsPerson("a"))
+        #expect(!model.needsPerson("b"))
+        // Sorted like the sidebar's "needs you" group: Forge first, although Scout comes first by name.
+        #expect(model.sortedAgents.map(\.id) == ["a", "b"])
+        // The menu bar lists approvals only for loaded threads; this one is counted with no row.
+        #expect(model.pendingApprovalCount(of: "a") - model.thread(for: "a").pendingApprovals.count == 1)
+        await model.disconnect()
+    }
+
+    /// Approvals and status that arrive live keep the team's view current, with no thread loaded.
+    @Test func liveApprovalAndStatusEventsUpdateTheTeamView() async throws {
+        let agents = #"[{"id":"a","name":"Forge","runtime":"claude","cwd":"/x","pending_approvals":0,"last_message":null}]"#
+        let fake = FakeTransport(handlers: daemonHandlers(lastSeq: 42, extra: ["agents.list": { _ in agents }]))
+        let (model, _) = makeModel([fake])
+        await model.connect()
+        #expect(!model.needsPerson("a"))
+
+        await fake.push(
+            JSONRPC.notification(
+                #"{"seq":43,"agent_id":"a","ts":43,"kind":"approval.requested","payload":{"approval_id":"ap1","call_id":"c1","tool":"Bash","title":"git push","reason":"risky"}}"#))
+        try await eventually { model.pendingApprovalCount(of: "a") == 1 }
+        #expect(model.needsPerson("a"))
+
+        await fake.push(
+            JSONRPC.notification(
+                #"{"seq":44,"agent_id":"a","ts":44,"kind":"agent.status","payload":{"status":"needs_you"}}"#))
+        try await eventually { model.status(of: "a") == .needsYou }
+
+        await fake.push(
+            JSONRPC.notification(
+                #"{"seq":45,"agent_id":"a","ts":45,"kind":"approval.resolved","payload":{"approval_id":"ap1","decision":"allow","by":"user","remember":false}}"#))
+        try await eventually { model.pendingApprovalCount(of: "a") == 0 }
+        #expect(model.status(of: "a") == .needsYou, "the status is the agent's own, not the approval's")
+        await model.disconnect()
+    }
+
+    /// A daemon from before `last_message` sends no such field: the app reads the newest messages once per agent.
+    @Test func daemonWithoutLastMessageGetsOneLegacyPreviewRead() async throws {
+        let agents = #"[{"id":"a","name":"Forge","runtime":"claude","cwd":"/x"}]"#
+        let fake = FakeTransport(
+            handlers: daemonHandlers(
+                lastSeq: 42,
+                extra: [
+                    "agents.list": { _ in agents },
+                    "events.page": { _ in
+                        "[" + JSONRPC.messageEvent(seq: 40, text: "older") + ","
+                            + JSONRPC.messageEvent(seq: 41, text: "newest") + "]"
+                    },
+                ]))
+        let (model, _) = makeModel([fake])
+        await model.connect()
+
+        try await eventually { model.agents.first?.lastMessage?.text == "newest" }
+        #expect(model.agents.first?.reportsLastMessage == true)
+        let pages = JSONRPC.requests(of: "events.page", in: await fake.sentTexts())
+        #expect(pages.count == 1)
+        #expect(JSONRPC.intParam("limit", in: pages[0]) == ServerModel.legacyPreviewPageSize)
+        await model.disconnect()
+    }
+
+    /// A daemon with the field (even when null) is not asked for messages again.
+    @Test func daemonWithLastMessageIsNotReadAgain() async throws {
+        let agents = #"[{"id":"a","name":"Forge","runtime":"claude","cwd":"/x","last_message":null}]"#
+        let fake = FakeTransport(
+            handlers: daemonHandlers(lastSeq: 42, extra: ["agents.list": { _ in agents }]))
+        let (model, _) = makeModel([fake])
+        await model.connect()
+        try await Task.sleep(for: .milliseconds(100))
+
+        #expect(model.agents.first?.reportsLastMessage == true)
+        #expect(JSONRPC.requests(of: "events.page", in: await fake.sentTexts()).isEmpty)
+        await model.disconnect()
+    }
+
+    /// The approvals are counted by id, so a replayed `approval.requested` does not count twice, and a resolution
+    /// removes the id whichever copy of the event arrives.
+    @Test func replayedApprovalEventsDoNotCountTwice() async throws {
+        let agents =
+            #"[{"id":"a","name":"Forge","runtime":"claude","cwd":"/x","pending_approval_ids":["A"],"pending_approvals":1,"#
+            + #""last_message":null}]"#
+        let fake = FakeTransport(handlers: daemonHandlers(lastSeq: 42, extra: ["agents.list": { _ in agents }]))
+        let (model, _) = makeModel([fake])
+        await model.connect()
+        #expect(model.pendingApprovalCount(of: "a") == 1, "the snapshot's id")
+
+        let requested =
+            #"{"approval_id":"A","call_id":"c1","tool":"Bash","title":"git push","reason":"risky"}"#
+        await fake.push(JSONRPC.notification(#"{"seq":43,"agent_id":"a","ts":43,"kind":"approval.requested","payload":\#(requested)}"#))
+        await fake.push(JSONRPC.notification(#"{"seq":44,"agent_id":"a","ts":44,"kind":"approval.requested","payload":\#(requested)}"#))
+        await fake.push(JSONRPC.notification(JSONRPC.messageEvent(seq: 45, text: "after")))
+        try await eventually { model.thread(for: "a").lastMessageText == "after" }
+        #expect(model.pendingApprovalCount(of: "a") == 1, "the same id twice is one approval")
+
+        await fake.push(
+            JSONRPC.notification(
+                #"{"seq":46,"agent_id":"a","ts":46,"kind":"approval.resolved","payload":{"approval_id":"A","decision":"allow","by":"user","remember":false}}"#))
+        await fake.push(JSONRPC.notification(JSONRPC.messageEvent(seq: 47, text: "done")))
+        try await eventually { model.thread(for: "a").lastMessageText == "done" }
+        #expect(model.pendingApprovalCount(of: "a") == 0)
+        await model.disconnect()
+    }
 }

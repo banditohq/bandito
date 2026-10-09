@@ -58,7 +58,7 @@
 "agentSheet.colorRose" = "Rose";
 "agentSheet.colorSage" = "Sage";
 "agentSheet.colorSky" = "Sky";
-"agentSheet.create" = "Create %1$@";
+"agentSheet.create" = "Create";
 "agentSheet.createBlockedFolder" = "Pick the project folder to create the agent.";
 "agentSheet.createBlockedWorkplace" = "Check the new workplace's name and limits.";
 "agentSheet.effortHintHigh" = "For hard tasks: it thinks longer and uses the limit noticeably faster.";
@@ -88,6 +88,7 @@
 "agentSheet.name" = "Name";
 "agentSheet.noFolder" = "Pick the project folder";
 "agentSheet.noServer" = "Choose a server first.";
+"agentSheet.ownFolderHint" = "No folder: the agent works in its own personal folder";
 "agentSheet.resetsIn" = "resets %1$@";
 "agentSheet.role" = "Role";
 "agentSheet.roleHint" = "shown as a tag by the name";
@@ -1334,7 +1335,6 @@
 "setup.unsupported" = "Not available";
 "sidebar.agentRail" = "Agents";
 "sidebar.agents" = "TEAM";
-"sidebar.empty" = "No agents yet. Create your first one.";
 "sidebar.messageTeam" = "Message the team…";
 "sidebar.needsYou" = "NEEDS YOU";
 "sidebar.new" = "New";
@@ -1392,13 +1392,15 @@
 "team.changes" = "Changes";
 "team.delete.action" = "Delete";
 "team.emptyTitle" = "No agents yet";
+"team.header.schedules" = "Schedules: when the agent runs by itself";
+"team.header.terminal" = "Open a terminal in the agent's folder";
 "team.noMessages" = "No messages yet";
 "team.pauseUnavailable" = "Pausing needs a newer server";
 "team.pickAgent" = "Pick an agent to see its chat";
 "team.resolvedAllowed" = "Allowed by you · just now";
 "team.resolvedDenied" = "Denied by you · just now";
-"team.schedules" = "Schedules";
-"team.terminal" = "Agent terminal (view only)";
+"team.welcomeBody" = "Agents work on your server, each with its own role and folder.";
+"team.welcomeTitle" = "Build your team";
 "team.workplaceShared" = "Shared";
 "template.assistant.desc" = "Mail, calendar, notes, reminders — in plain language.";
 "template.assistant.instructions" = "You help with mail, calendar, notes and reminders. Answer in plain language. Every morning at 09:00 send a short summary.";
@@ -1429,8 +1431,6 @@
 "terminals.confirmClose.end" = "End process";
 "terminals.confirmClose.title" = "The process is still running. End it?";
 "terminals.connecting" = "Connecting to %1$@…";
-"terminals.desktop" = "Desktop «%1$@»";
-"terminals.desktopDefault" = "Desktop";
 "terminals.dock.empty" = "Nothing collapsed";
 "terminals.dock.lastHint" = "%1$@ restores the last one";
 "terminals.dock.restore" = "Restore";
@@ -1464,7 +1464,6 @@
 "terminals.restart" = "Restart";
 "terminals.sidebar.collapsed" = "Collapsed";
 "terminals.sidebar.collapsedHint" = "keep running";
-"terminals.sidebar.none" = "No terminals";
 "terminals.sidebar.noteBody" = "A collapsed terminal keeps running on the server, even when this Mac is off. Come back and see everything it printed.";
 "terminals.sidebar.noteTitle" = "Collapse is not close.";
 "terminals.sidebar.onScreen" = "On screen";
@@ -1481,7 +1480,7 @@
 "thread.messageFor" = "Message for %1$@";
 "thread.messageFrom" = "Message from %1$@";
 "thread.more" = "More";
-"thread.placeholder" = "Message %1$@";
+"thread.placeholder" = "Write a task or a question…";
 "thread.react" = "React";
 "thread.reply" = "Reply";
 "thread.reviewApproved" = "%1$@ reviewed the changes · approved";

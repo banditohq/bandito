@@ -3,15 +3,20 @@ import BanditoKit
 import BanditoL10n
 import SwiftUI
 
-/// Team mode: the thread of the agent selected in the sidebar, with the details panel on the right when it is open.
+/// Team mode: the thread of the agent on screen, with the details panel on the right when it is open.
+/// The agent on screen is the one chosen, else the one last chosen on this server, else the first in sidebar order
+/// (see `TeamSelection`). A fallback becomes the chosen one, so it does not change under the person.
 struct TeamMode: View {
     @Environment(AppModel.self) private var app
     @Environment(Router.self) private var router
 
     var body: some View {
-        if let server = app.currentServer, let agent = selectedAgent(on: server) {
+        if let server = app.currentServer, let agent = shownAgent(on: server) {
             HStack(spacing: 0) {
+                // Switching agents gives a fresh view. The composer text is not in the view: it is kept per agent id in
+                // the Router (`Router.drafts`), so it stays with its agent.
                 ThreadView(server: server, agent: agent, inspectorTab: Bindable(router).inspectorTab)
+                    .id(agent.id)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 if router.inspectorOpen {
                     InspectorView(
@@ -23,13 +28,23 @@ struct TeamMode: View {
             }
             .banditoAnimation(BanditoMotion.ease, value: router.inspectorOpen)
             .background(Color.Bandito.bg)
+            // The agent on screen stays the chosen one, so an approval or status change elsewhere does not move it.
+            // Not remembered as the last opened agent: only an explicit choice is (Router.selectAgent).
+            .task(id: "\(server.id.uuidString)|\(agent.id)") {
+                if let kept = TeamSelection.keptChoice(shown: agent.id), router.selectedAgentID != kept {
+                    router.selectedAgentID = kept
+                }
+            }
+        } else if let server = app.currentServer, server.state == .connected, server.agents.isEmpty {
+            TeamWelcome()
         } else {
             EmptyTeam()
         }
     }
 
-    private func selectedAgent(on server: ServerModel) -> Agent? {
-        guard let id = router.selectedAgentID else { return nil }
+    private func shownAgent(on server: ServerModel) -> Agent? {
+        let id = TeamSelection.shownAgentID(
+            server: server, selected: router.selectedAgentID, pinned: Set(PinnedAgents().ids))
         return server.agents.first { $0.id == id }
     }
 }

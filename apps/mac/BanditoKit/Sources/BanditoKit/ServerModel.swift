@@ -56,6 +56,8 @@ public enum ConnectionState: Sendable, Hashable {
 public final class ServerModel: Identifiable {
     /// Messages per history request (`events.page`).
     public nonisolated static let historyPageSize = 200
+    /// Newest events read per agent when the daemon predates `last_message` (see `fillLegacyPreviews`).
+    public nonisolated static let legacyPreviewPageSize = 40
     /// Shown when some events could not be decoded: this app is older than the daemon, or a bug.
     /// Some events were skipped because this app does not know their shape: update the app.
     public nonisolated static let decodeWarning = FailureKind.reason("decode_failed")
@@ -140,11 +142,34 @@ public final class ServerModel: Identifiable {
     /// Agents that need a human first, then by name.
     public var sortedAgents: [Agent] {
         agents.sorted { a, b in
-            let na = thread(for: a.id).status == .needsYou
-            let nb = thread(for: b.id).status == .needsYou
+            let na = needsPerson(a.id)
+            let nb = needsPerson(b.id)
             if na != nb { return na }
             return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
         }
+    }
+
+    /// The status the team shows for an agent, whether or not its thread is loaded: the newest `agent.status` the app
+    /// knows (the daemon's answer, then the live events), else the thread's, else idle.
+    public func status(of agentId: String) -> AgentStatus {
+        agents.first { $0.id == agentId }?.status ?? threads[agentId]?.status ?? .idle
+    }
+
+    /// Approvals of the agent that wait for an answer. A daemon that sends the ids counts the ids (a replayed event
+    /// adds or removes nothing twice). An older one sends only a count: the larger of that and the loaded thread's.
+    public func pendingApprovalCount(of agentId: String) -> Int {
+        guard let agent = agents.first(where: { $0.id == agentId }) else {
+            return thread(for: agentId).pendingApprovals.count
+        }
+        if agent.reportsPendingApprovalIds {
+            return agent.pendingApprovalIds.count
+        }
+        return max(agent.pendingApprovals, thread(for: agentId).pendingApprovals.count)
+    }
+
+    /// Needs a person: the status says so, or an approval waits. Drives the "needs you" group and the menu bar.
+    public func needsPerson(_ agentId: String) -> Bool {
+        status(of: agentId) == .needsYou || pendingApprovalCount(of: agentId) > 0
     }
 
     // MARK: connection
@@ -217,6 +242,8 @@ public final class ServerModel: Identifiable {
             try checkCurrent(attempt)
             state = .connected
             lastError = decodeFailureCount > 0 ? Self.decodeWarning : nil
+            // A daemon from before `last_message` sends no preview: read the newest messages once, in the background.
+            Task { [weak self] in await self?.fillLegacyPreviews(c) }
         } catch {
             if client === c {
                 client = nil
@@ -355,7 +382,51 @@ public final class ServerModel: Identifiable {
         if case .usageLimits(let runtime, let windows) = e.body {
             recordUsage(runtime: runtime, windows: windows)
         }
+        // The team's view of the agent follows its live events: newest message, status, pending approvals.
+        if let i = agents.firstIndex(where: { $0.id == e.agentId }) {
+            switch e.body {
+            case .agentStatus(let status, _):
+                agents[i].status = status
+            case .approvalRequested(let approvalId, _, _, _, _, _, _):
+                if agents[i].reportsPendingApprovalIds {
+                    agents[i].pendingApprovalIds.insert(approvalId)
+                } else {
+                    agents[i].pendingApprovals += 1
+                }
+            case .approvalResolved(let approvalId, _, _, _):
+                if agents[i].reportsPendingApprovalIds {
+                    agents[i].pendingApprovalIds.remove(approvalId)
+                } else {
+                    agents[i].pendingApprovals = max(0, agents[i].pendingApprovals - 1)
+                }
+            default:
+                break
+            }
+            if let message = LastMessage(event: e) {
+                agents[i].lastMessage = message
+            }
+        }
         threads[e.agentId, default: AgentThread()].apply(e)
+    }
+
+    /// Reads the newest messages of agents that a daemon from before `last_message` did not report, so the sidebar can
+    /// show a preview. One page per agent (`legacyPreviewPageSize` events); a message that arrived live meanwhile wins.
+    /// An agent whose read fails is tried again at the next connection.
+    func fillLegacyPreviews(_ c: RPCClient) async {
+        let ids = agents.filter { !$0.reportsLastMessage }.map(\.id)
+        for id in ids {
+            guard let page = try? await c.call(
+                "events.page",
+                PageRequest(agentId: id, before: nil, limit: Self.legacyPreviewPageSize),
+                as: [Event].self)
+            else { continue }
+            guard client === c, let i = agents.firstIndex(where: { $0.id == id }) else { return }
+            let newest = page.reversed().lazy.compactMap { LastMessage(event: $0) }.first
+            if let newest, newest.ts > (agents[i].lastMessage?.ts ?? 0) {
+                agents[i].lastMessage = newest
+            }
+            agents[i].reportsLastMessage = true
+        }
     }
 
     private func recordUsage(runtime: String, windows: [LimitWindow]) {

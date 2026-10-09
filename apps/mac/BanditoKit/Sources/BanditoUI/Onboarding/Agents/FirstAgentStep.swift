@@ -500,7 +500,7 @@ struct FirstAgentStep: View {
 
     private func hire() async {
         guard let agent = await model.create() else { return }
-        router.selectedAgentID = agent.id
+        router.selectAgent(agent.id, on: model.server)
         router.select(mode: .team)
         router.pendingComposerText = L10n.Onboarding.Agent.composerText
         onCreated()

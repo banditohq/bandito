@@ -13,6 +13,8 @@ struct ThreadHeader: View {
     var changes: ChangesDiff?
     /// Whether the server has the `changes` feature. Without it the changes button is hidden.
     var showsChanges: Bool
+    /// Whether the server has the `terminals` feature. Without it the terminal button is hidden.
+    var showsTerminal: Bool
     var onChanges: () -> Void = {}
     var onTerminal: () -> Void = {}
     var onSchedules: () -> Void = {}
@@ -27,8 +29,10 @@ struct ThreadHeader: View {
                 if showsChanges {
                     changesButton
                 }
-                iconButton("terminal", help: L10n.Team.terminal, action: onTerminal)
-                iconButton("clock", help: L10n.Team.schedules, action: onSchedules)
+                if showsTerminal {
+                    iconButton("terminal", help: L10n.Team.Header.terminal, action: onTerminal)
+                }
+                iconButton("clock", help: L10n.Team.Header.schedules, action: onSchedules)
                 iconButton("sidebar.right", help: L10n.Inspector.toggleAria, action: onDetails)
             }
             .padding(.trailing, 16)
@@ -79,12 +83,16 @@ struct ThreadHeader: View {
     }
 
     private var changesButton: some View {
-        Button(action: onChanges) {
+        // With no changes the button is just the word, dimmed: "+0 −0" says nothing.
+        let counted = (changes?.additions ?? 0) + (changes?.deletions ?? 0) > 0
+        return Button(action: onChanges) {
             HStack(spacing: 7) {
                 Image(systemName: "doc.text")
                     .font(.system(size: 13, weight: .medium))
                 Text(L10n.Team.changes)
-                if let changes {
+                    .lineLimit(1)
+                    .fixedSize()
+                if let changes, counted {
                     HStack(spacing: 4) {
                         Text("+\(changes.additions)").foregroundStyle(Color.Bandito.ok)
                         Text("−\(changes.deletions)").foregroundStyle(Color.Bandito.danger)
@@ -93,7 +101,7 @@ struct ThreadHeader: View {
                 }
             }
             .font(BanditoFont.font(size: 12, weight: 500))
-            .foregroundStyle(Color.Bandito.text)
+            .foregroundStyle(counted ? Color.Bandito.text : Color.Bandito.text3)
             .padding(.horizontal, 11)
             .frame(height: 30)
             .background(Color.Bandito.text.opacity(0.05), in: Capsule())
@@ -109,9 +117,8 @@ struct ThreadHeader: View {
                 .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(Color.Bandito.text3)
                 .frame(width: 30, height: 30)
-                .contentShape(Rectangle())
         }
-        .banditoButton(.row(cornerRadius: 8, hoverOpacity: 0.08))
+        .banditoButton(.icon(size: 30, label: help))
         .help(help)
     }
 }
