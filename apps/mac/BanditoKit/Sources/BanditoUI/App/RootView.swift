@@ -23,6 +23,9 @@ public struct RootView: View {
         .background(Color.Bandito.bg)
         // The system focus ring is off for the whole scene; Bandito draws its own (brandFocusRing).
         .focusEffectDisabled()
+        #if os(macOS)
+        .modifier(SettingsOpenerBridge())
+        #endif
         #if DEBUG && os(macOS)
         // QA copies (scripts/qa): launch arguments and the command channel. Not in release builds.
         .task { QAHooks.start(router: router, onboarding: onboarding) }

@@ -21,9 +21,8 @@ public struct BanditoCommands: Commands {
     }
 
     public var body: some Commands {
-        CommandGroup(replacing: .appSettings) {
-            item("global.settings") { WindowActions.showSettings() }
-        }
+        // Settings… (⌘,) is the system item of the Settings scene. Replacing it left two items in the app menu, and the
+        // replacement could not open the window on recent macOS.
         CommandGroup(after: .help) {
             Button(L10n.Onboarding.showAgain) { onboarding.replay() }
         }
