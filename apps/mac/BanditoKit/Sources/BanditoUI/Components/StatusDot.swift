@@ -3,9 +3,11 @@ import BanditoKit
 import SwiftUI
 
 /// Agent status dot: idle, working (sage glow), needs you (orange glow and pulsing ring),
-/// error, offline (dimmed).
+/// error, offline (dimmed). VoiceOver reads the status name.
 public struct StatusDot: View {
+    /// Status shown by the dot.
     public var status: AgentStatus
+    /// Diameter of the dot in points.
     public var size: CGFloat
     /// Color of the ring that separates the dot from the avatar underneath (the surface color).
     public var ringColor: Color
@@ -28,7 +30,8 @@ public struct StatusDot: View {
                 .shadow(color: glow, radius: size * 0.6)
         }
         .frame(width: size, height: size)
-        .accessibilityHidden(true)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityText)
     }
 
     private var fill: Color {
@@ -48,10 +51,21 @@ public struct StatusDot: View {
         case .idle, .error, .offline: .clear
         }
     }
+
+    /// English status names for VoiceOver. Localization is added with BanditoL10n later.
+    private var accessibilityText: String {
+        switch status {
+        case .idle: "Idle"
+        case .working: "Working"
+        case .needsYou: "Needs you"
+        case .error: "Error"
+        case .offline: "Offline"
+        }
+    }
 }
 
 /// Ring that expands and fades around the dot. It starts at a visible rest frame, so
-/// static renders (snapshots) show it, and it animates on screen unless Reduce Motion is on.
+/// static renders (snapshots) show it. It pulses on screen unless Reduce Motion is on.
 private struct PulseRing: View {
     let size: CGFloat
     let color: Color
@@ -66,11 +80,20 @@ private struct PulseRing: View {
             .frame(width: base, height: base)
             .scaleEffect(isExpanded ? (size + 14) / base : 1)
             .opacity(isExpanded ? 0 : 0.55)
-            .onAppear {
-                guard !reduceMotion else { return }
-                withAnimation(.easeOut(duration: 1.8).repeatForever(autoreverses: false)) {
-                    isExpanded = true
-                }
+            .onAppear(perform: updatePulse)
+            .onChange(of: reduceMotion) { _, _ in updatePulse() }
+    }
+
+    /// Starts the repeating pulse, or rests the ring without animation when Reduce Motion is on.
+    private func updatePulse() {
+        if reduceMotion {
+            withAnimation(nil) {
+                isExpanded = false
             }
+        } else {
+            withAnimation(.easeOut(duration: 1.8).repeatForever(autoreverses: false)) {
+                isExpanded = true
+            }
+        }
     }
 }

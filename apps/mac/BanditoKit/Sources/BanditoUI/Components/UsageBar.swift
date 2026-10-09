@@ -4,8 +4,11 @@ import SwiftUI
 /// Quota bar: how much of a window is left, from 0 to 1.
 /// Without `tint` the color follows the remainder: cream above 25%, orange below 25%, rose at 0.
 public struct UsageBar: View {
+    /// Share of the window left, 0 to 1.
     public var fraction: Double
+    /// Fill color; `nil` picks it from the remainder (see the type comment).
     public var tint: Color?
+    /// Height of the bar in points.
     public var height: CGFloat
 
     public init(fraction: Double, tint: Color? = nil, height: CGFloat = 6) {
@@ -25,6 +28,9 @@ public struct UsageBar: View {
             }
         }
         .frame(height: height)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Quota left")
+        .accessibilityValue("\(Int((clamped * 100).rounded()))%")
     }
 
     private var clamped: Double {

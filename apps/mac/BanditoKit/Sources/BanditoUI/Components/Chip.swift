@@ -8,7 +8,9 @@ public enum ChipTone: CaseIterable, Sendable {
 
 /// Small rounded label, e.g. an agent role or a status word. Always pair the color with the text.
 public struct Chip: View {
+    /// Text shown in the chip.
     public var text: String
+    /// Color role: `.neutral` for plain labels, the others for states.
     public var tone: ChipTone
 
     public init(text: String, tone: ChipTone = .neutral) {

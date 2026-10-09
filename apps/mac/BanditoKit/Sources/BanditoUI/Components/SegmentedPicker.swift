@@ -23,7 +23,7 @@ public struct SegmentedPicker<T: Hashable>: View {
         }
         .padding(3)
         .background(Color.Bandito.text.opacity(0.05), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .animation(BanditoMotion.ease, value: selection)
+        .banditoAnimation(BanditoMotion.ease, value: selection)
     }
 
     private func segment(value: T, title: String) -> some View {
@@ -45,6 +45,7 @@ public struct SegmentedPicker<T: Hashable>: View {
                     }
                 }
                 .contentShape(Rectangle())
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
         }
         .buttonStyle(.plain)
     }

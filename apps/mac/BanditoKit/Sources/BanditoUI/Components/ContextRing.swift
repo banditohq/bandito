@@ -3,7 +3,9 @@ import SwiftUI
 
 /// Ring showing how full the context window is. Sage while there is room, peach above 80%.
 public struct ContextRing: View {
+    /// Share of the context window in use, 0 to 1.
     public var fraction: Double
+    /// Diameter of the ring in points.
     public var size: CGFloat
 
     public init(fraction: Double, size: CGFloat = 16) {
@@ -13,6 +15,7 @@ public struct ContextRing: View {
 
     public var body: some View {
         let value = fraction.isFinite ? min(max(fraction, 0), 1) : 0
+        let percent = Int((value * 100).rounded())
         let lineWidth = max(1.5, size * 0.11)
         ZStack {
             Circle()
@@ -29,5 +32,8 @@ public struct ContextRing: View {
         // Inset by half the stroke so the ring stays inside the frame.
         .padding(lineWidth / 2)
         .frame(width: size, height: size)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Context window")
+        .accessibilityValue("\(percent)%")
     }
 }

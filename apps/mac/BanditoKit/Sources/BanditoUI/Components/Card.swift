@@ -4,6 +4,7 @@ import SwiftUI
 /// Card surface: faint fill and hairline border. Selected cards take a signal tint.
 /// Apply with `.banditoCard(selected:)`.
 public struct BanditoCardModifier: ViewModifier {
+    /// Whether the card is in the selected state (signal tint and border).
     public var selected: Bool
 
     /// Mockup radius is 14–16; 14 is used for option cards and list groups.

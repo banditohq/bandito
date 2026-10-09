@@ -84,7 +84,7 @@ struct GalleryPage: View {
                     } label: {
                         Image(systemName: "magnifyingglass")
                     }
-                    .buttonStyle(IconButtonStyle())
+                    .buttonStyle(IconButtonStyle(label: "Search"))
                 }
                 HStack(spacing: 10) {
                     KeyHint("⌘K")

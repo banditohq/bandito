@@ -12,10 +12,13 @@ extension Color {
     }
 }
 
-/// Mockup colors that have no entry in `Color.Bandito` (see `brand/tokens/tokens.json`).
+/// Colors used by components that have no exact entry in `Color.Bandito`
+/// (see `brand/tokens/tokens.json`). Values that match a token reuse it.
 enum BanditoPalette {
-    /// Peach (#FFB067): the "context almost full" color, brighter than the signal orange.
-    static let peach = Color(hex: 0xFFB067)
-    /// Idle status dot (#6E655A): darker than `text3`, used only for dots.
+    /// Peach avatar tile (#FFB067). Same value as the dark `signal-glow` token.
+    static let peach = Color.Bandito.signalGlow
+    /// Lilac avatar tile (#C8B6E8). No token exists for it.
+    static let lilac = Color(hex: 0xC8B6E8)
+    /// Idle status dot (#6E655A), darker than `text3`. Used for dots only.
     static let idle = Color(hex: 0x6E655A)
 }

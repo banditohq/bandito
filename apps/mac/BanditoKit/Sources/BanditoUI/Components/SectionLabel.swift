@@ -8,7 +8,9 @@ public enum SectionLabelTone: Sendable {
 
 /// Uppercase section heading such as "КОМАНДА" or "ЖДУТ ВАС".
 public struct SectionLabel: View {
+    /// Heading text; shown uppercased.
     public let text: String
+    /// `.muted` for ordinary sections, `.signal` for sections that need the user.
     public var tone: SectionLabelTone
 
     public init(_ text: String, tone: SectionLabelTone = .muted) {

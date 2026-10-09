@@ -3,6 +3,7 @@ import SwiftUI
 
 /// Keyboard shortcut hint such as `⌘K` or `esc`, shown inside buttons and menus.
 public struct KeyHint: View {
+    /// Key name shown in the hint, e.g. "⌘K".
     public let text: String
 
     public init(_ text: String) {

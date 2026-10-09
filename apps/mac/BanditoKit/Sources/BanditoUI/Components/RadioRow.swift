@@ -70,7 +70,7 @@ private struct RadioMark: View {
 
     var body: some View {
         Circle()
-            .fill(isSelected ? Color.white : Color.clear)
+            .fill(isSelected ? Color.Bandito.onSignal : Color.clear)
             .overlay(
                 Circle().strokeBorder(
                     isSelected ? Color.Bandito.signalFill : Color.Bandito.text.opacity(0.25),
