@@ -9,13 +9,13 @@ struct TeamSidebar: View {
     @Environment(Router.self) private var router
     @State private var pins = PinnedAgents()
     @State private var pendingDelete: Agent?
-    @State private var actionError: String?
+    @State private var actionError: UserFacingMessage?
 
     var body: some View {
         if let server = app.currentServer {
             content(server)
         } else {
-            Color.Bandito.surface1
+            SidebarPlaceholder(mode: .team)
         }
     }
 
@@ -65,9 +65,7 @@ struct TeamSidebar: View {
                     .padding(.horizontal, 8)
                 }
                 if let actionError {
-                    Text(actionError)
-                        .font(BanditoFont.font(size: 12, weight: 400))
-                        .foregroundStyle(Color.Bandito.danger)
+                    UserFacingErrorView(message: actionError)
                         .padding(.horizontal, 18)
                         .padding(.top, 10)
                 }
@@ -124,7 +122,7 @@ struct TeamSidebar: View {
                             .stroke(Color.Bandito.line, lineWidth: 1))
                     .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
-                .buttonStyle(.plain)
+                .banditoButton(.row(cornerRadius: 16))
                 .contextMenu { menu(for: agent, server: server) }
             }
             if agents.count == 1 {
@@ -173,7 +171,7 @@ struct TeamSidebar: View {
                     .stroke(Color.Bandito.signal.opacity(0.28), lineWidth: 1))
             .contentShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .banditoButton(.row(cornerRadius: 13))
         .contextMenu { menu(for: agent, server: server) }
     }
 
@@ -187,7 +185,7 @@ struct TeamSidebar: View {
             AgentRow(agent: agent, thread: thread, isSelected: selected, lastActivity: lastActivityLabel(agent, thread: thread))
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .banditoButton(.row(cornerRadius: 10))
         .contextMenu { menu(for: agent, server: server) }
     }
 
@@ -221,7 +219,7 @@ struct TeamSidebar: View {
                 try await server.deleteAgent(agent.id)
                 if router.selectedAgentID == agent.id { router.selectedAgentID = nil }
             } catch {
-                actionError = error.localizedDescription
+                actionError = UserFacingError.message(for: error)
             }
         }
     }
@@ -241,7 +239,7 @@ struct TeamSidebar: View {
             Button(L10n.New.agent) {
                 router.sheet = .newAgent
             }
-            .buttonStyle(QuietButtonStyle())
+            .banditoButton(.quiet())
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 24)

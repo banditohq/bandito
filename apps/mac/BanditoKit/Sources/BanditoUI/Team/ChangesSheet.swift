@@ -33,7 +33,7 @@ struct ChangesSheet: View {
     /// The line the user picked; `nil` means the first change.
     @State private var focus: ChangeLocation?
     @State private var viewMode: ChangesViewMode = .inline
-    @State private var loadError: String?
+    @State private var loadError: UserFacingMessage?
     @State private var busy = false
     @State private var confirmRollback = false
 
@@ -85,9 +85,7 @@ struct ChangesSheet: View {
                     points: timeline, baseID: base?.id, nowTitle: L10n.Changes.now, onSelect: choose)
             }
             if let loadError {
-                Text(loadError)
-                    .font(BanditoFont.font(size: 12.5, weight: 500))
-                    .foregroundStyle(Color.Bandito.danger)
+                UserFacingErrorView(message: loadError)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 22)
                     .padding(.vertical, 8)
@@ -133,7 +131,7 @@ struct ChangesSheet: View {
                     .frame(width: 32, height: 32)
                     .background(Color.Bandito.text.opacity(0.05), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
-            .buttonStyle(.plain)
+            .banditoButton(.row(cornerRadius: 10, hoverOpacity: 0.08))
             .keyboardShortcut(.cancelAction)
             .help(L10n.Common.close)
             .accessibilityLabel(L10n.Common.close)
@@ -194,31 +192,38 @@ struct ChangesSheet: View {
                 .tint(Color.Bandito.signal)
                 .labelsHidden()
                 .accessibilityLabel(L10n.Changes.keepAria(name: Self.fileName(change.path)))
-            StatusTag(status: change.status)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(Self.fileName(change.path))
-                    .font(BanditoFont.font(size: 13, weight: 400))
-                    .foregroundStyle(Color.Bandito.text)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                if let caption = fileCaption(change) {
-                    Text(caption)
-                        .font(BanditoFont.font(size: 11.5, weight: 400, mono: true))
-                        .foregroundStyle(Color.Bandito.text3)
-                        .lineLimit(1)
-                        .truncationMode(.head)
+            Button { select(change.path) } label: {
+                HStack(spacing: 9) {
+                    StatusTag(status: change.status)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(Self.fileName(change.path))
+                            .font(BanditoFont.font(size: 13, weight: 400))
+                            .foregroundStyle(Color.Bandito.text)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        if let caption = fileCaption(change) {
+                            Text(caption)
+                                .font(BanditoFont.font(size: 11.5, weight: 400, mono: true))
+                                .foregroundStyle(Color.Bandito.text3)
+                                .lineLimit(1)
+                                .truncationMode(.head)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    HStack(spacing: 5) {
+                        if let additions = change.additions {
+                            Text("+\(additions)").foregroundStyle(Color.Bandito.ok)
+                        }
+                        if let deletions = change.deletions {
+                            Text("−\(deletions)").foregroundStyle(Color.Bandito.danger)
+                        }
+                    }
+                    .font(BanditoFont.font(size: 11.5, weight: 400, mono: true))
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            HStack(spacing: 5) {
-                if let additions = change.additions {
-                    Text("+\(additions)").foregroundStyle(Color.Bandito.ok)
-                }
-                if let deletions = change.deletions {
-                    Text("−\(deletions)").foregroundStyle(Color.Bandito.danger)
-                }
-            }
-            .font(BanditoFont.font(size: 11.5, weight: 400, mono: true))
+            .banditoButton(.row(cornerRadius: 10))
         }
         .padding(.horizontal, 9)
         .padding(.vertical, 8)
@@ -231,8 +236,6 @@ struct ChangesSheet: View {
                 .stroke(selected ? Color.Bandito.signal.opacity(0.3) : Color.clear, lineWidth: 1)
         )
         .opacity(keep.contains(change.path) ? 1 : 0.55)
-        .contentShape(Rectangle())
-        .onTapGesture { select(change.path) }
     }
 
     private var diffPane: some View {
@@ -278,8 +281,10 @@ struct ChangesSheet: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .binary:
             message(L10n.Changes.binary)
-        case .failed(let text):
-            message(text, tint: Color.Bandito.danger)
+        case .failed(let failure):
+            UserFacingErrorView(message: failure)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(28)
         case .text(let hunks, let truncated):
             if hunks.isEmpty {
                 message(L10n.Changes.noTextChanges)
@@ -327,9 +332,11 @@ struct ChangesSheet: View {
         HStack(spacing: 10) {
             Button(L10n.Changes.rollbackAll) { confirmRollback = true }
                 .buttonStyle(PillButtonStyle(tint: Color.Bandito.danger))
+                .brandFocusRing(shape: Capsule())
                 .disabled(busy)
             Button(L10n.Changes.askAgent(name: agent.name)) { askAgent(agent) }
                 .buttonStyle(PillButtonStyle(tint: Color.Bandito.text))
+                .brandFocusRing(shape: Capsule())
                 .disabled(busy || placeLine == nil)
             Spacer(minLength: 12)
             if !unticked.isEmpty {
@@ -338,7 +345,7 @@ struct ChangesSheet: View {
                     .foregroundStyle(Color.Bandito.text3)
             }
             Button(L10n.Changes.keepFiles(count: keptCount)) { keepFiles() }
-                .buttonStyle(SignalButtonStyle())
+                .banditoButton(.signal())
                 .disabled(busy)
         }
         .padding(.horizontal, 18)
@@ -421,7 +428,7 @@ struct ChangesSheet: View {
             }
             dismiss()
         } catch {
-            loadError = error.localizedDescription
+            loadError = UserFacingError.message(for: error)
         }
     }
 
@@ -436,7 +443,7 @@ struct ChangesSheet: View {
             base = RestorePoints.base(in: list)
             loaded = true
         } catch {
-            loadError = error.localizedDescription
+            loadError = UserFacingError.message(for: error)
             loaded = true
         }
     }
@@ -469,7 +476,7 @@ struct ChangesSheet: View {
             file = .text(hunks: UnifiedDiff.parse(result.diff), truncated: result.truncated)
         } catch {
             guard !Task.isCancelled else { return }
-            file = .failed(error.localizedDescription)
+            file = .failed(UserFacingError.message(for: error))
         }
     }
 
@@ -488,7 +495,7 @@ struct ChangesSheet: View {
             guard !Task.isCancelled else { return }
             diff = nil
             diffBase = nil
-            loadError = error.localizedDescription
+            loadError = UserFacingError.message(for: error)
         }
     }
 
@@ -519,7 +526,7 @@ private enum FileState {
     case idle, loading
     case text(hunks: [ChangeHunk], truncated: Bool)
     case binary
-    case failed(String)
+    case failed(UserFacingMessage)
 }
 
 private struct FileLoadKey: Hashable {
@@ -607,7 +614,7 @@ private struct RestorePointStrip: View {
                 Button { onSelect(point) } label: {
                     column(point, first: index == 0, selected: point.id == baseID)
                 }
-                .buttonStyle(.plain)
+                .banditoButton(.row(cornerRadius: 8))
                 .frame(maxWidth: .infinity)
             }
             VStack(spacing: 6) {
@@ -741,28 +748,30 @@ private struct InlineLineRow: View {
 
     var body: some View {
         let number = line.kind == .removed ? line.oldNumber : line.newNumber
-        HStack(spacing: 0) {
-            Text(number.map { String($0) } ?? "")
-                .frame(width: 44, alignment: .trailing)
-                .foregroundStyle(Color.Bandito.text3.opacity(0.6))
-            Text(line.kind.sign)
-                .frame(width: 22, alignment: .center)
-                .foregroundStyle(line.kind.signTint)
-            Text(line.text.isEmpty ? " " : line.text)
-                .foregroundStyle(line.kind.textTint)
-                .strikethrough(line.kind == .removed, color: Color.Bandito.danger.opacity(0.4))
-                .frame(maxWidth: .infinity, alignment: .leading)
+        Button(action: onTap) {
+            HStack(spacing: 0) {
+                Text(number.map { String($0) } ?? "")
+                    .frame(width: 44, alignment: .trailing)
+                    .foregroundStyle(Color.Bandito.text3.opacity(0.6))
+                Text(line.kind.sign)
+                    .frame(width: 22, alignment: .center)
+                    .foregroundStyle(line.kind.signTint)
+                Text(line.text.isEmpty ? " " : line.text)
+                    .foregroundStyle(line.kind.textTint)
+                    .strikethrough(line.kind == .removed, color: Color.Bandito.danger.opacity(0.4))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .font(BanditoFont.font(size: 12.5, weight: 400, mono: true))
+            .padding(.trailing, 16)
+            .background(line.kind.rowTint)
+            .contentShape(Rectangle())
         }
-        .font(BanditoFont.font(size: 12.5, weight: 400, mono: true))
-        .padding(.trailing, 16)
-        .background(line.kind.rowTint)
+        .banditoButton(.row(cornerRadius: 0, hoverOpacity: 0.04))
         .overlay {
             if focused {
                 Rectangle().stroke(Color.Bandito.signal.opacity(0.45), lineWidth: 1)
             }
         }
-        .contentShape(Rectangle())
-        .onTapGesture(perform: onTap)
         .modifier(LineReveal(delay: reveal))
     }
 }
@@ -812,14 +821,15 @@ private struct PillButtonStyle: ButtonStyle {
     let tint: Color
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(BanditoFont.font(size: 13, weight: 500))
-            .foregroundStyle(tint)
-            .padding(.horizontal, 14)
-            .frame(height: 36)
-            .background(Capsule().fill(tint.opacity(0.06)))
-            .overlay(Capsule().stroke(tint.opacity(0.35), lineWidth: 1))
-            .opacity(configuration.isPressed ? 0.85 : 1)
+        InteractiveBody(isPressed: configuration.isPressed) { hovered in
+            configuration.label
+                .font(BanditoFont.font(size: 13, weight: 500))
+                .foregroundStyle(tint)
+                .padding(.horizontal, 14)
+                .frame(height: 36)
+                .background(Capsule().fill(tint.opacity(hovered ? 0.12 : 0.06)))
+                .overlay(Capsule().stroke(tint.opacity(hovered ? 0.55 : 0.35), lineWidth: 1))
+        }
     }
 }
 
@@ -829,7 +839,7 @@ struct RollbackToast: View {
     var notice: RollbackNotice
     var onClose: () -> Void
 
-    @State private var failure: String?
+    @State private var failure: UserFacingMessage?
     @State private var undoing = false
 
     var body: some View {
@@ -838,13 +848,10 @@ struct RollbackToast: View {
                 .font(BanditoFont.font(size: 13, weight: 500))
                 .foregroundStyle(Color.Bandito.text)
             if let failure {
-                Text(failure)
-                    .font(BanditoFont.font(size: 12, weight: 400))
-                    .foregroundStyle(Color.Bandito.danger)
-                    .lineLimit(1)
+                UserFacingErrorView(message: failure)
             }
             Button(L10n.Changes.undo) { undo() }
-                .buttonStyle(.plain)
+                .banditoButton(.link)
                 .font(BanditoFont.font(size: 13, weight: 600))
                 .foregroundStyle(Color.Bandito.signal)
                 .disabled(undoing)
@@ -868,7 +875,7 @@ struct RollbackToast: View {
                 _ = try await notice.server.restore(agentID: notice.agentID, checkpointID: notice.undoCheckpointID)
                 onClose()
             } catch {
-                failure = error.localizedDescription
+                failure = UserFacingError.message(for: error)
                 undoing = false
             }
         }

@@ -14,7 +14,7 @@ struct ServerOverview: View {
     @State private var daemonUpdate = DaemonUpdateModel()
     @State private var secrets: [SecretInfo] = []
     @State private var stopping: ProcessRow?
-    @State private var actionError: String?
+    @State private var actionError: UserFacingMessage?
 
     var body: some View {
         ServerPage(title: L10n.Mode.serverOverview, trailing: { trailing }) {
@@ -27,9 +27,7 @@ struct ServerOverview: View {
                 }
                 tiles
                 if let error = monitor.error {
-                    Text(error)
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color.Bandito.danger)
+                    UserFacingErrorView(message: error)
                 }
                 HStack(alignment: .top, spacing: 12) {
                     processesCard(server)
@@ -161,9 +159,7 @@ struct ServerOverview: View {
                     .overlay(alignment: .top) { Rectangle().fill(Color.Bandito.text.opacity(0.05)).frame(height: 1) }
             }
             if let actionError {
-                Text(actionError)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.Bandito.danger)
+                UserFacingErrorView(message: actionError)
             }
         }
     }
@@ -208,7 +204,7 @@ struct ServerOverview: View {
                 } label: {
                     Image(systemName: "stop.fill")
                 }
-                .buttonStyle(IconButtonStyle(size: 26, label: L10n.Server.Processes.stopAria(name: name)))
+                .banditoButton(.icon(size: 26, label: L10n.Server.Processes.stopAria(name: name)))
             } else {
                 Color.clear.frame(width: 26, height: 26)
             }
@@ -254,7 +250,7 @@ struct ServerOverview: View {
                     try await server.kill(pid: pid)
                 }
             } catch {
-                actionError = error.localizedDescription
+                actionError = UserFacingError.message(for: error)
             }
             await monitor.refresh(server)
         }
@@ -283,7 +279,7 @@ struct ServerOverview: View {
                         .lineLimit(1)
                     Spacer(minLength: 8)
                     Button(L10n.Server.Ports.open) { openPreview(port.port) }
-                        .buttonStyle(QuietButtonStyle(size: .regular))
+                        .banditoButton(.quiet(size: .regular))
                 }
             }
         }
@@ -295,7 +291,7 @@ struct ServerOverview: View {
                 SectionLabel(L10n.Server.Secrets.title)
                 Spacer(minLength: 8)
                 Button(L10n.Server.Secrets.all) { router.serverSection = .secrets }
-                    .buttonStyle(QuietButtonStyle())
+                    .banditoButton(.quiet())
             }
             if !server.supports("secrets") {
                 Text(L10n.Server.updateNote).foregroundStyle(Color.Bandito.text2)
@@ -364,7 +360,7 @@ struct ServerOverview: View {
             Button(L10n.Server.Update.howTo) {
                 router.requestTerminalCommand(ReleaseFeed.installCommand)
             }
-            .buttonStyle(LightPillButtonStyle())
+            .banditoButton(.lightPill())
         }
         .padding(14)
         .background(Color.Bandito.signal.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))

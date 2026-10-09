@@ -36,7 +36,7 @@ struct ToolGroupCard: View {
                 .padding(.vertical, 10)
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .banditoButton(.row(cornerRadius: 8))
 
             if open {
                 VStack(alignment: .leading, spacing: 6) {

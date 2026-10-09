@@ -15,7 +15,7 @@ struct KeysAndGesturesSection: View {
     @State private var recording: String?
     /// A recorded shortcut that another command already uses, waiting for "Replace".
     @State private var pending: PendingBinding?
-    @State private var message: String?
+    @State private var message: UserFacingMessage?
     @State private var recorder = KeyRecorderBox()
 
     enum Tab: Hashable {
@@ -143,7 +143,7 @@ struct KeysAndGesturesSection: View {
                     .foregroundStyle(Color.Bandito.signalGlow)
                     .lineLimit(1)
                 Button(L10n.Keys.replace) { replace(waiting) }
-                    .buttonStyle(QuietButtonStyle(size: .regular))
+                    .banditoButton(.quiet(size: .regular))
             }
             Button {
                 startRecording(command)
@@ -151,7 +151,7 @@ struct KeysAndGesturesSection: View {
                 keyCap(text: isRecording ? L10n.Keys.recording : (keymap.binding(for: command.id)?.symbols ?? "—"),
                        custom: custom, recording: isRecording)
             }
-            .buttonStyle(.plain)
+            .banditoButton(.row(cornerRadius: 6, hoverOpacity: 0.08))
             .accessibilityLabel(command.title)
         }
         .padding(.horizontal, 8)
@@ -185,23 +185,20 @@ struct KeysAndGesturesSection: View {
                 .font(.system(size: 12.5))
                 .foregroundStyle(Color.Bandito.text3)
             if let message {
-                Text(message)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.Bandito.danger)
-                    .lineLimit(1)
+                UserFacingErrorView(message: message)
             }
             Spacer()
             Button(L10n.Keys.exportButton) { exportKeys() }
-                .buttonStyle(QuietButtonStyle(size: .regular))
+                .banditoButton(.quiet(size: .regular))
             Button(L10n.Keys.importButton) { importKeys() }
-                .buttonStyle(QuietButtonStyle(size: .regular))
+                .banditoButton(.quiet(size: .regular))
             Button(L10n.Keys.resetAll) {
                 stopRecording()
                 pending = nil
                 keymap.resetAll()
                 preset = .bandito
             }
-            .buttonStyle(QuietButtonStyle(size: .regular))
+            .banditoButton(.quiet(size: .regular))
             .foregroundStyle(Color.Bandito.danger)
         }
         .padding(.top, 12)
@@ -273,7 +270,7 @@ struct KeysAndGesturesSection: View {
             try keymap.exportData().write(to: url, options: .atomic)
             message = nil
         } catch {
-            message = error.localizedDescription
+            message = UserFacingError.message(for: error)
         }
     }
 
@@ -284,7 +281,7 @@ struct KeysAndGesturesSection: View {
             preset = .bandito
             message = nil
         } catch {
-            message = L10n.Keys.importFailed
+            message = UserFacingMessage(text: L10n.Keys.importFailed)
         }
     }
 

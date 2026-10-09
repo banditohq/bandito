@@ -15,13 +15,13 @@ struct FolderPicker: View {
     @State private var recent = RecentFolders()
     @State private var query = ""
     @State private var newFolder: String?
-    @State private var error: String?
+    @State private var error: UserFacingMessage?
     /// "Clone from a link": the form replaces the folder tree while it is open.
     @State private var cloneOpen = false
     @State private var cloneURL = ""
     @State private var cloneName = ""
     @State private var cloneBusy = false
-    @State private var cloneError: String?
+    @State private var cloneError: UserFacingMessage?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -128,9 +128,7 @@ struct FolderPicker: View {
                 .padding(6)
             }
             if let error {
-                Text(error)
-                    .font(BanditoFont.font(size: 11.5, weight: 400))
-                    .foregroundStyle(Color.Bandito.danger)
+                UserFacingErrorView(message: error)
                     .padding(.horizontal, 12)
                     .padding(.bottom, 6)
             }
@@ -145,7 +143,7 @@ struct FolderPicker: View {
                     Text("›").foregroundStyle(Color.Bandito.text3)
                 }
                 Button(part.name) { Task { await open(part.path) } }
-                    .buttonStyle(.plain)
+                    .banditoButton(.link)
                     .font(BanditoFont.font(size: 12.5, weight: index == parts.count - 1 ? 600 : 400))
                     .foregroundStyle(index == parts.count - 1 ? Color.Bandito.text : Color.Bandito.text3)
             }
@@ -156,17 +154,17 @@ struct FolderPicker: View {
     private var footer: some View {
         HStack(spacing: 6) {
             Button(L10n.FolderPicker.newFolder) { newFolder = newFolder == nil ? "" : nil }
-                .buttonStyle(QuietButtonStyle(size: .regular))
+                .banditoButton(.quiet(size: .regular))
                 .disabled(listing == nil)
             Button(L10n.FolderPicker.clone) {
                 cloneOpen.toggle()
                 cloneError = nil
             }
-                .buttonStyle(QuietButtonStyle(size: .regular))
+                .banditoButton(.quiet(size: .regular))
                 .disabled(listing == nil || cloneBusy)
             Spacer(minLength: 0)
             Button(L10n.FolderPicker.choose(name: FolderPickerLogic.name(of: listing?.path ?? "")), action: choose)
-                .buttonStyle(SignalButtonStyle(size: .regular))
+                .banditoButton(.signal(size: .regular))
                 .disabled(listing == nil)
         }
         .padding(10)
@@ -207,7 +205,7 @@ struct FolderPicker: View {
             .background(active ? Color.Bandito.signal.opacity(0.1) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .banditoButton(.row(cornerRadius: 8))
     }
 
     private var visibleDirectories: [FsEntry] {
@@ -221,7 +219,7 @@ struct FolderPicker: View {
             listing = try await server.list(path)
             error = nil
         } catch {
-            self.error = error.localizedDescription
+            self.error = UserFacingError.message(for: error)
         }
     }
 
@@ -234,7 +232,7 @@ struct FolderPicker: View {
             newFolder = nil
             await open(entry.path)
         } catch {
-            self.error = error.localizedDescription
+            self.error = UserFacingError.message(for: error)
         }
     }
 
@@ -263,22 +261,18 @@ struct FolderPicker: View {
                 }
             }
             if let cloneError {
-                Text(cloneError)
-                    .font(BanditoFont.font(size: 11, weight: 400, mono: true))
-                    .foregroundStyle(Color.Bandito.danger)
-                    .lineLimit(8)
-                    .textSelection(.enabled)
+                UserFacingErrorView(message: cloneError)
             }
             Spacer(minLength: 0)
             HStack {
                 Spacer(minLength: 0)
                 Button(L10n.Common.cancel) { cloneOpen = false }
-                    .buttonStyle(QuietButtonStyle(size: .regular))
+                    .banditoButton(.quiet(size: .regular))
                     .disabled(cloneBusy)
                 Button(L10n.FolderPicker.cloneGo) {
                     Task { await runClone() }
                 }
-                .buttonStyle(SignalButtonStyle(size: .regular))
+                .banditoButton(.signal(size: .regular))
                 .disabled(!canClone || cloneBusy)
             }
         }
@@ -305,9 +299,10 @@ struct FolderPicker: View {
             cloneName = ""
             await open(result.path)
         } catch let failure as RPCError {
-            cloneError = failure.cloneStderr ?? failure.message
+            cloneError = UserFacingMessage(
+                text: L10n.Failure.Reason.cloneFailed, technical: failure.cloneStderr ?? failure.message)
         } catch {
-            cloneError = error.localizedDescription
+            cloneError = UserFacingError.message(for: error)
         }
     }
 

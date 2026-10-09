@@ -5,9 +5,10 @@ and conversations stay on your servers. Everything works on one Mac without an a
 ## Account sheet
 
 <!-- id: acc-sheet; covers: sheet:account -->
-The sheet that Settings → Account and sync opens. Without an account it offers the sign-in, the same as the account step of the introduction. With an account it shows who is signed in, the devices of the account and the actions for them.
-Где: Settings (⌘,) → Account and sync (Аккаунт и синхронизация) → Sign in (Войти)
-1. Click Sign in (Войти) to sign in with GitHub or by an email code, as in the introduction.
+The sheet that the profile button at the bottom of the sidebar opens, and that Settings → Account and sync opens too. Without an account it offers the sign-in, the same as the account step of the introduction. With an account it shows who is signed in, the devices of the account and the actions for them.
+Где: Sidebar → bottom left, the profile button (person icon); or Settings (⌘,) → Account and sync (Аккаунт и синхронизация) → Sign in (Войти)
+1. Click the profile button at the bottom left of the sidebar. The sheet opens on the account, or on the sign-in when nobody is signed in.
+2. Click Sign in (Войти) to sign in with GitHub or by an email code, as in the introduction.
 2. With an account, read the devices. To drop a device from the list, click Remove device (Remove device) on its row.
 3. Reset account (Reset account) signs the other devices out and erases the sync settings. Your servers and the agents on them stay as they are.
 4. Close the sheet with Close (Закрыть).

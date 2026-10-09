@@ -110,7 +110,8 @@ private struct BrowserToolbar: View {
             } label: {
                 Image(systemName: "chevron.left")
             }
-            .buttonStyle(IconButtonStyle(size: 30, label: L10n.Browser.back))
+            .banditoButton(.icon(size: 30, label: L10n.Browser.back))
+            .focusable(false)
             .disabled(!model.canGoBack)
             .help(L10n.Browser.back)
 
@@ -119,7 +120,8 @@ private struct BrowserToolbar: View {
             } label: {
                 Image(systemName: "chevron.right")
             }
-            .buttonStyle(IconButtonStyle(size: 30, label: L10n.Browser.forward))
+            .banditoButton(.icon(size: 30, label: L10n.Browser.forward))
+            .focusable(false)
             .disabled(!model.canGoForward)
             .help(L10n.Browser.forward)
 
@@ -128,7 +130,8 @@ private struct BrowserToolbar: View {
             } label: {
                 Image(systemName: "arrow.clockwise")
             }
-            .buttonStyle(IconButtonStyle(size: 30, label: L10n.Browser.reload))
+            .banditoButton(.icon(size: 30, label: L10n.Browser.reload))
+            .focusable(false)
             .help(L10n.Browser.reload)
 
             addressBar
@@ -139,7 +142,7 @@ private struct BrowserToolbar: View {
                 } label: {
                     Text(L10n.Browser.openOnMac)
                 }
-                .buttonStyle(QuietButtonStyle())
+                .banditoButton(.quiet())
             }
         }
         .padding(.horizontal, 14)
@@ -245,10 +248,7 @@ private struct ChromeInstallCard: View {
                     .font(.system(size: 12))
                     .foregroundStyle(Color.Bandito.danger)
             } else if let error = setup.error ?? model.errorText {
-                Text(error)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.Bandito.danger)
-                    .multilineTextAlignment(.center)
+                UserFacingErrorView(message: error)
             }
             Button(L10n.Browser.install) {
                 Task {
@@ -256,7 +256,7 @@ private struct ChromeInstallCard: View {
                     await model.start()
                 }
             }
-            .buttonStyle(SignalButtonStyle())
+            .banditoButton(.signal())
             .disabled(setup.isRunning)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -310,11 +310,11 @@ private struct ControlBanner: View {
                 Button(L10n.Browser.bannerPause) {
                     Task { await model.pause() }
                 }
-                .buttonStyle(QuietButtonStyle())
+                .banditoButton(.quiet())
                 Button(L10n.Browser.bannerTake) {
                     Task { await model.takeControl() }
                 }
-                .buttonStyle(LightPillButtonStyle())
+                .banditoButton(.lightPill())
             } else if model.asksToTakeControl {
                 Text(L10n.Browser.askTakeControl)
                     .font(.system(size: 13))
@@ -323,7 +323,7 @@ private struct ControlBanner: View {
                 Button(L10n.Browser.bannerTake) {
                     Task { await model.takeControl() }
                 }
-                .buttonStyle(LightPillButtonStyle())
+                .banditoButton(.lightPill())
             } else {
                 Text(holder == .user ? L10n.Browser.controlUser : L10n.Browser.controlNone)
                     .font(.system(size: 12.5))
@@ -338,7 +338,7 @@ private struct ControlBanner: View {
                         }
                     }
                 }
-                .buttonStyle(QuietButtonStyle())
+                .banditoButton(.quiet())
             }
         }
         .padding(.horizontal, 12)
@@ -470,15 +470,13 @@ private struct BrowserStopped: View {
                 ChromeInstallCard(model: model)
             } else {
                 if let text = model.errorText {
-                    Text(text)
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color.Bandito.danger)
-                        .multilineTextAlignment(.center)
+                    UserFacingErrorView(message: text)
+                        .frame(maxWidth: 360)
                 }
                 Button(L10n.Browser.start) {
                     Task { await model.start() }
                 }
-                .buttonStyle(SignalButtonStyle())
+                .banditoButton(.signal())
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -501,7 +499,7 @@ private struct BrowserUnsupported: View {
             Button(L10n.Browser.openServer) {
                 router.select(mode: .server)
             }
-            .buttonStyle(QuietButtonStyle())
+            .banditoButton(.quiet())
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -615,7 +613,7 @@ private struct BrowserSidebarContent: View {
                 in: RoundedRectangle(cornerRadius: 11))
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .banditoButton(.row(cornerRadius: 11))
     }
 
     private func previewRow(_ port: Int) -> some View {
@@ -640,14 +638,14 @@ private struct BrowserSidebarContent: View {
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(Color.Bandito.text3)
                 }
-                .buttonStyle(.plain)
+                .banditoButton(.row(cornerRadius: 6, hoverOpacity: 0.08))
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .background(selected ? Color.Bandito.info.opacity(0.1) : Color.clear, in: RoundedRectangle(cornerRadius: 11))
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .banditoButton(.row(cornerRadius: 11))
     }
 
     private func portRow(_ port: ListeningPort) -> some View {
@@ -666,7 +664,7 @@ private struct BrowserSidebarContent: View {
             Button(L10n.Browser.openPreview) {
                 model.openPreview(port: port.port)
             }
-            .buttonStyle(QuietButtonStyle())
+            .banditoButton(.quiet())
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)

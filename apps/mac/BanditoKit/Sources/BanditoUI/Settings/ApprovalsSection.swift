@@ -11,7 +11,7 @@ struct ApprovalsSection: View {
     @State private var action: RuleAction = .ask
     /// "*" for every agent, otherwise an agent id.
     @State private var scope = "*"
-    @State private var error: String?
+    @State private var error: UserFacingMessage?
 
     /// Checks the daemon runs on every server (docs/ARCHITECTURE.md#approvals-policy). Shown, not editable.
     private static let builtin = [
@@ -76,16 +76,14 @@ struct ApprovalsSection: View {
                 }
                 .frame(width: 170)
                 Button(L10n.Settings.Approvals.add) { add(server) }
-                    .buttonStyle(LightPillButtonStyle())
+                    .banditoButton(.lightPill())
                     .disabled(pattern.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             Text(L10n.Settings.Approvals.wildcardNote)
                 .font(.system(size: 11.5))
                 .foregroundStyle(Color.Bandito.text3)
             if let error {
-                Text(error)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.Bandito.danger)
+                UserFacingErrorView(message: error)
             }
         }
         .padding(14)
@@ -128,7 +126,7 @@ struct ApprovalsSection: View {
                     } label: {
                         Image(systemName: "trash")
                     }
-                    .buttonStyle(IconButtonStyle(size: 26, label: L10n.Settings.Approvals.deleteAria(pattern: rule.pattern)))
+                    .banditoButton(.icon(size: 26, label: L10n.Settings.Approvals.deleteAria(pattern: rule.pattern)))
                     .frame(width: 30)
                 }
                 .padding(.horizontal, 16)
@@ -212,7 +210,7 @@ struct ApprovalsSection: View {
             rules = try await server.rules()
             error = nil
         } catch {
-            self.error = error.localizedDescription
+            self.error = UserFacingError.message(for: error)
         }
     }
 
@@ -225,7 +223,7 @@ struct ApprovalsSection: View {
                 pattern = ""
                 await reload(server)
             } catch {
-                self.error = error.localizedDescription
+                self.error = UserFacingError.message(for: error)
             }
         }
     }
@@ -235,7 +233,7 @@ struct ApprovalsSection: View {
             try await server.deleteRule(rule.id)
             await reload(server)
         } catch {
-            self.error = error.localizedDescription
+            self.error = UserFacingError.message(for: error)
         }
     }
 }

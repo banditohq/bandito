@@ -115,7 +115,7 @@ struct TourLayer: View {
                 Button(tour.hasNext(available: available) ? L10n.Common.next : L10n.Tour.finish) {
                     advance()
                 }
-                .buttonStyle(SignalButtonStyle(size: .regular))
+                .banditoButton(.signal(size: .regular))
             }
         }
         .padding(18)

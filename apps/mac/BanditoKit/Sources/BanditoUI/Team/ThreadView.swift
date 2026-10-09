@@ -12,9 +12,9 @@ struct ThreadView: View {
 
     @Environment(Router.self) private var router
     @State private var draft = ""
-    @State private var sendError: String?
+    @State private var sendError: UserFacingMessage?
     /// Failures of interrupt, approval and history loading.
-    @State private var actionError: String?
+    @State private var actionError: UserFacingMessage?
     @State private var loadingOlder = false
     /// Files changed since the last checkpoint; `nil` until loaded or when the server lacks `changes`.
     @State private var changes: ChangesDiff?
@@ -58,14 +58,18 @@ struct ThreadView: View {
             if thread.status == .error, let detail = thread.statusDetail {
                 Banner(text: detail)
             }
-            if let text = server.lastError {
-                Banner(text: text)
+            if let kind = server.lastError {
+                FailureBanner(message: UserFacingError.message(for: kind)) {
+                    Task { await server.connect() }
+                }
             }
             if let sendError {
-                Banner(text: sendError)
+                FailureBanner(message: sendError) { send() }
             }
             if let actionError {
-                Banner(text: actionError)
+                FailureBanner(message: actionError) {
+                    Task { await server.connect() }
+                }
             }
             Composer(
                 draft: $draft,
@@ -105,7 +109,7 @@ struct ThreadView: View {
     }
 
     private func loadHistory() async {
-        do { try await server.loadHistory(agent.id) } catch { actionError = error.localizedDescription }
+        do { try await server.loadHistory(agent.id) } catch { actionError = UserFacingError.message(for: error) }
     }
 
     /// Older history is loaded when its top edge scrolls into view; one page at a time.
@@ -114,7 +118,7 @@ struct ThreadView: View {
         loadingOlder = true
         Task {
             defer { loadingOlder = false }
-            do { try await server.loadOlder(agent.id) } catch { actionError = error.localizedDescription }
+            do { try await server.loadOlder(agent.id) } catch { actionError = UserFacingError.message(for: error) }
         }
     }
 
@@ -131,7 +135,7 @@ struct ThreadView: View {
 
     private func stop() {
         Task {
-            do { try await server.interrupt(agent.id) } catch { actionError = error.localizedDescription }
+            do { try await server.interrupt(agent.id) } catch { actionError = UserFacingError.message(for: error) }
         }
     }
 
@@ -142,7 +146,7 @@ struct ThreadView: View {
         sendError = nil
         Task {
             do { try await server.send(text, to: agent.id) } catch {
-                sendError = error.localizedDescription
+                sendError = UserFacingError.message(for: error)
                 draft = text
             }
         }
@@ -155,7 +159,7 @@ struct ThreadItemsView: View {
     var server: ServerModel
     var showsLoadEarlier = false
     var onLoadEarlier: () -> Void = {}
-    var onError: (String) -> Void = { _ in }
+    var onError: (UserFacingMessage) -> Void = { _ in }
     var agentName = ""
     var primaryRuntime = ""
     /// Shows the typing indicator after the last row while a turn runs.
@@ -184,6 +188,25 @@ struct ThreadItemsView: View {
         .padding(.top, 22)
         .padding(.bottom, 12)
         .frame(maxWidth: .infinity)
+    }
+}
+
+/// A failure in the thread: the sentence from `UserFacingError`, with "Повторить" when `onRetry` is given.
+private struct FailureBanner: View {
+    let message: UserFacingMessage
+    var onRetry: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Color.Bandito.danger)
+            UserFacingErrorView(message: message, onRetry: onRetry)
+            Spacer()
+        }
+        .padding(12)
+        .background(Color.Bandito.surface2, in: RoundedRectangle(cornerRadius: 12))
+        .frame(maxWidth: 780)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 8)
     }
 }
 

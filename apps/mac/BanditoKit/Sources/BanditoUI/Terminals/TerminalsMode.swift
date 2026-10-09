@@ -12,7 +12,7 @@ struct TerminalsMode: View {
         if let server = app.currentServer {
             TerminalsContent(server: server)
         } else {
-            TerminalsPlaceholder(symbol: "terminal", title: L10n.Terminals.noServer, detail: nil, action: nil)
+            NoServerView(symbol: "terminal")
         }
     }
 }
@@ -143,7 +143,7 @@ struct TerminalArea: View {
         VStack(spacing: 0) {
             TerminalToolbar(controller: controller, onNew: onNew)
             if let notice = controller.notice {
-                TerminalNoticeStrip(text: notice) { controller.clearNotice() }
+                TerminalNoticeStrip(message: notice) { controller.clearNotice() }
             }
             TerminalGrid(controller: controller, requestClose: requestClose)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -195,7 +195,7 @@ struct TerminalToolbar: View {
                 .padding(.horizontal, 11)
                 .frame(height: 30)
             }
-            .buttonStyle(.plain)
+            .banditoButton(.row(cornerRadius: 15, hoverOpacity: 0.08))
             .foregroundStyle(inputToAll ? BanditoPalette.peach : Color.Bandito.text2)
             .background(
                 inputToAll ? Color.Bandito.signal.opacity(0.13) : Color.Bandito.text.opacity(0.04),
@@ -211,7 +211,7 @@ struct TerminalToolbar: View {
             Button(action: onNew) {
                 Text(L10n.Keys.newTerminal)
             }
-            .buttonStyle(SignalButtonStyle())
+            .banditoButton(.signal())
             .help(keymap.binding(for: "terminals.new")?.symbols ?? "")
         }
         .padding(.horizontal, 14)
@@ -240,7 +240,7 @@ struct TerminalToolbar: View {
                         .font(.system(size: 12, weight: .regular))
                         .frame(width: 34, height: 26)
                 }
-                .buttonStyle(.plain)
+                .banditoButton(.row(cornerRadius: 6, hoverOpacity: 0.08))
                 .foregroundStyle(layout == current ? Color.Bandito.text : Color.Bandito.text3)
                 .background(
                     layout == current ? Color.Bandito.text.opacity(0.1) : Color.clear,
@@ -257,21 +257,18 @@ struct TerminalToolbar: View {
 
 /// A one-line message above the grid. Tapping the cross dismisses it.
 struct TerminalNoticeStrip: View {
-    let text: String
+    let message: UserFacingMessage
     let dismiss: () -> Void
 
     var body: some View {
         HStack(spacing: 8) {
-            Text(text)
-                .font(.system(size: 12))
-                .foregroundStyle(BanditoPalette.peach)
-                .lineLimit(2)
+            UserFacingErrorView(message: message)
             Spacer(minLength: 8)
             Button(action: dismiss) {
                 Image(systemName: "xmark")
                     .font(.system(size: 10, weight: .semibold))
             }
-            .buttonStyle(.plain)
+            .banditoButton(.row(cornerRadius: 6, hoverOpacity: 0.08))
             .foregroundStyle(Color.Bandito.text3)
         }
         .padding(.horizontal, 14)
@@ -307,7 +304,7 @@ struct TerminalsPlaceholder: View {
                 Button(action: action) {
                     Text(L10n.Keys.newTerminal)
                 }
-                .buttonStyle(SignalButtonStyle())
+                .banditoButton(.signal())
                 .padding(.top, 4)
             }
         }
@@ -322,16 +319,14 @@ struct TerminalsLoading: View {
 
     var body: some View {
         switch server.state {
-        case .failed(let message):
+        case .failed(let kind):
             VStack(spacing: 14) {
-                Text(message)
-                    .font(.system(size: 13))
-                    .foregroundStyle(Color.Bandito.text2)
-                    .multilineTextAlignment(.center)
+                UserFacingErrorView(message: UserFacingError.message(for: kind))
+                    .frame(maxWidth: 420)
                 Button(L10n.Banner.retry) {
                     Task { await server.connect() }
                 }
-                .buttonStyle(QuietButtonStyle())
+                .banditoButton(.quiet())
             }
             .padding(28)
             .frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -11,6 +11,7 @@ The first screen: what Bandito is. Agents run on your own server, on the subscri
 Где: Help → Show the introduction again (Показать знакомство снова), or the first launch → Welcome
 1. Read the four points on the screen (agents work while the Mac is closed, they ask before risky steps, the server is at hand, the subscriptions are yours).
 2. Click Get started — takes 3 minutes to go to Account, or I already have an account (У меня есть аккаунт), which goes to the same step.
+3. The language menu at the top right shows the language the interface is in now, in that language (for example Русский). To change it, pick another language; it applies after you restart Bandito.
 
 ## Account: sign in with GitHub or email
 
@@ -41,7 +42,7 @@ The step where your team lives: Where will your team live? You choose On this Ma
 ## This Mac is your first server
 
 <!-- id: gs-this-mac; covers: -->
-On the first launch Bandito adds a server named after this Mac (the host name, or "This Mac"). It runs the Bandito daemon on this Mac, so agents and their CLIs run here. Other servers are listed in Settings → Servers.
+Choosing On this Mac adds a server named after this Mac (its host name, or "This Mac"). No SSH is involved: Bandito is copied to `~/.local/bin`, its service starts, and the app pairs with it over the connection on this Mac, with its own device token. If the daemon does not start, the install log shows the last lines of its log. Agents and their CLIs run on this Mac. Other servers are listed in Settings → Servers.
 Где: Settings (⌘,) → Servers (Серверы) → the server list
 1. Open Settings with ⌘, and choose Servers (Серверы). Your Mac is listed with its state: Online (В сети) or Offline (Не в сети).
 ## Add a server

@@ -52,23 +52,12 @@ struct Composer: View {
                     .transition(.opacity.combined(with: .offset(y: 6)))
             }
             if let notice = slash.notice {
-                Text(notice)
-                    .font(BanditoFont.font(size: 12, weight: 400))
-                    .foregroundStyle(Color.Bandito.text2)
+                UserFacingErrorView(message: notice)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 16)
             }
             HStack(alignment: .bottom, spacing: 10) {
-                Button(action: attachFile) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(Color.Bandito.text2)
-                        .frame(width: 34, height: 34)
-                        .overlay(Circle().stroke(Color.Bandito.line, lineWidth: 1))
-                        .contentShape(Circle())
-                }
-                .buttonStyle(.plain)
-                .help(L10n.Thread.attach)
+                // Attaching files returns with uploads; a name-only "@file" was misleading.
 
                 TextField(L10n.Thread.placeholder(name: agentName), text: $draft, axis: .vertical)
                     .textFieldStyle(.plain)
@@ -168,7 +157,7 @@ struct Composer: View {
                     .frame(width: 34, height: 34)
                     .background(Color.Bandito.text, in: Circle())
             }
-            .buttonStyle(.plain)
+            .banditoButton(.brighten)
             .help(L10n.Thread.stop)
         } else {
             Button(action: submit) {
@@ -178,7 +167,7 @@ struct Composer: View {
                     .frame(width: 34, height: 34)
                     .background(Color.Bandito.text, in: Circle())
             }
-            .buttonStyle(.plain)
+            .banditoButton(.brighten)
             .disabled(!canSend)
             .opacity(canSend ? 1 : 0.4)
             .help(L10n.Thread.send)
@@ -259,18 +248,18 @@ struct Composer: View {
             router.sheet = .newAgent
         case .model:
             guard !args.isEmpty else {
-                slash.notice = L10n.Slash.modelNeedsName
+                slash.notice = UserFacingMessage(text: L10n.Slash.modelNeedsName)
                 return
             }
             draft = ""
             perform { try await server.updateAgent(agent.id, model: args) }
         case .effort:
             guard let level = BuiltinSlash.effortLevel(from: args) else {
-                slash.notice = L10n.Slash.effortInvalid
+                slash.notice = UserFacingMessage(text: L10n.Slash.effortInvalid)
                 return
             }
             guard agent.runtime.supportedEfforts.contains(level) else {
-                slash.notice = L10n.Slash.effortUnsupported(runtime: agent.runtime.rawValue, level: level.rawValue)
+                slash.notice = UserFacingMessage(text: L10n.Slash.effortUnsupported(runtime: agent.runtime.rawValue, level: level.rawValue))
                 return
             }
             draft = ""
@@ -308,7 +297,7 @@ struct Composer: View {
                 await slash.loadServerCommands(server: server, agentID: agent.id)
                 onSend()
             } catch {
-                slash.notice = error.localizedDescription
+                slash.notice = UserFacingError.message(for: error)
             }
         }
     }
@@ -318,7 +307,7 @@ struct Composer: View {
             do {
                 try await operation()
             } catch {
-                slash.notice = error.localizedDescription
+                slash.notice = UserFacingError.message(for: error)
             }
         }
     }

@@ -9,6 +9,7 @@ struct BanditoApp: App {
     @State private var keymap = Keymap()
     @State private var gestures = GestureSettings()
     @State private var demo = DemoStore()
+    @State private var focusMode = FocusModeTracker()
     @State private var onboarding: OnboardingModel
     @State private var accountHub = AccountHub()
     // Starts Sparkle at launch: the first scheduled check runs a few seconds after it.
@@ -31,6 +32,11 @@ struct BanditoApp: App {
                 .environment(demo)
                 .environment(onboarding)
                 .environment(accountHub)
+                .environment(\.focusMode, focusMode)
+                .task {
+                    // Tab and arrow keys show the focus ring; a click hides it.
+                    focusMode.start()
+                }
                 .task {
                     // Actions aimed at the server that was in front are dropped when another one is chosen.
                     model.onServerChanged = { [router] in router.dropPendingServerActions() }
@@ -46,6 +52,7 @@ struct BanditoApp: App {
                     await model.refreshDaemonInfoHourly()
                 }
                 .preferredColorScheme(.dark)
+                .background(WindowChrome())
         }
         .defaultSize(width: 1240, height: 800)
         .windowStyle(.hiddenTitleBar)
@@ -61,15 +68,38 @@ struct BanditoApp: App {
                 .environment(keymap)
                 .environment(gestures)
                 .environment(demo)
+                .focusEffectDisabled()
         }
 
         MenuBarExtra {
             MenuBarContent()
                 .environment(model)
                 .environment(demo)
+                .focusEffectDisabled()
         } label: {
             MenuBarLabel(app: model)
         }
         .menuBarExtraStyle(.window)
     }
+}
+
+/// Window chrome for the hidden title bar: the titlebar area is transparent and the window fill is the app's
+/// background, so no grey system strip shows above or below the content (onboarding draws edge to edge).
+private struct WindowChrome: NSViewRepresentable {
+    final class ChromeView: NSView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard let window else { return }
+            window.titlebarAppearsTransparent = true
+            window.titleVisibility = .hidden
+            // The dark value of Color.Bandito.bg (#12100E).
+            window.backgroundColor = NSColor(srgbRed: 0.071, green: 0.063, blue: 0.055, alpha: 1)
+        }
+    }
+
+    func makeNSView(context: Context) -> NSView {
+        ChromeView()
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
 }

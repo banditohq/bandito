@@ -14,7 +14,7 @@ final class SlashMenuModel {
     /// Set by Escape. The menu stays closed until the draft changes.
     var suppressed = false
     /// Shown above the field: an error, or "soon" for commands that are not built yet.
-    var notice: String?
+    var notice: UserFacingMessage?
     /// A command from this Mac waiting for the person's yes to install it on the server.
     var pendingInstall: MacCommand?
     var serverCommands: [AgentCommand] = []
@@ -93,8 +93,10 @@ struct SlashMenuView: View {
                                 .padding(.top, 8)
                                 .padding(.bottom, 4)
                             ForEach(group, id: \.element.id) { item in
-                                row(item.element, selected: item.offset == model.index)
-                                    .onTapGesture { onRun(item.element) }
+                                Button { onRun(item.element) } label: {
+                                    row(item.element, selected: item.offset == model.index)
+                                }
+                                .banditoButton(.row(cornerRadius: 8))
                             }
                         }
                     }
@@ -128,7 +130,7 @@ struct SlashMenuView: View {
                     .frame(height: 26)
                     .background(on ? Color(hex: 0x2C2722) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
                 }
-                .buttonStyle(.plain)
+                .banditoButton(.row(cornerRadius: 8))
             }
             Spacer(minLength: 0)
         }
@@ -184,7 +186,7 @@ struct SlashMenuView: View {
             Text(L10n.Slash.footerComplete)
             Spacer(minLength: 8)
             Button(L10n.Slash.newSnippet, action: onNewSnippet)
-                .buttonStyle(.plain)
+                .banditoButton(.link)
                 .foregroundStyle(BanditoPalette.peach)
         }
         .font(BanditoFont.font(size: 11.5, weight: 400, mono: true))
@@ -268,12 +270,12 @@ struct SnippetEditor: View {
             HStack {
                 Spacer()
                 Button(L10n.Common.cancel) { dismiss() }
-                    .buttonStyle(QuietButtonStyle())
+                    .banditoButton(.quiet())
                 Button(L10n.Common.save) {
                     onSave(Snippet(name: normalizedName, text: text))
                     dismiss()
                 }
-                .buttonStyle(SignalButtonStyle())
+                .banditoButton(.signal())
                 .disabled(!isValid)
             }
         }

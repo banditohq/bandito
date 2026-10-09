@@ -135,7 +135,8 @@ import Testing
     @Test func otherErrorsKeepTheirOwnText() {
         let timeout = RPCError(code: RPCError.timedOut, message: "no answer")
         #expect(WorkspaceText.failure(timeout) == nil)
-        #expect(WorkspaceText.message(for: timeout) == timeout.localizedDescription)
-        #expect(WorkspaceText.message(for: failure("not_found")) == L10n.Workspace.Error.notFound)
+        // A timed-out call is a server that does not answer: the mapper's sentence, never the raw description.
+        #expect(WorkspaceText.message(for: timeout).text == L10n.Failure.noAnswer)
+        #expect(WorkspaceText.message(for: failure("not_found")).text == L10n.Workspace.Error.notFound)
     }
 }

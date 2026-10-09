@@ -15,7 +15,7 @@ struct DetailsTab: View {
     @State private var instructions = ""
     @State private var schedules: [Schedule] = []
     @State private var showingNewSchedule = false
-    @State private var error: String?
+    @State private var error: UserFacingMessage?
     /// Values the daemon changed on its own after the last change (for example an effort the runtime lacks).
     @State private var notes: [String] = []
     @State private var modelDraft = ""
@@ -37,7 +37,7 @@ struct DetailsTab: View {
                         Button(agent.paused ? L10n.Agent.Menu.resume : L10n.Agent.Menu.pause) {
                             change { _ = try await server.setPaused(agentID: agent.id, !agent.paused) }
                         }
-                        .buttonStyle(.plain)
+                        .banditoButton(.link)
                         .font(BanditoFont.font(size: 12.5, weight: 500))
                         .foregroundStyle(BanditoPalette.peach)
                         .disabled(!PauseActions.available(on: server))
@@ -52,7 +52,8 @@ struct DetailsTab: View {
                     } label: {
                         Text(runtimeLine)
                     }
-                    .menuStyle(.borderlessButton)
+                    .menuStyle(.button)
+                    .banditoButton(.link)
                     .fixedSize()
                 }
                 InspectorRow(label: L10n.Inspector.model) {
@@ -71,7 +72,8 @@ struct DetailsTab: View {
                     } label: {
                         Text(agent.fallbackRuntime?.title ?? L10n.AgentSheet.fallbackNone)
                     }
-                    .menuStyle(.borderlessButton)
+                    .menuStyle(.button)
+                    .banditoButton(.link)
                     .fixedSize()
                 }
                 InspectorRow(label: L10n.Inspector.approvals) {
@@ -84,7 +86,8 @@ struct DetailsTab: View {
                     } label: {
                         Text(agent.approvalMode.title)
                     }
-                    .menuStyle(.borderlessButton)
+                    .menuStyle(.button)
+                    .banditoButton(.link)
                     .fixedSize()
                 }
                 InspectorRow(label: L10n.Inspector.project) {
@@ -109,7 +112,7 @@ struct DetailsTab: View {
                     SectionLabel(L10n.Inspector.scheduleHeader)
                     Spacer()
                     Button(L10n.Inspector.addSchedule) { showingNewSchedule = true }
-                        .buttonStyle(.plain)
+                        .banditoButton(.link)
                         .font(BanditoFont.font(size: 12.5, weight: 500))
                         .foregroundStyle(BanditoPalette.peach)
                 }
@@ -147,7 +150,7 @@ struct DetailsTab: View {
                     Button(L10n.Common.save) {
                         change { _ = try await server.updateAgent(agent.id, systemPrompt: instructions) }
                     }
-                    .buttonStyle(QuietButtonStyle())
+                    .banditoButton(.quiet())
                     .disabled(instructions == (agent.systemPrompt ?? ""))
                 }
             }
@@ -159,7 +162,7 @@ struct DetailsTab: View {
             }
 
             if let error {
-                InspectorError(text: error)
+                InspectorError(message: error)
             }
         }
         .onChange(of: agent.model, initial: true) { _, model in
@@ -194,7 +197,7 @@ struct DetailsTab: View {
     private func change(_ work: @escaping () async throws -> Void) {
         error = nil
         Task {
-            do { try await work() } catch { self.error = error.localizedDescription }
+            do { try await work() } catch { self.error = UserFacingError.message(for: error) }
         }
     }
 
@@ -206,7 +209,7 @@ struct DetailsTab: View {
                 let update = try await server.updateAgent(agent.id, patch: patch)
                 notes = update.warnings
             } catch {
-                self.error = error.localizedDescription
+                self.error = UserFacingError.message(for: error)
             }
         }
     }
@@ -292,7 +295,7 @@ private struct ScheduleEditor: View {
     @Environment(\.dismiss) private var dismiss
     @State private var cron = ""
     @State private var prompt = ""
-    @State private var error: String?
+    @State private var error: UserFacingMessage?
     @State private var busy = false
 
     var body: some View {
@@ -314,14 +317,14 @@ private struct ScheduleEditor: View {
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.Bandito.line, lineWidth: 1))
             }
             if let error {
-                InspectorError(text: error)
+                InspectorError(message: error)
             }
             HStack {
                 Spacer()
                 Button(L10n.Common.cancel) { dismiss() }
-                    .buttonStyle(QuietButtonStyle())
+                    .banditoButton(.quiet())
                 Button(L10n.Inspector.addSchedule) { add() }
-                    .buttonStyle(SignalButtonStyle())
+                    .banditoButton(.signal())
                     .disabled(busy || cron.trimmingCharacters(in: .whitespaces).isEmpty
                         || prompt.trimmingCharacters(in: .whitespaces).isEmpty)
             }
@@ -340,7 +343,7 @@ private struct ScheduleEditor: View {
                     tz: TimeZone.current.identifier, prompt: prompt.trimmingCharacters(in: .whitespacesAndNewlines))
                 dismiss()
             } catch {
-                self.error = error.localizedDescription
+                self.error = UserFacingError.message(for: error)
                 busy = false
             }
         }
@@ -356,7 +359,7 @@ struct MemoryTab: View {
 
     @Environment(Router.self) private var router
     @State private var files: [FsEntry] = []
-    @State private var error: String?
+    @State private var error: UserFacingMessage?
 
     private var budget: Int { agent.contextBudget ?? ContextUsage.defaultBudget }
 
@@ -373,7 +376,7 @@ struct MemoryTab: View {
             }
             filesSection
             if let error {
-                InspectorError(text: error)
+                InspectorError(message: error)
             }
         }
         .task(id: agent.id) { await loadFiles() }
@@ -422,7 +425,7 @@ struct MemoryTab: View {
         return Button {
             error = nil
             Task {
-                do { _ = try await server.updateAgent(agent.id, memoryMode: mode) } catch { self.error = error.localizedDescription }
+                do { _ = try await server.updateAgent(agent.id, memoryMode: mode) } catch { self.error = UserFacingError.message(for: error) }
             }
         } label: {
             HStack(alignment: .top, spacing: 11) {
@@ -456,7 +459,7 @@ struct MemoryTab: View {
                     .stroke(selected ? Color.Bandito.signal.opacity(0.4) : Color.Bandito.line, lineWidth: 1))
             .contentShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .banditoButton(.row(cornerRadius: 13))
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
@@ -507,7 +510,7 @@ struct MemoryTab: View {
                             .padding(.vertical, 10)
                             .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
+                        .banditoButton(.row(cornerRadius: 8))
                     }
                 }
                 Text(L10n.Memory.footer)
@@ -554,7 +557,7 @@ struct MemoryTab: View {
         do {
             files = try await server.list(home).entries
         } catch {
-            self.error = error.localizedDescription
+            self.error = UserFacingError.message(for: error)
         }
     }
 }
@@ -572,7 +575,7 @@ struct WhereTab: View {
     @State private var pendingMove: MoveTarget?
     /// The daemon's notes on the last change (for example the new chapter).
     @State private var notes: [String] = []
-    @State private var error: String?
+    @State private var error: UserFacingMessage?
 
     /// A workplace to move the agent to: the shared server (`shared`) or a container.
     private struct MoveTarget: Identifiable {
@@ -607,9 +610,7 @@ struct WhereTab: View {
                     }
                 }
                 if let error {
-                    Text(error)
-                        .font(BanditoFont.font(size: 12, weight: 400))
-                        .foregroundStyle(Color.Bandito.danger)
+                    UserFacingErrorView(message: error)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 ForEach(notes, id: \.self) { note in
@@ -695,7 +696,7 @@ struct WhereTab: View {
                 .font(BanditoFont.font(size: 12.5, weight: 500))
         }
         .menuStyle(.button)
-        .buttonStyle(QuietButtonStyle(size: .regular))
+        .banditoButton(.quiet(size: .regular))
         .fixedSize()
     }
 
@@ -728,7 +729,7 @@ struct WhereTab: View {
             .background(Color.Bandito.bg.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.Bandito.line, lineWidth: 1))
         }
-        .buttonStyle(.plain)
+        .banditoButton(.row(cornerRadius: 10))
     }
 
     private func runtimeRow(_ status: RuntimeStatus) -> some View {

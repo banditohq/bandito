@@ -67,7 +67,7 @@ struct InspectorView: View {
                     .overlay(Circle().stroke(Color.Bandito.line, lineWidth: 1))
                     .contentShape(Circle())
             }
-            .buttonStyle(.plain)
+            .banditoButton(.row(cornerRadius: 15, hoverOpacity: 0.08))
             .help(L10n.Common.close)
         }
         .padding(.horizontal, 20)
@@ -121,12 +121,9 @@ struct InspectorRow<Value: View>: View {
 
 /// Error line for a failed change in a tab.
 struct InspectorError: View {
-    var text: String
+    var message: UserFacingMessage
 
     var body: some View {
-        Text(text)
-            .font(BanditoFont.font(size: 12, weight: 400))
-            .foregroundStyle(Color.Bandito.danger)
-            .textSelection(.enabled)
+        UserFacingErrorView(message: message)
     }
 }

@@ -12,7 +12,7 @@ struct NewAgentSheet: View {
     @State private var draft = NewAgentDraft()
     @State private var pickerOpen = false
     @State private var creating = false
-    @State private var error: String?
+    @State private var error: UserFacingMessage?
     /// The server's workplaces, loaded when the sheet opens: what the workplace section can offer.
     @State private var workplaces: WorkspacesModel?
 
@@ -82,7 +82,7 @@ struct NewAgentSheet: View {
                                     }
                                 }
                         }
-                        .buttonStyle(.plain)
+                        .banditoButton(.row(cornerRadius: 9, hoverOpacity: 0.08))
                         .accessibilityLabel(colorName(color))
                         .accessibilityAddTraits(draft.color == color ? .isSelected : [])
                     }
@@ -114,7 +114,7 @@ struct NewAgentSheet: View {
                     .overlay(Capsule().stroke(Color.Bandito.line, lineWidth: 1))
             }
             .menuStyle(.button)
-            .buttonStyle(.plain)
+            .banditoButton(.row(cornerRadius: 16, hoverOpacity: 0.08))
             .fixedSize()
         }
         .padding(.horizontal, 28)
@@ -135,7 +135,7 @@ struct NewAgentSheet: View {
                     selected ? Color.Bandito.text.opacity(0.1) : Color.clear,
                     in: RoundedRectangle(cornerRadius: 6, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .banditoButton(.row(cornerRadius: 6, hoverOpacity: 0.08))
         .accessibilityLabel(faceName(face))
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
@@ -244,7 +244,8 @@ struct NewAgentSheet: View {
             }
             .modifier(FieldBox())
         }
-        .menuStyle(.borderlessButton)
+        .menuStyle(.button)
+        .banditoButton(.row(cornerRadius: 10))
         .fixedSize(horizontal: false, vertical: true)
     }
 
@@ -307,7 +308,7 @@ struct NewAgentSheet: View {
                     .stroke(selected ? Color.Bandito.signal.opacity(0.5) : Color.Bandito.text.opacity(0.09)))
             .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .banditoButton(.row(cornerRadius: 14))
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
@@ -332,7 +333,7 @@ struct NewAgentSheet: View {
                         .foregroundStyle(Color.Bandito.text3)
                 }
                 .menuStyle(.button)
-                .buttonStyle(.plain)
+                .banditoButton(.row(cornerRadius: 5, hoverOpacity: 0.08))
                 .fixedSize()
             }
         }
@@ -356,7 +357,7 @@ struct NewAgentSheet: View {
                         .truncationMode(.head)
                     Spacer(minLength: 0)
                     Button(L10n.AgentSheet.chooseFolder) { pickerOpen.toggle() }
-                        .buttonStyle(QuietButtonStyle(size: .regular))
+                        .banditoButton(.quiet(size: .regular))
                         .popover(isPresented: $pickerOpen, arrowEdge: .top) {
                             if let server {
                                 FolderPicker(server: server, selection: $draft.cwd) { pickerOpen = false }
@@ -385,7 +386,7 @@ struct NewAgentSheet: View {
                                 .foregroundStyle(Color.Bandito.text3)
                         }
                         .menuStyle(.button)
-                        .buttonStyle(.plain)
+                        .banditoButton(.row(cornerRadius: 5, hoverOpacity: 0.08))
                         .fixedSize()
                     }
                     Text(L10n.AgentSheet.memoryAuto)
@@ -467,7 +468,7 @@ struct NewAgentSheet: View {
                         .foregroundStyle(Color.Bandito.text3)
                 }
                 .menuStyle(.button)
-                .buttonStyle(.plain)
+                .banditoButton(.row(cornerRadius: 5, hoverOpacity: 0.08))
                 .fixedSize()
             }
             .modifier(FieldBox())
@@ -530,9 +531,7 @@ struct NewAgentSheet: View {
     private var footer: some View {
         VStack(spacing: 8) {
             if let error {
-                Text(error)
-                    .font(BanditoFont.font(size: 12, weight: 400))
-                    .foregroundStyle(Color.Bandito.danger)
+                UserFacingErrorView(message: error)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             HStack(spacing: 10) {
@@ -541,9 +540,9 @@ struct NewAgentSheet: View {
                     .foregroundStyle(Color.Bandito.text3)
                 Spacer(minLength: 0)
                 Button(L10n.AgentSheet.cancel) { router.sheet = nil }
-                    .buttonStyle(QuietButtonStyle(size: .regular))
+                    .banditoButton(.quiet(size: .regular))
                 Button(L10n.AgentSheet.create(name: trimmedName)) { create() }
-                    .buttonStyle(SignalButtonStyle(size: .regular))
+                    .banditoButton(.signal(size: .regular))
                     .disabled(!draft.canCreate || creating || server == nil)
             }
         }
@@ -573,7 +572,7 @@ struct NewAgentSheet: View {
                 router.select(mode: .team)
                 router.sheet = nil
             } catch {
-                self.error = WorkspaceText.failure(error) ?? error.localizedDescription
+                self.error = WorkspaceText.message(for: error)
                 creating = false
             }
         }

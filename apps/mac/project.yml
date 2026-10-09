@@ -64,13 +64,23 @@ targets:
         # EdDSA public key. The private key lives in the login Keychain of the release Mac (generate_keys); never commit it.
         SUPublicEDKey: UVUKIE5uztSbd3fpqdSPbNklkBuwXYC65+cRXRCqjLY=
         SUEnableAutomaticChecks: true
+        # The strings live in BanditoL10n's bundle; macOS picks a framework's language from the languages the
+        # app declares, so the app lists every language it ships (otherwise it always runs in English).
+        CFBundleLocalizations: [en, ru, ja, zh-Hans, ko, es, pt-BR, de, fr]
+        CFBundleAllowMixedLocalizations: true
     settings:
+      configs:
+        # Debug builds are a separate app: their own defaults, Keychain items (KeychainNamespace) and process,
+        # so testing never touches the installed Bandito.
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: dev.bandito.mac.debug
       base:
         # The script above reads files outside the target and writes into the product; the sandbox would block it.
         ENABLE_USER_SCRIPT_SANDBOXING: NO
         PRODUCT_NAME: Bandito
         PRODUCT_BUNDLE_IDENTIFIER: dev.bandito.mac
-        MARKETING_VERSION: 0.1.0
+        MARKETING_VERSION: 0.1.1
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CURRENT_PROJECT_VERSION: 203
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Bandito

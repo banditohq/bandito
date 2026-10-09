@@ -7,7 +7,7 @@ import SwiftUI
 struct DevicesView: View {
     let server: ServerModel?
     @State private var devices: [Device] = []
-    @State private var error: String?
+    @State private var error: UserFacingMessage?
     @State private var revoking: Device?
     @State private var pairing = false
 
@@ -17,7 +17,7 @@ struct DevicesView: View {
             trailing: {
                 if let server, server.supports("pairing") {
                     Button(L10n.Devices.add) { pairing = true }
-                        .buttonStyle(SignalButtonStyle())
+                        .banditoButton(.signal())
                 }
             }
         ) {
@@ -48,15 +48,13 @@ struct DevicesView: View {
                             }
                             Spacer(minLength: 8)
                             Button(L10n.Devices.revoke) { revoking = device }
-                                .buttonStyle(QuietButtonStyle())
+                                .banditoButton(.quiet())
                         }
                         .padding(.vertical, 4)
                         .overlay(alignment: .top) { Rectangle().fill(Color.Bandito.text.opacity(0.05)).frame(height: 1) }
                     }
                     if let error {
-                        Text(error)
-                            .font(.system(size: 12.5))
-                            .foregroundStyle(Color.Bandito.danger)
+                        UserFacingErrorView(message: error)
                     }
                 }
             } else {
@@ -92,7 +90,7 @@ struct DevicesView: View {
             devices = try await server.devices()
             error = nil
         } catch {
-            self.error = error.localizedDescription
+            self.error = UserFacingError.message(for: error)
         }
     }
 
@@ -102,7 +100,7 @@ struct DevicesView: View {
             try await server.revokeDevice(device.id)
             await reload()
         } catch {
-            self.error = error.localizedDescription
+            self.error = UserFacingError.message(for: error)
         }
     }
 
@@ -121,7 +119,7 @@ private struct PairSheet: View {
     let server: ServerModel
     @Environment(\.dismiss) private var dismiss
     @State private var code: PairCode?
-    @State private var error: String?
+    @State private var error: UserFacingMessage?
 
     var body: some View {
         VStack(spacing: 18) {
@@ -142,10 +140,7 @@ private struct PairSheet: View {
                     .font(.system(size: 12))
                     .foregroundStyle(Color.Bandito.text3)
             } else if let error {
-                Text(error)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(Color.Bandito.danger)
-                    .multilineTextAlignment(.center)
+                UserFacingErrorView(message: error)
             } else {
                 ProgressView()
                     .controlSize(.small)
@@ -154,7 +149,7 @@ private struct PairSheet: View {
             HStack {
                 Spacer()
                 Button(L10n.Common.close) { dismiss() }
-                    .buttonStyle(QuietButtonStyle())
+                    .banditoButton(.quiet())
             }
         }
         .padding(26)
@@ -164,7 +159,7 @@ private struct PairSheet: View {
             do {
                 code = try await server.createPairCode()
             } catch {
-                self.error = error.localizedDescription
+                self.error = UserFacingError.message(for: error)
             }
         }
     }

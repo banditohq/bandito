@@ -71,9 +71,7 @@ struct TerminalPaneView: View {
                 TerminalPane(view: session.view, fontSize: app.terminalFont.size)
                     .padding(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 8))
                 if let message = session.errorMessage {
-                    Text(message)
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color.Bandito.danger)
+                    UserFacingErrorView(message: message)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -185,7 +183,7 @@ struct PaneHeader: View {
                 .font(.system(size: 12, weight: .medium))
                 .frame(width: 26, height: 26)
         }
-        .buttonStyle(.plain)
+        .banditoButton(.row(cornerRadius: 6, hoverOpacity: 0.08))
         .foregroundStyle(Color.Bandito.text3)
         .help(help)
     }
@@ -216,7 +214,7 @@ struct ExitStrip: View {
                 .foregroundStyle(Color.Bandito.text2)
             Spacer(minLength: 8)
             Button(L10n.Terminals.restart, action: restart)
-                .buttonStyle(QuietButtonStyle(size: .regular))
+                .banditoButton(.quiet(size: .regular))
         }
         .padding(.horizontal, 12)
         .frame(height: 46)

@@ -12,7 +12,7 @@ public final class DemoStore {
 
     @ObservationIgnored private let defaults: UserDefaults
 
-    /// Whether sample data may be shown. On by default; Settings → General → "Show examples".
+    /// Whether sample data may be shown. Off by default (real users see only their own data); Settings → General → "Show examples".
     public var enabled: Bool {
         didSet { defaults.set(enabled, forKey: Self.storageKey) }
     }
@@ -30,7 +30,7 @@ public final class DemoStore {
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        enabled = defaults.object(forKey: Self.storageKey) as? Bool ?? true
+        enabled = defaults.object(forKey: Self.storageKey) as? Bool ?? false
         let start = Date()
         startedAt = start
 

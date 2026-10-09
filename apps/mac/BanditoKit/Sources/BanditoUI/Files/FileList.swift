@@ -84,6 +84,7 @@ struct FileRow: View {
             }
         }
         .contentShape(Rectangle())
+        .rowHighlight(cornerRadius: 10)
         .onTapGesture(count: 2) { if !isRenaming { onOpen() } }
         .onTapGesture { if !isRenaming { onSelect() } }
     }
@@ -116,6 +117,7 @@ struct FileTile: View {
             }
         }
         .contentShape(Rectangle())
+        .rowHighlight(cornerRadius: 12)
     }
 }
 

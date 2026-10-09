@@ -87,7 +87,8 @@ struct GeneralSection: View {
             try LaunchAtLogin.set(on)
             launchError = nil
         } catch {
-            launchError = L10n.Settings.launchFailed(error: error.localizedDescription)
+            // The toggle's hint is a single line, so only the sentence goes here, not the technical text.
+            launchError = L10n.Settings.launchFailed(error: UserFacingError.message(for: error).text)
             launchAtLogin = LaunchAtLogin.isEnabled
         }
     }

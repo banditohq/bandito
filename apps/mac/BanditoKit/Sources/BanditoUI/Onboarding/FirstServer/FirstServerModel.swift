@@ -20,6 +20,10 @@ final class FirstServerModel {
         /// The host is new to this Mac: its fingerprint is shown, and nothing is trusted until the person says so.
         case reviewingHost(HostKeyPreview)
         case failed
+        /// Paired and added: the app is connecting to the server (up to `connectTimeout`).
+        case connecting(ServerConfig)
+        /// The app did not connect in time. The server stays added; the person can try again.
+        case connectFailed(ServerConfig)
         case connected(ServerConfig)
     }
 
@@ -35,7 +39,7 @@ final class FirstServerModel {
     /// The address as typed (`user@host[:port]`).
     var address = ""
     private(set) var addressError: String?
-    private(set) var hostKeyError: String?
+    private(set) var hostKeyError: UserFacingMessage?
     /// For an address behind a jump host: the command to run once in Terminal, to confirm the key there.
     private(set) var proxyCommand: String?
     /// For a host whose old key is still in known_hosts: the command that removes that entry.
@@ -52,8 +56,11 @@ final class FirstServerModel {
     @ObservationIgnored private let devArchive: URL?
     @ObservationIgnored private var installTask: Task<Void, Never>?
     @ObservationIgnored private var syncTask: Task<Void, Never>?
+    @ObservationIgnored private var connectTask: Task<Void, Never>?
+    /// How long the app may take to connect to a paired server before the install reports it.
+    static let connectTimeout: Duration = .seconds(10)
     /// Why the servers could not be published to the account, if they could not.
-    private(set) var syncError: String?
+    private(set) var syncError: UserFacingMessage?
 
     /// - Parameters:
     ///   - runner: runs ssh, scp and the local install (tests pass a fake).
@@ -109,12 +116,13 @@ final class FirstServerModel {
         self.option = option
     }
 
-    /// "This Mac": copies bandito into `~/.local/bin` and starts the service.
+    /// "This Mac": copies bandito into `~/.local/bin`, starts the service, and pairs the app with the daemon.
     func startThisMac(app: AppModel) {
         option = .thisMac
-        checklist.reset()
+        checklist = InstallChecklist(items: ChecklistItem.thisMac)
         phase = .installing
-        let installer = LocalInstaller(runner: runner)
+        let installer = LocalInstaller(
+            runner: runner, hostName: Host.current().localizedName, fallbackName: L10n.Onboarding.Server.thisMacName)
         run(installer.install(), app: app)
     }
 
@@ -126,7 +134,7 @@ final class FirstServerModel {
             addressError = L10n.Onboarding.Server.invalidAddress
             return
         }
-        checklist.reset()
+        checklist = InstallChecklist(items: ChecklistItem.ssh)
         hostKeyError = nil
         phase = .installing
         #if DEBUG
@@ -148,7 +156,7 @@ final class FirstServerModel {
         } catch SSHHostKeyError.viaProxy {
             // A jump host: the key cannot be reviewed from here. The person connects once in Terminal.
             proxyCommand = "ssh " + target.sshArguments.joined(separator: " ")
-            hostKeyError = L10n.Onboarding.Server.viaProxy
+            hostKeyError = UserFacingMessage(text: L10n.Onboarding.Server.viaProxy)
         } catch {
             showHostKeyError(error)
         }
@@ -170,7 +178,7 @@ final class FirstServerModel {
             startOwnServer(app: app)
         } catch {
             if (error as? SSHHostKeyError) == .changedBetweenChecks {
-                hostKeyError = L10n.Onboarding.Server.hostKeyChangedWhileReviewing
+                hostKeyError = UserFacingMessage(text: L10n.Onboarding.Server.hostKeyChangedWhileReviewing)
             } else {
                 showHostKeyError(error)
             }
@@ -201,6 +209,7 @@ final class FirstServerModel {
     /// Back to choosing, keeping the address.
     func backToChoice() {
         installTask?.cancel()
+        connectTask?.cancel()
         checklist.reset()
         phase = .choosing
         option = nil
@@ -208,6 +217,7 @@ final class FirstServerModel {
 
     private func run(_ stream: AsyncStream<InstallEvent>, app: AppModel) {
         installTask?.cancel()
+        connectTask?.cancel()
         installTask = Task { [weak self] in
             for await event in stream {
                 guard let self else { return }
@@ -223,17 +233,60 @@ final class FirstServerModel {
         }
     }
 
+    /// The server is paired: it is added to the app, and the app connects to it. The components are read only once the
+    /// connection is up, so a server that is not reachable yet is never asked.
     private func finish(_ info: PairInfo, app: AppModel) {
         app.add(info.server)
-        phase = .connected(info.server)
+        guard let server = app.servers.first(where: { $0.id == info.server.id }) else {
+            // The app keeps no server whose token it could not store.
+            checklist.failLast(.tokenNotSaved)
+            phase = .failed
+            return
+        }
+        phase = .connecting(info.server)
         if accountHub?.signedIn == true {
             syncServers(app: app)
         }
-        if let model = app.servers.first(where: { $0.id == info.server.id }) {
-            Task { [weak self] in
-                await self?.setup.load(model)
+        awaitConnection(server)
+    }
+
+    /// Waits until the server is connected, for up to `connectTimeout`. Then the phase is `.connected` (and the
+    /// components are read), or `.connectFailed`. A new install or going back cancels the wait.
+    private func awaitConnection(_ server: ServerModel) {
+        connectTask?.cancel()
+        let config = server.config
+        connectTask = Task { [weak self] in
+            let deadline = ContinuousClock.now.advanced(by: Self.connectTimeout)
+            while true {
+                if server.state == .connected {
+                    self?.markConnected(server)
+                    return
+                }
+                if Task.isCancelled { return }
+                if ContinuousClock.now >= deadline {
+                    self?.phase = .connectFailed(config)
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(200))
             }
         }
+    }
+
+    private func markConnected(_ server: ServerModel) {
+        phase = .connected(server.config)
+        Task { [weak self] in
+            await self?.setup.load(server)
+        }
+    }
+
+    /// Tries the connection again to the server that is already added. The install is not repeated.
+    func retryConnection(app: AppModel) {
+        guard case .connectFailed(let config) = phase,
+            let server = app.servers.first(where: { $0.id == config.id })
+        else { return }
+        phase = .connecting(config)
+        awaitConnection(server)
+        Task { await server.connect() }
     }
 
     /// Whether the host-key step applies: only for an unknown host, never for a changed key.

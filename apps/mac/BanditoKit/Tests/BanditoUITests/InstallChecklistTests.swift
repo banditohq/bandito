@@ -6,55 +6,154 @@ import Testing
 
 @Suite struct InstallChecklistTests {
     private func pairInfo() -> PairInfo {
-        let server = ServerConfig(name: "prod-1", endpoint: .local(socketPath: "/tmp/bandito.sock"))
+        let server = ServerConfig(
+            name: "This Mac", endpoint: .webSocket(url: URL(string: "ws://127.0.0.1:7878/v1/rpc")!), token: "bdt")
         return PairInfo(server: server, alreadyInstalled: false, warnings: [])
     }
 
-    @Test func aFullRunMarksEveryItemDone() {
-        var list = InstallChecklist()
-        list.apply(.step("Checking the server"))
-        list.apply(.step("Installing Bandito"))
-        list.apply(.step("Starting the service"))
-        list.apply(.step("Creating a pairing code"))
-        list.apply(.step("Connecting"))
+    // MARK: this Mac
+
+    @Test func thisMacHasThreeLinesInOrder() {
+        #expect(ChecklistItem.thisMac.map(\.steps) == [[.install], [.service], [.pair]])
+        #expect(InstallChecklist(items: ChecklistItem.thisMac).items.count == 3)
+    }
+
+    @Test func thisMacHasNoSSHLines() {
+        #expect(ChecklistItem.thisMac.allSatisfy { !$0.title.contains("SSH") })
+    }
+
+    @Test func aFullThisMacRunMarksEveryLineDone() {
+        var list = InstallChecklist(items: ChecklistItem.thisMac)
+        list.apply(.step(.install, "Installing Bandito on this Mac"))
+        list.apply(.step(.service, "Starting the service"))
+        list.apply(.step(.pair, "Pairing the app"))
         list.apply(.done(pairInfo()))
-        #expect(ChecklistItem.allCases.allSatisfy { list.mark(of: $0) == .done })
+        #expect((0..<3).allSatisfy { list.mark(at: $0) == .done })
         #expect(list.failure == nil)
     }
 
-    @Test func aStepRunsAndTheStepsBeforeItAreDone() {
-        var list = InstallChecklist()
-        list.apply(.step("Installing Bandito"))
-        #expect(list.mark(of: .connect) == .done)
-        #expect(list.mark(of: .check) == .done)
-        #expect(list.mark(of: .install) == .running)
-        #expect(list.mark(of: .service) == .pending)
+    @Test func aDaemonThatDoesNotStartFailsItsStartLine() {
+        var list = InstallChecklist(items: ChecklistItem.thisMac)
+        list.apply(.step(.install, "Installing Bandito on this Mac"))
+        list.apply(.step(.service, "Starting the service"))
+        list.apply(.failed(.localDaemonNotStarted))
+        #expect(list.mark(at: 0) == .done)
+        #expect(list.mark(at: 1) == .failed)
+        #expect(list.mark(at: 2) == .pending)
+        #expect(list.failure == .localDaemonNotStarted)
     }
 
-    @Test func aFailureStopsTheRunningItemAndLeavesTheRestPending() {
+    @Test func aFailedCopyFailsTheFirstLine() {
+        var list = InstallChecklist(items: ChecklistItem.thisMac)
+        list.apply(.step(.install, "Installing Bandito on this Mac"))
+        list.apply(.failed(.localBinaryMissing))
+        #expect(list.mark(at: 0) == .failed)
+        #expect(list.mark(at: 1) == .pending)
+        #expect(list.mark(at: 2) == .pending)
+    }
+
+    @Test func stepsOfAnSSHInstallDoNothingOnThisMac() {
+        var list = InstallChecklist(items: ChecklistItem.thisMac)
+        list.apply(.step(.connect, "Connecting over SSH"))
+        list.apply(.step(.check, "Checking the server"))
+        list.apply(.step(.download, "Downloading Bandito"))
+        #expect((0..<3).allSatisfy { list.mark(at: $0) == .pending })
+        #expect(list.index(of: .connect) == nil)
+    }
+
+    // MARK: your own server (SSH)
+
+    @Test func sshHasFiveLinesInOrder() {
+        #expect(
+            ChecklistItem.ssh.map(\.steps)
+                == [
+                    Set([.connect]),
+                    Set([.check]),
+                    Set([.download, .verify, .install]),
+                    Set([.service]),
+                    Set([.pair]),
+                ])
+    }
+
+    @Test func aFullSSHRunMarksEveryLineDone() {
         var list = InstallChecklist()
-        list.apply(.step("Checking the server"))
-        list.apply(.step("Installing Bandito"))
+        let steps: [InstallStep] = [.connect, .check, .download, .verify, .install, .service, .pair, .pair]
+        for step in steps {
+            list.apply(.step(step, ""))
+        }
+        list.apply(.done(pairInfo()))
+        #expect((0..<5).allSatisfy { list.mark(at: $0) == .done })
+        #expect(list.failure == nil)
+    }
+
+    @Test func downloadVerifyAndInstallAreOneLine() {
+        var list = InstallChecklist()
+        list.apply(.step(.connect, ""))
+        list.apply(.step(.check, ""))
+        list.apply(.step(.download, ""))
+        #expect(list.mark(at: 2) == .running)
+        list.apply(.step(.verify, ""))
+        #expect(list.mark(at: 1) == .done)
+        #expect(list.mark(at: 2) == .running)
+        list.apply(.step(.install, ""))
+        #expect(list.mark(at: 2) == .running)
+        #expect(list.mark(at: 3) == .pending)
+    }
+
+    @Test func aStepRunsAndTheLinesBeforeItAreDone() {
+        var list = InstallChecklist()
+        list.apply(.step(.install, ""))
+        #expect(list.mark(at: 0) == .done)
+        #expect(list.mark(at: 1) == .done)
+        #expect(list.mark(at: 2) == .running)
+        #expect(list.mark(at: 3) == .pending)
+    }
+
+    @Test func aFailureStopsTheRunningLineAndLeavesTheRestPending() {
+        var list = InstallChecklist()
+        list.apply(.step(.check, "Checking the server"))
+        list.apply(.step(.install, "Installing Bandito"))
         list.apply(.failed(.sshFailed(.hostKeyUnknown)))
-        #expect(list.mark(of: .install) == .failed)
-        #expect(list.mark(of: .check) == .done)
-        #expect(list.mark(of: .service) == .pending)
+        #expect(list.mark(at: 0) == .done)
+        #expect(list.mark(at: 1) == .done)
+        #expect(list.mark(at: 2) == .failed)
+        #expect(list.mark(at: 3) == .pending)
         #expect(list.failure == .sshFailed(.hostKeyUnknown))
     }
 
-    @Test func retryAfterAFailureStartsOverCleanly() {
+    @Test func aFailureBeforeAnyStepFailsTheFirstLine() {
         var list = InstallChecklist()
-        list.apply(.step("Installing Bandito"))
-        list.apply(.failed(.sshFailed(.keyNotAccepted)))
+        list.apply(.failed(.sshFailed(.refused)))
+        #expect(list.mark(at: 0) == .failed)
+        #expect(list.mark(at: 1) == .pending)
+    }
+
+    // MARK: both
+
+    @Test func retryAfterAFailureStartsOverCleanlyKeepingTheLines() {
+        var list = InstallChecklist(items: ChecklistItem.thisMac)
+        list.apply(.step(.install, ""))
+        list.apply(.failed(.localDaemonNotStarted))
         list.reset()
-        #expect(ChecklistItem.allCases.allSatisfy { list.mark(of: $0) == .pending })
+        #expect(list.items == ChecklistItem.thisMac)
+        #expect((0..<3).allSatisfy { list.mark(at: $0) == .pending })
         #expect(list.failure == nil)
         #expect(list.log.isEmpty)
-        list.apply(.step("Checking the server"))
-        list.apply(.step("Installing Bandito"))
-        list.apply(.step("Starting the service"))
+        list.apply(.step(.install, ""))
+        list.apply(.step(.service, ""))
+        list.apply(.step(.pair, ""))
         list.apply(.done(pairInfo()))
-        #expect(ChecklistItem.allCases.allSatisfy { list.mark(of: $0) == .done })
+        #expect((0..<3).allSatisfy { list.mark(at: $0) == .done })
+    }
+
+    @Test func aFailureAfterTheInstallerFinishedFailsTheLastLine() {
+        var list = InstallChecklist(items: ChecklistItem.thisMac)
+        list.apply(.done(pairInfo()))
+        list.failLast(.tokenNotSaved)
+        #expect(list.mark(at: 0) == .done)
+        #expect(list.mark(at: 1) == .done)
+        #expect(list.mark(at: 2) == .failed)
+        #expect(list.failure == .tokenNotSaved)
     }
 
     @Test func logLinesAreKeptInOrderAndCapped() {
@@ -66,30 +165,10 @@ import Testing
         #expect(list.log.last == "line 499")
     }
 
-    @Test func stepTextsMapToTheirItem() {
-        #expect(InstallChecklist.item(forStep: "Checking the server") == .check)
-        #expect(InstallChecklist.item(forStep: "Installing Bandito on this Mac") == .install)
-        #expect(InstallChecklist.item(forStep: "Starting the service") == .service)
-        #expect(InstallChecklist.item(forStep: "Creating a pairing code") == .app)
-        #expect(InstallChecklist.item(forStep: "Connecting") == .app)
-        #expect(InstallChecklist.item(forStep: "Something new") == nil)
-    }
-
-    @Test func theDownloadAndTheSignatureCheckCountAsInstalling() {
-        #expect(InstallChecklist.item(forStep: "Downloading Bandito") == .install)
-        #expect(InstallChecklist.item(forStep: "Verifying the Bandito release") == .install)
-        var list = InstallChecklist()
-        list.apply(.step("Checking the server"))
-        list.apply(.step("Downloading Bandito"))
-        list.apply(.step("Verifying the Bandito release"))
-        #expect(list.mark(of: .check) == .done)
-        #expect(list.mark(of: .install) == .running)
-    }
-
-    @Test func anUnknownStepChangesNothing() {
-        var list = InstallChecklist()
-        list.apply(.step("Something new"))
-        #expect(ChecklistItem.allCases.allSatisfy { list.mark(of: $0) == .pending })
+    @Test func aStepOfNoLineChangesNothing() {
+        var list = InstallChecklist(items: ChecklistItem.thisMac)
+        list.apply(.step(.download, "Downloading Bandito"))
+        #expect((0..<3).allSatisfy { list.mark(at: $0) == .pending })
     }
 
     @Test func onlySshServersAreSyncedWithTheirUserAndPort() {

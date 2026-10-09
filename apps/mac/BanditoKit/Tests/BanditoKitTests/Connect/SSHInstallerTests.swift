@@ -89,6 +89,13 @@ private func logs(_ events: [InstallEvent]) -> [String] {
     }
 }
 
+private func stepIDs(_ events: [InstallEvent]) -> [InstallStep] {
+    events.compactMap { event in
+        if case .step(let step, _) = event { return step }
+        return nil
+    }
+}
+
 /// What the runner was asked to do, in order: an ssh call is its remote command, an scp call is `scp <remote path>`
 /// (the `<target>:` part of scp's destination is left out).
 private func steps(_ runner: ScriptedRunner) -> [String] {
@@ -169,6 +176,10 @@ private func steps(_ runner: ScriptedRunner) -> [String] {
         let events = await collect(installer.install(target: target, deviceName: "Test Mac"))
 
         #expect(failure(events) == nil)
+        // Every stage announces its step: the checklist of an SSH install groups these ids.
+        #expect(
+            stepIDs(events)
+                == [.connect, .check, .download, .verify, .install, .service, .pair, .pair])
         let info = try #require(done(events))
         #expect(info.server.endpoint == .ssh(target: "deploy@example.com:2222", remotePort: 7878))
         #expect(info.server.token == "tok-remote")
@@ -587,125 +598,5 @@ final class ScriptCounter: @unchecked Sendable {
 
     var count: Int {
         lock.withLock { value }
-    }
-}
-
-@Suite struct LocalInstallerTests {
-    private func makeHome() throws -> URL {
-        let home = FileManager.default.temporaryDirectory.appending(
-            path: "local-installer-\(UUID().uuidString)", directoryHint: .isDirectory)
-        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
-        return home
-    }
-
-    private func writeFile(_ url: URL, _ text: String, modified: Date) throws {
-        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try text.write(to: url, atomically: true, encoding: .utf8)
-        try FileManager.default.setAttributes([.modificationDate: modified], ofItemAtPath: url.path)
-    }
-
-    private func read(_ url: URL) throws -> String {
-        try String(contentsOf: url, encoding: .utf8)
-    }
-
-    /// Changes when a file is replaced by a rename, and stays when its content is only rewritten in place.
-    private func inodeNumber(_ url: URL) throws -> UInt64 {
-        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
-        return try #require(attributes[.systemFileNumber] as? UInt64)
-    }
-
-    @Test func copiesTheBundledBinaryAndStartsTheServiceOnThisMac() async throws {
-        let home = try makeHome()
-        let bundled = home.appending(path: "bundle/bandito")
-        try writeFile(bundled, "BIN", modified: Date())
-        let runner = ScriptedRunner { _, _ in DaemonAnswers.serviceOK }
-        let installer = LocalInstaller(runner: runner, bundledBinary: bundled, home: home)
-
-        let events = await collect(installer.install())
-
-        let installed = home.appending(path: ".local/bin/bandito")
-        #expect(try read(installed) == "BIN")
-        #expect(FileManager.default.isExecutableFile(atPath: installed.path))
-        let call = try #require(runner.calls.first)
-        #expect(call.executable == installed.path)
-        #expect(call.arguments == ["service", "install", "--json"])
-        let info = try #require(done(events))
-        #expect(info.server.endpoint == .local(socketPath: home.appending(path: ".bandito/bandito.sock").path))
-        #expect(info.server.token == nil)
-        #expect(info.alreadyInstalled == false)
-    }
-
-    @Test func anInstalledBinaryWithTheSameContentIsKeptAsItIs() async throws {
-        let home = try makeHome()
-        let bundled = home.appending(path: "bundle/bandito")
-        let installed = home.appending(path: ".local/bin/bandito")
-        try writeFile(bundled, "SAME", modified: Date())
-        try writeFile(installed, "SAME", modified: Date().addingTimeInterval(-3600))
-        let inode = try inodeNumber(installed)
-        let runner = ScriptedRunner { _, _ in DaemonAnswers.serviceOK }
-        let installer = LocalInstaller(runner: runner, bundledBinary: bundled, home: home)
-
-        let events = await collect(installer.install())
-
-        #expect(try inodeNumber(installed) == inode)
-        #expect(try read(installed) == "SAME")
-        #expect(try #require(done(events)).alreadyInstalled == true)
-    }
-
-    @Test func anInstalledBinaryWithDifferentContentIsReplacedEvenWhenItIsNewer() async throws {
-        let home = try makeHome()
-        let bundled = home.appending(path: "bundle/bandito")
-        let installed = home.appending(path: ".local/bin/bandito")
-        try writeFile(bundled, "NEW", modified: Date().addingTimeInterval(-3600))
-        try writeFile(installed, "NEWER", modified: Date().addingTimeInterval(3600))
-        let runner = ScriptedRunner { _, _ in DaemonAnswers.serviceOK }
-        let installer = LocalInstaller(runner: runner, bundledBinary: bundled, home: home)
-
-        _ = await collect(installer.install())
-
-        #expect(try read(installed) == "NEW")
-        #expect(FileManager.default.isExecutableFile(atPath: installed.path))
-    }
-
-    @Test func aReplacementLeavesNoTemporaryFileBehind() async throws {
-        let home = try makeHome()
-        let bundled = home.appending(path: "bundle/bandito")
-        let installed = home.appending(path: ".local/bin/bandito")
-        try writeFile(bundled, "NEW", modified: Date())
-        try writeFile(installed, "OLD", modified: Date())
-        let runner = ScriptedRunner { _, _ in DaemonAnswers.serviceOK }
-        let installer = LocalInstaller(runner: runner, bundledBinary: bundled, home: home)
-
-        _ = await collect(installer.install())
-
-        let names = try FileManager.default.contentsOfDirectory(atPath: installed.deletingLastPathComponent().path)
-        #expect(names == ["bandito"])
-    }
-
-    @Test func withoutABundledBinaryAndNothingInstalledItFails() async throws {
-        let home = try makeHome()
-        let runner = ScriptedRunner { _, _ in DaemonAnswers.serviceOK }
-        let installer = LocalInstaller(runner: runner, bundledBinary: nil, home: home)
-
-        let events = await collect(installer.install())
-
-        #expect(failure(events) == .localBinaryMissing)
-        #expect(runner.calls.isEmpty)
-    }
-
-    @Test func aFailedServiceInstallIsReported() async throws {
-        let home = try makeHome()
-        let bundled = home.appending(path: "bundle/bandito")
-        try writeFile(bundled, "BIN", modified: Date())
-        let refused = CommandResult(
-            status: 1,
-            stdout: #"{"ok":false,"mode":"launchd","listen":"127.0.0.1:7878","socket":"/s","warnings":["launchctl refused"]}"#,
-            stderr: "")
-        let runner = ScriptedRunner { _, _ in refused }
-        let installer = LocalInstaller(runner: runner, bundledBinary: bundled, home: home)
-
-        let events = await collect(installer.install())
-
-        #expect(failure(events) == .serviceFailed("launchctl refused"))
     }
 }

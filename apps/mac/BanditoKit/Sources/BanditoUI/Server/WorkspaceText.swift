@@ -21,8 +21,9 @@ enum WorkspaceText {
         }
     }
 
-    /// The workplace sentence when there is one, else the error's own description.
-    static func message(for error: Error) -> String {
-        failure(error) ?? error.localizedDescription
+    /// The workplace sentence when there is one, else the one mapper's message for the error.
+    static func message(for error: Error) -> UserFacingMessage {
+        if let text = failure(error) { return UserFacingMessage(text: text) }
+        return UserFacingError.message(for: error)
     }
 }

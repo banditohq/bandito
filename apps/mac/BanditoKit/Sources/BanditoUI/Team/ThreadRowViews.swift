@@ -10,7 +10,7 @@ struct ThreadRowView: View {
     /// The agent's primary runtime, to tell a return from a limit switch.
     var primaryRuntime: String
     var server: ServerModel
-    var onError: (String) -> Void
+    var onError: (UserFacingMessage) -> Void
 
     var body: some View {
         switch row {
@@ -32,7 +32,7 @@ private struct ItemView: View {
     var agentName: String
     var primaryRuntime: String
     var server: ServerModel
-    var onError: (String) -> Void
+    var onError: (UserFacingMessage) -> Void
 
     var body: some View {
         switch item {
@@ -62,7 +62,7 @@ private struct ItemView: View {
                     do {
                         try await server.resolve(row.approvalId, decision, remember: remember)
                     } catch {
-                        onError(error.localizedDescription)
+                        onError(UserFacingError.message(for: error))
                     }
                 }
             }

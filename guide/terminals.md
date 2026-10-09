@@ -107,6 +107,6 @@ A switch that sends what you type in the focused pane to every pane on screen. U
 <!-- id: terminals-errors; covers: -->
 Shown in the pane when the connection or the server cannot run a terminal.
 Где: Terminals → pane → message
-1. Terminal error: … (Terminal error: {message}): click Retry (Повторить) on the banner.
+1. Terminal error: … (Terminal error: {message}): the message gives a short reason. Click Details (Подробнее) for the technical text, or Retry (Повторить) on the banner.
 2. Update the server to use terminals: the server runs an older Bandito. Update it from Server → Updates (see [server.md](server.md)).
-3. No server selected (Сервер не выбран): choose a server in the top bar.
+3. No servers (Нет серверов): click Connect a server (Подключить сервер) in the pane, or see [troubleshooting.md](troubleshooting.md).

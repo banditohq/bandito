@@ -38,25 +38,31 @@ private struct EmptyTeam: View {
     @Environment(AppModel.self) private var app
 
     var body: some View {
-        VStack(spacing: 14) {
-            Image(systemName: "bubble.left.and.text.bubble.right")
-                .font(.system(size: 34))
-                .foregroundStyle(Color.Bandito.text3)
-            switch app.currentServer?.state {
-            case .failed(let message):
-                Text(message)
-                    .foregroundStyle(Color.Bandito.text2)
-                    .multilineTextAlignment(.center)
-                Button(L10n.Banner.retry) { Task { await app.currentServer?.connect() } }
-                    .buttonStyle(QuietButtonStyle())
-            case .connecting:
-                ProgressView().controlSize(.small)
-            default:
-                Text(L10n.Team.pickAgent)
-                    .foregroundStyle(Color.Bandito.text2)
+        if app.currentServer == nil {
+            NoServerView(symbol: "bubble.left.and.text.bubble.right")
+                .background(Color.Bandito.bg)
+        } else {
+            VStack(spacing: 14) {
+                Image(systemName: "bubble.left.and.text.bubble.right")
+                    .font(.system(size: 34))
+                    .foregroundStyle(Color.Bandito.text3)
+                switch app.currentServer?.state {
+                case .failed(let kind):
+                    UserFacingErrorView(message: UserFacingError.message(for: kind))
+                        .frame(maxWidth: 420)
+                    Button(L10n.Banner.retry) {
+                        Task { await app.currentServer?.connect() }
+                    }
+                    .banditoButton(.quiet())
+                case .connecting:
+                    ProgressView().controlSize(.small)
+                default:
+                    Text(L10n.Team.pickAgent)
+                        .foregroundStyle(Color.Bandito.text2)
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.Bandito.bg)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.Bandito.bg)
     }
 }

@@ -33,7 +33,7 @@ struct UsageButton: View {
             .overlay(Capsule().strokeBorder(Color.Bandito.text.opacity(open ? 0.22 : 0.10)))
             .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
+        .banditoButton(.row(cornerRadius: 17))
         .help(L10n.Usage.title)
         .accessibilityLabel(percent == nil ? L10n.Usage.title : L10n.Usage.buttonAria(percent: text))
         .popover(isPresented: $router.usagePopoverOpen, arrowEdge: .top) {

@@ -16,7 +16,7 @@ final class EmailSignInModel {
     var email = ""
     private(set) var phase: Phase = .address
     private(set) var code = SixDigitCode()
-    private(set) var errorText: String?
+    private(set) var errorText: UserFacingMessage?
     private(set) var isBusy = false
     private(set) var signedIn: Session?
     private(set) var cooldown = ResendCooldown()
@@ -33,7 +33,7 @@ final class EmailSignInModel {
         guard !isBusy else { return }
         let address = email.trimmingCharacters(in: .whitespaces)
         guard EmailAddressCheck.isPlausible(address) else {
-            errorText = L10n.Onboarding.Account.invalidEmail
+            errorText = UserFacingMessage(text: L10n.Onboarding.Account.invalidEmail)
             return
         }
         isBusy = true

@@ -7,7 +7,7 @@ import SwiftUI
 struct SecretsView: View {
     let server: ServerModel?
     @State private var secrets: [SecretInfo] = []
-    @State private var error: String?
+    @State private var error: UserFacingMessage?
     @State private var editing: SecretDraft?
     @State private var deleting: SecretInfo?
 
@@ -17,7 +17,7 @@ struct SecretsView: View {
             trailing: {
                 if let server, server.supports("secrets") {
                     Button(L10n.Secrets.add) { editing = .new() }
-                        .buttonStyle(SignalButtonStyle())
+                        .banditoButton(.signal())
                 }
             }
         ) {
@@ -60,13 +60,13 @@ struct SecretsView: View {
                                 } label: {
                                     Image(systemName: "pencil")
                                 }
-                                .buttonStyle(IconButtonStyle(size: 26, label: L10n.Secrets.editAria(name: secret.name)))
+                                .banditoButton(.icon(size: 26, label: L10n.Secrets.editAria(name: secret.name)))
                                 Button {
                                     deleting = secret
                                 } label: {
                                     Image(systemName: "trash")
                                 }
-                                .buttonStyle(IconButtonStyle(size: 26, label: L10n.Secrets.deleteAria(name: secret.name)))
+                                .banditoButton(.icon(size: 26, label: L10n.Secrets.deleteAria(name: secret.name)))
                             }
                             .frame(width: 64, alignment: .trailing)
                         }
@@ -74,9 +74,7 @@ struct SecretsView: View {
                         .overlay(alignment: .top) { Rectangle().fill(Color.Bandito.text.opacity(0.05)).frame(height: 1) }
                     }
                     if let error {
-                        Text(error)
-                            .font(.system(size: 12.5))
-                            .foregroundStyle(Color.Bandito.danger)
+                        UserFacingErrorView(message: error)
                     }
                 }
             } else {
@@ -116,7 +114,7 @@ struct SecretsView: View {
             secrets = try await server.secrets()
             error = nil
         } catch {
-            self.error = error.localizedDescription
+            self.error = UserFacingError.message(for: error)
         }
     }
 
@@ -126,7 +124,7 @@ struct SecretsView: View {
             try await server.deleteSecret(name: secret.name)
             await reload()
         } catch {
-            self.error = error.localizedDescription
+            self.error = UserFacingError.message(for: error)
         }
     }
 
@@ -170,7 +168,7 @@ private struct SecretEditor: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var saving = false
-    @State private var error: String?
+    @State private var error: UserFacingMessage?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -210,16 +208,14 @@ private struct SecretEditor: View {
                 }
             }
             if let error {
-                Text(error)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(Color.Bandito.danger)
+                UserFacingErrorView(message: error)
             }
             HStack {
                 Spacer()
                 Button(L10n.Common.cancel) { dismiss() }
-                    .buttonStyle(QuietButtonStyle())
+                    .banditoButton(.quiet())
                 Button(L10n.Common.save) { save() }
-                    .buttonStyle(SignalButtonStyle())
+                    .banditoButton(.signal())
                     .disabled(!canSave || saving)
             }
         }
@@ -242,7 +238,7 @@ private struct SecretEditor: View {
                 await onSaved()
                 dismiss()
             } catch {
-                self.error = error.localizedDescription
+                self.error = UserFacingError.message(for: error)
             }
             saving = false
         }
