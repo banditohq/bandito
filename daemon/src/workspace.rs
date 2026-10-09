@@ -17,8 +17,15 @@ use tokio::process::Command as AsyncCommand;
 
 /// Containers are named `bandito-ws-<workspace id>`.
 const CONTAINER_PREFIX: &str = "bandito-ws-";
-/// The image built when a container workspace names none: Node with both agent CLIs.
-const DOCKERFILE: &str = "FROM node:22-bookworm\nRUN npm install -g @anthropic-ai/claude-code @openai/codex\n";
+/// The Dockerfile of the image built when a container workspace names none: Node with both agent
+/// CLIs, at the versions pinned in `setup::NPM_PINS`.
+fn dockerfile() -> String {
+    let packages: Vec<String> = crate::setup::NPM_PINS
+        .iter()
+        .map(|(name, version)| format!("{name}@{version}"))
+        .collect();
+    format!("FROM node:22-bookworm\nRUN npm install -g {}\n", packages.join(" "))
+}
 /// How long `docker info` may take before Docker counts as unavailable.
 const DOCKER_INFO_TIMEOUT: Duration = Duration::from_secs(20);
 /// The container label that holds [`config_hash`].
@@ -86,9 +93,9 @@ pub fn data_dir() -> PathBuf {
         .unwrap_or_else(|| dirs::home_dir().unwrap_or_else(|| PathBuf::from("/")).join(".bandito"))
 }
 
-/// The tag of the image Bandito builds from [`DOCKERFILE`]. The tag changes with the Dockerfile.
+/// The tag of the image Bandito builds from [`dockerfile`]. The tag changes with the Dockerfile.
 pub fn default_image_tag() -> String {
-    let digest = Sha256::digest(DOCKERFILE.as_bytes());
+    let digest = Sha256::digest(dockerfile().as_bytes());
     format!("bandito/workspace:{}", &hex::encode(digest)[..12])
 }
 
@@ -438,7 +445,7 @@ impl WorkspaceManager {
             return Ok(());
         }
         std::fs::create_dir_all(&self.build_dir)
-            .and_then(|_| std::fs::write(self.build_dir.join("Dockerfile"), DOCKERFILE))
+            .and_then(|_| std::fs::write(self.build_dir.join("Dockerfile"), dockerfile()))
             .map_err(|e| WorkspaceError::Docker(format!("write the Dockerfile: {e}")))?;
         let dir = self.build_dir.display().to_string();
         self.run(&["build", "-t", &tag, &dir]).await?;
@@ -746,6 +753,15 @@ mod tests {
         assert!(tag.starts_with("bandito/workspace:"), "{tag}");
         assert_eq!(tag, default_image_tag());
         assert!(tag.len() > "bandito/workspace:".len());
+    }
+
+    #[test]
+    fn default_image_installs_the_pinned_agent_clis() {
+        let file = dockerfile();
+        assert!(file.starts_with("FROM node:22-bookworm\n"), "{file}");
+        for (name, version) in crate::setup::NPM_PINS {
+            assert!(file.contains(&format!("{name}@{version}")), "{file}");
+        }
     }
 
     #[test]
