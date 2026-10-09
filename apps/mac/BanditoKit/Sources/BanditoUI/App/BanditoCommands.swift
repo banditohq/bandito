@@ -11,16 +11,21 @@ public struct BanditoCommands: Commands {
     private let keymap: Keymap
     private let router: Router
     private let app: AppModel
+    private let onboarding: OnboardingModel
 
-    public init(keymap: Keymap, router: Router, app: AppModel) {
+    public init(keymap: Keymap, router: Router, app: AppModel, onboarding: OnboardingModel) {
         self.keymap = keymap
         self.router = router
         self.app = app
+        self.onboarding = onboarding
     }
 
     public var body: some Commands {
         CommandGroup(replacing: .appSettings) {
             item("global.settings") { WindowActions.showSettings() }
+        }
+        CommandGroup(replacing: .help) {
+            Button(L10n.Onboarding.showAgain) { onboarding.replay() }
         }
         // ⌘W is the terminal close in the Terminals mode, so the window closes with ⇧⌘W.
         CommandGroup(replacing: .saveItem) {
