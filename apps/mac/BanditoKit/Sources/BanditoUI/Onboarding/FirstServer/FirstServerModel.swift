@@ -27,8 +27,16 @@ final class FirstServerModel {
         case connected(ServerConfig)
     }
 
+    /// How an own server gets Bandito: by the app over ssh (default), or by a command the person runs on the server.
+    enum SetupMode: Hashable, Sendable {
+        case automatic
+        case command
+    }
+
     private(set) var option: Option?
     private(set) var phase: Phase = .choosing
+    /// The own-server panel's choice. It only changes what the panel shows; the install is the same.
+    var setupMode: SetupMode = .automatic
 
     /// Whether the server is connected and set up (the phase is `.connected`).
     var isConnected: Bool {
@@ -107,9 +115,20 @@ final class FirstServerModel {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
     }
 
-    /// Hosts the person already uses: from their ssh config and known_hosts.
-    func loadSuggestions(config: String, knownHosts: String) {
-        suggestions = SSHConfigReader.suggestions(config: config, knownHosts: knownHosts)
+    /// Hosts the person already uses: from their ssh config and known_hosts. The files are read and parsed in the
+    /// background, so the window does not wait for the disk; the result is set on the main actor.
+    func loadSuggestions() async {
+        suggestions = await Self.readSuggestionsInBackground()
+    }
+
+    /// Reads `~/.ssh/config` and `~/.ssh/known_hosts` (and any files they include) off the main thread. Nothing is written.
+    static func readSuggestionsInBackground() async -> [String] {
+        await Task.detached(priority: .utility) {
+            let ssh = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true).appending(path: ".ssh", directoryHint: .isDirectory)
+            let config = (try? String(contentsOf: ssh.appending(path: "config"), encoding: .utf8)) ?? ""
+            let known = (try? String(contentsOf: ssh.appending(path: "known_hosts"), encoding: .utf8)) ?? ""
+            return SSHConfigReader.suggestions(config: config, knownHosts: known)
+        }.value
     }
 
     func choose(_ option: Option) {

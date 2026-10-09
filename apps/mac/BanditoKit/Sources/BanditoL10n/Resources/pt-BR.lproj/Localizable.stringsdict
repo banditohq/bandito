@@ -155,9 +155,9 @@
 			<key>NSStringFormatValueTypeKey</key>
 			<string>lld</string>
 			<key>one</key>
-			<string>%1$lld minuto</string>
+			<string>≈ %1$lld minuto</string>
 			<key>other</key>
-			<string>%1$lld minutos</string>
+			<string>≈ %1$lld minutos</string>
 		</dict>
 	</dict>
 	<key>thread.ranCommands</key>

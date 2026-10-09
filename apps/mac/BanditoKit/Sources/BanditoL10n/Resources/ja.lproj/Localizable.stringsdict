@@ -139,7 +139,7 @@
 			<key>NSStringFormatValueTypeKey</key>
 			<string>lld</string>
 			<key>other</key>
-			<string>約 %1$lld 分</string>
+			<string>約 ≈ %1$lld 分</string>
 		</dict>
 	</dict>
 	<key>thread.ranCommands</key>

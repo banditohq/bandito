@@ -30,24 +30,33 @@ struct AccountSignInView: View {
     @State private var models: AccountModels?
     @State private var setupError: UserFacingMessage?
     @State private var showGitHub = false
+    /// The email branch is folded away until the person asks for it (or a code is already on its way).
+    @State private var showEmail = false
+
+    /// Below this window width the illustration is hidden, so the form keeps its room.
+    static let illustrationMinWidth: CGFloat = 980
 
     var body: some View {
         GeometryReader { geometry in
+            let wide = showsIllustration && geometry.size.width >= Self.illustrationMinWidth
+            // The card and the form share one height, centred vertically in the step.
+            let height = Self.cardHeight(for: geometry.size.height)
             HStack(spacing: 0) {
-                if showsIllustration {
-                    // Left column: about 44% of the step, the card keeps its inset from the flow's bars.
+                if wide {
                     AccountIllustration()
-                        .frame(width: Self.illustrationWidth(for: geometry.size.width))
+                        .frame(width: Self.illustrationWidth(for: geometry.size.width), height: height)
                 }
-                // Right column: the form, vertically centered; it scrolls when the window is short.
+                // The form scrolls when the window is short.
                 ScrollView {
                     form
-                        .frame(maxWidth: 460, alignment: .leading)
-                        .frame(maxWidth: .infinity, minHeight: geometry.size.height, alignment: .center)
-                        .padding(.horizontal, showsIllustration ? 48 : 0)
+                        .frame(maxWidth: 420, alignment: .leading)
+                        .frame(maxWidth: .infinity, minHeight: height, alignment: .center)
+                        .padding(.horizontal, wide ? 48 : 0)
                 }
                 .scrollIndicators(.hidden)
+                .frame(height: height)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .task { await build() }
         .onChange(of: finishedSession) { _, session in
@@ -67,6 +76,11 @@ struct AccountSignInView: View {
     /// The illustration column: 44% of the step's width, between 300 and 520 points.
     static func illustrationWidth(for stepWidth: CGFloat) -> CGFloat {
         min(520, max(300, (stepWidth * 0.44).rounded()))
+    }
+
+    /// The height of the card and the form: the step's height less a margin, between 360 and 560 points.
+    static func cardHeight(for stepHeight: CGFloat) -> CGFloat {
+        max(360, min(560, stepHeight - 48))
     }
 
     /// Set when either way of signing in succeeded.
@@ -101,16 +115,24 @@ struct AccountSignInView: View {
         }
     }
 
+    /// The email branch is open when asked for, or while a code is being entered.
+    private var emailExpanded: Bool {
+        showEmail || models?.email.phase == .code
+    }
+
     private var form: some View {
-        VStack(alignment: .leading, spacing: 22) {
-            VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 8) {
                 Text(L10n.Onboarding.Account.title)
-                    .font(BanditoFont.font(size: 38, weight: 600))
+                    .font(BanditoFont.font(size: 34, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
                 Text(L10n.Onboarding.Account.subtitle)
                     .font(BanditoFont.font(size: 15, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                     .lineSpacing(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             if let setupError {
                 HStack(spacing: 10) {
@@ -120,67 +142,87 @@ struct AccountSignInView: View {
                         .banditoButton(.quiet(size: .regular))
                 }
             }
-            Button {
+            GitHubContinueButton {
                 models?.github.start()
                 showGitHub = true
-            } label: {
-                Text(L10n.Onboarding.Account.continueGithub)
-                    .frame(maxWidth: .infinity)
             }
-            .banditoButton(.lightPill(size: .large))
             .disabled(models == nil)
 
-            divider(L10n.Onboarding.Account.orEmail)
+            VStack(alignment: .leading, spacing: 16) {
+                Button {
+                    withAnimation(BanditoMotion.ease) { showEmail.toggle() }
+                } label: {
+                    Text(L10n.Onboarding.Account.emailToggle)
+                        .font(BanditoFont.font(size: 13.5, weight: 500))
+                        .foregroundStyle(Color.Bandito.text2)
+                        .frame(maxWidth: .infinity)
+                }
+                .banditoButton(.link)
+                .frame(maxWidth: .infinity)
 
-            if let models {
-                EmailBlock(model: models.email)
+                if emailExpanded, let models {
+                    EmailBlock(model: models.email)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
             }
 
-            privacyCard
-            Text(L10n.Onboarding.Account.iphoneHint)
-                .font(BanditoFont.font(size: 13, weight: 400))
-                .foregroundStyle(Color.Bandito.text2)
-                .lineSpacing(2)
+            privacyLine
+                .frame(maxWidth: .infinity, alignment: .center)
             Button {
                 onSkipAccount?()
             } label: {
                 Text(L10n.Onboarding.Account.skip)
                     .font(BanditoFont.font(size: 13.5, weight: 400))
-                    .foregroundStyle(Color.Bandito.text2)
-                + Text(" · \(L10n.Onboarding.Account.skipHint)")
-                    .font(BanditoFont.font(size: 13.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
+                    .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.plain)
+            .banditoButton(.link)
+            .frame(maxWidth: .infinity)
+            .help(L10n.Onboarding.Account.skipHint)
             .opacity(onSkipAccount == nil ? 0 : 1)
             .disabled(onSkipAccount == nil)
         }
+        .banditoAnimation(BanditoMotion.ease, value: emailExpanded)
     }
 
-    private func divider(_ label: String) -> some View {
-        HStack(spacing: 12) {
-            Rectangle().fill(Color.Bandito.text.opacity(0.08)).frame(height: 1)
-            Text(label)
-                .font(BanditoFont.font(size: 12, weight: 400))
-                .foregroundStyle(Color.Bandito.text3)
-            Rectangle().fill(Color.Bandito.text.opacity(0.08)).frame(height: 1)
-        }
-    }
-
-    private var privacyCard: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "lock")
-                .font(.system(size: 16, weight: .medium))
+    /// One short line with a lock: the list of servers is encrypted, and only this person's devices hold the key.
+    private var privacyLine: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 7) {
+            Image(systemName: "lock.fill")
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(AvatarColor.sage.color)
-                .padding(.top, 1)
             Text(L10n.Onboarding.Account.privacy)
-                .font(BanditoFont.font(size: 13, weight: 400))
-                .foregroundStyle(Color.Bandito.text2)
-                .lineSpacing(2)
+                .font(BanditoFont.font(size: 12.5, weight: 400))
+                .foregroundStyle(Color.Bandito.text3)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(14)
-        .background(AvatarColor.sage.color.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(AvatarColor.sage.color.opacity(0.18)))
+    }
+}
+
+/// The main action of the step: the GitHub mark and "Continue with GitHub" on the light pill. Hovering lifts it with a
+/// soft shadow, on top of the pill's own brightening.
+private struct GitHubContinueButton: View {
+    let action: () -> Void
+    @State private var hovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                GitHubMark()
+                    .fill(Color.Bandito.bg)
+                    .frame(width: 18, height: 18)
+                Text(L10n.Onboarding.Account.continueGithub)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .banditoButton(.lightPill(size: .large))
+        .frame(maxWidth: .infinity)
+        .shadow(color: Color.Bandito.text.opacity(hovered ? 0.28 : 0), radius: hovered ? 18 : 0, x: 0, y: 6)
+        .onHover { hovered = $0 }
+        .banditoAnimation(BanditoMotion.ease, value: hovered)
     }
 }
 
