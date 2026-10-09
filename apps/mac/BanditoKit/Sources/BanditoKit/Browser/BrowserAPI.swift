@@ -1,6 +1,6 @@
 import Foundation
 
-// The shared browser of a server (`browser.*`) and the DevTools connection to its pages.
+// The shared browser of a server (`browser.*`) and its DevTools sessions over `/v1/browser/*`.
 
 /// Params shared by the `browser.*` and `screen.*` calls: the workspace, when it is not the default.
 struct WorkspaceParams: Encodable {
@@ -36,35 +36,49 @@ extension ServerModel {
         try await rpc().call("browser.touch", WorkspaceParams(workspace: workspace))
     }
 
-    /// The pages of the running browser, from its DevTools HTTP list (`/json/list`).
-    /// Uses a one-shot tunnel to the DevTools port: the connection closes after the answer.
-    public func browserTabs(cdpPort: Int) async throws -> [BrowserTab] {
-        let base = try await forwardOnce(port: cdpPort)
-        guard let url = URL(string: "/json/list", relativeTo: base) else { throw CDPError.badMessage }
-        var request = URLRequest(url: url)
-        request.setValue("close", forHTTPHeaderField: "Connection")
+    /// The pages of the running browser (`GET /v1/browser/tabs`). Throws `CDPError.browserNotRunning` (409)
+    /// when there is no browser.
+    public func browserTabs(workspace: String? = nil) async throws -> [BrowserTab] {
+        let request = try browserRequest(path: "/v1/browser/tabs", workspace: workspace, socket: false)
         let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            throw CDPError.httpStatus((response as? HTTPURLResponse)?.statusCode ?? 0)
-        }
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard status == 200 else { throw CDPError.routeError(status: status) }
         return try JSONDecoder().decode([BrowserTab].self, from: data).filter(\.isPage)
     }
 
-    /// A CDP client attached to one page of the running browser: `tabID`, or the first page when nil.
-    /// Two one-shot tunnels are used: one for the HTTP list, one for the WebSocket.
-    public func browserPageClient(cdpPort: Int, tabID: String? = nil) async throws -> (CDPClient, BrowserTab) {
-        let tabs = try await browserTabs(cdpPort: cdpPort)
+    /// A CDP session on one page (`WS /v1/browser/cdp/page/{id}`): `tabID`, or the first page when nil.
+    /// A running browser with no page gets a blank one first. Throws `CDPError.noSuchTab` (404) when the
+    /// tab has closed.
+    public func browserPageClient(tabID: String? = nil, workspace: String? = nil) async throws -> (CDPClient, BrowserTab) {
+        var tabs = try await browserTabs(workspace: workspace)
+        if tabs.isEmpty {
+            try await createBlankTab(workspace: workspace)
+            tabs = try await browserTabs(workspace: workspace)
+        }
         let tab = tabID.flatMap { id in tabs.first { $0.id == id } } ?? tabs.first
         guard let tab else { throw CDPError.noPage }
-        let local = try await forwardOnce(port: cdpPort)
-        guard let url = CDP.pageSocketURL(local: local, pageId: tab.id) else { throw CDPError.badMessage }
-        return (CDPClient(socket: URLSessionCDPSocket(url: url)), tab)
+        guard BrowserRoute.isValidTargetID(tab.id) else { throw CDPError.badMessage }
+        let request = try browserRequest(
+            path: "/v1/browser/cdp/page/\(tab.id)", workspace: workspace, socket: true)
+        let socket = try await URLSessionCDPSocket.open(request: request)
+        return (CDPClient(socket: socket), tab)
     }
 
-    /// A CDP client on the browser-level socket (`browser_ws_path`), for `Target.*` calls.
-    public func browserTargetsClient(cdpPort: Int, wsPath: String) async throws -> CDPClient {
-        let local = try await forwardOnce(port: cdpPort)
-        guard let url = CDP.browserSocketURL(local: local, path: wsPath) else { throw CDPError.badMessage }
-        return CDPClient(socket: URLSessionCDPSocket(url: url))
+    /// The browser-level CDP session (`WS /v1/browser/cdp`), for `Target.*` calls such as making a tab.
+    public func browserTargetsClient(workspace: String? = nil) async throws -> CDPClient {
+        let request = try browserRequest(path: "/v1/browser/cdp", workspace: workspace, socket: true)
+        return CDPClient(socket: try await URLSessionCDPSocket.open(request: request))
+    }
+
+    /// Opens `about:blank` in a new tab, on the browser-level session (`Target.createTarget` is a browser command).
+    func createBlankTab(workspace: String? = nil) async throws {
+        let browser = try await browserTargetsClient(workspace: workspace)
+        do {
+            _ = try await browser.send(.createTarget(url: "about:blank"))
+        } catch {
+            await browser.close()
+            throw error
+        }
+        await browser.close()
     }
 }

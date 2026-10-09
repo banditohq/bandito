@@ -176,7 +176,7 @@ extension ServerModel {
 
     /// Percent-encodes a query value the way the daemon's form decoder reads it: `+`, `&`, `=`, `#`
     /// and `;` are always encoded (a bare `+` would read as a space).
-    static func queryEncoded(_ value: String) -> String {
+    nonisolated static func queryEncoded(_ value: String) -> String {
         var allowed = CharacterSet.urlQueryAllowed
         allowed.remove(charactersIn: "+&=#;")
         return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? ""

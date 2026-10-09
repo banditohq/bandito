@@ -3,48 +3,60 @@ import Testing
 
 @testable import BanditoKit
 
-// Manual integration check: a real Chrome with `--remote-debugging-port` must send at least one screencast frame.
-// Start Chrome yourself (headless, isolated profile), then run with BANDITO_BROWSER_IT=1 and, when the port
-// is not 9333, BANDITO_BROWSER_IT_PORT=<port>. Skipped in normal runs.
+// Manual integration check against a running daemon: the app's own routes, the tabs, and one page evaluated over
+// `WS /v1/browser/cdp/page/{id}`. Start a daemon on a loopback port with a paired device (its listen port and token
+// are the ones below), then run with BANDITO_BROWSER_APP_IT=1, BANDITO_BROWSER_APP_URL=ws://127.0.0.1:<port>/v1/rpc
+// and BANDITO_BROWSER_APP_TOKEN=<device token>. Skipped in normal runs.
 
-@Test(.enabled(if: ProcessInfo.processInfo.environment["BANDITO_BROWSER_IT"] == "1"))
-func screencastDeliversAFrameFromChrome() async throws {
-    let port = ProcessInfo.processInfo.environment["BANDITO_BROWSER_IT_PORT"].flatMap(Int.init) ?? 9333
-    let base = try #require(URL(string: "http://127.0.0.1:\(port)"))
+private let appIT = ProcessInfo.processInfo.environment["BANDITO_BROWSER_APP_IT"] == "1"
 
-    var listRequest = URLRequest(url: base.appending(path: "json/list"))
-    listRequest.setValue("close", forHTTPHeaderField: "Connection")
-    let (listData, _) = try await URLSession.shared.data(for: listRequest)
-    let pages = try JSONDecoder().decode([BrowserTab].self, from: listData).filter(\.isPage)
-    let page = try #require(pages.first)
+@MainActor
+@Test(.enabled(if: appIT))
+func theAppReachesAPageThroughTheDaemonRoutes() async throws {
+    let env = ProcessInfo.processInfo.environment
+    let url = try #require(env["BANDITO_BROWSER_APP_URL"].flatMap(URL.init(string:)))
+    let server = ServerModel(
+        config: ServerConfig(name: "it", endpoint: .webSocket(url: url), token: env["BANDITO_BROWSER_APP_TOKEN"]))
+    await server.connect()
 
-    let socketURL = try #require(CDP.pageSocketURL(local: base, pageId: page.id))
-    let client = CDPClient(socket: URLSessionCDPSocket(url: socketURL))
-    _ = try await client.send(.startScreencast(maxWidth: 800, maxHeight: 600, quality: 70))
-    // A paint makes Chrome send a frame even on a blank page.
-    _ = try await client.send(.navigate(url: "data:text/html,<h1>Bandito screencast check</h1>"))
+    let status = try await server.browserStart()
+    #expect(status.isRelay)
 
-    let frame = try await withThrowingTaskGroup(of: ScreencastFrame?.self) { group -> ScreencastFrame? in
-        group.addTask {
-            for await event in client.events where event.method == "Page.screencastFrame" {
-                if let frame = CDP.screencastFrame(from: event.params) {
-                    _ = try? await client.send(.ackScreencastFrame(sessionId: frame.sessionId))
-                    return frame
-                }
-            }
-            return nil
-        }
-        group.addTask {
-            try await Task.sleep(for: .seconds(20))
-            return nil
-        }
-        let first = try await group.next() ?? nil
-        group.cancelAll()
-        return first
+    let (client, tab) = try await server.browserPageClient()
+    #expect(tab.isPage)
+    _ = try await client.send(.navigate(url: "data:text/html,<title>app-it</title><p>ok</p>"))
+    let evaluated = try await client.send(.evaluate(expression: "1 + 1"))
+    // Runtime.evaluate answers {"result": {"type", "value", …}}: the value is one level down.
+    #expect(evaluated["result"]?["value"] == .number(2))
+    await client.close()
+
+    // A tab that does not exist: the route answers 404, which the app reports as no such tab.
+    let request = try server.browserRequest(path: "/v1/browser/cdp/page/NOSUCHTAB", workspace: nil, socket: true)
+    await #expect(throws: CDPError.noSuchTab) {
+        _ = try await URLSessionCDPSocket.open(request: request)
     }
 
-    let received = try #require(frame)
-    #expect(received.jpeg.count > 1000)
-    #expect(received.deviceWidth > 0 && received.deviceHeight > 0)
-    await client.close()
+    // The browser-level socket opens and answers.
+    let browser = try await server.browserTargetsClient()
+    let targets = try await browser.send(.getTargets)
+    #expect(targets["targetInfos"] != nil)
+    await browser.close()
+
+    // Sixteen browser-level sockets per device; the seventeenth is refused with 429.
+    var held: [CDPClient] = []
+    for _ in 0..<16 {
+        held.append(try await server.browserTargetsClient())
+    }
+    await #expect(throws: CDPError.tooManySockets) {
+        _ = try await server.browserTargetsClient()
+    }
+    for client in held {
+        await client.close()
+    }
+
+    try await server.browserStop()
+    await #expect(throws: CDPError.browserNotRunning) {
+        _ = try await server.browserTabs()
+    }
+    await server.disconnect()
 }

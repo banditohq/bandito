@@ -4,7 +4,7 @@ import Foundation
 
 extension ServerModel {
     /// A local URL that reaches `127.0.0.1:<port>` on the server, for one client inside this app
-    /// (a VNC or DevTools client, for example). Each call makes a new one-shot forwarder.
+    /// (a VNC client, for example). Each call makes a new one-shot forwarder.
     ///
     /// Why one-shot: a forwarder that stays open would give every local process on this Mac a
     /// loopback port that goes to the server with the device token. Here the port serves exactly one
