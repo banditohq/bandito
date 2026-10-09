@@ -161,6 +161,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum",
+ "base64",
  "chrono",
  "chrono-tz",
  "clap",
@@ -177,6 +178,8 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+ "tokio-util",
+ "tower",
  "tracing",
  "tracing-subscriber",
  "uuid",
@@ -1458,6 +1461,19 @@ dependencies = [
  "log",
  "tokio",
  "tungstenite",
+]
+
+[[package]]
+name = "tokio-util"
+version = "0.7.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "494815d09bf52b5548659851081238f0ca39ff638363907596da739561c62c52"
+dependencies = [
+ "bytes",
+ "futures-core",
+ "futures-sink",
+ "pin-project-lite",
+ "tokio",
 ]
 
 [[package]]

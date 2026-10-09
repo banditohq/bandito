@@ -2,6 +2,7 @@
 //! See docs/ARCHITECTURE.md#rpc.
 
 use crate::event::{Decision, Event, EventBody, Source};
+use crate::files::FileService;
 use crate::home;
 use crate::pairing;
 use crate::runtime::RuntimeKind;
@@ -18,6 +19,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::{broadcast, mpsc};
 
+pub mod files;
 pub mod unix;
 pub mod ws;
 
@@ -35,6 +37,7 @@ pub const FEATURES: &[&str] = &[
     "usage",
     "memory",
     "history",
+    "files",
 ];
 
 /// Context budget bounds for `smart` memory, in tokens.
@@ -51,16 +54,25 @@ pub struct App {
     pub agents_root: PathBuf,
     /// Timestamps of failed `pair.redeem` calls (rate limit).
     redeem_failures: Mutex<VecDeque<i64>>,
+    /// Server files for the `fs.*` methods and `GET /v1/files/raw`.
+    pub files: Arc<FileService>,
 }
 
 impl App {
+    /// Files are served from the home folder of the user running the daemon.
     pub fn new(sup: Arc<Supervisor>, agents_root: PathBuf) -> Arc<Self> {
+        let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
+        Self::new_with_files(sup, agents_root, FileService::new(home, None))
+    }
+
+    pub fn new_with_files(sup: Arc<Supervisor>, agents_root: PathBuf, files: FileService) -> Arc<Self> {
         Arc::new(Self {
             sup,
             started_at: crate::store::now_ms(),
             hostname: hostname(),
             agents_root,
             redeem_failures: Mutex::new(VecDeque::new()),
+            files: Arc::new(files),
         })
     }
 }
@@ -89,6 +101,8 @@ pub enum Peer {
 pub struct RpcError {
     pub code: i64,
     pub message: String,
+    /// Machine-readable details, sent as JSON-RPC error.data.
+    pub data: Option<Value>,
 }
 
 pub const PARSE_ERROR: i64 = -32700;
@@ -98,12 +112,23 @@ pub const INVALID_PARAMS: i64 = -32602;
 pub const SERVER_ERROR: i64 = -32000;
 pub const UNAUTHORIZED: i64 = -32001;
 pub const RATE_LIMITED: i64 = -32002;
+/// A file operation failed; `error.data.reason` says why (see rpc::files).
+pub const FS_ERROR: i64 = -32020;
 
 impl RpcError {
     fn new(code: i64, message: impl Into<String>) -> Self {
         Self {
             code,
             message: message.into(),
+            data: None,
+        }
+    }
+
+    pub fn with_data(code: i64, message: impl Into<String>, data: Value) -> Self {
+        Self {
+            code,
+            message: message.into(),
+            data: Some(data),
         }
     }
 }
@@ -446,6 +471,12 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             UNAUTHORIZED,
             "not paired: run `bandito pair` on the server",
         ));
+    }
+    if method.starts_with("fs.") {
+        // Every `fs.*` name is answered there, unknown ones with METHOD_NOT_FOUND.
+        return files::dispatch(app, method, p)
+            .await
+            .unwrap_or_else(|| Err(RpcError::new(METHOD_NOT_FOUND, format!("unknown method {method}"))));
     }
     let store = &app.sup.hub().store;
     match method {
@@ -1139,7 +1170,13 @@ mod history_tests {
 fn response(id: Value, r: RpcResult) -> String {
     match r {
         Ok(result) => json!({ "jsonrpc": "2.0", "id": id, "result": result }),
-        Err(e) => json!({ "jsonrpc": "2.0", "id": id, "error": { "code": e.code, "message": e.message } }),
+        Err(e) => {
+            let mut error = json!({ "code": e.code, "message": e.message });
+            if let Some(data) = e.data {
+                error["data"] = data;
+            }
+            json!({ "jsonrpc": "2.0", "id": id, "error": error })
+        }
     }
     .to_string()
 }
