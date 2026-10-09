@@ -7,9 +7,16 @@ public enum SyncStoreError: Error, Equatable, Sendable {
     case keyMissing
     /// The stored payload was written by a newer app. Its version is attached.
     case newerVersion(Int)
+    /// The server offered blob version `got`, older than `seen`: the newest version this device has read.
+    /// The blob is not applied.
+    case rollback(seen: Int, got: Int)
 }
 
 /// Pulls and pushes the account's `SyncPayload` as one encrypted blob.
+///
+/// Each blob is bound to its account and version (`SyncKey.blobAssociatedData`). This device remembers the
+/// newest version it has read per account (`sync.maxSeenVersion.<accountID>` in `defaults`), and refuses an
+/// older one: a server cannot replay a stale blob.
 @MainActor
 @Observable
 public final class SyncStore {
@@ -25,11 +32,15 @@ public final class SyncStore {
 
     private let account: AccountClient
     private let keys: SecretStore
+    private let defaults: UserDefaults
 
-    /// - Parameter keys: the store holding the sync key (the app's account store).
-    public init(account: AccountClient, keys: SecretStore) {
+    /// - Parameters:
+    ///   - keys: the store holding the sync key (the app's account store).
+    ///   - defaults: where the newest seen version per account is kept. Tests pass a private suite.
+    public init(account: AccountClient, keys: SecretStore, defaults: UserDefaults = .standard) {
         self.account = account
         self.keys = keys
+        self.defaults = defaults
     }
 
     /// Fetches and decrypts the account's payload. Nil when the account has no data yet.
@@ -69,6 +80,14 @@ public final class SyncStore {
         }
     }
 
+    /// Forgets the newest version this device has read, for the signed-in account. Call it only after the
+    /// user resets the account (`AccountClient.reset`): the server then starts a new version history, and
+    /// the old high-water mark would reject it as a rollback. Nothing else clears it.
+    public func forgetVersionHistory() async throws {
+        defaults.removeObject(forKey: Self.versionKey(accountID: try await currentAccountID()))
+        knownVersion = 0
+    }
+
     /// Joins two copies of the payload. Servers are matched by `id`: the local copy wins for an id both
     /// have, and ids only one side has are kept. The local keymap wins when there is one.
     /// There are no tombstones, so a server deleted on one device comes back if another device
@@ -89,22 +108,49 @@ public final class SyncStore {
             snippets: local.snippets ?? remote.snippets)
     }
 
+    static func versionKey(accountID: String) -> String {
+        "sync.maxSeenVersion.\(accountID)"
+    }
+
+    private func currentAccountID() async throws -> String {
+        guard let session = try await account.restoreSession() else { throw AccountError.notSignedIn }
+        return session.user.id
+    }
+
+    private func maxSeenVersion(accountID: String) -> Int {
+        defaults.integer(forKey: Self.versionKey(accountID: accountID))
+    }
+
+    private func remember(version: Int, accountID: String) {
+        if version > maxSeenVersion(accountID: accountID) {
+            defaults.set(version, forKey: Self.versionKey(accountID: accountID))
+        }
+    }
+
     private func fetch() async throws -> SyncPayload? {
+        let accountID = try await currentAccountID()
         guard let blob = try await account.getSync() else {
             knownVersion = 0
             return nil
         }
+        let seen = maxSeenVersion(accountID: accountID)
+        guard blob.version >= seen else {
+            throw SyncStoreError.rollback(seen: seen, got: blob.version)
+        }
         guard let key = try SyncKey.load(from: keys) else { throw SyncStoreError.keyMissing }
+        let associatedData = SyncKey.blobAssociatedData(accountID: accountID, version: blob.version)
         let payload = try JSONDecoder().decode(
-            SyncPayload.self, from: try SyncKey.openBlob(blob.blob, key: key))
+            SyncPayload.self, from: try SyncKey.openBlob(blob.blob, key: key, associatedData: associatedData))
         guard payload.version <= SyncPayload.currentVersion else {
             throw SyncStoreError.newerVersion(payload.version)
         }
         knownVersion = blob.version
+        remember(version: blob.version, accountID: accountID)
         return payload
     }
 
     private func write(_ payload: SyncPayload) async throws -> SyncPayload {
+        let accountID = try await currentAccountID()
         let key: SymmetricKey
         if let existing = try SyncKey.load(from: keys) {
             key = existing
@@ -113,8 +159,16 @@ public final class SyncStore {
             guard try await account.getSync() == nil else { throw SyncStoreError.keyMissing }
             key = try SyncKey.loadOrCreate(from: keys)
         }
-        let blob = try SyncKey.sealBlob(try JSONEncoder().encode(payload), key: key)
-        knownVersion = try await account.putSync(version: knownVersion, blob: blob)
+        // The server stores the blob at knownVersion + 1 when the expected version matches, so the
+        // version is known before the request. The blob is bound to it.
+        let version = knownVersion + 1
+        let associatedData = SyncKey.blobAssociatedData(accountID: accountID, version: version)
+        let blob = try SyncKey.sealBlob(
+            try JSONEncoder().encode(payload), key: key, associatedData: associatedData)
+        let stored = try await account.putSync(version: knownVersion, blob: blob)
+        guard stored == version else { throw AccountError.badResponse }
+        knownVersion = stored
+        remember(version: stored, accountID: accountID)
         return payload
     }
 

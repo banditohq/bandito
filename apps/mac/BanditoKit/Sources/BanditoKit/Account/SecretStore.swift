@@ -33,18 +33,29 @@ public struct KeychainStore: SecretStore {
         return out as? Data
     }
 
+    /// Replaces the value in place (`SecItemUpdate`), or adds it when there is none. Only `save(nil)` deletes.
     public func save(_ data: Data?, account: String) throws {
         let query = baseQuery(account: account)
-        let deleted = SecItemDelete(query as CFDictionary)
-        guard deleted == errSecSuccess || deleted == errSecItemNotFound else {
-            throw SecretStoreError.keychain(deleted)
+        guard let data else {
+            let status = SecItemDelete(query as CFDictionary)
+            guard status == errSecSuccess || status == errSecItemNotFound else {
+                throw SecretStoreError.keychain(status)
+            }
+            return
         }
-        guard let data else { return }
-        var add = query
-        add[kSecValueData as String] = data
-        add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        let status = SecItemAdd(add as CFDictionary, nil)
-        guard status == errSecSuccess else { throw SecretStoreError.keychain(status) }
+        let attributes: [String: Any] = [
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+        ]
+        let updated = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        if updated == errSecItemNotFound {
+            var add = query
+            add.merge(attributes) { _, new in new }
+            let status = SecItemAdd(add as CFDictionary, nil)
+            guard status == errSecSuccess else { throw SecretStoreError.keychain(status) }
+            return
+        }
+        guard updated == errSecSuccess else { throw SecretStoreError.keychain(updated) }
     }
 
     private func baseQuery(account: String) -> [String: Any] {

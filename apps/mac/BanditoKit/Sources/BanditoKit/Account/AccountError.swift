@@ -13,6 +13,12 @@ public enum AccountError: Error, Sendable, Equatable, LocalizedError {
     case network(String)
     /// An answer that does not match the contract.
     case badResponse
+    /// The code shown on the pending device does not match its public key. Nothing was sent.
+    case fingerprintMismatch
+    /// The base URL is not `https://bandito.dev` (or `http` to a loopback host, for local development).
+    case insecureBaseURL
+    /// An ID would not be a single safe URL path segment (`^[A-Za-z0-9_-]{1,128}$`). Nothing was sent.
+    case invalidIdentifier
 
     public var errorDescription: String? {
         switch self {
@@ -26,6 +32,12 @@ public enum AccountError: Error, Sendable, Equatable, LocalizedError {
             return "No connection to bandito.dev (\(detail))."
         case .badResponse:
             return "bandito.dev sent an answer the app does not understand."
+        case .fingerprintMismatch:
+            return "The code on the new device does not match its key. Do not approve it."
+        case .insecureBaseURL:
+            return "The accounts server must be reached over https://bandito.dev."
+        case .invalidIdentifier:
+            return "The identifier is not valid."
         }
     }
 

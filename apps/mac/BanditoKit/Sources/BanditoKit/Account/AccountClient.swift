@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 /// Sign-in, devices and sync against the Bandito accounts API (docs/ACCOUNTS_API.md).
@@ -13,18 +14,31 @@ public actor AccountClient {
     private let baseURL: URL
     private let device: DeviceDescriptor
 
+    /// - Throws: `AccountError.insecureBaseURL` unless `baseURL` is `validate(baseURL:)`-clean.
     public init(
         identity: DeviceIdentity,
         sessions: SecretStore,
         http: HTTPClient = URLSessionHTTPClient(),
         baseURL: URL = AccountClient.defaultBaseURL,
         device: DeviceDescriptor = .current
-    ) {
+    ) throws {
+        try Self.validate(baseURL: baseURL)
         self.identity = identity
         self.sessions = sessions
         self.http = http
         self.baseURL = baseURL
         self.device = device
+    }
+
+    /// The base URL must be `https://bandito.dev`. Plain `http` is allowed only to a loopback host (local
+    /// development, `wrangler dev`). Anything else would send tokens in the clear or to another server.
+    public static func validate(baseURL: URL) throws {
+        guard let scheme = baseURL.scheme?.lowercased(), let host = baseURL.host?.lowercased() else {
+            throw AccountError.insecureBaseURL
+        }
+        if scheme == "https", host == "bandito.dev" { return }
+        if scheme == "http", ["127.0.0.1", "localhost"].contains(host) { return }
+        throw AccountError.insecureBaseURL
     }
 
     // MARK: session
@@ -122,11 +136,23 @@ public actor AccountClient {
         return try decodeOK(Wire.self, reply).devices
     }
 
-    /// Hands a pending device its sync-key envelope. Only an approved device may send it.
-    public func approve(deviceID: String, envelope: String) async throws {
+    /// Hands a pending device the sync key. Only an approved device may call it.
+    ///
+    /// The code of `device.publicKey` must equal `confirmedFingerprint`, the code the user compared on the new
+    /// device's screen. Otherwise nothing is sealed or sent: `AccountError.fingerprintMismatch`. This is what
+    /// stops a server that swapped the public key from receiving the sync key.
+    public func approve(
+        _ device: PendingDevice, confirmedFingerprint: String, syncKey: SymmetricKey, identity: DeviceIdentity
+    ) async throws {
+        let computed = try DeviceFingerprint.code(publicKeyBase64: device.publicKey)
+        guard DeviceFingerprint.matches(computed, confirmedFingerprint) else {
+            throw AccountError.fingerprintMismatch
+        }
         struct Body: Encodable { var envelope: String }
+        let envelope = try SyncKey.seal(syncKey, forPublicKey: device.publicKey, sender: identity)
         let reply = try await send(
-            "POST", "/devices/\(Self.segment(deviceID))/approve", body: Body(envelope: envelope), authenticated: true)
+            "POST", "/devices/\(try Self.segment(device.id))/approve", body: Body(envelope: envelope),
+            authenticated: true)
         try checkOK(reply)
     }
 
@@ -142,7 +168,7 @@ public actor AccountClient {
     /// Removes a device. `force` confirms removing the last approved device, which resets the account's sync data.
     public func deleteDevice(id: String, force: Bool) async throws {
         let query = force ? "?force=1" : ""
-        let reply = try await send("DELETE", "/devices/\(Self.segment(id))\(query)", authenticated: true)
+        let reply = try await send("DELETE", "/devices/\(try Self.segment(id))\(query)", authenticated: true)
         try checkOK(reply)
     }
 
@@ -262,10 +288,14 @@ public actor AccountClient {
         .api(code: failure?.error ?? "http_\(reply.status)", status: reply.status)
     }
 
-    /// A device ID as a single URL path segment.
-    private static func segment(_ id: String) -> String {
-        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_.~"))
-        return id.addingPercentEncoding(withAllowedCharacters: allowed) ?? id
+    /// An ID as a URL path segment. Only `^[A-Za-z0-9_-]{1,128}$` passes, so `..`, slashes and empty IDs
+    /// cannot reach another endpoint.
+    static func segment(_ id: String) throws -> String {
+        guard (1...128).contains(id.count), id.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-" || $0 == "_") })
+        else {
+            throw AccountError.invalidIdentifier
+        }
+        return id
     }
 }
 

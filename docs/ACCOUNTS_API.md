@@ -185,7 +185,8 @@ Devices of the same account that are not approved yet:
 
 ### `POST /devices/:id/approve` (approved device only)
 
-The approving device seals the sync key to the target's `public_key` and sends the envelope here.
+The approving device first compares the device's fingerprint with the code the user reads on the new device
+(see [Encryption model](#encryption-model)). Only then does it seal the sync key to the target's `public_key` and send the envelope here.
 
 Request: `{ "envelope": "<base64, at most 4096 characters>" }`.
 
@@ -247,12 +248,37 @@ Request: `{ "version": 3, "blob": "<base64, at most 262144 characters>" }`.
 
 ## Encryption model
 
-- The server stores only ciphertext (`sync.blob`) and envelopes (`key_envelopes.envelope`). It cannot read any synced content.
+- The server stores only ciphertext (`sync.blob`) and envelopes (`key_envelopes.envelope`). It cannot read synced content **as long as devices compare fingerprints before approving**. A server that replaces a pending device's `public_key` could otherwise receive the sync key. Without that comparison, the server can read the sync key.
 - The sync key is created by the first approved device of an account. That device is approved automatically when the account has no approved device and no sync blob.
 - A new device is pending. It has an X25519 key pair (`public_key` is public, the private part stays on the device) and an Ed25519 key pair (`signing_key`). Until approved it cannot read or write sync data.
-- An approved device opens the pending device's `public_key`, seals the sync key to it (X25519 envelope) and calls `POST /devices/:id/approve`. The new device fetches the envelope with `GET /devices/me/envelope` and opens it with its private key, which never leaves the device.
+- Approval, in order:
+  1. The new device shows its fingerprint (below).
+  2. The approving device takes `public_key` from `GET /devices/pending`, computes the fingerprint of that key, and asks the user to compare it with the code on the new device. A mismatch stops the approval: nothing is sealed or sent.
+  3. The approving device seals the sync key (below) and calls `POST /devices/:id/approve`.
+  4. The new device fetches the envelope with `GET /devices/me/envelope` and opens it with its private key. It shows the fingerprint of the sender ("approved by the device with code …"), which the user can compare with the approving device.
 - Ed25519 signatures prove that the login comes from the holder of `signing_key`. A stolen session token alone cannot register a new device.
 - If every approved device is lost, the sync key is lost too, and the server cannot recover it. Recovery is `POST /account/reset`, which discards the encrypted sync data.
+
+### Device fingerprint
+
+```
+code = base32( first 10 bytes of SHA-256( "bandito-device-fp:v1" (UTF-8) || public_key ) )
+```
+
+`public_key` is the raw 32-byte X25519 public key. Base32 is RFC 4648 with the alphabet `ABCDEFGHIJKLMNOPQRSTUVWXYZ234567` and no padding. The result has 16 symbols, shown in groups of four separated by `-`, for example `45IU-3YV7-MGPV-EGLY`. Comparison ignores case, spaces and dashes.
+
+### Sync key envelope, version 2
+
+- Standard base64 of 113 bytes: `0x02 || sender_x25519_pub (32) || enc (32) || ct (48)`. That is 152 characters, within the 4096-character limit.
+- HPKE (RFC 9180) in **auth mode**, with the sender's X25519 private key as `authenticatedBy`. Suite `DHKEM(X25519)/HKDF-SHA256/ChaCha20-Poly1305`, `info` = `bandito-sync-key:v1` (UTF-8). `enc` is the encapsulated key. `ct` is the 32-byte sync key with its 16-byte tag. The associated data is empty.
+- Opening: the length must be exactly 113 bytes and the first byte `0x02`. Anything else is refused before any decryption. The sender's public key is read from the envelope; HPKE fails if it was changed. A successful open returns the sync key and the sender's fingerprint.
+- Version 1 (no sender authentication) is not accepted. No release has used it.
+
+### Sync blob
+
+- Standard base64 of ChaCha20-Poly1305 "combined" output (12-byte nonce, ciphertext, 16-byte tag), under the sync key.
+- Associated data: UTF-8 `bandito-sync-blob:v1:<accountID>:<version>`. `version` is the version the blob is stored under: the `version` of the `PUT` plus one, which is what the server assigns on a match. A blob moved to another account, or labelled with another version, does not open.
+- Rollback: each device keeps, per account, the newest blob version it has read. A blob with a lower version is refused and not applied. The app clears this history only after the user resets the account on that device.
 
 ## Limits
 

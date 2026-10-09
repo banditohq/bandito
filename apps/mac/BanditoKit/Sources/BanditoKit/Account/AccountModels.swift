@@ -13,6 +13,17 @@ public struct Session: Codable, Sendable, Equatable {
     }
 }
 
+extension Session: CustomStringConvertible, CustomDebugStringConvertible {
+    /// The token never appears in logs or debug output.
+    public var description: String {
+        "Session(token: <redacted>, user: \(user.id), device: \(device.id))"
+    }
+
+    public var debugDescription: String {
+        description
+    }
+}
+
 public struct AccountUser: Codable, Sendable, Equatable {
     public var id: String
     public var email: String?

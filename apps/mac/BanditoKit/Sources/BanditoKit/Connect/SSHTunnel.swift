@@ -17,6 +17,8 @@ public enum SSHTunnelError: Error, Sendable, Equatable, LocalizedError {
     case unreachable
     /// ssh stopped with a message this list does not name. `detail` is its last line.
     case exited(detail: String)
+    /// Another program holds every local port this tunnel tried. Nothing was sent through the tunnel.
+    case portHijacked
 
     /// Maps ssh's own messages to a case. Nil for anything else. Only meaningful for stderr of an ssh process
     /// that exited with status 255, which is what ssh uses for its own failures.
@@ -42,7 +44,7 @@ public enum SSHTunnelError: Error, Sendable, Equatable, LocalizedError {
     /// Permanent errors are not retried: the same call will fail the same way.
     public var isPermanent: Bool {
         switch self {
-        case .invalidTarget, .authFailed, .unknownHost, .hostKeyChanged: return true
+        case .invalidTarget, .authFailed, .unknownHost, .hostKeyChanged, .portHijacked: return true
         case .unreachable, .exited: return false
         }
     }
@@ -68,11 +70,16 @@ public enum SSHTunnelError: Error, Sendable, Equatable, LocalizedError {
             return "The server did not answer. Check the address and that it is online."
         case .exited(let detail):
             return detail.isEmpty ? "ssh stopped unexpectedly." : "ssh stopped: \(detail)"
+        case .portHijacked:
+            return "A local port for the SSH tunnel is held by another program. Nothing was sent to the server."
         }
     }
 }
 
 #if os(macOS)
+
+/// The pids with a listening TCP socket on a port. Injected so tests can say who holds a port.
+public typealias ListenerLookup = @Sendable (_ port: Int) async throws -> Set<Int32>
 
 /// An `ssh -N -L` process that carries one local port to the daemon's loopback port on a server.
 ///
@@ -84,6 +91,9 @@ public actor SSHTunnel {
     public static let readyTimeout: Duration = .seconds(15)
     /// Waits before restart 1, 2, 3, …; the last value repeats.
     public static let restartDelays: [Duration] = [.seconds(1), .seconds(2), .seconds(5), .seconds(10), .seconds(30)]
+    /// Local ports tried before `portHijacked`.
+    public static let maxPortAttempts = 3
+    static let lsofPath = "/usr/sbin/lsof"
 
     public enum State: Sendable, Equatable {
         case stopped
@@ -106,6 +116,7 @@ public actor SSHTunnel {
     private let target: SSHTarget
     private let remotePort: Int
     private let sshPath: String
+    private let listeners: ListenerLookup
     private var process: Process?
     private var pipe: Pipe?
     private var stderr: StderrBuffer?
@@ -117,15 +128,23 @@ public actor SSHTunnel {
     /// - Parameters:
     ///   - target: `[user@]host[:port]` or an alias, as `SSHTarget.parse` reads it.
     ///   - remotePort: the port on the server's loopback that the tunnel reaches (the daemon's listen port).
-    public init(target: String, remotePort: Int, sshPath: String = SSHTunnel.sshPath) throws {
+    ///   - listeners: who listens on a local port. The tunnel is ready only when that is its own ssh.
+    public init(
+        target: String, remotePort: Int, sshPath: String = SSHTunnel.sshPath,
+        listeners: @escaping ListenerLookup = SSHTunnel.listeningProcesses
+    ) throws {
         guard let parsed = SSHTarget.parse(target) else { throw SSHTunnelError.invalidTarget }
         self.target = parsed
         self.remotePort = remotePort
         self.sshPath = sshPath
+        self.listeners = listeners
     }
 
     /// Opens the tunnel. Throws the reason when ssh exits or the port stays closed.
     /// A call while the tunnel is already starting or running returns at once.
+    ///
+    /// Ready means: the ssh process is alive, the port accepts connections, and the only process listening on
+    /// that port is this ssh. Callers send tokens and codes only after this returns.
     public func start() async throws {
         switch state {
         case .starting, .up, .restarting: return
@@ -135,9 +154,7 @@ public actor SSHTunnel {
         let (exits, sink) = AsyncStream.makeStream(of: Int.self, bufferingPolicy: .unbounded)
         exitSink = sink
         do {
-            let port = try Self.freeLocalPort()
-            localPort = port
-            let launched = try await launch(port: port)
+            let launched = try await establish()
             guard launched == generation else { throw SSHTunnelError.exited(detail: "stopped while starting") }
         } catch {
             let reason = error as? SSHTunnelError ?? .exited(detail: error.localizedDescription)
@@ -220,7 +237,23 @@ public actor SSHTunnel {
 
     // MARK: internals
 
-    /// Starts one ssh process and waits until its port accepts. Returns the generation of the process.
+    /// Starts ssh on a free local port. A port that another program holds (or an ssh that died binding it)
+    /// is replaced by a new free port, up to `maxPortAttempts` times, then `portHijacked`.
+    private func establish() async throws -> Int {
+        for _ in 0..<Self.maxPortAttempts {
+            let port = try Self.freeLocalPort()
+            localPort = port
+            do {
+                return try await launch(port: port)
+            } catch LaunchFailure.portTaken {
+                continue
+            }
+        }
+        throw SSHTunnelError.portHijacked
+    }
+
+    /// Starts one ssh process and waits until its port belongs to it. Returns the generation of the process.
+    /// Throws `LaunchFailure.portTaken` when the port is held by another program.
     private func launch(port: Int) async throws -> Int {
         let buffer = StderrBuffer()
         let pipe = Pipe()
@@ -257,9 +290,22 @@ public actor SSHTunnel {
             if !process.isRunning {
                 pipe.fileHandleForReading.readabilityHandler = nil
                 buffer.append((try? pipe.fileHandleForReading.readToEnd()) ?? Data())
+                if Self.isPortConflict(stderr: buffer.text) { throw LaunchFailure.portTaken }
                 throw SSHTunnelError.from(stderr: buffer.text)
             }
-            if await Self.isAccepting(port: port) { return current }
+            if await Self.isAccepting(port: port) {
+                // Something accepts on the port. It is ours only if the listening process is this ssh.
+                let owners: Set<Int32>
+                do {
+                    owners = try await listeners(port)
+                } catch {
+                    abandon(process, pipe: pipe)
+                    throw error
+                }
+                if owners == [process.processIdentifier] { return current }
+                abandon(process, pipe: pipe)
+                throw LaunchFailure.portTaken
+            }
             if ContinuousClock.now >= deadline {
                 // Not an exit to react to: the launch is failing and the caller decides.
                 generation += 1
@@ -268,6 +314,14 @@ public actor SSHTunnel {
             }
             try await Task.sleep(for: .milliseconds(200))
         }
+    }
+
+    /// Stops an ssh this tunnel will not use. Its exit no longer counts as a tunnel exit.
+    private func abandon(_ process: Process, pipe: Pipe) {
+        generation += 1
+        process.terminationHandler = nil
+        pipe.fileHandleForReading.readabilityHandler = nil
+        if process.isRunning { process.terminate() }
     }
 
     private func processEnded(_ ended: Int) {
@@ -302,12 +356,36 @@ public actor SSHTunnel {
                         state = .failed(error)
                         return
                     }
+                } catch LaunchFailure.portTaken {
+                    // The port changed hands while the tunnel was down. Its URL cannot move, so stop here.
+                    state = .failed(.portHijacked)
+                    return
                 } catch {
                     state = .failed(.exited(detail: error.localizedDescription))
                     return
                 }
             }
         }
+    }
+
+    /// ssh's words for "the local port is taken". With `ExitOnForwardFailure` ssh exits with them.
+    static func isPortConflict(stderr: String) -> Bool {
+        ["Address already in use", "cannot listen to port", "Could not request local forwarding"]
+            .contains { stderr.contains($0) }
+    }
+
+    /// The pids with a listening TCP socket on `port`, from `lsof`. Status 1 means none; other failures throw.
+    public static func listeningProcesses(port: Int) async throws -> Set<Int32> {
+        let result = try await ProcessCommandRunner().run(
+            lsofPath, ["-nP", "-iTCP:\(port)", "-sTCP:LISTEN", "-Fp"], stdin: nil)
+        guard result.status == 0 || result.status == 1 else {
+            throw SSHTunnelError.exited(detail: "could not check which process holds the port")
+        }
+        return Set(
+            result.stdout.split(separator: "\n").compactMap { line -> Int32? in
+                guard line.hasPrefix("p") else { return nil }
+                return Int32(line.dropFirst())
+            })
     }
 
     /// A free TCP port on 127.0.0.1, found by binding port 0 and reading back what the system chose.
@@ -337,6 +415,11 @@ public actor SSHTunnel {
         guard nameStatus == 0 else { throw SSHTunnelError.exited(detail: "no free local port") }
         return Int(UInt16(bigEndian: address.sin_port))
     }
+}
+
+/// A launch that did not get its port: another program holds it, or ssh could not bind it.
+private enum LaunchFailure: Error {
+    case portTaken
 }
 
 /// Collects a process's stderr from its readability handler, which runs on another thread.
