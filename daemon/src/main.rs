@@ -163,6 +163,7 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr) -> Result<()> {
     tracing::info!(version = rpc::VERSION, socket = %sock.display(), %listen, "bandito daemon is running");
     shutdown_signal().await;
     tracing::info!("shutting down");
+    app.terminals.shutdown_all();
     sup.stop_all().await;
     let _ = std::fs::remove_file(sock);
     Ok(())

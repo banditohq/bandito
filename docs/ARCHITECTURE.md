@@ -87,8 +87,8 @@ Migrations: numbered SQL files embedded in the binary, applied by `PRAGMA user_v
 
 JSON-RPC 2.0. Same methods on every transport.
 
-- Requests: `daemon.info`, `runtimes.status`, `agents.list|get|create|update|delete`, `agents.send{agent_id,text}`, `agents.interrupt`, `events.since{seq,limit,agent_id?}`, `approvals.list|resolve{approval_id,decision,remember}`, `rules.list|set|delete`, `schedules.list|create|update|delete|run_now`, `devices.list|revoke`, `pair.redeem{code,device_name}` (only unauthenticated method).
-- Notifications (server → client): `event{seq, agent_id, kind, payload, ts}` for every event including `message.delta`.
+- Requests: `daemon.info`, `runtimes.status`, `agents.list|get|create|update|delete`, `agents.send{agent_id,text}`, `agents.interrupt`, `events.since{seq,limit,agent_id?}`, `approvals.list|resolve{approval_id,decision,remember}`, `rules.list|set|delete`, `schedules.list|create|update|delete|run_now`, `devices.list|revoke`, `pair.redeem{code,device_name}` (only unauthenticated method), `term.list|open|input|resize|rename|close|attach|detach` (see Terminals).
+- Notifications (server → client): `event{seq, agent_id, kind, payload, ts}` for every event including `message.delta`; `term.output|gap|exit|closed` for attached terminals (see Terminals).
 
 ## Transports (connect any way you like)
 
@@ -133,6 +133,41 @@ Loop guards: every crew message belongs to a chain, which starts with each user 
 A refused `crew_send` comes back to the agent as a tool error that tells it to report to the user. The counters are in memory: a daemon restart resets them, and they are dropped all at once when more than 10 000 chains are tracked. A crew message sent while the agent has no running turn is not counted against the per-turn limit.
 
 These limits stop accidental loops. They are not a security boundary: an agent with shell access runs as your user and can do anything you can.
+
+## Terminals
+
+Persistent shells and programs on the server, PTY-backed, like a tmux-lite. A terminal keeps running while no app is attached. Unix only. `daemon/src/terminal.rs` is the engine; `daemon/src/rpc/term.rs` is the RPC layer.
+
+A terminal runs as the daemon's user, so a paired app can do anything that user can. Anonymous connections get `UNAUTHORIZED`.
+
+Methods:
+
+- `term.list {}` → `[TermInfo]`, oldest first.
+- `term.open {cwd?, command?: [string], title?, cols, rows, env?: {string:string}}` → `TermInfo`. `cwd` defaults to the home folder; `~` and `~/…` expand; anything else must be an absolute, existing folder (else `INVALID_PARAMS`). `command` defaults to the user's login shell. `cols` and `rows` are 1..=1000.
+- `term.input {id, data}` → `{}`. `data` is base64, at most 64 KiB decoded.
+- `term.resize {id, cols, rows}` → `TermInfo`; `term.rename {id, title}` → `TermInfo`.
+- `term.close {id}` → `{}`. Hangs up the process group: SIGHUP, then SIGKILL after 2 s.
+- `term.attach {id, from?}` → `{info, start, data}`. Subscribes this connection to the terminal's output. `data` is base64 output from `start` to the current offset; `start` is `from` (or the oldest byte still kept, if `from` is older). Attaching again only resets the connection's expected offset.
+- `term.detach {id}` → `{}`. The terminal keeps running; its output goes on into the scrollback.
+
+Notifications, sent on the connection that attached (every one has `id`):
+
+| method | params | meaning |
+|---|---|---|
+| `term.output` | `{id, offset, data}` | base64 bytes that start at byte `offset` of the terminal's output |
+| `term.gap` | `{id, lost}` | `lost` bytes were not delivered (scrollback overflow, or the connection lagged); sent just before the output that follows |
+| `term.exit` | `{id, code, signal}` | the program ended; `code` or `signal` is null |
+| `term.closed` | `{id}` | the terminal was closed; the connection is no longer attached to it |
+
+Offsets: each terminal counts its output bytes from 0 and never resets. A client remembers the offset just past the last byte it has; `term.attach {from}` continues from there. A connection that goes away detaches from all its terminals, which keeps running. An app that collapses a terminal sends `term.detach`; to show it again it sends `term.attach` with the stored offset.
+
+Limits: 16 live terminals (an exited one keeps its slot until closed); 512 KiB of output history per terminal; 64 KiB per `term.input`. An input that cannot be written within 5 s fails with `busy`, and a prefix of it may already have been written.
+
+Environment: a terminal gets only a whitelist of the daemon's variables (`PATH`, `HOME`, `USER`, `LOGNAME`, `LANG`, `LC_ALL`, `LC_CTYPE`, `SHELL`, `TZ`, `TMPDIR`, `XDG_RUNTIME_DIR`) plus the `env` given to `term.open`. The daemon's secrets (API keys, tokens) never reach a terminal.
+
+Errors: code `-32021` (`TERM_ERROR`), message `<code>: <text>`, where `<code>` is `too_many`, `not_found`, `invalid_size`, `exited` or `busy`.
+
+When the daemon stops, every terminal is hung up (`TerminalManager::shutdown_all`). Feature string: `"terminals"` in `daemon.info`.
 
 ## Mac app
 

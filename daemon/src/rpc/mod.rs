@@ -8,6 +8,7 @@ use crate::runtime::RuntimeKind;
 use crate::scheduler;
 use crate::store::{AgentPatch, Device, Effort, NewAgent, NewSchedule, NextRun, RuleAction, SchedulePatch, Store};
 use crate::supervisor::{Inbound, Supervisor};
+use crate::terminal::{Limits, TerminalManager};
 use chrono::{Local, NaiveDate, NaiveTime, TimeZone};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
@@ -18,6 +19,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::{broadcast, mpsc};
 
+pub mod term;
 pub mod unix;
 pub mod ws;
 
@@ -35,6 +37,7 @@ pub const FEATURES: &[&str] = &[
     "usage",
     "memory",
     "history",
+    "terminals",
 ];
 
 /// Context budget bounds for `smart` memory, in tokens.
@@ -49,6 +52,8 @@ pub struct App {
     pub hostname: String,
     /// Root of the per-agent folders (see `home::ensure_agent_home`).
     pub agents_root: PathBuf,
+    /// Persistent terminals (see docs/ARCHITECTURE.md#terminals). Lives as long as the daemon.
+    pub terminals: TerminalManager,
     /// Timestamps of failed `pair.redeem` calls (rate limit).
     redeem_failures: Mutex<VecDeque<i64>>,
 }
@@ -60,6 +65,7 @@ impl App {
             started_at: crate::store::now_ms(),
             hostname: hostname(),
             agents_root,
+            terminals: TerminalManager::new(Limits::default()),
             redeem_failures: Mutex::new(VecDeque::new()),
         })
     }
@@ -98,6 +104,7 @@ pub const INVALID_PARAMS: i64 = -32602;
 pub const SERVER_ERROR: i64 = -32000;
 pub const UNAUTHORIZED: i64 = -32001;
 pub const RATE_LIMITED: i64 = -32002;
+pub const TERM_ERROR: i64 = -32021;
 
 impl RpcError {
     fn new(code: i64, message: impl Into<String>) -> Self {
@@ -778,6 +785,10 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             ok(json!({ "token": token, "device": d }))
         }
 
+        "term.list" | "term.open" | "term.input" | "term.resize" | "term.rename" | "term.close" => {
+            term::dispatch(app, method, p).await
+        }
+
         _ => Err(RpcError::new(METHOD_NOT_FOUND, format!("unknown method {method}"))),
     }
 }
@@ -1189,6 +1200,7 @@ async fn recv_event(rx: &mut Option<broadcast::Receiver<Event>>) -> Result<Event
 pub async fn serve(app: Arc<App>, peer: Peer, mut inbox: mpsc::Receiver<String>, outbox: mpsc::Sender<String>) {
     let mut events: Option<broadcast::Receiver<Event>> = None;
     let mut last: i64 = 0;
+    let mut terms = term::Stream::default();
     loop {
         tokio::select! {
             msg = inbox.recv() => {
@@ -1223,6 +1235,10 @@ pub async fn serve(app: Arc<App>, peer: Peer, mut inbox: mpsc::Receiver<String>,
                             }
                         }
                     }
+                } else if req.method == "term.attach" {
+                    terms.attach(&app, &peer, req.params)
+                } else if req.method == "term.detach" {
+                    terms.detach(&peer, req.params)
                 } else {
                     dispatch(&app, &peer, &req.method, req.params).await
                 };
@@ -1251,6 +1267,12 @@ pub async fn serve(app: Arc<App>, peer: Peer, mut inbox: mpsc::Receiver<String>,
                 }
                 Err(broadcast::error::RecvError::Closed) => break,
             },
+            ev = terms.next_event() => {
+                let lines = terms.on_event(&app, ev);
+                if term::send_all(&outbox, lines).await.is_err() {
+                    break;
+                }
+            }
         }
     }
 }
