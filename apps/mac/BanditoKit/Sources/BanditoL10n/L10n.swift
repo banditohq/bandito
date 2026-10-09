@@ -1202,6 +1202,7 @@ public enum L10n {
             public static var modeAuto: String { L10n.tr("onboarding.server.modeAuto") }
             public static var modeCommand: String { L10n.tr("onboarding.server.modeCommand") }
             public static func moreHosts(count: Int) -> String { L10n.tr("onboarding.server.moreHosts", count) }
+            public static var newHostTitle: String { L10n.tr("onboarding.server.newHostTitle") }
             public static var nextAgent: String { L10n.tr("onboarding.server.nextAgent") }
             public static var nextStepTitle: String { L10n.tr("onboarding.server.nextStepTitle") }
             public static var noPorts: String { L10n.tr("onboarding.server.noPorts") }

@@ -870,6 +870,7 @@
 "onboarding.server.modeAuto" = "Автоматически";
 "onboarding.server.modeCommand" = "Командой на сервере";
 "onboarding.server.moreHosts" = "Ещё %1$lld";
+"onboarding.server.newHostTitle" = "Новый сервер — подтвердите его";
 "onboarding.server.next.checkGitHubAccess" = "Этот Mac не может открыть github.com. Проверьте интернет, VPN или прокси и попробуйте снова.";
 "onboarding.server.next.checkSSHPort" = "Проверьте, что на сервере работает SSH и порт указан верно.";
 "onboarding.server.next.checkServerAddress" = "Имя не находится. Проверьте адрес на опечатки.";

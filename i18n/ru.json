@@ -510,6 +510,7 @@
   "onboarding.server.fingerprintTitle": "Это отпечаток вашего сервера?",
   "onboarding.server.fingerprintHint": "Сверьте его с тем, что показывает ваш хостинг или сам сервер. Если не уверены — отмените: ничего не доверяется без вашего подтверждения.",
   "onboarding.server.failedTitle": "Установка не завершилась",
+  "onboarding.server.newHostTitle": "Новый сервер — подтвердите его",
   "onboarding.server.back": "Назад",
   "onboarding.server.retry": "Проверить снова",
   "onboarding.server.thisMacName": "Этот Mac",

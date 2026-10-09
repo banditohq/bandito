@@ -216,10 +216,9 @@ private struct GitHubContinueButton: View {
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
             }
-            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 8)
         }
         .banditoButton(.lightPill(size: .large))
-        .frame(maxWidth: .infinity)
         .shadow(color: Color.Bandito.text.opacity(hovered ? 0.28 : 0), radius: hovered ? 18 : 0, x: 0, y: 6)
         .onHover { hovered = $0 }
         .banditoAnimation(BanditoMotion.ease, value: hovered)

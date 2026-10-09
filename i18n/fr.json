@@ -1,4 +1,5 @@
 {
+  "onboarding.server.newHostTitle": "Nouveau serveur — confirmez-le",
   "onboarding.skip": "Configurer plus tard",
   "onboarding.skipHint": "Ouvre l’app maintenant. Vous pourrez ajouter un serveur et un agent à tout moment.",
   "app.name": "Bandito",

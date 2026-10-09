@@ -1,4 +1,5 @@
 {
+  "onboarding.server.newHostTitle": "新服务器 — 请确认",
   "onboarding.skip": "稍后设置",
   "onboarding.skipHint": "立即打开应用。随时可以添加服务器和智能体。",
   "app.name": "Bandito",

@@ -265,6 +265,7 @@
 "onboarding.server.modeAuto" = "Automático";
 "onboarding.server.modeCommand" = "Con un comando en el servidor";
 "onboarding.server.moreHosts" = "%1$lld más";
+"onboarding.server.newHostTitle" = "Servidor nuevo: confírmalo";
 "onboarding.server.next.checkGitHubAccess" = "Este Mac no puede acceder a github.com. Revisa internet, la VPN o el proxy y vuelve a intentarlo.";
 "onboarding.server.next.checkSSHPort" = "Comprueba que SSH está activo en el servidor y que el puerto es correcto.";
 "onboarding.server.next.checkServerAddress" = "El nombre no se resuelve. Revisa la dirección por si hay erratas.";

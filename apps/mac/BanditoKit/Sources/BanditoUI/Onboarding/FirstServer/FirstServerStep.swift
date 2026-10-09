@@ -373,9 +373,16 @@ struct FirstServerStep: View {
     /// text when the reason does not say it, and the journal. Retry, back and copy the journal sit in one row.
     private var failureView: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(L10n.Onboarding.Server.failedTitle)
-                .font(BanditoFont.font(size: 24, weight: 600))
-                .foregroundStyle(Color.Bandito.danger)
+            // A server this Mac has not met yet is the normal first step, not a failure: a calm title for it.
+            if model.failure == .sshFailed(.hostKeyUnknown) {
+                Text(L10n.Onboarding.Server.newHostTitle)
+                    .font(BanditoFont.font(size: 24, weight: 600))
+                    .foregroundStyle(Color.Bandito.text)
+            } else {
+                Text(L10n.Onboarding.Server.failedTitle)
+                    .font(BanditoFont.font(size: 24, weight: 600))
+                    .foregroundStyle(Color.Bandito.danger)
+            }
             checklistRows
             if let failure = model.failure {
                 Text(Self.failureText(failure))
@@ -719,6 +726,9 @@ private struct ServerOptionCard: View {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .fill(selected ? Color.Bandito.signal.opacity(0.09) : Color.Bandito.text.opacity(hovered ? 0.05 : 0.025)))
             .overlay(alignment: .topTrailing) {
+                if side, !selected, badge != nil {
+                    badgeView.padding(14)
+                }
                 if selected {
                     Image(systemName: "checkmark")
                         .font(.system(size: 10, weight: .bold))
@@ -742,11 +752,9 @@ private struct ServerOptionCard: View {
     /// Side by side: tile, badge and title, text, and the chip at the foot. The row shares its width equally.
     private var column: some View {
         VStack(alignment: .leading, spacing: 12) {
+            // The badge sits in the top-right corner (see the overlay), so every title starts at the same height.
             tile(size: 44)
-            VStack(alignment: .leading, spacing: 6) {
-                badgeView
-                titleView
-            }
+            titleView
             textView
             Spacer(minLength: 0)
             footer

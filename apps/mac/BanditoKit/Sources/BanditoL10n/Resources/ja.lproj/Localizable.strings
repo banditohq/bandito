@@ -265,6 +265,7 @@
 "onboarding.server.modeAuto" = "自動";
 "onboarding.server.modeCommand" = "サーバーでコマンド実行";
 "onboarding.server.moreHosts" = "ほか %1$lld 件";
+"onboarding.server.newHostTitle" = "新しいサーバーです — 確認してください";
 "onboarding.server.next.checkGitHubAccess" = "この Mac から github.com に接続できません。インターネット、VPN、プロキシを確認して、もう一度試してください。";
 "onboarding.server.next.checkSSHPort" = "サーバーで SSH が動いていて、ポートが正しいか確認してください。";
 "onboarding.server.next.checkServerAddress" = "名前を解決できません。アドレスの入力ミスを確認してください。";

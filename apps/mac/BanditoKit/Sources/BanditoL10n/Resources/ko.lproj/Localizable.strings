@@ -265,6 +265,7 @@
 "onboarding.server.modeAuto" = "자동";
 "onboarding.server.modeCommand" = "서버에서 명령으로";
 "onboarding.server.moreHosts" = "%1$lld개 더";
+"onboarding.server.newHostTitle" = "새 서버입니다 — 확인해 주세요";
 "onboarding.server.next.checkGitHubAccess" = "이 Mac에서 github.com에 접속할 수 없습니다. 인터넷, VPN, 프록시를 확인한 뒤 다시 시도하세요.";
 "onboarding.server.next.checkSSHPort" = "서버에서 SSH가 실행 중이고 포트가 맞는지 확인하세요.";
 "onboarding.server.next.checkServerAddress" = "이름을 확인할 수 없습니다. 주소의 오타를 확인하세요.";

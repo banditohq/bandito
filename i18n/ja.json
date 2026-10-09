@@ -1,4 +1,5 @@
 {
+  "onboarding.server.newHostTitle": "新しいサーバーです — 確認してください",
   "onboarding.skip": "あとで設定",
   "onboarding.skipHint": "アプリを開きます。サーバーとエージェントはいつでも追加できます。",
   "app.name": "Bandito",

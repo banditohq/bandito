@@ -489,6 +489,7 @@
   "onboarding.server.fingerprintTitle": "Is this your server's fingerprint?",
   "onboarding.server.fingerprintHint": "Compare it with the fingerprint your provider or your server shows. If you are not sure, cancel: nothing is trusted until you confirm.",
   "onboarding.server.failedTitle": "The install did not finish",
+  "onboarding.server.newHostTitle": "First time with this server — confirm it",
   "onboarding.server.back": "Back",
   "onboarding.server.retry": "Try again",
   "onboarding.server.thisMacName": "This Mac",

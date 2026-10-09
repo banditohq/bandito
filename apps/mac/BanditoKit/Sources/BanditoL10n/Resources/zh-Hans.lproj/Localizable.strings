@@ -265,6 +265,7 @@
 "onboarding.server.modeAuto" = "自动";
 "onboarding.server.modeCommand" = "在服务器上执行命令";
 "onboarding.server.moreHosts" = "另外 %1$lld 个";
+"onboarding.server.newHostTitle" = "新服务器 — 请确认";
 "onboarding.server.next.checkGitHubAccess" = "这台 Mac 无法访问 github.com，请检查网络、VPN 或代理后重试。";
 "onboarding.server.next.checkSSHPort" = "请检查服务器上是否运行着 SSH，以及端口是否正确。";
 "onboarding.server.next.checkServerAddress" = "无法解析该名称，请检查地址是否有拼写错误。";
