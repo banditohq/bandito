@@ -68,7 +68,44 @@ Per agent `approval_mode`:
 - `always`: every tool call that the CLI asks about goes to the human.
 - `never`: auto-allow everything (for sandboxes).
 
-Risky = matches a rule. Built-in rules (editable): `git push*`, `git reset --hard*`, `rm -rf*`, `*deploy*`, `npm publish*`, `cargo publish*`, `kubectl delete*`, `terraform apply*`, `DROP TABLE*`, `prisma migrate deploy*`, writes outside the agent's own folders (its `cwd` and its home folder). Agent rules (`allow` / `ask` / `deny` patterns) win over built-ins. "Always allow here" on an approval adds an `allow` rule to that agent.
+**Protected: always denied.** Bandito's own files and controls are off limits to agents, in every mode, and no rule can allow them. A call is refused with `Bandito's own files and controls are off limits to agents` when a path it reaches is known to be one of them:
+
+- the data folder (`$BANDITO_HOME`, else `~/.bandito`), reached by a path the command uses (an argument, a redirect target, the program, a file the tool edits or reads), once `~`, `~user` (looked up in the system's account database), `$HOME`, `${HOME}`, `$BANDITO_HOME`, variables set earlier on the same line, `cd`, `pushd` and `popd` are followed. Glob names count (`~/.ban*/bandito.*`, `~/[.]bandito`), and so do case differences (APFS and most Linux setups are case-insensitive);
+- a folder that contains the data folder, when the command reaches everything under it: removal, copying, moving or archiving (`rm -r ~`, `cp -r ~ /tmp`, `tar czf h.tgz ~`, `rsync … ~`), a recursive search (`grep -r x ~`, `rg`, `ag`, `ack`, `du`, `tree`, `ls -R`, `find` deeper than depth 1, `git grep` from such a folder), or `ditto`;
+- the daemon's own binary, or a command named `bandito`;
+- a command that stops, restarts, disables or kills Bandito: `kill` of the daemon's pid or of anything named `bandito`, `pkill`/`killall bandito`, `systemctl … stop|restart|disable bandito*`, `launchctl … bandito`;
+- the daemon's service files: `~/.config/systemd/user/bandito*`, `/etc/systemd/system/bandito*`, `~/Library/LaunchAgents/dev.bandito*`;
+- the data folder spelled out in the raw command line (`~/.bandito`, `$HOME/.bandito`, `${HOME}/.bandito`, the absolute path), so a `python -c` that names it is refused too.
+
+The Claude runtime also starts with `--settings` carrying `permissions.deny` for `Read`, `Edit` and `Write` under the data folder, so the file tools refuse it without asking.
+
+**Asked: what cannot be known, or names Bandito's files without a path.** The rule is: a path, folder or command that cannot be worked out is asked about, never allowed. In risky and always modes a call is asked about when:
+
+- a word the command uses cannot be expanded (a variable not set on the line, `$1`, `${X:-y}`, a substitution, an unknown user), or a folder the command runs in is unknown (after `cd -`, `popd` with nothing pushed, a `cd` in a pipeline, or a `cd` to an unknown folder), and the command takes path arguments (a plain name in `cd $X && rm a` counts; `cargo test` and `echo` do not);
+- a bare name of Bandito's files (`bandito.db`, `bandito.sock`, `agent.sock`) appears in the command line without a path that reaches them: asked, not refused, so `grep -rn agent.sock daemon/src` can still be asked and answered;
+- a line contains brace expansion (`{a,b}`, `{a..b}`), a zsh `=word`, a substitution, a process substitution, a heredoc, `eval`, `source`, a variable or glob as the program, an unclosed quote, a pipe into a shell or interpreter with no script, inline code from a pipe, a line over 64 KiB, or nesting deeper than 8.
+
+Never mode allows what is only asked about; it still refuses what is proven to reach Bandito's files.
+
+**Risky (default): a safety net, not a boundary.** `risky` reads the command line itself (`daemon/src/shell.rs`: quotes, `&&`, `;`, pipes, redirections, heredocs, `$(…)`, `$'…'` escapes, `sh -c`, subshells, and wrappers such as `sudo`, `env`, `timeout`, `nice`, `busybox`, `xargs` and `find -exec`, which are taken off so the command underneath is judged). It asks the human when a command means something risky, by meaning and not by prefix:
+
+- `git`: `push` (any form), `reset --hard`, `clean` with `-f`, `branch -D`, `checkout`/`restore .`, `filter-branch`, `filter-repo`; a config key that runs a program (`core.sshCommand`, `core.pager`, `core.editor`, `core.hooksPath`, `core.fsmonitor`, `alias.* = !…`, `filter.*`, `diff.*.textconv`, `credential.helper`, `sequence.editor`, `gpg.program`, `ssh.variant`, `protocol.*.allow`, `uploadpack.*`, `receive.*`) given with `-c` or `git config`, and the environment variables `GIT_SSH_COMMAND`, `GIT_PAGER`, `GIT_EDITOR`, `GIT_EXTERNAL_DIFF` and similar: `risky: git config exec`;
+- `rm` with a recursive flag, `find -delete`, `shred`, `dd of=`, `mkfs*`, `truncate`, `chmod -R`, `chown -R`;
+- publishing: `npm`/`pnpm`/`yarn publish`, `cargo publish`, `twine upload`, `gem push`; deploys: a program or script whose name starts with `deploy` (`./deploy.sh`), `npm|pnpm|yarn run deploy*`, `make deploy*`, `cargo xtask deploy*`, `fly`/`wrangler`/`firebase`/`gcloud deploy`, `vercel deploy` and `vercel --prod`;
+- `kubectl delete|apply|replace|patch|drain|rollout`, `helm install|upgrade|uninstall|delete`, `terraform apply|destroy`, `pulumi up|destroy`, `docker system prune`, `docker volume rm`, `docker rm -f`, `docker compose down -v`;
+- SQL `drop table`, `drop database`, `truncate table`, `delete from` anywhere in the line (matched in the raw text on purpose);
+- `shutdown`, `reboot`, `halt`, `poweroff`, `systemctl` except `status`/`show`/`list-*`/`is-*`, `launchctl`, `crontab` except `-l`, `at`, `systemd-run`, `useradd`, `usermod`, `passwd`, `visudo`;
+- sending data out: `curl` with `-d`, `-F`, `-T`, `--data*`, `--form*`, `--json` or a write method (`-X POST`, `-XPOST`, `-sSd`), `wget --post-*`, `scp`, `rsync` to a remote host, `nc`, `ncat`, `socat`, `telnet`, `ssh` with a command.
+
+The reason reads `risky: <rule>`. Two more asks: a write (redirect, or `cp`, `mv`, `rm`, `tee`, `touch`, `mkdir`, `sed -i`, `curl -o`, `wget -O`, `tar -C`, `unzip -d`, `rsync`'s destination, the start paths of a `find -exec`) to a path outside the agent's folders (`writes outside <folder>`); and any part of the line the reader cannot follow, as above (`can't check: <reason>`). Everything else is allowed.
+
+Agent rules (`allow` / `ask` / `deny`) are checked after the protected rule and before the risky checks, and they win over the risky checks. None of them can allow a protected call. "Always allow here" stores the exact command, with `*` escaped so the rule matches only that command; a command with a part that cannot be known is not remembered.
+
+A panic while deciding is logged without the command and becomes `Ask("policy error")`.
+
+**What is modelled, and what is not.** Modelled: quoting and escapes (including `$'…'` and `$"…"`), redirections, `~`, `~user`, `$HOME`, `${HOME}`, `$BANDITO_HOME`, variables set on the line (assignments, `export`, `unset`, `read`, prefix assignments for their own command only), `cd`, `pushd`, `popd`, subshells `( … )` (state restored after them), pipelines (`cd` or an assignment on one side of a pipe leaves the state unknown), wrappers, `sh -c` and `find -exec` bodies, `xargs`. Not modelled, so the call is asked about or only partly checked: the code run by an interpreter (`python -c`, `node -e`, `perl -e`), the contents of a script file (`./deploy.sh` is judged by its name only), npm and make script bodies, shell functions, aliases and startup files, `PATH` lookups (a program named `rm` may not be the system's), symbolic links (paths are compared lexically, the file system is not read), `$PWD`, `$OLDPWD`, `cd -`, parameters set by the shell itself, and the environment of the agent's shell beyond `HOME` and `BANDITO_HOME`.
+
+**Limits, stated plainly.** Risky mode guards against an agent making a mistake. It does not stop an agent that is trying to get around it: an interpreter, a script or a symlink can reach what the reader does not follow. The data folder is taken from `BANDITO_HOME` or `~/.bandito`; a daemon started with `--home` elsewhere is protected by its file names only, not by its folder. The real boundary is a separate machine or a workspace container (see [Workspaces](#workspaces)).
 
 The daemon can also ask the human itself, for something no runtime asked about (a risky browser click, see [Browser](#browser)). Such a request goes into the agent's feed like any other approval: `approval.requested`, answered with `approvals.resolve`. Nothing is remembered from it. No answer within the time limit denies it, and so does a stop of the agent while it waits. This works the same for every runtime.
 
@@ -483,7 +520,8 @@ daemon/            Rust crate `bandito`
   src/rpc/         JSON-RPC, transports, auth, pairing
   src/store/       SQLite + migrations
   src/runtime/     process.rs (shared child-process plumbing), claude.rs, codex.rs, grok.rs, api/
-  src/policy.rs    approval rules
+  src/policy.rs    approval rules: protected paths, risky checks (see Approvals)
+  src/shell.rs     reads a command line for the policy: simple commands, wrappers, redirections
   src/host.rs      host load, processes, ports, kill (see Host)
   src/setup.rs     components per feature, install jobs (see Setup)
   src/browser.rs   the server's Chrome: start, stop, agent actions, risky clicks (see Browser)

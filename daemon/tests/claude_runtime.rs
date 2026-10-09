@@ -235,6 +235,34 @@ async fn passes_flags() {
     s.session.shutdown().await;
 }
 
+#[tokio::test]
+async fn bandito_home_is_off_limits_to_the_file_tools() {
+    let dir = tempfile::tempdir().unwrap();
+    let args_out = dir.path().join("args.json");
+    let c = cfg("deny.jsonl", Some(&args_out));
+    let s = ClaudeRuntime::new().spawn(c).await.unwrap();
+    let args = written_args(&args_out).await;
+    // The daemon's data folder: `$BANDITO_HOME` or `~/.bandito`, as an absolute path in `//` form.
+    let home = std::path::absolute(bandito::workspace::data_dir()).unwrap();
+    // One `--settings` argument with inline JSON: a value with spaces cannot split the rules.
+    let i = args
+        .iter()
+        .position(|a| a == "--settings")
+        .unwrap_or_else(|| panic!("missing --settings in {args:?}"));
+    let settings: serde_json::Value = serde_json::from_str(&args[i + 1]).expect("settings are JSON");
+    let deny: Vec<String> = settings["permissions"]["deny"]
+        .as_array()
+        .expect("permissions.deny")
+        .iter()
+        .map(|v| v.as_str().unwrap_or_default().to_string())
+        .collect();
+    for tool in ["Read", "Edit", "Write"] {
+        let rule = format!("{tool}(/{}/**)", home.display());
+        assert!(deny.contains(&rule), "missing {rule} in {deny:?}");
+    }
+    s.session.shutdown().await;
+}
+
 /// Argv of a fake CLI, read once it has written it (it does so at startup).
 async fn written_args(path: &std::path::Path) -> Vec<String> {
     for _ in 0..250 {

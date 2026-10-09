@@ -21,6 +21,7 @@ pub mod scheduler;
 pub mod screen;
 pub mod service;
 pub mod setup;
+pub mod shell;
 pub mod store;
 pub mod supervisor;
 pub mod terminal;
