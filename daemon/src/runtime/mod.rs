@@ -72,6 +72,10 @@ pub struct ApprovalRequest {
 pub enum RuntimeOutput {
     Event(EventBody),
     Approval(ApprovalRequest),
+    /// The CLI withdrew a permission request (e.g. after an interrupt); the approval can no longer be answered.
+    ApprovalCancelled {
+        key: String,
+    },
     /// The CLI's own session/thread id, to store for resume.
     SessionId(String),
     /// The child process ended; no more output will follow.
