@@ -41,6 +41,7 @@ final class FirstServerModel {
 
     @ObservationIgnored private let runner: CommandRunner
     @ObservationIgnored private let devBinary: URL?
+    @ObservationIgnored private let devArchive: URL?
     @ObservationIgnored private var installTask: Task<Void, Never>?
     @ObservationIgnored private var syncTask: Task<Void, Never>?
     /// Why the servers could not be published to the account, if they could not.
@@ -49,9 +50,15 @@ final class FirstServerModel {
     /// - Parameters:
     ///   - runner: runs ssh, scp and the local install (tests pass a fake).
     ///   - devBinary: a Linux build of bandito for development (`BANDITO_DEV_LINUX_BINARY`, Debug only).
-    init(runner: CommandRunner = ProcessCommandRunner(), devBinary: URL? = FirstServerModel.debugLinuxBinary) {
+    ///   - devArchive: a release archive for development (`BANDITO_DEV_ARCHIVE`, Debug only).
+    init(
+        runner: CommandRunner = ProcessCommandRunner(),
+        devBinary: URL? = FirstServerModel.debugLinuxBinary,
+        devArchive: URL? = FirstServerModel.debugReleaseArchive
+    ) {
         self.runner = runner
         self.devBinary = devBinary
+        self.devArchive = devArchive
     }
 
     /// In Debug builds, `BANDITO_DEV_LINUX_BINARY` names a Linux bandito to copy to the server (no release yet).
@@ -65,6 +72,24 @@ final class FirstServerModel {
         #else
         return nil
         #endif
+    }
+
+    /// In Debug builds, `BANDITO_DEV_ARCHIVE` names a local release archive to install, before a release is published.
+    /// It skips the download and the signature check. Release builds never read it.
+    static var debugReleaseArchive: URL? {
+        #if DEBUG
+        guard let path = ProcessInfo.processInfo.environment["BANDITO_DEV_ARCHIVE"], !path.isEmpty else {
+            return nil
+        }
+        return URL(fileURLWithPath: path)
+        #else
+        return nil
+        #endif
+    }
+
+    /// The version of this app, which the server's release must match (`CFBundleShortVersionString`).
+    static var appVersion: String? {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
     }
 
     /// Hosts the person already uses: from their ssh config and known_hosts.
@@ -96,7 +121,8 @@ final class FirstServerModel {
         checklist.reset()
         hostKeyError = nil
         phase = .installing
-        let installer = SSHInstaller(runner: runner, localBinary: devBinary)
+        let installer = SSHInstaller(
+            runner: runner, localBinary: devBinary, devArchive: devArchive, appVersion: Self.appVersion)
         run(installer.install(target: target.description, deviceName: DeviceDescriptor.current.name), app: app)
     }
 

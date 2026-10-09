@@ -75,6 +75,17 @@ import Testing
         #expect(InstallChecklist.item(forStep: "Something new") == nil)
     }
 
+    @Test func theDownloadAndTheSignatureCheckCountAsInstalling() {
+        #expect(InstallChecklist.item(forStep: "Downloading Bandito") == .install)
+        #expect(InstallChecklist.item(forStep: "Verifying the Bandito release") == .install)
+        var list = InstallChecklist()
+        list.apply(.step("Checking the server"))
+        list.apply(.step("Downloading Bandito"))
+        list.apply(.step("Verifying the Bandito release"))
+        #expect(list.mark(of: .check) == .done)
+        #expect(list.mark(of: .install) == .running)
+    }
+
     @Test func anUnknownStepChangesNothing() {
         var list = InstallChecklist()
         list.apply(.step("Something new"))

@@ -486,6 +486,7 @@
   "onboarding.server.err.noRoute": "С этого Mac нет сетевого пути до сервера.",
   "onboarding.server.err.unsupported": "Система или процессор сервера не поддерживаются. Bandito нужен Linux или macOS на x86_64 или arm64.",
   "onboarding.server.err.localBinary": "В приложении нет программы bandito. Переустановите Bandito.",
+  "onboarding.server.err.releaseCheck": "Проверка подписи релиза не пройдена: загрузка могла быть подменена. Ничего не установлено.",
   "onboarding.server.err.generic": "Установка остановилась. Посмотрите в журнале, на каком шаге это произошло.",
   "onboarding.install.connect": "Подключение по SSH",
   "onboarding.install.check": "Проверка системы",

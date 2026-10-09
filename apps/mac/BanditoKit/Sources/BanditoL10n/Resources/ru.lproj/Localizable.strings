@@ -691,6 +691,7 @@
 "onboarding.server.err.localBinary" = "В приложении нет программы bandito. Переустановите Bandito.";
 "onboarding.server.err.noRoute" = "С этого Mac нет сетевого пути до сервера.";
 "onboarding.server.err.refused" = "Сервер отказывает в соединении. Проверьте, что SSH работает на этом порту.";
+"onboarding.server.err.releaseCheck" = "Проверка подписи релиза не пройдена: загрузка могла быть подменена. Ничего не установлено.";
 "onboarding.server.err.timedOut" = "Сервер не отвечает. Проверьте, что он включён и доступен по сети.";
 "onboarding.server.err.unknownHost" = "Имя сервера не находится. Проверьте адрес.";
 "onboarding.server.err.unsupported" = "Система или процессор сервера не поддерживаются. Bandito нужен Linux или macOS на x86_64 или arm64.";
