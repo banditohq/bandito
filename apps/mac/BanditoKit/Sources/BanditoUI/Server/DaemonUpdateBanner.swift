@@ -109,7 +109,7 @@ struct DaemonUpdateBanner: View {
                 Spacer(minLength: 8)
                 if current != nil, !model.isBusy {
                     Button(L10n.Server.DaemonUpdate.button) { confirming = true }
-                        .buttonStyle(LightPillButtonStyle())
+                        .banditoButton(.lightPill())
                 }
             }
             .padding(14)

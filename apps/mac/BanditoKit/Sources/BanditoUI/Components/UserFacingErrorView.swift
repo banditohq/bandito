@@ -18,7 +18,7 @@ struct UserFacingErrorView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             if message.canRetry, let onRetry {
                 Button(L10n.Banner.retry, action: onRetry)
-                    .buttonStyle(QuietButtonStyle())
+                    .banditoButton(.quiet())
             }
             if let technical = message.technical {
                 DisclosureGroup(L10n.Failure.details) {
@@ -29,7 +29,7 @@ struct UserFacingErrorView: View {
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
                         Button(L10n.Failure.copy) { SystemActions.copy(technical) }
-                            .buttonStyle(QuietButtonStyle())
+                            .banditoButton(.quiet())
                     }
                     .padding(.top, 4)
                 }

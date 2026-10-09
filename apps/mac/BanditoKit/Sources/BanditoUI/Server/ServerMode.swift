@@ -133,7 +133,7 @@ struct ServerSidebar: View {
                                 .fill(selected ? Color.Bandito.text.opacity(0.08) : .clear))
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .banditoButton(.row(cornerRadius: 9))
             }
             Spacer(minLength: 0)
         }

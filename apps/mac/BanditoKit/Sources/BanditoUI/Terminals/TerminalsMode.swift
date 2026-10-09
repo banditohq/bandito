@@ -195,7 +195,7 @@ struct TerminalToolbar: View {
                 .padding(.horizontal, 11)
                 .frame(height: 30)
             }
-            .buttonStyle(.plain)
+            .banditoButton(.row(cornerRadius: 15, hoverOpacity: 0.08))
             .foregroundStyle(inputToAll ? BanditoPalette.peach : Color.Bandito.text2)
             .background(
                 inputToAll ? Color.Bandito.signal.opacity(0.13) : Color.Bandito.text.opacity(0.04),
@@ -211,7 +211,7 @@ struct TerminalToolbar: View {
             Button(action: onNew) {
                 Text(L10n.Keys.newTerminal)
             }
-            .buttonStyle(SignalButtonStyle())
+            .banditoButton(.signal())
             .help(keymap.binding(for: "terminals.new")?.symbols ?? "")
         }
         .padding(.horizontal, 14)
@@ -240,7 +240,7 @@ struct TerminalToolbar: View {
                         .font(.system(size: 12, weight: .regular))
                         .frame(width: 34, height: 26)
                 }
-                .buttonStyle(.plain)
+                .banditoButton(.row(cornerRadius: 6, hoverOpacity: 0.08))
                 .foregroundStyle(layout == current ? Color.Bandito.text : Color.Bandito.text3)
                 .background(
                     layout == current ? Color.Bandito.text.opacity(0.1) : Color.clear,
@@ -268,7 +268,7 @@ struct TerminalNoticeStrip: View {
                 Image(systemName: "xmark")
                     .font(.system(size: 10, weight: .semibold))
             }
-            .buttonStyle(.plain)
+            .banditoButton(.row(cornerRadius: 6, hoverOpacity: 0.08))
             .foregroundStyle(Color.Bandito.text3)
         }
         .padding(.horizontal, 14)
@@ -304,7 +304,7 @@ struct TerminalsPlaceholder: View {
                 Button(action: action) {
                     Text(L10n.Keys.newTerminal)
                 }
-                .buttonStyle(SignalButtonStyle())
+                .banditoButton(.signal())
                 .padding(.top, 4)
             }
         }
@@ -326,7 +326,7 @@ struct TerminalsLoading: View {
                 Button(L10n.Banner.retry) {
                     Task { await server.connect() }
                 }
-                .buttonStyle(QuietButtonStyle())
+                .banditoButton(.quiet())
             }
             .padding(28)
             .frame(maxWidth: .infinity, maxHeight: .infinity)

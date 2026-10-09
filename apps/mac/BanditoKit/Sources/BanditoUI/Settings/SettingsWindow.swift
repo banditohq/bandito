@@ -56,7 +56,7 @@ public struct SettingsWindow: View {
                             .fill(selected ? Color.Bandito.text.opacity(0.08) : .clear))
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .banditoButton(.row(cornerRadius: 10))
                 .accessibilityAddTraits(selected ? .isSelected : [])
             }
             Spacer(minLength: 0)

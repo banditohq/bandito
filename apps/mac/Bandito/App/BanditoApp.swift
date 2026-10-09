@@ -9,6 +9,7 @@ struct BanditoApp: App {
     @State private var keymap = Keymap()
     @State private var gestures = GestureSettings()
     @State private var demo = DemoStore()
+    @State private var focusMode = FocusModeTracker()
     @State private var onboarding: OnboardingModel
     @State private var accountHub = AccountHub()
     // Starts Sparkle at launch: the first scheduled check runs a few seconds after it.
@@ -31,6 +32,11 @@ struct BanditoApp: App {
                 .environment(demo)
                 .environment(onboarding)
                 .environment(accountHub)
+                .environment(\.focusMode, focusMode)
+                .task {
+                    // Tab and arrow keys show the focus ring; a click hides it.
+                    focusMode.start()
+                }
                 .task {
                     // Actions aimed at the server that was in front are dropped when another one is chosen.
                     model.onServerChanged = { [router] in router.dropPendingServerActions() }
@@ -61,12 +67,14 @@ struct BanditoApp: App {
                 .environment(keymap)
                 .environment(gestures)
                 .environment(demo)
+                .focusEffectDisabled()
         }
 
         MenuBarExtra {
             MenuBarContent()
                 .environment(model)
                 .environment(demo)
+                .focusEffectDisabled()
         } label: {
             MenuBarLabel(app: model)
         }

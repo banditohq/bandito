@@ -182,7 +182,7 @@ struct QuickOpenPalette: View {
                 in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .banditoButton(.row(cornerRadius: 12))
         .disabled(!row.enabled)
         .onHover { hovering in
             if hovering, let index = rows.firstIndex(where: { $0.id == row.id }) { selected = index }

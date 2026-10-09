@@ -17,7 +17,7 @@ struct SecretsView: View {
             trailing: {
                 if let server, server.supports("secrets") {
                     Button(L10n.Secrets.add) { editing = .new() }
-                        .buttonStyle(SignalButtonStyle())
+                        .banditoButton(.signal())
                 }
             }
         ) {
@@ -60,13 +60,13 @@ struct SecretsView: View {
                                 } label: {
                                     Image(systemName: "pencil")
                                 }
-                                .buttonStyle(IconButtonStyle(size: 26, label: L10n.Secrets.editAria(name: secret.name)))
+                                .banditoButton(.icon(size: 26, label: L10n.Secrets.editAria(name: secret.name)))
                                 Button {
                                     deleting = secret
                                 } label: {
                                     Image(systemName: "trash")
                                 }
-                                .buttonStyle(IconButtonStyle(size: 26, label: L10n.Secrets.deleteAria(name: secret.name)))
+                                .banditoButton(.icon(size: 26, label: L10n.Secrets.deleteAria(name: secret.name)))
                             }
                             .frame(width: 64, alignment: .trailing)
                         }
@@ -213,9 +213,9 @@ private struct SecretEditor: View {
             HStack {
                 Spacer()
                 Button(L10n.Common.cancel) { dismiss() }
-                    .buttonStyle(QuietButtonStyle())
+                    .banditoButton(.quiet())
                 Button(L10n.Common.save) { save() }
-                    .buttonStyle(SignalButtonStyle())
+                    .banditoButton(.signal())
                     .disabled(!canSave || saving)
             }
         }

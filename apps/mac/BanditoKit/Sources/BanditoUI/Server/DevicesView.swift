@@ -17,7 +17,7 @@ struct DevicesView: View {
             trailing: {
                 if let server, server.supports("pairing") {
                     Button(L10n.Devices.add) { pairing = true }
-                        .buttonStyle(SignalButtonStyle())
+                        .banditoButton(.signal())
                 }
             }
         ) {
@@ -48,7 +48,7 @@ struct DevicesView: View {
                             }
                             Spacer(minLength: 8)
                             Button(L10n.Devices.revoke) { revoking = device }
-                                .buttonStyle(QuietButtonStyle())
+                                .banditoButton(.quiet())
                         }
                         .padding(.vertical, 4)
                         .overlay(alignment: .top) { Rectangle().fill(Color.Bandito.text.opacity(0.05)).frame(height: 1) }
@@ -149,7 +149,7 @@ private struct PairSheet: View {
             HStack {
                 Spacer()
                 Button(L10n.Common.close) { dismiss() }
-                    .buttonStyle(QuietButtonStyle())
+                    .banditoButton(.quiet())
             }
         }
         .padding(26)

@@ -143,7 +143,7 @@ struct FolderPicker: View {
                     Text("›").foregroundStyle(Color.Bandito.text3)
                 }
                 Button(part.name) { Task { await open(part.path) } }
-                    .buttonStyle(.plain)
+                    .banditoButton(.link)
                     .font(BanditoFont.font(size: 12.5, weight: index == parts.count - 1 ? 600 : 400))
                     .foregroundStyle(index == parts.count - 1 ? Color.Bandito.text : Color.Bandito.text3)
             }
@@ -154,17 +154,17 @@ struct FolderPicker: View {
     private var footer: some View {
         HStack(spacing: 6) {
             Button(L10n.FolderPicker.newFolder) { newFolder = newFolder == nil ? "" : nil }
-                .buttonStyle(QuietButtonStyle(size: .regular))
+                .banditoButton(.quiet(size: .regular))
                 .disabled(listing == nil)
             Button(L10n.FolderPicker.clone) {
                 cloneOpen.toggle()
                 cloneError = nil
             }
-                .buttonStyle(QuietButtonStyle(size: .regular))
+                .banditoButton(.quiet(size: .regular))
                 .disabled(listing == nil || cloneBusy)
             Spacer(minLength: 0)
             Button(L10n.FolderPicker.choose(name: FolderPickerLogic.name(of: listing?.path ?? "")), action: choose)
-                .buttonStyle(SignalButtonStyle(size: .regular))
+                .banditoButton(.signal(size: .regular))
                 .disabled(listing == nil)
         }
         .padding(10)
@@ -205,7 +205,7 @@ struct FolderPicker: View {
             .background(active ? Color.Bandito.signal.opacity(0.1) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .banditoButton(.row(cornerRadius: 8))
     }
 
     private var visibleDirectories: [FsEntry] {
@@ -267,12 +267,12 @@ struct FolderPicker: View {
             HStack {
                 Spacer(minLength: 0)
                 Button(L10n.Common.cancel) { cloneOpen = false }
-                    .buttonStyle(QuietButtonStyle(size: .regular))
+                    .banditoButton(.quiet(size: .regular))
                     .disabled(cloneBusy)
                 Button(L10n.FolderPicker.cloneGo) {
                     Task { await runClone() }
                 }
-                .buttonStyle(SignalButtonStyle(size: .regular))
+                .banditoButton(.signal(size: .regular))
                 .disabled(!canClone || cloneBusy)
             }
         }

@@ -95,7 +95,7 @@ struct ServerFeaturesCard: View {
                         let ids = setup.missingInstallable
                         Task { await setup.install(ids, server: server) }
                     }
-                    .buttonStyle(SignalButtonStyle())
+                    .banditoButton(.signal())
                     .disabled(setup.isRunning)
                 }
             }
@@ -126,7 +126,7 @@ struct ServerFeaturesCard: View {
                     Button(L10n.Setup.openTerminal) {
                         router.requestTerminalCommand(command)
                     }
-                    .buttonStyle(QuietButtonStyle())
+                    .banditoButton(.quiet())
                 }
             }
             if let failed = setup.job?.failedComponent {

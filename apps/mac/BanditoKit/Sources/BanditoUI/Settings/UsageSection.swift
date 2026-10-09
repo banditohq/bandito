@@ -22,7 +22,7 @@ struct UsageSection: View {
                         Button(L10n.Usage.refresh) {
                             refresh()
                         }
-                        .buttonStyle(QuietButtonStyle())
+                        .banditoButton(.quiet())
                         .disabled(refreshing || app.currentServer == nil)
                     }
                     if snapshot.cards.isEmpty {

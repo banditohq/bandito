@@ -18,7 +18,7 @@ struct NotificationsSection: View {
                         Button(L10n.Settings.Notifications.allow) {
                             Task { await request() }
                         }
-                        .buttonStyle(SignalButtonStyle())
+                        .banditoButton(.signal())
                     } else {
                         Chip(text: Self.statusText(status), tone: status == .authorized ? .ok : .neutral)
                     }

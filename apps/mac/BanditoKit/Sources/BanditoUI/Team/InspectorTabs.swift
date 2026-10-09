@@ -37,7 +37,7 @@ struct DetailsTab: View {
                         Button(agent.paused ? L10n.Agent.Menu.resume : L10n.Agent.Menu.pause) {
                             change { _ = try await server.setPaused(agentID: agent.id, !agent.paused) }
                         }
-                        .buttonStyle(.plain)
+                        .banditoButton(.link)
                         .font(BanditoFont.font(size: 12.5, weight: 500))
                         .foregroundStyle(BanditoPalette.peach)
                         .disabled(!PauseActions.available(on: server))
@@ -52,7 +52,8 @@ struct DetailsTab: View {
                     } label: {
                         Text(runtimeLine)
                     }
-                    .menuStyle(.borderlessButton)
+                    .menuStyle(.button)
+                    .banditoButton(.link)
                     .fixedSize()
                 }
                 InspectorRow(label: L10n.Inspector.model) {
@@ -71,7 +72,8 @@ struct DetailsTab: View {
                     } label: {
                         Text(agent.fallbackRuntime?.title ?? L10n.AgentSheet.fallbackNone)
                     }
-                    .menuStyle(.borderlessButton)
+                    .menuStyle(.button)
+                    .banditoButton(.link)
                     .fixedSize()
                 }
                 InspectorRow(label: L10n.Inspector.approvals) {
@@ -84,7 +86,8 @@ struct DetailsTab: View {
                     } label: {
                         Text(agent.approvalMode.title)
                     }
-                    .menuStyle(.borderlessButton)
+                    .menuStyle(.button)
+                    .banditoButton(.link)
                     .fixedSize()
                 }
                 InspectorRow(label: L10n.Inspector.project) {
@@ -109,7 +112,7 @@ struct DetailsTab: View {
                     SectionLabel(L10n.Inspector.scheduleHeader)
                     Spacer()
                     Button(L10n.Inspector.addSchedule) { showingNewSchedule = true }
-                        .buttonStyle(.plain)
+                        .banditoButton(.link)
                         .font(BanditoFont.font(size: 12.5, weight: 500))
                         .foregroundStyle(BanditoPalette.peach)
                 }
@@ -147,7 +150,7 @@ struct DetailsTab: View {
                     Button(L10n.Common.save) {
                         change { _ = try await server.updateAgent(agent.id, systemPrompt: instructions) }
                     }
-                    .buttonStyle(QuietButtonStyle())
+                    .banditoButton(.quiet())
                     .disabled(instructions == (agent.systemPrompt ?? ""))
                 }
             }
@@ -319,9 +322,9 @@ private struct ScheduleEditor: View {
             HStack {
                 Spacer()
                 Button(L10n.Common.cancel) { dismiss() }
-                    .buttonStyle(QuietButtonStyle())
+                    .banditoButton(.quiet())
                 Button(L10n.Inspector.addSchedule) { add() }
-                    .buttonStyle(SignalButtonStyle())
+                    .banditoButton(.signal())
                     .disabled(busy || cron.trimmingCharacters(in: .whitespaces).isEmpty
                         || prompt.trimmingCharacters(in: .whitespaces).isEmpty)
             }
@@ -456,7 +459,7 @@ struct MemoryTab: View {
                     .stroke(selected ? Color.Bandito.signal.opacity(0.4) : Color.Bandito.line, lineWidth: 1))
             .contentShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .banditoButton(.row(cornerRadius: 13))
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
@@ -507,7 +510,7 @@ struct MemoryTab: View {
                             .padding(.vertical, 10)
                             .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
+                        .banditoButton(.row(cornerRadius: 8))
                     }
                 }
                 Text(L10n.Memory.footer)
@@ -693,7 +696,7 @@ struct WhereTab: View {
                 .font(BanditoFont.font(size: 12.5, weight: 500))
         }
         .menuStyle(.button)
-        .buttonStyle(QuietButtonStyle(size: .regular))
+        .banditoButton(.quiet(size: .regular))
         .fixedSize()
     }
 
@@ -726,7 +729,7 @@ struct WhereTab: View {
             .background(Color.Bandito.bg.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.Bandito.line, lineWidth: 1))
         }
-        .buttonStyle(.plain)
+        .banditoButton(.row(cornerRadius: 10))
     }
 
     private func runtimeRow(_ status: RuntimeStatus) -> some View {

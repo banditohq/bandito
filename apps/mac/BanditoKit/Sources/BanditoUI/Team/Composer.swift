@@ -57,16 +57,7 @@ struct Composer: View {
                     .padding(.horizontal, 16)
             }
             HStack(alignment: .bottom, spacing: 10) {
-                Button(action: attachFile) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(Color.Bandito.text2)
-                        .frame(width: 34, height: 34)
-                        .overlay(Circle().stroke(Color.Bandito.line, lineWidth: 1))
-                        .contentShape(Circle())
-                }
-                .buttonStyle(.plain)
-                .help(L10n.Thread.attach)
+                // Attaching files returns with uploads; a name-only "@file" was misleading.
 
                 TextField(L10n.Thread.placeholder(name: agentName), text: $draft, axis: .vertical)
                     .textFieldStyle(.plain)
@@ -166,7 +157,7 @@ struct Composer: View {
                     .frame(width: 34, height: 34)
                     .background(Color.Bandito.text, in: Circle())
             }
-            .buttonStyle(.plain)
+            .banditoButton(.brighten)
             .help(L10n.Thread.stop)
         } else {
             Button(action: submit) {
@@ -176,7 +167,7 @@ struct Composer: View {
                     .frame(width: 34, height: 34)
                     .background(Color.Bandito.text, in: Circle())
             }
-            .buttonStyle(.plain)
+            .banditoButton(.brighten)
             .disabled(!canSend)
             .opacity(canSend ? 1 : 0.4)
             .help(L10n.Thread.send)

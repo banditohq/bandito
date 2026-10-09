@@ -43,7 +43,7 @@ struct UpdatesView: View {
                         Button(L10n.Updates.howButton) {
                             router.requestTerminalCommand(ReleaseFeed.installCommand)
                         }
-                        .buttonStyle(SignalButtonStyle())
+                        .banditoButton(.signal())
                     }
                 }
             } else {

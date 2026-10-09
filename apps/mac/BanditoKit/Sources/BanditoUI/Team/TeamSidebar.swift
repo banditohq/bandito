@@ -122,7 +122,7 @@ struct TeamSidebar: View {
                             .stroke(Color.Bandito.line, lineWidth: 1))
                     .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
-                .buttonStyle(.plain)
+                .banditoButton(.row(cornerRadius: 16))
                 .contextMenu { menu(for: agent, server: server) }
             }
             if agents.count == 1 {
@@ -171,7 +171,7 @@ struct TeamSidebar: View {
                     .stroke(Color.Bandito.signal.opacity(0.28), lineWidth: 1))
             .contentShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .banditoButton(.row(cornerRadius: 13))
         .contextMenu { menu(for: agent, server: server) }
     }
 
@@ -185,7 +185,7 @@ struct TeamSidebar: View {
             AgentRow(agent: agent, thread: thread, isSelected: selected, lastActivity: lastActivityLabel(agent, thread: thread))
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .banditoButton(.row(cornerRadius: 10))
         .contextMenu { menu(for: agent, server: server) }
     }
 
@@ -239,7 +239,7 @@ struct TeamSidebar: View {
             Button(L10n.New.agent) {
                 router.sheet = .newAgent
             }
-            .buttonStyle(QuietButtonStyle())
+            .banditoButton(.quiet())
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 24)

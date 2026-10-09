@@ -19,7 +19,7 @@ struct SidebarFooter: View {
                     .background(Circle().fill(Color.Bandito.surface3))
                     .contentShape(Circle())
             }
-            .buttonStyle(.plain)
+            .banditoButton(.row(cornerRadius: 17))
             .help(L10n.Settings.Nav.account)
             .accessibilityLabel(L10n.Settings.Nav.account)
 

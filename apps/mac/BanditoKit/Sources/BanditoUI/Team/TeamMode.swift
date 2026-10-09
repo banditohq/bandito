@@ -53,7 +53,7 @@ private struct EmptyTeam: View {
                     Button(L10n.Banner.retry) {
                         Task { await app.currentServer?.connect() }
                     }
-                    .buttonStyle(QuietButtonStyle())
+                    .banditoButton(.quiet())
                 case .connecting:
                     ProgressView().controlSize(.small)
                 default:

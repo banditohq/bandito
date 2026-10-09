@@ -143,7 +143,7 @@ struct KeysAndGesturesSection: View {
                     .foregroundStyle(Color.Bandito.signalGlow)
                     .lineLimit(1)
                 Button(L10n.Keys.replace) { replace(waiting) }
-                    .buttonStyle(QuietButtonStyle(size: .regular))
+                    .banditoButton(.quiet(size: .regular))
             }
             Button {
                 startRecording(command)
@@ -151,7 +151,7 @@ struct KeysAndGesturesSection: View {
                 keyCap(text: isRecording ? L10n.Keys.recording : (keymap.binding(for: command.id)?.symbols ?? "—"),
                        custom: custom, recording: isRecording)
             }
-            .buttonStyle(.plain)
+            .banditoButton(.row(cornerRadius: 6, hoverOpacity: 0.08))
             .accessibilityLabel(command.title)
         }
         .padding(.horizontal, 8)
@@ -189,16 +189,16 @@ struct KeysAndGesturesSection: View {
             }
             Spacer()
             Button(L10n.Keys.exportButton) { exportKeys() }
-                .buttonStyle(QuietButtonStyle(size: .regular))
+                .banditoButton(.quiet(size: .regular))
             Button(L10n.Keys.importButton) { importKeys() }
-                .buttonStyle(QuietButtonStyle(size: .regular))
+                .banditoButton(.quiet(size: .regular))
             Button(L10n.Keys.resetAll) {
                 stopRecording()
                 pending = nil
                 keymap.resetAll()
                 preset = .bandito
             }
-            .buttonStyle(QuietButtonStyle(size: .regular))
+            .banditoButton(.quiet(size: .regular))
             .foregroundStyle(Color.Bandito.danger)
         }
         .padding(.top, 12)

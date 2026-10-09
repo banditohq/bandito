@@ -56,7 +56,7 @@ struct PortsView: View {
                                 router.pendingPreviewPort = port.port
                                 router.select(mode: .browser)
                             }
-                            .buttonStyle(QuietButtonStyle())
+                            .banditoButton(.quiet())
                             .frame(width: 90, alignment: .trailing)
                         }
                         .padding(.vertical, 4)

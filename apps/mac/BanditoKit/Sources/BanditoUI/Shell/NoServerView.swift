@@ -25,7 +25,7 @@ struct NoServerView: View {
             Button(L10n.Empty.NoServers.action) {
                 router.sheet = .addServer
             }
-            .buttonStyle(SignalButtonStyle())
+            .banditoButton(.signal())
             .padding(.top, compact ? 2 : 6)
         }
         .padding(16)

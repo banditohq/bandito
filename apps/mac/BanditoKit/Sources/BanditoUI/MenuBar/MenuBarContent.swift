@@ -48,10 +48,12 @@ public struct MenuBarContent: View {
             VStack(alignment: .leading, spacing: 0) {
                 Button(L10n.Menubar.open) { WindowActions.showMainWindow() }
                     .buttonStyle(MenuRowStyle())
+                    .brandFocusRing(shape: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 Button(PauseActions.pauseAllTitle(app.currentServer)) {
                     if let server = app.currentServer { PauseActions.toggleAll(on: server) }
                 }
                 .buttonStyle(MenuRowStyle())
+                .brandFocusRing(shape: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .disabled(!PauseActions.available(on: app.currentServer))
             }
             .padding(.horizontal, 6)
@@ -120,9 +122,9 @@ public struct MenuBarContent: View {
             HStack(spacing: 6) {
                 Spacer(minLength: 0)
                 Button(L10n.Approval.deny) { resolve(row, .deny) }
-                    .buttonStyle(QuietButtonStyle(size: .regular))
+                    .banditoButton(.quiet(size: .regular))
                 Button(L10n.Approval.approve) { resolve(row, .allow) }
-                    .buttonStyle(SignalButtonStyle(size: .regular))
+                    .banditoButton(.signal(size: .regular))
             }
         }
         .padding(10)
@@ -245,14 +247,17 @@ public struct MenuBarContent: View {
 /// A full-width menu row with a hover tint, like the menus of the system.
 private struct MenuRowStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 13))
-            .foregroundStyle(Color.Bandito.text)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 8)
-            .frame(height: 30)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(configuration.isPressed ? Color.Bandito.text.opacity(0.10) : .clear))
+        InteractiveBody(isPressed: configuration.isPressed) { hovered in
+            configuration.label
+                .font(.system(size: 13))
+                .foregroundStyle(Color.Bandito.text)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 8)
+                .frame(height: 30)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(configuration.isPressed ? Color.Bandito.text.opacity(0.10)
+                            : Color.Bandito.text.opacity(hovered ? 0.05 : 0)))
+        }
     }
 }

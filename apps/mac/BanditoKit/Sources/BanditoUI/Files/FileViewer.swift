@@ -154,13 +154,13 @@ private struct TabButton: View {
                     }
                 }
             }
-            .buttonStyle(.plain)
+            .banditoButton(.row(cornerRadius: 7))
             Button(action: onClose) {
                 Image(systemName: "xmark")
                     .font(.system(size: 8.5, weight: .semibold))
                     .foregroundStyle(Color.Bandito.text3)
             }
-            .buttonStyle(.plain)
+            .banditoButton(.row(cornerRadius: 5, hoverOpacity: 0.08))
             .accessibilityLabel(L10n.Viewer.closeTab)
         }
         .foregroundStyle(isSelected ? Color.Bandito.text : Color.Bandito.text3)
@@ -190,7 +190,7 @@ private struct ViewerHeader: View {
                 Label(L10n.Viewer.folder, systemImage: "chevron.left")
                     .font(.system(size: 12.5))
             }
-            .buttonStyle(QuietButtonStyle())
+            .banditoButton(.quiet())
             if document.viewer == .markdown {
                 Rectangle().fill(Color.Bandito.text.opacity(0.1)).frame(width: 1, height: 18)
                 SegmentedPicker(
@@ -217,7 +217,7 @@ private struct ViewerHeader: View {
                 Button(action: onSave) {
                     Label(L10n.Viewer.save, systemImage: "square.and.arrow.down")
                 }
-                .buttonStyle(LightPillButtonStyle())
+                .banditoButton(.lightPill())
                 .disabled(!document.isDirty || document.readOnly || document.isSaving)
             }
         }
@@ -245,11 +245,11 @@ private struct ConflictBanner: View {
                 .lineLimit(2)
             Spacer(minLength: 8)
             Button(L10n.Viewer.Conflict.diff, action: onShowDiff)
-                .buttonStyle(QuietButtonStyle())
+                .banditoButton(.quiet())
             Button(L10n.Viewer.Conflict.keepMine, action: onKeepMine)
-                .buttonStyle(QuietButtonStyle())
+                .banditoButton(.quiet())
             Button(L10n.Viewer.Conflict.takeServer, action: onTakeServer)
-                .buttonStyle(QuietButtonStyle())
+                .banditoButton(.quiet())
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -360,7 +360,7 @@ private struct CardNote: View {
                     }
                 }
             }
-            .buttonStyle(QuietButtonStyle())
+            .banditoButton(.quiet())
             if let failure {
                 UserFacingErrorView(message: failure)
                     .frame(maxWidth: 360)
@@ -461,7 +461,7 @@ private struct ConflictDiffSheet: View {
             HStack {
                 Spacer()
                 Button(L10n.Common.close) { dismiss() }
-                    .buttonStyle(QuietButtonStyle())
+                    .banditoButton(.quiet())
             }
         }
         .padding(22)

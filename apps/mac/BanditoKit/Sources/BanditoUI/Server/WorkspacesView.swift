@@ -70,7 +70,7 @@ struct WorkspacesView: View {
             HStack {
                 Spacer(minLength: 0)
                 Button(L10n.Workspace.Action.create) { creating = true }
-                    .buttonStyle(SignalButtonStyle())
+                    .banditoButton(.signal())
                     .disabled(!model.dockerReady)
             }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 320), spacing: 14, alignment: .top)], alignment: .leading, spacing: 14) {
@@ -149,7 +149,7 @@ private struct DockerCard: View {
                     Button(L10n.Workspace.Action.install) {
                         Task { await setup.install(["docker"], server: model.server) }
                     }
-                    .buttonStyle(SignalButtonStyle())
+                    .banditoButton(.signal())
                     .disabled(setup.isRunning)
                     if setup.isRunning {
                         Text(L10n.Workspace.Docker.installing)
@@ -358,13 +358,13 @@ private struct RealWorkspaceCard: View {
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(Color.Bandito.text3)
                     }
-                    .buttonStyle(.plain)
+                    .banditoButton(.row(cornerRadius: 6, hoverOpacity: 0.08))
                     .help(L10n.Workspace.Folders.remove)
                     .disabled(busy)
                 }
             }
             Button(L10n.Workspace.Folders.add) { pickingFolder = true }
-                .buttonStyle(QuietButtonStyle(size: .regular))
+                .banditoButton(.quiet(size: .regular))
                 .disabled(busy)
         }
     }
@@ -374,14 +374,14 @@ private struct RealWorkspaceCard: View {
             HStack(spacing: 8) {
                 if workspace.isRunning {
                     Button(L10n.Workspace.Action.stop) { Task { await model.stop(workspace) } }
-                        .buttonStyle(QuietButtonStyle(size: .regular))
+                        .banditoButton(.quiet(size: .regular))
                 } else {
                     Button(L10n.Workspace.Action.start) { Task { await model.start(workspace) } }
-                        .buttonStyle(SignalButtonStyle())
+                        .banditoButton(.signal())
                 }
                 Spacer(minLength: 0)
                 Button(L10n.Workspace.Action.delete) { confirmDelete = true }
-                    .buttonStyle(QuietButtonStyle(size: .regular))
+                    .banditoButton(.quiet(size: .regular))
                     .disabled(!workspace.canDelete)
             }
             .disabled(busy)
@@ -471,9 +471,9 @@ struct WorkspaceCreateSheet: View {
             HStack(spacing: 10) {
                 Spacer(minLength: 0)
                 Button(L10n.AgentSheet.cancel) { onDone() }
-                    .buttonStyle(QuietButtonStyle(size: .regular))
+                    .banditoButton(.quiet(size: .regular))
                 Button(L10n.Workspace.Create.submit) { save() }
-                    .buttonStyle(SignalButtonStyle(size: .regular))
+                    .banditoButton(.signal(size: .regular))
                     .disabled(!draft.canCreate || saving)
             }
         }

@@ -20,7 +20,7 @@ struct WorkplacesSection: View {
                         router.select(mode: .server)
                         router.serverSection = .workspaces
                     }
-                    .buttonStyle(QuietButtonStyle())
+                    .banditoButton(.quiet())
                 }
             }
             .padding(16)

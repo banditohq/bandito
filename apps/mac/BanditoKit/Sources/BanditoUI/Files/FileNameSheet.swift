@@ -39,9 +39,9 @@ struct FileNameSheet: View {
             HStack {
                 Spacer()
                 Button(L10n.Files.cancel) { dismiss() }
-                    .buttonStyle(QuietButtonStyle())
+                    .banditoButton(.quiet())
                 Button(L10n.Files.Dialog.create, action: submit)
-                    .buttonStyle(SignalButtonStyle())
+                    .banditoButton(.signal())
                     .disabled(!isValid)
             }
         }

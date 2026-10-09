@@ -12,7 +12,7 @@ struct AddServerSheet: View {
             HStack {
                 Spacer(minLength: 0)
                 Button(L10n.Common.close) { close() }
-                    .buttonStyle(QuietButtonStyle())
+                    .banditoButton(.quiet())
                     .keyboardShortcut(.cancelAction)
             }
             FirstServerStep(
