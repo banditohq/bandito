@@ -2,6 +2,16 @@ import BanditoDesign
 import BanditoL10n
 import SwiftUI
 
+/// A section the Settings window should open on, asked for from elsewhere (for example "Manage servers" in the
+/// server menu). The window takes it once; without a request it opens on General.
+@MainActor
+@Observable
+final class SettingsNavigation {
+    static let shared = SettingsNavigation()
+
+    var requested: SettingsSection?
+}
+
 /// The Settings window (⌘,): 13 sections in a left navigation, 1040 × 760 pt, like the design.
 public struct SettingsWindow: View {
     @State private var section: SettingsSection = .general
@@ -20,6 +30,14 @@ public struct SettingsWindow: View {
         }
         .frame(width: 1040, height: 760)
         .preferredColorScheme(.dark)
+        .onAppear(perform: takeRequest)
+        .onChange(of: SettingsNavigation.shared.requested) { _, _ in takeRequest() }
+    }
+
+    private func takeRequest() {
+        guard let requested = SettingsNavigation.shared.requested else { return }
+        section = requested
+        SettingsNavigation.shared.requested = nil
     }
 
     private var navigation: some View {

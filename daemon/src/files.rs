@@ -41,6 +41,11 @@ const MAX_UPLOAD_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 const MOVE_COPY_LIMIT: u64 = 1024 * 1024 * 1024;
 /// Folders that `search` and `project_hints` never enter.
 const SKIP_DIRS: [&str; 5] = [".git", "node_modules", "target", ".cache", "Library"];
+/// Folders that `project_hints` also never enters: macOS keeps them closed to other processes, so a scan only
+/// logs refusals for them.
+const PROJECT_SKIP_DIRS: [&str; 1] = [".Trash"];
+/// Name endings of folders that `project_hints` skips: the Photos library bundle.
+const PROJECT_SKIP_SUFFIXES: [&str; 1] = [".photoslibrary"];
 /// Names tried for a trash entry before giving up.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 const MAX_NAME_TRIES: u32 = 10_000;
@@ -557,6 +562,11 @@ impl FileService {
             }
             let read = match fs::read_dir(&dir) {
                 Ok(read) => read,
+                // Refusals (macOS privacy folders, for one) are expected during a scan: debug, not warn.
+                Err(e) if is_access_denied(&e) => {
+                    tracing::debug!("files: project scan skips {} (no access): {e}", dir.display());
+                    continue;
+                }
                 Err(e) => {
                     tracing::warn!("files: project scan skips {}: {e}", dir.display());
                     continue;
@@ -576,7 +586,7 @@ impl FileService {
                 let Some(name) = item.file_name().to_str().map(str::to_string) else {
                     continue;
                 };
-                if !file_type.is_dir() || SKIP_DIRS.contains(&name.as_str()) {
+                if !file_type.is_dir() || skipped_by_project_scan(&name) {
                     continue;
                 }
                 let path = item.path();
@@ -758,6 +768,20 @@ impl FileService {
             .map_err(|e| map_io(e, &path))?;
         Ok(buf)
     }
+}
+
+/// Whether `project_hints` does not enter a folder named `name`.
+fn skipped_by_project_scan(name: &str) -> bool {
+    SKIP_DIRS.contains(&name)
+        || PROJECT_SKIP_DIRS.contains(&name)
+        || PROJECT_SKIP_SUFFIXES
+            .iter()
+            .any(|suffix| name.to_ascii_lowercase().ends_with(suffix))
+}
+
+/// EPERM and EACCES both come out as `PermissionDenied` in std on Unix.
+fn is_access_denied(e: &io::Error) -> bool {
+    e.kind() == ErrorKind::PermissionDenied
 }
 
 /// The read-check-rename of `write_text`. The caller holds the path lock.
@@ -2146,6 +2170,23 @@ mod tests {
         let top = svc.project_hints(1).unwrap();
         assert_eq!(top.len(), 1);
         assert_eq!(top[0].name, "new-repo");
+    }
+
+    #[test]
+    fn project_hints_skips_system_folders() {
+        let home = tempfile::tempdir().unwrap();
+        let p = real(&home);
+        let now = SystemTime::now();
+        make_repo(&p.join("real-repo"), now);
+        make_repo(&p.join(".Trash/trashed-repo"), now);
+        make_repo(&p.join("Photos Library.photoslibrary/library-repo"), now);
+        make_repo(&p.join("Upper.PHOTOSLIBRARY/upper-repo"), now);
+        make_repo(&p.join(".cache/cache-repo"), now);
+        make_repo(&p.join("node_modules/dep-repo"), now);
+        let svc = service(&p);
+        let hints = svc.project_hints(10).unwrap();
+        let found: Vec<&str> = hints.iter().map(|h| h.name.as_str()).collect();
+        assert_eq!(found, ["real-repo"]);
     }
 
     #[test]

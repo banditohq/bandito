@@ -436,6 +436,10 @@ public struct Device: Codable, Sendable, Identifiable, Hashable {
     public var name: String
     public var createdAt: Int64
     public var lastSeenAt: Int64?
+    /// True for the device this request comes from. Nil while the daemon does not report it.
+    public var current: Bool?
+    /// `macos` or `ios` when the daemon reports the platform. Nil otherwise.
+    public var platform: String?
 }
 
 public struct PairResult: Codable, Sendable {

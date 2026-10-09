@@ -107,6 +107,13 @@ public final class AccountHub {
     public private(set) var pending: [PendingDevice] = []
     /// Whether a session is stored (someone is signed in on this Mac).
     public private(set) var signedIn = false
+    /// The account as the server last said it (`GET /me`): the user and the devices. Nil until it has been read.
+    public private(set) var me: Me? {
+        didSet { profile.bind(userID: me?.user.id) }
+    }
+
+    /// The nickname and avatar colour of the signed-in account on this Mac. Follows `me`.
+    let profile = ProfileStore()
 
     /// Where the session and the sync key are kept. The device keys live in `DeviceIdentityStore`.
     public let keys: SecretStore
@@ -141,6 +148,7 @@ public final class AccountHub {
     public func inspect() async throws -> (route: AccountRoute, me: Me) {
         let client = try await prepare()
         let me = try await client.me()
+        self.me = me
         guard me.device.approved else {
             return (.waitForApproval, me)
         }
@@ -162,6 +170,7 @@ public final class AccountHub {
         _ = try await syncStore?.resetAccount()
         // The old key must not be used for the new history: it is replaced, not reused.
         _ = try SyncKey.rotate(in: keys)
+        profile.clear()
     }
 
     /// Whether this Mac holds the sync key of the signed-in account.
@@ -169,18 +178,32 @@ public final class AccountHub {
         (try? SyncKey.load(from: keys)) != nil
     }
 
+    /// Reads the account when someone is signed in, so the sidebar and the profile can show who it is. Silent on
+    /// failure: the profile reads it again when it opens.
+    public func refreshAccount() async {
+        guard signedIn else {
+            me = nil
+            return
+        }
+        guard let client = try? await prepare(), let account = try? await client.me() else { return }
+        me = account
+    }
+
     /// Signs out: the sync key and the local session go first, then the server is asked to end the session
-    /// (best effort, see `SignOutSteps`).
+    /// (best effort, see `SignOutSteps`). The account's nickname and colour leave this Mac too. If the local
+    /// steps fail, the error reaches the caller and the account stays as it was.
     public func signOut() async throws {
         let client = try await prepare()
         let session = (try? await client.restoreSession()) ?? nil
         stopWatchingPending()
-        pending = []
         try await SignOutSteps.run(
             keys: keys, session: session,
             revoke: { try await client.revoke($0) },
             log: { Logger.account.error("\($0, privacy: .public)") })
+        pending = []
         signedIn = false
+        profile.clear()
+        me = nil
     }
 
     /// Writes this Mac's ssh servers into the account's sync blob, keeping the other servers and retrying on

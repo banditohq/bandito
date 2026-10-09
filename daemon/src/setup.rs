@@ -184,6 +184,8 @@ pub struct Platform {
     pub distro: Distro,
     /// Where components are looked for (`PATH`).
     pub path: OsString,
+    /// Browser app bundles that count as installed, besides the names on `PATH` (macOS: Google Chrome).
+    pub browser_apps: Vec<PathBuf>,
     /// Where Bandito installs what it needs without root (`<data dir>/tools`).
     pub tools: PathBuf,
     /// apt's configuration folder, where the Chrome key and sources line go.
@@ -202,6 +204,11 @@ impl Platform {
                 .map(|text| distro_from_os_release(&text))
                 .unwrap_or(Distro::Other),
             path,
+            browser_apps: if os == "macos" {
+                vec![PathBuf::from(crate::browser::MAC_CHROME)]
+            } else {
+                Vec::new()
+            },
             tools: tools_dir(),
             apt_etc: PathBuf::from("/etc/apt"),
         }
@@ -241,6 +248,11 @@ pub fn which(name: &str, path: &OsStr) -> Option<PathBuf> {
     std::env::split_paths(path)
         .map(|dir| dir.join(name))
         .find(|candidate| is_executable(candidate))
+}
+
+/// Whether a browser is installed: one of the app bundles, or one of `BROWSERS` on `PATH`.
+fn browser_installed(p: &Platform) -> bool {
+    p.browser_apps.iter().any(|app| app.is_file()) || BROWSERS.iter().any(|b| which(b, &p.path).is_some())
 }
 
 fn is_executable(path: &Path) -> bool {
@@ -994,7 +1006,8 @@ impl Setup {
         let p = &self.platform;
         let (installed, version, hint) = match id {
             "fonts" => (self.fonts_installed().await, None, None),
-            "browser" => (BROWSERS.iter().any(|b| which(b, &p.path).is_some()), None, None),
+            // The same lookup the browser feature starts Chrome with, so the status matches what runs.
+            "browser" => (browser_installed(p), None, None),
             "docker" => self.docker_probe().await,
             "node" => {
                 let (_, version) = self.binary("node", true).await;
@@ -1522,9 +1535,23 @@ mod tests {
             package_manager: pm,
             distro,
             path: dir.as_os_str().to_owned(),
+            browser_apps: Vec::new(),
             tools: dir.join("tools"),
             apt_etc: dir.join("apt"),
         }
+    }
+
+    #[test]
+    fn browser_is_installed_as_an_app_bundle_or_on_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let app = dir.path().join("Google Chrome");
+        std::fs::write(&app, b"").unwrap();
+        let mut p = platform(dir.path(), None, Distro::Other);
+        assert!(!browser_installed(&p), "nothing installed yet");
+        p.browser_apps = vec![dir.path().join("missing.app")];
+        assert!(!browser_installed(&p), "a missing bundle does not count");
+        p.browser_apps = vec![app];
+        assert!(browser_installed(&p), "an installed bundle counts");
     }
 
     fn setup_with(platform: Platform, mock: &Arc<MockRunner>) -> Arc<Setup> {

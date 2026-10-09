@@ -680,7 +680,7 @@ private struct BrowserSidebarContent: View {
                     .frame(width: 26, height: 26)
                     .foregroundStyle(Color.Bandito.info)
                     .background(Color.Bandito.info.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
-                Text("\(L10n.Browser.previewTitle) :\(port)")
+                Text(verbatim: "\(L10n.Browser.previewTitle) :\(port)")
                     .font(.system(size: 13))
                     .foregroundStyle(Color.Bandito.text)
                 Spacer(minLength: 0)
@@ -703,7 +703,7 @@ private struct BrowserSidebarContent: View {
 
     private func portRow(_ port: ListeningPort) -> some View {
         HStack(spacing: 10) {
-            Text(":\(port.port)")
+            Text(verbatim: ":\(port.port)")
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundStyle(Color.Bandito.ok)
                 .padding(.horizontal, 7)

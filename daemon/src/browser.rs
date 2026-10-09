@@ -33,7 +33,8 @@ const STARTUP_LIMIT: Duration = Duration::from_secs(10);
 const STOP_GRACE: Duration = Duration::from_secs(5);
 /// Set to `1` to pass `--no-sandbox` (needed when running as root, e.g. in Docker tests).
 const NO_SANDBOX_ENV: &str = "BANDITO_BROWSER_NO_SANDBOX";
-const MAC_CHROME: &str = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+/// Google Chrome in its app bundle on macOS: the first place the browser feature looks.
+pub const MAC_CHROME: &str = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 /// How long the user has to answer a risky click before it is refused.
 pub const CLICK_APPROVAL_LIMIT: Duration = Duration::from_secs(10 * 60);
 

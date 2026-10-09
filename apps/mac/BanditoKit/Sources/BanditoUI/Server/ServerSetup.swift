@@ -8,6 +8,8 @@ struct SetupLine: Identifiable, Hashable {
     var id: String
     var title: String
     var state: SetupReady
+    /// What to do about a line that is not ready, in a word or two. Nil when there is nothing to add.
+    var hint: String?
 }
 
 /// Setup state of the server: what is missing, and the install job the app runs for it (`setup.*`).
@@ -24,12 +26,14 @@ final class SetupModel {
     var lines: [SetupLine] {
         guard let f = status?.features else { return [] }
         return [
-            SetupLine(id: "screen", title: L10n.Setup.Feature.screen, state: f.screen),
-            SetupLine(id: "browser", title: L10n.Setup.Feature.browser, state: f.browser),
-            SetupLine(id: "containers", title: L10n.Setup.Feature.containers, state: f.containers),
-            SetupLine(id: "claude", title: L10n.Runtime.claude, state: f.agents.claude),
-            SetupLine(id: "codex", title: L10n.Runtime.codex, state: f.agents.codex),
-            SetupLine(id: "grok", title: L10n.Runtime.grok, state: f.agents.grok),
+            SetupLine(
+                id: "screen", title: L10n.Setup.Feature.screen, state: f.screen,
+                hint: f.screen == .unsupported ? L10n.Setup.screenLinuxOnly : nil),
+            SetupLine(id: "browser", title: L10n.Setup.Feature.browser, state: f.browser, hint: nil),
+            SetupLine(id: "containers", title: L10n.Setup.Feature.containers, state: f.containers, hint: nil),
+            SetupLine(id: "claude", title: L10n.Runtime.claude, state: f.agents.claude, hint: nil),
+            SetupLine(id: "codex", title: L10n.Runtime.codex, state: f.agents.codex, hint: nil),
+            SetupLine(id: "grok", title: L10n.Runtime.grok, state: f.agents.grok, hint: nil),
         ]
     }
 
@@ -104,7 +108,15 @@ struct ServerFeaturesCard: View {
                     Text(line.title)
                         .font(.system(size: 13))
                         .foregroundStyle(Color.Bandito.text)
+                        .lineLimit(1)
                     Spacer(minLength: 8)
+                    if let hint = line.hint, line.state != .ready {
+                        Text(hint)
+                            .font(.system(size: 12))
+                            .foregroundStyle(Color.Bandito.text3)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
+                    }
                     Chip(text: Self.label(line.state), tone: line.state == .ready ? .ok : .neutral)
                 }
             }

@@ -35,7 +35,7 @@ enum ChecklistMark: Equatable, Sendable {
 }
 
 /// One line of the install journal: a step's text or an installer line, with the time it arrived.
-struct JournalLine: Equatable, Sendable {
+struct InstallJournalLine: Equatable, Sendable {
     let date: Date
     let text: String
 }
@@ -50,7 +50,7 @@ struct InstallChecklist: Equatable, Sendable {
     let items: [ChecklistItem]
     private(set) var marks: [ChecklistMark]
     /// The journal of this attempt, newest last: step texts, installer output and the final error.
-    private(set) var journal: [JournalLine] = []
+    private(set) var journal: [InstallJournalLine] = []
     /// Counts every journal line ever added. Unlike `journal.count`, it keeps growing after the journal is trimmed,
     /// so a view can scroll to the newest line when it changes.
     private(set) var journalVersion = 0
@@ -123,7 +123,7 @@ struct InstallChecklist: Equatable, Sendable {
 
     /// Adds a journal line. The journal stays within `logLimit` lines.
     private mutating func appendToLog(_ text: String, at date: Date) {
-        journal.append(JournalLine(date: date, text: text))
+        journal.append(InstallJournalLine(date: date, text: text))
         journalVersion += 1
         if journal.count > Self.logLimit {
             journal.removeFirst(journal.count - Self.logLimit)

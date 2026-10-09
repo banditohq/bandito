@@ -46,6 +46,73 @@ public enum L10n {
         ("fr", "Français"),
     ]
 
+    public enum Account {
+        public static var avatarColor: String { L10n.tr("account.avatarColor") }
+        public static var copyCode: String { L10n.tr("account.copyCode") }
+        public static var notSignedIn: String { L10n.tr("account.notSignedIn") }
+        public static var title: String { L10n.tr("account.title") }
+
+        public enum Color {
+            public static var cream: String { L10n.tr("account.color.cream") }
+            public static var lilac: String { L10n.tr("account.color.lilac") }
+            public static var peach: String { L10n.tr("account.color.peach") }
+            public static var rose: String { L10n.tr("account.color.rose") }
+            public static var sage: String { L10n.tr("account.color.sage") }
+            public static var sky: String { L10n.tr("account.color.sky") }
+        }
+
+        public enum Device {
+            public static var disconnect: String { L10n.tr("account.device.disconnect") }
+            public static var disconnectMessage: String { L10n.tr("account.device.disconnectMessage") }
+            public static func disconnectTitle(name: String) -> String { L10n.tr("account.device.disconnectTitle", name) }
+            public static func lastSeen(when: String) -> String { L10n.tr("account.device.lastSeen", when) }
+        }
+
+        public enum Links {
+            public static var help: String { L10n.tr("account.links.help") }
+            public static var settings: String { L10n.tr("account.links.settings") }
+        }
+
+        public enum Method {
+            public static var email: String { L10n.tr("account.method.email") }
+            public static var github: String { L10n.tr("account.method.github") }
+        }
+
+        public enum Nickname {
+            public static var edit: String { L10n.tr("account.nickname.edit") }
+            public static var placeholder: String { L10n.tr("account.nickname.placeholder") }
+        }
+
+        public enum Section {
+            public static var devices: String { L10n.tr("account.section.devices") }
+            public static var sync: String { L10n.tr("account.section.sync") }
+            public static var thisMac: String { L10n.tr("account.section.thisMac") }
+        }
+
+        public enum SignIn {
+            public static var byEmail: String { L10n.tr("account.signIn.byEmail") }
+            public static var text: String { L10n.tr("account.signIn.text") }
+            public static var title: String { L10n.tr("account.signIn.title") }
+        }
+
+        public enum SignOut {
+            public static var confirm: String { L10n.tr("account.signOut.confirm") }
+            public static var message: String { L10n.tr("account.signOut.message") }
+            public static var title: String { L10n.tr("account.signOut.title") }
+        }
+
+        public enum Sync {
+            public static func done(when: String) -> String { L10n.tr("account.sync.done", when) }
+            public static var now: String { L10n.tr("account.sync.now") }
+            public static var on: String { L10n.tr("account.sync.on") }
+            public static var what: String { L10n.tr("account.sync.what") }
+        }
+
+        public enum ThisMac {
+            public static var hint: String { L10n.tr("account.thisMac.hint") }
+        }
+    }
+
     public enum Agent {
 
         public enum Delete {
@@ -412,6 +479,7 @@ public enum L10n {
         public static var revoke: String { L10n.tr("devices.revoke") }
         public static var revokeMessage: String { L10n.tr("devices.revokeMessage") }
         public static func revokeTitle(name: String) -> String { L10n.tr("devices.revokeTitle", name) }
+        public static var thisDeviceHint: String { L10n.tr("devices.thisDeviceHint") }
     }
 
     public enum Effort {
@@ -745,7 +813,8 @@ public enum L10n {
         public static var loading: String { L10n.tr("journal.loading") }
         public static var needsNewer: String { L10n.tr("journal.needsNewer") }
         public static var refresh: String { L10n.tr("journal.refresh") }
-        public static func source(name: String) -> String { L10n.tr("journal.source", name) }
+        public static var sourceFile: String { L10n.tr("journal.sourceFile") }
+        public static var sourceJournald: String { L10n.tr("journal.sourceJournald") }
     }
 
     public enum Keys {
@@ -1278,6 +1347,7 @@ public enum L10n {
         public static var columnPort: String { L10n.tr("ports.columnPort") }
         public static var columnProcess: String { L10n.tr("ports.columnProcess") }
         public static var empty: String { L10n.tr("ports.empty") }
+        public static var onlyPreview: String { L10n.tr("ports.onlyPreview") }
     }
 
     public enum Profile {
@@ -1437,6 +1507,17 @@ public enum L10n {
             public static var updating: String { L10n.tr("server.daemonUpdate.updating") }
         }
 
+        public enum Detail {
+            public static var average: String { L10n.tr("server.detail.average") }
+            public static var diskNoHistory: String { L10n.tr("server.detail.diskNoHistory") }
+            public static var download: String { L10n.tr("server.detail.download") }
+            public static var hint: String { L10n.tr("server.detail.hint") }
+            public static var now: String { L10n.tr("server.detail.now") }
+            public static var peak: String { L10n.tr("server.detail.peak") }
+            public static var topProcesses: String { L10n.tr("server.detail.topProcesses") }
+            public static var upload: String { L10n.tr("server.detail.upload") }
+        }
+
         public enum Features {
             public static var title: String { L10n.tr("server.features.title") }
         }
@@ -1452,6 +1533,11 @@ public enum L10n {
             public static var agent: String { L10n.tr("server.owner.agent") }
             public static var daemon: String { L10n.tr("server.owner.daemon") }
             public static var terminal: String { L10n.tr("server.owner.terminal") }
+        }
+
+        public enum Picker {
+            public static var connect: String { L10n.tr("server.picker.connect") }
+            public static var manage: String { L10n.tr("server.picker.manage") }
         }
 
         public enum Ports {
@@ -1486,6 +1572,8 @@ public enum L10n {
             public static var cpu: String { L10n.tr("server.tile.cpu") }
             public static var disk: String { L10n.tr("server.tile.disk") }
             public static func diskFree(free: String) -> String { L10n.tr("server.tile.diskFree", free) }
+            public static func diskUsed(used: String, total: String) -> String { L10n.tr("server.tile.diskUsed", used, total) }
+            public static var freeWord: String { L10n.tr("server.tile.freeWord") }
             public static var memory: String { L10n.tr("server.tile.memory") }
             public static func memoryOf(total: String) -> String { L10n.tr("server.tile.memoryOf", total) }
             public static func netSplit(down: String, up: String) -> String { L10n.tr("server.tile.netSplit", down, up) }
@@ -1722,6 +1810,7 @@ public enum L10n {
         public static var needsPassword: String { L10n.tr("setup.needsPassword") }
         public static var openTerminal: String { L10n.tr("setup.openTerminal") }
         public static var ready: String { L10n.tr("setup.ready") }
+        public static var screenLinuxOnly: String { L10n.tr("setup.screenLinuxOnly") }
         public static var unsupported: String { L10n.tr("setup.unsupported") }
 
         public enum Feature {
