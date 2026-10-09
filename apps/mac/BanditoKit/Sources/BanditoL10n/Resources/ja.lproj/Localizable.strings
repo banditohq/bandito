@@ -306,7 +306,6 @@
 "settings.usage" = "使用状況";
 "sidebar.agentRail" = "エージェント";
 "sidebar.agents" = "チーム";
-"sidebar.connectApps" = "アプリを接続";
 "sidebar.empty" = "エージェントはまだありません。最初のエージェントを作成してください。";
 "sidebar.messageTeam" = "チームにメッセージ…";
 "sidebar.needsYou" = "要対応";

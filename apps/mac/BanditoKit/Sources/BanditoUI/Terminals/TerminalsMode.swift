@@ -12,7 +12,7 @@ struct TerminalsMode: View {
         if let server = app.currentServer {
             TerminalsContent(server: server)
         } else {
-            TerminalsPlaceholder(symbol: "terminal", title: L10n.Terminals.noServer, detail: nil, action: nil)
+            NoServerView(symbol: "terminal")
         }
     }
 }
@@ -143,7 +143,7 @@ struct TerminalArea: View {
         VStack(spacing: 0) {
             TerminalToolbar(controller: controller, onNew: onNew)
             if let notice = controller.notice {
-                TerminalNoticeStrip(text: notice) { controller.clearNotice() }
+                TerminalNoticeStrip(message: notice) { controller.clearNotice() }
             }
             TerminalGrid(controller: controller, requestClose: requestClose)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -257,15 +257,12 @@ struct TerminalToolbar: View {
 
 /// A one-line message above the grid. Tapping the cross dismisses it.
 struct TerminalNoticeStrip: View {
-    let text: String
+    let message: UserFacingMessage
     let dismiss: () -> Void
 
     var body: some View {
         HStack(spacing: 8) {
-            Text(text)
-                .font(.system(size: 12))
-                .foregroundStyle(BanditoPalette.peach)
-                .lineLimit(2)
+            UserFacingErrorView(message: message)
             Spacer(minLength: 8)
             Button(action: dismiss) {
                 Image(systemName: "xmark")
@@ -322,12 +319,10 @@ struct TerminalsLoading: View {
 
     var body: some View {
         switch server.state {
-        case .failed(let message):
+        case .failed(let kind):
             VStack(spacing: 14) {
-                Text(message)
-                    .font(.system(size: 13))
-                    .foregroundStyle(Color.Bandito.text2)
-                    .multilineTextAlignment(.center)
+                UserFacingErrorView(message: UserFacingError.message(for: kind))
+                    .frame(maxWidth: 420)
                 Button(L10n.Banner.retry) {
                     Task { await server.connect() }
                 }

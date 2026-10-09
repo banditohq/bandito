@@ -245,10 +245,7 @@ private struct ChromeInstallCard: View {
                     .font(.system(size: 12))
                     .foregroundStyle(Color.Bandito.danger)
             } else if let error = setup.error ?? model.errorText {
-                Text(error)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.Bandito.danger)
-                    .multilineTextAlignment(.center)
+                UserFacingErrorView(message: error)
             }
             Button(L10n.Browser.install) {
                 Task {
@@ -470,10 +467,8 @@ private struct BrowserStopped: View {
                 ChromeInstallCard(model: model)
             } else {
                 if let text = model.errorText {
-                    Text(text)
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color.Bandito.danger)
-                        .multilineTextAlignment(.center)
+                    UserFacingErrorView(message: text)
+                        .frame(maxWidth: 360)
                 }
                 Button(L10n.Browser.start) {
                     Task { await model.start() }

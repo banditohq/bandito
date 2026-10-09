@@ -31,7 +31,7 @@ struct ResetConfirmation: View {
 
     @State private var typed = ""
     @State private var busy = false
-    @State private var errorText: String?
+    @State private var errorText: UserFacingMessage?
     @State private var sessionTooOld = false
 
     var body: some View {
@@ -60,9 +60,7 @@ struct ResetConfirmation: View {
                 }
             }
             if let errorText {
-                Text(errorText)
-                    .font(BanditoFont.font(size: 13, weight: 400))
-                    .foregroundStyle(Color.Bandito.danger)
+                UserFacingErrorView(message: errorText)
             }
             if sessionTooOld, let onSignInAgain {
                 Button(L10n.Onboarding.Account.signInAgain, action: onSignInAgain)
@@ -97,7 +95,7 @@ struct DeviceApprovalStep: View {
 
     @State private var mode: Mode = .loading
     @State private var model: DeviceApprovalModel?
-    @State private var errorText: String?
+    @State private var errorText: UserFacingMessage?
     @State private var refuseFailed = false
 
     private enum Mode: Equatable {
@@ -126,9 +124,7 @@ struct DeviceApprovalStep: View {
                 failed
             }
             if let errorText {
-                Text(errorText)
-                    .font(BanditoFont.font(size: 13, weight: 400))
-                    .foregroundStyle(Color.Bandito.danger)
+                UserFacingErrorView(message: errorText)
             }
             if refuseFailed {
                 Button(L10n.Onboarding.Server.retry) { Task { await refuseThenSignOut() } }
@@ -215,9 +211,7 @@ struct DeviceApprovalStep: View {
 
     private var failed: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(errorText ?? L10n.Onboarding.Account.errorGeneric)
-                .font(BanditoFont.font(size: 14, weight: 400))
-                .foregroundStyle(Color.Bandito.text2)
+            UserFacingErrorView(message: errorText ?? UserFacingMessage(text: L10n.Onboarding.Account.errorGeneric))
             Button(L10n.Onboarding.Account.signOutAction) { Task { await signOut() } }
                 .buttonStyle(QuietButtonStyle())
         }
@@ -292,7 +286,7 @@ struct DeviceApprovalStep: View {
         guard let model else { return }
         guard await model.refuse() else {
             refuseFailed = true
-            errorText = L10n.Onboarding.Account.refuseFailed
+            errorText = UserFacingMessage(text: L10n.Onboarding.Account.refuseFailed)
             return
         }
         refuseFailed = false
@@ -324,7 +318,7 @@ struct ApproveDeviceSheet: View {
 
     @Environment(AccountHub.self) private var hub
     @State private var model: ApproveDeviceModel?
-    @State private var setupError: String?
+    @State private var setupError: UserFacingMessage?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -344,9 +338,7 @@ struct ApproveDeviceSheet: View {
                 CodeEntryRow(model: model)
             }
             if let message = setupError ?? model?.errorText {
-                Text(message)
-                    .font(BanditoFont.font(size: 13, weight: 400))
-                    .foregroundStyle(Color.Bandito.danger)
+                UserFacingErrorView(message: message)
             }
             HStack(spacing: 10) {
                 Button(L10n.Onboarding.Account.approveAction) {
@@ -384,7 +376,7 @@ struct ApproveDeviceSheet: View {
     private func build() {
         guard model == nil else { return }
         guard let identity = hub.identity, let client = hub.client else {
-            setupError = L10n.Onboarding.Account.setupFailed
+            setupError = UserFacingMessage(text: L10n.Onboarding.Account.setupFailed)
             return
         }
         let keys = hub.keys
@@ -457,7 +449,7 @@ struct AccountSheet: View {
     @State private var me: Me?
     @State private var route: AccountRoute?
     @State private var loading = false
-    @State private var errorText: String?
+    @State private var errorText: UserFacingMessage?
     @State private var resetting = false
 
     var body: some View {
@@ -509,9 +501,7 @@ struct AccountSheet: View {
                 ProgressView().controlSize(.small)
             }
             if let errorText {
-                Text(errorText)
-                    .font(BanditoFont.font(size: 13, weight: 400))
-                    .foregroundStyle(Color.Bandito.danger)
+                UserFacingErrorView(message: errorText)
             }
         }
         .padding(28)

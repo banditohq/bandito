@@ -16,7 +16,7 @@ final class TerminalController {
     /// Whether the server's terminals have been read since the app started (or since the last reconnect).
     private(set) var isListed = false
     /// The last failure to show, such as a terminal that could not be opened.
-    private(set) var notice: String?
+    private(set) var notice: UserFacingMessage?
 
     @ObservationIgnored private var watchTask: Task<Void, Never>?
     @ObservationIgnored private var wasConnected = false
@@ -89,7 +89,7 @@ final class TerminalController {
             isListed = true
             notice = nil
         } catch {
-            notice = error.localizedDescription
+            notice = UserFacingError.message(for: error)
         }
     }
 
@@ -117,7 +117,7 @@ final class TerminalController {
             workspace.add(info.id, afterFocused: afterFocused, at: .now)
             await makeSession(info, attachFrom: nil)
         } catch {
-            notice = L10n.Terminals.newFailed(message: error.localizedDescription)
+            notice = UserFacingError.message(for: error).wrapped { L10n.Terminals.newFailed(message: $0) }
         }
     }
 
@@ -127,7 +127,7 @@ final class TerminalController {
         do {
             try await server.closeTerminal(id)
         } catch {
-            notice = error.localizedDescription
+            notice = UserFacingError.message(for: error)
         }
         forget(id)
     }
@@ -151,7 +151,7 @@ final class TerminalController {
             workspace.replace(id, with: info.id)
             await makeSession(info, attachFrom: nil)
         } catch {
-            notice = L10n.Terminals.newFailed(message: error.localizedDescription)
+            notice = UserFacingError.message(for: error).wrapped { L10n.Terminals.newFailed(message: $0) }
         }
     }
 
@@ -169,14 +169,14 @@ final class TerminalController {
     @discardableResult
     func restore(_ id: String) -> Bool {
         if workspace.restore(id) { return true }
-        notice = L10n.Terminals.noRoom
+        notice = UserFacingMessage(text: L10n.Terminals.noRoom)
         return false
     }
 
     func restoreLast() {
         if workspace.collapsed.isEmpty { return }
         if workspace.restoreLast() == nil {
-            notice = L10n.Terminals.noRoom
+            notice = UserFacingMessage(text: L10n.Terminals.noRoom)
         }
     }
 

@@ -11,12 +11,12 @@ enum PauseActions {
     }
 
     /// Pauses `agent`, or resumes it when it is paused. A failure is passed to `failure`.
-    static func toggle(_ agent: Agent, on server: ServerModel, failure: @escaping (String) -> Void = { _ in }) {
+    static func toggle(_ agent: Agent, on server: ServerModel, failure: @escaping (UserFacingMessage) -> Void = { _ in }) {
         Task {
             do {
                 try await server.setPaused(agentID: agent.id, !agent.paused)
             } catch {
-                failure(error.localizedDescription)
+                failure(UserFacingError.message(for: error))
             }
         }
     }
@@ -27,13 +27,13 @@ enum PauseActions {
     }
 
     /// Pauses every agent of the server, or resumes them all when all are paused already.
-    static func toggleAll(on server: ServerModel, failure: @escaping (String) -> Void = { _ in }) {
+    static func toggleAll(on server: ServerModel, failure: @escaping (UserFacingMessage) -> Void = { _ in }) {
         let paused = !allPaused(server)
         Task {
             do {
                 try await server.pauseAll(paused)
             } catch {
-                failure(error.localizedDescription)
+                failure(UserFacingError.message(for: error))
             }
         }
     }

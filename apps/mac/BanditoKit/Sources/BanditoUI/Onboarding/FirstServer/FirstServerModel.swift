@@ -35,7 +35,7 @@ final class FirstServerModel {
     /// The address as typed (`user@host[:port]`).
     var address = ""
     private(set) var addressError: String?
-    private(set) var hostKeyError: String?
+    private(set) var hostKeyError: UserFacingMessage?
     /// For an address behind a jump host: the command to run once in Terminal, to confirm the key there.
     private(set) var proxyCommand: String?
     /// For a host whose old key is still in known_hosts: the command that removes that entry.
@@ -53,7 +53,7 @@ final class FirstServerModel {
     @ObservationIgnored private var installTask: Task<Void, Never>?
     @ObservationIgnored private var syncTask: Task<Void, Never>?
     /// Why the servers could not be published to the account, if they could not.
-    private(set) var syncError: String?
+    private(set) var syncError: UserFacingMessage?
 
     /// - Parameters:
     ///   - runner: runs ssh, scp and the local install (tests pass a fake).
@@ -148,7 +148,7 @@ final class FirstServerModel {
         } catch SSHHostKeyError.viaProxy {
             // A jump host: the key cannot be reviewed from here. The person connects once in Terminal.
             proxyCommand = "ssh " + target.sshArguments.joined(separator: " ")
-            hostKeyError = L10n.Onboarding.Server.viaProxy
+            hostKeyError = UserFacingMessage(text: L10n.Onboarding.Server.viaProxy)
         } catch {
             showHostKeyError(error)
         }
@@ -170,7 +170,7 @@ final class FirstServerModel {
             startOwnServer(app: app)
         } catch {
             if (error as? SSHHostKeyError) == .changedBetweenChecks {
-                hostKeyError = L10n.Onboarding.Server.hostKeyChangedWhileReviewing
+                hostKeyError = UserFacingMessage(text: L10n.Onboarding.Server.hostKeyChangedWhileReviewing)
             } else {
                 showHostKeyError(error)
             }

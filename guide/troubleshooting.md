@@ -21,12 +21,37 @@ The app is still reaching the server, or the server is not reachable. Team agent
 3. Check the server itself: a Mac server must be on and awake; a remote server must run the Bandito daemon.
 4. Read the daemon log in a terminal on the server if you need the reason (see [server.md](server.md)).
 
-## No server selected (Сервер не выбран)
+## No servers. Connect a server. (Нет серверов. Подключить сервер.)
 
 <!-- id: ts-no-server; covers: -->
-Terminals and other server modes need a selected server.
-Где: Top bar → server picker
-1. Pick a server in the top bar. If the list is empty, the server was removed (see [settings.md](settings.md)).
+Team, Files, Terminals, Browser, Screen and Server need a connected server. Until one is connected, each mode shows this empty state instead of its content. The sidebar shows the same state in short form.
+Где: Any mode without a server → Connect a server (Подключить сервер)
+1. Click Connect a server (Подключить сервер). The Add server (Добавить сервер) sheet opens; follow the steps there.
+2. A server that was removed in Settings → Servers (see [settings.md](settings.md)) is not listed any more; add it again the same way.
+
+## The server does not answer. (Сервер не отвечает. Проверьте, что он включён и подключение работает.)
+
+<!-- id: ts-no-answer; covers: -->
+The app cannot reach the server: there is no connection, the connection is refused, or the server does not answer in time. The app says this in words, not in the system's error text.
+Где: Any mode → the message; Team → the banner above the composer
+1. Check that the server is on and that the connection works.
+2. Click Retry (Повторить) under the message. The app also reconnects on its own (see Connecting to the server above).
+
+## This device is no longer connected to the server. (Это устройство больше не подключено к серверу — подключите заново.)
+
+<!-- id: ts-revoked; covers: -->
+The server no longer accepts this Mac. Usually the device was removed on the server.
+Где: Any mode → the message
+1. Connect the device again: Settings (⌘,) → Servers (Серверы) → Add server (Добавить сервер).
+2. The list of devices on the server is in Server → Devices (Устройства).
+
+## Something went wrong. (Что-то пошло не так.)
+
+<!-- id: ts-generic; covers: -->
+A failure the app cannot put into a short sentence. The message is shown under the action that failed.
+Где: The message under the action (for example a file, a setting or a terminal)
+1. Click Details (Подробнее) to see the technical text in a monospaced block.
+2. Click Copy (Скопировать) to copy that text, for example for a bug report.
 
 ## This server runs an older Bandito. Update it to see this.
 

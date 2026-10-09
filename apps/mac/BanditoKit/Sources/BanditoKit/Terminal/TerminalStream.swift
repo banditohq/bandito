@@ -12,7 +12,7 @@ public enum TerminalChunk: Sendable, Equatable {
     case closed
     /// Re-attaching failed (the message is the daemon's or the transport's). The stream stays open:
     /// the next reconnect attaches again from `nextOffset`.
-    case error(String)
+    case error(FailureKind)
 }
 
 /// The output of one attached terminal. Created by `ServerModel.attach(_:from:)`.
@@ -81,7 +81,7 @@ public final class TerminalStream {
 
     /// The attach failed: stops holding back, delivers what was held, and reports the error.
     /// The stream stays open for the next attach.
-    func abortAttach(error: String) {
+    func abortAttach(error: FailureKind) {
         attaching = false
         flushHeld()
         if !finished {

@@ -2,33 +2,28 @@ import BanditoDesign
 import BanditoL10n
 import SwiftUI
 
-/// Bottom of the sidebar: the user's avatar, the apps button (not built yet), and the usage button.
+/// Bottom of the sidebar: the account button and the usage button. The account button opens the account sheet:
+/// the account when someone is signed in, the sign-in when nobody is.
 struct SidebarFooter: View {
+    @Environment(Router.self) private var router
+
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: "person.fill")
-                .font(.system(size: 13))
-                .foregroundStyle(Color.Bandito.text2)
-                .frame(width: 32, height: 32)
-                .background(Circle().fill(Color.Bandito.surface3))
-                .accessibilityLabel(L10n.Profile.settings)
-
             Button {
+                router.sheet = .account
             } label: {
-                HStack(spacing: 7) {
-                    Image(systemName: "square.grid.2x2")
-                        .font(.system(size: 13))
-                    Text(L10n.Sidebar.connectApps)
-                        .font(.system(size: 12.5, weight: .medium))
-                }
-                .foregroundStyle(Color.Bandito.text2)
-                .frame(maxWidth: .infinity)
-                .frame(height: 34)
-                .background(Capsule().fill(Color.Bandito.text.opacity(0.04)))
-                .overlay(Capsule().strokeBorder(Color.Bandito.text.opacity(0.10)))
+                Image(systemName: "person.fill")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.Bandito.text2)
+                    .frame(width: 32, height: 32)
+                    .background(Circle().fill(Color.Bandito.surface3))
+                    .contentShape(Circle())
             }
             .buttonStyle(.plain)
-            .disabled(true)
+            .help(L10n.Settings.Nav.account)
+            .accessibilityLabel(L10n.Settings.Nav.account)
+
+            Spacer(minLength: 0)
 
             UsageButton()
         }

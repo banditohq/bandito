@@ -248,9 +248,7 @@ struct FirstServerStep: View {
                 failureActions(failure)
             }
             if let hostKeyError = model.hostKeyError {
-                Text(hostKeyError)
-                    .font(BanditoFont.font(size: 13, weight: 400))
-                    .foregroundStyle(Color.Bandito.danger)
+                UserFacingErrorView(message: hostKeyError)
             }
             if let command = model.knownHostCommand {
                 Text(L10n.Onboarding.Server.removeOldKey)
@@ -351,9 +349,7 @@ struct FirstServerStep: View {
                 .foregroundStyle(Color.Bandito.text2)
             if let syncError = model.syncError {
                 HStack(spacing: 10) {
-                    Text(syncError)
-                        .font(BanditoFont.font(size: 13, weight: 400))
-                        .foregroundStyle(Color.Bandito.danger)
+                    UserFacingErrorView(message: syncError)
                     Button(L10n.Onboarding.Server.retry) { model.syncServers(app: app) }
                         .buttonStyle(QuietButtonStyle(size: .regular))
                 }

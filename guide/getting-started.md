@@ -11,6 +11,7 @@ The first screen: what Bandito is. Agents run on your own server, on the subscri
 Где: Help → Show the introduction again (Показать знакомство снова), or the first launch → Welcome
 1. Read the four points on the screen (agents work while the Mac is closed, they ask before risky steps, the server is at hand, the subscriptions are yours).
 2. Click Get started — takes 3 minutes to go to Account, or I already have an account (У меня есть аккаунт), which goes to the same step.
+3. The language menu at the top right shows the language the interface is in now, in that language (for example Русский). To change it, pick another language; it applies after you restart Bandito.
 
 ## Account: sign in with GitHub or email
 

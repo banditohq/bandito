@@ -14,7 +14,7 @@ final class SlashMenuModel {
     /// Set by Escape. The menu stays closed until the draft changes.
     var suppressed = false
     /// Shown above the field: an error, or "soon" for commands that are not built yet.
-    var notice: String?
+    var notice: UserFacingMessage?
     /// A command from this Mac waiting for the person's yes to install it on the server.
     var pendingInstall: MacCommand?
     var serverCommands: [AgentCommand] = []

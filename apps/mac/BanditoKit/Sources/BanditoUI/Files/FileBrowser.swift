@@ -138,7 +138,9 @@ struct FileBrowser: View {
     private var content: some View {
         VStack(spacing: 0) {
             if let error = model.loadError {
-                EmptyNote(text: error)
+                UserFacingErrorView(message: error)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(28)
             } else if model.visibleEntries.isEmpty, !model.isLoading {
                 EmptyNote(text: model.searchResults != nil ? L10n.Files.noResults : L10n.Files.empty)
             } else if model.layout == .list {
@@ -295,7 +297,7 @@ struct FileBrowser: View {
             do {
                 try await FileDownload.save(entry, server: server)
             } catch {
-                model.actionError = L10n.Files.Download.failed(error: FileErrorText.message(for: error))
+                model.actionError = FileErrorText.message(for: error).wrapped { L10n.Files.Download.failed(error: $0) }
             }
         }
     }
@@ -462,16 +464,14 @@ private struct EmptyNote: View {
 
 /// Lines in the browser that the user can dismiss, such as a failed delete.
 private struct ErrorBanner: View {
-    let message: String
+    let message: UserFacingMessage
     let dismiss: () -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(alignment: .top, spacing: 10) {
             Image(systemName: "exclamationmark.triangle")
                 .foregroundStyle(Color.Bandito.danger)
-            Text(message)
-                .font(.system(size: 12.5))
-                .foregroundStyle(Color.Bandito.text)
+            UserFacingErrorView(message: message)
             Spacer(minLength: 8)
             Button(L10n.Files.Banner.dismiss, action: dismiss)
                 .buttonStyle(QuietButtonStyle(size: .regular))

@@ -36,7 +36,7 @@ final class ScreenModel {
     /// The delegate of `connection`; the VNC view needs it to build its framebuffer view.
     private(set) var vncDelegate: VNCSessionDelegate?
     private(set) var isConnected = false
-    private(set) var errorText: String?
+    private(set) var errorText: UserFacingMessage?
     /// True while an agent holds the screen and the person tried to act on it.
     private(set) var asksToTakeControl = false
     /// Starts from the choice in Settings → Browser and screen (`screen.quality`).
@@ -119,7 +119,7 @@ final class ScreenModel {
         do {
             let local = try await server.forwardOnce(port: vncPort)
             guard let host = local.host, let port = local.port, let port16 = UInt16(exactly: port) else {
-                errorText = L10n.Screen.error
+                errorText = UserFacingMessage(text: L10n.Screen.error)
                 return
             }
             let settings = VNCConnection.Settings(

@@ -13,7 +13,7 @@ enum ViewerMode: Sendable, Equatable {
 @Observable
 final class FileDocument {
     enum Phase: Equatable {
-        case loading, ready, failed(String), tooLarge, binary
+        case loading, ready, failed(UserFacingMessage), tooLarge, binary
     }
 
     /// The server's newer copy after a save was refused with `conflict`.
@@ -37,7 +37,7 @@ final class FileDocument {
     private(set) var etag: String?
     private(set) var conflict: ServerCopy?
     private(set) var isSaving = false
-    private(set) var saveError: String?
+    private(set) var saveError: UserFacingMessage?
     var mode: ViewerMode
 
     init(entry: FsEntry) {
@@ -135,24 +135,24 @@ final class FileDocument {
 
 /// Short, user-facing text for a file error. Known `reason` codes get their own sentence.
 enum FileErrorText {
-    static func message(for error: Error) -> String {
+    static func message(for error: Error) -> UserFacingMessage {
         guard let rpc = error as? RPCError, let reason = rpc.reason else {
-            return L10n.Files.Error.generic(error: error.localizedDescription)
+            return UserFacingError.message(for: error)
         }
         switch reason {
-        case "not_found": return L10n.Files.Error.notFound
-        case "exists": return L10n.Files.Error.exists
-        case "not_a_directory": return L10n.Files.Error.notDirectory
-        case "is_a_directory": return L10n.Files.Error.isDirectory
-        case "not_a_file": return L10n.Files.Error.notFile
-        case "permission_denied": return L10n.Files.Error.permissionDenied
-        case "too_large": return L10n.Files.Error.tooLarge
-        case "binary": return L10n.Files.Error.binary
-        case "conflict": return L10n.Files.Error.conflict
-        case "invalid_path": return L10n.Files.Error.invalidPath
-        case "outside_roots": return L10n.Files.Error.outsideRoots
-        case "io": return L10n.Files.Error.io
-        default: return L10n.Files.Error.generic(error: rpc.message)
+        case "not_found": return UserFacingMessage(text: L10n.Files.Error.notFound)
+        case "exists": return UserFacingMessage(text: L10n.Files.Error.exists)
+        case "not_a_directory": return UserFacingMessage(text: L10n.Files.Error.notDirectory)
+        case "is_a_directory": return UserFacingMessage(text: L10n.Files.Error.isDirectory)
+        case "not_a_file": return UserFacingMessage(text: L10n.Files.Error.notFile)
+        case "permission_denied": return UserFacingMessage(text: L10n.Files.Error.permissionDenied)
+        case "too_large": return UserFacingMessage(text: L10n.Files.Error.tooLarge)
+        case "binary": return UserFacingMessage(text: L10n.Files.Error.binary)
+        case "conflict": return UserFacingMessage(text: L10n.Files.Error.conflict)
+        case "invalid_path": return UserFacingMessage(text: L10n.Files.Error.invalidPath)
+        case "outside_roots": return UserFacingMessage(text: L10n.Files.Error.outsideRoots)
+        case "io": return UserFacingMessage(text: L10n.Files.Error.io)
+        default: return UserFacingError.message(for: error)
         }
     }
 }

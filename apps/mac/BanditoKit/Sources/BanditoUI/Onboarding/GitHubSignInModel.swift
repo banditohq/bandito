@@ -9,7 +9,7 @@ enum GitHubSignInState: Equatable, Sendable {
     case waiting(GitHubFlow)
     case expired
     case denied
-    case failed(String)
+    case failed(UserFacingMessage)
     case signedIn(Session)
 }
 

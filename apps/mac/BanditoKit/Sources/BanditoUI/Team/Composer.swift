@@ -52,9 +52,7 @@ struct Composer: View {
                     .transition(.opacity.combined(with: .offset(y: 6)))
             }
             if let notice = slash.notice {
-                Text(notice)
-                    .font(BanditoFont.font(size: 12, weight: 400))
-                    .foregroundStyle(Color.Bandito.text2)
+                UserFacingErrorView(message: notice)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 16)
             }
@@ -259,18 +257,18 @@ struct Composer: View {
             router.sheet = .newAgent
         case .model:
             guard !args.isEmpty else {
-                slash.notice = L10n.Slash.modelNeedsName
+                slash.notice = UserFacingMessage(text: L10n.Slash.modelNeedsName)
                 return
             }
             draft = ""
             perform { try await server.updateAgent(agent.id, model: args) }
         case .effort:
             guard let level = BuiltinSlash.effortLevel(from: args) else {
-                slash.notice = L10n.Slash.effortInvalid
+                slash.notice = UserFacingMessage(text: L10n.Slash.effortInvalid)
                 return
             }
             guard agent.runtime.supportedEfforts.contains(level) else {
-                slash.notice = L10n.Slash.effortUnsupported(runtime: agent.runtime.rawValue, level: level.rawValue)
+                slash.notice = UserFacingMessage(text: L10n.Slash.effortUnsupported(runtime: agent.runtime.rawValue, level: level.rawValue))
                 return
             }
             draft = ""
@@ -308,7 +306,7 @@ struct Composer: View {
                 await slash.loadServerCommands(server: server, agentID: agent.id)
                 onSend()
             } catch {
-                slash.notice = error.localizedDescription
+                slash.notice = UserFacingError.message(for: error)
             }
         }
     }
@@ -318,7 +316,7 @@ struct Composer: View {
             do {
                 try await operation()
             } catch {
-                slash.notice = error.localizedDescription
+                slash.notice = UserFacingError.message(for: error)
             }
         }
     }

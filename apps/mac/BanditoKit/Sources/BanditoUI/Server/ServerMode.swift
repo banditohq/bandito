@@ -29,14 +29,18 @@ struct ServerMode: View {
 
     var body: some View {
         Group {
-            switch router.serverSection {
-            case .overview: ServerOverview(server: app.currentServer)
-            case .workspaces: WorkspacesView()
-            case .secrets: SecretsView(server: app.currentServer)
-            case .ports: PortsView(server: app.currentServer)
-            case .devices: DevicesView(server: app.currentServer)
-            case .updates: UpdatesView(server: app.currentServer)
-            case .journal: ServerJournalView(server: app.currentServer)
+            if app.currentServer == nil {
+                NoServerView(symbol: AppMode.server.systemImage)
+            } else {
+                switch router.serverSection {
+                case .overview: ServerOverview(server: app.currentServer)
+                case .workspaces: WorkspacesView()
+                case .secrets: SecretsView(server: app.currentServer)
+                case .ports: PortsView(server: app.currentServer)
+                case .devices: DevicesView(server: app.currentServer)
+                case .updates: UpdatesView(server: app.currentServer)
+                case .journal: ServerJournalView(server: app.currentServer)
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

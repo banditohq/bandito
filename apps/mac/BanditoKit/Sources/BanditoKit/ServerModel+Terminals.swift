@@ -72,7 +72,7 @@ extension ServerModel {
             stream.completeAttach(from: from, start: reply.start, data: reply.bytes)
         } catch {
             if terminalStreams[id] === stream { terminalStreams[id] = nil }
-            stream.abortAttach(error: error.localizedDescription)
+            stream.abortAttach(error: FailureKind.classify(error))
             stream.finish()
             throw error
         }
@@ -120,7 +120,7 @@ extension ServerModel {
                 terminalStreams[id] = nil
                 stream.terminate()
             } catch {
-                stream.abortAttach(error: error.localizedDescription)
+                stream.abortAttach(error: FailureKind.classify(error))
             }
         }
     }

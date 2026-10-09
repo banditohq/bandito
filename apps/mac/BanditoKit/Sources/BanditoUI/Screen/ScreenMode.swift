@@ -58,6 +58,7 @@ private struct ScreenMainArea: View {
 
 private struct ScreenToolbar: View {
     @Bindable var model: ScreenModel
+    @Environment(Keymap.self) private var keymap
 
     var body: some View {
         let holder = model.status?.controller ?? .none
@@ -79,11 +80,10 @@ private struct ScreenToolbar: View {
             Button {
                 model.sendCtrlAltDelete()
             } label: {
-                Text("⌃⌥⌫")
+                Text(keymap.binding(for: "screen.sendCtrlAltDelete")?.symbols ?? "")
                     .font(.system(size: 12, design: .monospaced))
             }
             .buttonStyle(QuietButtonStyle())
-            .keyboardShortcut(.delete, modifiers: [.control, .option])
             .help(L10n.Screen.sendCAD)
 
             Button {
@@ -104,11 +104,21 @@ private struct ScreenToolbar: View {
                     Task { await model.takeControl() }
                 }
                 .buttonStyle(LightPillButtonStyle())
-                .keyboardShortcut("c", modifiers: [.command, .shift])
             }
         }
         .padding(.horizontal, 14)
         .frame(height: 52)
+        // The shortcuts come from the keymap, so a rebinding in Settings applies here too.
+        .keymapShortcut("screen.sendCtrlAltDelete", keymap: keymap) { model.sendCtrlAltDelete() }
+        .keymapShortcut("screen.takeControl", keymap: keymap) {
+            Task {
+                if model.status?.controller == .user {
+                    await model.giveBack()
+                } else {
+                    await model.takeControl()
+                }
+            }
+        }
         .background(Color(red: 0.07, green: 0.063, blue: 0.055))
         .overlay(alignment: .bottom) {
             Rectangle().fill(Color.Bandito.text.opacity(0.05)).frame(height: 1)
@@ -162,7 +172,12 @@ private struct ScreenCanvas: View {
                 }
             }
         } else if model.status?.running == true {
-            ScreenNote(text: model.errorText ?? L10n.Screen.connecting)
+            if let errorText = model.errorText {
+                UserFacingErrorView(message: errorText)
+                    .padding(16)
+            } else {
+                ScreenNote(text: L10n.Screen.connecting)
+            }
         } else {
             VStack(spacing: 14) {
                 Image(systemName: "display")
@@ -172,9 +187,8 @@ private struct ScreenCanvas: View {
                     .font(.system(size: 13))
                     .foregroundStyle(Color.Bandito.text2)
                 if let text = model.errorText {
-                    Text(text)
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color.Bandito.danger)
+                    UserFacingErrorView(message: text)
+                        .frame(maxWidth: 360)
                 }
                 Button(L10n.Screen.start) {
                     Task { await model.start() }

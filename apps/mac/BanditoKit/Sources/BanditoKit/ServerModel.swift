@@ -46,7 +46,7 @@ public enum ConnectionState: Sendable, Hashable {
     case connected
     /// The link dropped and the app is retrying. `attempt` counts from 1.
     case reconnecting(attempt: Int)
-    case failed(String)
+    case failed(FailureKind)
 }
 
 /// Live state of one server: agents, their threads, runtimes. Main-actor
@@ -57,7 +57,8 @@ public final class ServerModel: Identifiable {
     /// Messages per history request (`events.page`).
     public nonisolated static let historyPageSize = 200
     /// Shown when some events could not be decoded: this app is older than the daemon, or a bug.
-    public nonisolated static let decodeWarning = "some updates could not be read; update the app"
+    /// Some events were skipped because this app does not know their shape: update the app.
+    public nonisolated static let decodeWarning = FailureKind.reason("decode_failed")
 
     public let config: ServerConfig
     public nonisolated var id: UUID { config.id }
@@ -70,7 +71,7 @@ public final class ServerModel: Identifiable {
     /// Rate-limit windows per runtime, as last learned (from `usage.*` calls or live events).
     public private(set) var usage: [UsageEntry] = []
     /// The last failure of a background operation (subscription, reconnect, unreadable updates).
-    public internal(set) var lastError: String?
+    public internal(set) var lastError: FailureKind?
     /// Whether an agent's thread has events older than the ones loaded.
     public private(set) var hasMoreHistory: [String: Bool] = [:]
 
@@ -151,7 +152,7 @@ public final class ServerModel: Identifiable {
             try await open()
         } catch {
             // A connection lost during this attempt has already scheduled a reconnect: keep retrying instead of giving up.
-            if reconnectTask == nil { state = .failed(error.localizedDescription) }
+            if reconnectTask == nil { state = .failed(FailureKind.classify(error)) }
         }
     }
 
@@ -282,7 +283,7 @@ public final class ServerModel: Identifiable {
                     return
                 } catch {
                     if Task.isCancelled { return }
-                    model.lastError = error.localizedDescription
+                    model.lastError = FailureKind.classify(error)
                 }
             }
         }
@@ -309,7 +310,7 @@ public final class ServerModel: Identifiable {
                 try await catchUp(c, through: e.seq - 1)
             } catch {
                 // Drop the connection: the reconnect resubscribes from lastSeq, which backfills the gap.
-                lastError = error.localizedDescription
+                lastError = FailureKind.classify(error)
                 await c.close()
                 return
             }

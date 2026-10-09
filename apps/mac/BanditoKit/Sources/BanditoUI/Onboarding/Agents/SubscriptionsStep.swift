@@ -20,7 +20,7 @@ final class SubscriptionsModel {
     private(set) var terminal: TerminalSession?
     /// The last https link the login printed. Only https is ever offered.
     private(set) var latestLink: URL?
-    private(set) var errorText: String?
+    private(set) var errorText: UserFacingMessage?
     /// Runtimes the person confirmed with "Done", for the ones the server cannot verify.
     private(set) var confirmed: Set<RuntimeKind> = []
 
@@ -155,9 +155,7 @@ struct SubscriptionsStep: View {
                 loginPanel
             }
             if let errorText = model.errorText {
-                Text(errorText)
-                    .font(BanditoFont.font(size: 13, weight: 400))
-                    .foregroundStyle(Color.Bandito.danger)
+                UserFacingErrorView(message: errorText)
             }
             HStack(spacing: 14) {
                 Button(L10n.Onboarding.Subs.continueLabel, action: onContinue)

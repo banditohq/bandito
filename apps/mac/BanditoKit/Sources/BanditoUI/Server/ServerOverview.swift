@@ -14,7 +14,7 @@ struct ServerOverview: View {
     @State private var daemonUpdate = DaemonUpdateModel()
     @State private var secrets: [SecretInfo] = []
     @State private var stopping: ProcessRow?
-    @State private var actionError: String?
+    @State private var actionError: UserFacingMessage?
 
     var body: some View {
         ServerPage(title: L10n.Mode.serverOverview, trailing: { trailing }) {
@@ -27,9 +27,7 @@ struct ServerOverview: View {
                 }
                 tiles
                 if let error = monitor.error {
-                    Text(error)
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color.Bandito.danger)
+                    UserFacingErrorView(message: error)
                 }
                 HStack(alignment: .top, spacing: 12) {
                     processesCard(server)
@@ -161,9 +159,7 @@ struct ServerOverview: View {
                     .overlay(alignment: .top) { Rectangle().fill(Color.Bandito.text.opacity(0.05)).frame(height: 1) }
             }
             if let actionError {
-                Text(actionError)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.Bandito.danger)
+                UserFacingErrorView(message: actionError)
             }
         }
     }
@@ -254,7 +250,7 @@ struct ServerOverview: View {
                     try await server.kill(pid: pid)
                 }
             } catch {
-                actionError = error.localizedDescription
+                actionError = UserFacingError.message(for: error)
             }
             await monitor.refresh(server)
         }

@@ -12,7 +12,7 @@ struct NewAgentSheet: View {
     @State private var draft = NewAgentDraft()
     @State private var pickerOpen = false
     @State private var creating = false
-    @State private var error: String?
+    @State private var error: UserFacingMessage?
     /// The server's workplaces, loaded when the sheet opens: what the workplace section can offer.
     @State private var workplaces: WorkspacesModel?
 
@@ -530,9 +530,7 @@ struct NewAgentSheet: View {
     private var footer: some View {
         VStack(spacing: 8) {
             if let error {
-                Text(error)
-                    .font(BanditoFont.font(size: 12, weight: 400))
-                    .foregroundStyle(Color.Bandito.danger)
+                UserFacingErrorView(message: error)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             HStack(spacing: 10) {
@@ -573,7 +571,7 @@ struct NewAgentSheet: View {
                 router.select(mode: .team)
                 router.sheet = nil
             } catch {
-                self.error = WorkspaceText.failure(error) ?? error.localizedDescription
+                self.error = WorkspaceText.message(for: error)
                 creating = false
             }
         }

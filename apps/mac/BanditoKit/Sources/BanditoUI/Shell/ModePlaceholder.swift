@@ -2,39 +2,39 @@ import BanditoDesign
 import BanditoL10n
 import SwiftUI
 
-/// What a mode shows while there is no server to show it for: its icon, its name and a hint to connect one.
+/// What a mode shows while there is no server to show it for: "No servers" and the button to connect one.
 struct ModePlaceholder: View {
     var mode: AppMode
 
     var body: some View {
-        VStack(spacing: 14) {
-            Image(systemName: mode.systemImage)
-                .font(.system(size: 34, weight: .regular))
-                .foregroundStyle(Color.Bandito.text3)
-            Text(mode.title)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(Color.Bandito.text)
-            Text(L10n.Mode.connectServer)
-                .font(.system(size: 13))
-                .foregroundStyle(Color.Bandito.text2)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.Bandito.bg)
+        NoServerView(symbol: mode.systemImage)
+            .background(Color.Bandito.bg)
     }
 }
 
-/// Sidebar stand-in for a mode whose list needs a server.
+/// Sidebar stand-in for a mode whose list needs a server. Without a server it offers the connection; with an
+/// old server it says that the server needs an update.
 struct SidebarPlaceholder: View {
     var mode: AppMode
 
+    @Environment(AppModel.self) private var app
+
     var body: some View {
-        VStack(spacing: 6) {
-            Text(mode.title)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Color.Bandito.text2)
-            Text(L10n.Mode.connectServer)
-                .font(.system(size: 12))
-                .foregroundStyle(Color.Bandito.text3)
+        Group {
+            if app.currentServer == nil {
+                NoServerView(symbol: mode.systemImage, compact: true)
+            } else {
+                VStack(spacing: 6) {
+                    Text(mode.title)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.Bandito.text2)
+                    Text(L10n.Server.updateNote)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.Bandito.text3)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(16)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.Bandito.surface1)

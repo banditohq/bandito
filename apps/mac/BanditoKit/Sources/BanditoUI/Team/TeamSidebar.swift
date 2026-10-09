@@ -9,13 +9,13 @@ struct TeamSidebar: View {
     @Environment(Router.self) private var router
     @State private var pins = PinnedAgents()
     @State private var pendingDelete: Agent?
-    @State private var actionError: String?
+    @State private var actionError: UserFacingMessage?
 
     var body: some View {
         if let server = app.currentServer {
             content(server)
         } else {
-            Color.Bandito.surface1
+            SidebarPlaceholder(mode: .team)
         }
     }
 
@@ -65,9 +65,7 @@ struct TeamSidebar: View {
                     .padding(.horizontal, 8)
                 }
                 if let actionError {
-                    Text(actionError)
-                        .font(BanditoFont.font(size: 12, weight: 400))
-                        .foregroundStyle(Color.Bandito.danger)
+                    UserFacingErrorView(message: actionError)
                         .padding(.horizontal, 18)
                         .padding(.top, 10)
                 }
@@ -221,7 +219,7 @@ struct TeamSidebar: View {
                 try await server.deleteAgent(agent.id)
                 if router.selectedAgentID == agent.id { router.selectedAgentID = nil }
             } catch {
-                actionError = error.localizedDescription
+                actionError = UserFacingError.message(for: error)
             }
         }
     }

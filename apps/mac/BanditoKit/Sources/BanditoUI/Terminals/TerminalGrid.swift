@@ -71,9 +71,7 @@ struct TerminalPaneView: View {
                 TerminalPane(view: session.view, fontSize: app.terminalFont.size)
                     .padding(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 8))
                 if let message = session.errorMessage {
-                    Text(message)
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color.Bandito.danger)
+                    UserFacingErrorView(message: message)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
                         .frame(maxWidth: .infinity, alignment: .leading)

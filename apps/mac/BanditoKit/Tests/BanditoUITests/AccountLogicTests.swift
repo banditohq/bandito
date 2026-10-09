@@ -235,7 +235,7 @@ actor FakeApprovalBackend: DeviceApprovalBackend {
         #expect(model.canApprove)
         await model.approve()
         #expect(await backend.approveCalls.isEmpty)
-        #expect(model.errorText == L10n.Onboarding.Account.codeMismatch)
+        #expect(model.errorText?.text == L10n.Onboarding.Account.codeMismatch)
         #expect(!model.approved)
     }
 

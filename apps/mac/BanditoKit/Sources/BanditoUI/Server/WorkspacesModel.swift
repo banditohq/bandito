@@ -18,7 +18,7 @@ final class WorkspacesModel {
     private(set) var dockerReady = false
     private(set) var loading = false
     /// The last failure of a change or a load, as a sentence.
-    private(set) var errorText: String?
+    private(set) var errorText: UserFacingMessage?
     /// The workspace whose change is running (its buttons are disabled meanwhile).
     private(set) var busyID: String?
 
@@ -92,7 +92,7 @@ final class WorkspacesModel {
     /// Deletes a container. A workspace that still has agents is refused here, before the daemon is asked.
     func delete(_ workspace: Workspace) async {
         guard workspace.canDelete else {
-            errorText = L10n.Workspace.Error.notEmpty
+            errorText = UserFacingMessage(text: L10n.Workspace.Error.notEmpty)
             return
         }
         await change(workspace.id) { try await self.server.deleteWorkspace(workspace.id) }

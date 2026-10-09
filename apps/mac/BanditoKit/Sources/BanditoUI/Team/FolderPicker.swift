@@ -15,13 +15,13 @@ struct FolderPicker: View {
     @State private var recent = RecentFolders()
     @State private var query = ""
     @State private var newFolder: String?
-    @State private var error: String?
+    @State private var error: UserFacingMessage?
     /// "Clone from a link": the form replaces the folder tree while it is open.
     @State private var cloneOpen = false
     @State private var cloneURL = ""
     @State private var cloneName = ""
     @State private var cloneBusy = false
-    @State private var cloneError: String?
+    @State private var cloneError: UserFacingMessage?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -128,9 +128,7 @@ struct FolderPicker: View {
                 .padding(6)
             }
             if let error {
-                Text(error)
-                    .font(BanditoFont.font(size: 11.5, weight: 400))
-                    .foregroundStyle(Color.Bandito.danger)
+                UserFacingErrorView(message: error)
                     .padding(.horizontal, 12)
                     .padding(.bottom, 6)
             }
@@ -221,7 +219,7 @@ struct FolderPicker: View {
             listing = try await server.list(path)
             error = nil
         } catch {
-            self.error = error.localizedDescription
+            self.error = UserFacingError.message(for: error)
         }
     }
 
@@ -234,7 +232,7 @@ struct FolderPicker: View {
             newFolder = nil
             await open(entry.path)
         } catch {
-            self.error = error.localizedDescription
+            self.error = UserFacingError.message(for: error)
         }
     }
 
@@ -263,11 +261,7 @@ struct FolderPicker: View {
                 }
             }
             if let cloneError {
-                Text(cloneError)
-                    .font(BanditoFont.font(size: 11, weight: 400, mono: true))
-                    .foregroundStyle(Color.Bandito.danger)
-                    .lineLimit(8)
-                    .textSelection(.enabled)
+                UserFacingErrorView(message: cloneError)
             }
             Spacer(minLength: 0)
             HStack {
@@ -305,9 +299,10 @@ struct FolderPicker: View {
             cloneName = ""
             await open(result.path)
         } catch let failure as RPCError {
-            cloneError = failure.cloneStderr ?? failure.message
+            cloneError = UserFacingMessage(
+                text: L10n.Failure.Reason.cloneFailed, technical: failure.cloneStderr ?? failure.message)
         } catch {
-            cloneError = error.localizedDescription
+            cloneError = UserFacingError.message(for: error)
         }
     }
 

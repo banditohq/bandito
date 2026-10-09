@@ -83,30 +83,31 @@ enum EmailAddressCheck {
 /// The text shown for an error in the account and sign-in screens. Every string comes from the app's own
 /// translations: the Kit's English descriptions are never shown.
 enum SignInMessages {
-    static func text(for error: Error) -> String {
+    static func text(for error: Error) -> UserFacingMessage {
         switch error {
         case let accountError as AccountError:
-            return accountText(accountError)
+            return UserFacingMessage(text: accountText(accountError))
         case is DeviceIdentityError:
-            return L10n.Onboarding.Account.keyUnavailable
+            return UserFacingMessage(text: L10n.Onboarding.Account.keyUnavailable)
         case let hostKey as SSHHostKeyError:
-            return hostKeyText(hostKey)
+            return UserFacingMessage(text: hostKeyText(hostKey))
         case is DeviceApprovalError:
-            return L10n.Onboarding.Account.noKeyHere
+            return UserFacingMessage(text: L10n.Onboarding.Account.noKeyHere)
         default:
-            return L10n.Onboarding.Account.errorGeneric
+            // Network and unknown failures: the one mapper, so the technical text is one tap away.
+            return UserFacingError.message(for: error)
         }
     }
 
     /// The text for a failure while preparing sign-in (reading this Mac's device key, building the client).
-    static func setupText(for error: Error) -> String {
+    static func setupText(for error: Error) -> UserFacingMessage {
         if error is DeviceIdentityError {
-            return L10n.Onboarding.Account.keyUnavailable
+            return UserFacingMessage(text: L10n.Onboarding.Account.keyUnavailable)
         }
         if error is AccountError {
             return text(for: error)
         }
-        return L10n.Onboarding.Account.setupFailed
+        return UserFacingMessage(text: L10n.Onboarding.Account.setupFailed)
     }
 
     static func accountText(_ error: AccountError) -> String {

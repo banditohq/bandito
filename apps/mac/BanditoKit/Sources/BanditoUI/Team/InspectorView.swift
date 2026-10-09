@@ -121,12 +121,9 @@ struct InspectorRow<Value: View>: View {
 
 /// Error line for a failed change in a tab.
 struct InspectorError: View {
-    var text: String
+    var message: UserFacingMessage
 
     var body: some View {
-        Text(text)
-            .font(BanditoFont.font(size: 12, weight: 400))
-            .foregroundStyle(Color.Bandito.danger)
-            .textSelection(.enabled)
+        UserFacingErrorView(message: message)
     }
 }

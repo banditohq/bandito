@@ -42,13 +42,13 @@ final class FolderModel {
     private(set) var entries: [FsEntry] = []
     private(set) var truncated = false
     private(set) var skipped = 0
-    private(set) var loadError: String?
+    private(set) var loadError: UserFacingMessage?
     private(set) var isLoading = false
     private(set) var searchResults: [FsEntry]?
     private(set) var upload: UploadJob?
     private(set) var uploadConflict: UploadConflict?
     /// Something a file operation could not do; shown once, then the user dismisses it.
-    var actionError: String?
+    var actionError: UserFacingMessage?
 
     /// Settings → Terminal and files: whether hidden files show when the browser opens.
     static let showHiddenDefaultsKey = "files.showHiddenByDefault"
@@ -193,7 +193,7 @@ final class FolderModel {
                 upload = nil
                 return
             } catch {
-                actionError = L10n.Files.Upload.failed(name: name, error: FileErrorText.message(for: error))
+                actionError = FileErrorText.message(for: error).wrapped { L10n.Files.Upload.failed(name: name, error: $0) }
             }
         }
         await reload(server: server)
@@ -215,7 +215,7 @@ final class FolderModel {
                     self.upload?.fraction = fraction
                 }
             } catch {
-                actionError = L10n.Files.Upload.failed(name: conflict.name, error: FileErrorText.message(for: error))
+                actionError = FileErrorText.message(for: error).wrapped { L10n.Files.Upload.failed(name: conflict.name, error: $0) }
             }
             upload = nil
         case .keepBoth:
@@ -227,7 +227,7 @@ final class FolderModel {
                     self.upload?.fraction = fraction
                 }
             } catch {
-                actionError = L10n.Files.Upload.failed(name: name, error: FileErrorText.message(for: error))
+                actionError = FileErrorText.message(for: error).wrapped { L10n.Files.Upload.failed(name: name, error: $0) }
             }
             upload = nil
         }

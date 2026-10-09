@@ -97,8 +97,7 @@ struct WelcomeView: View {
     }
 
     private var currentLanguageName: String {
-        let code = GeneralSection.storedLanguage()
-        return L10n.languages.first { $0.code == code }?.native ?? "English"
+        InterfaceLanguage.current
     }
 }
 
