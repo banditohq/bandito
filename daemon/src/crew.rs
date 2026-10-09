@@ -13,7 +13,12 @@ use serde_json::{Value, json};
 use std::path::PathBuf;
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt, BufReader};
 
+/// Version answered when the client asks for none we support.
 const PROTOCOL_VERSION: &str = "2025-06-18";
+/// Protocol versions this server speaks. A client asking for one gets it back.
+const SUPPORTED_PROTOCOL_VERSIONS: [&str; 3] = ["2025-06-18", "2025-03-26", "2024-11-05"];
+/// Longest input line we accept. A longer line is refused and skipped without being kept.
+const MAX_LINE_BYTES: usize = 1024 * 1024;
 const PARSE_ERROR: i64 = -32700;
 const INVALID_REQUEST: i64 = -32600;
 const METHOD_NOT_FOUND: i64 = -32601;
@@ -70,21 +75,74 @@ where
 {
     let mut buf = Vec::new();
     loop {
-        buf.clear();
-        if reader.read_until(b'\n', &mut buf).await? == 0 {
-            return Ok(());
-        }
-        let line = String::from_utf8_lossy(&buf);
-        if line.trim().is_empty() {
-            continue;
-        }
-        if let Some(reply) = handle_line(&line, backend).await {
-            let mut out = reply.to_string();
-            out.push('\n');
-            writer.write_all(out.as_bytes()).await?;
-            writer.flush().await?;
+        match read_line_capped(&mut reader, &mut buf).await? {
+            LineRead::Eof => return Ok(()),
+            LineRead::TooLong => {
+                let reply = error_reply(Value::Null, PARSE_ERROR, "parse error: line is longer than 1 MB");
+                write_reply(&mut writer, &reply).await?;
+            }
+            LineRead::Line => {
+                let line = String::from_utf8_lossy(&buf);
+                if line.trim().is_empty() {
+                    continue;
+                }
+                if let Some(reply) = handle_line(&line, backend).await {
+                    write_reply(&mut writer, &reply).await?;
+                }
+            }
         }
     }
+}
+
+enum LineRead {
+    /// Input ended before any byte of a new line.
+    Eof,
+    /// A line is in the buffer, without its newline.
+    Line,
+    /// The line was over `MAX_LINE_BYTES`; it was skipped up to its newline.
+    TooLong,
+}
+
+/// Read one line into `buf`. Bytes past `MAX_LINE_BYTES` are dropped as they
+/// arrive, so an overlong line never sits in memory.
+async fn read_line_capped<R: AsyncBufRead + Unpin>(reader: &mut R, buf: &mut Vec<u8>) -> std::io::Result<LineRead> {
+    buf.clear();
+    let mut too_long = false;
+    loop {
+        let available = reader.fill_buf().await?;
+        if available.is_empty() {
+            return Ok(match (too_long, buf.is_empty()) {
+                (true, _) => LineRead::TooLong,
+                (false, true) => LineRead::Eof,
+                (false, false) => LineRead::Line,
+            });
+        }
+        let (chunk, finished) = match available.iter().position(|&b| b == b'\n') {
+            Some(i) => (&available[..i], true),
+            None => (available, false),
+        };
+        if !too_long {
+            if buf.len() + chunk.len() > MAX_LINE_BYTES {
+                too_long = true;
+                buf.clear();
+            } else {
+                buf.extend_from_slice(chunk);
+            }
+        }
+        let used = chunk.len() + usize::from(finished);
+        reader.consume(used);
+        if finished {
+            return Ok(if too_long { LineRead::TooLong } else { LineRead::Line });
+        }
+    }
+}
+
+async fn write_reply<W: AsyncWrite + Unpin>(writer: &mut W, reply: &Value) -> Result<()> {
+    let mut out = reply.to_string();
+    out.push('\n');
+    writer.write_all(out.as_bytes()).await?;
+    writer.flush().await?;
+    Ok(())
 }
 
 /// Reply to one incoming line, or `None` when no reply is due.
@@ -117,6 +175,7 @@ fn initialize(params: &Value) -> Value {
     let version = params
         .get("protocolVersion")
         .and_then(Value::as_str)
+        .filter(|v| SUPPORTED_PROTOCOL_VERSIONS.contains(v))
         .unwrap_or(PROTOCOL_VERSION);
     json!({
         "protocolVersion": version,
@@ -274,15 +333,18 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn initialize_echoes_the_protocol_version() {
+    async fn initialize_answers_with_a_version_we_support() {
         let backend = MockBackend::default();
-        let r = reply(
-            json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": { "protocolVersion": "2024-11-05" } }),
-            &backend,
-        )
-        .await;
-        assert_eq!(r["id"], 1);
-        assert_eq!(r["result"]["protocolVersion"], "2024-11-05");
+        for asked in ["2025-06-18", "2025-03-26", "2024-11-05"] {
+            let r = reply(
+                json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": { "protocolVersion": asked } }),
+                &backend,
+            )
+            .await;
+            assert_eq!(r["id"], 1);
+            assert_eq!(r["result"]["protocolVersion"], asked);
+        }
+        let r = reply(json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize" }), &backend).await;
         assert_eq!(r["result"]["capabilities"], json!({ "tools": {} }));
         assert_eq!(r["result"]["serverInfo"]["name"], "bandito-crew");
         assert_eq!(r["result"]["serverInfo"]["version"], env!("CARGO_PKG_VERSION"));
@@ -290,16 +352,37 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn initialize_defaults_the_protocol_version() {
+    async fn initialize_falls_back_to_our_newest_version() {
         let backend = MockBackend::default();
         let r = reply(json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize" }), &backend).await;
         assert_eq!(r["result"]["protocolVersion"], "2025-06-18");
-        let r = reply(
-            json!({ "jsonrpc": "2.0", "id": 2, "method": "initialize", "params": { "protocolVersion": 5 } }),
-            &backend,
-        )
-        .await;
-        assert_eq!(r["result"]["protocolVersion"], "2025-06-18");
+        for params in [
+            json!({ "protocolVersion": 5 }),
+            json!({ "protocolVersion": "2099-01-01" }),
+        ] {
+            let r = reply(
+                json!({ "jsonrpc": "2.0", "id": 2, "method": "initialize", "params": params }),
+                &backend,
+            )
+            .await;
+            assert_eq!(r["result"]["protocolVersion"], "2025-06-18");
+        }
+    }
+
+    #[tokio::test]
+    async fn overlong_line_is_refused_and_the_next_line_is_served() {
+        let backend = MockBackend::default();
+        let long = format!(
+            "{{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\",\"pad\":\"{}\"}}",
+            "a".repeat(MAX_LINE_BYTES)
+        );
+        let input = format!("{long}\n{{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"ping\"}}\n");
+        let all = replies(&input, &backend).await;
+        assert_eq!(all.len(), 2);
+        assert_eq!(all[0]["id"], Value::Null);
+        assert_eq!(all[0]["error"]["code"], PARSE_ERROR);
+        assert_eq!(all[1]["id"], 2);
+        assert_eq!(all[1]["result"], json!({}));
     }
 
     #[tokio::test]

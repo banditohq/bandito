@@ -3,6 +3,7 @@
 use super::{App, Peer, serve};
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::mpsc;
@@ -60,8 +61,26 @@ async fn handle(app: Arc<App>, stream: UnixStream) {
     let _ = writer.await;
 }
 
-/// Client side, for the `bandito` CLI: one request, one response.
+/// Longest a client waits for the daemon to answer one request.
+const CALL_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Client side, for the `bandito` CLI and the crew MCP: one request, one response.
 pub async fn call(path: &Path, method: &str, params: serde_json::Value) -> anyhow::Result<serde_json::Value> {
+    call_within(path, method, params, CALL_TIMEOUT).await
+}
+
+async fn call_within(
+    path: &Path,
+    method: &str,
+    params: serde_json::Value,
+    limit: Duration,
+) -> anyhow::Result<serde_json::Value> {
+    tokio::time::timeout(limit, call_once(path, method, params))
+        .await
+        .map_err(|_| anyhow::anyhow!("the daemon did not answer in {} s", limit.as_secs()))?
+}
+
+async fn call_once(path: &Path, method: &str, params: serde_json::Value) -> anyhow::Result<serde_json::Value> {
     let stream = UnixStream::connect(path)
         .await
         .map_err(|e| anyhow::anyhow!("cannot reach the daemon at {} ({e}). Is it running?", path.display()))?;
@@ -80,4 +99,27 @@ pub async fn call(path: &Path, method: &str, params: serde_json::Value) -> anyho
         return Ok(v["result"].clone());
     }
     anyhow::bail!("the daemon closed the connection")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn call_gives_up_when_the_daemon_stays_silent() {
+        let dir = tempfile::tempdir().unwrap();
+        let sock = dir.path().join("silent.sock");
+        let listener = tokio::net::UnixListener::bind(&sock).unwrap();
+        // Accept the connection and never answer.
+        let server = tokio::spawn(async move {
+            let _conn = listener.accept().await;
+            tokio::time::sleep(Duration::from_secs(60)).await;
+        });
+        let err = call_within(&sock, "daemon.info", json!({}), Duration::from_millis(100))
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("the daemon did not answer in"), "{err}");
+        server.abort();
+    }
 }
