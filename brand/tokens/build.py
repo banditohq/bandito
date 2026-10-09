@@ -80,7 +80,7 @@ def build_swift():
     s += ["}", "", "public enum BanditoRadius {"]
     s += [f"    public static let {k}: CGFloat = {v}" for k, v in T["radius"].items()]
     s += ["}", "", "public enum BanditoType {",
-          f'    public static let sans = "{T["font"]["sans"]}"', f'    public static let mono = "{T["font"]["mono"]}"']
+          f'    public static let sansFamily = "{T["font"]["sans"]}"', f'    public static let monoFamily = "{T["font"]["mono"]}"']
     for k, v in T["type"].items():
         s.append(f"    public static let {k} = (size: CGFloat({v['size']}), weight: {v['weight']}, tracking: CGFloat({v['tracking']}), leading: CGFloat({v['leading']}))")
     m = T["motion"]
