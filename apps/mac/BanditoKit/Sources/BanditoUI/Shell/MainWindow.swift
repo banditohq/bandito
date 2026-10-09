@@ -103,6 +103,7 @@ private struct SheetPlaceholder: View {
         case .newAgent: L10n.AgentSheet.title
         case .changes: L10n.Keys.whatChanged
         case .addServer: L10n.Profile.addServer
+        case .account: L10n.Settings.Nav.account
         case .settings: L10n.Settings.title
         }
     }

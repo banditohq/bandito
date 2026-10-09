@@ -3,7 +3,7 @@ import BanditoL10n
 /// The sections of the Settings window, in the order of the left navigation.
 public enum SettingsSection: String, CaseIterable, Identifiable, Hashable, Sendable {
     case general, account, servers, approvals, usage, workplaces, terminalFiles, browserScreen
-    case keysGestures, notifications, appearance, language
+    case keysGestures, notifications, appearance, language, updates
 
     public var id: String { rawValue }
 
@@ -21,6 +21,7 @@ public enum SettingsSection: String, CaseIterable, Identifiable, Hashable, Senda
         case .notifications: L10n.Settings.Nav.notifications
         case .appearance: L10n.Settings.Nav.appearance
         case .language: L10n.Settings.Nav.language
+        case .updates: L10n.Settings.Nav.updates
         }
     }
 
@@ -39,6 +40,7 @@ public enum SettingsSection: String, CaseIterable, Identifiable, Hashable, Senda
         case .notifications: "◔"
         case .appearance: "✦"
         case .language: "Aa"
+        case .updates: "↻"
         }
     }
 }

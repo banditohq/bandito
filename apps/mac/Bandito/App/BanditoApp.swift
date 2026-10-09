@@ -29,6 +29,7 @@ struct BanditoApp: App {
         Settings {
             SettingsWindow()
                 .environment(model)
+                .environment(router)
                 .environment(keymap)
                 .environment(gestures)
                 .environment(demo)

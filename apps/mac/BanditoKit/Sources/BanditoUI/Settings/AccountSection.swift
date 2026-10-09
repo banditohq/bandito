@@ -1,8 +1,22 @@
+import BanditoDesign
+import BanditoL10n
 import SwiftUI
 
-/// Settings → account. Stub until the section is built.
+/// Settings → Account and sync. Sign-in itself happens in the account sheet (shared with onboarding).
 struct AccountSection: View {
+    @Environment(Router.self) private var router
+
     var body: some View {
-        SettingsSectionPlaceholder(section: .account)
+        SettingsPage(title: SettingsSection.account.title, intro: L10n.Settings.Account.intro) {
+            VStack(spacing: 0) {
+                SettingsRow(title: L10n.Settings.Account.state, hint: L10n.Settings.Account.signedOutHint) {
+                    Button(L10n.Settings.Account.signIn) {
+                        router.sheet = .account
+                    }
+                    .buttonStyle(SignalButtonStyle())
+                }
+            }
+            .banditoCard()
+        }
     }
 }

@@ -302,6 +302,26 @@
 			<string>%1$lld минуты</string>
 		</dict>
 	</dict>
+	<key>server.cores</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%1$lld ядра</string>
+			<key>many</key>
+			<string>%1$lld ядер</string>
+			<key>one</key>
+			<string>%1$lld ядро</string>
+			<key>other</key>
+			<string>%1$lld ядра</string>
+		</dict>
+	</dict>
 	<key>thread.ranCommands</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>

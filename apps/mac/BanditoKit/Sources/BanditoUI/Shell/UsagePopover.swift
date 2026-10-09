@@ -94,7 +94,7 @@ struct UsagePopover: View {
 }
 
 /// One runtime: name, plan, who uses it, and a block per limit window.
-private struct UsageCardView: View {
+struct UsageCardView: View {
     var card: UsageCard
     var example: Bool
     var now: Date
