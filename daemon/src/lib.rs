@@ -2,6 +2,7 @@
 
 pub mod crew;
 pub mod event;
+pub mod home;
 pub mod hub;
 pub mod pairing;
 pub mod policy;

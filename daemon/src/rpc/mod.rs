@@ -2,15 +2,19 @@
 //! See docs/ARCHITECTURE.md#rpc.
 
 use crate::event::{Decision, Event};
+use crate::home;
 use crate::pairing;
+use crate::runtime::RuntimeKind;
 use crate::scheduler;
-use crate::store::{AgentPatch, Device, NewAgent, NewSchedule, NextRun, RuleAction, SchedulePatch};
+use crate::store::{AgentPatch, Device, Effort, NewAgent, NewSchedule, NextRun, RuleAction, SchedulePatch};
 use crate::supervisor::{Inbound, Supervisor};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use std::collections::VecDeque;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use tokio::sync::{broadcast, mpsc};
 
 pub mod unix;
@@ -21,23 +25,31 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// Capabilities this daemon offers. Clients show a feature only when it is
 /// listed, so new apps keep working with older daemons. Add a string here in
 /// the same PR that adds the feature.
-pub const FEATURES: &[&str] = &["approvals", "rules", "schedules", "crew", "pairing"];
+pub const FEATURES: &[&str] = &["approvals", "rules", "schedules", "crew", "pairing", "usage", "memory"];
+
+/// Context budget bounds for `smart` memory, in tokens.
+const CONTEXT_BUDGET: std::ops::RangeInclusive<u32> = 20_000..=1_000_000;
+/// How long one runtime may take to answer `usage.refresh`.
+const USAGE_REFRESH_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// Shared state for all connections.
 pub struct App {
     pub sup: Arc<Supervisor>,
     pub started_at: i64,
     pub hostname: String,
+    /// Root of the per-agent folders (see `home::ensure_agent_home`).
+    pub agents_root: PathBuf,
     /// Timestamps of failed `pair.redeem` calls (rate limit).
     redeem_failures: Mutex<VecDeque<i64>>,
 }
 
 impl App {
-    pub fn new(sup: Arc<Supervisor>) -> Arc<Self> {
+    pub fn new(sup: Arc<Supervisor>, agents_root: PathBuf) -> Arc<Self> {
         Arc::new(Self {
             sup,
             started_at: crate::store::now_ms(),
             hostname: hostname(),
+            agents_root,
             redeem_failures: Mutex::new(VecDeque::new()),
         })
     }
@@ -213,6 +225,37 @@ fn check_cwd(cwd: &str) -> Result<(), RpcError> {
     Ok(())
 }
 
+/// Effort levels each runtime accepts (see docs/ARCHITECTURE.md#memory-and-context).
+pub fn supported_efforts(kind: RuntimeKind) -> &'static [Effort] {
+    match kind {
+        RuntimeKind::Claude | RuntimeKind::Api => {
+            &[Effort::Low, Effort::Medium, Effort::High, Effort::Xhigh, Effort::Max]
+        }
+        RuntimeKind::Codex => &[Effort::Low, Effort::Medium, Effort::High, Effort::Xhigh],
+        RuntimeKind::Grok => &[Effort::Low, Effort::Medium, Effort::High],
+    }
+}
+
+fn check_effort(kind: RuntimeKind, effort: Option<Effort>) -> Result<(), RpcError> {
+    match effort {
+        Some(e) if !supported_efforts(kind).contains(&e) => Err(RpcError::new(
+            INVALID_PARAMS,
+            format!("{} doesn't offer effort {}", kind.as_str(), e.as_str()),
+        )),
+        _ => Ok(()),
+    }
+}
+
+fn check_context_budget(budget: Option<u32>) -> Result<(), RpcError> {
+    match budget {
+        Some(b) if !CONTEXT_BUDGET.contains(&b) => Err(RpcError::new(
+            INVALID_PARAMS,
+            "context budget must be between 20 000 and 1 000 000 tokens",
+        )),
+        _ => Ok(()),
+    }
+}
+
 /// Handle one request. `events.subscribe` lives in [`serve`] because it needs
 /// connection state.
 pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResult {
@@ -258,13 +301,36 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
         "agents.create" => {
             let a: NewAgent = params(p)?;
             check_cwd(&a.cwd)?;
-            ok(store.agent_create(a)?)
+            check_effort(a.runtime, a.effort)?;
+            check_context_budget(a.context_budget)?;
+            let created = store.agent_create(a)?;
+            let folder = home::ensure_agent_home(&app.agents_root, &created.id, &created.name).and_then(|dir| {
+                store.agent_set_home(&created.id, &dir.display().to_string())?;
+                Ok(dir)
+            });
+            if let Err(e) = folder {
+                // Without its folder the agent is useless: undo the create.
+                store.agent_delete(&created.id)?;
+                return Err(RpcError::new(
+                    SERVER_ERROR,
+                    format!("could not create the agent's folder: {e:#}"),
+                ));
+            }
+            ok(store
+                .agent_get(&created.id)?
+                .ok_or_else(|| RpcError::new(SERVER_ERROR, format!("no agent {}", created.id)))?)
         }
         "agents.update" => {
             let UpdateAgent { id, patch } = params(p)?;
             if let Some(cwd) = &patch.cwd {
                 check_cwd(cwd)?;
             }
+            // Effort is checked against the agent's runtime, which a patch cannot change.
+            let current = store
+                .agent_get(&id)?
+                .ok_or_else(|| RpcError::new(SERVER_ERROR, format!("no agent {id}")))?;
+            check_effort(current.runtime, patch.effort.flatten())?;
+            check_context_budget(patch.context_budget.flatten())?;
             let a = store.agent_update(
                 &id,
                 AgentPatch {
@@ -433,6 +499,35 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             ok(json!({ "revoked": store.device_revoke(&id)? }))
         }
 
+        "usage.limits" => ok(store.usage_list()?),
+        "usage.refresh" => {
+            // Ask every runtime at once; each one gets its own timeout.
+            let mut rts = app.sup.runtimes().all();
+            rts.sort_by_key(|rt| rt.kind().as_str());
+            let asked = futures_util::future::join_all(rts.iter().map(|rt| async move {
+                let kind = rt.kind();
+                (
+                    kind,
+                    tokio::time::timeout(USAGE_REFRESH_TIMEOUT, rt.refresh_usage()).await,
+                )
+            }))
+            .await;
+            let mut errors = Vec::new();
+            for (kind, res) in asked {
+                let message = match res {
+                    Err(_) => format!("no answer within {} s", USAGE_REFRESH_TIMEOUT.as_secs()),
+                    Ok(Err(e)) => format!("{e:#}"),
+                    Ok(Ok(None)) => continue,
+                    Ok(Ok(Some(windows))) => match store.usage_set(kind.as_str(), &windows, crate::store::now_ms()) {
+                        Ok(()) => continue,
+                        Err(e) => format!("{e:#}"),
+                    },
+                };
+                errors.push(json!({ "runtime": kind.as_str(), "message": message }));
+            }
+            ok(json!({ "limits": store.usage_list()?, "errors": errors }))
+        }
+
         "pair.create" => {
             let code = pairing::new_code();
             store.pairing_add(&code, pairing::CODE_TTL_MS)?;
@@ -502,7 +597,7 @@ mod crew_tests {
         };
         let forge = add("Forge", "builder");
         let scout = add("Scout", "reviewer");
-        (App::new(sup), forge, scout)
+        (App::new(sup, std::env::temp_dir()), forge, scout)
     }
 
     #[tokio::test]
@@ -705,7 +800,7 @@ mod schedule_tests {
             })
             .unwrap();
         let sup = Supervisor::new(Hub::new(store), Runtimes::default(), None);
-        (App::new(sup), agent.id)
+        (App::new(sup, std::env::temp_dir()), agent.id)
     }
 
     async fn call(app: &App, method: &str, p: Value) -> RpcResult {
@@ -849,5 +944,243 @@ mod schedule_tests {
             call(&app, "schedules.delete", json!({"id": id})).await.unwrap(),
             json!({"deleted": false})
         );
+    }
+}
+
+#[cfg(test)]
+mod memory_tests {
+    use super::*;
+    use crate::event::{EventBody, LimitWindow};
+    use crate::hub::Hub;
+    use crate::runtime::{Runtime, RuntimeStatus, SpawnConfig, Spawned};
+    use crate::store::{Store, UsageEntry};
+    use crate::supervisor::Runtimes;
+    use async_trait::async_trait;
+
+    /// An app whose agent folders live under a fresh temp dir (kept alive by the caller).
+    fn app_in_tempdir() -> (Arc<App>, tempfile::TempDir) {
+        let dir = tempfile::tempdir().unwrap();
+        let app = app_with_root(dir.path().join("agents"), Runtimes::default());
+        (app, dir)
+    }
+
+    fn app_with_root(root: PathBuf, runtimes: Runtimes) -> Arc<App> {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let sup = Supervisor::new(Hub::new(store), runtimes, None);
+        App::new(sup, root)
+    }
+
+    async fn call(app: &App, method: &str, p: Value) -> RpcResult {
+        dispatch(app, &Peer::Local, method, p).await
+    }
+
+    fn new_agent(name: &str, runtime: &str) -> Value {
+        json!({
+            "name": name,
+            "runtime": runtime,
+            "cwd": std::env::temp_dir().display().to_string(),
+        })
+    }
+
+    fn window(name: &str, utilization: f64) -> LimitWindow {
+        LimitWindow {
+            name: name.into(),
+            utilization,
+            resets_at: None,
+        }
+    }
+
+    /// A runtime that only answers `refresh_usage`, with fixed windows or an error.
+    struct UsageProbe {
+        kind: RuntimeKind,
+        answer: Result<Option<Vec<LimitWindow>>, String>,
+    }
+
+    #[async_trait]
+    impl Runtime for UsageProbe {
+        fn kind(&self) -> RuntimeKind {
+            self.kind
+        }
+        async fn status(&self) -> RuntimeStatus {
+            RuntimeStatus {
+                kind: self.kind,
+                installed: true,
+                version: None,
+                logged_in: None,
+                detail: None,
+            }
+        }
+        async fn spawn(&self, _cfg: SpawnConfig) -> anyhow::Result<Spawned> {
+            anyhow::bail!("not used in this test")
+        }
+        async fn refresh_usage(&self) -> anyhow::Result<Option<Vec<LimitWindow>>> {
+            self.answer.clone().map_err(anyhow::Error::msg)
+        }
+    }
+
+    #[test]
+    fn effort_support_per_runtime() {
+        assert_eq!(supported_efforts(RuntimeKind::Claude).len(), 5);
+        assert_eq!(supported_efforts(RuntimeKind::Api).len(), 5);
+        assert!(!supported_efforts(RuntimeKind::Codex).contains(&Effort::Max));
+        assert!(supported_efforts(RuntimeKind::Codex).contains(&Effort::Xhigh));
+        assert_eq!(
+            supported_efforts(RuntimeKind::Grok),
+            &[Effort::Low, Effort::Medium, Effort::High]
+        );
+    }
+
+    #[tokio::test]
+    async fn daemon_advertises_usage_and_memory() {
+        let (app, _dir) = app_in_tempdir();
+        let info = call(&app, "daemon.info", json!({})).await.unwrap();
+        let features = info["features"].as_array().unwrap();
+        assert!(features.contains(&json!("usage")));
+        assert!(features.contains(&json!("memory")));
+    }
+
+    #[tokio::test]
+    async fn create_returns_the_agent_with_its_home_folder() {
+        let (app, dir) = app_in_tempdir();
+        let agent = call(&app, "agents.create", new_agent("Night Owl", "claude"))
+            .await
+            .unwrap();
+        let home = PathBuf::from(agent["home_dir"].as_str().unwrap());
+        assert_eq!(home, dir.path().join("agents").join("night-owl"));
+        assert!(home.join("MEMORY.md").is_file());
+        assert!(home.join("notes").is_dir());
+        assert!(home.join("journal").is_dir());
+        assert!(home.join("files").is_dir());
+        // The stored agent carries the same folder.
+        let stored = app.sup.hub().store.agent_list().unwrap();
+        assert_eq!(stored[0].home_dir.as_deref(), Some(home.to_str().unwrap()));
+    }
+
+    #[tokio::test]
+    async fn create_rejects_effort_the_runtime_lacks() {
+        let (app, _dir) = app_in_tempdir();
+        let mut p = new_agent("Forge", "codex");
+        p["effort"] = json!("max");
+        let err = call(&app, "agents.create", p).await.unwrap_err();
+        assert_eq!(err, RpcError::new(INVALID_PARAMS, "codex doesn't offer effort max"));
+        assert!(app.sup.hub().store.agent_list().unwrap().is_empty());
+
+        let mut p = new_agent("Scout", "grok");
+        p["effort"] = json!("xhigh");
+        let err = call(&app, "agents.create", p).await.unwrap_err();
+        assert_eq!(err.code, INVALID_PARAMS);
+        assert!(err.message.contains("grok doesn't offer effort xhigh"));
+    }
+
+    #[tokio::test]
+    async fn create_checks_context_budget_range() {
+        let (app, _dir) = app_in_tempdir();
+        for bad in [10_000, 1_000_001] {
+            let mut p = new_agent("Forge", "claude");
+            p["context_budget"] = json!(bad);
+            let err = call(&app, "agents.create", p).await.unwrap_err();
+            assert_eq!(
+                err,
+                RpcError::new(
+                    INVALID_PARAMS,
+                    "context budget must be between 20 000 and 1 000 000 tokens"
+                )
+            );
+        }
+        let mut p = new_agent("Forge", "claude");
+        p["context_budget"] = json!(20_000);
+        assert!(call(&app, "agents.create", p).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn update_checks_effort_against_the_agent_runtime() {
+        let (app, _dir) = app_in_tempdir();
+        let grok = call(&app, "agents.create", new_agent("Scout", "grok")).await.unwrap();
+        let id = grok["id"].as_str().unwrap().to_string();
+
+        let err = call(&app, "agents.update", json!({ "id": id, "effort": "xhigh" }))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, INVALID_PARAMS);
+        assert!(err.message.contains("grok doesn't offer effort xhigh"));
+
+        call(&app, "agents.update", json!({ "id": id, "effort": "high" }))
+            .await
+            .unwrap();
+
+        let err = call(&app, "agents.update", json!({ "id": id, "context_budget": 5 }))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, INVALID_PARAMS);
+    }
+
+    #[tokio::test]
+    async fn create_removes_the_agent_when_its_folder_fails() {
+        let dir = tempfile::tempdir().unwrap();
+        // The agents root is a file, so no folder can be made under it.
+        let root = dir.path().join("not-a-dir");
+        std::fs::write(&root, "x").unwrap();
+        let app = app_with_root(root, Runtimes::default());
+
+        let err = call(&app, "agents.create", new_agent("Forge", "claude"))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, SERVER_ERROR);
+        assert!(
+            err.message.starts_with("could not create the agent's folder:"),
+            "{}",
+            err.message
+        );
+        assert!(app.sup.hub().store.agent_list().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn usage_limits_events_fill_the_cache() {
+        let (app, _dir) = app_in_tempdir();
+        let windows = vec![LimitWindow {
+            name: "5h".into(),
+            utilization: 0.4,
+            resets_at: Some(1_900_000_000),
+        }];
+        app.sup.hub().emit(
+            "agent-1",
+            EventBody::UsageLimits {
+                runtime: "claude".into(),
+                windows: windows.clone(),
+            },
+        );
+        let v = call(&app, "usage.limits", json!({})).await.unwrap();
+        let entries: Vec<UsageEntry> = serde_json::from_value(v).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].runtime, "claude");
+        assert_eq!(entries[0].windows, windows);
+    }
+
+    #[tokio::test]
+    async fn usage_refresh_caches_answers_and_reports_errors() {
+        let mut rts = Runtimes::default();
+        rts.insert(Arc::new(UsageProbe {
+            kind: RuntimeKind::Codex,
+            answer: Ok(Some(vec![window("5h", 0.25)])),
+        }));
+        rts.insert(Arc::new(UsageProbe {
+            kind: RuntimeKind::Grok,
+            answer: Err("login expired".into()),
+        }));
+        rts.insert(Arc::new(UsageProbe {
+            kind: RuntimeKind::Claude,
+            answer: Ok(None),
+        }));
+        let dir = tempfile::tempdir().unwrap();
+        let app = app_with_root(dir.path().to_path_buf(), rts);
+
+        let v = call(&app, "usage.refresh", json!({})).await.unwrap();
+        assert_eq!(v["limits"].as_array().unwrap().len(), 1);
+        assert_eq!(v["limits"][0]["runtime"], "codex");
+        assert_eq!(v["limits"][0]["windows"][0]["name"], "5h");
+        assert_eq!(v["errors"], json!([{ "runtime": "grok", "message": "login expired" }]));
+
+        // The cache now answers usage.limits with the same windows.
+        assert_eq!(call(&app, "usage.limits", json!({})).await.unwrap(), v["limits"]);
     }
 }
