@@ -51,6 +51,7 @@ public enum L10n {
         public static var approvals: String { L10n.tr("agentSheet.approvals") }
         public static func approvalsHint(path: String) -> String { L10n.tr("agentSheet.approvalsHint", path) }
         public static var askAbout: String { L10n.tr("agentSheet.askAbout") }
+        public static func autoName(number: String) -> String { L10n.tr("agentSheet.autoName", number) }
         public static var avatar: String { L10n.tr("agentSheet.avatar") }
         public static var cancel: String { L10n.tr("agentSheet.cancel") }
         public static var changeLater: String { L10n.tr("agentSheet.changeLater") }
@@ -62,6 +63,8 @@ public enum L10n {
         public static var colorSage: String { L10n.tr("agentSheet.colorSage") }
         public static var colorSky: String { L10n.tr("agentSheet.colorSky") }
         public static func create(name: String) -> String { L10n.tr("agentSheet.create", name) }
+        public static var createBlockedFolder: String { L10n.tr("agentSheet.createBlockedFolder") }
+        public static var createBlockedWorkplace: String { L10n.tr("agentSheet.createBlockedWorkplace") }
         public static var effortHintHigh: String { L10n.tr("agentSheet.effortHintHigh") }
         public static var effortHintLow: String { L10n.tr("agentSheet.effortHintLow") }
         public static var effortHintMax: String { L10n.tr("agentSheet.effortHintMax") }
@@ -77,6 +80,7 @@ public enum L10n {
         public static var folder: String { L10n.tr("agentSheet.folder") }
         public static var folderHint: String { L10n.tr("agentSheet.folderHint") }
         public static var fromTemplate: String { L10n.tr("agentSheet.fromTemplate") }
+        public static var installGuide: String { L10n.tr("agentSheet.installGuide") }
         public static var instructions: String { L10n.tr("agentSheet.instructions") }
         public static var instructionsHint: String { L10n.tr("agentSheet.instructionsHint") }
         public static var memory: String { L10n.tr("agentSheet.memory") }
@@ -98,10 +102,15 @@ public enum L10n {
         public static func runtimeMissing(runtime: String, server: String) -> String { L10n.tr("agentSheet.runtimeMissing", runtime, server) }
         public static var statusChecking: String { L10n.tr("agentSheet.statusChecking") }
         public static func statusExhausted(time: String) -> String { L10n.tr("agentSheet.statusExhausted", time) }
+        public static var statusNeedsLogin: String { L10n.tr("agentSheet.statusNeedsLogin") }
+        public static var statusNeedsLoginHint: String { L10n.tr("agentSheet.statusNeedsLoginHint") }
         public static var statusNotInstalled: String { L10n.tr("agentSheet.statusNotInstalled") }
         public static var statusNotSignedIn: String { L10n.tr("agentSheet.statusNotSignedIn") }
+        public static var statusReady: String { L10n.tr("agentSheet.statusReady") }
+        public static func statusReadyVersion(version: String) -> String { L10n.tr("agentSheet.statusReadyVersion", version) }
         public static func statusSignedIn(percent: String) -> String { L10n.tr("agentSheet.statusSignedIn", percent) }
         public static var statusSignedInPlain: String { L10n.tr("agentSheet.statusSignedInPlain") }
+        public static var statusUnknown: String { L10n.tr("agentSheet.statusUnknown") }
         public static var title: String { L10n.tr("agentSheet.title") }
         public static var toolBrowser: String { L10n.tr("agentSheet.toolBrowser") }
         public static var toolFiles: String { L10n.tr("agentSheet.toolFiles") }
@@ -171,6 +180,7 @@ public enum L10n {
 
     public enum Browser {
         public static var address: String { L10n.tr("browser.address") }
+        public static var agentDrivingNow: String { L10n.tr("browser.agentDrivingNow") }
         public static var agentsOpened: String { L10n.tr("browser.agentsOpened") }
         public static var askTakeControl: String { L10n.tr("browser.askTakeControl") }
         public static var back: String { L10n.tr("browser.back") }
@@ -178,14 +188,18 @@ public enum L10n {
         public static var bannerGive: String { L10n.tr("browser.bannerGive") }
         public static var bannerPause: String { L10n.tr("browser.bannerPause") }
         public static var bannerTake: String { L10n.tr("browser.bannerTake") }
+        public static var closeTab: String { L10n.tr("browser.closeTab") }
+        public static var closeTabHelp: String { L10n.tr("browser.closeTabHelp") }
         public static var connecting: String { L10n.tr("browser.connecting") }
         public static var controlAgent: String { L10n.tr("browser.controlAgent") }
         public static var controlNone: String { L10n.tr("browser.controlNone") }
         public static var controlUser: String { L10n.tr("browser.controlUser") }
+        public static var copyAddress: String { L10n.tr("browser.copyAddress") }
         public static var emptyPage: String { L10n.tr("browser.emptyPage") }
         public static var error: String { L10n.tr("browser.error") }
         public static var forward: String { L10n.tr("browser.forward") }
         public static var hint: String { L10n.tr("browser.hint") }
+        public static var hintShort: String { L10n.tr("browser.hintShort") }
         public static var install: String { L10n.tr("browser.install") }
         public static var installFailed: String { L10n.tr("browser.installFailed") }
         public static var installing: String { L10n.tr("browser.installing") }
@@ -193,6 +207,7 @@ public enum L10n {
         public static var needsChrome: String { L10n.tr("browser.needsChrome") }
         public static var needsChromeHint: String { L10n.tr("browser.needsChromeHint") }
         public static var newTab: String { L10n.tr("browser.newTab") }
+        public static var newTabHelp: String { L10n.tr("browser.newTabHelp") }
         public static var onServer: String { L10n.tr("browser.onServer") }
         public static var openOnMac: String { L10n.tr("browser.openOnMac") }
         public static var openPreview: String { L10n.tr("browser.openPreview") }
@@ -202,9 +217,11 @@ public enum L10n {
         public static var reload: String { L10n.tr("browser.reload") }
         public static var start: String { L10n.tr("browser.start") }
         public static var stopped: String { L10n.tr("browser.stopped") }
+        public static var stoppedHint: String { L10n.tr("browser.stoppedHint") }
         public static var tabs: String { L10n.tr("browser.tabs") }
         public static var title: String { L10n.tr("browser.title") }
         public static var unsupported: String { L10n.tr("browser.unsupported") }
+        public static var userHolds: String { L10n.tr("browser.userHolds") }
     }
 
     public enum Changes {
@@ -687,6 +704,7 @@ public enum L10n {
         public static var back: String { L10n.tr("keys.back") }
         public static var clear: String { L10n.tr("keys.clear") }
         public static var clearHint: String { L10n.tr("keys.clearHint") }
+        public static var closeTab: String { L10n.tr("keys.closeTab") }
         public static var closeTerminal: String { L10n.tr("keys.closeTerminal") }
         public static var closeWindow: String { L10n.tr("keys.closeWindow") }
         public static var collapse: String { L10n.tr("keys.collapse") }
@@ -1953,6 +1971,8 @@ public enum L10n {
 
     public enum Usage {
         public static func buttonAria(percent: String) -> String { L10n.tr("usage.buttonAria", percent) }
+        public static var claudeWaitsForReply: String { L10n.tr("usage.claudeWaitsForReply") }
+        public static var createAgent: String { L10n.tr("usage.createAgent") }
         public static func days(count: Int) -> String { L10n.tr("usage.days", count) }
         public static var empty: String { L10n.tr("usage.empty") }
         public static var exhausted: String { L10n.tr("usage.exhausted") }
@@ -1961,6 +1981,9 @@ public enum L10n {
         public static func hours(count: Int) -> String { L10n.tr("usage.hours", count) }
         public static func left(percent: String) -> String { L10n.tr("usage.left", percent) }
         public static var limits: String { L10n.tr("usage.limits") }
+        public static var noLimitsYet: String { L10n.tr("usage.noLimitsYet") }
+        public static var noSubscriptions: String { L10n.tr("usage.noSubscriptions") }
+        public static func readFailed(reason: String) -> String { L10n.tr("usage.readFailed", reason) }
         public static var refresh: String { L10n.tr("usage.refresh") }
         public static func resetDate(time: String) -> String { L10n.tr("usage.resetDate", time) }
         public static func resetIn(time: String) -> String { L10n.tr("usage.resetIn", time) }

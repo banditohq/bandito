@@ -44,6 +44,8 @@ public enum CDPCommand: Sendable {
     case getTargets
     case createTarget(url: String)
     case activateTarget(id: String)
+    /// Closes a tab on the browser-level connection (`Target.closeTarget`).
+    case closeTarget(id: String)
     /// Runs `expression` in the page and returns its value (`returnByValue`).
     case evaluate(expression: String)
 
@@ -63,6 +65,7 @@ public enum CDPCommand: Sendable {
         case .getTargets: "Target.getTargets"
         case .createTarget: "Target.createTarget"
         case .activateTarget: "Target.activateTarget"
+        case .closeTarget: "Target.closeTarget"
         case .evaluate: "Runtime.evaluate"
         }
     }
@@ -127,7 +130,7 @@ public enum CDPCommand: Sendable {
             return .object(object)
         case .createTarget(let url):
             return .object(["url": .string(url)])
-        case .activateTarget(let id):
+        case .activateTarget(let id), .closeTarget(let id):
             return .object(["targetId": .string(id)])
         case .evaluate(let expression):
             return .object(["expression": .string(expression), "returnByValue": .bool(true)])

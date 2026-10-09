@@ -455,6 +455,14 @@ Opens a new tab in the browser on the server.
 1. In the Browser mode, press ⌘T to open a new tab.
 Хоткей: ⌘T
 
+## Close tab (Закрыть вкладку)
+
+<!-- id: key-browser-closetab; covers: command:browser.closeTab -->
+Closes the tab shown in the browser on the server. The next tab opens in its place.
+Где: Browser → Close tab (Закрыть вкладку), or the cross on the tab in the sidebar
+1. In the Browser mode, press ⌘W to close the shown tab.
+Хоткей: ⌘W
+
 ## Take / give back control (Взять / отдать управление)
 
 <!-- id: key-browser-takecontrol; covers: command:browser.takeControl -->

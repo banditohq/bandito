@@ -13,8 +13,9 @@ struct UsageButton: View {
         @Bindable var router = router
         let open = router.usagePopoverOpen
         let snapshot = UsageCards.snapshot(server: app.currentServer, demo: demo)
+        // The share left in the window that is closest to its limit; with no limits known, only the icon.
         let percent = UsageCards.percentLeft(snapshot.cards, runtime: selectedRuntime)
-        let text = percent.map { "\(Int(($0 * 100).rounded()))%" } ?? "—"
+        let text = percent.map { "\(Int(($0 * 100).rounded()))%" }
 
         Button {
             router.usagePopoverOpen.toggle()
@@ -22,9 +23,13 @@ struct UsageButton: View {
             HStack(spacing: 6) {
                 Image(systemName: "gauge.medium")
                     .font(.system(size: 14, weight: .medium))
-                Text(text)
-                    .font(.system(size: 12.5, weight: .semibold))
-                    .monospacedDigit()
+                if let text {
+                    Text(text)
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .fixedSize()
+                }
             }
             .foregroundStyle(Color.Bandito.text)
             .padding(.horizontal, 11)
@@ -34,8 +39,8 @@ struct UsageButton: View {
             .contentShape(Capsule())
         }
         .banditoButton(.row(cornerRadius: 17))
-        .help(L10n.Usage.title)
-        .accessibilityLabel(percent == nil ? L10n.Usage.title : L10n.Usage.buttonAria(percent: text))
+        .help(L10n.Usage.limits)
+        .accessibilityLabel(text.map { L10n.Usage.buttonAria(percent: $0) } ?? L10n.Usage.limits)
         .popover(isPresented: $router.usagePopoverOpen, arrowEdge: .top) {
             UsagePopover()
         }

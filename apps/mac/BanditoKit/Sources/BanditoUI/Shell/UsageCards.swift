@@ -130,6 +130,49 @@ public enum UsageCards {
     }
 }
 
+/// One line of the usage popover: a runtime's card, or a runtime that has no limits yet. `error` is the daemon's
+/// reason the last refresh could not read it, shown in grey.
+public enum UsageRow: Identifiable, Hashable, Sendable {
+    case card(UsageCard, error: String?)
+    case waiting(runtime: String, name: String, text: String, error: String?)
+
+    public var id: String {
+        switch self {
+        case .card(let card, _): card.runtime
+        case .waiting(let runtime, _, _, _): runtime
+        }
+    }
+
+    /// The popover's lines for the server's runtimes. Installed runtimes come first in a fixed order (then by id):
+    /// a runtime that is not signed in says so; one with a card shows it; one without says its limits are to come.
+    /// A card of a runtime the server reports as not installed is left out. With no runtime status yet, the cards
+    /// are shown as they are.
+    public static func make(cards: [UsageCard], runtimes: [RuntimeStatus], errors: [String: String]) -> [UsageRow] {
+        let order = ["claude", "codex", "grok", "api"]
+        func rank(_ runtime: String) -> Int { order.firstIndex(of: runtime) ?? order.count }
+        let notInstalled = Set(runtimes.filter { !$0.installed }.map { $0.kind.rawValue })
+        let signedOut = Set(runtimes.filter { $0.installed && $0.loggedIn == false }.map { $0.kind.rawValue })
+        let installed = runtimes.filter(\.installed).map { $0.kind.rawValue }
+
+        var rows: [UsageRow] = cards
+            .filter { !notInstalled.contains($0.runtime) && !signedOut.contains($0.runtime) }
+            .map { .card($0, error: errors[$0.runtime]) }
+        for runtime in installed {
+            if signedOut.contains(runtime) {
+                rows.append(.waiting(
+                    runtime: runtime, name: UsageCards.displayName(runtime),
+                    text: L10n.AgentSheet.statusNeedsLogin, error: errors[runtime]))
+            } else if !cards.contains(where: { $0.runtime == runtime }) {
+                rows.append(.waiting(
+                    runtime: runtime, name: UsageCards.displayName(runtime),
+                    text: runtime == "claude" ? L10n.Usage.claudeWaitsForReply : L10n.Usage.noLimitsYet,
+                    error: errors[runtime]))
+            }
+        }
+        return rows.sorted { (rank($0.id), $0.id) < (rank($1.id), $1.id) }
+    }
+}
+
 /// The cards plus where they came from.
 public struct UsageSnapshot: Sendable {
     public let cards: [UsageCard]

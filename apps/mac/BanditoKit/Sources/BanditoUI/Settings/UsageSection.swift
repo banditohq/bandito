@@ -52,7 +52,7 @@ struct UsageSection: View {
         error = nil
         Task {
             do {
-                try await server.refreshUsage()
+                try await server.refreshUsage(force: true)
             } catch {
                 self.error = UserFacingError.message(for: error)
             }

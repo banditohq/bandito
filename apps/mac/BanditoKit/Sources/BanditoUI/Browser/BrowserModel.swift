@@ -43,6 +43,11 @@ final class BrowserModel {
     var addressText = ""
 
     private var client: CDPClient?
+    /// True while the address field has focus: the page's address then does not replace the typed text.
+    private(set) var isEditingAddress = false
+    /// The id of the page's main frame, from `Page.frameNavigated`. Same-document changes of the address
+    /// (`Page.navigatedWithinDocument`) count only for this frame.
+    private var mainFrameID: String?
     private var clientTabID: String?
     private var eventTask: Task<Void, Never>?
     private var pollTask: Task<Void, Never>?
@@ -101,10 +106,48 @@ final class BrowserModel {
         }
     }
 
-    /// Opens a new tab on `about:blank` and shows it (⌘T). The new tab is made on the browser connection,
-    /// because `Target.createTarget` is a browser command, not a page one.
+    /// Opens a new tab on `about:blank` and shows it (⌘T). While an agent drives the browser, it asks to take control
+    /// instead. The new tab is made on the browser connection, because `Target.createTarget` is a browser command.
     func newTab() async {
-        guard canInteract, status?.isRelay == true else { return }
+        guard status?.isRelay == true else { return }
+        guard canInteract else {
+            noteAgentHasControl()
+            return
+        }
+        guard let id = await createBlankTab() else { return }
+        tabs = (try? await server.browserTabs()) ?? tabs
+        await selectPage(id)
+    }
+
+    /// Makes one blank tab on the browser connection and returns its id. Nil (with `errorText` set) on failure.
+    private func createBlankTab() async -> String? {
+        let browser: CDPClient
+        do {
+            browser = try await server.browserTargetsClient()
+        } catch {
+            errorText = Self.describe(error)
+            return nil
+        }
+        defer { Task { await browser.close() } }
+        do {
+            let result = try await browser.send(.createTarget(url: "about:blank"))
+            guard case .object(let object) = result, case .string(let id)? = object["targetId"] else { return nil }
+            return id
+        } catch {
+            errorText = Self.describe(error)
+            return nil
+        }
+    }
+
+    /// Closes a tab (`Target.closeTarget`). The tab is removed from the list only when the browser closed it.
+    /// When the shown page is the one closed, the next tab takes its place (see `BrowserTabPolicy`); when none is
+    /// left, a blank tab opens. While an agent drives the browser, it asks to take control instead.
+    func closeTab(_ id: String) async {
+        guard status?.isRelay == true else { return }
+        guard canInteract else {
+            noteAgentHasControl()
+            return
+        }
         let browser: CDPClient
         do {
             browser = try await server.browserTargetsClient()
@@ -112,22 +155,37 @@ final class BrowserModel {
             errorText = Self.describe(error)
             return
         }
-        let result: JSONValue
         do {
-            result = try await browser.send(.createTarget(url: "about:blank"))
+            _ = try await browser.send(.closeTarget(id: id))
         } catch {
             await browser.close()
             errorText = Self.describe(error)
             return
         }
         await browser.close()
-        guard case .object(let object) = result, case .string(let id)? = object["targetId"] else { return }
-        do {
-            tabs = try await server.browserTabs()
-        } catch {
-            errorText = Self.describe(error)
+        let before = tabs.map(\.id)
+        let fresh = (try? await server.browserTabs()) ?? tabs
+        tabs = fresh.filter { $0.id != id }
+        let shown: String? = { if case .page(let shown) = selection { return shown } else { return nil } }()
+        switch BrowserTabPolicy.afterClosing(closedID: id, shownID: shown, before: before, remaining: tabs.map(\.id)) {
+        case .keep:
+            return
+        case .show(let next):
+            await selectPage(next)
+        case .openBlank:
+            await closeClient()
+            selection = nil
+            if let blank = await createBlankTab() {
+                tabs = (try? await server.browserTabs()) ?? tabs
+                await selectPage(blank)
+            }
         }
-        await selectPage(id)
+    }
+
+    /// Closes the shown page (⌘W). Does nothing when a preview is shown: a hidden page tab is never closed by it.
+    func closeCurrentTab() async {
+        guard case .page(let id) = selection else { return }
+        await closeTab(id)
     }
 
     /// One poll: the status, the tabs every few polls, a reconnect when the page connection is down, and a
@@ -381,11 +439,18 @@ final class BrowserModel {
             pageSize = CGSize(width: frame.deviceWidth, height: frame.deviceHeight)
             isLoading = false
         case "Page.frameNavigated":
-            if let url = event.params["frame"]?["url"]?.string, event.params["frame"]?["parentId"] == nil {
-                currentURL = url
-                addressText = url
+            if let frame = event.params["frame"], frame["parentId"] == nil {
+                mainFrameID = frame["id"]?.string
+                if let url = frame["url"]?.string { movePage(to: url) }
             }
             if let title = event.params["frame"]?["name"]?.string { pageTitle = title }
+            await refreshHistoryFlags(client: client)
+        case "Page.navigatedWithinDocument":
+            // Pushed and replaced URLs of single-page sites. Only the main frame counts, and only once it is known.
+            if let mainFrameID, event.params["frameId"]?.string == mainFrameID,
+               let url = event.params["url"]?.string {
+                movePage(to: url)
+            }
             await refreshHistoryFlags(client: client)
         case "Page.loadEventFired", "Page.domContentEventFired":
             isLoading = false
@@ -394,15 +459,31 @@ final class BrowserModel {
         }
     }
 
+    /// The back and forward flags. The address is not read here: the page's own events move it (`movePage`).
     private func refreshHistoryFlags(client: CDPClient) async {
         guard let history = try? await client.send(.navigationHistory) else { return }
         let index = Int(history["currentIndex"]?.numberValue ?? 0)
-        let count: Int = {
-            if case .array(let items) = history["entries"] ?? .null { return items.count }
-            return 0
-        }()
+        let entries = Self.historyEntries(history)
         canGoBack = index > 0
-        canGoForward = index < count - 1
+        canGoForward = index < entries.count - 1
+    }
+
+    /// The page moved to `url`: the address and, unless it is being typed, the text of the address field follow.
+    private func movePage(to url: String) {
+        let next = BrowserAddressRule.afterPageMoved(to: url, currentURL: currentURL, typed: addressText, editing: isEditingAddress)
+        currentURL = next.currentURL
+        addressText = next.typed
+    }
+
+    /// Called by the address field when focus comes or goes. When focus leaves, the field shows the page's address.
+    func addressEditingChanged(_ editing: Bool) {
+        isEditingAddress = editing
+        addressText = BrowserAddressRule.afterEditingEnded(currentURL: currentURL, typed: addressText, editing: editing)
+    }
+
+    static func historyEntries(_ history: JSONValue) -> [JSONValue] {
+        if case .array(let items) = history["entries"] ?? .null { return items }
+        return []
     }
 
     /// The socket closed under us. Drops the connection; the next poll reconnects, under the policy.
@@ -410,6 +491,7 @@ final class BrowserModel {
         guard client === ended else { return }
         client = nil
         clientTabID = nil
+        mainFrameID = nil
         frame = nil
         isLoading = false
     }
@@ -420,6 +502,7 @@ final class BrowserModel {
         let old = client
         client = nil
         clientTabID = nil
+        mainFrameID = nil
         frame = nil
         await old?.close()
     }
@@ -451,5 +534,46 @@ final class BrowserStore {
         let model = BrowserModel(server: server)
         models[server.id] = model
         return model
+    }
+}
+
+/// What to show after a tab closed. Pure, so the choice is easy to read and test.
+enum BrowserTabPolicy {
+    enum Outcome: Equatable {
+        /// The shown page did not change: nothing to do.
+        case keep
+        /// The shown page closed: show this tab.
+        case show(String)
+        /// The shown page closed and no tab is left: open a blank one.
+        case openBlank
+    }
+
+    /// `before` is the tab ids before the close, `remaining` the ids after it (without `closedID`). The tab that takes
+    /// the place of the closed one is the one on its right, or the last one when it was the last of the row.
+    static func afterClosing(closedID: String, shownID: String?, before: [String], remaining: [String]) -> Outcome {
+        guard shownID == closedID else { return .keep }
+        guard !remaining.isEmpty else { return .openBlank }
+        let index = before.firstIndex(of: closedID) ?? 0
+        return .show(remaining[min(index, remaining.count - 1)])
+    }
+}
+
+/// How the address follows the page. Pure, so the rules are easy to read and test.
+enum BrowserAddressRule {
+    struct Fields: Equatable {
+        var currentURL: String
+        /// The text of the address field.
+        var typed: String
+    }
+
+    /// The page moved to `url`. The field shows the new address, unless the person is typing in it.
+    static func afterPageMoved(to url: String, currentURL: String, typed: String, editing: Bool) -> Fields {
+        guard url != currentURL else { return Fields(currentURL: currentURL, typed: typed) }
+        return Fields(currentURL: url, typed: editing ? typed : url)
+    }
+
+    /// Focus left or came to the address field. When it leaves, the field shows the page's address again.
+    static func afterEditingEnded(currentURL: String, typed: String, editing: Bool) -> String {
+        editing ? typed : currentURL
     }
 }

@@ -68,8 +68,18 @@ public final class ServerModel: Identifiable {
     public private(set) var agents: [Agent] = []
     public private(set) var threads: [String: AgentThread] = [:]
     public private(set) var runtimes: [RuntimeStatus] = []
+    /// When `runtimes` was last read from the daemon; nil until the first answer.
+    public private(set) var runtimesFetchedAt: Date?
     /// Rate-limit windows per runtime, as last learned (from `usage.*` calls or live events).
     public private(set) var usage: [UsageEntry] = []
+    /// Why the last `refreshUsage` could not read a runtime, by runtime id.
+    public private(set) var usageErrors: [String: String] = [:]
+    /// The `usage.refresh` request in flight, if any.
+    private var usageRefresh: Task<[UsageEntry], Error>?
+    /// When the last `usage.refresh` request started.
+    private var usageRefreshStartedAt: Date?
+    /// How long an automatic refresh waits after the last request before it asks the runtimes again.
+    public static let usageRefreshInterval: TimeInterval = 30
     /// The last failure of a background operation (subscription, reconnect, unreadable updates).
     public internal(set) var lastError: FailureKind?
     /// Whether an agent's thread has events older than the ones loaded.
@@ -193,6 +203,7 @@ public final class ServerModel: Identifiable {
             info = daemon
             agents = try await c.call("agents.list", NoParams(), as: [Agent].self)
             runtimes = try await c.call("runtimes.status", NoParams(), as: [RuntimeStatus].self)
+            runtimesFetchedAt = Date()
             try checkCurrent(attempt)
             // First connection: live events only (the thread is loaded separately).
             // Later connections: everything after what has already been applied.
@@ -489,13 +500,37 @@ public final class ServerModel: Identifiable {
         return entries
     }
 
-    /// Asks the runtimes that can be asked for fresh limits, then returns them.
+    /// Asks the runtimes that can be asked for fresh limits, then returns them. A runtime that could not be asked
+    /// is listed in `usageErrors` with the reason; the limits it had before stay.
+    ///
+    /// One request is in flight at a time: a call while one runs waits for it. Without `force`, a call within
+    /// `usageRefreshInterval` of the last request returns the limits already known. `force` (the refresh button)
+    /// skips that wait, but still does not run in parallel.
     @discardableResult
-    public func refreshUsage() async throws -> [UsageEntry] {
-        struct Reply: Decodable { var limits: [UsageEntry] }
-        let entries = try await rpc().call("usage.refresh", NoParams(), as: Reply.self).limits
-        usage = entries
-        return entries
+    public func refreshUsage(force: Bool = false) async throws -> [UsageEntry] {
+        if let inFlight = usageRefresh {
+            return try await inFlight.value
+        }
+        if !force, let last = usageRefreshStartedAt, Date().timeIntervalSince(last) < Self.usageRefreshInterval {
+            return usage
+        }
+        usageRefreshStartedAt = Date()
+        let task = Task { () throws -> [UsageEntry] in
+            try await self.askRuntimesForUsage()
+        }
+        usageRefresh = task
+        defer { usageRefresh = nil }
+        return try await task.value
+    }
+
+    /// The `usage.refresh` call itself.
+    private func askRuntimesForUsage() async throws -> [UsageEntry] {
+        struct Refusal: Decodable { var runtime: String; var message: String }
+        struct Reply: Decodable { var limits: [UsageEntry]; var errors: [Refusal] }
+        let reply = try await rpc().call("usage.refresh", NoParams(), as: Reply.self)
+        usage = reply.limits
+        usageErrors = Dictionary(reply.errors.map { ($0.runtime, $0.message) }, uniquingKeysWith: { first, _ in first })
+        return reply.limits
     }
 }
 
@@ -504,6 +539,7 @@ public final class ServerModel: Identifiable {
 extension ServerModel {
     public func refreshRuntimes() async throws {
         runtimes = try await rpc().call("runtimes.status", NoParams(), as: [RuntimeStatus].self)
+        runtimesFetchedAt = Date()
     }
 
     public func rules(agentId: String? = nil) async throws -> [Rule] {
