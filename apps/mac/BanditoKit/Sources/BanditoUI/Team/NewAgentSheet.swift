@@ -13,6 +13,8 @@ struct NewAgentSheet: View {
     @State private var pickerOpen = false
     @State private var creating = false
     @State private var error: String?
+    /// The server's workplaces, loaded when the sheet opens: what the workplace section can offer.
+    @State private var workplaces: WorkspacesModel?
 
     private var server: ServerModel? { app.currentServer }
 
@@ -46,9 +48,12 @@ struct NewAgentSheet: View {
         }
         .task {
             guard let server else { return }
+            let loaded = WorkspacesModel(server: server)
+            workplaces = loaded
             // Limits and runtime status are shown when they arrive; a failure leaves the cards in "checking".
             do { try await server.refreshRuntimes() } catch {}
             _ = try? await server.usageLimits()
+            await loaded.load()
         }
     }
 
@@ -392,23 +397,7 @@ struct NewAgentSheet: View {
                 .modifier(FieldBox())
             }
 
-            VStack(alignment: .leading, spacing: 7) {
-                labeledHeader(L10n.AgentSheet.workplace, hint: L10n.AgentSheet.workplaceHint)
-                HStack(spacing: 8) {
-                    workplaceCard(
-                        name: L10n.AgentSheet.workplaceShared, text: L10n.AgentSheet.workplaceSharedText,
-                        selected: true, enabled: true)
-                    workplaceCard(
-                        name: L10n.AgentSheet.workplaceSeparate, text: L10n.AgentSheet.workplaceSeparateText,
-                        selected: false, enabled: false)
-                    workplaceCard(
-                        name: L10n.AgentSheet.workplaceContainer, text: L10n.AgentSheet.workplaceContainerText,
-                        selected: false, enabled: false)
-                }
-                Text(L10n.AgentSheet.workplaceSoonHint)
-                    .font(BanditoFont.font(size: 12, weight: 400))
-                    .foregroundStyle(Color.Bandito.text3)
-            }
+            workplaceSection
 
             labeled(L10n.AgentSheet.memory, hint: nil) {
                 VStack(alignment: .leading, spacing: 4) {
@@ -457,27 +446,104 @@ struct NewAgentSheet: View {
         }
     }
 
-    private func workplaceCard(name: String, text: String, selected: Bool, enabled: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(name)
-                .font(BanditoFont.font(size: 13, weight: 600))
-                .foregroundStyle(Color.Bandito.text)
-            Text(text)
-                .font(BanditoFont.font(size: 11.5, weight: 400))
-                .foregroundStyle(Color.Bandito.text3)
-                .lineLimit(2)
+    // MARK: Workplace
+
+    /// Shared server or a separate workplace. A separate one is an existing container or a new one (name, defaults).
+    private var workplaceSection: some View {
+        let available = workplaces?.canCreateSeparate ?? false
+        let supported = workplaces?.supported ?? false
+        return VStack(alignment: .leading, spacing: 9) {
+            labeledHeader(L10n.AgentSheet.workplace, hint: L10n.AgentSheet.workplaceHint)
+            SegmentedPicker(
+                selection: Binding(get: { draft.workplace.mode }, set: { setMode($0) }),
+                options: [
+                    (WorkplaceChoice.Mode.shared, L10n.AgentSheet.workplaceShared),
+                    (WorkplaceChoice.Mode.separate, L10n.AgentSheet.workplaceSeparate),
+                ])
+            if draft.workplace.mode == .shared {
+                Text(L10n.AgentSheet.workplaceSharedText)
+                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .foregroundStyle(Color.Bandito.text3)
+            } else if available {
+                separateFields
+            }
+            if supported && !available {
+                Text(L10n.Workspace.Choice.dockerNeeded)
+                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .foregroundStyle(Color.Bandito.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
-        .padding(.horizontal, 11)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            selected ? Color.Bandito.signal.opacity(0.08) : Color.Bandito.text.opacity(0.03),
-            in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .stroke(selected ? Color.Bandito.signal.opacity(0.5) : Color.Bandito.text.opacity(0.09)))
-        .opacity(enabled ? 1 : 0.5)
-        .help(enabled ? "" : L10n.Common.comingSoon)
+    }
+
+    private var separateFields: some View {
+        let containers = workplaces?.containers ?? []
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(workplaceName(containers))
+                    .font(BanditoFont.font(size: 13, weight: 400))
+                    .foregroundStyle(Color.Bandito.text)
+                Spacer(minLength: 0)
+                Menu {
+                    ForEach(containers) { container in
+                        Button(container.name) { draft.workplace = .existing(container.id) }
+                    }
+                    if !containers.isEmpty {
+                        Divider()
+                    }
+                    Button(L10n.Workspace.Choice.newOne) { draft.workplace = .new }
+                } label: {
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Color.Bandito.text3)
+                }
+                .menuStyle(.button)
+                .buttonStyle(.plain)
+                .fixedSize()
+            }
+            .modifier(FieldBox())
+            if draft.workplace == .new {
+                TextField(L10n.Workspace.Create.name, text: $draft.newWorkplace.name)
+                    .textFieldStyle(.plain)
+                    .font(BanditoFont.font(size: 13.5, weight: 400))
+                    .modifier(FieldBox())
+                Text(L10n.Workspace.Draft.defaults(limits: draft.newWorkplace.limitsText))
+                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .foregroundStyle(Color.Bandito.text3)
+            }
+            Text(L10n.Workspace.Choice.isolation)
+                .font(BanditoFont.font(size: 12, weight: 400))
+                .foregroundStyle(Color.Bandito.text3)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(L10n.Workspace.Choice.lost)
+                .font(BanditoFont.font(size: 12, weight: 400))
+                .foregroundStyle(Color.Bandito.text3)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// Switching to "separate" picks the first container, or a new one when there is none yet.
+    private func setMode(_ mode: WorkplaceChoice.Mode) {
+        guard mode == .shared || (workplaces?.canCreateSeparate ?? false) else { return }
+        switch mode {
+        case .shared:
+            draft.workplace = .shared
+        case .separate:
+            if draft.workplace == .shared {
+                if let first = workplaces?.containers.first {
+                    draft.workplace = .existing(first.id)
+                } else {
+                    draft.workplace = .new
+                }
+            }
+        }
+    }
+
+    private func workplaceName(_ containers: [Workspace]) -> String {
+        switch draft.workplace {
+        case .shared, .new: L10n.Workspace.Choice.newOne
+        case .existing(let id): containers.first { $0.id == id }?.name ?? L10n.Workspace.Choice.newOne
+        }
     }
 
     private var toolTags: [FlowTags.Tag] {
@@ -526,10 +592,11 @@ struct NewAgentSheet: View {
         guard let server, draft.canCreate else { return }
         creating = true
         error = nil
-        let request = draft.makeNewAgent()
         Task {
             do {
-                let agent = try await server.createAgent(request)
+                let workspaceID = try await WorkplaceCreation.prepare(
+                    draft.workplace, new: draft.newWorkplace, on: server)
+                let agent = try await server.createAgent(draft.makeNewAgent(workspaceID: workspaceID))
                 var recent = RecentFolders.load(serverID: server.id.uuidString)
                 recent.remember(agent.cwd)
                 recent.save(serverID: server.id.uuidString)
@@ -537,7 +604,7 @@ struct NewAgentSheet: View {
                 router.select(mode: .team)
                 router.sheet = nil
             } catch {
-                self.error = error.localizedDescription
+                self.error = WorkspaceText.failure(error) ?? error.localizedDescription
                 creating = false
             }
         }

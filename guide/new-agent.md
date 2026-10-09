@@ -70,16 +70,19 @@ The folder on the server where the agent works. Pick one that exists, create a n
 ## Workplace: Shared (Общее)
 
 <!-- id: na-workplace; covers: -->
-Where the agent's files, browser, screen and terminals live. In this build only Shared is available: the agent works on the same server, as your user, with the same files and browser as you.
+Where the agent's CLI runs. Shared (Общее) is the server itself, as the Bandito user: the agent works with the same files as you on that server, and it can use the server's browser and screen. Nothing to install. This is the default.
 Где: New agent sheet → Workplace (Рабочее место) → Shared (Общее)
-1. Leave Shared (Общее) selected. It is the only choice that works.
+1. Leave Shared (Общее) selected.
 
-## Separate and container workplaces (Separate, Container)
+## Separate workplace (Отдельное рабочее место)
 
-<!-- id: na-workplace-separate; covers: ; status: planned -->
-Separate (Отдельное) means a separate user on the server with its own files, browser and screen. Container (Контейнер) means full isolation in Docker or Podman, with its own disk, network and CPU and memory limits. Both cards are shown but disabled; the sheet says Separate and container workplaces are coming soon (Separate and container workplaces are coming soon).
-Где: New agent sheet → Workplace (Рабочее место) → Separate (Отдельное), Container (Контейнер)
-1. Nothing to choose yet. Use Shared (Общее).
+<!-- id: na-workplace-separate; covers: -->
+A separate workplace is a Docker container on the server. The agent sees only its own folder and the folders added to the workplace (see [server.md](server.md)). Your other files and keys on the server are out of its reach. The container has its own disk, its own network and limits of processor and memory. The cost: inside a container the agent has no browser and no screen tools, because those run on the server.
+Где: New agent sheet → Workplace (Рабочее место) → Separate (Отдельное рабочее место)
+1. Choose Separate (Отдельное рабочее место). It is offered only when Docker is ready on the server. Otherwise the sheet says Docker is needed; install it in Server → Overview.
+2. Pick an existing workplace from the menu, or choose New… (Новое…).
+3. For New… type a Name (Название), 1 to 64 characters. The new workplace gets the default limits (2 CPU, 2048 MB) and internet. It is made when you click Create. Change its limits and network later in Server → Workplaces.
+4. An agent in a separate workplace is moved there later from its Inspector: Where it works (Где работает).
 
 ## Memory (Память)
 

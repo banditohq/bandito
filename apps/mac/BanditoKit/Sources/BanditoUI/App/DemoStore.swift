@@ -24,7 +24,7 @@ public final class DemoStore {
     public let files: [DemoFile]
     public let terminals: [DemoTerminal]
     public let workplaces: [DemoWorkplace]
-    /// Server → Workplaces: where the agents live. Sample data only until the daemon has workspaces.
+    /// Server → Workplaces: where the agents live. Shown only when the server lacks the `workspaces` feature.
     public let spaces: [DemoSpace]
     public let serverLoad = DemoServerLoad(cpu: 0.34, memory: 0.58)
 

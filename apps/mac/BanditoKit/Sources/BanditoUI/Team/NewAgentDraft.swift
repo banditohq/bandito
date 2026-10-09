@@ -41,12 +41,21 @@ public struct NewAgentDraft: Equatable, Sendable {
     public var fallbackRuntime: RuntimeKind?
     /// Empty means the fallback runtime's default model.
     public var fallbackModel = ""
+    /// Where the agent's CLI runs. The shared server by default.
+    public var workplace: WorkplaceChoice = .shared
+    /// The container to make when `workplace` is `.new`.
+    public var newWorkplace = NewWorkplaceDraft()
 
     public init() {}
 
-    /// Name and folder are the only required fields.
+    /// Name and folder are the only required fields. A new container needs a valid name and limits.
     public var canCreate: Bool {
-        !trimmed(name).isEmpty && !trimmed(cwd).isEmpty
+        !trimmed(name).isEmpty && !trimmed(cwd).isEmpty && workplaceReady
+    }
+
+    /// The chosen workplace can be used: the shared server, an existing container, or a new one with a valid form.
+    public var workplaceReady: Bool {
+        workplace != .new || newWorkplace.canCreate
     }
 
     /// Switches the runtime. The effort is lowered to a level the new runtime offers.
@@ -65,9 +74,17 @@ public struct NewAgentDraft: Equatable, Sendable {
         RuntimeKind.pickable.filter { $0 != runtime }
     }
 
-    public func makeNewAgent() -> NewAgent {
+    /// The request for `agents.create`. `workspaceID` is the id of the container made for `.new` (see
+    /// `WorkplaceCreation.prepare`); the other choices name their workspace themselves.
+    public func makeNewAgent(workspaceID: String? = nil) -> NewAgent {
         let model = trimmed(model)
         let instructions = trimmed(instructions)
+        let workspace: String?
+        switch workplace {
+        case .shared: workspace = nil
+        case .existing(let id): workspace = id
+        case .new: workspace = workspaceID
+        }
         return NewAgent(
             name: trimmed(name),
             role: trimmed(role),
@@ -79,7 +96,8 @@ public struct NewAgentDraft: Equatable, Sendable {
             effort: effort,
             memoryMode: memory,
             fallbackRuntime: fallbackRuntime,
-            fallbackModel: trimmed(fallbackModel).isEmpty ? nil : trimmed(fallbackModel))
+            fallbackModel: trimmed(fallbackModel).isEmpty ? nil : trimmed(fallbackModel),
+            workspaceId: workspace)
     }
 
     /// Model names offered in the menu. Other runtimes take free text only.
