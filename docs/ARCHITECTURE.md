@@ -57,6 +57,7 @@ Everything an agent does becomes a row in `events` (append-only, global `seq`). 
 | `turn.completed` | `{turn_id, status: "ok"\|"error"\|"interrupted", usage?, cost_usd?}` |
 | `agent.status` | `{status: "idle"\|"working"\|"needs_you"\|"error"\|"offline", detail?}` |
 | `usage.limits` | `{runtime, windows:[{name, utilization, resets_at}]}` |
+| `runtime.switched` | `{from, to, until?}`: the agent moved to another runtime (see [Fallback subscription](#fallback-subscription)); `until` is when the limit resets (Unix seconds), if known |
 | `error` | `{message}` |
 
 ## Approvals (policy)
@@ -69,11 +70,13 @@ Per agent `approval_mode`:
 
 Risky = matches a rule. Built-in rules (editable): `git push*`, `git reset --hard*`, `rm -rf*`, `*deploy*`, `npm publish*`, `cargo publish*`, `kubectl delete*`, `terraform apply*`, `DROP TABLE*`, `prisma migrate deploy*`, writes outside the agent's own folders (its `cwd` and its home folder). Agent rules (`allow` / `ask` / `deny` patterns) win over built-ins. "Always allow here" on an approval adds an `allow` rule to that agent.
 
+The daemon can also ask the human itself, for something no runtime asked about (a risky browser click, see [Browser](#browser)). Such a request goes into the agent's feed like any other approval: `approval.requested`, answered with `approvals.resolve`. Nothing is remembered from it. No answer within the time limit denies it, and so does a stop of the agent while it waits. This works the same for every runtime.
+
 A pending approval blocks only that agent. Approvals time out after 24 h → deny.
 
 ## Store (SQLite)
 
-- `agents(id, name, role, runtime, model, cwd, approval_mode, system_prompt, runtime_session_id, created_at, updated_at)`
+- `agents(id, name, role, runtime, model, cwd, approval_mode, system_prompt, runtime_session_id, created_at, updated_at, fallback_runtime, fallback_model, active_runtime)`: the last three are the [fallback subscription](#fallback-subscription); `active_runtime` NULL means the primary `runtime`
 - `events(seq INTEGER PRIMARY KEY, agent_id, ts, kind, payload JSON)`
 - `approvals(id, agent_id, call_id, tool, title, payload JSON, status, decision, created_at, resolved_at)`
 - `rules(id, agent_id NULL, pattern, action)`
@@ -89,7 +92,7 @@ Migrations: numbered SQL files embedded in the binary, applied by `PRAGMA user_v
 
 JSON-RPC 2.0. Same methods on every transport.
 
-- Requests: `daemon.info`, `runtimes.status`, `agents.list|get|create|update|delete`, `agents.send{agent_id,text}`, `agents.interrupt`, `events.since{seq,limit,agent_id?}`, `approvals.list|resolve{approval_id,decision,remember}`, `rules.list|set|delete`, `schedules.list|create|update|delete|run_now`, `devices.list|revoke`, `pair.redeem{code,device_name}` (only unauthenticated method), `term.list|open|input|resize|rename|close|attach|detach` (see Terminals), `fs.*` (see [Files](#files)), `changes.checkpoints|diff|file|restore` (see [Changes](#changes)), `secrets.list|set|delete` (see [Secrets](#secrets), `host.stats|history|processes|ports|kill`, `setup.status|install|job` (see [Setup](#setup)), `commands.list|install` (see [Commands](#commands)), `workspaces.list|create|update|delete|start|stop` (see [Workspaces](#workspaces)).
+- Requests: `daemon.info`, `runtimes.status`, `agents.list|get|create|update|delete`, `agents.send{agent_id,text}`, `agents.interrupt`, `events.since{seq,limit,agent_id?}`, `approvals.list|resolve{approval_id,decision,remember}`, `rules.list|set|delete`, `schedules.list|create|update|delete|run_now`, `devices.list|revoke`, `pair.redeem{code,device_name}` (only unauthenticated method), `term.list|open|input|resize|rename|close|attach|detach` (see Terminals), `fs.*` (see [Files](#files)), `changes.checkpoints|diff|file|restore` (see [Changes](#changes)), `secrets.list|set|delete` (see [Secrets](#secrets), `host.stats|history|processes|ports|kill`, `setup.status|install|job` (see [Setup](#setup)), `commands.list|install` (see [Commands](#commands)), `browser.start|status|stop|control|touch` (see [Browser](#browser)), `workspaces.list|create|update|delete|start|stop` (see [Workspaces](#workspaces)). `browser.agent.*` is for the crew MCP on the server only.
 - Notifications (server → client): `event{seq, agent_id, kind, payload, ts}` for every event including `message.delta`; `term.output|gap|exit|closed` for attached terminals (see Terminals).
 
 ## Transports (connect any way you like)
@@ -136,6 +139,40 @@ A refused `crew_send` comes back to the agent as a tool error that tells it to r
 
 These limits stop accidental loops. They are not a security boundary: an agent with shell access runs as your user and can do anything you can.
 
+Browser tools are on the same server, through the same crew MCP: `browser_open`, `browser_snapshot`, `browser_click`, `browser_type`, `browser_press`, `browser_back`, `browser_screenshot`, `browser_tabs`, `browser_switch`. They are described in [Browser](#browser).
+
+## Browser
+
+The server runs one Chrome per workspace (`shared` by default). The app watches it, and agents drive it, through the same daemon. Code: `daemon/src/browser.rs` (manager, approvals), `daemon/src/cdp.rs` (DevTools client, snapshot), `daemon/src/rpc/browser.rs` (methods). Feature string: `"browser"`. The screen feature (Xvfb) is separate; the browser runs `--headless=new` for now.
+
+**Start.** `browser.start{workspace?}` finds `google-chrome`, `google-chrome-stable`, `chromium` or `chromium-browser` on `PATH`, and on macOS `/Applications/Google Chrome.app` first. It starts Chrome on a free loopback port, in its own process group, with `--headless=new --remote-debugging-address=127.0.0.1` and the profile `<data dir>/workspaces/<workspace>/browser` (`<data dir>` is `$BANDITO_HOME` or `~/.bandito`). Chrome's output goes to `browser.log` in the workspace folder. The daemon waits up to 10 s for the DevTools port. Without a browser the error has `reason: "missing_component"` and `component: "browser"`, and the app offers the install from setup.
+
+**The app.** The app opens the page's DevTools WebSocket through the tunnel (`GET /v1/tunnel?port=<cdp_port>`, see [Tunnel](#tunnel)) and runs a CDP screencast on it. The daemon does not relay frames. `browser.status` answers `{running, cdp_port, browser_ws_path, pid, started_at, controller}`, where `controller` is `user`, `agent` or `none`. `browser.control{workspace?, holder}` sets who drives it. `browser.stop` stops it, and `browser.touch` only counts as activity.
+
+**Idle stop.** A browser with no agent call and no `browser.status` or `browser.touch` for 30 minutes is stopped; the check runs every minute. The app calls `browser.touch` while it shows the browser.
+
+**Errors.** `BROWSER_ERROR` (-32026), with `error.data.reason`: `missing_component`, `start_failed`, `unsupported` (not Linux or macOS), `not_running`, `user_controls`, `declined`, `failed`. A bad workspace name (letters, digits, `-`, `_`, up to 64) or a URL that is not `http`, `https`, `data:` or `about:blank` is `-32602`.
+
+**Agent tools.** The crew MCP server offers the browser tools, and each one calls `browser.agent.*` on the unix socket. Those methods accept only local peers. The browser starts on the first use. While `controller` is `user`, every tool call fails with "The user is using the browser. Wait or ask them to hand it back.". Refs come from the latest snapshot and are the DOM node's `backendDOMNodeId`.
+- `browser_snapshot` returns the title, the URL, and one line per link, button, textbox, searchbox, combobox, checkbox, radio, menuitem, tab, heading, or named image: `[ref] role "name" (value)`. Names are cut at 120 characters; there are at most 600 element lines.
+- `browser_open{url, new_tab?}` navigates the agent's tab, or opens a new one, and waits for the load event for up to 30 s.
+- `browser_click{ref}`, `browser_type{ref, text, submit?}`, `browser_press{key}` (named keys only, such as `Enter`, `Tab`, `Escape`, `ArrowDown`), `browser_back`, `browser_screenshot` (PNG, at most 1280 px wide, returned as an image), `browser_tabs` (`*` marks the agent's tab), `browser_switch{index}`.
+
+**Risky clicks.** `browser.agent.click{agent_id, ref}` reads the element's role, name and value first. If the name or the value contains one of the words below (case-insensitive substring match), the daemon asks the human before it clicks. It does this itself, not through the runtime, so every runtime behaves the same. The request is an approval in the agent's feed: tool `browser_click`, title `Нажать «<the element's real name>» на <host>`, the page URL as command, reason `browser: risky click`. The user answers it in the app with `approvals.resolve`, as with any approval. Allow: the click happens. Deny, or no answer within 10 minutes: the agent gets "The user declined this click.", and the click does not happen. Ordinary clicks and typing are not asked about. Words: `pay`, `buy`, `purchase`, `checkout`, `order`, `subscribe`, `send`, `submit`, `delete`, `remove`, `transfer`, `confirm`, `оплат`, `куп`, `заказ`, `подпис`, `отправ`, `удал`, `перев`, `подтверд`.
+
+**Orphans.** When the daemon starts, it stops Chrome processes an earlier daemon left behind: processes whose command line has this server's `workspaces/` folder in `--user-data-dir`. On Linux it reads `/proc`; on macOS it uses `pgrep -f`. Other Chrome processes, such as the user's own, are not touched.
+
+**Profile.** The profile keeps the browser's sign-ins to websites. Agents and the app share it, and it stays on the server, with the same owner as the daemon. Deleting `workspaces/<workspace>` signs out everywhere.
+
+## Preview proxy
+
+`GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE` and `OPTIONS` on `/v1/proxy/<port>/<path>` forward to `127.0.0.1:<port>` on the server, so the app can show a dev server an agent started. Access is the same as for the file routes: a paired device (`Authorization: Bearer`), and no browser `Origin` (403). A port outside 1..=65535 is 400. Code: `daemon/src/rpc/preview.rs`; the route is in `rpc/ws.rs`.
+
+- Request: the hop-by-hop headers (`Connection` and the names it lists, `Keep-Alive`, `Proxy-*`, `TE`, `Trailer`, `Transfer-Encoding`, `Upgrade`) are not passed on. Neither are `Authorization` (the device token) and `Host`; the target gets `Host: 127.0.0.1:<port>`. The body is streamed.
+- Response: status, headers (without hop-by-hop ones) and body are streamed back. A `Location` of `http://127.0.0.1:<port>` or `http://localhost:<port>`, or a root path (`/x`), is rewritten under the proxy prefix (`/v1/proxy/<port>/x`), so a redirect stays in the preview.
+- Connecting to the target takes at most 5 s; otherwise 502.
+- WebSocket upgrades are refused with 501. Root-relative links inside HTML and JavaScript are not rewritten, so a page that uses them shows, but its links to `/x` go to the server root.
+
 ## Terminals
 
 Persistent shells and programs on the server, PTY-backed, like a tmux-lite. A terminal keeps running while no app is attached. Unix only. `daemon/src/terminal.rs` is the engine; `daemon/src/rpc/term.rs` is the RPC layer.
@@ -161,7 +198,7 @@ Notifications, sent on the connection that attached (every one has `id`):
 | `term.exit` | `{id, code, signal}` | the program ended; `code` or `signal` is null |
 | `term.closed` | `{id}` | the terminal was closed; the connection is no longer attached to it |
 
-Offsets: each terminal counts its output bytes from 0 and never resets. A client remembers the offset just past the last byte it has; `term.attach {from}` continues from there. A connection that goes away detaches from all its terminals, which keeps running. An app that collapses a terminal sends `term.detach`; to show it again it sends `term.attach` with the stored offset.
+Offsets: each terminal counts its output bytes from 0 and never resets. A client remembers the offset just past the last byte it has; `term.attach {from}` continues from there. A connection that goes away detaches from all its terminals, which keeps running. An app that collapses a terminal keeps its stream attached: the pane leaves the screen, but the app still reads the output (line counts, the dock's sparkline, the waiting-for-input prompt) and keeps the emulator state in memory. It sends `term.detach` only when it stops following the terminal: on quitting, on removing the server, or after a close. A detached terminal is shown again with `term.attach` from the stored offset.
 
 Limits: 16 live terminals (an exited one keeps its slot until closed); 512 KiB of output history per terminal; 64 KiB per `term.input`. An input that cannot be written within 5 s fails with `busy`, and a prefix of it may already have been written.
 
@@ -217,10 +254,14 @@ Params are objects; unknown fields are `invalid_params`.
 | `fs.upload.append` | `upload_id`, `offset`, `data` (standard base64) | `{written}` |
 | `fs.upload.commit` | `upload_id`, `overwrite?` (default false) | `Entry` |
 | `fs.upload.abort` | `upload_id` | `{}` |
+| `fs.clone` | `url`, `dest` | `{path, default_branch}` (see below) |
 
 **Writing.** Overwriting an existing file needs the `etag` from the last `fs.read`. Without it, or with a stale one, the write is refused with `conflict`, and `error.data.etag` holds the current etag. `create: true` without an etag makes a new file and gives `exists` if the path is taken. `etag` on a missing file gives `not_found`.
 
-**Errors.** File failures use code `-32020` and `error.data.reason`: `not_found`, `exists`, `not_a_directory`, `is_a_directory`, `not_a_file`, `permission_denied`, `too_large` (`size`, `limit`), `binary`, `conflict` (`etag`), `invalid_path`, `outside_roots`, `cross_device`, `io`. Bad params are `-32602`.
+**Errors.** File failures use code `-32020` and `error.data.reason`: `not_found`, `exists`, `not_a_directory`, `is_a_directory`, `not_a_file`, `permission_denied`, `too_large` (`size`, `limit`), `binary`, `conflict` (`etag`), `invalid_path`, `outside_roots`, `cross_device`, `io`, `clone_failed` (`stderr`). Bad params are `-32602`.
+
+**Clone.** `fs.clone` copies a git repository into a new folder. `url` is `https://…` or scp-style `user@host:path` (ssh); anything else (`file://`, `http://`, `ssh://`, options such as `--upload-pack=…`) is `invalid_params`. `dest` is resolved like any path (`~` is home, otherwise absolute, under the roots) and must not exist, though its parent must. The daemon runs `git clone --depth 50 -- <url> <dest>` with a 10-minute limit and `GIT_TERMINAL_PROMPT=0`: nothing prompts, and private repositories work through the server's own ssh keys. The result is `{path, default_branch}` (`default_branch` is `null` when HEAD is detached). A failure is `FS_ERROR` with `reason: "clone_failed"` and `data.stderr`: the last 2 KB of git's stderr, with `user:password@` cut from every URL in it. The partial folder is removed. An existing `dest` gives `exists`.
+
 
 **Upload in chunks.** `begin` creates a temp file next to the destination. Each `append` must send `offset` equal to the bytes already written; a chunk is at most 1 MiB decoded, and the total at most 4 GiB. One WebSocket message may be up to 4 MiB, so a full 1 MiB chunk fits after base64. `commit` moves the file into place (`overwrite: false` gives `exists`). An upload idle for an hour is removed with its temp file (checked every 10 minutes). `abort` removes it at once.
 
@@ -441,6 +482,12 @@ daemon/            Rust crate `bandito`
   src/policy.rs    approval rules
   src/host.rs      host load, processes, ports, kill (see Host)
   src/setup.rs     components per feature, install jobs (see Setup)
+  src/browser.rs   the server's Chrome: start, stop, agent actions, risky clicks (see Browser)
+  src/cdp.rs       DevTools WebSocket client, page operations, snapshot text
+  src/rpc/browser.rs  browser.* and browser.agent.* methods
+  src/rpc/preview.rs  preview proxy to loopback ports (see Preview proxy)
+  src/screen.rs    the server's virtual desktop (see Screen)
+  src/rpc/screen.rs  screen.* methods
   src/commands.rs  slash commands: discovery, expansion, install (see Commands)
   src/workspace.rs where CLIs run: the server or a Docker container (see Workspaces)
   src/scheduler.rs
@@ -503,7 +550,7 @@ The agent's instructions (built by the daemon, before the user's own) explain th
 
 **Recall instead of remembering.** The crew MCP server also offers `history_search{query}` and `history_day{date}` over the agent's own past messages in the daemon's database, so an agent looks up what was said weeks ago instead of carrying it.
 
-**Changing an agent.** `agents.update` applies name, role, model, effort, system prompt, memory mode, context budget and folder from the next session: an idle agent's session is closed at once, a running one when its turn ends. The chapter goes on, except after a folder change or a workspace change, which starts a new chapter (a CLI session is tied to its folder and to where it runs; see [Workspaces](#workspaces)). The approval mode is read on every request and needs no restart.
+**Changing an agent.** `agents.update` applies name, role, model, effort, system prompt, memory mode, context budget, folder, runtime, fallback and workspace from the next session: an idle agent's session is closed at once, a running one when its turn ends. The chapter goes on, except after a folder, runtime or workspace change, which starts a new chapter (a CLI session is tied to its folder, its runtime and where it runs; see [Workspaces](#workspaces)). A runtime change also resets effort to null, with a `warnings` entry in the response, when the new runtime does not offer the old level. The approval mode is read on every request and needs no restart.
 
 **Effort.** Each agent has an `effort` (`low`, `medium`, `high`, `xhigh`, `max`). The daemon maps it to the runtime (`--effort` for Claude, the turn's `effort` for Codex, `--reasoning-effort` for Grok) and refuses levels a runtime does not offer.
 
@@ -516,6 +563,36 @@ The agent's instructions (built by the daemon, before the user's own) explain th
 - Grok and API keys: no plan yet.
 
 A runtime that reports no plan, or fails, leaves the stored plan as it was.
+
+## Fallback subscription
+
+An agent can name a fallback runtime (`fallback_runtime`, one of `claude`, `codex`, `grok`, different from its `runtime`) and a `fallback_model` for it. It is used when the primary runtime's subscription runs out of usage. `agents.create` and `agents.update` take both (`null` clears them), and `agents.get`/`agents.list` return `active_runtime`: the runtime the agent runs on now, `null` for the primary one.
+
+**Recognising a limit.** A turn that ends with an error, and whose runtime reported its usage as used up during it:
+
+| runtime | error message (case-insensitive) | or usage reported |
+|---|---|---|
+| Claude | `usage limit` (`Claude AI usage limit reached…`), `rate limit`, `rate_limit`, `429` | `rate_limit_event` window at utilization 1.0 or more |
+| Codex | `usage_limit_reached`, `usage limit` | `account/rateLimits/updated` window at `usedPercent` 100 or more |
+| Grok | `rate limit` (`Rate limited: …`), `429`, `too many requests` | none |
+
+Only runtime error messages are checked, never the agent's text. The message is the one the adapter reports, so a runtime that words its limit differently is not recognised.
+
+**Switching.** When the limit is recognised, the fallback is free, and the turn had no retry yet, the daemon:
+
+1. closes the session and starts a new chapter (`session.rotated`, reason `runtime switched`). The memory carries over in the agent's files, so no wrap-up turn runs;
+2. sets `active_runtime` to the other runtime and emits `runtime.switched {from, to, until?}`;
+3. sends the same message again on the new runtime. The thread shows the user's message once. A retry that hits the limit again is a plain error: one switch per message.
+
+Without a fallback, or when the fallback is out of usage too, the turn is an ordinary error.
+
+**Coming back.** Before a message goes out, an agent on its fallback returns to the primary runtime once that runtime's windows do not block: a full window (utilization 1.0 or more) blocks while its `resets_at` is in the future. A full window with no reset time blocks for one hour after it was reported; after that the primary runtime is tried again, and if its limit is still there, the message switches to the fallback again. The return emits `runtime.switched {from: fallback, to: primary}` and starts a new chapter.
+
+**Usage cache.** The runtime left is recorded as used up: its own windows if it reported them, else a window named `limit` at 100% with no reset time. The app shows that window under the runtime's usage.
+
+**Changing the primary runtime.** `agents.update {runtime}` checks that the runtime is installed on this server, clears `active_runtime`, starts a new chapter (`session.rotated`, reason `runtime changed`) and drops the CLI session. The fallback must differ from the new runtime: switching to the current fallback is refused unless the same patch clears it.
+
+**Limits of this design.** Codex limits are recognised by the words in the error message the adapter passes on. A switch does not run a wrap-up turn, so what the agent did not write to its memory files during the chapter is not saved.
 
 ## Accounts, sync and push (planned)
 

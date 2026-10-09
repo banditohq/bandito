@@ -143,6 +143,16 @@ pub enum EventBody {
         reason: String,
         context_tokens: u64,
     },
+    /// The agent moved to another runtime: its fallback when the primary one ran out of
+    /// usage, or back to the primary one when its limit reset. `until` is when the limit
+    /// resets (Unix seconds), if known.
+    #[serde(rename = "runtime.switched")]
+    RuntimeSwitched {
+        from: String,
+        to: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        until: Option<i64>,
+    },
     #[serde(rename = "usage.limits")]
     UsageLimits { runtime: String, windows: Vec<LimitWindow> },
     #[serde(rename = "error")]

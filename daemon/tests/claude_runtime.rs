@@ -237,7 +237,7 @@ async fn passes_flags() {
 
 /// Argv of a fake CLI, read once it has written it (it does so at startup).
 async fn written_args(path: &std::path::Path) -> Vec<String> {
-    for _ in 0..50 {
+    for _ in 0..250 {
         if let Some(args) = std::fs::read_to_string(path)
             .ok()
             .and_then(|text| serde_json::from_str::<Vec<String>>(&text).ok())

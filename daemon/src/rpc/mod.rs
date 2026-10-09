@@ -1,6 +1,7 @@
 //! JSON-RPC 2.0, the same on every transport (unix socket, WebSocket).
 //! See docs/ARCHITECTURE.md#rpc.
 
+use crate::browser::BrowserManager;
 use crate::commands::prepare as prepare_message;
 use crate::event::{Decision, Event, EventBody, Source};
 use crate::files::FileService;
@@ -25,10 +26,12 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::{broadcast, mpsc};
 
+pub mod browser;
 pub mod changes;
 pub mod commands;
 pub mod files;
 pub mod host;
+pub mod preview;
 pub mod screen;
 pub mod secrets;
 pub mod setup;
@@ -62,6 +65,7 @@ pub fn features() -> Vec<&'static str> {
         "setup",
         "commands",
         "workspaces",
+        "browser",
     ];
     if cfg!(target_os = "linux") {
         list.push("screen");
@@ -93,6 +97,8 @@ pub struct App {
     pub host: Arc<Sampler>,
     /// Components the features need, and installing them (see docs/ARCHITECTURE.md#setup).
     pub setup: Arc<Setup>,
+    /// The server's browser, one per workspace (see docs/ARCHITECTURE.md#browser).
+    pub browser: Arc<BrowserManager>,
     /// The server screen, one per workspace (see docs/ARCHITECTURE.md#screen).
     pub screens: Arc<crate::screen::ScreenManager>,
 }
@@ -116,6 +122,7 @@ impl App {
             tunnels: Arc::new(tunnel::TunnelSlots::default()),
             host: Sampler::new(),
             setup: Setup::system(),
+            browser: BrowserManager::system(),
             screens: Arc::new(crate::screen::ScreenManager::new(screens_dir())),
         })
     }
@@ -174,6 +181,8 @@ pub const CHANGES_ERROR: i64 = -32022;
 pub const HOST_ERROR: i64 = -32023;
 /// A setup method failed; `error.data.reason` says why (see rpc::setup).
 pub const SETUP_ERROR: i64 = -32024;
+/// A browser method failed; `error.data.reason` says why (see rpc::browser).
+pub const BROWSER_ERROR: i64 = -32026;
 /// A screen call failed; `error.data.reason` says why (see rpc::screen).
 pub const SCREEN_ERROR: i64 = -32025;
 /// A command or skill call failed; `error.data.reason` says why (see rpc::commands).
@@ -267,6 +276,11 @@ struct AgentPatchParams {
     #[serde(default, deserialize_with = "double_option")]
     context_budget: Option<Option<u32>>,
     workspace_id: Option<String>,
+    runtime: Option<RuntimeKind>,
+    #[serde(default, deserialize_with = "double_option")]
+    fallback_runtime: Option<Option<RuntimeKind>>,
+    #[serde(default, deserialize_with = "double_option")]
+    fallback_model: Option<Option<String>>,
 }
 impl AgentPatchParams {
     /// Whether the patch changes something a running session was started with, so
@@ -284,9 +298,14 @@ impl AgentPatchParams {
             effort,
             memory_mode,
             context_budget,
+            runtime,
+            // A fallback is read when a limit is hit: nothing to reload now.
+            fallback_runtime: _,
+            fallback_model: _,
             workspace_id,
         } = self;
         workspace_id.as_ref().is_some_and(|w| *w != current.workspace_id)
+            || runtime.as_ref().is_some_and(|r| *r != current.runtime)
             || name.as_ref().is_some_and(|n| n.trim() != current.name)
             || role.as_ref().is_some_and(|r| *r != current.role)
             || model.as_ref().is_some_and(|m| *m != current.model)
@@ -408,6 +427,22 @@ fn check_effort(kind: RuntimeKind, effort: Option<Effort>) -> Result<(), RpcErro
             format!("{} doesn't offer effort {}", kind.as_str(), e.as_str()),
         )),
         _ => Ok(()),
+    }
+}
+
+/// A fallback is one of the subscription runtimes, and not the agent's primary runtime.
+fn check_fallback(primary: RuntimeKind, fallback: Option<RuntimeKind>) -> Result<(), RpcError> {
+    match fallback {
+        None => Ok(()),
+        Some(RuntimeKind::Api) => Err(RpcError::new(
+            INVALID_PARAMS,
+            "fallback runtime must be claude, codex or grok",
+        )),
+        Some(fb) if fb == primary => Err(RpcError::new(
+            INVALID_PARAMS,
+            "fallback runtime must differ from the agent's runtime",
+        )),
+        Some(_) => Ok(()),
     }
 }
 
@@ -559,6 +594,10 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             .await
             .unwrap_or_else(|| Err(RpcError::new(METHOD_NOT_FOUND, format!("unknown method {method}"))));
     }
+    if method.starts_with("browser.") {
+        // Every `browser.*` name is answered there, unknown ones with METHOD_NOT_FOUND.
+        return browser::dispatch(app, peer, method, p).await;
+    }
     if method.starts_with("screen.") {
         return screen::dispatch(app, peer, method, p).await;
     }
@@ -614,6 +653,9 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             check_cwd(&a.cwd)?;
             check_effort(a.runtime, a.effort)?;
             check_context_budget(a.context_budget)?;
+            if let Some(fallback) = a.fallback_runtime {
+                check_fallback(a.runtime, Some(fallback))?;
+            }
             let created = store.agent_create_in(a, workspace_id.as_deref().unwrap_or(SHARED_WORKSPACE))?;
             let folder = home::ensure_agent_home(&app.agents_root, &created.id, &created.name).and_then(|dir| {
                 store.agent_set_home(&created.id, &dir.display().to_string())?;
@@ -632,20 +674,69 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                 .ok_or_else(|| RpcError::new(SERVER_ERROR, format!("no agent {}", created.id)))?)
         }
         "agents.update" => {
-            let UpdateAgent { id, patch } = params(p)?;
+            let UpdateAgent { id, mut patch } = params(p)?;
             if let Some(cwd) = &patch.cwd {
                 check_cwd(cwd)?;
             }
-            // Effort is checked against the agent's runtime, which a patch cannot change.
             let current = store
                 .agent_get(&id)?
                 .ok_or_else(|| RpcError::new(SERVER_ERROR, format!("no agent {id}")))?;
-            check_effort(current.runtime, patch.effort.flatten())?;
+            let runtime = patch.runtime.unwrap_or(current.runtime);
+            let runtime_changed = runtime != current.runtime;
+            if runtime_changed && app.sup.runtimes().get(runtime).is_none() {
+                return Err(RpcError::new(
+                    INVALID_PARAMS,
+                    format!("{} is not available on this server", runtime.as_str()),
+                ));
+            }
+            // Effort is checked against the runtime the agent will run on. One carried over from
+            // the old runtime that the new one lacks is dropped, with a warning.
+            let mut warnings: Vec<String> = Vec::new();
+            match patch.effort {
+                Some(explicit) => check_effort(runtime, explicit)?,
+                None => {
+                    if let Some(effort) = current
+                        .effort
+                        .filter(|e| runtime_changed && !supported_efforts(runtime).contains(e))
+                    {
+                        patch.effort = Some(None);
+                        warnings.push(format!(
+                            "effort {} is not offered by {}, so it was reset",
+                            effort.as_str(),
+                            runtime.as_str()
+                        ));
+                    }
+                }
+            }
+            // A model name belongs to its runtime (`opus` means nothing to Codex): a runtime change
+            // without a new model goes back to the runtime's default, with a warning.
+            if runtime_changed
+                && patch.model.is_none()
+                && let Some(model) = current.model.as_deref()
+            {
+                patch.model = Some(None);
+                warnings.push(format!(
+                    "model {model} belongs to {}, so {} uses its default model",
+                    current.runtime.as_str(),
+                    runtime.as_str()
+                ));
+            }
             check_context_budget(patch.context_budget.flatten())?;
+            // The fallback as it will be after the patch.
+            let fallback_after = patch.fallback_runtime.unwrap_or(current.fallback_runtime);
+            check_fallback(runtime, fallback_after)?;
             let reload = patch.changes_session(&current);
-            // A session is tied to its folder and its workspace: either change starts a new chapter.
+            // A session is tied to its folder, its runtime and its workspace: any of them changing starts a new chapter.
             let moved = patch.workspace_id.as_ref().is_some_and(|w| *w != current.workspace_id);
-            let new_chapter = patch.cwd.as_ref().is_some_and(|cwd| *cwd != current.cwd) || moved;
+            let new_chapter = if patch.cwd.as_ref().is_some_and(|cwd| *cwd != current.cwd) {
+                Some("folder changed")
+            } else if runtime_changed {
+                Some("runtime changed")
+            } else if moved {
+                Some("workspace changed")
+            } else {
+                None
+            };
             let a = store.agent_update(
                 &id,
                 AgentPatch {
@@ -659,15 +750,20 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                     memory_mode: patch.memory_mode,
                     context_budget: patch.context_budget,
                     workspace_id: patch.workspace_id,
+                    runtime: patch.runtime,
+                    fallback_runtime: patch.fallback_runtime,
+                    fallback_model: patch.fallback_model,
                 },
             )?;
             // New config takes effect with the next session: the running one is
             // closed when idle, or once its turn ends. The chapter goes on, unless
-            // the folder changed.
+            // the folder or the runtime changed.
             if reload {
                 app.sup.reload(&id, new_chapter).await;
             }
-            ok(a)
+            let mut body = serde_json::to_value(&a).map_err(|e| RpcError::new(SERVER_ERROR, e.to_string()))?;
+            body["warnings"] = json!(warnings);
+            ok(body)
         }
         "agents.delete" => {
             let Id { id } = params(p)?;
@@ -964,6 +1060,8 @@ mod crew_tests {
                     effort: None,
                     memory_mode: crate::store::MemoryMode::Smart,
                     context_budget: None,
+                    fallback_runtime: None,
+                    fallback_model: None,
                 })
                 .unwrap()
                 .id
@@ -1051,6 +1149,8 @@ mod history_tests {
                 effort: None,
                 memory_mode: crate::store::MemoryMode::Smart,
                 context_budget: None,
+                fallback_runtime: None,
+                fallback_model: None,
             })
             .unwrap();
         let sup = Supervisor::new(Hub::new(store), Runtimes::default(), None);
@@ -1452,6 +1552,8 @@ mod schedule_tests {
                 effort: None,
                 memory_mode: crate::store::MemoryMode::Smart,
                 context_budget: None,
+                fallback_runtime: None,
+                fallback_model: None,
             })
             .unwrap();
         let sup = Supervisor::new(Hub::new(store), Runtimes::default(), None);
@@ -1657,6 +1759,8 @@ mod memory_tests {
                 effort: None,
                 memory_mode: crate::store::MemoryMode::Smart,
                 context_budget: None,
+                fallback_runtime: None,
+                fallback_model: None,
             })
             .unwrap()
             .id;
@@ -2019,5 +2123,204 @@ mod memory_tests {
         assert_eq!(v["errors"], json!([]), "a plan error is logged, not reported");
         assert_eq!(v["limits"][0]["runtime"], "codex");
         assert_eq!(v["limits"][0]["plan"], json!({"id": "pro", "label": "Pro"}));
+    }
+}
+
+#[cfg(test)]
+mod fallback_tests {
+    use super::*;
+    use crate::event::EventBody;
+    use crate::hub::Hub;
+    use crate::runtime::{Runtime, RuntimeKind, RuntimeStatus, SpawnConfig, Spawned};
+    use crate::store::Store;
+    use crate::supervisor::Runtimes;
+    use async_trait::async_trait;
+
+    /// A runtime that is installed on this server. The tests here never start a session on it.
+    struct Installed(RuntimeKind);
+
+    #[async_trait]
+    impl Runtime for Installed {
+        fn kind(&self) -> RuntimeKind {
+            self.0
+        }
+        async fn status(&self) -> RuntimeStatus {
+            RuntimeStatus {
+                kind: self.0,
+                installed: true,
+                version: None,
+                logged_in: None,
+                detail: None,
+            }
+        }
+        async fn spawn(&self, _cfg: SpawnConfig) -> anyhow::Result<Spawned> {
+            anyhow::bail!("not spawned in these tests")
+        }
+    }
+
+    /// An app whose server has `installed` runtimes; agent folders under a temp dir kept by the caller.
+    fn app_with(installed: &[RuntimeKind]) -> (Arc<App>, tempfile::TempDir) {
+        let dir = tempfile::tempdir().unwrap();
+        let mut runtimes = Runtimes::default();
+        for kind in installed {
+            runtimes.insert(Arc::new(Installed(*kind)));
+        }
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let sup = Supervisor::new(Hub::new(store), runtimes, None);
+        (App::new(sup, dir.path().join("agents")), dir)
+    }
+
+    async fn call(app: &App, method: &str, p: Value) -> RpcResult {
+        dispatch(app, &Peer::Local, method, p).await
+    }
+
+    fn new_agent(name: &str, runtime: &str) -> Value {
+        json!({
+            "name": name,
+            "runtime": runtime,
+            "cwd": std::env::temp_dir().display().to_string(),
+        })
+    }
+
+    async fn create(app: &App, p: Value) -> Value {
+        call(app, "agents.create", p).await.unwrap()
+    }
+
+    fn event_bodies(app: &App) -> Vec<EventBody> {
+        app.sup
+            .hub()
+            .store
+            .events_since(0, 1000, None)
+            .unwrap()
+            .into_iter()
+            .map(|e| e.body)
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn create_takes_a_fallback_and_refuses_a_bad_one() {
+        let (app, _dir) = app_with(&[RuntimeKind::Codex]);
+        let mut p = new_agent("Forge", "claude");
+        p["fallback_runtime"] = json!("codex");
+        p["fallback_model"] = json!("gpt-5.5");
+        let created = create(&app, p).await;
+        assert_eq!(created["fallback_runtime"], "codex");
+        assert_eq!(created["fallback_model"], "gpt-5.5");
+        assert!(created["active_runtime"].is_null());
+        let got = call(&app, "agents.get", json!({ "id": created["id"] })).await.unwrap();
+        assert_eq!(got["fallback_runtime"], "codex");
+
+        // Not a subscription runtime, not the primary one, not a runtime name at all.
+        for bad in ["api", "claude", "gemini"] {
+            let mut p = new_agent("Scout", "claude");
+            p["fallback_runtime"] = json!(bad);
+            let err = call(&app, "agents.create", p).await.unwrap_err();
+            assert_eq!(err.code, INVALID_PARAMS, "fallback {bad}: {}", err.message);
+        }
+    }
+
+    #[tokio::test]
+    async fn update_takes_the_model_as_typed_and_clears_it_with_null() {
+        let (app, _dir) = app_with(&[]);
+        let created = create(&app, new_agent("Forge", "claude")).await;
+        let id = created["id"].clone();
+
+        let set = call(&app, "agents.update", json!({ "id": id, "model": "claude-opus-5" }))
+            .await
+            .unwrap();
+        assert_eq!(set["model"], "claude-opus-5");
+        let cleared = call(&app, "agents.update", json!({ "id": id, "model": null }))
+            .await
+            .unwrap();
+        assert!(cleared["model"].is_null());
+
+        let fb = call(&app, "agents.update", json!({ "id": id, "fallback_model": "gpt-5.5" }))
+            .await
+            .unwrap();
+        assert_eq!(fb["fallback_model"], "gpt-5.5");
+    }
+
+    #[tokio::test]
+    async fn update_runtime_starts_a_new_chapter_and_drops_an_effort_the_new_runtime_lacks() {
+        let (app, _dir) = app_with(&[RuntimeKind::Codex]);
+        let mut p = new_agent("Forge", "claude");
+        p["effort"] = json!("max");
+        let created = create(&app, p).await;
+        let id = created["id"].as_str().unwrap().to_string();
+        app.sup.hub().store.agent_set_session(&id, Some("sess-1")).unwrap();
+
+        let res = call(&app, "agents.update", json!({ "id": id, "runtime": "codex" }))
+            .await
+            .unwrap();
+        assert_eq!(res["runtime"], "codex");
+        assert!(res["effort"].is_null(), "max is not offered by codex");
+        let warnings = res["warnings"].as_array().unwrap();
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert!(warnings[0].as_str().unwrap().contains("max"));
+
+        let stored = app.sup.hub().store.agent_get(&id).unwrap().unwrap();
+        assert!(stored.runtime_session_id.is_none(), "the Claude session is not resumed");
+        assert_eq!(stored.chapter, 2);
+        assert!(event_bodies(&app).iter().any(|b| matches!(
+            b,
+            EventBody::SessionRotated { reason, .. } if reason == "runtime changed"
+        )));
+    }
+
+    #[tokio::test]
+    async fn update_runtime_keeps_an_effort_the_new_runtime_offers() {
+        let (app, _dir) = app_with(&[RuntimeKind::Codex]);
+        let mut p = new_agent("Forge", "claude");
+        p["effort"] = json!("high");
+        let created = create(&app, p).await;
+        let res = call(
+            &app,
+            "agents.update",
+            json!({ "id": created["id"], "runtime": "codex" }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(res["effort"], "high");
+        assert_eq!(res["warnings"], json!([]));
+    }
+
+    #[tokio::test]
+    async fn update_runtime_refuses_a_runtime_that_is_not_installed_here() {
+        let (app, _dir) = app_with(&[RuntimeKind::Codex]);
+        let created = create(&app, new_agent("Forge", "claude")).await;
+        let err = call(&app, "agents.update", json!({ "id": created["id"], "runtime": "grok" }))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, INVALID_PARAMS);
+        assert!(
+            err.message.contains("grok is not available on this server"),
+            "{}",
+            err.message
+        );
+    }
+
+    #[tokio::test]
+    async fn the_fallback_must_differ_from_the_runtime_after_the_patch() {
+        let (app, _dir) = app_with(&[RuntimeKind::Codex]);
+        let mut p = new_agent("Forge", "claude");
+        p["fallback_runtime"] = json!("codex");
+        let created = create(&app, p).await;
+        let id = created["id"].clone();
+
+        // Switching to codex while codex is still the fallback is refused...
+        let err = call(&app, "agents.update", json!({ "id": id, "runtime": "codex" }))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, INVALID_PARAMS);
+        // ...but clearing the fallback in the same patch is fine.
+        let ok = call(
+            &app,
+            "agents.update",
+            json!({ "id": id, "runtime": "codex", "fallback_runtime": null }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(ok["runtime"], "codex");
+        assert!(ok["fallback_runtime"].is_null());
     }
 }

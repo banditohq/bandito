@@ -24,6 +24,8 @@ public final class DemoStore {
     public let files: [DemoFile]
     public let terminals: [DemoTerminal]
     public let workplaces: [DemoWorkplace]
+    /// Server → Workplaces: where the agents live. Sample data only until the daemon has workspaces.
+    public let spaces: [DemoSpace]
     public let serverLoad = DemoServerLoad(cpu: 0.34, memory: 0.58)
 
     public init(defaults: UserDefaults = .standard) {
@@ -107,6 +109,39 @@ public final class DemoStore {
             DemoWorkplace(name: "billing", path: "~/billing", agentName: "Forge"),
             DemoWorkplace(name: "api", path: "~/api", agentName: "Watch"),
             DemoWorkplace(name: "landing", path: "~/landing", agentName: "Quill"),
+        ]
+
+        spaces = [
+            DemoSpace(
+                name: L10n.Demo.Space.sharedName, kind: .shared, agents: ["Atlas", "Forge", "Quill"],
+                rows: [
+                    DemoSpaceRow(icon: "folder", label: L10n.Server.Workspaces.Row.files, value: L10n.Demo.Space.Shared.files),
+                    DemoSpaceRow(icon: "globe", label: L10n.Server.Workspaces.Row.browser, value: L10n.Demo.Space.Shared.browser),
+                    DemoSpaceRow(icon: "display", label: L10n.Server.Workspaces.Row.screen, value: L10n.Demo.Space.Shared.screen),
+                    DemoSpaceRow(icon: "network", label: L10n.Server.Workspaces.Row.network, value: L10n.Demo.Space.Shared.network),
+                ],
+                meters: []),
+            DemoSpace(
+                name: L10n.Demo.Space.containerName, kind: .container, agents: ["Scout"],
+                rows: [
+                    DemoSpaceRow(icon: "folder", label: L10n.Server.Workspaces.Row.files, value: L10n.Demo.Space.Container.files),
+                    DemoSpaceRow(icon: "globe", label: L10n.Server.Workspaces.Row.browser, value: L10n.Demo.Space.Container.browser),
+                    DemoSpaceRow(icon: "display", label: L10n.Server.Workspaces.Row.screen, value: L10n.Demo.Space.Container.screen),
+                    DemoSpaceRow(icon: "network", label: L10n.Server.Workspaces.Row.network, value: L10n.Demo.Space.Container.network),
+                ],
+                meters: [
+                    DemoMeter(label: L10n.Demo.Space.cpu, value: L10n.Demo.Space.Container.cpuValue, fraction: 0.7),
+                    DemoMeter(label: L10n.Demo.Space.memory, value: L10n.Demo.Space.Container.memoryValue, fraction: 0.55),
+                ]),
+            DemoSpace(
+                name: L10n.Demo.Space.userName, kind: .user, agents: ["Watch"],
+                rows: [
+                    DemoSpaceRow(icon: "folder", label: L10n.Server.Workspaces.Row.files, value: L10n.Demo.Space.User.files),
+                    DemoSpaceRow(icon: "globe", label: L10n.Server.Workspaces.Row.browser, value: L10n.Demo.Space.User.browser),
+                    DemoSpaceRow(icon: "display", label: L10n.Server.Workspaces.Row.screen, value: L10n.Demo.Space.User.screen),
+                    DemoSpaceRow(icon: "terminal", label: L10n.Server.Workspaces.Row.commands, value: L10n.Demo.Space.User.commands),
+                ],
+                meters: []),
         ]
     }
 }
@@ -197,3 +232,39 @@ public struct DemoServerLoad: Hashable, Sendable {
     public let cpu: Double
     public let memory: Double
 }
+
+/// A workplace on the Server screen: where its agents' files, browser, screen and terminals live.
+public struct DemoSpace: Identifiable, Hashable, Sendable {
+    public enum Kind: Hashable, Sendable {
+        /// Shared with the server: agents see what the owner sees.
+        case shared
+        /// A container with its own disk and limits.
+        case container
+        /// A separate system user.
+        case user
+    }
+
+    public var id: String { name }
+    public let name: String
+    public let kind: Kind
+    /// Names of the agents that start here.
+    public let agents: [String]
+    public let rows: [DemoSpaceRow]
+    public let meters: [DemoMeter]
+}
+
+public struct DemoSpaceRow: Hashable, Sendable {
+    /// SF Symbol shown before the label.
+    public let icon: String
+    public let label: String
+    public let value: String
+}
+
+public struct DemoMeter: Hashable, Sendable {
+    public let label: String
+    /// The reading in words, e.g. "1,4 of 2 cores".
+    public let value: String
+    /// Share used, 0...1.
+    public let fraction: Double
+}
+

@@ -14,10 +14,16 @@ enum WindowActions {
         NSApp.activate()
         NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
     }
+
+    /// Closes the key window (⇧⌘W). ⌘W is the focused terminal's close in the Terminals mode.
+    static func closeKeyWindow() {
+        NSApp.keyWindow?.performClose(nil)
+    }
 }
 #else
 enum WindowActions {
     @MainActor static func showMainWindow() {}
     @MainActor static func showSettings() {}
+    @MainActor static func closeKeyWindow() {}
 }
 #endif

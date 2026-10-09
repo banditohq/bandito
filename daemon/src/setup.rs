@@ -32,7 +32,7 @@ const NODE_INDEX: &str = "https://nodejs.org/dist/latest-v22.x/";
 const CHROME_DEB_URL: &str = "https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb";
 const DOCKER_DOCS: &str = "https://docs.docker.com/engine/install/";
 const GROK_DOCS: &str = "https://x.ai/cli";
-const BROWSERS: [&str; 4] = ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser"];
+pub const BROWSERS: [&str; 4] = ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser"];
 
 /// Every component id, in the order status reports them.
 pub const COMPONENTS: [&str; 11] = [
@@ -178,7 +178,7 @@ impl Platform {
 }
 
 /// `$BANDITO_HOME`, or `~/.bandito`: the daemon's data directory when `--home` is not given.
-fn default_home() -> PathBuf {
+pub fn default_home() -> PathBuf {
     std::env::var_os("BANDITO_HOME")
         .map(PathBuf::from)
         .or_else(|| dirs::home_dir().map(|home| home.join(".bandito")))

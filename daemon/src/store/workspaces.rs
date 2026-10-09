@@ -322,6 +322,8 @@ mod tests {
             effort: None,
             memory_mode: MemoryMode::Smart,
             context_budget: None,
+            fallback_runtime: None,
+            fallback_model: None,
         }
     }
 

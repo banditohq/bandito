@@ -92,7 +92,7 @@ Defaults (presets "VS Code", "iTerm", "Slack" only override what they differ in)
 | team | Agent details | ⌘I |
 | terminals | New terminal | ⌘T |
 | terminals | Split vertically / horizontally | ⌘D / ⌘⇧D |
-| terminals | Collapse (keeps running) | ⌘⇧↓ |
+| terminals | Collapse: the pane leaves the screen into the dock, output keeps being followed (keeps running) | ⌘⇧↓ |
 | terminals | Bring back last collapsed | ⌘⇧T |
 | terminals | Next pane | ⌥⌘←→↑↓ |
 | terminals | Close (ends the process) | ⌘W |

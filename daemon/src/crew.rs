@@ -44,6 +44,8 @@ pub trait CrewBackend: Send + Sync {
     async fn history_search(&self, query: &str, limit: u32) -> Result<String>;
     /// Everything said with the agent on one local day (`YYYY-MM-DD`), formatted.
     async fn history_day(&self, date: &str) -> Result<String>;
+    /// A browser tool call: `method` is a `browser.agent.*` method, answered by the daemon.
+    async fn browser(&self, method: &str, params: Value) -> Result<Value>;
     /// One `screen.agent.*` RPC method with its parameters. Returns the daemon's result.
     async fn screen(&self, method: &str, params: Value) -> Result<Value>;
 }
@@ -89,6 +91,14 @@ impl CrewBackend for DaemonBackend {
         )
         .await?;
         text_of(v, "history.day")
+    }
+
+    async fn browser(&self, method: &str, mut params: Value) -> Result<Value> {
+        // Every browser call is made for this agent; a risky click asks the user in its feed.
+        if let Some(object) = params.as_object_mut() {
+            object.insert("agent_id".to_string(), json!(self.agent_id));
+        }
+        call(&self.sock, method, params).await
     }
 
     async fn screen(&self, method: &str, params: Value) -> Result<Value> {
@@ -194,16 +204,7 @@ async fn handle_line(line: &str, backend: &dyn CrewBackend) -> Option<Value> {
     let outcome: Result<Value, Fault> = match method {
         "initialize" => Ok(initialize(&params)),
         "ping" => Ok(json!({})),
-        "tools/list" => {
-            let mut tools = vec![
-                crew_list_tool(),
-                crew_send_tool(),
-                history_search_tool(),
-                history_day_tool(),
-            ];
-            tools.extend(screen_tools());
-            Ok(json!({ "tools": tools }))
-        }
+        "tools/list" => Ok(json!({ "tools": tools_list() })),
         "tools/call" => call_tool(&params, backend).await,
         "" => Err((INVALID_REQUEST, "invalid request: no method".into())),
         other => Err((METHOD_NOT_FOUND, format!("Method not found: {other}"))),
@@ -230,6 +231,18 @@ fn initialize(params: &Value) -> Value {
         "serverInfo": { "name": "bandito-crew", "version": env!("CARGO_PKG_VERSION") },
         "instructions": "Tools to talk to the other agents in your Bandito crew.",
     })
+}
+
+fn tools_list() -> Vec<Value> {
+    let mut tools = vec![
+        crew_list_tool(),
+        crew_send_tool(),
+        history_search_tool(),
+        history_day_tool(),
+    ];
+    tools.extend(screen_tools());
+    tools.extend(browser_tool_defs());
+    tools
 }
 
 fn crew_list_tool() -> Value {
@@ -297,6 +310,7 @@ async fn call_tool(params: &Value, backend: &dyn CrewBackend) -> Result<Value, F
         "crew_send" => Ok(tool_result(crew_send(&args, backend).await)),
         "history_search" => Ok(tool_result(history_search(&args, backend).await)),
         "history_day" => Ok(tool_result(history_day(&args, backend).await)),
+        name if BROWSER_TOOLS.contains(&name) => Ok(blocks_result(browser_tool(name, &args, backend).await)),
         _ if SCREEN_TOOLS.iter().any(|(tool, _)| *tool == name) => Ok(screen_tool(name, &args, backend).await),
         _ => Err((INVALID_PARAMS, format!("Unknown tool: {name}"))),
     }
@@ -343,6 +357,106 @@ async fn crew_send(args: &Value, backend: &dyn CrewBackend) -> Result<String, St
     Ok(format!(
         "Sent to {to}. Their answer will arrive as a new message from them."
     ))
+}
+
+/// The browser tools, in the order `tools/list` gives them. Their daemon methods: `browser.agent.*`.
+const BROWSER_TOOLS: [&str; 9] = [
+    "browser_open",
+    "browser_snapshot",
+    "browser_click",
+    "browser_type",
+    "browser_press",
+    "browser_back",
+    "browser_screenshot",
+    "browser_tabs",
+    "browser_switch",
+];
+
+fn browser_tool_defs() -> Vec<Value> {
+    vec![
+        json!({
+            "name": "browser_open",
+            "description": "Open a web page in the browser on the server, in the current tab (or a new one). Only http, https, data: and about:blank. Take a browser_snapshot after it loads.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "url": { "type": "string", "description": "Absolute URL" },
+                    "new_tab": { "type": "boolean", "description": "Open in a new tab (default false)" },
+                },
+                "required": ["url"],
+            },
+        }),
+        json!({
+            "name": "browser_snapshot",
+            "description": "Read the current page: title, URL, and its links, buttons, fields, headings and images, each with a [ref]. Take a snapshot before you click or type; refs come from the latest one.",
+            "inputSchema": { "type": "object", "properties": {} },
+        }),
+        json!({
+            "name": "browser_click",
+            "description": "Click an element by its [ref] from browser_snapshot. A click that pays, buys, sends, submits, deletes, removes, transfers or confirms first asks the user in the app; the tool waits for their answer (up to 10 minutes) and says whether the click went ahead.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "ref": { "type": "integer", "minimum": 1, "description": "The [ref] from browser_snapshot" },
+                },
+                "required": ["ref"],
+            },
+        }),
+        json!({
+            "name": "browser_type",
+            "description": "Type text into a field by its [ref] from browser_snapshot. With submit, press Enter afterwards.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "ref": { "type": "integer", "minimum": 1, "description": "The [ref] of the field" },
+                    "text": { "type": "string" },
+                    "submit": { "type": "boolean", "description": "Press Enter after typing (default false)" },
+                },
+                "required": ["ref", "text"],
+            },
+        }),
+        json!({
+            "name": "browser_press",
+            "description": "Press one key in the page.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "key": {
+                        "type": "string",
+                        "enum": [
+                            "Enter", "Tab", "Escape", "Backspace", "Delete", "Space", "ArrowUp", "ArrowDown",
+                            "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown",
+                        ],
+                    },
+                },
+                "required": ["key"],
+            },
+        }),
+        json!({
+            "name": "browser_back",
+            "description": "Go back one page in the current tab.",
+            "inputSchema": { "type": "object", "properties": {} },
+        }),
+        json!({
+            "name": "browser_screenshot",
+            "description": "A PNG screenshot of the visible part of the current page (at most 1280 px wide).",
+            "inputSchema": { "type": "object", "properties": {} },
+        }),
+        json!({
+            "name": "browser_tabs",
+            "description": "List the browser's tabs. The one you work in is marked with *.",
+            "inputSchema": { "type": "object", "properties": {} },
+        }),
+        json!({
+            "name": "browser_switch",
+            "description": "Make the tab with this index (from browser_tabs) the one you work in, and bring it to the front.",
+            "inputSchema": {
+                "type": "object",
+                "properties": { "index": { "type": "integer", "minimum": 0 } },
+                "required": ["index"],
+            },
+        }),
+    ]
 }
 
 /// Screen tools and the daemon method each one calls. The arguments are passed on as they are.
@@ -433,6 +547,81 @@ fn screen_tools() -> Vec<Value> {
             },
         }),
     ]
+}
+
+/// Runs one browser tool: its daemon method and arguments, then the reply as MCP content blocks.
+async fn browser_tool(name: &str, args: &Value, backend: &dyn CrewBackend) -> Result<Vec<Value>, String> {
+    let (method, params) = browser_call(name, args)?;
+    let reply = backend.browser(method, params).await.map_err(|e| format!("{e:#}"))?;
+    if name == "browser_screenshot" {
+        let data = reply["png_base64"]
+            .as_str()
+            .ok_or_else(|| format!("{name}: unexpected response"))?;
+        return Ok(vec![json!({ "type": "image", "data": data, "mimeType": "image/png" })]);
+    }
+    let text = reply["text"]
+        .as_str()
+        .ok_or_else(|| format!("{name}: unexpected response"))?;
+    Ok(vec![text_block(text)])
+}
+
+/// The daemon method and parameters for a browser tool; bad arguments are an error for the agent.
+fn browser_call(name: &str, args: &Value) -> Result<(&'static str, Value), String> {
+    let text = |key: &str| args.get(key).and_then(Value::as_str);
+    let node = |key: &str| {
+        args.get(key)
+            .and_then(Value::as_i64)
+            .filter(|n| *n >= 1)
+            .ok_or_else(|| format!("{name} needs \"{key}\": a ref from browser_snapshot"))
+    };
+    let flag = |key: &str| args.get(key).and_then(Value::as_bool).unwrap_or(false);
+    match name {
+        "browser_open" => {
+            let url = text("url")
+                .map(str::trim)
+                .filter(|u| !u.is_empty())
+                .ok_or_else(|| "browser_open needs \"url\"".to_string())?;
+            Ok(("browser.agent.open", json!({ "url": url, "new_tab": flag("new_tab") })))
+        }
+        "browser_snapshot" => Ok(("browser.agent.snapshot", json!({}))),
+        "browser_click" => Ok(("browser.agent.click", json!({ "ref": node("ref")? }))),
+        "browser_type" => {
+            let typed = text("text").ok_or_else(|| "browser_type needs \"text\"".to_string())?;
+            Ok((
+                "browser.agent.type",
+                json!({ "ref": node("ref")?, "text": typed, "submit": flag("submit") }),
+            ))
+        }
+        "browser_press" => {
+            let key = text("key")
+                .filter(|k| !k.is_empty())
+                .ok_or_else(|| "browser_press needs \"key\"".to_string())?;
+            Ok(("browser.agent.press", json!({ "key": key })))
+        }
+        "browser_back" => Ok(("browser.agent.back", json!({}))),
+        "browser_screenshot" => Ok(("browser.agent.screenshot", json!({}))),
+        "browser_tabs" => Ok(("browser.agent.tabs", json!({}))),
+        "browser_switch" => {
+            let index = args
+                .get("index")
+                .and_then(Value::as_u64)
+                .ok_or_else(|| "browser_switch needs \"index\": a whole number from browser_tabs".to_string())?;
+            Ok(("browser.agent.switch", json!({ "index": index })))
+        }
+        other => Err(format!("Unknown tool: {other}")),
+    }
+}
+
+fn text_block(text: &str) -> Value {
+    json!({ "type": "text", "text": text })
+}
+
+/// MCP result from content blocks. `Err` is a tool error (`isError`) with its message as the block.
+fn blocks_result(outcome: Result<Vec<Value>, String>) -> Value {
+    match outcome {
+        Ok(content) => json!({ "content": content, "isError": false }),
+        Err(text) => json!({ "content": [text_block(&text)], "isError": true }),
+    }
 }
 
 /// Runs one screen tool through the daemon. The screenshot comes back as an image block.
@@ -559,6 +748,10 @@ mod tests {
             }
             self.days.lock().unwrap().push(date.to_string());
             Ok(format!("day {date}"))
+        }
+
+        async fn browser(&self, _method: &str, _params: Value) -> Result<Value> {
+            anyhow::bail!("no browser in this test")
         }
 
         async fn screen(&self, method: &str, params: Value) -> Result<Value> {
@@ -701,6 +894,15 @@ mod tests {
                 "screen_key",
                 "screen_scroll",
                 "screen_launch",
+                "browser_open",
+                "browser_snapshot",
+                "browser_click",
+                "browser_type",
+                "browser_press",
+                "browser_back",
+                "browser_screenshot",
+                "browser_tabs",
+                "browser_switch",
             ]
         );
         assert_eq!(tools[0]["inputSchema"], json!({ "type": "object", "properties": {} }));

@@ -8,6 +8,8 @@ struct MainWindow: View {
     @Environment(AppModel.self) private var app
     @Environment(Router.self) private var router
     @Environment(GestureSettings.self) private var gestures
+    /// Shown after a rollback from "What changed", with the undo.
+    @State private var rollbackNotice: RollbackNotice?
 
     var body: some View {
         @Bindable var router = router
@@ -30,7 +32,30 @@ struct MainWindow: View {
             onBack: { router.back() },
             onForward: { router.forward() })
         .sheet(item: $router.sheet) { sheet in
-            SheetPlaceholder(sheet: sheet)
+            sheetView(for: sheet)
+        }
+        .overlay {
+            if router.paletteOpen {
+                QuickOpenPalette()
+                    .transition(.opacity)
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if let notice = rollbackNotice {
+                RollbackToast(notice: notice) { rollbackNotice = nil }
+                    .padding(.bottom, 18)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .banditoAnimation(BanditoMotion.ease, value: rollbackNotice?.id)
+    }
+
+    @ViewBuilder
+    private func sheetView(for sheet: Sheet) -> some View {
+        switch sheet {
+        case .newAgent: NewAgentSheet()
+        case .changes(let agentID): ChangesSheet(agentID: agentID) { rollbackNotice = $0 }
+        default: SheetPlaceholder(sheet: sheet)
         }
     }
 }
@@ -63,7 +88,7 @@ private struct ModeArea: View {
     }
 }
 
-/// Stand-in for the sheets whose screens come later (new agent, what changed, add server).
+/// Stand-in for the sheets whose screens come later (what changed, add server, settings).
 private struct SheetPlaceholder: View {
     var sheet: Sheet
     @Environment(\.dismiss) private var dismiss
@@ -89,6 +114,7 @@ private struct SheetPlaceholder: View {
         case .newAgent: L10n.AgentSheet.title
         case .changes: L10n.Keys.whatChanged
         case .addServer: L10n.Profile.addServer
+        case .account: L10n.Settings.Nav.account
         case .settings: L10n.Settings.title
         }
     }

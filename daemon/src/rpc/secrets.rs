@@ -77,7 +77,7 @@ async fn reload(app: &App, before: &[String], after: &[String]) -> Result<(), Rp
             .collect()
     };
     for id in ids {
-        app.sup.reload(&id, false).await;
+        app.sup.reload(&id, None).await;
     }
     Ok(())
 }
@@ -135,6 +135,8 @@ mod tests {
                 effort: None,
                 memory_mode: MemoryMode::Smart,
                 context_budget: None,
+                fallback_runtime: None,
+                fallback_model: None,
             })
             .unwrap()
             .id

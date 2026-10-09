@@ -315,6 +315,8 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr) -> Result<()> {
     let app = App::new(sup.clone(), agents_root);
 
     let unix = rpc::unix::bind(sock)?;
+    // This daemon owns the socket now, so Chrome left by an earlier daemon is ours to stop.
+    bandito::browser::reap_orphans(&bandito::setup::default_home());
     tokio::spawn(rpc::unix::run(app.clone(), unix));
 
     let tcp = tokio::net::TcpListener::bind(listen)

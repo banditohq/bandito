@@ -71,6 +71,8 @@ struct ThreadView: View {
                 agentName: agent.name,
                 running: thread.turnRunning,
                 contextFraction: ContextUsage.fraction(tokens: agent.contextTokens, budget: agent.contextBudget),
+                agent: agent,
+                server: server,
                 onSend: send,
                 onStop: stop)
                 .frame(maxWidth: 780)
@@ -82,6 +84,12 @@ struct ThreadView: View {
         .task(id: agent.id) {
             await loadHistory()
             await loadChanges()
+        }
+        // Text put here by another screen ("Ask about this place") goes into the composer, once.
+        .onChange(of: router.pendingComposerText, initial: true) { _, text in
+            guard let text else { return }
+            draft = draft.isEmpty ? text : draft + "\n" + text
+            router.pendingComposerText = nil
         }
         // The change counts are refreshed when a turn ends.
         .onChange(of: thread.turnRunning) { wasRunning, isRunning in

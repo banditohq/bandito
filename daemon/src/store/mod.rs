@@ -35,7 +35,8 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../../migrations/0003_usage_plan.sql"),
     include_str!("../../migrations/0004_checkpoints.sql"),
     include_str!("../../migrations/0005_secrets.sql"),
-    include_str!("../../migrations/0006_workspaces.sql"),
+    include_str!("../../migrations/0007_fallback.sql"),
+    include_str!("../../migrations/0008_workspaces.sql"),
 ];
 
 pub struct Store {

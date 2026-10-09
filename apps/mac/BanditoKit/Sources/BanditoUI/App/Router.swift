@@ -37,6 +37,8 @@ public enum Sheet: Identifiable, Hashable, Sendable {
     case newAgent
     case changes(agentID: String)
     case addServer
+    /// Sign in or create an account (Onboarding's account step, reused from Settings).
+    case account
     case settings(SettingsSection)
 
     public var id: String {
@@ -44,6 +46,7 @@ public enum Sheet: Identifiable, Hashable, Sendable {
         case .newAgent: "newAgent"
         case .changes(let agentID): "changes-\(agentID)"
         case .addServer: "addServer"
+        case .account: "account"
         case .settings(let section): "settings-\(section.rawValue)"
         }
     }
@@ -70,12 +73,20 @@ public final class Router {
     public var pendingTerminalCwd: String?
     /// New agent sheet: the folder the agent should work in ("Create agent in this folder"). Taken once by the sheet.
     public var pendingAgentCwd: String?
+    /// Team: text for the composer of the selected agent ("Ask about this place"). Taken once by the thread.
+    public var pendingComposerText: String?
+    /// Terminals: a command from the menu bar, waiting for the Terminals mode to perform it.
+    public var terminalRequest: TerminalRequest?
     /// Browser: the open tab.
     public var browserTabID: String?
+    /// Browser: a port an agent opened ("Open" in the sidebar, or the Agents section). Taken once by the browser mode.
+    public var pendingPreviewPort: Int?
     /// Server screen: the screen being shown.
     public var screenID: String?
     /// Server: the section in view.
     public var serverSection: ServerSection = .overview
+    /// Terminals: a command to type into a new terminal (Server → Install, Update). Taken once by the terminals.
+    public var pendingTerminalCommand: String?
 
     public var sheet: Sheet?
     /// The quick-open palette (⌘K).

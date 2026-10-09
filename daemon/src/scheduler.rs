@@ -274,6 +274,8 @@ mod tests {
                 effort: None,
                 memory_mode: crate::store::MemoryMode::Smart,
                 context_budget: None,
+                fallback_runtime: None,
+                fallback_model: None,
             })
             .unwrap();
         // No runtimes: a send fails after emitting an `error` event, which
@@ -446,6 +448,8 @@ mod tests {
                 effort: None,
                 memory_mode: crate::store::MemoryMode::Smart,
                 context_budget: None,
+                fallback_runtime: None,
+                fallback_model: None,
             })
             .unwrap();
         let s = store
