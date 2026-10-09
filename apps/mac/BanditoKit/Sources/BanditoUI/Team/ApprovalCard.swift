@@ -45,7 +45,8 @@ struct ApprovalCard: View {
                     .font(BanditoFont.font(size: 14.5, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                 Spacer(minLength: 8)
-                Text(L10n.Approval.rule(rule: row.reason))
+                Text(ApprovalReason.text(row.reason))
+                    .help(row.reason)
                     .font(BanditoFont.font(size: 11.5, weight: 500))
                     .foregroundStyle(Color.Bandito.text3)
                     .lineLimit(1)
@@ -191,5 +192,33 @@ struct CheckBoxRow: View {
         }
         .banditoButton(.row(cornerRadius: 6))
         .accessibilityAddTraits(isOn ? .isSelected : [])
+    }
+}
+
+/// The daemon's reason for asking, in words: `risky: rm -r` → "deletes a whole folder". An unknown reason is shown as
+/// it came, after "rule:".
+enum ApprovalReason {
+    static func text(_ reason: String) -> String {
+        let r = reason.trimmingCharacters(in: .whitespaces)
+        if r.hasPrefix("risky: ") {
+            let rule = String(r.dropFirst("risky: ".count))
+            switch rule {
+            case "rm -r": return L10n.Approval.Why.deleteFolder
+            case "git push": return L10n.Approval.Why.gitPush
+            case "sql": return L10n.Approval.Why.sql
+            case "sudo": return L10n.Approval.Why.sudo
+            case "npm publish", "cargo publish": return L10n.Approval.Why.publish
+            default: return L10n.Approval.Why.risky(rule: rule)
+            }
+        }
+        if r.hasPrefix("reads credentials: ") {
+            return L10n.Approval.Why.credentials(folder: String(r.dropFirst("reads credentials: ".count)))
+        }
+        if r.hasPrefix("writes outside ") { return L10n.Approval.Why.outside }
+        if r.hasPrefix("can't check") { return L10n.Approval.Why.cantCheck }
+        if r == "approval required for every action" { return L10n.Approval.Why.always }
+        if r.hasPrefix("rule: ") { return L10n.Approval.Why.yourRule(rule: String(r.dropFirst("rule: ".count))) }
+        if r == "touches Bandito's files by name" { return L10n.Approval.Why.bandito }
+        return L10n.Approval.rule(rule: r)
     }
 }

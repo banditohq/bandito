@@ -304,6 +304,22 @@
 			<string>%1$lld windows</string>
 		</dict>
 	</dict>
+	<key>thread.notRanCommands</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%1$lld command did not run</string>
+			<key>other</key>
+			<string>%1$lld commands did not run</string>
+		</dict>
+	</dict>
 	<key>thread.ranCommands</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
@@ -318,6 +334,22 @@
 			<string>Ran %1$lld command</string>
 			<key>other</key>
 			<string>Ran %1$lld commands</string>
+		</dict>
+	</dict>
+	<key>thread.runningCommands</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>Running %1$lld command</string>
+			<key>other</key>
+			<string>Running %1$lld commands</string>
 		</dict>
 	</dict>
 </dict>

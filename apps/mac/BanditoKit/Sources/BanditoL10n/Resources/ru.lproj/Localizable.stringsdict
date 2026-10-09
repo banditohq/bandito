@@ -382,6 +382,26 @@
 			<string>%1$lld окна</string>
 		</dict>
 	</dict>
+	<key>thread.notRanCommands</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%1$lld команды не выполнены</string>
+			<key>many</key>
+			<string>%1$lld команд не выполнено</string>
+			<key>one</key>
+			<string>%1$lld команда не выполнена</string>
+			<key>other</key>
+			<string>%1$lld команды не выполнены</string>
+		</dict>
+	</dict>
 	<key>thread.ranCommands</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
@@ -400,6 +420,26 @@
 			<string>Выполнил %1$lld команду</string>
 			<key>other</key>
 			<string>Выполнил %1$lld команды</string>
+		</dict>
+	</dict>
+	<key>thread.runningCommands</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>Выполняет %1$lld команды</string>
+			<key>many</key>
+			<string>Выполняет %1$lld команд</string>
+			<key>one</key>
+			<string>Выполняет %1$lld команду</string>
+			<key>other</key>
+			<string>Выполняет %1$lld команды</string>
 		</dict>
 	</dict>
 </dict>

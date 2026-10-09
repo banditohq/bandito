@@ -234,6 +234,21 @@ public enum L10n {
         public static func rule(rule: String) -> String { L10n.tr("approval.rule", rule) }
         public static func wants(name: String) -> String { L10n.tr("approval.wants", name) }
         public static func wantsPush(name: String) -> String { L10n.tr("approval.wantsPush", name) }
+
+        public enum Why {
+            public static var always: String { L10n.tr("approval.why.always") }
+            public static var bandito: String { L10n.tr("approval.why.bandito") }
+            public static var cantCheck: String { L10n.tr("approval.why.cantCheck") }
+            public static func credentials(folder: String) -> String { L10n.tr("approval.why.credentials", folder) }
+            public static var deleteFolder: String { L10n.tr("approval.why.deleteFolder") }
+            public static var gitPush: String { L10n.tr("approval.why.gitPush") }
+            public static var outside: String { L10n.tr("approval.why.outside") }
+            public static var publish: String { L10n.tr("approval.why.publish") }
+            public static func risky(rule: String) -> String { L10n.tr("approval.why.risky", rule) }
+            public static var sql: String { L10n.tr("approval.why.sql") }
+            public static var sudo: String { L10n.tr("approval.why.sudo") }
+            public static func yourRule(rule: String) -> String { L10n.tr("approval.why.yourRule", rule) }
+        }
     }
 
     public enum ApprovalMode {
@@ -2041,11 +2056,13 @@ public enum L10n {
         public static func messageFor(name: String) -> String { L10n.tr("thread.messageFor", name) }
         public static func messageFrom(name: String) -> String { L10n.tr("thread.messageFrom", name) }
         public static var more: String { L10n.tr("thread.more") }
+        public static func notRanCommands(count: Int) -> String { L10n.tr("thread.notRanCommands", count) }
         public static var placeholder: String { L10n.tr("thread.placeholder") }
         public static func ranCommands(count: Int) -> String { L10n.tr("thread.ranCommands", count) }
         public static var react: String { L10n.tr("thread.react") }
         public static var reply: String { L10n.tr("thread.reply") }
         public static func reviewApproved(name: String) -> String { L10n.tr("thread.reviewApproved", name) }
+        public static func runningCommands(count: Int) -> String { L10n.tr("thread.runningCommands", count) }
         public static func runtimeLimit(from: String, to: String) -> String { L10n.tr("thread.runtimeLimit", from, to) }
         public static func runtimeLimitUntil(from: String, to: String, time: String) -> String { L10n.tr("thread.runtimeLimitUntil", from, to, time) }
         public static func runtimeReturned(runtime: String) -> String { L10n.tr("thread.runtimeReturned", runtime) }

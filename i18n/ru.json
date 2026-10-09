@@ -1,4 +1,28 @@
 {
+  "thread.notRanCommands": {
+    "one": "{count} команда не выполнена",
+    "few": "{count} команды не выполнены",
+    "many": "{count} команд не выполнено",
+    "other": "{count} команды не выполнены"
+  },
+  "thread.runningCommands": {
+    "one": "Выполняет {count} команду",
+    "few": "Выполняет {count} команды",
+    "many": "Выполняет {count} команд",
+    "other": "Выполняет {count} команды"
+  },
+  "approval.why.bandito": "трогает файлы самого Bandito",
+  "approval.why.yourRule": "ваше правило: {rule}",
+  "approval.why.always": "вы просили спрашивать обо всём",
+  "approval.why.cantCheck": "Bandito не может проверить эту команду",
+  "approval.why.outside": "пишет за пределами проекта",
+  "approval.why.credentials": "читает ключи и пароли в {folder}",
+  "approval.why.risky": "рискованно: {rule}",
+  "approval.why.publish": "публикует пакет",
+  "approval.why.sudo": "запускает от администратора",
+  "approval.why.sql": "меняет базу данных",
+  "approval.why.gitPush": "отправляет код в удалённый репозиторий",
+  "approval.why.deleteFolder": "удаляет папку целиком",
   "thread.chapterSaved": "Глава {chapter} · память сохранена",
   "thread.savingMemory": "Сохраняет память перед новой главой",
   "thread.aTeammate": "коллеги",
