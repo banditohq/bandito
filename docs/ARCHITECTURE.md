@@ -160,7 +160,7 @@ Notifications, sent on the connection that attached (every one has `id`):
 | `term.exit` | `{id, code, signal}` | the program ended; `code` or `signal` is null |
 | `term.closed` | `{id}` | the terminal was closed; the connection is no longer attached to it |
 
-Offsets: each terminal counts its output bytes from 0 and never resets. A client remembers the offset just past the last byte it has; `term.attach {from}` continues from there. A connection that goes away detaches from all its terminals, which keeps running. An app that collapses a terminal sends `term.detach`; to show it again it sends `term.attach` with the stored offset.
+Offsets: each terminal counts its output bytes from 0 and never resets. A client remembers the offset just past the last byte it has; `term.attach {from}` continues from there. A connection that goes away detaches from all its terminals, which keeps running. An app that collapses a terminal keeps its stream attached: the pane leaves the screen, but the app still reads the output (line counts, the dock's sparkline, the waiting-for-input prompt) and keeps the emulator state in memory. It sends `term.detach` only when it stops following the terminal: on quitting, on removing the server, or after a close. A detached terminal is shown again with `term.attach` from the stored offset.
 
 Limits: 16 live terminals (an exited one keeps its slot until closed); 512 KiB of output history per terminal; 64 KiB per `term.input`. An input that cannot be written within 5 s fails with `busy`, and a prefix of it may already have been written.
 

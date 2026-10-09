@@ -16,11 +16,20 @@ let package = Package(
         .library(name: "BanditoL10n", targets: ["BanditoL10n"]),
         .library(name: "BanditoUI", targets: ["BanditoUI"]),
     ],
+    dependencies: [
+        // Terminal emulator for the Terminals mode. Pinned to the last stable minor: 1.99.0 and 1.20.0 are previews.
+        .package(url: "https://github.com/migueldeicaza/SwiftTerm", .upToNextMinor(from: "1.19.0")),
+    ],
     targets: [
         .target(name: "BanditoKit"),
         .target(name: "BanditoDesign", resources: [.process("Colors.xcassets")]),
         .target(name: "BanditoL10n", resources: [.process("Resources")]),
-        .target(name: "BanditoUI", dependencies: ["BanditoKit", "BanditoDesign", "BanditoL10n"]),
+        .target(
+            name: "BanditoUI",
+            dependencies: [
+                "BanditoKit", "BanditoDesign", "BanditoL10n",
+                .product(name: "SwiftTerm", package: "SwiftTerm", condition: .when(platforms: [.macOS, .iOS])),
+            ]),
         .testTarget(name: "BanditoKitTests", dependencies: ["BanditoKit", "BanditoL10n"]),
         .testTarget(name: "BanditoUITests", dependencies: ["BanditoUI", "BanditoKit", "BanditoL10n"]),
     ]

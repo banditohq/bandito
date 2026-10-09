@@ -64,6 +64,10 @@ public final class Router {
     public var filesPath: String?
     /// Terminals: the terminal pane in focus.
     public var terminalID: String?
+    /// Terminals: the folder for the next new terminal (absolute on the server). Used once, then cleared.
+    public var pendingTerminalCwd: String?
+    /// Terminals: a command from the menu bar, waiting for the Terminals mode to perform it.
+    public var terminalRequest: TerminalRequest?
     /// Browser: the open tab.
     public var browserTabID: String?
     /// Server screen: the screen being shown.

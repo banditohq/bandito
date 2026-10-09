@@ -22,6 +22,11 @@ public struct BanditoCommands: Commands {
         CommandGroup(replacing: .appSettings) {
             item("global.settings") { WindowActions.showSettings() }
         }
+        // ⌘W is the terminal close in the Terminals mode, so the window closes with ⇧⌘W.
+        CommandGroup(replacing: .saveItem) {
+            Button(L10n.Keys.closeWindow) { WindowActions.closeKeyWindow() }
+                .keyboardShortcut("w", modifiers: [.command, .shift])
+        }
         CommandGroup(replacing: .sidebar) {
             item("global.mode.team") { router.select(mode: .team) }
             item("global.mode.files") { router.select(mode: .files) }
@@ -46,6 +51,26 @@ public struct BanditoCommands: Commands {
             item("team.previousAgent") { moveSelection(by: -1) }
             item("team.nextAgent") { moveSelection(by: 1) }
         }
+        CommandMenu(L10n.Menu.terminals) {
+            terminal("terminals.new", .new)
+            terminal("terminals.splitVertical", .splitVertical)
+            terminal("terminals.splitHorizontal", .splitHorizontal)
+            Divider()
+            terminal("terminals.collapse", .collapse)
+            terminal("terminals.restoreCollapsed", .restoreLast)
+            Divider()
+            terminal("terminals.paneLeft", .move(.left))
+            terminal("terminals.paneRight", .move(.right))
+            terminal("terminals.paneUp", .move(.up))
+            terminal("terminals.paneDown", .move(.down))
+            Divider()
+            terminal("terminals.close", .close)
+            terminal("terminals.clear", .clear)
+            Divider()
+            terminal("terminals.fontBigger", .fontBigger)
+            terminal("terminals.fontSmaller", .fontSmaller)
+            terminal("terminals.fontReset", .fontReset)
+        }
         CommandMenu(L10n.Menu.agent) {
             item("global.newAgent") { router.sheet = .newAgent }
             item("team.agentDetails") { router.inspectorOpen.toggle() }
@@ -68,6 +93,12 @@ public struct BanditoCommands: Commands {
     private func item(_ commandID: String, action: @escaping () -> Void) -> some View {
         Button(Command.find(commandID)?.title ?? commandID, action: action)
             .banditoShortcut(keymap.binding(for: commandID))
+    }
+
+    /// A terminal command: it is handed to the Terminals mode, so it only works while that mode is shown.
+    private func terminal(_ commandID: String, _ action: TerminalRequest.Action) -> some View {
+        item(commandID) { router.terminalRequest = TerminalRequest(action) }
+            .disabled(router.mode != .terminals)
     }
 
     // MARK: actions
