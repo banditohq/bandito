@@ -1412,6 +1412,7 @@ public enum L10n {
         public static var title: String { L10n.tr("screen.title") }
         public static var transfer: String { L10n.tr("screen.transfer") }
         public static var unsupported: String { L10n.tr("screen.unsupported") }
+        public static var unsupportedText: String { L10n.tr("screen.unsupportedText") }
         public static var who: String { L10n.tr("screen.who") }
         public static var workplaces: String { L10n.tr("screen.workplaces") }
         public static var youWatch: String { L10n.tr("screen.youWatch") }

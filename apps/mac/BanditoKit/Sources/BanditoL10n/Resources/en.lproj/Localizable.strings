@@ -1033,7 +1033,8 @@
 "screen.start" = "Start screen";
 "screen.title" = "Server screen";
 "screen.transfer" = "Transfer";
-"screen.unsupported" = "The server screen is available on Linux servers";
+"screen.unsupported" = "The server screen works on Linux servers";
+"screen.unsupportedText" = "On a Linux server Bandito shows its desktop here: agents use apps on it, and you can watch or take over. A Mac does not need it — its screen is right in front of you.";
 "screen.who" = "Who is here";
 "screen.workplaces" = "Screens of workplaces";
 "screen.youWatch" = "You are watching";

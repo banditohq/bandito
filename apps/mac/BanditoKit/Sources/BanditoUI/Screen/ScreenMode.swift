@@ -245,6 +245,9 @@ struct ScreenSidebar: View {
     var body: some View {
         if let server = app.currentServer, server.supports("screen") {
             ScreenSidebarContent(model: ScreenStore.shared.model(for: server))
+        } else if let os = app.currentServer?.info?.os, os != "linux" {
+            // Not an old daemon: this system has no server screen. The main area says why; the sidebar stays empty.
+            Color.clear
         } else {
             SidebarPlaceholder(mode: .screen)
         }
@@ -352,13 +355,24 @@ private struct ScreenSidebarContent: View {
 
 private struct ScreenUnsupported: View {
     var body: some View {
-        VStack(spacing: 14) {
-            ExampleChip()
+        VStack(spacing: 12) {
+            Image(systemName: "display")
+                .font(.system(size: 34, weight: .light))
+                .foregroundStyle(Color.Bandito.text3)
+                .padding(.bottom, 4)
             Text(L10n.Screen.unsupported)
-                .font(.system(size: 14, weight: .semibold))
+                .font(BanditoFont.font(size: 18, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
                 .multilineTextAlignment(.center)
+            Text(L10n.Screen.unsupportedText)
+                .font(BanditoFont.font(size: 13.5, weight: 400))
+                .foregroundStyle(Color.Bandito.text2)
+                .multilineTextAlignment(.center)
+                .lineSpacing(2)
+                .frame(maxWidth: 440)
+                .fixedSize(horizontal: false, vertical: true)
         }
+        .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
