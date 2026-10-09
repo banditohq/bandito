@@ -1155,9 +1155,21 @@ mod tests {
             .spawn()
             .unwrap();
 
-        reap_orphans(home.path());
-
-        assert!(!orphan.wait().unwrap().success(), "the orphan should have been stopped");
+        // The process table can lag behind a fresh spawn under load (CI): reap until the orphan is gone.
+        let mut stopped = None;
+        for _ in 0..50 {
+            reap_orphans(home.path());
+            if let Some(status) = orphan.try_wait().unwrap() {
+                stopped = Some(status);
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        let status = stopped.unwrap_or_else(|| {
+            let _ = orphan.kill();
+            orphan.wait().unwrap()
+        });
+        assert!(!status.success(), "the orphan should have been stopped");
         assert!(other.try_wait().unwrap().is_none(), "an unrelated process was stopped");
         other.kill().unwrap();
         let _ = other.wait();

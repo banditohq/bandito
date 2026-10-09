@@ -1,11 +1,15 @@
+import BanditoKit
 import Foundation
 import Security
 
 /// Device tokens live in the login Keychain, one item per server.
 enum Keychain {
-    private static let service = "dev.bandito.mac.server-token"
+    private static let service = KeychainNamespace.scoped("dev.bandito.mac.server-token")
 
     static func token(for server: UUID) -> String? {
+        if let file = KeychainNamespace.debugFileStore(service: service) {
+            return (try? file.load(account: server.uuidString)).flatMap { $0 }.flatMap { String(data: $0, encoding: .utf8) }
+        }
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -24,6 +28,9 @@ enum Keychain {
     /// Returns whether the change was made (clearing an absent token counts as made).
     @discardableResult
     static func setToken(_ token: String?, for server: UUID) -> Bool {
+        if let file = KeychainNamespace.debugFileStore(service: service) {
+            return (try? file.save(token.map { Data($0.utf8) }, account: server.uuidString)) != nil
+        }
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,

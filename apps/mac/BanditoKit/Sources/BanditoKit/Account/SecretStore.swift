@@ -19,10 +19,11 @@ public struct KeychainStore: SecretStore {
     public let service: String
 
     public init(service: String) {
-        self.service = service
+        self.service = KeychainNamespace.scoped(service)
     }
 
     public func load(account: String) throws -> Data? {
+        if let file = KeychainNamespace.debugFileStore(service: service) { return try file.load(account: account) }
         var query = baseQuery(account: account)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
@@ -35,6 +36,9 @@ public struct KeychainStore: SecretStore {
 
     /// Replaces the value in place (`SecItemUpdate`), or adds it when there is none. Only `save(nil)` deletes.
     public func save(_ data: Data?, account: String) throws {
+        if let file = KeychainNamespace.debugFileStore(service: service) {
+            return try file.save(data, account: account)
+        }
         let query = baseQuery(account: account)
         guard let data else {
             let status = SecItemDelete(query as CFDictionary)
@@ -65,6 +69,40 @@ public struct KeychainStore: SecretStore {
             kSecAttrAccount as String: account,
             kSecAttrSynchronizable as String: false,
         ]
+    }
+}
+
+/// Files with mode 0600 in a 0700 folder, one file per account. Only debug builds use it (see
+/// `KeychainNamespace.debugFileStore`): an ad hoc signed build is a new app to the Keychain after every
+/// rebuild, so the Keychain would ask for the login password each time.
+public struct FileSecretStore: SecretStore {
+    public let directory: URL
+
+    public init(directory: URL) {
+        self.directory = directory
+    }
+
+    public func load(account: String) throws -> Data? {
+        let url = file(for: account)
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        return try Data(contentsOf: url)
+    }
+
+    public func save(_ data: Data?, account: String) throws {
+        let url = file(for: account)
+        guard let data else {
+            try? FileManager.default.removeItem(at: url)
+            return
+        }
+        try FileManager.default.createDirectory(
+            at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        try data.write(to: url, options: [.atomic])
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+    }
+
+    private func file(for account: String) -> URL {
+        // Account names are ids and fixed words; hex keeps any other character out of the path.
+        directory.appending(path: Data(account.utf8).map { String(format: "%02x", $0) }.joined())
     }
 }
 
