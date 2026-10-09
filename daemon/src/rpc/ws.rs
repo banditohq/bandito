@@ -1,10 +1,13 @@
 //! HTTP + WebSocket transport: `GET /v1/health`, `GET /v1/rpc` (WebSocket),
 //! `GET` and `HEAD /v1/files/raw` (file bytes, see docs/ARCHITECTURE.md#files),
 //! `GET /v1/tunnel` (TCP to the server's loopback, see docs/ARCHITECTURE.md#tunnel).
+//! `GET /v1/browser/tabs`, `GET /v1/browser/cdp[/page/<id>]` (the browser's DevTools protocol, see
+//! docs/ARCHITECTURE.md#browser).
 //! Auth: `Authorization: Bearer <device token>`. Without a token the socket
 //! is anonymous (only `daemon.hello` and `pair.redeem`); raw files and the
 //! tunnel need a token.
 
+use super::browser;
 use super::tunnel;
 use super::{App, Peer, preview, serve};
 use crate::files::{EntryKind, FsError};
@@ -32,6 +35,9 @@ pub fn router(app: Arc<App>) -> Router {
         .route("/v1/rpc", get(rpc))
         .route("/v1/files/raw", get(files_raw))
         .route("/v1/tunnel", get(tunnel_upgrade))
+        .route("/v1/browser/tabs", get(browser::tabs))
+        .route("/v1/browser/cdp", get(browser::cdp_browser))
+        .route("/v1/browser/cdp/page/{target_id}", get(browser::cdp_page))
         .route("/v1/proxy/{*rest}", any(preview_proxy))
         .with_state(app)
 }
@@ -69,7 +75,7 @@ fn device_for(app: &App, headers: &HeaderMap) -> Result<Option<Device>, (StatusC
 
 /// The paired device behind the request. The error is the status and message to
 /// send when the request has a browser origin, or the token is missing or unknown.
-fn require_device(app: &App, headers: &HeaderMap) -> Result<Device, (StatusCode, &'static str)> {
+pub(super) fn require_device(app: &App, headers: &HeaderMap) -> Result<Device, (StatusCode, &'static str)> {
     if has_browser_origin(headers) {
         return Err((StatusCode::FORBIDDEN, "browser origins are not allowed"));
     }

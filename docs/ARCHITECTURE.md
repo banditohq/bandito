@@ -100,7 +100,7 @@ JSON-RPC 2.0. Same methods on every transport.
 The daemon always listens on:
 
 1. Unix socket `~/.bandito/bandito.sock` (0600). Trusted: same user.
-2. `127.0.0.1:7878` HTTP + WebSocket (`/v1/rpc`, `/v1/health`, `/v1/files/raw`, `/v1/tunnel`). Token required.
+2. `127.0.0.1:7878` HTTP + WebSocket (`/v1/rpc`, `/v1/health`, `/v1/files/raw`, `/v1/tunnel`, `/v1/browser/*`). Token required.
 
 WebSocket upgrades that carry an `Origin` header are refused: native apps don't send one, browsers always do, so a web page can't drive the daemon through the user's browser. Unix socket paths are limited to ~104 bytes on macOS, so keep `BANDITO_HOME` short.
 
@@ -143,13 +143,27 @@ Browser tools are on the same server, through the same crew MCP: `browser_open`,
 
 ## Browser
 
-The server runs one Chrome per workspace (`shared` by default). The app watches it, and agents drive it, through the same daemon. Code: `daemon/src/browser.rs` (manager, approvals), `daemon/src/cdp.rs` (DevTools client, snapshot), `daemon/src/rpc/browser.rs` (methods). Feature string: `"browser"`. The screen feature (Xvfb) is separate; the browser runs `--headless=new` for now.
+The server runs one Chrome per workspace (`shared` by default). The app watches it, and agents drive it, through the same daemon. Code: `daemon/src/browser.rs` (manager, approvals), `daemon/src/cdp.rs` (DevTools client, snapshot), `daemon/src/cdp_pipe.rs` (pipes and relay), `daemon/src/rpc/browser.rs` (methods and routes). Feature string: `"browser"`. The screen feature (Xvfb) is separate; the browser runs `--headless=new` for now.
 
-**Start.** `browser.start{workspace?}` finds `google-chrome`, `google-chrome-stable`, `chromium` or `chromium-browser` on `PATH`, and on macOS `/Applications/Google Chrome.app` first. It starts Chrome on a free loopback port, in its own process group, with `--headless=new --remote-debugging-address=127.0.0.1` and the profile `<data dir>/workspaces/<workspace>/browser` (`<data dir>` is `$BANDITO_HOME` or `~/.bandito`). Chrome's output goes to `browser.log` in the workspace folder. The daemon waits up to 10 s for the DevTools port. Without a browser the error has `reason: "missing_component"` and `component: "browser"`, and the app offers the install from setup.
+**Start.** `browser.start{workspace?}` finds `google-chrome`, `google-chrome-stable`, `chromium` or `chromium-browser` on `PATH`, and on macOS `/Applications/Google Chrome.app` first. It starts Chrome in its own process group, with `--headless=new --remote-debugging-pipe` and the profile `<data dir>/workspaces/<workspace>/browser` (`<data dir>` is `$BANDITO_HOME` or `~/.bandito`). Chrome opens no TCP port. The DevTools protocol runs over two pipes: Chrome reads commands on fd 3 and writes answers and events on fd 4, each message JSON followed by a NUL byte. The daemon sets the pipes up in the child with `pre_exec` (`dup2` onto 3 and 4). Chrome's output goes to `browser.log` in the workspace folder. The daemon waits up to 10 s for `Browser.getVersion` to answer. Without a browser the error has `reason: "missing_component"` and `component: "browser"`, and the app offers the install from setup.
 
-**The app.** The app opens the page's DevTools WebSocket through the tunnel (`GET /v1/tunnel?port=<cdp_port>`, see [Tunnel](#tunnel)) and runs a CDP screencast on it. The daemon does not relay frames. `browser.status` answers `{running, cdp_port, browser_ws_path, pid, started_at, controller}`, where `controller` is `user`, `agent` or `none`. `browser.control{workspace?, holder}` sets who drives it. `browser.stop` stops it, and `browser.touch` only counts as activity.
+**Relay.** One task owns both pipes (`cdp_pipe.rs`), and every client is a view on it. A client's command gets a new id from the relay, and the answer goes back with the client's own id, so two clients may use the same ids. A client may have 256 commands unanswered; the 257th gets `{"id", "error": {"code": -32000, "message": "too many pending commands"}}`. A session event (one with `sessionId`) goes to the client that owns the session. A browser-level event goes to every browser-level client. A tab client attaches its tab when it is made (`Target.attachToTarget`, flattened), detaches it when it goes (`Target.detachFromTarget`), and sees plain CDP: no `sessionId` on its messages. When the tab closes, its client gets `Target.detachedFromTarget` and then its connection ends. A client whose queue of 1024 messages is full is disconnected, not waited for. A message from Chrome over 64 MiB, or one that is not JSON, is treated as a crash: the pipe closes, the browser is stopped, and the next call starts it again. Agents (`browser.agent.*`) use the relay directly, with a tab client per call.
 
-**Idle stop.** A browser with no agent call and no `browser.status` or `browser.touch` for 30 minutes is stopped; the check runs every minute. The app calls `browser.touch` while it shows the browser.
+**The app.** The app speaks DevTools over the routes below, with its device token, and runs a CDP screencast on the tab socket. The daemon does not relay frames. `browser.status` answers `{running, cdp, pid, started_at, controller}`, where `cdp` is `"relay"` while the browser runs (`null` when stopped) and `controller` is `user`, `agent` or `none`.
+
+**Routes.** Device token only (`Authorization: Bearer`; a request with `Origin` gets 403), as for the file routes. `?workspace=<name>` is optional (default `shared`) and checked like the `browser.*` methods (400 when bad). The checks run before the upgrade.
+
+- `GET /v1/browser/tabs` answers `200` with `[{"id", "type": "page", "title", "url"}]`: the pages of the browser, as DevTools' `/json/list` lists them.
+- `GET /v1/browser/cdp` (WebSocket): the browser level. Commands carry no `sessionId`; the socket gets browser-level events.
+- `GET /v1/browser/cdp/page/{target_id}` (WebSocket): one tab, as a plain CDP session. `target_id` is 1 to 64 ASCII letters or digits, else 400. No such tab: 404 `{"error": "no_such_tab"}`.
+- No browser running: 409 `{"error": "browser_not_running"}` (the tabs route too). A device may hold 16 of these sockets at once; the 17th gets 429.
+- A WebSocket carries one CDP message per text frame, in each direction. Binary frames are ignored.
+
+`browser.control{workspace?, holder}` sets who drives it. `browser.stop` stops it, and `browser.touch` only counts as activity.
+
+Chrome has no DevTools port any more, so `/v1/tunnel` cannot reach the browser. The old `browser.status` fields `cdp_port` and `browser_ws_path` are gone.
+
+**Idle stop.** A browser with no agent call, no `browser.status` or `browser.touch`, and no opened `/v1/browser/*` socket for 30 minutes is stopped; the check runs every minute. An open socket alone does not count, so the app calls `browser.touch` while it shows the browser.
 
 **Errors.** `BROWSER_ERROR` (-32026), with `error.data.reason`: `missing_component`, `start_failed`, `unsupported` (not Linux or macOS), `not_running`, `user_controls`, `declined`, `failed`. A bad workspace name (letters, digits, `-`, `_`, up to 64) or a URL that is not `http`, `https`, `data:` or `about:blank` is `-32602`.
 
@@ -273,7 +287,7 @@ Params are objects; unknown fields are `invalid_params`.
 
 ## Tunnel
 
-`GET /v1/tunnel?port=<1..=65535>` is a WebSocket that carries one TCP connection to `127.0.0.1:<port>` on the server. It lets the app reach what agents start on the server, such as a dev server on `localhost:3000`. Later it carries the server's screen (VNC) and a browser's DevTools port (CDP). The client listens on a local port of its own and sends the traffic through this socket: a WKWebView points at the local port, a VNC viewer connects to it.
+`GET /v1/tunnel?port=<1..=65535>` is a WebSocket that carries one TCP connection to `127.0.0.1:<port>` on the server. It lets the app reach what agents start on the server, such as a dev server on `localhost:3000`. Later it carries the server's screen (VNC). A browser's DevTools protocol does not go through it: see [Browser](#browser). The client listens on a local port of its own and sends the traffic through this socket: a WKWebView points at the local port, a VNC viewer connects to it.
 
 **Access.** Same as the file routes: a paired device only. Without `Authorization: Bearer` the upgrade is 401, and so is an unknown or revoked token. An `Origin` header is 403. Checks run before the upgrade, so a refusal is a plain HTTP response.
 

@@ -1,15 +1,18 @@
-//! Chrome DevTools Protocol client for the agent's browser tools: one WebSocket per
-//! operation, commands answered by id, events queued while a command waits.
-//! See docs/ARCHITECTURE.md#browser.
+//! Chrome DevTools Protocol client for the agent's browser tools and the app's socket helpers:
+//! commands answered by id, events queued while a command waits. The transport is a
+//! [`CdpTransport`]: a relay client (see `cdp_pipe`), in production. See docs/ARCHITECTURE.md#browser.
 
 use anyhow::{Context, Result, anyhow, bail};
-use futures_util::{SinkExt, StreamExt};
 use serde_json::{Value, json};
 use std::collections::VecDeque;
+use std::future::Future;
 use std::time::Duration;
-use tokio::net::TcpStream;
-use tokio_tungstenite::tungstenite::Message;
-use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
+
+/// Moves CDP messages (JSON text) to and from one browser or tab.
+pub trait CdpTransport: Send {
+    fn send(&mut self, text: String) -> impl Future<Output = Result<()>> + Send;
+    fn recv(&mut self) -> impl Future<Output = Result<String>> + Send;
+}
 
 /// Longest a navigation may take to fire its load event.
 pub const LOAD_TIMEOUT: Duration = Duration::from_secs(30);
@@ -36,23 +39,20 @@ const SNAPSHOT_ROLES: [&str; 11] = [
     "image",
 ];
 
-/// One open DevTools WebSocket (a page, or the browser itself).
-pub struct Cdp {
-    ws: WebSocketStream<MaybeTlsStream<TcpStream>>,
+/// The CDP session of one browser or one tab, over any [`CdpTransport`].
+pub struct Cdp<T> {
+    transport: T,
     next_id: u64,
     events: VecDeque<Value>,
 }
 
-impl Cdp {
-    pub async fn connect(url: &str) -> Result<Self> {
-        let (ws, _) = connect_async(url)
-            .await
-            .with_context(|| format!("cannot connect to the browser at {url}"))?;
-        Ok(Self {
-            ws,
+impl<T: CdpTransport> Cdp<T> {
+    pub fn new(transport: T) -> Self {
+        Self {
+            transport,
             next_id: 1,
             events: VecDeque::new(),
-        })
+        }
     }
 
     /// Send one command and return its `result`. Events that arrive first are kept for [`Cdp::wait_event`].
@@ -60,7 +60,7 @@ impl Cdp {
         let id = self.next_id;
         self.next_id += 1;
         let request = json!({ "id": id, "method": method, "params": params });
-        self.ws.send(Message::Text(request.to_string().into())).await?;
+        self.transport.send(request.to_string()).await?;
         loop {
             let msg = self.read().await?;
             if msg.get("id") == Some(&json!(id)) {
@@ -96,15 +96,8 @@ impl Cdp {
     }
 
     async fn read(&mut self) -> Result<Value> {
-        loop {
-            match self.ws.next().await {
-                Some(Ok(Message::Text(text))) => return Ok(serde_json::from_str(&text)?),
-                Some(Ok(Message::Close(_))) | None => bail!("the browser closed the connection"),
-                // Pings are answered by the library; binary frames are not used.
-                Some(Ok(_)) => continue,
-                Some(Err(e)) => return Err(e.into()),
-            }
-        }
+        let text = self.transport.recv().await?;
+        Ok(serde_json::from_str(&text)?)
     }
 
     fn keep_event(&mut self, msg: Value) {

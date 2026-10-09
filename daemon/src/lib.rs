@@ -2,6 +2,7 @@
 
 pub mod browser;
 pub mod cdp;
+pub mod cdp_pipe;
 pub mod checkpoint;
 pub mod commands;
 pub mod crew;
