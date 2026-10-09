@@ -21,7 +21,7 @@ Status: working design, October 2026. This file is the source of truth for the M
 ```
 
 - The daemon runs as the user who owns the CLI logins (`~/.claude`, `~/.codex`, `~/.grok`), never as root.
-- One binary: `bandito daemon` (foreground), `bandito pair`, `bandito info`, `bandito status`, `bandito mcp` (crew MCP over stdio, proxies to the daemon socket), `bandito service install|uninstall|status` (see [Install and service](#install-and-service)).
+- One binary: `bandito daemon` (foreground), `bandito pair`, `bandito info`, `bandito status`, `bandito mcp [--token-file <path>]` (crew MCP over stdio, proxies to the daemon's `agent.sock` with the agent's session token), `bandito service install|uninstall|status` (see [Install and service](#install-and-service)), `bandito update` (see [Self-update](#self-update)).
 
 ## Runtimes
 
@@ -47,7 +47,7 @@ Everything an agent does becomes a row in `events` (append-only, global `seq`). 
 | kind | payload |
 |---|---|
 | `turn.started` | `{turn_id, source: "user"\|"schedule"\|"crew"}` |
-| `message.user` | `{text, source, from_agent?}` |
+| `message.user` | `{text, source, from_agent?, command?}` (`text` is what the person typed; `command` names a slash command, see [Commands](#commands)) |
 | `message.assistant` | `{text}` (final text of a message) |
 | `message.delta` | `{text}` streaming chunk, **not persisted**, broadcast only |
 | `tool.call` | `{call_id, tool, title, input}` |
@@ -57,6 +57,7 @@ Everything an agent does becomes a row in `events` (append-only, global `seq`). 
 | `turn.completed` | `{turn_id, status: "ok"\|"error"\|"interrupted", usage?, cost_usd?}` |
 | `agent.status` | `{status: "idle"\|"working"\|"needs_you"\|"error"\|"offline", detail?}` |
 | `usage.limits` | `{runtime, windows:[{name, utilization, resets_at}]}` |
+| `runtime.switched` | `{from, to, until?}`: the agent moved to another runtime (see [Fallback subscription](#fallback-subscription)); `until` is when the limit resets (Unix seconds), if known |
 | `error` | `{message}` |
 
 ## Approvals (policy)
@@ -67,13 +68,54 @@ Per agent `approval_mode`:
 - `always`: every tool call that the CLI asks about goes to the human.
 - `never`: auto-allow everything (for sandboxes).
 
-Risky = matches a rule. Built-in rules (editable): `git push*`, `git reset --hard*`, `rm -rf*`, `*deploy*`, `npm publish*`, `cargo publish*`, `kubectl delete*`, `terraform apply*`, `DROP TABLE*`, `prisma migrate deploy*`, writes outside the agent's own folders (its `cwd` and its home folder). Agent rules (`allow` / `ask` / `deny` patterns) win over built-ins. "Always allow here" on an approval adds an `allow` rule to that agent.
+**Protected: always denied.** Bandito's own files and controls are off limits to agents, in every mode, and no rule can allow them. A call is refused with `Bandito's own files and controls are off limits to agents` when a path it reaches is known to be one of them:
+
+- the data folder (`$BANDITO_HOME`, else `~/.bandito`), reached by a path the command uses (an argument, a redirect target, the program, a file the tool edits or reads), once `~`, `~user` (looked up in the system's account database), `$HOME`, `${HOME}`, `$BANDITO_HOME`, variables set earlier on the same line, `cd`, `pushd` and `popd` are followed. Glob names count (`~/.ban*/bandito.*`, `~/[.]bandito`), and so do case differences (APFS and most Linux setups are case-insensitive);
+- a folder that contains the data folder, when the command reaches everything under it: removal, copying, moving or archiving (`rm -r ~`, `cp -r ~ /tmp`, `tar czf h.tgz ~`, `rsync … ~`), a recursive search (`grep -r x ~`, `rg`, `ag`, `ack`, `du`, `tree`, `ls -R`, `find` deeper than depth 1, `git grep` from such a folder), or `ditto`;
+- the daemon's own binary, or a command named `bandito`;
+- a command that stops, restarts, disables or kills Bandito: `kill` of the daemon's pid or of anything named `bandito`, `pkill`/`killall bandito`, `systemctl … stop|restart|disable bandito*`, `launchctl … bandito`;
+- the daemon's service files: `~/.config/systemd/user/bandito*`, `/etc/systemd/system/bandito*`, `~/Library/LaunchAgents/dev.bandito*`;
+- the data folder spelled out in the raw command line (`~/.bandito`, `$HOME/.bandito`, `${HOME}/.bandito`, the absolute path), so a `python -c` that names it is refused too.
+
+The Claude runtime also starts with `--settings` carrying `permissions.deny` for `Read`, `Edit` and `Write` under the data folder, so the file tools refuse it without asking.
+
+**Asked: what cannot be known, or names Bandito's files without a path.** The rule is: a path, folder or command that cannot be worked out is asked about, never allowed. In risky and always modes a call is asked about when:
+
+- a word the command uses cannot be expanded (a variable not set on the line, `$1`, `${X:-y}`, a substitution, an unknown user) and it can name a file: it is the program itself, a redirect target, or an argument of a command that reads or writes files (`cat`, `less`, `head`, `tail`, `grep`, `sed`, `awk`, `jq`, `sqlite3`, `strings`, `xxd`, `base64`, `openssl`, `nc`, `socat`, `tar`, `cp`, `mv`, `rm`, `python`, `node`, `sh`, `source`, …). `echo "$PATH"`, `printf '%s' "$HOME"` and `git commit -m "$MSG"` are allowed. Inside single quotes, `$` is literal: `awk '{print $1}' f` is not unknown;
+- a folder the command runs in is unknown (after `cd -`, `popd` with nothing pushed, a `cd` in a pipeline, or a `cd` to an unknown folder), and the command takes path arguments (a plain name in `cd $X && rm a` counts; `cargo test` and `echo` do not);
+- `source FILE` or `. FILE` where FILE is unknown, or known but outside the agent's folders (`source ~/.bashrc`). A file inside the folder is allowed (`. .venv/bin/activate`): what it contains is not read, as with `python script.py`;
+- a bare name of Bandito's files (`bandito.db`, `bandito.sock`, `agent.sock`) appears in the command line without a path that reaches them: asked, not refused, so `grep -rn agent.sock daemon/src` can still be asked and answered;
+- a line contains brace expansion (`{a,b}`, `{a..b}`), a zsh `=word`, a substitution, a process substitution, a heredoc, `eval`, a variable or glob as the program, an unclosed quote, a pipe into a shell or interpreter with no script, inline code from a pipe, a line over 64 KiB, or nesting deeper than 8.
+
+Never mode allows what is only asked about; it still refuses what is proven to reach Bandito's files.
+
+**Risky (default): a safety net, not a boundary.** `risky` reads the command line itself (`daemon/src/shell.rs`: quotes, `&&`, `;`, pipes, redirections, heredocs, `$(…)`, `$'…'` escapes, `sh -c`, subshells, and wrappers such as `sudo`, `env`, `timeout`, `nice`, `busybox`, `xargs` and `find -exec`, which are taken off so the command underneath is judged). It asks the human when a command means something risky, by meaning and not by prefix:
+
+- `git`: `push` (any form), `reset --hard`, `clean` with `-f`, `branch -D`, `checkout`/`restore .`, `filter-branch`, `filter-repo`; a config key that runs a program (`core.sshCommand`, `core.pager`, `core.editor`, `core.hooksPath`, `core.fsmonitor`, `alias.* = !…`, `filter.*`, `diff.*.textconv`, `credential.helper`, `sequence.editor`, `gpg.program`, `ssh.variant`, `protocol.*.allow`, `uploadpack.*`, `receive.*`) given with `-c` or `git config`, and the environment variables `GIT_SSH_COMMAND`, `GIT_PAGER`, `GIT_EDITOR`, `GIT_EXTERNAL_DIFF` and similar: `risky: git config exec`;
+- `rm` with a recursive flag, `find -delete`, `shred`, `dd of=`, `mkfs*`, `truncate`, `chmod -R`, `chown -R`;
+- publishing: `npm`/`pnpm`/`yarn publish`, `cargo publish`, `twine upload`, `gem push`; deploys: a program or script whose name starts with `deploy` (`./deploy.sh`), `npm|pnpm|yarn run deploy*`, `make deploy*`, `cargo xtask deploy*`, `fly`/`wrangler`/`firebase`/`gcloud deploy`, `vercel deploy` and `vercel --prod`;
+- `kubectl delete|apply|replace|patch|drain|rollout`, `helm install|upgrade|uninstall|delete`, `terraform apply|destroy`, `pulumi up|destroy`, `docker system prune`, `docker volume rm`, `docker rm -f`, `docker compose down -v`;
+- SQL `drop table`, `drop database`, `truncate table`, `delete from` anywhere in the line (matched in the raw text on purpose);
+- `shutdown`, `reboot`, `halt`, `poweroff`, `systemctl` except `status`/`show`/`list-*`/`is-*`, `launchctl`, `crontab` except `-l`, `at`, `systemd-run`, `useradd`, `usermod`, `passwd`, `visudo`;
+- sending data out: `curl` with `-d`, `-F`, `-T`, `--data*`, `--form*`, `--json` or a write method (`-X POST`, `-XPOST`, `-sSd`), `wget --post-*`, `scp`, `rsync` to a remote host, `nc`, `ncat`, `socat`, `telnet`, `ssh` with a command.
+
+The reason reads `risky: <rule>`. Two more asks: a write (redirect, or `cp`, `mv`, `rm`, `tee`, `touch`, `mkdir`, `sed -i`, `curl -o`, `wget -O`, `tar -C`, `unzip -d`, `rsync`'s destination, the start paths of a `find -exec`) to a path outside the agent's folders (`writes outside <folder>`); and any part of the line the reader cannot follow, as above (`can't check: <reason>`). Everything else is allowed.
+
+Agent rules (`allow` / `ask` / `deny`) are checked after the protected rule and before the risky checks, and they win over the risky checks. None of them can allow a protected call. "Always allow here" stores the exact command, with `*` escaped so the rule matches only that command; a command with a part that cannot be known is not remembered.
+
+A panic while deciding is logged without the command and becomes `Ask("policy error")`.
+
+**What is modelled, and what is not.** Modelled: quoting and escapes (including `$'…'` and `$"…"`), redirections, `~`, `~user`, `$HOME`, `${HOME}`, `$BANDITO_HOME`, variables set on the line (assignments, `export`, `unset`, `read`, prefix assignments for their own command only), `cd`, `pushd`, `popd`, subshells `( … )` (state restored after them), pipelines (`cd` or an assignment on one side of a pipe leaves the state unknown), wrappers, `sh -c` and `find -exec` bodies, `xargs`. Not modelled, so the call is asked about or only partly checked: the code run by an interpreter (`python -c`, `node -e`, `perl -e`), the contents of a script file (`./deploy.sh` is judged by its name only), npm and make script bodies, shell functions, aliases and startup files, `PATH` lookups (a program named `rm` may not be the system's), symbolic links (paths are compared lexically, the file system is not read), `$PWD`, `$OLDPWD`, `cd -`, parameters set by the shell itself, and the environment of the agent's shell beyond `HOME` and `BANDITO_HOME`.
+
+**Limits, stated plainly.** Risky mode guards against an agent making a mistake. It does not stop an agent that is trying to get around it: an interpreter, a script or a symlink can reach what the reader does not follow. The data folder is the one the daemon runs in: `--home`, else `BANDITO_HOME`, else `~/.bandito` (the daemon passes it to the policy at start). The real boundary is a separate machine or a workspace container (see [Workspaces](#workspaces)).
+
+The daemon can also ask the human itself, for something no runtime asked about (a risky browser click, see [Browser](#browser)). Such a request goes into the agent's feed like any other approval: `approval.requested`, answered with `approvals.resolve`. Nothing is remembered from it. No answer within the time limit denies it, and so does a stop of the agent while it waits. This works the same for every runtime.
 
 A pending approval blocks only that agent. Approvals time out after 24 h → deny.
 
 ## Store (SQLite)
 
-- `agents(id, name, role, runtime, model, cwd, approval_mode, system_prompt, runtime_session_id, created_at, updated_at)`
+- `agents(id, name, role, runtime, model, cwd, approval_mode, system_prompt, runtime_session_id, created_at, updated_at, fallback_runtime, fallback_model, active_runtime, paused)`: `fallback_runtime`, `fallback_model` and `active_runtime` are the [fallback subscription](#fallback-subscription); `active_runtime` NULL means the primary `runtime`. `paused` is the [pause](#pause) flag
 - `events(seq INTEGER PRIMARY KEY, agent_id, ts, kind, payload JSON)`
 - `approvals(id, agent_id, call_id, tool, title, payload JSON, status, decision, created_at, resolved_at)`
 - `rules(id, agent_id NULL, pattern, action)`
@@ -81,6 +123,7 @@ A pending approval blocks only that agent. Approvals time out after 24 h → den
 - `devices(id, name, token_hash, created_at, last_seen_at)`; `pairing(code_hash, expires_at)`
 - `checkpoints(id, agent_id, sha, label, kind, turn_id, created_at)`: points in an agent's folder history (see [Changes](#changes))
 - `secrets(name, value, agents, created_at, updated_at)` for API keys, file mode 0600 (keychain/age later); see [Secrets](#secrets)
+- `workspaces(id, name, kind, image, cpus, memory_mb, network, mounts, created_at)`: where an agent's CLI runs. The row `shared` is created by the migration and always exists. `agents.workspace_id` (default `shared`) says where each agent runs; see [Workspaces](#workspaces)
 
 Migrations: numbered SQL files embedded in the binary, applied by `PRAGMA user_version`.
 
@@ -88,15 +131,16 @@ Migrations: numbered SQL files embedded in the binary, applied by `PRAGMA user_v
 
 JSON-RPC 2.0. Same methods on every transport.
 
-- Requests: `daemon.info`, `runtimes.status`, `agents.list|get|create|update|delete`, `agents.send{agent_id,text}`, `agents.interrupt`, `events.since{seq,limit,agent_id?}`, `approvals.list|resolve{approval_id,decision,remember}`, `rules.list|set|delete`, `schedules.list|create|update|delete|run_now`, `devices.list|revoke`, `pair.redeem{code,device_name}` (only unauthenticated method), `term.list|open|input|resize|rename|close|attach|detach` (see Terminals), `fs.*` (see [Files](#files)), `changes.checkpoints|diff|file|restore` (see [Changes](#changes)), `secrets.list|set|delete` (see [Secrets](#secrets), `host.stats|history|processes|ports|kill`, `setup.status|install|job` (see [Setup](#setup)).
+- Requests: `daemon.info`, `runtimes.status`, `agents.list|get|create|update|delete` (`update` takes `paused` too, see [Pause](#pause)), `agents.send{agent_id,text}` (replies `{queued: true}` when the agent is paused), `agents.interrupt`, `agents.pause_all{paused}`, `events.since{seq,limit,agent_id?}`, `approvals.list|resolve{approval_id,decision,remember}`, `rules.list|set|delete`, `schedules.list|create|update|delete|run_now`, `devices.list|revoke`, `pair.redeem{code,device_name}` (only unauthenticated method), `term.list|open|input|resize|rename|close|attach|detach` (see Terminals), `fs.*` (see [Files](#files)), `changes.checkpoints|diff|file|restore` (see [Changes](#changes)), `secrets.list|set|delete` (see [Secrets](#secrets), `host.stats|history|processes|ports|kill`, `setup.status|install|job` (see [Setup](#setup)), `commands.list|install` (see [Commands](#commands)), `browser.start|status|stop|control|touch` (see [Browser](#browser)), `workspaces.list|create|update|delete|start|stop` (see [Workspaces](#workspaces)), `daemon.logs{lines,level}` (see [Logs](#logs)). `browser.agent.*` is for the crew MCP on the server only.
 - Notifications (server → client): `event{seq, agent_id, kind, payload, ts}` for every event including `message.delta`; `term.output|gap|exit|closed` for attached terminals (see Terminals).
 
 ## Transports (connect any way you like)
 
 The daemon always listens on:
 
-1. Unix socket `~/.bandito/bandito.sock` (0600). Trusted: same user.
-2. `127.0.0.1:7878` HTTP + WebSocket (`/v1/rpc`, `/v1/health`, `/v1/files/raw`, `/v1/tunnel`). Token required.
+1. Unix socket `~/.bandito/bandito.sock` (0600): the owner's CLI. Only processes that are not under the daemon may connect, see [Trust model](#trust-model).
+2. Unix socket `~/.bandito/agent.sock` (0600): the crew servers of agents. Each connection must open with `daemon.hello` carrying its session token.
+3. `127.0.0.1:7878` HTTP + WebSocket (`/v1/rpc`, `/v1/health`, `/v1/files/raw`, `/v1/tunnel`, `/v1/browser/*`). Token required.
 
 WebSocket upgrades that carry an `Origin` header are refused: native apps don't send one, browsers always do, so a web page can't drive the daemon through the user's browser. Unix socket paths are limited to ~104 bytes on macOS, so keep `BANDITO_HOME` short.
 
@@ -115,15 +159,95 @@ Ways the Mac app reaches a server, all ending in the same WebSocket:
 | Cloudflare Tunnel, WireGuard/ZeroTier/Netbird, reverse proxy | any URL that ends at the daemon port; token auth |
 | Bandito Relay | later: outbound-only connection from the daemon through bandito.dev, end-to-end encrypted |
 
+## Trust model
+
+Who may call the daemon, and what. One list in `daemon/src/rpc/mod.rs` (`allowed`) decides, and it is checked first in every dispatch and before the event stream.
+
+**Two sockets, both mode 0600.** Both are created under umask `0077`, so there is no moment when they are more open.
+
+- `bandito.sock` is the owner's CLI. A connection is refused when the calling process runs under the daemon: agents, their shells and tools, and the terminals and apps the daemon opened. The caller's pid comes from the socket (`SO_PEERCRED` on Linux, `LOCAL_PEERPID` on macOS), and the parent chain is walked (`/proc/<pid>/stat` on Linux, `proc_pidinfo` on macOS) up to pid 1. A caller whose chain cannot be read is refused too (fail closed, with a warning). On Linux the daemon is a child subreaper, so a process that double-forks away is still re-parented under it. The daemon also reaps those children: every 10 s it reads `/proc`, and a zombie child that is still a zombie at the next scan is waited for by its pid (the first scan only marks it, so a child whose owner waits for it gets the chance first). Children that have an owner who waits for them (runtime CLIs, terminals, the screen and the browser) are registered and left alone; an owner's exit status is never taken away. A CLI that exits while a process it left behind keeps its stdout open is reported with its real exit code after one second; that process is then killed with the rest of the CLI's group. Consequence: `bandito pair` run from a terminal that the Bandito app opened does not work. Use a terminal of your own.
+- `agent.sock` is for the crew servers of agents. The first request must be `daemon.hello {"agent_token": "..."}`. Without a valid token the reply is UNAUTHORIZED and the connection closes.
+
+**Agent session tokens.** Each runtime session (Claude, Codex, Grok, and a fallback runtime) gets its own token when it starts: `bat_` plus 32 random bytes in base64url. The daemon keeps only the SHA-256 of each token, in memory. Two places carry the token, and neither puts it in an argument list (`ps` shows argument lists to other users): the CLI's environment (`BANDITO_AGENT_TOKEN`), and a file under `$BANDITO_HOME/run/` (`agent-<random>.token`, mode 0600, written through a temporary file and a rename). The crew server is started with `--token-file <that file>`. Its MCP config for Claude is a file too (`agent-<random>.mcp.json`, mode 0600), passed to `--mcp-config` by path. The run folder is mode 0700. Ending the session revokes the token and removes both files. Starting the daemon removes what a previous one left, and a restart revokes all tokens. The agent is the one its token names: an `agent_id` or `from` in the params must match it, or the call is refused.
+
+| Peer | How it connects | May call |
+|---|---|---|
+| Anonymous | any transport, not paired | `daemon.hello`, `pair.redeem` |
+| Device (paired app) | WebSocket with the device token | everything except the agent tools |
+| Local (owner's CLI) | `bandito.sock`, not under the daemon | everything except the agent tools |
+| Agent | `agent.sock` with a live token | `daemon.hello`, `crew.list`, `crew.send`, `history.day`, `history.search`, `browser.agent.{back,click,open,press,screenshot,snapshot,switch,tabs,type}`, `screen.agent.{click,key,launch,move,screenshot,scroll,type}`; for the agent its token names (see the caveat below) |
+
+The agent tools (`crew.send`, `history.*`, `browser.agent.*`, `screen.agent.*`) are for agents alone. The owner's CLI and the apps may not call them, so nothing that speaks as the owner can pass for an agent. Agents may call none of the owner's methods: rules, approvals, pairing, devices, secrets, agent create/update/delete, workspaces, setup, and `commands.install` at user scope.
+
+**Host header.** The check depends on the address the daemon listens on. On a loopback listener (`127.0.0.0/8` or `::1`), HTTP and WebSocket routes accept only the `Host` names `127.0.0.1`, `localhost`, `[::1]` and `::1` (the port is ignored), plus the names in `allowed_hosts` of `$BANDITO_HOME/config.json`. Any other name, and a request without `Host`, gets 421 Misdirected Request. This blocks DNS rebinding from a web page. A reverse proxy or tunnel on the same server connects to loopback and sends its own name, so put that name in `allowed_hosts`. On a listener on any other address (for example `0.0.0.0` or a Tailscale address) the `Host` is not checked: the bearer token and the refused `Origin` header protect it. The config file is optional. It is a JSON object with two keys: `allowed_hosts` (a list of host names without port or path) and `agent_sandbox` (see [macOS sandbox](#macos-sandbox)). An unknown key or a bad name stops the daemon at start.
+
+**`pair.redeem` rate limit.** Failures count in a 10-minute window: at most 100 for the whole daemon, and 5 per source (the client IP on WebSocket, `local` on `bandito.sock`). A refused call gets RATE_LIMITED.
+
+**What this does not stop.**
+- A process of the same user that is not under the daemon passes as the owner. Examples are one started by `systemd-run --user`, by cron, or in a tmux server the owner already runs. The check asks "is this under the daemon", not "is this trusted".
+- On macOS a double-forked process is re-parented to launchd, so it is not seen as the daemon's. The [macOS sandbox](#macos-sandbox) closes the known channels for agent sessions: their processes, orphans included, cannot reach `bandito.sock`. It is a layer, not a boundary (see there).
+- Agents of the same user can read each other's token files: on Linux, and on macOS when the sandbox is off (`agent_sandbox: false`). An agent that reads another agent's token can speak as that agent (`crew.send`, `history.*`). The sandbox on macOS denies the other sessions' files.
+- An agent with shell access runs as the daemon's user and can do what that user can on disk. The token only opens the agent tools, but the agent can read its own environment. For real isolation use a container workspace (see [Workspaces](#workspaces)), not these checks.
+
+**What agents share.** The browser (one per workspace) and the screen (one per workspace) are shared by all agents in that workspace, and the daemon starts them, so they run outside any agent sandbox. An agent can drive them through the browser and screen tools, but it cannot run commands through them. Anything an agent does in the browser or on the screen is visible to the other agents of the workspace.
+
+**Agent sessions in containers.** A container is the isolation for an agent in a container workspace. Agents in containers get no crew server, so they have no agent tools (`crew.send`, `history.*`, browser and screen tools), and `agent.sock` is not mounted. Their session token still goes into their environment, but nothing reads it there. This is a known limit: such agents cannot use the crew tools at all.
+
+## macOS sandbox
+
+On macOS, the Claude, Grok and Codex sessions of the shared workspace run under `sandbox-exec`, with a Seatbelt profile that the daemon writes for each session. The processes a session starts run under the same profile. This is an additional layer. It closes the channels we know that start something outside a session. It is not a boundary (see below).
+
+**What the profile closes.**
+- Starting programs that hand work to other services: `open` (Launch Services), `osascript` (Apple events), `launchctl`, `lsappinfo`, and the scheduler programs `crontab`, `at`, `batch` and `cron`. Their exec is refused, and so is a Launch Services connection (`mach-lookup` of `launchservicesd`).
+- Apple events: `appleevent-send` is denied. `osascript` cannot run at all under the profile, so `osascript -e 'return 1'` fails there too.
+- Autostart and later execution: writes to the login files (`.zshrc`, `.zprofile`, `.zshenv`, `.zlogin`, `.bashrc`, `.bash_profile`, `.profile`, `.ssh/rc`, `.ssh/authorized_keys`), to `~/.config/fish`, to `~/Library/LaunchAgents`, and to the background task manager's folder under `~/Library/Application Support`.
+- The daemon's data folder (`$BANDITO_HOME`): nothing in it is readable or writable, except the session's own two files (its token file and its MCP config). Connecting to `bandito.sock` is denied, and `agent.sock` is allowed. A denial on the folder does not stop a connect to a unix socket, so the network rule is the one that counts. Writing the daemon's binary is denied.
+
+**What the profile does not close.** Everything else stays open: project folders, the network, and the rest of the user's files. The profile is a list of known channels, not an allowlist, and it is not a boundary. A copy of a system binary that is not on the list, an unknown channel, or a process of the owner's own shells is outside what it checks. The real isolation is a container workspace (see [Workspaces](#workspaces)), or in future a separate macOS user.
+
+**Codex.** Codex is wrapped in the same profile, and its own sandbox is turned off: the `-c sandbox_mode="danger-full-access"` override, and the same `sandbox` value for its threads (checked against `codex-cli` 0.161.0). Approvals stay with Codex's approval policy (`untrusted`), and so with Bandito's policy. A nested sandbox cannot be applied inside a sandbox (`sandbox_apply: Operation not permitted`), which is why Codex's own is the one that goes.
+
+**Containers** are not wrapped: they are isolated already.
+
+**Paths.** A path that is not valid UTF-8 cannot be written into a profile or an argument list faithfully. Such a session does not start, with an error that names the path. Nothing is converted lossily.
+
+**Switching it off.** `"agent_sandbox": false` in `$BANDITO_HOME/config.json` turns the sandbox off for new sessions. It is on by default. It has no effect on Linux.
+
+**Checked on macOS** (tests in `daemon/src/runtime/sandbox.rs`): a read of the database is denied; a connect to `bandito.sock` is denied, also from an orphan started by a shell; a connect to `agent.sock` and a read of the own token file work; other sessions' token files are denied; `open` and `launchctl` cannot start; an Apple event sent by a small program is refused under the profile and accepted without it; writes to `~/.zshrc` and `~/Library/LaunchAgents` are denied in a temporary home, and a file elsewhere in the home stays writable; writes into the project, `git`, `node` and `curl` work; `nc` to the network works where there is a network.
+
+**Not verified.** The Claude and Grok CLIs may run their own shell tool under `sandbox-exec`. Then their commands fail inside this profile, since nested sandboxes are refused. This was not tested with the real CLIs; check it before relying on the sandbox.
+
 ## Scheduler
 
-Cron expressions with a time zone. On fire: `agents.send` with `source:"schedule"`. Missed runs while the daemon was down run once on start if missed by less than 1 h.
+Cron expressions with a time zone. On fire: `agents.send` with `source:"schedule"`. Missed runs while the daemon was down run once on start if missed by less than 1 h. A run that falls due while its agent is [paused](#pause) is skipped (logged): it is not recorded as a run, and the next occurrence is set as usual.
+
+## Pause
+
+A paused agent (`agents.update {paused: true}`, or all agents at once with `agents.pause_all {paused}`) stops working, and keeps its history:
+
+- A message sent to it (`agents.send`, a crew message, a schedule's run) is written to the thread at once, and the reply is `{queued: true}`. No session starts. The message waits in the agent's queue.
+- A pause interrupts the running turn, as `agents.interrupt` does. The queue stays.
+- A resume (`paused: false`) starts the queued messages one turn at a time, as they would have run without the pause. A message that could not start (for example its runtime is not installed) is shown in the thread as usual, and the resume itself still succeeds.
+- Scheduled runs of a paused agent are skipped (see [Scheduler](#scheduler)).
+- The flag is in the store (`agents.paused`), so the apps see it in `agents.list|get`. The queue is in memory: messages held at a daemon restart are lost, as messages waiting for a turn already are. They stay visible in the thread.
+
+`agents.pause_all` is for the owner's CLI and the apps. It returns how many agents changed. Clients show the pause controls when `daemon.info.features` contains `"pause"`.
+
+## Logs
+
+`daemon.logs {lines?, level?}` returns the newest lines of the daemon's own log, for the app's journal view. `lines` is 1–2000 (default 500); `level` is the lowest level to show: `info` (default; debug and trace lines are left out), `warn` or `error`. The reply is `{source, lines}`, where `source` is `journald` or `file`.
+
+Where the lines are: a systemd user unit writes to the journal (read with `journalctl --user -u bandito.service -o cat`), and a launchd agent or a background process writes `<home>/logs/daemon.log`. The reader scans the last 4 MB of the file, or the last 10 000 journal lines, then keeps the newest `lines` lines at the level. A line without a level takes the level of the line before it, so a wrapped error stays with its error. Colour codes are removed.
+
+Clients show the journal when `daemon.info.features` contains `"logs"`.
+
+Before a line is returned, every secret value is replaced as in [Secrets](#secrets) (`••••NAME`), and the secret part of Bandito's tokens (`bdt_` and `bat_`) becomes `••••`. Only the owner's CLI and the apps may call it.
 
 ## Crew
 
 `bandito mcp` is an MCP server (stdio) injected into every agent: `--mcp-config` for Claude, `mcp_servers` config for Codex, `mcpServers` in ACP `session/new` for Grok. It answers `initialize` with the client's protocol version when it is one of `2025-06-18`, `2025-03-26`, `2024-11-05`, otherwise with `2025-06-18`. Input lines over 1 MB get a parse error and are skipped.
 
-Tools today: `crew_list` and `crew_send{to, message}` (becomes `message.user` with `source:"crew"` for the target). `report{text}` (shows in the user's inbox) is later, not in the MVP yet. `crew.send` over RPC is accepted only from the local socket, i.e. from the crew MCP servers on the server; paired apps can call `crew.list` only.
+Tools today: `crew_list` and `crew_send{to, message}` (becomes `message.user` with `source:"crew"` for the target). `report{text}` (shows in the user's inbox) is later, not in the MVP yet. `crew.send` over RPC is accepted only from an agent's session on `agent.sock`, and only as that agent; paired apps can call `crew.list` only. See [Trust model](#trust-model).
 
 Loop guards: every crew message belongs to a chain, which starts with each user or schedule message. The daemon counts three limits:
 
@@ -134,6 +258,60 @@ Loop guards: every crew message belongs to a chain, which starts with each user 
 A refused `crew_send` comes back to the agent as a tool error that tells it to report to the user. The counters are in memory: a daemon restart resets them, and they are dropped all at once when more than 10 000 chains are tracked. A crew message sent while the agent has no running turn is not counted against the per-turn limit.
 
 These limits stop accidental loops. They are not a security boundary: an agent with shell access runs as your user and can do anything you can.
+
+Browser tools are on the same server, through the same crew MCP: `browser_open`, `browser_snapshot`, `browser_click`, `browser_type`, `browser_press`, `browser_back`, `browser_screenshot`, `browser_tabs`, `browser_switch`. They are described in [Browser](#browser).
+
+## Browser
+
+The server runs one Chrome per workspace (`shared` by default). The app watches it, and agents drive it, through the same daemon. Code: `daemon/src/browser.rs` (manager, approvals), `daemon/src/cdp.rs` (DevTools client, snapshot), `daemon/src/cdp_pipe.rs` (pipes and relay), `daemon/src/rpc/browser.rs` (methods and routes). Feature string: `"browser"`. The screen feature (Xvfb) is separate; the browser runs `--headless=new` for now.
+
+**Start.** `browser.start{workspace?}` finds `google-chrome`, `google-chrome-stable`, `chromium` or `chromium-browser` on `PATH`, and on macOS `/Applications/Google Chrome.app` first. It starts Chrome in its own process group, with `--headless=new --remote-debugging-pipe` and the profile `<data dir>/workspaces/<workspace>/browser` (`<data dir>` is `$BANDITO_HOME` or `~/.bandito`). Chrome opens no TCP port. The DevTools protocol runs over two pipes: Chrome reads commands on fd 3 and writes answers and events on fd 4, each message JSON followed by a NUL byte. The daemon sets the pipes up in the child with `pre_exec` (`dup2` onto 3 and 4). Chrome's output goes to `browser.log` in the workspace folder. The daemon waits up to 10 s for `Browser.getVersion` to answer. Without a browser the error has `reason: "missing_component"` and `component: "browser"`, and the app offers the install from setup.
+
+**Relay.** One task owns both pipes (`cdp_pipe.rs`), and every client is a view on it. A client's command gets a new id from the relay, and the answer goes back with the client's own id, so two clients may use the same ids. A client may have 256 commands unanswered; the 257th gets `{"id", "error": {"code": -32000, "message": "too many pending commands"}}`. A session event (one with `sessionId`) goes to the client that owns the session. A browser-level event goes to every browser-level client. A tab client attaches its tab when it is made (`Target.attachToTarget`, flattened), detaches it when it goes (`Target.detachFromTarget`), and sees plain CDP: no `sessionId` on its messages. When the tab closes, its client gets `Target.detachedFromTarget` and then its connection ends. A client whose queue of 1024 messages is full is disconnected, not waited for. A message from Chrome over 64 MiB, or one that is not JSON, is treated as a crash: the pipe closes, the browser is stopped, and the next call starts it again. Agents (`browser.agent.*`) use the relay directly, with a tab client per call.
+
+**Page and browser rules.** A page client is one tab's view, and it may not reach the browser around it. Its commands in `Target.*`, `Browser.*`, `Storage.*` and `SystemInfo.*` are refused, as are any `params.targetId` and any `params.sessionId` (the one exception: `Page.screencastFrameAck`, whose `sessionId` is a frame number). A refusal is `{"id", "error": {"code": -32002, "message": "method not allowed for a page client"}}` (or `params.sessionId`/`params.targetId is not allowed for a page client`). A browser client may name only its own sessions: `Target.detachFromTarget` and `Target.sendMessageToTarget` with another client's `params.sessionId` are `-32001 unknown session`. `Target.closeTarget` is refused (`-32001`, "the tab is attached to another client") when a session on that tab belongs to another client; a tab nobody attached can be closed. A device is the owner of its browser, so its raw CDP is not checked against `browser.control`'s `controller`: that is by design. When a session's target detaches, the relay forgets the session whoever owns it.
+
+**Budgets.** A client may have 256 MiB of messages queued (the sum of their lengths); past that it is disconnected as slow, like one whose count of 1024 messages is full. Commands waiting for the pipe may total 128 MiB; a command past that is refused with `{"id", "error": {"code": -32000, "message": "too many bytes waiting for the browser"}}`, not queued. The relay never waits on a client or on the pipe.
+
+**The app.** The app speaks DevTools over the routes below, with its device token, and runs a CDP screencast on the tab socket. The daemon does not relay frames. `browser.status` answers `{running, cdp, pid, started_at, controller}`, where `cdp` is `"relay"` while the browser runs (`null` when stopped) and `controller` is `user`, `agent` or `none`.
+
+**Routes.** Device token only (`Authorization: Bearer`; a request with `Origin` gets 403), as for the file routes. `?workspace=<name>` is optional (default `shared`) and checked like the `browser.*` methods (400 when bad). The checks run before the upgrade.
+
+- `GET /v1/browser/tabs` answers `200` with `[{"id", "type": "page", "title", "url"}]`: the pages of the browser, as DevTools' `/json/list` lists them.
+- `GET /v1/browser/cdp` (WebSocket): the browser level. Commands carry no `sessionId`; the socket gets browser-level events.
+- `GET /v1/browser/cdp/page/{target_id}` (WebSocket): one tab, as a plain CDP session. `target_id` is 1 to 64 ASCII letters or digits, else 400. No such tab: 404 `{"error": "no_such_tab"}`.
+- No browser running: 409 `{"error": "browser_not_running"}` (the tabs route too). A device may hold 16 of these sockets at once; the 17th gets 429.
+- A WebSocket carries one CDP message per text frame, in each direction. Binary frames are ignored.
+
+`browser.control{workspace?, holder}` sets who drives it. `browser.stop` stops it, and `browser.touch` only counts as activity.
+
+Chrome has no DevTools port any more, so `/v1/tunnel` cannot reach the browser. The old `browser.status` fields `cdp_port` and `browser_ws_path` are gone.
+
+**Idle stop.** A browser with no agent call, no `browser.status` or `browser.touch`, and no opened `/v1/browser/*` socket for 30 minutes is stopped; the check runs every minute. An open socket alone does not count, so the app calls `browser.touch` while it shows the browser.
+
+**Errors.** `BROWSER_ERROR` (-32026), with `error.data.reason`: `missing_component`, `start_failed`, `unsupported` (not Linux or macOS), `not_running`, `user_controls`, `declined`, `failed`. A bad workspace name (letters, digits, `-`, `_`, up to 64) or a URL that is not `http`, `https`, `data:` or `about:blank` is `-32602`.
+
+**Agent tools.** The crew MCP server offers the browser tools, and each one calls `browser.agent.*` on the unix socket. Those methods accept only agents, on `agent.sock`, for their own agent. The browser starts on the first use. While `controller` is `user`, every tool call fails with "The user is using the browser. Wait or ask them to hand it back.". Refs come from the latest snapshot and are the DOM node's `backendDOMNodeId`.
+- `browser_snapshot` returns the title, the URL, and one line per link, button, textbox, searchbox, combobox, checkbox, radio, menuitem, tab, heading, or named image: `[ref] role "name" (value)`. Names are cut at 120 characters; there are at most 600 element lines.
+- `browser_open{url, new_tab?}` navigates the agent's tab, or opens a new one, and waits for the load event for up to 30 s.
+- `browser_click{ref}`, `browser_type{ref, text, submit?}`, `browser_press{key}` (named keys only, such as `Enter`, `Tab`, `Escape`, `ArrowDown`), `browser_back`, `browser_screenshot` (PNG, at most 1280 px wide, returned as an image), `browser_tabs` (`*` marks the agent's tab), `browser_switch{index}`.
+
+**Risky clicks.** `browser.agent.click{agent_id, ref}` reads the element's role, name and value first. If the name or the value contains one of the words below (case-insensitive substring match), the daemon asks the human before it clicks. It does this itself, not through the runtime, so every runtime behaves the same. The request is an approval in the agent's feed: tool `browser_click`, title `Нажать «<the element's real name>» на <host>`, the page URL as command, reason `browser: risky click`. The user answers it in the app with `approvals.resolve`, as with any approval. Allow: the click happens. Deny, or no answer within 10 minutes: the agent gets "The user declined this click.", and the click does not happen. Ordinary clicks and typing are not asked about. Words: `pay`, `buy`, `purchase`, `checkout`, `order`, `subscribe`, `send`, `submit`, `delete`, `remove`, `transfer`, `confirm`, `оплат`, `куп`, `заказ`, `подпис`, `отправ`, `удал`, `перев`, `подтверд`.
+
+**Orphans.** When the daemon starts, it stops Chrome processes an earlier daemon left behind: processes whose command line has this server's `workspaces/` folder in `--user-data-dir`. On Linux it reads `/proc`; on macOS it uses `pgrep -f`. Other Chrome processes, such as the user's own, are not touched.
+
+**Profile.** The profile keeps the browser's sign-ins to websites. Agents and the app share it, and it stays on the server, with the same owner as the daemon. Deleting `workspaces/<workspace>` signs out everywhere.
+
+## Preview proxy
+
+**App side.** A preview web view serves one port: the one it was opened for. A `bandito-preview://p<other port>/` load gets 404. The web view's requests go through the daemon's request builder with the device token, so the token never reaches the web view, and it is sent only where a token may go (TLS or loopback). The request carries the method, `Content-Type` and other headers and the body, but not `Authorization`, `Cookie`, `Host` or hop-by-hop headers; it asks for `Accept-Encoding: identity`. The response goes back without `Content-Encoding` and `Content-Length`. Each preview has its own session with no cache and its own cookies; the daemon's tab list has no cache either.
+
+`GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE` and `OPTIONS` on `/v1/proxy/<port>/<path>` forward to `127.0.0.1:<port>` on the server, so the app can show a dev server an agent started. Access is the same as for the file routes: a paired device (`Authorization: Bearer`), and no browser `Origin` (403). A port outside 1..=65535 is 400. Code: `daemon/src/rpc/preview.rs`; the route is in `rpc/ws.rs`.
+
+- Request: the hop-by-hop headers (`Connection` and the names it lists, `Keep-Alive`, `Proxy-*`, `TE`, `Trailer`, `Transfer-Encoding`, `Upgrade`) are not passed on. Neither are `Authorization` (the device token) and `Host`; the target gets `Host: 127.0.0.1:<port>`. The body is streamed.
+- Response: status, headers (without hop-by-hop ones) and body are streamed back. A `Location` of `http://127.0.0.1:<port>` or `http://localhost:<port>`, or a root path (`/x`), is rewritten under the proxy prefix (`/v1/proxy/<port>/x`), so a redirect stays in the preview.
+- Connecting to the target takes at most 5 s; otherwise 502.
+- WebSocket upgrades are refused with 501. Root-relative links inside HTML and JavaScript are not rewritten, so a page that uses them shows, but its links to `/x` go to the server root.
 
 ## Terminals
 
@@ -160,7 +338,7 @@ Notifications, sent on the connection that attached (every one has `id`):
 | `term.exit` | `{id, code, signal}` | the program ended; `code` or `signal` is null |
 | `term.closed` | `{id}` | the terminal was closed; the connection is no longer attached to it |
 
-Offsets: each terminal counts its output bytes from 0 and never resets. A client remembers the offset just past the last byte it has; `term.attach {from}` continues from there. A connection that goes away detaches from all its terminals, which keeps running. An app that collapses a terminal sends `term.detach`; to show it again it sends `term.attach` with the stored offset.
+Offsets: each terminal counts its output bytes from 0 and never resets. A client remembers the offset just past the last byte it has; `term.attach {from}` continues from there. A connection that goes away detaches from all its terminals, which keeps running. An app that collapses a terminal keeps its stream attached: the pane leaves the screen, but the app still reads the output (line counts, the dock's sparkline, the waiting-for-input prompt) and keeps the emulator state in memory. It sends `term.detach` only when it stops following the terminal: on quitting, on removing the server, or after a close. A detached terminal is shown again with `term.attach` from the stored offset.
 
 Limits: 16 live terminals (an exited one keeps its slot until closed); 512 KiB of output history per terminal; 64 KiB per `term.input`. An input that cannot be written within 5 s fails with `busy`, and a prefix of it may already have been written.
 
@@ -216,10 +394,14 @@ Params are objects; unknown fields are `invalid_params`.
 | `fs.upload.append` | `upload_id`, `offset`, `data` (standard base64) | `{written}` |
 | `fs.upload.commit` | `upload_id`, `overwrite?` (default false) | `Entry` |
 | `fs.upload.abort` | `upload_id` | `{}` |
+| `fs.clone` | `url`, `dest` | `{path, default_branch}` (see below) |
 
 **Writing.** Overwriting an existing file needs the `etag` from the last `fs.read`. Without it, or with a stale one, the write is refused with `conflict`, and `error.data.etag` holds the current etag. `create: true` without an etag makes a new file and gives `exists` if the path is taken. `etag` on a missing file gives `not_found`.
 
-**Errors.** File failures use code `-32020` and `error.data.reason`: `not_found`, `exists`, `not_a_directory`, `is_a_directory`, `not_a_file`, `permission_denied`, `too_large` (`size`, `limit`), `binary`, `conflict` (`etag`), `invalid_path`, `outside_roots`, `cross_device`, `io`. Bad params are `-32602`.
+**Errors.** File failures use code `-32020` and `error.data.reason`: `not_found`, `exists`, `not_a_directory`, `is_a_directory`, `not_a_file`, `permission_denied`, `too_large` (`size`, `limit`), `binary`, `conflict` (`etag`), `invalid_path`, `outside_roots`, `cross_device`, `io`, `clone_failed` (`stderr`). Bad params are `-32602`.
+
+**Clone.** `fs.clone` copies a git repository into a new folder. `url` is `https://…` or scp-style `user@host:path` (ssh); anything else (`file://`, `http://`, `ssh://`, options such as `--upload-pack=…`) is `invalid_params`. `dest` is resolved like any path (`~` is home, otherwise absolute, under the roots) and must not exist, though its parent must. The daemon runs `git clone --depth 50 -- <url> <dest>` with a 10-minute limit and `GIT_TERMINAL_PROMPT=0`: nothing prompts, and private repositories work through the server's own ssh keys. The result is `{path, default_branch}` (`default_branch` is `null` when HEAD is detached). A failure is `FS_ERROR` with `reason: "clone_failed"` and `data.stderr`: the last 2 KB of git's stderr, with `user:password@` cut from every URL in it. The partial folder is removed. An existing `dest` gives `exists`.
+
 
 **Upload in chunks.** `begin` creates a temp file next to the destination. Each `append` must send `offset` equal to the bytes already written; a chunk is at most 1 MiB decoded, and the total at most 4 GiB. One WebSocket message may be up to 4 MiB, so a full 1 MiB chunk fits after base64. `commit` moves the file into place (`overwrite: false` gives `exists`). An upload idle for an hour is removed with its temp file (checked every 10 minutes). `abort` removes it at once.
 
@@ -231,7 +413,7 @@ Params are objects; unknown fields are `invalid_params`.
 
 ## Tunnel
 
-`GET /v1/tunnel?port=<1..=65535>` is a WebSocket that carries one TCP connection to `127.0.0.1:<port>` on the server. It lets the app reach what agents start on the server, such as a dev server on `localhost:3000`. Later it carries the server's screen (VNC) and a browser's DevTools port (CDP). The client listens on a local port of its own and sends the traffic through this socket: a WKWebView points at the local port, a VNC viewer connects to it.
+`GET /v1/tunnel?port=<1..=65535>` is a WebSocket that carries one TCP connection to `127.0.0.1:<port>` on the server. It lets the app reach what agents start on the server, such as a dev server on `localhost:3000`. Later it carries the server's screen (VNC). A browser's DevTools protocol does not go through it: see [Browser](#browser). The client listens on a local port of its own and sends the traffic through this socket: a WKWebView points at the local port, a VNC viewer connects to it.
 
 **Access.** Same as the file routes: a paired device only. Without `Authorization: Bearer` the upgrade is 401, and so is an unknown or revoked token. An `Origin` header is 403. Checks run before the upgrade, so a refusal is a plain HTTP response.
 
@@ -244,6 +426,8 @@ Params are objects; unknown fields are `invalid_params`.
 **Limits.** At most 64 live tunnels per device. The 65th upgrade gets 429 before the upgrade. A slot is freed when its tunnel ends, whichever side ended it.
 
 Feature string: `"tunnel"` in `daemon.info`.
+
+**Known limits (accepted, not fixed).** A forwarder (`forwardOnce`) accepts exactly one connection on its loopback port, and until that connection arrives any local process can connect to the port first (one-shot listener). The daemon's pipes to Chrome are made close-on-exec as `std::io::pipe` does it on macOS, which sets the flag after the descriptor exists, so a fork on another thread in that instant could hand a pipe to a child that is not Chrome.
 
 ## Changes
 
@@ -302,28 +486,55 @@ The app shows what the server is doing: CPU, memory, disks, network, the process
 
 ## Install and service
 
-`scripts/install.sh` (served as `https://bandito.dev/install.sh`) picks the release asset for the machine (`bandito-<target>.tar.gz`, targets `x86_64|aarch64` × `unknown-linux-gnu|apple-darwin`), checks its `.sha256`, installs `bandito` to `~/.local/bin`, and runs `bandito service install` unless `--no-service` is given. Releases are built by `.github/workflows/release.yml` on tag publish or by manual dispatch with a tag.
+`scripts/install.sh` (served as `https://bandito.dev/install.sh`) picks the release asset for the machine (`bandito-<target>.tar.gz`, targets `x86_64|aarch64` × `unknown-linux-gnu|apple-darwin`), checks it, installs `bandito` to `~/.local/bin`, and runs `bandito service install` unless `--no-service` is given. Releases are built by `.github/workflows/release.yml` on tag publish or by manual dispatch with a tag.
+
+Release signing: the last job of the release workflow lists the SHA-256 of every archive and of `install.sh` in `SHA256SUMS` and signs that file with the release key (Ed25519, raw signature, base64 in `SHA256SUMS.sig`). The private key is the repository secret `RELEASE_SIGNING_KEY`; `scripts/release-key.sh` makes it on the owner's Mac, stores it there and in a keychain backup, and writes the public key into `install.sh` (`RELEASE_PUBKEY`). `install.sh` verifies the signature with OpenSSL 3 and takes the archive's hash from the signed list. Without OpenSSL 3 it falls back to the per-archive `.sha256` with a warning, unless `BANDITO_REQUIRE_SIGNATURE=1`. The Mac app does not depend on the server's OpenSSL: it downloads the archive and `SHA256SUMS` on the Mac, verifies the signature with CryptoKit against the key it carries, copies the archive, `SHA256SUMS` and `SHA256SUMS.sig` over SSH to `~/.cache/bandito-install/` and runs `install.sh --archive FILE --sums FILE --sig FILE` with `BANDITO_REQUIRE_SIGNATURE=1`; the three files are removed afterwards. On the server the script compares the archive's SHA-256 with its line in `SHA256SUMS` on every machine, without OpenSSL, and checks the signature of `SHA256SUMS` when OpenSSL 3 is there. Without OpenSSL 3 the server cannot check the signature, so the Mac's check is the only one: the script warns and installs, because the app has verified the same files. The hash check still refuses a file swapped in transit. A release that does not exist yet for the app's version falls back to the latest one, with a line in the install log; a latest older than the app is refused as still being published.
 
 `bandito service install` writes `~/.config/systemd/user/bandito.service` (Linux) or `~/Library/LaunchAgents/dev.bandito.daemon.plist` (macOS), starts it, and waits up to 10 s for `daemon.info` on the socket. Linux machines without a user systemd manager (WSL without systemd, containers) get a detached background process with its pid in `<home>/daemon.pid` and output in `<home>/logs/daemon.log`; it does not survive a reboot. On Linux the installer also asks for lingering (`loginctl enable-linger`), so the daemon outlives the SSH session that installed it; if that is refused, the command prints the `sudo` line. `service uninstall` removes the unit or plist and stops the daemon; data is kept. `service install --dry-run` prints what would be written and run, and changes nothing.
 
 Machine-readable output for scripts and the app: `bandito pair --json` prints `{"code","expires_in_ms"}`; `bandito info --json` prints version, paths, `listen`, `running`, and the `features` the daemon reports (empty when it is down); `service install --json` prints `{"ok","mode","listen","socket","warnings"}`; `service status --json` prints `{"installed","mode","running","pid"?}`.
 
+## Self-update
+
+`bandito update [--check] [--json] [--version vX.Y.Z] [--allow-downgrade]` installs a newer release. Over RPC, `daemon.update_check` → `UpdateInfo {current, latest, available}` and `daemon.update_apply {version}` → `{ok, restarting}` do the same. Both are for the owner (`bandito.sock`) and for paired apps (a device is the owner's app, so it may apply too); agents and anonymous peers are refused by `allowed()`. Feature `update`. Code: `daemon/src/update.rs`. Nothing installs by itself: only the owner asks.
+
+**Newest release.** A `curl -I` (a HEAD request, https only, TLS 1.2 or newer, redirects only to https) of `https://github.com/banditohq/bandito/releases/latest` ends at `releases/tag/vX.Y.Z`; the tag is the version. Only `MAJOR.MINOR.PATCH` is accepted. A repository without a published release answers 404, which is reported as `no releases published yet`; other failures are `cannot reach GitHub`. A successful check is reused for 10 minutes, and concurrent checks share one lookup. A downgrade is refused unless `--allow-downgrade` is given (CLI only); installing the running version is refused.
+
+**Install.** Only one update runs at a time: `apply` takes an exclusive `flock` on `<data dir>/run/update.lock`, shared by the RPC and the CLI, and a second one fails with `busy`. In `<data dir>/run/update-<id>` (mode 0700, removed afterwards) the daemon downloads `SHA256SUMS`, `SHA256SUMS.sig` and `bandito-<target>.tar.gz`, targets as in `scripts/install.sh`. Sizes are limited: the archive to 200 MiB, the sums and the signature to 64 KiB (`--max-filesize`, and the size on disk is checked again). Checks, in this order, and nothing is replaced before all of them pass:
+1. Ed25519 `verify_strict` of the exact bytes of `SHA256SUMS` with the release key (`RELEASE_PUBKEY_B64` in `daemon/src/update.rs`, the same key as `RELEASE_PUBKEY` in `install.sh`; a test keeps them equal). Failure: `signature check failed`. The archive is not downloaded before this passes.
+2. The archive is listed in `SHA256SUMS` (`<hash>  <name>` or `<hash> *<name>`). Failure: `asset not listed`.
+3. The archive's SHA-256 equals its line. Failure: `checksum mismatch`.
+4. Only the member `bandito` is extracted (`tar --no-same-owner`), and its entry must be a regular file, not a link (`symlink_metadata`). Failure: `archive entry is not a regular file`. Only then is it made executable and run.
+5. Its `--version` prints `bandito <version>`. Failure: `version mismatch`.
+
+The binary is then copied next to the running one as `.bandito.new.<pid>`, chmod 755, and renamed over it: a running daemon keeps its old inode.
+
+**Restart.** The pid comes from the daemon itself: the daemon that answers on the socket reports its own `pid` in `daemon.info`, and that is the pid signalled. The service files give how it runs, and the service manager must name the same pid: systemd `MainPID`, launchd `PID`, or, for a background process, its pid file. A stale pid file, another process, or no answer on the socket means no restart; the reply then says so. systemd: `systemctl --user --no-block restart bandito.service`. launchd: `launchctl kickstart -k gui/<uid>/dev.bandito.daemon`. Background process: a shell waits (up to 30 s) for the old pid to exit, then starts the new daemon with the same arguments in its own process group, and the old one gets SIGTERM. Over RPC the restart runs one second after the reply, so the app gets it. Any other process (`bandito daemon` by hand) is not restarted: the binary is replaced and the reply says `restarting: false`.
+
+**Background check.** The daemon checks for a newer release 10 minutes after start and then every 24 hours (`update::spawn_background_check`). A newer release is written to the log. Nothing is installed. `daemon.info` carries the last successful check as `update: {current, latest, available, checked_at}` (`null` until one succeeds), and the app shows its button from it.
+
+**Mac app.** Server → Overview shows the daemon's offer as a card, and the server menu shows a dot. The button asks `daemon.update_apply` after a confirmation, then waits for `daemon.info` to report the new version. See [Mac app updates](#mac-app-updates).
+
+**Not in place: revocation and a minimum version.** The client has no revocation list and no minimum version. A release that the release key signed installs when the owner asks, even if it was later withdrawn from GitHub. The protection is the signature, the download limits and the owner's choice; a compromised release key would need a new key in the apps and in `install.sh`.
+
 ## Setup
 
 The server sets itself up from the app. The daemon knows which components each feature needs, checks whether they are there, and installs the missing ones. Clients show a feature from `setup.status`, and offer the install. Code: `daemon/src/setup.rs` (checks, plans, jobs), `daemon/src/rpc/setup.rs` (methods). Feature string: `"setup"`.
 
-**Features and components.** `screen` needs `xvfb`, `x11vnc`, `xdotool`, `window_manager` (openbox) and `fonts` (Noto). `browser` needs `browser` and `fonts`. `agents` are `claude`, `codex` and `grok`; `claude` and `codex` need `node`. `containers` needs `docker`. The screen feature is `unsupported` off Linux.
+**Features and components.** `screen` needs `xvfb`, `x11vnc`, `xdotool`, `xauth`, `imagemagick` (`import`), `window_manager` (openbox) and `fonts` (Noto). `browser` needs `browser` and `fonts`. `agents` are `claude`, `codex` and `grok`; `claude` and `codex` need `node`. `containers` needs `docker`. The screen feature is `unsupported` off Linux.
 
-**Checks.** A component is installed when its program is on `PATH`: `Xvfb`, `x11vnc`, `xdotool`, `openbox`, one of `google-chrome`, `google-chrome-stable`, `chromium`, `chromium-browser`, or `node`, `claude`, `codex`, `grok`. Tools that have a version must answer `--version`. Node must be 18 or newer (`node --version`). `fonts` passes when `fc-list` lists a Noto family. `docker` passes when `docker info` succeeds. The check uses the daemon's `PATH`, which starts with `<data dir>/tools/bin`.
+**Checks.** A component is installed when its program is on `PATH`: `Xvfb`, `x11vnc`, `xdotool`, `xauth`, `import`, `openbox`, one of `google-chrome`, `google-chrome-stable`, `chromium`, `chromium-browser`, or `node`, `claude`, `codex`, `grok`. Tools that have a version must answer `--version`. Node must be 18 or newer (`node --version`). `fonts` passes when `fc-list` lists a Noto family. `docker` passes when `docker info` succeeds. The check uses the daemon's `PATH`, which starts with `<data dir>/tools/bin`.
 
 **How it is installed.**
 
 | component | how | needs sudo |
 |---|---|---|
-| `xvfb`, `x11vnc`, `xdotool`, `window_manager`, `fonts`, `browser` | apt, dnf or pacman, one batch per job (apt runs `update` first). Ubuntu on x86_64 gets Google Chrome as a .deb, since its `chromium-browser` is a snap. Ubuntu on arm64 has no installer | yes |
+| `xvfb`, `x11vnc`, `xdotool`, `xauth`, `imagemagick`, `window_manager`, `fonts`, `browser` | apt, dnf or pacman, one batch per job (apt runs `update` first). Ubuntu on x86_64 gets Google Chrome from Google's signed apt repository, since its `chromium-browser` is a snap (see below). Ubuntu on arm64 has no installer | yes |
 | `node` | Node 22 LTS tarball from nodejs.org, checked against `SHASUMS256.txt` (sha256), unpacked into `<data dir>/tools/node`, linked as `node`, `npm`, `npx` in `<data dir>/tools/bin` | no |
-| `claude`, `codex` | `npm install -g @anthropic-ai/claude-code` / `@openai/codex` with `NPM_CONFIG_PREFIX=<data dir>/tools` | no |
+| `claude`, `codex` | `npm install -g @anthropic-ai/claude-code@2.1.295` / `@openai/codex@0.162.0` with `NPM_CONFIG_PREFIX=<data dir>/tools`. The versions are pinned in `NPM_PINS` (`daemon/src/setup.rs`) and move only with a Bandito release | no |
 | `grok`, `docker` | not installed by Bandito. The hint names the docs; a docker permission error hints `sudo usermod -aG docker $USER` | — |
+
+**Google Chrome on Ubuntu (x86_64).** Chrome comes from Google's apt repository, signed. The job downloads `https://dl.google.com/linux/linux_signing_key.pub` (https only, TLS 1.2 or newer) into `<data dir>/tools/downloads`, and `gpg --dearmor` turns it into a keyring there. That keyring is checked before anything is installed: `gpg --show-keys --with-colons` must list exactly one primary key, and the `fpr:` line right after its `pub:` line must be `EB4C1BFD4F042F6DDDCCEC917721F63BD38B4796`, the primary key of Google's Linux Package Signing Authority. Subkeys do not count, and a keyring with a second key in it is refused. Otherwise the job fails with `Google signing key fingerprint mismatch`, deletes the files, and runs nothing more. The checked keyring is then installed with `sudo -n install` as `/etc/apt/keyrings/google-chrome.gpg`, with the sources line `deb [arch=amd64 signed-by=/etc/apt/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb/ stable main` in `/etc/apt/sources.list.d/google-chrome.list`. apt then updates from the Chrome list alone, and installs `google-chrome-stable`. A keyring and list already in place, passing the same check, are not written again. gpg is installed with the package batch when it is missing.
 
 On macOS, Bandito installs only `node`, `claude` and `codex`. The screen feature is `unsupported`, and `browser`, `grok` and `docker` show a hint.
 
@@ -343,9 +554,100 @@ Poll `setup.job` about once a second with the last `offset`. The daemon keeps on
 
 **PATH.** At start the daemon puts `<data dir>/tools/bin` first on its `PATH`, before the runtime starts, so the tools reach agents and terminals. The data dir is `$BANDITO_HOME` or `~/.bandito`; `--home` does not move it.
 
+## Commands
+
+Slash commands in an agent's chat. The daemon lists what an agent can run, and a message that starts with `/name` reaches every runtime. Code: `daemon/src/commands.rs` (discovery, expansion, install), `daemon/src/rpc/commands.rs` (methods). Feature string: `"commands"`.
+
+**Discovery.** For an agent whose folder is `cwd`, and the daemon user's home:
+
+| source | files | name |
+|---|---|---|
+| `project` | `<cwd>/.claude/commands/**/*.md` | the path without `.md`, folders joined by `:` (`git/commit.md` is `git:commit`) |
+| `user` | `~/.claude/commands/**/*.md` | the same |
+| `skill` | `~/.claude/skills/<name>/SKILL.md`, `<cwd>/.claude/skills/<name>/SKILL.md` | front matter `name:`, or the folder name |
+| `codex_prompt` | `~/.codex/prompts/*.md` | the file name without `.md` |
+
+Limits: files up to 256 KiB, at most 500 commands per list, folders up to 4 levels below `commands/` or `skills/`, symlinks not followed, names only `[A-Za-z0-9_:.-]` and not starting with a dot. The list is sorted by source (`project`, `user`, `skill`, `codex_prompt`), then by name. When names clash, the first one wins.
+
+Front matter is the YAML block between two `---` lines. The daemon reads top-level `key: value` lines only: `description`, `argument-hint` (or `args`), and `name` for skills. Quotes around a value are removed. Nested and multi-line values are not read.
+
+`runtime_native` is true for Claude commands and skills, because the CLI runs them itself. It is false for Codex, for Grok, and for codex prompts.
+
+**Sending.** A message that starts with `/name`, where `name` is a command for the agent, is handled like this:
+
+- Claude and a native command: the text goes to the CLI as typed.
+- Anything else: the runtime gets the expansion. The thread keeps what the person typed (`message.user.text`) and the command name (`message.user.command`).
+- An unknown `/x` goes as typed, and the CLI deals with it.
+
+This applies to messages from people (`agents.send`) and to schedule prompts. Crew messages are not expanded.
+
+Expansion: the front matter is dropped. `$ARGUMENTS` becomes the whole argument string, and `$1`…`$9` become the words of it. Words are split as a shell does for simple cases: spaces separate them, `"…"` and `'…'` group them (single quotes are literal), and a backslash escapes the next character. A file without placeholders, given arguments, gets `Arguments: <args>` appended after a blank line. A skill becomes `Use the skill below.`, its body, and `Task: <args>` (the last line only when there are arguments).
+
+**Methods.**
+
+| method | params | result |
+|---|---|---|
+| `commands.list` | `agent_id` | `[Command]`: `{name, description?, args_hint?, source, path, runtime_native}`, no file content |
+| `commands.install` | `scope: "user"\|"project"`, `agent_id` (for `project`), `kind: "command"\|"skill"`, `name`, `files: [{path, content}]` (`content` is base64), `overwrite?` (default false) | `{path}` |
+
+Install writes under the daemon user's home (`user`) or under the agent's folder (`project`). A command is `.claude/commands/<name>.md`, one file (`git:commit` goes to `commands/git/commit.md`). A skill is the folder `.claude/skills/<name>/`, which must contain `SKILL.md`; it takes at most 50 files and 2 MiB decoded in total. File paths are relative and have no `..`. Everything is checked before the first write. Without `overwrite`, an existing command or skill is an error. With it, a skill folder is replaced as a whole. Like the file methods, these are open to any paired device, with the rights of the daemon user.
+
+Errors: code `-32027` (`COMMANDS_ERROR`) with `error.data.reason`: `invalid_name`, `invalid_path`, `invalid_content`, `file_count`, `too_many_files`, `too_large`, `missing_skill_file`, `exists`, `no_home`, `io`. Bad params are `-32602`.
+
+## Workspaces
+
+A workspace is where an agent's CLI runs: on the server itself, or in a Docker container with its own disk, network and limits. Agents can be mixed freely: some share the server, one sits in a container. Code: `daemon/src/workspace.rs` (Docker, the command each runtime runs), `daemon/src/store/workspaces.rs` (rows), `daemon/src/rpc/workspaces.rs` (methods). Feature string: `"workspaces"`.
+
+**Kinds.**
+
+| kind | where the CLI runs | notes |
+|---|---|---|
+| `shared` | the server, as the daemon's user | built in, always present, cannot be deleted; the default for agents |
+| `container` | Docker container `bandito-ws-<id>`, started by Bandito | own disk layer, network `internet` or `none`, optional `cpus` and `memory_mb`, extra `mounts` |
+
+A separate Linux user for a workspace is the next step, not in this version.
+
+**What a container sees.** Each agent's folder and its home (`~/bandito/agents/<slug>/`) are mounted read-write at the same paths they have on the server, so the paths in messages, approvals and checkpoints match. The workspace's own `mounts` are added (host folders, optionally read-only). The CLI logins are mounted read-write: `~/.claude` as `/root/.claude` and `~/.codex` as `/root/.codex`, when they exist, so the agent inside is logged in with the same subscription. Nothing else from the server is mounted: no other project, no daemon socket, no Docker socket. Agent secrets reach the CLI as environment variables, by name.
+
+**Image.** When a container workspace names no `image`, Bandito builds `bandito/workspace:<hash>` once from a fixed Dockerfile: `FROM node:22-bookworm` plus the global npm packages `@anthropic-ai/claude-code@2.1.295` and `@openai/codex@0.162.0`, the versions in `NPM_PINS` (the same table the setup installs from). The tag changes with the Dockerfile. With `image` set, that image is used as it is, and it must have the CLIs on `PATH` and run as root.
+
+**Lifecycle.** A container starts with the first session of an agent in its workspace. Each start checks it: missing → created; stopped → started; settings that differ (image, limits, network, or mounts, including the folders of the agents in the workspace) → recreated. Containers restart with the Docker daemon (`--restart unless-stopped`). Recreation drops the container's own writable layer, so anything installed inside it (apt or npm packages) is lost; folders on the host stay. Recreation also ends the running sessions of the other agents in that container, which resume with their next message. `workspaces.stop` stops the container; the next message starts it again.
+
+**How a CLI runs.** Runtimes build their command as before, then `workspace::confine` moves it into the workspace. For a container that is `docker exec -i -w <cwd> -e NAME… <container> <program> <args…>`, so stdin, stdout and stderr pass through and the JSON protocols do not change. Environment values are not in the argument list: `-e NAME` takes the value from the environment of the docker client, which keeps secrets out of the process list. The crew MCP server is not given to container agents, and `agent.sock` is not mounted, so they have no agent tools. The session token still goes into their environment. This is a known limit: a container agent cannot use the crew, browser or screen tools, and the daemon's `history.*` tools are out of its reach. Approvals, checkpoints and memory keep working, because they run in the daemon on the server against the same folders.
+
+**Security.** A container isolates the files outside its mounts, the network (`none` means no network at all) and the CPU and memory it may use. It does not isolate the CLI logins: `~/.claude` and `~/.codex` are writable inside, so an agent in a container can read and change that subscription login. A mount may not be the server root, the Docker socket, or a path with `..`, `,` or `"`. Nor may it be Bandito's own data folder (`$BANDITO_HOME`, or `~/.bandito`), a folder inside it, or a folder that holds it (such as the home folder). Membership of the `docker` group is root-equivalent on the server, so the daemon's user holds that power whenever a container workspace exists.
+
+**Docker.** Bandito uses the `docker` program from `PATH` and runs `docker info` before each start. Without Docker, or when it does not answer, the error is `docker_unavailable` and it names the install guide. The `containers` feature of [Setup](#setup) shows the same check.
+
+**Methods.**
+
+| method | params | result |
+|---|---|---|
+| `workspaces.list` | `{}` | `[Workspace + {agents: [ids], status}]`. `status` is `null` for `shared`; for a container it is `{running, container_id, cpu, mem}`, or `{running: false, error}` when Docker cannot answer |
+| `workspaces.create` | `{name, kind: "shared"\|"container", image?, cpus?, memory_mb?, network?: "internet"\|"none", mounts?: [{host, target, read_only?}]}` | `Workspace` |
+| `workspaces.update` | `{id, name?, image?, cpus?, memory_mb?, network?, mounts?}`; `null` clears `image`, `cpus` or `memory_mb` | `Workspace`. Limits and mounts apply at the container's next start |
+| `workspaces.delete` | `{id}` | `{deleted: true}`. Removes the container of an empty workspace first |
+| `workspaces.start`, `workspaces.stop` | `{id}` | `status` (container workspaces only) |
+
+`agents.create` and `agents.update` take `workspace_id` (default `shared`). Moving an agent starts a new chapter, as a folder change does.
+
+Limits: name 1–64 characters; `cpus` 0.1–64; `memory_mb` 64–262144; mounts are absolute paths without `,`, `"` or `..`. The shared workspace has no container settings, so it refuses them.
+
+Errors: code `-32028` (`WORKSPACE_ERROR`) with `error.data.reason`: `docker_unavailable`, `not_found`, `builtin` (the shared workspace cannot be deleted), `not_empty` (agents still run in it), `invalid` (bad settings or mount), `docker` (Docker failed; its message is in `message`).
+
 ## Mac app
 
 SwiftUI, macOS 14+. Sidebar: servers → crew. Thread view rendered from events; approval cards with Approve / Deny / Always; schedules; connection wizard. Menu bar item with the status dot. Local notifications with Approve / Deny actions while the app runs. Strings in a String Catalog, 9 languages. Colors from `brand/tokens/dist`.
+
+## Mac app updates
+
+The Mac app updates itself with Sparkle 2 (SwiftPM, exact version 2.10.0 in `apps/mac/project.yml`). Only the app target links Sparkle: `apps/mac/Bandito/App/AppUpdater.swift`. Kit and UI know the settings (`AppUpdatePreferences`) and the menu item (`AppUpdateCommands`, under About), not Sparkle.
+
+- **Feed.** `https://bandito.dev/appcast.xml` (`SUFeedURL`), the file `public/appcast.xml` of the platform repo. The site serves it as `application/rss+xml; charset=utf-8` with `Cache-Control: public, max-age=300`. An item has `sparkle:version` (the build number: the commit count of the release commit), `sparkle:shortVersionString`, `sparkle:minimumSystemVersion` 14.0 and an enclosure on the GitHub release `v<version>`. A version with `-beta.N` also gets `<sparkle:channel>beta</sparkle:channel>`.
+- **Trust.** Archives are checked with EdDSA: `SUPublicEDKey` in `project.yml` is the public key. The private key is in the login Keychain of the Mac that releases the app (made with Sparkle's `generate_keys`). It is never exported, printed or committed. Sparkle refuses an archive whose signature does not match.
+- **Channels.** Stable takes the items without a channel. Beta also takes the `beta` items. The choice is `updates.channel` in Settings → General. Automatic checks (once a day, Sparkle's default) are `SUEnableAutomaticChecks`, on by default. Nothing installs without the user's OK in Sparkle's own window.
+- **Release.** `apps/mac/scripts/release-app.sh <version> [--dry-run]` writes the version into `project.yml`, builds Release with the Developer ID identity of team 74Q24ZMD7A and the hardened runtime, and signs Sparkle's nested code inside out (the XPC services, `Autoupdate`, `Updater.app`, the framework, then the app; no `--deep`). It notarizes the zip with the `bandito-notary` keychain profile, staples the app, builds the `.dmg` (signed, notarized, stapled), signs the final zip with `sign_update`, and adds the appcast item to the platform checkout. It uploads nothing and deploys nothing. `--dry-run` stops before Apple's notary service. Artifacts go to `apps/mac/build/release/` (not committed). The Sparkle tools are read from `~/.cache/sparkle/2.10.0/extracted/bin`; the release must not run from a dirty tree.
+- **Daemon update.** The Server screens offer the daemon's own update from `daemon.info.update` (see [Self-update](#self-update)): a card in Server → Overview with a confirmation, then `daemon.update_apply`, then waiting for the daemon to report the new version (two minutes at most). A dot next to a server in the server menu marks a daemon with an update. The app re-reads `daemon.info` once an hour and when Server opens. The GitHub hint in Overview is only a fallback for a daemon that has not reported a check.
 
 ## Repo layout
 
@@ -356,9 +658,18 @@ daemon/            Rust crate `bandito`
   src/rpc/         JSON-RPC, transports, auth, pairing
   src/store/       SQLite + migrations
   src/runtime/     process.rs (shared child-process plumbing), claude.rs, codex.rs, grok.rs, api/
-  src/policy.rs    approval rules
+  src/policy.rs    approval rules: protected paths, risky checks (see Approvals)
+  src/shell.rs     reads a command line for the policy: simple commands, wrappers, redirections
   src/host.rs      host load, processes, ports, kill (see Host)
   src/setup.rs     components per feature, install jobs (see Setup)
+  src/browser.rs   the server's Chrome: start, stop, agent actions, risky clicks (see Browser)
+  src/cdp.rs       DevTools WebSocket client, page operations, snapshot text
+  src/rpc/browser.rs  browser.* and browser.agent.* methods
+  src/rpc/preview.rs  preview proxy to loopback ports (see Preview proxy)
+  src/screen.rs    the server's virtual desktop (see Screen)
+  src/rpc/screen.rs  screen.* methods
+  src/commands.rs  slash commands: discovery, expansion, install (see Commands)
+  src/workspace.rs where CLIs run: the server or a Docker container (see Workspaces)
   src/scheduler.rs
   src/crew.rs      MCP server
   tests/fixtures/  recorded protocol transcripts
@@ -419,7 +730,7 @@ The agent's instructions (built by the daemon, before the user's own) explain th
 
 **Recall instead of remembering.** The crew MCP server also offers `history_search{query}` and `history_day{date}` over the agent's own past messages in the daemon's database, so an agent looks up what was said weeks ago instead of carrying it.
 
-**Changing an agent.** `agents.update` applies name, role, model, effort, system prompt, memory mode, context budget and folder from the next session: an idle agent's session is closed at once, a running one when its turn ends. The chapter goes on, except after a folder change, which starts a new chapter (a CLI session is tied to its folder). The approval mode is read on every request and needs no restart.
+**Changing an agent.** `agents.update` applies name, role, model, effort, system prompt, memory mode, context budget, folder, runtime, fallback and workspace from the next session: an idle agent's session is closed at once, a running one when its turn ends. The chapter goes on, except after a folder, runtime or workspace change, which starts a new chapter (a CLI session is tied to its folder, its runtime and where it runs; see [Workspaces](#workspaces)). A runtime change also resets effort to null, with a `warnings` entry in the response, when the new runtime does not offer the old level. The approval mode is read on every request and needs no restart.
 
 **Effort.** Each agent has an `effort` (`low`, `medium`, `high`, `xhigh`, `max`). The daemon maps it to the runtime (`--effort` for Claude, the turn's `effort` for Codex, `--reasoning-effort` for Grok) and refuses levels a runtime does not offer.
 
@@ -432,6 +743,36 @@ The agent's instructions (built by the daemon, before the user's own) explain th
 - Grok and API keys: no plan yet.
 
 A runtime that reports no plan, or fails, leaves the stored plan as it was.
+
+## Fallback subscription
+
+An agent can name a fallback runtime (`fallback_runtime`, one of `claude`, `codex`, `grok`, different from its `runtime`) and a `fallback_model` for it. It is used when the primary runtime's subscription runs out of usage. `agents.create` and `agents.update` take both (`null` clears them), and `agents.get`/`agents.list` return `active_runtime`: the runtime the agent runs on now, `null` for the primary one.
+
+**Recognising a limit.** A turn that ends with an error, and whose runtime reported its usage as used up during it:
+
+| runtime | error message (case-insensitive) | or usage reported |
+|---|---|---|
+| Claude | `usage limit` (`Claude AI usage limit reached…`), `rate limit`, `rate_limit`, `429` | `rate_limit_event` window at utilization 1.0 or more |
+| Codex | `usage_limit_reached`, `usage limit` | `account/rateLimits/updated` window at `usedPercent` 100 or more |
+| Grok | `rate limit` (`Rate limited: …`), `429`, `too many requests` | none |
+
+Only runtime error messages are checked, never the agent's text. The message is the one the adapter reports, so a runtime that words its limit differently is not recognised.
+
+**Switching.** When the limit is recognised, the fallback is free, and the turn had no retry yet, the daemon:
+
+1. closes the session and starts a new chapter (`session.rotated`, reason `runtime switched`). The memory carries over in the agent's files, so no wrap-up turn runs;
+2. sets `active_runtime` to the other runtime and emits `runtime.switched {from, to, until?}`;
+3. sends the same message again on the new runtime. The thread shows the user's message once. A retry that hits the limit again is a plain error: one switch per message.
+
+Without a fallback, or when the fallback is out of usage too, the turn is an ordinary error.
+
+**Coming back.** Before a message goes out, an agent on its fallback returns to the primary runtime once that runtime's windows do not block: a full window (utilization 1.0 or more) blocks while its `resets_at` is in the future. A full window with no reset time blocks for one hour after it was reported; after that the primary runtime is tried again, and if its limit is still there, the message switches to the fallback again. The return emits `runtime.switched {from: fallback, to: primary}` and starts a new chapter.
+
+**Usage cache.** The runtime left is recorded as used up: its own windows if it reported them, else a window named `limit` at 100% with no reset time. The app shows that window under the runtime's usage.
+
+**Changing the primary runtime.** `agents.update {runtime}` checks that the runtime is installed on this server, clears `active_runtime`, starts a new chapter (`session.rotated`, reason `runtime changed`) and drops the CLI session. The fallback must differ from the new runtime: switching to the current fallback is refused unless the same patch clears it.
+
+**Limits of this design.** Codex limits are recognised by the words in the error message the adapter passes on. A switch does not run a wrap-up turn, so what the agent did not write to its memory files during the chapter is not saved.
 
 ## Accounts, sync and push (planned)
 
@@ -448,3 +789,17 @@ An account is optional: without one the app works on one Mac. With one, every de
 **Push.** Approvals and finished turns reach phones through `push.bandito.dev`: the daemon sends an end-to-end encrypted payload addressed to device push tokens; a notification service extension decrypts it on the phone. Approve and Deny from the notification call the daemon directly (through whatever connection the phone has: Tailscale, SSH, relay).
 
 **Reaching servers from a phone.** Tailscale and direct TLS work as on the Mac; SSH works through an in-app SSH client; the Bandito Relay (outbound-only, end-to-end encrypted) covers servers behind NAT without any setup.
+
+## Screen
+
+A virtual desktop on a Linux server that people see in the app and agents can drive. `daemon/src/screen.rs` runs it; `daemon/src/rpc/screen.rs` is the RPC layer. Other systems answer `unsupported`.
+
+**Lifecycle.** `screen.start {workspace?, width?, height?}` starts `Xvfb` on the first free display from `:90`, `openbox` when it is installed, and `x11vnc` bound to `127.0.0.1` on a free port with a random password (file mode 0600 under `$BANDITO_HOME/screens/<workspace>/`). Before Xvfb starts, `xauth -f FILE source -` writes the folder's `Xauthority` with one `MIT-MAGIC-COOKIE-1` of 16 random bytes for the display. The cookie goes to xauth on stdin, not in its arguments, so it does not show in the process list (mode 0600; a file from a crashed screen is replaced). Xvfb runs with `-auth` on it, and x11vnc with `-auth`. Every program on the screen (openbox, x11vnc, `screen.launch`, and the agent tools) gets `DISPLAY` and `XAUTHORITY`, so another local user cannot open the screen. `screen.stop` removes the file. `xauth` and `x11vnc -storepasswd` run with umask 077, and the folder is 0700 even when it existed before. Each process has its own process group; x11vnc is restarted once if it dies. `screen.status` returns `{running, display, width, height, vnc_port, vnc_password, started_at, controller, idle_ms}`; `screen.stop` ends it. A screen with no VNC client and no agent tool call for 30 minutes stops by itself. The daemon stops every screen when it shuts down.
+
+**Viewing.** The app calls `screen.start`, then opens `/v1/tunnel?port=<vnc_port>` through a one-shot local forwarder and speaks VNC with the password. The password is 8 characters, the whole of what RFB uses (it reads only the first 8). They come from the system RNG as printable ASCII without `"` and `\` (92 symbols), by rejection sampling, so no symbol is favored. The tunnel is what keeps the screen private (loopback only, paired device only).
+
+**Agents.** The crew MCP server offers `screen_screenshot` (PNG, at most 1280 px wide, with the original size so clicks use screen pixels), `screen_click {x, y, button?, double?}`, `screen_move`, `screen_type {text}`, `screen_key {keys}`, `screen_scroll {direction, amount?}` and `screen_launch {command}`. They call `screen.agent.*` methods, which only agents may call and start the screen when it is off.
+
+**Control.** `screen.control {holder: user|agent|none}`. While the user holds the screen, agent tools fail with a message asking the agent to wait or ask for it back.
+
+**Needs** `xvfb`, `x11vnc`, `xdotool`, `xauth`, `imagemagick` (`import`, `convert`) and optionally `openbox` (see [Setup](#setup)). A missing one is `SCREEN_ERROR` (`-32025`) with `data.reason = "missing_component"` and `data.component`. Feature string: `"screen"` (Linux only).

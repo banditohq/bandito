@@ -2,10 +2,15 @@ name: apple
 
 on:
   pull_request:
-    paths: ["apps/**", "i18n/**", "brand/tokens/**", ".github/workflows/apple.yml"]
+    paths: ["apps/**", "daemon/**", "i18n/**", "brand/tokens/**", "guide/**", "scripts/check_guide.py", ".github/workflows/apple.yml"]
   push:
     branches: [main]
-    paths: ["apps/**", "i18n/**", "brand/tokens/**", ".github/workflows/apple.yml"]
+    paths: ["apps/**", "daemon/**", "i18n/**", "brand/tokens/**", "guide/**", "scripts/check_guide.py", ".github/workflows/apple.yml"]
+
+# A newer push to the same PR or branch cancels the run for the older one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -16,6 +21,9 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
+
+      - name: Guide covers every screen, setting and command
+        run: python3 scripts/check_guide.py
 
       - name: Select the newest Xcode
         run: |
@@ -36,8 +44,19 @@ jobs:
         working-directory: apps/mac/BanditoKit
         run: swift test
 
+      - name: Install Rust (the app bundles the bandito daemon)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo (daemon)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: daemon
+
       - name: Install XcodeGen
         run: brew install xcodegen
 
       - name: Build the Mac app (unsigned)
+        # build.sh builds the daemon through the app's build phase; CARGO_TARGET_DIR puts it where the cache looks.
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/daemon/target
         run: apps/mac/scripts/build.sh

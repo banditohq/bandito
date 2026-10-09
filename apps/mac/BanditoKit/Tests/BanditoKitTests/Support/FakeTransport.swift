@@ -9,17 +9,28 @@ import Testing
 actor FakeTransport: RPCTransport {
     /// Receives the request's params as JSON, returns the result as JSON.
     typealias Handler = @Sendable (String) -> String
+    /// Receives the request's params as JSON; returns the error object (`{code, message, data}`)
+    /// to answer with, or nil to fall through to the normal handler.
+    typealias Failure = @Sendable (String) -> String?
 
     private let handlers: [String: Handler]
+    private let errors: [String: Failure]
     private let autoRespond: Bool
     private let continuation: AsyncThrowingStream<String, Error>.Continuation
     /// The client's read loop is the only reader, so the iterator needs no further synchronization.
     private let inbound: InboundIterator
     private var sent: [String] = []
+    /// What `httpBase` answers: an ssh tunnel's HTTP base in the tests that need one.
+    private var base: URL?
 
-    init(handlers: [String: Handler] = [:], autoRespond: Bool = true) {
+    init(
+        handlers: [String: Handler] = [:], errors: [String: Failure] = [:], autoRespond: Bool = true,
+        httpBase: URL? = nil
+    ) {
         self.handlers = handlers
+        self.errors = errors
         self.autoRespond = autoRespond
+        self.base = httpBase
         let (stream, continuation) = AsyncThrowingStream.makeStream(
             of: String.self, throwing: Error.self, bufferingPolicy: .unbounded)
         self.continuation = continuation
@@ -30,7 +41,12 @@ actor FakeTransport: RPCTransport {
 
     func send(_ text: String) async throws {
         sent.append(text)
-        guard autoRespond, let request = JSONRPC.parse(text), let handler = handlers[request.method] else { return }
+        guard autoRespond, let request = JSONRPC.parse(text) else { return }
+        if let failure = errors[request.method], let error = failure(request.paramsJSON) {
+            continuation.yield(JSONRPC.errorResponse(id: request.id, error: error))
+            return
+        }
+        guard let handler = handlers[request.method] else { return }
         continuation.yield(JSONRPC.response(id: request.id, result: handler(request.paramsJSON)))
     }
 
@@ -45,7 +61,16 @@ actor FakeTransport: RPCTransport {
         continuation.finish()
     }
 
+    var httpBase: URL? {
+        get async { base }
+    }
+
     // MARK: test controls
+
+    /// Moves the tunnel: the next request is answered from the new base.
+    func setHTTPBase(_ url: URL?) {
+        base = url
+    }
 
     /// Delivers a server message (a response or a notification).
     func push(_ text: String) {
@@ -63,6 +88,7 @@ actor FakeTransport: RPCTransport {
 }
 
 /// Holds the single-reader iterator outside the actor's isolation so it can be advanced across `await`.
+// @unchecked: only the client's read loop advances the iterator.
 private final class InboundIterator: @unchecked Sendable {
     private var iterator: AsyncThrowingStream<String, Error>.AsyncIterator
 
@@ -96,6 +122,11 @@ enum JSONRPC {
 
     static func response(id: Int, result: String) -> String {
         #"{"jsonrpc":"2.0","id":\#(id),"result":\#(result)}"#
+    }
+
+    /// `error` is the JSON error object: `{"code":…,"message":…,"data":…}`.
+    static func errorResponse(id: Int, error: String) -> String {
+        #"{"jsonrpc":"2.0","id":\#(id),"error":\#(error)}"#
     }
 
     static func notification(_ event: String) -> String {

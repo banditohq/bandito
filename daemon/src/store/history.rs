@@ -98,6 +98,7 @@ mod tests {
             text: text.into(),
             source: Source::User,
             from_agent: None,
+            command: None,
         }
     }
 
@@ -185,6 +186,7 @@ mod tests {
                     text: "Update your memory staging notes".into(),
                     source: Source::System,
                     from_agent: None,
+                    command: None,
                 },
             )
             .unwrap();

@@ -1,37 +1,128 @@
 //! HTTP + WebSocket transport: `GET /v1/health`, `GET /v1/rpc` (WebSocket),
 //! `GET` and `HEAD /v1/files/raw` (file bytes, see docs/ARCHITECTURE.md#files),
 //! `GET /v1/tunnel` (TCP to the server's loopback, see docs/ARCHITECTURE.md#tunnel).
+//! `GET /v1/browser/tabs`, `GET /v1/browser/cdp[/page/<id>]` (the browser's DevTools protocol, see
+//! docs/ARCHITECTURE.md#browser).
 //! Auth: `Authorization: Bearer <device token>`. Without a token the socket
 //! is anonymous (only `daemon.hello` and `pair.redeem`); raw files and the
 //! tunnel need a token.
 
+use super::browser;
 use super::tunnel;
-use super::{App, Peer, serve};
+use super::{App, Peer, preview, serve};
 use crate::files::{EntryKind, FsError};
 use crate::store::Device;
 use axum::Router;
 use axum::body::Body;
+use axum::extract::ConnectInfo;
+use axum::extract::Extension;
 use axum::extract::Query;
+use axum::extract::Request;
 use axum::extract::State;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::http::{HeaderMap, Method, StatusCode, header};
+use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
-use axum::routing::get;
+use axum::routing::{any, get};
 use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
 use std::io::{self, ErrorKind, SeekFrom};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use tokio::sync::mpsc;
 use tokio_util::io::ReaderStream;
 
+/// The router for a daemon that listens on loopback only (also used by tests).
 pub fn router(app: Arc<App>) -> Router {
+    router_listening(app, IpAddr::V4(Ipv4Addr::LOCALHOST), Vec::new())
+}
+
+/// The router for a daemon that listens on `listen`. `allowed_hosts` are extra `Host` names from the
+/// config, honoured on loopback listeners only (see [`HostGuard`]).
+pub fn router_listening(app: Arc<App>, listen: IpAddr, allowed_hosts: Vec<String>) -> Router {
     Router::new()
         .route("/v1/health", get(|| async { "ok" }))
         .route("/v1/rpc", get(rpc))
         .route("/v1/files/raw", get(files_raw))
         .route("/v1/tunnel", get(tunnel_upgrade))
+        .route("/v1/browser/tabs", get(browser::tabs))
+        .route("/v1/browser/cdp", get(browser::cdp_browser))
+        .route("/v1/browser/cdp/page/{target_id}", get(browser::cdp_page))
+        .route("/v1/proxy/{*rest}", any(preview_proxy))
+        .layer(axum::middleware::from_fn_with_state(
+            HostGuard::new(listen, allowed_hosts),
+            check_host,
+        ))
         .with_state(app)
+}
+
+/// DNS rebinding defence for a loopback listener: a web page on another name is pointed at the daemon
+/// through the user's browser, and its `Host` is that other name. So on a loopback listener only loopback
+/// names, and the names in `allowed_hosts` (for a reverse proxy or tunnel on this server), get through;
+/// anything else gets 421 Misdirected Request. A listener on any other address is not checked: the
+/// bearer token and the refused `Origin` header protect it instead.
+#[derive(Clone)]
+struct HostGuard {
+    check: bool,
+    /// Lower-case names from `allowed_hosts`.
+    names: Vec<String>,
+}
+
+impl HostGuard {
+    fn new(listen: IpAddr, allowed_hosts: Vec<String>) -> Self {
+        Self {
+            check: listen.is_loopback(),
+            names: allowed_hosts.iter().map(|n| n.trim().to_ascii_lowercase()).collect(),
+        }
+    }
+
+    /// Whether a request with this `Host` header (absent: `None`) may proceed.
+    fn allows(&self, header: Option<&str>) -> bool {
+        if !self.check {
+            return true;
+        }
+        let Some(name) = header.and_then(host_name) else {
+            return false;
+        };
+        if name.eq_ignore_ascii_case("localhost") || self.names.iter().any(|n| n.eq_ignore_ascii_case(name)) {
+            return true;
+        }
+        match name.parse::<IpAddr>() {
+            Ok(ip) => ip == IpAddr::V4(Ipv4Addr::LOCALHOST) || ip == IpAddr::V6(Ipv6Addr::LOCALHOST),
+            Err(_) => false,
+        }
+    }
+}
+
+/// The host name of a `Host` header value, without its port: `localhost:17777` → `localhost`,
+/// `[::1]:7878` → `::1`, and a bare `::1` is kept whole.
+fn host_name(header: &str) -> Option<&str> {
+    if let Some(rest) = header.strip_prefix('[') {
+        return rest.split_once(']').map(|(ip, _)| ip);
+    }
+    if header.matches(':').count() > 1 {
+        return Some(header);
+    }
+    Some(header.split_once(':').map_or(header, |(name, _)| name))
+}
+
+/// The address a request came from, as the router saw it: the rate limit of `pair.redeem` keys on it.
+#[derive(Clone)]
+struct ClientAddr(String);
+
+/// Refuses a request whose `Host` is not allowed, and records the client's address for the handlers.
+async fn check_host(State(guard): State<HostGuard>, mut req: Request, next: Next) -> Response {
+    let header = req.headers().get(header::HOST).and_then(|v| v.to_str().ok());
+    if !guard.allows(header) {
+        return (StatusCode::MISDIRECTED_REQUEST, "unknown host name").into_response();
+    }
+    let addr = req
+        .extensions()
+        .get::<ConnectInfo<SocketAddr>>()
+        .map_or_else(|| "unknown".to_string(), |c| c.0.ip().to_string());
+    req.extensions_mut().insert(ClientAddr(addr));
+    next.run(req).await
 }
 
 fn bearer(headers: &HeaderMap) -> Option<&str> {
@@ -67,7 +158,7 @@ fn device_for(app: &App, headers: &HeaderMap) -> Result<Option<Device>, (StatusC
 
 /// The paired device behind the request. The error is the status and message to
 /// send when the request has a browser origin, or the token is missing or unknown.
-fn require_device(app: &App, headers: &HeaderMap) -> Result<Device, (StatusCode, &'static str)> {
+pub(super) fn require_device(app: &App, headers: &HeaderMap) -> Result<Device, (StatusCode, &'static str)> {
     if has_browser_origin(headers) {
         return Err((StatusCode::FORBIDDEN, "browser origins are not allowed"));
     }
@@ -78,13 +169,18 @@ fn require_device(app: &App, headers: &HeaderMap) -> Result<Device, (StatusCode,
     }
 }
 
-async fn rpc(State(app): State<Arc<App>>, headers: HeaderMap, ws: WebSocketUpgrade) -> Response {
+async fn rpc(
+    State(app): State<Arc<App>>,
+    Extension(client): Extension<ClientAddr>,
+    headers: HeaderMap,
+    ws: WebSocketUpgrade,
+) -> Response {
     if has_browser_origin(&headers) {
         return (StatusCode::FORBIDDEN, "browser origins are not allowed").into_response();
     }
     let peer = match device_for(&app, &headers) {
         Ok(Some(device)) => Peer::Device(device),
-        Ok(None) => Peer::Anonymous,
+        Ok(None) => Peer::Anonymous(client.0),
         Err(e) => return e.into_response(),
     };
     ws.max_message_size(4 << 20)
@@ -198,6 +294,40 @@ async fn tunnel_upgrade(
     };
     ws.max_message_size(tunnel::MAX_MESSAGE_SIZE)
         .on_upgrade(move |socket| tunnel::run(socket, port, slot))
+}
+
+/// `/v1/proxy/<port>/<path>`: forwards to `127.0.0.1:<port>` (see rpc/preview.rs). Same checks as
+/// the file routes: a paired device, and no browser origin.
+async fn preview_proxy(State(app): State<Arc<App>>, request: Request) -> Response {
+    let (parts, body) = request.into_parts();
+    if let Err(e) = require_device(&app, &parts.headers) {
+        return e.into_response();
+    }
+    let Some(rest) = parts.uri.path().strip_prefix("/v1/proxy/") else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let (port_text, path) = rest.split_once('/').unwrap_or((rest, ""));
+    let port = match port_text.parse::<u16>() {
+        Ok(port) if port != 0 => port,
+        _ => return (StatusCode::BAD_REQUEST, "port must be 1..=65535").into_response(),
+    };
+    let methods = [
+        Method::GET,
+        Method::HEAD,
+        Method::POST,
+        Method::PUT,
+        Method::PATCH,
+        Method::DELETE,
+        Method::OPTIONS,
+    ];
+    if !methods.contains(&parts.method) {
+        return (StatusCode::METHOD_NOT_ALLOWED, "method not allowed").into_response();
+    }
+    let path_and_query = match parts.uri.query() {
+        Some(query) => format!("/{path}?{query}"),
+        None => format!("/{path}"),
+    };
+    preview::forward(port, parts.method, &path_and_query, &parts.headers, body).await
 }
 
 fn raw_error(e: FsError) -> Response {
@@ -348,7 +478,10 @@ mod tests {
     }
 
     async fn send(app: &Arc<App>, method: Method, uri: &str, headers: &[(&str, &str)]) -> Response {
-        let mut req = Request::builder().method(method).uri(uri);
+        let mut req = Request::builder()
+            .method(method)
+            .uri(uri)
+            .header(header::HOST, "127.0.0.1:7878");
         for (name, value) in headers {
             req = req.header(*name, *value);
         }
@@ -572,5 +705,235 @@ mod tests {
     #[test]
     fn percent_encoding_keeps_only_unreserved_characters() {
         assert_eq!(percent_encode("a-b_c.d~E9/ é"), "a-b_c.d~E9%2F%20%C3%A9");
+    }
+
+    /// A small HTTP server on 127.0.0.1 that stands in for a dev server. Returns its port.
+    async fn target_server() -> u16 {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let target = axum::Router::new()
+            .route(
+                "/hello",
+                axum::routing::get(|headers: HeaderMap, uri: axum::http::Uri| async move {
+                    let auth = headers.contains_key(header::AUTHORIZATION);
+                    let host = headers
+                        .get(header::HOST)
+                        .and_then(|h| h.to_str().ok())
+                        .unwrap_or_default()
+                        .to_string();
+                    let query = uri.query().unwrap_or_default().to_string();
+                    (
+                        StatusCode::CREATED,
+                        [("x-target", "yes")],
+                        format!("hello q={query} auth={auth} host={host}"),
+                    )
+                }),
+            )
+            .route(
+                "/go",
+                axum::routing::get(move || async move {
+                    (
+                        StatusCode::FOUND,
+                        [(header::LOCATION, format!("http://127.0.0.1:{port}/hello?from=go"))],
+                    )
+                }),
+            )
+            .route(
+                "/echo",
+                axum::routing::post(|body: String| async move { format!("echo {body}") }),
+            );
+        tokio::spawn(async move { axum::serve(listener, target).await.unwrap() });
+        port
+    }
+
+    #[tokio::test]
+    async fn preview_forwards_to_loopback_and_never_passes_the_device_token() {
+        let port = target_server().await;
+        let dir = tempfile::tempdir().unwrap();
+        let app = served(dir.path());
+        let res = send(&app, Method::GET, &format!("/v1/proxy/{port}/hello?x=1"), &[AUTH]).await;
+        assert_eq!(res.status(), StatusCode::CREATED);
+        assert_eq!(header(&res, "x-target"), "yes");
+        assert_eq!(
+            String::from_utf8(body_of(res).await).unwrap(),
+            format!("hello q=x=1 auth=false host=127.0.0.1:{port}")
+        );
+    }
+
+    #[tokio::test]
+    async fn preview_needs_a_device_token_and_refuses_browser_origins() {
+        let port = target_server().await;
+        let dir = tempfile::tempdir().unwrap();
+        let app = served(dir.path());
+        let uri = format!("/v1/proxy/{port}/hello");
+        assert_eq!(
+            send(&app, Method::GET, &uri, &[]).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
+        let revoked = [("authorization", "Bearer bdt_revoked")];
+        assert_eq!(
+            send(&app, Method::GET, &uri, &revoked).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
+        let evil = [AUTH, ("origin", "https://evil.example")];
+        assert_eq!(
+            send(&app, Method::GET, &uri, &evil).await.status(),
+            StatusCode::FORBIDDEN
+        );
+    }
+
+    #[tokio::test]
+    async fn preview_rewrites_redirects_into_the_proxy_prefix() {
+        let port = target_server().await;
+        let dir = tempfile::tempdir().unwrap();
+        let app = served(dir.path());
+        let res = send(&app, Method::GET, &format!("/v1/proxy/{port}/go"), &[AUTH]).await;
+        assert_eq!(res.status(), StatusCode::FOUND);
+        assert_eq!(header(&res, "location"), format!("/v1/proxy/{port}/hello?from=go"));
+    }
+
+    #[tokio::test]
+    async fn preview_forwards_request_bodies() {
+        let port = target_server().await;
+        let dir = tempfile::tempdir().unwrap();
+        let app = served(dir.path());
+        let req = Request::builder()
+            .method(Method::POST)
+            .uri(format!("/v1/proxy/{port}/echo"))
+            .header(header::HOST, "127.0.0.1:7878")
+            .header(AUTH.0, AUTH.1)
+            .body(Body::from("ping"))
+            .unwrap();
+        let res = router(app.clone()).oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        assert_eq!(body_of(res).await, b"echo ping");
+    }
+
+    #[tokio::test]
+    async fn preview_checks_port_and_method_and_refuses_websockets() {
+        let port = target_server().await;
+        let dir = tempfile::tempdir().unwrap();
+        let app = served(dir.path());
+        for uri in ["/v1/proxy/0/x", "/v1/proxy/70000/x", "/v1/proxy/abc/x"] {
+            assert_eq!(
+                send(&app, Method::GET, uri, &[AUTH]).await.status(),
+                StatusCode::BAD_REQUEST,
+                "{uri}"
+            );
+        }
+        let uri = format!("/v1/proxy/{port}/hello");
+        assert_eq!(
+            send(&app, Method::TRACE, &uri, &[AUTH]).await.status(),
+            StatusCode::METHOD_NOT_ALLOWED
+        );
+        let upgrade = [AUTH, ("upgrade", "websocket")];
+        assert_eq!(
+            send(&app, Method::GET, &uri, &upgrade).await.status(),
+            StatusCode::NOT_IMPLEMENTED
+        );
+    }
+
+    #[tokio::test]
+    async fn preview_to_a_closed_port_is_bad_gateway() {
+        let port = std::net::TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        let dir = tempfile::tempdir().unwrap();
+        let app = served(dir.path());
+        let res = send(&app, Method::GET, &format!("/v1/proxy/{port}/x"), &[AUTH]).await;
+        assert_eq!(res.status(), StatusCode::BAD_GATEWAY);
+    }
+}
+
+#[cfg(test)]
+mod host_tests {
+    use super::*;
+    use crate::hub::Hub;
+    use crate::store::Store;
+    use crate::supervisor::{Runtimes, Supervisor};
+    use axum::body::Body;
+    use axum::http::Request;
+    use tower::ServiceExt;
+
+    fn app() -> Arc<App> {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let sup = Supervisor::new(Hub::new(store), Runtimes::default(), None);
+        App::new(sup, std::env::temp_dir().join("bandito-host-tests"))
+    }
+
+    /// Status of `GET /v1/health` with the given `Host` header (none: `None`), through a router for `listen`.
+    async fn health(listen: &str, allowed: &[&str], host: Option<&str>) -> StatusCode {
+        let mut req = Request::builder().uri("/v1/health");
+        if let Some(host) = host {
+            req = req.header(header::HOST, host);
+        }
+        let allowed = allowed.iter().map(|n| n.to_string()).collect();
+        let router = router_listening(app(), listen.parse().unwrap(), allowed);
+        router.oneshot(req.body(Body::empty()).unwrap()).await.unwrap().status()
+    }
+
+    #[test]
+    fn host_names_drop_the_port_and_keep_bare_ipv6() {
+        assert_eq!(host_name("localhost:17777"), Some("localhost"));
+        assert_eq!(host_name("127.0.0.1:7878"), Some("127.0.0.1"));
+        assert_eq!(host_name("[::1]:7878"), Some("::1"));
+        assert_eq!(host_name("[::1]"), Some("::1"));
+        assert_eq!(host_name("::1"), Some("::1"));
+        assert_eq!(host_name("evil.example"), Some("evil.example"));
+    }
+
+    #[tokio::test]
+    async fn loopback_names_are_allowed_on_a_loopback_listener() {
+        assert_eq!(health("127.0.0.1", &[], Some("127.0.0.1:7878")).await, StatusCode::OK);
+        assert_eq!(health("127.0.0.1", &[], Some("localhost:17777")).await, StatusCode::OK);
+        assert_eq!(health("127.0.0.1", &[], Some("LOCALHOST")).await, StatusCode::OK);
+        assert_eq!(health("::1", &[], Some("[::1]:7878")).await, StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn loopback_listener_refuses_a_foreign_host_with_421() {
+        assert_eq!(
+            health("127.0.0.1", &[], Some("evil.example")).await,
+            StatusCode::MISDIRECTED_REQUEST
+        );
+        assert_eq!(
+            health("127.0.0.1", &[], Some("evil.example:7878")).await,
+            StatusCode::MISDIRECTED_REQUEST
+        );
+        assert_eq!(
+            health("127.0.0.1", &[], Some("127.0.0.2:7878")).await,
+            StatusCode::MISDIRECTED_REQUEST
+        );
+        assert_eq!(health("127.0.0.1", &[], None).await, StatusCode::MISDIRECTED_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn allowed_hosts_are_added_on_a_loopback_listener() {
+        // A reverse proxy or tunnel on this server connects to loopback and sends its own name.
+        let allowed = ["Proxy.Example"];
+        assert_eq!(
+            health("127.0.0.1", &allowed, Some("proxy.example")).await,
+            StatusCode::OK
+        );
+        assert_eq!(
+            health("127.0.0.1", &allowed, Some("proxy.example:443")).await,
+            StatusCode::OK
+        );
+        assert_eq!(
+            health("127.0.0.1", &allowed, Some("other.example")).await,
+            StatusCode::MISDIRECTED_REQUEST
+        );
+    }
+
+    #[tokio::test]
+    async fn a_wildcard_listener_checks_no_host() {
+        assert_eq!(health("0.0.0.0", &[], Some("evil.example")).await, StatusCode::OK);
+        assert_eq!(health("0.0.0.0", &[], None).await, StatusCode::OK);
+        assert_eq!(
+            health("100.64.0.5", &[], Some("mac.tailnet.ts.net:7879")).await,
+            StatusCode::OK
+        );
     }
 }

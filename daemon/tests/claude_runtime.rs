@@ -235,9 +235,88 @@ async fn passes_flags() {
     s.session.shutdown().await;
 }
 
+#[tokio::test]
+async fn the_token_stays_out_of_argv_and_its_files_go_with_the_session() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let args_out = dir.path().join("args.json");
+    let tokens = bandito::agent_token::AgentTokens::new();
+    tokens.set_run_dir(&dir.path().join("run")).unwrap();
+    let (token, guard) = tokens.issue("a1").unwrap();
+    let token_file = guard.token_file().unwrap().to_path_buf();
+    let config_file = guard.config_file().unwrap().to_path_buf();
+    let mut c = cfg("deny.jsonl", Some(&args_out));
+    c.mcp = Some((
+        PathBuf::from("/usr/local/bin/bandito"),
+        vec![
+            "mcp".into(),
+            "--agent".into(),
+            "a1".into(),
+            "--token-file".into(),
+            token_file.display().to_string(),
+        ],
+    ));
+    c.agent_token = Some(token.clone());
+    c.agent_mcp_file = Some(config_file.clone());
+    let s = ClaudeRuntime::new().spawn(c).await.unwrap();
+    let args = written_args(&args_out).await;
+    assert!(args.iter().all(|a| !a.contains("bat_")), "{args:?}");
+    // The config is a file (owner-only), named on the command line; the token itself is in neither.
+    let i = args.iter().position(|a| a == "--mcp-config").expect("--mcp-config");
+    assert_eq!(PathBuf::from(&args[i + 1]), config_file);
+    let mode = std::fs::metadata(&config_file).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode, 0o600);
+    let mcp: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&config_file).unwrap()).unwrap();
+    assert_eq!(
+        mcp["mcpServers"]["bandito"]["args"],
+        serde_json::json!(["mcp", "--agent", "a1", "--token-file", token_file.display().to_string()])
+    );
+    assert!(!std::fs::read_to_string(&config_file).unwrap().contains("bat_"));
+    // The token file holds the token, owner-only.
+    assert_eq!(std::fs::read_to_string(&token_file).unwrap(), token);
+    assert_eq!(
+        std::fs::metadata(&token_file).unwrap().permissions().mode() & 0o777,
+        0o600
+    );
+    s.session.shutdown().await;
+    // Ending the session removes both files and revokes the token.
+    drop(guard);
+    assert!(!config_file.exists());
+    assert!(!token_file.exists());
+    assert_eq!(tokens.agent_for(&token), None);
+}
+
+#[tokio::test]
+async fn bandito_home_is_off_limits_to_the_file_tools() {
+    let dir = tempfile::tempdir().unwrap();
+    let args_out = dir.path().join("args.json");
+    let c = cfg("deny.jsonl", Some(&args_out));
+    let s = ClaudeRuntime::new().spawn(c).await.unwrap();
+    let args = written_args(&args_out).await;
+    // The daemon's data folder: `$BANDITO_HOME` or `~/.bandito`, as an absolute path in `//` form.
+    let home = std::path::absolute(bandito::workspace::data_dir()).unwrap();
+    // One `--settings` argument with inline JSON: a value with spaces cannot split the rules.
+    let i = args
+        .iter()
+        .position(|a| a == "--settings")
+        .unwrap_or_else(|| panic!("missing --settings in {args:?}"));
+    let settings: serde_json::Value = serde_json::from_str(&args[i + 1]).expect("settings are JSON");
+    let deny: Vec<String> = settings["permissions"]["deny"]
+        .as_array()
+        .expect("permissions.deny")
+        .iter()
+        .map(|v| v.as_str().unwrap_or_default().to_string())
+        .collect();
+    for tool in ["Read", "Edit", "Write"] {
+        let rule = format!("{tool}(/{}/**)", home.display());
+        assert!(deny.contains(&rule), "missing {rule} in {deny:?}");
+    }
+    s.session.shutdown().await;
+}
+
 /// Argv of a fake CLI, read once it has written it (it does so at startup).
 async fn written_args(path: &std::path::Path) -> Vec<String> {
-    for _ in 0..50 {
+    for _ in 0..250 {
         if let Some(args) = std::fs::read_to_string(path)
             .ok()
             .and_then(|text| serde_json::from_str::<Vec<String>>(&text).ok())
@@ -512,4 +591,20 @@ async fn dropping_the_session_kills_the_child_tree() {
 
     drop(s);
     assert!(wait_gone(pid).await, "background child {pid} survived the drop");
+}
+
+#[tokio::test]
+async fn a_crew_server_path_that_is_not_utf8_refuses_the_session() {
+    use std::os::unix::ffi::OsStrExt;
+    let mut c = cfg("deny.jsonl", None);
+    c.mcp = Some((
+        PathBuf::from(std::ffi::OsStr::from_bytes(b"/tmp/\xff/bandito")),
+        vec!["mcp".into()],
+    ));
+    let err = ClaudeRuntime::new()
+        .spawn(c)
+        .await
+        .err()
+        .expect("the session is refused");
+    assert!(err.to_string().contains("not valid UTF-8"), "{err}");
 }

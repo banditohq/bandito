@@ -75,14 +75,27 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
     public var chapter: Int
     /// Unix milliseconds of the last finished turn.
     public var lastTurnAt: Int64?
+    /// The fallback subscription, used when the primary runtime's usage runs out. `nil` = none.
+    public var fallbackRuntime: RuntimeKind?
+    public var fallbackModel: String?
+    /// The runtime the agent runs on now; `nil` = the primary `runtime`.
+    public var activeRuntime: RuntimeKind?
+    /// The workspace the agent's CLI runs in: `shared` (the server) or a container's id (see `Workspace`).
+    public var workspaceId: String
+    /// Paused: messages wait in the thread and no session starts until it is resumed (`agents.update {paused}`).
+    public var paused: Bool
 
     public init(
         id: String, name: String, role: String = "", runtime: RuntimeKind, model: String? = nil, cwd: String,
         approvalMode: ApprovalMode = .risky, systemPrompt: String? = nil, runtimeSessionId: String? = nil,
         createdAt: Int64 = 0, updatedAt: Int64 = 0,
         effort: Effort? = nil, memoryMode: MemoryMode = .smart, contextBudget: Int? = nil, homeDir: String? = nil,
-        contextTokens: Int = 0, chapter: Int = 1, lastTurnAt: Int64? = nil
+        contextTokens: Int = 0, chapter: Int = 1, lastTurnAt: Int64? = nil,
+        fallbackRuntime: RuntimeKind? = nil, fallbackModel: String? = nil, activeRuntime: RuntimeKind? = nil,
+        workspaceId: String = "shared",
+        paused: Bool = false
     ) {
+        self.workspaceId = workspaceId
         self.id = id
         self.name = name
         self.role = role
@@ -101,6 +114,10 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
         self.contextTokens = contextTokens
         self.chapter = chapter
         self.lastTurnAt = lastTurnAt
+        self.fallbackRuntime = fallbackRuntime
+        self.fallbackModel = fallbackModel
+        self.activeRuntime = activeRuntime
+        self.paused = paused
     }
 
     /// Fields added after the first daemon release are optional on the wire; old daemons send none of them.
@@ -124,6 +141,11 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
         contextTokens = try c.decodeIfPresent(Int.self, forKey: .contextTokens) ?? 0
         chapter = try c.decodeIfPresent(Int.self, forKey: .chapter) ?? 1
         lastTurnAt = try c.decodeIfPresent(Int64.self, forKey: .lastTurnAt)
+        fallbackRuntime = try c.decodeIfPresent(RuntimeKind.self, forKey: .fallbackRuntime)
+        fallbackModel = try c.decodeIfPresent(String.self, forKey: .fallbackModel)
+        activeRuntime = try c.decodeIfPresent(RuntimeKind.self, forKey: .activeRuntime)
+        workspaceId = try c.decodeIfPresent(String.self, forKey: .workspaceId) ?? "shared"
+        paused = try c.decodeIfPresent(Bool.self, forKey: .paused) ?? false
     }
 }
 
@@ -138,12 +160,21 @@ public struct NewAgent: Codable, Sendable {
     public var effort: Effort?
     public var memoryMode: MemoryMode
     public var contextBudget: Int?
+    /// Optional fallback subscription; omitted from the request when `nil`.
+    public var fallbackRuntime: RuntimeKind?
+    public var fallbackModel: String?
+    /// The workspace to run in; omitted from the request when `nil` (the daemon uses `shared`).
+    public var workspaceId: String?
 
     public init(
         name: String, role: String = "", runtime: RuntimeKind, model: String? = nil, cwd: String,
         approvalMode: ApprovalMode = .risky, systemPrompt: String? = nil,
-        effort: Effort? = nil, memoryMode: MemoryMode = .smart, contextBudget: Int? = nil
+        effort: Effort? = nil, memoryMode: MemoryMode = .smart, contextBudget: Int? = nil,
+        fallbackRuntime: RuntimeKind? = nil, fallbackModel: String? = nil, workspaceId: String? = nil
     ) {
+        self.workspaceId = workspaceId
+        self.fallbackRuntime = fallbackRuntime
+        self.fallbackModel = fallbackModel
         self.name = name
         self.role = role
         self.runtime = runtime
@@ -202,17 +233,33 @@ public struct LimitWindow: Codable, Sendable, Hashable {
     public var resetsAt: Int64?
 }
 
+/// The subscription an account is on, as the runtime's CLI names it (e.g. "Max ×20").
+public struct Plan: Codable, Sendable, Hashable {
+    /// Stable id from the CLI, e.g. `max_20x`.
+    public var id: String
+    /// Name to show, e.g. `Max ×20`.
+    public var label: String
+
+    public init(id: String, label: String) {
+        self.id = id
+        self.label = label
+    }
+}
+
 /// Rate-limit windows of one runtime, as the app last learned them.
 public struct UsageEntry: Codable, Sendable, Hashable {
     public var runtime: String
     public var windows: [LimitWindow]
     /// Unix milliseconds when the app received these limits.
     public var updatedAt: Int64
+    /// The subscription the runtime is on. `nil` when unknown (API keys, or a CLI that does not say).
+    public var plan: Plan?
 
-    public init(runtime: String, windows: [LimitWindow], updatedAt: Int64) {
+    public init(runtime: String, windows: [LimitWindow], updatedAt: Int64, plan: Plan? = nil) {
         self.runtime = runtime
         self.windows = windows
         self.updatedAt = updatedAt
+        self.plan = plan
     }
 
     public init(from decoder: Decoder) throws {
@@ -220,6 +267,7 @@ public struct UsageEntry: Codable, Sendable, Hashable {
         runtime = try c.decode(String.self, forKey: .runtime)
         windows = try c.decodeIfPresent([LimitWindow].self, forKey: .windows) ?? []
         updatedAt = try c.decodeIfPresent(Int64.self, forKey: .updatedAt) ?? Int64(Date().timeIntervalSince1970 * 1000)
+        plan = try c.decodeIfPresent(Plan.self, forKey: .plan)
     }
 }
 
@@ -240,6 +288,9 @@ public enum EventBody: Sendable, Hashable {
     case usageLimits(runtime: String, windows: [LimitWindow])
     /// The agent closed one chapter (its session) and started the next.
     case sessionRotated(chapter: Int, reason: String, contextTokens: Int)
+    /// The agent moved to another runtime: to its fallback when the limit ran out, or back to the primary.
+    /// `until` is when the limit resets (Unix seconds), if the daemon knows it.
+    case runtimeSwitched(from: String, to: String, until: Int64?)
     case error(message: String)
     /// A kind this app version doesn't know yet. Shown as nothing; kept for forward compatibility.
     case unknown(kind: String)
@@ -284,6 +335,7 @@ extension Event: Decodable {
     private struct AgentStatusP: Decodable { var status: AgentStatus; var detail: String? }
     private struct UsageLimitsP: Decodable { var runtime: String; var windows: [LimitWindow] }
     private struct SessionRotatedP: Decodable { var chapter: Int; var reason: String; var contextTokens: Int }
+    private struct RuntimeSwitchedP: Decodable { var from: String; var to: String; var until: Int64? }
     private struct ErrorP: Decodable { var message: String }
 
     public init(from decoder: Decoder) throws {
@@ -323,6 +375,9 @@ extension Event: Decodable {
         case "session.rotated":
             let x = try p(SessionRotatedP.self)
             body = .sessionRotated(chapter: x.chapter, reason: x.reason, contextTokens: x.contextTokens)
+        case "runtime.switched":
+            let x = try p(RuntimeSwitchedP.self)
+            body = .runtimeSwitched(from: x.from, to: x.to, until: x.until)
         case "error": body = .error(message: try p(ErrorP.self).message)
         default: body = .unknown(kind: kind)
         }
@@ -370,6 +425,8 @@ public struct DaemonInfo: Codable, Sendable, Hashable {
     public var lastSeq: Int64
     /// What this daemon supports (e.g. "schedules", "crew"). Missing on very old daemons.
     public var features: [String]?
+    /// The daemon's last successful check for a newer release. Null until one succeeded; missing on old daemons.
+    public var update: DaemonUpdate?
 
     public func supports(_ feature: String) -> Bool { features?.contains(feature) ?? false }
 }

@@ -5,8 +5,11 @@ import Observation
 public enum ServerEndpoint: Codable, Sendable, Hashable {
     /// The daemon on this Mac (unix socket, no token).
     case local(socketPath: String)
-    /// A WebSocket URL (`ws://127.0.0.1:7878/v1/rpc` via an SSH tunnel, a tailnet address, `wss://…`).
+    /// A WebSocket URL (`ws://127.0.0.1:7878/v1/rpc`, a tailnet address, `wss://…`).
     case webSocket(url: URL)
+    /// The daemon on a server reached over ssh. `target` is `[user@]host[:port]` or an alias; `remotePort`
+    /// is the daemon's listen port on the server's loopback. See `SSHTransport`.
+    case ssh(target: String, remotePort: Int)
 
     public static var defaultLocal: ServerEndpoint {
         .local(socketPath: FileManager.default.homeDirectoryForCurrentUser.appending(path: ".bandito/bandito.sock").path)
@@ -60,20 +63,27 @@ public final class ServerModel: Identifiable {
     public nonisolated var id: UUID { config.id }
 
     public private(set) var state: ConnectionState = .disconnected
-    public private(set) var info: DaemonInfo?
+    public internal(set) var info: DaemonInfo?
     public private(set) var agents: [Agent] = []
     public private(set) var threads: [String: AgentThread] = [:]
     public private(set) var runtimes: [RuntimeStatus] = []
     /// Rate-limit windows per runtime, as last learned (from `usage.*` calls or live events).
     public private(set) var usage: [UsageEntry] = []
     /// The last failure of a background operation (subscription, reconnect, unreadable updates).
-    public private(set) var lastError: String?
+    public internal(set) var lastError: String?
     /// Whether an agent's thread has events older than the ones loaded.
     public private(set) var hasMoreHistory: [String: Bool] = [:]
 
     private var client: RPCClient?
     private var pump: Task<Void, Never>?
+    private var notificationPump: Task<Void, Never>?
     private var reconnectTask: Task<Void, Never>?
+    /// Attached terminals, by id. Their streams are re-attached after every reconnect.
+    @ObservationIgnored var terminalStreams: [String: TerminalStream] = [:]
+    /// Port forwarders started by `forwardOnce(port:)`; closed by `disconnect()`.
+    @ObservationIgnored var forwarders: [PortForwarder] = []
+    /// The transport of the current connection. Its `httpBase` is where the daemon's HTTP routes answer.
+    @ObservationIgnored var transport: RPCTransport?
     /// Bumped whenever a connection attempt starts and on disconnect. An attempt that finds the
     /// number changed has been superseded and throws away its client.
     private var generation = 0
@@ -96,6 +106,12 @@ public final class ServerModel: Identifiable {
                 switch cfg.endpoint {
                 case .local(let path): return UnixSocketTransport(path: path)
                 case .webSocket(let url): return WebSocketTransport(url: url, token: cfg.token)
+                case .ssh(let target, let remotePort):
+                    #if os(macOS)
+                    return SSHTransport(target: target, remotePort: remotePort, token: cfg.token)
+                    #else
+                    return UnavailableTransport(reason: "ssh servers are not available on this platform yet")
+                    #endif
                 }
             }
         self.reconnectDelay = reconnectDelay ?? { ServerModel.backoff(attempt: $0) }
@@ -143,11 +159,13 @@ public final class ServerModel: Identifiable {
         reconnectTask?.cancel()
         reconnectTask = nil
         generation += 1
-        pump?.cancel()
-        pump = nil
+        stopPumps()
         let old = client
         client = nil
+        transport = nil
         state = .disconnected
+        finishTerminalStreams()
+        await stopForwarders()
         await old?.close()
     }
 
@@ -157,8 +175,10 @@ public final class ServerModel: Identifiable {
         generation += 1
         let attempt = generation
         await dropClient()
+        let current = makeTransport(config)
+        transport = current
         let c = RPCClient(
-            transport: makeTransport(config),
+            transport: current,
             onDecodeFailure: { [weak self] in
                 Task { @MainActor in self?.noteDecodeFailure() }
             })
@@ -167,6 +187,7 @@ public final class ServerModel: Identifiable {
             try checkCurrent(attempt)
             client = c
             pump = startPump(c)
+            notificationPump = startNotificationPump(c)
             let daemon = try await c.call("daemon.info", NoParams(), as: DaemonInfo.self)
             info = daemon
             agents = try await c.call("agents.list", NoParams(), as: [Agent].self)
@@ -180,14 +201,14 @@ public final class ServerModel: Identifiable {
             struct Subscribed: Decodable { var lastSeq: Int64 }
             let subscribed = try await c.call("events.subscribe", Subscribe(after: from), as: Subscribed.self)
             lastSeq = max(lastSeq, subscribed.lastSeq)
+            await reattachTerminals(c)
             try checkCurrent(attempt)
             state = .connected
             lastError = decodeFailureCount > 0 ? Self.decodeWarning : nil
         } catch {
             if client === c {
                 client = nil
-                pump?.cancel()
-                pump = nil
+                stopPumps()
             }
             await c.close()
             throw error
@@ -200,8 +221,7 @@ public final class ServerModel: Identifiable {
     }
 
     private func dropClient() async {
-        pump?.cancel()
-        pump = nil
+        stopPumps()
         let old = client
         client = nil
         await old?.close()
@@ -218,11 +238,28 @@ public final class ServerModel: Identifiable {
         }
     }
 
+    /// Consumes the client's notifications (terminal output and the like).
+    private func startNotificationPump(_ c: RPCClient) -> Task<Void, Never> {
+        Task { [weak self] in
+            for await n in c.notifications {
+                guard let self else { return }
+                self.routeNotification(n)
+            }
+        }
+    }
+
+    private func stopPumps() {
+        pump?.cancel()
+        pump = nil
+        notificationPump?.cancel()
+        notificationPump = nil
+    }
+
     private func connectionLost(_ lost: RPCClient) async {
         // Stale clients (superseded, or closed by disconnect) are ignored.
         guard client === lost else { return }
         client = nil
-        pump = nil
+        stopPumps()
         await lost.close()
         scheduleReconnect()
     }
@@ -251,7 +288,7 @@ public final class ServerModel: Identifiable {
         }
     }
 
-    private func noteDecodeFailure() {
+    func noteDecodeFailure() {
         decodeFailureCount += 1
         lastError = Self.decodeWarning
     }
@@ -279,6 +316,7 @@ public final class ServerModel: Identifiable {
             if e.seq <= lastSeq { return }
         }
         apply(e)
+        onLiveEvent?(e)
     }
 
     /// Fetches `events.since` pages until `lastSeq` reaches `last`, applying them in order.
@@ -294,6 +332,10 @@ public final class ServerModel: Identifiable {
             if lastSeq == before { break }
         }
     }
+
+    /// Called for each event that arrives live (not for history fetched to fill a gap). The app uses it
+    /// for notifications, so events that were already seen never notify twice.
+    public var onLiveEvent: ((Event) -> Void)?
 
     /// Fold one event into the model (also used by tests).
     public func apply(_ e: Event) {
@@ -321,7 +363,7 @@ public final class ServerModel: Identifiable {
         if let i = agents.firstIndex(where: { $0.id == a.id }) { agents[i] = a } else { agents.append(a) }
     }
 
-    private func rpc() throws -> RPCClient {
+    func rpc() throws -> RPCClient {
         guard let client else { throw RPCError(code: RPCError.disconnected, message: "not connected to \(config.name)") }
         return client
     }
@@ -398,6 +440,32 @@ public final class ServerModel: Identifiable {
         return created
     }
 
+    /// Pauses or resumes one agent (`agents.update {paused}`). Returns the agent as the daemon now has it.
+    @discardableResult
+    public func setPaused(agentID: String, _ paused: Bool) async throws -> Agent {
+        try await updateAgent(agentID, patch: AgentPatch(paused: paused)).agent
+    }
+
+    /// The newest lines of the daemon's own log (`daemon.logs`). `level` is the lowest level to show.
+    public func daemonLog(lines: Int = 500, level: DaemonLogLevel? = nil) async throws -> DaemonLog {
+        struct P: Encodable {
+            var lines: Int
+            var level: String?
+        }
+        return try await rpc().call("daemon.logs", P(lines: lines, level: level?.rawValue), as: DaemonLog.self)
+    }
+
+    /// Pauses or resumes every agent (`agents.pause_all`). Returns how many changed, and reloads the agents
+    /// (the daemon sends no event for it).
+    @discardableResult
+    public func pauseAll(_ paused: Bool) async throws -> Int {
+        struct P: Encodable { var paused: Bool }
+        struct Reply: Decodable { var changed: Int }
+        let reply = try await rpc().call("agents.pause_all", P(paused: paused), as: Reply.self)
+        agents = try await rpc().call("agents.list", NoParams(), as: [Agent].self)
+        return reply.changed
+    }
+
     public func deleteAgent(_ id: String) async throws {
         struct P: Encodable { var id: String }
         try await rpc().call("agents.delete", P(id: id))
@@ -405,6 +473,11 @@ public final class ServerModel: Identifiable {
         threads[id] = nil
         oldestSeq[id] = nil
         hasMoreHistory[id] = nil
+    }
+
+    /// Whether the daemon reports `feature` in `daemon.info` (for example `files`, `terminals`).
+    public func supports(_ feature: String) -> Bool {
+        info?.supports(feature) ?? false
     }
 
     /// Current rate-limit windows of every runtime (cached by the daemon).
@@ -491,20 +564,34 @@ extension ServerModel {
     @discardableResult
     public func updateAgent(
         _ id: String, name: String? = nil, role: String? = nil, cwd: String? = nil, approvalMode: ApprovalMode? = nil,
-        effort: Effort? = nil, memoryMode: MemoryMode? = nil, contextBudget: Int? = nil
+        effort: Effort? = nil, memoryMode: MemoryMode? = nil, contextBudget: Int? = nil,
+        systemPrompt: String? = nil, model: String? = nil
     ) async throws -> Agent {
+        try await updateAgent(
+            id,
+            patch: AgentPatch(
+                name: name, role: role, cwd: cwd, approvalMode: approvalMode, effort: effort,
+                memoryMode: memoryMode, contextBudget: contextBudget, systemPrompt: systemPrompt,
+                model: model.map { .set($0) })
+        ).agent
+    }
+
+    /// Applies `patch` (`agents.update`). Returns the agent and the daemon's warnings.
+    @discardableResult
+    public func updateAgent(_ id: String, patch: AgentPatch) async throws -> AgentUpdate {
         struct P: Encodable {
-            var id: String; var name: String?; var role: String?; var cwd: String?; var approvalMode: ApprovalMode?
-            var effort: Effort?; var memoryMode: MemoryMode?; var contextBudget: Int?
+            var id: String
+            var patch: AgentPatch
+
+            func encode(to encoder: Encoder) throws {
+                var c = encoder.container(keyedBy: AgentPatch.Key.self)
+                try c.encode(id, forKey: .id)
+                try patch.encodeFields(into: &c)
+            }
         }
-        let a = try await rpc().call(
-            "agents.update",
-            P(
-                id: id, name: name, role: role, cwd: cwd, approvalMode: approvalMode, effort: effort,
-                memoryMode: memoryMode, contextBudget: contextBudget),
-            as: Agent.self)
-        replaceAgent(a)
-        return a
+        let update = try await rpc().call("agents.update", P(id: id, patch: patch), as: AgentUpdate.self)
+        replaceAgent(update.agent)
+        return update
     }
 }
 
@@ -524,4 +611,33 @@ public enum Pairing {
         struct P: Encodable { var code: String; var deviceName: String }
         return try await client.call("pair.redeem", P(code: code, deviceName: deviceName), as: PairResult.self)
     }
+
+    /// Revokes a device on the daemon (`devices.revoke`), over a connection that the token itself opens. Used when
+    /// the app cannot keep a token it was just given, so the daemon does not keep a device nobody holds.
+    public static func revoke(url: URL, token: String, deviceID: String) async throws {
+        guard WebSocketTransport.allowsToken(for: url) else {
+            throw RPCError(
+                code: RPCError.insecureTransport,
+                message: "refusing to send the device token over an unencrypted connection")
+        }
+        let client = RPCClient(transport: WebSocketTransport(url: url, token: token))
+        try await client.start()
+        defer { Task { await client.close() } }
+        struct P: Encodable { var id: String }
+        struct Revoked: Decodable { var revoked: Bool }
+        _ = try await client.call("devices.revoke", P(id: deviceID), as: Revoked.self)
+    }
+}
+
+/// The daemon's log lines, as `daemon.logs` returns them.
+public struct DaemonLog: Decodable, Sendable, Equatable {
+    /// Where the lines came from: `journald` or `file`.
+    public var source: String
+    /// Newest last. Secrets and tokens are already masked by the daemon.
+    public var lines: [String]
+}
+
+/// The lowest level `daemon.logs` shows.
+public enum DaemonLogLevel: String, CaseIterable, Sendable {
+    case info, warn, error
 }

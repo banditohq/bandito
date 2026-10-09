@@ -5,7 +5,7 @@
 //! forwards `crew.list` / `crew.send` to the daemon over its unix socket.
 //! Stdout carries the protocol only, so logs must go to stderr.
 
-use crate::rpc::unix::call;
+use crate::rpc::unix::call_agent;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -44,49 +44,60 @@ pub trait CrewBackend: Send + Sync {
     async fn history_search(&self, query: &str, limit: u32) -> Result<String>;
     /// Everything said with the agent on one local day (`YYYY-MM-DD`), formatted.
     async fn history_day(&self, date: &str) -> Result<String>;
+    /// A browser tool call: `method` is a `browser.agent.*` method, answered by the daemon.
+    async fn browser(&self, method: &str, params: Value) -> Result<Value>;
+    /// One `screen.agent.*` RPC method with its parameters. Returns the daemon's result.
+    async fn screen(&self, method: &str, params: Value) -> Result<Value>;
 }
 
-/// Backend that asks the daemon over its unix socket.
+/// Backend that asks the daemon over `agent.sock`, as the agent whose session token it holds.
+/// The daemon takes the agent from the token: the calls carry no agent id.
 pub struct DaemonBackend {
     pub sock: PathBuf,
-    pub agent_id: String,
+    pub token: String,
 }
 
 #[async_trait]
 impl CrewBackend for DaemonBackend {
     async fn list(&self) -> Result<Vec<CrewMember>> {
-        let v = call(&self.sock, "crew.list", json!({ "agent_id": self.agent_id })).await?;
+        let v = call_agent(&self.sock, &self.token, "crew.list", json!({})).await?;
         serde_json::from_value(v).context("crew.list: unexpected response")
     }
 
     async fn send(&self, to: &str, message: &str) -> Result<()> {
-        call(
+        call_agent(
             &self.sock,
+            &self.token,
             "crew.send",
-            json!({ "from": self.agent_id, "to": to, "message": message }),
+            json!({ "to": to, "message": message }),
         )
         .await?;
         Ok(())
     }
 
     async fn history_search(&self, query: &str, limit: u32) -> Result<String> {
-        let v = call(
+        let v = call_agent(
             &self.sock,
+            &self.token,
             "history.search",
-            json!({ "agent_id": self.agent_id, "query": query, "limit": limit }),
+            json!({ "query": query, "limit": limit }),
         )
         .await?;
         text_of(v, "history.search")
     }
 
     async fn history_day(&self, date: &str) -> Result<String> {
-        let v = call(
-            &self.sock,
-            "history.day",
-            json!({ "agent_id": self.agent_id, "date": date }),
-        )
-        .await?;
+        let v = call_agent(&self.sock, &self.token, "history.day", json!({ "date": date })).await?;
         text_of(v, "history.day")
+    }
+
+    async fn browser(&self, method: &str, params: Value) -> Result<Value> {
+        // A risky click asks the user in the agent's feed; the daemon knows the agent from the token.
+        call_agent(&self.sock, &self.token, method, params).await
+    }
+
+    async fn screen(&self, method: &str, params: Value) -> Result<Value> {
+        call_agent(&self.sock, &self.token, method, params).await
     }
 }
 
@@ -188,9 +199,7 @@ async fn handle_line(line: &str, backend: &dyn CrewBackend) -> Option<Value> {
     let outcome: Result<Value, Fault> = match method {
         "initialize" => Ok(initialize(&params)),
         "ping" => Ok(json!({})),
-        "tools/list" => Ok(json!({
-            "tools": [crew_list_tool(), crew_send_tool(), history_search_tool(), history_day_tool()]
-        })),
+        "tools/list" => Ok(json!({ "tools": tools_list() })),
         "tools/call" => call_tool(&params, backend).await,
         "" => Err((INVALID_REQUEST, "invalid request: no method".into())),
         other => Err((METHOD_NOT_FOUND, format!("Method not found: {other}"))),
@@ -217,6 +226,18 @@ fn initialize(params: &Value) -> Value {
         "serverInfo": { "name": "bandito-crew", "version": env!("CARGO_PKG_VERSION") },
         "instructions": "Tools to talk to the other agents in your Bandito crew.",
     })
+}
+
+fn tools_list() -> Vec<Value> {
+    let mut tools = vec![
+        crew_list_tool(),
+        crew_send_tool(),
+        history_search_tool(),
+        history_day_tool(),
+    ];
+    tools.extend(screen_tools());
+    tools.extend(browser_tool_defs());
+    tools
 }
 
 fn crew_list_tool() -> Value {
@@ -284,6 +305,8 @@ async fn call_tool(params: &Value, backend: &dyn CrewBackend) -> Result<Value, F
         "crew_send" => Ok(tool_result(crew_send(&args, backend).await)),
         "history_search" => Ok(tool_result(history_search(&args, backend).await)),
         "history_day" => Ok(tool_result(history_day(&args, backend).await)),
+        name if BROWSER_TOOLS.contains(&name) => Ok(blocks_result(browser_tool(name, &args, backend).await)),
+        _ if SCREEN_TOOLS.iter().any(|(tool, _)| *tool == name) => Ok(screen_tool(name, &args, backend).await),
         _ => Err((INVALID_PARAMS, format!("Unknown tool: {name}"))),
     }
 }
@@ -331,6 +354,301 @@ async fn crew_send(args: &Value, backend: &dyn CrewBackend) -> Result<String, St
     ))
 }
 
+/// The browser tools, in the order `tools/list` gives them. Their daemon methods: `browser.agent.*`.
+const BROWSER_TOOLS: [&str; 9] = [
+    "browser_open",
+    "browser_snapshot",
+    "browser_click",
+    "browser_type",
+    "browser_press",
+    "browser_back",
+    "browser_screenshot",
+    "browser_tabs",
+    "browser_switch",
+];
+
+fn browser_tool_defs() -> Vec<Value> {
+    vec![
+        json!({
+            "name": "browser_open",
+            "description": "Open a web page in the browser on the server, in the current tab (or a new one). Only http, https, data: and about:blank. Take a browser_snapshot after it loads.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "url": { "type": "string", "description": "Absolute URL" },
+                    "new_tab": { "type": "boolean", "description": "Open in a new tab (default false)" },
+                },
+                "required": ["url"],
+            },
+        }),
+        json!({
+            "name": "browser_snapshot",
+            "description": "Read the current page: title, URL, and its links, buttons, fields, headings and images, each with a [ref]. Take a snapshot before you click or type; refs come from the latest one.",
+            "inputSchema": { "type": "object", "properties": {} },
+        }),
+        json!({
+            "name": "browser_click",
+            "description": "Click an element by its [ref] from browser_snapshot. A click that pays, buys, sends, submits, deletes, removes, transfers or confirms first asks the user in the app; the tool waits for their answer (up to 10 minutes) and says whether the click went ahead.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "ref": { "type": "integer", "minimum": 1, "description": "The [ref] from browser_snapshot" },
+                },
+                "required": ["ref"],
+            },
+        }),
+        json!({
+            "name": "browser_type",
+            "description": "Type text into a field by its [ref] from browser_snapshot. With submit, press Enter afterwards.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "ref": { "type": "integer", "minimum": 1, "description": "The [ref] of the field" },
+                    "text": { "type": "string" },
+                    "submit": { "type": "boolean", "description": "Press Enter after typing (default false)" },
+                },
+                "required": ["ref", "text"],
+            },
+        }),
+        json!({
+            "name": "browser_press",
+            "description": "Press one key in the page.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "key": {
+                        "type": "string",
+                        "enum": [
+                            "Enter", "Tab", "Escape", "Backspace", "Delete", "Space", "ArrowUp", "ArrowDown",
+                            "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown",
+                        ],
+                    },
+                },
+                "required": ["key"],
+            },
+        }),
+        json!({
+            "name": "browser_back",
+            "description": "Go back one page in the current tab.",
+            "inputSchema": { "type": "object", "properties": {} },
+        }),
+        json!({
+            "name": "browser_screenshot",
+            "description": "A PNG screenshot of the visible part of the current page (at most 1280 px wide).",
+            "inputSchema": { "type": "object", "properties": {} },
+        }),
+        json!({
+            "name": "browser_tabs",
+            "description": "List the browser's tabs. The one you work in is marked with *.",
+            "inputSchema": { "type": "object", "properties": {} },
+        }),
+        json!({
+            "name": "browser_switch",
+            "description": "Make the tab with this index (from browser_tabs) the one you work in, and bring it to the front.",
+            "inputSchema": {
+                "type": "object",
+                "properties": { "index": { "type": "integer", "minimum": 0 } },
+                "required": ["index"],
+            },
+        }),
+    ]
+}
+
+/// Screen tools and the daemon method each one calls. The arguments are passed on as they are.
+const SCREEN_TOOLS: [(&str, &str); 7] = [
+    ("screen_screenshot", "screen.agent.screenshot"),
+    ("screen_click", "screen.agent.click"),
+    ("screen_move", "screen.agent.move"),
+    ("screen_type", "screen.agent.type"),
+    ("screen_key", "screen.agent.key"),
+    ("screen_scroll", "screen.agent.scroll"),
+    ("screen_launch", "screen.agent.launch"),
+];
+
+fn screen_tools() -> Vec<Value> {
+    let point = |what: &str| {
+        json!({
+            "type": "integer",
+            "minimum": 0,
+            "description": format!("{what} in screen pixels, from the top left corner"),
+        })
+    };
+    vec![
+        json!({
+            "name": "screen_screenshot",
+            "description": "Take a screenshot of the server's screen, the desktop the user can also see over VNC. Starts the screen if it is not running. Returns the image, with the screen's original width and height and the scale of the image. Multiply coordinates you read from the image by 1/scale to get screen pixels for screen_click, screen_move and screen_scroll.",
+            "inputSchema": { "type": "object", "properties": {} },
+        }),
+        json!({
+            "name": "screen_click",
+            "description": "Click at x, y in screen pixels (not the pixels of the screenshot; see screen_screenshot for the scale). Starts the screen if needed. Refused while the user controls the screen.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "x": point("X"),
+                    "y": point("Y"),
+                    "button": { "type": "string", "enum": ["left", "right", "middle"], "description": "Mouse button, left by default" },
+                    "double": { "type": "boolean", "description": "Double click, false by default" },
+                },
+                "required": ["x", "y"],
+            },
+        }),
+        json!({
+            "name": "screen_move",
+            "description": "Move the mouse pointer to x, y in screen pixels (not the pixels of the screenshot). Refused while the user controls the screen.",
+            "inputSchema": {
+                "type": "object",
+                "properties": { "x": point("X"), "y": point("Y") },
+                "required": ["x", "y"],
+            },
+        }),
+        json!({
+            "name": "screen_type",
+            "description": "Type text into the window that has focus, as if typed on a keyboard. Refused while the user controls the screen.",
+            "inputSchema": {
+                "type": "object",
+                "properties": { "text": { "type": "string", "description": "Text to type" } },
+                "required": ["text"],
+            },
+        }),
+        json!({
+            "name": "screen_key",
+            "description": "Press a key or a shortcut, for example Return, Tab, Escape, ctrl+l or alt+F4. Refused while the user controls the screen.",
+            "inputSchema": {
+                "type": "object",
+                "properties": { "keys": { "type": "string", "description": "Key or shortcut, joined with +" } },
+                "required": ["keys"],
+            },
+        }),
+        json!({
+            "name": "screen_scroll",
+            "description": "Scroll with the mouse wheel at the pointer position, which can be set with screen_move (in screen pixels). Refused while the user controls the screen.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "direction": { "type": "string", "enum": ["up", "down", "left", "right"] },
+                    "amount": { "type": "integer", "minimum": 1, "maximum": 20, "description": "Wheel notches, 3 by default" },
+                },
+                "required": ["direction"],
+            },
+        }),
+        json!({
+            "name": "screen_launch",
+            "description": "Start a program on the server's screen, for example firefox. It runs detached: the call returns at once and does not wait for the program. Starts the screen if needed. Refused while the user controls the screen.",
+            "inputSchema": {
+                "type": "object",
+                "properties": { "command": { "type": "string", "description": "Shell command line to run" } },
+                "required": ["command"],
+            },
+        }),
+    ]
+}
+
+/// Runs one browser tool: its daemon method and arguments, then the reply as MCP content blocks.
+async fn browser_tool(name: &str, args: &Value, backend: &dyn CrewBackend) -> Result<Vec<Value>, String> {
+    let (method, params) = browser_call(name, args)?;
+    let reply = backend.browser(method, params).await.map_err(|e| format!("{e:#}"))?;
+    if name == "browser_screenshot" {
+        let data = reply["png_base64"]
+            .as_str()
+            .ok_or_else(|| format!("{name}: unexpected response"))?;
+        return Ok(vec![json!({ "type": "image", "data": data, "mimeType": "image/png" })]);
+    }
+    let text = reply["text"]
+        .as_str()
+        .ok_or_else(|| format!("{name}: unexpected response"))?;
+    Ok(vec![text_block(text)])
+}
+
+/// The daemon method and parameters for a browser tool; bad arguments are an error for the agent.
+fn browser_call(name: &str, args: &Value) -> Result<(&'static str, Value), String> {
+    let text = |key: &str| args.get(key).and_then(Value::as_str);
+    let node = |key: &str| {
+        args.get(key)
+            .and_then(Value::as_i64)
+            .filter(|n| *n >= 1)
+            .ok_or_else(|| format!("{name} needs \"{key}\": a ref from browser_snapshot"))
+    };
+    let flag = |key: &str| args.get(key).and_then(Value::as_bool).unwrap_or(false);
+    match name {
+        "browser_open" => {
+            let url = text("url")
+                .map(str::trim)
+                .filter(|u| !u.is_empty())
+                .ok_or_else(|| "browser_open needs \"url\"".to_string())?;
+            Ok(("browser.agent.open", json!({ "url": url, "new_tab": flag("new_tab") })))
+        }
+        "browser_snapshot" => Ok(("browser.agent.snapshot", json!({}))),
+        "browser_click" => Ok(("browser.agent.click", json!({ "ref": node("ref")? }))),
+        "browser_type" => {
+            let typed = text("text").ok_or_else(|| "browser_type needs \"text\"".to_string())?;
+            Ok((
+                "browser.agent.type",
+                json!({ "ref": node("ref")?, "text": typed, "submit": flag("submit") }),
+            ))
+        }
+        "browser_press" => {
+            let key = text("key")
+                .filter(|k| !k.is_empty())
+                .ok_or_else(|| "browser_press needs \"key\"".to_string())?;
+            Ok(("browser.agent.press", json!({ "key": key })))
+        }
+        "browser_back" => Ok(("browser.agent.back", json!({}))),
+        "browser_screenshot" => Ok(("browser.agent.screenshot", json!({}))),
+        "browser_tabs" => Ok(("browser.agent.tabs", json!({}))),
+        "browser_switch" => {
+            let index = args
+                .get("index")
+                .and_then(Value::as_u64)
+                .ok_or_else(|| "browser_switch needs \"index\": a whole number from browser_tabs".to_string())?;
+            Ok(("browser.agent.switch", json!({ "index": index })))
+        }
+        other => Err(format!("Unknown tool: {other}")),
+    }
+}
+
+fn text_block(text: &str) -> Value {
+    json!({ "type": "text", "text": text })
+}
+
+/// MCP result from content blocks. `Err` is a tool error (`isError`) with its message as the block.
+fn blocks_result(outcome: Result<Vec<Value>, String>) -> Value {
+    match outcome {
+        Ok(content) => json!({ "content": content, "isError": false }),
+        Err(text) => json!({ "content": [text_block(&text)], "isError": true }),
+    }
+}
+
+/// Runs one screen tool through the daemon. The screenshot comes back as an image block.
+async fn screen_tool(tool: &str, args: &Value, backend: &dyn CrewBackend) -> Value {
+    let Some((_, method)) = SCREEN_TOOLS.iter().find(|(name, _)| *name == tool) else {
+        return tool_result(Err(format!("Unknown tool: {tool}")));
+    };
+    let reply = match backend.screen(method, args.clone()).await {
+        Ok(reply) => reply,
+        Err(e) => return tool_result(Err(format!("{e:#}"))),
+    };
+    if tool != "screen_screenshot" {
+        return tool_result(Ok("Done.".into()));
+    }
+    let png = reply.get("png_base64").and_then(Value::as_str);
+    let size = json!({
+        "width": reply.get("width").cloned().unwrap_or(Value::Null),
+        "height": reply.get("height").cloned().unwrap_or(Value::Null),
+        "scale": reply.get("scale").cloned().unwrap_or(Value::Null),
+    });
+    match png {
+        Some(data) => json!({
+            "content": [
+                { "type": "text", "text": size.to_string() },
+                { "type": "image", "data": data, "mimeType": "image/png" },
+            ],
+            "isError": false,
+        }),
+        None => tool_result(Err("screen_screenshot: the daemon sent no image".into())),
+    }
+}
+
 /// Matches returned when `history_search` gets no `limit`.
 const HISTORY_SEARCH_DEFAULT_LIMIT: u32 = 20;
 const HISTORY_SEARCH_MAX_LIMIT: u32 = 50;
@@ -367,10 +685,53 @@ async fn history_day(args: &Value, backend: &dyn CrewBackend) -> Result<String, 
     backend.history_day(date).await.map_err(|e| format!("{e:#}"))
 }
 
-/// Run the crew MCP server for one agent on stdin/stdout.
-pub async fn serve_stdio(sock: PathBuf, agent_id: String) -> Result<()> {
-    let backend = DaemonBackend { sock, agent_id };
+/// Run the crew MCP server on stdin/stdout, for the agent whose session token it is given: from
+/// `token_file` when one is named (the daemon's way), else from `BANDITO_AGENT_TOKEN`.
+pub async fn serve_stdio(sock: PathBuf, token_file: Option<PathBuf>) -> Result<()> {
+    let from_file = match &token_file {
+        Some(path) => Some(
+            std::fs::read_to_string(path).with_context(|| format!("read the agent token file {}", path.display()))?,
+        ),
+        None => None,
+    };
+    let token = token_from(from_file.as_deref(), std::env::var("BANDITO_AGENT_TOKEN").ok())?;
+    let backend = DaemonBackend { sock, token };
     serve(BufReader::new(tokio::io::stdin()), tokio::io::stdout(), &backend).await
+}
+
+/// The session token: the token file's contents when a file is named, else `BANDITO_AGENT_TOKEN`.
+/// Blank values count as missing.
+fn token_from(file: Option<&str>, env: Option<String>) -> Result<String> {
+    if let Some(text) = file {
+        let token = text.trim();
+        anyhow::ensure!(!token.is_empty(), "the agent token file is empty");
+        return Ok(token.to_string());
+    }
+    env.filter(|t| !t.trim().is_empty()).map(|t| t.trim().to_string()).context(
+        "no agent token: the Bandito crew server only runs inside an agent session (BANDITO_AGENT_TOKEN is not set)",
+    )
+}
+
+#[cfg(test)]
+mod token_tests {
+    use super::*;
+
+    #[test]
+    fn the_token_file_wins_and_the_environment_is_the_fallback() {
+        assert_eq!(
+            token_from(Some("  bat_file \n"), Some("bat_env".into())).unwrap(),
+            "bat_file"
+        );
+        assert_eq!(token_from(None, Some("bat_env".into())).unwrap(), "bat_env");
+    }
+
+    #[test]
+    fn a_missing_or_blank_token_is_an_error() {
+        let missing = token_from(None, None).unwrap_err().to_string();
+        assert!(missing.contains("BANDITO_AGENT_TOKEN is not set"), "{missing}");
+        assert!(token_from(None, Some(String::new())).is_err());
+        assert!(token_from(Some("  \n"), Some("bat_env".into())).is_err());
+    }
 }
 
 #[cfg(test)]
@@ -386,6 +747,10 @@ mod tests {
         searches: Mutex<Vec<(String, u32)>>,
         /// Date of every history_day call.
         days: Mutex<Vec<String>>,
+        /// Method and parameters of every screen call.
+        screen_calls: Mutex<Vec<(String, Value)>>,
+        /// What screen calls answer; `{}` when unset.
+        screen_reply: Option<Value>,
         /// When set, every backend call fails with this message.
         fail: Option<String>,
     }
@@ -421,6 +786,18 @@ mod tests {
             }
             self.days.lock().unwrap().push(date.to_string());
             Ok(format!("day {date}"))
+        }
+
+        async fn browser(&self, _method: &str, _params: Value) -> Result<Value> {
+            anyhow::bail!("no browser in this test")
+        }
+
+        async fn screen(&self, method: &str, params: Value) -> Result<Value> {
+            if let Some(e) = &self.fail {
+                anyhow::bail!("{e}");
+            }
+            self.screen_calls.lock().unwrap().push((method.to_string(), params));
+            Ok(self.screen_reply.clone().unwrap_or_else(|| json!({})))
         }
     }
 
@@ -536,12 +913,36 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn tools_list_has_all_four_tools() {
+    async fn tools_list_has_the_crew_history_and_screen_tools() {
         let backend = MockBackend::default();
         let r = reply(json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/list" }), &backend).await;
         let tools = r["result"]["tools"].as_array().unwrap();
         let names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
-        assert_eq!(names, ["crew_list", "crew_send", "history_search", "history_day"]);
+        assert_eq!(
+            names,
+            [
+                "crew_list",
+                "crew_send",
+                "history_search",
+                "history_day",
+                "screen_screenshot",
+                "screen_click",
+                "screen_move",
+                "screen_type",
+                "screen_key",
+                "screen_scroll",
+                "screen_launch",
+                "browser_open",
+                "browser_snapshot",
+                "browser_click",
+                "browser_type",
+                "browser_press",
+                "browser_back",
+                "browser_screenshot",
+                "browser_tabs",
+                "browser_switch",
+            ]
+        );
         assert_eq!(tools[0]["inputSchema"], json!({ "type": "object", "properties": {} }));
         assert_eq!(tools[1]["inputSchema"]["required"], json!(["to", "message"]));
         assert_eq!(tools[1]["inputSchema"]["properties"]["to"]["type"], "string");
@@ -709,6 +1110,121 @@ mod tests {
         .await;
         assert_eq!(r["result"]["isError"], true);
         assert_eq!(tool_text(&r), "no agent named 'Nobody' in this crew");
+        assert!(r.get("error").is_none());
+    }
+
+    #[tokio::test]
+    async fn screen_tools_describe_their_inputs() {
+        let backend = MockBackend::default();
+        let r = reply(json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/list" }), &backend).await;
+        let tools = r["result"]["tools"].as_array().unwrap();
+        let tool = |name: &str| tools.iter().find(|t| t["name"] == name).unwrap().clone();
+
+        assert_eq!(tool("screen_screenshot")["inputSchema"]["properties"], json!({}));
+        let click = tool("screen_click");
+        assert_eq!(click["inputSchema"]["required"], json!(["x", "y"]));
+        assert_eq!(
+            click["inputSchema"]["properties"]["button"]["enum"],
+            json!(["left", "right", "middle"])
+        );
+        assert_eq!(click["inputSchema"]["properties"]["double"]["type"], "boolean");
+        assert_eq!(tool("screen_move")["inputSchema"]["required"], json!(["x", "y"]));
+        assert_eq!(tool("screen_type")["inputSchema"]["required"], json!(["text"]));
+        assert_eq!(tool("screen_key")["inputSchema"]["required"], json!(["keys"]));
+        let scroll = tool("screen_scroll");
+        assert_eq!(scroll["inputSchema"]["required"], json!(["direction"]));
+        assert_eq!(
+            scroll["inputSchema"]["properties"]["direction"]["enum"],
+            json!(["up", "down", "left", "right"])
+        );
+        assert_eq!(scroll["inputSchema"]["properties"]["amount"]["minimum"], 1);
+        assert_eq!(scroll["inputSchema"]["properties"]["amount"]["maximum"], 20);
+        assert_eq!(tool("screen_launch")["inputSchema"]["required"], json!(["command"]));
+        for name in ["screen_click", "screen_move", "screen_scroll"] {
+            assert!(
+                tool(name)["description"].as_str().unwrap().contains("pixel"),
+                "{name} should say that coordinates are screen pixels"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn screen_click_is_forwarded_to_the_daemon() {
+        let backend = MockBackend::default();
+        let r = reply(
+            tool_call("screen_click", json!({ "x": 10, "y": 20, "button": "right" })),
+            &backend,
+        )
+        .await;
+        assert_eq!(r["result"]["isError"], false, "{r}");
+        assert_eq!(
+            *backend.screen_calls.lock().unwrap(),
+            vec![(
+                "screen.agent.click".to_string(),
+                json!({ "x": 10, "y": 20, "button": "right" })
+            )]
+        );
+    }
+
+    #[tokio::test]
+    async fn screen_tools_forward_to_their_daemon_method() {
+        let backend = MockBackend::default();
+        for (tool, method, args) in [
+            ("screen_move", "screen.agent.move", json!({ "x": 1, "y": 2 })),
+            ("screen_type", "screen.agent.type", json!({ "text": "hi" })),
+            ("screen_key", "screen.agent.key", json!({ "keys": "ctrl+l" })),
+            (
+                "screen_scroll",
+                "screen.agent.scroll",
+                json!({ "direction": "down", "amount": 4 }),
+            ),
+            ("screen_launch", "screen.agent.launch", json!({ "command": "firefox" })),
+        ] {
+            let r = reply(tool_call(tool, args.clone()), &backend).await;
+            assert_eq!(r["result"]["isError"], false, "{tool}: {r}");
+            assert_eq!(tool_text(&r), "Done.", "{tool}");
+            let calls = backend.screen_calls.lock().unwrap();
+            assert_eq!(calls.last().unwrap(), &(method.to_string(), args), "{tool}");
+        }
+    }
+
+    #[tokio::test]
+    async fn screen_screenshot_returns_the_size_and_the_image() {
+        let backend = MockBackend {
+            screen_reply: Some(json!({
+                "width": 1600,
+                "height": 1000,
+                "scale": 0.8,
+                "png_base64": "iVBORw0KGgo=",
+            })),
+            ..Default::default()
+        };
+        let r = reply(tool_call("screen_screenshot", json!({})), &backend).await;
+        assert_eq!(r["result"]["isError"], false, "{r}");
+        let content = r["result"]["content"].as_array().unwrap();
+        assert_eq!(content.len(), 2, "{r}");
+        assert_eq!(content[0]["type"], "text");
+        let size: Value = serde_json::from_str(content[0]["text"].as_str().unwrap()).unwrap();
+        assert_eq!(size, json!({ "width": 1600, "height": 1000, "scale": 0.8 }));
+        assert_eq!(
+            content[1],
+            json!({ "type": "image", "data": "iVBORw0KGgo=", "mimeType": "image/png" })
+        );
+        assert_eq!(backend.screen_calls.lock().unwrap()[0].0, "screen.agent.screenshot");
+    }
+
+    #[tokio::test]
+    async fn screen_refusal_from_the_daemon_is_a_tool_error() {
+        let backend = MockBackend {
+            fail: Some("The user is controlling the screen. Wait or ask them to hand it back.".into()),
+            ..Default::default()
+        };
+        let r = reply(tool_call("screen_type", json!({ "text": "hi" })), &backend).await;
+        assert_eq!(r["result"]["isError"], true);
+        assert_eq!(
+            tool_text(&r),
+            "The user is controlling the screen. Wait or ask them to hand it back."
+        );
         assert!(r.get("error").is_none());
     }
 

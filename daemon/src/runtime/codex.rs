@@ -99,7 +99,7 @@ impl Runtime for CodexRuntime {
             // `-c key=value` values are parsed as TOML; JSON strings and arrays are valid TOML.
             cmd.arg("-c").arg(format!(
                 "mcp_servers.bandito.command={}",
-                json!(prog.display().to_string())
+                json!(crate::runtime::path_text(prog)?)
             ));
             cmd.arg("-c").arg(format!("mcp_servers.bandito.args={}", json!(args)));
         }
@@ -112,6 +112,9 @@ impl Runtime for CodexRuntime {
         cmd.current_dir(&cfg.cwd).envs(cfg.env.iter().map(|(k, v)| (k, v)));
         // Marks the CLI and its children for `host.processes` (see docs/ARCHITECTURE.md#host).
         cmd.env("BANDITO_AGENT_ID", &cfg.agent_id);
+        if let Some(token) = &cfg.agent_token {
+            cmd.env("BANDITO_AGENT_TOKEN", token);
+        }
 
         let state = Arc::new(Mutex::new(State::new(cfg.effort.map(turn_effort))));
         let launch = Launch::from_config(&cfg);
@@ -119,6 +122,13 @@ impl Runtime for CodexRuntime {
         let router_launch = launch.clone();
         let router: Router =
             Box::new(move |msg: &Value, sink: &LineSink| route(msg, &router_state, &router_launch, sink));
+        if crate::runtime::sandbox::applies(cfg.sandbox.as_ref()) {
+            // Our sandbox is the one that applies here. Codex's own would nest inside it, and macOS refuses
+            // nested sandboxes; so Codex's is turned off, and approvals stay with Codex's approval policy.
+            cmd.arg("-c").arg(r#"sandbox_mode="danger-full-access""#);
+        }
+        let cmd = crate::runtime::sandbox::wrap(cmd, cfg.sandbox.as_ref())?;
+        let cmd = crate::workspace::confine(cmd, cfg.workspace.as_ref());
         let (proc, output) = JsonProcess::spawn(cmd, LABEL, router)?;
         let sink = proc.sink();
         // A CLI that already died has closed its stdin. Its exit reaches the caller as `Exited`.
@@ -334,6 +344,8 @@ struct Launch {
     model: Option<String>,
     system_prompt: Option<String>,
     resume: Option<String>,
+    /// Codex's own sandbox is off: the sandbox of the daemon applies instead (see `spawn`).
+    own_sandbox_off: bool,
 }
 
 impl Launch {
@@ -343,6 +355,7 @@ impl Launch {
             model: cfg.model.clone(),
             system_prompt: cfg.system_prompt.clone(),
             resume: cfg.resume.clone(),
+            own_sandbox_off: crate::runtime::sandbox::applies(cfg.sandbox.as_ref()),
         }
     }
 }
@@ -484,7 +497,12 @@ impl State {
 /// Thread options shared by `thread/start` and `thread/resume`.
 fn thread_params(launch: &Launch, mut params: Value) -> Value {
     params["approvalPolicy"] = json!("untrusted");
-    params["sandbox"] = json!("workspace-write");
+    // Codex's sandbox mode for its threads: the same setting as the `-c` override (see `spawn`).
+    params["sandbox"] = json!(if launch.own_sandbox_off {
+        "danger-full-access"
+    } else {
+        "workspace-write"
+    });
     if let Some(model) = &launch.model {
         params["model"] = json!(model);
     }

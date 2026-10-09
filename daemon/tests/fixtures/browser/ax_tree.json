@@ -1,0 +1,17 @@
+{
+  "title": "Checkout",
+  "url": "https://shop.example/cart",
+  "nodes": [
+    {"nodeId": "1", "ignored": false, "role": {"type": "role", "value": "RootWebArea"}, "name": {"type": "computedString", "value": "Checkout"}},
+    {"nodeId": "2", "ignored": false, "role": {"type": "role", "value": "heading"}, "name": {"type": "computedString", "value": "Your order"}, "backendDOMNodeId": 5},
+    {"nodeId": "3", "ignored": true, "role": {"type": "role", "value": "generic"}, "name": {"type": "computedString", "value": ""}, "backendDOMNodeId": 6},
+    {"nodeId": "4", "ignored": false, "role": {"type": "role", "value": "link"}, "name": {"type": "computedString", "value": "Home"}, "backendDOMNodeId": 7},
+    {"nodeId": "5", "ignored": false, "role": {"type": "role", "value": "textbox"}, "name": {"type": "computedString", "value": "Email"}, "value": {"type": "string", "value": "a@b.c"}, "backendDOMNodeId": 8},
+    {"nodeId": "6", "ignored": false, "role": {"type": "role", "value": "image"}, "name": {"type": "computedString", "value": ""}, "backendDOMNodeId": 9},
+    {"nodeId": "7", "ignored": false, "role": {"type": "role", "value": "image"}, "name": {"type": "computedString", "value": "Logo"}, "backendDOMNodeId": 10},
+    {"nodeId": "8", "ignored": false, "role": {"type": "role", "value": "button"}, "name": {"type": "computedString", "value": "Pay now"}, "backendDOMNodeId": 11},
+    {"nodeId": "9", "ignored": false, "role": {"type": "role", "value": "paragraph"}, "name": {"type": "computedString", "value": "Some text"}, "backendDOMNodeId": 12},
+    {"nodeId": "10", "ignored": false, "role": {"type": "role", "value": "checkbox"}, "name": {"type": "computedString", "value": "Subscribe\n   to news"}, "backendDOMNodeId": 13},
+    {"nodeId": "11", "ignored": false, "role": {"type": "role", "value": "button"}, "name": {"type": "computedString", "value": "Very long label that goes on and on and on past the one hundred and twenty character limit used by the snapshot renderer, so it gets cut"}, "backendDOMNodeId": 14}
+  ]
+}

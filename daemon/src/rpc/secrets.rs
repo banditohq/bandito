@@ -77,14 +77,14 @@ async fn reload(app: &App, before: &[String], after: &[String]) -> Result<(), Rp
             .collect()
     };
     for id in ids {
-        app.sup.reload(&id, false).await;
+        app.sup.reload(&id, None).await;
     }
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::super::{App, FEATURES, INVALID_PARAMS, Peer, RpcResult, dispatch};
+    use super::super::{App, INVALID_PARAMS, Peer, RpcResult, dispatch, features};
     use crate::event::{EventBody, TurnStatus};
     use crate::hub::Hub;
     use crate::runtime::{RuntimeKind, RuntimeOutput};
@@ -135,6 +135,8 @@ mod tests {
                 effort: None,
                 memory_mode: MemoryMode::Smart,
                 context_budget: None,
+                fallback_runtime: None,
+                fallback_model: None,
             })
             .unwrap()
             .id
@@ -142,7 +144,7 @@ mod tests {
 
     #[test]
     fn the_daemon_advertises_secrets() {
-        assert!(FEATURES.contains(&"secrets"));
+        assert!(features().contains(&"secrets"));
     }
 
     #[tokio::test]

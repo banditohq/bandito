@@ -10,10 +10,13 @@ public enum ThreadItem: Sendable, Hashable, Identifiable {
     case approval(ApprovalRow)
     /// A quiet centered line: crew hand-offs, schedule runs, errors, session events.
     case note(id: String, text: String, kind: NoteKind, ts: Int64)
+    /// The agent moved between runtimes. The app words it (it knows the agent's primary runtime).
+    case runtimeSwitch(id: String, from: String, to: String, until: Int64?, ts: Int64)
 
     public var id: String {
         switch self {
         case .user(let id, _, _, _, _), .assistant(let id, _, _), .note(let id, _, _, _): return id
+        case .runtimeSwitch(let id, _, _, _, _): return id
         case .streaming: return "streaming"
         case .tool(let t): return "tool-\(t.callId)"
         case .approval(let a): return "approval-\(a.approvalId)"
@@ -163,6 +166,8 @@ public struct AgentThread: Sendable, Hashable {
             items.append(.note(id: e.id, text: message, kind: .error, ts: e.ts))
         case .sessionRotated(let chapter, _, _):
             items.append(.note(id: e.id, text: "Chapter \(chapter) · memory saved", kind: .info, ts: e.ts))
+        case .runtimeSwitched(let from, let to, let until):
+            items.append(.runtimeSwitch(id: e.id, from: from, to: to, until: until, ts: e.ts))
         case .usageLimits, .unknown:
             break
         }

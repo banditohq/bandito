@@ -92,7 +92,7 @@ Defaults (presets "VS Code", "iTerm", "Slack" only override what they differ in)
 | team | Agent details | ⌘I |
 | terminals | New terminal | ⌘T |
 | terminals | Split vertically / horizontally | ⌘D / ⌘⇧D |
-| terminals | Collapse (keeps running) | ⌘⇧↓ |
+| terminals | Collapse: the pane leaves the screen into the dock, output keeps being followed (keeps running) | ⌘⇧↓ |
 | terminals | Bring back last collapsed | ⌘⇧T |
 | terminals | Next pane | ⌥⌘←→↑↓ |
 | terminals | Close (ends the process) | ⌘W |
@@ -115,6 +115,25 @@ Defaults (presets "VS Code", "iTerm", "Slack" only override what they differ in)
 | screen | Send ⌃⌥⌦ | ⌃⌥⌫ |
 
 Text fields keep their system shortcuts (⌘A, ⌘Z, ⌘C…); the composer sends on ↵, new line on ⇧↵.
+
+## Slash commands
+
+Typing `/` in the composer opens a list (board 10a): ↑↓ pick, ↵ run, ⇥ complete. Sources, merged and
+searchable:
+
+- **Server** — the agent CLI's own commands and skills: `~/.claude/commands`, `~/.claude/skills`,
+  the project's `.claude/` in the agent's folder, `~/.codex/prompts`. Listed by the daemon
+  (`commands.list {agent_id}`).
+- **This Mac** — `~/.claude/commands` and `~/.claude/skills` on the Mac, marked "from Mac". The first
+  use offers "Install on the server" (copied into the server's `~/.claude/…` over `fs.upload`);
+  afterwards they stay in sync while the setting is on.
+- **Bandito** — `/new, /model, /effort, /chapter, /memory, /changes, /terminal, /files, /usage, /pause`,
+  handled by the app.
+- **Mine** — saved prompts with `{placeholders}`, stored in the account and synced.
+
+Claude Code runs its commands and skills itself, so `/name args` is sent as is. For Codex and Grok the
+daemon expands the command file into the message (front matter dropped, `$ARGUMENTS` and `$1…$9`
+filled) before it reaches the CLI, so one command works for every agent.
 
 ## Trackpad gestures
 
@@ -140,3 +159,20 @@ name hash. Only one attention animation per screen.
 
 Every visible string goes through `L10n`. New keys go to `i18n/en.json` (source) and `i18n/ru.json`;
 other languages are filled in a translation pass. Run `python3 i18n/build.py` after editing.
+
+## Guide is mandatory
+
+`guide/` is the user reference of the Apple app: each entry says what a screen, a setting or a command does and
+where to find it, in the current version. A new screen, sheet, settings section, `@AppStorage`/UserDefaults setting,
+keymap command or onboarding step must have an entry in `guide/` in the same PR. A change that adds one without it
+does not pass CI.
+
+`scripts/check_guide.py` extracts the real list from the Swift code (`AppMode`, `Sheet`, `SettingsSection`, the keys
+read by the Settings views, `Command` ids in `Keymap.swift`, `OnboardingStep`) and compares it with the
+`covers:` keys of the entries. It fails on a missing element and on a key that names nothing in the code (a stale
+guide). Run `python3 scripts/check_guide.py --list` to see what it extracts. It runs in `.claude/verify.sh` and in the
+`apple` workflow.
+
+Entry format: `## <Title>`, then `<!-- id: <unique>; covers: <kind:name, …>; status: planned -->` (status only for
+features that are in the design but not working yet), a sentence or two, `Где:` with the path, the numbered steps,
+and `Хоткей:` when the entry has a shortcut.

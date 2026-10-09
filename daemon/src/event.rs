@@ -82,6 +82,9 @@ pub enum EventBody {
         source: Source,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         from_agent: Option<String>,
+        /// Name of the slash command in `text`, when one was recognised (see docs/ARCHITECTURE.md#commands).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        command: Option<String>,
     },
     #[serde(rename = "message.assistant")]
     MessageAssistant { text: String },
@@ -139,6 +142,16 @@ pub enum EventBody {
         chapter: u32,
         reason: String,
         context_tokens: u64,
+    },
+    /// The agent moved to another runtime: its fallback when the primary one ran out of
+    /// usage, or back to the primary one when its limit reset. `until` is when the limit
+    /// resets (Unix seconds), if known.
+    #[serde(rename = "runtime.switched")]
+    RuntimeSwitched {
+        from: String,
+        to: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        until: Option<i64>,
     },
     #[serde(rename = "usage.limits")]
     UsageLimits { runtime: String, windows: Vec<LimitWindow> },

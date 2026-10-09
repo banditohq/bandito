@@ -5,7 +5,7 @@ use crate::event::{Decision, EventBody, truncate_output};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tokio::sync::mpsc;
 
 pub use crate::event::Plan;
@@ -14,6 +14,7 @@ pub mod claude;
 pub mod codex;
 pub mod grok;
 pub mod process;
+pub mod sandbox;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -94,6 +95,17 @@ pub enum RuntimeOutput {
     },
 }
 
+/// A path as text for an argument list or a config file. A path that is not valid UTF-8 cannot be
+/// given faithfully, so the session that needs it does not start (fail closed).
+pub fn path_text(path: &Path) -> anyhow::Result<&str> {
+    path.to_str().ok_or_else(|| {
+        anyhow::anyhow!(
+            "the path {} is not valid UTF-8; the agent session cannot start",
+            path.to_string_lossy()
+        )
+    })
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct SpawnConfig {
     pub agent_id: String,
@@ -113,6 +125,15 @@ pub struct SpawnConfig {
     pub effort: Option<crate::store::Effort>,
     /// Folders besides `cwd` the agent may read and write (its home).
     pub extra_dirs: Vec<PathBuf>,
+    /// Where the CLI runs (see docs/ARCHITECTURE.md#workspaces). `None` = the server itself.
+    pub workspace: Option<crate::workspace::WorkspaceSpec>,
+    /// This session's agent token: the CLI gets it as `BANDITO_AGENT_TOKEN`. Its crew server reads
+    /// it from a file instead (see docs/ARCHITECTURE.md#trust-model).
+    pub agent_token: Option<String>,
+    /// Where a Claude MCP config file goes (owner-only, removed with the session). `None`: inline.
+    pub agent_mcp_file: Option<PathBuf>,
+    /// The sandbox for this session, on macOS (see `sandbox`). `None`: not sandboxed.
+    pub sandbox: Option<sandbox::SandboxPolicy>,
 }
 
 /// A live session with one agent CLI.
@@ -191,4 +212,18 @@ pub async fn probe_version(program: &str) -> Option<String> {
         .next()
         .map(|l| l.trim().to_string())
         .filter(|l| !l.is_empty())
+}
+
+#[cfg(all(test, unix))]
+mod path_tests {
+    use super::*;
+    use std::os::unix::ffi::OsStrExt;
+
+    #[test]
+    fn a_path_that_is_not_utf8_has_no_text_form() {
+        let bad = Path::new(std::ffi::OsStr::from_bytes(b"/tmp/\xff/bandito"));
+        let err = path_text(bad).unwrap_err().to_string();
+        assert!(err.contains("not valid UTF-8"), "{err}");
+        assert_eq!(path_text(Path::new("/tmp/ok")).unwrap(), "/tmp/ok");
+    }
 }

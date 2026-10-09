@@ -415,6 +415,8 @@ impl TerminalManager {
         let spawned = std::thread::Builder::new()
             .name("terminal-reaper".into())
             .spawn(move || {
+                // Registered from the thread that waits: it holds the child until its exit.
+                let _registration = crate::children::register(child.id());
                 let status = child.wait().ok();
                 exited.store(true, Ordering::SeqCst);
                 // The receiver is gone only if nobody reads the session any more.

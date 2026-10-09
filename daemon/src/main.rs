@@ -52,10 +52,30 @@ enum Cmd {
         #[command(subcommand)]
         cmd: ServiceCmd,
     },
-    /// Crew MCP server for one agent (started by the daemon; speaks MCP on stdio).
+    /// Crew MCP server of an agent (started by the daemon; speaks MCP on stdio). The agent comes
+    /// from its session token: read from `--token-file`, else from `BANDITO_AGENT_TOKEN`. `--agent`
+    /// is accepted for older configs and changes nothing.
     Mcp {
         #[arg(long)]
-        agent: String,
+        agent: Option<String>,
+        /// The file the daemon wrote the session token to (under `$BANDITO_HOME/run`).
+        #[arg(long)]
+        token_file: Option<PathBuf>,
+    },
+    /// Check for a newer signed release, or install one (and restart the daemon when a service runs it).
+    Update {
+        /// Only report whether a newer release exists.
+        #[arg(long)]
+        check: bool,
+        /// Print the result as one JSON object.
+        #[arg(long)]
+        json: bool,
+        /// Install this release (X.Y.Z or vX.Y.Z) instead of the newest one.
+        #[arg(long, value_name = "VERSION")]
+        version: Option<String>,
+        /// Allow installing a release older than the running one.
+        #[arg(long)]
+        allow_downgrade: bool,
     },
 }
 
@@ -139,8 +159,75 @@ async fn run_command(cmd: Cmd, home: PathBuf) -> Result<()> {
         Cmd::Pair { json } => pair(&sock, json).await,
         Cmd::Info { json } => info(&home, &sock, json).await,
         Cmd::Service { cmd } => service_cmd(cmd, &home).await,
-        Cmd::Mcp { agent } => bandito::crew::serve_stdio(sock, agent).await,
+        Cmd::Mcp { token_file, .. } => bandito::crew::serve_stdio(home.join("agent.sock"), token_file).await,
+        Cmd::Update {
+            check,
+            json,
+            version,
+            allow_downgrade,
+        } => update_cmd(&home, check, json, version, allow_downgrade).await,
     }
+}
+
+/// `bandito update`: report the newest release, or install one and restart the daemon when a service runs it.
+async fn update_cmd(
+    home: &Path,
+    check: bool,
+    json: bool,
+    version: Option<String>,
+    allow_downgrade: bool,
+) -> Result<()> {
+    if check {
+        let info = bandito::update::check_async(rpc::VERSION).await?;
+        if json {
+            println!("{}", serde_json::to_string(&info)?);
+        } else if info.available {
+            println!("bandito {} is available (this is {})", info.latest, info.current);
+        } else {
+            println!("bandito {} is the newest release", info.current);
+        }
+        return Ok(());
+    }
+    let target = match version {
+        Some(v) => v,
+        None => {
+            let info = bandito::update::check_async(rpc::VERSION).await?;
+            if !info.available {
+                println!("bandito {} is the newest release", info.current);
+                return Ok(());
+            }
+            info.latest
+        }
+    };
+    let exe = std::env::current_exe()?
+        .canonicalize()
+        .context("resolve the path of the bandito binary")?;
+    let installed = bandito::update::apply_async(
+        home.to_path_buf(),
+        exe.clone(),
+        rpc::VERSION.to_string(),
+        target,
+        allow_downgrade,
+    )
+    .await?;
+    // The pid to restart is the one the running daemon reports on its socket. No answer, no restart.
+    let daemon_pid = bandito::update::daemon_pid(&home.join("bandito.sock")).await;
+    let restart = bandito::update::restart_for(home.to_path_buf(), exe, daemon_pid).await?;
+    bandito::update::run_restart(&restart)?;
+    let restarting = restart != bandito::update::Restart::Manual;
+    if json {
+        println!(
+            "{}",
+            json!({ "ok": true, "version": installed, "restarting": restarting, "daemon_answered": daemon_pid.is_some() })
+        );
+    } else if restarting {
+        println!("Installed bandito {installed}. The daemon restarts with it.");
+    } else if daemon_pid.is_none() {
+        println!("Installed bandito {installed}. The daemon did not answer, so it was not restarted.");
+    } else {
+        println!("Installed bandito {installed}. Restart the daemon to run it.");
+    }
+    Ok(())
 }
 
 async fn pair(sock: &Path, json: bool) -> Result<()> {
@@ -286,6 +373,9 @@ async fn status(sock: &Path) -> Result<()> {
 }
 
 async fn daemon(home: &Path, sock: &Path, listen: SocketAddr) -> Result<()> {
+    // Before anything starts: sessions recovered below are children too.
+    rpc::unix::become_subreaper();
+    bandito::update::set_data_home(home);
     let store = Arc::new(Store::open(&home.join("bandito.db"))?);
     let agents_root = home::default_agents_root(home);
     let created = home::backfill(&store, &agents_root);
@@ -310,12 +400,26 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr) -> Result<()> {
         );
         None
     };
-    let sup = Supervisor::new(hub, runtimes, mcp);
+    let sup = Supervisor::new_in_home(hub, runtimes, mcp, home);
+    // Session tokens are files in `run/`: a previous daemon's leftovers go, and no token outlives a restart.
+    sup.agent_tokens()
+        .set_run_dir(&home.join("run"))
+        .context("prepare the run folder")?;
+    let config = bandito::config::load(home)?;
+    sup.set_agent_sandbox(config.agent_sandbox);
     sup.recover()?;
-    let app = App::new(sup.clone(), agents_root);
+    let app = App::new_in_home(sup.clone(), agents_root, App::default_files(), home.to_path_buf());
 
+    // Children that double-fork away stay under this process, so the owner's socket can tell them apart,
+    // and this process reaps them (see docs/ARCHITECTURE.md#trust-model).
+    rpc::unix::spawn_zombie_reaper(rpc::unix::REAP_INTERVAL);
     let unix = rpc::unix::bind(sock)?;
+    // Agents reach the daemon only through this socket, with their session token (docs/ARCHITECTURE.md#trust-model).
+    let agent_unix = rpc::unix::bind(&home.join("agent.sock"))?;
+    // This daemon owns the socket now, so Chrome left by an earlier daemon is ours to stop.
+    bandito::browser::reap_orphans(&bandito::setup::default_home());
     tokio::spawn(rpc::unix::run(app.clone(), unix));
+    tokio::spawn(rpc::unix::run_agents(app.clone(), agent_unix));
 
     let tcp = tokio::net::TcpListener::bind(listen)
         .await
@@ -323,14 +427,16 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr) -> Result<()> {
     if let Err(e) = std::fs::write(home.join(LISTEN_FILE), tcp.local_addr()?.to_string()) {
         tracing::warn!("could not record the listen address: {e}");
     }
-    let router = rpc::ws::router(app.clone());
+    let router = rpc::ws::router_listening(app.clone(), listen.ip(), config.allowed_hosts);
     tokio::spawn(async move {
-        if let Err(e) = axum::serve(tcp, router).await {
+        if let Err(e) = axum::serve(tcp, router.into_make_service_with_connect_info::<SocketAddr>()).await {
             tracing::error!("http server: {e}");
         }
     });
 
     bandito::scheduler::spawn_loop(sup.clone());
+    // Stops server screens that nobody has used for 30 minutes (see docs/ARCHITECTURE.md#screen).
+    app.screens.spawn_idle_reaper();
 
     {
         let sup = sup.clone();
@@ -377,10 +483,16 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr) -> Result<()> {
         });
     }
 
+    // Looks for a newer release now and then. Nothing is installed here (docs/ARCHITECTURE.md#self-update).
+    bandito::update::spawn_background_check(rpc::VERSION, |info| {
+        tracing::info!(current = %info.current, latest = %info.latest, "a newer Bandito release is available");
+    });
+
     tracing::info!(version = rpc::VERSION, socket = %sock.display(), %listen, "bandito daemon is running");
     shutdown_signal().await;
     tracing::info!("shutting down");
     app.terminals.shutdown_all();
+    app.screens.shutdown_all().await;
     sup.stop_all().await;
     let _ = std::fs::remove_file(sock);
     Ok(())
@@ -404,6 +516,35 @@ mod tests {
 
     fn parse(args: &[&str]) -> Cmd {
         Cli::try_parse_from(args).expect("parses").cmd
+    }
+
+    #[test]
+    fn update_takes_its_flags() {
+        assert!(matches!(
+            parse(&["bandito", "update"]),
+            Cmd::Update {
+                check: false,
+                json: false,
+                version: None,
+                allow_downgrade: false
+            }
+        ));
+        assert!(matches!(
+            parse(&["bandito", "update", "--check", "--json"]),
+            Cmd::Update {
+                check: true,
+                json: true,
+                ..
+            }
+        ));
+        match parse(&["bandito", "update", "--version", "v0.2.0", "--allow-downgrade"]) {
+            Cmd::Update {
+                version: Some(v),
+                allow_downgrade: true,
+                ..
+            } => assert_eq!(v, "v0.2.0"),
+            _ => panic!("update flags did not parse"),
+        }
     }
 
     #[test]

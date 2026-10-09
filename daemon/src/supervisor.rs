@@ -2,18 +2,27 @@
 //! single turn runs at a time, applies the approval policy, and turns runtime
 //! output into stored events.
 
+use crate::agent_token::{AgentTokens, SessionToken};
 use crate::checkpoint;
+use crate::event::LimitWindow;
 use crate::event::{AgentStatus, DecidedBy, Decision, EventBody, Source, TurnStatus, Usage};
 use crate::hub::Hub;
-use crate::policy::{self, Verdict};
+use crate::limit;
+use crate::policy::{self, Protected, Verdict};
 use crate::redact::Redactor;
+use crate::runtime::sandbox::SandboxPolicy;
 use crate::runtime::{ApprovalRequest, Runtime, RuntimeKind, RuntimeOutput, Session, SpawnConfig};
-use crate::store::{Agent, CheckpointKind, DEFAULT_CONTEXT_BUDGET, MemoryMode, RuleAction, Store, new_id, now_ms};
+use crate::store::{
+    Agent, CheckpointKind, DEFAULT_CONTEXT_BUDGET, MemoryMode, RuleAction, Store, UsageEntry, WorkspaceKind, new_id,
+    now_ms,
+};
+use crate::workspace::{self, WorkspaceManager, WorkspaceSpec};
 use anyhow::{Result, anyhow, bail};
 use chrono::{DateTime, Local, NaiveTime, TimeZone};
 use serde_json::json;
 use std::collections::{HashMap, VecDeque};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
@@ -47,6 +56,11 @@ pub struct Inbound {
     /// Crew conversation this message belongs to. `None` for user and schedule
     /// messages: the turn they start gets a new chain id.
     pub chain: Option<String>,
+    /// What the person typed, when `text` is an expansion of it (a slash command for a runtime
+    /// that does not run it itself). The thread shows this; the runtime gets `text`.
+    pub typed: Option<String>,
+    /// Name of the slash command in the message, if one was recognised.
+    pub command: Option<String>,
 }
 
 impl Inbound {
@@ -57,6 +71,8 @@ impl Inbound {
             from_agent: None,
             hops: 0,
             chain: None,
+            typed: None,
+            command: None,
         }
     }
 
@@ -67,6 +83,8 @@ impl Inbound {
             from_agent: None,
             hops: 0,
             chain: None,
+            typed: None,
+            command: None,
         }
     }
 }
@@ -94,9 +112,37 @@ pub struct CrewContext {
     pub sends: u8,
 }
 
+/// An approval the daemon asks for itself, not a runtime (such as a risky browser click).
+#[derive(Debug, Clone)]
+pub struct ApprovalSpec {
+    /// Tool name shown in the app, e.g. `browser_click`.
+    pub tool: String,
+    pub title: String,
+    pub command: Option<String>,
+    /// Why the human is asked; shown with the approval.
+    pub reason: String,
+    /// What the answer is about. Stored and shown with the approval.
+    pub input: serde_json::Value,
+}
+
+/// A message waiting for its turn. `echoed`: it is already in the thread, because it arrived while the agent was paused.
+struct Queued {
+    msg: Inbound,
+    echoed: bool,
+}
+
 enum Cmd {
-    Send(Inbound, oneshot::Sender<Result<()>>),
+    /// Replies `true` when the agent is paused and the message waits for the pause to end.
+    Send(Inbound, oneshot::Sender<Result<bool>>),
+    /// A daemon-asked approval (see [`Supervisor::ask_external`]). Replies with the approval id and
+    /// the channel that carries the answer.
+    AskExternal {
+        spec: ApprovalSpec,
+        reply: oneshot::Sender<Result<(String, oneshot::Receiver<Decision>)>>,
+    },
     Interrupt(oneshot::Sender<Result<()>>),
+    /// The pause flag changed in the store: interrupt the running turn when paused, else start the held messages.
+    PauseChanged(oneshot::Sender<Result<()>>),
     Resolve {
         approval_id: String,
         decision: Decision,
@@ -106,9 +152,9 @@ enum Cmd {
     },
     Stop(oneshot::Sender<()>),
     /// New settings for the next session: close the session now, or after the running turn.
-    /// `new_chapter`: the folder changed, so the next session starts a new chapter.
+    /// `new_chapter`: why the next session starts a new chapter (the folder or the runtime changed).
     Reload {
-        new_chapter: bool,
+        new_chapter: Option<&'static str>,
         reply: oneshot::Sender<()>,
     },
     /// Checks the per-turn and hop limits and, if they pass, counts one crew
@@ -126,6 +172,22 @@ pub struct Supervisor {
     actors: Mutex<HashMap<String, mpsc::Sender<Cmd>>>,
     /// Crew messages accepted so far, per chain id.
     chains: Mutex<HashMap<String, u32>>,
+    /// Docker for the container workspaces (see docs/ARCHITECTURE.md#workspaces).
+    workspaces: Arc<WorkspaceManager>,
+    /// Live session tokens of the agents (see docs/ARCHITECTURE.md#trust-model).
+    agent_tokens: Arc<AgentTokens>,
+    /// Whether agent sessions run under the macOS sandbox (see `runtime::sandbox`).
+    agent_sandbox: Arc<AtomicBool>,
+    /// Bandito's own files and controls, for the approval policy. Built once at start.
+    protected: Arc<Protected>,
+}
+
+/// Bandito's own files and controls, as the approval policy protects them: the data folder,
+/// the daemon's binary, and the service files of the user's home. `BANDITO_HOME` or `~/.bandito`.
+fn daemon_protected(data_home: &std::path::Path) -> Protected {
+    let exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("bandito"));
+    let user_home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
+    Protected::new(data_home, &exe, &user_home)
 }
 
 /// Approvals nobody answered are denied after this long.
@@ -195,6 +257,21 @@ fn chapter_due(agent: &Agent, now: DateTime<Local>) -> Option<&'static str> {
     (has_chapter && new_day_due(agent, now)).then_some("new day")
 }
 
+/// The runtime an agent runs on now: its fallback while it is active there, else its primary one.
+fn effective_runtime(agent: &Agent) -> RuntimeKind {
+    agent.active_runtime.unwrap_or(agent.runtime)
+}
+
+/// The runtime to switch to when `current` runs out of usage: the fallback from the primary
+/// runtime, the primary one from the fallback. `None` when the agent has no fallback to use.
+fn other_runtime(agent: &Agent, current: RuntimeKind) -> Option<RuntimeKind> {
+    if current == agent.runtime {
+        agent.fallback_runtime.filter(|fb| *fb != current)
+    } else {
+        Some(agent.runtime)
+    }
+}
+
 /// The reason shown when a chapter closes without its wrap-up turn.
 fn unsaved(reason: &'static str) -> &'static str {
     match reason {
@@ -230,13 +307,60 @@ fn next_chapter(hub: &Hub, agent_id: &str, reason: &'static str) {
 
 impl Supervisor {
     pub fn new(hub: Hub, runtimes: Runtimes, mcp: Option<(PathBuf, Vec<String>)>) -> Arc<Self> {
+        Self::new_with_workspaces(hub, runtimes, mcp, WorkspaceManager::system())
+    }
+
+    pub fn new_with_workspaces(
+        hub: Hub,
+        runtimes: Runtimes,
+        mcp: Option<(PathBuf, Vec<String>)>,
+        workspaces: Arc<WorkspaceManager>,
+    ) -> Arc<Self> {
+        Self::new_in(hub, runtimes, mcp, workspaces, &crate::workspace::data_dir())
+    }
+
+    /// The daemon of the data folder `home` (`--home`): the approval policy protects that folder.
+    pub fn new_in_home(
+        hub: Hub,
+        runtimes: Runtimes,
+        mcp: Option<(PathBuf, Vec<String>)>,
+        home: &std::path::Path,
+    ) -> Arc<Self> {
+        Self::new_in(hub, runtimes, mcp, WorkspaceManager::system(), home)
+    }
+
+    fn new_in(
+        hub: Hub,
+        runtimes: Runtimes,
+        mcp: Option<(PathBuf, Vec<String>)>,
+        workspaces: Arc<WorkspaceManager>,
+        home: &std::path::Path,
+    ) -> Arc<Self> {
         Arc::new(Self {
             hub,
             runtimes,
             mcp,
             actors: Mutex::new(HashMap::new()),
             chains: Mutex::new(HashMap::new()),
+            workspaces,
+            agent_tokens: AgentTokens::new(),
+            agent_sandbox: Arc::new(AtomicBool::new(true)),
+            protected: Arc::new(daemon_protected(home)),
         })
+    }
+
+    /// Turns the sandbox for agent sessions on or off (from the config file, at start).
+    pub fn set_agent_sandbox(&self, on: bool) {
+        self.agent_sandbox.store(on, Ordering::Relaxed);
+    }
+
+    /// The live agent session tokens, for `agent.sock`.
+    pub fn agent_tokens(&self) -> Arc<AgentTokens> {
+        Arc::clone(&self.agent_tokens)
+    }
+
+    pub fn workspaces(&self) -> &Arc<WorkspaceManager> {
+        &self.workspaces
     }
 
     pub fn hub(&self) -> &Hub {
@@ -278,6 +402,11 @@ impl Supervisor {
             hub: self.hub.clone(),
             runtimes: self.runtimes.clone(),
             mcp: self.mcp.clone(),
+            workspaces: self.workspaces.clone(),
+            tokens: self.agent_tokens.clone(),
+            sandbox_on: self.agent_sandbox.clone(),
+            agent_token: None,
+            protected: self.protected.clone(),
             session: None,
             output: None,
             redactor: Redactor::default(),
@@ -289,7 +418,12 @@ impl Supervisor {
             turn_context: None,
             turn_checkpoints: false,
             reload_after_turn: false,
-            new_chapter_after_turn: false,
+            new_chapter_after_turn: None,
+            session_kind: None,
+            turn_limit: false,
+            turn_retry: false,
+            next_turn_is_retry: false,
+            last_message: None,
             queue: VecDeque::new(),
             pending: HashMap::new(),
             status: None,
@@ -309,7 +443,24 @@ impl Supervisor {
     }
 
     pub async fn send(&self, agent_id: &str, msg: Inbound) -> Result<()> {
+        self.send_held(agent_id, msg).await.map(|_| ())
+    }
+
+    /// Sends a message like [`Supervisor::send`]. Returns `true` when the agent is paused: the message is
+    /// in its thread and waits there until the pause ends (see docs/ARCHITECTURE.md#pause).
+    pub async fn send_held(&self, agent_id: &str, msg: Inbound) -> Result<bool> {
         self.call(agent_id, |r| Cmd::Send(msg, r)).await
+    }
+
+    /// Pauses or resumes an agent. Pausing interrupts the running turn, as [`Supervisor::interrupt`] does;
+    /// resuming starts the messages held meanwhile. Returns `false` when the agent already has that state
+    /// or does not exist.
+    pub async fn set_paused(&self, agent_id: &str, paused: bool) -> Result<bool> {
+        if !self.hub.store.agent_set_paused(agent_id, paused)? {
+            return Ok(false);
+        }
+        self.call(agent_id, Cmd::PauseChanged).await?;
+        Ok(true)
     }
 
     /// One agent messages another by name (the crew MCP tool `crew_send`).
@@ -343,6 +494,8 @@ impl Supervisor {
             from_agent: Some(from.name),
             hops: ctx.hops.saturating_add(1),
             chain: Some(chain),
+            typed: None,
+            command: None,
         };
         self.send(&to.id, msg).await?;
         Ok(to.id)
@@ -389,6 +542,32 @@ impl Supervisor {
         .await
     }
 
+    /// Ask the human before the daemon acts for the agent. The request is recorded and shown in the
+    /// agent's feed like a runtime approval, and answered with `approvals.resolve`. No answer within
+    /// `limit` denies it, and so does a stop of the agent while it waits (its pending approvals are
+    /// expired then). `remember` is ignored for these: no rule is created.
+    pub async fn ask_external(&self, agent_id: &str, spec: ApprovalSpec, limit: Duration) -> Result<Decision> {
+        let (approval_id, mut answer) = self.call(agent_id, |reply| Cmd::AskExternal { spec, reply }).await?;
+        match tokio::time::timeout(limit, &mut answer).await {
+            Ok(Ok(decision)) => Ok(decision),
+            Ok(Err(_)) => Ok(Decision::Deny),
+            Err(_) => {
+                // Too late: deny it through the actor, so the store and the feed record it. An answer
+                // that arrived meanwhile is kept.
+                let _ = self
+                    .call(agent_id, |reply| Cmd::Resolve {
+                        approval_id,
+                        decision: Decision::Deny,
+                        by: DecidedBy::Policy,
+                        remember: false,
+                        reply,
+                    })
+                    .await;
+                Ok(answer.try_recv().unwrap_or(Decision::Deny))
+            }
+        }
+    }
+
     /// Deny approvals older than [`APPROVAL_TTL_MS`]. Call periodically.
     pub async fn expire_stale_approvals(&self) -> Result<()> {
         let cutoff = now_ms() - APPROVAL_TTL_MS;
@@ -427,11 +606,11 @@ impl Supervisor {
     /// Apply changed settings to the agent's next session without interrupting a
     /// running turn: the session is closed now, or when the running turn ends.
     /// The chapter goes on (the runtime session id is kept), so the next message
-    /// resumes it with the new settings. With `new_chapter` (the folder changed)
-    /// the next session starts a new chapter instead: CLI sessions are tied to
-    /// their folder. An agent with no actor has no session to close; a folder
-    /// change still starts its next chapter in the store.
-    pub async fn reload(&self, agent_id: &str, new_chapter: bool) {
+    /// resumes it with the new settings. With `new_chapter` (why: "folder changed",
+    /// "runtime changed") the next session starts a new chapter instead: CLI sessions
+    /// are tied to their folder and their runtime. An agent with no actor has no
+    /// session to close; its next chapter still starts in the store.
+    pub async fn reload(&self, agent_id: &str, new_chapter: Option<&'static str>) {
         let tx = self
             .actors
             .lock()
@@ -445,8 +624,11 @@ impl Supervisor {
                     let _ = rx.await;
                 }
             }
-            None if new_chapter => next_chapter(&self.hub, agent_id, "folder changed"),
-            None => {}
+            None => {
+                if let Some(reason) = new_chapter {
+                    next_chapter(&self.hub, agent_id, reason);
+                }
+            }
         }
     }
 
@@ -468,6 +650,8 @@ struct PendingApproval {
     key: String,
     /// What a "remember" rule should match: the command, or the title.
     subject: String,
+    /// Set for a daemon-asked approval: the answer goes here instead of to a runtime session.
+    external: Option<oneshot::Sender<Decision>>,
 }
 
 struct Actor {
@@ -475,6 +659,12 @@ struct Actor {
     hub: Hub,
     runtimes: Runtimes,
     mcp: Option<(PathBuf, Vec<String>)>,
+    workspaces: Arc<WorkspaceManager>,
+    tokens: Arc<AgentTokens>,
+    sandbox_on: Arc<AtomicBool>,
+    /// The token of the running session. Dropping it (when the session ends) revokes the token.
+    agent_token: Option<SessionToken>,
+    protected: Arc<Protected>,
     session: Option<Box<dyn Session>>,
     output: Option<mpsc::Receiver<RuntimeOutput>>,
     /// Replaces the values of the secrets this session was started with, in everything it stores or sends.
@@ -492,9 +682,19 @@ struct Actor {
     turn_checkpoints: bool,
     /// Settings changed while a session was running: close that session once it is idle.
     reload_after_turn: bool,
-    /// The folder changed while a session was running: the next session starts a new chapter.
-    new_chapter_after_turn: bool,
-    queue: VecDeque<Inbound>,
+    /// A folder or runtime change while a session was running: the next session starts a new chapter, for this reason.
+    new_chapter_after_turn: Option<&'static str>,
+    /// The runtime of the running session (the primary one or the fallback).
+    session_kind: Option<RuntimeKind>,
+    /// The running turn reported that the runtime's usage is used up (see `marks_limit`).
+    turn_limit: bool,
+    /// The running turn is the retry of a message after a switch: it does not echo the message again.
+    turn_retry: bool,
+    /// The next turn started is a retry (set just before `start_turn`).
+    next_turn_is_retry: bool,
+    /// The last message a turn was started for, to repeat it on another runtime.
+    last_message: Option<Inbound>,
+    queue: VecDeque<Queued>,
     pending: HashMap<String, PendingApproval>,
     status: Option<AgentStatus>,
 }
@@ -538,13 +738,27 @@ impl Actor {
     async fn command(&mut self, cmd: Cmd) {
         match cmd {
             Cmd::Send(msg, reply) => {
-                self.queue.push_back(msg);
-                let _ = reply.send(self.pump().await);
+                let held = self.is_paused();
+                if held {
+                    self.echo(&msg);
+                }
+                self.queue.push_back(Queued { msg, echoed: held });
+                let res = self.pump().await.map(|()| held);
+                let _ = reply.send(res);
             }
             Cmd::Interrupt(reply) => {
-                let res = match (&mut self.session, &self.turn) {
-                    (Some(s), Some(_)) => s.interrupt().await,
-                    _ => Ok(()),
+                let res = self.interrupt_turn().await;
+                let _ = reply.send(res);
+            }
+            Cmd::PauseChanged(reply) => {
+                let res = if self.is_paused() {
+                    self.interrupt_turn().await
+                } else {
+                    // A held message that cannot start is already shown in the thread (`start_turn` reports it).
+                    if let Err(e) = self.pump().await {
+                        tracing::warn!(agent = self.id, "held message after resume: {e:#}");
+                    }
+                    Ok(())
                 };
                 let _ = reply.send(res);
             }
@@ -557,6 +771,9 @@ impl Actor {
             } => {
                 let _ = reply.send(self.resolve(&approval_id, decision, by, remember).await);
             }
+            Cmd::AskExternal { spec, reply } => {
+                let _ = reply.send(self.ask_external(spec));
+            }
             Cmd::ReserveCrewSend(text, reply) => {
                 let result = self
                     .reserve_crew_send()
@@ -565,12 +782,38 @@ impl Actor {
             }
             Cmd::Reload { new_chapter, reply } => {
                 self.reload_after_turn = true;
-                self.new_chapter_after_turn |= new_chapter;
+                self.new_chapter_after_turn = self.new_chapter_after_turn.or(new_chapter);
                 self.apply_reload_if_idle().await;
                 let _ = reply.send(());
             }
             Cmd::Stop(_) => unreachable!("handled in run"),
         }
+    }
+
+    /// Asks the running session to stop its turn. Nothing happens when no turn runs.
+    async fn interrupt_turn(&mut self) -> Result<()> {
+        match (&mut self.session, &self.turn) {
+            (Some(s), Some(_)) => s.interrupt().await,
+            _ => Ok(()),
+        }
+    }
+
+    /// Whether the agent is paused now. Read from the store, so a pause holds messages that are already queued.
+    fn is_paused(&self) -> bool {
+        self.agent().is_ok_and(|a| a.paused)
+    }
+
+    /// Shows a message in the thread: what the person typed, or its text when no expansion was typed.
+    fn echo(&self, msg: &Inbound) {
+        self.hub.emit(
+            &self.id,
+            EventBody::MessageUser {
+                text: msg.typed.clone().unwrap_or_else(|| msg.text.clone()),
+                source: msg.source,
+                from_agent: msg.from_agent.clone(),
+                command: msg.command.clone(),
+            },
+        );
     }
 
     /// Check the hop and per-turn limits, then count one crew message for the
@@ -602,21 +845,36 @@ impl Actor {
     }
 
     async fn resolve(&mut self, approval_id: &str, decision: Decision, by: DecidedBy, remember: bool) -> Result<()> {
-        let Some(p) = self.pending.get(approval_id) else {
+        let Some(p) = self.pending.remove(approval_id) else {
             bail!("approval {approval_id} is not pending");
         };
         if self.hub.store.approval_resolve(approval_id, decision)?.is_none() {
-            self.pending.remove(approval_id);
             bail!("approval {approval_id} was already answered");
         }
-        let (key, subject) = (p.key.clone(), p.subject.clone());
-        self.pending.remove(approval_id);
-        if let Some(s) = &mut self.session {
-            s.resolve(&key, decision).await?;
+        let external = p.external.is_some();
+        match p.external {
+            // The daemon's own question: whoever asked is waiting for this answer.
+            Some(answer) => {
+                let _ = answer.send(decision);
+            }
+            None => {
+                if let Some(s) = &mut self.session {
+                    s.resolve(&p.key, decision).await?;
+                }
+            }
         }
-        let remember = remember && decision == Decision::Allow;
+        let remember = remember && decision == Decision::Allow && !external;
         if remember {
-            self.hub.store.rule_set(Some(&self.id), &subject, RuleAction::Allow)?;
+            // The exact command, escaped; never a command with parts that cannot be known.
+            match policy::always_pattern(&p.subject, &self.protected) {
+                Some(pattern) => {
+                    self.hub.store.rule_set(Some(&self.id), &pattern, RuleAction::Allow)?;
+                }
+                None => tracing::info!(
+                    agent = self.id,
+                    "not remembered: the command has parts that cannot be known"
+                ),
+            }
         }
         self.hub.emit(
             &self.id,
@@ -645,10 +903,11 @@ impl Actor {
             return Ok(());
         }
         let agent = self.agent()?;
+        let kind = effective_runtime(&agent);
         let rt = self
             .runtimes
-            .get(agent.runtime)
-            .ok_or_else(|| anyhow!("runtime {} is not available on this server", agent.runtime.as_str()))?;
+            .get(kind)
+            .ok_or_else(|| anyhow!("runtime {} is not available on this server", kind.as_str()))?;
         // Blocks: memory briefing, role, the user's own instructions.
         let mut blocks: Vec<String> = Vec::new();
         if let Some(home) = agent.home_dir.as_deref() {
@@ -666,36 +925,91 @@ impl Actor {
         }
         let prompt = blocks.join("\n\n");
         let secrets = self.hub.store.secrets_for_agent(&agent.id)?;
+        let (token, token_guard) = self.tokens.issue(&agent.id)?;
+        // The token file's path goes into an argument list: it must be text, or the session does not start.
+        let token_file_arg = match token_guard.token_file() {
+            Some(file) => Some(crate::runtime::path_text(file)?.to_string()),
+            None => None,
+        };
+        // Containers are isolated already; the sandbox is for the agents that run on the server itself.
+        let sandbox = match self.tokens.home() {
+            Some(home)
+                if agent.workspace_id == crate::store::SHARED_WORKSPACE && self.sandbox_on.load(Ordering::Relaxed) =>
+            {
+                Some(SandboxPolicy {
+                    home,
+                    // Without a home folder the profile cannot protect the login files: the session is refused.
+                    user_home: dirs::home_dir()
+                        .ok_or_else(|| anyhow!("no home folder: the agent cannot be sandboxed"))?,
+                    exe: std::env::current_exe().ok(),
+                    session_files: token_guard
+                        .token_file()
+                        .into_iter()
+                        .chain(token_guard.config_file())
+                        .map(Path::to_path_buf)
+                        .collect(),
+                })
+            }
+            _ => None,
+        };
+        let ws = self
+            .hub
+            .store
+            .workspace_get(&agent.workspace_id)?
+            .ok_or_else(|| anyhow!("workspace {} is gone", agent.workspace_id))?;
+        let (workspace, mcp) = match ws.kind {
+            WorkspaceKind::Shared => (WorkspaceSpec::Shared, self.mcp.clone()),
+            WorkspaceKind::Container => {
+                let mounts = workspace::mounts_for(&self.hub.store, &ws)?;
+                self.workspaces.ensure_running(&ws, &mounts).await?;
+                // The crew server talks to the daemon socket, which is not mounted: no crew inside a container.
+                (self.workspaces.spec(&ws), None)
+            }
+        };
         let spawned = rt
             .spawn(SpawnConfig {
                 agent_id: agent.id.clone(),
                 cwd: PathBuf::from(&agent.cwd),
-                model: agent.model.clone(),
+                model: if kind == agent.runtime {
+                    agent.model.clone()
+                } else {
+                    agent.fallback_model.clone()
+                },
                 system_prompt: (!prompt.is_empty()).then_some(prompt),
                 resume: agent.runtime_session_id.clone(),
                 program: None,
-                mcp: self.mcp.clone().map(|(prog, mut args)| {
+                mcp: mcp.map(|(prog, mut args)| {
                     args.extend(["--agent".to_string(), agent.id.clone()]);
+                    // The bridge reads the token from this file, so the token stays out of argument lists.
+                    if let Some(file) = &token_file_arg {
+                        args.extend(["--token-file".to_string(), file.clone()]);
+                    }
                     (prog, args)
                 }),
                 env: secrets.clone(),
                 effort: agent.effort,
                 extra_dirs: agent.home_dir.iter().map(PathBuf::from).collect(),
+                workspace: Some(workspace),
+                agent_token: Some(token.clone()),
+                agent_mcp_file: token_guard.config_file().map(Path::to_path_buf),
+                sandbox,
             })
             .await?;
         self.session = Some(spawned.session);
         self.output = Some(spawned.output);
-        // The same values the child got, so what it prints is redacted exactly for them.
-        self.redactor = Redactor::new(secrets);
+        self.session_kind = Some(kind);
+        self.agent_token = Some(token_guard);
+        // The same values the child got, so what it prints is redacted exactly for them, the token too.
+        self.redactor = Redactor::new(secrets.into_iter().chain([("BANDITO_AGENT_TOKEN".to_string(), token)]));
         Ok(())
     }
 
-    /// Start the next queued message if no turn is running.
+    /// Start the next queued message if no turn is running. A paused agent starts none.
     async fn pump(&mut self) -> Result<()> {
         if self.turn.is_some() || self.wrap_up.is_some() {
             return Ok(());
         }
-        if self.queue.is_empty() {
+        if self.queue.is_empty() || self.is_paused() {
             return Ok(());
         }
         // A chapter that is over budget, or a new memory day, closes before the message goes out.
@@ -706,10 +1020,18 @@ impl Actor {
         {
             return Ok(());
         }
-        let Some(msg) = self.queue.pop_front() else {
+        // On a fallback: the primary runtime goes back in as soon as its limit has reset.
+        if let Ok(agent) = self.agent()
+            && let Some(active) = agent.active_runtime
+            && self.runtimes.get(agent.runtime).is_some()
+            && self.runtime_free(agent.runtime, now_ms())
+        {
+            self.switch_runtime(&agent, active, agent.runtime, None).await;
+        }
+        let Some(Queued { msg, echoed }) = self.queue.pop_front() else {
             return Ok(());
         };
-        self.start_turn(msg).await
+        self.start_turn(msg, echoed).await
     }
 
     /// True when the next message would first close the chapter.
@@ -747,8 +1069,10 @@ impl Actor {
             from_agent: None,
             hops: 0,
             chain: None,
+            typed: None,
+            command: None,
         };
-        match self.start_turn(msg).await {
+        match self.start_turn(msg, false).await {
             Ok(()) => true,
             Err(e) => {
                 tracing::warn!(agent = self.id, "wrap-up turn: {e:#}");
@@ -773,8 +1097,8 @@ impl Actor {
     async fn apply_reload(&mut self) {
         let new_chapter = self.new_chapter_after_turn;
         self.release_session().await;
-        if new_chapter {
-            next_chapter(&self.hub, &self.id, "folder changed");
+        if let Some(reason) = new_chapter {
+            next_chapter(&self.hub, &self.id, reason);
         }
     }
 
@@ -785,9 +1109,11 @@ impl Actor {
         if let Some(s) = self.session.take() {
             s.shutdown().await;
         }
+        self.agent_token = None;
         self.output = None;
+        self.session_kind = None;
         self.reload_after_turn = false;
-        self.new_chapter_after_turn = false;
+        self.new_chapter_after_turn = None;
         self.expire_pending();
     }
 
@@ -816,8 +1142,8 @@ impl Actor {
         }
     }
 
-    /// Start a turn for `msg` on the session, spawning it if needed.
-    async fn start_turn(&mut self, msg: Inbound) -> Result<()> {
+    /// Start a turn for `msg` on the session, spawning it if needed. `echoed`: the message is already in the thread.
+    async fn start_turn(&mut self, msg: Inbound, echoed: bool) -> Result<()> {
         if let Err(e) = self.ensure_session().await {
             let message = format!("could not start the agent: {e:#}");
             self.hub.emit(
@@ -828,6 +1154,12 @@ impl Actor {
             );
             self.set_status(AgentStatus::Error, Some(message));
             return Err(e);
+        }
+        let retry = std::mem::take(&mut self.next_turn_is_retry);
+        self.turn_retry = retry;
+        self.turn_limit = false;
+        if !retry && msg.source != Source::System {
+            self.last_message = Some(msg.clone());
         }
         let turn_id = new_id();
         self.turn = Some(turn_id.clone());
@@ -842,16 +1174,11 @@ impl Actor {
                 source: msg.source,
             },
         );
-        self.hub.emit(
-            &self.id,
-            EventBody::MessageUser {
-                text: msg.text.clone(),
-                source: msg.source,
-                from_agent: msg.from_agent.clone(),
-            },
-        );
+        if !retry && !echoed {
+            self.echo(&msg);
+        }
         self.set_status(AgentStatus::Working, None);
-        let dirs = if msg.source == Source::System {
+        let dirs = if msg.source == Source::System || retry {
             None
         } else {
             self.checkpoint_dirs()
@@ -897,6 +1224,8 @@ impl Actor {
                 cost_usd,
                 ..
             }) => {
+                let limited = std::mem::take(&mut self.turn_limit);
+                let retry = self.turn_retry;
                 let turn_id = self.turn.take().unwrap_or_else(new_id);
                 self.hub.emit(
                     &self.id,
@@ -916,6 +1245,10 @@ impl Actor {
                     self.after_turn().await;
                     return;
                 }
+                // Out of usage: another runtime takes the message, once per message.
+                if limited && status == TurnStatus::Error && !retry && self.switch_on_limit().await {
+                    return;
+                }
                 // A chapter over budget closes when the next message comes (see `pump`).
                 if self.reload_after_turn && !self.chapter_pending() {
                     self.apply_reload().await;
@@ -923,6 +1256,9 @@ impl Actor {
                 self.after_turn().await;
             }
             RuntimeOutput::Event(body) => {
+                if self.turn.is_some() && self.marks_limit(&body) {
+                    self.turn_limit = true;
+                }
                 let body = self.redactor.redact_event(body);
                 self.hub.emit(&self.id, body);
             }
@@ -941,6 +1277,7 @@ impl Actor {
             RuntimeOutput::Exited { code, stderr_tail } => {
                 let stderr_tail = self.redactor.redact(&stderr_tail).into_owned();
                 self.session = None;
+                self.agent_token = None;
                 let failed = code != Some(0);
                 let detail = if failed {
                     let tail: Vec<&str> = stderr_tail.lines().rev().take(5).collect();
@@ -971,8 +1308,8 @@ impl Actor {
                 }
                 // The next session starts with the current settings anyway; a folder change still starts a chapter.
                 self.reload_after_turn = false;
-                if std::mem::take(&mut self.new_chapter_after_turn) {
-                    next_chapter(&self.hub, &self.id, "folder changed");
+                if let Some(reason) = self.new_chapter_after_turn.take() {
+                    next_chapter(&self.hub, &self.id, reason);
                 }
                 if failed {
                     self.set_status(AgentStatus::Error, detail);
@@ -985,8 +1322,114 @@ impl Actor {
         }
     }
 
+    /// Whether a runtime output says that the running session's usage is used up: an error
+    /// message of the runtime, or a usage window reported full.
+    fn marks_limit(&self, body: &EventBody) -> bool {
+        let Some(kind) = self.session_kind else {
+            return false;
+        };
+        match body {
+            EventBody::Error { message } => limit::error_marks_limit(kind, message),
+            EventBody::UsageLimits { runtime, windows } => {
+                runtime == kind.as_str() && windows.iter().any(limit::window_full)
+            }
+            _ => false,
+        }
+    }
+
+    /// The usage cache entry of `kind`, as the runtime last reported it.
+    fn usage_of(&self, kind: RuntimeKind) -> Option<UsageEntry> {
+        match self.hub.store.usage_list() {
+            Ok(list) => list.into_iter().find(|e| e.runtime == kind.as_str()),
+            Err(e) => {
+                tracing::warn!(agent = self.id, "read usage: {e:#}");
+                None
+            }
+        }
+    }
+
+    /// Whether `kind` can take a message now: no usage window blocks it.
+    fn runtime_free(&self, kind: RuntimeKind, now_ms: i64) -> bool {
+        self.usage_of(kind)
+            .is_none_or(|e| !limit::blocked(&e.windows, e.updated_at, now_ms))
+    }
+
+    /// The running turn ended because its runtime is out of usage. When the other runtime
+    /// (the fallback, or the primary one) is free, switch to it and repeat the last message
+    /// there. Returns `true` when the switch was made and the retry turn was started (or
+    /// failed to start, with its error shown); `false` leaves the turn as a plain error.
+    async fn switch_on_limit(&mut self) -> bool {
+        let Ok(agent) = self.agent() else {
+            return false;
+        };
+        let Some(current) = self.session_kind else {
+            return false;
+        };
+        let Some(target) = other_runtime(&agent, current) else {
+            return false;
+        };
+        let now = now_ms();
+        if self.runtimes.get(target).is_none() || !self.runtime_free(target, now) {
+            tracing::info!(agent = self.id, "no runtime to switch to from {}", current.as_str());
+            return false;
+        }
+        let Some(msg) = self.last_message.clone() else {
+            return false;
+        };
+        // The runtime we leave is recorded as used up, so the primary one waits for its reset
+        // (or for a recheck, when the reset time is unknown).
+        self.mark_exhausted(current, now);
+        let until = self
+            .usage_of(current)
+            .and_then(|e| limit::blocked_until(&e.windows, e.updated_at, now));
+        self.switch_runtime(&agent, current, target, until).await;
+        self.next_turn_is_retry = true;
+        if let Err(e) = self.start_turn(msg, false).await {
+            tracing::warn!(agent = self.id, "retry on {}: {e:#}", target.as_str());
+        }
+        true
+    }
+
+    /// Records that `kind` is out of usage, when its cache does not say so yet.
+    fn mark_exhausted(&self, kind: RuntimeKind, now: i64) {
+        let entry = self.usage_of(kind);
+        let (mut windows, reported_at) = match entry {
+            Some(e) if limit::blocked(&e.windows, e.updated_at, now) => return,
+            Some(e) => (e.windows, now),
+            None => (Vec::new(), now),
+        };
+        windows.push(LimitWindow {
+            name: "limit".into(),
+            utilization: 1.0,
+            resets_at: None,
+        });
+        if let Err(e) = self.hub.store.usage_set(kind.as_str(), &windows, reported_at) {
+            tracing::warn!(agent = self.id, "record the limit of {}: {e:#}", kind.as_str());
+        }
+    }
+
+    /// Makes `to` the agent's runtime for the next session and starts a new chapter, which
+    /// has no CLI session to resume. The memory carries over in the agent's files.
+    async fn switch_runtime(&mut self, agent: &Agent, from: RuntimeKind, to: RuntimeKind, until: Option<i64>) {
+        self.release_session().await;
+        let active = (to != agent.runtime).then_some(to);
+        if let Err(e) = self.hub.store.agent_set_active_runtime(&self.id, active) {
+            tracing::warn!(agent = self.id, "set the active runtime: {e:#}");
+        }
+        self.hub.emit(
+            &self.id,
+            EventBody::RuntimeSwitched {
+                from: from.as_str().to_string(),
+                to: to.as_str().to_string(),
+                until,
+            },
+        );
+        next_chapter(&self.hub, &self.id, "runtime switched");
+    }
+
     async fn after_turn(&mut self) {
-        if self.queue.is_empty() {
+        // A paused agent holds its queue: it is idle until the pause ends.
+        if self.queue.is_empty() || self.is_paused() {
             self.set_status(AgentStatus::Idle, None);
         } else if let Err(e) = self.pump().await {
             tracing::warn!(agent = self.id, "next message: {e:#}");
@@ -1052,7 +1495,7 @@ impl Actor {
         // The agent's own folders: its working folder, and its home when it has one.
         let mut roots = vec![agent.cwd.as_str()];
         roots.extend(agent.home_dir.as_deref());
-        let verdict = policy::evaluate(agent.approval_mode, &req, &roots, &rules);
+        let verdict = policy::guarded(|| policy::evaluate(agent.approval_mode, &req, &roots, &rules, &self.protected));
         let subject = req.command.clone().unwrap_or_else(|| req.title.clone());
         match verdict {
             Verdict::Allow => match self.session.as_mut() {
@@ -1083,12 +1526,41 @@ impl Actor {
                     PendingApproval {
                         key: req.key.clone(),
                         subject,
+                        external: None,
                     },
                 );
                 self.set_status(AgentStatus::NeedsYou, None);
                 Ok(())
             }
         }
+    }
+
+    /// Record a daemon-asked approval. Its answer channel waits in `pending`, and it shows in the feed
+    /// like a policy `Ask`. Returns the approval id and the receiver for the answer.
+    fn ask_external(&mut self, spec: ApprovalSpec) -> Result<(String, oneshot::Receiver<Decision>)> {
+        let mut req = ApprovalRequest {
+            key: new_id(),
+            call_id: new_id(),
+            tool: spec.tool,
+            title: spec.title,
+            command: spec.command,
+            diff: None,
+            paths: Vec::new(),
+            input: spec.input,
+        };
+        self.redactor.redact_approval(&mut req);
+        let approval_id = self.record(&req, &spec.reason)?;
+        let (answer, received) = oneshot::channel();
+        self.pending.insert(
+            approval_id.clone(),
+            PendingApproval {
+                key: req.key,
+                subject: String::new(),
+                external: Some(answer),
+            },
+        );
+        self.set_status(AgentStatus::NeedsYou, None);
+        Ok((approval_id, received))
     }
 
     /// Store an approval and emit `approval.requested`. Returns its id.
@@ -1159,6 +1631,7 @@ impl Actor {
         if let Some(s) = self.session.take() {
             s.shutdown().await;
         }
+        self.agent_token = None;
         self.output = None;
         if self.turn.is_some() {
             self.end_turn(TurnStatus::Interrupted, None);
@@ -1309,6 +1782,8 @@ mod tests {
                 effort: None,
                 memory_mode: crate::store::MemoryMode::Smart,
                 context_budget: None,
+                fallback_runtime: None,
+                fallback_model: None,
             })
             .unwrap();
         attach(store, agent.id)
@@ -1524,6 +1999,89 @@ mod tests {
         assert_eq!(w.spawns.lock().unwrap().len(), 1, "one session for both turns");
     }
 
+    fn user_texts(w: &World) -> Vec<String> {
+        w.store
+            .events_since(0, 1000, Some(&w.agent))
+            .unwrap()
+            .into_iter()
+            .filter_map(|e| match e.body {
+                EventBody::MessageUser { text, .. } => Some(text),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn paused_agent_keeps_messages_in_the_thread_and_starts_no_session() {
+        let w = world(ApprovalMode::Risky);
+        assert!(w.sup.set_paused(&w.agent, true).await.unwrap());
+        assert!(w.store.agent_get(&w.agent).unwrap().unwrap().paused);
+
+        assert!(w.sup.send_held(&w.agent, Inbound::user("held")).await.unwrap());
+        assert!(w.sup.send_held(&w.agent, Inbound::user("also held")).await.unwrap());
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        assert_eq!(user_texts(&w), vec!["held", "also held"]);
+        assert!(w.spawns.lock().unwrap().is_empty(), "no session starts while paused");
+        assert!(w.log.lock().unwrap().is_empty());
+        let turns = w
+            .store
+            .events_since(0, 1000, Some(&w.agent))
+            .unwrap()
+            .into_iter()
+            .filter(|e| matches!(e.body, EventBody::TurnStarted { .. }))
+            .count();
+        assert_eq!(turns, 0);
+    }
+
+    #[tokio::test]
+    async fn resuming_starts_the_held_messages_in_order_and_echoes_each_once() {
+        let w = world(ApprovalMode::Risky);
+        w.sup.set_paused(&w.agent, true).await.unwrap();
+        w.sup.send(&w.agent, Inbound::user("first")).await.unwrap();
+        w.sup.send(&w.agent, Inbound::user("second")).await.unwrap();
+
+        assert!(w.sup.set_paused(&w.agent, false).await.unwrap());
+        w.wait_log("send first").await;
+        w.push(done()).await;
+        w.wait_log("send second").await;
+
+        assert_eq!(user_texts(&w), vec!["first", "second"]);
+        assert_eq!(w.spawns.lock().unwrap().len(), 1, "one session for both turns");
+    }
+
+    #[tokio::test]
+    async fn a_message_queued_before_the_pause_waits_without_a_second_echo() {
+        let w = world(ApprovalMode::Risky);
+        w.sup.send(&w.agent, Inbound::user("running")).await.unwrap();
+        w.wait_log("send running").await;
+        // Queued while the first turn runs: not in the thread yet.
+        assert!(!w.sup.send_held(&w.agent, Inbound::user("queued")).await.unwrap());
+        assert_eq!(user_texts(&w), vec!["running"]);
+
+        // Pausing interrupts the turn; the queued message stays where it is.
+        assert!(w.sup.set_paused(&w.agent, true).await.unwrap());
+        w.wait_log("interrupt").await;
+        w.push(done()).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert!(!w.log.lock().unwrap().iter().any(|l| l == "send queued"));
+        assert!(w.store.agent_get(&w.agent).unwrap().unwrap().paused);
+
+        assert!(w.sup.set_paused(&w.agent, false).await.unwrap());
+        w.wait_log("send queued").await;
+        assert_eq!(user_texts(&w), vec!["running", "queued"]);
+    }
+
+    #[tokio::test]
+    async fn set_paused_reports_only_real_changes() {
+        let w = world(ApprovalMode::Risky);
+        assert!(!w.sup.set_paused(&w.agent, false).await.unwrap());
+        assert!(w.sup.set_paused(&w.agent, true).await.unwrap());
+        assert!(!w.sup.set_paused(&w.agent, true).await.unwrap());
+        assert!(w.sup.set_paused(&w.agent, false).await.unwrap());
+        assert!(!w.sup.set_paused("no-such-agent", true).await.unwrap());
+    }
+
     #[tokio::test]
     async fn risky_command_waits_for_the_human() {
         let mut w = world(ApprovalMode::Risky);
@@ -1545,7 +2103,7 @@ mod tests {
         else {
             unreachable!()
         };
-        assert_eq!(reason, "risky: git push*");
+        assert_eq!(reason, "risky: git push");
         assert_eq!(command.as_deref(), Some("git push origin main"));
         w.wait(is_status(AgentStatus::NeedsYou)).await;
         assert_eq!(w.store.approval_list_pending(None).unwrap().len(), 1);
@@ -1697,6 +2255,8 @@ mod tests {
                 effort: None,
                 memory_mode: crate::store::MemoryMode::Smart,
                 context_budget: None,
+                fallback_runtime: None,
+                fallback_model: None,
             })
             .unwrap()
             .id
@@ -1714,6 +2274,7 @@ mod tests {
             text,
             source,
             from_agent,
+            ..
         } = e.body
         else {
             unreachable!()
@@ -1757,6 +2318,7 @@ mod tests {
                 text: "use ••••OPENAI_API_KEY now".into(),
                 source: Source::Crew,
                 from_agent: Some("Forge".into()),
+                command: None,
             }
         );
 
@@ -1833,6 +2395,8 @@ mod tests {
             from_agent: Some("Scout".into()),
             hops: MAX_CREW_HOPS,
             chain: Some("chain-1".into()),
+            typed: None,
+            command: None,
         };
         w.sup.send(&w.agent, msg).await.unwrap();
         w.wait_log("send hi").await;
@@ -1925,6 +2489,8 @@ mod tests {
             from_agent: Some("Scout".into()),
             hops: 1,
             chain: Some("spent".into()),
+            typed: None,
+            command: None,
         };
         w.sup.send(&w.agent, msg).await.unwrap();
         w.wait_log("send hi").await;
@@ -1974,6 +2540,8 @@ mod tests {
                 effort: None,
                 memory_mode: crate::store::MemoryMode::Smart,
                 context_budget: None,
+                fallback_runtime: None,
+                fallback_model: None,
             })
             .unwrap();
         let err = w.sup.send(&codex.id, Inbound::user("x")).await.unwrap_err();
@@ -2209,7 +2777,7 @@ mod tests {
         w.push(done()).await;
         w.wait(is_status(AgentStatus::Idle)).await;
 
-        w.sup.reload(&w.agent, false).await;
+        w.sup.reload(&w.agent, None).await;
         assert!(w.log.lock().unwrap().iter().any(|l| l == "shutdown"));
         let a = w.store.agent_get(&w.agent).unwrap().unwrap();
         assert_eq!(a.runtime_session_id.as_deref(), Some("sess-1"), "the chapter goes on");
@@ -2228,8 +2796,8 @@ mod tests {
         w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
         w.wait_log("send go").await;
         w.push(RuntimeOutput::SessionId("sess-1".into())).await;
-        w.sup.reload(&w.agent, false).await;
-        w.sup.reload(&w.agent, false).await;
+        w.sup.reload(&w.agent, None).await;
+        w.sup.reload(&w.agent, None).await;
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert!(
             !w.log.lock().unwrap().iter().any(|l| l == "shutdown"),
@@ -2255,7 +2823,7 @@ mod tests {
         w.wait(is_status(AgentStatus::Idle)).await;
 
         // over budget and idle: the wrap-up still runs before the next message
-        w.sup.reload(&w.agent, false).await;
+        w.sup.reload(&w.agent, None).await;
         assert!(!w.log.lock().unwrap().iter().any(|l| l == "shutdown"));
         w.sup.send(&w.agent, Inbound::user("next")).await.unwrap();
         w.wait_log(&format!("send {WRAP_UP}")).await;
@@ -2269,8 +2837,8 @@ mod tests {
     #[tokio::test]
     async fn reload_without_an_actor_does_nothing() {
         let w = world(ApprovalMode::Risky);
-        w.sup.reload(&w.agent, false).await;
-        w.sup.reload("nobody", false).await;
+        w.sup.reload(&w.agent, None).await;
+        w.sup.reload("nobody", None).await;
         assert!(w.spawns.lock().unwrap().is_empty(), "no session was started");
         assert!(w.log.lock().unwrap().is_empty());
     }
@@ -2411,7 +2979,7 @@ mod tests {
         w.push(done()).await;
         w.wait(is_status(AgentStatus::Idle)).await;
 
-        w.sup.reload(&w.agent, true).await;
+        w.sup.reload(&w.agent, Some("folder changed")).await;
         assert!(w.log.lock().unwrap().iter().any(|l| l == "shutdown"));
         let (chapter, reason, _) = rotated(&mut w).await;
         assert_eq!((chapter, reason.as_str()), (2, "folder changed"));
@@ -2429,7 +2997,7 @@ mod tests {
         w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
         w.wait_log("send go").await;
         w.push(RuntimeOutput::SessionId("sess-1".into())).await;
-        w.sup.reload(&w.agent, true).await;
+        w.sup.reload(&w.agent, Some("folder changed")).await;
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert!(
             !w.log.lock().unwrap().iter().any(|l| l == "shutdown"),
@@ -2450,7 +3018,7 @@ mod tests {
         w.wait_log("send go").await;
         w.push(approval("k1", "ls")).await;
         w.wait(|b| matches!(b, EventBody::ApprovalRequested { .. })).await;
-        w.sup.reload(&w.agent, false).await;
+        w.sup.reload(&w.agent, None).await;
         w.push(done()).await;
         w.wait_log("shutdown").await;
         assert!(w.store.approval_list_pending(None).unwrap().is_empty());
@@ -2511,6 +3079,8 @@ mod tests {
                 effort: None,
                 memory_mode: crate::store::MemoryMode::Smart,
                 context_budget: None,
+                fallback_runtime: None,
+                fallback_model: None,
             })
             .unwrap();
         store.agent_set_home(&agent.id, &home.display().to_string()).unwrap();
@@ -2584,11 +3154,543 @@ mod tests {
             from_agent: None,
             hops: 0,
             chain: None,
+            typed: None,
+            command: None,
         };
         w.sup.send(&w.agent, wrap_up).await.unwrap();
         w.wait_log("send wrap up").await;
         w.push(done()).await;
         w.wait(|b| matches!(b, EventBody::TurnCompleted { .. })).await;
         assert!(w.store.checkpoint_list(&w.agent, 10).unwrap().is_empty());
+    }
+
+    fn external_spec() -> ApprovalSpec {
+        ApprovalSpec {
+            tool: "browser_click".into(),
+            title: "Нажать «Оплатить» на shop.example".into(),
+            command: Some("https://shop.example/cart".into()),
+            reason: "browser: risky click".into(),
+            input: json!({"name": "Оплатить"}),
+        }
+    }
+
+    #[tokio::test]
+    async fn external_ask_is_denied_when_the_agent_stops_while_it_waits() {
+        let mut w = world(ApprovalMode::Risky);
+        let (sup, agent) = (w.sup.clone(), w.agent.clone());
+        let asking =
+            tokio::spawn(async move { sup.ask_external(&agent, external_spec(), Duration::from_secs(30)).await });
+        w.wait(|b| matches!(b, EventBody::ApprovalRequested { .. })).await;
+        w.sup.stop(&w.agent).await;
+        assert_eq!(asking.await.unwrap().unwrap(), Decision::Deny);
+        assert!(w.store.approval_list_pending(None).unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn external_ask_never_creates_a_remember_rule() {
+        let mut w = world(ApprovalMode::Risky);
+        let (sup, agent) = (w.sup.clone(), w.agent.clone());
+        let asking =
+            tokio::spawn(async move { sup.ask_external(&agent, external_spec(), Duration::from_secs(5)).await });
+        let e = w.wait(|b| matches!(b, EventBody::ApprovalRequested { .. })).await;
+        let EventBody::ApprovalRequested { approval_id, .. } = e.body else {
+            unreachable!()
+        };
+        w.sup.resolve(&approval_id, Decision::Allow, true).await.unwrap();
+        assert_eq!(asking.await.unwrap().unwrap(), Decision::Allow);
+        assert!(w.store.rule_list(Some(&w.agent)).unwrap().is_empty());
+    }
+
+    // ---- Fallback subscription -------------------------------------------------------
+
+    use crate::event::LimitWindow;
+
+    /// A mock reporting another runtime kind (the fallback). It shares the output map of the Claude mock.
+    struct AsKind(MockRuntime, RuntimeKind);
+
+    #[async_trait::async_trait]
+    impl Runtime for AsKind {
+        fn kind(&self) -> RuntimeKind {
+            self.1
+        }
+        async fn status(&self) -> crate::runtime::RuntimeStatus {
+            crate::runtime::RuntimeStatus {
+                kind: self.1,
+                installed: true,
+                version: None,
+                logged_in: None,
+                detail: None,
+            }
+        }
+        async fn spawn(&self, cfg: SpawnConfig) -> Result<crate::runtime::Spawned> {
+            self.0.spawn(cfg).await
+        }
+    }
+
+    /// A world whose agent runs on Claude with `fallback`. The Codex mock is in the runtimes only if
+    /// `codex_available`. Returns the world and the log of the Codex mock.
+    fn fallback_world(fallback: Option<RuntimeKind>, codex_available: bool) -> (World, Log) {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let agent = store
+            .agent_create(NewAgent {
+                name: "Forge".into(),
+                role: "builder".into(),
+                runtime: RuntimeKind::Claude,
+                model: None,
+                cwd: "/home/u/app".into(),
+                approval_mode: ApprovalMode::Never,
+                system_prompt: None,
+                effort: None,
+                memory_mode: crate::store::MemoryMode::Smart,
+                context_budget: None,
+                fallback_runtime: fallback,
+                fallback_model: None,
+            })
+            .unwrap();
+        let hub = Hub::new(store.clone());
+        let events = hub.subscribe();
+        let log: Log = Arc::default();
+        let codex_log: Log = Arc::default();
+        let out: Outs = Arc::default();
+        let spawns = Arc::new(Mutex::new(Vec::new()));
+        let mut rts = Runtimes::default();
+        rts.insert(Arc::new(MockRuntime {
+            log: log.clone(),
+            out: out.clone(),
+            spawns: spawns.clone(),
+        }));
+        if codex_available {
+            rts.insert(Arc::new(AsKind(
+                MockRuntime {
+                    log: codex_log.clone(),
+                    out: out.clone(),
+                    spawns: spawns.clone(),
+                },
+                RuntimeKind::Codex,
+            )));
+        }
+        let world = World {
+            sup: Supervisor::new(hub, rts, None),
+            store,
+            log,
+            out,
+            spawns,
+            events,
+            agent: agent.id,
+        };
+        (world, codex_log)
+    }
+
+    /// The Claude turn ends with the usage limit's error.
+    fn limit_error() -> RuntimeOutput {
+        RuntimeOutput::Event(EventBody::Error {
+            message: "Claude AI usage limit reached|1791543600".into(),
+        })
+    }
+
+    fn turn_failed() -> RuntimeOutput {
+        RuntimeOutput::Event(EventBody::TurnCompleted {
+            turn_id: String::new(),
+            status: TurnStatus::Error,
+            usage: None,
+            cost_usd: None,
+        })
+    }
+
+    fn full_window(resets_at: Option<i64>) -> LimitWindow {
+        LimitWindow {
+            name: "five_hour".into(),
+            utilization: 1.0,
+            resets_at,
+        }
+    }
+
+    async fn wait_in(log: &Log, line: &str) {
+        for _ in 0..300 {
+            if log.lock().unwrap().iter().any(|l| l == line) {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        panic!("log never had {line:?}: {:?}", log.lock().unwrap());
+    }
+
+    fn switch_count(w: &World) -> usize {
+        w.kinds().iter().filter(|k| *k == "runtime.switched").count()
+    }
+
+    #[tokio::test]
+    async fn a_limit_error_switches_to_the_fallback_and_repeats_the_message() {
+        let (mut w, codex_log) = fallback_world(Some(RuntimeKind::Codex), true);
+        w.sup.send(&w.agent, Inbound::user("fix the build")).await.unwrap();
+        w.wait_log("send fix the build").await;
+        w.push(limit_error()).await;
+        w.push(turn_failed()).await;
+
+        let switched = w.wait(|b| matches!(b, EventBody::RuntimeSwitched { .. })).await;
+        assert_eq!(
+            switched.body,
+            EventBody::RuntimeSwitched {
+                from: "claude".into(),
+                to: "codex".into(),
+                until: None,
+            }
+        );
+        wait_in(&codex_log, "send fix the build").await;
+        let agent = w.store.agent_get(&w.agent).unwrap().unwrap();
+        assert_eq!(agent.active_runtime, Some(RuntimeKind::Codex));
+        assert_eq!(agent.chapter, 2, "the fallback starts a new chapter");
+        assert!(
+            agent.runtime_session_id.is_none(),
+            "the Claude session id is not reused"
+        );
+        // The message is in the thread once: the retry does not echo it.
+        assert_eq!(w.kinds().iter().filter(|k| *k == "message.user").count(), 1);
+
+        w.push(done()).await;
+        w.wait(|b| {
+            matches!(
+                b,
+                EventBody::TurnCompleted {
+                    status: TurnStatus::Ok,
+                    ..
+                }
+            )
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn a_fallback_that_is_also_out_of_usage_is_not_used() {
+        let (mut w, codex_log) = fallback_world(Some(RuntimeKind::Codex), true);
+        let now = now_ms();
+        w.store
+            .usage_set("codex", &[full_window(Some(now / 1000 + 3600))], now)
+            .unwrap();
+        w.sup.send(&w.agent, Inbound::user("fix")).await.unwrap();
+        w.wait_log("send fix").await;
+        w.push(limit_error()).await;
+        w.push(turn_failed()).await;
+        w.wait(|b| matches!(b, EventBody::TurnCompleted { .. })).await;
+
+        assert_eq!(switch_count(&w), 0);
+        assert!(codex_log.lock().unwrap().is_empty());
+        let agent = w.store.agent_get(&w.agent).unwrap().unwrap();
+        assert_eq!(agent.active_runtime, None);
+        assert_eq!(agent.chapter, 1);
+    }
+
+    #[tokio::test]
+    async fn a_retry_that_hits_the_limit_again_is_a_plain_error() {
+        let (mut w, codex_log) = fallback_world(Some(RuntimeKind::Codex), true);
+        w.sup.send(&w.agent, Inbound::user("fix")).await.unwrap();
+        w.wait_log("send fix").await;
+        w.push(limit_error()).await;
+        w.push(turn_failed()).await;
+        w.wait(|b| matches!(b, EventBody::RuntimeSwitched { .. })).await;
+        wait_in(&codex_log, "send fix").await;
+
+        w.push(limit_error()).await;
+        w.push(turn_failed()).await;
+        w.wait(|b| matches!(b, EventBody::TurnCompleted { .. })).await;
+
+        assert_eq!(switch_count(&w), 1, "one switch per message");
+        assert_eq!(w.log.lock().unwrap().iter().filter(|l| *l == "send fix").count(), 1);
+        assert_eq!(codex_log.lock().unwrap().iter().filter(|l| *l == "send fix").count(), 1);
+    }
+
+    #[tokio::test]
+    async fn without_a_fallback_a_limit_error_is_a_plain_error() {
+        let (mut w, codex_log) = fallback_world(None, true);
+        w.sup.send(&w.agent, Inbound::user("fix")).await.unwrap();
+        w.wait_log("send fix").await;
+        w.push(limit_error()).await;
+        w.push(turn_failed()).await;
+        let ended = w.wait(|b| matches!(b, EventBody::TurnCompleted { .. })).await;
+        assert!(matches!(
+            ended.body,
+            EventBody::TurnCompleted {
+                status: TurnStatus::Error,
+                ..
+            }
+        ));
+        assert_eq!(switch_count(&w), 0);
+        assert!(codex_log.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_fallback_that_is_not_available_on_this_server_is_not_used() {
+        let (mut w, codex_log) = fallback_world(Some(RuntimeKind::Codex), false);
+        w.sup.send(&w.agent, Inbound::user("fix")).await.unwrap();
+        w.wait_log("send fix").await;
+        w.push(limit_error()).await;
+        w.push(turn_failed()).await;
+        w.wait(|b| matches!(b, EventBody::TurnCompleted { .. })).await;
+        assert_eq!(switch_count(&w), 0);
+        assert!(codex_log.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn the_primary_comes_back_once_its_window_has_reset() {
+        let (mut w, codex_log) = fallback_world(Some(RuntimeKind::Codex), true);
+        let now = now_ms();
+        w.store
+            .agent_set_active_runtime(&w.agent, Some(RuntimeKind::Codex))
+            .unwrap();
+        w.store
+            .usage_set("claude", &[full_window(Some(now / 1000 - 10))], now - 3_600_000)
+            .unwrap();
+
+        w.sup.send(&w.agent, Inbound::user("again")).await.unwrap();
+        let switched = w.wait(|b| matches!(b, EventBody::RuntimeSwitched { .. })).await;
+        assert_eq!(
+            switched.body,
+            EventBody::RuntimeSwitched {
+                from: "codex".into(),
+                to: "claude".into(),
+                until: None,
+            }
+        );
+        w.wait_log("send again").await;
+        assert!(codex_log.lock().unwrap().is_empty());
+        let agent = w.store.agent_get(&w.agent).unwrap().unwrap();
+        assert_eq!(agent.active_runtime, None);
+    }
+
+    #[tokio::test]
+    async fn the_fallback_stays_while_the_primary_window_is_still_full() {
+        let (w, codex_log) = fallback_world(Some(RuntimeKind::Codex), true);
+        let now = now_ms();
+        w.store
+            .agent_set_active_runtime(&w.agent, Some(RuntimeKind::Codex))
+            .unwrap();
+        w.store
+            .usage_set("claude", &[full_window(Some(now / 1000 + 3600))], now)
+            .unwrap();
+
+        w.sup.send(&w.agent, Inbound::user("again")).await.unwrap();
+        wait_in(&codex_log, "send again").await;
+        assert_eq!(switch_count(&w), 0);
+        assert!(w.log.lock().unwrap().is_empty());
+    }
+}
+
+#[cfg(test)]
+mod workspace_tests {
+    use super::testing::MockRuntime;
+    use super::*;
+    use crate::store::{ApprovalMode, MemoryMode, Network, NewAgent, NewWorkspace, Store, WorkspaceKind};
+    use crate::workspace::testing::fake_docker;
+    use crate::workspace::{WorkspaceManager, WorkspaceSpec};
+    use std::time::Duration;
+
+    fn rig(store: Arc<Store>, manager: Arc<WorkspaceManager>) -> (Arc<Supervisor>, Arc<Mutex<Vec<SpawnConfig>>>) {
+        let spawns = Arc::new(Mutex::new(Vec::new()));
+        let mut rts = Runtimes::default();
+        rts.insert(Arc::new(MockRuntime {
+            log: Arc::default(),
+            out: Arc::default(),
+            spawns: spawns.clone(),
+        }));
+        let hub = Hub::new(store);
+        (Supervisor::new_with_workspaces(hub, rts, None, manager), spawns)
+    }
+
+    fn agent(store: &Store, name: &str, workspace: &str) -> String {
+        store
+            .agent_create_in(
+                NewAgent {
+                    name: name.into(),
+                    role: String::new(),
+                    runtime: RuntimeKind::Claude,
+                    model: None,
+                    cwd: std::env::temp_dir().display().to_string(),
+                    approval_mode: ApprovalMode::Never,
+                    system_prompt: None,
+                    effort: None,
+                    memory_mode: MemoryMode::Smart,
+                    context_budget: None,
+                    fallback_runtime: None,
+                    fallback_model: None,
+                },
+                workspace,
+            )
+            .unwrap()
+            .id
+    }
+
+    async fn first_spawn(spawns: &Arc<Mutex<Vec<SpawnConfig>>>) -> SpawnConfig {
+        for _ in 0..100 {
+            if let Some(cfg) = spawns.lock().unwrap().first().cloned() {
+                return cfg;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        panic!("no session was spawned");
+    }
+
+    fn scratch_manager() -> Arc<WorkspaceManager> {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().to_path_buf();
+        std::mem::forget(dir);
+        WorkspaceManager::new(PathBuf::from("/nonexistent/bandito-docker"), path.join("build"))
+    }
+
+    #[tokio::test]
+    async fn a_shared_agent_gets_the_shared_spec_and_its_mcp_server() {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let id = agent(&store, "Forge", "shared");
+        let (sup, spawns) = rig(store, scratch_manager());
+        sup.send(&id, Inbound::user("go")).await.unwrap();
+        let cfg = first_spawn(&spawns).await;
+        assert_eq!(cfg.workspace, Some(WorkspaceSpec::Shared));
+    }
+
+    #[tokio::test]
+    async fn a_session_gets_its_own_token_and_loses_it_when_it_ends() {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let id = agent(&store, "Forge", "shared");
+        let (sup, spawns) = rig(store, scratch_manager());
+        sup.send(&id, Inbound::user("go")).await.unwrap();
+        let cfg = first_spawn(&spawns).await;
+        let token = cfg.agent_token.clone().expect("a session gets a token");
+        assert!(token.starts_with("bat_"), "{token}");
+        assert_eq!(sup.agent_tokens().agent_for(&token), Some(id.clone()));
+        sup.stop(&id).await;
+        assert_eq!(sup.agent_tokens().agent_for(&token), None);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_container_agent_starts_its_container_and_runs_inside_it() {
+        let fake = fake_docker(None);
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let box_ws = store
+            .workspace_create(NewWorkspace {
+                name: "Box".into(),
+                kind: WorkspaceKind::Container,
+                image: Some("img:1".into()),
+                cpus: None,
+                memory_mb: None,
+                network: Network::Internet,
+                mounts: Vec::new(),
+            })
+            .unwrap();
+        let id = agent(&store, "Scout", &box_ws.id);
+        let manager = WorkspaceManager::new(fake.docker.clone(), fake.dir.path().join("build"));
+        let (sup, spawns) = rig(store, manager);
+        sup.send(&id, Inbound::user("go")).await.unwrap();
+
+        let cfg = first_spawn(&spawns).await;
+        let name = format!("bandito-ws-{}", box_ws.id);
+        assert_eq!(
+            cfg.workspace,
+            Some(WorkspaceSpec::Container {
+                name: name.clone(),
+                docker: fake.docker.clone(),
+            })
+        );
+        assert!(
+            cfg.mcp.is_none(),
+            "a container cannot reach the daemon socket, so no crew server"
+        );
+        let cwd = std::env::temp_dir().display().to_string();
+        let log = fake.calls();
+        let run = log
+            .iter()
+            .find(|l| l.starts_with(&format!("run -d --name {name} ")))
+            .unwrap_or_else(|| panic!("container created: {log:?}"));
+        assert!(
+            run.contains(&format!("source={cwd},target={cwd}")),
+            "the agent's folder is mounted: {run}"
+        );
+    }
+    /// A mock that reports another runtime kind, as the fallback runtime does.
+    struct OtherKind {
+        kind: RuntimeKind,
+        inner: MockRuntime,
+    }
+
+    #[async_trait::async_trait]
+    impl Runtime for OtherKind {
+        fn kind(&self) -> RuntimeKind {
+            self.kind
+        }
+        async fn status(&self) -> crate::runtime::RuntimeStatus {
+            crate::runtime::RuntimeStatus {
+                kind: self.kind,
+                installed: true,
+                version: None,
+                logged_in: None,
+                detail: None,
+            }
+        }
+        async fn spawn(&self, cfg: SpawnConfig) -> Result<crate::runtime::Spawned> {
+            self.inner.spawn(cfg).await
+        }
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_fallback_runtime_runs_in_the_agents_container_too() {
+        let fake = fake_docker(None);
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let box_ws = store
+            .workspace_create(NewWorkspace {
+                name: "Box".into(),
+                kind: WorkspaceKind::Container,
+                image: Some("img:1".into()),
+                cpus: None,
+                memory_mb: None,
+                network: Network::Internet,
+                mounts: Vec::new(),
+            })
+            .unwrap();
+        let id = agent(&store, "Scout", &box_ws.id);
+        // The agent has switched to its fallback (Codex) after a limit error on Claude.
+        store.agent_set_active_runtime(&id, Some(RuntimeKind::Codex)).unwrap();
+
+        let spawns = Arc::new(Mutex::new(Vec::new()));
+        let mut rts = Runtimes::default();
+        rts.insert(Arc::new(OtherKind {
+            kind: RuntimeKind::Codex,
+            inner: MockRuntime {
+                log: Arc::default(),
+                out: Arc::default(),
+                spawns: spawns.clone(),
+            },
+        }));
+        let manager = WorkspaceManager::new(fake.docker.clone(), fake.dir.path().join("build"));
+        let sup = Supervisor::new_with_workspaces(Hub::new(store.clone()), rts, None, manager);
+        sup.send(&id, Inbound::user("go")).await.unwrap();
+
+        let cfg = first_spawn(&spawns).await;
+        assert_eq!(
+            cfg.workspace,
+            Some(WorkspaceSpec::Container {
+                name: format!("bandito-ws-{}", box_ws.id),
+                docker: fake.docker.clone(),
+            })
+        );
+        assert!(
+            fake.calls()
+                .iter()
+                .any(|l| l.starts_with(&format!("run -d --name bandito-ws-{} ", box_ws.id))),
+            "the container is created for the fallback too"
+        );
+    }
+}
+
+#[cfg(test)]
+mod home_policy_tests {
+    use super::*;
+
+    #[test]
+    fn the_policy_protects_the_home_the_daemon_was_started_with() {
+        let store = Arc::new(crate::store::Store::open_in_memory().unwrap());
+        let home = std::path::Path::new("/srv/bandito-home");
+        let sup = Supervisor::new_in_home(Hub::new(store), Runtimes::default(), None, home);
+        assert_eq!(sup.protected.paths[0], PathBuf::from("/srv/bandito-home"));
+        assert!(sup.protected.words.iter().any(|w| w == "/srv/bandito-home"));
     }
 }
