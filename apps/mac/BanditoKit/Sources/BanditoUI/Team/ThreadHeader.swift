@@ -21,11 +21,17 @@ struct ThreadHeader: View {
     var onDetails: () -> Void = {}
 
     var body: some View {
-        ZStack {
-            capsule
-                .frame(maxWidth: .infinity)
+        // Centered when there is room; on a narrow window the capsule sits on the left and gives up its caption, and
+        // never runs under the buttons.
+        HStack(spacing: 10) {
+            Color.clear.frame(width: 0)
+            ViewThatFits(in: .horizontal) {
+                capsule(showsCaption: true)
+                capsule(showsCaption: false)
+            }
+            .frame(maxWidth: .infinity)
+            .layoutPriority(1)
             HStack(spacing: 6) {
-                Spacer()
                 if showsChanges {
                     changesButton
                 }
@@ -35,15 +41,16 @@ struct ThreadHeader: View {
                 iconButton("clock", help: L10n.Team.Header.schedules, action: onSchedules)
                 iconButton("sidebar.right", help: L10n.Inspector.toggleAria, action: onDetails)
             }
-            .padding(.trailing, 16)
+            .fixedSize()
         }
+        .padding(.horizontal, 16)
         .frame(height: 52)
         .overlay(alignment: .bottom) {
             Rectangle().fill(Color.Bandito.text.opacity(0.05)).frame(height: 1)
         }
     }
 
-    private var capsule: some View {
+    private func capsule(showsCaption: Bool) -> some View {
         HStack(spacing: 9) {
             AgentAvatar(
                 name: agent.name, size: 26,
@@ -51,7 +58,8 @@ struct ThreadHeader: View {
             Text(agent.name)
                 .font(BanditoFont.font(size: 13, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
-            if !caption.isEmpty {
+                .lineLimit(1)
+            if showsCaption, !caption.isEmpty {
                 Text(caption)
                     .font(BanditoFont.font(size: 11.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
@@ -61,6 +69,8 @@ struct ThreadHeader: View {
             Text(status.title)
                 .font(BanditoFont.font(size: 12, weight: 600))
                 .foregroundStyle(statusTint)
+                .lineLimit(1)
+                .fixedSize()
         }
         .padding(.leading, 6)
         .padding(.trailing, 14)

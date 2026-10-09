@@ -141,7 +141,11 @@ struct ServerOverview: View {
         let tx = stats?.netTxBps ?? 0
         let diskTotal = root?.total ?? 0
         let diskUsed = root?.used ?? 0
-        return HStack(alignment: .top, spacing: 12) {
+        // Four in a row on a wide page, two by two otherwise: a narrow card would cut its numbers.
+        return LazyVGrid(
+            columns: Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: isWide ? 4 : 2),
+            alignment: .leading, spacing: 12
+        ) {
             openable(.cpu) {
                 MetricTile(
                     label: L10n.Server.Tile.cpu,
