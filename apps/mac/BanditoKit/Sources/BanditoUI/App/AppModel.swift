@@ -207,9 +207,6 @@ public final class AppModel {
         {
             configs = saved
         }
-        if configs.isEmpty {
-            configs = [ServerConfig(name: Host.current().localizedName ?? "This Mac", endpoint: .defaultLocal)]
-        }
         servers = configs.map { c in
             var c = c
             c.token = Keychain.token(for: c.id)
