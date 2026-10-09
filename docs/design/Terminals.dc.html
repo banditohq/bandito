@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Bandito — терминалы сервера</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0B0A09}
+a{color:#FFB067}a:hover{color:#FFD2A0}
+button{font:inherit;cursor:pointer;transition:color .15s ease,box-shadow .2s ease,transform .12s ease,filter .15s ease}
+button:hover{filter:brightness(1.15)}
+button:active{transform:scale(.98)}
+@keyframes bnd-draw{from{stroke-dashoffset:140}to{stroke-dashoffset:0}}
+@keyframes bnd-line{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes bnd-dock{from{opacity:0;transform:translateY(18px) scale(.95)}to{opacity:1;transform:none}}
+@keyframes bnd-bar{from{transform:scaleX(.2)}to{transform:scaleX(1)}}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+@keyframes bnd-caret{0%,49%{opacity:1}50%,100%{opacity:0}}
+@keyframes bnd-pulse{0%{box-shadow:0 0 0 0 rgba(255,138,31,.55)}70%{box-shadow:0 0 0 6px rgba(255,138,31,0)}100%{box-shadow:0 0 0 0 rgba(255,138,31,0)}}
+@keyframes bnd-tick{0%,100%{opacity:.3}50%{opacity:1}}
+@keyframes bnd-rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; display: flex; background: #12100E; color: #F3EBDD; font-family: Geist, -apple-system, sans-serif; font-size: 14px; overflow: hidden; position: relative;">
+
+  <aside style="width: 296px; flex-shrink: 0; display: flex; flex-direction: column; background: linear-gradient(180deg, rgba(30,26,22,.92) 0%, rgba(22,19,17,.96) 100%); border-right: 1px solid rgba(243,235,221,.07);">
+    <div style="height: 52px; display: flex; align-items: center; padding: 0 16px; gap: 8px;">
+      <span style="width: 12px; height: 12px; border-radius: 50%; background: #FF5F57;"></span>
+      <span style="width: 12px; height: 12px; border-radius: 50%; background: #FEBC2E;"></span>
+      <span style="width: 12px; height: 12px; border-radius: 50%; background: #28C840;"></span>
+      <span style="flex: 1;"></span>
+      <button aria-label="Новый терминал (⌘T)" style="width: 30px; height: 30px; border-radius: 9px; border: 1px solid rgba(243,235,221,.08); background: rgba(243,235,221,.03); color: #BDB2A0; display: grid; place-items: center;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg></button>
+    </div>
+    <div style="padding: 4px 14px 10px;">
+      <button style="width: 100%; display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 12px; border: 1px solid rgba(243,235,221,.08); background: rgba(243,235,221,.035); color: #F3EBDD; text-align: left;">
+        <span style="width: 8px; height: 8px; border-radius: 50%; background: #A9C7A2; box-shadow: 0 0 10px rgba(169,199,162,.6);"></span>
+        <span style="flex: 1; display: flex; flex-direction: column; line-height: 1.25;"><span style="font-size: 13px; font-weight: 600;">vps-tokyo-1</span><span style="font-size: 11.5px; color: #867C6D;">5 терминалов · 2 свёрнуты</span></span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#867C6D" stroke-width="2" stroke-linecap="round"><path d="m7 10 5 5 5-5"></path></svg>
+      </button>
+    </div>
+    <nav aria-label="Разделы" style="display: flex; gap: 2px; margin: 0 14px 6px; padding: 3px; border-radius: 12px; background: rgba(243,235,221,.04); border: 1px solid rgba(243,235,221,.06);">
+      <sc-for list="{{modes}}" as="m" hint-placeholder-count="6">
+        <button aria-label="{{m.label}}" style="{{m.style}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="{{m.icon}}"></path></svg></button>
+      </sc-for>
+    </nav>
+    <sc-for list="{{groups}}" as="g" hint-placeholder-count="3">
+      <div style="padding: 14px 18px 6px; font-size: 11px; font-weight: 600; letter-spacing: .08em; color: #867C6D; display: flex; justify-content: space-between;"><span>{{g.title}}</span><span style="letter-spacing: 0; font-weight: 500; color: #6E655A;">{{g.hint}}</span></div>
+      <div style="padding: 0 8px; display: flex; flex-direction: column; gap: 1px;">
+        <sc-for list="{{g.items}}" as="t" hint-placeholder-count="3">
+          <button style="{{t.style}}">
+            <span style="{{t.dot}}"></span>
+            <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; text-align: left; gap: 1px;">
+              <span style="font-weight: 500; color: #F3EBDD;">{{t.name}}</span>
+              <span style="font-size: 11.5px; color: #6E655A; font-family: 'Geist Mono', monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{t.sub}}</span>
+            </span>
+            <sc-if value="{{t.badge}}" hint-placeholder-val="{{ false }}"><span style="{{t.badgeStyle}}">{{t.badge}}</span></sc-if>
+          </button>
+        </sc-for>
+      </div>
+    </sc-for>
+    <div style="flex: 1;"></div>
+    <div style="margin: 0 14px 14px; padding: 12px 13px; border-radius: 14px; background: rgba(243,235,221,.03); border: 1px solid rgba(243,235,221,.06); font-size: 12px; line-height: 1.5; color: #BDB2A0;">
+      <b style="color: #F3EBDD; font-weight: 600;">Свернуть ≠ закрыть.</b> Свёрнутый терминал продолжает работать на сервере, даже если Mac выключен. Вернётесь — увидите всё, что он успел вывести.
+    </div>
+  </aside>
+
+  <main style="flex: 1; min-width: 0; display: flex; flex-direction: column; background: #0E0C0B;">
+    <header style="height: 52px; display: flex; align-items: center; gap: 10px; padding: 0 14px; background: #12100E; border-bottom: 1px solid rgba(243,235,221,.05);">
+      <span style="font-weight: 600;">Рабочий стол «billing»</span>
+      <span style="font-size: 12px; color: #6E655A;">3 окна</span>
+      <span style="flex: 1;"></span>
+      <span style="font-size: 12px; color: #867C6D;">Расположение</span>
+      <div style="display: flex; padding: 3px; border-radius: 10px; background: rgba(243,235,221,.05); gap: 2px;">
+        <sc-for list="{{layouts}}" as="l" hint-placeholder-count="4">
+          <button aria-label="{{l.label}}" onClick="{{l.pick}}" style="{{l.style}}"><svg width="18" height="14" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="1.4"><path d="{{l.icon}}"></path></svg></button>
+        </sc-for>
+      </div>
+      <button style="height: 30px; padding: 0 11px; border-radius: 9px; border: 1px solid rgba(243,235,221,.1); background: rgba(243,235,221,.04); color: #BDB2A0; font-size: 12.5px; display: flex; align-items: center; gap: 6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 12h16M14 6l6 6-6 6"></path></svg>Ввод во все</button>
+      <button style="height: 30px; padding: 0 12px; border-radius: 999px; border: none; background: linear-gradient(180deg, #E4620E, #C94F09); color: #FFFFFF; font-size: 12.5px; font-weight: 600; box-shadow: 0 6px 16px -6px rgba(228,98,14,.8);">Новый терминал</button>
+    </header>
+
+    <div style="{{gridStyle}}">
+      <sc-for list="{{panes}}" as="p" hint-placeholder-count="3">
+        <section aria-label="{{p.title}}" style="{{p.box}}">
+          <div style="height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 12px; background: rgba(28,24,21,.85); border-bottom: 1px solid rgba(243,235,221,.05); font-size: 12.5px;">
+            <span style="{{p.dot}}"></span>
+            <span style="font-weight: 600;">{{p.title}}</span>
+            <span style="color: #6E655A; font-family: 'Geist Mono', monospace; font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{p.cwd}}</span>
+            <span style="flex: 1;"></span>
+            <button aria-label="Разделить" style="width: 26px; height: 26px; border-radius: 7px; border: none; background: transparent; color: #867C6D; display: grid; place-items: center;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="5" width="16" height="14" rx="2"></rect><path d="M12 5v14"></path></svg></button>
+            <button aria-label="Свернуть — продолжит работать" style="width: 26px; height: 26px; border-radius: 7px; border: none; background: transparent; color: #867C6D; display: grid; place-items: center;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 17h12"></path></svg></button>
+            <button aria-label="На весь экран" style="width: 26px; height: 26px; border-radius: 7px; border: none; background: transparent; color: #867C6D; display: grid; place-items: center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"></path></svg></button>
+            <button aria-label="Закрыть и завершить" style="width: 26px; height: 26px; border-radius: 7px; border: none; background: transparent; color: #867C6D; display: grid; place-items: center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></button>
+          </div>
+          <div style="flex: 1; padding: 10px 14px; font-family: 'Geist Mono', monospace; font-size: 12.5px; line-height: 1.6; color: #D9CFBF; overflow: hidden; white-space: pre;">
+            <sc-for list="{{p.lines}}" as="ln" hint-placeholder-count="8"><div style="{{ln.style}}">{{ln.t}}</div></sc-for>
+            <sc-if value="{{p.prompt}}" hint-placeholder-val="{{ true }}"><div><span style="color: #A9C7A2;">deploy@tokyo</span> <span style="color: #A3BDEB;">~/projects/billing</span> <span style="color: #FFB067;">❯</span> <span style="display: inline-block; width: 8px; height: 15px; background: #FF8A1F; vertical-align: -3px; animation: bnd-caret 1s infinite;"></span></div></sc-if>
+          </div>
+        </section>
+      </sc-for>
+    </div>
+
+    <div aria-label="Свёрнутые терминалы" style="height: 64px; display: flex; align-items: center; gap: 10px; padding: 0 14px; background: #12100E; border-top: 1px solid rgba(243,235,221,.06);">
+      <span style="font-size: 11px; font-weight: 600; letter-spacing: .08em; color: #6E655A;">СВЁРНУТЫ</span>
+      <sc-for list="{{dock}}" as="d" hint-placeholder-count="2">
+        <button style="{{d.style}}">
+          <span style="{{d.dot}}"></span>
+          <span style="display: flex; flex-direction: column; text-align: left; line-height: 1.25;">
+            <span style="font-size: 12.5px; font-weight: 600; color: #F3EBDD;">{{d.name}}</span>
+            <span style="font-size: 11px; color: {{d.subColor}};">{{d.sub}}</span>
+          </span>
+          <svg width="56" height="22" viewBox="0 0 56 22" fill="none" stroke="{{d.spark}}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="{{d.path}}" style="stroke-dasharray: 140; animation: bnd-draw 1.4s ease-out .6s both;"></path></svg>
+          <span style="font-size: 11.5px; color: #FFB067; font-weight: 600;">Вернуть</span>
+        </button>
+      </sc-for>
+      <span style="flex: 1;"></span>
+      <span style="font-size: 12px; color: #6E655A;">⌘⇧T — вернуть последний</span>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { layout: 'main-right' }; }
+  renderVals() {
+    const I = {
+      chat: 'M4 5h16v11H9l-5 4z',
+      folder: 'M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
+      term: 'M3.5 5h17v14h-17zM7 10l3 2-3 2M12.5 15h4',
+      globe: 'M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17zM3.5 12h17M12 3.5c2.6 2.6 2.6 14.4 0 17M12 3.5c-2.6 2.6-2.6 14.4 0 17',
+      screen: 'M3.5 4.5h17v11h-17zM9 20h6M12 15.5V20',
+      pulse: 'M3 12h4l2-5 4 10 2-5h6'
+    };
+    const modeStyle = (on) => 'flex: 1; height: 32px; border-radius: 9px; border: none; display: grid; place-items: center; ' + (on ? 'background: #2C2722; color: #F3EBDD; box-shadow: inset 0 1px 0 rgba(243,235,221,.06), 0 4px 10px -4px rgba(0,0,0,.6);' : 'background: transparent; color: #867C6D;');
+    const modes = [['Команда', I.chat], ['Файлы', I.folder], ['Терминалы', I.term], ['Браузер', I.globe], ['Экран сервера', I.screen], ['Сервер', I.pulse]].map(([label, icon], k) => ({ label, icon, style: modeStyle(k === 2) }));
+    const dot = (c, kind) => 'width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: ' + c + ';' + (kind === 'pulse' ? ' animation: bnd-pulse 1.8s infinite;' : kind === 'glow' ? ' box-shadow: 0 0 8px ' + c + ';' : kind === 'tick' ? ' animation: bnd-tick 1.2s infinite;' : '');
+    const item = (on) => 'display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 10px; border: none; font-size: 13px; ' + (on ? 'background: rgba(243,235,221,.07);' : 'background: transparent;');
+    const badge = (tone) => 'font-size: 10.5px; font-weight: 600; padding: 2px 7px; border-radius: 999px; ' + (tone === 'signal' ? 'color: #FFB067; background: rgba(255,138,31,.13);' : tone === 'ok' ? 'color: #A9C7A2; background: rgba(169,199,162,.12);' : 'color: #BDB2A0; background: rgba(243,235,221,.07);');
+    const groups = [
+      { title: 'НА ЭКРАНЕ', hint: '', items: [
+        { name: 'billing', sub: 'cargo test · ~/projects/billing', dot: dot('#A9C7A2', 'glow'), on: true },
+        { name: 'htop', sub: 'нагрузка сервера', dot: dot('#A9C7A2', 'glow') },
+        { name: 'api logs', sub: 'tail -f /var/log/api.log', dot: dot('#A9C7A2', 'tick') }
+      ] },
+      { title: 'СВЁРНУТЫ', hint: 'работают дальше', items: [
+        { name: 'cargo watch', sub: 'пересборка при изменениях', dot: dot('#A9C7A2', 'tick'), badge: '+214 строк', tone: 'muted' },
+        { name: 'deploy staging', sub: 'ждёт ответа: Continue? [y/N]', dot: dot('#FF8A1F', 'pulse'), badge: 'ждёт ввода', tone: 'signal' }
+      ] },
+      { title: 'АГЕНТЫ', hint: 'только смотреть', items: [
+        { name: 'Forge', sub: 'git push origin feat/billing…', dot: dot('#FFB067', 'pulse'), badge: 'live', tone: 'ok' }
+      ] }
+    ].map(g => ({ ...g, items: g.items.map(t => ({ ...t, badge: t.badge || '', style: item(!!t.on), badgeStyle: badge(t.tone) })) }));
+    const L = this.state.layout;
+    const lb = (on) => 'width: 34px; height: 26px; border-radius: 7px; border: none; display: grid; place-items: center; ' + (on ? 'background: #2C2722; color: #F3EBDD;' : 'background: transparent; color: #867C6D;');
+    const layouts = [
+      ['one', 'Одно окно', 'M1 1h16v12H1z'],
+      ['cols', 'Рядом', 'M1 1h16v12H1zM9 1v12'],
+      ['main-right', 'Главное и два справа', 'M1 1h16v12H1zM10 1v12M10 7h7'],
+      ['grid', 'Сетка 2×2', 'M1 1h16v12H1zM9 1v12M1 7h16']
+    ].map(([id, label, icon]) => ({ label, icon, style: lb(L === id), pick: () => this.setState({ layout: id }) }));
+    const grids = {
+      one: 'grid-template-columns: 1fr; grid-template-rows: 1fr;',
+      cols: 'grid-template-columns: 1fr 1fr; grid-template-rows: 1fr;',
+      'main-right': 'grid-template-columns: 1.35fr 1fr; grid-template-rows: 1fr 1fr;',
+      grid: 'grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;'
+    };
+    const gridStyle = 'flex: 1; min-height: 0; display: grid; gap: 8px; padding: 8px; ' + grids[L];
+    let n = 0;
+    const c = (t, col) => ({ t, style: (col ? 'color: ' + col + ';' : '') + ' animation: bnd-line .3s ease-out ' + (250 + (n++) * 70) + 'ms both;' });
+    const area = {
+      one: ['1 / 1 / 2 / 2', 'none', 'none'],
+      cols: ['1 / 1 / 2 / 2', '1 / 2 / 2 / 3', 'none'],
+      'main-right': ['1 / 1 / 3 / 2', '1 / 2 / 2 / 3', '2 / 2 / 3 / 3'],
+      grid: ['1 / 1 / 2 / 2', '1 / 2 / 2 / 3', '2 / 1 / 3 / 3']
+    }[L];
+    const box = (k, focus) => 'grid-area: ' + area[k] + '; ' + (area[k] === 'none' ? 'display: none;' : 'display: flex;') + ' flex-direction: column; min-width: 0; min-height: 0; border-radius: 12px; overflow: hidden; background: #0B0A09; animation: bnd-rise .3s ease-out; ' + (focus ? 'box-shadow: 0 0 0 1px rgba(255,138,31,.55), 0 0 0 4px rgba(255,138,31,.10);' : 'box-shadow: 0 0 0 1px rgba(243,235,221,.07);');
+    const panes = [
+      { title: 'billing', cwd: '~/projects/billing', dot: dot('#A9C7A2', 'glow'), box: box(0, true), prompt: true, lines: [
+        c('❯ cargo test billing::', '#FFB067'),
+        c('   Compiling billing v0.4.0 (/home/deploy/projects/billing)', '#867C6D'),
+        c('    Finished test profile in 6.81s', '#867C6D'),
+        c('running 14 tests'),
+        c('test webhook::rejects_bad_signature ... ok', '#A9C7A2'),
+        c('test webhook::idempotent_by_event_id ... ok', '#A9C7A2'),
+        c('test ledger::credit_in_kopecks ... ok', '#A9C7A2'),
+        c('test ledger::rounding_516_80_by_62_5 ... ok', '#A9C7A2'),
+        c('test retry::backoff_doubles ... ok', '#A9C7A2'),
+        c(''),
+        c('test result: ok. 14 passed; 0 failed; finished in 3.12s', '#A9C7A2'),
+        c('')
+      ] },
+      { title: 'htop', cwd: 'нагрузка', dot: dot('#A9C7A2', 'glow'), box: box(1, false), prompt: false, lines: [
+        c('  CPU [||||||||||||          38.2%]', '#A9C7A2'),
+        c('  Mem [||||||||||||||||    5.1G/8G]', '#FFB067'),
+        c('  Swp [                      0K/2G]', '#867C6D'),
+        c(''),
+        c('  PID USER     CPU%  MEM%  COMMAND', '#12100E; background: #A9C7A2'),
+        c(' 4127 deploy   21.4   6.2  claude -p --input-format…'),
+        c(' 4188 deploy    9.8   3.1  cargo test billing::'),
+        c(' 2210 deploy    4.0   2.4  codex app-server --stdio'),
+        c('  981 deploy    1.2   1.0  bandito daemon', '#FFB067')
+      ] },
+      { title: 'api logs', cwd: 'tail -f /var/log/api.log', dot: dot('#A9C7A2', 'tick'), box: box(2, false), prompt: false, lines: [
+        c('14:09:12 INFO  POST /v1/webhook 200 12ms', '#BDB2A0'),
+        c('14:09:13 INFO  GET  /v1/health  200  1ms', '#867C6D'),
+        c('14:09:15 WARN  retry #2 event=evt_93Kd', '#FFB067'),
+        c('14:09:17 INFO  POST /v1/webhook 200  9ms', '#BDB2A0'),
+        c('14:09:20 INFO  GET  /v1/health  200  1ms', '#867C6D'),
+        c('14:09:22 INFO  POST /v1/charge  201 41ms', '#BDB2A0')
+      ] }
+    ];
+    const dockBtn = 'height: 46px; display: flex; align-items: center; gap: 10px; padding: 0 12px; border-radius: 12px; border: 1px solid rgba(243,235,221,.08); background: rgba(243,235,221,.04);';
+    const dock = [
+      { name: 'cargo watch', sub: 'работает · +214 строк', subColor: '#867C6D', dot: dot('#A9C7A2', 'tick'), spark: '#A9C7A2', path: 'M1 16 7 12l6 3 6-8 6 5 6-2 6 4 6-9 6 6 5-3', style: dockBtn + ' animation: bnd-dock .45s cubic-bezier(.2,.9,.3,1.15) .3s both;' },
+      { name: 'deploy staging', sub: 'ждёт ввода · 3 мин', subColor: '#FFB067', dot: dot('#FF8A1F', 'pulse'), spark: '#FF8A1F', path: 'M1 18 9 17l8-6 8 1 8-7 8 6 8-3h6', style: dockBtn + ' border-color: rgba(255,138,31,.35); background: rgba(255,138,31,.07); animation: bnd-dock .45s cubic-bezier(.2,.9,.3,1.15) .42s both;' }
+    ];
+    return { modes, groups, layouts, gridStyle, panes, dock };
+  }
+}
+</script>
+</body>
+</html>

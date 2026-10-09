@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Bandito — настройки, правила одобрения</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0B0A09}
+a{color:#FFB067}a:hover{color:#FFD2A0}
+button{font:inherit;cursor:pointer;transition:color .15s ease,box-shadow .2s ease,transform .12s ease,filter .15s ease}
+button:hover{filter:brightness(1.15)}
+button:active{transform:scale(.98)}
+input{font:inherit}
+@keyframes bnd-sheet{from{opacity:0;transform:translateY(22px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes bnd-fade{from{opacity:0}to{opacity:1}}
+@keyframes bnd-rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; position: relative; background: #12100E; color: #F3EBDD; font-family: Geist, -apple-system, sans-serif; font-size: 14px; overflow: hidden;">
+  <div aria-hidden="true" style="position: absolute; inset: 0; display: flex; filter: blur(3px); opacity: .5;"><div style="width: 296px; background: #171411;"></div><div style="flex: 1;"></div></div>
+  <div aria-hidden="true" style="position: absolute; inset: 0; background: rgba(8,7,6,.62); animation: bnd-fade .25s ease-out both;"></div>
+
+  <div role="dialog" aria-label="Настройки" style="position: absolute; left: 200px; top: 50px; width: 1040px; height: 800px; animation: bnd-sheet .4s cubic-bezier(.2,.9,.3,1.05) both; border-radius: 24px; background: #181512; border: 1px solid rgba(243,235,221,.11); box-shadow: 0 50px 140px -30px rgba(0,0,0,.9); display: flex; overflow: hidden;">
+    <nav aria-label="Разделы настроек" style="width: 240px; flex-shrink: 0; padding: 22px 14px; background: #14110F; border-right: 1px solid rgba(243,235,221,.06); display: flex; flex-direction: column; gap: 3px;">
+      <span style="font-size: 17px; font-weight: 650; padding: 0 10px 14px;">Настройки</span>
+      <sc-for list="{{nav}}" as="n" hint-placeholder-count="5">
+        <a href="#" style="{{n.style}}"><span style="{{n.iconStyle}}">{{n.glyph}}</span>{{n.label}}</a>
+      </sc-for>
+      <div style="flex: 1;"></div>
+      <div style="padding: 12px 10px 4px; font-size: 11.5px; color: #6E655A; line-height: 1.5;">Bandito 0.5.0 · демон 0.5.0<br>vps-tokyo-1 · синхронизировано</div>
+    </nav>
+
+    <section style="flex: 1; min-width: 0; padding: 26px 34px; display: flex; flex-direction: column; gap: 22px; overflow: hidden;">
+      <div style="display: flex; align-items: flex-start; gap: 12px;">
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
+          <h1 style="margin: 0; font-size: 22px; font-weight: 650; letter-spacing: -.015em;">Одобрения</h1>
+          <p style="margin: 0; color: #867C6D; font-size: 13.5px; line-height: 1.5; max-width: 560px;">Bandito проверяет каждое действие агента. Обычная работа идёт сама, а всё, что подходит под правило ниже или встроенную проверку, ждёт вашего решения.</p>
+        </div>
+        <button aria-label="Закрыть настройки" style="width: 30px; height: 30px; border-radius: 50%; border: 1px solid rgba(243,235,221,.1); background: transparent; color: #867C6D; display: grid; place-items: center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></button>
+      </div>
+
+      <div style="border-radius: 16px; border: 1px solid rgba(243,235,221,.08); background: rgba(243,235,221,.02); padding: 14px 16px; display: flex; flex-direction: column; gap: 12px;">
+        <span style="font-size: 13px; font-weight: 600;">Новое правило</span>
+        <div style="display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr) minmax(0, 1fr) auto; gap: 10px; align-items: end;">
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <label for="pat" style="font-size: 12px; color: #867C6D;">Когда агент хочет выполнить</label>
+            <input id="pat" placeholder="например, wrangler deploy*" value="terraform plan*" style="height: 38px; border-radius: 11px; border: 1px solid rgba(243,235,221,.12); background: #121010; color: #F3EBDD; padding: 0 12px; font-family: 'Geist Mono', monospace; font-size: 13px; outline: none;">
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px;"><span style="font-size: 12px; color: #867C6D;">То</span><button style="height: 38px; border-radius: 11px; border: 1px solid rgba(243,235,221,.12); background: #121010; color: #C8DCC3; padding: 0 12px; display: flex; align-items: center; justify-content: space-between;">Разрешать<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#867C6D" stroke-width="2" stroke-linecap="round"><path d="m7 10 5 5 5-5"></path></svg></button></div>
+          <div style="display: flex; flex-direction: column; gap: 6px;"><span style="font-size: 12px; color: #867C6D;">Для кого</span><button style="height: 38px; border-radius: 11px; border: 1px solid rgba(243,235,221,.12); background: #121010; color: #F3EBDD; padding: 0 12px; display: flex; align-items: center; justify-content: space-between;">Все агенты<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#867C6D" stroke-width="2" stroke-linecap="round"><path d="m7 10 5 5 5-5"></path></svg></button></div>
+          <button style="height: 38px; padding: 0 16px; border-radius: 999px; border: none; background: #F3EBDD; color: #12100E; font-weight: 600;">Добавить</button>
+        </div>
+        <span style="font-size: 11.5px; color: #6E655A;"><span style="font-family: 'Geist Mono', monospace;">*</span> — что угодно. Если подходят два правила, побеждает правило конкретного агента, затем более новое.</span>
+      </div>
+
+      <div style="border-radius: 16px; border: 1px solid rgba(243,235,221,.08); overflow: hidden;">
+        <div style="display: grid; grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr) minmax(0, 1fr) 72px; padding: 10px 16px; font-size: 11px; font-weight: 600; letter-spacing: .08em; color: #6E655A; background: rgba(243,235,221,.025); border-bottom: 1px solid rgba(243,235,221,.06);">
+          <span>ДЕЙСТВИЕ</span><span>ПОВЕДЕНИЕ</span><span>ДЛЯ КОГО</span><span></span>
+        </div>
+        <sc-for list="{{rules}}" as="r" hint-placeholder-count="5">
+          <div style="{{r.row}}">
+            <span style="font-family: 'Geist Mono', monospace; font-size: 13px; color: #F3EBDD;">{{r.pattern}}</span>
+            <span><span style="{{r.pill}}">{{r.behavior}}</span></span>
+            <span style="font-size: 13px; color: #BDB2A0;">{{r.scope}}</span>
+            <span style="display: flex; gap: 4px; justify-content: flex-end; color: #6E655A;">
+              <button aria-label="Изменить правило" style="width: 28px; height: 28px; border-radius: 8px; border: none; background: transparent; color: inherit; display: grid; place-items: center;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20h4L19 9l-4-4L4 16z"></path></svg></button>
+              <button aria-label="Удалить правило" style="width: 28px; height: 28px; border-radius: 8px; border: none; background: transparent; color: inherit; display: grid; place-items: center;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 7h14M10 11v6M14 11v6M7 7l1 12h8l1-12M10 7V4h4v3"></path></svg></button>
+            </span>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 8px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FFB067" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"></path></svg><span style="font-size: 13px; font-weight: 600;">Встроенные проверки</span><span style="font-size: 12px; color: #6E655A;">· работают всегда, если правило выше не говорит иначе</span></div>
+        <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+          <sc-for list="{{builtin}}" as="b" hint-placeholder-count="10">
+            <span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #BDB2A0; padding: 4px 9px; border-radius: 8px; background: rgba(243,235,221,.05); border: 1px solid rgba(243,235,221,.07);">{{b}}</span>
+          </sc-for>
+          <span style="font-size: 12px; color: #BDB2A0; padding: 4px 9px; border-radius: 8px; background: rgba(243,235,221,.05); border: 1px solid rgba(243,235,221,.07);">запись вне папки проекта</span>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
+          <span style="font-size: 12px; color: #867C6D; margin-right: 2px;">В браузере и на экране:</span>
+          <sc-for list="{{browser}}" as="b" hint-placeholder-count="4">
+            <span style="font-size: 12px; color: #A3BDEB; padding: 4px 9px; border-radius: 8px; background: rgba(163,189,235,.07); border: 1px solid rgba(163,189,235,.16);">{{b}}</span>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; animation: bnd-rise .4s ease-out .5s both;">
+        <sc-for list="{{toggles}}" as="t" hint-placeholder-count="2">
+          <div style="border-radius: 14px; border: 1px solid rgba(243,235,221,.08); background: rgba(243,235,221,.02); padding: 12px 14px; display: flex; gap: 12px; align-items: flex-start;">
+            <span style="flex: 1; display: flex; flex-direction: column; gap: 3px;"><span style="font-size: 13px; font-weight: 600;">{{t.title}}</span><span style="font-size: 12px; color: #867C6D; line-height: 1.45;">{{t.text}}</span></span>
+            <span role="switch" aria-checked="{{t.on}}" aria-label="{{t.title}}" style="{{t.track}}"><span style="{{t.knob}}"></span></span>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const navBase = 'display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 10px; text-decoration: none; font-size: 13.5px;';
+    const icon = 'width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; font-size: 12px; font-family: Geist Mono, monospace;';
+    const nav = [
+      ['Общие', '◐', false], ['Аккаунт и синхронизация', '☁', false], ['Серверы', '⌁', false], ['Одобрения', '✓', true], ['Подписки и лимиты', '▮', false], ['Рабочие места', '▣', false], ['Терминал и файлы', '›_', false], ['Браузер и экран', '◎', false], ['Уведомления', '◔', false], ['Внешний вид и анимации', '✦', false], ['Язык', 'Aa', false], ['Обновления', '↻', false]
+    ].map(([label, glyph, on]) => ({
+      label, glyph,
+      style: navBase + (on ? ' background: rgba(243,235,221,.08); color: #F3EBDD; font-weight: 600;' : ' color: #BDB2A0;'),
+      iconStyle: icon + (on ? ' background: #E4620E; color: #FFFFFF;' : ' background: rgba(243,235,221,.06); color: #867C6D;')
+    }));
+    const pill = (bg, fg, bd) => 'display: inline-flex; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: ' + bg + '; color: ' + fg + '; border: 1px solid ' + bd + ';';
+    const allow = pill('rgba(169,199,162,.1)', '#C8DCC3', 'rgba(169,199,162,.22)');
+    const ask = pill('rgba(255,176,103,.1)', '#FFB067', 'rgba(255,176,103,.24)');
+    const deny = pill('rgba(242,160,147,.1)', '#F2A093', 'rgba(242,160,147,.24)');
+    const toggle = (title, text, on) => ({ title, text, on: on ? 'true' : 'false', track: 'width: 36px; height: 21px; border-radius: 999px; position: relative; flex-shrink: 0; margin-top: 2px; background: ' + (on ? '#E4620E' : 'rgba(243,235,221,.14)') + ';', knob: 'position: absolute; top: 2px; ' + (on ? 'right: 2px; background: #FFFFFF;' : 'left: 2px; background: #BDB2A0;') + ' width: 17px; height: 17px; border-radius: 50%;' });
+    const rawRules = [
+        { pattern: 'git push origin feat/*', behavior: 'Разрешать', pill: allow, scope: 'Forge' },
+        { pattern: 'gh issue create*', behavior: 'Разрешать', pill: allow, scope: 'Night Owl' },
+        { pattern: 'kubectl *', behavior: 'Спрашивать', pill: ask, scope: 'Все агенты' },
+        { pattern: 'npm publish*', behavior: 'Запрещать', pill: deny, scope: 'Все агенты' },
+        { pattern: 'psql *prod*', behavior: 'Запрещать', pill: deny, scope: 'Watch' }
+    ];
+    return {
+      nav,
+      rules: rawRules.map((r, k) => ({ ...r, row: 'display: grid; grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr) minmax(0, 1fr) 72px; align-items: center; padding: 11px 16px; border-bottom: 1px solid rgba(243,235,221,.05); animation: bnd-rise .3s ease-out ' + (200 + k * 60) + 'ms both;' })),
+      browser: ['«Оплатить», «Купить»', '«Отправить» в формах', '«Удалить» на сайтах', 'вход с паролем'],
+      toggles: [
+        toggle('Опасное — через Touch ID', 'Пуш в main, деплой и удаление подтверждаются отпечатком на Mac или Face ID на iPhone.', true),
+        toggle('Если вы не ответили за 30 минут', 'Отклонить и попросить агента найти другой путь, а не ждать вечно.', false)
+      ],
+      builtin: ['git push*', 'git reset --hard*', 'rm -rf*', '*deploy*', 'npm publish*', 'cargo publish*', 'kubectl delete*', 'terraform apply*', '*drop table*', 'docker system prune*']
+    };
+  }
+}
+</script>
+</body>
+</html>

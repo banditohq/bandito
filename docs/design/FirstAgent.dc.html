@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Bandito — первый агент</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+@keyframes bnd-blink{0%,93%,100%{transform:scaleY(1)}96%{transform:scaleY(.12)}}
+body{margin:0;background:#0B0A09}
+a{color:#FFB067}a:hover{color:#FFD2A0}
+button{font:inherit;cursor:pointer;transition:color .15s ease,box-shadow .2s ease,transform .15s ease,filter .15s ease,border-color .15s ease}
+button:hover{filter:brightness(1.12);transform:translateY(-2px)}
+button:active{transform:scale(.98)}
+@keyframes bnd-rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes bnd-story{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes bnd-hop{0%{transform:translateY(0) scale(.9)}40%{transform:translateY(-8px) scale(1.05)}70%{transform:translateY(0) scale(.98)}100%{transform:none}}
+@keyframes bnd-fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@keyframes bnd-shimmer{0%{background-position:-300px 0}100%{background-position:600px 0}}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; position: relative; overflow: hidden; color: #F3EBDD; font-family: Geist, -apple-system, sans-serif; background: radial-gradient(900px 400px at 50% -80px, rgba(255,138,31,.1), transparent 70%), #12100E;">
+  <div style="position: absolute; left: 18px; top: 18px; display: flex; gap: 8px;"><span style="width: 12px; height: 12px; border-radius: 50%; background: #FF5F57;"></span><span style="width: 12px; height: 12px; border-radius: 50%; background: #FEBC2E;"></span><span style="width: 12px; height: 12px; border-radius: 50%; background: #28C840;"></span></div>
+
+  <div style="width: 1180px; margin: 0 auto; padding-top: 70px; display: flex; gap: 28px;">
+    <div style="flex: 1; display: flex; flex-direction: column; gap: 22px;">
+      <div style="display: flex; align-items: center; gap: 12px; animation: bnd-rise .45s ease-out both;"><div style="display: flex; gap: 6px;"><sc-for list="{{steps}}" as="s" hint-placeholder-count="5"><span style="{{s.track}}"><span style="{{s.fill}}"></span></span></sc-for></div><span style="font-size: 12.5px; color: #867C6D;">шаг 4 из 5 · первый агент</span></div>
+      <div style="display: flex; flex-direction: column; gap: 10px; animation: bnd-rise .45s ease-out .08s both;">
+        <h1 style="margin: 0; font-size: 38px; font-weight: 600; letter-spacing: -.035em;">Кого нанять первым?</h1>
+        <p style="margin: 0; font-size: 15px; color: #BDB2A0; line-height: 1.55; max-width: 560px;">Выберите готовую роль — мы подставим модель, инструкции и расписание. Всё можно поменять потом, а новых агентов добавить в любой момент.</p>
+      </div>
+      <div role="radiogroup" aria-label="Шаблон агента" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;">
+        <sc-for list="{{templates}}" as="t" hint-placeholder-count="6">
+          <button role="radio" aria-checked="{{t.checked}}" onClick="{{t.pick}}" style="{{t.card}}">
+            <svg width="40" height="40" viewBox="0 0 52 52"><rect width="52" height="52" rx="17" fill="{{t.color}}"></rect><path d="M8 22c6-6 30-6 36 0v7c-6 4-30 4-36 0z" fill="#12100E"></path><g style="transform-box: view-box; transform-origin: 26px 26px; animation: bnd-blink 5.2s ease-in-out infinite; animation-delay: {{t.blink}};"><circle cx="18" cy="26" r="2.6" fill="{{t.color}}"></circle><circle cx="34" cy="26" r="2.6" fill="{{t.color}}"></circle></g></svg>
+            <span style="font-size: 15.5px; font-weight: 600;">{{t.title}}</span>
+            <span style="font-size: 13px; color: #867C6D; line-height: 1.45;">{{t.desc}}</span>
+            <span style="font-size: 11.5px; color: #6E655A; margin-top: auto;">{{t.meta}}</span>
+          </button>
+        </sc-for>
+      </div>
+    </div>
+
+    <aside style="width: 390px; flex-shrink: 0; margin-top: 64px; border-radius: 24px; border: 1px solid rgba(243,235,221,.1); background: linear-gradient(180deg, #1C1815, #171411); padding: 22px; display: flex; flex-direction: column; gap: 14px; align-self: flex-start; animation: bnd-rise .5s ease-out .2s both;">
+      <span style="font-size: 11px; font-weight: 600; letter-spacing: .08em; color: #867C6D;">ВАШ ПЕРВЫЙ АГЕНТ</span>
+      <sc-for list="{{pickedList}}" as="p" hint-placeholder-count="1">
+        <div style="display: flex; flex-direction: column; gap: 14px; animation: bnd-fade .3s ease-out both;">
+          <div style="display: flex; align-items: center; gap: 14px;">
+            <div style="animation: bnd-hop .6s cubic-bezier(.2,.9,.3,1.2) both;"><svg width="60" height="60" viewBox="0 0 52 52"><rect width="52" height="52" rx="17" fill="{{p.color}}"></rect><path d="M8 22c6-6 30-6 36 0v7c-6 4-30 4-36 0z" fill="#12100E"></path><g style="transform-box: view-box; transform-origin: 26px 26px; animation: bnd-blink 5.2s ease-in-out infinite; animation-delay: 1.37s;"><circle cx="18" cy="26" r="2.6" fill="{{p.color}}"></circle><circle cx="34" cy="26" r="2.6" fill="{{p.color}}"></circle></g></svg></div>
+            <div style="display: flex; flex-direction: column; gap: 4px;"><span style="font-size: 20px; font-weight: 650;">{{p.name}}</span><span style="font-size: 12.5px; color: #867C6D;">{{p.role}}</span></div>
+          </div>
+          <div style="border-radius: 14px; border: 1px solid rgba(243,235,221,.08);">
+            <sc-for list="{{p.rows}}" as="r" hint-placeholder-count="5">
+              <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 9px 13px; border-bottom: 1px solid rgba(243,235,221,.05); font-size: 13px;"><span style="color: #867C6D;">{{r.k}}</span><span style="{{r.vs}}">{{r.v}}</span></div>
+            </sc-for>
+          </div>
+          <div style="border-radius: 14px; background: #141210; border: 1px solid rgba(243,235,221,.07); padding: 12px 13px; font-size: 12.5px; color: #BDB2A0; line-height: 1.55;">
+            <span style="font-size: 11px; font-weight: 600; letter-spacing: .06em; color: #6E655A; display: block; margin-bottom: 6px;">ИНСТРУКЦИИ ИЗ ШАБЛОНА</span>
+            {{p.inst}}
+          </div>
+        </div>
+      </sc-for>
+      <a href="Tour.dc.html" style="position: relative; overflow: hidden; height: 48px; border-radius: 14px; background: linear-gradient(180deg, #E4620E, #C94F09); color: #FFFFFF; font-weight: 600; font-size: 15px; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 10px 26px -10px rgba(228,98,14,.85);"><span aria-hidden="true" style="position: absolute; inset: 0; background: linear-gradient(110deg, transparent 35%, rgba(255,255,255,.25) 50%, transparent 65%); background-size: 300px 100%; background-repeat: no-repeat; animation: bnd-shimmer 3.2s ease-in-out 1s infinite;"></span>{{cta}}</a>
+      <span style="font-size: 12px; color: #6E655A; text-align: center;">Первое сообщение займёт пару секунд — агент представится и спросит, с чего начать.</span>
+    </aside>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { pick: 0 }; }
+  renderVals() {
+    const pick = this.state.pick;
+    const card = (on, k) => 'border-radius: 18px; padding: 16px; display: flex; flex-direction: column; align-items: flex-start; text-align: left; color: #F3EBDD; gap: 8px; min-height: 172px; animation: bnd-rise .4s ease-out ' + (160 + k * 60) + 'ms both; ' + (on ? 'border: 1px solid rgba(255,138,31,.55); background: linear-gradient(180deg, rgba(255,138,31,.1), rgba(255,138,31,.03)); box-shadow: 0 16px 40px -24px rgba(255,138,31,.8);' : 'border: 1px solid rgba(243,235,221,.08); background: rgba(243,235,221,.02);');
+    const raw = [
+      { title: 'Сборщик', name: 'Forge', desc: 'Пишет и чинит код, гоняет тесты, открывает PR.', meta: 'Claude Code · среднее усилие', color: '#FFB067', rt: 'Claude Code · Max ×20', rtOk: true, model: 'Opus 5.5 · среднее', place: 'Общее', folder: '~/projects/billing', ask: 'Только рискованное', inst: 'Пишешь и чинишь код в проекте. Делаешь маленькие изменения, гоняешь тесты перед каждым коммитом, открываешь PR и кратко пишешь, что сделал.' },
+      { title: 'Ревьюер', name: 'Scout', desc: 'Смотрит изменения других агентов и ваши PR, ищет ошибки.', meta: 'Codex · высокое усилие', color: '#A3BDEB', rt: 'Codex · нужно войти', rtOk: false, model: 'gpt-5.5-codex · высокое', place: 'Песочница (контейнер)', folder: '~/projects/billing · чтение', ask: 'Только рискованное', inst: 'Читаешь изменения, ищешь ошибки и риски, предлагаешь правки комментариями. Сам код не меняешь без просьбы.' },
+      { title: 'Дежурный', name: 'Watch', desc: 'Следит за продом и логами, будит только по делу.', meta: 'Claude Code · низкое · проверка каждые 15 мин', color: '#F2A093', rt: 'Claude Code · Max ×20', rtOk: true, model: 'Haiku 5.5 · низкое', place: 'Отдельный пользователь', folder: '/var/log · чтение', ask: 'Всё подряд', inst: 'Раз в 15 минут смотришь логи и метрики. Пишешь, только если что-то сломалось, и предлагаешь, что сделать.' },
+      { title: 'Ассистент', name: 'Atlas', desc: 'Почта, календарь, заметки, напоминания — на обычном языке.', meta: 'Claude Code · среднее · сводка в 09:00', color: '#A9C7A2', rt: 'Claude Code · Max ×20', rtOk: true, model: 'Sonnet 5.5 · среднее', place: 'Общее', folder: '~/notes', ask: 'Только рискованное', inst: 'Помогаешь с делами: напоминания, заметки, черновики писем. Каждое утро в 09:00 — короткая сводка дня.' },
+      { title: 'Исследователь', name: 'Fox', desc: 'Ищет, читает и сравнивает, приносит выжимку со ссылками.', meta: 'Grok · высокое усилие', color: '#C8B6E8', rt: 'Grok · SuperGrok', rtOk: true, model: 'grok-5 · высокое', place: 'Общее · свой браузер', folder: '~/research', ask: 'Только рискованное', inst: 'Ищешь в интернете, читаешь первоисточники, сравниваешь и приносишь выжимку со ссылками и датами.' },
+      { title: 'С нуля', name: 'Новый агент', desc: 'Пустой агент: сами дадите имя, роль и инструкции.', meta: 'Любая модель', color: '#BDB2A0', rt: 'выберете сами', rtOk: true, model: '—', place: 'Общее', folder: 'выберете сами', ask: 'Только рискованное', inst: 'Напишите, кем он работает и что для вас важно — как ТЗ новому сотруднику.' }
+    ];
+    const templates = raw.map((t, k) => ({ ...t, checked: pick === k ? 'true' : 'false', card: card(pick === k, k), blink: ((k * 1.7 + 0.5) % 5).toFixed(2) + 's', pick: () => this.setState({ pick: k }) }));
+    const p = raw[pick];
+    const vs = (c) => 'font-size: 13px; color: ' + (c || '#F3EBDD') + '; text-align: right;';
+    const picked = {
+      name: p.name, role: p.title.toLowerCase(), color: p.color, inst: p.inst,
+      rows: [
+        { k: 'Чем думает', v: p.rt, vs: vs(p.rtOk ? '#F3EBDD' : '#FFB067') },
+        { k: 'Модель', v: p.model, vs: vs() },
+        { k: 'Рабочее место', v: p.place, vs: vs() },
+        { k: 'Папка', v: p.folder + ' · сменить', vs: vs('#BDB2A0') + ' font-family: \'Geist Mono\', monospace; font-size: 12px;' },
+        { k: 'Спрашивает', v: p.ask, vs: vs() }
+      ]
+    };
+    const steps = [1, 2, 3, 4, 5].map((k) => ({
+      track: 'width: 26px; height: 4px; border-radius: 2px; overflow: hidden; background: ' + (k < 4 ? '#A9C7A2' : 'rgba(243,235,221,.12)') + ';',
+      fill: k === 4 ? 'display: block; height: 100%; background: #FF8A1F; transform-origin: left; animation: bnd-story .8s ease-out .3s both;' : 'display: none;'
+    }));
+    return { steps, templates, pickedList: [picked], cta: pick === 5 ? 'Создать агента' : 'Нанять ' + p.name + ' и поздороваться' };
+  }
+}
+</script>
+</body>
+</html>

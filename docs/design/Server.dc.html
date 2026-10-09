@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Bandito — сервер</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+@keyframes bnd-blink{0%,93%,100%{transform:scaleY(1)}96%{transform:scaleY(.12)}}
+body{margin:0;background:#0B0A09}
+a{color:#FFB067}a:hover{color:#FFD2A0}
+button{font:inherit;cursor:pointer;transition:color .15s ease,box-shadow .2s ease,transform .12s ease,filter .15s ease}
+button:hover{filter:brightness(1.15)}
+button:active{transform:scale(.98)}
+@keyframes bnd-rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes bnd-draw{from{stroke-dashoffset:400}to{stroke-dashoffset:0}}
+@keyframes bnd-fill{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes bnd-tick{0%,100%{opacity:.35}50%{opacity:1}}
+@keyframes bnd-shine{0%{background-position:-200px 0}100%{background-position:400px 0}}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; display: flex; background: #12100E; color: #F3EBDD; font-family: Geist, -apple-system, sans-serif; font-size: 14px; overflow: hidden; position: relative;">
+
+  <aside style="width: 296px; flex-shrink: 0; display: flex; flex-direction: column; background: linear-gradient(180deg, rgba(30,26,22,.92) 0%, rgba(22,19,17,.96) 100%); border-right: 1px solid rgba(243,235,221,.07);">
+    <div style="height: 52px; display: flex; align-items: center; padding: 0 16px; gap: 8px;">
+      <span style="width: 12px; height: 12px; border-radius: 50%; background: #FF5F57;"></span>
+      <span style="width: 12px; height: 12px; border-radius: 50%; background: #FEBC2E;"></span>
+      <span style="width: 12px; height: 12px; border-radius: 50%; background: #28C840;"></span>
+    </div>
+    <div style="padding: 4px 14px 10px;">
+      <button style="width: 100%; display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 12px; border: 1px solid rgba(243,235,221,.08); background: rgba(243,235,221,.035); color: #F3EBDD; text-align: left;">
+        <span style="width: 8px; height: 8px; border-radius: 50%; background: #A9C7A2; box-shadow: 0 0 10px rgba(169,199,162,.6);"></span>
+        <span style="flex: 1; display: flex; flex-direction: column; line-height: 1.25;"><span style="font-size: 13px; font-weight: 600;">vps-tokyo-1</span><span style="font-size: 11.5px; color: #867C6D;">Ubuntu 24.04 · 4 ядра · 8 ГБ</span></span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#867C6D" stroke-width="2" stroke-linecap="round"><path d="m7 10 5 5 5-5"></path></svg>
+      </button>
+    </div>
+    <nav aria-label="Разделы" style="display: flex; gap: 2px; margin: 0 14px 6px; padding: 3px; border-radius: 12px; background: rgba(243,235,221,.04); border: 1px solid rgba(243,235,221,.06);">
+      <sc-for list="{{modes}}" as="m" hint-placeholder-count="6">
+        <button aria-label="{{m.label}}" style="{{m.style}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="{{m.icon}}"></path></svg></button>
+      </sc-for>
+    </nav>
+    <div style="padding: 10px 8px 0; display: flex; flex-direction: column; gap: 1px;">
+      <sc-for list="{{nav}}" as="n" hint-placeholder-count="7">
+        <button style="{{n.style}}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="{{n.icon}}"></path></svg>
+          <span style="flex: 1; text-align: left;">{{n.label}}</span>
+          <span style="{{n.metaStyle}}">{{n.meta}}</span>
+        </button>
+      </sc-for>
+    </div>
+    <div style="flex: 1;"></div>
+    <div style="display: flex; align-items: center; gap: 8px; padding: 12px 14px 14px; border-top: 1px solid rgba(243,235,221,.06);">
+      <span style="width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #2C2722, #3A332C); display: grid; place-items: center; font-size: 12px; font-weight: 600; color: #BDB2A0;">Н</span>
+      <span style="flex: 1; font-size: 12px; color: #867C6D;">работает 12 дн. 4 ч</span>
+      <button aria-label="Использование: осталось 77%" style="height: 34px; padding: 0 11px; border-radius: 999px; border: 1px solid rgba(243,235,221,.1); background: rgba(243,235,221,.04); color: #F3EBDD; font-size: 12.5px; font-weight: 600; display: flex; align-items: center; gap: 6px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4.5 16a8 8 0 1 1 15 0"></path><path d="m12 14 3.5-4"></path></svg>77%</button>
+    </div>
+  </aside>
+
+  <main style="flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 26px 30px 24px; gap: 16px;">
+    <div style="display: flex; align-items: center; gap: 14px;">
+      <h1 style="margin: 0; font-size: 26px; letter-spacing: -.02em;">Сервер</h1>
+      <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #A9C7A2; background: rgba(169,199,162,.1); padding: 3px 10px; border-radius: 999px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #A9C7A2; animation: bnd-tick 1.6s infinite;"></span>Всё в порядке</span>
+      <span style="flex: 1;"></span>
+      <div style="display: flex; padding: 3px; border-radius: 10px; background: rgba(243,235,221,.05);">
+        <button style="height: 26px; padding: 0 10px; border-radius: 7px; border: none; background: transparent; color: #867C6D; font-size: 12px;">1 ч</button>
+        <button style="height: 26px; padding: 0 10px; border-radius: 7px; border: none; background: #2C2722; color: #F3EBDD; font-size: 12px; font-weight: 600;">24 ч</button>
+        <button style="height: 26px; padding: 0 10px; border-radius: 7px; border: none; background: transparent; color: #867C6D; font-size: 12px;">7 дн.</button>
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;">
+      <sc-for list="{{tiles}}" as="t" hint-placeholder-count="4">
+        <section style="{{t.box}}">
+          <div style="display: flex; justify-content: space-between; font-size: 12.5px;"><span style="color: #867C6D;">{{t.label}}</span><span style="color: {{t.noteColor}};">{{t.note}}</span></div>
+          <span style="font-size: 26px; font-weight: 650; letter-spacing: -.02em;">{{t.value}}</span>
+          <svg width="100%" height="44" viewBox="0 0 220 44" preserveAspectRatio="none" fill="none"><path d="{{t.area}}" fill="{{t.fill}}"></path><path d="{{t.line}}" stroke="{{t.color}}" stroke-width="2" stroke-linejoin="round" style="stroke-dasharray: 400; animation: bnd-draw 1.4s ease-out {{t.delay}} both;"></path></svg>
+        </section>
+      </sc-for>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1.25fr 1fr; gap: 12px; flex: 1; min-height: 0;">
+      <section style="border-radius: 18px; background: rgba(243,235,221,.025); border: 1px solid rgba(243,235,221,.07); padding: 16px; display: flex; flex-direction: column; gap: 10px; animation: bnd-rise .45s ease-out .35s both;">
+        <div style="display: flex; justify-content: space-between; align-items: center;"><span style="font-size: 11px; font-weight: 600; letter-spacing: .08em; color: #867C6D;">КТО СКОЛЬКО ЕСТ</span><span style="font-size: 12px; color: #6E655A;">процессы агентов</span></div>
+        <sc-for list="{{procs}}" as="p" hint-placeholder-count="5">
+          <div style="display: grid; grid-template-columns: 28px minmax(0, 1fr) 120px 70px 28px; gap: 10px; align-items: center; font-size: 13px; padding: 6px 0; border-top: 1px solid rgba(243,235,221,.05);">
+            <svg width="26" height="26" viewBox="0 0 52 52"><rect width="52" height="52" rx="17" fill="{{p.color}}"></rect><path d="M8 22c6-6 30-6 36 0v7c-6 4-30 4-36 0z" fill="#12100E"></path><g style="transform-box: view-box; transform-origin: 26px 26px; animation: bnd-blink 5.2s ease-in-out infinite; animation-delay: {{p.blink}};"><circle cx="18" cy="26" r="2.6" fill="{{p.color}}"></circle><circle cx="34" cy="26" r="2.6" fill="{{p.color}}"></circle></g></svg>
+            <span style="display: flex; flex-direction: column; min-width: 0;"><b style="font-weight: 600;">{{p.name}}</b><span style="font-size: 11.5px; color: #6E655A; font-family: 'Geist Mono', monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{p.cmd}}</span></span>
+            <span style="display: flex; flex-direction: column; gap: 4px;"><span style="font-size: 11.5px; color: #BDB2A0;">ЦП {{p.cpu}}%</span><span style="height: 4px; border-radius: 999px; background: rgba(243,235,221,.08); overflow: hidden;"><span style="{{p.bar}}"></span></span></span>
+            <span style="font-size: 12px; color: #BDB2A0; text-align: right;">{{p.mem}}</span>
+            <button aria-label="Остановить процессы {{p.name}}" style="width: 26px; height: 26px; border-radius: 7px; border: none; background: transparent; color: #867C6D; display: grid; place-items: center;"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg></button>
+          </div>
+        </sc-for>
+      </section>
+
+      <div style="display: flex; flex-direction: column; gap: 12px; min-height: 0;">
+        <section style="border-radius: 18px; background: rgba(243,235,221,.025); border: 1px solid rgba(243,235,221,.07); padding: 16px; display: flex; flex-direction: column; gap: 10px; animation: bnd-rise .45s ease-out .45s both;">
+          <span style="font-size: 11px; font-weight: 600; letter-spacing: .08em; color: #867C6D;">ПОРТЫ И ПРЕВЬЮ</span>
+          <sc-for list="{{ports}}" as="p" hint-placeholder-count="2">
+            <div style="display: flex; align-items: center; gap: 10px; font-size: 13px;">
+              <span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #A9C7A2; background: rgba(169,199,162,.1); padding: 2px 7px; border-radius: 6px;">{{p.port}}</span>
+              <span style="flex: 1;">{{p.name}} <span style="color: #6E655A;">· {{p.by}}</span></span>
+              <button style="height: 26px; padding: 0 10px; border-radius: 999px; border: 1px solid rgba(243,235,221,.12); background: transparent; color: #F3EBDD; font-size: 12px;">Открыть</button>
+              <button style="height: 26px; padding: 0 10px; border-radius: 999px; border: none; background: transparent; color: #FFB067; font-size: 12px; font-weight: 600;">Поделиться ссылкой</button>
+            </div>
+          </sc-for>
+        </section>
+        <section style="border-radius: 18px; background: rgba(243,235,221,.025); border: 1px solid rgba(243,235,221,.07); padding: 16px; display: flex; flex-direction: column; gap: 10px; animation: bnd-rise .45s ease-out .55s both;">
+          <div style="display: flex; justify-content: space-between;"><span style="font-size: 11px; font-weight: 600; letter-spacing: .08em; color: #867C6D;">СЕКРЕТЫ</span><span style="font-size: 12px; color: #6E655A;">агенты получают их как переменные, но не видят значений в чате</span></div>
+          <sc-for list="{{secrets}}" as="s" hint-placeholder-count="3">
+            <div style="display: flex; align-items: center; gap: 10px; font-size: 13px;">
+              <span style="font-family: 'Geist Mono', monospace; font-size: 12.5px; flex: 1;">{{s.name}}</span>
+              <span style="font-family: 'Geist Mono', monospace; color: #6E655A;">••••{{s.tail}}</span>
+              <span style="font-size: 12px; color: #BDB2A0;">{{s.who}}</span>
+            </div>
+          </sc-for>
+        </section>
+        <section style="border-radius: 16px; padding: 12px 14px; display: flex; align-items: center; gap: 12px; background: linear-gradient(90deg, rgba(255,138,31,.10), rgba(255,138,31,.03)), linear-gradient(110deg, transparent 30%, rgba(255,176,103,.12) 50%, transparent 70%); background-size: auto, 300px 100%; background-repeat: no-repeat; border: 1px solid rgba(255,138,31,.28); animation: bnd-rise .45s ease-out .65s both, bnd-shine 3.5s ease-in-out 1.5s infinite;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFB067" stroke-width="2" stroke-linecap="round"><path d="M12 19V5M6 11l6-6 6 6"></path></svg>
+          <span style="flex: 1; font-size: 13px;"><b style="font-weight: 600;">Bandito 0.5.1</b> <span style="color: #BDB2A0;">· исправления терминала, быстрее браузер</span></span>
+          <button style="height: 30px; padding: 0 12px; border-radius: 999px; border: none; background: #F3EBDD; color: #12100E; font-size: 12.5px; font-weight: 600;">Обновить ночью</button>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const I = {
+      chat: 'M4 5h16v11H9l-5 4z',
+      folder: 'M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
+      term: 'M3.5 5h17v14h-17zM7 10l3 2-3 2M12.5 15h4',
+      globe: 'M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17zM3.5 12h17M12 3.5c2.6 2.6 2.6 14.4 0 17M12 3.5c-2.6 2.6-2.6 14.4 0 17',
+      screen: 'M3.5 4.5h17v11h-17zM9 20h6M12 15.5V20',
+      pulse: 'M3 12h4l2-5 4 10 2-5h6',
+      box: 'M4 7.5 12 4l8 3.5v9L12 20l-8-3.5zM4 7.5l8 3.5 8-3.5M12 11v9',
+      key: 'M14.5 9.5a4 4 0 1 0-3.6 4l1.6 1.5h2v2h2v2h3v-3l-5-5',
+      plug: 'M9 7V3M15 7V3M7 7h10v4a5 5 0 0 1-10 0zM12 16v5',
+      phone: 'M8 3h8v18H8zM11 18h2',
+      up: 'M12 19V5M6 11l6-6 6 6',
+      log: 'M6 4h9l3 3v13H6zM9 11h6M9 15h6'
+    };
+    const modeStyle = (on) => 'flex: 1; height: 32px; border-radius: 9px; border: none; display: grid; place-items: center; ' + (on ? 'background: #2C2722; color: #F3EBDD; box-shadow: inset 0 1px 0 rgba(243,235,221,.06), 0 4px 10px -4px rgba(0,0,0,.6);' : 'background: transparent; color: #867C6D;');
+    const modes = [['Команда', I.chat], ['Файлы', I.folder], ['Терминалы', I.term], ['Браузер', I.globe], ['Экран сервера', I.screen], ['Сервер', I.pulse]].map(([label, icon], k) => ({ label, icon, style: modeStyle(k === 5) }));
+    const navStyle = (on) => 'display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; border: none; font-size: 13px; ' + (on ? 'background: rgba(243,235,221,.07); color: #F3EBDD;' : 'background: transparent; color: #BDB2A0;');
+    const nav = [
+      ['Обзор', I.pulse, '', true], ['Рабочие места', I.box, '3'], ['Секреты', I.key, '5'], ['Порты и превью', I.plug, '2'], ['Устройства', I.phone, '3'], ['Обновления', I.up, 'есть', false, true], ['Журнал демона', I.log, '']
+    ].map(([label, icon, meta, on, hot]) => ({ label, icon, meta, style: navStyle(!!on), metaStyle: hot ? 'font-size: 11px; font-weight: 600; color: #FFB067; background: rgba(255,138,31,.13); padding: 1px 7px; border-radius: 999px;' : 'font-size: 11.5px; color: #6E655A;' }));
+    const series = (pts) => {
+      const step = 220 / (pts.length - 1);
+      const line = pts.map((v, k) => (k ? 'L' : 'M') + (k * step).toFixed(1) + ' ' + (44 - v * 0.4).toFixed(1)).join(' ');
+      return { line, area: line + ' L220 44 L0 44 Z' };
+    };
+    const tile = (label, value, note, noteColor, color, fill, pts, k) => ({ label, value, note, noteColor, color, fill, delay: (200 + k * 120) + 'ms', ...series(pts), box: 'border-radius: 16px; background: rgba(243,235,221,.025); border: 1px solid rgba(243,235,221,.07); padding: 14px 14px 8px; display: flex; flex-direction: column; gap: 4px; animation: bnd-rise .4s ease-out ' + (k * 80) + 'ms both;' });
+    const tiles = [
+      tile('Процессор', '38%', '4 ядра', '#6E655A', '#A9C7A2', 'rgba(169,199,162,.10)', [20, 25, 22, 40, 55, 38, 30, 45, 62, 50, 38, 42], 0),
+      tile('Память', '5,1 ГБ', 'из 8 ГБ', '#6E655A', '#FFB067', 'rgba(255,138,31,.10)', [50, 52, 55, 58, 57, 60, 62, 61, 63, 64, 63, 64], 1),
+      tile('Диск', '122 ГБ', '38 ГБ свободно', '#FFB067', '#F3EBDD', 'rgba(243,235,221,.06)', [60, 61, 61, 62, 63, 64, 66, 70, 72, 74, 75, 76], 2),
+      tile('Сеть', '2,4 МБ/с', '↓ 1,9 · ↑ 0,5', '#6E655A', '#A3BDEB', 'rgba(163,189,235,.10)', [10, 30, 15, 60, 20, 35, 80, 25, 40, 18, 55, 30], 3)
+    ];
+    const proc = (name, color, cmd, cpu, mem, k) => ({ name, color, cmd, cpu, mem, bar: 'display: block; width: ' + cpu + '%; height: 100%; border-radius: 999px; background: ' + color + '; transform-origin: left; animation: bnd-fill .9s cubic-bezier(.2,.8,.2,1) ' + (500 + k * 90) + 'ms both;' });
+    const procs = [
+      proc('Forge', '#FFB067', 'claude · cargo test · node :3000', 34, '1,6 ГБ', 0),
+      proc('Scout', '#A3BDEB', 'контейнер sandbox-scout · k6', 28, '1,1 ГБ', 1),
+      proc('Watch', '#F2A093', 'codex app-server · tail -f', 6, '320 МБ', 2),
+      proc('Quill', '#BDB2A0', 'vite :5173', 3, '210 МБ', 3),
+      proc('Bandito', '#F3EBDD', 'демон · 2 экрана · 5 терминалов', 4, '180 МБ', 4)
+    ];
+    const ports = [{ port: ':3000', name: 'billing admin', by: 'Forge' }, { port: ':5173', name: 'лендинг (dev)', by: 'Quill' }];
+    const secrets = [
+      { name: 'PAYMENTS_TEST_KEY', tail: 'x9Qa', who: 'Forge' },
+      { name: 'DATABASE_URL', tail: '5432', who: 'Forge, Scout' },
+      { name: 'SENTRY_TOKEN', tail: '1f0c', who: 'Watch' }
+    ];
+    return { modes, nav, tiles, procs, ports, secrets };
+  }
+}
+</script>
+</body>
+</html>

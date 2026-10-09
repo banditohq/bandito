@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Bandito — браузер сервера</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+@keyframes bnd-blink{0%,93%,100%{transform:scaleY(1)}96%{transform:scaleY(.12)}}
+body{margin:0;background:#0B0A09}
+a{color:#FFB067}a:hover{color:#FFD2A0}
+button{font:inherit;cursor:pointer;transition:color .15s ease,box-shadow .2s ease,transform .12s ease,filter .15s ease}
+button:hover{filter:brightness(1.15)}
+button:active{transform:scale(.98)}
+@keyframes bnd-pulse{0%{box-shadow:0 0 0 0 rgba(255,138,31,.55)}70%{box-shadow:0 0 0 7px rgba(255,138,31,0)}100%{box-shadow:0 0 0 0 rgba(255,138,31,0)}}
+@keyframes bnd-rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes bnd-cursor{0%{transform:translate(0,0)}35%{transform:translate(-210px,-118px)}45%{transform:translate(-210px,-118px) scale(.9)}50%{transform:translate(-210px,-118px)}85%{transform:translate(0,0)}100%{transform:translate(0,0)}}
+@keyframes bnd-ripple{0%,34%{opacity:0;transform:scale(.2)}36%{opacity:.9;transform:scale(.4)}60%{opacity:0;transform:scale(1.8)}100%{opacity:0}}
+@keyframes bnd-type{from{width:0}to{width:232px}}
+@keyframes bnd-caret{0%,49%{opacity:1}50%,100%{opacity:0}}
+@keyframes bnd-dots{0%,80%,100%{opacity:.25}40%{opacity:1}}
+@keyframes bnd-load{0%{transform:translateX(-100%)}100%{transform:translateX(400%)}}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; display: flex; background: #12100E; color: #F3EBDD; font-family: Geist, -apple-system, sans-serif; font-size: 14px; overflow: hidden; position: relative;">
+
+  <aside style="width: 296px; flex-shrink: 0; display: flex; flex-direction: column; background: linear-gradient(180deg, rgba(30,26,22,.92) 0%, rgba(22,19,17,.96) 100%); border-right: 1px solid rgba(243,235,221,.07);">
+    <div style="height: 52px; display: flex; align-items: center; padding: 0 16px; gap: 8px;">
+      <span style="width: 12px; height: 12px; border-radius: 50%; background: #FF5F57;"></span>
+      <span style="width: 12px; height: 12px; border-radius: 50%; background: #FEBC2E;"></span>
+      <span style="width: 12px; height: 12px; border-radius: 50%; background: #28C840;"></span>
+      <span style="flex: 1;"></span>
+      <button aria-label="Новая вкладка (⌘T)" style="width: 30px; height: 30px; border-radius: 9px; border: 1px solid rgba(243,235,221,.08); background: rgba(243,235,221,.03); color: #BDB2A0; display: grid; place-items: center;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg></button>
+    </div>
+    <div style="padding: 4px 14px 10px;">
+      <button style="width: 100%; display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 12px; border: 1px solid rgba(243,235,221,.08); background: rgba(243,235,221,.035); color: #F3EBDD; text-align: left;">
+        <span style="width: 8px; height: 8px; border-radius: 50%; background: #A9C7A2; box-shadow: 0 0 10px rgba(169,199,162,.6);"></span>
+        <span style="flex: 1; display: flex; flex-direction: column; line-height: 1.25;"><span style="font-size: 13px; font-weight: 600;">vps-tokyo-1</span><span style="font-size: 11.5px; color: #867C6D;">браузер рабочего места «Общее»</span></span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#867C6D" stroke-width="2" stroke-linecap="round"><path d="m7 10 5 5 5-5"></path></svg>
+      </button>
+    </div>
+    <nav aria-label="Разделы" style="display: flex; gap: 2px; margin: 0 14px 6px; padding: 3px; border-radius: 12px; background: rgba(243,235,221,.04); border: 1px solid rgba(243,235,221,.06);">
+      <sc-for list="{{modes}}" as="m" hint-placeholder-count="6">
+        <button aria-label="{{m.label}}" style="{{m.style}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="{{m.icon}}"></path></svg></button>
+      </sc-for>
+    </nav>
+    <div style="padding: 14px 18px 6px; font-size: 11px; font-weight: 600; letter-spacing: .08em; color: #867C6D;">ВКЛАДКИ</div>
+    <div style="padding: 0 8px; display: flex; flex-direction: column; gap: 2px;">
+      <sc-for list="{{tabs}}" as="t" hint-placeholder-count="3">
+        <button style="{{t.style}}">
+          <span style="{{t.fav}}">{{t.letter}}</span>
+          <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; text-align: left; gap: 1px;">
+            <span style="font-weight: 500; color: #F3EBDD; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{t.title}}</span>
+            <span style="font-size: 11.5px; color: {{t.subColor}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{t.sub}}</span>
+          </span>
+        </button>
+      </sc-for>
+    </div>
+    <div style="padding: 16px 18px 6px; font-size: 11px; font-weight: 600; letter-spacing: .08em; color: #867C6D;">АГЕНТЫ ЗАПУСТИЛИ</div>
+    <div style="padding: 0 8px; display: flex; flex-direction: column; gap: 2px;">
+      <sc-for list="{{ports}}" as="p" hint-placeholder-count="2">
+        <button style="display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; border: none; background: transparent; font-size: 13px; color: #BDB2A0; animation: bnd-rise .35s ease-out {{p.delay}} both;">
+          <span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #A9C7A2; background: rgba(169,199,162,.1); padding: 2px 7px; border-radius: 6px;">{{p.port}}</span>
+          <span style="flex: 1; text-align: left; color: #F3EBDD;">{{p.name}}</span>
+          <span style="font-size: 11.5px; color: #6E655A;">{{p.by}}</span>
+        </button>
+      </sc-for>
+    </div>
+    <div style="flex: 1;"></div>
+    <div style="margin: 0 14px 14px; padding: 12px 13px; border-radius: 14px; background: rgba(163,189,235,.06); border: 1px solid rgba(163,189,235,.16); font-size: 12px; line-height: 1.5; color: #BDB2A0;">
+      <span style="color: #A3BDEB; font-weight: 600;">Браузер живёт на сервере.</span> Входы на сайты сохраняются, агенты видят те же вкладки, что и вы. У изолированных агентов — свой браузер.
+    </div>
+  </aside>
+
+  <main style="flex: 1; min-width: 0; display: flex; flex-direction: column; background: #12100E;">
+    <header style="height: 52px; display: flex; align-items: center; gap: 6px; padding: 0 14px; border-bottom: 1px solid rgba(243,235,221,.05);">
+      <button aria-label="Назад" style="width: 30px; height: 30px; border-radius: 9px; border: none; background: transparent; color: #BDB2A0; display: grid; place-items: center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m15 6-6 6 6 6"></path></svg></button>
+      <button aria-label="Вперёд" style="width: 30px; height: 30px; border-radius: 9px; border: none; background: transparent; color: #4A433B; display: grid; place-items: center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m9 6 6 6-6 6"></path></svg></button>
+      <button aria-label="Обновить" style="width: 30px; height: 30px; border-radius: 9px; border: none; background: transparent; color: #BDB2A0; display: grid; place-items: center;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"></path></svg></button>
+      <label style="flex: 1; position: relative; display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border-radius: 10px; background: rgba(243,235,221,.05); border: 1px solid rgba(243,235,221,.07); overflow: hidden;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#A9C7A2" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>
+        <input aria-label="Адрес" value="localhost:3000/admin/webhooks/new" style="flex: 1; border: none; background: transparent; color: #F3EBDD; font: inherit; font-size: 13px; outline: none;">
+        <span style="font-size: 11.5px; color: #6E655A;">открыто на сервере</span>
+        <span style="position: absolute; left: 0; bottom: 0; width: 25%; height: 2px; background: linear-gradient(90deg, transparent, #FF8A1F, transparent); animation: bnd-load 1.6s ease-in-out infinite;"></span>
+      </label>
+      <button aria-label="Открыть на Mac" style="height: 30px; padding: 0 10px; border-radius: 9px; border: 1px solid rgba(243,235,221,.1); background: rgba(243,235,221,.04); color: #BDB2A0; font-size: 12.5px;">Открыть на Mac</button>
+    </header>
+
+    <div style="margin: 10px 14px 0; padding: 9px 10px 9px 12px; border-radius: 12px; background: linear-gradient(90deg, rgba(255,138,31,.12), rgba(255,138,31,.04)); border: 1px solid rgba(255,138,31,.3); display: flex; align-items: center; gap: 10px; animation: bnd-rise .35s ease-out both;">
+      <svg width="24" height="24" viewBox="0 0 52 52"><rect width="52" height="52" rx="17" fill="#FFB067"></rect><path d="M8 22c6-6 30-6 36 0v7c-6 4-30 4-36 0z" fill="#12100E"></path><g style="transform-box: view-box; transform-origin: 26px 26px; animation: bnd-blink 5.2s ease-in-out infinite; animation-delay: 0.00s;"><path d="m16 23 4 3-4 3" stroke="#FFB067" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"></path><path d="M31 26h6" stroke="#FFB067" stroke-width="2.6" stroke-linecap="round"></path></g></svg>
+      <span style="font-size: 13px;"><b style="font-weight: 600;">Forge управляет браузером</b> <span style="color: #BDB2A0;">· заполняет форму вебхука</span></span>
+      <span style="display: inline-flex; gap: 3px;"><span style="width: 4px; height: 4px; border-radius: 50%; background: #FFB067; animation: bnd-dots 1.2s infinite;"></span><span style="width: 4px; height: 4px; border-radius: 50%; background: #FFB067; animation: bnd-dots 1.2s .2s infinite;"></span><span style="width: 4px; height: 4px; border-radius: 50%; background: #FFB067; animation: bnd-dots 1.2s .4s infinite;"></span></span>
+      <span style="flex: 1;"></span>
+      <button style="height: 28px; padding: 0 11px; border-radius: 999px; border: 1px solid rgba(243,235,221,.14); background: transparent; color: #F3EBDD; font-size: 12.5px;">Пауза</button>
+      <button style="height: 28px; padding: 0 12px; border-radius: 999px; border: none; background: #F3EBDD; color: #12100E; font-size: 12.5px; font-weight: 600;">Взять управление</button>
+    </div>
+
+    <div style="flex: 1; display: flex; gap: 12px; padding: 10px 14px 14px; min-height: 0;">
+      <section aria-label="Страница" style="flex: 1; min-width: 0; position: relative; border-radius: 14px; overflow: hidden; background: #F7F4EE; color: #1B1814; box-shadow: 0 0 0 1px rgba(243,235,221,.08), 0 30px 60px -30px rgba(0,0,0,.9);">
+        <div style="height: 54px; display: flex; align-items: center; gap: 22px; padding: 0 24px; border-bottom: 1px solid #E6DFD3; font-size: 13.5px; color: #6A6156;">
+          <span style="font-weight: 700; color: #1B1814; letter-spacing: -.01em;">billing admin</span>
+          <span>Платежи</span><span>Клиенты</span><span style="color: #1B1814; font-weight: 600; border-bottom: 2px solid #E4620E; padding: 17px 0 15px;">Вебхуки</span><span>Логи</span>
+        </div>
+        <div style="padding: 26px 30px; display: flex; flex-direction: column; gap: 18px; max-width: 560px;">
+          <h2 style="margin: 0; font-size: 22px; letter-spacing: -.02em;">Новый вебхук</h2>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <span style="font-size: 13px; font-weight: 600;">Адрес, куда слать события</span>
+            <div style="height: 40px; border-radius: 9px; border: 1.5px solid #E4620E; box-shadow: 0 0 0 4px rgba(228,98,14,.14); background: #FFFFFF; display: flex; align-items: center; padding: 0 12px; font-family: 'Geist Mono', monospace; font-size: 13px;">
+              <span style="display: inline-block; overflow: hidden; white-space: nowrap; animation: bnd-type 2.6s steps(34) .4s both;">https://api.billing.dev/v1/webhook</span><span style="display: inline-block; width: 2px; height: 17px; background: #E4620E; animation: bnd-caret 1s infinite;"></span>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <span style="font-size: 13px; font-weight: 600;">События</span>
+            <sc-for list="{{events}}" as="ev" hint-placeholder-count="3">
+              <label style="display: flex; align-items: center; gap: 10px; font-size: 13.5px;"><input type="checkbox" checked="{{ev.on}}" style="width: 16px; height: 16px; accent-color: #E4620E;">{{ev.name}}</label>
+            </sc-for>
+          </div>
+          <div style="display: flex; gap: 10px;">
+            <button style="height: 38px; padding: 0 16px; border-radius: 9px; border: none; background: #1B1814; color: #F7F4EE; font-weight: 600;">Сохранить</button>
+            <button style="height: 38px; padding: 0 16px; border-radius: 9px; border: 1px solid #D9D0C2; background: #FFFFFF; color: #1B1814;">Отправить тестовое событие</button>
+          </div>
+        </div>
+        <div aria-hidden="true" style="position: absolute; left: 470px; top: 430px; animation: bnd-cursor 5s cubic-bezier(.4,0,.2,1) infinite;">
+          <span style="position: absolute; left: -14px; top: -14px; width: 28px; height: 28px; border-radius: 50%; border: 2px solid #E4620E; animation: bnd-ripple 5s ease-out infinite;"></span>
+          <svg width="20" height="22" viewBox="0 0 20 22"><path d="M2 1.5 17.5 11 10 12.5 6.5 20z" fill="#E4620E" stroke="#FFFFFF" stroke-width="1.5" stroke-linejoin="round"></path></svg>
+          <span style="position: absolute; left: 16px; top: 18px; font-size: 11px; font-weight: 600; color: #FFFFFF; background: #E4620E; padding: 2px 7px; border-radius: 999px; white-space: nowrap;">Forge</span>
+        </div>
+      </section>
+
+      <aside aria-label="Что делает агент" style="width: 300px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px;">
+        <div style="border-radius: 14px; background: rgba(26,23,20,.7); border: 1px solid rgba(243,235,221,.07); padding: 14px; display: flex; flex-direction: column; gap: 10px;">
+          <span style="font-size: 11px; font-weight: 600; letter-spacing: .08em; color: #867C6D;">ШАГИ FORGE</span>
+          <sc-for list="{{steps}}" as="s" hint-placeholder-count="5">
+            <div style="{{s.row}}">
+              <span style="{{s.mark}}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="{{s.icon}}"></path></svg></span>
+              <span style="flex: 1; color: {{s.color}};">{{s.text}}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="border-radius: 16px; padding: 1px; background: linear-gradient(135deg, rgba(255,176,103,.75), rgba(228,98,14,.3) 45%, rgba(243,235,221,.08)); animation: bnd-rise .4s ease-out .8s both;">
+          <div style="border-radius: 15px; background: linear-gradient(180deg, #221C16, #1A1612); padding: 14px; display: flex; flex-direction: column; gap: 10px;">
+            <span style="display: inline-flex; align-self: flex-start; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: #FFB067; background: rgba(255,138,31,.13); padding: 3px 9px 3px 7px; border-radius: 999px;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #FF8A1F; animation: bnd-pulse 1.8s infinite;"></span>Спросит вас</span>
+            <span style="font-size: 13.5px; line-height: 1.45;">Следующий шаг — <b style="font-weight: 600;">«Отправить тестовое событие»</b>. Это настоящий запрос на ваш API, поэтому Forge сначала спросит.</span>
+            <span style="font-size: 12px; color: #867C6D;">Правило: нажатия «Отправить», «Оплатить», «Удалить» — с вашего «да».</span>
+          </div>
+        </div>
+        <div style="flex: 1;"></div>
+        <div style="display: flex; justify-content: space-between; font-size: 11.5px; color: #6E655A; padding: 0 4px;"><span>Смотрите вы и Forge</span><span>30 к/с · 1280×800</span></div>
+      </aside>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const I = {
+      chat: 'M4 5h16v11H9l-5 4z',
+      folder: 'M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
+      term: 'M3.5 5h17v14h-17zM7 10l3 2-3 2M12.5 15h4',
+      globe: 'M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17zM3.5 12h17M12 3.5c2.6 2.6 2.6 14.4 0 17M12 3.5c-2.6 2.6-2.6 14.4 0 17',
+      screen: 'M3.5 4.5h17v11h-17zM9 20h6M12 15.5V20',
+      pulse: 'M3 12h4l2-5 4 10 2-5h6'
+    };
+    const modeStyle = (on) => 'flex: 1; height: 32px; border-radius: 9px; border: none; display: grid; place-items: center; ' + (on ? 'background: #2C2722; color: #F3EBDD; box-shadow: inset 0 1px 0 rgba(243,235,221,.06), 0 4px 10px -4px rgba(0,0,0,.6);' : 'background: transparent; color: #867C6D;');
+    const modes = [['Команда', I.chat], ['Файлы', I.folder], ['Терминалы', I.term], ['Браузер', I.globe], ['Экран сервера', I.screen], ['Сервер', I.pulse]].map(([label, icon], k) => ({ label, icon, style: modeStyle(k === 3) }));
+    const fav = (bg, fg) => 'width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; font-size: 12px; font-weight: 700; flex-shrink: 0; background: ' + bg + '; color: ' + fg + ';';
+    const tabRow = (on, k) => 'display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 11px; border: none; font-size: 13px; animation: bnd-rise .35s ease-out ' + (k * 70) + 'ms both; ' + (on ? 'background: rgba(255,138,31,.10); box-shadow: inset 0 0 0 1px rgba(255,138,31,.3);' : 'background: transparent;');
+    const tabs = [
+      { title: 'billing admin · Вебхуки', sub: 'Forge управляет', subColor: '#FFB067', letter: 'b', f: fav('#1B1814', '#F7F4EE'), on: true },
+      { title: 'PR #43 · тесты вебхука', sub: 'Scout читает', subColor: '#A3BDEB', letter: 'G', f: fav('rgba(163,189,235,.15)', '#A3BDEB') },
+      { title: 'Документация API', sub: 'вы · 12 мин назад', subColor: '#6E655A', letter: 'D', f: fav('rgba(243,235,221,.08)', '#BDB2A0') }
+    ].map((t, k) => ({ ...t, fav: t.f, style: tabRow(!!t.on, k) }));
+    const ports = [
+      { port: ':3000', name: 'billing admin', by: 'Forge', delay: '250ms' },
+      { port: ':5173', name: 'лендинг (dev)', by: 'Quill', delay: '320ms' }
+    ];
+    const events = [{ name: 'payment.succeeded', on: true }, { name: 'payment.refunded', on: true }, { name: 'customer.created', on: false }];
+    const mark = (bg, fg) => 'width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; flex-shrink: 0; background: ' + bg + '; color: ' + fg + ';';
+    const steps = [
+      { text: 'Открыл localhost:3000/admin', done: true },
+      { text: 'Вошёл тестовым пользователем', done: true },
+      { text: 'Перешёл в «Вебхуки» → «Новый»', done: true },
+      { text: 'Вписывает адрес и события', live: true },
+      { text: 'Отправит тестовое событие', next: true }
+    ].map((s, k) => ({
+      ...s,
+      row: 'display: flex; align-items: center; gap: 10px; font-size: 13px; animation: bnd-rise .35s ease-out ' + (200 + k * 90) + 'ms both;',
+      mark: s.done ? mark('rgba(169,199,162,.15)', '#A9C7A2') : s.live ? mark('#E4620E', '#FFFFFF') + ' animation: bnd-pulse 1.8s infinite;' : mark('rgba(243,235,221,.06)', '#6E655A'),
+      icon: s.done ? 'm5 12 4.5 4.5L19 7' : s.live ? 'M12 8v4l2.5 2' : 'M12 12h.01',
+      color: s.done ? '#BDB2A0' : s.live ? '#F3EBDD' : '#867C6D'
+    }));
+    return { modes, tabs, ports, events, steps };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,42 @@
+{
+  "v": 3,
+  "createdOnFiles": {"v": 1, "at": "2026-10-09T09:40:00Z"},
+  "title": "Bandito — Mac app",
+  "launch": {"view": "canvas"},
+  "pages": [],
+  "boards": {
+    "Welcome.dc.html": {"x": 0, "y": 0, "w": 1440, "h": 900, "title": "01 · Приветствие", "is_interactive": true, "radius": 14},
+    "Account.dc.html": {"x": 1520, "y": 0, "w": 1440, "h": 900, "title": "02 · Аккаунт — Mac и iPhone вместе", "radius": 14},
+    "FirstServer.dc.html": {"x": 3040, "y": 0, "w": 1440, "h": 900, "title": "03 · Первый сервер", "is_interactive": true, "radius": 14},
+    "FirstAgent.dc.html": {"x": 4560, "y": 0, "w": 1440, "h": 900, "title": "04 · Первый агент — шаблоны", "is_interactive": true, "radius": 14},
+    "Tour.dc.html": {"x": 6080, "y": 0, "w": 1440, "h": 900, "title": "05 · Короткое обучение", "is_interactive": true, "radius": 14},
+    "Main.dc.html": {"x": 0, "y": 1300, "w": 1440, "h": 900, "title": "06 · Окно команды — одобрение и лимиты", "is_interactive": true, "radius": 14},
+    "Inspector.dc.html": {"x": 1520, "y": 1300, "w": 1440, "h": 900, "title": "07 · Агент — память, главы, рабочее место", "is_interactive": true, "radius": 14},
+    "Changes.dc.html": {"x": 3040, "y": 1300, "w": 1440, "h": 900, "title": "08 · Что изменил агент — откат по точкам", "radius": 14},
+    "NewAgent.dc.html": {"x": 4560, "y": 1300, "w": 1440, "h": 900, "title": "09 · Новый агент — подписка, папка, рабочее место", "is_interactive": true, "radius": 14},
+    "Palette.dc.html": {"x": 6080, "y": 1300, "w": 1440, "h": 900, "title": "10 · ⌘K — быстрый переход и команды", "radius": 14},
+    "Files.dc.html": {"x": 0, "y": 2600, "w": 1440, "h": 900, "title": "11 · Файлы сервера", "radius": 14},
+    "FileViewer.dc.html": {"x": 1520, "y": 2600, "w": 1440, "h": 900, "title": "12 · Файл в приложении — читать и править", "is_interactive": true, "radius": 14},
+    "Terminals.dc.html": {"x": 3040, "y": 2600, "w": 1440, "h": 900, "title": "13 · Терминалы — несколько, свернуть, вернуть", "is_interactive": true, "radius": 14},
+    "Browser.dc.html": {"x": 0, "y": 3900, "w": 1440, "h": 900, "title": "14 · Браузер сервера — вы и агент", "radius": 14},
+    "Desktop.dc.html": {"x": 1520, "y": 3900, "w": 1440, "h": 900, "title": "15 · Экран сервера", "radius": 14},
+    "Server.dc.html": {"x": 0, "y": 5200, "w": 1440, "h": 900, "title": "16 · Сервер — здоровье, порты, секреты", "radius": 14},
+    "Workspaces.dc.html": {"x": 1520, "y": 5200, "w": 1440, "h": 900, "title": "17 · Рабочие места — вместе или отдельно", "radius": 14},
+    "Settings.dc.html": {"x": 3040, "y": 5200, "w": 1440, "h": 900, "title": "18 · Настройки — правила и доступ", "radius": 14},
+    "AddServer.dc.html": {"x": 4560, "y": 5200, "w": 1440, "h": 900, "title": "19 · Подключение сервера — как удобно", "radius": 14},
+    "Keys.dc.html": {"x": 6080, "y": 5200, "w": 1440, "h": 900, "title": "19a · Клавиши и жесты — всё настраивается", "is_interactive": true, "radius": 14},
+    "MenuBar.dc.html": {"x": 0, "y": 6500, "w": 900, "h": 760, "title": "20 · Строка меню и уведомления", "radius": 14},
+    "Phone.dc.html": {"x": 980, "y": 6500, "w": 390, "h": 844, "title": "21 · iPhone", "radius": 44},
+    "Avatars.dc.html": {"x": 1450, "y": 6500, "w": 1440, "h": 640, "title": "22 · Живые аватары — состояния", "radius": 14}
+  },
+  "order": ["Welcome.dc.html", "Account.dc.html", "FirstServer.dc.html", "FirstAgent.dc.html", "Tour.dc.html", "Main.dc.html", "Inspector.dc.html", "Changes.dc.html", "NewAgent.dc.html", "Palette.dc.html", "Files.dc.html", "FileViewer.dc.html", "Terminals.dc.html", "Browser.dc.html", "Desktop.dc.html", "Server.dc.html", "Workspaces.dc.html", "Settings.dc.html", "AddServer.dc.html", "Keys.dc.html", "MenuBar.dc.html", "Phone.dc.html", "Avatars.dc.html"],
+  "notes": {
+    "t1": {"x": 0, "y": -300, "text": "Первый запуск: от нуля до первой задачи за 3 минуты", "kind": "title1", "maxW": 7520},
+    "t2": {"x": 0, "y": 1000, "text": "Окно команды: разговор, память, изменения, новые агенты", "kind": "title1", "maxW": 7520},
+    "t3": {"x": 0, "y": 2300, "text": "Сервер под рукой: файлы и терминалы", "kind": "title1", "maxW": 4480},
+    "t4": {"x": 0, "y": 3600, "text": "Браузер и экран сервера — для вас и агентов", "kind": "title1", "maxW": 2960},
+    "t5": {"x": 0, "y": 4900, "text": "Сервер, рабочие места, подключение, клавиши", "kind": "title1", "maxW": 7520},
+    "t6": {"x": 0, "y": 6200, "text": "Вне окна и живые аватары", "kind": "title1", "maxW": 2890}
+  },
+  "designSystems": []
+}

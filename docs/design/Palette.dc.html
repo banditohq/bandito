@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Bandito — быстрый переход</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+@keyframes bnd-blink{0%,93%,100%{transform:scaleY(1)}96%{transform:scaleY(.12)}}
+body{margin:0;background:#0B0A09}
+a{color:#FFB067}a:hover{color:#FFD2A0}
+button{font:inherit;cursor:pointer;transition:color .15s ease,box-shadow .2s ease,transform .12s ease,filter .15s ease}
+button:hover{filter:brightness(1.15)}
+@keyframes bnd-palette{from{opacity:0;transform:translateY(-10px) scale(.97)}to{opacity:1;transform:none}}
+@keyframes bnd-fade{from{opacity:0}to{opacity:1}}
+@keyframes bnd-rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes bnd-caret{0%,49%{opacity:1}50%,100%{opacity:0}}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; position: relative; background: #12100E; color: #F3EBDD; font-family: Geist, -apple-system, sans-serif; font-size: 14px; overflow: hidden;">
+
+  <div aria-hidden="true" style="position: absolute; inset: 0; display: flex; filter: blur(3px); opacity: .55;">
+    <div style="width: 296px; background: #171411; border-right: 1px solid rgba(243,235,221,.07); padding: 70px 14px; display: flex; flex-direction: column; gap: 14px;">
+      <div style="height: 50px; border-radius: 12px; background: rgba(243,235,221,.05);"></div>
+      <div style="height: 112px; border-radius: 16px; background: rgba(243,235,221,.04);"></div>
+      <div style="height: 54px; border-radius: 13px; background: rgba(255,138,31,.1);"></div>
+      <div style="height: 54px; border-radius: 13px; background: rgba(243,235,221,.03);"></div>
+      <div style="height: 54px; border-radius: 13px; background: rgba(243,235,221,.03);"></div>
+    </div>
+    <div style="flex: 1; display: flex; flex-direction: column; align-items: center; padding-top: 90px; gap: 16px;">
+      <div style="width: 460px; height: 44px; border-radius: 18px; background: #2C2722; align-self: center; margin-left: 300px;"></div>
+      <div style="width: 760px; height: 70px; border-radius: 18px; background: #1A1714;"></div>
+      <div style="width: 760px; height: 100px; border-radius: 14px; background: #1A1714;"></div>
+      <div style="width: 760px; height: 210px; border-radius: 20px; background: #221C16; border: 1px solid rgba(255,138,31,.3);"></div>
+    </div>
+  </div>
+  <div aria-hidden="true" style="position: absolute; inset: 0; background: rgba(8,7,6,.55); animation: bnd-fade .2s ease-out both;"></div>
+
+  <div role="dialog" aria-label="Быстрый переход" style="position: absolute; left: 390px; top: 70px; width: 660px; animation: bnd-palette .22s cubic-bezier(.2,.9,.3,1.1) both; border-radius: 22px; background: rgba(30,26,22,.96); border: 1px solid rgba(243,235,221,.12); box-shadow: 0 40px 120px -20px rgba(0,0,0,.85), 0 0 0 1px rgba(0,0,0,.4), inset 0 1px 0 rgba(243,235,221,.06); overflow: hidden;">
+    <div style="display: flex; align-items: center; gap: 12px; padding: 16px 18px; border-bottom: 1px solid rgba(243,235,221,.07);">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#BDB2A0" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+      <label for="q" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0);">Поиск</label>
+      <span style="flex: 1; display: flex; align-items: center;"><input id="q" value="fo" style="width: 22px; border: none; outline: none; background: transparent; color: #F3EBDD; font: inherit; font-size: 17px;"><span style="width: 2px; height: 20px; background: #FF8A1F; animation: bnd-caret 1s infinite;"></span><span style="flex: 1;"></span><span style="font-size: 12px; color: #6E655A;">агенты, файлы, терминалы, команды</span></span>
+      <span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #867C6D; border: 1px solid rgba(243,235,221,.14); border-radius: 6px; padding: 2px 6px;">esc</span>
+    </div>
+
+    <div style="padding: 8px;">
+      <div style="padding: 8px 10px 6px; font-size: 11px; font-weight: 600; letter-spacing: .08em; color: #6E655A;">АГЕНТЫ</div>
+      <div style="display: flex; align-items: center; gap: 12px; padding: 9px 10px; border-radius: 12px; background: rgba(243,235,221,.07);">
+        <svg width="32" height="32" viewBox="0 0 52 52"><rect width="52" height="52" rx="17" fill="#FFB067"></rect><path d="M8 22c6-6 30-6 36 0v7c-6 4-30 4-36 0z" fill="#12100E"></path><g style="transform-box: view-box; transform-origin: 26px 26px; animation: bnd-blink 5.2s ease-in-out infinite; animation-delay: 0.00s;"><path d="m16 23 4 3-4 3" stroke="#FFB067" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"></path><path d="M31 26h6" stroke="#FFB067" stroke-width="2.6" stroke-linecap="round"></path></g></svg>
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 1px;">
+          <span style="font-weight: 600;"><span style="color: #FFB067;">Fo</span>rge <span style="font-size: 11px; font-weight: 500; color: #FFB067; margin-left: 6px;">● ждёт вас</span></span>
+          <span style="font-size: 12.5px; color: #867C6D;">сборщик · Claude Code · ~/billing</span>
+        </div>
+        <span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #BDB2A0;">⌘2</span>
+        <span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #BDB2A0; border: 1px solid rgba(243,235,221,.16); border-radius: 6px; padding: 2px 6px;">↵</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px; padding: 9px 10px; border-radius: 12px;">
+        <svg width="32" height="32" viewBox="0 0 52 52"><rect width="52" height="52" rx="17" fill="#C8B6E8"></rect><path d="M8 22c6-6 30-6 36 0v7c-6 4-30 4-36 0z" fill="#12100E"></path><g style="transform-box: view-box; transform-origin: 26px 26px; animation: bnd-blink 5.2s ease-in-out infinite; animation-delay: 1.37s;"><circle cx="18" cy="26" r="2.6" fill="#C8B6E8"></circle><circle cx="34" cy="26" r="2.6" fill="#C8B6E8"></circle></g></svg>
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 1px;">
+          <span style="font-weight: 600;"><span style="color: #FFB067;">Fo</span>x</span>
+          <span style="font-size: 12.5px; color: #867C6D;">исследователь · Codex · на home-5080 (не в сети)</span>
+        </div>
+        <span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #6E655A;">⌘6</span>
+      </div>
+
+      <div style="padding: 12px 10px 6px; font-size: 11px; font-weight: 600; letter-spacing: .08em; color: #6E655A;">ДЕЙСТВИЯ</div>
+      <div style="display: flex; align-items: center; gap: 12px; padding: 9px 10px; border-radius: 12px;">
+        <span style="width: 32px; height: 32px; border-radius: 10px; background: rgba(243,235,221,.06); display: grid; place-items: center; color: #BDB2A0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg></span>
+        <span style="flex: 1;">Новый агент <span style="color: #6E655A;">— с именем «Fo…»</span></span>
+        <span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #6E655A;">⌘N</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px; padding: 9px 10px; border-radius: 12px;">
+        <span style="width: 32px; height: 32px; border-radius: 10px; background: rgba(243,235,221,.06); display: grid; place-items: center; color: #BDB2A0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6v12M16 6v12"></path></svg></span>
+        <span style="flex: 1;">Поставить на паузу <span style="color: #FFB067;">Fo</span>rge</span>
+      </div>
+
+      <div style="padding: 12px 10px 6px; font-size: 11px; font-weight: 600; letter-spacing: .08em; color: #6E655A;">ФАЙЛЫ, ТЕРМИНАЛЫ, ПРЕВЬЮ</div>
+      <sc-for list="{{server}}" as="s" hint-placeholder-count="4">
+        <div style="{{s.row}}">
+          <span style="{{s.iconWrap}}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="{{s.icon}}"></path></svg></span>
+          <span style="flex: 1; display: flex; flex-direction: column; gap: 1px;"><span>{{s.title}}</span><span style="font-size: 12px; color: #6E655A; font-family: 'Geist Mono', monospace;">{{s.sub}}</span></span>
+          <span style="font-size: 11.5px; color: {{s.tagColor}};">{{s.tag}}</span>
+        </div>
+      </sc-for>
+
+      <div style="padding: 12px 10px 6px; font-size: 11px; font-weight: 600; letter-spacing: .08em; color: #6E655A;">СООБЩЕНИЯ</div>
+      <div style="display: flex; align-items: flex-start; gap: 12px; padding: 9px 10px; border-radius: 12px;">
+        <span style="width: 32px; height: 32px; border-radius: 10px; background: rgba(243,235,221,.06); display: grid; place-items: center; color: #BDB2A0; flex-shrink: 0;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 5h16v11H9l-5 4z"></path></svg></span>
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 2px;">
+          <span style="font-size: 13px; color: #BDB2A0;">«…блокировка снимается до записи, и два воркера берут одну задачу. <span style="color: #FFB067; background: rgba(255,138,31,.12); border-radius: 3px;">Fo</span>rge, поправишь?»</span>
+          <span style="font-size: 11.5px; color: #6E655A;">Scout · вчера в 16:40</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 16px; padding: 11px 18px; border-top: 1px solid rgba(243,235,221,.07); font-size: 11.5px; color: #6E655A; font-family: 'Geist Mono', monospace;">
+      <span>↑↓ выбрать</span><span>↵ открыть</span><span>⌘↵ написать</span><span style="flex: 1;"></span><span>3 сервера · 9 агентов</span>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const wrap = (c, bg) => 'width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; flex-shrink: 0; color: ' + c + '; background: ' + bg + ';';
+    const server = [
+      { title: 'MEMORY.md — память Forge', sub: '~/bandito/agents/forge', icon: 'M6 3.5h8l4 4v13H6zM14 3.5v4h4M9 12.5h6M9 16h4', c: '#FFB067', bg: 'rgba(255,138,31,.12)', tag: 'открыть здесь', tagColor: '#867C6D' },
+      { title: 'Терминал «deploy staging»', sub: 'свёрнут · ждёт ввода', icon: 'M3.5 5h17v14h-17zM7 10l3 2-3 2M12.5 15h4', c: '#FFB067', bg: 'rgba(255,138,31,.12)', tag: 'вернуть ⌘⇧T', tagColor: '#FFB067' },
+      { title: 'Новый терминал в папке Forge', sub: '~/projects/billing', icon: 'M12 5v14M5 12h14', c: '#BDB2A0', bg: 'rgba(243,235,221,.06)', tag: '⌥T', tagColor: '#6E655A' },
+      { title: 'Открыть :3000 — billing admin', sub: 'запустил Forge', icon: 'M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17zM3.5 12h17', c: '#A9C7A2', bg: 'rgba(169,199,162,.12)', tag: 'в браузере', tagColor: '#867C6D' }
+    ].map((s, k) => ({ ...s, iconWrap: wrap(s.c, s.bg), row: 'display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: 12px; font-size: 13.5px; animation: bnd-rise .25s ease-out ' + (120 + k * 50) + 'ms both;' }));
+    return { server };
+  }
+}
+</script>
+</body>
+</html>

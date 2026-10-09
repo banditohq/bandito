@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Bandito — файл в приложении</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+@keyframes bnd-blink{0%,93%,100%{transform:scaleY(1)}96%{transform:scaleY(.12)}}
+body{margin:0;background:#0B0A09}
+a{color:#FFB067}a:hover{color:#FFD2A0}
+button{font:inherit;cursor:pointer;transition:color .15s ease,box-shadow .2s ease,transform .12s ease,filter .15s ease}
+button:hover{filter:brightness(1.15)}
+button:active{transform:scale(.98)}
+@keyframes bnd-caret{0%,49%{opacity:1}50%,100%{opacity:0}}
+@keyframes bnd-rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes bnd-pop{from{opacity:0;transform:translateY(24px) scale(.92)}to{opacity:1;transform:none}}
+@keyframes bnd-soft{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.8)}}
+@keyframes bnd-progress{from{width:31%}to{width:58%}}
+@keyframes bnd-hl{from{background:rgba(255,138,31,.24)}to{background:rgba(255,138,31,.07)}}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+@keyframes bnd-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+@keyframes bnd-eq{0%,100%{transform:scaleY(.35)}50%{transform:scaleY(1)}}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; display: flex; background: #12100E; color: #F3EBDD; font-family: Geist, -apple-system, sans-serif; font-size: 14px; overflow: hidden; position: relative;">
+
+  <aside style="width: 296px; flex-shrink: 0; display: flex; flex-direction: column; background: linear-gradient(180deg, rgba(30,26,22,.92) 0%, rgba(22,19,17,.96) 100%); border-right: 1px solid rgba(243,235,221,.07);">
+    <div style="height: 52px; display: flex; align-items: center; padding: 0 16px; gap: 8px;">
+      <span style="width: 12px; height: 12px; border-radius: 50%; background: #FF5F57;"></span>
+      <span style="width: 12px; height: 12px; border-radius: 50%; background: #FEBC2E;"></span>
+      <span style="width: 12px; height: 12px; border-radius: 50%; background: #28C840;"></span>
+    </div>
+    <div style="padding: 4px 14px 14px; display: flex; align-items: center; gap: 11px;">
+      <svg width="40" height="40" viewBox="0 0 52 52"><rect width="52" height="52" rx="17" fill="#FFB067"></rect><path d="M8 22c6-6 30-6 36 0v7c-6 4-30 4-36 0z" fill="#12100E"></path><g style="transform-box: view-box; transform-origin: 26px 26px; animation: bnd-blink 5.2s ease-in-out infinite; animation-delay: 0.00s;"><path d="m16 23 4 3-4 3" stroke="#FFB067" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"></path><path d="M31 26h6" stroke="#FFB067" stroke-width="2.4" stroke-linecap="round"></path></g></svg>
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 1px;"><span style="font-weight: 600;">Память Forge</span><span style="font-size: 11.5px; color: #867C6D; font-family: 'Geist Mono', monospace;">~/bandito/agents/forge</span></div>
+    </div>
+    <div style="padding: 0 8px; display: flex; flex-direction: column; gap: 1px;">
+      <sc-for list="{{tree}}" as="t" hint-placeholder-count="12">
+        <button style="{{t.style}}">
+          <sc-if value="{{t.chev}}" hint-placeholder-val="{{ false }}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#6E655A" stroke-width="2.4" stroke-linecap="round"><path d="{{t.chev}}"></path></svg></sc-if>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="{{t.tint}}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="{{t.icon}}"></path></svg>
+          <span style="flex: 1; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{t.name}}</span>
+          <span style="font-size: 11px; color: #6E655A;">{{t.meta}}</span>
+        </button>
+      </sc-for>
+    </div>
+    <div style="flex: 1;"></div>
+    <div style="margin: 0 14px 14px; padding: 12px 13px; border-radius: 14px; background: rgba(200,182,232,.06); border: 1px solid rgba(200,182,232,.16); font-size: 12px; line-height: 1.5; color: #BDB2A0;">
+      <span style="color: #C8B6E8; font-weight: 600;">Это обычные файлы.</span> Forge читает их в начале каждой главы. Поправьте что-то здесь — и он будет знать это завтра.
+    </div>
+  </aside>
+
+  <main style="flex: 1; min-width: 0; display: flex; flex-direction: column; background: #12100E; position: relative;">
+    <div role="tablist" aria-label="Открытые файлы" style="height: 44px; display: flex; align-items: flex-end; gap: 2px; padding: 0 12px; background: rgba(14,12,11,.6); border-bottom: 1px solid rgba(243,235,221,.06);">
+      <sc-for list="{{tabs}}" as="tb" hint-placeholder-count="4">
+        <button role="tab" aria-selected="{{tb.sel}}" style="{{tb.style}}">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="{{tb.tint}}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="{{tb.icon}}"></path></svg>
+          <span>{{tb.name}}</span>
+          <span style="{{tb.dotStyle}}"></span>
+        </button>
+      </sc-for>
+      <span style="flex: 1;"></span>
+    </div>
+
+    <header style="height: 50px; display: flex; align-items: center; gap: 10px; padding: 0 16px; border-bottom: 1px solid rgba(243,235,221,.05);">
+      <div style="display: flex; padding: 3px; border-radius: 10px; background: rgba(243,235,221,.05);">
+        <sc-for list="{{views}}" as="v" hint-placeholder-count="3">
+          <button onClick="{{v.pick}}" style="{{v.style}}">{{v.label}}</button>
+        </sc-for>
+      </div>
+      <span style="width: 1px; height: 18px; background: rgba(243,235,221,.1);"></span>
+      <sc-for list="{{fmt}}" as="b" hint-placeholder-count="6">
+        <button aria-label="{{b.label}}" style="width: 28px; height: 28px; border-radius: 7px; border: none; background: transparent; color: #BDB2A0; display: grid; place-items: center; font-weight: 700; font-size: 13px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="{{b.icon}}"></path></svg></button>
+      </sc-for>
+      <span style="flex: 1;"></span>
+      <span style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #867C6D;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #FFB067; animation: bnd-soft 2s ease-in-out infinite;"></span>Есть несохранённое · ⌘S</span>
+      <button style="height: 30px; padding: 0 11px; border-radius: 9px; border: 1px solid rgba(243,235,221,.1); background: rgba(243,235,221,.04); color: #F3EBDD; font-size: 12.5px;">История</button>
+      <button style="height: 30px; padding: 0 12px; border-radius: 999px; border: none; background: #F3EBDD; color: #12100E; font-size: 12.5px; font-weight: 600; display: flex; align-items: center; gap: 6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"></path></svg>Обсудить с Forge</button>
+    </header>
+
+    <div style="margin: 12px 16px 0; padding: 10px 14px; border-radius: 12px; background: rgba(255,138,31,.08); border: 1px solid rgba(255,138,31,.3); display: flex; align-items: center; gap: 10px; font-size: 13px; animation: bnd-in .25s ease-out;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFB067" stroke-width="2" stroke-linecap="round"><path d="M12 8v5M12 16.5v.01M10.3 4.2 2.8 17.5A2 2 0 0 0 4.5 20.5h15a2 2 0 0 0 1.7-3L13.7 4.2a2 2 0 0 0-3.4 0z"></path></svg>
+      <span style="flex: 1;"><b style="font-weight: 600;">Forge дописал этот файл 30 секунд назад</b>, пока вы его правили. Ничего не потеряется — выберите, что оставить.</span>
+      <button style="height: 28px; padding: 0 10px; border-radius: 8px; border: none; background: transparent; color: #FFB067; font-size: 12.5px; font-weight: 600;">Показать разницу</button>
+      <button style="height: 28px; padding: 0 11px; border-radius: 8px; border: 1px solid rgba(243,235,221,.14); background: transparent; color: #F3EBDD; font-size: 12.5px;">Совместить</button>
+    </div>
+
+    <div style="flex: 1; display: flex; min-height: 0; padding: 12px 16px 16px; gap: 12px;">
+      <sc-if value="{{showSource}}" hint-placeholder-val="{{ true }}">
+        <section aria-label="Исходный текст" style="flex: 1; min-width: 0; border-radius: 14px; background: #0E0C0B; border: 1px solid rgba(243,235,221,.06); display: flex; overflow: hidden; animation: bnd-rise .4s ease-out .1s both;">
+          <div style="width: 44px; padding: 16px 0; text-align: right; font-family: 'Geist Mono', monospace; font-size: 12px; line-height: 22px; color: #4A433B; display: flex; flex-direction: column; padding-right: 10px; box-sizing: border-box;">
+            <sc-for list="{{lineNos}}" as="n" hint-placeholder-count="18"><span>{{n}}</span></sc-for>
+          </div>
+          <div style="flex: 1; padding: 16px 14px 16px 6px; font-family: 'Geist Mono', monospace; font-size: 12.5px; line-height: 22px; color: #BDB2A0; white-space: pre;">
+            <div><span style="color: #FF8A1F;"># </span><span style="color: #F3EBDD; font-weight: 600;">Forge — память</span></div>
+            <div> </div>
+            <div><span style="color: #FF8A1F;">## </span><span style="color: #F3EBDD; font-weight: 600;">Проекты</span></div>
+            <div><span style="color: #6E655A;">- </span><span style="color: #FFB067;">**billing**</span> — <span style="color: #A3BDEB;">`~/projects/billing`</span>, Rust + Postgres.</div>
+            <div>  Деньги — в копейках (<span style="color: #A3BDEB;">`i64`</span>), никогда <span style="color: #A3BDEB;">`f64`</span>.</div>
+            <div> </div>
+            <div><span style="color: #FF8A1F;">## </span><span style="color: #F3EBDD; font-weight: 600;">Решения</span></div>
+            <div><span style="color: #6E655A;">- </span>08.10 — вебхуки идемпотентны по <span style="color: #A3BDEB;">`event.id`</span>.</div>
+            <div><span style="color: #6E655A;">- </span>09.10 — пуш в main только через PR.</div>
+            <div style="background: rgba(255,138,31,.07); margin: 0 -14px 0 -6px; padding: 0 14px 0 6px; animation: bnd-hl 1.6s ease-out .6s both;"><span style="color: #6E655A;">- </span>09.10 — ретраи вебхука: 5 раз, шаг ×2<span style="display: inline-block; width: 2px; height: 16px; background: #FF8A1F; vertical-align: -3px; animation: bnd-caret 1s infinite;"></span></div>
+            <div> </div>
+            <div><span style="color: #FF8A1F;">## </span><span style="color: #F3EBDD; font-weight: 600;">Открытые задачи</span></div>
+            <div><span style="color: #6E655A;">- [ ] </span>PR #43: тесты вебхука — ждёт Scout</div>
+            <div><span style="color: #6E655A;">- [x] </span><span style="color: #6E655A;">Перевести суммы на копейки</span></div>
+            <div> </div>
+            <div><span style="color: #FF8A1F;">## </span><span style="color: #F3EBDD; font-weight: 600;">Люди</span></div>
+            <div><span style="color: #6E655A;">- </span>Никита — владелец, решает про пуши в main.</div>
+            <div><span style="color: #6E655A;">&gt; </span><span style="color: #C8B6E8;">Пишу коротко: это читается каждое утро.</span></div>
+          </div>
+        </section>
+      </sc-if>
+      <sc-if value="{{showPreview}}" hint-placeholder-val="{{ true }}">
+        <article aria-label="Как выглядит" style="flex: 1; min-width: 0; border-radius: 14px; background: linear-gradient(180deg, #1C1814, #171411); border: 1px solid rgba(243,235,221,.06); padding: 26px 32px; display: flex; flex-direction: column; gap: 12px; line-height: 1.6; overflow: hidden; animation: bnd-rise .4s ease-out .22s both;">
+          <h1 style="margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -.02em;">Forge — память</h1>
+          <h2 style="margin: 6px 0 0; font-size: 13px; font-weight: 600; letter-spacing: .08em; color: #FF8A1F;">ПРОЕКТЫ</h2>
+          <div style="display: flex; gap: 10px;"><span style="color: #6E655A;">•</span><span><b style="font-weight: 600;">billing</b> — <code style="font-family: 'Geist Mono', monospace; font-size: 12.5px; color: #FFB067; background: rgba(255,138,31,.09); padding: 1px 6px; border-radius: 5px;">~/projects/billing</code>, Rust + Postgres. Деньги — в копейках (<code style="font-family: 'Geist Mono', monospace; font-size: 12.5px; color: #FFB067; background: rgba(255,138,31,.09); padding: 1px 6px; border-radius: 5px;">i64</code>), никогда <code style="font-family: 'Geist Mono', monospace; font-size: 12.5px; color: #FFB067; background: rgba(255,138,31,.09); padding: 1px 6px; border-radius: 5px;">f64</code>.</span></div>
+          <h2 style="margin: 6px 0 0; font-size: 13px; font-weight: 600; letter-spacing: .08em; color: #FF8A1F;">РЕШЕНИЯ</h2>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="display: flex; gap: 10px;"><span style="color: #6E655A; font-family: 'Geist Mono', monospace; font-size: 12px; padding-top: 2px;">08.10</span><span>Вебхуки идемпотентны по <code style="font-family: 'Geist Mono', monospace; font-size: 12.5px; color: #FFB067; background: rgba(255,138,31,.09); padding: 1px 6px; border-radius: 5px;">event.id</code>.</span></div>
+            <div style="display: flex; gap: 10px;"><span style="color: #6E655A; font-family: 'Geist Mono', monospace; font-size: 12px; padding-top: 2px;">09.10</span><span>Пуш в main только через PR.</span></div>
+            <div style="display: flex; gap: 10px;"><span style="color: #6E655A; font-family: 'Geist Mono', monospace; font-size: 12px; padding-top: 2px;">09.10</span><span>Ретраи вебхука: 5 раз, шаг ×2</span></div>
+          </div>
+          <h2 style="margin: 6px 0 0; font-size: 13px; font-weight: 600; letter-spacing: .08em; color: #FF8A1F;">ОТКРЫТЫЕ ЗАДАЧИ</h2>
+          <label style="display: flex; gap: 10px; align-items: center;"><input type="checkbox" style="width: 16px; height: 16px; accent-color: #E4620E;">PR #43: тесты вебхука — ждёт Scout</label>
+          <label style="display: flex; gap: 10px; align-items: center; color: #6E655A; text-decoration: line-through;"><input type="checkbox" checked style="width: 16px; height: 16px; accent-color: #E4620E;">Перевести суммы на копейки</label>
+          <h2 style="margin: 6px 0 0; font-size: 13px; font-weight: 600; letter-spacing: .08em; color: #FF8A1F;">ЛЮДИ</h2>
+          <div style="display: flex; gap: 10px;"><span style="color: #6E655A;">•</span><span>Никита — владелец, решает про пуши в main.</span></div>
+          <blockquote style="margin: 4px 0 0; padding: 8px 14px; border-radius: 10px; background: rgba(200,182,232,.07); color: #C8B6E8; font-size: 13.5px;">Пишу коротко: это читается каждое утро.</blockquote>
+        </article>
+      </sc-if>
+    </div>
+
+    <div aria-label="Видео с сервера" style="position: absolute; right: 28px; bottom: 28px; width: 300px; border-radius: 16px; overflow: hidden; background: #0B0A09; border: 1px solid rgba(243,235,221,.12); box-shadow: 0 30px 70px -20px rgba(0,0,0,.95); animation: bnd-pop .55s cubic-bezier(.2,.9,.3,1.15) .5s both;">
+      <div style="height: 160px; position: relative; background: radial-gradient(260px 140px at 30% 30%, #3A2414, #120E0B); display: grid; place-items: center;">
+        <div style="width: 200px; height: 112px; border-radius: 8px; background: linear-gradient(180deg, #F3EBDD, #E5DACA); display: flex; flex-direction: column; padding: 10px; gap: 6px; box-sizing: border-box;">
+          <span style="height: 8px; width: 60%; border-radius: 4px; background: #12100E; opacity: .8;"></span>
+          <span style="height: 6px; width: 85%; border-radius: 3px; background: #867C6D; opacity: .5;"></span>
+          <span style="height: 6px; width: 70%; border-radius: 3px; background: #867C6D; opacity: .5;"></span>
+          <span style="margin-top: auto; height: 20px; width: 70px; border-radius: 6px; background: #E4620E; align-self: flex-end;"></span>
+        </div>
+        <span style="position: absolute; left: 10px; top: 10px; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: rgba(11,10,9,.7); color: #F3EBDD;">с сервера · без скачивания</span>
+      </div>
+      <div style="padding: 10px 12px; display: flex; flex-direction: column; gap: 8px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <button aria-label="Пауза" style="width: 30px; height: 30px; border-radius: 50%; border: none; background: #F3EBDD; color: #12100E; display: grid; place-items: center;"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"></rect><rect x="14" y="5" width="4" height="14" rx="1"></rect></svg></button>
+          <div style="flex: 1; display: flex; flex-direction: column;"><span style="font-size: 12.5px; font-weight: 600;">demo-checkout.mp4</span><span style="font-size: 11px; color: #867C6D;">0:42 / 2:15 · 1080p</span></div>
+          <span style="display: flex; gap: 2px; align-items: flex-end; height: 14px;"><span style="width: 3px; height: 14px; background: #FFB067; border-radius: 2px; animation: bnd-eq .9s ease-in-out infinite; transform-origin: bottom;"></span><span style="width: 3px; height: 14px; background: #FFB067; border-radius: 2px; animation: bnd-eq .9s .2s ease-in-out infinite; transform-origin: bottom;"></span><span style="width: 3px; height: 14px; background: #FFB067; border-radius: 2px; animation: bnd-eq .9s .4s ease-in-out infinite; transform-origin: bottom;"></span></span>
+        </div>
+        <div style="height: 4px; border-radius: 999px; background: rgba(243,235,221,.1); overflow: hidden;"><div style="width: 31%; height: 100%; background: #FF8A1F; animation: bnd-progress 40s linear infinite;"></div></div>
+      </div>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { view: 'split' }; }
+  renderVals() {
+    const I = {
+      folder: 'M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
+      md: 'M6 3.5h8l4 4v13H6zM14 3.5v4h4M9 12.5h6M9 16h4',
+      cal: 'M4.5 6h15v14h-15zM4.5 10h15M8.5 3.5v4M15.5 3.5v4',
+      code: 'm8 9-3 3 3 3M16 9l3 3-3 3M13.5 6l-3 12',
+      film: 'M4 5h16v14H4zM8 5v14M16 5v14M4 9.5h4M4 14.5h4M16 9.5h4M16 14.5h4',
+      img: 'M4 5h16v14H4zM4 16l5-5 4 4 2.5-2.5L20 17'
+    };
+    const open = 'm7 10 5 5 5-5', closed = 'm10 7 5 5-5 5';
+    const row = (depth, on) => 'display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px ' + (10 + depth * 18) + 'px; border-radius: 9px; border: none; font-size: 13px; ' + (on ? 'background: rgba(255,138,31,.11); color: #F3EBDD; box-shadow: inset 0 0 0 1px rgba(255,138,31,.3);' : 'background: transparent; color: #BDB2A0;');
+    const tree = [
+      { name: 'MEMORY.md', icon: I.md, tint: '#FFB067', meta: '14:05', d: 0, on: true },
+      { name: 'notes', icon: I.folder, tint: '#A3BDEB', meta: '7', d: 0, chev: open },
+      { name: 'billing.md', icon: I.md, tint: '#867C6D', meta: '', d: 1 },
+      { name: 'deploy.md', icon: I.md, tint: '#867C6D', meta: '', d: 1 },
+      { name: 'team.md', icon: I.md, tint: '#867C6D', meta: '', d: 1 },
+      { name: 'journal', icon: I.folder, tint: '#A9C7A2', meta: '31', d: 0, chev: open },
+      { name: '2026-10-09.md', icon: I.cal, tint: '#867C6D', meta: 'сегодня', d: 1 },
+      { name: '2026-10-08.md', icon: I.cal, tint: '#867C6D', meta: 'вчера', d: 1 },
+      { name: 'files', icon: I.folder, tint: '#BDB2A0', meta: '3', d: 0, chev: closed }
+    ].map((t, k) => ({ ...t, chev: t.chev || '', style: row(t.d, !!t.on) + ' animation: bnd-rise .3s ease-out ' + (60 + k * 40) + 'ms both;' }));
+    const tabStyle = (sel) => 'height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border: none; border-radius: 10px 10px 0 0; font-size: 12.5px; ' + (sel ? 'background: #12100E; color: #F3EBDD; box-shadow: inset 0 1px 0 rgba(243,235,221,.08), inset 1px 0 0 rgba(243,235,221,.05), inset -1px 0 0 rgba(243,235,221,.05);' : 'background: transparent; color: #867C6D;');
+    const tabs = [
+      { name: 'MEMORY.md', icon: I.md, tint: '#FFB067', sel: true, dirty: true },
+      { name: 'deploy.md', icon: I.md, tint: '#867C6D' },
+      { name: 'webhook.rs', icon: I.code, tint: '#C8B6E8' },
+      { name: 'demo-checkout.mp4', icon: I.film, tint: '#F2A093', playing: true },
+      { name: 'flow.png', icon: I.img, tint: '#A9C7A2' }
+    ].map(t => ({ ...t, sel: !!t.sel, style: tabStyle(!!t.sel), dotStyle: 'width: 7px; height: 7px; border-radius: 50%; ' + (t.dirty ? 'background: #FFB067; animation: bnd-soft 2s ease-in-out infinite;' : t.playing ? 'background: #A9C7A2; box-shadow: 0 0 6px #A9C7A2;' : 'background: transparent;') }));
+    const v = this.state.view;
+    const vs = (on) => 'height: 28px; padding: 0 12px; border-radius: 8px; border: none; font-size: 12.5px; ' + (on ? 'background: #2C2722; color: #F3EBDD; font-weight: 600; box-shadow: 0 2px 8px -3px rgba(0,0,0,.6);' : 'background: transparent; color: #867C6D;');
+    const views = [['read', 'Читать'], ['edit', 'Править'], ['split', 'Рядом']].map(([id, label]) => ({ label, style: vs(v === id), pick: () => this.setState({ view: id }) }));
+    const fmt = [
+      { label: 'Заголовок', icon: 'M6 5v14M18 5v14M6 12h12' },
+      { label: 'Жирный', icon: 'M7 5h6a3.5 3.5 0 0 1 0 7H7zM7 12h7a3.5 3.5 0 0 1 0 7H7z' },
+      { label: 'Список', icon: 'M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01' },
+      { label: 'Задача', icon: 'M4 5h6v6H4zM5.5 8l1.5 1.5L9.5 6.5M14 8h6M4 14h6v6H4zM14 17h6' },
+      { label: 'Код', icon: 'm8 9-3 3 3 3M16 9l3 3-3 3' },
+      { label: 'Ссылка', icon: 'M10 14a4 4 0 0 0 5.6 0l3-3a4 4 0 0 0-5.6-5.6l-1 1M14 10a4 4 0 0 0-5.6 0l-3 3a4 4 0 0 0 5.6 5.6l1-1' }
+    ];
+    const lineNos = Array.from({ length: 18 }, (_, k) => String(k + 1));
+    return { tree, tabs, views, fmt, lineNos, showSource: v !== 'read', showPreview: v !== 'edit' };
+  }
+}
+</script>
+</body>
+</html>

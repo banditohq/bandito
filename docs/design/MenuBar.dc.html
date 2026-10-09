@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Bandito — строка меню</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+@keyframes bnd-blink{0%,93%,100%{transform:scaleY(1)}96%{transform:scaleY(.12)}}
+body{margin:0;background:#0B0A09}
+a{color:#FFB067}a:hover{color:#FFD2A0}
+button{font:inherit;cursor:pointer;transition:color .15s ease,box-shadow .2s ease,transform .12s ease,filter .15s ease}
+button:hover{filter:brightness(1.15)}
+button:active{transform:scale(.98)}
+@keyframes bnd-notif{from{opacity:0;transform:translateX(30px)}to{opacity:1;transform:none}}
+@keyframes bnd-menu{from{opacity:0;transform:translateY(-6px) scale(.98);transform-origin:top right}to{opacity:1;transform:none}}
+@keyframes bnd-badge{0%,100%{transform:scale(1)}50%{transform:scale(1.25)}}
+@keyframes bnd-pulse{0%{box-shadow:0 0 0 0 rgba(255,138,31,.55)}70%{box-shadow:0 0 0 6px rgba(255,138,31,0)}100%{box-shadow:0 0 0 0 rgba(255,138,31,0)}}
+@keyframes bnd-fill{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes bnd-tick{0%,100%{opacity:.4}50%{opacity:1}}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div style="width: 900px; height: 760px; position: relative; overflow: hidden; color: #F3EBDD; font-family: Geist, -apple-system, sans-serif; font-size: 13.5px; background: radial-gradient(700px 500px at 80% 110%, #3A2414 0%, rgba(58,36,20,0) 60%), radial-gradient(600px 400px at 0% 0%, #1E2A3A 0%, rgba(30,42,58,0) 60%), #15110E;">
+  <div style="height: 28px; display: flex; align-items: center; gap: 18px; padding: 0 14px; background: rgba(20,17,14,.55); backdrop-filter: blur(20px); font-size: 13px; font-weight: 500; color: rgba(243,235,221,.9);">
+    <span style="font-weight: 700;">Finder</span><span>Файл</span><span>Правка</span><span>Вид</span>
+    <span style="flex: 1;"></span>
+    <span style="position: relative; display: grid; place-items: center; width: 26px; height: 20px; border-radius: 5px; background: rgba(243,235,221,.16);">
+      <svg width="18" height="14" viewBox="0 0 36 28"><path d="M2 10c8-8 24-8 32 0v8c-8 6-24 6-32 0z" fill="#F3EBDD"></path><path d="m9 12 4 2.5L9 17" stroke="#15110E" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"></path><path d="M21 14.5h6" stroke="#15110E" stroke-width="2.4" stroke-linecap="round"></path></svg>
+      <span style="position: absolute; right: 1px; top: 1px; width: 7px; height: 7px; border-radius: 50%; background: #FF8A1F; border: 1.5px solid #2A221B; animation: bnd-badge 1.6s ease-in-out infinite;"></span>
+    </span>
+    <span style="font-family: 'Geist Mono', monospace; font-size: 12px;">Пт 14:09</span>
+  </div>
+
+  <span style="position: absolute; left: 28px; top: 54px; font-size: 11px; font-weight: 600; letter-spacing: .08em; color: rgba(243,235,221,.45);">УВЕДОМЛЕНИЕ · ОДОБРИТЬ, НЕ ОТКРЫВАЯ ПРИЛОЖЕНИЕ</span>
+  <div style="position: absolute; left: 24px; top: 78px; width: 372px; border-radius: 18px; background: rgba(36,31,27,.82); backdrop-filter: blur(30px); border: 1px solid rgba(243,235,221,.12); box-shadow: 0 30px 80px -20px rgba(0,0,0,.8); display: flex; gap: 12px; padding: 13px 14px; align-items: flex-start; animation: bnd-notif .5s cubic-bezier(.2,.9,.3,1.1) .3s both;">
+    <svg width="38" height="38" viewBox="0 0 52 52" style="flex-shrink: 0;"><rect width="52" height="52" rx="12" fill="#12100E"></rect><path d="M8 22c6-6 30-6 36 0v7c-6 4-30 4-36 0z" fill="#F3EBDD"></path><g style="transform-box: view-box; transform-origin: 26px 26px; animation: bnd-blink 5.2s ease-in-out infinite; animation-delay: 0.00s;"><path d="m16 23 4 3-4 3" stroke="#12100E" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"></path><path d="M31 26h6" stroke="#12100E" stroke-width="2.6" stroke-linecap="round"></path></g><circle cx="42" cy="12" r="5" fill="#FF8A1F"></circle></svg>
+    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px;">
+      <div style="display: flex; justify-content: space-between;"><span style="font-weight: 600;">Forge ждёт вас</span><span style="font-size: 11.5px; color: rgba(243,235,221,.5);">сейчас</span></div>
+      <span style="font-size: 12.5px; color: rgba(243,235,221,.75); font-family: 'Geist Mono', monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">git push origin feat/billing-webhook-tests</span>
+      <div style="display: flex; gap: 6px; margin-top: 7px;">
+        <button style="flex: 1; height: 28px; border-radius: 8px; border: none; background: rgba(243,235,221,.1); color: #F3EBDD; font-size: 12.5px; font-weight: 500;">Отклонить</button>
+        <button style="flex: 1; height: 28px; border-radius: 8px; border: none; background: linear-gradient(180deg, #E4620E, #C94F09); color: #FFFFFF; font-size: 12.5px; font-weight: 600;">Разрешить</button>
+      </div>
+    </div>
+  </div>
+
+  <div role="menu" aria-label="Bandito" style="position: absolute; right: 86px; top: 34px; width: 360px; border-radius: 16px; background: rgba(28,24,21,.9); backdrop-filter: blur(30px); border: 1px solid rgba(243,235,221,.12); box-shadow: 0 30px 90px -20px rgba(0,0,0,.85); overflow: hidden; animation: bnd-menu .22s ease-out both;">
+    <div style="display: flex; align-items: center; gap: 9px; padding: 13px 14px 10px;">
+      <span style="font-weight: 650;">Bandito</span>
+      <span style="font-size: 11.5px; color: #867C6D;">vps-tokyo-1 · home-5080</span>
+      <span style="flex: 1;"></span>
+      <span style="font-size: 11px; font-weight: 600; color: #FFFFFF; background: #E4620E; padding: 1px 7px; border-radius: 999px;">1</span>
+    </div>
+    <div style="margin: 0 8px; padding: 11px 12px; border-radius: 12px; background: rgba(255,138,31,.09); border: 1px solid rgba(255,138,31,.28); display: flex; flex-direction: column; gap: 8px;">
+      <div style="display: flex; align-items: center; gap: 9px;">
+        <svg width="26" height="26" viewBox="0 0 52 52"><rect width="52" height="52" rx="17" fill="#FFB067"></rect><path d="M8 22c6-6 30-6 36 0v7c-6 4-30 4-36 0z" fill="#12100E"></path><g style="transform-box: view-box; transform-origin: 26px 26px; animation: bnd-blink 5.2s ease-in-out infinite; animation-delay: 1.37s;"><path d="m16 23 4 3-4 3" stroke="#FFB067" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"></path><path d="M31 26h6" stroke="#FFB067" stroke-width="2.6" stroke-linecap="round"></path></g></svg>
+        <span style="font-weight: 600;">Forge</span><span style="font-size: 12px; color: #FFB067;">хочет запушить</span>
+      </div>
+      <span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #BDB2A0;">git push origin feat/billing-webhook-tests</span>
+      <div style="display: flex; gap: 6px;">
+        <button style="height: 28px; padding: 0 12px; border-radius: 999px; border: 1px solid rgba(243,235,221,.14); background: transparent; color: #F3EBDD; font-size: 12.5px;">Отклонить</button>
+        <button style="height: 28px; padding: 0 14px; border-radius: 999px; border: none; background: linear-gradient(180deg, #E4620E, #C94F09); color: #FFFFFF; font-size: 12.5px; font-weight: 600;">Разрешить</button>
+        <span style="flex: 1;"></span>
+        <button style="height: 28px; border: none; background: transparent; color: #867C6D; font-size: 12px;">Открыть чат →</button>
+      </div>
+    </div>
+
+    <div style="padding: 12px 14px 4px; font-size: 11px; font-weight: 600; letter-spacing: .08em; color: #6E655A;">РАБОТАЮТ</div>
+    <div style="padding: 0 8px; display: flex; flex-direction: column;">
+      <div role="menuitem" style="display: flex; align-items: center; gap: 10px; padding: 8px 6px; border-radius: 9px;">
+        <span style="width: 7px; height: 7px; border-radius: 50%; background: #A9C7A2; box-shadow: 0 0 8px rgba(169,199,162,.7);"></span>
+        <span style="font-weight: 500;">Scout</span><span style="flex: 1; font-size: 12.5px; color: #867C6D; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Проверяет PR #43 · 2 мин</span>
+      </div>
+      <div role="menuitem" style="display: flex; align-items: center; gap: 10px; padding: 8px 6px; border-radius: 9px;">
+        <span style="width: 7px; height: 7px; border-radius: 50%; background: #A9C7A2; box-shadow: 0 0 8px rgba(169,199,162,.7);"></span>
+        <span style="font-weight: 500;">Watch</span><span style="flex: 1; font-size: 12.5px; color: #867C6D;">Следит за логами api · всё спокойно</span>
+      </div>
+    </div>
+    <div style="padding: 10px 14px 4px; font-size: 11px; font-weight: 600; letter-spacing: .08em; color: #6E655A;">ДАЛЬШЕ</div>
+    <div style="padding: 0 8px 8px;">
+      <div role="menuitem" style="display: flex; align-items: center; gap: 10px; padding: 8px 6px; border-radius: 9px;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#A3BDEB" stroke-width="2" stroke-linecap="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"></path></svg>
+        <span style="font-weight: 500;">Night Owl</span><span style="flex: 1; font-size: 12.5px; color: #867C6D;">Аудит зависимостей · 02:00</span>
+      </div>
+    </div>
+    <div style="padding: 4px 14px 4px; font-size: 11px; font-weight: 600; letter-spacing: .08em; color: #6E655A;">ТЕРМИНАЛЫ</div>
+    <div style="padding: 0 8px 6px;">
+      <div role="menuitem" style="display: flex; align-items: center; gap: 10px; padding: 8px 6px; border-radius: 9px;">
+        <span style="width: 7px; height: 7px; border-radius: 50%; background: #FF8A1F; animation: bnd-pulse 1.8s infinite;"></span>
+        <span style="font-weight: 500;">deploy staging</span><span style="flex: 1; font-size: 12.5px; color: #FFB067;">ждёт ввода · свёрнут</span><span style="font-size: 12px; color: #867C6D;">Вернуть</span>
+      </div>
+      <div role="menuitem" style="display: flex; align-items: center; gap: 10px; padding: 8px 6px; border-radius: 9px;">
+        <span style="width: 7px; height: 7px; border-radius: 50%; background: #A9C7A2; animation: bnd-tick 1.2s infinite;"></span>
+        <span style="font-weight: 500;">cargo watch</span><span style="flex: 1; font-size: 12.5px; color: #867C6D;">работает · свёрнут</span>
+      </div>
+    </div>
+    <div style="margin: 0 8px 8px; padding: 10px 12px; border-radius: 12px; background: rgba(243,235,221,.04); display: flex; flex-direction: column; gap: 7px;">
+      <div style="display: flex; align-items: center; gap: 8px; font-size: 12.5px;"><span style="width: 8px; height: 8px; border-radius: 3px; background: #FFB067;"></span><b style="font-weight: 600;">Claude</b><span style="font-size: 11px; font-weight: 600; color: #FFB067; background: rgba(255,138,31,.13); padding: 0 6px; border-radius: 5px;">Max ×20</span><span style="flex: 1;"></span><span>90%</span><span style="color: #867C6D; font-family: 'Geist Mono', monospace; font-size: 11.5px;">⏱ 2:14</span></div>
+      <div style="height: 4px; border-radius: 999px; background: rgba(243,235,221,.08); overflow: hidden;"><div style="width: 90%; height: 100%; background: #F3EBDD; transform-origin: left; animation: bnd-fill .8s ease-out .3s both;"></div></div>
+      <div style="display: flex; align-items: center; gap: 8px; font-size: 12.5px;"><span style="width: 8px; height: 8px; border-radius: 3px; background: #A3BDEB;"></span><b style="font-weight: 600;">Codex</b><span style="font-size: 11px; font-weight: 600; color: #A3BDEB; background: rgba(163,189,235,.13); padding: 0 6px; border-radius: 5px;">Plus</span><span style="flex: 1;"></span><span style="color: #FFB067;">18%</span><span style="color: #FFB067; font-family: 'Geist Mono', monospace; font-size: 11.5px;">⏱ 0:41</span></div>
+      <div style="height: 4px; border-radius: 999px; background: rgba(243,235,221,.08); overflow: hidden;"><div style="width: 18%; height: 100%; background: #FF8A1F; transform-origin: left; animation: bnd-fill .8s ease-out .4s both;"></div></div>
+    </div>
+    <div style="border-top: 1px solid rgba(243,235,221,.07); padding: 6px 8px; display: flex; flex-direction: column;">
+      <div role="menuitem" style="display: flex; justify-content: space-between; padding: 8px 6px; border-radius: 9px;"><span>Открыть Bandito</span><span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #6E655A;">⌘O</span></div>
+      <div role="menuitem" style="display: flex; justify-content: space-between; padding: 8px 6px; border-radius: 9px;"><span>Пауза для всех агентов</span><span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #6E655A;">⇧⌘P</span></div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":900,"height":760}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

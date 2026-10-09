@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Bandito — изменения агента</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+@keyframes bnd-blink{0%,93%,100%{transform:scaleY(1)}96%{transform:scaleY(.12)}}
+body{margin:0;background:#0B0A09}
+a{color:#FFB067}a:hover{color:#FFD2A0}
+button{font:inherit;cursor:pointer;transition:color .15s ease,box-shadow .2s ease,transform .12s ease,filter .15s ease}
+button:hover{filter:brightness(1.15)}
+button:active{transform:scale(.98)}
+@keyframes bnd-rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes bnd-sheet{from{opacity:0;transform:translateY(30px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes bnd-fade{from{opacity:0}to{opacity:1}}
+@keyframes bnd-fill{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes bnd-pulse{0%{box-shadow:0 0 0 0 rgba(255,138,31,.6)}70%{box-shadow:0 0 0 8px rgba(255,138,31,0)}100%{box-shadow:0 0 0 0 rgba(255,138,31,0)}}
+@keyframes bnd-line{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; position: relative; overflow: hidden; color: #F3EBDD; font-family: Geist, -apple-system, sans-serif; font-size: 14px; background: #12100E;">
+  <div aria-hidden="true" style="position: absolute; inset: 0; display: flex; filter: blur(3px); opacity: .5;">
+    <div style="width: 296px; background: #1C1815; border-right: 1px solid rgba(243,235,221,.07);"></div>
+    <div style="flex: 1; display: flex; justify-content: center; padding-top: 80px;"><div style="width: 760px; display: flex; flex-direction: column; gap: 14px;"><div style="align-self: flex-end; width: 380px; height: 44px; border-radius: 18px; background: #2C2722;"></div><div style="width: 560px; height: 80px; border-radius: 18px; background: #1A1714;"></div><div style="height: 120px; border-radius: 14px; background: #1A1714;"></div></div></div>
+  </div>
+  <div aria-hidden="true" style="position: absolute; inset: 0; background: rgba(8,7,6,.55); animation: bnd-fade .3s ease-out both;"></div>
+
+  <section role="dialog" aria-label="Что изменил Forge" style="position: absolute; left: 70px; right: 70px; top: 44px; bottom: 44px; border-radius: 22px; background: #171411; border: 1px solid rgba(243,235,221,.1); box-shadow: 0 50px 120px -30px rgba(0,0,0,.95); display: flex; flex-direction: column; overflow: hidden; animation: bnd-sheet .45s cubic-bezier(.2,.9,.3,1.05) both;">
+    <header style="padding: 18px 22px 14px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid rgba(243,235,221,.06);">
+      <svg width="36" height="36" viewBox="0 0 52 52"><rect width="52" height="52" rx="17" fill="#FFB067"></rect><path d="M8 22c6-6 30-6 36 0v7c-6 4-30 4-36 0z" fill="#12100E"></path><g style="transform-box: view-box; transform-origin: 26px 26px; animation: bnd-blink 5.2s ease-in-out infinite; animation-delay: 0.00s;"><path d="m16 23 4 3-4 3" stroke="#FFB067" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"></path><path d="M31 26h6" stroke="#FFB067" stroke-width="2.4" stroke-linecap="round"></path></g></svg>
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 2px;">
+        <span style="font-size: 17px; font-weight: 650;">Что изменил Forge</span>
+        <span style="font-size: 12.5px; color: #867C6D;">Задача «тесты для вебхука оплаты» · 6 файлов · <span style="color: #A9C7A2;">+412</span> <span style="color: #F2A093;">−18</span></span>
+      </div>
+      <div style="display: flex; padding: 3px; border-radius: 10px; background: rgba(243,235,221,.05);">
+        <button style="height: 26px; padding: 0 10px; border-radius: 7px; border: none; background: #2C2722; color: #F3EBDD; font-size: 12px; font-weight: 600;">Построчно</button>
+        <button style="height: 26px; padding: 0 10px; border-radius: 7px; border: none; background: transparent; color: #867C6D; font-size: 12px;">Рядом</button>
+      </div>
+      <button aria-label="Закрыть (Esc)" style="width: 32px; height: 32px; border-radius: 10px; border: none; background: rgba(243,235,221,.05); color: #BDB2A0; display: grid; place-items: center;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></button>
+    </header>
+
+    <div aria-label="Точки возврата" style="padding: 16px 30px 14px; border-bottom: 1px solid rgba(243,235,221,.06); position: relative;">
+      <div style="position: absolute; left: 46px; right: 46px; top: 26px; height: 2px; background: rgba(243,235,221,.08);"></div>
+      <div style="position: absolute; left: 46px; right: 46px; top: 26px; height: 2px; background: linear-gradient(90deg, #A9C7A2, #FF8A1F); transform-origin: left; animation: bnd-fill 1.2s cubic-bezier(.2,.8,.2,1) .4s both;"></div>
+      <div style="display: flex; justify-content: space-between; position: relative;">
+        <sc-for list="{{points}}" as="p" hint-placeholder-count="5">
+          <button style="{{p.wrap}}">
+            <span style="{{p.dot}}"></span>
+            <span style="font-size: 12.5px; font-weight: 600; color: {{p.color}};">{{p.time}}</span>
+            <span style="font-size: 12px; color: #867C6D; max-width: 160px; text-align: center;">{{p.text}}</span>
+          </button>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="flex: 1; display: flex; min-height: 0;">
+      <aside aria-label="Файлы" style="width: 320px; flex-shrink: 0; border-right: 1px solid rgba(243,235,221,.06); padding: 10px 10px; display: flex; flex-direction: column; gap: 2px;">
+        <sc-for list="{{files}}" as="f" hint-placeholder-count="6">
+          <label style="{{f.row}}">
+            <input type="checkbox" checked="{{f.keep}}" aria-label="Оставить {{f.name}}" style="width: 15px; height: 15px; accent-color: #E4620E;">
+            <span style="{{f.tag}}">{{f.letter}}</span>
+            <span style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+              <span style="font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{f.name}}</span>
+              <span style="font-size: 11.5px; color: #6E655A; font-family: 'Geist Mono', monospace;">{{f.dir}}</span>
+            </span>
+            <span style="font-size: 11.5px; font-family: 'Geist Mono', monospace;"><span style="color: #A9C7A2;">{{f.add}}</span> <span style="color: #F2A093;">{{f.del}}</span></span>
+          </label>
+        </sc-for>
+        <div style="flex: 1;"></div>
+        <div style="padding: 10px; border-radius: 12px; background: rgba(243,235,221,.03); font-size: 12px; color: #867C6D; line-height: 1.5;">Снимите галочку — файл вернётся к виду до задачи. Остальное останется.</div>
+      </aside>
+
+      <section aria-label="Разница" style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+        <div style="padding: 10px 16px; display: flex; align-items: center; gap: 10px; font-size: 13px; border-bottom: 1px solid rgba(243,235,221,.05);">
+          <span style="font-family: 'Geist Mono', monospace;">src/webhook.rs</span>
+          <span style="font-size: 11.5px; color: #FFB067; background: rgba(255,138,31,.12); padding: 1px 7px; border-radius: 6px; font-weight: 600;">изменён</span>
+          <span style="flex: 1;"></span>
+          <span style="font-size: 12px; color: #867C6D;">2 места</span>
+        </div>
+        <div style="flex: 1; padding: 10px 0; font-family: 'Geist Mono', monospace; font-size: 12.5px; line-height: 1.75; overflow: hidden;">
+          <sc-for list="{{diff}}" as="d" hint-placeholder-count="16">
+            <div style="{{d.row}}"><span style="width: 44px; text-align: right; color: #4A433B; flex-shrink: 0;">{{d.n}}</span><span style="width: 22px; text-align: center; flex-shrink: 0; color: {{d.signColor}};">{{d.sign}}</span><span style="white-space: pre; color: {{d.color}};">{{d.t}}</span></div>
+          </sc-for>
+        </div>
+        <div style="margin: 0 16px 12px; padding: 10px 12px; border-radius: 12px; background: rgba(163,189,235,.06); border: 1px solid rgba(163,189,235,.18); display: flex; gap: 10px; align-items: flex-start; animation: bnd-rise .4s ease-out 1.1s both;">
+          <svg width="20" height="20" viewBox="0 0 52 52" style="flex-shrink: 0;"><rect width="52" height="52" rx="17" fill="#A3BDEB"></rect><path d="M8 22c6-6 30-6 36 0v7c-6 4-30 4-36 0z" fill="#12100E"></path><g style="transform-box: view-box; transform-origin: 26px 26px; animation: bnd-blink 5.2s ease-in-out infinite; animation-delay: 1.37s;"><circle cx="18" cy="26" r="2.6" fill="#A3BDEB"></circle><circle cx="34" cy="26" r="2.6" fill="#A3BDEB"></circle></g></svg>
+          <span style="font-size: 12.5px; color: #BDB2A0; line-height: 1.5;"><b style="color: #F3EBDD; font-weight: 600;">Scout, строка 41:</b> idempotency::claim лучше вызывать до verify_signature — меньше работы на дублях.</span>
+        </div>
+      </section>
+    </div>
+
+    <footer style="padding: 12px 18px; display: flex; align-items: center; gap: 10px; border-top: 1px solid rgba(243,235,221,.06); background: rgba(14,12,11,.6);">
+      <button style="height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid rgba(242,160,147,.35); background: transparent; color: #F2A093; font-size: 13px;">Откатить всю задачу</button>
+      <button style="height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid rgba(243,235,221,.12); background: rgba(243,235,221,.04); color: #F3EBDD; font-size: 13px;">Спросить Forge об этом месте</button>
+      <span style="flex: 1;"></span>
+      <span style="font-size: 12px; color: #6E655A;">Снят 1 файл из 6</span>
+      <button style="height: 36px; padding: 0 16px; border-radius: 999px; border: none; background: linear-gradient(180deg, #E4620E, #C94F09); color: #FFFFFF; font-size: 13px; font-weight: 600; box-shadow: 0 8px 22px -8px rgba(228,98,14,.85);">Оставить 5 файлов</button>
+    </footer>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const pt = (time, text, state, k) => ({
+      time, text,
+      color: state === 'now' ? '#FFB067' : '#F3EBDD',
+      wrap: 'display: flex; flex-direction: column; align-items: center; gap: 6px; border: none; background: transparent; padding: 0; animation: bnd-rise .35s ease-out ' + (300 + k * 120) + 'ms both;',
+      dot: 'width: 14px; height: 14px; border-radius: 50%; box-sizing: border-box; ' + (state === 'now' ? 'background: #FF8A1F; border: 3px solid #171411; box-shadow: 0 0 0 2px #FF8A1F; animation: bnd-pulse 1.8s 1.6s infinite;' : state === 'start' ? 'background: #171411; border: 2px solid #A9C7A2;' : 'background: #A9C7A2; border: 3px solid #171411; box-shadow: 0 0 0 1px #A9C7A2;')
+    });
+    const points = [
+      pt('14:02', 'До задачи', 'start', 0),
+      pt('14:03', 'Написал 14 тестов', 'mid', 1),
+      pt('14:05', 'Исправил округление', 'mid', 2),
+      pt('14:07', 'Обновил README', 'mid', 3),
+      pt('14:09', 'Сейчас · перед пушем', 'now', 4)
+    ];
+    const tag = (c, bg) => 'width: 20px; height: 20px; border-radius: 6px; display: grid; place-items: center; font-size: 11px; font-weight: 700; flex-shrink: 0; color: ' + c + '; background: ' + bg + ';';
+    const tags = { M: tag('#FFB067', 'rgba(255,138,31,.13)'), A: tag('#A9C7A2', 'rgba(169,199,162,.13)'), D: tag('#F2A093', 'rgba(242,160,147,.13)') };
+    const files = [
+      { name: 'webhook.rs', dir: 'src/', letter: 'M', add: '+86', del: '−4', keep: true, sel: true },
+      { name: 'webhook_tests.rs', dir: 'tests/', letter: 'A', add: '+248', del: '', keep: true },
+      { name: 'ledger.rs', dir: 'src/', letter: 'M', add: '+31', del: '−11', keep: true },
+      { name: 'money.rs', dir: 'src/', letter: 'A', add: '+40', del: '', keep: true },
+      { name: 'README.md', dir: '', letter: 'M', add: '+7', del: '−3', keep: false },
+      { name: 'Cargo.lock', dir: '', letter: 'M', add: '+0', del: '−0', keep: true }
+    ].map((f, k) => ({
+      ...f,
+      tag: tags[f.letter],
+      row: 'display: flex; align-items: center; gap: 9px; padding: 8px 9px; border-radius: 10px; cursor: pointer; animation: bnd-rise .3s ease-out ' + (200 + k * 60) + 'ms both; ' + (f.sel ? 'background: rgba(255,138,31,.09); box-shadow: inset 0 0 0 1px rgba(255,138,31,.3);' : '') + (f.keep ? '' : ' opacity: .55;')
+    }));
+    const L = (n, sign, t) => ({ n, sign, t });
+    const raw = [
+      L('34', ' ', 'pub async fn handle(req: Webhook, db: &Pool) -> Result<Ack> {'),
+      L('35', '-', '    let amount = req.amount as f64 / 100.0;'),
+      L('35', '+', '    // amounts are kopecks: i64, never f64'),
+      L('36', '+', '    let amount = req.amount_minor()?;'),
+      L('37', '+', '    verify_signature(&req)?;'),
+      L('38', '+', '    idempotency::claim(db, req.id).await?;'),
+      L('39', ' ', '    ledger::credit(db, amount).await'),
+      L('40', ' ', '}'),
+      L('', '', ''),
+      L('58', ' ', 'fn retry_delay(attempt: u32) -> Duration {'),
+      L('59', '-', '    Duration::from_secs(5)'),
+      L('59', '+', '    // 5 tries, doubling: 1s, 2s, 4s, 8s, 16s'),
+      L('60', '+', '    Duration::from_secs(1 << attempt.min(4))'),
+      L('61', ' ', '}')
+    ];
+    const diff = raw.map((d, k) => ({
+      ...d,
+      signColor: d.sign === '+' ? '#A9C7A2' : d.sign === '-' ? '#F2A093' : '#4A433B',
+      color: d.sign === '+' ? '#E7F0E4' : d.sign === '-' ? '#F2C4BB' : '#BDB2A0',
+      row: 'display: flex; padding-right: 16px; animation: bnd-line .3s ease-out ' + (450 + k * 45) + 'ms both; ' + (d.sign === '+' ? 'background: rgba(169,199,162,.08);' : d.sign === '-' ? 'background: rgba(242,160,147,.08); text-decoration: line-through; text-decoration-color: rgba(242,160,147,.4);' : d.n === '' ? 'height: 10px; border-top: 1px dashed rgba(243,235,221,.08); margin: 4px 0;' : '')
+    }));
+    return { points, files, diff };
+  }
+}
+</script>
+</body>
+</html>

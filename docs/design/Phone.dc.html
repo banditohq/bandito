@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Bandito — команда на iPhone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+@keyframes bnd-blink{0%,93%,100%{transform:scaleY(1)}96%{transform:scaleY(.12)}}
+body{margin:0;background:#0B0A09}
+a{color:#FFB067}a:hover{color:#FFD2A0}
+button{font:inherit;cursor:pointer;transition:transform .12s ease,filter .15s ease}
+button:active{transform:scale(.97)}
+@keyframes bnd-pop{0%{opacity:0;transform:translateY(16px) scale(.96)}60%{transform:translateY(-2px) scale(1.01)}100%{opacity:1;transform:none}}
+@keyframes bnd-rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes bnd-pulse{0%{box-shadow:0 0 0 0 rgba(255,138,31,.55)}70%{box-shadow:0 0 0 8px rgba(255,138,31,0)}100%{box-shadow:0 0 0 0 rgba(255,138,31,0)}}
+@keyframes bnd-hop{0%,60%,100%{transform:translateY(0)}70%{transform:translateY(-4px)}80%{transform:translateY(0)}}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; display: flex; flex-direction: column; background: radial-gradient(420px 260px at 50% -40px, rgba(255,138,31,.12), transparent 70%), #12100E; color: #F3EBDD; font-family: Geist, -apple-system, sans-serif; font-size: 15px; overflow: hidden;">
+  <div style="padding: 62px 20px 10px; display: flex; align-items: flex-end; justify-content: space-between;">
+    <div style="display: flex; flex-direction: column; gap: 4px;">
+      <span style="font-size: 13px; color: #867C6D; display: flex; align-items: center; gap: 6px;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #A9C7A2;"></span>vps-tokyo-1</span>
+      <h1 style="margin: 0; font-size: 32px; font-weight: 700; letter-spacing: -.03em;">Команда</h1>
+    </div>
+    <button aria-label="Лимиты: Claude Max ×20, осталось 90%" style="height: 30px; padding: 0 10px; margin-right: 8px; border-radius: 999px; border: 1px solid rgba(243,235,221,.12); background: rgba(243,235,221,.05); color: #F3EBDD; font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 5px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4.5 16a8 8 0 1 1 15 0"></path><path d="m12 14 3.5-4"></path></svg>90%</button>
+    <button aria-label="Новый агент" style="width: 38px; height: 38px; border-radius: 50%; border: 1px solid rgba(243,235,221,.12); background: rgba(243,235,221,.05); color: #F3EBDD; display: grid; place-items: center;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg></button>
+  </div>
+
+  <div style="margin: 8px 16px 0; border-radius: 22px; padding: 1px; background: linear-gradient(135deg, rgba(255,176,103,.8), rgba(228,98,14,.35) 45%, rgba(243,235,221,.08)); animation: bnd-pop .55s cubic-bezier(.2,.9,.3,1.1) .2s both;">
+    <div style="border-radius: 21px; background: linear-gradient(180deg, #241D17, #1A1612); padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <svg width="36" height="36" viewBox="0 0 52 52"><rect width="52" height="52" rx="17" fill="#FFB067"></rect><path d="M8 22c6-6 30-6 36 0v7c-6 4-30 4-36 0z" fill="#12100E"></path><g style="transform-box: view-box; transform-origin: 26px 26px; animation: bnd-blink 5.2s ease-in-out infinite; animation-delay: 0.00s;"><path d="m16 23 4 3-4 3" stroke="#FFB067" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"></path><path d="M31 26h6" stroke="#FFB067" stroke-width="2.4" stroke-linecap="round"></path></g></svg>
+        <div style="flex: 1; display: flex; flex-direction: column;"><span style="font-weight: 600;">Forge ждёт вас</span><span style="font-size: 12.5px; color: #867C6D;">2 мин назад · ~/billing</span></div>
+      </div>
+      <div style="border-radius: 12px; background: #0E0C0B; padding: 11px 12px; font-family: 'Geist Mono', monospace; font-size: 12.5px; line-height: 1.5;"><span style="color: #FFB067;">git push</span> origin <span style="color: #A3BDEB;">feat/billing-webhook-tests</span></div>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;">
+        <button style="height: 46px; border-radius: 14px; border: 1px solid rgba(243,235,221,.12); background: rgba(243,235,221,.05); color: #F3EBDD; font-weight: 500; font-size: 15px;">Отклонить</button>
+        <button style="height: 46px; border-radius: 14px; border: none; background: linear-gradient(180deg, #E4620E, #C94F09); color: #FFFFFF; font-weight: 600; font-size: 15px; box-shadow: 0 8px 22px -8px rgba(228,98,14,.85);">Разрешить</button>
+      </div>
+    </div>
+  </div>
+
+  <div style="padding: 22px 20px 8px; font-size: 12px; font-weight: 600; letter-spacing: .08em; color: #6E655A;">АГЕНТЫ</div>
+  <div style="padding: 0 10px; display: flex; flex-direction: column;">
+    <sc-for list="{{agents}}" as="a" hint-placeholder-count="4">
+      <div style="{{a.row}}">
+        <div style="position: relative; flex-shrink: 0;">
+          <svg width="46" height="46" viewBox="0 0 52 52"><rect width="52" height="52" rx="17" fill="{{a.color}}"></rect><path d="M8 22c6-6 30-6 36 0v7c-6 4-30 4-36 0z" fill="#12100E"></path><g style="transform-box: view-box; transform-origin: 26px 26px; animation: bnd-blink 5.2s ease-in-out infinite; animation-delay: {{a.blink}};"><circle cx="18" cy="26" r="2.6" fill="{{a.color}}"></circle><circle cx="34" cy="26" r="2.6" fill="{{a.color}}"></circle></g></svg>
+          <span style="{{a.dot}}"></span>
+        </div>
+        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;">
+          <div style="display: flex; align-items: center; gap: 6px;"><span style="font-weight: 600;">{{a.name}}</span><span style="font-size: 11px; color: #BDB2A0; padding: 1px 6px; border-radius: 6px; background: rgba(243,235,221,.07);">{{a.role}}</span><span style="flex: 1;"></span><span style="font-size: 12px; color: #6E655A;">{{a.time}}</span></div>
+          <span style="font-size: 13.5px; color: #867C6D; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{a.preview}}</span>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+  <div style="flex: 1;"></div>
+  <div style="margin: 0 16px 10px; height: 54px; border-radius: 27px; background: rgba(30,26,22,.92); border: 1px solid rgba(243,235,221,.1); display: flex; align-items: center; padding: 0 8px 0 18px; gap: 10px; box-shadow: 0 20px 40px -20px rgba(0,0,0,.9);">
+    <span style="flex: 1; color: #6E655A;">Написать команде…</span>
+    <span style="width: 38px; height: 38px; border-radius: 50%; background: #F3EBDD; display: grid; place-items: center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#12100E" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"></path></svg></span>
+  </div>
+  <nav aria-label="Разделы" style="height: 74px; padding: 6px 18px 22px; display: flex; justify-content: space-between; border-top: 1px solid rgba(243,235,221,.06); background: rgba(18,16,14,.92);">
+    <sc-for list="{{tabs}}" as="t" hint-placeholder-count="4">
+      <button aria-label="{{t.label}}" style="{{t.style}}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="{{t.icon}}"></path></svg><span style="font-size: 10.5px; font-weight: 500;">{{t.label}}</span></button>
+    </sc-for>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const dot = (c) => 'position: absolute; right: -2px; bottom: -2px; width: 12px; height: 12px; border-radius: 50%; border: 2.5px solid #12100E; background: ' + c + ';';
+    const list = [
+        { name: 'Scout', role: 'ревьюер', color: '#A3BDEB', time: '14:09', preview: 'Одобрил изменения, одно замечание.', dot: dot('#A9C7A2') },
+        { name: 'Watch', role: 'дежурный', color: '#F2A093', time: 'live', preview: 'Всё спокойно · 5xx 0,02%', dot: dot('#A9C7A2') },
+        { name: 'Night Owl', role: 'аудитор', color: '#A9C7A2', time: '02:00', preview: 'Следующий запуск через 11 ч', dot: dot('#6E655A') },
+        { name: 'Quill', role: 'документация', color: '#BDB2A0', time: 'вт', preview: 'Changelog к 0.4 готов.', dot: dot('#6E655A') }
+    ];
+    const tabs = [
+      ['Команда', 'M4 5h16v11H9l-5 4z'],
+      ['Файлы', 'M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'],
+      ['Терминал', 'M3.5 5h17v14h-17zM7 10l3 2-3 2M12.5 15h4'],
+      ['Сервер', 'M3 12h4l2-5 4 10 2-5h6']
+    ].map(([label, icon], k) => ({ label, icon, style: 'width: 72px; border: none; background: transparent; display: flex; flex-direction: column; align-items: center; gap: 3px; padding-top: 6px; color: ' + (k === 0 ? '#FF8A1F' : '#867C6D') + ';' }));
+    return { tabs, agents: list.map((a, k) => ({ ...a, blink: ((k * 1.7 + 0.4) % 5).toFixed(2) + 's', row: 'display: flex; align-items: center; gap: 12px; padding: 11px 10px; border-radius: 16px; animation: bnd-rise .35s ease-out ' + (450 + k * 70) + 'ms both;' })) };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Bandito — экран сервера</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+@keyframes bnd-blink{0%,93%,100%{transform:scaleY(1)}96%{transform:scaleY(.12)}}
+body{margin:0;background:#0B0A09}
+a{color:#FFB067}a:hover{color:#FFD2A0}
+button{font:inherit;cursor:pointer;transition:color .15s ease,box-shadow .2s ease,transform .12s ease,filter .15s ease}
+button:hover{filter:brightness(1.15)}
+button:active{transform:scale(.98)}
+@keyframes bnd-rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes bnd-zoom{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
+@keyframes bnd-drag{0%,15%{transform:translate(0,0)}45%,60%{transform:translate(120px,40px)}90%,100%{transform:translate(0,0)}}
+@keyframes bnd-cur{0%,15%{transform:translate(0,0)}45%,60%{transform:translate(120px,40px)}90%,100%{transform:translate(0,0)}}
+@keyframes bnd-pulse{0%{box-shadow:0 0 0 0 rgba(163,189,235,.55)}70%{box-shadow:0 0 0 7px rgba(163,189,235,0)}100%{box-shadow:0 0 0 0 rgba(163,189,235,0)}}
+@keyframes bnd-sig{0%,100%{opacity:.35}50%{opacity:1}}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; display: flex; background: #12100E; color: #F3EBDD; font-family: Geist, -apple-system, sans-serif; font-size: 14px; overflow: hidden; position: relative;">
+
+  <aside style="width: 296px; flex-shrink: 0; display: flex; flex-direction: column; background: linear-gradient(180deg, rgba(30,26,22,.92) 0%, rgba(22,19,17,.96) 100%); border-right: 1px solid rgba(243,235,221,.07);">
+    <div style="height: 52px; display: flex; align-items: center; padding: 0 16px; gap: 8px;">
+      <span style="width: 12px; height: 12px; border-radius: 50%; background: #FF5F57;"></span>
+      <span style="width: 12px; height: 12px; border-radius: 50%; background: #FEBC2E;"></span>
+      <span style="width: 12px; height: 12px; border-radius: 50%; background: #28C840;"></span>
+    </div>
+    <div style="padding: 4px 14px 10px;">
+      <button style="width: 100%; display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 12px; border: 1px solid rgba(243,235,221,.08); background: rgba(243,235,221,.035); color: #F3EBDD; text-align: left;">
+        <span style="width: 8px; height: 8px; border-radius: 50%; background: #A9C7A2; box-shadow: 0 0 10px rgba(169,199,162,.6);"></span>
+        <span style="flex: 1; display: flex; flex-direction: column; line-height: 1.25;"><span style="font-size: 13px; font-weight: 600;">vps-tokyo-1</span><span style="font-size: 11.5px; color: #867C6D;">2 экрана · 1 активен</span></span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#867C6D" stroke-width="2" stroke-linecap="round"><path d="m7 10 5 5 5-5"></path></svg>
+      </button>
+    </div>
+    <nav aria-label="Разделы" style="display: flex; gap: 2px; margin: 0 14px 6px; padding: 3px; border-radius: 12px; background: rgba(243,235,221,.04); border: 1px solid rgba(243,235,221,.06);">
+      <sc-for list="{{modes}}" as="m" hint-placeholder-count="6">
+        <button aria-label="{{m.label}}" style="{{m.style}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="{{m.icon}}"></path></svg></button>
+      </sc-for>
+    </nav>
+    <div style="padding: 14px 18px 6px; font-size: 11px; font-weight: 600; letter-spacing: .08em; color: #867C6D;">ЭКРАНЫ РАБОЧИХ МЕСТ</div>
+    <div style="padding: 0 8px; display: flex; flex-direction: column; gap: 6px;">
+      <sc-for list="{{screens}}" as="s" hint-placeholder-count="2">
+        <button style="{{s.style}}">
+          <span style="{{s.thumb}}"><span style="{{s.win}}"></span></span>
+          <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; text-align: left;">
+            <span style="font-weight: 600; color: #F3EBDD;">{{s.name}}</span>
+            <span style="font-size: 11.5px; color: #867C6D;">{{s.sub}}</span>
+            <span style="display: flex; gap: 4px; margin-top: 2px;">
+              <sc-for list="{{s.agents}}" as="a" hint-placeholder-count="2"><svg width="18" height="18" viewBox="0 0 52 52"><rect width="52" height="52" rx="17" fill="{{a}}"></rect><path d="M8 22c6-6 30-6 36 0v7c-6 4-30 4-36 0z" fill="#12100E"></path><g style="transform-box: view-box; transform-origin: 26px 26px; animation: bnd-blink 5.2s ease-in-out infinite; animation-delay: 0.00s;"><circle cx="18" cy="26" r="2.6" fill="{{a}}"></circle><circle cx="34" cy="26" r="2.6" fill="{{a}}"></circle></g></svg></sc-for>
+            </span>
+          </span>
+        </button>
+      </sc-for>
+    </div>
+    <div style="padding: 16px 18px 6px; font-size: 11px; font-weight: 600; letter-spacing: .08em; color: #867C6D;">ПЕРЕДАЧА</div>
+    <div style="padding: 0 18px; display: flex; flex-direction: column; gap: 10px; font-size: 13px;">
+      <sc-for list="{{opts}}" as="o" hint-placeholder-count="3">
+        <div style="display: flex; align-items: center; justify-content: space-between;"><span style="color: #BDB2A0;">{{o.label}}</span><span style="{{o.style}}">{{o.value}}</span></div>
+      </sc-for>
+    </div>
+    <div style="flex: 1;"></div>
+    <div style="margin: 0 14px 14px; padding: 12px 13px; border-radius: 14px; background: rgba(243,235,221,.03); border: 1px solid rgba(243,235,221,.06); font-size: 12px; line-height: 1.5; color: #BDB2A0;">
+      <b style="color: #F3EBDD; font-weight: 600;">Экран просыпается по запросу.</b> Когда им 30 минут никто не пользуется — ни вы, ни агенты, — он засыпает и не тратит память сервера.
+    </div>
+  </aside>
+
+  <main style="flex: 1; min-width: 0; display: flex; flex-direction: column; background: #0E0C0B;">
+    <header style="height: 52px; display: flex; align-items: center; gap: 10px; padding: 0 14px; background: #12100E; border-bottom: 1px solid rgba(243,235,221,.05);">
+      <span style="font-weight: 600;">Песочница Scout</span>
+      <span style="font-size: 12px; color: #6E655A; display: flex; align-items: center; gap: 6px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #A9C7A2; animation: bnd-sig 1.6s infinite;"></span>18 мс · чётко</span>
+      <span style="flex: 1;"></span>
+      <div style="display: flex; padding: 3px; border-radius: 10px; background: rgba(243,235,221,.05);">
+        <button style="height: 26px; padding: 0 10px; border-radius: 7px; border: none; background: transparent; color: #867C6D; font-size: 12px;">Быстрее</button>
+        <button style="height: 26px; padding: 0 10px; border-radius: 7px; border: none; background: #2C2722; color: #F3EBDD; font-size: 12px; font-weight: 600;">Авто</button>
+        <button style="height: 26px; padding: 0 10px; border-radius: 7px; border: none; background: transparent; color: #867C6D; font-size: 12px;">Чётче</button>
+      </div>
+      <button aria-label="Отправить ⌃⌥⌦" style="height: 30px; padding: 0 10px; border-radius: 9px; border: 1px solid rgba(243,235,221,.1); background: rgba(243,235,221,.04); color: #BDB2A0; font-size: 12px; font-family: 'Geist Mono', monospace;">⌃⌥⌦</button>
+      <button aria-label="Во весь экран" style="width: 30px; height: 30px; border-radius: 9px; border: 1px solid rgba(243,235,221,.1); background: rgba(243,235,221,.04); color: #BDB2A0; display: grid; place-items: center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"></path></svg></button>
+      <button style="height: 30px; padding: 0 12px; border-radius: 999px; border: none; background: #F3EBDD; color: #12100E; font-size: 12.5px; font-weight: 600;">Взять управление</button>
+    </header>
+
+    <div style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 16px; position: relative;">
+      <div aria-label="Рабочий стол сервера" style="width: 1080px; height: 680px; border-radius: 12px; overflow: hidden; position: relative; background: radial-gradient(500px 380px at 75% 80%, #3B2618, transparent 70%), radial-gradient(520px 360px at 10% 10%, #1D2A3B, transparent 70%), #17130F; box-shadow: 0 0 0 1px rgba(243,235,221,.1), 0 40px 80px -30px rgba(0,0,0,.95); animation: bnd-zoom .5s cubic-bezier(.2,.8,.2,1) both;">
+        <div style="height: 28px; display: flex; align-items: center; gap: 16px; padding: 0 12px; background: rgba(12,10,9,.75); font-size: 12px; color: #BDB2A0;">
+          <span style="font-weight: 700; color: #F3EBDD;">Действия</span><span>Файлы</span><span>Браузер</span><span style="flex: 1;"></span><span style="font-family: 'Geist Mono', monospace;">14:09</span>
+        </div>
+        <div style="position: absolute; left: 40px; top: 60px; width: 560px; height: 380px; border-radius: 10px; overflow: hidden; background: #F7F4EE; box-shadow: 0 20px 50px -20px rgba(0,0,0,.8); animation: bnd-rise .4s ease-out .3s both;">
+          <div style="height: 30px; background: #E9E3D8; display: flex; align-items: center; gap: 6px; padding: 0 10px;"><span style="width: 10px; height: 10px; border-radius: 50%; background: #FF5F57;"></span><span style="width: 10px; height: 10px; border-radius: 50%; background: #FEBC2E;"></span><span style="width: 10px; height: 10px; border-radius: 50%; background: #28C840;"></span><span style="margin-left: 12px; flex: 1; height: 18px; border-radius: 5px; background: #FFFFFF; font-size: 11px; color: #6A6156; display: flex; align-items: center; padding: 0 8px;">localhost:8080/report.html</span></div>
+          <div style="padding: 18px; color: #1B1814; display: flex; flex-direction: column; gap: 12px;">
+            <span style="font-weight: 700; font-size: 17px;">Отчёт по нагрузке · вторник</span>
+            <div style="display: flex; align-items: flex-end; gap: 10px; height: 150px; padding: 10px; border-radius: 8px; background: #FFFFFF;">
+              <sc-for list="{{bars}}" as="b" hint-placeholder-count="12"><span style="{{b}}"></span></sc-for>
+            </div>
+            <span style="font-size: 12.5px; color: #6A6156;">Пик в 11:00 — 412 запросов/с. Узкое место — подпись вебхуков.</span>
+          </div>
+        </div>
+        <div style="position: absolute; left: 520px; top: 300px; width: 470px; height: 300px; border-radius: 10px; overflow: hidden; background: #0B0A09; box-shadow: 0 20px 50px -20px rgba(0,0,0,.9), 0 0 0 1px rgba(163,189,235,.5); animation: bnd-drag 7s cubic-bezier(.45,0,.2,1) 1s infinite;">
+          <div style="height: 28px; background: #1E1A16; display: flex; align-items: center; padding: 0 10px; font-size: 11.5px; color: #BDB2A0; gap: 8px;"><span style="width: 8px; height: 8px; border-radius: 50%; background: #A3BDEB;"></span>Терминал — Scout</div>
+          <div style="padding: 10px 12px; font-family: 'Geist Mono', monospace; font-size: 11.5px; line-height: 1.6; color: #D9CFBF; white-space: pre;"><span style="color: #A3BDEB;">scout@sandbox</span> ❯ k6 run load.js --vus 200
+<span style="color: #867C6D;">running (0m42s), 200/200 VUs</span>
+<span style="color: #A9C7A2;">✓ status is 200</span>
+<span style="color: #FFB067;">✗ p95 &lt; 300ms   ↳ 412ms</span>
+<span style="color: #867C6D;">http_reqs......: 17 304  412/s</span></div>
+        </div>
+        <div aria-hidden="true" style="position: absolute; left: 700px; top: 312px; animation: bnd-cur 7s cubic-bezier(.45,0,.2,1) 1s infinite;">
+          <svg width="20" height="22" viewBox="0 0 20 22"><path d="M2 1.5 17.5 11 10 12.5 6.5 20z" fill="#A3BDEB" stroke="#12100E" stroke-width="1.5" stroke-linejoin="round"></path></svg>
+          <span style="position: absolute; left: 16px; top: 18px; font-size: 11px; font-weight: 600; color: #12100E; background: #A3BDEB; padding: 2px 7px; border-radius: 999px; white-space: nowrap;">Scout</span>
+        </div>
+        <div style="position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); display: flex; gap: 8px; padding: 6px 8px; border-radius: 14px; background: rgba(12,10,9,.7); border: 1px solid rgba(243,235,221,.1);">
+          <sc-for list="{{dock}}" as="d" hint-placeholder-count="5"><span style="{{d}}"></span></sc-for>
+        </div>
+      </div>
+
+      <div style="position: absolute; right: 30px; top: 30px; width: 260px; border-radius: 14px; background: rgba(28,24,21,.92); border: 1px solid rgba(243,235,221,.1); box-shadow: 0 24px 60px -20px rgba(0,0,0,.9); padding: 12px; display: flex; flex-direction: column; gap: 10px; animation: bnd-rise .4s ease-out .7s both;">
+        <span style="font-size: 11px; font-weight: 600; letter-spacing: .08em; color: #867C6D;">КТО ЗДЕСЬ</span>
+        <div style="display: flex; align-items: center; gap: 9px; font-size: 13px;">
+          <svg width="26" height="26" viewBox="0 0 52 52"><rect width="52" height="52" rx="17" fill="#A3BDEB"></rect><path d="M8 22c6-6 30-6 36 0v7c-6 4-30 4-36 0z" fill="#12100E"></path><g style="transform-box: view-box; transform-origin: 26px 26px; animation: bnd-blink 5.2s ease-in-out infinite; animation-delay: 1.37s;"><circle cx="18" cy="26" r="2.6" fill="#A3BDEB"></circle><circle cx="34" cy="26" r="2.6" fill="#A3BDEB"></circle></g></svg>
+          <span style="flex: 1;"><b style="font-weight: 600;">Scout</b> <span style="color: #867C6D;">управляет</span></span>
+          <span style="width: 8px; height: 8px; border-radius: 50%; background: #A3BDEB; animation: bnd-pulse 1.8s infinite;"></span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 9px; font-size: 13px;">
+          <span style="width: 26px; height: 26px; border-radius: 50%; background: linear-gradient(135deg, #2C2722, #3A332C); display: grid; place-items: center; font-size: 11px; font-weight: 600; color: #BDB2A0;">Н</span>
+          <span style="flex: 1;"><b style="font-weight: 600;">Вы</b> <span style="color: #867C6D;">смотрите</span></span>
+        </div>
+        <span style="font-size: 12px; color: #867C6D; line-height: 1.45;">Нажмите «Взять управление» или просто кликните по экрану — Scout подождёт, пока вы не отпустите.</span>
+      </div>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const I = {
+      chat: 'M4 5h16v11H9l-5 4z',
+      folder: 'M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
+      term: 'M3.5 5h17v14h-17zM7 10l3 2-3 2M12.5 15h4',
+      globe: 'M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17zM3.5 12h17M12 3.5c2.6 2.6 2.6 14.4 0 17M12 3.5c-2.6 2.6-2.6 14.4 0 17',
+      screen: 'M3.5 4.5h17v11h-17zM9 20h6M12 15.5V20',
+      pulse: 'M3 12h4l2-5 4 10 2-5h6'
+    };
+    const modeStyle = (on) => 'flex: 1; height: 32px; border-radius: 9px; border: none; display: grid; place-items: center; ' + (on ? 'background: #2C2722; color: #F3EBDD; box-shadow: inset 0 1px 0 rgba(243,235,221,.06), 0 4px 10px -4px rgba(0,0,0,.6);' : 'background: transparent; color: #867C6D;');
+    const modes = [['Команда', I.chat], ['Файлы', I.folder], ['Терминалы', I.term], ['Браузер', I.globe], ['Экран сервера', I.screen], ['Сервер', I.pulse]].map(([label, icon], k) => ({ label, icon, style: modeStyle(k === 4) }));
+    const card = (on, k) => 'display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 13px; border: none; font-size: 13px; animation: bnd-rise .35s ease-out ' + (k * 80) + 'ms both; ' + (on ? 'background: rgba(163,189,235,.08); box-shadow: inset 0 0 0 1px rgba(163,189,235,.35);' : 'background: rgba(243,235,221,.03); box-shadow: inset 0 0 0 1px rgba(243,235,221,.06);');
+    const thumb = (bg) => 'width: 74px; height: 48px; border-radius: 8px; position: relative; overflow: hidden; flex-shrink: 0; background: ' + bg + ';';
+    const screens = [
+      { name: 'Песочница Scout', sub: 'отдельное · контейнер', agents: ['#A3BDEB'], on: true, bg: 'radial-gradient(60px 40px at 70% 80%, #3B2618, transparent), #1D2A3B', w: 'position: absolute; left: 10px; top: 9px; width: 34px; height: 22px; border-radius: 3px; background: #F7F4EE; opacity: .9;' },
+      { name: 'Общее', sub: 'спит · проснётся по клику', agents: ['#FFB067', '#C8B6E8'], bg: '#211B16', w: 'position: absolute; left: 22px; top: 14px; width: 30px; height: 20px; border-radius: 3px; background: rgba(243,235,221,.18);' }
+    ].map((s, k) => ({ ...s, style: card(!!s.on, k), thumb: thumb(s.bg), win: s.w }));
+    const pill = (c, bg) => 'font-size: 12px; font-weight: 600; color: ' + c + '; background: ' + bg + '; padding: 2px 8px; border-radius: 999px;';
+    const opts = [
+      { label: 'Буфер обмена', value: 'общий', style: pill('#A9C7A2', 'rgba(169,199,162,.12)') },
+      { label: 'Звук', value: 'выключен', style: pill('#BDB2A0', 'rgba(243,235,221,.07)') },
+      { label: 'Раскладка', value: 'как на Mac', style: pill('#BDB2A0', 'rgba(243,235,221,.07)') }
+    ];
+    const heights = [38, 52, 44, 70, 92, 100, 84, 66, 58, 48, 40, 34];
+    const bars = heights.map((h, k) => 'flex: 1; height: ' + h + '%; border-radius: 4px 4px 0 0; transform-origin: bottom; animation: bnd-rise .5s ease-out ' + (400 + k * 50) + 'ms both; background: ' + (h > 90 ? '#E4620E' : '#D9CFBF') + ';');
+    const dockColors = ['#F3EBDD', '#A3BDEB', '#FFB067', '#A9C7A2', '#C8B6E8'];
+    const dock = dockColors.map(c => 'width: 30px; height: 30px; border-radius: 8px; background: ' + c + '; opacity: .85;');
+    return { modes, screens, opts, bars, dock };
+  }
+}
+</script>
+</body>
+</html>

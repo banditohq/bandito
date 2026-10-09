@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Bandito — аккаунт</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0B0A09}
+a{color:#FFB067}a:hover{color:#FFD2A0}
+button{font:inherit;cursor:pointer;transition:color .15s ease,box-shadow .2s ease,transform .12s ease,filter .15s ease}
+button:hover{filter:brightness(1.12)}
+button:active{transform:scale(.98)}
+input{font:inherit}
+@keyframes bnd-rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes bnd-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+@keyframes bnd-float2{0%,100%{transform:translateY(0) rotate(4deg)}50%{transform:translateY(-12px) rotate(3deg)}}
+@keyframes bnd-flow{to{stroke-dashoffset:-36}}
+@keyframes bnd-travel{0%{offset-distance:0%;opacity:0}10%{opacity:1}90%{opacity:1}100%{offset-distance:100%;opacity:0}}
+@keyframes bnd-pulse{0%{box-shadow:0 0 0 0 rgba(255,138,31,.55)}70%{box-shadow:0 0 0 10px rgba(255,138,31,0)}100%{box-shadow:0 0 0 0 rgba(255,138,31,0)}}
+@keyframes bnd-story{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes bnd-scan{0%,100%{transform:translateY(0)}50%{transform:translateY(64px)}}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; display: flex; overflow: hidden; color: #F3EBDD; font-family: Geist, -apple-system, sans-serif; background: #12100E;">
+  <section style="width: 640px; flex-shrink: 0; position: relative; overflow: hidden; background: radial-gradient(520px 420px at 45% 45%, rgba(255,138,31,.18), transparent 70%), #171411; border-right: 1px solid rgba(243,235,221,.06);">
+    <div style="position: absolute; left: 18px; top: 18px; display: flex; gap: 8px;"><span style="width: 12px; height: 12px; border-radius: 50%; background: #FF5F57;"></span><span style="width: 12px; height: 12px; border-radius: 50%; background: #FEBC2E;"></span><span style="width: 12px; height: 12px; border-radius: 50%; background: #28C840;"></span></div>
+    <div aria-hidden="true" style="position: absolute; left: 90px; top: 210px; width: 400px; height: 260px; border-radius: 18px; background: #1E1A16; border: 1px solid rgba(243,235,221,.12); box-shadow: 0 40px 90px -30px rgba(0,0,0,.9); display: flex; overflow: hidden; animation: bnd-float 6s ease-in-out infinite;">
+      <div style="width: 110px; background: #191512; border-right: 1px solid rgba(243,235,221,.06); padding: 26px 10px; display: flex; flex-direction: column; gap: 9px;">
+        <div style="height: 22px; border-radius: 7px; background: rgba(255,138,31,.25);"></div>
+        <div style="height: 22px; border-radius: 7px; background: rgba(243,235,221,.07);"></div>
+        <div style="height: 22px; border-radius: 7px; background: rgba(243,235,221,.07);"></div>
+        <div style="height: 22px; border-radius: 7px; background: rgba(243,235,221,.07);"></div>
+      </div>
+      <div style="flex: 1; padding: 30px 18px; display: flex; flex-direction: column; gap: 10px;">
+        <div style="align-self: flex-end; width: 130px; height: 22px; border-radius: 10px; background: #2C2722;"></div>
+        <div style="width: 200px; height: 34px; border-radius: 10px; background: #221E1A;"></div>
+        <div style="width: 220px; height: 70px; border-radius: 12px; border: 1px solid rgba(255,138,31,.45); background: #221C16;"></div>
+      </div>
+    </div>
+    <div aria-hidden="true" style="position: absolute; left: 400px; top: 330px; width: 150px; height: 300px; border-radius: 30px; background: #1C1815; border: 1px solid rgba(243,235,221,.14); box-shadow: 0 40px 90px -20px rgba(0,0,0,.95); padding: 30px 12px; display: flex; flex-direction: column; gap: 10px; animation: bnd-float2 7s ease-in-out 1s infinite;">
+      <div style="height: 64px; border-radius: 14px; border: 1px solid rgba(255,138,31,.5); background: #241D17; display: flex; align-items: flex-end; gap: 5px; padding: 8px; animation: bnd-pulse 2.2s ease-out 1.5s infinite;"><span style="flex: 1; height: 16px; border-radius: 6px; background: rgba(243,235,221,.1);"></span><span style="flex: 1; height: 16px; border-radius: 6px; background: #E4620E;"></span></div>
+      <div style="height: 18px; border-radius: 7px; background: rgba(243,235,221,.07);"></div>
+      <div style="height: 18px; border-radius: 7px; background: rgba(243,235,221,.07);"></div>
+      <div style="height: 18px; border-radius: 7px; background: rgba(243,235,221,.07);"></div>
+    </div>
+    <svg aria-hidden="true" width="640" height="900" style="position: absolute; inset: 0;"><path d="M330 470 C 360 520, 380 520, 400 500" fill="none" stroke="#FF8A1F" stroke-width="1.5" stroke-dasharray="4 5" opacity=".7" style="animation: bnd-flow 1.2s linear infinite;"></path></svg>
+    <span aria-hidden="true" style="position: absolute; left: 0; top: 0; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; background: #FFB067; box-shadow: 0 0 12px #FF8A1F; offset-path: path('M330 470 C 360 520, 380 520, 400 500'); animation: bnd-travel 2.4s ease-in-out infinite;"></span>
+    <span aria-hidden="true" style="position: absolute; left: 0; top: 0; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: #A9C7A2; box-shadow: 0 0 10px #A9C7A2; offset-path: path('M400 500 C 380 520, 360 520, 330 470'); animation: bnd-travel 2.4s ease-in-out 1.2s infinite;"></span>
+    <div style="position: absolute; left: 90px; bottom: 120px; right: 60px; display: flex; flex-direction: column; gap: 8px;">
+      <span style="font-size: 22px; font-weight: 600; letter-spacing: -.02em;">Одна команда — на Mac и iPhone</span>
+      <span style="font-size: 14.5px; color: #BDB2A0; line-height: 1.55;">Войдите один раз, и все ваши серверы и агенты появятся на любом устройстве. Одобряйте задачи с телефона, даже когда Mac закрыт.</span>
+    </div>
+  </section>
+
+  <section style="flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 0 120px; gap: 24px;">
+    <div style="display: flex; align-items: center; gap: 12px; animation: bnd-rise .45s ease-out both;">
+      <div style="display: flex; gap: 6px;">
+        <span style="width: 26px; height: 4px; border-radius: 2px; background: #A9C7A2;"></span>
+        <span style="width: 26px; height: 4px; border-radius: 2px; background: rgba(243,235,221,.12); overflow: hidden;"><span style="display: block; height: 100%; background: #FF8A1F; transform-origin: left; animation: bnd-story .8s ease-out .3s both;"></span></span>
+        <span style="width: 26px; height: 4px; border-radius: 2px; background: rgba(243,235,221,.12);"></span>
+        <span style="width: 26px; height: 4px; border-radius: 2px; background: rgba(243,235,221,.12);"></span>
+        <span style="width: 26px; height: 4px; border-radius: 2px; background: rgba(243,235,221,.12);"></span>
+      </div>
+      <span style="font-size: 12.5px; color: #867C6D;">шаг 2 из 5 · аккаунт</span>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 10px; animation: bnd-rise .45s ease-out .08s both;">
+      <h1 style="margin: 0; font-size: 38px; font-weight: 600; letter-spacing: -.035em; line-height: 1.1;">Создайте аккаунт Bandito</h1>
+      <p style="margin: 0; font-size: 15px; color: #BDB2A0; line-height: 1.55; max-width: 480px;">Он бесплатный и нужен, чтобы устройства узнавали друг друга. Пароль придумывать не придётся.</p>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 10px; max-width: 420px; animation: bnd-rise .45s ease-out .16s both;">
+      <button style="height: 48px; border-radius: 14px; border: none; background: #F3EBDD; color: #12100E; font-size: 15px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 10px;"><svg width="17" height="17" viewBox="0 0 24 24" fill="#12100E"><path d="M16.5 12.6c0-2.6 2.1-3.8 2.2-3.9-1.2-1.8-3.1-2-3.7-2-1.6-.2-3.1.9-3.9.9-.8 0-2-.9-3.4-.9-1.7 0-3.3 1-4.2 2.6-1.8 3.1-.5 7.7 1.3 10.2.9 1.2 1.9 2.6 3.2 2.6 1.3-.1 1.8-.8 3.3-.8s2 .8 3.4.8c1.4 0 2.3-1.3 3.1-2.5 1-1.4 1.4-2.8 1.4-2.9 0 0-2.7-1-2.7-4.1zM14 4.9c.7-.9 1.2-2 1-3.2-1 0-2.2.7-3 1.6-.6.7-1.2 1.9-1 3.1 1.1.1 2.3-.6 3-1.5z"></path></svg>Продолжить с Apple</button>
+      <button style="height: 48px; border-radius: 14px; border: 1px solid rgba(243,235,221,.14); background: rgba(243,235,221,.04); color: #F3EBDD; font-size: 15px; font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 10px;"><svg width="17" height="17" viewBox="0 0 24 24" fill="#F3EBDD"><path d="M12 .8a11.2 11.2 0 0 0-3.5 21.8c.6.1.8-.2.8-.5v-2c-3.1.7-3.8-1.4-3.8-1.4-.5-1.3-1.2-1.6-1.2-1.6-1-.7.1-.7.1-.7 1.1.1 1.7 1.2 1.7 1.2 1 1.7 2.6 1.2 3.3.9.1-.7.4-1.2.7-1.5-2.5-.3-5.1-1.2-5.1-5.5 0-1.2.4-2.2 1.2-3-.1-.3-.5-1.4.1-3 0 0 .9-.3 3.1 1.2a10.6 10.6 0 0 1 5.6 0c2.1-1.5 3-1.2 3-1.2.6 1.6.2 2.7.1 3 .7.8 1.2 1.8 1.2 3 0 4.3-2.6 5.2-5.1 5.5.4.3.8 1 .8 2v3c0 .3.2.6.8.5A11.2 11.2 0 0 0 12 .8z"></path></svg>Продолжить с GitHub</button>
+      <div style="display: flex; align-items: center; gap: 12px; color: #6E655A; font-size: 12px; margin: 4px 0;"><span style="flex: 1; height: 1px; background: rgba(243,235,221,.08);"></span>или по почте<span style="flex: 1; height: 1px; background: rgba(243,235,221,.08);"></span></div>
+      <div style="display: flex; gap: 8px;">
+        <label for="mail" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0);">Почта</label>
+        <input id="mail" placeholder="you@example.com" style="flex: 1; height: 46px; border-radius: 14px; border: 1px solid rgba(243,235,221,.12); background: #141210; color: #F3EBDD; padding: 0 14px; outline: none; font-size: 14.5px;">
+        <button style="height: 46px; padding: 0 16px; border-radius: 14px; border: none; background: linear-gradient(180deg, #E4620E, #C94F09); color: #FFFFFF; font-weight: 600;">Прислать ссылку</button>
+      </div>
+    </div>
+    <div style="max-width: 480px; display: flex; gap: 14px; align-items: center; padding: 14px 16px; border-radius: 16px; background: rgba(243,235,221,.03); border: 1px solid rgba(243,235,221,.09); animation: bnd-rise .45s ease-out .24s both;">
+      <div aria-hidden="true" style="position: relative; width: 72px; height: 72px; border-radius: 12px; background: #F3EBDD; padding: 7px; box-sizing: border-box; display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; flex-shrink: 0; overflow: hidden;">
+        <sc-for list="{{qr}}" as="q" hint-placeholder-count="49"><span style="{{q}}"></span></sc-for>
+        <span style="position: absolute; left: 4px; right: 4px; top: 4px; height: 2px; background: #FF8A1F; box-shadow: 0 0 8px #FF8A1F; animation: bnd-scan 2.4s ease-in-out infinite;"></span>
+      </div>
+      <span style="font-size: 13px; color: #BDB2A0; line-height: 1.55;"><b style="color: #F3EBDD; font-weight: 600;">Уже вошли на iPhone?</b> Наведите камеру телефона — Mac войдёт сам, без пароля и почты. И наоборот: этот код появится на Mac, когда будете ставить iPhone.</span>
+    </div>
+    <div style="max-width: 480px; display: flex; gap: 12px; padding: 14px 16px; border-radius: 16px; background: rgba(169,199,162,.06); border: 1px solid rgba(169,199,162,.18); animation: bnd-rise .45s ease-out .32s both;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A9C7A2" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 1px;"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>
+      <span style="font-size: 13px; color: #BDB2A0; line-height: 1.55;">Мы храним только список ваших серверов — <b style="color: #F3EBDD; font-weight: 600;">зашифрованным</b>, ключ есть лишь у ваших устройств. Код, ключи API и переписка остаются на ваших серверах.</span>
+    </div>
+    <a href="FirstServer.dc.html" style="font-size: 13.5px; color: #867C6D; text-decoration: none;">Продолжить без аккаунта <span style="color: #6E655A;">· всё будет только на этом Mac</span></a>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const on = (r, c) => (r < 2 && c < 2) || (r < 2 && c > 4) || (r > 4 && c < 2) || ((r * 3 + c * 5 + r * c) % 3 === 0 && !(r < 2 && c < 2));
+    const qr = Array.from({ length: 49 }, (_, k) => 'border-radius: 1.5px; background: ' + (on(Math.floor(k / 7), k % 7) ? '#12100E' : 'transparent') + ';');
+    return { qr };
+  }
+}
+</script>
+</body>
+</html>
