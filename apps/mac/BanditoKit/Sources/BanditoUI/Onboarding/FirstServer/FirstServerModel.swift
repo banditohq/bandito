@@ -123,8 +123,12 @@ final class FirstServerModel {
         checklist.reset()
         hostKeyError = nil
         phase = .installing
+        #if DEBUG
         let installer = SSHInstaller(
             runner: runner, localBinary: devBinary, devArchive: devArchive, appVersion: Self.appVersion)
+        #else
+        let installer = SSHInstaller(runner: runner, appVersion: Self.appVersion)
+        #endif
         run(installer.install(target: target.description, deviceName: DeviceDescriptor.current.name), app: app)
     }
 

@@ -112,3 +112,44 @@ import Testing
         #expect(guardDelegate.refused == false)
     }
 }
+
+@Suite struct ReleaseTagTests {
+    @Test func aRedirectToAReleaseDownloadNamesTheTag() throws {
+        let guardDelegate = RedirectGuard()
+        let session = URLSession(configuration: .ephemeral)
+        let start = URL(string: "https://github.com/banditohq/bandito/releases/latest/download/x")!
+        let task = session.dataTask(with: start)
+        let response = try #require(HTTPURLResponse(url: start, statusCode: 302, httpVersion: nil, headerFields: nil))
+
+        guardDelegate.urlSession(
+            session, task: task, willPerformHTTPRedirection: response,
+            newRequest: URLRequest(url: URL(string: "https://github.com/banditohq/bandito/releases/download/v0.3.0/x")!),
+            completionHandler: { _ in })
+
+        #expect(guardDelegate.followedTag == "v0.3.0")
+        #expect(guardDelegate.refused == false)
+    }
+
+    @Test func aCdnRedirectKeepsTheTagOfTheReleaseItCameFrom() throws {
+        let guardDelegate = RedirectGuard()
+        let session = URLSession(configuration: .ephemeral)
+        let start = URL(string: "https://github.com/banditohq/bandito/releases/download/v0.3.0/x")!
+        let task = session.dataTask(with: start)
+        let response = try #require(HTTPURLResponse(url: start, statusCode: 302, httpVersion: nil, headerFields: nil))
+
+        guardDelegate.urlSession(
+            session, task: task, willPerformHTTPRedirection: response,
+            newRequest: URLRequest(url: URL(string: "https://objects.githubusercontent.com/github-production/x")!),
+            completionHandler: { _ in })
+
+        #expect(guardDelegate.followedTag == nil)
+        #expect(guardDelegate.refused == false)
+    }
+
+    @Test func onlyVersionsAreTakenAsTags() throws {
+        let url = { (text: String) in URL(string: "https://github.com/banditohq/bandito/releases/download/\(text)/x")! }
+        #expect(GitHubReleaseSource.tag(inDownload: url("v0.3.0")) == "v0.3.0")
+        #expect(GitHubReleaseSource.tag(inDownload: url("latest")) == nil)
+        #expect(GitHubReleaseSource.tag(inDownload: url("..")) == nil)
+    }
+}

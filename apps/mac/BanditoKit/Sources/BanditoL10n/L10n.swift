@@ -1033,6 +1033,7 @@ public enum L10n {
                 public static var noRoute: String { L10n.tr("onboarding.server.err.noRoute") }
                 public static var refused: String { L10n.tr("onboarding.server.err.refused") }
                 public static var releaseCheck: String { L10n.tr("onboarding.server.err.releaseCheck") }
+                public static func releasePublishing(tag: String) -> String { L10n.tr("onboarding.server.err.releasePublishing", tag) }
                 public static var timedOut: String { L10n.tr("onboarding.server.err.timedOut") }
                 public static var unknownHost: String { L10n.tr("onboarding.server.err.unknownHost") }
                 public static var unsupported: String { L10n.tr("onboarding.server.err.unsupported") }

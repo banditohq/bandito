@@ -19,7 +19,7 @@ import Testing
     }
 
     @Test func aValidSignatureAndAMatchingHashPass() throws {
-        try check(sums: release.sums, signatureBase64: try release.signatureFile())
+        try check(sums: release.sums, signatureBase64: release.signatureFile)
     }
 
     @Test func binaryModeLinesAreReadToo() throws {
@@ -28,11 +28,11 @@ import Testing
     }
 
     @Test func aTrailingNewlineAroundTheSignatureIsIgnored() throws {
-        try check(sums: release.sums, signatureBase64: try release.signatureFile() + "\n")
+        try check(sums: release.sums, signatureBase64: release.signatureFile + "\n")
     }
 
     @Test func changedSumsFailTheSignature() throws {
-        let signature = try release.signatureFile()
+        let signature = release.signatureFile
         let changed = Data("\(testSHA256Hex(Data("evil".utf8)))  \(asset)\n".utf8)
         #expect(throws: ReleaseVerifier.Failure.badSignature) {
             try check(sums: changed, signatureBase64: signature)
@@ -50,7 +50,7 @@ import Testing
     @Test func aTestSignatureDoesNotPassTheReleaseKey() throws {
         // The production key never accepts a signature made with another key.
         #expect(throws: ReleaseVerifier.Failure.badSignature) {
-            try check(sums: release.sums, signatureBase64: try release.signatureFile(), key: ReleaseVerifier.release)
+            try check(sums: release.sums, signatureBase64: release.signatureFile, key: ReleaseVerifier.release)
         }
     }
 
@@ -70,7 +70,7 @@ import Testing
 
     @Test func aTamperedArchiveIsRefused() throws {
         #expect(throws: ReleaseVerifier.Failure.checksumMismatch) {
-            try check(sums: release.sums, signatureBase64: try release.signatureFile(), archive: Data("x".utf8))
+            try check(sums: release.sums, signatureBase64: release.signatureFile, archive: Data("x".utf8))
         }
     }
 

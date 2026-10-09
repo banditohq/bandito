@@ -725,6 +725,7 @@
 "onboarding.server.err.noRoute" = "There is no network route to the server from this Mac.";
 "onboarding.server.err.refused" = "The server refuses the connection. Check that SSH runs on that port.";
 "onboarding.server.err.releaseCheck" = "Release signature check failed — the download may have been tampered with. Nothing was installed.";
+"onboarding.server.err.releasePublishing" = "Release %1$@ is still being published — try again in a few minutes.";
 "onboarding.server.err.timedOut" = "The server does not answer. Check that it is on and reachable.";
 "onboarding.server.err.unknownHost" = "The server name does not resolve. Check the address.";
 "onboarding.server.err.unsupported" = "This server's system or processor is not supported. Bandito needs Linux or macOS on x86_64 or arm64.";
