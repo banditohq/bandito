@@ -33,6 +33,11 @@ enum Cmd {
     Status,
     /// Create a one-time pairing code for the app.
     Pair,
+    /// Crew MCP server for one agent (started by the daemon; speaks MCP on stdio).
+    Mcp {
+        #[arg(long)]
+        agent: String,
+    },
 }
 
 fn home_dir(arg: Option<PathBuf>) -> Result<PathBuf> {
@@ -48,7 +53,9 @@ fn home_dir(arg: Option<PathBuf>) -> Result<PathBuf> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Logs go to stderr: `mcp` uses stdout for the protocol.
     tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
         .with_env_filter(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
         .init();
     let cli = Cli::parse();
@@ -67,6 +74,7 @@ async fn main() -> Result<()> {
             println!("Enter it in the Bandito app: Settings → Servers → Add server.");
             Ok(())
         }
+        Cmd::Mcp { agent } => bandito::crew::serve_stdio(sock, agent).await,
     }
 }
 
@@ -97,7 +105,12 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr) -> Result<()> {
     let hub = Hub::new(store);
     let mut runtimes = Runtimes::default();
     runtimes.insert(Arc::new(ClaudeRuntime::new()));
-    let sup = Supervisor::new(hub, runtimes, None);
+    // Each agent gets `bandito --home <home> mcp --agent <id>` as its crew MCP server.
+    let mcp = (
+        std::env::current_exe()?,
+        vec!["--home".into(), home.display().to_string(), "mcp".into()],
+    );
+    let sup = Supervisor::new(hub, runtimes, Some(mcp));
     sup.recover()?;
     let app = App::new(sup.clone());
 
