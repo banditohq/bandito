@@ -22,6 +22,6 @@ let package = Package(
         .target(name: "BanditoL10n", resources: [.process("Resources")]),
         .target(name: "BanditoUI", dependencies: ["BanditoKit", "BanditoDesign", "BanditoL10n"]),
         .testTarget(name: "BanditoKitTests", dependencies: ["BanditoKit", "BanditoL10n"]),
-        .testTarget(name: "BanditoUITests", dependencies: ["BanditoUI", "BanditoKit"]),
+        .testTarget(name: "BanditoUITests", dependencies: ["BanditoUI", "BanditoKit", "BanditoL10n"]),
     ]
 )
