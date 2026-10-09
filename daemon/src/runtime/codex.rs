@@ -110,6 +110,8 @@ impl Runtime for CodexRuntime {
                 .arg(format!("sandbox_workspace_write.writable_roots={}", json!(roots)));
         }
         cmd.current_dir(&cfg.cwd).envs(cfg.env.iter().map(|(k, v)| (k, v)));
+        // Marks the CLI and its children for `host.processes` (see docs/ARCHITECTURE.md#host).
+        cmd.env("BANDITO_AGENT_ID", &cfg.agent_id);
 
         let state = Arc::new(Mutex::new(State::new(cfg.effort.map(turn_effort))));
         let launch = Launch::from_config(&cfg);

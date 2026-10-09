@@ -177,6 +177,21 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr) -> Result<()> {
         });
     }
 
+    {
+        // Host load: one sample every 10 s, kept for the 1 h and 24 h charts (see docs/ARCHITECTURE.md#host).
+        let sampler = app.host.clone();
+        tokio::spawn(async move {
+            let mut tick = tokio::time::interval(bandito::host::SAMPLE_INTERVAL);
+            loop {
+                tick.tick().await;
+                let sampler = sampler.clone();
+                if let Err(e) = tokio::task::spawn_blocking(move || sampler.sample_now()).await {
+                    tracing::warn!("host sample failed: {e}");
+                }
+            }
+        });
+    }
+
     tracing::info!(version = rpc::VERSION, socket = %sock.display(), %listen, "bandito daemon is running");
     shutdown_signal().await;
     tracing::info!("shutting down");
