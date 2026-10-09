@@ -420,6 +420,8 @@ public struct DaemonInfo: Codable, Sendable, Hashable {
     public var lastSeq: Int64
     /// What this daemon supports (e.g. "schedules", "crew"). Missing on very old daemons.
     public var features: [String]?
+    /// The daemon's last successful check for a newer release. Null until one succeeded; missing on old daemons.
+    public var update: DaemonUpdate?
 
     public func supports(_ feature: String) -> Bool { features?.contains(feature) ?? false }
 }

@@ -1,13 +1,17 @@
 import BanditoDesign
+import BanditoKit
 import BanditoL10n
 import SwiftUI
 
-/// Settings → General: interface language, sample data, and launch at login.
+/// Settings → General: interface language, sample data, launch at login, and how the app updates itself.
 struct GeneralSection: View {
     @Environment(DemoStore.self) private var demo
     @State private var language = Self.storedLanguage()
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
     @State private var launchError: String?
+    // The app target reads these keys and configures Sparkle (AppUpdater).
+    @AppStorage(AppUpdatePreferences.automaticChecksKey) private var autoCheckUpdates = true
+    @AppStorage(AppUpdatePreferences.channelKey) private var updateChannel = AppUpdatePreferences.Channel.stable.rawValue
 
     private static let languageKey = "AppleLanguages"
     private static let systemLanguage = "system"
@@ -37,6 +41,21 @@ struct GeneralSection: View {
                     Toggle("", isOn: $launchAtLogin)
                         .labelsHidden()
                         .toggleStyle(BanditoToggleStyle())
+                }
+                Divider().padding(.horizontal, 16)
+                SettingsRow(title: L10n.Settings.autoCheckUpdates, hint: L10n.Settings.autoCheckUpdatesHint) {
+                    Toggle("", isOn: $autoCheckUpdates)
+                        .labelsHidden()
+                        .toggleStyle(BanditoToggleStyle())
+                }
+                Divider().padding(.horizontal, 16)
+                SettingsRow(title: L10n.Settings.Updates.channel, hint: L10n.Settings.channelHint) {
+                    Picker("", selection: $updateChannel) {
+                        Text(L10n.Settings.Updates.stable).tag(AppUpdatePreferences.Channel.stable.rawValue)
+                        Text(L10n.Settings.Updates.beta).tag(AppUpdatePreferences.Channel.beta.rawValue)
+                    }
+                    .labelsHidden()
+                    .frame(width: 220)
                 }
             }
             .banditoCard()

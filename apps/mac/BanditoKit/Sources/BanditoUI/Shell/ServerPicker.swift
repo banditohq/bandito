@@ -11,7 +11,14 @@ struct ServerPicker: View {
         if let server = app.currentServer {
             Menu {
                 ForEach(app.servers) { candidate in
-                    Button(Self.name(candidate)) { app.selectedServerID = candidate.id }
+                    Button { app.selectedServerID = candidate.id } label: {
+                        // A dot marks a server whose daemon has a newer release to install.
+                        if DaemonUpdateOffer.offer(for: candidate.info) != nil {
+                            Label(Self.name(candidate), systemImage: "circle.fill")
+                        } else {
+                            Text(Self.name(candidate))
+                        }
+                    }
                 }
             } label: {
                 HStack(spacing: 10) {

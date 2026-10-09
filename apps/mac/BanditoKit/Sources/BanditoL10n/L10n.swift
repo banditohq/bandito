@@ -749,6 +749,7 @@ public enum L10n {
 
     public enum Menu {
         public static var agent: String { L10n.tr("menu.agent") }
+        public static var checkForUpdates: String { L10n.tr("menu.checkForUpdates") }
         public static var go: String { L10n.tr("menu.go") }
         public static var terminals: String { L10n.tr("menu.terminals") }
         public static var view: String { L10n.tr("menu.view") }
@@ -1268,6 +1269,20 @@ public enum L10n {
             public static var user: String { L10n.tr("server.add.user") }
         }
 
+        public enum DaemonUpdate {
+            public static var button: String { L10n.tr("server.daemonUpdate.button") }
+            public static var confirm: String { L10n.tr("server.daemonUpdate.confirm") }
+            public static var confirmMessage: String { L10n.tr("server.daemonUpdate.confirmMessage") }
+            public static func confirmTitle(version: String) -> String { L10n.tr("server.daemonUpdate.confirmTitle", version) }
+            public static func done(version: String) -> String { L10n.tr("server.daemonUpdate.done", version) }
+            public static func failed(error: String) -> String { L10n.tr("server.daemonUpdate.failed", error) }
+            public static func manualRestart(version: String) -> String { L10n.tr("server.daemonUpdate.manualRestart", version) }
+            public static var restarting: String { L10n.tr("server.daemonUpdate.restarting") }
+            public static func timedOut(version: String) -> String { L10n.tr("server.daemonUpdate.timedOut", version) }
+            public static func title(latest: String, current: String) -> String { L10n.tr("server.daemonUpdate.title", latest, current) }
+            public static var updating: String { L10n.tr("server.daemonUpdate.updating") }
+        }
+
         public enum Features {
             public static var title: String { L10n.tr("server.features.title") }
         }
@@ -1376,6 +1391,9 @@ public enum L10n {
     public enum Settings {
         public static var approvals: String { L10n.tr("settings.approvals") }
         public static var approvalsIntro: String { L10n.tr("settings.approvalsIntro") }
+        public static var autoCheckUpdates: String { L10n.tr("settings.autoCheckUpdates") }
+        public static var autoCheckUpdatesHint: String { L10n.tr("settings.autoCheckUpdatesHint") }
+        public static var channelHint: String { L10n.tr("settings.channelHint") }
         public static var close: String { L10n.tr("settings.close") }
         public static var general: String { L10n.tr("settings.general") }
         public static var keysIntro: String { L10n.tr("settings.keysIntro") }

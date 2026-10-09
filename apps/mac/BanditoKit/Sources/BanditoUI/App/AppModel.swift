@@ -94,6 +94,17 @@ public final class AppModel {
         }
     }
 
+    /// Re-reads every connected server's `daemon.info` once an hour, so the update offer follows the daemon's own
+    /// check (the daemon checks every 24 hours). Runs until the caller's task is cancelled.
+    public func refreshDaemonInfoHourly() async {
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(3600))
+            for server in servers {
+                await server.refreshInfo()
+            }
+        }
+    }
+
     /// Moves the saved `.local` servers (this Mac, over its unix socket) to the daemon's WebSocket with a device
     /// token (`LocalDaemonPairing`). It runs at each launch, before the connect, and a server that is moved is no
     /// longer `.local`, so it happens once. A server that cannot be paired yet stays `.local`; the next launch

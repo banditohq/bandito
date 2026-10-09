@@ -15,9 +15,9 @@ Opens the Settings window. It is a separate window, not a sheet over the main wi
 ## General (Общие)
 
 <!-- id: set-general; covers: settings:general -->
-The first section. It holds the interface language, the sample data switch, and launch at login.
+The first section. It holds the interface language, the sample data switch, launch at login, and how Bandito updates itself.
 Где: Settings (⌘,) → General (Общие)
-1. Language (Язык) and Show examples (Показывать примеры) and Launch at login (Запускать при входе в систему) are described below.
+1. Language (Язык) and Show examples (Показывать примеры) and Launch at login (Запускать при входе в систему) are described below. Check for updates automatically (Проверять обновления автоматически) and Update channel (Канал обновлений) are described at the end of this section.
 
 ## Language in General (Language)
 
@@ -41,6 +41,22 @@ When the server has no data for a screen yet, the app shows sample agents and li
 Starts Bandito when you sign in to this Mac. It uses the macOS login items; the setting is not stored by Bandito.
 Где: Settings (⌘,) → General (Общие) → Launch at login (Запускать при входе в систему)
 1. Turn the switch on. If macOS refuses, the message says Could not change the login item: … (Could not change the login item: {error}).
+
+## Check for updates automatically (Проверять обновления автоматически)
+
+<!-- id: set-auto-update; covers: setting:SUEnableAutomaticChecks -->
+Bandito checks for a new version once a day and tells you when one is out. It never installs anything without your OK. The switch is on by default.
+Где: Settings (⌘,) → General (Общие) → Check for updates automatically (Проверять обновления автоматически)
+1. Turn the switch off to stop the daily check. Check for Updates… (Проверить обновления…) in the Bandito menu still works.
+2. When a new version is found, the update window shows it. Click Install Update (Установить обновление), or pick Remind Me Later (Напоминать позже) or Skip This Version (Пропустить эту версию).
+
+## Update channel (Канал обновлений)
+
+<!-- id: set-update-channel; covers: setting:updates.channel -->
+Stable (Стабильный) gets the released versions. Beta (Бета) also gets preview builds, which come earlier and may have rough edges.
+Где: Settings (⌘,) → General (Общие) → Update channel (Канал обновлений)
+1. Pick Stable (Стабильный) for the released versions only, or Beta (Бета) for the preview builds too.
+2. Check for Updates… (Проверить обновления…) uses the channel that is picked now.
 
 ## Account and sync (Аккаунт и синхронизация)
 

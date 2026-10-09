@@ -524,6 +524,7 @@
 "memory.splitHeader" = "КАК ДЕЛИТЬ НА ГЛАВЫ";
 "memory.title" = "Память";
 "menu.agent" = "Агент";
+"menu.checkForUpdates" = "Проверить обновления…";
 "menu.go" = "Перейти";
 "menu.terminals" = "Терминалы";
 "menu.view" = "Вид";
@@ -949,6 +950,17 @@
 "server.add.url" = "Свой адрес";
 "server.add.urlDesc" = "Cloudflare Tunnel, WireGuard, обратный прокси — любой URL до демона.";
 "server.add.user" = "Пользователь";
+"server.daemonUpdate.button" = "Обновить сервер";
+"server.daemonUpdate.confirm" = "Обновить";
+"server.daemonUpdate.confirmMessage" = "Демон скачает новую версию, проверит её подпись и перезапустится. Связь пропадёт на несколько секунд. Данные и настройки сохранятся.";
+"server.daemonUpdate.confirmTitle" = "Обновить сервер до версии %1$@?";
+"server.daemonUpdate.done" = "Сервер работает на версии %1$@.";
+"server.daemonUpdate.failed" = "Не удалось обновить: %1$@";
+"server.daemonUpdate.manualRestart" = "Установлена версия %1$@. Перезапустите демон на сервере, чтобы запустить её.";
+"server.daemonUpdate.restarting" = "Ждём, пока сервер перезапустится…";
+"server.daemonUpdate.timedOut" = "Сервер не вернулся на версии %1$@ за две минуты. Проверьте его в терминале.";
+"server.daemonUpdate.title" = "Доступна версия %1$@ (у вас %2$@)";
+"server.daemonUpdate.updating" = "Обновляем сервер…";
 "server.features.title" = "Возможности";
 "server.health.bothFull" = "Диск и память почти заполнены";
 "server.health.diskFull" = "Диск почти полон";
@@ -1061,6 +1073,8 @@
 "settings.approvals.when" = "Когда агент хочет выполнить";
 "settings.approvals.wildcardNote" = "* — что угодно. Если подходят два правила, побеждает правило конкретного агента, затем более новое.";
 "settings.approvalsIntro" = "Bandito проверяет каждое действие агента. Обычная работа идёт сама, а всё, что подходит под правило ниже или встроенную проверку, ждёт вашего решения.";
+"settings.autoCheckUpdates" = "Проверять обновления автоматически";
+"settings.autoCheckUpdatesHint" = "Раз в сутки. Без вашего согласия ничего не устанавливается.";
 "settings.browserScreen.clipboard" = "Общий буфер обмена";
 "settings.browserScreen.clipboardHint" = "Скопировали здесь — вставили там, и наоборот.";
 "settings.browserScreen.intro" = "Браузер и экран сервера, как их видно на этом Mac.";
@@ -1069,6 +1083,7 @@
 "settings.browserScreen.qualityFaster" = "Быстрее";
 "settings.browserScreen.qualityHint" = "Быстрее — меньше данных; чётче — больше трафика.";
 "settings.browserScreen.qualitySharper" = "Чётче";
+"settings.channelHint" = "Бета получает предварительные сборки раньше.";
 "settings.close" = "Закрыть настройки";
 "settings.general" = "Общие";
 "settings.keysIntro" = "Всё как в привычных приложениях Mac. Нажмите на сочетание, чтобы поменять.";

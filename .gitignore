@@ -8,3 +8,5 @@ DerivedData/
 target/
 .build/
 .swiftpm/
+# Release artifacts and their work files (apps/mac/scripts/release-app.sh).
+apps/mac/build/

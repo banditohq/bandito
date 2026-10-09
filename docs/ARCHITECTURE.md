@@ -491,6 +491,8 @@ The binary is then copied next to the running one as `.bandito.new.<pid>`, chmod
 
 **Background check.** The daemon checks for a newer release 10 minutes after start and then every 24 hours (`update::spawn_background_check`). A newer release is written to the log. Nothing is installed. `daemon.info` carries the last successful check as `update: {current, latest, available, checked_at}` (`null` until one succeeds), and the app shows its button from it.
 
+**Mac app.** Server → Overview shows the daemon's offer as a card, and the server menu shows a dot. The button asks `daemon.update_apply` after a confirmation, then waits for `daemon.info` to report the new version. See [Mac app updates](#mac-app-updates).
+
 **Not in place: revocation and a minimum version.** The client has no revocation list and no minimum version. A release that the release key signed installs when the owner asks, even if it was later withdrawn from GitHub. The protection is the signature, the download limits and the owner's choice; a compromised release key would need a new key in the apps and in `install.sh`.
 
 ## Setup
@@ -614,6 +616,16 @@ Errors: code `-32028` (`WORKSPACE_ERROR`) with `error.data.reason`: `docker_unav
 ## Mac app
 
 SwiftUI, macOS 14+. Sidebar: servers → crew. Thread view rendered from events; approval cards with Approve / Deny / Always; schedules; connection wizard. Menu bar item with the status dot. Local notifications with Approve / Deny actions while the app runs. Strings in a String Catalog, 9 languages. Colors from `brand/tokens/dist`.
+
+## Mac app updates
+
+The Mac app updates itself with Sparkle 2 (SwiftPM, exact version 2.10.0 in `apps/mac/project.yml`). Only the app target links Sparkle: `apps/mac/Bandito/App/AppUpdater.swift`. Kit and UI know the settings (`AppUpdatePreferences`) and the menu item (`AppUpdateCommands`, under About), not Sparkle.
+
+- **Feed.** `https://bandito.dev/appcast.xml` (`SUFeedURL`), the file `public/appcast.xml` of the platform repo. The site serves it as `application/rss+xml; charset=utf-8` with `Cache-Control: public, max-age=300`. An item has `sparkle:version` (the build number: the commit count of the release commit), `sparkle:shortVersionString`, `sparkle:minimumSystemVersion` 14.0 and an enclosure on the GitHub release `v<version>`. A version with `-beta.N` also gets `<sparkle:channel>beta</sparkle:channel>`.
+- **Trust.** Archives are checked with EdDSA: `SUPublicEDKey` in `project.yml` is the public key. The private key is in the login Keychain of the Mac that releases the app (made with Sparkle's `generate_keys`). It is never exported, printed or committed. Sparkle refuses an archive whose signature does not match.
+- **Channels.** Stable takes the items without a channel. Beta also takes the `beta` items. The choice is `updates.channel` in Settings → General. Automatic checks (once a day, Sparkle's default) are `SUEnableAutomaticChecks`, on by default. Nothing installs without the user's OK in Sparkle's own window.
+- **Release.** `apps/mac/scripts/release-app.sh <version> [--dry-run]` writes the version into `project.yml`, builds Release with the Developer ID identity of team 74Q24ZMD7A and the hardened runtime, and signs Sparkle's nested code inside out (the XPC services, `Autoupdate`, `Updater.app`, the framework, then the app; no `--deep`). It notarizes the zip with the `bandito-notary` keychain profile, staples the app, builds the `.dmg` (signed, notarized, stapled), signs the final zip with `sign_update`, and adds the appcast item to the platform checkout. It uploads nothing and deploys nothing. `--dry-run` stops before Apple's notary service. Artifacts go to `apps/mac/build/release/` (not committed). The Sparkle tools are read from `~/.cache/sparkle/2.10.0/extracted/bin`; the release must not run from a dirty tree.
+- **Daemon update.** The Server screens offer the daemon's own update from `daemon.info.update` (see [Self-update](#self-update)): a card in Server → Overview with a confirmation, then `daemon.update_apply`, then waiting for the daemon to report the new version (two minutes at most). A dot next to a server in the server menu marks a daemon with an update. The app re-reads `daemon.info` once an hour and when Server opens. The GitHub hint in Overview is only a fallback for a daemon that has not reported a check.
 
 ## Repo layout
 
