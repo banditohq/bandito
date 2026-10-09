@@ -3,6 +3,7 @@
 use bandito::event::{Decision, EventBody, TurnStatus};
 use bandito::runtime::grok::GrokRuntime;
 use bandito::runtime::{Runtime, RuntimeOutput, SpawnConfig, Spawned};
+use bandito::store::Effort;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -203,6 +204,48 @@ async fn passes_flags() {
     }
     assert_eq!(args, ["agent", "--no-leader", "--model", "grok-4.7", "stdio"]);
     s.session.shutdown().await;
+}
+
+/// Argv of a fake CLI, read once it has written it (it does so at startup).
+async fn written_args(path: &std::path::Path) -> Vec<String> {
+    for _ in 0..50 {
+        if let Some(args) = std::fs::read_to_string(path)
+            .ok()
+            .and_then(|text| serde_json::from_str::<Vec<String>>(&text).ok())
+        {
+            return args;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    panic!("args file not written: {}", path.display());
+}
+
+#[tokio::test]
+async fn reasoning_effort_flag_maps_high_and_max() {
+    let dir = tempfile::tempdir().unwrap();
+    // Grok has no level above high: Max is sent as high.
+    for (i, (effort, sent)) in [(Effort::High, "high"), (Effort::Max, "high")].into_iter().enumerate() {
+        let args_out = dir.path().join(format!("args-{i}.json"));
+        let mut c = cfg("reject_edit.jsonl");
+        c.env.push(("FAKECLI_ARGS_OUT".into(), args_out.display().to_string()));
+        c.model = Some("grok-4.7".into());
+        c.effort = Some(effort);
+        let s = spawn(c).await;
+        let args = written_args(&args_out).await;
+        assert_eq!(
+            args,
+            [
+                "agent",
+                "--no-leader",
+                "--model",
+                "grok-4.7",
+                "--reasoning-effort",
+                sent,
+                "stdio"
+            ]
+        );
+        s.session.shutdown().await;
+    }
 }
 
 #[tokio::test]

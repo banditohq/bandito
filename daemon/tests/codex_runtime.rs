@@ -1,8 +1,9 @@
 //! Codex adapter against the fake CLI replaying `tests/fixtures/codex/*.jsonl`.
 
-use bandito::event::{Decision, EventBody, TurnStatus};
+use bandito::event::{Decision, EventBody, LimitWindow, TurnStatus};
 use bandito::runtime::codex::CodexRuntime;
 use bandito::runtime::{Runtime, RuntimeOutput, SpawnConfig, Spawned};
+use bandito::store::Effort;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -247,6 +248,89 @@ async fn passes_flags_for_model_and_mcp() {
     assert!(has(&["-c", r#"mcp_servers.bandito.command="/usr/local/bin/bandito""#]));
     assert!(has(&["-c", r#"mcp_servers.bandito.args=["mcp","--agent","a1"]"#]));
     s.session.shutdown().await;
+}
+
+#[tokio::test]
+async fn turn_start_carries_the_effort() {
+    let mut c = cfg("effort_turn.jsonl");
+    c.effort = Some(Effort::Medium);
+    let mut s = spawn(c).await;
+    s.session.send("think about it").await.unwrap();
+    // The fixture only answers turn/start when it carries "effort": "medium".
+    let out = until(&mut s, is_turn_end).await;
+    assert_eq!(turn_statuses(&out), vec![TurnStatus::Ok]);
+    s.session.shutdown().await;
+}
+
+#[tokio::test]
+async fn extra_dirs_become_one_writable_roots_override() {
+    let dir = tempfile::tempdir().unwrap();
+    let args_out = dir.path().join("args.json");
+    let mut c = cfg("resume_and_unknown_request.jsonl");
+    c.env.push(("FAKECLI_ARGS_OUT".into(), args_out.display().to_string()));
+    c.extra_dirs = vec![PathBuf::from("/a"), PathBuf::from("/b")];
+    let s = spawn(c).await;
+    let mut args: Vec<String> = Vec::new();
+    for _ in 0..50 {
+        if let Ok(text) = std::fs::read_to_string(&args_out)
+            && let Ok(v) = serde_json::from_str::<Vec<String>>(&text)
+        {
+            args = v;
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    let has = |pair: &[&str]| {
+        args.windows(pair.len())
+            .any(|w| w.iter().zip(pair).all(|(a, b)| a == b))
+    };
+    assert!(
+        has(&["-c", r#"sandbox_workspace_write.writable_roots=["/a","/b"]"#]),
+        "{args:?}"
+    );
+    assert_eq!(args.iter().filter(|a| a.contains("writable_roots")).count(), 1);
+    s.session.shutdown().await;
+}
+
+/// A Codex runtime whose fake CLI replays `script` (from `tests/fixtures/codex/`) for a usage read.
+fn usage_runtime(script: &str) -> CodexRuntime {
+    CodexRuntime::with_program(env!("CARGO_BIN_EXE_fakecli")).with_env(vec![(
+        "FAKECLI_SCRIPT".into(),
+        format!("{}/tests/fixtures/codex/{script}", env!("CARGO_MANIFEST_DIR")),
+    )])
+}
+
+#[tokio::test]
+async fn refresh_usage_reads_the_rate_limits_without_a_turn() {
+    let windows = usage_runtime("rate_limits_read.jsonl")
+        .refresh_usage()
+        .await
+        .expect("usage read")
+        .expect("codex can be asked for its limits");
+    assert_eq!(
+        windows,
+        vec![
+            LimitWindow {
+                name: "five_hour".into(),
+                utilization: 0.25,
+                resets_at: Some(1791543600),
+            },
+            LimitWindow {
+                name: "seven_day".into(),
+                utilization: 0.6,
+                resets_at: Some(1792026000),
+            },
+        ]
+    );
+}
+
+#[tokio::test]
+async fn refresh_usage_reports_a_refused_read() {
+    let err = usage_runtime("rate_limits_read_error.jsonl")
+        .refresh_usage()
+        .await
+        .expect_err("a refused read is an error");
+    assert_eq!(err.to_string(), "codex: not logged in");
 }
 
 #[tokio::test]
