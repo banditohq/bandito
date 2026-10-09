@@ -142,6 +142,9 @@ extension ServerModel {
         switch config.endpoint {
         case .local:
             return URLRequest(url: URL(fileURLWithPath: path))
+        case .ssh:
+            // Not yet: a raw URL needs the SSH tunnel's local port, which the model does not own.
+            return nil
         case .webSocket(let server):
             if config.token != nil, !WebSocketTransport.allowsToken(for: server) { return nil }
             guard var components = URLComponents(url: server, resolvingAgainstBaseURL: false) else { return nil }

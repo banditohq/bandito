@@ -23,6 +23,9 @@ extension ServerModel {
         case .local:
             // Force unwrap: the string is built from an Int and always a valid URL.
             return URL(string: "http://127.0.0.1:\(port)")!
+        case .ssh:
+            // A forwarder over ssh needs the SSH tunnel's local port, which the model does not own yet.
+            throw RPCError(code: RPCError.unsupportedTransport, message: "port forwarding is not available over SSH yet")
         case .webSocket(let server):
             guard let tunnel = Self.tunnelURL(for: server, port: port) else {
                 throw RPCError(code: RPCError.invalidParams, message: "the server address is not usable")
