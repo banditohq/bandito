@@ -88,9 +88,18 @@ public final class AppModel {
     public func connectAll() async {
         await migrateLocalServers()
         await withTaskGroup(of: Void.self) { group in
-            for s in servers {
+            for s in reachableServers {
                 group.addTask { await s.connect() }
             }
+        }
+    }
+
+    /// The servers this copy may talk to. A QA copy (`QABuild`) never reaches this Mac's own daemon: its `.local`
+    /// servers, which are the owner's unix socket, are left alone.
+    private var reachableServers: [ServerModel] {
+        servers.filter { server in
+            if QABuild.isRunningQA, case .local = server.config.endpoint { return false }
+            return true
         }
     }
 
@@ -99,7 +108,7 @@ public final class AppModel {
     public func refreshDaemonInfoHourly() async {
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(3600))
-            for server in servers {
+            for server in reachableServers {
                 await server.refreshInfo()
             }
         }
@@ -115,6 +124,8 @@ public final class AppModel {
         storeToken: (String, UUID) -> Bool = { Keychain.setToken($0, for: $1) },
         revoke: (URL, String, String) async throws -> Void = { try await Pairing.revoke(url: $0, token: $1, deviceID: $2) }
     ) async {
+        // A QA copy never installs or pairs with this Mac's daemon (~/.local/bin/bandito): nothing to migrate.
+        guard !QABuild.isRunningQA else { return }
         let pending = servers.filter { server in
             if case .local = server.config.endpoint { true } else { false }
         }.map(\.id)
@@ -220,6 +231,10 @@ public final class AppModel {
             return model
         }
         selectedServerID = servers.first?.id
+        #if DEBUG && os(macOS)
+        // QA copies (scripts/qa): the server named by the launch arguments is added once. Not in release builds.
+        QAHooks.addLaunchServer(to: self)
+        #endif
     }
 
     private func save() {

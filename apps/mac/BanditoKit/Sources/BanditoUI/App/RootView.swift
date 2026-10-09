@@ -6,6 +6,9 @@ import SwiftUI
 /// The model is injected by the app (`BanditoApp`), which also owns the Help menu item that replays it.
 public struct RootView: View {
     @Environment(OnboardingModel.self) private var onboarding
+    #if DEBUG && os(macOS)
+    @Environment(Router.self) private var router
+    #endif
 
     public init() {}
 
@@ -20,5 +23,9 @@ public struct RootView: View {
         .background(Color.Bandito.bg)
         // The system focus ring is off for the whole scene; Bandito draws its own (brandFocusRing).
         .focusEffectDisabled()
+        #if DEBUG && os(macOS)
+        // QA copies (scripts/qa): launch arguments and the command channel. Not in release builds.
+        .task { QAHooks.start(router: router, onboarding: onboarding) }
+        #endif
     }
 }
