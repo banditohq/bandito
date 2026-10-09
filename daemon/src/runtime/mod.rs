@@ -148,6 +148,12 @@ pub trait Runtime: Send + Sync {
     fn kind(&self) -> RuntimeKind;
     async fn status(&self) -> RuntimeStatus;
     async fn spawn(&self, cfg: SpawnConfig) -> anyhow::Result<Spawned>;
+    /// Ask the CLI for current rate-limit windows without running a turn.
+    /// `Ok(None)` when the runtime can't be asked (the cache then keeps the
+    /// last windows a turn reported).
+    async fn refresh_usage(&self) -> anyhow::Result<Option<Vec<crate::event::LimitWindow>>> {
+        Ok(None)
+    }
 }
 
 /// `program --version` → first line, or `None` if it can't run.
