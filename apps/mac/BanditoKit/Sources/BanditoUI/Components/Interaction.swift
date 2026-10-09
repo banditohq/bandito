@@ -13,6 +13,8 @@ struct InteractiveBody<Content: View>: View {
 
     var body: some View {
         content(pointerOver && isEnabled)
+            // A disabled control looks disabled: faded, with no hover and no press.
+            .opacity(isEnabled ? 1 : 0.4)
             .onHover { pointerOver = $0 }
             .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: pointerOver && isEnabled)
             .scaleEffect(isPressed ? 0.97 : 1)
