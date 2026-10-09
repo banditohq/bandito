@@ -47,6 +47,89 @@ const NO_PATH_ARGS: &[&str] = &[
     "echo", "printf", "cargo", "npm", "pnpm", "yarn", "make", "kubectl", "docker", "true", "false", "date", "pwd",
     "whoami", "uname", "which",
 ];
+/// Commands that read or write the files they are given. An argument that is not known can name
+/// such a file, so it is asked about. Other commands (echo, printf, git, npm, cargo, make, test, `[`)
+/// take a value they cannot know without a question.
+const PATH_COMMANDS: &[&str] = &[
+    "cat",
+    "less",
+    "more",
+    "head",
+    "tail",
+    "wc",
+    "sort",
+    "uniq",
+    "cut",
+    "awk",
+    "sed",
+    "grep",
+    "egrep",
+    "fgrep",
+    "rg",
+    "ag",
+    "ack",
+    "jq",
+    "yq",
+    "file",
+    "stat",
+    "diff",
+    "cmp",
+    "md5sum",
+    "sha1sum",
+    "sha256sum",
+    "shasum",
+    "xxd",
+    "od",
+    "hexdump",
+    "strings",
+    "base64",
+    "openssl",
+    "sqlite3",
+    "nc",
+    "ncat",
+    "socat",
+    "scp",
+    "rsync",
+    "tar",
+    "bsdtar",
+    "zip",
+    "unzip",
+    "gzip",
+    "gunzip",
+    "bzip2",
+    "xz",
+    "cp",
+    "mv",
+    "rm",
+    "rmdir",
+    "ln",
+    "touch",
+    "mkdir",
+    "tee",
+    "install",
+    "truncate",
+    "shred",
+    "chmod",
+    "chown",
+    "chgrp",
+    "ls",
+    "du",
+    "tree",
+    "find",
+    "python",
+    "python3",
+    "node",
+    "ruby",
+    "perl",
+    "sh",
+    "bash",
+    "zsh",
+    "dash",
+    "ksh",
+    "fish",
+    "source",
+    ".",
+];
 /// Options whose value is a path the command writes to, per command.
 const WRITE_VALUE_FLAGS: &[(&str, &[&str])] = &[
     ("tar", &["-C", "--directory"]),
@@ -323,7 +406,12 @@ fn check_command(cmd: &SimpleCommand, prot: &Protected) -> Check {
         return Check::Deny;
     }
     let strict = cwd.is_none() && !NO_PATH_ARGS.contains(&program.as_str());
+    // An argument that is not known can name a file only for a command that reads or writes files.
+    let reads_paths = PATH_COMMANDS.contains(&program.as_str());
     for (i, exp) in cmd.expanded.iter().enumerate().skip(1) {
+        if exp.is_none() && !reads_paths {
+            continue;
+        }
         if look(exp.as_deref(), &cmd.argv[i], strict) {
             return Check::Deny;
         }
@@ -773,6 +861,22 @@ fn writes_args(cmd: &SimpleCommand) -> bool {
     WRITERS.contains(&name.as_str()) || in_place
 }
 
+/// `source FILE` and `. FILE` run the file. A known file inside the agent's folders is allowed
+/// (what it contains is not read, as with `python script.py`); outside them, or unknown, it is asked about.
+fn sourced_file(cmd: &SimpleCommand, roots: &[&str]) -> Option<String> {
+    let name = cmd.argv.first()?;
+    if name != "source" && name != "." {
+        return None;
+    }
+    let file = cmd.argv.get(1)?;
+    let first = roots.first().copied().unwrap_or_default();
+    match target_path(cmd.expanded[1].as_deref(), file, cmd.cwd.as_deref(), true) {
+        Some(Some(abs)) if is_outside_all(&abs, roots) => Some(format!("sources a file outside {first}")),
+        Some(Some(_)) => None,
+        _ => Some("can't check: source of an unknown file".into()),
+    }
+}
+
 /// The risky rules for `Risky` mode, when no owner rule and no protected path decided:
 /// meaning first, then writes outside the agent's folders, then parts that could not be read.
 fn risky(req: &ApprovalRequest, roots: &[&str], prot: &Protected, parsed: Option<&Parsed>) -> Verdict {
@@ -789,6 +893,9 @@ fn risky(req: &ApprovalRequest, roots: &[&str], prot: &Protected, parsed: Option
         if let Some(cmd) = parsed.commands.iter().find(|cmd| cmd.via_xargs && writes_args(cmd)) {
             let name = cmd.argv.first().map(String::as_str).unwrap_or_default();
             return Verdict::Ask(format!("can't check: xargs {name}"));
+        }
+        if let Some(reason) = parsed.commands.iter().find_map(|cmd| sourced_file(cmd, roots)) {
+            return Verdict::Ask(reason);
         }
         for cmd in &parsed.commands {
             for (exp, text) in write_targets(cmd) {
@@ -1784,5 +1891,98 @@ mod probes {
             }
             let _ = evaluate(ApprovalMode::Risky, &req(&line), &[APP], &[], &prot);
         }
+    }
+}
+
+#[cfg(test)]
+mod everyday_commands {
+    use super::*;
+
+    const APP: &str = "/home/u/app";
+
+    fn verdict(command: &str) -> Verdict {
+        let prot = Protected::new(
+            Path::new("/home/u/.bandito"),
+            Path::new("/usr/local/bin/bandito"),
+            Path::new("/home/u"),
+        );
+        let req = ApprovalRequest {
+            key: "k".into(),
+            call_id: "c".into(),
+            tool: "Bash".into(),
+            title: "Bash".into(),
+            command: Some(command.into()),
+            diff: None,
+            paths: vec![],
+            input: serde_json::Value::Null,
+        };
+        evaluate(ApprovalMode::Risky, &req, &[APP], &[], &prot)
+    }
+
+    fn check(expected: fn(&Verdict) -> bool, what: &str, commands: &[&str]) {
+        let bad: Vec<String> = commands
+            .iter()
+            .map(|c| (c, verdict(c)))
+            .filter(|(_, v)| !expected(v))
+            .map(|(c, v)| format!("{c}: {v:?}"))
+            .collect();
+        assert!(bad.is_empty(), "expected {what}:\n{}", bad.join("\n"));
+    }
+
+    fn allowed(commands: &[&str]) {
+        check(|v| *v == Verdict::Allow, "Allow", commands);
+    }
+
+    fn asked(commands: &[&str]) {
+        check(|v| matches!(v, Verdict::Ask(_)), "Ask", commands);
+    }
+
+    #[test]
+    fn everyday_commands_are_allowed() {
+        allowed(&[
+            "awk '{print $1}' data.txt",
+            "git log --oneline -5 | head",
+            "npm run build && npm test",
+            "cargo test -q 2>&1 | tail -20",
+            "pytest -x tests/",
+            "grep -rn 'TODO' src | wc -l",
+            "ls -la && cat README.md",
+            "find . -name '*.rs' | xargs wc -l",
+            "sed -n '1,40p' src/main.rs",
+            "python3 -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt",
+            "docker compose up -d",
+            "echo \"$PATH\"",
+            "git commit -m 'feat: x'",
+            "mkdir -p build && cd build && cmake ..",
+            "jq '.items[] | {name}' data.json",
+            "curl -s https://api.github.com/repos/x/y | jq .stargazers_count",
+            "node -e 'console.log(1)'",
+        ]);
+    }
+
+    /// Single quotes make `$` literal: nothing to expand, so nothing unknown.
+    #[test]
+    fn dollars_inside_single_quotes_are_literal() {
+        allowed(&[
+            "awk '{print $1}' data.txt",
+            "sed 's/$/x/' f",
+            "grep '$HOME' f",
+            "jq '.a | $x' f",
+        ]);
+    }
+
+    /// An unknown value asks only where it can name a file, or where it is written to.
+    #[test]
+    fn unknown_values_ask_only_where_they_name_a_file() {
+        asked(&["cat $X", "sqlite3 $X .dump", "echo x > $X"]);
+        allowed(&["echo \"$PATH\"", "printf '%s' \"$HOME\"", "git commit -m \"$MSG\""]);
+    }
+
+    /// Sourcing a file in the folder is allowed; outside it, or with an unknown name, it is asked about.
+    #[test]
+    fn sourcing_a_file_is_allowed_only_inside_the_folder() {
+        allowed(&["python3 -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt"]);
+        allowed(&["source x.sh", ". .venv/bin/activate"]);
+        asked(&["source ~/.bashrc", ". $X"]);
     }
 }

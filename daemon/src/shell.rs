@@ -212,16 +212,16 @@ fn run_raw(raw: &Raw, st: &mut State, depth: usize, env: &Env, out: &mut Parsed)
     let words: Vec<Word> = raw
         .words
         .iter()
-        .map(|text| Word {
+        .map(|(text, src)| Word {
             text: text.clone(),
-            exp: expand(text, st, env),
+            exp: expand(src, st, env),
         })
         .collect();
     let redirects: Vec<Redirect> = raw
         .redirects
         .iter()
-        .map(|r| Redirect {
-            expanded: expand(&r.target, st, env),
+        .map(|(r, src)| Redirect {
+            expanded: expand(src, st, env),
             ..r.clone()
         })
         .collect();
@@ -237,8 +237,12 @@ fn run_raw(raw: &Raw, st: &mut State, depth: usize, env: &Env, out: &mut Parsed)
     if assigns == words.len() {
         // Only assignments (and maybe redirections): they change the shell's own variables.
         for word in &words {
-            let (name, value) = split_assignment(&word.text);
-            let value = expand(value, st, env);
+            let (name, _) = split_assignment(&word.text);
+            let value = word
+                .exp
+                .as_deref()
+                .and_then(|e| e.split_once('='))
+                .map(|(_, v)| v.to_string());
             st.set(name, value, piped);
         }
         if !redirects.is_empty() {
@@ -327,6 +331,171 @@ fn resolve(path: &str, cwd: Option<&str>) -> Option<String> {
 /// Expands the parts of a word that this reader can know: `~`, `~user`, `$NAME`, `${NAME}`.
 /// None when a part cannot be known (a variable not set on this line, a substitution, a
 /// positional or special parameter, a parameter expression, an unknown user).
+/// Stands for a `$` or `~` that quotes or an escape made literal, in the source form of a word.
+const LIT_DOLLAR: char = '\u{E001}';
+const LIT_TILDE: char = '\u{E002}';
+
+/// The word as expansion reads it, from its source characters: a `$` or `~` that single quotes,
+/// a backslash or `\"` made literal is kept as a marker, so it is not expanded. A word with a
+/// substitution or an ANSI-C quote is unknown here, and reads as `$(`.
+fn source_of(raw: &[char]) -> String {
+    let mut out = String::new();
+    let lit = |out: &mut String, c: char| {
+        out.push(match c {
+            '$' => LIT_DOLLAR,
+            '~' => LIT_TILDE,
+            other => other,
+        })
+    };
+    let mut i = 0;
+    while i < raw.len() {
+        match raw[i] {
+            '\\' => {
+                match raw.get(i + 1) {
+                    Some(&'\n') => {}
+                    Some(&next) => lit(&mut out, next),
+                    None => lit(&mut out, '\\'),
+                }
+                i += 2;
+            }
+            '\'' => {
+                i += 1;
+                while i < raw.len() && raw[i] != '\'' {
+                    lit(&mut out, raw[i]);
+                    i += 1;
+                }
+                i += 1;
+            }
+            '"' => {
+                i += 1;
+                while i < raw.len() && raw[i] != '"' {
+                    match raw[i] {
+                        '\\' if raw.get(i + 1).is_some_and(|c| matches!(*c, '"' | '\\' | '$' | '`')) => {
+                            lit(&mut out, raw[i + 1]);
+                            i += 2;
+                        }
+                        '$' if raw.get(i + 1) == Some(&'(') => return "$(".to_string(),
+                        '`' => return "$(".to_string(),
+                        '~' => {
+                            lit(&mut out, '~');
+                            i += 1;
+                        }
+                        c => {
+                            out.push(c);
+                            i += 1;
+                        }
+                    }
+                }
+                i += 1;
+            }
+            '`' => return "$(".to_string(),
+            '$' if raw.get(i + 1) == Some(&'(') => return "$(".to_string(),
+            '$' if raw.get(i + 1) == Some(&'\'') => match decode_ansi_c(raw, i + 2) {
+                Some((decoded, end)) => {
+                    decoded.chars().for_each(|c| lit(&mut out, c));
+                    i = end;
+                }
+                None => return "$(".to_string(),
+            },
+            // `$"…"` is `"…"`: the `$` is dropped and the quote is read next.
+            '$' if raw.get(i + 1) == Some(&'"') => i += 1,
+            c => {
+                out.push(c);
+                i += 1;
+            }
+        }
+    }
+    out
+}
+
+/// Decodes the body of an ANSI-C quote (`$'…'`) that starts at `start`, just after the opening
+/// quote, the way bash reads its escapes. Returns the decoded text and the index after the closing
+/// quote; None when the quote never closes.
+fn decode_ansi_c(chars: &[char], start: usize) -> Option<(String, usize)> {
+    let mut text = String::new();
+    let mut i = start;
+    while let Some(&c) = chars.get(i) {
+        i += 1;
+        match c {
+            '\'' => return Some((text, i)),
+            '\\' => {
+                let Some(&e) = chars.get(i) else {
+                    break;
+                };
+                i += 1;
+                match e {
+                    'n' => text.push('\n'),
+                    't' => text.push('\t'),
+                    'r' => text.push('\r'),
+                    'a' => text.push('\u{7}'),
+                    'b' => text.push('\u{8}'),
+                    'e' | 'E' => text.push('\u{1b}'),
+                    'f' => text.push('\u{c}'),
+                    'v' => text.push('\u{b}'),
+                    '\\' | '\'' | '"' | '?' => text.push(e),
+                    'x' => i = numeric_escape(chars, i, 16, 2, &mut text, "\\x"),
+                    'u' => i = numeric_escape(chars, i, 16, 4, &mut text, "\\u"),
+                    'U' => i = numeric_escape(chars, i, 16, 8, &mut text, "\\U"),
+                    '0'..='7' => {
+                        let mut value = e.to_digit(8).unwrap_or(0);
+                        for _ in 0..2 {
+                            match chars.get(i).and_then(|d| d.to_digit(8)) {
+                                Some(d) => {
+                                    value = value * 8 + d;
+                                    i += 1;
+                                }
+                                None => break,
+                            }
+                        }
+                        text.push(char::from_u32(value).unwrap_or('\u{fffd}'));
+                    }
+                    other => {
+                        text.push('\\');
+                        text.push(other);
+                    }
+                }
+            }
+            other => text.push(other),
+        }
+    }
+    None
+}
+
+/// Up to `max` digits in `radix` at `i`, after an ANSI-C `\x`, `\u` or `\U`. No digits: the escape
+/// stays as written. Returns the index after the digits.
+fn numeric_escape(chars: &[char], mut i: usize, radix: u32, max: usize, text: &mut String, written: &str) -> usize {
+    let mut value = 0u32;
+    let mut count = 0;
+    while count < max {
+        match chars.get(i).and_then(|d| d.to_digit(radix)) {
+            Some(d) => {
+                value = value.wrapping_mul(radix).wrapping_add(d);
+                i += 1;
+                count += 1;
+            }
+            None => break,
+        }
+    }
+    if count == 0 {
+        text.push_str(written);
+    } else {
+        text.push(char::from_u32(value).unwrap_or('\u{fffd}'));
+    }
+    i
+}
+
+/// Replaces the markers of [`source_of`] with the characters they stand for.
+fn unmark(segment: &str) -> String {
+    segment
+        .chars()
+        .map(|c| match c {
+            LIT_DOLLAR => '$',
+            LIT_TILDE => '~',
+            other => other,
+        })
+        .collect()
+}
+
 fn expand(word: &str, st: &State, env: &Env) -> Option<String> {
     if word.contains('`') || word.contains("$(") || word.contains("<(") || word.contains(">(") {
         return None;
@@ -352,7 +521,7 @@ fn expand(word: &str, st: &State, env: &Env) -> Option<String> {
         rest = &after[end..];
     }
     while let Some(pos) = rest.find('$') {
-        out.push_str(&rest[..pos]);
+        out.push_str(&unmark(&rest[..pos]));
         let after = &rest[pos + 1..];
         if let Some(inner) = after.strip_prefix('{') {
             let end = inner.find('}')?;
@@ -382,7 +551,7 @@ fn expand(word: &str, st: &State, env: &Env) -> Option<String> {
             rest = &after[len..];
         }
     }
-    out.push_str(rest);
+    out.push_str(&unmark(rest));
     Some(out)
 }
 
@@ -399,6 +568,8 @@ enum Tok {
     /// names the shell feature the word needs and this reader does not model (brace expansion, zsh `=word`).
     Word {
         text: String,
+        /// The word as expansion reads it (see [`source_of`]).
+        src: String,
         quoted: bool,
         shell: Option<&'static str>,
     },
@@ -514,6 +685,7 @@ impl Lexer {
                 _ => {
                     let start = self.pos;
                     let (text, quoted, shell) = self.word();
+                    let src = source_of(&self.chars[start..self.pos]);
                     if self.pos == start {
                         self.pos += 1;
                         continue;
@@ -521,7 +693,12 @@ impl Lexer {
                     if !quoted && (text == "{" || text == "}") {
                         toks.push(Tok::Op(";"));
                     } else if quoted || !text.is_empty() {
-                        toks.push(Tok::Word { text, quoted, shell });
+                        toks.push(Tok::Word {
+                            text,
+                            src,
+                            quoted,
+                            shell,
+                        });
                     }
                 }
             }
@@ -560,8 +737,10 @@ impl Lexer {
             if let Some(inner) = self.extract_paren() {
                 self.note("process substitution");
                 self.nested(&inner);
+                let text = format!("{c}({inner})");
                 toks.push(Tok::Word {
-                    text: format!("{c}({inner})"),
+                    src: text.clone(),
+                    text,
                     quoted: true,
                     shell: None,
                 });
@@ -762,76 +941,20 @@ impl Lexer {
         }
     }
 
-    /// After `$'`: the ANSI-C quoted text, with its escapes read as bash reads them. False when it is not closed.
+    /// After `$'`: the ANSI-C quoted text, decoded. False when it is not closed.
     fn ansi_c(&mut self, text: &mut String) -> bool {
-        loop {
-            let Some(c) = self.bump() else {
+        match decode_ansi_c(&self.chars, self.pos) {
+            Some((decoded, end)) => {
+                text.push_str(&decoded);
+                self.pos = end;
+                true
+            }
+            None => {
                 self.note("unclosed quote");
                 self.stop = true;
-                return false;
-            };
-            match c {
-                '\'' => return true,
-                '\\' => {
-                    let Some(e) = self.bump() else {
-                        text.push('\\');
-                        continue;
-                    };
-                    match e {
-                        'n' => text.push('\n'),
-                        't' => text.push('\t'),
-                        'r' => text.push('\r'),
-                        'a' => text.push('\u{7}'),
-                        'b' => text.push('\u{8}'),
-                        'e' | 'E' => text.push('\u{1b}'),
-                        'f' => text.push('\u{c}'),
-                        'v' => text.push('\u{b}'),
-                        '\\' | '\'' | '"' | '?' => text.push(e),
-                        'x' => self.numeric_escape(text, 16, 2, "\\x"),
-                        'u' => self.numeric_escape(text, 16, 4, "\\u"),
-                        'U' => self.numeric_escape(text, 16, 8, "\\U"),
-                        '0'..='7' => {
-                            let mut value = e.to_digit(8).unwrap_or(0);
-                            for _ in 0..2 {
-                                match self.peek(0).and_then(|d| d.to_digit(8)) {
-                                    Some(d) => {
-                                        value = value * 8 + d;
-                                        self.pos += 1;
-                                    }
-                                    None => break,
-                                }
-                            }
-                            text.push(char::from_u32(value).unwrap_or('\u{fffd}'));
-                        }
-                        other => {
-                            text.push('\\');
-                            text.push(other);
-                        }
-                    }
-                }
-                other => text.push(other),
+                self.pos = self.chars.len();
+                false
             }
-        }
-    }
-
-    /// Up to `max` digits in `radix` after an ANSI-C `\x`, `\u` or `\U`. No digits: the escape stays as written.
-    fn numeric_escape(&mut self, text: &mut String, radix: u32, max: usize, written: &str) {
-        let mut value = 0u32;
-        let mut count = 0;
-        while count < max {
-            match self.peek(0).and_then(|d| d.to_digit(radix)) {
-                Some(d) => {
-                    value = value.wrapping_mul(radix).wrapping_add(d);
-                    self.pos += 1;
-                    count += 1;
-                }
-                None => break,
-            }
-        }
-        if count == 0 {
-            text.push_str(written);
-        } else {
-            text.push(char::from_u32(value).unwrap_or('\u{fffd}'));
         }
     }
 
@@ -950,8 +1073,10 @@ impl Lexer {
 /// A simple command as the lexer found it: words and redirections, before wrappers and expansion.
 #[derive(Debug, Default)]
 struct Raw {
-    words: Vec<String>,
-    redirects: Vec<Redirect>,
+    /// (text, source form) of each word.
+    words: Vec<(String, String)>,
+    /// Each redirection with the source form of its target.
+    redirects: Vec<(Redirect, String)>,
     /// Shell features this command needs that are not modelled.
     opaque: Vec<&'static str>,
     /// Fed by a pipe (`… | this`).
@@ -1001,22 +1126,27 @@ fn build(tokens: &[Tok]) -> Vec<Raw> {
             },
             Tok::Heredoc => {}
             Tok::Redir { fd, op } => {
-                if let Some(Tok::Word { text, shell, .. }) = tokens.get(i + 1) {
+                if let Some(Tok::Word { text, src, shell, .. }) = tokens.get(i + 1) {
                     i += 1;
                     begin(&mut cur, &mut started, piped_in, &mut pend_open, &mut pend_close);
                     if let Some(reason) = shell {
                         cur.opaque.push(reason);
                     }
-                    cur.redirects.push(redirect(fd, op, text.clone()));
+                    cur.redirects.push((redirect(fd, op, text.clone()), src.clone()));
                 }
             }
-            Tok::Word { text, quoted, shell } => {
+            Tok::Word {
+                text,
+                src,
+                quoted,
+                shell,
+            } => {
                 if !(cur.words.is_empty() && !quoted && RESERVED.contains(&text.as_str())) {
                     begin(&mut cur, &mut started, piped_in, &mut pend_open, &mut pend_close);
                     if let Some(reason) = shell {
                         cur.opaque.push(reason);
                     }
-                    cur.words.push(text.clone());
+                    cur.words.push((text.clone(), src.clone()));
                 }
             }
         }
@@ -1100,10 +1230,8 @@ fn normalize(words: &[Word], redirects: &[Redirect], ctx: &Ctx, env: &Env, state
         out.note("glob command");
     }
     let name = basename(&program.text);
-    match name {
-        "eval" => out.note("eval"),
-        "source" | "." => out.note("source"),
-        _ => {}
+    if name == "eval" {
+        out.note("eval");
     }
     let rest = &words[1..];
     let texts: Vec<&str> = rest.iter().map(|w| w.text.as_str()).collect();
@@ -1564,10 +1692,11 @@ mod tests {
     }
 
     #[test]
-    fn eval_and_source_are_opaque() {
+    fn eval_is_opaque_and_source_is_a_command_to_check() {
         assert_eq!(opaque("eval \"rm -rf x\""), vec!["eval"]);
-        assert_eq!(opaque("source ./env.sh"), vec!["source"]);
-        assert_eq!(opaque(". ./env.sh"), vec!["source"]);
+        // `source` and `.` are commands; the policy checks the file they name.
+        assert!(opaque("source ./env.sh").is_empty());
+        assert_eq!(p(". ./env.sh").commands[0].argv, words(&[".", "./env.sh"]));
     }
 
     #[test]
