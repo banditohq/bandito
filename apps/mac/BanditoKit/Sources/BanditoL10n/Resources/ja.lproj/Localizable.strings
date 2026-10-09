@@ -107,12 +107,15 @@
 "banner.notLoggedIn" = "%2$@ で %1$@ にログインしていません。そこで `%3$@` を実行してください。";
 "banner.offline" = "%1$@ がオフラインです。再接続中…";
 "banner.retry" = "再試行";
+"browser.addressPlaceholder" = "アドレスを入力するか検索";
+"browser.addressRefused" = "http と https のアドレスのみ開けます";
 "browser.agentDrivingNow" = "今はエージェントがブラウザを操作しています";
 "browser.closeTab" = "タブを閉じる";
 "browser.closeTabHelp" = "タブを閉じる (⌘W)";
 "browser.copyAddress" = "アドレスをコピー";
 "browser.hintShort" = "ログイン情報はサーバーに保存され、エージェントも同じタブを使います。";
 "browser.newTabHelp" = "新しいタブ (⌘T)";
+"browser.onServerHelp" = "このページは、この Mac ではなくサーバー上のブラウザで開いています";
 "browser.stoppedHint" = "ブラウザはサーバー上で動きます。エージェントも同じタブを見ます。";
 "browser.userHolds" = "ブラウザはあなたが操作しています";
 "chapter.explainer" = "チャプターがいっぱいになると、%1$@ が大事なことを記憶に保存して白紙から始めます。会話はウィンドウに丸ごと残り、新しいメッセージが高くなることはありません。";

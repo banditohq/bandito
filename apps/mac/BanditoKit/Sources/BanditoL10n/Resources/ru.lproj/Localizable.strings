@@ -158,6 +158,8 @@
 "banner.offline" = "%1$@ не в сети. Переподключение…";
 "banner.retry" = "Повторить";
 "browser.address" = "Адрес";
+"browser.addressPlaceholder" = "Введите адрес или запрос";
+"browser.addressRefused" = "Можно открыть только адреса http и https";
 "browser.agentDrivingNow" = "Сейчас браузером управляет агент";
 "browser.agentsOpened" = "Агенты запустили";
 "browser.askTakeControl" = "Взять управление, чтобы кликнуть здесь?";
@@ -170,8 +172,6 @@
 "browser.closeTabHelp" = "Закрыть вкладку (⌘W)";
 "browser.connecting" = "Подключаем браузер…";
 "browser.controlAgent" = "Агент работает";
-"browser.controlNone" = "На паузе";
-"browser.controlUser" = "Вы";
 "browser.copyAddress" = "Скопировать адрес";
 "browser.emptyPage" = "Нет открытой страницы";
 "browser.error" = "Не удалось подключиться к браузеру";
@@ -187,6 +187,7 @@
 "browser.newTab" = "Новая вкладка";
 "browser.newTabHelp" = "Новая вкладка (⌘T)";
 "browser.onServer" = "открыто на сервере";
+"browser.onServerHelp" = "Страница открыта в браузере на сервере, а не на этом Mac";
 "browser.openOnMac" = "Открыть на Mac";
 "browser.openPreview" = "Открыть";
 "browser.openServer" = "Открыть «Сервер»";

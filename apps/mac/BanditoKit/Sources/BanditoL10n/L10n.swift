@@ -266,6 +266,8 @@ public enum L10n {
 
     public enum Browser {
         public static var address: String { L10n.tr("browser.address") }
+        public static var addressPlaceholder: String { L10n.tr("browser.addressPlaceholder") }
+        public static var addressRefused: String { L10n.tr("browser.addressRefused") }
         public static var agentDrivingNow: String { L10n.tr("browser.agentDrivingNow") }
         public static var agentsOpened: String { L10n.tr("browser.agentsOpened") }
         public static var askTakeControl: String { L10n.tr("browser.askTakeControl") }
@@ -278,8 +280,6 @@ public enum L10n {
         public static var closeTabHelp: String { L10n.tr("browser.closeTabHelp") }
         public static var connecting: String { L10n.tr("browser.connecting") }
         public static var controlAgent: String { L10n.tr("browser.controlAgent") }
-        public static var controlNone: String { L10n.tr("browser.controlNone") }
-        public static var controlUser: String { L10n.tr("browser.controlUser") }
         public static var copyAddress: String { L10n.tr("browser.copyAddress") }
         public static var emptyPage: String { L10n.tr("browser.emptyPage") }
         public static var error: String { L10n.tr("browser.error") }
@@ -295,6 +295,7 @@ public enum L10n {
         public static var newTab: String { L10n.tr("browser.newTab") }
         public static var newTabHelp: String { L10n.tr("browser.newTabHelp") }
         public static var onServer: String { L10n.tr("browser.onServer") }
+        public static var onServerHelp: String { L10n.tr("browser.onServerHelp") }
         public static var openOnMac: String { L10n.tr("browser.openOnMac") }
         public static var openPreview: String { L10n.tr("browser.openPreview") }
         public static var openServer: String { L10n.tr("browser.openServer") }

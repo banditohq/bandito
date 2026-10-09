@@ -107,12 +107,15 @@
 "banner.notLoggedIn" = "%1$@ n'est pas connecté sur %2$@. Exécutez `%3$@` là-bas.";
 "banner.offline" = "%1$@ est hors ligne. Reconnexion…";
 "banner.retry" = "Réessayer";
+"browser.addressPlaceholder" = "Saisissez une adresse ou une recherche";
+"browser.addressRefused" = "Seules les adresses http et https peuvent être ouvertes";
 "browser.agentDrivingNow" = "Un agent contrôle le navigateur";
 "browser.closeTab" = "Fermer l'onglet";
 "browser.closeTabHelp" = "Fermer l'onglet (⌘W)";
 "browser.copyAddress" = "Copier l'adresse";
 "browser.hintShort" = "Les connexions sont gardées sur le serveur, et les agents utilisent les mêmes onglets.";
 "browser.newTabHelp" = "Nouvel onglet (⌘T)";
+"browser.onServerHelp" = "La page est ouverte dans le navigateur du serveur, pas sur ce Mac";
 "browser.stoppedHint" = "Le navigateur tourne sur le serveur : les agents voient les mêmes onglets.";
 "browser.userHolds" = "Vous contrôlez le navigateur";
 "chapter.explainer" = "Quand un chapitre se remplit, %1$@ enregistre l'essentiel en mémoire et repart sur une page blanche. La conversation reste entière dans la fenêtre, et chaque nouveau message ne coûte pas plus cher.";

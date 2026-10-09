@@ -112,4 +112,34 @@ import Testing
         #expect(BrowserAddressRule.afterEditingEnded(currentURL: "https://a.test/", typed: "a.te", editing: false) == "https://a.test/")
         #expect(BrowserAddressRule.afterEditingEnded(currentURL: "https://a.test/", typed: "a.te", editing: true) == "a.te")
     }
+
+    @Test func tabTitleFollowsTheLivePageTitleAndShowsItsDomain() {
+        let parts = BrowserTabLabel.make(title: "Example Domain", url: "https://www.example.com/", newTabTitle: "New tab")
+        #expect(parts.title == "Example Domain")
+        #expect(parts.domain == "example.com")
+    }
+
+    @Test func newTabAddressIsAnEmptyField() {
+        #expect(BrowserAddressRule.shownAddress("chrome://newtab/").isEmpty)
+        #expect(BrowserAddressRule.shownAddress("about:blank").isEmpty)
+        #expect(BrowserAddressRule.shownAddress("https://a.test/") == "https://a.test/")
+    }
+
+    @Test func movingToANewTabClearsTheFieldWhenNotTyping() {
+        let next = BrowserAddressRule.afterPageMoved(
+            to: "about:blank", currentURL: "https://a.test/", typed: "a.te", editing: false)
+        #expect(next == .init(currentURL: "about:blank", typed: ""))
+    }
+
+    @Test func leavingTheFieldOnANewTabShowsAnEmptyField() {
+        #expect(BrowserAddressRule.afterEditingEnded(currentURL: "chrome://newtab/", typed: "x", editing: false).isEmpty)
+    }
+
+    @Test func newTabPagesAlwaysShowTheLocalizedNewTabName() {
+        for url in ["about:blank", "chrome://newtab/", "chrome-search://local-ntp/local-ntp.html", "CHROME://NEWTAB/"] {
+            let parts = BrowserTabLabel.make(title: "Something Else", url: url, newTabTitle: "Новая вкладка")
+            #expect(parts.title == "Новая вкладка")
+            #expect(parts.domain.isEmpty)
+        }
+    }
 }

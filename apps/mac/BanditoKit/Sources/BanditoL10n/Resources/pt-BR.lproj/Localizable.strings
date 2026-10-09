@@ -107,12 +107,15 @@
 "banner.notLoggedIn" = "%1$@ não está conectado em %2$@. Execute `%3$@` lá.";
 "banner.offline" = "%1$@ está offline. Reconectando…";
 "banner.retry" = "Tentar novamente";
+"browser.addressPlaceholder" = "Digite um endereço ou uma pesquisa";
+"browser.addressRefused" = "Só é possível abrir endereços http e https";
 "browser.agentDrivingNow" = "Um agente está controlando o navegador agora";
 "browser.closeTab" = "Fechar aba";
 "browser.closeTabHelp" = "Fechar aba (⌘W)";
 "browser.copyAddress" = "Copiar endereço";
 "browser.hintShort" = "Os logins ficam salvos no servidor, e os agentes usam as mesmas abas.";
 "browser.newTabHelp" = "Nova aba (⌘T)";
+"browser.onServerHelp" = "A página está aberta no navegador do servidor, não neste Mac";
 "browser.stoppedHint" = "O navegador roda no servidor: os agentes veem as mesmas abas.";
 "browser.userHolds" = "Você está controlando o navegador";
 "chapter.explainer" = "Quando um capítulo enche, %1$@ salva o que importa na memória e começa numa página limpa. A conversa fica inteira na janela, e cada nova mensagem não fica mais cara.";

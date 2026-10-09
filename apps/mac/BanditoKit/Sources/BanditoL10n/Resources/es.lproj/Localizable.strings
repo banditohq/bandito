@@ -107,12 +107,15 @@
 "banner.notLoggedIn" = "%1$@ no ha iniciado sesión en %2$@. Ejecuta `%3$@` allí.";
 "banner.offline" = "%1$@ está sin conexión. Reconectando…";
 "banner.retry" = "Reintentar";
+"browser.addressPlaceholder" = "Escribe una dirección o una búsqueda";
+"browser.addressRefused" = "Solo se pueden abrir direcciones http y https";
 "browser.agentDrivingNow" = "Un agente está controlando el navegador";
 "browser.closeTab" = "Cerrar pestaña";
 "browser.closeTabHelp" = "Cerrar pestaña (⌘W)";
 "browser.copyAddress" = "Copiar dirección";
 "browser.hintShort" = "Los inicios de sesión se guardan en el servidor, y los agentes usan las mismas pestañas.";
 "browser.newTabHelp" = "Nueva pestaña (⌘T)";
+"browser.onServerHelp" = "La página está abierta en el navegador del servidor, no en este Mac";
 "browser.stoppedHint" = "El navegador funciona en el servidor: los agentes ven las mismas pestañas.";
 "browser.userHolds" = "Tú controlas el navegador";
 "chapter.explainer" = "Cuando un capítulo se llena, %1$@ guarda lo importante en la memoria y empieza en una página limpia. La conversación se mantiene completa en la ventana y cada mensaje nuevo no encarece nada.";

@@ -107,12 +107,15 @@
 "banner.notLoggedIn" = "%2$@ 上的 %1$@ 未登录。请在该服务器上运行 `%3$@`。";
 "banner.offline" = "%1$@ 已离线，正在重新连接…";
 "banner.retry" = "重试";
+"browser.addressPlaceholder" = "输入地址或搜索内容";
+"browser.addressRefused" = "只能打开 http 和 https 地址";
 "browser.agentDrivingNow" = "现在由智能体操控浏览器";
 "browser.closeTab" = "关闭标签页";
 "browser.closeTabHelp" = "关闭标签页 (⌘W)";
 "browser.copyAddress" = "复制地址";
 "browser.hintShort" = "登录状态保存在服务器上，智能体使用同样的标签页。";
 "browser.newTabHelp" = "新标签页 (⌘T)";
+"browser.onServerHelp" = "页面在服务器上的浏览器中打开，而不是在这台 Mac 上";
 "browser.stoppedHint" = "浏览器在服务器上运行：智能体看到的是同样的标签页。";
 "browser.userHolds" = "现在由你操控浏览器";
 "chapter.explainer" = "章节写满后，%1$@ 会把重要内容存入记忆，然后从空白开始。对话会完整保留在窗口中，而且每条新消息都不会更贵。";

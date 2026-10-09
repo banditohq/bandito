@@ -107,12 +107,15 @@
 "banner.notLoggedIn" = "%1$@ ist auf %2$@ nicht angemeldet. Führe dort `%3$@` aus.";
 "banner.offline" = "%1$@ ist offline. Verbindung wird wiederhergestellt…";
 "banner.retry" = "Erneut versuchen";
+"browser.addressPlaceholder" = "Adresse eingeben oder suchen";
+"browser.addressRefused" = "Nur http- und https-Adressen können geöffnet werden";
 "browser.agentDrivingNow" = "Ein Agent steuert gerade den Browser";
 "browser.closeTab" = "Tab schließen";
 "browser.closeTabHelp" = "Tab schließen (⌘W)";
 "browser.copyAddress" = "Adresse kopieren";
 "browser.hintShort" = "Anmeldungen bleiben auf dem Server, Agenten nutzen dieselben Tabs.";
 "browser.newTabHelp" = "Neuer Tab (⌘T)";
+"browser.onServerHelp" = "Die Seite ist im Browser auf dem Server geöffnet, nicht auf diesem Mac";
 "browser.stoppedHint" = "Der Browser läuft auf dem Server: Agenten sehen dieselben Tabs.";
 "browser.userHolds" = "Du steuerst den Browser";
 "chapter.explainer" = "Wenn ein Kapitel voll ist, speichert %1$@ das Wichtige im Gedächtnis und beginnt mit einer leeren Seite. Der Verlauf bleibt vollständig im Fenster, und jede neue Nachricht wird nicht teurer.";

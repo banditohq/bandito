@@ -107,12 +107,15 @@
 "banner.notLoggedIn" = "%2$@에서 %1$@에 로그인되어 있지 않습니다. 그곳에서 `%3$@`을(를) 실행하세요.";
 "banner.offline" = "%1$@이(가) 오프라인입니다. 다시 연결하는 중…";
 "banner.retry" = "다시 시도";
+"browser.addressPlaceholder" = "주소를 입력하거나 검색";
+"browser.addressRefused" = "http 및 https 주소만 열 수 있습니다";
 "browser.agentDrivingNow" = "지금 에이전트가 브라우저를 조작하고 있습니다";
 "browser.closeTab" = "탭 닫기";
 "browser.closeTabHelp" = "탭 닫기 (⌘W)";
 "browser.copyAddress" = "주소 복사";
 "browser.hintShort" = "로그인 정보는 서버에 저장되며, 에이전트도 같은 탭을 씁니다.";
 "browser.newTabHelp" = "새 탭 (⌘T)";
+"browser.onServerHelp" = "이 페이지는 이 Mac이 아닌 서버의 브라우저에서 열려 있습니다";
 "browser.stoppedHint" = "브라우저는 서버에서 실행됩니다. 에이전트도 같은 탭을 봅니다.";
 "browser.userHolds" = "지금 브라우저를 직접 조작 중입니다";
 "chapter.explainer" = "챕터가 가득 차면 %1$@이(가) 중요한 내용을 기억에 저장하고 빈 페이지에서 시작합니다. 대화는 창에 그대로 남고, 새 메시지도 비용이 늘지 않습니다.";

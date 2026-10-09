@@ -158,6 +158,8 @@
 "banner.offline" = "%1$@ is offline. Reconnecting…";
 "banner.retry" = "Retry";
 "browser.address" = "Address";
+"browser.addressPlaceholder" = "Enter an address or search";
+"browser.addressRefused" = "Only http and https addresses can be opened";
 "browser.agentDrivingNow" = "An agent is driving the browser now";
 "browser.agentsOpened" = "Agents opened";
 "browser.askTakeControl" = "Take control to click here?";
@@ -170,8 +172,6 @@
 "browser.closeTabHelp" = "Close tab (⌘W)";
 "browser.connecting" = "Connecting to the browser…";
 "browser.controlAgent" = "Agent is working";
-"browser.controlNone" = "Paused";
-"browser.controlUser" = "You";
 "browser.copyAddress" = "Copy address";
 "browser.emptyPage" = "No page open";
 "browser.error" = "Could not reach the browser";
@@ -187,6 +187,7 @@
 "browser.newTab" = "New tab";
 "browser.newTabHelp" = "New tab (⌘T)";
 "browser.onServer" = "on server";
+"browser.onServerHelp" = "The page is open in the browser on the server, not on this Mac";
 "browser.openOnMac" = "Open on Mac";
 "browser.openPreview" = "Open";
 "browser.openServer" = "Open Server";
