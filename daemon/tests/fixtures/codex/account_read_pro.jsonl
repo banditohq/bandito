@@ -1,0 +1,6 @@
+// account_plan without a turn: initialize, then account/read. The plan is at /result/account/planType.
+{"expect": {"method": "initialize"}}
+{"send": {"id": "$last:/id", "result": {"userAgent": "bandito/0.161.0", "codexHome": "/home/user/.codex", "platformFamily": "unix", "platformOs": "linux"}}}
+{"expect": {"method": "initialized"}}
+{"expect": {"method": "account/read", "id": 2, "params": {}}}
+{"send": {"id": "$last:/id", "result": {"account": {"type": "chatgpt", "planType": "pro"}, "requiresOpenaiAuth": true}}}

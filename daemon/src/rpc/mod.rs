@@ -724,20 +724,32 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
 
         "usage.limits" => ok(store.usage_list()?),
         "usage.refresh" => {
-            // Ask every runtime at once; each one gets its own timeout.
+            // Ask every runtime at once, for its windows and its plan; each question gets its own timeout.
             let mut rts = app.sup.runtimes().all();
             rts.sort_by_key(|rt| rt.kind().as_str());
             let asked = futures_util::future::join_all(rts.iter().map(|rt| async move {
                 let kind = rt.kind();
-                (
-                    kind,
-                    tokio::time::timeout(USAGE_REFRESH_TIMEOUT, rt.refresh_usage()).await,
-                )
+                let (windows, plan) = tokio::join!(
+                    tokio::time::timeout(USAGE_REFRESH_TIMEOUT, rt.refresh_usage()),
+                    tokio::time::timeout(USAGE_REFRESH_TIMEOUT, rt.account_plan()),
+                );
+                (kind, windows, plan)
             }))
             .await;
             let mut errors = Vec::new();
-            for (kind, res) in asked {
-                let message = match res {
+            for (kind, windows, plan) in asked {
+                // A plan that is not known (none, error, timeout) leaves the stored one as it is.
+                match plan {
+                    Ok(Ok(Some(plan))) => {
+                        if let Err(e) = store.usage_set_plan(kind.as_str(), Some(&plan), crate::store::now_ms()) {
+                            errors.push(json!({ "runtime": kind.as_str(), "message": format!("{e:#}") }));
+                        }
+                    }
+                    Ok(Ok(None)) => tracing::debug!(runtime = kind.as_str(), "no plan reported"),
+                    Ok(Err(e)) => tracing::warn!(runtime = kind.as_str(), "plan not read: {e:#}"),
+                    Err(_) => tracing::warn!(runtime = kind.as_str(), "plan read timed out"),
+                }
+                let message = match windows {
                     Err(_) => format!("no answer within {} s", USAGE_REFRESH_TIMEOUT.as_secs()),
                     Ok(Err(e)) => format!("{e:#}"),
                     Ok(Ok(None)) => continue,
@@ -1602,10 +1614,20 @@ mod memory_tests {
         }
     }
 
-    /// A runtime that only answers `refresh_usage`, with fixed windows or an error.
+    use crate::event::Plan;
+
+    /// A runtime that only answers `refresh_usage` and `account_plan`, with fixed answers or errors.
     struct UsageProbe {
         kind: RuntimeKind,
         answer: Result<Option<Vec<LimitWindow>>, String>,
+        plan: Result<Option<Plan>, String>,
+    }
+
+    fn plan(id: &str, label: &str) -> Plan {
+        Plan {
+            id: id.into(),
+            label: label.into(),
+        }
     }
 
     #[async_trait]
@@ -1627,6 +1649,9 @@ mod memory_tests {
         }
         async fn refresh_usage(&self) -> anyhow::Result<Option<Vec<LimitWindow>>> {
             self.answer.clone().map_err(anyhow::Error::msg)
+        }
+        async fn account_plan(&self) -> anyhow::Result<Option<Plan>> {
+            self.plan.clone().map_err(anyhow::Error::msg)
         }
     }
 
@@ -1774,14 +1799,17 @@ mod memory_tests {
         rts.insert(Arc::new(UsageProbe {
             kind: RuntimeKind::Codex,
             answer: Ok(Some(vec![window("5h", 0.25)])),
+            plan: Ok(None),
         }));
         rts.insert(Arc::new(UsageProbe {
             kind: RuntimeKind::Grok,
             answer: Err("login expired".into()),
+            plan: Ok(None),
         }));
         rts.insert(Arc::new(UsageProbe {
             kind: RuntimeKind::Claude,
             answer: Ok(None),
+            plan: Ok(None),
         }));
         let dir = tempfile::tempdir().unwrap();
         let app = app_with_root(dir.path().to_path_buf(), rts);
@@ -1794,5 +1822,61 @@ mod memory_tests {
 
         // The cache now answers usage.limits with the same windows.
         assert_eq!(call(&app, "usage.limits", json!({})).await.unwrap(), v["limits"]);
+    }
+
+    #[tokio::test]
+    async fn usage_refresh_stores_the_plan_with_or_without_windows() {
+        let mut rts = Runtimes::default();
+        rts.insert(Arc::new(UsageProbe {
+            kind: RuntimeKind::Claude,
+            answer: Ok(None),
+            plan: Ok(Some(plan("max_20x", "Max ×20"))),
+        }));
+        rts.insert(Arc::new(UsageProbe {
+            kind: RuntimeKind::Codex,
+            answer: Ok(Some(vec![window("5h", 0.25)])),
+            plan: Ok(Some(plan("pro", "Pro"))),
+        }));
+        let dir = tempfile::tempdir().unwrap();
+        let app = app_with_root(dir.path().to_path_buf(), rts);
+
+        let v = call(&app, "usage.refresh", json!({})).await.unwrap();
+        assert_eq!(v["errors"], json!([]));
+        let limits = v["limits"].as_array().unwrap();
+        assert_eq!(limits.len(), 2);
+        assert_eq!(limits[0]["runtime"], "claude");
+        assert_eq!(limits[0]["windows"], json!([]));
+        assert_eq!(limits[0]["plan"], json!({"id": "max_20x", "label": "Max ×20"}));
+        assert_eq!(limits[1]["runtime"], "codex");
+        assert_eq!(limits[1]["windows"][0]["name"], "5h");
+        assert_eq!(limits[1]["plan"], json!({"id": "pro", "label": "Pro"}));
+        assert_eq!(call(&app, "usage.limits", json!({})).await.unwrap(), v["limits"]);
+    }
+
+    #[tokio::test]
+    async fn usage_refresh_keeps_the_stored_plan_when_none_or_an_error_comes_back() {
+        let mut rts = Runtimes::default();
+        rts.insert(Arc::new(UsageProbe {
+            kind: RuntimeKind::Codex,
+            answer: Ok(None),
+            plan: Ok(None),
+        }));
+        rts.insert(Arc::new(UsageProbe {
+            kind: RuntimeKind::Grok,
+            answer: Ok(None),
+            plan: Err("account read timed out".into()),
+        }));
+        let dir = tempfile::tempdir().unwrap();
+        let app = app_with_root(dir.path().to_path_buf(), rts);
+        app.sup
+            .hub()
+            .store
+            .usage_set_plan("codex", Some(&plan("pro", "Pro")), 1)
+            .unwrap();
+
+        let v = call(&app, "usage.refresh", json!({})).await.unwrap();
+        assert_eq!(v["errors"], json!([]), "a plan error is logged, not reported");
+        assert_eq!(v["limits"][0]["runtime"], "codex");
+        assert_eq!(v["limits"][0]["plan"], json!({"id": "pro", "label": "Pro"}));
     }
 }

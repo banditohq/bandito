@@ -26,6 +26,7 @@ pub use usage::UsageEntry;
 const MIGRATIONS: &[&str] = &[
     include_str!("../../migrations/0001_init.sql"),
     include_str!("../../migrations/0002_memory.sql"),
+    include_str!("../../migrations/0003_usage_plan.sql"),
 ];
 
 pub struct Store {
@@ -350,5 +351,33 @@ mod tests {
         s.secret_set("k", "1").unwrap();
         s.secret_set("k", "2").unwrap();
         assert_eq!(s.secret_get("k").unwrap().as_deref(), Some("2"));
+    }
+
+    #[test]
+    fn plan_migration_applies_to_a_version_2_database() {
+        // A database as the previous release left it: migrations 1 and 2 applied, usage rows present.
+        let conn = Connection::open_in_memory().unwrap();
+        for sql in &MIGRATIONS[..2] {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.pragma_update(None, "user_version", 2).unwrap();
+        conn.execute(
+            "INSERT INTO usage_limits (runtime, windows, updated_at) VALUES ('codex', '[]', 7)",
+            [],
+        )
+        .unwrap();
+
+        let s = Store::init(conn).unwrap();
+        let version: i64 = s.conn().query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+        assert_eq!(version, MIGRATIONS.len() as i64);
+        assert_eq!(
+            s.usage_list().unwrap(),
+            vec![UsageEntry {
+                runtime: "codex".into(),
+                windows: Vec::new(),
+                updated_at: 7,
+                plan: None,
+            }]
+        );
     }
 }

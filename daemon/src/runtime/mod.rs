@@ -8,6 +8,8 @@ use serde_json::Value;
 use std::path::PathBuf;
 use tokio::sync::mpsc;
 
+pub use crate::event::Plan;
+
 pub mod claude;
 pub mod codex;
 pub mod grok;
@@ -157,6 +159,20 @@ pub trait Runtime: Send + Sync {
     /// last windows a turn reported).
     async fn refresh_usage(&self) -> anyhow::Result<Option<Vec<crate::event::LimitWindow>>> {
         Ok(None)
+    }
+    /// The account's subscription (`Max ×20`, `Plus`, …), read without starting a turn.
+    /// `Ok(None)` when the runtime does not say, or cannot be asked; the stored plan then stays.
+    async fn account_plan(&self) -> anyhow::Result<Option<Plan>> {
+        Ok(None)
+    }
+}
+
+/// `text` with its first character upper-cased (`prolite` → `Prolite`). Used for plan names we do not know.
+pub(crate) fn capitalized(text: &str) -> String {
+    let mut chars = text.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+        None => String::new(),
     }
 }
 

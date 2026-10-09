@@ -248,6 +248,14 @@ The agent's instructions (built by the daemon, before the user's own) explain th
 
 **Usage.** Rate-limit windows reported by the CLIs are cached per runtime (`usage.limits`), so the app shows remaining quota even when no turn is running; `usage.refresh` asks runtimes that can be asked (Codex: `account/rateLimits/read`).
 
+**Plan.** The subscription of each runtime's account is cached next to its windows, as `plan: {id, label}` (Claude `max_20x` / «Max ×20», `max_5x` / «Max ×5», `max` / «Max», `pro`; ChatGPT `plus`, `pro`, `team`, …), or `null` when unknown. `usage.refresh` asks for it in the same call as the windows, with the same timeout, and never starts a turn:
+
+- Claude: read from `<config_dir>/.credentials.json`, where `config_dir` is `CLAUDE_CONFIG_DIR` or else `$HOME/.claude`. Only `subscriptionType` and `rateLimitTier` are read. The OAuth tokens in that file are never deserialized, logged or returned. On macOS the CLI keeps its login in the Keychain and writes no file, so the plan stays unknown there.
+- Codex: a separate `codex app-server` for `initialize` → `account/read` (`account.planType`).
+- Grok and API keys: no plan yet.
+
+A runtime that reports no plan, or fails, leaves the stored plan as it was.
+
 ## Accounts, sync and push (planned)
 
 An account is optional: without one the app works on one Mac. With one, every device of the person sees the same servers and agents, and approvals reach the phone.
