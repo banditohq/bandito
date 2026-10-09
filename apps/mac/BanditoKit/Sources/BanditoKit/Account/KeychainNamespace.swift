@@ -12,4 +12,18 @@ public enum KeychainNamespace {
         guard bundleID?.hasSuffix(".debug") == true, service.hasPrefix("dev.bandito.") else { return service }
         return "dev.bandito.debug." + service.dropFirst("dev.bandito.".count)
     }
+
+    /// Whether this process is a debug build of the app.
+    public static func isDebugBuild(bundleID: String? = Bundle.main.bundleIdentifier) -> Bool {
+        bundleID?.hasSuffix(".debug") == true
+    }
+
+    /// For a debug build: secrets go to `~/Library/Application Support/Bandito Debug/secrets/<service>`,
+    /// never to the Keychain. Nil for the release app and for tests.
+    public static func debugFileStore(service: String, bundleID: String? = Bundle.main.bundleIdentifier) -> FileSecretStore? {
+        guard isDebugBuild(bundleID: bundleID) else { return nil }
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSHomeDirectory()).appending(path: "Library/Application Support")
+        return FileSecretStore(directory: base.appending(path: "Bandito Debug/secrets/\(service)"))
+    }
 }
