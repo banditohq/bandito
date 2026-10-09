@@ -19,27 +19,32 @@ final class AccountModels {
 /// Step 2 of 5: sign in with GitHub or by email code, or go on without an account.
 /// Signing in hands the session to the flow, which decides between approval and servers.
 struct AccountSignInView: View {
-    /// A session was stored by the account client. The flow reads `session.device.approved` next.
-    var onSignedIn: (Session) -> Void
-    /// "Continue without an account": everything stays on this Mac.
-    var onSkipAccount: () -> Void
+    /// Signed in: the route this device takes next (see `AccountRoute`). The first device has its blob by now.
+    var onFinished: (AccountRoute) -> Void
+    /// "Continue without an account": everything stays on this Mac. Nil where there is no such choice (Settings).
+    var onSkipAccount: (() -> Void)?
+    /// The step's illustration on the left. Off in the Settings sheet, where there is no room for it.
+    var showsIllustration = true
 
+    @Environment(AccountHub.self) private var hub
     @State private var models: AccountModels?
     @State private var setupError: String?
     @State private var showGitHub = false
 
     var body: some View {
         HStack(spacing: 0) {
-            AccountIllustration()
-                .frame(width: 380)
+            if showsIllustration {
+                AccountIllustration()
+                    .frame(width: 380)
+            }
             form
                 .frame(maxWidth: 460, alignment: .leading)
-                .padding(.leading, 56)
+                .padding(.leading, showsIllustration ? 56 : 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task { await build() }
         .onChange(of: finishedSession) { _, session in
-            if let session { onSignedIn(session) }
+            if session != nil { Task { await finish() } }
         }
         .sheet(isPresented: $showGitHub) {
             if let github = models?.github {
@@ -59,13 +64,27 @@ struct AccountSignInView: View {
         return nil
     }
 
-    /// Builds the account client and its models. The device key is read (or created once) by the app's identity store.
+    /// Builds the models on the hub's client. The device key is read (or created once) by the app's identity store.
     private func build() async {
         guard models == nil else { return }
         do {
-            models = AccountModels(service: try await AccountEnvironment.live())
+            models = AccountModels(service: try await hub.prepare())
         } catch {
             setupError = SignInMessages.setupText(for: error)
+        }
+    }
+
+    /// A session is stored: the first device creates the sync blob, then the caller decides the next step.
+    private func finish() async {
+        hub.markSignedIn()
+        do {
+            let (route, _) = try await hub.inspect()
+            if route == .firstDevice {
+                try await hub.createFirstBlob()
+            }
+            onFinished(route)
+        } catch {
+            setupError = SignInMessages.text(for: error)
         }
     }
 
@@ -107,7 +126,7 @@ struct AccountSignInView: View {
                 .foregroundStyle(Color.Bandito.text2)
                 .lineSpacing(2)
             Button {
-                onSkipAccount()
+                onSkipAccount?()
             } label: {
                 Text(L10n.Onboarding.Account.skip)
                     .font(BanditoFont.font(size: 13.5, weight: 400))
@@ -117,6 +136,8 @@ struct AccountSignInView: View {
                     .foregroundStyle(Color.Bandito.text3)
             }
             .buttonStyle(.plain)
+            .opacity(onSkipAccount == nil ? 0 : 1)
+            .disabled(onSkipAccount == nil)
         }
     }
 

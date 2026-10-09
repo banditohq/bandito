@@ -10,6 +10,7 @@ struct BanditoApp: App {
     @State private var gestures = GestureSettings()
     @State private var demo = DemoStore()
     @State private var onboarding: OnboardingModel
+    @State private var accountHub = AccountHub()
 
     init() {
         // Saved servers are read synchronously by AppModel, so the first frame already knows the launch state.
@@ -27,6 +28,7 @@ struct BanditoApp: App {
                 .environment(gestures)
                 .environment(demo)
                 .environment(onboarding)
+                .environment(accountHub)
                 .task {
                     // Actions aimed at the server that was in front are dropped when another one is chosen.
                     model.onServerChanged = { [router] in router.dropPendingServerActions() }
@@ -36,8 +38,6 @@ struct BanditoApp: App {
                         },
                         windowActive: { NSApp.isActive })
                     await model.connectAll()
-                    // Servers are connected by now, so their agents are known.
-                    onboarding.evaluate(hasServerWithAgents: model.servers.contains { !$0.agents.isEmpty })
                 }
                 .preferredColorScheme(.dark)
         }

@@ -8,6 +8,8 @@ struct MainWindow: View {
     @Environment(AppModel.self) private var app
     @Environment(Router.self) private var router
     @Environment(GestureSettings.self) private var gestures
+    @Environment(AccountHub.self) private var hub
+    @Environment(\.scenePhase) private var scenePhase
     /// Shown after a rollback from "What changed", with the undo.
     @State private var rollbackNotice: RollbackNotice?
 
@@ -21,7 +23,10 @@ struct MainWindow: View {
                     }
                     .transition(.move(edge: .leading).combined(with: .opacity))
             }
-            ModeArea()
+            VStack(spacing: 0) {
+                PendingDevicesBanner()
+                ModeArea()
+            }
         }
         .frame(minWidth: 900, minHeight: 600)
         .background(Color.Bandito.bg)
@@ -48,6 +53,18 @@ struct MainWindow: View {
             }
         }
         .banditoAnimation(BanditoMotion.ease, value: rollbackNotice?.id)
+        .task {
+            // Only with a session: without one nobody can ask for pending devices, and no device key is needed yet.
+            guard hub.signedIn else { return }
+            try? await hub.prepare()
+            await hub.refreshPending()
+            hub.startWatchingPending()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active, hub.signedIn {
+                Task { await hub.refreshPending() }
+            }
+        }
     }
 
     @ViewBuilder
@@ -55,6 +72,7 @@ struct MainWindow: View {
         switch sheet {
         case .newAgent: NewAgentSheet()
         case .changes(let agentID): ChangesSheet(agentID: agentID) { rollbackNotice = $0 }
+        case .account: AccountSheet()
         default: SheetPlaceholder(sheet: sheet)
         }
     }

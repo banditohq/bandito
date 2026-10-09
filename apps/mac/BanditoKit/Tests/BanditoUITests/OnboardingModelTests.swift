@@ -14,8 +14,7 @@ import Testing
     }
 
     @Test func freshInstallStartsAtWelcomeAndIsActive() {
-        let model = OnboardingModel(defaults: makeDefaults())
-        model.evaluate(hasServerWithAgents: false)
+        let model = OnboardingModel(defaults: makeDefaults(), hasSavedServers: false)
         #expect(model.isActive)
         #expect(model.step == .welcome)
         #expect(!model.isDone)
@@ -23,7 +22,6 @@ import Testing
 
     @Test func accountWithApprovedDeviceGoesToServer() {
         let model = OnboardingModel(defaults: makeDefaults())
-        model.evaluate(hasServerWithAgents: false)
         model.advance()
         #expect(model.step == .account)
         model.signedIn(deviceApproved: true)
@@ -32,7 +30,6 @@ import Testing
 
     @Test func unapprovedDeviceStopsAtApprovalThenGoesToServer() {
         let model = OnboardingModel(defaults: makeDefaults())
-        model.evaluate(hasServerWithAgents: false)
         model.advance()
         model.signedIn(deviceApproved: false)
         #expect(model.step == .approval)
@@ -43,7 +40,6 @@ import Testing
 
     @Test func continuingWithoutAccountSkipsApproval() {
         let model = OnboardingModel(defaults: makeDefaults())
-        model.evaluate(hasServerWithAgents: false)
         model.advance()
         model.advance()
         #expect(model.step == .server)
@@ -52,7 +48,6 @@ import Testing
 
     @Test func serverThenAgentFinishesTheFlow() {
         let model = OnboardingModel(defaults: makeDefaults())
-        model.evaluate(hasServerWithAgents: false)
         model.advance()
         model.advance()
         model.advance()
@@ -67,7 +62,6 @@ import Testing
         let defaults = makeDefaults()
         for steps in 0...4 {
             let model = OnboardingModel(defaults: defaults)
-            model.evaluate(hasServerWithAgents: false)
             defaults.set(false, forKey: OnboardingModel.doneKey)
             for _ in 0..<steps { model.advance() }
             model.skip()
@@ -75,36 +69,38 @@ import Testing
             #expect(model.isDone)
         }
         let relaunched = OnboardingModel(defaults: defaults)
-        relaunched.evaluate(hasServerWithAgents: false)
         #expect(!relaunched.isActive)
     }
 
-    @Test func serverWithAgentsHidesTheFlowUntilReplayed() {
-        let model = OnboardingModel(defaults: makeDefaults())
-        model.evaluate(hasServerWithAgents: true)
+    // MARK: launch decision (made in init, from local data only)
+
+    @Test func savedServersOpenTheMainWindowAtOnce() {
+        let model = OnboardingModel(defaults: makeDefaults(), hasSavedServers: true)
         #expect(!model.isActive)
     }
 
     @Test func finishedFlowStaysHiddenOnLaunch() {
         let defaults = makeDefaults()
         let first = OnboardingModel(defaults: defaults)
-        first.evaluate(hasServerWithAgents: false)
         first.finish()
-        let second = OnboardingModel(defaults: defaults)
-        second.evaluate(hasServerWithAgents: false)
+        let second = OnboardingModel(defaults: defaults, hasSavedServers: false)
         #expect(!second.isActive)
+    }
+
+    @Test func finishedFlowIsHiddenEvenWithoutServers() {
+        let defaults = makeDefaults()
+        OnboardingModel(defaults: defaults).finish()
+        #expect(!OnboardingModel(defaults: defaults, hasSavedServers: false).isActive)
     }
 
     @Test func relaunchResumesTheSavedStep() {
         let defaults = makeDefaults()
         let first = OnboardingModel(defaults: defaults)
-        first.evaluate(hasServerWithAgents: false)
         first.advance()
         first.advance()
         #expect(first.step == .server)
 
         let second = OnboardingModel(defaults: defaults)
-        second.evaluate(hasServerWithAgents: false)
         #expect(second.isActive)
         #expect(second.step == .server)
     }
@@ -113,40 +109,32 @@ import Testing
         let defaults = makeDefaults()
         defaults.set(OnboardingStep.done.rawValue, forKey: OnboardingModel.stepKey)
         let model = OnboardingModel(defaults: defaults)
-        model.evaluate(hasServerWithAgents: false)
         #expect(model.step == .welcome)
         #expect(model.isActive)
     }
 
     @Test func replayShowsWelcomeEvenWhenServersExist() {
         let defaults = makeDefaults()
-        let model = OnboardingModel(defaults: defaults)
-        model.evaluate(hasServerWithAgents: false)
+        let model = OnboardingModel(defaults: defaults, hasSavedServers: true)
         model.finish()
         model.replay()
         #expect(model.isActive)
         #expect(model.step == .welcome)
         #expect(!model.isDone)
-        // The launch check has already run, so a later evaluate must not hide the replayed flow.
-        model.evaluate(hasServerWithAgents: true)
-        #expect(model.isActive)
     }
 
     @Test func replayResetsTheDoneFlagForTheNextLaunch() {
         let defaults = makeDefaults()
         let model = OnboardingModel(defaults: defaults)
-        model.evaluate(hasServerWithAgents: false)
         model.finish()
         model.replay()
-        let relaunched = OnboardingModel(defaults: defaults)
-        relaunched.evaluate(hasServerWithAgents: false)
+        let relaunched = OnboardingModel(defaults: defaults, hasSavedServers: false)
         #expect(relaunched.isActive)
         #expect(defaults.bool(forKey: OnboardingModel.doneKey) == false)
     }
 
     @Test func sessionTooOldReturnsToSignIn() {
         let model = OnboardingModel(defaults: makeDefaults())
-        model.evaluate(hasServerWithAgents: false)
         model.advance()
         model.signedIn(deviceApproved: false)
         #expect(model.step == .approval)
@@ -157,7 +145,6 @@ import Testing
 
     @Test func progressCountsFiveDesignSteps() {
         let model = OnboardingModel(defaults: makeDefaults())
-        model.evaluate(hasServerWithAgents: false)
         #expect(model.step.position == 1)
         model.advance()
         #expect(model.step.position == 2)
@@ -180,38 +167,5 @@ import Testing
         #expect(OnboardingModel.nextStep(after: .server, needsApproval: false) == .agent)
         #expect(OnboardingModel.nextStep(after: .agent, needsApproval: false) == .done)
         #expect(OnboardingModel.nextStep(after: .done, needsApproval: false) == .done)
-    }
-
-    // MARK: launch decision from local data
-
-    @Test func freshLaunchShowsTheFlowAtOnceWithoutWaitingForServers() {
-        let model = OnboardingModel(defaults: makeDefaults(), hasSavedServers: false)
-        #expect(model.isActive)
-        #expect(!model.isUndecided)
-    }
-
-    @Test func savedServersLeaveTheLaunchUndecidedUntilTheyAreConnected() {
-        let model = OnboardingModel(defaults: makeDefaults(), hasSavedServers: true)
-        #expect(model.isUndecided)
-        #expect(!model.isActive)
-        model.evaluate(hasServerWithAgents: false)
-        #expect(!model.isUndecided)
-        #expect(model.isActive)
-    }
-
-    @Test func connectedServerWithAgentsResolvesToTheMainWindow() {
-        let model = OnboardingModel(defaults: makeDefaults(), hasSavedServers: true)
-        model.evaluate(hasServerWithAgents: true)
-        #expect(!model.isUndecided)
-        #expect(!model.isActive)
-    }
-
-    @Test func finishedFlowIsNeverUndecidedOrActive() {
-        let defaults = makeDefaults()
-        let first = OnboardingModel(defaults: defaults)
-        first.finish()
-        let second = OnboardingModel(defaults: defaults, hasSavedServers: true)
-        #expect(!second.isUndecided)
-        #expect(!second.isActive)
     }
 }
