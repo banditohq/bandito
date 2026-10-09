@@ -1,0 +1,35 @@
+name: Bandito
+options:
+  bundleIdPrefix: dev.bandito
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+packages:
+  BanditoKit:
+    path: BanditoKit
+targets:
+  Bandito:
+    type: application
+    platform: macOS
+    sources:
+      - Bandito
+    dependencies:
+      - package: BanditoKit
+        product: BanditoKit
+      - package: BanditoKit
+        product: BanditoDesign
+    settings:
+      base:
+        PRODUCT_NAME: Bandito
+        PRODUCT_BUNDLE_IDENTIFIER: dev.bandito.mac
+        MARKETING_VERSION: 0.1.0
+        CURRENT_PROJECT_VERSION: 1
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Bandito
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
+        INFOPLIST_KEY_NSHumanReadableCopyright: "FSL-1.1-ALv2"
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Manual
+        ENABLE_HARDENED_RUNTIME: YES
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
