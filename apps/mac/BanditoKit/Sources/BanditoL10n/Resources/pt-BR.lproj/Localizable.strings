@@ -487,7 +487,9 @@
 "template.scratch.desc" = "Um agente vazio: você escolhe o nome, a função e as instruções.";
 "template.scratch.meta" = "Qualquer modelo";
 "template.scratch.title" = "Do zero";
+"thread.aTeammate" = "um colega";
 "thread.attach" = "Anexar arquivos";
+"thread.chapterSaved" = "Capítulo %1$@ · memória salva";
 "thread.copy" = "Copiar";
 "thread.copyMarkdown" = "Copiar como Markdown";
 "thread.dictate" = "Ditar";
@@ -503,10 +505,11 @@
 "thread.react" = "Reagir";
 "thread.reply" = "Responder";
 "thread.reviewApproved" = "%1$@ revisou as mudanças · aprovado";
+"thread.savingMemory" = "Salvando memória antes de um novo capítulo";
 "thread.scheduledRun" = "Execução agendada";
 "thread.send" = "Enviar";
 "thread.stop" = "Parar";
-"thread.stopped" = "Interrompido";
+"thread.stopped" = "Parado";
 "thread.today" = "Hoje";
 "thread.yesterday" = "Ontem";
 "tour.approve.text" = "Pushes, deploys e exclusões chegam aqui. Permita com um botão ou negue. Você também pode responder pelo celular.";

@@ -1,4 +1,7 @@
 {
+  "thread.chapterSaved": "Глава {chapter} · память сохранена",
+  "thread.savingMemory": "Сохраняет память перед новой главой",
+  "thread.aTeammate": "коллеги",
   "app.name": "Bandito",
   "sidebar.search": "Поиск (⌘K)",
   "sidebar.newAgent": "Новый агент (⌘N)",
@@ -52,7 +55,7 @@
   "status.working": "работает",
   "status.needsYou": "ждёт вас",
   "status.error": "Ошибка",
-  "status.offline": "Не в сети",
+  "status.offline": "Готов",
   "profile.getIphone": "Получить приложение для iPhone",
   "profile.help": "Справка",
   "profile.settings": "Настройки…",
@@ -146,7 +149,7 @@
   "thread.messageFrom": "Сообщение от {name}",
   "thread.messageFor": "Сообщение для {name}",
   "thread.scheduledRun": "Запуск по расписанию",
-  "thread.stopped": "Остановлено",
+  "thread.stopped": "Остановлен",
   "thread.duration": "{runtime} с",
   "thread.ranCommands": {
     "one": "Выполнил {count} команду",

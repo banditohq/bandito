@@ -1,4 +1,7 @@
 {
+  "thread.chapterSaved": "챕터 {chapter} · 메모리 저장됨",
+  "thread.savingMemory": "새 챕터 전에 메모리 저장 중",
+  "thread.aTeammate": "팀원",
   "onboarding.server.newHostTitle": "새 서버입니다 — 확인해 주세요",
   "onboarding.skip": "나중에 설정",
   "onboarding.skipHint": "앱을 엽니다. 서버와 에이전트는 언제든 추가할 수 있습니다.",

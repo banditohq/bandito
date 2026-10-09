@@ -1387,7 +1387,7 @@
 "status.error" = "Error";
 "status.idle" = "Idle";
 "status.needsYou" = "Needs you";
-"status.offline" = "Offline";
+"status.offline" = "Ready";
 "status.working" = "Working";
 "team.changes" = "Changes";
 "team.delete.action" = "Delete";
@@ -1468,7 +1468,9 @@
 "terminals.sidebar.noteTitle" = "Collapse is not close.";
 "terminals.sidebar.onScreen" = "On screen";
 "terminals.updateServer" = "Update the server to use terminals.";
+"thread.aTeammate" = "a teammate";
 "thread.attach" = "Attach files";
+"thread.chapterSaved" = "Chapter %1$@ · memory saved";
 "thread.copy" = "Copy";
 "thread.copyMarkdown" = "Copy as Markdown";
 "thread.dictate" = "Dictate";
@@ -1487,6 +1489,7 @@
 "thread.runtimeLimit" = "%1$@ limit ran out — continuing on %2$@";
 "thread.runtimeLimitUntil" = "%1$@ limit ran out — continuing on %2$@ until %3$@";
 "thread.runtimeReturned" = "Back on %1$@";
+"thread.savingMemory" = "Saving memory before a new chapter";
 "thread.scheduledRun" = "Scheduled run";
 "thread.send" = "Send";
 "thread.stop" = "Stop";

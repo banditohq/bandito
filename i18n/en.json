@@ -1,4 +1,7 @@
 {
+  "thread.chapterSaved": "Chapter {chapter} · memory saved",
+  "thread.savingMemory": "Saving memory before a new chapter",
+  "thread.aTeammate": "a teammate",
   "app.name": "Bandito",
   "sidebar.search": "Search (⌘K)",
   "sidebar.newAgent": "New agent (⌘N)",
@@ -45,7 +48,7 @@
   "status.working": "Working",
   "status.needsYou": "Needs you",
   "status.error": "Error",
-  "status.offline": "Offline",
+  "status.offline": "Ready",
   "profile.getIphone": "Get the iPhone app",
   "profile.help": "Help",
   "profile.settings": "Settings…",

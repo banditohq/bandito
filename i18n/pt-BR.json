@@ -1,4 +1,7 @@
 {
+  "thread.chapterSaved": "Capítulo {chapter} · memória salva",
+  "thread.savingMemory": "Salvando memória antes de um novo capítulo",
+  "thread.aTeammate": "um colega",
   "onboarding.server.newHostTitle": "Servidor novo — confirme",
   "onboarding.skip": "Configurar depois",
   "onboarding.skipHint": "Abre o app agora. Você pode adicionar um servidor e um agente quando quiser.",
@@ -133,7 +136,7 @@
   "thread.messageFrom": "Mensagem de {name}",
   "thread.messageFor": "Mensagem para {name}",
   "thread.scheduledRun": "Execução agendada",
-  "thread.stopped": "Interrompido",
+  "thread.stopped": "Parado",
   "thread.duration": "{runtime} s",
   "thread.ranCommands": {"one": "Executou {count} comando", "other": "Executou {count} comandos"},
   "thread.reviewApproved": "{name} revisou as mudanças · aprovado",

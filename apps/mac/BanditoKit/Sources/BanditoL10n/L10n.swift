@@ -2027,7 +2027,9 @@ public enum L10n {
     }
 
     public enum Thread {
+        public static var aTeammate: String { L10n.tr("thread.aTeammate") }
         public static var attach: String { L10n.tr("thread.attach") }
+        public static func chapterSaved(chapter: String) -> String { L10n.tr("thread.chapterSaved", chapter) }
         public static var copy: String { L10n.tr("thread.copy") }
         public static var copyMarkdown: String { L10n.tr("thread.copyMarkdown") }
         public static var dictate: String { L10n.tr("thread.dictate") }
@@ -2047,6 +2049,7 @@ public enum L10n {
         public static func runtimeLimit(from: String, to: String) -> String { L10n.tr("thread.runtimeLimit", from, to) }
         public static func runtimeLimitUntil(from: String, to: String, time: String) -> String { L10n.tr("thread.runtimeLimitUntil", from, to, time) }
         public static func runtimeReturned(runtime: String) -> String { L10n.tr("thread.runtimeReturned", runtime) }
+        public static var savingMemory: String { L10n.tr("thread.savingMemory") }
         public static var scheduledRun: String { L10n.tr("thread.scheduledRun") }
         public static var send: String { L10n.tr("thread.send") }
         public static var stop: String { L10n.tr("thread.stop") }

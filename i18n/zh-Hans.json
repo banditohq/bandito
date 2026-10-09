@@ -1,4 +1,7 @@
 {
+  "thread.chapterSaved": "第 {chapter} 章 · 记忆已保存",
+  "thread.savingMemory": "开始新章节前保存记忆",
+  "thread.aTeammate": "队友",
   "onboarding.server.newHostTitle": "新服务器 — 请确认",
   "onboarding.skip": "稍后设置",
   "onboarding.skipHint": "立即打开应用。随时可以添加服务器和智能体。",
@@ -132,7 +135,7 @@
   "thread.yesterday": "昨天",
   "thread.messageFrom": "来自 {name} 的消息",
   "thread.messageFor": "发给 {name} 的消息",
-  "thread.scheduledRun": "定时运行",
+  "thread.scheduledRun": "计划运行",
   "thread.stopped": "已停止",
   "thread.duration": "{runtime} 秒",
   "thread.ranCommands": {"other": "已运行 {count} 条命令"},

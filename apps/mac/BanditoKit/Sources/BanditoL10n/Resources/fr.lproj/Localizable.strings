@@ -487,7 +487,9 @@
 "template.scratch.desc" = "Un agent vide : vous choisissez le nom, le rôle et les instructions.";
 "template.scratch.meta" = "N'importe quel modèle";
 "template.scratch.title" = "À partir de zéro";
+"thread.aTeammate" = "un coéquipier";
 "thread.attach" = "Joindre des fichiers";
+"thread.chapterSaved" = "Chapitre %1$@ · mémoire enregistrée";
 "thread.copy" = "Copier";
 "thread.copyMarkdown" = "Copier en Markdown";
 "thread.dictate" = "Dicter";
@@ -503,6 +505,7 @@
 "thread.react" = "Réagir";
 "thread.reply" = "Répondre";
 "thread.reviewApproved" = "%1$@ a relu les modifications · approuvé";
+"thread.savingMemory" = "Enregistre la mémoire avant un nouveau chapitre";
 "thread.scheduledRun" = "Exécution planifiée";
 "thread.send" = "Envoyer";
 "thread.stop" = "Arrêter";

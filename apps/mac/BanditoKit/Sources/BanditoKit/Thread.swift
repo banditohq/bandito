@@ -1,3 +1,4 @@
+import BanditoL10n
 import Foundation
 
 /// One row in an agent's thread, built from events. See docs/MAC_APP_UX.md#thread.
@@ -112,16 +113,16 @@ public struct AgentThread: Sendable, Hashable {
                 items.append(.user(id: e.id, text: text, source: source, from: nil, ts: e.ts))
             case .crew:
                 dropStreaming()
-                items.append(.note(id: e.id + "-n", text: "Message from \(from ?? "a teammate")", kind: .crew, ts: e.ts))
+                items.append(.note(id: e.id + "-n", text: L10n.Thread.messageFrom(name: from ?? L10n.Thread.aTeammate), kind: .crew, ts: e.ts))
                 items.append(.user(id: e.id, text: text, source: source, from: from, ts: e.ts))
             case .schedule:
                 dropStreaming()
-                items.append(.note(id: e.id + "-n", text: "Scheduled run", kind: .schedule, ts: e.ts))
+                items.append(.note(id: e.id + "-n", text: L10n.Thread.scheduledRun, kind: .schedule, ts: e.ts))
                 items.append(.user(id: e.id, text: text, source: source, from: nil, ts: e.ts))
             case .system:
                 // Hidden wrap-up turn before a new chapter: no bubble, just a quiet line.
                 finalizeStreaming(e)
-                items.append(.note(id: e.id, text: "Saving memory before a new chapter", kind: .info, ts: e.ts))
+                items.append(.note(id: e.id, text: L10n.Thread.savingMemory, kind: .info, ts: e.ts))
             }
         case .messageDelta(let text):
             if case .streaming(let t)? = items.last {
@@ -169,7 +170,7 @@ public struct AgentThread: Sendable, Hashable {
                 items[items.count - 1] = .assistant(id: e.id + "-s", text: t, ts: e.ts)
             }
             if status == .interrupted {
-                items.append(.note(id: e.id, text: "Stopped", kind: .info, ts: e.ts))
+                items.append(.note(id: e.id, text: L10n.Thread.stopped, kind: .info, ts: e.ts))
             }
         case .agentStatus(let status, let detail):
             self.status = status
@@ -177,7 +178,7 @@ public struct AgentThread: Sendable, Hashable {
         case .error(let message):
             items.append(.note(id: e.id, text: message, kind: .error, ts: e.ts))
         case .sessionRotated(let chapter, _, _):
-            items.append(.note(id: e.id, text: "Chapter \(chapter) · memory saved", kind: .info, ts: e.ts))
+            items.append(.note(id: e.id, text: L10n.Thread.chapterSaved(chapter: "\(chapter)"), kind: .info, ts: e.ts))
         case .runtimeSwitched(let from, let to, let until):
             items.append(.runtimeSwitch(id: e.id, from: from, to: to, until: until, ts: e.ts))
         case .usageLimits, .unknown:

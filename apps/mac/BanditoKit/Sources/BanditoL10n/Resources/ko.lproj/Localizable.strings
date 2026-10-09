@@ -487,7 +487,9 @@
 "template.scratch.desc" = "빈 에이전트: 이름, 역할, 지침을 직접 정합니다.";
 "template.scratch.meta" = "모든 모델";
 "template.scratch.title" = "처음부터";
+"thread.aTeammate" = "팀원";
 "thread.attach" = "파일 첨부";
+"thread.chapterSaved" = "챕터 %1$@ · 메모리 저장됨";
 "thread.copy" = "복사";
 "thread.copyMarkdown" = "Markdown으로 복사";
 "thread.dictate" = "받아쓰기";
@@ -503,6 +505,7 @@
 "thread.react" = "반응";
 "thread.reply" = "답장";
 "thread.reviewApproved" = "%1$@이(가) 변경 사항을 검토 · 승인";
+"thread.savingMemory" = "새 챕터 전에 메모리 저장 중";
 "thread.scheduledRun" = "예약 실행";
 "thread.send" = "보내기";
 "thread.stop" = "중지";

@@ -90,9 +90,16 @@ fn agents_root_from(env: Option<OsString>, user_home: Option<PathBuf>, home: &Pa
     let default_home = user_home.as_ref().map(|user_home| user_home.join(".bandito"));
     match (custom, user_home) {
         (Some(dir), _) => dir,
-        (None, Some(_)) if home_given && Some(home) != default_home.as_deref() => std::path::absolute(home)
-            .unwrap_or_else(|_| home.to_path_buf())
-            .join("agents"),
+        // Next to the data folder, never inside it: agents may not touch Bandito's own files, so a folder under the
+        // data folder would be one they cannot write (`/srv/second` → `/srv/second-agents`).
+        (None, Some(_)) if home_given && Some(home) != default_home.as_deref() => {
+            let home = std::path::absolute(home).unwrap_or_else(|_| home.to_path_buf());
+            let name = home
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "bandito".into());
+            home.with_file_name(format!("{name}-agents"))
+        }
         (None, Some(user_home)) => user_home.join("bandito").join("agents"),
         (None, None) => home.join("agents"),
     }
@@ -342,7 +349,7 @@ mod tests {
         // A second daemon with its own --home must not write into the first one's folder.
         assert_eq!(
             agents_root_from(None, Some("/home/u".into()), Path::new("/srv/second"), true),
-            PathBuf::from("/srv/second/agents")
+            PathBuf::from("/srv/second-agents")
         );
         // BANDITO_AGENTS_DIR still wins over the home.
         assert_eq!(

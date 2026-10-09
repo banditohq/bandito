@@ -487,7 +487,9 @@
 "template.scratch.desc" = "空のエージェント。名前、役割、指示はあなたが決めます。";
 "template.scratch.meta" = "任意のモデル";
 "template.scratch.title" = "ゼロから";
+"thread.aTeammate" = "チームメイト";
 "thread.attach" = "ファイルを添付";
+"thread.chapterSaved" = "第%1$@章 · メモリを保存しました";
 "thread.copy" = "コピー";
 "thread.copyMarkdown" = "Markdownとしてコピー";
 "thread.dictate" = "音声入力";
@@ -503,6 +505,7 @@
 "thread.react" = "リアクション";
 "thread.reply" = "返信";
 "thread.reviewApproved" = "%1$@ が変更を確認 · 承認";
+"thread.savingMemory" = "新しい章の前にメモリを保存中";
 "thread.scheduledRun" = "スケジュール実行";
 "thread.send" = "送信";
 "thread.stop" = "停止";

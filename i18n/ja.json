@@ -1,4 +1,7 @@
 {
+  "thread.chapterSaved": "第{chapter}章 · メモリを保存しました",
+  "thread.savingMemory": "新しい章の前にメモリを保存中",
+  "thread.aTeammate": "チームメイト",
   "onboarding.server.newHostTitle": "新しいサーバーです — 確認してください",
   "onboarding.skip": "あとで設定",
   "onboarding.skipHint": "アプリを開きます。サーバーとエージェントはいつでも追加できます。",

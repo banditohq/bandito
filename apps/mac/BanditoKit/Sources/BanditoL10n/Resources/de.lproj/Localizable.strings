@@ -487,7 +487,9 @@
 "template.scratch.desc" = "Ein leerer Agent: Name, Rolle und Anweisungen legst du selbst fest.";
 "template.scratch.meta" = "Beliebiges Modell";
 "template.scratch.title" = "Von vorn";
+"thread.aTeammate" = "einem Teammitglied";
 "thread.attach" = "Dateien anhängen";
+"thread.chapterSaved" = "Kapitel %1$@ · Gedächtnis gespeichert";
 "thread.copy" = "Kopieren";
 "thread.copyMarkdown" = "Als Markdown kopieren";
 "thread.dictate" = "Diktieren";
@@ -503,6 +505,7 @@
 "thread.react" = "Reagieren";
 "thread.reply" = "Antworten";
 "thread.reviewApproved" = "%1$@ hat die Änderungen geprüft · genehmigt";
+"thread.savingMemory" = "Speichert das Gedächtnis vor einem neuen Kapitel";
 "thread.scheduledRun" = "Geplanter Lauf";
 "thread.send" = "Senden";
 "thread.stop" = "Stopp";

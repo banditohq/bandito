@@ -117,7 +117,7 @@ up() {
     mkdir -p "$home"
     # Everything the daemon keeps goes under the QA home: some parts read $BANDITO_HOME instead of --home, and the
     # agents' folders default to ~/bandito/agents.
-    BANDITO_HOME="$home" BANDITO_AGENTS_DIR="$home/agents" \
+    BANDITO_HOME="$home" BANDITO_AGENTS_DIR="$dir/agents" \
         nohup "$bin" --home "$home" daemon --listen "127.0.0.1:$port" >>"$log" 2>&1 </dev/null &
     echo $! >"$pidfile"
 

@@ -1387,7 +1387,7 @@
 "status.error" = "Ошибка";
 "status.idle" = "ждёт задачу";
 "status.needsYou" = "ждёт вас";
-"status.offline" = "Не в сети";
+"status.offline" = "Готов";
 "status.working" = "работает";
 "team.changes" = "Изменения";
 "team.delete.action" = "Удалить";
@@ -1468,7 +1468,9 @@
 "terminals.sidebar.noteTitle" = "Свернуть ≠ закрыть.";
 "terminals.sidebar.onScreen" = "На экране";
 "terminals.updateServer" = "Обновите сервер, чтобы пользоваться терминалами.";
+"thread.aTeammate" = "коллеги";
 "thread.attach" = "Прикрепить файлы";
+"thread.chapterSaved" = "Глава %1$@ · память сохранена";
 "thread.copy" = "Копировать";
 "thread.copyMarkdown" = "Копировать как Markdown";
 "thread.dictate" = "Диктовка";
@@ -1487,10 +1489,11 @@
 "thread.runtimeLimit" = "Лимит %1$@ кончился — продолжаю на %2$@";
 "thread.runtimeLimitUntil" = "Лимит %1$@ кончился — продолжаю на %2$@ до %3$@";
 "thread.runtimeReturned" = "Вернулся на %1$@";
+"thread.savingMemory" = "Сохраняет память перед новой главой";
 "thread.scheduledRun" = "Запуск по расписанию";
 "thread.send" = "Отправить";
 "thread.stop" = "Остановить";
-"thread.stopped" = "Остановлено";
+"thread.stopped" = "Остановлен";
 "thread.today" = "Сегодня";
 "thread.yesterday" = "Вчера";
 "tour.agents.text" = "Каждый агент — отдельный чат. Оранжевая точка значит, что агент ждёт вашего решения.";

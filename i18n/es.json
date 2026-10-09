@@ -1,4 +1,7 @@
 {
+  "thread.chapterSaved": "Capítulo {chapter} · memoria guardada",
+  "thread.savingMemory": "Guardando memoria antes de un nuevo capítulo",
+  "thread.aTeammate": "un compañero",
   "onboarding.server.newHostTitle": "Servidor nuevo: confírmalo",
   "onboarding.skip": "Configurar más tarde",
   "onboarding.skipHint": "Abre la app ahora. Puedes añadir un servidor y un agente cuando quieras.",
