@@ -41,7 +41,9 @@ extension ServerModel {
     public func browserTabs(workspace: String? = nil) async throws -> [BrowserTab] {
         let request = try await daemonRequest(
             path: "/v1/browser/tabs", query: BrowserRoute.query(workspace: workspace), socket: false)
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let session = URLSession(configuration: DaemonHTTP.configuration())
+        defer { session.finishTasksAndInvalidate() }
+        let (data, response) = try await session.data(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard status == 200 else { throw CDPError.routeError(status: status) }
         return try JSONDecoder().decode([BrowserTab].self, from: data).filter(\.isPage)

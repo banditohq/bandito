@@ -84,6 +84,32 @@ private func restoreSaved(_ previous: Data?) {
         }
     }
 
+    @Test func aTokenThatCannotBeKeptIsRevokedOnTheDaemonAndReported() async throws {
+        let previous = saveServers([ServerConfig(id: id, name: "This Mac", endpoint: local.endpoint)])
+        defer { restoreSaved(previous) }
+        let app = AppModel()
+        let log = RevokeLog()
+        await app.migrateLocalServers(
+            pairing: LocalDaemonPairing(
+                runner: HealthyDaemon(), binary: URL(fileURLWithPath: "/bin/bandito"),
+                redeem: { _, _, _ in
+                    try RPCClient.decoder.decode(
+                        PairResult.self,
+                        from: Data(#"{"token":"bdt_lost","device":{"id":"dev-7","name":"n","created_at":1}}"#.utf8))
+                }),
+            storeToken: { _, _ in false },
+            revoke: { url, token, deviceID in
+                log.record(url: url, token: token, deviceID: deviceID)
+            })
+
+        #expect(app.servers.first?.config.endpoint == local.endpoint)
+        #expect(log.calls.count == 1)
+        #expect(log.calls.first?.token == "bdt_lost")
+        #expect(log.calls.first?.deviceID == "dev-7")
+        #expect(log.calls.first?.url.absoluteString == "ws://127.0.0.1:17779/v1/rpc")
+        #expect(app.lastError != nil)
+    }
+
     @Test func aServerThatCannotBePairedStaysLocalForTheNextLaunch() async throws {
         let stored = Recorder()
         let previous = saveServers([ServerConfig(id: id, name: "This Mac", endpoint: local.endpoint)])
@@ -117,6 +143,22 @@ private func restoreSaved(_ previous: Data?) {
                 })
             #expect(app.servers.first?.config.endpoint == webSocket.endpoint)
         }
+    }
+}
+
+/// Records the revocations the migration asks for.
+private final class RevokeLog: @unchecked Sendable {
+    // @unchecked: the migration calls it on the main actor only.
+    struct Call {
+        var url: URL
+        var token: String
+        var deviceID: String
+    }
+
+    private(set) var calls: [Call] = []
+
+    func record(url: URL, token: String, deviceID: String) {
+        calls.append(Call(url: url, token: token, deviceID: deviceID))
     }
 }
 

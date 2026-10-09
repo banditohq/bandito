@@ -14,6 +14,14 @@ public enum PreviewURL {
         return URL(string: "\(scheme)://p\(port)\(tail)")
     }
 
+    /// The port of a preview URL (`bandito-preview://p<port>/…`), or nil for another URL or a bad port.
+    public static func port(of url: URL) -> Int? {
+        guard url.scheme == scheme, let host = url.host, host.hasPrefix("p"),
+              let port = Int(host.dropFirst()), (1...65_535).contains(port)
+        else { return nil }
+        return port
+    }
+
     /// The daemon's proxy path and query for a preview URL: `/v1/proxy/<port><path>`, percent-encoded as the URL
     /// had it, and the query as it was. Nil for another scheme, a host that is not `p<port>`, or a bad port.
     public static func proxyParts(for url: URL) -> (path: String, query: String?)? {

@@ -585,4 +585,20 @@ public enum Pairing {
         struct P: Encodable { var code: String; var deviceName: String }
         return try await client.call("pair.redeem", P(code: code, deviceName: deviceName), as: PairResult.self)
     }
+
+    /// Revokes a device on the daemon (`devices.revoke`), over a connection that the token itself opens. Used when
+    /// the app cannot keep a token it was just given, so the daemon does not keep a device nobody holds.
+    public static func revoke(url: URL, token: String, deviceID: String) async throws {
+        guard WebSocketTransport.allowsToken(for: url) else {
+            throw RPCError(
+                code: RPCError.insecureTransport,
+                message: "refusing to send the device token over an unencrypted connection")
+        }
+        let client = RPCClient(transport: WebSocketTransport(url: url, token: token))
+        try await client.start()
+        defer { Task { await client.close() } }
+        struct P: Encodable { var id: String }
+        struct Revoked: Decodable { var revoked: Bool }
+        _ = try await client.call("devices.revoke", P(id: deviceID), as: Revoked.self)
+    }
 }

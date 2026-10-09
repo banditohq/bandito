@@ -1,5 +1,16 @@
 import Foundation
 
+/// A paired daemon: the server config with its token, and the id of the device the daemon made for it.
+public struct PairedServer: Sendable, Equatable {
+    public var config: ServerConfig
+    public var deviceID: String
+
+    public init(config: ServerConfig, deviceID: String) {
+        self.config = config
+        self.deviceID = deviceID
+    }
+}
+
 /// Gives this Mac's daemon a device token, so the app talks to it like any other WebSocket server.
 ///
 /// `info --json` gives the listen address, `pair --json` a one-time code (the bandito command asks the daemon
@@ -37,6 +48,11 @@ public struct LocalDaemonPairing: Sendable {
     /// `id` keeps an existing server's identity (its selection and its Keychain item).
     /// Throws `InstallError` when a step fails; nothing is saved here, the caller keeps or drops the result.
     public func serverConfig(name: String, id: UUID = UUID(), deviceName: String) async throws -> ServerConfig {
+        try await pair(name: name, id: id, deviceName: deviceName).config
+    }
+
+    /// As `serverConfig`, and with the device's id: a caller that cannot keep the token revokes the device with it.
+    public func pair(name: String, id: UUID = UUID(), deviceName: String) async throws -> PairedServer {
         let info = try await run(["info", "--json"], step: "Reading the daemon's address")
         guard let port = SSHInstaller.listenPort(in: info.stdout) else {
             throw InstallError.badResponse("info")
@@ -53,7 +69,8 @@ public struct LocalDaemonPairing: Sendable {
         } catch let error as RPCError {
             throw InstallError.pairingFailed(error.message)
         }
-        return ServerConfig(id: id, name: name, endpoint: .webSocket(url: url), token: paired.token)
+        let config = ServerConfig(id: id, name: name, endpoint: .webSocket(url: url), token: paired.token)
+        return PairedServer(config: config, deviceID: paired.device.id)
     }
 
     /// Runs `bandito [--home <home>] <arguments>`. A non-zero exit throws with the last line of its stderr.

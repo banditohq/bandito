@@ -149,6 +149,10 @@ The server runs one Chrome per workspace (`shared` by default). The app watches 
 
 **Relay.** One task owns both pipes (`cdp_pipe.rs`), and every client is a view on it. A client's command gets a new id from the relay, and the answer goes back with the client's own id, so two clients may use the same ids. A client may have 256 commands unanswered; the 257th gets `{"id", "error": {"code": -32000, "message": "too many pending commands"}}`. A session event (one with `sessionId`) goes to the client that owns the session. A browser-level event goes to every browser-level client. A tab client attaches its tab when it is made (`Target.attachToTarget`, flattened), detaches it when it goes (`Target.detachFromTarget`), and sees plain CDP: no `sessionId` on its messages. When the tab closes, its client gets `Target.detachedFromTarget` and then its connection ends. A client whose queue of 1024 messages is full is disconnected, not waited for. A message from Chrome over 64 MiB, or one that is not JSON, is treated as a crash: the pipe closes, the browser is stopped, and the next call starts it again. Agents (`browser.agent.*`) use the relay directly, with a tab client per call.
 
+**Page and browser rules.** A page client is one tab's view, and it may not reach the browser around it. Its commands in `Target.*`, `Browser.*`, `Storage.*` and `SystemInfo.*` are refused, as are any `params.targetId` and any `params.sessionId` (the one exception: `Page.screencastFrameAck`, whose `sessionId` is a frame number). A refusal is `{"id", "error": {"code": -32002, "message": "method not allowed for a page client"}}` (or `params.sessionId`/`params.targetId is not allowed for a page client`). A browser client may name only its own sessions: `Target.detachFromTarget` and `Target.sendMessageToTarget` with another client's `params.sessionId` are `-32001 unknown session`. `Target.closeTarget` is refused (`-32001`, "the tab is attached to another client") when a session on that tab belongs to another client; a tab nobody attached can be closed. A device is the owner of its browser, so its raw CDP is not checked against `browser.control`'s `controller`: that is by design. When a session's target detaches, the relay forgets the session whoever owns it.
+
+**Budgets.** A client may have 256 MiB of messages queued (the sum of their lengths); past that it is disconnected as slow, like one whose count of 1024 messages is full. Commands waiting for the pipe may total 128 MiB; a command past that is refused with `{"id", "error": {"code": -32000, "message": "too many bytes waiting for the browser"}}`, not queued. The relay never waits on a client or on the pipe.
+
 **The app.** The app speaks DevTools over the routes below, with its device token, and runs a CDP screencast on the tab socket. The daemon does not relay frames. `browser.status` answers `{running, cdp, pid, started_at, controller}`, where `cdp` is `"relay"` while the browser runs (`null` when stopped) and `controller` is `user`, `agent` or `none`.
 
 **Routes.** Device token only (`Authorization: Bearer`; a request with `Origin` gets 403), as for the file routes. `?workspace=<name>` is optional (default `shared`) and checked like the `browser.*` methods (400 when bad). The checks run before the upgrade.
@@ -179,6 +183,8 @@ Chrome has no DevTools port any more, so `/v1/tunnel` cannot reach the browser. 
 **Profile.** The profile keeps the browser's sign-ins to websites. Agents and the app share it, and it stays on the server, with the same owner as the daemon. Deleting `workspaces/<workspace>` signs out everywhere.
 
 ## Preview proxy
+
+**App side.** A preview web view serves one port: the one it was opened for. A `bandito-preview://p<other port>/` load gets 404. The web view's requests go through the daemon's request builder with the device token, so the token never reaches the web view, and it is sent only where a token may go (TLS or loopback). The request carries the method, `Content-Type` and other headers and the body, but not `Authorization`, `Cookie`, `Host` or hop-by-hop headers; it asks for `Accept-Encoding: identity`. The response goes back without `Content-Encoding` and `Content-Length`. Each preview has its own session with no cache and its own cookies; the daemon's tab list has no cache either.
 
 `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE` and `OPTIONS` on `/v1/proxy/<port>/<path>` forward to `127.0.0.1:<port>` on the server, so the app can show a dev server an agent started. Access is the same as for the file routes: a paired device (`Authorization: Bearer`), and no browser `Origin` (403). A port outside 1..=65535 is 400. Code: `daemon/src/rpc/preview.rs`; the route is in `rpc/ws.rs`.
 
@@ -300,6 +306,8 @@ Params are objects; unknown fields are `invalid_params`.
 **Limits.** At most 64 live tunnels per device. The 65th upgrade gets 429 before the upgrade. A slot is freed when its tunnel ends, whichever side ended it.
 
 Feature string: `"tunnel"` in `daemon.info`.
+
+**Known limits (accepted, not fixed).** A forwarder (`forwardOnce`) accepts exactly one connection on its loopback port, and until that connection arrives any local process can connect to the port first (one-shot listener). The daemon's pipes to Chrome are made close-on-exec as `std::io::pipe` does it on macOS, which sets the flag after the descriptor exists, so a fork on another thread in that instant could hand a pipe to a child that is not Chrome.
 
 ## Changes
 

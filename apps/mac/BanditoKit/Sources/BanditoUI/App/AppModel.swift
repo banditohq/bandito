@@ -97,10 +97,12 @@ public final class AppModel {
     /// Moves the saved `.local` servers (this Mac, over its unix socket) to the daemon's WebSocket with a device
     /// token (`LocalDaemonPairing`). It runs at each launch, before the connect, and a server that is moved is no
     /// longer `.local`, so it happens once. A server that cannot be paired yet stays `.local`; the next launch
-    /// tries again.
+    /// tries again. A token that cannot be kept is revoked on the daemon, so no device is left that nobody holds.
+    /// Every failure is reported in `lastError`.
     func migrateLocalServers(
         pairing: LocalDaemonPairing = .installed(),
-        storeToken: (String, UUID) -> Bool = { Keychain.setToken($0, for: $1) }
+        storeToken: (String, UUID) -> Bool = { Keychain.setToken($0, for: $1) },
+        revoke: (URL, String, String) async throws -> Void = { try await Pairing.revoke(url: $0, token: $1, deviceID: $2) }
     ) async {
         let pending = servers.filter { server in
             if case .local = server.config.endpoint { true } else { false }
@@ -109,38 +111,41 @@ public final class AppModel {
         for id in pending {
             guard let old = servers.first(where: { $0.id == id }) else { continue }
             do {
-                let config = try await pairing.serverConfig(
+                let paired = try await pairing.pair(
                     name: old.config.name, id: id, deviceName: Host.current().localizedName ?? "This Mac")
-                guard let token = config.token, storeToken(token, id) else {
-                    lastError = "Could not save this Mac's device token in the Keychain."
+                guard let token = paired.config.token, storeToken(token, id) else {
+                    await revokeUnkeptToken(paired, revoke: revoke)
                     continue
                 }
                 await old.disconnect()
                 guard let index = servers.firstIndex(where: { $0.id == id }) else { continue }
-                let model = ServerModel(config: config)
+                let model = ServerModel(config: paired.config)
                 attachNotifications(model)
                 servers[index] = model
                 changed = true
             } catch {
                 // Still `.local`: the next launch tries again.
+                lastError = "This Mac's server could not be set up for the app: \(error.localizedDescription)"
             }
         }
         if changed { save() }
     }
 
-    public func add(_ config: ServerConfig) {
-        // A server whose token cannot be stored could never authenticate: refuse it instead of adding a dead entry.
-        guard Keychain.setToken(config.token, for: config.id) else {
-            lastError = "Could not save the device token in the Keychain. The server was not added."
-            return
+    /// The device was paired, but its token could not be stored: the device is revoked on the daemon, and the
+    /// server stays `.local` until the next launch.
+    private func revokeUnkeptToken(
+        _ paired: PairedServer,
+        revoke: (URL, String, String) async throws -> Void
+    ) async {
+        var message = "Could not save this Mac's device token in the Keychain; the server stays local until the next launch."
+        if case .webSocket(let url) = paired.config.endpoint, let token = paired.config.token {
+            do {
+                try await revoke(url, token, paired.deviceID)
+            } catch {
+                message += " Revoking the device on the server failed: \(error.localizedDescription)"
+            }
         }
-        lastError = nil
-        let model = ServerModel(config: config)
-        attachNotifications(model)
-        servers.append(model)
-        selectedServerID = model.id
-        save()
-        Task { await model.connect() }
+        lastError = message
     }
 
     public func remove(_ id: UUID) {

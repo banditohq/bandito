@@ -1237,4 +1237,46 @@ mod tests {
 
         manager.stop(DEFAULT_WORKSPACE).await;
     }
+
+    /// A page client is one tab's view of the browser. It must not list the other tabs, attach to them, or read
+    /// them. Real Chrome: run with `BANDITO_BROWSER_IT=1 cargo test -- --ignored browser_it_page_client`.
+    #[tokio::test]
+    #[ignore = "starts a real Chrome; BANDITO_BROWSER_IT=1 cargo test -- --ignored browser_it_page_client"]
+    async fn browser_it_page_client_cannot_reach_other_tabs() {
+        if std::env::var("BANDITO_BROWSER_IT").as_deref() != Ok("1") {
+            return;
+        }
+        let home = tempfile::tempdir().unwrap();
+        let manager = BrowserManager::new(home.path().to_path_buf());
+        manager.start(DEFAULT_WORKSPACE).await.expect("start");
+        manager
+            .agent_open("data:text/html,<title>tab-a</title>", false)
+            .await
+            .expect("open a");
+        manager
+            .agent_open("data:text/html,<title>secret-tab-b</title>", true)
+            .await
+            .expect("open b");
+        let pages = manager.pages(DEFAULT_WORKSPACE).await.expect("pages");
+        let a = pages.iter().find(|p| p.title == "tab-a").expect("tab a").id.clone();
+        let b = pages
+            .iter()
+            .find(|p| p.title == "secret-tab-b")
+            .expect("tab b")
+            .id
+            .clone();
+        let relay = manager.app_relay(DEFAULT_WORKSPACE).await.expect("relay");
+
+        let mut tab_a = Cdp::new(relay.page_client(&a).await.expect("page client"));
+        // Listing the tabs would show the other tab's id and URL.
+        let listed = tab_a.call("Target.getTargets", json!({})).await;
+        assert!(listed.is_err(), "a page client listed the tabs: {listed:?}");
+        // Attaching to the other tab would give a session on it.
+        let attached = tab_a
+            .call("Target.attachToTarget", json!({ "targetId": b, "flatten": true }))
+            .await;
+        assert!(attached.is_err(), "a page client attached to another tab: {attached:?}");
+
+        manager.stop(DEFAULT_WORKSPACE).await;
+    }
 }
