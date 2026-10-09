@@ -11,6 +11,7 @@ struct ServerOverview: View {
     @State private var monitor = HostMonitor()
     @State private var setup = SetupModel()
     @State private var release = ReleaseStatus()
+    @State private var daemonUpdate = DaemonUpdateModel()
     @State private var secrets: [SecretInfo] = []
     @State private var stopping: ProcessRow?
     @State private var actionError: String?
@@ -18,7 +19,10 @@ struct ServerOverview: View {
     var body: some View {
         ServerPage(title: L10n.Mode.serverOverview, trailing: { trailing }) {
             if let server, server.supports("host") {
-                if release.updateAvailable(current: server.info?.version) {
+                // The daemon's own check wins; the GitHub hint is only for a daemon that has not reported one yet.
+                if daemonUpdate.shownOffer(current: DaemonUpdateOffer.offer(for: server.info), serverID: server.id) != nil {
+                    DaemonUpdateBanner(server: server, model: daemonUpdate)
+                } else if release.updateAvailable(current: server.info?.version) {
                     updateBanner(server)
                 }
                 tiles
@@ -46,6 +50,10 @@ struct ServerOverview: View {
         .task(id: server?.id) {
             guard let server else { return }
             await monitor.run(server)
+        }
+        .task(id: server?.id) {
+            // Opening the Server screen re-reads the daemon's update check, so the offer is current.
+            await server?.refreshInfo()
         }
         .task(id: server?.info != nil) {
             guard let server, server.info != nil else { return }

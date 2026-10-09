@@ -536,6 +536,7 @@
 "memory.splitHeader" = "HOW TO SPLIT INTO CHAPTERS";
 "memory.title" = "Memory";
 "menu.agent" = "Agent";
+"menu.checkForUpdates" = "Check for Updates…";
 "menu.go" = "Go";
 "menu.terminals" = "Terminals";
 "menu.view" = "View";
@@ -964,6 +965,17 @@
 "server.add.url" = "Custom address";
 "server.add.urlDesc" = "Cloudflare Tunnel, WireGuard, a reverse proxy — any URL that reaches the daemon.";
 "server.add.user" = "User";
+"server.daemonUpdate.button" = "Update server";
+"server.daemonUpdate.confirm" = "Update";
+"server.daemonUpdate.confirmMessage" = "The daemon downloads the release, checks its signature and restarts. The connection drops for a few seconds. Your data and settings stay.";
+"server.daemonUpdate.confirmTitle" = "Update the server to %1$@?";
+"server.daemonUpdate.done" = "The server runs %1$@ now.";
+"server.daemonUpdate.failed" = "Update failed: %1$@";
+"server.daemonUpdate.manualRestart" = "Installed %1$@. Restart the daemon on the server to run it.";
+"server.daemonUpdate.restarting" = "Waiting for the server to restart…";
+"server.daemonUpdate.timedOut" = "The server did not come back on %1$@ within two minutes. Check it in Terminal.";
+"server.daemonUpdate.title" = "Version %1$@ is available (you have %2$@)";
+"server.daemonUpdate.updating" = "Updating the server…";
 "server.features.title" = "Capabilities";
 "server.health.bothFull" = "Disk and memory almost full";
 "server.health.diskFull" = "Disk almost full";
@@ -1076,6 +1088,8 @@
 "settings.approvals.when" = "When the agent wants to run";
 "settings.approvals.wildcardNote" = "* means anything. If two rules match, the rule for one agent wins, then the newer one.";
 "settings.approvalsIntro" = "Bandito checks every action an agent takes. Routine work runs on its own, while anything that matches a rule below or a built-in check waits for your decision.";
+"settings.autoCheckUpdates" = "Check for updates automatically";
+"settings.autoCheckUpdatesHint" = "Once a day. Nothing is installed without your OK.";
 "settings.browserScreen.clipboard" = "Shared clipboard";
 "settings.browserScreen.clipboardHint" = "Copy here, paste there, and the other way round.";
 "settings.browserScreen.intro" = "The server's browser and screen, as you see them on this Mac.";
@@ -1084,6 +1098,7 @@
 "settings.browserScreen.qualityFaster" = "Faster";
 "settings.browserScreen.qualityHint" = "Faster sends less data; sharper uses more bandwidth.";
 "settings.browserScreen.qualitySharper" = "Sharper";
+"settings.channelHint" = "Beta gets preview builds first.";
 "settings.close" = "Close settings";
 "settings.general" = "General";
 "settings.keysIntro" = "Everything works as in the Mac apps you know. Click a shortcut to change it.";

@@ -63,7 +63,7 @@ public final class ServerModel: Identifiable {
     public nonisolated var id: UUID { config.id }
 
     public private(set) var state: ConnectionState = .disconnected
-    public private(set) var info: DaemonInfo?
+    public internal(set) var info: DaemonInfo?
     public private(set) var agents: [Agent] = []
     public private(set) var threads: [String: AgentThread] = [:]
     public private(set) var runtimes: [RuntimeStatus] = []

@@ -21,6 +21,13 @@ The first screen: CPU, Memory, Disk and Network tiles, a health line, and the pr
 2. Switch the chart range: 1 h (1 h) or 24 h (24 h).
 3. Read Who uses the most (Кто сколько ест): the agent processes with their CPU share. If nothing runs, the list says Nothing is running yet.
 
+<!-- id: server-update-card; covers: -->
+When the daemon on the server has a newer release, a card at the top says Version X is available (you have Y) (Доступна версия X (у вас Y)).
+Где: Server → Overview (Обзор) → Update server (Обновить сервер)
+1. Click Update server (Обновить сервер) and confirm Update (Обновить). The server downloads the release, checks its signature, and restarts. The connection drops for a few seconds, then comes back by itself.
+2. The card then says The server runs X now (Сервер работает на версии X). If the server does not come back within two minutes, the card says so: check the server in Terminal.
+3. The server list in the Bandito menu shows a dot next to a server whose daemon has an update.
+
 ## Stop an agent's processes (Stop)
 
 <!-- id: server-stop-processes; covers: -->
@@ -130,7 +137,7 @@ The phones and Macs that connect to this server. Revoking one device cuts off on
 ## Updates (Обновления)
 
 <!-- id: server-updates; covers: -->
-Shows the version of the daemon on the server and the latest release, and how to update it.
+Shows the version of the daemon on the server and the latest release, and how to update it. The Overview card (see above) installs the update from the app; this page is the manual way.
 Где: Server → Updates (Обновления) → How to update (Как обновить) → Open in terminal (Открыть в терминале)
 1. Read Daemon version (Версия демона) and Latest release (Последний релиз). The badge says Update available (Доступно обновление) or Up to date (Актуально).
 2. Click Open in terminal (Открыть в терминале). The update runs the same install script as the first setup. It replaces the daemon and keeps your data and settings.

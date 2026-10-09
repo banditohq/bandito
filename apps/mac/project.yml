@@ -7,6 +7,11 @@ options:
 packages:
   BanditoKit:
     path: BanditoKit
+  # The app's own updates (Sparkle 2). Only the app target links it; BanditoKit and BanditoUI stay Sparkle-free.
+  # Pinned to the exact stable release; bump it with its SHA-256 check (see docs/ARCHITECTURE.md#mac-app-updates).
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    exactVersion: 2.10.0
 targets:
   Bandito:
     type: application
@@ -23,6 +28,8 @@ targets:
         product: BanditoDesign
       - package: BanditoKit
         product: BanditoUI
+      - package: Sparkle
+        product: Sparkle
     postBuildScripts:
       # Builds the bandito daemon and puts it into Contents/Helpers/bandito, signed with the app's identity.
       # Helpers, not MacOS: on the default case-insensitive APFS, MacOS/bandito would collide with the app's Bandito.
@@ -45,6 +52,18 @@ targets:
           identity="${EXPANDED_CODE_SIGN_IDENTITY:--}"
           if [ "$identity" = "-" ]; then timestamp="--timestamp=none"; else timestamp="--timestamp"; fi
           codesign --force --options runtime $timestamp --sign "$identity" "$helpers/bandito"
+    # Merged into the generated Info.plist (GENERATE_INFOPLIST_FILE stays YES).
+    info:
+      path: Config/Info.plist
+      properties:
+        # Versions come from the build settings below (release-app.sh sets them).
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        # Where Sparkle looks for the appcast; the site serves it (platform repo, public/appcast.xml).
+        SUFeedURL: https://bandito.dev/appcast.xml
+        # EdDSA public key. The private key lives in the login Keychain of the release Mac (generate_keys); never commit it.
+        SUPublicEDKey: UVUKIE5uztSbd3fpqdSPbNklkBuwXYC65+cRXRCqjLY=
+        SUEnableAutomaticChecks: true
     settings:
       base:
         # The script above reads files outside the target and writes into the product; the sandbox would block it.
@@ -52,7 +71,7 @@ targets:
         PRODUCT_NAME: Bandito
         PRODUCT_BUNDLE_IDENTIFIER: dev.bandito.mac
         MARKETING_VERSION: 0.1.0
-        CURRENT_PROJECT_VERSION: 1
+        CURRENT_PROJECT_VERSION: 191
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Bandito
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
