@@ -47,6 +47,11 @@ pub struct Inbound {
     /// Crew conversation this message belongs to. `None` for user and schedule
     /// messages: the turn they start gets a new chain id.
     pub chain: Option<String>,
+    /// What the person typed, when `text` is an expansion of it (a slash command for a runtime
+    /// that does not run it itself). The thread shows this; the runtime gets `text`.
+    pub typed: Option<String>,
+    /// Name of the slash command in the message, if one was recognised.
+    pub command: Option<String>,
 }
 
 impl Inbound {
@@ -57,6 +62,8 @@ impl Inbound {
             from_agent: None,
             hops: 0,
             chain: None,
+            typed: None,
+            command: None,
         }
     }
 
@@ -67,6 +74,8 @@ impl Inbound {
             from_agent: None,
             hops: 0,
             chain: None,
+            typed: None,
+            command: None,
         }
     }
 }
@@ -362,6 +371,8 @@ impl Supervisor {
             from_agent: Some(from.name),
             hops: ctx.hops.saturating_add(1),
             chain: Some(chain),
+            typed: None,
+            command: None,
         };
         self.send(&to.id, msg).await?;
         Ok(to.id)
@@ -803,6 +814,8 @@ impl Actor {
             from_agent: None,
             hops: 0,
             chain: None,
+            typed: None,
+            command: None,
         };
         match self.start_turn(msg).await {
             Ok(()) => true,
@@ -901,9 +914,10 @@ impl Actor {
         self.hub.emit(
             &self.id,
             EventBody::MessageUser {
-                text: msg.text.clone(),
+                text: msg.typed.clone().unwrap_or_else(|| msg.text.clone()),
                 source: msg.source,
                 from_agent: msg.from_agent.clone(),
+                command: msg.command.clone(),
             },
         );
         self.set_status(AgentStatus::Working, None);
@@ -1799,6 +1813,7 @@ mod tests {
             text,
             source,
             from_agent,
+            ..
         } = e.body
         else {
             unreachable!()
@@ -1842,6 +1857,7 @@ mod tests {
                 text: "use ••••OPENAI_API_KEY now".into(),
                 source: Source::Crew,
                 from_agent: Some("Forge".into()),
+                command: None,
             }
         );
 
@@ -1918,6 +1934,8 @@ mod tests {
             from_agent: Some("Scout".into()),
             hops: MAX_CREW_HOPS,
             chain: Some("chain-1".into()),
+            typed: None,
+            command: None,
         };
         w.sup.send(&w.agent, msg).await.unwrap();
         w.wait_log("send hi").await;
@@ -2010,6 +2028,8 @@ mod tests {
             from_agent: Some("Scout".into()),
             hops: 1,
             chain: Some("spent".into()),
+            typed: None,
+            command: None,
         };
         w.sup.send(&w.agent, msg).await.unwrap();
         w.wait_log("send hi").await;
@@ -2669,6 +2689,8 @@ mod tests {
             from_agent: None,
             hops: 0,
             chain: None,
+            typed: None,
+            command: None,
         };
         w.sup.send(&w.agent, wrap_up).await.unwrap();
         w.wait_log("send wrap up").await;

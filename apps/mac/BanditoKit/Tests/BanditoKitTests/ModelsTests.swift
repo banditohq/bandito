@@ -85,6 +85,17 @@ import Testing
         #expect(entry.updatedAt >= before)
     }
 
+    @Test func usageEntryDecodesPlan() throws {
+        let withPlan = try RPCClient.decoder.decode(
+            UsageEntry.self,
+            from: Data(
+                #"{"runtime":"claude","windows":[],"updated_at":5,"plan":{"id":"max_20x","label":"Max ×20"}}"#.utf8))
+        #expect(withPlan.plan == Plan(id: "max_20x", label: "Max ×20"))
+        let withoutPlan = try RPCClient.decoder.decode(
+            UsageEntry.self, from: Data(#"{"runtime":"codex","windows":[],"updated_at":5}"#.utf8))
+        #expect(withoutPlan.plan == nil)
+    }
+
     @Test func serverConfigDoesNotEncodeOrPrintTheToken() throws {
         let config = ServerConfig(name: "vps", endpoint: .local(socketPath: "/tmp/x.sock"), token: "very-secret")
         let json = String(decoding: try JSONEncoder().encode(config), as: UTF8.self)

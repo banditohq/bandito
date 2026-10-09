@@ -3,6 +3,7 @@
 pub mod browser;
 pub mod cdp;
 pub mod checkpoint;
+pub mod commands;
 pub mod crew;
 pub mod event;
 pub mod files;
@@ -15,6 +16,7 @@ pub mod redact;
 pub mod rpc;
 pub mod runtime;
 pub mod scheduler;
+pub mod screen;
 pub mod service;
 pub mod setup;
 pub mod store;

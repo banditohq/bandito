@@ -6,7 +6,13 @@ public enum L10n {
 
     static func tr(_ key: String, _ args: CVarArg...) -> String {
         let format = Bundle.module.localizedString(forKey: key, value: nil, table: "Localizable")
-        return String(format: format, locale: Locale.current, arguments: args)
+        return String(format: format, locale: locale, arguments: args)
+    }
+
+    /// Locale of the language the strings come from. Plural rules and number formats follow it,
+    /// not the system locale: a Russian UI on an English Mac still gets Russian plurals.
+    public static var locale: Locale {
+        Locale(identifier: Bundle.module.preferredLocalizations.first ?? "en")
     }
 
     public static let languages: [(code: String, native: String)] = [
@@ -72,7 +78,9 @@ public enum L10n {
 
     public enum Approval {
         public static func always(command: String, path: String) -> String { L10n.tr("approval.always", command, path) }
+        public static var alwaysHere: String { L10n.tr("approval.alwaysHere") }
         public static var approve: String { L10n.tr("approval.approve") }
+        public static var approvedByPolicy: String { L10n.tr("approval.approvedByPolicy") }
         public static func approvedByYou(time: String) -> String { L10n.tr("approval.approvedByYou", time) }
         public static var deniedByPolicy: String { L10n.tr("approval.deniedByPolicy") }
         public static func deniedByYou(time: String) -> String { L10n.tr("approval.deniedByYou", time) }
@@ -127,14 +135,21 @@ public enum L10n {
         public static func agentCount(count: Int) -> String { L10n.tr("common.agentCount", count) }
         public static var agents: String { L10n.tr("common.agents") }
         public static var back: String { L10n.tr("common.back") }
+        public static var cancel: String { L10n.tr("common.cancel") }
         public static var close: String { L10n.tr("common.close") }
         public static var comingSoon: String { L10n.tr("common.comingSoon") }
+        public static var delete: String { L10n.tr("common.delete") }
         public static func minutesAgo(count: Int) -> String { L10n.tr("common.minutesAgo", count) }
         public static var next: String { L10n.tr("common.next") }
         public static var now: String { L10n.tr("common.now") }
         public static var recommended: String { L10n.tr("common.recommended") }
+        public static var save: String { L10n.tr("common.save") }
         public static func serverCount(count: Int) -> String { L10n.tr("common.serverCount", count) }
         public static func workingCount(count: Int) -> String { L10n.tr("common.workingCount", count) }
+    }
+
+    public enum Composer {
+        public static var contextHint: String { L10n.tr("composer.contextHint") }
     }
 
     public enum Connect {
@@ -145,6 +160,47 @@ public enum L10n {
         public static var stateLimitToday: String { L10n.tr("connect.stateLimitToday") }
         public static var stateLoggedIn: String { L10n.tr("connect.stateLoggedIn") }
         public static var stateLoginNeeded: String { L10n.tr("connect.stateLoginNeeded") }
+    }
+
+    public enum Countdown {
+        public static func daysHours(days: String, hours: String) -> String { L10n.tr("countdown.daysHours", days, hours) }
+        public static func exhausted(time: String) -> String { L10n.tr("countdown.exhausted", time) }
+        public static func hoursMinutes(hours: String, minutes: String) -> String { L10n.tr("countdown.hoursMinutes", hours, minutes) }
+        public static var lessThanMinute: String { L10n.tr("countdown.lessThanMinute") }
+        public static func minutes(count: Int) -> String { L10n.tr("countdown.minutes", count) }
+    }
+
+    public enum Demo {
+        public static var badge: String { L10n.tr("demo.badge") }
+        public static var budget: String { L10n.tr("demo.budget") }
+        public static var budgetNote: String { L10n.tr("demo.budgetNote") }
+
+        public enum Preview {
+            public static var atlas: String { L10n.tr("demo.preview.atlas") }
+            public static var forge: String { L10n.tr("demo.preview.forge") }
+            public static var nightOwl: String { L10n.tr("demo.preview.nightOwl") }
+            public static var quill: String { L10n.tr("demo.preview.quill") }
+            public static var scout: String { L10n.tr("demo.preview.scout") }
+            public static var watch: String { L10n.tr("demo.preview.watch") }
+        }
+
+        public enum Role {
+            public static var auditor: String { L10n.tr("demo.role.auditor") }
+            public static var builder: String { L10n.tr("demo.role.builder") }
+            public static var docs: String { L10n.tr("demo.role.docs") }
+            public static var lead: String { L10n.tr("demo.role.lead") }
+            public static var onCall: String { L10n.tr("demo.role.onCall") }
+            public static var reviewer: String { L10n.tr("demo.role.reviewer") }
+        }
+
+        public enum Terminal {
+            public static var running: String { L10n.tr("demo.terminal.running") }
+            public static var waiting: String { L10n.tr("demo.terminal.waiting") }
+        }
+
+        public enum Window {
+            public static var day: String { L10n.tr("demo.window.day") }
+        }
     }
 
     public enum Effort {
@@ -163,15 +219,209 @@ public enum L10n {
         public static func generic(message: String) -> String { L10n.tr("error.generic", message) }
     }
 
+    public enum Files {
+        public static var agentsWorking: String { L10n.tr("files.agentsWorking") }
+        public static var back: String { L10n.tr("files.back") }
+        public static var cancel: String { L10n.tr("files.cancel") }
+        public static var connecting: String { L10n.tr("files.connecting") }
+        public static var copyPath: String { L10n.tr("files.copyPath") }
+        public static var create: String { L10n.tr("files.create") }
+        public static var empty: String { L10n.tr("files.empty") }
+        public static var favorites: String { L10n.tr("files.favorites") }
+        public static var forward: String { L10n.tr("files.forward") }
+        public static var hidden: String { L10n.tr("files.hidden") }
+        public static var loading: String { L10n.tr("files.loading") }
+        public static var noResults: String { L10n.tr("files.noResults") }
+        public static func search(folder: String) -> String { L10n.tr("files.search", folder) }
+        public static func skipped(count: Int) -> String { L10n.tr("files.skipped", count) }
+        public static var terminalHere: String { L10n.tr("files.terminalHere") }
+        public static var trash: String { L10n.tr("files.trash") }
+        public static func truncated(count: Int) -> String { L10n.tr("files.truncated", count) }
+        public static var unsupported: String { L10n.tr("files.unsupported") }
+
+        public enum Banner {
+            public static var dismiss: String { L10n.tr("files.banner.dismiss") }
+        }
+
+        public enum Column {
+            public static var by: String { L10n.tr("files.column.by") }
+            public static var changed: String { L10n.tr("files.column.changed") }
+            public static var name: String { L10n.tr("files.column.name") }
+            public static var size: String { L10n.tr("files.column.size") }
+        }
+
+        public enum Conflict {
+            public static var keepBoth: String { L10n.tr("files.conflict.keepBoth") }
+            public static var replace: String { L10n.tr("files.conflict.replace") }
+            public static func title(name: String) -> String { L10n.tr("files.conflict.title", name) }
+        }
+
+        public enum Create {
+            public static var file: String { L10n.tr("files.create.file") }
+            public static var folder: String { L10n.tr("files.create.folder") }
+        }
+
+        public enum Dialog {
+            public static var create: String { L10n.tr("files.dialog.create") }
+            public static var name: String { L10n.tr("files.dialog.name") }
+            public static var newFile: String { L10n.tr("files.dialog.newFile") }
+            public static var newFolder: String { L10n.tr("files.dialog.newFolder") }
+        }
+
+        public enum Disk {
+            public static func free(size: String) -> String { L10n.tr("files.disk.free", size) }
+            public static var title: String { L10n.tr("files.disk.title") }
+        }
+
+        public enum Download {
+            public static func failed(error: String) -> String { L10n.tr("files.download.failed", error) }
+        }
+
+        public enum Error {
+            public static var binary: String { L10n.tr("files.error.binary") }
+            public static var conflict: String { L10n.tr("files.error.conflict") }
+            public static var exists: String { L10n.tr("files.error.exists") }
+            public static func generic(error: String) -> String { L10n.tr("files.error.generic", error) }
+            public static var invalidPath: String { L10n.tr("files.error.invalidPath") }
+            public static var io: String { L10n.tr("files.error.io") }
+            public static var isDirectory: String { L10n.tr("files.error.isDirectory") }
+            public static var notDirectory: String { L10n.tr("files.error.notDirectory") }
+            public static var notFile: String { L10n.tr("files.error.notFile") }
+            public static var notFound: String { L10n.tr("files.error.notFound") }
+            public static var outsideRoots: String { L10n.tr("files.error.outsideRoots") }
+            public static var permissionDenied: String { L10n.tr("files.error.permissionDenied") }
+            public static var tooLarge: String { L10n.tr("files.error.tooLarge") }
+        }
+
+        public enum Kind {
+            public static var audio: String { L10n.tr("files.kind.audio") }
+            public static var binary: String { L10n.tr("files.kind.binary") }
+            public static var code: String { L10n.tr("files.kind.code") }
+            public static var config: String { L10n.tr("files.kind.config") }
+            public static var folder: String { L10n.tr("files.kind.folder") }
+            public static var image: String { L10n.tr("files.kind.image") }
+            public static var markdown: String { L10n.tr("files.kind.markdown") }
+            public static var other: String { L10n.tr("files.kind.other") }
+            public static var pdf: String { L10n.tr("files.kind.pdf") }
+            public static var text: String { L10n.tr("files.kind.text") }
+            public static var video: String { L10n.tr("files.kind.video") }
+        }
+
+        public enum Layout {
+            public static var grid: String { L10n.tr("files.layout.grid") }
+            public static var list: String { L10n.tr("files.layout.list") }
+        }
+
+        public enum Menu {
+            public static var agent: String { L10n.tr("files.menu.agent") }
+            public static var copyPath: String { L10n.tr("files.menu.copyPath") }
+            public static var download: String { L10n.tr("files.menu.download") }
+            public static var duplicate: String { L10n.tr("files.menu.duplicate") }
+            public static var `open`: String { L10n.tr("files.menu.open") }
+            public static var rename: String { L10n.tr("files.menu.rename") }
+            public static var terminal: String { L10n.tr("files.menu.terminal") }
+            public static var trash: String { L10n.tr("files.menu.trash") }
+        }
+
+        public enum Places {
+            public static var downloads: String { L10n.tr("files.places.downloads") }
+            public static var home: String { L10n.tr("files.places.home") }
+            public static var logs: String { L10n.tr("files.places.logs") }
+            public static var memory: String { L10n.tr("files.places.memory") }
+            public static var projects: String { L10n.tr("files.places.projects") }
+        }
+
+        public enum Preview {
+            public static var access: String { L10n.tr("files.preview.access") }
+            public static var changed: String { L10n.tr("files.preview.changed") }
+            public static var download: String { L10n.tr("files.preview.download") }
+            public static var `open`: String { L10n.tr("files.preview.open") }
+            public static var path: String { L10n.tr("files.preview.path") }
+            public static var placeholder: String { L10n.tr("files.preview.placeholder") }
+            public static var readOnly: String { L10n.tr("files.preview.readOnly") }
+            public static var readWrite: String { L10n.tr("files.preview.readWrite") }
+            public static var tooLarge: String { L10n.tr("files.preview.tooLarge") }
+        }
+
+        public enum Time {
+            public static var justNow: String { L10n.tr("files.time.justNow") }
+            public static func minutes(count: Int) -> String { L10n.tr("files.time.minutes", count) }
+            public static func today(time: String) -> String { L10n.tr("files.time.today", time) }
+            public static func yesterday(time: String) -> String { L10n.tr("files.time.yesterday", time) }
+        }
+
+        public enum Upload {
+            public static func count(done: String, total: String) -> String { L10n.tr("files.upload.count", done, total) }
+            public static func failed(name: String, error: String) -> String { L10n.tr("files.upload.failed", name, error) }
+            public static var hint: String { L10n.tr("files.upload.hint") }
+            public static func title(name: String, folder: String) -> String { L10n.tr("files.upload.title", name, folder) }
+        }
+    }
+
+    public enum Gestures {
+        public static var sensitivity: String { L10n.tr("gestures.sensitivity") }
+        public static var sharper: String { L10n.tr("gestures.sharper") }
+        public static var softer: String { L10n.tr("gestures.softer") }
+
+        public enum AgentRow {
+            public static var text: String { L10n.tr("gestures.agentRow.text") }
+            public static var title: String { L10n.tr("gestures.agentRow.title") }
+            public static var `where`: String { L10n.tr("gestures.agentRow.where") }
+        }
+
+        public enum DoubleTap {
+            public static var text: String { L10n.tr("gestures.doubleTap.text") }
+            public static var title: String { L10n.tr("gestures.doubleTap.title") }
+            public static var `where`: String { L10n.tr("gestures.doubleTap.where") }
+        }
+
+        public enum ForcePress {
+            public static var text: String { L10n.tr("gestures.forcePress.text") }
+            public static var title: String { L10n.tr("gestures.forcePress.title") }
+            public static var `where`: String { L10n.tr("gestures.forcePress.where") }
+        }
+
+        public enum PanePinch {
+            public static var text: String { L10n.tr("gestures.panePinch.text") }
+            public static var title: String { L10n.tr("gestures.panePinch.title") }
+            public static var `where`: String { L10n.tr("gestures.panePinch.where") }
+        }
+
+        public enum Pinch {
+            public static var text: String { L10n.tr("gestures.pinch.text") }
+            public static var title: String { L10n.tr("gestures.pinch.title") }
+            public static var `where`: String { L10n.tr("gestures.pinch.where") }
+        }
+
+        public enum TwoFingerSwipe {
+            public static var text: String { L10n.tr("gestures.twoFingerSwipe.text") }
+            public static var title: String { L10n.tr("gestures.twoFingerSwipe.title") }
+            public static var `where`: String { L10n.tr("gestures.twoFingerSwipe.where") }
+        }
+    }
+
     public enum Inspector {
         public static var aboutAgent: String { L10n.tr("inspector.aboutAgent") }
         public static var addSchedule: String { L10n.tr("inspector.addSchedule") }
+        public static var approvals: String { L10n.tr("inspector.approvals") }
         public static var askRisky: String { L10n.tr("inspector.askRisky") }
+        public static var cronLabel: String { L10n.tr("inspector.cronLabel") }
         public static var details: String { L10n.tr("inspector.details") }
         public static var instructionsHeader: String { L10n.tr("inspector.instructionsHeader") }
+        public static var instructionsPlaceholder: String { L10n.tr("inspector.instructionsPlaceholder") }
         public static var library: String { L10n.tr("inspector.library") }
+        public static var loggedIn: String { L10n.tr("inspector.loggedIn") }
+        public static var loggedOut: String { L10n.tr("inspector.loggedOut") }
+        public static var model: String { L10n.tr("inspector.model") }
         public static func nextRun(time: String) -> String { L10n.tr("inspector.nextRun", time) }
+        public static var noSchedules: String { L10n.tr("inspector.noSchedules") }
+        public static var notInstalled: String { L10n.tr("inspector.notInstalled") }
+        public static var placeBrowser: String { L10n.tr("inspector.placeBrowser") }
+        public static var placeFolder: String { L10n.tr("inspector.placeFolder") }
+        public static var placeScreen: String { L10n.tr("inspector.placeScreen") }
+        public static var placeTerminal: String { L10n.tr("inspector.placeTerminal") }
         public static var project: String { L10n.tr("inspector.project") }
+        public static var promptLabel: String { L10n.tr("inspector.promptLabel") }
         public static func resets(time: String) -> String { L10n.tr("inspector.resets", time) }
         public static var rules: String { L10n.tr("inspector.rules") }
         public static var runNow: String { L10n.tr("inspector.runNow") }
@@ -181,13 +431,101 @@ public enum L10n {
         public static var schedules: String { L10n.tr("inspector.schedules") }
         public static var server: String { L10n.tr("inspector.server") }
         public static func serverInfo(os: String, version: String, uptime: String) -> String { L10n.tr("inspector.serverInfo", os, version, uptime) }
+        public static var subscription: String { L10n.tr("inspector.subscription") }
         public static var toggleAria: String { L10n.tr("inspector.toggleAria") }
         public static func uptime(count: Int) -> String { L10n.tr("inspector.uptime", count) }
         public static var usage: String { L10n.tr("inspector.usage") }
+        public static var whereRuns: String { L10n.tr("inspector.whereRuns") }
+        public static var workplace: String { L10n.tr("inspector.workplace") }
 
         public enum Window {
             public static var fiveHour: String { L10n.tr("inspector.window.fiveHour") }
             public static var sevenDay: String { L10n.tr("inspector.window.sevenDay") }
+        }
+    }
+
+    public enum Keys {
+        public static var address: String { L10n.tr("keys.address") }
+        public static var agentDetails: String { L10n.tr("keys.agentDetails") }
+        public static var approve: String { L10n.tr("keys.approve") }
+        public static var back: String { L10n.tr("keys.back") }
+        public static var clear: String { L10n.tr("keys.clear") }
+        public static var clearHint: String { L10n.tr("keys.clearHint") }
+        public static var closeTerminal: String { L10n.tr("keys.closeTerminal") }
+        public static var collapse: String { L10n.tr("keys.collapse") }
+        public static func conflict(name: String) -> String { L10n.tr("keys.conflict", name) }
+        public static var copyPath: String { L10n.tr("keys.copyPath") }
+        public static func customizedCount(count: Int) -> String { L10n.tr("keys.customizedCount", count) }
+        public static var deny: String { L10n.tr("keys.deny") }
+        public static var duplicate: String { L10n.tr("keys.duplicate") }
+        public static var enclosingFolder: String { L10n.tr("keys.enclosingFolder") }
+        public static var exportButton: String { L10n.tr("keys.exportButton") }
+        public static var fontBigger: String { L10n.tr("keys.fontBigger") }
+        public static var fontReset: String { L10n.tr("keys.fontReset") }
+        public static var fontSmaller: String { L10n.tr("keys.fontSmaller") }
+        public static var forward: String { L10n.tr("keys.forward") }
+        public static func goTo(mode: String) -> String { L10n.tr("keys.goTo", mode) }
+        public static var importButton: String { L10n.tr("keys.importButton") }
+        public static var importFailed: String { L10n.tr("keys.importFailed") }
+        public static var needsYou: String { L10n.tr("keys.needsYou") }
+        public static var newAgent: String { L10n.tr("keys.newAgent") }
+        public static var newFile: String { L10n.tr("keys.newFile") }
+        public static var newFolder: String { L10n.tr("keys.newFolder") }
+        public static var newTerminal: String { L10n.tr("keys.newTerminal") }
+        public static var nextAgent: String { L10n.tr("keys.nextAgent") }
+        public static var nextTab: String { L10n.tr("keys.nextTab") }
+        public static var `open`: String { L10n.tr("keys.open") }
+        public static var pauseAll: String { L10n.tr("keys.pauseAll") }
+        public static var previousAgent: String { L10n.tr("keys.previousAgent") }
+        public static var previousTab: String { L10n.tr("keys.previousTab") }
+        public static var quickLook: String { L10n.tr("keys.quickLook") }
+        public static var quickOpen: String { L10n.tr("keys.quickOpen") }
+        public static var recording: String { L10n.tr("keys.recording") }
+        public static var reload: String { L10n.tr("keys.reload") }
+        public static var rename: String { L10n.tr("keys.rename") }
+        public static var replace: String { L10n.tr("keys.replace") }
+        public static var resetAll: String { L10n.tr("keys.resetAll") }
+        public static var restoreCollapsed: String { L10n.tr("keys.restoreCollapsed") }
+        public static var save: String { L10n.tr("keys.save") }
+        public static var search: String { L10n.tr("keys.search") }
+        public static var searchHistory: String { L10n.tr("keys.searchHistory") }
+        public static var sendToServer: String { L10n.tr("keys.sendToServer") }
+        public static var settings: String { L10n.tr("keys.settings") }
+        public static var sideBySide: String { L10n.tr("keys.sideBySide") }
+        public static var splitHorizontal: String { L10n.tr("keys.splitHorizontal") }
+        public static var splitVertical: String { L10n.tr("keys.splitVertical") }
+        public static var stop: String { L10n.tr("keys.stop") }
+        public static var tabGestures: String { L10n.tr("keys.tabGestures") }
+        public static var tabKeys: String { L10n.tr("keys.tabKeys") }
+        public static var takeControl: String { L10n.tr("keys.takeControl") }
+        public static var toggleEdit: String { L10n.tr("keys.toggleEdit") }
+        public static var toggleSidebar: String { L10n.tr("keys.toggleSidebar") }
+        public static var trash: String { L10n.tr("keys.trash") }
+        public static var usage: String { L10n.tr("keys.usage") }
+        public static var whatChanged: String { L10n.tr("keys.whatChanged") }
+
+        public enum Context {
+            public static var browser: String { L10n.tr("keys.context.browser") }
+            public static var files: String { L10n.tr("keys.context.files") }
+            public static var global: String { L10n.tr("keys.context.global") }
+            public static var screen: String { L10n.tr("keys.context.screen") }
+            public static var team: String { L10n.tr("keys.context.team") }
+            public static var terminals: String { L10n.tr("keys.context.terminals") }
+            public static var viewer: String { L10n.tr("keys.context.viewer") }
+        }
+
+        public enum Pane {
+            public static var down: String { L10n.tr("keys.pane.down") }
+            public static var left: String { L10n.tr("keys.pane.left") }
+            public static var right: String { L10n.tr("keys.pane.right") }
+            public static var up: String { L10n.tr("keys.pane.up") }
+        }
+
+        public enum Preset {
+            public static var bandito: String { L10n.tr("keys.preset.bandito") }
+            public static var iterm: String { L10n.tr("keys.preset.iterm") }
+            public static var slack: String { L10n.tr("keys.preset.slack") }
+            public static var vscode: String { L10n.tr("keys.preset.vscode") }
         }
     }
 
@@ -206,6 +544,7 @@ public enum L10n {
         public static var modeAria: String { L10n.tr("memory.modeAria") }
         public static var notes: String { L10n.tr("memory.notes") }
         public static func notesMeta(files: String, count: Int) -> String { L10n.tr("memory.notesMeta", files, count) }
+        public static func occupied(tokens: String) -> String { L10n.tr("memory.occupied", tokens) }
         public static func searchResult(query: String, count: Int, time: String) -> String { L10n.tr("memory.searchResult", query, count, time) }
         public static var searched: String { L10n.tr("memory.searched") }
         public static var smart: String { L10n.tr("memory.smart") }
@@ -215,14 +554,38 @@ public enum L10n {
         public static var title: String { L10n.tr("memory.title") }
     }
 
+    public enum Menu {
+        public static var agent: String { L10n.tr("menu.agent") }
+        public static var go: String { L10n.tr("menu.go") }
+        public static var view: String { L10n.tr("menu.view") }
+    }
+
     public enum Menubar {
         public static func needsYou(count: Int) -> String { L10n.tr("menubar.needsYou", count) }
+        public static var noneWaiting: String { L10n.tr("menubar.noneWaiting") }
+        public static var nothingRunning: String { L10n.tr("menubar.nothingRunning") }
         public static var `open`: String { L10n.tr("menubar.open") }
         public static var openChat: String { L10n.tr("menubar.openChat") }
         public static var pauseAll: String { L10n.tr("menubar.pauseAll") }
+        public static func resolveFailed(error: String) -> String { L10n.tr("menubar.resolveFailed", error) }
         public static var upNext: String { L10n.tr("menubar.upNext") }
+        public static var waiting: String { L10n.tr("menubar.waiting") }
         public static var wantsPush: String { L10n.tr("menubar.wantsPush") }
         public static var working: String { L10n.tr("menubar.working") }
+    }
+
+    public enum Mode {
+        public static var browser: String { L10n.tr("mode.browser") }
+        public static var files: String { L10n.tr("mode.files") }
+        public static var screen: String { L10n.tr("mode.screen") }
+        public static var server: String { L10n.tr("mode.server") }
+        public static var serverOverview: String { L10n.tr("mode.serverOverview") }
+        public static var serverPorts: String { L10n.tr("mode.serverPorts") }
+        public static var serverSecrets: String { L10n.tr("mode.serverSecrets") }
+        public static var serverWorkspaces: String { L10n.tr("mode.serverWorkspaces") }
+        public static var soonHere: String { L10n.tr("mode.soonHere") }
+        public static var team: String { L10n.tr("mode.team") }
+        public static var terminals: String { L10n.tr("mode.terminals") }
     }
 
     public enum New {
@@ -415,12 +778,18 @@ public enum L10n {
         public static var approvalsIntro: String { L10n.tr("settings.approvalsIntro") }
         public static var close: String { L10n.tr("settings.close") }
         public static var general: String { L10n.tr("settings.general") }
+        public static var keysIntro: String { L10n.tr("settings.keysIntro") }
         public static var language: String { L10n.tr("settings.language") }
+        public static var languageRestart: String { L10n.tr("settings.languageRestart") }
         public static var launchAtLogin: String { L10n.tr("settings.launchAtLogin") }
+        public static func launchFailed(error: String) -> String { L10n.tr("settings.launchFailed", error) }
         public static var menuBar: String { L10n.tr("settings.menuBar") }
         public static var notifications: String { L10n.tr("settings.notifications") }
+        public static var placeholder: String { L10n.tr("settings.placeholder") }
         public static var sectionsAria: String { L10n.tr("settings.sectionsAria") }
         public static var servers: String { L10n.tr("settings.servers") }
+        public static var showExamples: String { L10n.tr("settings.showExamples") }
+        public static var showExamplesHint: String { L10n.tr("settings.showExamplesHint") }
         public static var theme: String { L10n.tr("settings.theme") }
         public static var title: String { L10n.tr("settings.title") }
         public static var updates: String { L10n.tr("settings.updates") }
@@ -428,6 +797,21 @@ public enum L10n {
 
         public enum Language {
             public static var system: String { L10n.tr("settings.language.system") }
+        }
+
+        public enum Nav {
+            public static var account: String { L10n.tr("settings.nav.account") }
+            public static var appearance: String { L10n.tr("settings.nav.appearance") }
+            public static var approvals: String { L10n.tr("settings.nav.approvals") }
+            public static var browserScreen: String { L10n.tr("settings.nav.browserScreen") }
+            public static var general: String { L10n.tr("settings.nav.general") }
+            public static var keysGestures: String { L10n.tr("settings.nav.keysGestures") }
+            public static var language: String { L10n.tr("settings.nav.language") }
+            public static var notifications: String { L10n.tr("settings.nav.notifications") }
+            public static var servers: String { L10n.tr("settings.nav.servers") }
+            public static var terminalFiles: String { L10n.tr("settings.nav.terminalFiles") }
+            public static var usage: String { L10n.tr("settings.nav.usage") }
+            public static var workplaces: String { L10n.tr("settings.nav.workplaces") }
         }
 
         public enum Theme {
@@ -471,6 +855,23 @@ public enum L10n {
         public static var needsYou: String { L10n.tr("status.needsYou") }
         public static var offline: String { L10n.tr("status.offline") }
         public static var working: String { L10n.tr("status.working") }
+    }
+
+    public enum Team {
+        public static var changes: String { L10n.tr("team.changes") }
+        public static var emptyTitle: String { L10n.tr("team.emptyTitle") }
+        public static var noMessages: String { L10n.tr("team.noMessages") }
+        public static var pauseUnavailable: String { L10n.tr("team.pauseUnavailable") }
+        public static var pickAgent: String { L10n.tr("team.pickAgent") }
+        public static var resolvedAllowed: String { L10n.tr("team.resolvedAllowed") }
+        public static var resolvedDenied: String { L10n.tr("team.resolvedDenied") }
+        public static var schedules: String { L10n.tr("team.schedules") }
+        public static var terminal: String { L10n.tr("team.terminal") }
+        public static var workplaceShared: String { L10n.tr("team.workplaceShared") }
+
+        public enum Delete {
+            public static var action: String { L10n.tr("team.delete.action") }
+        }
     }
 
     public enum Template {
@@ -571,14 +972,62 @@ public enum L10n {
     public enum Usage {
         public static func buttonAria(percent: String) -> String { L10n.tr("usage.buttonAria", percent) }
         public static func days(count: Int) -> String { L10n.tr("usage.days", count) }
+        public static var empty: String { L10n.tr("usage.empty") }
         public static var exhausted: String { L10n.tr("usage.exhausted") }
+        public static func fallbackNote(time: String) -> String { L10n.tr("usage.fallbackNote", time) }
         public static func footnote(time: String) -> String { L10n.tr("usage.footnote", time) }
         public static func hours(count: Int) -> String { L10n.tr("usage.hours", count) }
         public static func left(percent: String) -> String { L10n.tr("usage.left", percent) }
+        public static var limits: String { L10n.tr("usage.limits") }
         public static var refresh: String { L10n.tr("usage.refresh") }
         public static func resetDate(time: String) -> String { L10n.tr("usage.resetDate", time) }
         public static func resetIn(time: String) -> String { L10n.tr("usage.resetIn", time) }
         public static func resetTime(time: String) -> String { L10n.tr("usage.resetTime", time) }
+        public static func resetToday(time: String) -> String { L10n.tr("usage.resetToday", time) }
         public static var title: String { L10n.tr("usage.title") }
+    }
+
+    public enum Viewer {
+        public static var closeTab: String { L10n.tr("viewer.closeTab") }
+        public static var empty: String { L10n.tr("viewer.empty") }
+        public static func error(error: String) -> String { L10n.tr("viewer.error", error) }
+        public static var folder: String { L10n.tr("viewer.folder") }
+        public static var readOnly: String { L10n.tr("viewer.readOnly") }
+        public static var save: String { L10n.tr("viewer.save") }
+        public static func saveError(error: String) -> String { L10n.tr("viewer.saveError", error) }
+        public static var tooLarge: String { L10n.tr("viewer.tooLarge") }
+        public static var unsaved: String { L10n.tr("viewer.unsaved") }
+
+        public enum Binary {
+            public static var title: String { L10n.tr("viewer.binary.title") }
+        }
+
+        public enum CloseUnsaved {
+            public static var discard: String { L10n.tr("viewer.closeUnsaved.discard") }
+            public static func title(name: String) -> String { L10n.tr("viewer.closeUnsaved.title", name) }
+        }
+
+        public enum Conflict {
+            public static var diff: String { L10n.tr("viewer.conflict.diff") }
+            public static var keepMine: String { L10n.tr("viewer.conflict.keepMine") }
+            public static var takeServer: String { L10n.tr("viewer.conflict.takeServer") }
+            public static var title: String { L10n.tr("viewer.conflict.title") }
+        }
+
+        public enum Diff {
+            public static var mine: String { L10n.tr("viewer.diff.mine") }
+            public static var server: String { L10n.tr("viewer.diff.server") }
+            public static var title: String { L10n.tr("viewer.diff.title") }
+        }
+
+        public enum Media {
+            public static var unavailable: String { L10n.tr("viewer.media.unavailable") }
+        }
+
+        public enum Mode {
+            public static var edit: String { L10n.tr("viewer.mode.edit") }
+            public static var read: String { L10n.tr("viewer.mode.read") }
+            public static var split: String { L10n.tr("viewer.mode.split") }
+        }
     }
 }

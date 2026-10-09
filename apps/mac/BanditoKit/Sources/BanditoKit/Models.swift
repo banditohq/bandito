@@ -202,17 +202,33 @@ public struct LimitWindow: Codable, Sendable, Hashable {
     public var resetsAt: Int64?
 }
 
+/// The subscription an account is on, as the runtime's CLI names it (e.g. "Max ×20").
+public struct Plan: Codable, Sendable, Hashable {
+    /// Stable id from the CLI, e.g. `max_20x`.
+    public var id: String
+    /// Name to show, e.g. `Max ×20`.
+    public var label: String
+
+    public init(id: String, label: String) {
+        self.id = id
+        self.label = label
+    }
+}
+
 /// Rate-limit windows of one runtime, as the app last learned them.
 public struct UsageEntry: Codable, Sendable, Hashable {
     public var runtime: String
     public var windows: [LimitWindow]
     /// Unix milliseconds when the app received these limits.
     public var updatedAt: Int64
+    /// The subscription the runtime is on. `nil` when unknown (API keys, or a CLI that does not say).
+    public var plan: Plan?
 
-    public init(runtime: String, windows: [LimitWindow], updatedAt: Int64) {
+    public init(runtime: String, windows: [LimitWindow], updatedAt: Int64, plan: Plan? = nil) {
         self.runtime = runtime
         self.windows = windows
         self.updatedAt = updatedAt
+        self.plan = plan
     }
 
     public init(from decoder: Decoder) throws {
@@ -220,6 +236,7 @@ public struct UsageEntry: Codable, Sendable, Hashable {
         runtime = try c.decode(String.self, forKey: .runtime)
         windows = try c.decodeIfPresent([LimitWindow].self, forKey: .windows) ?? []
         updatedAt = try c.decodeIfPresent(Int64.self, forKey: .updatedAt) ?? Int64(Date().timeIntervalSince1970 * 1000)
+        plan = try c.decodeIfPresent(Plan.self, forKey: .plan)
     }
 }
 

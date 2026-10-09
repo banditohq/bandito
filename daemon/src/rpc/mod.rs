@@ -2,6 +2,7 @@
 //! See docs/ARCHITECTURE.md#rpc.
 
 use crate::browser::BrowserManager;
+use crate::commands::prepare as prepare_message;
 use crate::event::{Decision, Event, EventBody, Source};
 use crate::files::FileService;
 use crate::home;
@@ -11,7 +12,7 @@ use crate::runtime::RuntimeKind;
 use crate::scheduler;
 use crate::setup::Setup;
 use crate::store::{AgentPatch, Device, Effort, NewAgent, NewSchedule, NextRun, RuleAction, SchedulePatch, Store};
-use crate::supervisor::{Inbound, Supervisor};
+use crate::supervisor::Supervisor;
 use crate::terminal::{Limits, TerminalManager};
 use chrono::{Local, NaiveDate, NaiveTime, TimeZone};
 use serde::Deserialize;
@@ -25,9 +26,11 @@ use tokio::sync::{broadcast, mpsc};
 
 pub mod browser;
 pub mod changes;
+pub mod commands;
 pub mod files;
 pub mod host;
 pub mod preview;
+pub mod screen;
 pub mod secrets;
 pub mod setup;
 pub mod term;
@@ -39,25 +42,32 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Capabilities this daemon offers. Clients show a feature only when it is
 /// listed, so new apps keep working with older daemons. Add a string here in
-/// the same PR that adds the feature.
-pub const FEATURES: &[&str] = &[
-    "approvals",
-    "rules",
-    "schedules",
-    "crew",
-    "pairing",
-    "usage",
-    "memory",
-    "history",
-    "terminals",
-    "files",
-    "tunnel",
-    "changes",
-    "secrets",
-    "host",
-    "setup",
-    "browser",
-];
+/// the same PR that adds the feature. `screen` is offered on Linux only.
+pub fn features() -> Vec<&'static str> {
+    let mut list = vec![
+        "approvals",
+        "rules",
+        "schedules",
+        "crew",
+        "pairing",
+        "usage",
+        "memory",
+        "history",
+        "terminals",
+        "files",
+        "tunnel",
+        "changes",
+        "secrets",
+        "host",
+        "setup",
+        "commands",
+        "browser",
+    ];
+    if cfg!(target_os = "linux") {
+        list.push("screen");
+    }
+    list
+}
 
 /// Context budget bounds for `smart` memory, in tokens.
 const CONTEXT_BUDGET: std::ops::RangeInclusive<u32> = 20_000..=1_000_000;
@@ -85,6 +95,8 @@ pub struct App {
     pub setup: Arc<Setup>,
     /// The server's browser, one per workspace (see docs/ARCHITECTURE.md#browser).
     pub browser: Arc<BrowserManager>,
+    /// The server screen, one per workspace (see docs/ARCHITECTURE.md#screen).
+    pub screens: Arc<crate::screen::ScreenManager>,
 }
 
 impl App {
@@ -107,8 +119,18 @@ impl App {
             host: Sampler::new(),
             setup: Setup::system(),
             browser: BrowserManager::system(),
+            screens: Arc::new(crate::screen::ScreenManager::new(screens_dir())),
         })
     }
+}
+
+/// VNC password files of the screens live here, one folder per workspace.
+/// Where screen state (VNC password files) lives: `$BANDITO_HOME/screens`, else `~/.bandito/screens`.
+fn screens_dir() -> PathBuf {
+    std::env::var_os("BANDITO_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| dirs::home_dir().unwrap_or_else(|| PathBuf::from("/")).join(".bandito"))
+        .join("screens")
 }
 
 fn hostname() -> String {
@@ -157,6 +179,10 @@ pub const HOST_ERROR: i64 = -32023;
 pub const SETUP_ERROR: i64 = -32024;
 /// A browser method failed; `error.data.reason` says why (see rpc::browser).
 pub const BROWSER_ERROR: i64 = -32026;
+/// A screen call failed; `error.data.reason` says why (see rpc::screen).
+pub const SCREEN_ERROR: i64 = -32025;
+/// A command or skill call failed; `error.data.reason` says why (see rpc::commands).
+pub const COMMANDS_ERROR: i64 = -32027;
 
 impl RpcError {
     fn new(code: i64, message: impl Into<String>) -> Self {
@@ -442,6 +468,7 @@ fn history_line(e: &Event, agent_name: &str) -> Option<String> {
             text,
             source,
             from_agent,
+            ..
         } => {
             let who = match source {
                 Source::User => "user".to_string(),
@@ -525,6 +552,13 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
         // Every `browser.*` name is answered there, unknown ones with METHOD_NOT_FOUND.
         return browser::dispatch(app, peer, method, p).await;
     }
+    if method.starts_with("screen.") {
+        return screen::dispatch(app, peer, method, p).await;
+    }
+    if method.starts_with("commands.") {
+        // Every `commands.*` name is answered there, unknown ones with METHOD_NOT_FOUND.
+        return commands::dispatch(app, method, p).await;
+    }
     if method.starts_with("changes.") {
         // Every `changes.*` name is answered there, unknown ones with METHOD_NOT_FOUND.
         return changes::dispatch(app, method, p)
@@ -546,7 +580,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             "arch": std::env::consts::ARCH,
             "started_at": app.started_at,
             "last_seq": store.last_seq()?,
-            "features": FEATURES,
+            "features": features(),
         })),
         "runtimes.status" => {
             let mut out = Vec::new();
@@ -635,7 +669,10 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             if text.len() > MAX_MESSAGE_BYTES {
                 return Err(RpcError::new(INVALID_PARAMS, "message is too long"));
             }
-            app.sup.send(&agent_id, Inbound::user(text)).await?;
+            // A slash command is expanded for runtimes that do not run it themselves; the thread keeps what was typed.
+            let agent = store.agent_get(&agent_id)?;
+            let prepared = prepare_message(agent.as_ref(), &text)?;
+            app.sup.send(&agent_id, prepared.into_inbound(Source::User)).await?;
             ok(json!({}))
         }
         "agents.interrupt" => {
@@ -1015,6 +1052,7 @@ mod history_tests {
             text: text.into(),
             source,
             from_agent: from_agent.map(str::to_string),
+            command: None,
         }
     }
 

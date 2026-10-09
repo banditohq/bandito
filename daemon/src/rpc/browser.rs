@@ -197,3 +197,11 @@ fn to_rpc(e: BrowserError) -> RpcError {
         ),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn browser_is_offered_on_every_system() {
+        assert!(crate::rpc::features().contains(&"browser"));
+    }
+}

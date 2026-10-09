@@ -116,6 +116,25 @@ Defaults (presets "VS Code", "iTerm", "Slack" only override what they differ in)
 
 Text fields keep their system shortcuts (⌘A, ⌘Z, ⌘C…); the composer sends on ↵, new line on ⇧↵.
 
+## Slash commands
+
+Typing `/` in the composer opens a list (board 10a): ↑↓ pick, ↵ run, ⇥ complete. Sources, merged and
+searchable:
+
+- **Server** — the agent CLI's own commands and skills: `~/.claude/commands`, `~/.claude/skills`,
+  the project's `.claude/` in the agent's folder, `~/.codex/prompts`. Listed by the daemon
+  (`commands.list {agent_id}`).
+- **This Mac** — `~/.claude/commands` and `~/.claude/skills` on the Mac, marked "from Mac". The first
+  use offers "Install on the server" (copied into the server's `~/.claude/…` over `fs.upload`);
+  afterwards they stay in sync while the setting is on.
+- **Bandito** — `/new, /model, /effort, /chapter, /memory, /changes, /terminal, /files, /usage, /pause`,
+  handled by the app.
+- **Mine** — saved prompts with `{placeholders}`, stored in the account and synced.
+
+Claude Code runs its commands and skills itself, so `/name args` is sent as is. For Codex and Grok the
+daemon expands the command file into the message (front matter dropped, `$ARGUMENTS` and `$1…$9`
+filled) before it reaches the CLI, so one command works for every agent.
+
 ## Trackpad gestures
 
 Each can be switched off in Settings → Keys and gestures; one sensitivity slider for swipes.

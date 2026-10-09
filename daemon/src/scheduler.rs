@@ -6,7 +6,9 @@
 //! skipped and only the next occurrence is scheduled. Cron patterns have five
 //! fields (`min hour dom mon dow`) and are evaluated in an IANA time zone.
 
-use crate::store::{NextRun, SchedulePatch, now_ms};
+use crate::commands::Prepared;
+use crate::event::Source;
+use crate::store::{NextRun, Schedule, SchedulePatch, Store, now_ms};
 use crate::supervisor::{Inbound, Supervisor};
 use anyhow::{Result, anyhow, bail};
 use chrono::{DateTime, Utc};
@@ -85,7 +87,7 @@ pub async fn tick(sup: &Supervisor, now_ms: i64) -> Result<usize> {
                 }
             }
             // At-most-once: the run is already recorded, so a failed send is only logged.
-            if let Err(e) = sup.send(&s.agent_id, Inbound::schedule(s.prompt.clone())).await {
+            if let Err(e) = sup.send(&s.agent_id, schedule_message(store, &s)).await {
                 tracing::warn!(schedule = %s.id, agent = %s.agent_id, "scheduled run failed: {e:#}");
             }
             fired += 1;
@@ -100,6 +102,19 @@ pub async fn tick(sup: &Supervisor, now_ms: i64) -> Result<usize> {
     Ok(fired)
 }
 
+/// The message for one run of a schedule. A slash command in the prompt is expanded for the
+/// runtime, as `agents.send` does; if that fails, the prompt goes as written.
+fn schedule_message(store: &Store, s: &Schedule) -> Inbound {
+    let prepared = store
+        .agent_get(&s.agent_id)
+        .and_then(|agent| crate::commands::prepare(agent.as_ref(), &s.prompt));
+    let prepared = prepared.unwrap_or_else(|e| {
+        tracing::warn!(schedule = %s.id, "could not expand the command, sending the prompt as written: {e:#}");
+        Prepared::plain(&s.prompt)
+    });
+    prepared.into_inbound(Source::Schedule)
+}
+
 /// Fire one schedule now, as an explicit user action. Its next occurrence stays as it was.
 ///
 /// Unlike [`tick`], this does not claim the run first. A failed send is returned to the
@@ -110,7 +125,7 @@ pub async fn run_now(sup: &Supervisor, id: &str) -> Result<()> {
     let Some(s) = store.schedule_get(id)? else {
         bail!("no schedule {id}");
     };
-    sup.send(&s.agent_id, Inbound::schedule(s.prompt.clone())).await?;
+    sup.send(&s.agent_id, schedule_message(store, &s)).await?;
     store.schedule_mark_ran(&s.id, now_ms())?;
     Ok(())
 }
@@ -410,5 +425,45 @@ mod tests {
                 .to_string()
                 .contains("no schedule missing")
         );
+    }
+
+    #[test]
+    fn scheduled_slash_commands_are_expanded_like_messages() {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let cwd = tempfile::tempdir().unwrap();
+        let dir = cwd.path().join(".claude/commands");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("deploy.md"), "Deploy to $1.").unwrap();
+        let agent = store
+            .agent_create(NewAgent {
+                name: "Scout".into(),
+                role: String::new(),
+                runtime: RuntimeKind::Codex,
+                model: None,
+                cwd: cwd.path().display().to_string(),
+                approval_mode: ApprovalMode::Risky,
+                system_prompt: None,
+                effort: None,
+                memory_mode: crate::store::MemoryMode::Smart,
+                context_budget: None,
+            })
+            .unwrap();
+        let s = store
+            .schedule_create(
+                NewSchedule {
+                    agent_id: agent.id.clone(),
+                    cron: "0 * * * *".into(),
+                    tz: "UTC".into(),
+                    prompt: "/deploy prod".into(),
+                    enabled: true,
+                },
+                Some(ms("2026-10-09T11:00:00Z")),
+            )
+            .unwrap();
+        let msg = schedule_message(&store, &s);
+        assert_eq!(msg.text, "Deploy to prod.");
+        assert_eq!(msg.typed.as_deref(), Some("/deploy prod"));
+        assert_eq!(msg.command.as_deref(), Some("deploy"));
+        assert_eq!(msg.source, crate::event::Source::Schedule);
     }
 }
