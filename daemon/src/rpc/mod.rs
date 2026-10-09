@@ -178,6 +178,12 @@ struct RedeemParams {
     code: String,
     device_name: String,
 }
+#[derive(Deserialize)]
+struct CrewSendParams {
+    from: String,
+    to: String,
+    message: String,
+}
 
 fn check_cwd(cwd: &str) -> Result<(), RpcError> {
     let p = std::path::Path::new(cwd);
@@ -282,6 +288,22 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             let AgentRef { agent_id } = params(p)?;
             app.sup.interrupt(&agent_id).await?;
             ok(json!({}))
+        }
+
+        "crew.list" => {
+            let AgentRef { agent_id } = params(p)?;
+            let members: Vec<Value> = store
+                .agent_list()?
+                .into_iter()
+                .filter(|a| a.id != agent_id)
+                .map(|a| json!({ "name": a.name, "role": a.role, "runtime": a.runtime.as_str() }))
+                .collect();
+            ok(members)
+        }
+        "crew.send" => {
+            let CrewSendParams { from, to, message } = params(p)?;
+            let to_id = app.sup.crew_send(&from, &to, &message).await?;
+            ok(json!({ "to_id": to_id }))
         }
 
         "events.since" => {
@@ -396,6 +418,66 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
         }
 
         _ => Err(RpcError::new(METHOD_NOT_FOUND, format!("unknown method {method}"))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::runtime::RuntimeKind;
+    use crate::store::{ApprovalMode, NewAgent, Store};
+
+    /// An app with a crew of two agents: Forge (builder) and Scout (reviewer).
+    /// Returns the app and the ids of Forge and Scout.
+    fn app_with_crew() -> (Arc<App>, String, String) {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let hub = crate::hub::Hub::new(store.clone());
+        let sup = Supervisor::new(hub, crate::supervisor::Runtimes::default(), None);
+        let add = |name: &str, role: &str| {
+            store
+                .agent_create(NewAgent {
+                    name: name.into(),
+                    role: role.into(),
+                    runtime: RuntimeKind::Claude,
+                    model: None,
+                    cwd: "/tmp".into(),
+                    approval_mode: ApprovalMode::Risky,
+                    system_prompt: None,
+                })
+                .unwrap()
+                .id
+        };
+        let forge = add("Forge", "builder");
+        let scout = add("Scout", "reviewer");
+        (App::new(sup), forge, scout)
+    }
+
+    #[tokio::test]
+    async fn crew_list_excludes_the_asking_agent() {
+        let (app, forge, scout) = app_with_crew();
+        let v = dispatch(&app, &Peer::Local, "crew.list", json!({ "agent_id": forge }))
+            .await
+            .unwrap();
+        assert_eq!(v, json!([{ "name": "Scout", "role": "reviewer", "runtime": "claude" }]));
+        let v = dispatch(&app, &Peer::Local, "crew.list", json!({ "agent_id": scout }))
+            .await
+            .unwrap();
+        assert_eq!(v.as_array().unwrap()[0]["name"], "Forge");
+    }
+
+    #[tokio::test]
+    async fn crew_send_to_unknown_agent_fails() {
+        let (app, forge, _) = app_with_crew();
+        let err = dispatch(
+            &app,
+            &Peer::Local,
+            "crew.send",
+            json!({ "from": forge, "to": "Nobody", "message": "hi" }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, SERVER_ERROR);
+        assert!(err.message.contains("no agent named"), "{}", err.message);
     }
 }
 

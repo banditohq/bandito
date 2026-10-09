@@ -1,0 +1,472 @@
+//! Crew MCP server: lets one agent see and message the other agents of its crew.
+//!
+//! The daemon starts `bandito --home <home> mcp --agent <id>` for every agent.
+//! That process speaks MCP (JSON-RPC 2.0, one message per line) on stdio and
+//! forwards `crew.list` / `crew.send` to the daemon over its unix socket.
+//! Stdout carries the protocol only, so logs must go to stderr.
+
+use crate::rpc::unix::call;
+use anyhow::{Context, Result};
+use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
+use std::path::PathBuf;
+use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt, BufReader};
+
+const PROTOCOL_VERSION: &str = "2025-06-18";
+const PARSE_ERROR: i64 = -32700;
+const INVALID_REQUEST: i64 = -32600;
+const METHOD_NOT_FOUND: i64 = -32601;
+const INVALID_PARAMS: i64 = -32602;
+
+/// JSON-RPC error: code and message.
+type Fault = (i64, String);
+
+/// Another agent in the crew, as seen by the agent asking.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct CrewMember {
+    pub name: String,
+    pub role: String,
+    pub runtime: String,
+}
+
+/// What the MCP tools need from the daemon. A trait so the protocol can be tested without a socket.
+#[async_trait]
+pub trait CrewBackend: Send + Sync {
+    async fn list(&self) -> Result<Vec<CrewMember>>;
+    async fn send(&self, to: &str, message: &str) -> Result<()>;
+}
+
+/// Backend that asks the daemon over its unix socket.
+pub struct DaemonBackend {
+    pub sock: PathBuf,
+    pub agent_id: String,
+}
+
+#[async_trait]
+impl CrewBackend for DaemonBackend {
+    async fn list(&self) -> Result<Vec<CrewMember>> {
+        let v = call(&self.sock, "crew.list", json!({ "agent_id": self.agent_id })).await?;
+        serde_json::from_value(v).context("crew.list: unexpected response")
+    }
+
+    async fn send(&self, to: &str, message: &str) -> Result<()> {
+        call(
+            &self.sock,
+            "crew.send",
+            json!({ "from": self.agent_id, "to": to, "message": message }),
+        )
+        .await?;
+        Ok(())
+    }
+}
+
+/// Serve MCP until the reader reaches EOF. Every request gets one reply line;
+/// notifications (no `id`) get none.
+pub async fn serve<R, W>(mut reader: R, mut writer: W, backend: &dyn CrewBackend) -> Result<()>
+where
+    R: AsyncBufRead + Unpin,
+    W: AsyncWrite + Unpin,
+{
+    let mut buf = Vec::new();
+    loop {
+        buf.clear();
+        if reader.read_until(b'\n', &mut buf).await? == 0 {
+            return Ok(());
+        }
+        let line = String::from_utf8_lossy(&buf);
+        if line.trim().is_empty() {
+            continue;
+        }
+        if let Some(reply) = handle_line(&line, backend).await {
+            let mut out = reply.to_string();
+            out.push('\n');
+            writer.write_all(out.as_bytes()).await?;
+            writer.flush().await?;
+        }
+    }
+}
+
+/// Reply to one incoming line, or `None` when no reply is due.
+async fn handle_line(line: &str, backend: &dyn CrewBackend) -> Option<Value> {
+    let Ok(msg) = serde_json::from_str::<Value>(line) else {
+        return Some(error_reply(Value::Null, PARSE_ERROR, "parse error"));
+    };
+    let id = msg.get("id")?.clone();
+    let method = msg.get("method").and_then(Value::as_str).unwrap_or_default();
+    let params = msg.get("params").cloned().unwrap_or(Value::Null);
+    let outcome: Result<Value, Fault> = match method {
+        "initialize" => Ok(initialize(&params)),
+        "ping" => Ok(json!({})),
+        "tools/list" => Ok(json!({ "tools": [crew_list_tool(), crew_send_tool()] })),
+        "tools/call" => call_tool(&params, backend).await,
+        "" => Err((INVALID_REQUEST, "invalid request: no method".into())),
+        other => Err((METHOD_NOT_FOUND, format!("Method not found: {other}"))),
+    };
+    Some(match outcome {
+        Ok(result) => json!({ "jsonrpc": "2.0", "id": id, "result": result }),
+        Err((code, message)) => error_reply(id, code, &message),
+    })
+}
+
+fn error_reply(id: Value, code: i64, message: &str) -> Value {
+    json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } })
+}
+
+fn initialize(params: &Value) -> Value {
+    let version = params
+        .get("protocolVersion")
+        .and_then(Value::as_str)
+        .unwrap_or(PROTOCOL_VERSION);
+    json!({
+        "protocolVersion": version,
+        "capabilities": { "tools": {} },
+        "serverInfo": { "name": "bandito-crew", "version": env!("CARGO_PKG_VERSION") },
+        "instructions": "Tools to talk to the other agents in your Bandito crew.",
+    })
+}
+
+fn crew_list_tool() -> Value {
+    json!({
+        "name": "crew_list",
+        "description": "List the other agents in your Bandito crew: name, role and runtime.",
+        "inputSchema": { "type": "object", "properties": {} },
+    })
+}
+
+fn crew_send_tool() -> Value {
+    json!({
+        "name": "crew_send",
+        "description": "Send a message to another agent in your crew, by name. Use it to hand off work or ask for a review. Their answer arrives later as a new message from them; don't wait for it in this turn.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "to": { "type": "string", "description": "Agent name" },
+                "message": { "type": "string", "description": "What you want them to do, with enough context" },
+            },
+            "required": ["to", "message"],
+        },
+    })
+}
+
+async fn call_tool(params: &Value, backend: &dyn CrewBackend) -> Result<Value, Fault> {
+    let name = params.get("name").and_then(Value::as_str).unwrap_or_default();
+    let args = params.get("arguments").cloned().unwrap_or(Value::Null);
+    match name {
+        "crew_list" => Ok(tool_result(crew_list(backend).await)),
+        "crew_send" => Ok(tool_result(crew_send(&args, backend).await)),
+        _ => Err((INVALID_PARAMS, format!("Unknown tool: {name}"))),
+    }
+}
+
+/// MCP tool result with a single text block. `Err` is a tool error (`isError`), not a protocol error.
+fn tool_result(outcome: Result<String, String>) -> Value {
+    let (text, is_error) = match outcome {
+        Ok(text) => (text, false),
+        Err(text) => (text, true),
+    };
+    json!({ "content": [{ "type": "text", "text": text }], "isError": is_error })
+}
+
+async fn crew_list(backend: &dyn CrewBackend) -> Result<String, String> {
+    let members = backend.list().await.map_err(|e| format!("{e:#}"))?;
+    if members.is_empty() {
+        return Ok("No other agents in this crew yet.".into());
+    }
+    let lines: Vec<String> = members
+        .iter()
+        .map(|m| {
+            let role = m.role.trim();
+            if role.is_empty() {
+                format!("- {} · {}", m.name, m.runtime)
+            } else {
+                format!("- {} ({role}) · {}", m.name, m.runtime)
+            }
+        })
+        .collect();
+    Ok(lines.join("\n"))
+}
+
+async fn crew_send(args: &Value, backend: &dyn CrewBackend) -> Result<String, String> {
+    let to = args.get("to").and_then(Value::as_str).filter(|s| !s.trim().is_empty());
+    let message = args
+        .get("message")
+        .and_then(Value::as_str)
+        .filter(|s| !s.trim().is_empty());
+    let (Some(to), Some(message)) = (to, message) else {
+        return Err("crew_send needs \"to\" and \"message\"".into());
+    };
+    backend.send(to, message).await.map_err(|e| format!("{e:#}"))?;
+    Ok(format!(
+        "Sent to {to}. Their answer will arrive as a new message from them."
+    ))
+}
+
+/// Run the crew MCP server for one agent on stdin/stdout.
+pub async fn serve_stdio(sock: PathBuf, agent_id: String) -> Result<()> {
+    let backend = DaemonBackend { sock, agent_id };
+    serve(BufReader::new(tokio::io::stdin()), tokio::io::stdout(), &backend).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    #[derive(Default)]
+    struct MockBackend {
+        members: Vec<CrewMember>,
+        sent: Mutex<Vec<(String, String)>>,
+        /// When set, every backend call fails with this message.
+        fail: Option<String>,
+    }
+
+    #[async_trait]
+    impl CrewBackend for MockBackend {
+        async fn list(&self) -> Result<Vec<CrewMember>> {
+            if let Some(e) = &self.fail {
+                anyhow::bail!("{e}");
+            }
+            Ok(self.members.clone())
+        }
+
+        async fn send(&self, to: &str, message: &str) -> Result<()> {
+            if let Some(e) = &self.fail {
+                anyhow::bail!("{e}");
+            }
+            self.sent.lock().unwrap().push((to.to_string(), message.to_string()));
+            Ok(())
+        }
+    }
+
+    fn member(name: &str, role: &str, runtime: &str) -> CrewMember {
+        CrewMember {
+            name: name.into(),
+            role: role.into(),
+            runtime: runtime.into(),
+        }
+    }
+
+    /// Feed raw input through `serve` and parse every reply line.
+    async fn replies(input: &str, backend: &MockBackend) -> Vec<Value> {
+        let mut out = Vec::new();
+        serve(input.as_bytes(), &mut out, backend).await.unwrap();
+        String::from_utf8(out)
+            .unwrap()
+            .lines()
+            .map(|l| serde_json::from_str(l).unwrap())
+            .collect()
+    }
+
+    /// Send one request and expect exactly one reply.
+    async fn reply(request: Value, backend: &MockBackend) -> Value {
+        let mut all = replies(&format!("{request}\n"), backend).await;
+        assert_eq!(all.len(), 1, "expected exactly one reply");
+        all.remove(0)
+    }
+
+    fn tool_call(name: &str, arguments: Value) -> Value {
+        json!({ "jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": { "name": name, "arguments": arguments } })
+    }
+
+    fn tool_text(reply: &Value) -> &str {
+        reply["result"]["content"][0]["text"].as_str().unwrap()
+    }
+
+    #[tokio::test]
+    async fn initialize_echoes_the_protocol_version() {
+        let backend = MockBackend::default();
+        let r = reply(
+            json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": { "protocolVersion": "2024-11-05" } }),
+            &backend,
+        )
+        .await;
+        assert_eq!(r["id"], 1);
+        assert_eq!(r["result"]["protocolVersion"], "2024-11-05");
+        assert_eq!(r["result"]["capabilities"], json!({ "tools": {} }));
+        assert_eq!(r["result"]["serverInfo"]["name"], "bandito-crew");
+        assert_eq!(r["result"]["serverInfo"]["version"], env!("CARGO_PKG_VERSION"));
+        assert!(r["result"]["instructions"].as_str().unwrap().contains("Bandito crew"));
+    }
+
+    #[tokio::test]
+    async fn initialize_defaults_the_protocol_version() {
+        let backend = MockBackend::default();
+        let r = reply(json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize" }), &backend).await;
+        assert_eq!(r["result"]["protocolVersion"], "2025-06-18");
+        let r = reply(
+            json!({ "jsonrpc": "2.0", "id": 2, "method": "initialize", "params": { "protocolVersion": 5 } }),
+            &backend,
+        )
+        .await;
+        assert_eq!(r["result"]["protocolVersion"], "2025-06-18");
+    }
+
+    #[tokio::test]
+    async fn notifications_get_no_reply() {
+        let backend = MockBackend::default();
+        let input = "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}\n";
+        assert!(replies(input, &backend).await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn blank_lines_are_skipped() {
+        let backend = MockBackend::default();
+        let input = "\n   \n{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}\n\n";
+        let all = replies(input, &backend).await;
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0]["result"], json!({}));
+    }
+
+    #[tokio::test]
+    async fn ping_returns_an_empty_result() {
+        let backend = MockBackend::default();
+        let r = reply(json!({ "jsonrpc": "2.0", "id": "p", "method": "ping" }), &backend).await;
+        assert_eq!(r["id"], "p");
+        assert_eq!(r["result"], json!({}));
+    }
+
+    #[tokio::test]
+    async fn tools_list_has_both_tools() {
+        let backend = MockBackend::default();
+        let r = reply(json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/list" }), &backend).await;
+        let tools = r["result"]["tools"].as_array().unwrap();
+        let names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
+        assert_eq!(names, ["crew_list", "crew_send"]);
+        assert_eq!(tools[0]["inputSchema"], json!({ "type": "object", "properties": {} }));
+        assert_eq!(tools[1]["inputSchema"]["required"], json!(["to", "message"]));
+        assert_eq!(tools[1]["inputSchema"]["properties"]["to"]["type"], "string");
+    }
+
+    #[tokio::test]
+    async fn crew_list_with_nobody_else_says_so() {
+        let backend = MockBackend::default();
+        let r = reply(tool_call("crew_list", json!({})), &backend).await;
+        assert_eq!(tool_text(&r), "No other agents in this crew yet.");
+        assert_eq!(r["result"]["isError"], false);
+    }
+
+    #[tokio::test]
+    async fn crew_list_shows_one_line_per_agent() {
+        let backend = MockBackend {
+            members: vec![member("Scout", "reviewer", "claude"), member("Rook", "", "codex")],
+            ..Default::default()
+        };
+        let r = reply(tool_call("crew_list", json!({})), &backend).await;
+        assert_eq!(tool_text(&r), "- Scout (reviewer) · claude\n- Rook · codex");
+        assert_eq!(r["result"]["isError"], false);
+    }
+
+    #[tokio::test]
+    async fn crew_list_backend_error_is_a_tool_error() {
+        let backend = MockBackend {
+            fail: Some("cannot reach the daemon".into()),
+            ..Default::default()
+        };
+        let r = reply(tool_call("crew_list", json!({})), &backend).await;
+        assert_eq!(r["result"]["isError"], true);
+        assert_eq!(tool_text(&r), "cannot reach the daemon");
+    }
+
+    #[tokio::test]
+    async fn crew_send_delivers_to_and_message() {
+        let backend = MockBackend::default();
+        let r = reply(
+            tool_call(
+                "crew_send",
+                json!({ "to": "Scout", "message": "please review the diff" }),
+            ),
+            &backend,
+        )
+        .await;
+        assert_eq!(r["result"]["isError"], false);
+        assert_eq!(
+            tool_text(&r),
+            "Sent to Scout. Their answer will arrive as a new message from them."
+        );
+        assert_eq!(
+            *backend.sent.lock().unwrap(),
+            vec![("Scout".to_string(), "please review the diff".to_string())]
+        );
+    }
+
+    #[tokio::test]
+    async fn crew_send_without_arguments_is_a_tool_error() {
+        let backend = MockBackend::default();
+        for args in [
+            json!({}),
+            json!({ "to": "Scout" }),
+            json!({ "to": " ", "message": "hi" }),
+        ] {
+            let r = reply(tool_call("crew_send", args), &backend).await;
+            assert_eq!(r["result"]["isError"], true);
+            assert_eq!(tool_text(&r), "crew_send needs \"to\" and \"message\"");
+        }
+        assert!(backend.sent.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn crew_send_backend_error_is_a_tool_error() {
+        let backend = MockBackend {
+            fail: Some("no agent named 'Nobody' in this crew".into()),
+            ..Default::default()
+        };
+        let r = reply(
+            tool_call("crew_send", json!({ "to": "Nobody", "message": "hi" })),
+            &backend,
+        )
+        .await;
+        assert_eq!(r["result"]["isError"], true);
+        assert_eq!(tool_text(&r), "no agent named 'Nobody' in this crew");
+        assert!(r.get("error").is_none());
+    }
+
+    #[tokio::test]
+    async fn unknown_tool_is_an_invalid_params_error() {
+        let backend = MockBackend::default();
+        let r = reply(tool_call("crew_fly", json!({})), &backend).await;
+        assert_eq!(r["error"]["code"], -32602);
+        assert_eq!(r["error"]["message"], "Unknown tool: crew_fly");
+    }
+
+    #[tokio::test]
+    async fn unknown_method_is_method_not_found() {
+        let backend = MockBackend::default();
+        let r = reply(
+            json!({ "jsonrpc": "2.0", "id": 9, "method": "resources/list" }),
+            &backend,
+        )
+        .await;
+        assert_eq!(r["id"], 9);
+        assert_eq!(r["error"]["code"], -32601);
+        assert_eq!(r["error"]["message"], "Method not found: resources/list");
+    }
+
+    #[tokio::test]
+    async fn request_without_method_is_invalid() {
+        let backend = MockBackend::default();
+        let r = reply(json!({ "jsonrpc": "2.0", "id": 4 }), &backend).await;
+        assert_eq!(r["error"]["code"], -32600);
+    }
+
+    #[tokio::test]
+    async fn invalid_json_is_a_parse_error_with_null_id() {
+        let backend = MockBackend::default();
+        let all = replies("not json\n", &backend).await;
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0]["id"], Value::Null);
+        assert_eq!(all[0]["error"]["code"], -32700);
+        assert_eq!(all[0]["error"]["message"], "parse error");
+    }
+
+    #[tokio::test]
+    async fn one_reply_per_request_in_order() {
+        let backend = MockBackend::default();
+        let input = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}\n\
+                     {\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}\n\
+                     {\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"ping\"}\n";
+        let all = replies(input, &backend).await;
+        let ids: Vec<&Value> = all.iter().map(|r| &r["id"]).collect();
+        assert_eq!(ids, [&json!(1), &json!(2)]);
+    }
+}
