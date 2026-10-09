@@ -83,7 +83,7 @@ The rules for translators are in [Translations](#translations).
 ### Change or add a UI string
 
 1. Add the key to `i18n/en.json`. Keys are flat and dotted (`thread.send`). Use `{name}` for placeholders; a placeholder named `count` is a number, any other is text.
-2. Run `python3 i18n/build.py`. It regenerates `Localizable.xcstrings` and the typed accessors in `apps/mac/BanditoKit/Sources/BanditoL10n/`.
+2. Run `python3 i18n/build.py`. It regenerates the per-language `Localizable.strings` and `Localizable.stringsdict` files under `apps/mac/BanditoKit/Sources/BanditoL10n/Resources/<code>.lproj/` and the typed accessors in `apps/mac/BanditoKit/Sources/BanditoL10n/L10n.swift`.
 3. Use the accessor in SwiftUI code. The key `agent.menu.copyId` is `L10n.Agent.Menu.copyId`.
 4. Commit `en.json` and the regenerated files together. Other languages are optional: a missing key falls back to English.
 
@@ -145,7 +145,7 @@ All user-facing strings live in `i18n/`. `i18n/en.json` is the reference; every 
 - Placeholders such as `{name}` must be kept exactly as in English, with the same names and the same set. Do not translate them. A placeholder named `count` is a number; any other placeholder is text.
 - Text in backticks (commands such as `bandito pair`) is not translated. Product and protocol names (Bandito, Claude Code, Codex, Grok, Tailscale, SSH, TLS, URL, ID) stay as they are.
 - A literal `%` is written as is; the build escapes it for the platform.
-- Plurals are objects keyed by CLDR categories: `zero`, `one`, `two`, `few`, `many`, `other`. `other` is required. Use only the categories your language needs. Placeholders are checked across all forms together.
+- Plurals are objects keyed by CLDR categories: `zero`, `one`, `two`, `few`, `many`, `other`. `other` is required. Use only the categories your language needs. Placeholders are checked across all forms together. A plural must use the `{count}` placeholder, because it selects the form.
 - A missing key is not an error. The build prints a warning with the number of missing keys, and the app shows English for those strings.
 - Run `python3 i18n/build.py --check` before pushing. CI runs the same check on changes to `i18n/` and to the generated sources.
 
