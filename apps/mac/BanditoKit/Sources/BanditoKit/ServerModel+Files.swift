@@ -51,6 +51,19 @@ extension ServerModel {
         try await rpc().call("fs.create_file", PathParams(path: path), as: FsEntry.self)
     }
 
+    /// Result of `fs.clone`: the new folder, and the branch it checked out (nil when HEAD is detached).
+    public struct CloneResult: Decodable, Sendable, Equatable {
+        public var path: String
+        public var defaultBranch: String?
+    }
+
+    /// Copies a git repository into a new folder on the server (`fs.clone`). `dest` must not exist yet.
+    /// A clone can take minutes, so the call waits longer than the usual 30 s (the daemon gives up at 10 min).
+    public func clone(url: String, to dest: String) async throws -> CloneResult {
+        struct P: Encodable { var url: String; var dest: String }
+        return try await rpc().call("fs.clone", P(url: url, dest: dest), as: CloneResult.self, timeout: .seconds(620))
+    }
+
     public func mkdir(_ path: String) async throws -> FsEntry {
         try await rpc().call("fs.mkdir", PathParams(path: path), as: FsEntry.self)
     }
@@ -189,5 +202,13 @@ final class UploadSource: @unchecked Sendable {
 
     func close() {
         try? handle.close()
+    }
+}
+
+extension RPCError {
+    /// For `clone_failed`: the last part of git's error output, with credentials removed by the daemon.
+    public var cloneStderr: String? {
+        guard reason == "clone_failed", let text = data?["stderr"]?.string, !text.isEmpty else { return nil }
+        return text
     }
 }

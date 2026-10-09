@@ -104,4 +104,36 @@ import Testing
         #expect(NewAgentDraft.modelPresets(for: .codex).isEmpty)
         #expect(NewAgentDraft.modelPresets(for: .grok).isEmpty)
     }
+    @Test func fallbackIsSentWhenSet() {
+        var draft = NewAgentDraft()
+        draft.name = "Forge"
+        draft.cwd = "/home/me/billing"
+        draft.fallbackRuntime = .codex
+        draft.fallbackModel = " gpt-5 "
+        let agent = draft.makeNewAgent()
+        #expect(agent.fallbackRuntime == .codex)
+        #expect(agent.fallbackModel == "gpt-5")
+    }
+
+    @Test func noFallbackMeansNil() {
+        var draft = NewAgentDraft()
+        draft.fallbackModel = "  "
+        let agent = draft.makeNewAgent()
+        #expect(agent.fallbackRuntime == nil)
+        #expect(agent.fallbackModel == nil)
+    }
+
+    @Test func fallbackOffersOtherRuntimesOnly() {
+        #expect(NewAgentDraft.fallbackOptions(for: .claude) == [.codex, .grok])
+        #expect(!NewAgentDraft.fallbackOptions(for: .codex).contains(.codex))
+    }
+
+    @Test func switchingPrimaryToTheFallbackClearsTheFallback() {
+        var draft = NewAgentDraft()
+        draft.runtime = .claude
+        draft.fallbackRuntime = .codex
+        draft.setRuntime(.codex)
+        #expect(draft.fallbackRuntime == nil)
+        #expect(draft.fallbackModel.isEmpty)
+    }
 }

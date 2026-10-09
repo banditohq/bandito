@@ -16,6 +16,9 @@ struct DetailsTab: View {
     @State private var schedules: [Schedule] = []
     @State private var showingNewSchedule = false
     @State private var error: String?
+    /// Values the daemon changed on its own after the last change (for example an effort the runtime lacks).
+    @State private var notes: [String] = []
+    @State private var modelDraft = ""
 
     private var effort: Binding<Effort> {
         Binding(
@@ -27,10 +30,34 @@ struct DetailsTab: View {
         VStack(alignment: .leading, spacing: 18) {
             InspectorCard {
                 InspectorRow(label: L10n.Inspector.runsOn) {
-                    Text(runtimeLine)
+                    Menu {
+                        ForEach(RuntimeKind.pickable.filter { $0 != agent.runtime }, id: \.self) { kind in
+                            Button(kind.title) { switchRuntime(to: kind) }
+                        }
+                    } label: {
+                        Text(runtimeLine)
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
                 }
                 InspectorRow(label: L10n.Inspector.model) {
-                    Text(agent.model ?? "—")
+                    TextField(L10n.AgentSheet.modelDefault, text: $modelDraft)
+                        .textFieldStyle(.plain)
+                        .multilineTextAlignment(.trailing)
+                        .frame(maxWidth: 170)
+                        .onSubmit(saveModel)
+                }
+                InspectorRow(label: L10n.AgentSheet.fallbackLabel) {
+                    Menu {
+                        Button(L10n.AgentSheet.fallbackNone) { setFallback(nil) }
+                        ForEach(NewAgentDraft.fallbackOptions(for: agent.runtime), id: \.self) { kind in
+                            Button(kind.title) { setFallback(kind) }
+                        }
+                    } label: {
+                        Text(agent.fallbackRuntime?.title ?? L10n.AgentSheet.fallbackNone)
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
                 }
                 InspectorRow(label: L10n.Inspector.approvals) {
                     Menu {
@@ -110,9 +137,18 @@ struct DetailsTab: View {
                 }
             }
 
+            ForEach(notes, id: \.self) { note in
+                Text(note)
+                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .foregroundStyle(BanditoPalette.peach)
+            }
+
             if let error {
                 InspectorError(text: error)
             }
+        }
+        .onChange(of: agent.model, initial: true) { _, model in
+            modelDraft = model ?? ""
         }
         .task(id: agent.id) {
             folder = agent.cwd
@@ -145,6 +181,46 @@ struct DetailsTab: View {
         Task {
             do { try await work() } catch { self.error = error.localizedDescription }
         }
+    }
+
+    /// Sends a patch and shows the daemon's notes about values it changed on its own.
+    private func apply(_ patch: AgentPatch) {
+        error = nil
+        Task {
+            do {
+                let update = try await server.updateAgent(agent.id, patch: patch)
+                notes = update.warnings
+            } catch {
+                self.error = error.localizedDescription
+            }
+        }
+    }
+
+    /// Moves the agent to another runtime. A fallback that becomes the primary is cleared in the same patch,
+    /// because the daemon refuses a fallback equal to the primary runtime.
+    private func switchRuntime(to kind: RuntimeKind) {
+        var patch = AgentPatch(runtime: kind)
+        if agent.fallbackRuntime == kind {
+            patch.fallbackRuntime = .clear
+            patch.fallbackModel = .clear
+        }
+        apply(patch)
+    }
+
+    private func setFallback(_ kind: RuntimeKind?) {
+        if let kind {
+            apply(AgentPatch(fallbackRuntime: .set(kind)))
+        } else {
+            apply(AgentPatch(fallbackRuntime: .clear, fallbackModel: .clear))
+        }
+    }
+
+    /// An empty field goes back to the runtime's default model.
+    private func saveModel() {
+        let text = modelDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let next: FieldChange<String> = text.isEmpty ? .clear : .set(text)
+        if text == (agent.model ?? "") { return }
+        apply(AgentPatch(model: next))
     }
 }
 
@@ -387,8 +463,7 @@ struct MemoryTab: View {
                 InspectorCard {
                     ForEach(memoryItems, id: \.path) { item in
                         Button {
-                            router.filesPath = item.path
-                            router.select(mode: .files)
+                            router.openInFiles(item.path, isFile: item.isFile)
                         } label: {
                             HStack(spacing: 11) {
                                 Image(systemName: item.symbol)
@@ -433,6 +508,7 @@ struct MemoryTab: View {
         var title: String
         var meta: String
         var symbol: String
+        var isFile = false
     }
 
     /// The four places of the design, found among the folder's entries; missing ones are left out.
@@ -442,7 +518,9 @@ struct MemoryTab: View {
         var items: [MemoryItem] = []
         if let memory = entry("MEMORY.md") {
             let time = TeamTime.label(ms: memory.modifiedMs)
-            items.append(MemoryItem(path: memory.path, title: "MEMORY.md", meta: L10n.Memory.memoryFile(time: time), symbol: "doc.text"))
+            items.append(MemoryItem(
+                path: memory.path, title: "MEMORY.md", meta: L10n.Memory.memoryFile(time: time), symbol: "doc.text",
+                isFile: memory.kind == .file))
         }
         if let notes = entry("notes") {
             items.append(MemoryItem(path: notes.path, title: L10n.Memory.notes, meta: "notes/", symbol: "list.bullet"))

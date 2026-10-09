@@ -40,9 +40,8 @@ struct NewAgentSheet: View {
         .frame(width: 1080, height: 820)
         .background(Color.Bandito.surface2)
         .onAppear {
-            if let cwd = router.pendingAgentCwd {
+            if let cwd = router.takeAgentCwd() {
                 draft.cwd = cwd
-                router.pendingAgentCwd = nil
             }
         }
         .task {
@@ -180,24 +179,15 @@ struct NewAgentSheet: View {
                 .offset(y: -6)
 
             labeled(L10n.AgentSheet.fallbackLabel) {
-                HStack(spacing: 10) {
-                    Image(systemName: "arrow.right")
-                        .font(.system(size: 13))
-                        .foregroundStyle(Color.Bandito.ok)
-                    Text(L10n.AgentSheet.fallbackNone)
+                fallbackPicker
+            }
+            if draft.fallbackRuntime != nil {
+                labeled(L10n.AgentSheet.model) {
+                    TextField(L10n.AgentSheet.modelDefault, text: $draft.fallbackModel)
+                        .textFieldStyle(.plain)
                         .font(BanditoFont.font(size: 13, weight: 400))
-                        .foregroundStyle(Color.Bandito.text)
-                    Spacer(minLength: 0)
-                    Text(L10n.Common.comingSoon)
-                        .font(BanditoFont.font(size: 10.5, weight: 600))
-                        .foregroundStyle(Color.Bandito.text3)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 1)
-                        .background(Color.Bandito.text.opacity(0.07), in: Capsule())
+                        .modifier(FieldBox())
                 }
-                .modifier(FieldBox())
-                .opacity(0.7)
-                .help(L10n.Common.comingSoon)
             }
             Text(L10n.AgentSheet.fallbackHint)
                 .font(BanditoFont.font(size: 12, weight: 400))
@@ -226,6 +216,32 @@ struct NewAgentSheet: View {
                 runtimeSoonCard
             }
         }
+    }
+
+    /// The fallback runtime: "Don't switch", or one of the other runtimes.
+    private var fallbackPicker: some View {
+        Menu {
+            Button(L10n.AgentSheet.fallbackNone) {
+                draft.fallbackRuntime = nil
+                draft.fallbackModel = ""
+            }
+            ForEach(NewAgentDraft.fallbackOptions(for: draft.runtime), id: \.self) { kind in
+                Button(runtimeName(kind)) { draft.fallbackRuntime = kind }
+            }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 13))
+                    .foregroundStyle(draft.fallbackRuntime == nil ? Color.Bandito.text3 : Color.Bandito.ok)
+                Text(draft.fallbackRuntime.map { runtimeName($0) } ?? L10n.AgentSheet.fallbackNone)
+                    .font(BanditoFont.font(size: 13, weight: 400))
+                    .foregroundStyle(Color.Bandito.text)
+                Spacer(minLength: 0)
+            }
+            .modifier(FieldBox())
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private func runtimeCard(_ kind: RuntimeKind, now: Date) -> some View {

@@ -4,17 +4,21 @@ import SwiftUI
 
 /// Settings → Terminal and files. The values are read by the terminal and file screens.
 struct TerminalFilesSection: View {
-    /// Text size of new terminals, in points.
-    @AppStorage("terminal.fontSize") private var fontSize = 13.0
+    @Environment(AppModel.self) private var app
     /// Whether the file browser shows hidden files when a folder opens.
-    @AppStorage("files.showHiddenByDefault") private var showHidden = false
+    @AppStorage(FolderModel.showHiddenDefaultsKey) private var showHidden = false
+
+    /// The terminals' text size is the app's one `TerminalFontStore`, so ⌘+ and this stepper agree.
+    private var fontSize: Binding<Double> {
+        Binding(get: { app.terminalFont.size }, set: { app.terminalFont.set($0) })
+    }
 
     var body: some View {
         SettingsPage(title: SettingsSection.terminalFiles.title, intro: L10n.Settings.TerminalFiles.intro) {
             VStack(spacing: 0) {
                 SettingsRow(title: L10n.Settings.TerminalFiles.fontSize, hint: L10n.Settings.TerminalFiles.fontSizeHint) {
-                    Stepper(value: $fontSize, in: 10...22, step: 1) {
-                        Text("\(Int(fontSize)) pt")
+                    Stepper(value: fontSize, in: TerminalFontSize.range, step: TerminalFontSize.step) {
+                        Text(String(format: "%g pt", app.terminalFont.size))
                             .font(.system(size: 13, design: .monospaced))
                             .foregroundStyle(Color.Bandito.text2)
                     }

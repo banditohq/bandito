@@ -41,8 +41,7 @@ struct UpdatesView: View {
                     HStack {
                         Spacer()
                         Button(L10n.Updates.howButton) {
-                            router.pendingTerminalCommand = ReleaseFeed.installCommand
-                            router.select(mode: .terminals)
+                            router.requestTerminalCommand(ReleaseFeed.installCommand)
                         }
                         .buttonStyle(SignalButtonStyle())
                     }

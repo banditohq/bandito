@@ -1,20 +1,27 @@
+import CryptoKit
 import Foundation
 
 /// Puts Bandito on this Mac: copies the bandito binary from the app bundle into `~/.local/bin` when it is missing
-/// or older, runs `service install --json`, and returns the config that talks to the daemon's unix socket.
+/// or different (SHA-256), runs `service install --json`, and returns the config that talks to the daemon's unix socket.
 /// No token: the socket is trusted for this user (docs/ARCHITECTURE.md#transports).
 public struct LocalInstaller: Sendable {
     private let runner: CommandRunner
     private let bundledBinary: URL?
     private let home: URL
 
+    /// Where the app bundle keeps the daemon: `Contents/Helpers/bandito`. Helpers, not MacOS: on a
+    /// case-insensitive volume `MacOS/bandito` would be the app's own `Bandito` executable.
+    public static func bundledDaemonURL(bundleURL: URL = Bundle.main.bundleURL) -> URL {
+        bundleURL.appending(path: "Contents/Helpers/bandito")
+    }
+
     /// - Parameters:
     ///   - runner: runs the installed binary.
-    ///   - bundledBinary: the bandito binary inside the app bundle. Default: the auxiliary executable.
+    ///   - bundledBinary: the bandito binary inside the app bundle. Default: `Contents/Helpers/bandito`.
     ///   - home: the user's home directory (a test passes a temporary one).
     public init(
         runner: CommandRunner,
-        bundledBinary: URL? = Bundle.main.url(forAuxiliaryExecutable: "bandito"),
+        bundledBinary: URL? = LocalInstaller.bundledDaemonURL(),
         home: URL = URL(fileURLWithPath: NSHomeDirectory())
     ) {
         self.runner = runner
@@ -42,8 +49,8 @@ public struct LocalInstaller: Sendable {
                 guard FileManager.default.fileExists(atPath: bundledBinary.path) else {
                     throw InstallError.localBinaryMissing
                 }
-                if try !existed || Self.modified(bundledBinary) > Self.modified(binary) {
-                    try Self.copy(bundledBinary, to: binary)
+                if try !existed || Self.digest(of: bundledBinary) != Self.digest(of: binary) {
+                    try Self.replace(binary, withCopyOf: bundledBinary)
                     emit(.log("Copied bandito to \(binary.path)"))
                 }
             } else if !existed {
@@ -67,18 +74,26 @@ public struct LocalInstaller: Sendable {
         }
     }
 
-    private static func modified(_ url: URL) throws -> Date {
-        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
-        return (attributes[.modificationDate] as? Date) ?? .distantPast
+    static func digest(of url: URL) throws -> SHA256.Digest {
+        SHA256.hash(data: try Data(contentsOf: url, options: .mappedIfSafe))
     }
 
-    private static func copy(_ source: URL, to destination: URL) throws {
+    /// Copies `source` to a temporary file next to `destination`, makes it executable, and renames it over
+    /// `destination`. The rename is atomic: a reader sees the old binary or the new one, never a partial copy.
+    static func replace(_ destination: URL, withCopyOf source: URL) throws {
         let fileManager = FileManager.default
-        try fileManager.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
-        if fileManager.fileExists(atPath: destination.path) {
-            try fileManager.removeItem(at: destination)
+        let directory = destination.deletingLastPathComponent()
+        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        let temporary = directory.appending(path: ".\(destination.lastPathComponent).\(UUID().uuidString).tmp")
+        do {
+            try fileManager.copyItem(at: source, to: temporary)
+            try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: temporary.path)
+            guard rename(temporary.path, destination.path) == 0 else {
+                throw InstallError.io("could not replace \(destination.path)")
+            }
+        } catch {
+            try? fileManager.removeItem(at: temporary)
+            throw error
         }
-        try fileManager.copyItem(at: source, to: destination)
-        try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: destination.path)
     }
 }

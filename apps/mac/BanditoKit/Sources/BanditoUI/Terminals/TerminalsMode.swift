@@ -54,6 +54,10 @@ struct TerminalsContent: View {
             router.terminalRequest = nil
             perform(request.action, controller: controller)
         }
+        .onChange(of: router.pendingTerminalCommand, initial: true) { _, _ in
+            guard let command = router.takeTerminalCommand() else { return }
+            runInNewTerminal(command, controller: controller)
+        }
         .confirmationDialog(
             L10n.Terminals.ConfirmClose.title,
             isPresented: Binding(get: { closeCandidate != nil }, set: { if !$0 { closeCandidate = nil } }),
@@ -75,10 +79,20 @@ struct TerminalsContent: View {
         if split {
             cwd = controller.focusedSession?.info.cwd
         } else {
-            cwd = router.pendingTerminalCwd
-            router.pendingTerminalCwd = nil
+            cwd = router.takeTerminalCwd()
         }
         Task { await controller.openNew(cwd: cwd, afterFocused: split) }
+    }
+
+    /// A new terminal that starts with a command typed into it (Server → Install, Update): the command goes in
+    /// with a line break, so it runs as if the user typed it and pressed return.
+    private func runInNewTerminal(_ command: String, controller: TerminalController) {
+        Task {
+            await controller.start()
+            await controller.openNew(cwd: nil, afterFocused: false)
+            guard let id = controller.workspace.focusedID else { return }
+            try? await controller.server.input(Data((command + "\n").utf8), to: id)
+        }
     }
 
     /// Closes at once when the process has ended; otherwise asks first.

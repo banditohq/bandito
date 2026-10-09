@@ -255,6 +255,20 @@ private func done(_ events: [InstallEvent]) -> PairInfo? {
                 == ["-P", "2222", "/Users/dev/build/bandito", "deploy@example.com:.local/bin/bandito"])
     }
 
+    @Test func withoutAnInstallScriptOrABundledCopyNothingIsRunOnTheServer() async throws {
+        // The test bundle has no install.sh, and nothing is downloaded in its place.
+        let runner = ScriptedRunner(respond: DaemonAnswers.answer(probe: DaemonAnswers.probeNew))
+        let redeem = RedeemLog()
+        let installer = makeInstaller(runner: runner, redeem: redeem, script: SSHInstaller.bundledScript)
+
+        let events = await collect(installer.install(target: target, deviceName: "Test Mac"))
+
+        #expect(failure(events) == .missingInstallScript)
+        let remote = runner.calls.compactMap(ScriptedRunner.remoteCommand)
+        #expect(remote == [DaemonAnswers.probeCommand])
+        #expect(redeem.calls.isEmpty)
+    }
+
     @Test func invalidTargetFailsWithoutRunningAnything() async throws {
         let runner = ScriptedRunner(respond: DaemonAnswers.answer(probe: DaemonAnswers.probeNew))
         let installer = makeInstaller(runner: runner, redeem: RedeemLog(), script: { self.script })
@@ -316,6 +330,12 @@ final class ScriptCounter: @unchecked Sendable {
         try String(contentsOf: url, encoding: .utf8)
     }
 
+    /// Changes when a file is replaced by a rename, and stays when its content is only rewritten in place.
+    private func inodeNumber(_ url: URL) throws -> UInt64 {
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        return try #require(attributes[.systemFileNumber] as? UInt64)
+    }
+
     @Test func copiesTheBundledBinaryAndStartsTheServiceOnThisMac() async throws {
         let home = try makeHome()
         let bundled = home.appending(path: "bundle/bandito")
@@ -337,33 +357,51 @@ final class ScriptCounter: @unchecked Sendable {
         #expect(info.alreadyInstalled == false)
     }
 
-    @Test func keepsAnInstalledBinaryThatIsNewerThanTheBundledOne() async throws {
+    @Test func anInstalledBinaryWithTheSameContentIsKeptAsItIs() async throws {
         let home = try makeHome()
         let bundled = home.appending(path: "bundle/bandito")
         let installed = home.appending(path: ".local/bin/bandito")
-        try writeFile(bundled, "OLD", modified: Date().addingTimeInterval(-3600))
-        try writeFile(installed, "NEWER", modified: Date().addingTimeInterval(3600))
+        try writeFile(bundled, "SAME", modified: Date())
+        try writeFile(installed, "SAME", modified: Date().addingTimeInterval(-3600))
+        let inode = try inodeNumber(installed)
         let runner = ScriptedRunner { _, _ in DaemonAnswers.serviceOK }
         let installer = LocalInstaller(runner: runner, bundledBinary: bundled, home: home)
 
         let events = await collect(installer.install())
 
-        #expect(try read(installed) == "NEWER")
+        #expect(try inodeNumber(installed) == inode)
+        #expect(try read(installed) == "SAME")
         #expect(try #require(done(events)).alreadyInstalled == true)
     }
 
-    @Test func replacesAnInstalledBinaryThatIsOlderThanTheBundledOne() async throws {
+    @Test func anInstalledBinaryWithDifferentContentIsReplacedEvenWhenItIsNewer() async throws {
         let home = try makeHome()
         let bundled = home.appending(path: "bundle/bandito")
         let installed = home.appending(path: ".local/bin/bandito")
-        try writeFile(bundled, "NEW", modified: Date())
-        try writeFile(installed, "OLD", modified: Date().addingTimeInterval(-3600))
+        try writeFile(bundled, "NEW", modified: Date().addingTimeInterval(-3600))
+        try writeFile(installed, "NEWER", modified: Date().addingTimeInterval(3600))
         let runner = ScriptedRunner { _, _ in DaemonAnswers.serviceOK }
         let installer = LocalInstaller(runner: runner, bundledBinary: bundled, home: home)
 
         _ = await collect(installer.install())
 
         #expect(try read(installed) == "NEW")
+        #expect(FileManager.default.isExecutableFile(atPath: installed.path))
+    }
+
+    @Test func aReplacementLeavesNoTemporaryFileBehind() async throws {
+        let home = try makeHome()
+        let bundled = home.appending(path: "bundle/bandito")
+        let installed = home.appending(path: ".local/bin/bandito")
+        try writeFile(bundled, "NEW", modified: Date())
+        try writeFile(installed, "OLD", modified: Date())
+        let runner = ScriptedRunner { _, _ in DaemonAnswers.serviceOK }
+        let installer = LocalInstaller(runner: runner, bundledBinary: bundled, home: home)
+
+        _ = await collect(installer.install())
+
+        let names = try FileManager.default.contentsOfDirectory(atPath: installed.deletingLastPathComponent().path)
+        #expect(names == ["bandito"])
     }
 
     @Test func withoutABundledBinaryAndNothingInstalledItFails() async throws {

@@ -8,7 +8,7 @@ use crate::event::LimitWindow;
 use crate::event::{AgentStatus, DecidedBy, Decision, EventBody, Source, TurnStatus, Usage};
 use crate::hub::Hub;
 use crate::limit;
-use crate::policy::{self, Verdict};
+use crate::policy::{self, Protected, Verdict};
 use crate::redact::Redactor;
 use crate::runtime::sandbox::SandboxPolicy;
 use crate::runtime::{ApprovalRequest, Runtime, RuntimeKind, RuntimeOutput, Session, SpawnConfig};
@@ -169,6 +169,16 @@ pub struct Supervisor {
     agent_tokens: Arc<AgentTokens>,
     /// Whether agent sessions run under the macOS sandbox (see `runtime::sandbox`).
     agent_sandbox: Arc<AtomicBool>,
+    /// Bandito's own files and controls, for the approval policy. Built once at start.
+    protected: Arc<Protected>,
+}
+
+/// Bandito's own files and controls, as the approval policy protects them: the data folder,
+/// the daemon's binary, and the service files of the user's home. `BANDITO_HOME` or `~/.bandito`.
+fn daemon_protected(data_home: &std::path::Path) -> Protected {
+    let exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("bandito"));
+    let user_home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
+    Protected::new(data_home, &exe, &user_home)
 }
 
 /// Approvals nobody answered are denied after this long.
@@ -297,6 +307,26 @@ impl Supervisor {
         mcp: Option<(PathBuf, Vec<String>)>,
         workspaces: Arc<WorkspaceManager>,
     ) -> Arc<Self> {
+        Self::new_in(hub, runtimes, mcp, workspaces, &crate::workspace::data_dir())
+    }
+
+    /// The daemon of the data folder `home` (`--home`): the approval policy protects that folder.
+    pub fn new_in_home(
+        hub: Hub,
+        runtimes: Runtimes,
+        mcp: Option<(PathBuf, Vec<String>)>,
+        home: &std::path::Path,
+    ) -> Arc<Self> {
+        Self::new_in(hub, runtimes, mcp, WorkspaceManager::system(), home)
+    }
+
+    fn new_in(
+        hub: Hub,
+        runtimes: Runtimes,
+        mcp: Option<(PathBuf, Vec<String>)>,
+        workspaces: Arc<WorkspaceManager>,
+        home: &std::path::Path,
+    ) -> Arc<Self> {
         Arc::new(Self {
             hub,
             runtimes,
@@ -306,6 +336,7 @@ impl Supervisor {
             workspaces,
             agent_tokens: AgentTokens::new(),
             agent_sandbox: Arc::new(AtomicBool::new(true)),
+            protected: Arc::new(daemon_protected(home)),
         })
     }
 
@@ -366,6 +397,7 @@ impl Supervisor {
             tokens: self.agent_tokens.clone(),
             sandbox_on: self.agent_sandbox.clone(),
             agent_token: None,
+            protected: self.protected.clone(),
             session: None,
             output: None,
             redactor: Redactor::default(),
@@ -606,6 +638,7 @@ struct Actor {
     sandbox_on: Arc<AtomicBool>,
     /// The token of the running session. Dropping it (when the session ends) revokes the token.
     agent_token: Option<SessionToken>,
+    protected: Arc<Protected>,
     session: Option<Box<dyn Session>>,
     output: Option<mpsc::Receiver<RuntimeOutput>>,
     /// Replaces the values of the secrets this session was started with, in everything it stores or sends.
@@ -766,7 +799,16 @@ impl Actor {
         }
         let remember = remember && decision == Decision::Allow && !external;
         if remember {
-            self.hub.store.rule_set(Some(&self.id), &p.subject, RuleAction::Allow)?;
+            // The exact command, escaped; never a command with parts that cannot be known.
+            match policy::always_pattern(&p.subject, &self.protected) {
+                Some(pattern) => {
+                    self.hub.store.rule_set(Some(&self.id), &pattern, RuleAction::Allow)?;
+                }
+                None => tracing::info!(
+                    agent = self.id,
+                    "not remembered: the command has parts that cannot be known"
+                ),
+            }
         }
         self.hub.emit(
             &self.id,
@@ -1394,7 +1436,7 @@ impl Actor {
         // The agent's own folders: its working folder, and its home when it has one.
         let mut roots = vec![agent.cwd.as_str()];
         roots.extend(agent.home_dir.as_deref());
-        let verdict = policy::evaluate(agent.approval_mode, &req, &roots, &rules);
+        let verdict = policy::guarded(|| policy::evaluate(agent.approval_mode, &req, &roots, &rules, &self.protected));
         let subject = req.command.clone().unwrap_or_else(|| req.title.clone());
         match verdict {
             Verdict::Allow => match self.session.as_mut() {
@@ -1919,7 +1961,7 @@ mod tests {
         else {
             unreachable!()
         };
-        assert_eq!(reason, "risky: git push*");
+        assert_eq!(reason, "risky: git push");
         assert_eq!(command.as_deref(), Some("git push origin main"));
         w.wait(is_status(AgentStatus::NeedsYou)).await;
         assert_eq!(w.store.approval_list_pending(None).unwrap().len(), 1);
@@ -3494,5 +3536,19 @@ mod workspace_tests {
                 .any(|l| l.starts_with(&format!("run -d --name bandito-ws-{} ", box_ws.id))),
             "the container is created for the fallback too"
         );
+    }
+}
+
+#[cfg(test)]
+mod home_policy_tests {
+    use super::*;
+
+    #[test]
+    fn the_policy_protects_the_home_the_daemon_was_started_with() {
+        let store = Arc::new(crate::store::Store::open_in_memory().unwrap());
+        let home = std::path::Path::new("/srv/bandito-home");
+        let sup = Supervisor::new_in_home(Hub::new(store), Runtimes::default(), None, home);
+        assert_eq!(sup.protected.paths[0], PathBuf::from("/srv/bandito-home"));
+        assert!(sup.protected.words.iter().any(|w| w == "/srv/bandito-home"));
     }
 }

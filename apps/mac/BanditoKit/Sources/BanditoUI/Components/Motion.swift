@@ -16,6 +16,16 @@ public enum MotionLevel: String, CaseIterable, Sendable {
     public func reducesMotion(systemReduceMotion: Bool) -> Bool {
         self == .off || systemReduceMotion
     }
+
+    /// "Less" runs every animation at half the duration.
+    public var durationScale: Double { self == .less ? 0.5 : 1 }
+
+    /// A duration in seconds at this level.
+    public func scaled(_ seconds: Double) -> Double { seconds * durationScale }
+
+    /// Whether repeating animations run: pulses, the floating of the status dots, idle blinking, the
+    /// sparkline. "Less" and "Off" keep them still, so the screen shows their rest frame.
+    public var allowsRepeatingMotion: Bool { self == .full }
 }
 
 /// Applies an animation to changes of `value`, and none when motion is reduced (Reduce Motion or "Off" in settings).
@@ -27,8 +37,11 @@ private struct BanditoAnimationModifier<Value: Equatable>: ViewModifier {
     @AppStorage(MotionLevel.storageKey) private var motionLevel = MotionLevel.full.rawValue
 
     func body(content: Content) -> some View {
-        let reduced = MotionLevel(stored: motionLevel).reducesMotion(systemReduceMotion: reduceMotion)
-        content.animation(reduced ? nil : animation, value: value)
+        let level = MotionLevel(stored: motionLevel)
+        let reduced = level.reducesMotion(systemReduceMotion: reduceMotion)
+        // Half duration for "Less": speed 2 runs the same curve twice as fast.
+        let timed = level == .less ? animation.speed(1 / level.durationScale) : animation
+        content.animation(reduced ? nil : timed, value: value)
     }
 }
 

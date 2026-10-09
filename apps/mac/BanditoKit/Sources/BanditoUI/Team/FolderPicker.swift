@@ -16,6 +16,12 @@ struct FolderPicker: View {
     @State private var query = ""
     @State private var newFolder: String?
     @State private var error: String?
+    /// "Clone from a link": the form replaces the folder tree while it is open.
+    @State private var cloneOpen = false
+    @State private var cloneURL = ""
+    @State private var cloneName = ""
+    @State private var cloneBusy = false
+    @State private var cloneError: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -25,8 +31,14 @@ struct FolderPicker: View {
                 sidebar
                     .frame(width: 190)
                 Rectangle().fill(Color.Bandito.line).frame(width: 1)
-                tree
-                    .frame(maxWidth: .infinity)
+                Group {
+                    if cloneOpen {
+                        cloneForm
+                    } else {
+                        tree
+                    }
+                }
+                .frame(maxWidth: .infinity)
             }
             .frame(maxHeight: .infinity)
             footer
@@ -146,10 +158,12 @@ struct FolderPicker: View {
             Button(L10n.FolderPicker.newFolder) { newFolder = newFolder == nil ? "" : nil }
                 .buttonStyle(QuietButtonStyle(size: .regular))
                 .disabled(listing == nil)
-            Button(L10n.FolderPicker.clone) {}
+            Button(L10n.FolderPicker.clone) {
+                cloneOpen.toggle()
+                cloneError = nil
+            }
                 .buttonStyle(QuietButtonStyle(size: .regular))
-                .disabled(true)
-                .help(L10n.Common.comingSoon)
+                .disabled(listing == nil || cloneBusy)
             Spacer(minLength: 0)
             Button(L10n.FolderPicker.choose(name: FolderPickerLogic.name(of: listing?.path ?? "")), action: choose)
                 .buttonStyle(SignalButtonStyle(size: .regular))
@@ -221,6 +235,79 @@ struct FolderPicker: View {
             await open(entry.path)
         } catch {
             self.error = error.localizedDescription
+        }
+    }
+
+    private var canClone: Bool {
+        !cloneURL.trimmingCharacters(in: .whitespaces).isEmpty && CloneLogic.isValidName(cloneName) && listing != nil
+    }
+
+    /// The URL and the folder name. The name follows the URL until it is typed over.
+    private var cloneForm: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(L10n.FolderPicker.cloneHint(folder: FolderPickerLogic.name(of: listing?.path ?? "")))
+                .font(BanditoFont.font(size: 12, weight: 400))
+                .foregroundStyle(Color.Bandito.text3)
+            TextField(L10n.FolderPicker.cloneURL, text: $cloneURL)
+                .textFieldStyle(.roundedBorder)
+                .disabled(cloneBusy)
+            TextField(L10n.FolderPicker.cloneName, text: $cloneName)
+                .textFieldStyle(.roundedBorder)
+                .disabled(cloneBusy)
+            if cloneBusy {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text(L10n.FolderPicker.cloning)
+                        .font(BanditoFont.font(size: 12, weight: 400))
+                        .foregroundStyle(Color.Bandito.text2)
+                }
+            }
+            if let cloneError {
+                Text(cloneError)
+                    .font(BanditoFont.font(size: 11, weight: 400, mono: true))
+                    .foregroundStyle(Color.Bandito.danger)
+                    .lineLimit(8)
+                    .textSelection(.enabled)
+            }
+            Spacer(minLength: 0)
+            HStack {
+                Spacer(minLength: 0)
+                Button(L10n.Common.cancel) { cloneOpen = false }
+                    .buttonStyle(QuietButtonStyle(size: .regular))
+                    .disabled(cloneBusy)
+                Button(L10n.FolderPicker.cloneGo) {
+                    Task { await runClone() }
+                }
+                .buttonStyle(SignalButtonStyle(size: .regular))
+                .disabled(!canClone || cloneBusy)
+            }
+        }
+        .padding(16)
+        .onChange(of: cloneURL) { old, new in
+            if cloneName.isEmpty || cloneName == GitRemote.folderName(from: old) {
+                cloneName = GitRemote.folderName(from: new) ?? ""
+            }
+        }
+    }
+
+    /// Clones into the folder on screen, then opens the new folder. The git error (stderr) is shown as it is.
+    private func runClone() async {
+        guard let parent = listing?.path, canClone else { return }
+        let url = cloneURL.trimmingCharacters(in: .whitespaces)
+        let dest = CloneLogic.destination(parent: parent, name: cloneName.trimmingCharacters(in: .whitespaces))
+        cloneBusy = true
+        cloneError = nil
+        defer { cloneBusy = false }
+        do {
+            let result = try await server.clone(url: url, to: dest)
+            cloneOpen = false
+            cloneURL = ""
+            cloneName = ""
+            await open(result.path)
+        } catch let failure as RPCError {
+            cloneError = failure.cloneStderr ?? failure.message
+        } catch {
+            cloneError = error.localizedDescription
         }
     }
 

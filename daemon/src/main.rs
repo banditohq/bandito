@@ -317,7 +317,7 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr) -> Result<()> {
         );
         None
     };
-    let sup = Supervisor::new(hub, runtimes, mcp);
+    let sup = Supervisor::new_in_home(hub, runtimes, mcp, home);
     // Session tokens are files in `run/`: a previous daemon's leftovers go, and no token outlives a restart.
     sup.agent_tokens()
         .set_run_dir(&home.join("run"))

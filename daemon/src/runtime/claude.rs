@@ -35,6 +35,18 @@ const BASE_ARGS: [&str; 11] = [
     "default",
 ];
 
+/// Permission rules that keep the agent's Read, Edit and Write tools out of `home`, Bandito's
+/// own folder. Claude Code writes an absolute path with a `//` prefix: `Read(//home/u/.bandito/**)`.
+fn bandito_home_rules(home: &std::path::Path) -> Vec<String> {
+    let home = std::path::absolute(home).unwrap_or_else(|_| home.to_path_buf());
+    let text = home.display().to_string();
+    let text = text.trim_end_matches('/');
+    ["Read", "Edit", "Write"]
+        .iter()
+        .map(|tool| format!("{tool}(/{text}/**)"))
+        .collect()
+}
+
 const INIT_REQUEST_ID: &str = "init";
 /// Tool input strings longer than this are clipped in events and approvals.
 const INPUT_CLIP_BYTES: usize = 4096;
@@ -160,6 +172,10 @@ impl Runtime for ClaudeRuntime {
                 }
             }
         }
+        // The agent's file tools may not touch Bandito's own folder (see docs/ARCHITECTURE.md#approvals-policy).
+        // One argument of inline JSON, so no rule can be split at a space.
+        let settings = json!({"permissions": {"deny": bandito_home_rules(&crate::workspace::data_dir())}});
+        cmd.arg("--settings").arg(settings.to_string());
         cmd.current_dir(&cfg.cwd).envs(cfg.env.iter().map(|(k, v)| (k, v)));
         // Marks the CLI and its children for `host.processes` (see docs/ARCHITECTURE.md#host).
         cmd.env("BANDITO_AGENT_ID", &cfg.agent_id);
@@ -294,6 +310,53 @@ pub fn tool_title(tool: &str, input: &Value) -> String {
     }
 }
 
+/// Tools tied to a known input shape. Any other tool has its path-like input strings checked too.
+const KNOWN_TOOLS: &[&str] = &[
+    "Bash",
+    "Edit",
+    "MultiEdit",
+    "Write",
+    "Read",
+    "NotebookEdit",
+    "WebFetch",
+    "WebSearch",
+    "Glob",
+    "Grep",
+    "LS",
+    "Task",
+    "TodoWrite",
+];
+
+/// The paths a tool call names, for the policy: the blocked path, the file it edits or reads,
+/// the folder a search runs in, and for unknown tools every top-level string that looks like a path.
+fn approval_paths(request: &Value, tool: &str, input: &Value) -> Vec<String> {
+    if let Some(blocked) = str_field(request, "blocked_path") {
+        return vec![blocked.to_string()];
+    }
+    let mut paths: Vec<String> = Vec::new();
+    if let Some(path) = str_field(input, "file_path").or_else(|| str_field(input, "notebook_path")) {
+        paths.push(path.to_string());
+    }
+    if matches!(tool, "Glob" | "Grep" | "LS") {
+        paths.extend(str_field(input, "path").map(str::to_string));
+    }
+    if let (false, Some(fields)) = (KNOWN_TOOLS.contains(&tool), input.as_object()) {
+        paths.extend(
+            fields
+                .values()
+                .filter_map(Value::as_str)
+                .filter(|s| looks_like_path(s))
+                .map(str::to_string),
+        );
+    }
+    paths
+}
+
+/// A string that names a file or folder: absolute, home-relative, or relative with a dot.
+fn looks_like_path(text: &str) -> bool {
+    text.starts_with('/') || text.starts_with('~') || text.starts_with("./") || text.starts_with("../")
+}
+
 /// Map one stdout line (already parsed) to outputs. Pure, so it is unit-testable.
 /// `control_request{can_use_tool}` is NOT handled here (it needs session state).
 pub fn map_message(msg: &Value) -> Vec<RuntimeOutput> {
@@ -339,13 +402,7 @@ pub fn approval_from_control(msg: &Value) -> Option<ApprovalRequest> {
     }
     .filter(|d| !d.is_empty())
     .map(|d| truncate_output(&d, APPROVAL_DIFF_LIMIT));
-    let paths = if let Some(blocked) = str_field(request, "blocked_path") {
-        vec![blocked.to_string()]
-    } else if let Some(path) = str_field(&input, "file_path").or_else(|| str_field(&input, "notebook_path")) {
-        vec![path.to_string()]
-    } else {
-        Vec::new()
-    };
+    let paths = approval_paths(request, &tool, &input);
     Some(ApprovalRequest {
         key,
         call_id,
@@ -1330,5 +1387,29 @@ mod tests {
                 .unwrap();
             assert_eq!(plan, None, "{content}");
         }
+    }
+}
+
+#[cfg(test)]
+mod approval_path_tests {
+    use super::*;
+
+    fn control(tool: &str, input: Value) -> Value {
+        json!({"type": "control_request", "request_id": "k1", "request": {
+            "subtype": "can_use_tool", "tool_name": tool, "tool_use_id": "t1", "input": input}})
+    }
+
+    #[test]
+    fn search_tools_path_is_checked() {
+        let req = approval_from_control(&control("Grep", json!({"pattern": "x", "path": "/home/u/.bandito"}))).unwrap();
+        assert!(req.paths.iter().any(|p| p == "/home/u/.bandito"), "{:?}", req.paths);
+        let req = approval_from_control(&control("Glob", json!({"pattern": "*", "path": "/home/u/.bandito"}))).unwrap();
+        assert!(req.paths.iter().any(|p| p == "/home/u/.bandito"), "{:?}", req.paths);
+    }
+
+    #[test]
+    fn unknown_tool_path_like_fields_are_checked() {
+        let req = approval_from_control(&control("SomeNewTool", json!({"target": "~/.bandito/x", "n": 3}))).unwrap();
+        assert!(req.paths.iter().any(|p| p == "~/.bandito/x"), "{:?}", req.paths);
     }
 }

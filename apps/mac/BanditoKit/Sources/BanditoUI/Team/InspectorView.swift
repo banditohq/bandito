@@ -3,11 +3,6 @@ import BanditoKit
 import BanditoL10n
 import SwiftUI
 
-/// Tabs of the agent details panel.
-enum InspectorTab: String, CaseIterable, Hashable, Sendable {
-    case details, memory, whereRuns
-}
-
 /// The details panel of the selected agent (⌘I): header, three tabs, and the tab's content.
 struct InspectorView: View {
     var server: ServerModel

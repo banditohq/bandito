@@ -72,6 +72,9 @@ private struct PulseRing: View {
 
     @State private var isExpanded = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage(MotionLevel.storageKey) private var motionLevel = MotionLevel.full.rawValue
+    /// Repeating motion stands still: Reduce Motion, or "Less" / "Off" in settings.
+    private var still: Bool { reduceMotion || !MotionLevel(stored: motionLevel).allowsRepeatingMotion }
 
     var body: some View {
         let base = size + 4
@@ -81,12 +84,12 @@ private struct PulseRing: View {
             .scaleEffect(isExpanded ? (size + 14) / base : 1)
             .opacity(isExpanded ? 0 : 0.55)
             .onAppear(perform: updatePulse)
-            .onChange(of: reduceMotion) { _, _ in updatePulse() }
+            .onChange(of: still) { _, _ in updatePulse() }
     }
 
     /// Starts the repeating pulse, or rests the ring without animation when Reduce Motion is on.
     private func updatePulse() {
-        if reduceMotion {
+        if still {
             withAnimation(nil) {
                 isExpanded = false
             }

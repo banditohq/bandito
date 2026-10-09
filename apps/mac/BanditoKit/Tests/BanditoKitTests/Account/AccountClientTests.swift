@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import Testing
 
@@ -308,22 +309,202 @@ import Testing
     @Test func pendingDevicesAndApproveUseTheApprovedSession() async throws {
         let sessions = MemorySecretStore()
         try seedSession(sessions, token: "tok_9")
+        let approver = try makeIdentity()
+        let newDevice = try makeIdentity()
+        let pendingJSON = """
+            {"ok":true,"devices":[{"id":"d2","name":"iPhone","platform":"ios","public_key":"\(newDevice.publicKeyBase64)","created_at":"2026-10-09T10:00:00Z"}]}
+            """
         let http = ScriptedHTTP([
-            "GET /devices/pending": [
-                ScriptedReply(
-                    #"{"ok":true,"devices":[{"id":"d2","name":"iPhone","platform":"ios","public_key":"cHVi","created_at":"2026-10-09T10:00:00Z"}]}"#)
-            ],
+            "GET /devices/pending": [ScriptedReply(pendingJSON)],
             "POST /devices/d2/approve": [ScriptedReply(#"{"ok":true}"#)],
         ])
-        let client = try makeClient(http: http, sessions: sessions)
+        let client = try makeClient(http: http, sessions: sessions, identity: approver)
 
         let pending = try await client.pendingDevices()
         #expect(pending.map(\.id) == ["d2"])
-        #expect(pending[0].publicKey == "cHVi")
+        #expect(pending[0].publicKey == newDevice.publicKeyBase64)
 
-        try await client.approve(deviceID: "d2", envelope: "ZW52")
+        let syncKey = SymmetricKey(size: .bits256)
+        try await client.approve(
+            pending[0], confirmedFingerprint: newDevice.fingerprint, syncKey: syncKey, identity: approver)
+
         let body = try jsonBody(http.requests[1])
-        #expect(body["envelope"] as? String == "ZW52")
+        let envelope = try #require(body["envelope"] as? String)
+        // The envelope is bound to the account (u1 in the seeded session) and to the pending device (d2).
+        let pendingKey = try SyncKey.open(
+            envelope: envelope, with: newDevice, accountID: "u1", deviceID: "d2")
+        #expect(pendingKey.senderFingerprint == approver.fingerprint)
+        #expect(rawBytes(of: try pendingKey.accept(confirmedFingerprint: approver.fingerprint)) == rawBytes(of: syncKey))
+    }
+
+    @Test func approveWithAMismatchedFingerprintSendsNothing() async throws {
+        let sessions = MemorySecretStore()
+        try seedSession(sessions, token: "tok_9")
+        let approver = try makeIdentity()
+        let newDevice = try makeIdentity()
+        let impostor = try makeIdentity()
+        let http = ScriptedHTTP([:])
+        let client = try makeClient(http: http, sessions: sessions, identity: approver)
+        let pending = PendingDevice(
+            id: "d2", name: "iPhone", platform: "ios", publicKey: newDevice.publicKeyBase64,
+            createdAt: "2026-10-09T10:00:00Z")
+
+        // The server swapped the key: the code the user reads on the new device is the real one.
+        var tampered = Array(newDevice.fingerprint)
+        tampered[0] = tampered[0] == "A" ? "B" : "A"
+        do {
+            try await client.approve(
+                pending, confirmedFingerprint: String(tampered),
+                syncKey: SymmetricKey(size: .bits256), identity: approver)
+            Issue.record("expected fingerprintMismatch")
+        } catch let error as AccountError {
+            #expect(error == .fingerprintMismatch)
+        }
+        #expect(http.requests.isEmpty)
+        // The code of the impostor's key is not the one the user saw either.
+        do {
+            try await client.approve(
+                pending, confirmedFingerprint: impostor.fingerprint,
+                syncKey: SymmetricKey(size: .bits256), identity: approver)
+            Issue.record("expected fingerprintMismatch")
+        } catch let error as AccountError {
+            #expect(error == .fingerprintMismatch)
+        }
+        #expect(http.requests.isEmpty)
+    }
+
+    @Test func approveAcceptsTheCodeWithDifferentCaseAndSpacing() async throws {
+        let sessions = MemorySecretStore()
+        try seedSession(sessions, token: "tok_9")
+        let approver = try makeIdentity()
+        let newDevice = try makeIdentity()
+        let http = ScriptedHTTP(["POST /devices/d2/approve": [ScriptedReply(#"{"ok":true}"#)]])
+        let client = try makeClient(http: http, sessions: sessions, identity: approver)
+        let pending = PendingDevice(
+            id: "d2", name: "iPhone", platform: "ios", publicKey: newDevice.publicKeyBase64,
+            createdAt: "2026-10-09T10:00:00Z")
+        let typed = newDevice.fingerprint.lowercased().replacingOccurrences(of: "-", with: " ")
+
+        try await client.approve(
+            pending, confirmedFingerprint: typed, syncKey: SymmetricKey(size: .bits256), identity: approver)
+
+        #expect(http.keys == ["POST /devices/d2/approve"])
+    }
+
+    @Test func approveRejectsAPendingKeyThatIsNotX25519() async throws {
+        let sessions = MemorySecretStore()
+        try seedSession(sessions, token: "tok_9")
+        let approver = try makeIdentity()
+        let http = ScriptedHTTP([:])
+        let client = try makeClient(http: http, sessions: sessions, identity: approver)
+        let pending = PendingDevice(
+            id: "d2", name: "iPhone", platform: "ios", publicKey: "cHVi", createdAt: "2026-10-09T10:00:00Z")
+
+        await #expect(throws: SyncKeyError.invalidPublicKey) {
+            try await client.approve(
+                pending, confirmedFingerprint: "AAAA-AAAA-AAAA-AAAA",
+                syncKey: SymmetricKey(size: .bits256), identity: approver)
+        }
+        #expect(http.requests.isEmpty)
+    }
+
+    @Test func deviceIDsThatAreNotSafePathSegmentsAreRejectedBeforeAnyRequest() async throws {
+        let sessions = MemorySecretStore()
+        try seedSession(sessions, token: "tok_9")
+        let approver = try makeIdentity()
+        let newDevice = try makeIdentity()
+        let http = ScriptedHTTP([:])
+        let client = try makeClient(http: http, sessions: sessions, identity: approver)
+
+        for bad in ["..", "a/b", "", "a?b=1", "a%2Fb", String(repeating: "a", count: 129)] {
+            await #expect(throws: AccountError.invalidIdentifier) {
+                try await client.deleteDevice(id: bad, force: false)
+            }
+            let pending = PendingDevice(
+                id: bad, name: "x", platform: "ios", publicKey: newDevice.publicKeyBase64,
+                createdAt: "2026-10-09T10:00:00Z")
+            await #expect(throws: AccountError.invalidIdentifier) {
+                try await client.approve(
+                    pending, confirmedFingerprint: newDevice.fingerprint,
+                    syncKey: SymmetricKey(size: .bits256), identity: approver)
+            }
+        }
+        #expect(http.requests.isEmpty)
+    }
+
+    @Test func aDeviceIDOfTheDocumentedShapeIsSentAsIs() async throws {
+        let sessions = MemorySecretStore()
+        try seedSession(sessions, token: "tok_9")
+        let http = ScriptedHTTP(["DELETE /devices/abc_DEF-123": [ScriptedReply(#"{"ok":true}"#)]])
+        let client = try makeClient(http: http, sessions: sessions)
+
+        try await client.deleteDevice(id: "abc_DEF-123", force: false)
+
+        #expect(http.keys == ["DELETE /devices/abc_DEF-123"])
+    }
+
+    @Test func baseURLMustBeBanditoOverHTTPSOrLoopbackOverHTTP() throws {
+        let identity = try makeIdentity()
+        let sessions = MemorySecretStore()
+        #expect(throws: AccountError.insecureBaseURL) {
+            try AccountClient(
+                identity: identity, sessions: sessions, baseURL: URL(string: "http://evil.example/api/v1")!)
+        }
+        #expect(throws: AccountError.insecureBaseURL) {
+            try AccountClient(
+                identity: identity, sessions: sessions, baseURL: URL(string: "https://evil.example/api/v1")!)
+        }
+        #expect(throws: AccountError.insecureBaseURL) {
+            try AccountClient(
+                identity: identity, sessions: sessions, baseURL: URL(string: "http://bandito.dev/api/v1")!)
+        }
+        #expect(throws: AccountError.insecureBaseURL) {
+            try AccountClient(
+                identity: identity, sessions: sessions, baseURL: URL(string: "https://bandito.dev.evil.example/")!)
+        }
+        // User info in the URL: the host is not the one the user sees.
+        #expect(throws: AccountError.insecureBaseURL) {
+            try AccountClient(
+                identity: identity, sessions: sessions, baseURL: URL(string: "https://bandito.dev@evil.example/")!)
+        }
+        #expect(throws: AccountError.insecureBaseURL) {
+            try AccountClient(
+                identity: identity, sessions: sessions, baseURL: URL(string: "https://user:pw@bandito.dev/")!)
+        }
+        // A non-standard HTTPS port is another server as far as the client can tell.
+        #expect(throws: AccountError.insecureBaseURL) {
+            try AccountClient(
+                identity: identity, sessions: sessions, baseURL: URL(string: "https://bandito.dev:8443/api/v1")!)
+        }
+        #expect(throws: AccountError.insecureBaseURL) {
+            try AccountClient(
+                identity: identity, sessions: sessions, baseURL: URL(string: "http://127.0.0.1:8787@evil.example/")!)
+        }
+        #expect(throws: AccountError.insecureBaseURL) {
+            try AccountClient(
+                identity: identity, sessions: sessions, baseURL: URL(string: "http://user@127.0.0.1:8787/")!)
+        }
+        _ = try AccountClient(identity: identity, sessions: sessions, baseURL: AccountClient.defaultBaseURL)
+        _ = try AccountClient(
+            identity: identity, sessions: sessions, baseURL: URL(string: "https://bandito.dev:443/api/v1")!)
+        _ = try AccountClient(
+            identity: identity, sessions: sessions, baseURL: URL(string: "http://127.0.0.1:9999/api/v1")!)
+        _ = try AccountClient(
+            identity: identity, sessions: sessions, baseURL: URL(string: "http://127.0.0.1:8787/api/v1")!)
+        _ = try AccountClient(
+            identity: identity, sessions: sessions, baseURL: URL(string: "http://localhost:8787/api/v1")!)
+    }
+
+    @Test func sessionDescriptionsDoNotShowTheToken() throws {
+        let session = Session(
+            token: "tok_secret_value",
+            user: AccountUser(id: "u1", email: "ann@example.com", name: "Ann", githubLogin: "ann"),
+            device: DeviceRef(id: "d1", approved: true))
+
+        #expect(!"\(session)".contains("tok_secret_value"))
+        #expect(!String(reflecting: session).contains("tok_secret_value"))
+        #expect("\(session)".contains("<redacted>"))
+        #expect(String(reflecting: session).contains("<redacted>"))
     }
 
     @Test func myEnvelopeIsNilUntilApproved() async throws {

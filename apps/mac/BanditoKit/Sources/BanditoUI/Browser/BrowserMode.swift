@@ -2,6 +2,9 @@ import BanditoDesign
 import BanditoKit
 import BanditoL10n
 import SwiftUI
+#if os(macOS)
+import AppKit
+#endif
 
 /// Browser mode: the server's browser, its page, and the previews of ports agents opened.
 /// Waits for the server's info, says so when the server is too old to have a browser, and shows the
@@ -23,10 +26,22 @@ struct BrowserMode: View {
 private struct BrowserContent: View {
     let server: ServerModel
     @Environment(Router.self) private var router
+    @Environment(Keymap.self) private var keymap
 
     var body: some View {
         let model = BrowserStore.shared.model(for: server)
         BrowserMainArea(model: model)
+            // ⌘⇧C takes the browser from the agent, or gives it back when the user holds it.
+            .keymapShortcut("browser.takeControl", keymap: keymap) {
+                Task {
+                    if model.status?.controller == .user {
+                        await model.giveBack()
+                    } else {
+                        await model.takeControl()
+                    }
+                }
+            }
+            .keymapShortcut("browser.newTab", keymap: keymap) { Task { await model.newTab() } }
             .task(id: server.id) {
                 model.attach()
             }
@@ -34,8 +49,7 @@ private struct BrowserContent: View {
                 model.detach()
             }
             .task(id: router.pendingPreviewPort) {
-                if let port = router.pendingPreviewPort {
-                    router.pendingPreviewPort = nil
+                if let port = router.takePreviewPort() {
                     model.openPreview(port: port)
                 }
             }
@@ -87,6 +101,7 @@ private struct BrowserMainArea: View {
 private struct BrowserToolbar: View {
     @Bindable var model: BrowserModel
     @FocusState private var addressFocused: Bool
+    @Environment(Keymap.self) private var keymap
 
     var body: some View {
         HStack(spacing: 6) {
@@ -114,7 +129,6 @@ private struct BrowserToolbar: View {
                 Image(systemName: "arrow.clockwise")
             }
             .buttonStyle(IconButtonStyle(size: 30, label: L10n.Browser.reload))
-            .keyboardShortcut("r", modifiers: .command)
             .help(L10n.Browser.reload)
 
             addressBar
@@ -134,13 +148,9 @@ private struct BrowserToolbar: View {
         .overlay(alignment: .bottom) {
             Rectangle().fill(Color.Bandito.text.opacity(0.05)).frame(height: 1)
         }
-        .background {
-            // ⌘L focuses the address bar.
-            Button("") { addressFocused = true }
-                .keyboardShortcut("l", modifiers: .command)
-                .opacity(0)
-                .frame(width: 0, height: 0)
-        }
+        // The shortcuts come from the keymap, so Settings → Keys can change them: ⌘L address, ⌘R reload.
+        .keymapShortcut("browser.address", keymap: keymap) { addressFocused = true }
+        .keymapShortcut("browser.reload", keymap: keymap) { Task { await model.reload() } }
     }
 
     private var addressBar: some View {
@@ -172,9 +182,92 @@ private struct BrowserToolbar: View {
     }
 }
 
+#if os(macOS)
+/// Sends a key press to the page. ⌘A/C/X/Z go as edit commands, ⌘V as the Mac's text, the rest as keys.
+@MainActor
+enum BrowserKeyRouting {
+    static func forward(_ type: CDPKeyType, _ descriptor: CDPKeyDescriptor, _ modifiers: KeyModifiers, to model: BrowserModel) async {
+        let shortcut = BrowserEdit.shortcut(
+            key: descriptor.key, command: modifiers.contains(.meta), shift: modifiers.contains(.shift))
+        if shortcut == .paste {
+            // Only the first press pastes. A held ⌘V sends repeats (rawKeyDown, from isARepeat) that must not
+            // paste again, nor reach the page as a key.
+            guard type == .keyDown else { return }
+            // Chrome's paste reads its own clipboard, so the Mac's text is typed in instead.
+            if let text = NSPasteboard.general.string(forType: .string), !text.isEmpty {
+                await model.send(.insertText(text))
+            }
+            return
+        }
+        let edit = type == .keyDown ? shortcut : nil
+        switch edit {
+        case let edit?:
+            await model.send(.editing(edit, key: descriptor, modifiers: modifiers))
+        case nil:
+            await model.send(.key(type: type, key: descriptor, modifiers: modifiers))
+        }
+    }
+}
+#endif
+
+/// Shown when Chrome is not on the server. Installs it with `setup.install`, the same job as the server's
+/// capabilities card, then starts the browser.
+private struct ChromeInstallCard: View {
+    @Bindable var model: BrowserModel
+    @State private var setup = SetupModel()
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Text(L10n.Browser.needsChrome)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color.Bandito.text)
+            Text(L10n.Browser.needsChromeHint)
+                .font(.system(size: 12.5))
+                .foregroundStyle(Color.Bandito.text2)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 380)
+            if setup.isRunning {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text(L10n.Browser.installing)
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(Color.Bandito.text2)
+                }
+            }
+            if let command = setup.passwordCommand {
+                Text(command)
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundStyle(Color.Bandito.text2)
+                    .textSelection(.enabled)
+            }
+            if setup.job?.state == .failed {
+                Text(L10n.Browser.installFailed)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.Bandito.danger)
+            } else if let error = setup.error ?? model.errorText {
+                Text(error)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.Bandito.danger)
+                    .multilineTextAlignment(.center)
+            }
+            Button(L10n.Browser.install) {
+                Task {
+                    await setup.install(["browser"], server: model.server)
+                    await model.start()
+                }
+            }
+            .buttonStyle(SignalButtonStyle())
+            .disabled(setup.isRunning)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
 /// A thin orange sweep under the address bar while a page loads.
 private struct LoadingBar: View {
     @State private var phase: CGFloat = -0.3
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage(MotionLevel.storageKey) private var motionLevel = MotionLevel.full.rawValue
 
     var body: some View {
         GeometryReader { geo in
@@ -183,6 +276,11 @@ private struct LoadingBar: View {
                 .frame(width: geo.size.width * 0.25, height: 2)
                 .offset(x: geo.size.width * phase)
                 .onAppear {
+                    // Still motion: a steady segment in the middle instead of a sweep.
+                    if reduceMotion || !MotionLevel(stored: motionLevel).allowsRepeatingMotion {
+                        phase = 0.375
+                        return
+                    }
                     withAnimation(.linear(duration: 1.6).repeatForever(autoreverses: false)) {
                         phase = 1
                     }
@@ -217,7 +315,6 @@ private struct ControlBanner: View {
                     Task { await model.takeControl() }
                 }
                 .buttonStyle(LightPillButtonStyle())
-                .keyboardShortcut("c", modifiers: [.command, .shift])
             } else if model.asksToTakeControl {
                 Text(L10n.Browser.askTakeControl)
                     .font(.system(size: 13))
@@ -242,7 +339,6 @@ private struct ControlBanner: View {
                     }
                 }
                 .buttonStyle(QuietButtonStyle())
-                .keyboardShortcut("c", modifiers: [.command, .shift])
             }
         }
         .padding(.horizontal, 12)
@@ -321,7 +417,7 @@ private struct PageSurface: View {
                         Task { @MainActor in
                             switch key {
                             case .key(let type, let descriptor, let modifiers):
-                                await model.send(.key(type: type, key: descriptor, modifiers: modifiers))
+                                await BrowserKeyRouting.forward(type, descriptor, modifiers, to: model)
                             case .text(let text):
                                 await model.send(.insertText(text))
                             }
@@ -377,16 +473,20 @@ private struct BrowserStopped: View {
             Text(L10n.Browser.stopped)
                 .font(.system(size: 13))
                 .foregroundStyle(Color.Bandito.text2)
-            if let text = model.errorText {
-                Text(text)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.Bandito.danger)
-                    .multilineTextAlignment(.center)
+            if model.needsChrome {
+                ChromeInstallCard(model: model)
+            } else {
+                if let text = model.errorText {
+                    Text(text)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.Bandito.danger)
+                        .multilineTextAlignment(.center)
+                }
+                Button(L10n.Browser.start) {
+                    Task { await model.start() }
+                }
+                .buttonStyle(SignalButtonStyle())
             }
-            Button(L10n.Browser.start) {
-                Task { await model.start() }
-            }
-            .buttonStyle(SignalButtonStyle())
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
