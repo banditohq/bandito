@@ -853,6 +853,8 @@ mod tests {
                 effort: None,
                 memory_mode: MemoryMode::Smart,
                 context_budget: None,
+                fallback_runtime: None,
+                fallback_model: None,
             })
             .unwrap();
         let sup = Supervisor::new(Hub::new(store.clone()), Runtimes::default(), None);

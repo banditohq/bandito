@@ -5,6 +5,7 @@
 
 use super::{App, FS_ERROR, INVALID_PARAMS, METHOD_NOT_FOUND, RpcError, RpcResult, SERVER_ERROR, ok, params};
 use crate::files::{FileService, FsError, Result as FsResult, TEXT_LIMIT};
+use crate::git_clone::{self, CloneError};
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
 use serde::Deserialize;
@@ -102,7 +103,29 @@ async fn call(app: &App, method: &str, p: Value) -> RpcResult {
             blocking(app, move |f| f.abort_upload(&p.upload_id)).await?;
             ok(json!({}))
         }
+        "fs.clone" => {
+            let p: CloneParams = params(p)?;
+            ok(clone_repo(app, p).await?)
+        }
         _ => Err(RpcError::new(METHOD_NOT_FOUND, format!("unknown method {method}"))),
+    }
+}
+
+/// `fs.clone`: the URL is checked first, then the destination is resolved under the file roots and
+/// the repository is cloned there (see `crate::git_clone`).
+async fn clone_repo(app: &App, p: CloneParams) -> Result<Value, RpcError> {
+    let CloneParams { url, dest } = p;
+    git_clone::check_url(&url).map_err(|m| RpcError::new(INVALID_PARAMS, m))?;
+    let dest = blocking(app, move |f| f.resolve(&dest)).await?;
+    match git_clone::clone_repo(&url, &dest).await {
+        Ok(cloned) => ok(cloned),
+        Err(CloneError::InvalidUrl(m)) => Err(RpcError::new(INVALID_PARAMS, m)),
+        Err(CloneError::Fs(e)) => Err(fs_error(e)),
+        Err(CloneError::Failed { stderr }) => Err(RpcError::with_data(
+            FS_ERROR,
+            "git clone failed",
+            json!({ "reason": "clone_failed", "stderr": stderr }),
+        )),
     }
 }
 
@@ -142,6 +165,13 @@ fn check_limit(limit: usize, allowed: &RangeInclusive<usize>) -> Result<(), RpcE
             format!("limit must be between {} and {}", allowed.start(), allowed.end()),
         ))
     }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CloneParams {
+    url: String,
+    dest: String,
 }
 
 #[derive(Deserialize)]
@@ -601,5 +631,118 @@ mod tests {
             .map(|f| f.as_str().unwrap())
             .collect();
         assert!(features.contains(&"files"), "{features:?}");
+    }
+}
+
+#[cfg(test)]
+mod clone_tests {
+    use crate::files::FileService;
+    use crate::hub::Hub;
+    use crate::rpc::{App, FS_ERROR, INVALID_PARAMS, Peer, RpcError, dispatch};
+    use crate::store::Store;
+    use crate::supervisor::{Runtimes, Supervisor};
+    use serde_json::{Value, json};
+    use std::path::Path;
+    use std::process::Command;
+    use std::sync::Arc;
+
+    fn app_in(dir: &Path) -> Arc<App> {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let sup = Supervisor::new(Hub::new(store), Runtimes::default(), None);
+        App::new_with_files(sup, dir.join("agents"), FileService::new(dir.to_path_buf(), None))
+    }
+
+    async fn clone(app: &App, p: Value) -> Result<Value, RpcError> {
+        dispatch(app, &Peer::Local, "fs.clone", p).await
+    }
+
+    /// A bare repository with one commit on `main`, cloned through `file://` in tests only.
+    fn origin(root: &Path) -> std::path::PathBuf {
+        let bare = root.join("origin.git");
+        let work = root.join("work");
+        std::fs::create_dir_all(&work).unwrap();
+        let run = |dir: &Path, args: &[&str]| {
+            let out = Command::new("git")
+                .args(["-c", "user.name=test", "-c", "user.email=test@example.com"])
+                .args(args)
+                .current_dir(dir)
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "{args:?}");
+        };
+        run(root, &["init", "--bare", "-b", "main", bare.to_str().unwrap()]);
+        run(&work, &["init", "-b", "main"]);
+        std::fs::write(work.join("README.md"), "hi\n").unwrap();
+        run(&work, &["add", "README.md"]);
+        run(&work, &["commit", "-m", "init"]);
+        run(&work, &["push", bare.to_str().unwrap(), "main"]);
+        bare
+    }
+
+    #[tokio::test]
+    async fn fs_clone_refuses_urls_outside_https_and_ssh() {
+        let dir = tempfile::tempdir().unwrap();
+        let app = app_in(dir.path());
+        for url in [
+            "http://example.com/app.git",
+            "--upload-pack=touch /tmp/x",
+            "ssh://host/app.git",
+        ] {
+            let dest = dir.path().join("app").display().to_string();
+            let err = clone(&app, json!({ "url": url, "dest": dest })).await.unwrap_err();
+            assert_eq!(err.code, INVALID_PARAMS, "{url}");
+        }
+    }
+
+    #[tokio::test]
+    async fn fs_clone_reports_an_existing_destination_as_exists() {
+        let dir = tempfile::tempdir().unwrap();
+        let app = app_in(dir.path());
+        let dest = dir.path().join("taken");
+        std::fs::create_dir(&dest).unwrap();
+        let err = clone(
+            &app,
+            json!({ "url": "https://example.com/app.git", "dest": dest.display().to_string() }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, FS_ERROR);
+        assert_eq!(err.data.as_ref().unwrap()["reason"], "exists");
+    }
+
+    #[tokio::test]
+    async fn fs_clone_reports_a_failed_clone_with_its_stderr() {
+        let dir = tempfile::tempdir().unwrap();
+        let app = app_in(dir.path());
+        let dest = dir.path().join("app");
+        let url = format!("file://{}/missing.git", dir.path().display());
+        let err = clone(&app, json!({ "url": url, "dest": dest.display().to_string() }))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, FS_ERROR);
+        let data = err.data.unwrap();
+        assert_eq!(data["reason"], "clone_failed");
+        assert!(!data["stderr"].as_str().unwrap().is_empty());
+        assert!(!dest.exists());
+    }
+
+    #[tokio::test]
+    async fn fs_clone_answers_with_the_path_and_the_default_branch() {
+        let dir = tempfile::tempdir().unwrap();
+        let bare = origin(dir.path());
+        let app = app_in(dir.path());
+        let dest = dir.path().join("app");
+        let res = clone(
+            &app,
+            json!({ "url": format!("file://{}", bare.display()), "dest": dest.display().to_string() }),
+        )
+        .await
+        .unwrap();
+        // The path comes back canonical (`/var` is a link to `/private/var` on macOS).
+        let canonical = std::fs::canonicalize(dir.path()).unwrap().join("app");
+        assert_eq!(
+            res,
+            json!({ "path": canonical.display().to_string(), "default_branch": "main" })
+        );
     }
 }
