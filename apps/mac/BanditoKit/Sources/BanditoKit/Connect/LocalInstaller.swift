@@ -9,13 +9,19 @@ public struct LocalInstaller: Sendable {
     private let bundledBinary: URL?
     private let home: URL
 
+    /// Where the app bundle keeps the daemon: `Contents/Helpers/bandito`. Helpers, not MacOS: on a
+    /// case-insensitive volume `MacOS/bandito` would be the app's own `Bandito` executable.
+    public static func bundledDaemonURL(bundleURL: URL = Bundle.main.bundleURL) -> URL {
+        bundleURL.appending(path: "Contents/Helpers/bandito")
+    }
+
     /// - Parameters:
     ///   - runner: runs the installed binary.
-    ///   - bundledBinary: the bandito binary inside the app bundle. Default: the auxiliary executable.
+    ///   - bundledBinary: the bandito binary inside the app bundle. Default: `Contents/Helpers/bandito`.
     ///   - home: the user's home directory (a test passes a temporary one).
     public init(
         runner: CommandRunner,
-        bundledBinary: URL? = Bundle.main.url(forAuxiliaryExecutable: "bandito"),
+        bundledBinary: URL? = LocalInstaller.bundledDaemonURL(),
         home: URL = URL(fileURLWithPath: NSHomeDirectory())
     ) {
         self.runner = runner
