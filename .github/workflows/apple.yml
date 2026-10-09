@@ -1,0 +1,43 @@
+name: apple
+
+on:
+  pull_request:
+    paths: ["apps/**", "i18n/**", "brand/tokens/**", ".github/workflows/apple.yml"]
+  push:
+    branches: [main]
+    paths: ["apps/**", "i18n/**", "brand/tokens/**", ".github/workflows/apple.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build-macos
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Select the newest Xcode
+        run: |
+          xcode="$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -n 1 || true)"
+          if [ -n "$xcode" ]; then sudo xcode-select -s "$xcode"; fi
+
+      - name: Xcode version
+        run: xcodebuild -version
+
+      - uses: actions/cache@v4
+        with:
+          path: apps/mac/BanditoKit/.build
+          key: swiftpm-${{ runner.os }}-${{ hashFiles('apps/mac/BanditoKit/Package.resolved', 'apps/mac/BanditoKit/Package.swift') }}
+          restore-keys: |
+            swiftpm-${{ runner.os }}-
+
+      - name: Test BanditoKit
+        working-directory: apps/mac/BanditoKit
+        run: swift test
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Build the Mac app (unsigned)
+        run: apps/mac/scripts/build.sh
