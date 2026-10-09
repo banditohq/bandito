@@ -256,6 +256,9 @@ mod tests {
                 cwd: "/tmp".into(),
                 approval_mode: ApprovalMode::Risky,
                 system_prompt: None,
+                effort: None,
+                memory_mode: crate::store::MemoryMode::Smart,
+                context_budget: None,
             })
             .unwrap();
         // No runtimes: a send fails after emitting an `error` event, which

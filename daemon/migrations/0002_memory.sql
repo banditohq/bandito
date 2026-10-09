@@ -1,0 +1,13 @@
+ALTER TABLE agents ADD COLUMN effort TEXT;
+ALTER TABLE agents ADD COLUMN memory_mode TEXT NOT NULL DEFAULT 'smart';
+ALTER TABLE agents ADD COLUMN context_budget INTEGER;
+ALTER TABLE agents ADD COLUMN home_dir TEXT;
+ALTER TABLE agents ADD COLUMN context_tokens INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE agents ADD COLUMN chapter INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE agents ADD COLUMN last_turn_at INTEGER;
+
+CREATE TABLE usage_limits (
+    runtime TEXT PRIMARY KEY,
+    windows TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+);

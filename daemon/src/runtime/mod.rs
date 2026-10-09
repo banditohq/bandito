@@ -103,6 +103,10 @@ pub struct SpawnConfig {
     pub mcp: Option<(PathBuf, Vec<String>)>,
     /// Extra environment for the child.
     pub env: Vec<(String, String)>,
+    /// How hard the model thinks; each runtime maps or rejects it.
+    pub effort: Option<crate::store::Effort>,
+    /// Folders besides `cwd` the agent may read and write (its home).
+    pub extra_dirs: Vec<PathBuf>,
 }
 
 /// A live session with one agent CLI.

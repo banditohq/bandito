@@ -1,4 +1,4 @@
-use super::{ApprovalMode, Store, new_id, now_ms};
+use super::{ApprovalMode, Effort, MemoryMode, Store, new_id, now_ms};
 use crate::runtime::RuntimeKind;
 use anyhow::{Result, anyhow, bail};
 use rusqlite::{OptionalExtension, Row, params};
@@ -17,6 +17,17 @@ pub struct Agent {
     pub runtime_session_id: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
+    pub effort: Option<Effort>,
+    pub memory_mode: MemoryMode,
+    /// Tokens; `None` = `DEFAULT_CONTEXT_BUDGET`. Used by `smart` memory.
+    pub context_budget: Option<u32>,
+    /// The agent's own folder for memory and files (absolute path on the server).
+    pub home_dir: Option<String>,
+    /// Size of the current chapter's context after the last turn, in tokens.
+    pub context_tokens: u64,
+    /// Chapter number of the current session, from 1.
+    pub chapter: u32,
+    pub last_turn_at: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -32,6 +43,16 @@ pub struct NewAgent {
     pub approval_mode: ApprovalMode,
     #[serde(default)]
     pub system_prompt: Option<String>,
+    #[serde(default)]
+    pub effort: Option<Effort>,
+    #[serde(default = "default_memory")]
+    pub memory_mode: MemoryMode,
+    #[serde(default)]
+    pub context_budget: Option<u32>,
+}
+
+fn default_memory() -> MemoryMode {
+    MemoryMode::Smart
 }
 
 fn default_mode() -> ApprovalMode {
@@ -48,10 +69,12 @@ pub struct AgentPatch {
     pub cwd: Option<String>,
     pub approval_mode: Option<ApprovalMode>,
     pub system_prompt: Option<Option<String>>,
+    pub effort: Option<Option<Effort>>,
+    pub memory_mode: Option<MemoryMode>,
+    pub context_budget: Option<Option<u32>>,
 }
 
-const COLS: &str =
-    "id, name, role, runtime, model, cwd, approval_mode, system_prompt, runtime_session_id, created_at, updated_at";
+const COLS: &str = "id, name, role, runtime, model, cwd, approval_mode, system_prompt, runtime_session_id, created_at, updated_at, effort, memory_mode, context_budget, home_dir, context_tokens, chapter, last_turn_at";
 
 fn from_row(r: &Row) -> rusqlite::Result<Agent> {
     let runtime: String = r.get(3)?;
@@ -68,6 +91,13 @@ fn from_row(r: &Row) -> rusqlite::Result<Agent> {
         runtime_session_id: r.get(8)?,
         created_at: r.get(9)?,
         updated_at: r.get(10)?,
+        effort: r.get::<_, Option<String>>(11)?.as_deref().and_then(Effort::parse),
+        memory_mode: MemoryMode::parse(&r.get::<_, String>(12)?).unwrap_or(MemoryMode::Smart),
+        context_budget: r.get::<_, Option<i64>>(13)?.map(|v| v.clamp(0, u32::MAX as i64) as u32),
+        home_dir: r.get(14)?,
+        context_tokens: r.get::<_, i64>(15)?.max(0) as u64,
+        chapter: r.get::<_, i64>(16)?.clamp(1, u32::MAX as i64) as u32,
+        last_turn_at: r.get(17)?,
     })
 }
 
@@ -103,9 +133,18 @@ impl Store {
             runtime_session_id: None,
             created_at: now,
             updated_at: now,
+            effort: a.effort,
+            memory_mode: a.memory_mode,
+            context_budget: a.context_budget,
+            home_dir: None,
+            context_tokens: 0,
+            chapter: 1,
+            last_turn_at: None,
         };
         let res = self.conn().execute(
-            &format!("INSERT INTO agents ({COLS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)"),
+            &format!(
+                "INSERT INTO agents ({COLS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)"
+            ),
             params![
                 agent.id,
                 agent.name,
@@ -117,7 +156,14 @@ impl Store {
                 agent.system_prompt,
                 agent.runtime_session_id,
                 agent.created_at,
-                agent.updated_at
+                agent.updated_at,
+                agent.effort.map(Effort::as_str),
+                agent.memory_mode.as_str(),
+                agent.context_budget,
+                agent.home_dir,
+                agent.context_tokens as i64,
+                agent.chapter,
+                agent.last_turn_at
             ],
         );
         match res {
@@ -176,10 +222,32 @@ impl Store {
         if let Some(v) = p.system_prompt {
             a.system_prompt = v;
         }
+        if let Some(v) = p.effort {
+            a.effort = v;
+        }
+        if let Some(v) = p.memory_mode {
+            a.memory_mode = v;
+        }
+        if let Some(v) = p.context_budget {
+            a.context_budget = v;
+        }
         a.updated_at = now_ms();
         let res = self.conn().execute(
-            "UPDATE agents SET name=?2, role=?3, model=?4, cwd=?5, approval_mode=?6, system_prompt=?7, updated_at=?8 WHERE id=?1",
-            params![a.id, a.name, a.role, a.model, a.cwd, a.approval_mode.as_str(), a.system_prompt, a.updated_at],
+            "UPDATE agents SET name=?2, role=?3, model=?4, cwd=?5, approval_mode=?6, system_prompt=?7, updated_at=?8,
+             effort=?9, memory_mode=?10, context_budget=?11 WHERE id=?1",
+            params![
+                a.id,
+                a.name,
+                a.role,
+                a.model,
+                a.cwd,
+                a.approval_mode.as_str(),
+                a.system_prompt,
+                a.updated_at,
+                a.effort.map(Effort::as_str),
+                a.memory_mode.as_str(),
+                a.context_budget
+            ],
         );
         match res {
             Ok(_) => Ok(a),
@@ -188,6 +256,34 @@ impl Store {
             }
             Err(e) => Err(e.into()),
         }
+    }
+
+    /// Remember the agent's own folder (set once, when it is created).
+    pub fn agent_set_home(&self, id: &str, home_dir: &str) -> Result<()> {
+        self.conn()
+            .execute("UPDATE agents SET home_dir=?2 WHERE id=?1", params![id, home_dir])?;
+        Ok(())
+    }
+
+    /// After a turn: the chapter's context size and when it happened.
+    pub fn agent_note_turn(&self, id: &str, context_tokens: u64, at: i64) -> Result<()> {
+        self.conn().execute(
+            "UPDATE agents SET context_tokens=?2, last_turn_at=?3 WHERE id=?1",
+            params![id, context_tokens as i64, at],
+        )?;
+        Ok(())
+    }
+
+    /// Close the current chapter: forget the CLI session, reset the context
+    /// size, bump the chapter number. Returns the new chapter number.
+    pub fn agent_next_chapter(&self, id: &str) -> Result<u32> {
+        let conn = self.conn();
+        conn.execute(
+            "UPDATE agents SET runtime_session_id=NULL, context_tokens=0, chapter=chapter+1, updated_at=?2 WHERE id=?1",
+            params![id, now_ms()],
+        )?;
+        let chapter: i64 = conn.query_row("SELECT chapter FROM agents WHERE id=?1", [id], |r| r.get(0))?;
+        Ok(chapter.clamp(1, u32::MAX as i64) as u32)
     }
 
     pub fn agent_set_session(&self, id: &str, session_id: Option<&str>) -> Result<()> {
@@ -225,6 +321,9 @@ mod tests {
             cwd: "/tmp".into(),
             approval_mode: ApprovalMode::Risky,
             system_prompt: None,
+            effort: None,
+            memory_mode: crate::store::MemoryMode::Smart,
+            context_budget: None,
         }
     }
 

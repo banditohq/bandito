@@ -507,6 +507,8 @@ impl Actor {
                     (prog, args)
                 }),
                 env: Vec::new(),
+                effort: None,
+                extra_dirs: Vec::new(),
             })
             .await?;
         self.session = Some(spawned.session);
@@ -896,6 +898,9 @@ mod tests {
                 cwd: "/home/u/app".into(),
                 approval_mode: mode,
                 system_prompt: Some("Keep PRs small.".into()),
+                effort: None,
+                memory_mode: crate::store::MemoryMode::Smart,
+                context_budget: None,
             })
             .unwrap();
         World {
@@ -1210,6 +1215,9 @@ mod tests {
                 cwd: "/tmp".into(),
                 approval_mode: ApprovalMode::Risky,
                 system_prompt: None,
+                effort: None,
+                memory_mode: crate::store::MemoryMode::Smart,
+                context_budget: None,
             })
             .unwrap()
             .id
@@ -1415,6 +1423,9 @@ mod tests {
                 cwd: "/tmp".into(),
                 approval_mode: ApprovalMode::Risky,
                 system_prompt: None,
+                effort: None,
+                memory_mode: crate::store::MemoryMode::Smart,
+                context_budget: None,
             })
             .unwrap();
         let err = w.sup.send(&codex.id, Inbound::user("x")).await.unwrap_err();

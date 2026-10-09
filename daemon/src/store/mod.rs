@@ -20,7 +20,10 @@ pub use auth::Device;
 pub use rules::{Rule, RuleAction};
 pub use schedules::{NewSchedule, NextRun, Schedule, SchedulePatch};
 
-const MIGRATIONS: &[&str] = &[include_str!("../../migrations/0001_init.sql")];
+const MIGRATIONS: &[&str] = &[
+    include_str!("../../migrations/0001_init.sql"),
+    include_str!("../../migrations/0002_memory.sql"),
+];
 
 pub struct Store {
     conn: Mutex<Connection>,
@@ -147,6 +150,69 @@ impl Store {
         Ok(())
     }
 }
+
+/// How hard the model thinks. Mapped per runtime (see docs/ARCHITECTURE.md#memory-and-context).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Effort {
+    Low,
+    Medium,
+    High,
+    Xhigh,
+    Max,
+}
+
+impl Effort {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Effort::Low => "low",
+            Effort::Medium => "medium",
+            Effort::High => "high",
+            Effort::Xhigh => "xhigh",
+            Effort::Max => "max",
+        }
+    }
+    pub fn parse(s: &str) -> Option<Self> {
+        Some(match s {
+            "low" => Effort::Low,
+            "medium" => Effort::Medium,
+            "high" => Effort::High,
+            "xhigh" => Effort::Xhigh,
+            "max" => Effort::Max,
+            _ => return None,
+        })
+    }
+}
+
+/// When an agent's chat starts a new chapter (a fresh CLI session).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MemoryMode {
+    Smart,
+    Daily,
+    Full,
+}
+
+impl MemoryMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            MemoryMode::Smart => "smart",
+            MemoryMode::Daily => "daily",
+            MemoryMode::Full => "full",
+        }
+    }
+    pub fn parse(s: &str) -> Option<Self> {
+        Some(match s {
+            "smart" => MemoryMode::Smart,
+            "daily" => MemoryMode::Daily,
+            "full" => MemoryMode::Full,
+            _ => return None,
+        })
+    }
+}
+
+/// Default context budget for `smart` memory, in tokens.
+pub const DEFAULT_CONTEXT_BUDGET: u32 = 120_000;
 
 /// Status string helpers shared by sub-modules.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

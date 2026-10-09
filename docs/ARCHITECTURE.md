@@ -175,3 +175,36 @@ Bandito is built so a PR adds something once and every client gets it.
 **One source of strings.** `i18n/en.json` is the reference; every language is one file next to it (`i18n/ru.json`, …) and is listed in `i18n/languages.json`. Keys are flat and dotted (`thread.approve`). Plurals are objects with CLDR categories (`{"one": "…", "other": "…"}`), placeholders are `{name}`; a placeholder named `count` is an integer, any other is text. `i18n/build.py` generates platform files (now: `Localizable.xcstrings` + typed `L10n` accessors in BanditoKit; later Android `strings.xml`, web JSON). CI fails if a language has missing or extra keys, placeholders that differ from English, or generated files that are out of date. A missing translation falls back to English at runtime.
 
 **Protocol is described, not implied.** The daemon's RPC types are the contract; `docs/ARCHITECTURE.md#rpc` lists methods, and types for non-Swift clients will be generated from a JSON Schema exported by the daemon.
+
+## Memory and context (keeping long chats cheap)
+
+A chat with an agent can run for weeks. If one CLI session carried all of it, every message would resend a growing context and cost more each time. Bandito keeps the **conversation** (our event log, shown in the app as one continuous thread) separate from the **session** (what the CLI holds in its context window).
+
+**Chapters.** A session is one chapter of the thread. When a chapter gets long, Bandito closes it and the next message starts a fresh, small session. The user sees one thread with a quiet "New chapter · memory saved" line; nothing is lost.
+
+Per agent `memory_mode`:
+
+| mode | when a new chapter starts | for |
+|---|---|---|
+| `smart` (default) | context passes `context_budget` tokens (default 120 000), or the first message after 04:00 local when the last turn was yesterday | almost everyone |
+| `daily` | every first message after 04:00 local | assistants with daily routines |
+| `full` | never; the CLI compacts on its own | short projects, debugging one long task |
+
+Before a chapter closes, the daemon sends a hidden wrap-up turn (`source: "system"`): *update your memory files with what matters from this chapter*. Then the session is dropped and `session.rotated` is emitted.
+
+**Agent home.** Every agent gets its own folder on the server, `~/bandito/agents/<slug>/`, next to (not inside) the project it works on:
+
+```
+MEMORY.md        short index, read at the start of every chapter (≤ 200 lines)
+notes/<topic>.md details: decisions, how things work, people, preferences
+journal/<date>.md one line per finished piece of work
+files/           anything the agent makes for itself
+```
+
+The agent's instructions (built by the daemon, before the user's own) explain this layout. The CLI is allowed to write there (`--add-dir` for Claude, writable roots for Codex). The user can open, edit or delete these files; they are plain Markdown.
+
+**Recall instead of remembering.** The crew MCP server also offers `history_search{query}` and `history_day{date}` over the agent's own past messages in the daemon's database, so an agent looks up what was said weeks ago instead of carrying it.
+
+**Effort.** Each agent has an `effort` (`low`, `medium`, `high`, `xhigh`, `max`). The daemon maps it to the runtime (`--effort` for Claude, the turn's `effort` for Codex, `--reasoning-effort` for Grok) and refuses levels a runtime does not offer.
+
+**Usage.** Rate-limit windows reported by the CLIs are cached per runtime (`usage.limits`), so the app shows remaining quota even when no turn is running; `usage.refresh` asks runtimes that can be asked (Codex: `account/rateLimits/read`).

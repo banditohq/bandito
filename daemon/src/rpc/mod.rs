@@ -137,9 +137,15 @@ struct AgentPatchParams {
     approval_mode: Option<crate::store::ApprovalMode>,
     #[serde(default, deserialize_with = "double_option")]
     system_prompt: Option<Option<String>>,
+    #[serde(default, deserialize_with = "double_option")]
+    effort: Option<Option<crate::store::Effort>>,
+    memory_mode: Option<crate::store::MemoryMode>,
+    #[serde(default, deserialize_with = "double_option")]
+    context_budget: Option<Option<u32>>,
 }
-fn double_option<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Option<String>>, D::Error> {
-    Option::<String>::deserialize(d).map(Some)
+/// `{"x": null}` → `Some(None)` (clear), missing → `None` (keep).
+fn double_option<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(d: D) -> Result<Option<Option<T>>, D::Error> {
+    Option::<T>::deserialize(d).map(Some)
 }
 #[derive(Deserialize)]
 struct SendParams {
@@ -268,6 +274,9 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                     cwd: patch.cwd,
                     approval_mode: patch.approval_mode,
                     system_prompt: patch.system_prompt,
+                    effort: patch.effort,
+                    memory_mode: patch.memory_mode,
+                    context_budget: patch.context_budget,
                 },
             )?;
             // New config takes effect with the next message.
@@ -468,6 +477,9 @@ mod crew_tests {
                     cwd: "/tmp".into(),
                     approval_mode: ApprovalMode::Risky,
                     system_prompt: None,
+                    effort: None,
+                    memory_mode: crate::store::MemoryMode::Smart,
+                    context_budget: None,
                 })
                 .unwrap()
                 .id
@@ -671,6 +683,9 @@ mod schedule_tests {
                 cwd: "/tmp".into(),
                 approval_mode: ApprovalMode::Risky,
                 system_prompt: None,
+                effort: None,
+                memory_mode: crate::store::MemoryMode::Smart,
+                context_budget: None,
             })
             .unwrap();
         let sup = Supervisor::new(Hub::new(store), Runtimes::default(), None);
