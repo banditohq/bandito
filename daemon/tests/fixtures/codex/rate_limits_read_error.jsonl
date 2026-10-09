@@ -1,0 +1,6 @@
+// The usage read is refused (not logged in): refresh_usage reports the server's message.
+{"expect": {"method": "initialize"}}
+{"send": {"id": "$last:/id", "result": {"userAgent": "bandito/0.161.0"}}}
+{"expect": {"method": "initialized"}}
+{"expect": {"method": "account/rateLimits/read", "id": 2}}
+{"send": {"id": "$last:/id", "error": {"code": -32000, "message": "not logged in"}}}

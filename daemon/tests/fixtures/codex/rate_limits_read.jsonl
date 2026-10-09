@@ -1,0 +1,6 @@
+// refresh_usage without a turn: initialize, then `initialized`, then account/rateLimits/read. Answer shape as in account/rateLimits/updated.
+{"expect": {"method": "initialize"}}
+{"send": {"id": "$last:/id", "result": {"userAgent": "bandito/0.161.0", "codexHome": "/home/user/.codex", "platformFamily": "unix", "platformOs": "linux"}}}
+{"expect": {"method": "initialized"}}
+{"expect": {"method": "account/rateLimits/read", "id": 2, "params": {}}}
+{"send": {"id": "$last:/id", "result": {"rateLimits": {"limitId": "codex", "primary": {"usedPercent": 25, "windowDurationMins": 300, "resetsAt": 1791543600}, "secondary": {"usedPercent": 60, "windowDurationMins": 10080, "resetsAt": 1792026000}}}}}

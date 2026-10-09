@@ -11,6 +11,8 @@ pub enum Source {
     User,
     Schedule,
     Crew,
+    /// Bandito itself, e.g. the hidden wrap-up turn before a new chapter.
+    System,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -58,6 +60,14 @@ pub struct LimitWindow {
     pub utilization: f64,
     /// Unix seconds.
     pub resets_at: Option<i64>,
+}
+
+/// The subscription an account is on, as the CLI names it: `id` is stable (`max_20x`, `pro`),
+/// `label` is for people (`Max ×20`, `Pro`). Holds no credentials.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Plan {
+    pub id: String,
+    pub label: String,
 }
 
 /// The typed body of an event. Serialized as `{"kind": "...", "payload": {...}}`.
@@ -120,6 +130,15 @@ pub enum EventBody {
         status: AgentStatus,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         detail: Option<String>,
+    },
+    /// The agent's CLI session was closed and the conversation continues in
+    /// a fresh one (chapter `chapter`). `context_tokens` is the size of the
+    /// closed chapter's context.
+    #[serde(rename = "session.rotated")]
+    SessionRotated {
+        chapter: u32,
+        reason: String,
+        context_tokens: u64,
     },
     #[serde(rename = "usage.limits")]
     UsageLimits { runtime: String, windows: Vec<LimitWindow> },
@@ -206,6 +225,22 @@ mod tests {
         assert_eq!(v["kind"], "agent.status");
         assert_eq!(v["payload"]["status"], "needs_you");
         assert_eq!(serde_json::from_value::<Event>(v).unwrap(), e);
+    }
+
+    #[test]
+    fn chapter_events_use_their_wire_names() {
+        assert_eq!(serde_json::to_value(Source::System).unwrap(), "system");
+        let b = EventBody::SessionRotated {
+            chapter: 2,
+            reason: "context".into(),
+            context_tokens: 130_000,
+        };
+        let (kind, payload) = b.to_parts();
+        assert_eq!(kind, "session.rotated");
+        assert_eq!(payload["chapter"], 2);
+        assert_eq!(payload["reason"], "context");
+        assert_eq!(payload["context_tokens"], 130_000);
+        assert_eq!(EventBody::from_parts(&kind, payload).unwrap(), b);
     }
 
     #[test]

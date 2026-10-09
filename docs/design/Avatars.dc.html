@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Bandito — живые аватары</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0B0A09}
+a{color:#FFB067}a:hover{color:#FFD2A0}
+@keyframes bnd-blink{0%,93%,100%{transform:scaleY(1)}96%{transform:scaleY(.12)}}
+@keyframes bnd-look{0%,30%,100%{transform:translateX(0)}40%,55%{transform:translateX(-3px)}65%,85%{transform:translateX(3px)}}
+@keyframes bnd-hop{0%,60%,100%{transform:translateY(0)}70%{transform:translateY(-6px)}80%{transform:translateY(0)}86%{transform:translateY(-2px)}}
+@keyframes bnd-ring{0%{box-shadow:0 0 0 0 rgba(255,138,31,.55)}70%{box-shadow:0 0 0 12px rgba(255,138,31,0)}100%{box-shadow:0 0 0 0 rgba(255,138,31,0)}}
+@keyframes bnd-squint{0%,100%{transform:scaleY(1)}40%,70%{transform:scaleY(.45)}}
+@keyframes bnd-dots{0%,80%,100%{opacity:.25}40%{opacity:1}}
+@keyframes bnd-shake{0%,70%,100%{transform:translateX(0)}74%{transform:translateX(-4px)}78%{transform:translateX(4px)}82%{transform:translateX(-3px)}86%{transform:translateX(2px)}}
+@keyframes bnd-breathe{0%,100%{transform:scale(1)}50%{transform:scale(.96)}}
+@keyframes bnd-z{0%{opacity:0;transform:translate(0,0) scale(.6)}30%{opacity:1}100%{opacity:0;transform:translate(10px,-22px) scale(1.1)}}
+@keyframes bnd-wink{0%,50%,100%{transform:scaleY(1)}60%,72%{transform:scaleY(.1)}}
+@keyframes bnd-rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation:none!important}}
+</style>
+</helmet>
+<div style="width: 1440px; height: 640px; background: radial-gradient(800px 300px at 50% 0, rgba(255,138,31,.06), transparent 70%), #12100E; color: #F3EBDD; font-family: Geist, -apple-system, sans-serif; font-size: 14px; padding: 34px 40px; box-sizing: border-box; display: flex; flex-direction: column; gap: 26px;">
+  <div style="display: flex; flex-direction: column; gap: 6px;">
+    <h1 style="margin: 0; font-size: 26px; letter-spacing: -.02em;">Живые аватары</h1>
+    <span style="color: #BDB2A0; max-width: 820px; line-height: 1.5;">Енот показывает состояние агента без слов — в боковой панели, в чате, на iPhone, в строке меню. Каждый моргает в своём ритме. При «Уменьшить движение» остаются только цвет и значок.</span>
+  </div>
+  <div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 14px;">
+
+    <section style="border-radius: 18px; background: rgba(243,235,221,.03); border: 1px solid rgba(243,235,221,.07); padding: 22px 14px 16px; display: flex; flex-direction: column; align-items: center; gap: 12px; animation: bnd-rise .4s ease-out 0s both;">
+      <svg width="84" height="84" viewBox="0 0 52 52"><rect width="52" height="52" rx="17" fill="#BDB2A0"></rect><path d="M8 22c6-6 30-6 36 0v7c-6 4-30 4-36 0z" fill="#12100E"></path><g style="transform-box: view-box; transform-origin: 26px 26px; animation: bnd-blink 4.2s ease-in-out infinite;"><circle cx="18" cy="26" r="2.6" fill="#BDB2A0"></circle><circle cx="34" cy="26" r="2.6" fill="#BDB2A0"></circle></g></svg>
+      <span style="font-weight: 600;">Без дела</span>
+      <span style="font-size: 12px; color: #867C6D; text-align: center; line-height: 1.45;">Изредка моргает. Ждёт задачу.</span>
+    </section>
+
+    <section style="border-radius: 18px; background: rgba(243,235,221,.03); border: 1px solid rgba(243,235,221,.07); padding: 22px 14px 16px; display: flex; flex-direction: column; align-items: center; gap: 12px; animation: bnd-rise .4s ease-out .07s both;">
+      <div style="position: relative;">
+        <svg width="84" height="84" viewBox="0 0 52 52"><rect width="52" height="52" rx="17" fill="#A3BDEB"></rect><path d="M8 22c6-6 30-6 36 0v7c-6 4-30 4-36 0z" fill="#12100E"></path><g style="transform-box: view-box; animation: bnd-look 2.4s ease-in-out infinite;"><circle cx="18" cy="26" r="2.6" fill="#A3BDEB"></circle><circle cx="34" cy="26" r="2.6" fill="#A3BDEB"></circle></g></svg>
+        <span style="position: absolute; right: -3px; bottom: -3px; width: 15px; height: 15px; border-radius: 50%; background: #A9C7A2; border: 3px solid #1A1714; box-shadow: 0 0 10px #A9C7A2;"></span>
+      </div>
+      <span style="font-weight: 600;">Работает</span>
+      <span style="font-size: 12px; color: #867C6D; text-align: center; line-height: 1.45;">Глаза бегают по строчкам.</span>
+    </section>
+
+    <section style="border-radius: 18px; background: rgba(255,138,31,.06); border: 1px solid rgba(255,138,31,.3); padding: 22px 14px 16px; display: flex; flex-direction: column; align-items: center; gap: 12px; animation: bnd-rise .4s ease-out .14s both;">
+      <div style="position: relative; animation: bnd-hop 2.2s ease-in-out infinite;">
+        <svg width="84" height="84" viewBox="0 0 52 52"><rect width="52" height="52" rx="17" fill="#FFB067"></rect><path d="M8 22c6-6 30-6 36 0v7c-6 4-30 4-36 0z" fill="#12100E"></path><g style="transform-box: view-box; transform-origin: 26px 26px; animation: bnd-blink 3.4s ease-in-out .8s infinite;"><path d="m16 23 4 3-4 3" stroke="#FFB067" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"></path><path d="M31 26h6" stroke="#FFB067" stroke-width="2.4" stroke-linecap="round"></path></g></svg>
+        <span style="position: absolute; right: -3px; bottom: -3px; width: 15px; height: 15px; border-radius: 50%; background: #FF8A1F; border: 3px solid #241C15; animation: bnd-ring 1.8s infinite;"></span>
+      </div>
+      <span style="font-weight: 600; color: #FFB067;">Ждёт вас</span>
+      <span style="font-size: 12px; color: #867C6D; text-align: center; line-height: 1.45;">Подпрыгивает и зовёт. Самое заметное.</span>
+    </section>
+
+    <section style="border-radius: 18px; background: rgba(243,235,221,.03); border: 1px solid rgba(243,235,221,.07); padding: 22px 14px 16px; display: flex; flex-direction: column; align-items: center; gap: 12px; animation: bnd-rise .4s ease-out .21s both;">
+      <div style="position: relative;">
+        <svg width="84" height="84" viewBox="0 0 52 52"><rect width="52" height="52" rx="17" fill="#C8B6E8"></rect><path d="M8 22c6-6 30-6 36 0v7c-6 4-30 4-36 0z" fill="#12100E"></path><g style="transform-box: view-box; transform-origin: 26px 26px; animation: bnd-squint 2.6s ease-in-out infinite;"><circle cx="18" cy="26" r="2.6" fill="#C8B6E8"></circle><circle cx="34" cy="26" r="2.6" fill="#C8B6E8"></circle></g></svg>
+        <span style="position: absolute; left: 50%; top: -14px; transform: translateX(-50%); display: flex; gap: 3px;"><span style="width: 5px; height: 5px; border-radius: 50%; background: #C8B6E8; animation: bnd-dots 1.2s infinite;"></span><span style="width: 5px; height: 5px; border-radius: 50%; background: #C8B6E8; animation: bnd-dots 1.2s .2s infinite;"></span><span style="width: 5px; height: 5px; border-radius: 50%; background: #C8B6E8; animation: bnd-dots 1.2s .4s infinite;"></span></span>
+      </div>
+      <span style="font-weight: 600;">Думает</span>
+      <span style="font-size: 12px; color: #867C6D; text-align: center; line-height: 1.45;">Прищур и точки — пишет ответ.</span>
+    </section>
+
+    <section style="border-radius: 18px; background: rgba(242,160,147,.05); border: 1px solid rgba(242,160,147,.22); padding: 22px 14px 16px; display: flex; flex-direction: column; align-items: center; gap: 12px; animation: bnd-rise .4s ease-out .28s both;">
+      <div style="position: relative; animation: bnd-shake 3s ease-in-out infinite;">
+        <svg width="84" height="84" viewBox="0 0 52 52"><rect width="52" height="52" rx="17" fill="#F2A093"></rect><path d="M8 22c6-6 30-6 36 0v7c-6 4-30 4-36 0z" fill="#12100E"></path><path d="m15.5 23.5 5 5M20.5 23.5l-5 5M31.5 23.5l5 5M36.5 23.5l-5 5" stroke="#F2A093" stroke-width="2.2" stroke-linecap="round"></path></svg>
+        <span style="position: absolute; right: -3px; bottom: -3px; width: 15px; height: 15px; border-radius: 50%; background: #F2A093; border: 3px solid #1F1714;"></span>
+      </div>
+      <span style="font-weight: 600; color: #F2A093;">Ошибка</span>
+      <span style="font-size: 12px; color: #867C6D; text-align: center; line-height: 1.45;">Встряхивается один раз и ждёт.</span>
+    </section>
+
+    <section style="border-radius: 18px; background: rgba(243,235,221,.03); border: 1px solid rgba(243,235,221,.07); padding: 22px 14px 16px; display: flex; flex-direction: column; align-items: center; gap: 12px; animation: bnd-rise .4s ease-out .35s both;">
+      <div style="position: relative; animation: bnd-breathe 4s ease-in-out infinite;">
+        <svg width="84" height="84" viewBox="0 0 52 52" style="opacity: .75;"><rect width="52" height="52" rx="17" fill="#A9C7A2"></rect><path d="M8 22c6-6 30-6 36 0v7c-6 4-30 4-36 0z" fill="#12100E"></path><path d="M15 26.5h6M31 26.5h6" stroke="#A9C7A2" stroke-width="2.2" stroke-linecap="round"></path></svg>
+        <span style="position: absolute; right: 2px; top: -6px; font-size: 13px; font-weight: 700; color: #A3BDEB; animation: bnd-z 2.6s ease-out infinite;">z</span>
+        <span style="position: absolute; right: 2px; top: -6px; font-size: 10px; font-weight: 700; color: #A3BDEB; animation: bnd-z 2.6s ease-out 1.3s infinite;">z</span>
+      </div>
+      <span style="font-weight: 600;">Спит</span>
+      <span style="font-size: 12px; color: #867C6D; text-align: center; line-height: 1.45;">До запуска по расписанию или не в сети.</span>
+    </section>
+
+    <section style="border-radius: 18px; background: rgba(243,235,221,.03); border: 1px solid rgba(243,235,221,.07); padding: 22px 14px 16px; display: flex; flex-direction: column; align-items: center; gap: 12px; animation: bnd-rise .4s ease-out .42s both;">
+      <svg width="84" height="84" viewBox="0 0 52 52"><rect width="52" height="52" rx="17" fill="#F3EBDD"></rect><path d="M8 22c6-6 30-6 36 0v7c-6 4-30 4-36 0z" fill="#12100E"></path><circle cx="18" cy="26" r="2.6" fill="#F3EBDD"></circle><g style="transform-box: view-box; transform-origin: 34px 26px; animation: bnd-wink 2.4s ease-in-out infinite;"><circle cx="34" cy="26" r="2.6" fill="#F3EBDD"></circle></g></svg>
+      <span style="font-weight: 600;">Наведение</span>
+      <span style="font-size: 12px; color: #867C6D; text-align: center; line-height: 1.45;">Подмигивает, когда вы наводите курсор.</span>
+    </section>
+  </div>
+  <div style="display: flex; gap: 24px; font-size: 12.5px; color: #867C6D; flex-wrap: wrap;">
+    <span><b style="color: #F3EBDD; font-weight: 600;">Размеры:</b> 18 · 26 · 40 · 52 · 84 pt — на маленьких только моргание и точка статуса</span>
+    <span><b style="color: #F3EBDD; font-weight: 600;">Ритм:</b> у каждого агента свой, от имени — чтобы команда не моргала хором</span>
+    <span><b style="color: #F3EBDD; font-weight: 600;">Тишина:</b> не больше одной заметной анимации на экране — «ждёт вас» главнее всех</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":640}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

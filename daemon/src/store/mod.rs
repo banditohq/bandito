@@ -3,7 +3,7 @@
 
 use crate::event::{Event, EventBody};
 use anyhow::{Context, Result, bail};
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::Mutex;
@@ -11,16 +11,29 @@ use std::sync::Mutex;
 mod agents;
 mod approvals;
 pub mod auth;
+mod checkpoints;
+mod history;
 mod rules;
 mod schedules;
+mod secrets;
+mod usage;
 
 pub use agents::{Agent, AgentPatch, NewAgent};
 pub use approvals::{Approval, ApprovalStatus};
 pub use auth::Device;
+pub use checkpoints::{Checkpoint, CheckpointKind};
 pub use rules::{Rule, RuleAction};
-pub use schedules::{NewSchedule, Schedule, SchedulePatch};
+pub use schedules::{NewSchedule, NextRun, Schedule, SchedulePatch};
+pub use secrets::{SecretInfo, check_agents, check_name, check_value};
+pub use usage::UsageEntry;
 
-const MIGRATIONS: &[&str] = &[include_str!("../../migrations/0001_init.sql")];
+const MIGRATIONS: &[&str] = &[
+    include_str!("../../migrations/0001_init.sql"),
+    include_str!("../../migrations/0002_memory.sql"),
+    include_str!("../../migrations/0003_usage_plan.sql"),
+    include_str!("../../migrations/0004_checkpoints.sql"),
+    include_str!("../../migrations/0005_secrets.sql"),
+];
 
 pub struct Store {
     conn: Mutex<Connection>,
@@ -36,6 +49,7 @@ pub fn new_id() -> String {
 
 impl Store {
     pub fn open(path: &Path) -> Result<Self> {
+        restrict_to_owner(path)?;
         let conn = Connection::open(path).with_context(|| format!("open {}", path.display()))?;
         Self::init(conn)
     }
@@ -123,30 +137,134 @@ impl Store {
         Ok(out)
     }
 
+    /// One agent's newest events before `before` (exclusive; `None` = latest),
+    /// returned oldest first. For scrolling a thread back page by page.
+    pub fn events_page(&self, agent_id: &str, before: Option<i64>, limit: u32) -> Result<Vec<Event>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT seq, agent_id, ts, kind, payload FROM events
+             WHERE agent_id = ?1 AND (?2 IS NULL OR seq < ?2)
+             ORDER BY seq DESC LIMIT ?3",
+        )?;
+        let rows = stmt.query_map(params![agent_id, before, limit.clamp(1, 1000)], |r| {
+            Ok((
+                r.get::<_, i64>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, i64>(2)?,
+                r.get::<_, String>(3)?,
+                r.get::<_, String>(4)?,
+            ))
+        })?;
+        let mut out = Vec::new();
+        for row in rows {
+            let (seq, agent_id, ts, kind, payload) = row?;
+            let body = EventBody::from_parts(&kind, serde_json::from_str(&payload)?)
+                .with_context(|| format!("decode event {seq} ({kind})"))?;
+            out.push(Event {
+                seq,
+                agent_id,
+                ts,
+                body,
+            });
+        }
+        out.reverse();
+        Ok(out)
+    }
+
     pub fn last_seq(&self) -> Result<i64> {
         Ok(self
             .conn()
             .query_row("SELECT COALESCE(MAX(seq), 0) FROM events", [], |r| r.get(0))?)
     }
+}
 
-    // ---- secrets ----
-
-    pub fn secret_get(&self, name: &str) -> Result<Option<String>> {
-        Ok(self
-            .conn()
-            .query_row("SELECT value FROM secrets WHERE name = ?1", [name], |r| r.get(0))
-            .optional()?)
+/// The database holds secrets, so only the daemon's user may read it. A new file is created
+/// private from the start; an existing one is tightened. SQLite gives its journal and WAL
+/// files the database file's mode.
+#[cfg(unix)]
+fn restrict_to_owner(path: &Path) -> Result<()> {
+    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+    match std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(path)
+    {
+        Ok(_) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+        Err(e) => return Err(e).with_context(|| format!("create {}", path.display())),
     }
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
+        .with_context(|| format!("chmod {}", path.display()))
+}
 
-    pub fn secret_set(&self, name: &str, value: &str) -> Result<()> {
-        self.conn().execute(
-            "INSERT INTO secrets (name, value) VALUES (?1, ?2)
-             ON CONFLICT(name) DO UPDATE SET value = excluded.value",
-            params![name, value],
-        )?;
-        Ok(())
+#[cfg(not(unix))]
+fn restrict_to_owner(_path: &Path) -> Result<()> {
+    Ok(())
+}
+
+/// How hard the model thinks. Mapped per runtime (see docs/ARCHITECTURE.md#memory-and-context).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Effort {
+    Low,
+    Medium,
+    High,
+    Xhigh,
+    Max,
+}
+
+impl Effort {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Effort::Low => "low",
+            Effort::Medium => "medium",
+            Effort::High => "high",
+            Effort::Xhigh => "xhigh",
+            Effort::Max => "max",
+        }
+    }
+    pub fn parse(s: &str) -> Option<Self> {
+        Some(match s {
+            "low" => Effort::Low,
+            "medium" => Effort::Medium,
+            "high" => Effort::High,
+            "xhigh" => Effort::Xhigh,
+            "max" => Effort::Max,
+            _ => return None,
+        })
     }
 }
+
+/// When an agent's chat starts a new chapter (a fresh CLI session).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MemoryMode {
+    Smart,
+    Daily,
+    Full,
+}
+
+impl MemoryMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            MemoryMode::Smart => "smart",
+            MemoryMode::Daily => "daily",
+            MemoryMode::Full => "full",
+        }
+    }
+    pub fn parse(s: &str) -> Option<Self> {
+        Some(match s {
+            "smart" => MemoryMode::Smart,
+            "daily" => MemoryMode::Daily,
+            "full" => MemoryMode::Full,
+            _ => return None,
+        })
+    }
+}
+
+/// Default context budget for `smart` memory, in tokens.
+pub const DEFAULT_CONTEXT_BUDGET: u32 = 120_000;
 
 /// Status string helpers shared by sub-modules.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -216,11 +334,73 @@ mod tests {
     }
 
     #[test]
-    fn secrets_upsert() {
+    fn events_page_walks_back() {
         let s = Store::open_in_memory().unwrap();
-        assert_eq!(s.secret_get("k").unwrap(), None);
-        s.secret_set("k", "1").unwrap();
-        s.secret_set("k", "2").unwrap();
-        assert_eq!(s.secret_get("k").unwrap().as_deref(), Some("2"));
+        let mut seqs = Vec::new();
+        for i in 0..5 {
+            seqs.push(
+                s.append_event("a", EventBody::MessageAssistant { text: format!("{i}") })
+                    .unwrap()
+                    .seq,
+            );
+            s.append_event("b", EventBody::MessageAssistant { text: "x".into() })
+                .unwrap();
+        }
+        let last2: Vec<i64> = s.events_page("a", None, 2).unwrap().iter().map(|e| e.seq).collect();
+        assert_eq!(last2, vec![seqs[3], seqs[4]], "newest page, oldest first");
+        let before: Vec<i64> = s
+            .events_page("a", Some(seqs[3]), 10)
+            .unwrap()
+            .iter()
+            .map(|e| e.seq)
+            .collect();
+        assert_eq!(before, vec![seqs[0], seqs[1], seqs[2]]);
+        assert!(s.events_page("a", Some(seqs[0]), 10).unwrap().is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn database_file_is_private() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let mode = |p: &Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+
+        let fresh = dir.path().join("fresh.db");
+        Store::open(&fresh).unwrap();
+        assert_eq!(mode(&fresh), 0o600, "a new database is created private");
+
+        let old = dir.path().join("old.db");
+        std::fs::write(&old, b"").unwrap();
+        std::fs::set_permissions(&old, std::fs::Permissions::from_mode(0o644)).unwrap();
+        Store::open(&old).unwrap();
+        assert_eq!(mode(&old), 0o600, "an existing database is tightened");
+    }
+
+    #[test]
+    fn plan_migration_applies_to_a_version_2_database() {
+        // A database as the previous release left it: migrations 1 and 2 applied, usage rows present.
+        let conn = Connection::open_in_memory().unwrap();
+        for sql in &MIGRATIONS[..2] {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.pragma_update(None, "user_version", 2).unwrap();
+        conn.execute(
+            "INSERT INTO usage_limits (runtime, windows, updated_at) VALUES ('codex', '[]', 7)",
+            [],
+        )
+        .unwrap();
+
+        let s = Store::init(conn).unwrap();
+        let version: i64 = s.conn().query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+        assert_eq!(version, MIGRATIONS.len() as i64);
+        assert_eq!(
+            s.usage_list().unwrap(),
+            vec![UsageEntry {
+                runtime: "codex".into(),
+                windows: Vec::new(),
+                updated_at: 7,
+                plan: None,
+            }]
+        );
     }
 }

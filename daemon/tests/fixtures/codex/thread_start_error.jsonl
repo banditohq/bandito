@@ -1,0 +1,7 @@
+// thread/start is refused. The sleep keeps the sends from the test ahead of the thread: they are queued.
+{"expect": {"method": "initialize"}}
+{"sleep_ms": 200}
+{"send": {"id": "$last:/id", "result": {"userAgent": "bandito/0.161.0"}}}
+{"expect": {"method": "initialized"}}
+{"expect": {"method": "thread/start"}}
+{"send": {"id": "$last:/id", "error": {"code": -32000, "message": "sandbox setup failed"}}}

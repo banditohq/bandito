@@ -1,0 +1,11 @@
+// turn/start carries the agent's effort as a string (here medium). Shape from the generated protocol schema.
+{"expect": {"method": "initialize"}}
+{"send": {"id": "$last:/id", "result": {"userAgent": "bandito/0.161.0", "codexHome": "/home/user/.codex", "platformFamily": "unix", "platformOs": "linux"}}}
+{"expect": {"method": "initialized"}}
+{"expect": {"method": "thread/start"}}
+{"send": {"id": "$last:/id", "result": {"thread": {"id": "thr-e", "environments": [{"environmentId": "local", "cwd": "/home/user/work"}]}}}}
+{"expect": {"method": "turn/start", "params": {"threadId": "thr-e", "effort": "medium", "input": [{"type": "text", "text": "think about it"}]}}}
+{"send": {"id": "$last:/id", "result": {"turn": {"id": "turn-e", "items": [], "status": "inProgress", "error": null}}}}
+{"send": {"method": "turn/started", "params": {"threadId": "thr-e", "turn": {"id": "turn-e", "items": [], "status": "inProgress"}}}}
+{"send": {"method": "item/completed", "params": {"threadId": "thr-e", "turnId": "turn-e", "completedAtMs": 1791530172000, "item": {"type": "agentMessage", "id": "m-e", "text": "Done."}}}}
+{"send": {"method": "turn/completed", "params": {"threadId": "thr-e", "turn": {"id": "turn-e", "items": [], "status": "completed", "error": null}}}}

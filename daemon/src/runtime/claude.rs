@@ -2,23 +2,20 @@
 //! stream-json on both sides and answers permission prompts as the host.
 //! Protocol notes and a real transcript: `tests/fixtures/claude/`.
 
+use super::process::{self, JsonProcess, LineSink, Router, locked};
 use super::{
-    ApprovalRequest, Runtime, RuntimeKind, RuntimeOutput, RuntimeStatus, Session, SpawnConfig, Spawned, clip_input,
+    ApprovalRequest, Plan, Runtime, RuntimeKind, RuntimeOutput, RuntimeStatus, Session, SpawnConfig, Spawned,
+    capitalized, clip_input,
 };
 use crate::event::{Decision, EventBody, LimitWindow, TOOL_OUTPUT_LIMIT, TurnStatus, Usage, truncate_output};
-use anyhow::{Context, bail};
+use anyhow::bail;
 use async_trait::async_trait;
+use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::process::Stdio;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
-use std::time::Duration;
-use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::process::{Child, ChildStderr, ChildStdin, ChildStdout, Command};
-use tokio::sync::{mpsc, oneshot};
-use tokio::task::JoinHandle;
-use tokio::time::timeout;
+use std::sync::{Arc, Mutex};
+use tokio::process::Command;
 
 /// Message sent back to Claude when the human (or policy) says no.
 pub const DENY_MESSAGE: &str = "Denied by the user in Bandito";
@@ -39,20 +36,8 @@ const BASE_ARGS: [&str; 11] = [
 ];
 
 const INIT_REQUEST_ID: &str = "init";
-/// Capacity of the output channel. The pump waits when it is full.
-const OUTPUT_CAPACITY: usize = 256;
-/// Max bytes of stderr kept for `Exited { stderr_tail }`.
-const STDERR_TAIL_LIMIT: usize = 4096;
-/// Longest stdout/stderr line kept in memory. Longer lines are dropped whole.
-const MAX_LINE_BYTES: usize = 8 * 1024 * 1024;
 /// Tool input strings longer than this are clipped in events and approvals.
 const INPUT_CLIP_BYTES: usize = 4096;
-/// How long the CLI may take to exit after stdin is closed, before it is killed.
-const EXIT_GRACE: Duration = Duration::from_secs(5);
-/// How long to wait for the child to exit after the kill signal, before the task is aborted.
-const KILL_GRACE: Duration = Duration::from_secs(2);
-/// How long to wait for stderr to close after the child exited.
-const STDERR_GRACE: Duration = Duration::from_secs(2);
 /// Max bytes of diff text shown in an approval.
 const APPROVAL_DIFF_LIMIT: usize = 8192;
 /// Max chars of a Bash command used as a tool title.
@@ -60,11 +45,16 @@ const TITLE_LIMIT: usize = 200;
 
 /// Approval key → the original tool input (echoed back as `updatedInput`, unclipped).
 type PendingMap = Arc<Mutex<HashMap<String, Value>>>;
-/// Frames waiting for the writer task. `None` once the session is shut down.
-type LineSink = Arc<Mutex<Option<mpsc::UnboundedSender<String>>>>;
+
+/// File in the Claude config folder that holds the login, the subscription and OAuth tokens.
+const CREDENTIALS_FILE: &str = ".credentials.json";
 
 pub struct ClaudeRuntime {
     program: String,
+    /// Environment the account read sees, over the daemon's own. Spawned sessions keep their own env.
+    env: Vec<(String, String)>,
+    /// Folder with `.credentials.json`. `None` = from the environment. Tests point it at a temp dir.
+    config_dir: Option<PathBuf>,
 }
 
 impl ClaudeRuntime {
@@ -75,7 +65,40 @@ impl ClaudeRuntime {
     pub fn with_program(program: &str) -> Self {
         Self {
             program: program.to_string(),
+            env: Vec::new(),
+            config_dir: None,
         }
+    }
+
+    /// Environment for the account read (`CLAUDE_CONFIG_DIR`, `HOME`).
+    pub fn with_env(mut self, env: Vec<(String, String)>) -> Self {
+        self.env = env;
+        self
+    }
+
+    /// Folder with `.credentials.json`, instead of the one the environment names.
+    pub fn with_config_dir(mut self, dir: impl Into<PathBuf>) -> Self {
+        self.config_dir = Some(dir.into());
+        self
+    }
+
+    /// Folder with `.credentials.json`: the explicit one, else `CLAUDE_CONFIG_DIR`, else `$HOME/.claude`.
+    fn credentials_dir(&self) -> Option<PathBuf> {
+        if let Some(dir) = &self.config_dir {
+            return Some(dir.clone());
+        }
+        let home = self.env_var("HOME").map(PathBuf::from).or_else(dirs::home_dir);
+        config_dir_from(self.env_var("CLAUDE_CONFIG_DIR"), home)
+    }
+
+    /// `key` as the account read sees it: this runtime's own entries win, then the daemon's environment.
+    fn env_var(&self, key: &str) -> Option<String> {
+        self.env
+            .iter()
+            .rev()
+            .find(|(k, _)| k == key)
+            .map(|(_, v)| v.clone())
+            .or_else(|| std::env::var(key).ok())
     }
 }
 
@@ -109,6 +132,12 @@ impl Runtime for ClaudeRuntime {
         if let Some(model) = &cfg.model {
             cmd.arg("--model").arg(model);
         }
+        if let Some(effort) = cfg.effort {
+            cmd.arg("--effort").arg(effort.as_str());
+        }
+        for dir in &cfg.extra_dirs {
+            cmd.arg("--add-dir").arg(dir);
+        }
         if let Some(prompt) = &cfg.system_prompt {
             cmd.arg("--append-system-prompt").arg(prompt);
         }
@@ -122,26 +151,14 @@ impl Runtime for ClaudeRuntime {
             .to_string();
             cmd.arg("--mcp-config").arg(config);
         }
-        cmd.current_dir(&cfg.cwd)
-            .envs(cfg.env.iter().map(|(k, v)| (k, v)))
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .kill_on_drop(true);
-        configure_group(&mut cmd);
+        cmd.current_dir(&cfg.cwd).envs(cfg.env.iter().map(|(k, v)| (k, v)));
+        // Marks the CLI and its children for `host.processes` (see docs/ARCHITECTURE.md#host).
+        cmd.env("BANDITO_AGENT_ID", &cfg.agent_id);
 
-        let mut child = cmd
-            .spawn()
-            .with_context(|| format!("failed to start {}", program.display()))?;
-        // Unix: the child leads its own process group, so the whole tree can be killed.
-        let pgid = if cfg!(unix) { child.id() } else { None };
-        let stdin = piped(child.stdin.take(), "stdin")?;
-        let stdout = piped(child.stdout.take(), "stdout")?;
-        let stderr = piped(child.stderr.take(), "stderr")?;
-
-        let (line_tx, line_rx) = mpsc::unbounded_channel();
-        let sink: LineSink = Arc::new(Mutex::new(Some(line_tx)));
-        tokio::spawn(writer_task(stdin, line_rx));
+        let pending: PendingMap = Arc::new(Mutex::new(HashMap::new()));
+        let router_pending = Arc::clone(&pending);
+        let router: Router = Box::new(move |msg: &Value, sink: &LineSink| route(msg, &router_pending, sink));
+        let (proc, output) = JsonProcess::spawn(cmd, "claude", router)?;
         let init = json!({
             "type": "control_request",
             "request_id": INIT_REQUEST_ID,
@@ -149,38 +166,95 @@ impl Runtime for ClaudeRuntime {
         });
         // A CLI that already died (e.g. not logged in) has closed its stdin. Its exit
         // reaches the caller as `Exited`, so a failed write here is not an error.
-        let _ = push_line(&sink, &init);
-
-        let pending: PendingMap = Arc::new(Mutex::new(HashMap::new()));
-        let stderr_tail = Arc::new(Mutex::new(String::new()));
-        let stderr_task = spawn_stderr(stderr, Arc::clone(&stderr_tail));
-        let (tx, rx) = mpsc::channel(OUTPUT_CAPACITY);
-        let (kill_tx, kill_rx) = oneshot::channel();
-        let pump = Pump {
-            child,
-            pgid,
-            pending: Arc::clone(&pending),
-            sink: Arc::clone(&sink),
-            tx,
-            kill: kill_rx,
-            killed: false,
-            stderr: stderr_tail,
-            stderr_task,
-        };
-        let exited = tokio::spawn(pump.run(stdout));
+        let _ = proc.send(&init);
 
         Ok(Spawned {
             session: Box::new(ClaudeSession {
-                sink,
+                proc,
                 pending,
-                kill: Some(kill_tx),
-                exited,
-                pgid,
                 next_request: 0,
             }),
-            output: rx,
+            output,
         })
     }
+
+    /// Reads the subscription from `.credentials.json`; no process is started.
+    /// On macOS the CLI keeps its login in the Keychain and writes no such file: then this is `Ok(None)`, which is normal.
+    async fn account_plan(&self) -> anyhow::Result<Option<Plan>> {
+        let Some(dir) = self.credentials_dir() else {
+            return Ok(None);
+        };
+        let path = dir.join(CREDENTIALS_FILE);
+        match tokio::fs::read(&path).await {
+            Ok(bytes) => Ok(plan_from_credentials(&bytes)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => {
+                tracing::warn!(path = %path.display(), kind = ?e.kind(), "claude: could not read the account file");
+                Ok(None)
+            }
+        }
+    }
+}
+
+/// Where `.credentials.json` lives: `CLAUDE_CONFIG_DIR` when it is set and not blank, else `<home>/.claude`.
+pub fn config_dir_from(claude_config_dir: Option<String>, home: Option<PathBuf>) -> Option<PathBuf> {
+    match (claude_config_dir.filter(|dir| !dir.trim().is_empty()), home) {
+        (Some(dir), _) => Some(PathBuf::from(dir)),
+        (None, Some(home)) => Some(home.join(".claude")),
+        (None, None) => None,
+    }
+}
+
+/// Only the two fields the plan needs. Serde skips every other key, OAuth tokens included, so they never reach a struct.
+#[derive(Deserialize)]
+struct CredentialsFile {
+    #[serde(rename = "claudeAiOauth")]
+    oauth: Option<OauthAccount>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct OauthAccount {
+    subscription_type: Option<String>,
+    rate_limit_tier: Option<String>,
+}
+
+/// The plan in a `.credentials.json` body. A broken file is logged without its content, since it holds tokens.
+pub fn plan_from_credentials(bytes: &[u8]) -> Option<Plan> {
+    let file: CredentialsFile = match serde_json::from_slice(bytes) {
+        Ok(file) => file,
+        Err(_) => {
+            tracing::warn!("claude: .credentials.json is not readable; the plan stays unknown");
+            return None;
+        }
+    };
+    let oauth = file.oauth?;
+    plan_from_claude(oauth.subscription_type.as_deref()?, oauth.rate_limit_tier.as_deref())
+}
+
+/// Plan from Claude's `subscriptionType` and `rateLimitTier`. The tier only tells the Max sizes apart.
+pub fn plan_from_claude(subscription: &str, tier: Option<&str>) -> Option<Plan> {
+    let raw = subscription.trim();
+    let tier = tier.unwrap_or("").to_lowercase();
+    let (id, label) = match raw.to_lowercase().as_str() {
+        "" => return None,
+        "max" if tier.contains("20x") => ("max_20x", "Max ×20"),
+        "max" if tier.contains("5x") => ("max_5x", "Max ×5"),
+        "max" => ("max", "Max"),
+        "pro" => ("pro", "Pro"),
+        "team" => ("team", "Team"),
+        "enterprise" => ("enterprise", "Enterprise"),
+        _ => {
+            return Some(Plan {
+                id: raw.to_string(),
+                label: capitalized(raw),
+            });
+        }
+    };
+    Some(Plan {
+        id: id.to_string(),
+        label: label.to_string(),
+    })
 }
 
 /// One-line human title for a tool call.
@@ -270,18 +344,11 @@ pub fn approval_from_control(msg: &Value) -> Option<ApprovalRequest> {
     })
 }
 
-/// A live Claude Code process. Writes go through the writer task; the pump task
-/// owns the child and reports its exit.
+/// A live Claude Code process. Frames go out through [`JsonProcess::send`];
+/// the process wrapper owns the child and reports its exit.
 struct ClaudeSession {
-    /// `None` after shutdown: the writer task then drops stdin (EOF for the CLI).
-    sink: LineSink,
+    proc: JsonProcess,
     pending: PendingMap,
-    /// Asks the pump to kill the child. Dropping it (session dropped) kills too.
-    kill: Option<oneshot::Sender<()>>,
-    /// The pump task.
-    exited: JoinHandle<()>,
-    /// Process group id, for killing the whole tree.
-    pgid: Option<u32>,
     next_request: u64,
 }
 
@@ -294,28 +361,22 @@ impl ClaudeSession {
 #[async_trait]
 impl Session for ClaudeSession {
     async fn send(&mut self, text: &str) -> anyhow::Result<()> {
-        push_line(
-            &self.sink,
-            &json!({
-                "type": "user",
-                "message": {"role": "user", "content": text},
-                "parent_tool_use_id": null,
-                "session_id": "",
-            }),
-        )
+        self.proc.send(&json!({
+            "type": "user",
+            "message": {"role": "user", "content": text},
+            "parent_tool_use_id": null,
+            "session_id": "",
+        }))
     }
 
     async fn interrupt(&mut self) -> anyhow::Result<()> {
         let id = self.next_request;
         self.next_request += 1;
-        push_line(
-            &self.sink,
-            &json!({
-                "type": "control_request",
-                "request_id": format!("int-{id}"),
-                "request": {"subtype": "interrupt"}
-            }),
-        )
+        self.proc.send(&json!({
+            "type": "control_request",
+            "request_id": format!("int-{id}"),
+            "request": {"subtype": "interrupt"}
+        }))
     }
 
     async fn resolve(&mut self, key: &str, decision: Decision) -> anyhow::Result<()> {
@@ -326,120 +387,15 @@ impl Session for ClaudeSession {
             Decision::Allow => json!({"behavior": "allow", "updatedInput": input}),
             Decision::Deny => json!({"behavior": "deny", "message": DENY_MESSAGE}),
         };
-        push_line(
-            &self.sink,
-            &json!({
-                "type": "control_response",
-                "response": {"subtype": "success", "request_id": key, "response": response}
-            }),
-        )
+        self.proc.send(&json!({
+            "type": "control_response",
+            "response": {"subtype": "success", "request_id": key, "response": response}
+        }))
     }
 
     async fn shutdown(self: Box<Self>) {
-        let mut this = *self;
-        // Closing the channel ends the writer task, which drops stdin: EOF for the CLI.
-        let _ = locked(&this.sink).take();
-        if timeout(EXIT_GRACE, &mut this.exited).await.is_ok() {
-            return;
-        }
-        if let Some(kill) = this.kill.take() {
-            let _ = kill.send(());
-        }
-        if timeout(KILL_GRACE, &mut this.exited).await.is_err() {
-            if let Some(pgid) = this.pgid {
-                kill_group(pgid);
-            }
-            // Last resort: dropping the task drops the child (kill_on_drop).
-            this.exited.abort();
-        }
-    }
-}
-
-/// The stdout side of a session. Owns the child, routes lines, and reports
-/// `Exited` at the end.
-struct Pump {
-    child: Child,
-    /// Process group id (unix). Kills go to the whole group.
-    pgid: Option<u32>,
-    pending: PendingMap,
-    sink: LineSink,
-    tx: mpsc::Sender<RuntimeOutput>,
-    /// Fires on shutdown. A dropped session closes it too, which also kills.
-    kill: oneshot::Receiver<()>,
-    killed: bool,
-    stderr: Arc<Mutex<String>>,
-    stderr_task: JoinHandle<()>,
-}
-
-impl Pump {
-    fn kill_now(&mut self) {
-        self.killed = true;
-        kill_tree(&mut self.child, self.pgid);
-    }
-
-    async fn run(mut self, stdout: ChildStdout) {
-        let mut reader = BufReader::new(stdout);
-        loop {
-            let read = tokio::select! {
-                read = read_capped_line(&mut reader, MAX_LINE_BYTES) => read,
-                _ = &mut self.kill, if !self.killed => {
-                    self.kill_now();
-                    continue;
-                }
-            };
-            let line = match read {
-                Ok(Line::Text(text)) => text,
-                Ok(Line::TooLong) => {
-                    tracing::warn!("dropped a claude stdout line longer than {MAX_LINE_BYTES} bytes");
-                    continue;
-                }
-                Ok(Line::Eof) => break,
-                Err(e) => {
-                    tracing::warn!("claude stdout read failed: {e}");
-                    self.kill_now();
-                    break;
-                }
-            };
-            let Ok(msg) = serde_json::from_str::<Value>(&line) else {
-                tracing::debug!("skipping non-JSON line from claude stdout");
-                continue;
-            };
-            for output in route(&msg, &self.pending, &self.sink) {
-                if self.killed {
-                    break;
-                }
-                // Shutdown must not wait behind a full channel.
-                let sent = tokio::select! {
-                    result = self.tx.send(output) => result.is_ok(),
-                    _ = &mut self.kill, if !self.killed => false,
-                };
-                if !sent {
-                    // A kill was requested, or nobody listens any more.
-                    self.kill_now();
-                    break;
-                }
-            }
-        }
-
-        let status = loop {
-            tokio::select! {
-                status = self.child.wait() => break status.ok(),
-                _ = &mut self.kill, if !self.killed => self.kill_now(),
-            }
-        };
-        if let Some(pgid) = self.pgid {
-            // Whatever the CLI left in its group (e.g. background jobs) goes too.
-            kill_group(pgid);
-        }
-        let code = status.and_then(|s| s.code());
-        if timeout(STDERR_GRACE, &mut self.stderr_task).await.is_err() {
-            self.stderr_task.abort();
-        }
-        let stderr_tail = locked(&self.stderr).clone();
-        tokio::select! {
-            _ = self.tx.send(RuntimeOutput::Exited { code, stderr_tail }) => {}
-            _ = &mut self.kill, if !self.killed => {}
-        }
+        let this = *self;
+        this.proc.shutdown().await;
     }
 }
 
@@ -462,7 +418,7 @@ fn route(msg: &Value, pending: &PendingMap, sink: &LineSink) -> Vec<RuntimeOutpu
     }
     if let Some(reply) = unsupported_control_reply(msg) {
         tracing::debug!("answering unsupported control request: {reply}");
-        if let Err(e) = push_line(sink, &reply) {
+        if let Err(e) = process::push_line(sink, "claude", &reply) {
             tracing::debug!("could not answer control request: {e}");
         }
         return Vec::new();
@@ -497,155 +453,6 @@ fn unsupported_control_reply(msg: &Value) -> Option<Value> {
             "error": format!("Unsupported control request: {subtype}"),
         }
     }))
-}
-
-/// Owns the child's stdin. Writes queued frames in order. When the channel
-/// closes (shutdown), it drops stdin.
-async fn writer_task(mut stdin: ChildStdin, mut lines: mpsc::UnboundedReceiver<String>) {
-    while let Some(line) = lines.recv().await {
-        let written = match stdin.write_all(line.as_bytes()).await {
-            Ok(()) => stdin.flush().await,
-            Err(e) => Err(e),
-        };
-        if let Err(e) = written {
-            tracing::warn!("claude stdin write failed: {e}");
-            break;
-        }
-    }
-}
-
-/// Queue one NDJSON frame for the writer task. Errors when the session is
-/// closed or the writer task has stopped.
-fn push_line(sink: &LineSink, v: &Value) -> anyhow::Result<()> {
-    let guard = locked(sink);
-    let Some(tx) = guard.as_ref() else {
-        bail!("claude session is closed");
-    };
-    let mut line = v.to_string();
-    line.push('\n');
-    tx.send(line).map_err(|_| anyhow::anyhow!("claude session is closed"))
-}
-
-/// Collect stderr into a bounded tail shared with the pump.
-fn spawn_stderr(stderr: ChildStderr, tail: Arc<Mutex<String>>) -> JoinHandle<()> {
-    tokio::spawn(async move {
-        let mut reader = BufReader::new(stderr);
-        loop {
-            match read_capped_line(&mut reader, MAX_LINE_BYTES).await {
-                Ok(Line::Text(line)) => {
-                    let mut shared = locked(&tail);
-                    shared.push_str(&line);
-                    shared.push('\n');
-                    trim_tail(&mut shared);
-                }
-                Ok(Line::TooLong) => {}
-                Ok(Line::Eof) | Err(_) => break,
-            }
-        }
-    })
-}
-
-/// Keep only the last `STDERR_TAIL_LIMIT` bytes, cut on a char boundary.
-fn trim_tail(tail: &mut String) {
-    if tail.len() <= STDERR_TAIL_LIMIT {
-        return;
-    }
-    let mut start = tail.len() - STDERR_TAIL_LIMIT;
-    while !tail.is_char_boundary(start) {
-        start += 1;
-    }
-    tail.drain(..start);
-}
-
-/// One line read by [`read_capped_line`].
-#[derive(Debug, PartialEq)]
-enum Line {
-    /// Stream ended with nothing left to read.
-    Eof,
-    /// Line without its `\n`. Invalid UTF-8 is replaced, not rejected.
-    Text(String),
-    /// Longer than the limit. The bytes were discarded up to the newline.
-    TooLong,
-}
-
-/// Read one `\n`-terminated line. Memory stays bounded by `limit`: a longer
-/// line is consumed to its end and reported as [`Line::TooLong`].
-async fn read_capped_line<R>(reader: &mut R, limit: usize) -> std::io::Result<Line>
-where
-    R: AsyncBufRead + Unpin,
-{
-    let mut buf: Vec<u8> = Vec::new();
-    let mut too_long = false;
-    let mut read_any = false;
-    loop {
-        let chunk = reader.fill_buf().await?;
-        if chunk.is_empty() {
-            if !read_any {
-                return Ok(Line::Eof);
-            }
-            break;
-        }
-        read_any = true;
-        let newline = chunk.iter().position(|&b| b == b'\n');
-        let content_len = newline.unwrap_or(chunk.len());
-        if !too_long {
-            if buf.len() + content_len > limit {
-                too_long = true;
-                buf = Vec::new();
-            } else {
-                buf.extend_from_slice(&chunk[..content_len]);
-            }
-        }
-        let consumed = newline.map_or(chunk.len(), |i| i + 1);
-        reader.consume(consumed);
-        if newline.is_some() {
-            break;
-        }
-    }
-    Ok(if too_long {
-        Line::TooLong
-    } else {
-        Line::Text(String::from_utf8_lossy(&buf).into_owned())
-    })
-}
-
-/// Start the child in its own process group (unix), so a kill can reach its descendants.
-#[cfg(unix)]
-fn configure_group(cmd: &mut Command) {
-    cmd.process_group(0);
-}
-
-#[cfg(not(unix))]
-fn configure_group(_cmd: &mut Command) {}
-
-/// SIGKILL to the whole process group.
-#[cfg(unix)]
-fn kill_group(pgid: u32) {
-    // SAFETY: killpg only sends a signal. An unknown group yields ESRCH, which is ignored.
-    let _ = unsafe { libc::killpg(pgid as i32, libc::SIGKILL) };
-}
-
-#[cfg(not(unix))]
-fn kill_group(_pgid: u32) {}
-
-/// Kill the child's whole group, or only the child when no group is known.
-fn kill_tree(child: &mut Child, pgid: Option<u32>) {
-    match pgid {
-        Some(pgid) => kill_group(pgid),
-        None => {
-            let _ = child.start_kill();
-        }
-    }
-}
-
-/// The child's pipe, or an error if it was not set up as one.
-fn piped<T>(pipe: Option<T>, name: &str) -> anyhow::Result<T> {
-    pipe.ok_or_else(|| anyhow::anyhow!("claude {name} is not piped"))
-}
-
-/// Lock a mutex, ignoring poisoning (the data stays usable).
-fn locked<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
-    m.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 /// Non-empty string field of a JSON object.
@@ -780,22 +587,37 @@ fn map_result(msg: &Value, out: &mut Vec<RuntimeOutput>) {
             message: result_text.unwrap_or("Claude Code reported an error").to_string(),
         }));
     }
-    let usage = msg.get("usage").filter(|u| u.is_object()).map(|u| {
-        let n = |key: &str| u.get(key).and_then(Value::as_u64).unwrap_or(0);
-        Usage {
-            input_tokens: n("input_tokens")
-                .saturating_add(n("cache_creation_input_tokens"))
-                .saturating_add(n("cache_read_input_tokens")),
-            output_tokens: n("output_tokens"),
-        }
-    });
+    let usage = msg.get("usage").filter(|u| u.is_object());
+    // The top level sums every API call of a multi-step turn. The context the
+    // chapter holds now is the last call's, reported in `iterations`.
+    let last_call = usage
+        .and_then(|u| u.get("iterations"))
+        .and_then(Value::as_array)
+        .and_then(|calls| calls.last());
+    if let Some(call) = last_call {
+        let call = call_usage(call);
+        out.push(RuntimeOutput::ContextSize(
+            call.input_tokens.saturating_add(call.output_tokens),
+        ));
+    }
     out.push(RuntimeOutput::Event(EventBody::TurnCompleted {
         // The supervisor fills in the turn id.
         turn_id: String::new(),
         status,
-        usage,
+        usage: usage.map(call_usage),
         cost_usd: msg.get("total_cost_usd").and_then(Value::as_f64),
     }));
+}
+
+/// Usage of one API call: input counts cache writes and reads too.
+fn call_usage(u: &Value) -> Usage {
+    let n = |key: &str| u.get(key).and_then(Value::as_u64).unwrap_or(0);
+    Usage {
+        input_tokens: n("input_tokens")
+            .saturating_add(n("cache_creation_input_tokens"))
+            .saturating_add(n("cache_read_input_tokens")),
+        output_tokens: n("output_tokens"),
+    }
 }
 
 /// Each line of `text` with `prefix`, joined by newlines.
@@ -1042,6 +864,54 @@ mod tests {
                     output_tokens: 7,
                 }),
                 cost_usd: Some(0.5),
+            })]
+        );
+    }
+
+    #[test]
+    fn map_result_reports_the_last_call_as_context_and_the_total_as_usage() {
+        // Two API calls in one turn: the first read a big context, the second is the context now held.
+        let msg = json!({"type": "result", "subtype": "success", "is_error": false, "result": "done",
+            "usage": {
+                "input_tokens": 90, "cache_creation_input_tokens": 500, "cache_read_input_tokens": 150_000, "output_tokens": 900,
+                "iterations": [
+                    {"input_tokens": 80, "cache_creation_input_tokens": 400, "cache_read_input_tokens": 149_000, "output_tokens": 800},
+                    {"input_tokens": 10, "cache_creation_input_tokens": 100, "cache_read_input_tokens": 20_000, "output_tokens": 100}
+                ]
+            }
+        });
+        assert_eq!(
+            map_message(&msg),
+            vec![
+                RuntimeOutput::ContextSize(20_210),
+                RuntimeOutput::Event(EventBody::TurnCompleted {
+                    turn_id: String::new(),
+                    status: TurnStatus::Ok,
+                    usage: Some(Usage {
+                        input_tokens: 150_590,
+                        output_tokens: 900,
+                    }),
+                    cost_usd: None,
+                }),
+            ]
+        );
+    }
+
+    #[test]
+    fn map_result_with_empty_iterations_uses_the_top_level() {
+        let msg = json!({"type": "result", "subtype": "success", "is_error": false, "result": "ok",
+            "usage": {"input_tokens": 3, "output_tokens": 7, "iterations": []}
+        });
+        assert_eq!(
+            map_message(&msg),
+            vec![RuntimeOutput::Event(EventBody::TurnCompleted {
+                turn_id: String::new(),
+                status: TurnStatus::Ok,
+                usage: Some(Usage {
+                    input_tokens: 3,
+                    output_tokens: 7,
+                }),
+                cost_usd: None,
             })]
         );
     }
@@ -1304,45 +1174,147 @@ mod tests {
         assert_eq!(v["a"].as_str().expect("a").len(), 10_000);
     }
 
-    #[tokio::test]
-    async fn read_capped_line_replaces_invalid_utf8() {
-        let mut r = BufReader::new(&b"ab\xff\n{}\n"[..]);
-        assert_eq!(
-            read_capped_line(&mut r, 1024).await.expect("io"),
-            Line::Text("ab\u{FFFD}".into())
-        );
-        assert_eq!(
-            read_capped_line(&mut r, 1024).await.expect("io"),
-            Line::Text("{}".into())
-        );
-        assert_eq!(read_capped_line(&mut r, 1024).await.expect("io"), Line::Eof);
-    }
-
-    #[tokio::test]
-    async fn read_capped_line_drops_overlong_line_and_keeps_going() {
-        let mut r = BufReader::new(&b"abcdefgh\nxy\n"[..]);
-        assert_eq!(read_capped_line(&mut r, 4).await.expect("io"), Line::TooLong);
-        assert_eq!(read_capped_line(&mut r, 4).await.expect("io"), Line::Text("xy".into()));
-        assert_eq!(read_capped_line(&mut r, 4).await.expect("io"), Line::Eof);
-    }
-
-    #[tokio::test]
-    async fn read_capped_line_returns_unterminated_tail() {
-        let mut r = BufReader::new(&b"tail"[..]);
-        assert_eq!(
-            read_capped_line(&mut r, 1024).await.expect("io"),
-            Line::Text("tail".into())
-        );
-        assert_eq!(read_capped_line(&mut r, 1024).await.expect("io"), Line::Eof);
+    fn named(id: &str, label: &str) -> Plan {
+        Plan {
+            id: id.into(),
+            label: label.into(),
+        }
     }
 
     #[test]
-    fn trim_tail_keeps_last_bytes_on_char_boundary() {
-        // 'я' is 2 bytes and starts at even offsets; the naive cut at 1905 is mid-char.
-        let mut s = format!("{}a", "я".repeat(3000));
-        trim_tail(&mut s);
-        assert_eq!(s.len(), 4095);
-        assert!(s.ends_with('a'));
-        assert!(s.starts_with('я'));
+    fn plan_from_claude_maps_max_tiers_and_plain_plans() {
+        assert_eq!(
+            plan_from_claude("max", Some("default_claude_max_20x")),
+            Some(named("max_20x", "Max ×20"))
+        );
+        assert_eq!(
+            plan_from_claude("max", Some("default_claude_max_5x")),
+            Some(named("max_5x", "Max ×5"))
+        );
+        assert_eq!(plan_from_claude("max", None), Some(named("max", "Max")));
+        assert_eq!(
+            plan_from_claude("max", Some("default_claude_max")),
+            Some(named("max", "Max"))
+        );
+        assert_eq!(
+            plan_from_claude("pro", Some("default_claude_pro")),
+            Some(named("pro", "Pro"))
+        );
+        assert_eq!(plan_from_claude("team", None), Some(named("team", "Team")));
+        assert_eq!(
+            plan_from_claude("enterprise", None),
+            Some(named("enterprise", "Enterprise"))
+        );
+    }
+
+    #[test]
+    fn plan_from_claude_ignores_case_and_spaces() {
+        assert_eq!(
+            plan_from_claude("MAX", Some("  Default_Claude_Max_20X ")),
+            Some(named("max_20x", "Max ×20"))
+        );
+        assert_eq!(plan_from_claude(" Max ", None), Some(named("max", "Max")));
+        // The tier only refines `max`: a Pro account with a max-looking tier is Pro.
+        assert_eq!(
+            plan_from_claude("pro", Some("default_claude_max_20x")),
+            Some(named("pro", "Pro"))
+        );
+    }
+
+    #[test]
+    fn plan_from_claude_names_other_plans_as_they_come() {
+        assert_eq!(plan_from_claude("weird", None), Some(named("weird", "Weird")));
+        assert_eq!(
+            plan_from_claude("Custom Plan", None),
+            Some(named("Custom Plan", "Custom Plan"))
+        );
+    }
+
+    #[test]
+    fn plan_from_claude_needs_a_subscription_type() {
+        assert_eq!(plan_from_claude("", Some("default_claude_max_20x")), None);
+        assert_eq!(plan_from_claude("   ", None), None);
+    }
+
+    #[test]
+    fn config_dir_prefers_claude_config_dir_then_home() {
+        assert_eq!(
+            config_dir_from(Some("/opt/claude".into()), Some("/home/u".into())),
+            Some(PathBuf::from("/opt/claude"))
+        );
+        assert_eq!(
+            config_dir_from(Some("  ".into()), Some("/home/u".into())),
+            Some(PathBuf::from("/home/u/.claude"))
+        );
+        assert_eq!(
+            config_dir_from(None, Some("/home/u".into())),
+            Some(PathBuf::from("/home/u/.claude"))
+        );
+        assert_eq!(config_dir_from(None, None), None);
+    }
+
+    const CREDENTIALS: &str = r#"{"claudeAiOauth": {"accessToken": "SECRET-ACCESS-123", "refreshToken": "SECRET-REFRESH-456", "expiresAt": 1791543600000, "scopes": ["user:inference"], "subscriptionType": "max", "rateLimitTier": "default_claude_max_20x"}}"#;
+
+    fn dir_with_credentials(content: &str) -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join(".credentials.json"), content).unwrap();
+        dir
+    }
+
+    #[tokio::test]
+    async fn account_plan_reads_the_subscription_and_never_the_tokens() {
+        let dir = dir_with_credentials(CREDENTIALS);
+        let plan = ClaudeRuntime::new()
+            .with_config_dir(dir.path())
+            .account_plan()
+            .await
+            .unwrap()
+            .expect("a plan");
+        assert_eq!(plan, named("max_20x", "Max ×20"));
+        let debug = format!("{plan:?}");
+        let json = serde_json::to_string(&plan).unwrap();
+        for text in [debug, json] {
+            assert!(!text.contains("SECRET"), "token leaked into {text}");
+        }
+    }
+
+    #[tokio::test]
+    async fn account_plan_uses_claude_config_dir_from_the_runtime_env() {
+        let dir = dir_with_credentials(CREDENTIALS);
+        let rt = ClaudeRuntime::new().with_env(vec![
+            ("CLAUDE_CONFIG_DIR".into(), dir.path().display().to_string()),
+            ("HOME".into(), "/nonexistent-home".into()),
+        ]);
+        assert_eq!(rt.account_plan().await.unwrap(), Some(named("max_20x", "Max ×20")));
+    }
+
+    #[tokio::test]
+    async fn account_plan_is_none_without_the_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let plan = ClaudeRuntime::new()
+            .with_config_dir(dir.path())
+            .account_plan()
+            .await
+            .unwrap();
+        assert_eq!(plan, None);
+    }
+
+    #[tokio::test]
+    async fn account_plan_is_none_for_broken_or_incomplete_files() {
+        for content in [
+            r#"{"claudeAiOauth": {"accessToken": "SECRET-"#,
+            "{}",
+            r#"{"claudeAiOauth": {"accessToken": "SECRET-ONLY"}}"#,
+            r#"{"claudeAiOauth": "SECRET-STRING"}"#,
+            r#"{"claudeAiOauth": {"subscriptionType": ""}}"#,
+        ] {
+            let dir = dir_with_credentials(content);
+            let plan = ClaudeRuntime::new()
+                .with_config_dir(dir.path())
+                .account_plan()
+                .await
+                .unwrap();
+            assert_eq!(plan, None, "{content}");
+        }
     }
 }

@@ -1,0 +1,8 @@
+// The host interrupts before session/new is answered. The queued texts are dropped, so no session/prompt
+// follows. The script's expect below is then never met: the fake exits with code 3 at stdin EOF.
+// Exit 0 would mean a prompt went out.
+{"expect": {"method": "initialize"}}
+{"send": {"jsonrpc": "2.0", "id": "$last:/id", "result": {"protocolVersion": 1, "agentCapabilities": {}}}}
+{"expect": {"method": "session/new"}}
+{"send": {"jsonrpc": "2.0", "id": "$last:/id", "result": {"sessionId": "sess-i1"}}}
+{"expect": {"method": "session/prompt"}}

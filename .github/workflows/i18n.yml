@@ -1,0 +1,19 @@
+name: i18n
+
+on:
+  pull_request:
+    paths: ["i18n/**", "apps/mac/BanditoKit/Sources/BanditoL10n/**"]
+  push:
+    branches: [main]
+    paths: ["i18n/**", "apps/mac/BanditoKit/Sources/BanditoL10n/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Validate strings and generated files
+        run: python3 i18n/build.py --check

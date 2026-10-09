@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Bandito — агент, память и главы</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+@keyframes bnd-blink{0%,93%,100%{transform:scaleY(1)}96%{transform:scaleY(.12)}}
+body{margin:0;background:#0B0A09}
+a{color:#FFB067}a:hover{color:#FFD2A0}
+button{font:inherit;cursor:pointer;transition:color .15s ease,box-shadow .2s ease,transform .12s ease,filter .15s ease,background-color .15s ease}
+button:hover{filter:brightness(1.15)}
+button:active{transform:scale(.98)}
+@keyframes bnd-rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes bnd-slide{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:none}}
+@keyframes bnd-fill{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes bnd-tab{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; display: flex; background: #12100E; color: #F3EBDD; font-family: Geist, -apple-system, sans-serif; font-size: 14px; overflow: hidden;">
+
+  <nav aria-label="Агенты" style="width: 76px; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 18px 0 16px; background: #161311; border-right: 1px solid rgba(243,235,221,.07);">
+    <div style="display: flex; gap: 6px; margin-bottom: 8px;"><span style="width: 11px; height: 11px; border-radius: 50%; background: #FF5F57;"></span><span style="width: 11px; height: 11px; border-radius: 50%; background: #FEBC2E;"></span><span style="width: 11px; height: 11px; border-radius: 50%; background: #28C840;"></span></div>
+    <div aria-label="Разделы" style="display: flex; flex-direction: column; gap: 2px; padding: 3px; border-radius: 12px; background: rgba(243,235,221,.04); border: 1px solid rgba(243,235,221,.06);">
+      <sc-for list="{{modesNav}}" as="m" hint-placeholder-count="6">
+        <button aria-label="{{m.label}}" style="{{m.style}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="{{m.icon}}"></path></svg></button>
+      </sc-for>
+    </div>
+    <span style="width: 28px; height: 1px; background: rgba(243,235,221,.08); margin: 4px 0;"></span>
+    <sc-for list="{{rail}}" as="r" hint-placeholder-count="5">
+      <div style="{{r.wrap}}">
+        <svg width="40" height="40" viewBox="0 0 52 52"><rect width="52" height="52" rx="17" fill="{{r.color}}"></rect><path d="M8 22c6-6 30-6 36 0v7c-6 4-30 4-36 0z" fill="#12100E"></path><g style="transform-box: view-box; transform-origin: 26px 26px; animation: bnd-blink 5.2s ease-in-out infinite; animation-delay: {{r.blink}};"><circle cx="18" cy="26" r="2.6" fill="{{r.color}}"></circle><circle cx="34" cy="26" r="2.6" fill="{{r.color}}"></circle></g></svg>
+        <span style="{{r.dot}}"></span>
+      </div>
+    </sc-for>
+    <div style="flex: 1;"></div>
+    <button aria-label="Новый агент" style="width: 40px; height: 40px; border-radius: 13px; border: 1px dashed rgba(243,235,221,.18); background: transparent; color: #867C6D; display: grid; place-items: center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg></button>
+  </nav>
+
+  <main style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+    <header style="height: 52px; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid rgba(243,235,221,.05);">
+      <div style="display: flex; align-items: center; gap: 9px; padding: 5px 14px 5px 6px; border-radius: 999px; background: rgba(28,24,21,.8); border: 1px solid rgba(243,235,221,.09);">
+        <svg width="26" height="26" viewBox="0 0 52 52"><rect width="52" height="52" rx="17" fill="#FFB067"></rect><path d="M8 22c6-6 30-6 36 0v7c-6 4-30 4-36 0z" fill="#12100E"></path><g style="transform-box: view-box; transform-origin: 26px 26px; animation: bnd-blink 5.2s ease-in-out infinite; animation-delay: 1.37s;"><path d="m16 23 4 3-4 3" stroke="#FFB067" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"></path><path d="M31 26h6" stroke="#FFB067" stroke-width="2.6" stroke-linecap="round"></path></g></svg>
+        <span style="font-weight: 600;">Forge</span>
+        <span style="font-size: 12px; color: #A9C7A2;">ждёт задачу</span>
+      </div>
+    </header>
+    <div style="flex: 1; display: flex; justify-content: center; overflow: hidden;">
+      <div style="width: 640px; padding-top: 26px; display: flex; flex-direction: column; gap: 14px;">
+        <div style="align-self: flex-end; max-width: 520px; padding: 11px 15px; border-radius: 18px 18px 6px 18px; background: #2C2722; line-height: 1.5;">Помнишь, что мы решили про округление в счетах?</div>
+        <div style="border-radius: 14px; border: 1px solid rgba(243,235,221,.07); background: rgba(26,23,20,.6); padding: 10px 14px; display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: #BDB2A0;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#A3BDEB" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+          <span style="color: #F3EBDD; font-weight: 500;">Поискал в переписке</span><span style="color: #6E655A;">· «округление» · 3 совпадения, 2 недели назад</span>
+        </div>
+        <div style="align-self: flex-start; max-width: 560px; padding: 12px 16px; border-radius: 18px 18px 18px 6px; background: #1A1714; border: 1px solid rgba(243,235,221,.06); line-height: 1.6;">Да: 24 сентября решили хранить все суммы в копейках (<span style="font-family: 'Geist Mono', monospace; color: #FFB067;">i64</span>) и округлять только при показе. Это записано в <span style="font-family: 'Geist Mono', monospace; color: #A3BDEB;">notes/billing.md</span>.</div>
+      </div>
+    </div>
+  </main>
+
+  <aside aria-label="Об агенте" style="width: 400px; flex-shrink: 0; background: linear-gradient(180deg, #1A1714, #161311); border-left: 1px solid rgba(243,235,221,.07); display: flex; flex-direction: column; overflow: hidden; animation: bnd-slide .4s cubic-bezier(.2,.8,.2,1) both;">
+    <div style="display: flex; align-items: center; gap: 14px; padding: 18px 20px 14px;">
+      <svg width="56" height="56" viewBox="0 0 52 52"><rect width="52" height="52" rx="17" fill="#FFB067"></rect><path d="M8 22c6-6 30-6 36 0v7c-6 4-30 4-36 0z" fill="#12100E"></path><g style="transform-box: view-box; transform-origin: 26px 26px; animation: bnd-blink 5.2s ease-in-out infinite; animation-delay: 2.74s;"><path d="m16 23 4 3-4 3" stroke="#FFB067" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"></path><path d="M31 26h6" stroke="#FFB067" stroke-width="2.4" stroke-linecap="round"></path></g></svg>
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 3px;">
+        <span style="font-size: 19px; font-weight: 650; letter-spacing: -.01em;">Forge</span>
+        <span style="font-size: 12.5px; color: #867C6D;">сборщик · Claude Code · Opus 5.5</span>
+      </div>
+      <button aria-label="Закрыть" style="width: 30px; height: 30px; border-radius: 50%; border: 1px solid rgba(243,235,221,.1); background: transparent; color: #867C6D; display: grid; place-items: center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></button>
+    </div>
+    <div role="tablist" style="margin: 0 20px 16px; padding: 3px; border-radius: 11px; background: rgba(243,235,221,.05); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px;">
+      <sc-for list="{{tabs}}" as="t" hint-placeholder-count="3">
+        <button role="tab" aria-selected="{{t.selected}}" onClick="{{t.pick}}" style="{{t.style}}">{{t.label}}</button>
+      </sc-for>
+    </div>
+
+    <sc-if value="{{isMemory}}" hint-placeholder-val="{{ true }}">
+      <div style="flex: 1; overflow: hidden; padding: 0 20px 20px; display: flex; flex-direction: column; gap: 16px; animation: bnd-tab .3s ease-out both;">
+        <section style="border-radius: 16px; border: 1px solid rgba(243,235,221,.08); background: rgba(243,235,221,.025); padding: 14px; display: flex; flex-direction: column; gap: 10px;">
+          <div style="display: flex; justify-content: space-between; align-items: baseline;"><span style="font-weight: 600;">Глава 4</span><span style="font-size: 12px; color: #867C6D;">идёт с сегодняшнего утра</span></div>
+          <div style="height: 8px; border-radius: 999px; background: rgba(243,235,221,.07); overflow: hidden; display: flex;"><div style="width: 32%; background: linear-gradient(90deg, #A9C7A2, #C8DCC3); border-radius: 999px; transform-origin: left; animation: bnd-fill 1s cubic-bezier(.2,.8,.2,1) .3s both;"></div></div>
+          <div style="display: flex; justify-content: space-between; font-size: 12px; color: #867C6D;"><span>занято 38 400 токенов</span><span>новая глава после 120 000</span></div>
+          <p style="margin: 0; font-size: 12.5px; color: #BDB2A0; line-height: 1.55;">Когда глава заполнится, Forge сам запишет важное в память и начнёт с чистого листа. Переписка в окне остаётся целиком, а каждое новое сообщение не дорожает.</p>
+        </section>
+
+        <section style="display: flex; flex-direction: column; gap: 8px;">
+          <span style="font-size: 11px; font-weight: 600; letter-spacing: .08em; color: #867C6D;">КАК ДЕЛИТЬ НА ГЛАВЫ</span>
+          <div role="radiogroup" aria-label="Режим памяти" style="display: flex; flex-direction: column; gap: 6px;">
+            <sc-for list="{{modes}}" as="m" hint-placeholder-count="3">
+              <div role="radio" aria-checked="{{m.checked}}" onClick="{{m.pick}}" style="{{m.style}}">
+                <span style="{{m.radio}}"></span>
+                <span style="flex: 1; display: flex; flex-direction: column; gap: 2px;"><span style="font-weight: 600; font-size: 13px;">{{m.name}} <span style="{{m.badgeStyle}}">{{m.badge}}</span></span><span style="font-size: 12px; color: #867C6D; line-height: 1.45;">{{m.desc}}</span></span>
+              </div>
+            </sc-for>
+          </div>
+        </section>
+
+        <section style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: baseline;"><span style="font-size: 11px; font-weight: 600; letter-spacing: .08em; color: #867C6D;">ПАМЯТЬ</span><span style="font-size: 11.5px; color: #6E655A; font-family: 'Geist Mono', monospace;">~/bandito/agents/forge</span></div>
+          <div style="border-radius: 14px; border: 1px solid rgba(243,235,221,.08); overflow: hidden;">
+            <sc-for list="{{files}}" as="f" hint-placeholder-count="4">
+              <button aria-label="Открыть {{f.name}}" style="{{f.row}}">
+                <span style="{{f.iconWrap}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="{{f.icon}}"></path></svg></span>
+                <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; text-align: left;"><span style="font-size: 13px; font-weight: 500;">{{f.name}}</span><span style="font-size: 11.5px; color: #6E655A;">{{f.meta}}</span></span>
+                <span style="font-size: 11.5px; color: #FFB067; font-weight: 600;">{{f.action}}</span>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6E655A" stroke-width="2" stroke-linecap="round"><path d="m9 6 6 6-6 6"></path></svg>
+              </button>
+            </sc-for>
+          </div>
+          <span style="font-size: 12px; color: #6E655A; line-height: 1.5;">Обычные Markdown-файлы на вашем сервере. Нажмите — откроются прямо здесь: читать, править, смотреть историю. Агент прочитает новую версию в следующей главе.</span>
+        </section>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{isDetails}}" hint-placeholder-val="{{ false }}">
+      <div style="flex: 1; overflow: hidden; padding: 0 20px 20px; display: flex; flex-direction: column; gap: 14px; animation: bnd-tab .3s ease-out both;">
+        <section style="border-radius: 14px; border: 1px solid rgba(243,235,221,.08); background: rgba(243,235,221,.025);">
+          <sc-for list="{{details}}" as="d" hint-placeholder-count="5">
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 11px 14px; border-bottom: 1px solid rgba(243,235,221,.05);"><span style="color: #867C6D; font-size: 12.5px;">{{d.k}}</span><span style="font-size: 13px; display: flex; align-items: center; gap: 6px;">{{d.v}}<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6E655A" stroke-width="2" stroke-linecap="round"><path d="m7 10 5 5 5-5"></path></svg></span></div>
+          </sc-for>
+        </section>
+        <section style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;"><span style="font-size: 11px; font-weight: 600; letter-spacing: .08em; color: #867C6D;">РАСПИСАНИЕ</span><button style="border: none; background: transparent; color: #FFB067; font-size: 12.5px; font-weight: 500; padding: 0;">+ Добавить</button></div>
+          <div style="border-radius: 14px; border: 1px solid rgba(243,235,221,.08); background: rgba(243,235,221,.025); padding: 12px 14px; display: flex; align-items: center; gap: 12px;">
+            <span style="width: 34px; height: 34px; border-radius: 10px; background: rgba(255,176,103,.12); color: #FFB067; display: grid; place-items: center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5"></path></svg></span>
+            <div style="flex: 1; display: flex; flex-direction: column; gap: 2px;"><span style="font-size: 13px; font-weight: 500;">Утренняя сводка</span><span style="font-size: 12px; color: #867C6D;">По будням в 09:00 · следующая завтра</span></div>
+            <span role="switch" aria-checked="true" aria-label="Утренняя сводка" style="width: 36px; height: 21px; border-radius: 999px; background: #E4620E; position: relative;"><span style="position: absolute; right: 2px; top: 2px; width: 17px; height: 17px; border-radius: 50%; background: #FFFFFF;"></span></span>
+          </div>
+        </section>
+        <section style="display: flex; flex-direction: column; gap: 8px;">
+          <span style="font-size: 11px; font-weight: 600; letter-spacing: .08em; color: #867C6D;">ИНСТРУКЦИИ</span>
+          <div style="border-radius: 14px; border: 1px solid rgba(243,235,221,.08); background: #141210; padding: 12px 14px; font-size: 13px; color: #BDB2A0; line-height: 1.55;">Делай маленькие PR. Перед каждым пушем гоняй тесты. Когда закончишь — попроси Scout посмотреть.</div>
+        </section>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{isServer}}" hint-placeholder-val="{{ false }}">
+      <div style="flex: 1; overflow: hidden; padding: 0 20px 20px; display: flex; flex-direction: column; gap: 12px; animation: bnd-tab .3s ease-out both;">
+        <section style="border-radius: 16px; border: 1px solid rgba(255,176,103,.25); background: rgba(255,138,31,.05); padding: 14px; display: flex; flex-direction: column; gap: 10px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="width: 34px; height: 34px; border-radius: 11px; background: rgba(255,138,31,.13); color: #FFB067; display: grid; place-items: center;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 11 12 4l8 7v9H4z"></path></svg></span>
+            <span style="flex: 1; display: flex; flex-direction: column; gap: 2px;"><span style="font-weight: 600;">Общее</span><span style="font-size: 12px; color: #867C6D;">vps-tokyo-1 · вместе с Atlas и Quill</span></span>
+            <button style="height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid rgba(243,235,221,.14); background: transparent; color: #F3EBDD; font-size: 12px;">Сменить</button>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px;">
+            <sc-for list="{{place}}" as="p" hint-placeholder-count="4">
+              <button style="{{p.style}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="{{p.icon}}"></path></svg><span style="flex: 1; text-align: left;">{{p.label}}</span></button>
+            </sc-for>
+          </div>
+        </section>
+        <span style="font-size: 11px; font-weight: 600; letter-spacing: .08em; color: #867C6D; margin-top: 4px;">ПОДПИСКИ НА ЭТОМ СЕРВЕРЕ</span>
+        <sc-for list="{{clis}}" as="c" hint-placeholder-count="3">
+          <div style="{{c.row}}">
+            <span style="flex: 1; display: flex; flex-direction: column; gap: 2px;"><span style="font-weight: 600; font-size: 13px;">{{c.name}} <span style="{{c.planStyle}}">{{c.plan}}</span></span><span style="font-size: 11.5px; color: #6E655A; font-family: 'Geist Mono', monospace;">{{c.version}}</span></span>
+            <span style="{{c.style}}">{{c.state}}</span>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+  </aside>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { tab: 'memory', mode: 'smart' };
+  }
+  renderVals() {
+    const tab = this.state.tab, mode = this.state.mode;
+    const base = 'position: relative; padding: 3px; border-radius: 16px;';
+    const dot = (c) => 'position: absolute; right: 0; bottom: 0; width: 11px; height: 11px; border-radius: 50%; border: 2.5px solid #161311; background: ' + c + ';';
+    const tabBtn = (id, label) => ({
+      label, selected: tab === id ? 'true' : 'false',
+      pick: () => this.setState({ tab: id }),
+      style: 'height: 30px; border-radius: 8px; border: none; font-size: 12.5px; ' + (tab === id ? 'background: #2C2722; color: #F3EBDD; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.4);' : 'background: transparent; color: #867C6D; font-weight: 500;')
+    });
+    const modeRow = (id, name, desc, badge) => ({
+      name, desc, badge: badge || '', checked: mode === id ? 'true' : 'false',
+      pick: () => this.setState({ mode: id }),
+      badgeStyle: badge ? 'font-size: 10.5px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: rgba(169,199,162,.14); color: #C8DCC3; margin-left: 4px;' : 'display: none;',
+      style: 'display: flex; gap: 11px; align-items: flex-start; padding: 11px 12px; border-radius: 13px; cursor: pointer; ' + (mode === id ? 'background: rgba(255,138,31,.07); border: 1px solid rgba(255,138,31,.4);' : 'border: 1px solid rgba(243,235,221,.07);'),
+      radio: 'width: 16px; height: 16px; border-radius: 50%; margin-top: 1px; flex-shrink: 0; ' + (mode === id ? 'border: 5px solid #E4620E; background: #FFFFFF;' : 'border: 1.5px solid rgba(243,235,221,.25);')
+    });
+    let fk = 0;
+    const file = (name, meta, icon, tint, action) => ({ name, meta, icon, action: action || '', iconWrap: 'width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; flex-shrink: 0; background: ' + tint + '22; color: ' + tint + ';', row: 'width: 100%; display: flex; align-items: center; gap: 11px; padding: 10px 12px; border: none; border-bottom: 1px solid rgba(243,235,221,.05); background: ' + (fk === 0 ? 'rgba(255,138,31,.05)' : 'transparent') + '; color: #F3EBDD; animation: bnd-rise .3s ease-out ' + (250 + (fk++) * 70) + 'ms both;' });
+    let ck = 0;
+    const cli = (name, plan, version, state, ok) => ({ name, plan, version, state, planStyle: 'font-size: 10.5px; font-weight: 600; color: #FFB067; background: rgba(255,138,31,.12); padding: 1px 6px; border-radius: 6px; margin-left: 4px;' + (plan ? '' : ' display: none;'), row: 'display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: 14px; border: 1px solid rgba(243,235,221,.07); animation: bnd-rise .3s ease-out ' + (150 + (ck++) * 70) + 'ms both;', style: 'font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; ' + (ok ? 'background: rgba(169,199,162,.12); color: #C8DCC3;' : 'background: rgba(255,176,103,.12); color: #FFB067;') });
+    const I = {
+      chat: 'M4 5h16v11H9l-5 4z',
+      folder: 'M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
+      term: 'M3.5 5h17v14h-17zM7 10l3 2-3 2M12.5 15h4',
+      globe: 'M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17zM3.5 12h17M12 3.5c2.6 2.6 2.6 14.4 0 17M12 3.5c-2.6 2.6-2.6 14.4 0 17',
+      screen: 'M3.5 4.5h17v11h-17zM9 20h6M12 15.5V20',
+      pulse: 'M3 12h4l2-5 4 10 2-5h6'
+    };
+    const modeStyle = (on) => 'width: 36px; height: 32px; border-radius: 9px; border: none; display: grid; place-items: center; ' + (on ? 'background: #2C2722; color: #F3EBDD; box-shadow: inset 0 1px 0 rgba(243,235,221,.06), 0 4px 10px -4px rgba(0,0,0,.6);' : 'background: transparent; color: #867C6D;');
+    const modesNav = [['Команда', I.chat], ['Файлы', I.folder], ['Терминалы', I.term], ['Браузер', I.globe], ['Экран сервера', I.screen], ['Сервер', I.pulse]].map(([label, icon], k) => ({ label, icon, style: modeStyle(k === 0) }));
+    const placeBtn = 'display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(243,235,221,.08); background: rgba(18,16,14,.5); color: #BDB2A0; font-size: 12.5px;';
+    const place = [
+      { label: 'Папка проекта', icon: I.folder, style: placeBtn },
+      { label: 'Терминал агента', icon: I.term, style: placeBtn },
+      { label: 'Его браузер', icon: I.globe, style: placeBtn },
+      { label: 'Экран', icon: I.screen, style: placeBtn }
+    ];
+    return {
+      modesNav, place,
+      rail: [
+        { color: '#F3EBDD', wrap: base, dot: dot('#A9C7A2') },
+        { color: '#FFB067', wrap: base + ' box-shadow: 0 0 0 2px #FFB067;', dot: dot('#A9C7A2') },
+        { color: '#A3BDEB', wrap: base, dot: dot('#6E655A') },
+        { color: '#F2A093', wrap: base, dot: dot('#A9C7A2') },
+        { color: '#BDB2A0', wrap: base, dot: dot('#6E655A') }
+      ],
+      tabs: [tabBtn('details', 'Сведения'), tabBtn('memory', 'Память'), tabBtn('server', 'Где работает')],
+      isMemory: tab === 'memory', isDetails: tab === 'details', isServer: tab === 'server',
+      modes: [
+        modeRow('smart', 'Умная', 'Новая глава, когда разговор разрастается, и с утра нового дня. Подходит почти всем.', 'рекомендуем'),
+        modeRow('daily', 'Каждый день', 'Каждое утро — чистый лист. Для ассистентов с ежедневными задачами.'),
+        modeRow('full', 'Одна длинная глава', 'Агент сам сжимает старое. Удобно для одной большой задачи, но дороже.')
+      ],
+      files: [
+        file('MEMORY.md', 'Главное: проекты, решения, открытые задачи · обновлён в 14:05', 'M6 4h9l4 4v12H6zM14 4v5h5', '#FFB067', 'Открыть'),
+        file('Заметки', 'billing.md, team.md, deploy.md и ещё 4', 'M4 6h16M4 12h16M4 18h10', '#A3BDEB'),
+        file('Журнал', 'Сегодня: 3 записи · вчера: 5', 'M8 3v4M16 3v4M4 9h16M5 5h14v15H5z', '#A9C7A2'),
+        file('Файлы', '3 файла, которые Forge сделал для себя', 'M3.5 6.5h6l2 2h9v10h-17z', '#BDB2A0')
+      ],
+      details: [
+        { k: 'Работает на', v: 'Claude Code · Max ×20' }, { k: 'Модель', v: 'Opus 5.5' }, { k: 'Усилие', v: 'Среднее' },
+        { k: 'Если лимит кончится', v: 'Codex' }, { k: 'Проект', v: '~/projects/billing' },
+        { k: 'Рабочее место', v: 'Общее' }, { k: 'Одобрения', v: 'Спрашивать о рискованном' }
+      ],
+      clis: [cli('Claude Code', 'Max ×20', '2.1.295 · осталось 90%', 'вход выполнен', true), cli('Codex', 'ChatGPT Plus', '0.161.0 · осталось 18%', 'вход выполнен', true), cli('Grok', 'SuperGrok', '1.0.50 · снова в 20:00', 'лимит на сегодня', false)]
+    };
+  }
+}
+</script>
+</body>
+</html>

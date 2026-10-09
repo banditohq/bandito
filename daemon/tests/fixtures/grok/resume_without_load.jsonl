@@ -1,0 +1,8 @@
+// The agent cannot load sessions (no loadSession capability): resume starts a new session instead, and
+// since that session has no history yet, the system prompt goes into its first prompt.
+{"expect": {"method": "initialize"}}
+{"send": {"jsonrpc": "2.0", "id": "$last:/id", "result": {"protocolVersion": 1, "agentCapabilities": {}}}}
+{"expect": {"method": "session/new"}}
+{"send": {"jsonrpc": "2.0", "id": "$last:/id", "result": {"sessionId": "sess-n1"}}}
+{"expect": {"method": "session/prompt", "params": {"sessionId": "sess-n1", "prompt": [{"type": "text", "text": "Instructions from Bandito:\nYou are Night Owl.\n\nUser message:\nagain"}]}}}
+{"send": {"jsonrpc": "2.0", "id": 3, "result": {"stopReason": "end_turn"}}}

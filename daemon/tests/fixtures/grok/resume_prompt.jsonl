@@ -1,0 +1,8 @@
+// Resume with a system prompt: the loaded history already holds it, so the first prompt goes out as is.
+{"expect": {"method": "initialize"}}
+{"send": {"jsonrpc": "2.0", "id": "$last:/id", "result": {"protocolVersion": 1, "agentCapabilities": {"loadSession": true}}}}
+{"expect": {"method": "session/load", "params": {"sessionId": "sess-r1"}}}
+{"send": {"jsonrpc": "2.0", "id": "$last:/id", "result": null}}
+{"expect": {"method": "session/prompt", "params": {"sessionId": "sess-r1", "prompt": [{"type": "text", "text": "again"}]}}}
+{"send": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "sess-r1", "update": {"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": "ok"}}}}}
+{"send": {"jsonrpc": "2.0", "id": 3, "result": {"stopReason": "end_turn"}}}

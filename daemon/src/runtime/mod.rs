@@ -8,7 +8,12 @@ use serde_json::Value;
 use std::path::PathBuf;
 use tokio::sync::mpsc;
 
+pub use crate::event::Plan;
+
 pub mod claude;
+pub mod codex;
+pub mod grok;
+pub mod process;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -78,6 +83,10 @@ pub enum RuntimeOutput {
     },
     /// The CLI's own session/thread id, to store for resume.
     SessionId(String),
+    /// Context size the chapter holds after this turn, when the CLI reports it
+    /// separately from the turn's total usage (Claude: the last API call of a
+    /// multi-step turn). Without it, the turn's usage is the context size.
+    ContextSize(u64),
     /// The child process ended; no more output will follow.
     Exited {
         code: Option<i32>,
@@ -100,6 +109,10 @@ pub struct SpawnConfig {
     pub mcp: Option<(PathBuf, Vec<String>)>,
     /// Extra environment for the child.
     pub env: Vec<(String, String)>,
+    /// How hard the model thinks; each runtime maps or rejects it.
+    pub effort: Option<crate::store::Effort>,
+    /// Folders besides `cwd` the agent may read and write (its home).
+    pub extra_dirs: Vec<PathBuf>,
 }
 
 /// A live session with one agent CLI.
@@ -141,6 +154,26 @@ pub trait Runtime: Send + Sync {
     fn kind(&self) -> RuntimeKind;
     async fn status(&self) -> RuntimeStatus;
     async fn spawn(&self, cfg: SpawnConfig) -> anyhow::Result<Spawned>;
+    /// Ask the CLI for current rate-limit windows without running a turn.
+    /// `Ok(None)` when the runtime can't be asked (the cache then keeps the
+    /// last windows a turn reported).
+    async fn refresh_usage(&self) -> anyhow::Result<Option<Vec<crate::event::LimitWindow>>> {
+        Ok(None)
+    }
+    /// The account's subscription (`Max ×20`, `Plus`, …), read without starting a turn.
+    /// `Ok(None)` when the runtime does not say, or cannot be asked; the stored plan then stays.
+    async fn account_plan(&self) -> anyhow::Result<Option<Plan>> {
+        Ok(None)
+    }
+}
+
+/// `text` with its first character upper-cased (`prolite` → `Prolite`). Used for plan names we do not know.
+pub(crate) fn capitalized(text: &str) -> String {
+    let mut chars = text.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+        None => String::new(),
+    }
 }
 
 /// `program --version` → first line, or `None` if it can't run.

@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Bandito — клавиши и жесты</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0B0A09}
+a{color:#FFB067}a:hover{color:#FFD2A0}
+button{font:inherit;cursor:pointer;transition:color .15s ease,box-shadow .2s ease,transform .12s ease,filter .15s ease}
+button:hover{filter:brightness(1.15)}
+button:active{transform:scale(.98)}
+input{font:inherit}
+@keyframes bnd-sheet{from{opacity:0;transform:translateY(22px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes bnd-fade{from{opacity:0}to{opacity:1}}
+@keyframes bnd-rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes bnd-rec{0%,100%{box-shadow:0 0 0 0 rgba(255,138,31,.6)}50%{box-shadow:0 0 0 5px rgba(255,138,31,0)}}
+@keyframes bnd-caret{0%,49%{opacity:1}50%,100%{opacity:0}}
+@keyframes bnd-swipe{0%,15%{transform:translateX(0);opacity:0}25%{opacity:1}65%{transform:translateX(-46px);opacity:1}80%,100%{transform:translateX(-46px);opacity:0}}
+@keyframes bnd-pinch1{0%,20%{transform:translate(0,0)}60%,80%{transform:translate(-12px,-10px)}100%{transform:translate(0,0)}}
+@keyframes bnd-pinch2{0%,20%{transform:translate(0,0)}60%,80%{transform:translate(12px,10px)}100%{transform:translate(0,0)}}
+@keyframes bnd-press{0%,30%{transform:scale(1);box-shadow:0 0 0 0 rgba(255,176,103,.6)}55%{transform:scale(.85);box-shadow:0 0 0 10px rgba(255,176,103,0)}100%{transform:scale(1)}}
+@keyframes bnd-reveal{0%,20%{transform:translateX(0)}50%,80%{transform:translateX(-92px)}100%{transform:translateX(0)}}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; position: relative; background: #12100E; color: #F3EBDD; font-family: Geist, -apple-system, sans-serif; font-size: 14px; overflow: hidden;">
+  <div aria-hidden="true" style="position: absolute; inset: 0; display: flex; filter: blur(3px); opacity: .5;"><div style="width: 296px; background: #171411;"></div><div style="flex: 1;"></div></div>
+  <div aria-hidden="true" style="position: absolute; inset: 0; background: rgba(8,7,6,.62); animation: bnd-fade .25s ease-out both;"></div>
+
+  <div role="dialog" aria-label="Настройки — клавиши и жесты" style="position: absolute; left: 140px; top: 40px; width: 1160px; height: 820px; border-radius: 24px; background: #181512; border: 1px solid rgba(243,235,221,.11); box-shadow: 0 50px 140px -30px rgba(0,0,0,.9); display: flex; overflow: hidden; animation: bnd-sheet .4s cubic-bezier(.2,.9,.3,1.05) both;">
+    <nav aria-label="Разделы настроек" style="width: 230px; flex-shrink: 0; padding: 22px 12px; background: #14110F; border-right: 1px solid rgba(243,235,221,.06); display: flex; flex-direction: column; gap: 2px;">
+      <span style="font-size: 17px; font-weight: 650; padding: 0 10px 14px;">Настройки</span>
+      <sc-for list="{{nav}}" as="n" hint-placeholder-count="12">
+        <a href="#" style="{{n.style}}"><span style="{{n.iconStyle}}">{{n.glyph}}</span>{{n.label}}</a>
+      </sc-for>
+    </nav>
+
+    <section style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+      <div style="padding: 22px 28px 14px; display: flex; flex-direction: column; gap: 12px; border-bottom: 1px solid rgba(243,235,221,.06);">
+        <div style="display: flex; align-items: flex-start; gap: 12px;">
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 5px;">
+            <h1 style="margin: 0; font-size: 22px; font-weight: 650; letter-spacing: -.015em;">Клавиши и жесты</h1>
+            <p style="margin: 0; color: #867C6D; font-size: 13.5px; line-height: 1.5;">Всё как в привычных приложениях Mac. Нажмите на сочетание, чтобы поменять. Настройки едут на все ваши устройства.</p>
+          </div>
+          <div style="display: flex; padding: 3px; border-radius: 10px; background: rgba(243,235,221,.05);">
+            <sc-for list="{{presets}}" as="p" hint-placeholder-count="4"><button onClick="{{p.pick}}" style="{{p.style}}">{{p.label}}</button></sc-for>
+          </div>
+        </div>
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <label style="flex: 1; display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px; border-radius: 10px; background: rgba(243,235,221,.05); border: 1px solid rgba(243,235,221,.08);">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#867C6D" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+            <input aria-label="Найти действие или сочетание" placeholder="Найти действие или нажмите сочетание" style="flex: 1; border: none; background: transparent; color: #F3EBDD; outline: none; font-size: 13px;">
+          </label>
+          <div style="display: flex; padding: 3px; border-radius: 10px; background: rgba(243,235,221,.05);">
+            <sc-for list="{{tabs}}" as="t" hint-placeholder-count="2"><button onClick="{{t.pick}}" style="{{t.style}}">{{t.label}}</button></sc-for>
+          </div>
+        </div>
+      </div>
+
+      <sc-if value="{{isKeys}}" hint-placeholder-val="{{ true }}">
+        <div style="flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 26px; padding: 14px 28px; overflow: hidden;">
+          <sc-for list="{{groups}}" as="g" hint-placeholder-count="6">
+            <div style="display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; animation: bnd-rise .35s ease-out {{g.delay}} both;">
+              <span style="font-size: 11px; font-weight: 600; letter-spacing: .08em; color: #867C6D; padding: 6px 0 4px;">{{g.title}}</span>
+              <sc-for list="{{g.rows}}" as="r" hint-placeholder-count="5">
+                <div style="{{r.row}}">
+                  <span style="flex: 1; color: {{r.color}};">{{r.label}}</span>
+                  <sc-if value="{{r.conflict}}" hint-placeholder-val="{{ false }}"><span style="font-size: 11.5px; color: #FFB067;">занято: {{r.conflict}}</span></sc-if>
+                  <button aria-label="Изменить сочетание: {{r.label}}" style="{{r.keyStyle}}">{{r.keys}}<sc-if value="{{r.recording}}" hint-placeholder-val="{{ false }}"><span style="display: inline-block; width: 1.5px; height: 12px; background: #FF8A1F; margin-left: 2px; animation: bnd-caret 1s infinite;"></span></sc-if></button>
+                </div>
+              </sc-for>
+            </div>
+          </sc-for>
+        </div>
+        <div style="padding: 12px 28px; display: flex; align-items: center; gap: 10px; border-top: 1px solid rgba(243,235,221,.06); font-size: 12.5px; color: #867C6D;">
+          <span style="width: 8px; height: 8px; border-radius: 50%; background: #FF8A1F;"></span>
+          <span>Изменено вами: 2</span>
+          <span style="flex: 1;"></span>
+          <button style="height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid rgba(243,235,221,.12); background: transparent; color: #F3EBDD; font-size: 12.5px;">Экспорт</button>
+          <button style="height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid rgba(243,235,221,.12); background: transparent; color: #F3EBDD; font-size: 12.5px;">Импорт</button>
+          <button style="height: 30px; padding: 0 12px; border-radius: 999px; border: none; background: transparent; color: #F2A093; font-size: 12.5px;">Сбросить всё</button>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{isGestures}}" hint-placeholder-val="{{ false }}">
+        <div style="flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 16px 28px; align-content: start;">
+          <sc-for list="{{gestures}}" as="g" hint-placeholder-count="6">
+            <div style="{{g.card}}">
+              <div style="width: 96px; height: 72px; border-radius: 12px; background: #0E0C0B; border: 1px solid rgba(243,235,221,.08); position: relative; overflow: hidden; flex-shrink: 0;">
+                <sc-for list="{{g.dots}}" as="d" hint-placeholder-count="2"><span style="{{d}}"></span></sc-for>
+              </div>
+              <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
+                <span style="font-weight: 600; font-size: 13.5px;">{{g.title}}</span>
+                <span style="font-size: 12.5px; color: #867C6D; line-height: 1.45;">{{g.text}}</span>
+                <span style="font-size: 11.5px; color: #6E655A;">{{g.where}}</span>
+              </div>
+              <span role="switch" aria-checked="{{g.onAttr}}" aria-label="{{g.title}}" style="{{g.track}}"><span style="{{g.knob}}"></span></span>
+            </div>
+          </sc-for>
+          <div style="grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 14px; border: 1px solid rgba(243,235,221,.08); background: rgba(243,235,221,.02);">
+            <span style="font-size: 13px; font-weight: 600;">Чувствительность свайпов</span>
+            <span style="font-size: 12px; color: #867C6D;">мягче</span>
+            <div style="flex: 1; height: 4px; border-radius: 999px; background: rgba(243,235,221,.1); position: relative;"><div style="width: 55%; height: 100%; border-radius: 999px; background: #FF8A1F;"></div><span style="position: absolute; left: 55%; top: -6px; width: 16px; height: 16px; margin-left: -8px; border-radius: 50%; background: #F3EBDD; box-shadow: 0 2px 6px rgba(0,0,0,.5);"></span></div>
+            <span style="font-size: 12px; color: #867C6D;">резче</span>
+          </div>
+        </div>
+      </sc-if>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { tab: 'keys', preset: 0 }; }
+  renderVals() {
+    const s = this.state;
+    const navBase = 'display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; text-decoration: none; font-size: 13px;';
+    const icon = 'width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; font-size: 11px; font-family: Geist Mono, monospace;';
+    const nav = [['Общие', '◐'], ['Аккаунт и синхронизация', '☁'], ['Серверы', '⌁'], ['Одобрения', '✓'], ['Подписки и лимиты', '▮'], ['Рабочие места', '▣'], ['Терминал и файлы', '›_'], ['Браузер и экран', '◎'], ['Клавиши и жесты', '⌘', true], ['Уведомления', '◔'], ['Внешний вид и анимации', '✦'], ['Язык', 'Aa']].map(([label, glyph, on]) => ({ label, glyph, style: navBase + (on ? ' background: rgba(243,235,221,.08); color: #F3EBDD; font-weight: 600;' : ' color: #BDB2A0;'), iconStyle: icon + (on ? ' background: #E4620E; color: #FFFFFF;' : ' background: rgba(243,235,221,.06); color: #867C6D;') }));
+    const seg = (on) => 'height: 28px; padding: 0 11px; border-radius: 8px; border: none; font-size: 12.5px; ' + (on ? 'background: #2C2722; color: #F3EBDD; font-weight: 600;' : 'background: transparent; color: #867C6D;');
+    const presets = ['Bandito', 'Как в VS Code', 'Как в iTerm', 'Как в Slack'].map((label, k) => ({ label, style: seg(s.preset === k), pick: () => this.setState({ preset: k }) }));
+    const tabs = [['keys', 'Клавиши'], ['gestures', 'Жесты тачпада']].map(([id, label]) => ({ label, style: seg(s.tab === id), pick: () => this.setState({ tab: id }) }));
+    const key = (custom, rec) => 'min-width: 44px; height: 26px; padding: 0 9px; border-radius: 7px; font-family: \'Geist Mono\', monospace; font-size: 12px; display: inline-flex; align-items: center; justify-content: center; ' + (rec ? 'border: 1px solid #FF8A1F; background: rgba(255,138,31,.12); color: #FFB067; animation: bnd-rec 1.4s infinite;' : custom ? 'border: 1px solid rgba(255,176,103,.45); background: rgba(255,138,31,.08); color: #FFB067;' : 'border: 1px solid rgba(243,235,221,.14); background: rgba(243,235,221,.05); color: #F3EBDD;');
+    const R = (label, keys, opt) => { opt = opt || {}; return { label, keys: opt.rec ? 'нажмите…' : keys, conflict: opt.conflict || '', recording: !!opt.rec, color: opt.rec ? '#FFB067' : '#F3EBDD', keyStyle: key(!!opt.custom, !!opt.rec), row: 'display: flex; align-items: center; gap: 10px; padding: 6px 8px; margin: 0 -8px; border-radius: 8px; font-size: 13px;' + (opt.rec ? ' background: rgba(255,138,31,.06);' : '') }; };
+    const raw = [
+      { title: 'ВЕЗДЕ', rows: [R('Быстрый переход', '⌘K'), R('Разделы: Команда … Сервер', '⌘1 … ⌘6'), R('Новый агент', '⌘N'), R('Назад / вперёд', '⌘[  ⌘]'), R('Боковая панель', '⌃⌘S'), R('Лимиты подписок', '⌥⌘U'), R('Настройки', '⌘,')] },
+      { title: 'КОМАНДА', rows: [R('Предыдущий / следующий агент', '⌥⌘↑  ⌥⌘↓'), R('К тому, кто ждёт вас', '⌘⇧A', { custom: true }), R('Разрешить / отклонить', '⌘↵  ⎋'), R('Остановить агента', '⌘.'), R('Что изменил агент', '⌘⇧D'), R('Сведения об агенте', '⌘I')] },
+      { title: 'ТЕРМИНАЛЫ', rows: [R('Новый терминал', '⌘T'), R('Разделить вертикально / горизонтально', '⌘D  ⌘⇧D'), R('Свернуть (продолжит работать)', '', { rec: true }), R('Вернуть последний свёрнутый', '⌘⇧T'), R('Соседняя панель', '⌥⌘← → ↑ ↓'), R('Очистить экран', '⌘⇧K')] },
+      { title: 'ФАЙЛЫ', rows: [R('Открыть / в родительскую папку', '⌘↓  ⌘↑'), R('Быстрый просмотр', 'Пробел'), R('Новая папка / новый файл', '⌘⇧N  ⌥⌘N'), R('Переименовать', '↵'), R('В корзину', '⌘⌫'), R('Скопировать путь', '⌥⌘C')] },
+      { title: 'ФАЙЛ В ПРИЛОЖЕНИИ', rows: [R('Читать ⇄ Править', '⌘E'), R('Рядом', '⌥⌘↵'), R('Сохранить', '⌘S'), R('Следующая вкладка', '⌃⇥'), R('Крупнее / мельче', '⌘+  ⌘−')] },
+      { title: 'БРАУЗЕР И ЭКРАН', rows: [R('Адресная строка', '⌘L'), R('Обновить', '⌘R'), R('Взять / отдать управление', '⌘⇧C', { custom: true, conflict: 'Скопировать стиль' }), R('Отправить ⌃⌥⌦ на сервер', '⌃⌥⌫')] }
+    ];
+    const groups = raw.map((g, k) => ({ ...g, delay: (80 + k * 60) + 'ms' }));
+    const finger = (x, y, anim) => 'position: absolute; left: ' + x + 'px; top: ' + y + 'px; width: 16px; height: 16px; border-radius: 50%; background: rgba(255,176,103,.85); box-shadow: 0 0 12px rgba(255,138,31,.6);' + (anim ? ' animation: ' + anim + ';' : '');
+    const toggle = (on) => ({ onAttr: on ? 'true' : 'false', track: 'width: 36px; height: 21px; border-radius: 999px; position: relative; flex-shrink: 0; background: ' + (on ? '#E4620E' : 'rgba(243,235,221,.14)') + ';', knob: 'position: absolute; top: 2px; ' + (on ? 'right: 2px; background: #FFFFFF;' : 'left: 2px; background: #BDB2A0;') + ' width: 17px; height: 17px; border-radius: 50%;' });
+    const G = (title, text, where, dots, on, k) => ({ title, text, where, dots, ...toggle(on), card: 'display: flex; gap: 14px; align-items: center; padding: 12px 14px; border-radius: 16px; border: 1px solid rgba(243,235,221,.08); background: rgba(243,235,221,.02); animation: bnd-rise .35s ease-out ' + (k * 60) + 'ms both;' });
+    const gestures = [
+      G('Свайп двумя пальцами — назад/вперёд', 'Как в Safari и Finder: листайте историю папок, страниц и файлов.', 'Файлы · Браузер · Файл в приложении', [finger(54, 22, 'bnd-swipe 2.2s ease-in-out infinite'), finger(54, 42, 'bnd-swipe 2.2s ease-in-out infinite')], true, 0),
+      G('Свайп по агенту — действия', 'Как в Почте: влево — закрепить, пауза, удалить; вправо — отметить прочитанным.', 'Боковая панель', [ 'position: absolute; left: 8px; top: 24px; width: 80px; height: 24px; border-radius: 6px; background: #2C2722; animation: bnd-reveal 2.6s ease-in-out infinite;', 'position: absolute; right: 8px; top: 24px; width: 24px; height: 24px; border-radius: 6px; background: #E4620E; z-index: -1;'], true, 1),
+      G('Щипок — масштаб', 'Крупнее и мельче текст в терминале и файлах, приближение экрана сервера.', 'Терминалы · Файлы · Экран', [finger(36, 22, 'bnd-pinch1 2s ease-in-out infinite'), finger(46, 34, 'bnd-pinch2 2s ease-in-out infinite')], true, 2),
+      G('Щипок наружу — на весь экран', 'Разведите пальцы над терминалом — он развернётся; сведите — вернётся в сетку.', 'Терминалы', [finger(40, 26, 'bnd-pinch2 2s ease-in-out infinite'), finger(40, 26, 'bnd-pinch1 2s ease-in-out infinite')], true, 3),
+      G('Сильное нажатие — предпросмотр', 'Нажмите сильнее на агента, файл или ссылку — увидите превью, не открывая.', 'Везде', [finger(40, 28, 'bnd-press 1.8s ease-in-out infinite')], true, 4),
+      G('Двойное касание двумя пальцами', 'Приблизить место на экране сервера или странице браузера.', 'Экран · Браузер', [finger(32, 28, 'bnd-press 1.2s ease-in-out infinite'), finger(50, 28, 'bnd-press 1.2s ease-in-out .1s infinite')], false, 5)
+    ];
+    return { nav, presets, tabs, groups, gestures, isKeys: s.tab === 'keys', isGestures: s.tab === 'gestures' };
+  }
+}
+</script>
+</body>
+</html>

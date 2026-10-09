@@ -1,0 +1,11 @@
+// The host cancels the prompt (session/cancel); ACP requires answering open permission requests with `cancelled`.
+// Our request ids are integers: initialize = 1, session/new or session/load = 2, then each prompt 3, 4, ...
+{"expect": {"method": "initialize"}}
+{"send": {"jsonrpc": "2.0", "id": "$last:/id", "result": {"protocolVersion": 1, "agentCapabilities": {}}}}
+{"expect": {"method": "session/new"}}
+{"send": {"jsonrpc": "2.0", "id": "$last:/id", "result": {"sessionId": "sess-g3"}}}
+{"expect": {"method": "session/prompt"}}
+{"send": {"jsonrpc": "2.0", "id": 9, "method": "session/request_permission", "params": {"sessionId": "sess-g3", "toolCall": {"toolCallId": "call-3", "title": "rm -rf build", "kind": "delete", "rawInput": {"command": "rm -rf build"}}, "options": [{"optionId": "y", "name": "Allow", "kind": "allow_once"}]}}}
+{"expect": {"method": "session/cancel", "params": {"sessionId": "sess-g3"}}}
+{"expect": {"id": 9, "result": {"outcome": {"outcome": "cancelled"}}}}
+{"send": {"jsonrpc": "2.0", "id": 3, "result": {"stopReason": "cancelled"}}}

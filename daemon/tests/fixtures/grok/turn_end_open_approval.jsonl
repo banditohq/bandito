@@ -1,0 +1,10 @@
+// The turn ends while a permission request is still open. The CLI ends the turn first (end_turn); the adapter
+// then answers the open request `cancelled` before it reports the turn as over.
+{"expect": {"method": "initialize"}}
+{"send": {"jsonrpc": "2.0", "id": "$last:/id", "result": {"protocolVersion": 1, "agentCapabilities": {}}}}
+{"expect": {"method": "session/new"}}
+{"send": {"jsonrpc": "2.0", "id": "$last:/id", "result": {"sessionId": "sess-t1"}}}
+{"expect": {"method": "session/prompt"}}
+{"send": {"jsonrpc": "2.0", "id": 11, "method": "session/request_permission", "params": {"sessionId": "sess-t1", "toolCall": {"toolCallId": "call-t1", "title": "touch x", "kind": "edit", "rawInput": {"path": "x"}}, "options": [{"optionId": "y", "name": "Allow", "kind": "allow_once"}]}}}
+{"send": {"jsonrpc": "2.0", "id": 3, "result": {"stopReason": "end_turn"}}}
+{"expect": {"id": 11, "result": {"outcome": {"outcome": "cancelled"}}}}

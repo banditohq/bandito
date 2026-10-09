@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Bandito — новый агент</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0B0A09}
+a{color:#FFB067}a:hover{color:#FFD2A0}
+button{font:inherit;cursor:pointer;transition:color .15s ease,box-shadow .2s ease,transform .12s ease,filter .15s ease,background-color .15s ease}
+button:hover{filter:brightness(1.15)}
+button:active{transform:scale(.98)}
+input,textarea{font:inherit}
+@keyframes bnd-sheet{from{opacity:0;transform:translateY(26px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes bnd-fade{from{opacity:0}to{opacity:1}}
+@keyframes bnd-rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes bnd-drop{from{opacity:0;transform:translateY(-6px) scale(.98);transform-origin:top}to{opacity:1;transform:none}}
+@keyframes bnd-blink{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.1)}}
+@keyframes bnd-fill{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes bnd-check{from{transform:scale(0)}60%{transform:scale(1.2)}to{transform:scale(1)}}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; position: relative; background: #12100E; color: #F3EBDD; font-family: Geist, -apple-system, sans-serif; font-size: 14px; overflow: hidden;">
+  <div aria-hidden="true" style="position: absolute; inset: 0; display: flex; filter: blur(3px); opacity: .5;">
+    <div style="width: 296px; background: #171411; border-right: 1px solid rgba(243,235,221,.07);"></div>
+    <div style="flex: 1; background: radial-gradient(800px 400px at 50% 0, rgba(255,138,31,.06), transparent 70%);"></div>
+  </div>
+  <div aria-hidden="true" style="position: absolute; inset: 0; background: rgba(8,7,6,.6); animation: bnd-fade .3s ease-out both;"></div>
+
+  <div role="dialog" aria-label="Новый агент" style="position: absolute; left: 50%; top: 22px; margin-left: -540px; width: 1080px; height: 856px; border-radius: 24px; background: #1C1815; border: 1px solid rgba(243,235,221,.11); box-shadow: 0 50px 140px -30px rgba(0,0,0,.9), inset 0 1px 0 rgba(243,235,221,.05); overflow: hidden; display: flex; flex-direction: column; animation: bnd-sheet .45s cubic-bezier(.2,.9,.3,1.05) both;">
+    <div style="display: flex; align-items: center; gap: 18px; padding: 18px 28px 14px; border-bottom: 1px solid rgba(243,235,221,.06); background: radial-gradient(500px 160px at 0 0, rgba(255,176,103,.08), transparent 70%);">
+      <svg width="60" height="60" viewBox="0 0 52 52"><rect width="52" height="52" rx="17" fill="#FFB067"></rect><path d="M8 22c6-6 30-6 36 0v7c-6 4-30 4-36 0z" fill="#12100E"></path><g style="transform-origin: 26px 26px; animation: bnd-blink 4s ease-in-out 1s infinite;"><path d="m16 23 4 3-4 3" stroke="#FFB067" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"></path><path d="M31 26h6" stroke="#FFB067" stroke-width="2.4" stroke-linecap="round"></path></g></svg>
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
+        <span style="font-size: 20px; font-weight: 650; letter-spacing: -.01em;">Новый агент</span>
+        <div role="radiogroup" aria-label="Цвет аватара" style="display: flex; gap: 7px; align-items: center;">
+          <sc-for list="{{colors}}" as="c" hint-placeholder-count="6"><button role="radio" aria-checked="{{c.on}}" aria-label="{{c.label}}" style="{{c.style}}"></button></sc-for>
+          <span style="width: 1px; height: 18px; background: rgba(243,235,221,.1); margin: 0 3px;"></span>
+          <span style="font-size: 12px; color: #867C6D;">Лицо:</span>
+          <sc-for list="{{faces}}" as="f" hint-placeholder-count="3"><button role="radio" aria-checked="{{f.on}}" aria-label="{{f.label}}" style="{{f.style}}">{{f.text}}</button></sc-for>
+        </div>
+      </div>
+      <button style="height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid rgba(243,235,221,.12); background: rgba(243,235,221,.04); color: #BDB2A0; font-size: 12.5px;">Из шаблона…</button>
+    </div>
+
+    <div style="flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 26px; padding: 16px 28px; min-height: 0;">
+      <div style="display: flex; flex-direction: column; gap: 14px;">
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; animation: bnd-rise .35s ease-out .1s both;">
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <label for="name" style="font-size: 12.5px; color: #BDB2A0; font-weight: 500;">Имя</label>
+            <input id="name" value="Forge" style="height: 40px; border-radius: 12px; border: 1px solid rgba(255,138,31,.55); background: #141210; color: #F3EBDD; padding: 0 13px; outline: none; box-shadow: 0 0 0 4px rgba(255,138,31,.12);">
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <label for="role" style="font-size: 12.5px; color: #BDB2A0; font-weight: 500;">Роль <span style="color: #6E655A; font-weight: 400;">· метка у имени</span></label>
+            <input id="role" value="сборщик" style="height: 40px; border-radius: 12px; border: 1px solid rgba(243,235,221,.1); background: #141210; color: #F3EBDD; padding: 0 13px; outline: none;">
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 7px; animation: bnd-rise .35s ease-out .18s both;">
+          <span style="font-size: 12.5px; color: #BDB2A0; font-weight: 500;">Чем думает <span style="color: #6E655A; font-weight: 400;">· подписки, на которые вы вошли на vps-tokyo-1</span></span>
+          <div role="radiogroup" aria-label="Чем думает" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px;">
+            <sc-for list="{{runtimes}}" as="r" hint-placeholder-count="4">
+              <button role="radio" aria-checked="{{r.on}}" onClick="{{r.pick}}" style="{{r.box}}">
+                <span style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                  <span style="display: flex; align-items: center; gap: 7px;"><span style="font-weight: 600; font-size: 13.5px; color: #F3EBDD;">{{r.name}}</span><span style="{{r.planStyle}}">{{r.plan}}</span></span>
+                  <sc-if value="{{r.on}}" hint-placeholder-val="{{ false }}"><span style="width: 17px; height: 17px; border-radius: 50%; background: #E4620E; display: grid; place-items: center; animation: bnd-check .3s ease-out both;"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4.5 4.5L19 7"></path></svg></span></sc-if>
+                </span>
+                <span style="{{r.statusStyle}}"><span style="{{r.dot}}"></span>{{r.status}}</span>
+                <span style="height: 4px; width: 100%; border-radius: 999px; background: rgba(243,235,221,.08); overflow: hidden;"><span style="{{r.bar}}"></span></span>
+                <span style="font-size: 11px; color: #6E655A; text-align: left;">{{r.hint}}</span>
+              </button>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 2fr); gap: 12px; align-items: start; animation: bnd-rise .35s ease-out .26s both;">
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <span style="font-size: 12.5px; color: #BDB2A0; font-weight: 500;">Модель</span>
+            <button style="height: 40px; border-radius: 12px; border: 1px solid rgba(243,235,221,.1); background: #141210; color: #F3EBDD; padding: 0 13px; display: flex; align-items: center; justify-content: space-between;"><span>{{model}}</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#867C6D" stroke-width="2" stroke-linecap="round"><path d="m7 10 5 5 5-5"></path></svg></button>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <span style="font-size: 12.5px; color: #BDB2A0; font-weight: 500;">Усилие</span>
+            <div role="radiogroup" aria-label="Усилие" style="padding: 3px; border-radius: 12px; background: rgba(243,235,221,.05); display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px;">
+              <sc-for list="{{efforts}}" as="e" hint-placeholder-count="5"><button role="radio" aria-checked="{{e.on}}" onClick="{{e.pick}}" style="{{e.style}}">{{e.label}}</button></sc-for>
+            </div>
+          </div>
+        </div>
+        <span style="font-size: 12px; color: #6E655A; margin-top: -6px;">{{effortHint}}</span>
+
+        <div style="display: flex; flex-direction: column; gap: 6px; animation: bnd-rise .35s ease-out .34s both;">
+          <span style="font-size: 12.5px; color: #BDB2A0; font-weight: 500;">Если лимит кончится</span>
+          <div style="border-radius: 12px; border: 1px solid rgba(243,235,221,.1); background: #141210; padding: 9px 12px; display: flex; align-items: center; gap: 10px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#A9C7A2" stroke-width="2" stroke-linecap="round"><path d="M4 12h12M12 6l6 6-6 6"></path></svg>
+            <span style="flex: 1; font-size: 13px;">Продолжить на <b style="font-weight: 600;">Codex</b> <span style="color: #867C6D;">· вернуться на Claude после сброса</span></span>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#867C6D" stroke-width="2" stroke-linecap="round"><path d="m7 10 5 5 5-5"></path></svg>
+          </div>
+          <span style="font-size: 12px; color: #6E655A;">Память и задачи переедут вместе с ним — продолжит с того же места.</span>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 6px; animation: bnd-rise .35s ease-out .42s both;">
+          <label for="inst" style="font-size: 12.5px; color: #BDB2A0; font-weight: 500;">Инструкции <span style="color: #6E655A; font-weight: 400;">· как ТЗ для нового сотрудника</span></label>
+          <textarea id="inst" rows="3" style="border-radius: 12px; border: 1px solid rgba(243,235,221,.1); background: #141210; color: #F3EBDD; padding: 10px 13px; outline: none; resize: none; line-height: 1.5;">Делай маленькие PR. Перед каждым пушем гоняй тесты. Когда закончишь — попроси Scout посмотреть.</textarea>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 14px; position: relative;">
+        <div style="display: flex; flex-direction: column; gap: 6px; animation: bnd-rise .35s ease-out .14s both;">
+          <span style="font-size: 12.5px; color: #BDB2A0; font-weight: 500;">Проект на сервере <span style="color: #6E655A; font-weight: 400;">· где лежит код, с которым он работает</span></span>
+          <div style="height: 40px; border-radius: 12px; border: 1px solid {{pickerBorder}}; background: #141210; display: flex; align-items: center; gap: 9px; padding: 0 5px 0 12px;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FFB067" stroke-width="1.9" stroke-linejoin="round"><path d="M3.5 6.5h6l2 2h9v10h-17z"></path></svg>
+            <span style="flex: 1; font-family: 'Geist Mono', monospace; font-size: 13px;">~/projects/billing</span>
+            <span style="font-size: 11px; color: #A9C7A2; padding: 3px 8px; border-radius: 7px; background: rgba(169,199,162,.1);">git · main</span>
+            <button onClick="{{togglePicker}}" style="height: 30px; padding: 0 11px; border-radius: 9px; border: none; background: rgba(243,235,221,.08); color: #F3EBDD; font-size: 12.5px;">Выбрать…</button>
+          </div>
+        </div>
+
+        <sc-if value="{{pickerOpen}}" hint-placeholder-val="{{ true }}">
+          <div role="dialog" aria-label="Выбор папки на сервере" style="position: absolute; left: 0; right: 0; top: 74px; z-index: 5; border-radius: 16px; background: #26211C; border: 1px solid rgba(243,235,221,.14); box-shadow: 0 30px 70px -20px rgba(0,0,0,.95); overflow: hidden; animation: bnd-drop .22s ease-out both;">
+            <div style="display: flex; align-items: center; gap: 6px; padding: 10px 12px; border-bottom: 1px solid rgba(243,235,221,.07);">
+              <label style="flex: 1; display: flex; align-items: center; gap: 7px; height: 30px; padding: 0 10px; border-radius: 9px; background: rgba(243,235,221,.06);">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#867C6D" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+                <input aria-label="Найти папку" placeholder="Найти папку или вставить путь" style="flex: 1; border: none; background: transparent; color: #F3EBDD; outline: none; font-size: 12.5px;">
+              </label>
+            </div>
+            <div style="display: grid; grid-template-columns: 190px minmax(0, 1fr);">
+              <div style="padding: 10px 8px; border-right: 1px solid rgba(243,235,221,.06); display: flex; flex-direction: column; gap: 2px;">
+                <span style="font-size: 10.5px; font-weight: 600; letter-spacing: .08em; color: #6E655A; padding: 2px 8px 4px;">НЕДАВНИЕ</span>
+                <sc-for list="{{recent}}" as="p" hint-placeholder-count="3">
+                  <button style="{{p.style}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="{{p.tint}}" stroke-width="1.9" stroke-linejoin="round"><path d="M3.5 6.5h6l2 2h9v10h-17z"></path></svg><span style="flex: 1; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{p.name}}</span></button>
+                </sc-for>
+                <span style="font-size: 10.5px; font-weight: 600; letter-spacing: .08em; color: #6E655A; padding: 8px 8px 4px;">НАЙДЕНЫ РЕПОЗИТОРИИ</span>
+                <sc-for list="{{repos}}" as="p" hint-placeholder-count="3">
+                  <button style="{{p.style}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#A9C7A2" stroke-width="2" stroke-linecap="round"><circle cx="6" cy="6" r="2.5"></circle><circle cx="6" cy="18" r="2.5"></circle><circle cx="18" cy="9" r="2.5"></circle><path d="M6 8.5v7M18 11.5c0 4-6 3-11 5"></path></svg><span style="flex: 1; text-align: left;">{{p.name}}</span></button>
+                </sc-for>
+              </div>
+              <div style="display: flex; flex-direction: column;">
+                <div style="display: flex; align-items: center; gap: 3px; padding: 8px 12px; font-size: 12.5px; color: #867C6D;"><span>~</span><span>›</span><span>projects</span><span>›</span><span style="color: #F3EBDD; font-weight: 600;">billing</span></div>
+                <div style="padding: 0 6px; display: flex; flex-direction: column;">
+                  <sc-for list="{{dirs}}" as="d" hint-placeholder-count="5">
+                    <button style="{{d.style}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="{{d.tint}}" stroke-width="1.9" stroke-linejoin="round"><path d="M3.5 6.5h6l2 2h9v10h-17z"></path></svg><span style="flex: 1; text-align: left;">{{d.name}}</span><span style="font-size: 11px; color: #6E655A;">{{d.meta}}</span></button>
+                  </sc-for>
+                </div>
+                <div style="display: flex; gap: 6px; padding: 10px 12px; border-top: 1px solid rgba(243,235,221,.06); margin-top: 6px;">
+                  <button style="height: 30px; padding: 0 10px; border-radius: 9px; border: 1px solid rgba(243,235,221,.12); background: transparent; color: #F3EBDD; font-size: 12px;">Новая папка</button>
+                  <button style="height: 30px; padding: 0 10px; border-radius: 9px; border: 1px solid rgba(243,235,221,.12); background: transparent; color: #F3EBDD; font-size: 12px;">Склонировать по ссылке</button>
+                  <span style="flex: 1;"></span>
+                  <button onClick="{{togglePicker}}" style="height: 30px; padding: 0 12px; border-radius: 9px; border: none; background: #F3EBDD; color: #12100E; font-size: 12px; font-weight: 600;">Выбрать billing</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <div style="display: flex; flex-direction: column; gap: 7px; animation: bnd-rise .35s ease-out .22s both;">
+          <span style="font-size: 12.5px; color: #BDB2A0; font-weight: 500;">Рабочее место <span style="color: #6E655A; font-weight: 400;">· его файлы, браузер, экран и терминалы</span></span>
+          <div role="radiogroup" aria-label="Рабочее место" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px;">
+            <sc-for list="{{spaces}}" as="w" hint-placeholder-count="3">
+              <button role="radio" aria-checked="{{w.on}}" onClick="{{w.pick}}" style="{{w.box}}">
+                <span style="font-weight: 600; font-size: 13px; color: #F3EBDD;">{{w.name}}</span>
+                <span style="font-size: 11.5px; color: #867C6D; text-align: left; line-height: 1.35;">{{w.text}}</span>
+              </button>
+            </sc-for>
+          </div>
+          <span style="font-size: 12px; color: #6E655A;">{{spaceHint}}</span>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 6px; animation: bnd-rise .35s ease-out .3s both;">
+          <span style="font-size: 12.5px; color: #BDB2A0; font-weight: 500;">Память</span>
+          <div style="border-radius: 12px; border: 1px solid rgba(243,235,221,.1); background: #141210; padding: 9px 12px; display: flex; flex-direction: column; gap: 4px;">
+            <span style="display: flex; justify-content: space-between; align-items: center;"><span style="font-size: 13px;">Умные главы <span style="font-size: 10.5px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: rgba(169,199,162,.14); color: #C8DCC3; margin-left: 4px;">рекомендуем</span></span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#867C6D" stroke-width="2" stroke-linecap="round"><path d="m7 10 5 5 5-5"></path></svg></span>
+            <span style="font-size: 11.5px; color: #6E655A; font-family: 'Geist Mono', monospace;">~/bandito/agents/forge · создастся сама</span>
+          </div>
+          <span style="font-size: 12px; color: #6E655A;">Ведёт заметки в своей папке, поэтому помнит всё, а сообщения не дорожают.</span>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 6px; animation: bnd-rise .35s ease-out .38s both;">
+          <span style="font-size: 12.5px; color: #BDB2A0; font-weight: 500;">Что спрашивать у вас</span>
+          <div role="radiogroup" aria-label="Одобрения" style="padding: 3px; border-radius: 12px; background: rgba(243,235,221,.05); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px;">
+            <span role="radio" aria-checked="true" style="height: 34px; border-radius: 9px; background: #2C2722; display: grid; place-items: center; font-size: 13px; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.4);">Только рискованное</span>
+            <span role="radio" aria-checked="false" style="height: 34px; border-radius: 9px; display: grid; place-items: center; font-size: 13px; color: #867C6D;">Всё подряд</span>
+            <span role="radio" aria-checked="false" style="height: 34px; border-radius: 9px; display: grid; place-items: center; font-size: 13px; color: #867C6D;">Ничего</span>
+          </div>
+          <span style="font-size: 12px; color: #6E655A;">Пуш, деплой, удаление, запись вне <span style="font-family: 'Geist Mono', monospace; color: #867C6D;">~/projects/billing</span> и кнопки «Оплатить/Отправить» в браузере ждут вашего «да».</span>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 6px; animation: bnd-rise .35s ease-out .46s both;">
+          <span style="font-size: 12.5px; color: #BDB2A0; font-weight: 500;">Что ему можно</span>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+            <sc-for list="{{tools}}" as="t" hint-placeholder-count="5"><span style="{{t.style}}">{{t.label}}</span></sc-for>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 10px; padding: 14px 28px; border-top: 1px solid rgba(243,235,221,.06); background: rgba(0,0,0,.12);">
+      <span style="font-size: 12px; color: #6E655A;">Всё это можно поменять потом в «Сведениях» агента.</span>
+      <span style="flex: 1;"></span>
+      <button style="height: 38px; padding: 0 16px; border-radius: 999px; border: 1px solid rgba(243,235,221,.12); background: transparent; color: #F3EBDD; font-weight: 500;">Отмена</button>
+      <button style="height: 38px; padding: 0 20px; border-radius: 999px; border: none; background: linear-gradient(180deg, #E4620E, #C94F09); color: #FFFFFF; font-weight: 600; box-shadow: 0 6px 18px -6px rgba(228,98,14,.8), inset 0 1px 0 rgba(255,255,255,.18);">Создать Forge</button>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { runtime: 'claude', effort: 1, picker: true, space: 0 }; }
+  renderVals() {
+    const s = this.state;
+    const colorsRaw = [['Персиковый', '#FFB067'], ['Голубой', '#A3BDEB'], ['Шалфей', '#A9C7A2'], ['Розовый', '#F2A093'], ['Сиреневый', '#C8B6E8'], ['Кремовый', '#F3EBDD']];
+    const colors = colorsRaw.map(([label, c], k) => ({ label, on: k === 0, style: 'width: 22px; height: 22px; border-radius: 7px; border: none; padding: 0; background: ' + c + ';' + (k === 0 ? ' box-shadow: 0 0 0 2px #1C1815, 0 0 0 3.5px ' + c + ';' : '') }));
+    const faces = [['Прищур', '> –'], ['Точки', '• •'], ['Улыбка', '^ ^']].map(([label, text], k) => ({ label, text, on: k === 0, style: 'border: none; font-family: \'Geist Mono\', monospace; font-size: 12px; padding: 2px 7px; border-radius: 6px; ' + (k === 0 ? 'background: rgba(243,235,221,.1); color: #F3EBDD;' : 'background: transparent; color: #867C6D;') }));
+    const planStyle = (c, bg) => 'font-size: 10.5px; font-weight: 600; color: ' + c + '; background: ' + bg + '; padding: 1px 6px; border-radius: 6px;';
+    const rt = [
+      { id: 'claude', name: 'Claude Code', plan: 'Max ×20', ps: planStyle('#FFB067', 'rgba(255,138,31,.13)'), status: 'Вход выполнен · осталось 90%', sc: '#A9C7A2', left: 90, hint: '5 ч сбросятся через 2 ч 14 мин', model: 'Opus 5.5' },
+      { id: 'codex', name: 'Codex', plan: 'ChatGPT Plus', ps: planStyle('#A3BDEB', 'rgba(163,189,235,.13)'), status: 'Осталось 18% · сброс через 41 мин', sc: '#FFB067', left: 18, hint: 'Неделя: осталось 64%', model: 'gpt-5.5-codex' },
+      { id: 'grok', name: 'Grok', plan: 'SuperGrok', ps: planStyle('#A9C7A2', 'rgba(169,199,162,.13)'), status: 'Лимит исчерпан · снова в 20:00', sc: '#F2A093', left: 0, hint: 'Можно выбрать — начнёт после сброса', model: 'grok-5' },
+      { id: 'api', name: 'API-ключ', plan: 'OpenRouter', ps: planStyle('#BDB2A0', 'rgba(243,235,221,.08)'), status: 'Бюджет: $37,60 из $50', sc: '#A9C7A2', left: 75, hint: 'Любая модель · платите за токены', model: 'по выбору' }
+    ];
+    const runtimes = rt.map((r, k) => {
+      const on = s.runtime === r.id;
+      const barColor = r.left === 0 ? '#F2A093' : r.left < 25 ? '#FF8A1F' : '#A9C7A2';
+      return {
+        name: r.name, plan: r.plan, planStyle: r.ps, status: r.status, hint: r.hint, on,
+        pick: () => this.setState({ runtime: r.id }),
+        box: 'border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; text-align: left; ' + (on ? 'background: rgba(255,138,31,.08); border: 1px solid rgba(255,138,31,.5); box-shadow: 0 10px 30px -18px rgba(255,138,31,.7);' : 'background: rgba(243,235,221,.03); border: 1px solid rgba(243,235,221,.09);'),
+        statusStyle: 'font-size: 11.5px; color: ' + r.sc + '; display: flex; align-items: center; gap: 5px;',
+        dot: 'width: 6px; height: 6px; border-radius: 50%; background: ' + r.sc + ';',
+        bar: 'display: block; height: 100%; width: ' + r.left + '%; border-radius: 999px; background: ' + barColor + '; transform-origin: left; animation: bnd-fill .8s cubic-bezier(.2,.8,.2,1) ' + (300 + k * 80) + 'ms both;'
+      };
+    });
+    const model = rt.find(r => r.id === s.runtime).model;
+    const effortLabels = ['Низкое', 'Среднее', 'Высокое', 'Очень высокое', 'Максимум'];
+    const effortHints = [
+      'Быстро и экономно: для простых правок и вопросов.',
+      'Чем выше, тем умнее на сложных задачах, но дольше и быстрее тратит лимит. Для обычной работы хватает среднего.',
+      'Для сложных задач: дольше думает, тратит лимит заметно быстрее.',
+      'Для больших переделок и запутанных багов. Лимит тает быстро.',
+      'Самое глубокое мышление. Только когда остальное не справилось.'
+    ];
+    const efforts = effortLabels.map((label, k) => ({ label: k === 3 ? 'Очень' : label, on: s.effort === k, pick: () => this.setState({ effort: k }), style: 'height: 34px; border-radius: 9px; border: none; font-size: 12.5px; ' + (s.effort === k ? 'background: #2C2722; color: #F3EBDD; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.4);' : 'background: transparent; color: #867C6D;') }));
+    const pRow = (on) => 'display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; border: none; font-size: 12.5px; ' + (on ? 'background: rgba(255,138,31,.12); color: #F3EBDD;' : 'background: transparent; color: #BDB2A0;');
+    const recent = [{ name: 'billing', tint: '#FFB067', on: true }, { name: 'api', tint: '#867C6D' }, { name: 'landing', tint: '#867C6D' }].map(p => ({ ...p, style: pRow(!!p.on) }));
+    const repos = [{ name: 'billing' }, { name: 'api' }, { name: 'infra' }].map(p => ({ ...p, style: pRow(false) }));
+    const dRow = (on, k) => 'display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: 8px; border: none; font-size: 13px; animation: bnd-rise .25s ease-out ' + (k * 40) + 'ms both; ' + (on ? 'background: rgba(243,235,221,.07); color: #F3EBDD;' : 'background: transparent; color: #BDB2A0;');
+    const dirs = [
+      { name: 'src', meta: '14 файлов', tint: '#FFB067' },
+      { name: 'tests', meta: '6 файлов', tint: '#FFB067' },
+      { name: 'migrations', meta: '9 файлов', tint: '#FFB067' },
+      { name: 'docs', meta: '3 файла', tint: '#FFB067' },
+      { name: '.github', meta: 'скрытая', tint: '#6E655A' }
+    ].map((d, k) => ({ ...d, style: dRow(false, k) }));
+    const spacesRaw = [
+      { name: 'Общее', text: 'Вместе с Atlas и Quill', hint: 'Видит тот же сервер, что и вы. Самый быстрый старт.' },
+      { name: 'Отдельное', text: 'Свои файлы, браузер, экран', hint: 'Bandito создаст для Forge отдельного пользователя на сервере. Проект откроется ему на запись.' },
+      { name: 'Контейнер', text: 'Полная изоляция · Docker ✓', hint: 'Свой диск, сеть и лимиты. Проект будет примонтирован внутрь контейнера.' }
+    ];
+    const spaces = spacesRaw.map((w, k) => ({ ...w, on: s.space === k, pick: () => this.setState({ space: k }), box: 'border-radius: 13px; padding: 10px 11px; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; ' + (s.space === k ? 'background: rgba(255,138,31,.08); border: 1px solid rgba(255,138,31,.5);' : 'background: rgba(243,235,221,.03); border: 1px solid rgba(243,235,221,.09);') }));
+    const tool = (label, on) => ({ label, style: 'font-size: 12px; padding: 5px 10px; border-radius: 999px; ' + (on ? 'color: #F3EBDD; background: rgba(243,235,221,.07); border: 1px solid rgba(243,235,221,.12);' : 'color: #6E655A; border: 1px dashed rgba(243,235,221,.14);') });
+    const tools = [tool('✓ Терминал', true), tool('✓ Файлы проекта', true), tool('✓ Браузер', true), tool('✓ Писать команде', true), tool('+ Экран сервера', false), tool('+ Секреты: PAYMENTS_TEST_KEY', false)];
+    return {
+      colors, faces, runtimes, model, efforts, effortHint: effortHints[s.effort],
+      pickerOpen: s.picker, togglePicker: () => this.setState({ picker: !s.picker }),
+      pickerBorder: s.picker ? 'rgba(255,138,31,.55)' : 'rgba(243,235,221,.1)',
+      recent, repos, dirs, spaces, spaceHint: spacesRaw[s.space].hint, tools
+    };
+  }
+}
+</script>
+</body>
+</html>

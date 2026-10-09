@@ -1,0 +1,12 @@
+// interrupt() comes after turn/start was sent and before its answer. The turn/interrupt goes out
+// with the turn id once the answer brings it (the sleep makes the answer come late).
+{"expect": {"method": "initialize"}}
+{"send": {"id": "$last:/id", "result": {}}}
+{"expect": {"method": "initialized"}}
+{"expect": {"method": "thread/start"}}
+{"send": {"id": "$last:/id", "result": {"thread": {"id": "thr-8"}}}}
+{"expect": {"method": "turn/start"}}
+{"sleep_ms": 300}
+{"send": {"id": "$last:/id", "result": {"turn": {"id": "turn-6", "items": [], "status": "inProgress", "error": null}}}}
+{"expect": {"method": "turn/interrupt", "params": {"threadId": "thr-8", "turnId": "turn-6"}}}
+{"send": {"method": "turn/completed", "params": {"threadId": "thr-8", "turn": {"id": "turn-6", "items": [], "status": "interrupted", "error": null}}}}

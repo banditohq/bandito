@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Bandito — короткое обучение</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0B0A09}
+a{color:#FFB067}a:hover{color:#FFD2A0}
+button{font:inherit;cursor:pointer;transition:color .15s ease,box-shadow .2s ease,transform .12s ease,filter .15s ease}
+button:hover{filter:brightness(1.12)}
+button:active{transform:scale(.98)}
+@keyframes bnd-blink{0%,93%,100%{transform:scaleY(1)}96%{transform:scaleY(.12)}}
+@keyframes bnd-bubble{from{opacity:0;transform:translateY(8px) scale(.97)}to{opacity:1;transform:none}}
+@keyframes bnd-hop{0%,100%{transform:translateY(0)}30%{transform:translateY(-16px) rotate(-4deg)}55%{transform:translateY(0)}70%{transform:translateY(-6px)}}
+@keyframes bnd-confetti{0%{opacity:0;transform:translate(0,0) rotate(0)}10%{opacity:1}100%{opacity:0;transform:translate(var(--dx),var(--dy)) rotate(300deg)}}
+@keyframes bnd-pop{0%{opacity:0;transform:scale(.85)}60%{transform:scale(1.03)}100%{opacity:1;transform:none}}
+@keyframes bnd-fade{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; position: relative; overflow: hidden; color: #F3EBDD; font-family: Geist, -apple-system, sans-serif; font-size: 14px; background: #12100E;">
+  <div aria-hidden="true" style="position: absolute; inset: 0; display: flex;">
+    <div style="width: 296px; background: #181512; border-right: 1px solid rgba(243,235,221,.07); padding: 60px 8px 0; display: flex; flex-direction: column; gap: 8px;">
+      <div style="height: 50px; margin: 0 6px; border-radius: 12px; background: rgba(243,235,221,.05);"></div>
+      <div style="height: 38px; margin: 0 6px; border-radius: 12px; background: rgba(243,235,221,.04); border: 1px solid rgba(243,235,221,.06); display: flex; align-items: center; gap: 2px; padding: 3px;"><span style="flex: 1; height: 30px; border-radius: 9px; background: #2C2722;"></span><span style="flex: 1; height: 30px; border-radius: 9px;"></span><span style="flex: 1; height: 30px; border-radius: 9px;"></span><span style="flex: 1; height: 30px; border-radius: 9px;"></span><span style="flex: 1; height: 30px; border-radius: 9px;"></span><span style="flex: 1; height: 30px; border-radius: 9px;"></span></div>
+      <div style="height: 100px; margin: 0 6px; border-radius: 16px; background: rgba(243,235,221,.04);"></div>
+      <div style="height: 58px; border-radius: 13px; background: rgba(255,138,31,.12); border: 1px solid rgba(255,138,31,.3); display: flex; align-items: center; gap: 10px; padding: 0 10px;"><span style="width: 38px; height: 38px; border-radius: 13px; background: #FFB067;"></span><span style="display: flex; flex-direction: column; gap: 4px;"><span style="font-weight: 600;">Forge</span><span style="font-size: 12px; color: #FFB067;">ждёт вас</span></span></div>
+      <div style="height: 58px; border-radius: 13px; display: flex; align-items: center; gap: 10px; padding: 0 10px;"><span style="width: 38px; height: 38px; border-radius: 13px; background: #A3BDEB;"></span><span style="font-weight: 600;">Scout</span></div>
+      <div style="height: 58px; border-radius: 13px; display: flex; align-items: center; gap: 10px; padding: 0 10px;"><span style="width: 38px; height: 38px; border-radius: 13px; background: #A9C7A2;"></span><span style="font-weight: 600;">Night Owl</span></div>
+      <div style="flex: 1;"></div>
+      <div style="height: 60px; border-top: 1px solid rgba(243,235,221,.06); display: flex; align-items: center; gap: 8px; padding: 0 6px;"><span style="width: 32px; height: 32px; border-radius: 50%; background: #2C2722;"></span><span style="flex: 1; height: 34px; border-radius: 999px; border: 1px solid rgba(243,235,221,.1);"></span><span style="width: 72px; height: 34px; border-radius: 999px; border: 1px solid rgba(243,235,221,.14); display: grid; place-items: center; font-size: 12.5px; font-weight: 600;">77%</span></div>
+    </div>
+    <div style="flex: 1; display: flex; flex-direction: column; align-items: center; padding-top: 80px; gap: 14px; position: relative;">
+      <div style="position: absolute; right: 70px; top: 22px; height: 34px; padding: 0 12px; border-radius: 999px; border: 1px solid rgba(243,235,221,.12); display: flex; align-items: center; gap: 6px; font-size: 12.5px;">Изменения <span style="color: #A9C7A2;">+412</span> <span style="color: #F2A093;">−18</span></div>
+      <div style="width: 760px; display: flex; flex-direction: column; gap: 14px;">
+        <div style="align-self: flex-end; padding: 11px 15px; border-radius: 18px; background: #2C2722;">Добавь тесты для вебхука оплаты и открой PR.</div>
+        <div style="align-self: flex-start; padding: 12px 16px; border-radius: 18px; background: #1A1714; width: 440px; height: 44px;"></div>
+        <div style="height: 76px; border-radius: 14px; background: #1A1714;"></div>
+        <div style="height: 176px; border-radius: 20px; border: 1px solid rgba(255,138,31,.5); background: #211B15; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px;"><span style="font-weight: 600;">Forge хочет запушить ветку</span><span style="height: 44px; border-radius: 12px; background: #0E0C0B;"></span><span style="display: flex; gap: 10px;"><span style="width: 110px; height: 36px; border-radius: 999px; border: 1px solid rgba(243,235,221,.14);"></span><span style="width: 120px; height: 36px; border-radius: 999px; background: #E4620E;"></span></span></div>
+      </div>
+      <div style="flex: 1;"></div>
+      <div style="width: 780px; height: 60px; margin-bottom: 30px; border-radius: 24px; background: #1A1714; border: 1px solid rgba(243,235,221,.1); display: flex; align-items: center; padding: 0 18px; color: #6E655A;">Сообщение для Forge…</div>
+    </div>
+  </div>
+
+  <sc-if value="{{done}}" hint-placeholder-val="{{ false }}">
+    <div aria-hidden="true" style="position: absolute; inset: 0; background: rgba(8,7,6,.72); animation: bnd-fade .3s ease-out both;"></div>
+    <div role="dialog" aria-label="Всё готово" style="position: absolute; left: 470px; top: 230px; width: 500px; border-radius: 26px; background: linear-gradient(180deg, #241D17, #1A1612); border: 1px solid rgba(255,176,103,.35); box-shadow: 0 50px 120px -30px rgba(0,0,0,.95), 0 0 80px -30px rgba(255,138,31,.6); padding: 30px; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; animation: bnd-pop .5s cubic-bezier(.2,.9,.3,1.15) both;">
+      <div style="position: relative;">
+        <div style="animation: bnd-hop 1.4s cubic-bezier(.3,.7,.3,1) .2s 2 both;"><svg width="92" height="92" viewBox="0 0 52 52"><rect width="52" height="52" rx="17" fill="#FFB067"></rect><path d="M8 22c6-6 30-6 36 0v7c-6 4-30 4-36 0z" fill="#12100E"></path><path d="m15 27 3-3 3 3M31 27l3-3 3 3" stroke="#FFB067" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg></div>
+        <div aria-hidden="true" style="position: absolute; left: 46px; top: 40px; width: 1px; height: 1px;"><sc-for list="{{confetti}}" as="p" hint-placeholder-count="18"><span style="{{p}}"></span></sc-for></div>
+      </div>
+      <span style="font-size: 24px; font-weight: 650; letter-spacing: -.02em;">Всё готово!</span>
+      <span style="font-size: 14.5px; color: #BDB2A0; line-height: 1.55;">Forge уже на сервере и ждёт первую задачу. Подсказки можно открыть снова в меню «Справка».</span>
+      <button onClick="{{restart}}" style="margin-top: 6px; height: 46px; padding: 0 24px; border-radius: 999px; border: none; background: linear-gradient(180deg, #E4620E, #C94F09); color: #FFFFFF; font-weight: 600; font-size: 15px; box-shadow: 0 12px 30px -10px rgba(228,98,14,.9);">Написать Forge</button>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{touring}}" hint-placeholder-val="{{ true }}">
+  <div aria-hidden="true" style="{{spot}}"></div>
+
+  <div role="dialog" aria-label="Подсказка" style="{{bubble}}">
+    <div style="display: flex; align-items: center; gap: 8px;"><span style="font-family: 'Geist Mono', monospace; font-size: 11.5px; color: #FF8A1F;">{{counter}}</span><span style="flex: 1;"></span><button onClick="{{skip}}" style="border: none; background: transparent; color: #867C6D; font-size: 12.5px; padding: 0;">Пропустить</button></div>
+    <span style="font-size: 17px; font-weight: 600; letter-spacing: -.01em;">{{title}}</span>
+    <span style="font-size: 13.5px; color: #BDB2A0; line-height: 1.55;">{{text}}</span>
+    <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+      <sc-for list="{{dots}}" as="d" hint-placeholder-count="4"><span style="{{d}}"></span></sc-for>
+      <span style="flex: 1;"></span>
+      <button onClick="{{next}}" style="height: 34px; padding: 0 16px; border-radius: 999px; border: none; background: #F3EBDD; color: #12100E; font-weight: 600; font-size: 13px;">{{cta}}</button>
+    </div>
+  </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { i: 0 }; }
+  renderVals() {
+    const steps = [
+      { r: [8, 214, 280, 250], b: [312, 230], title: 'Это ваша команда', text: 'Каждый агент — отдельный чат. Еноты живые: моргают, когда отдыхают, и подпрыгивают, когда ждут вашего решения.' },
+      { r: [10, 112, 276, 50], b: [312, 96], title: 'Весь сервер — здесь', text: 'Файлы, терминалы, браузер и экран сервера. Переключайтесь иконками или ⌘1…⌘6 — SSH больше не нужен.' },
+      { r: [474, 790, 790, 70], b: [560, 590], title: 'Пишите как коллеге', text: 'Обычными словами: «добавь тесты для оплаты и открой PR». Агент сам разберётся, что запустить.' },
+      { r: [504, 460, 772, 186], b: [560, 230], title: 'Рискованное — только с вашего «да»', text: 'Пуш, деплой, удаление, оплата в браузере — агент принесёт сюда. Ответить можно и с iPhone, и из уведомления.' },
+      { r: [1212, 16, 166, 46], b: [830, 76], title: 'Что изменил агент', text: 'Все правки задачи в одном месте. Не понравилось — откатите файл или всю задачу к любой точке.' },
+      { r: [212, 838, 80, 44], b: [312, 650], title: 'Сколько осталось', text: 'Тариф каждой подписки (например, Claude Max ×20), остаток и таймер до сброса. Кончится лимит — агент сам перейдёт на запасную.' }
+    ];
+    const i = this.state.i, done = i >= steps.length;
+    const s = steps[Math.min(i, steps.length - 1)], last = i === steps.length - 1;
+    const [x, y, w, h] = s.r;
+    const colors = ['#FF8A1F', '#FFB067', '#A9C7A2', '#A3BDEB', '#C8B6E8', '#F3EBDD', '#F2A093'];
+    const confetti = Array.from({ length: 18 }, (_, k) => {
+      const ang = (k / 18) * Math.PI * 2;
+      const dx = Math.round(Math.cos(ang) * (110 + (k % 3) * 40));
+      const dy = Math.round(Math.sin(ang) * (80 + (k % 4) * 25)) - 50;
+      return 'position: absolute; width: ' + (k % 2 ? 7 : 9) + 'px; height: ' + (k % 2 ? 12 : 7) + 'px; border-radius: 2px; background: ' + colors[k % colors.length] + '; --dx: ' + dx + 'px; --dy: ' + dy + 'px; animation: bnd-confetti 1.5s cubic-bezier(.2,.7,.3,1) ' + (0.25 + (k % 5) * 0.03).toFixed(2) + 's both;';
+    });
+    return {
+      done, touring: !done, confetti,
+      spot: 'position: absolute; left: ' + x + 'px; top: ' + y + 'px; width: ' + w + 'px; height: ' + h + 'px; border-radius: 18px; box-shadow: 0 0 0 4px rgba(255,138,31,.65), 0 0 0 9999px rgba(8,7,6,.72); transition: all .45s cubic-bezier(.2,.8,.2,1); pointer-events: none;',
+      bubble: 'position: absolute; left: ' + s.b[0] + 'px; top: ' + s.b[1] + 'px; width: 360px; border-radius: 20px; background: #221E1A; border: 1px solid rgba(243,235,221,.14); box-shadow: 0 30px 80px -20px rgba(0,0,0,.9); padding: 18px; display: flex; flex-direction: column; gap: 8px; transition: all .45s cubic-bezier(.2,.8,.2,1); animation: bnd-bubble .3s ease-out both;',
+      counter: (Math.min(i, steps.length - 1) + 1) + ' из ' + steps.length,
+      title: s.title, text: s.text,
+      cta: last ? 'Начать работу' : 'Дальше',
+      dots: steps.map((_, k) => 'height: 6px; border-radius: 999px; transition: all .25s; ' + (k === i ? 'width: 18px; background: #FF8A1F;' : 'width: 6px; background: rgba(243,235,221,.2);')),
+      next: () => this.setState({ i: i + 1 }),
+      skip: () => this.setState({ i: steps.length }),
+      restart: () => this.setState({ i: 0 })
+    };
+  }
+}
+</script>
+</body>
+</html>

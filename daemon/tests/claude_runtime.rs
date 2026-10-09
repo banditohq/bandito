@@ -3,6 +3,7 @@
 use bandito::event::{Decision, EventBody, TurnStatus};
 use bandito::runtime::claude::ClaudeRuntime;
 use bandito::runtime::{Runtime, RuntimeOutput, SpawnConfig, Spawned};
+use bandito::store::Effort;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -232,6 +233,80 @@ async fn passes_flags() {
         serde_json::json!(["mcp", "--agent", "a1"])
     );
     s.session.shutdown().await;
+}
+
+/// Argv of a fake CLI, read once it has written it (it does so at startup).
+async fn written_args(path: &std::path::Path) -> Vec<String> {
+    for _ in 0..50 {
+        if let Some(args) = std::fs::read_to_string(path)
+            .ok()
+            .and_then(|text| serde_json::from_str::<Vec<String>>(&text).ok())
+        {
+            return args;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    panic!("args file not written: {}", path.display());
+}
+
+fn position_of(args: &[String], flag: &str) -> usize {
+    args.iter()
+        .position(|a| a == flag)
+        .unwrap_or_else(|| panic!("missing {flag} in {args:?}"))
+}
+
+#[tokio::test]
+async fn passes_effort_and_extra_dirs() {
+    let dir = tempfile::tempdir().unwrap();
+    let args_out = dir.path().join("args.json");
+    let mut c = cfg("deny.jsonl", Some(&args_out));
+    c.model = Some("opus".into());
+    c.effort = Some(Effort::High);
+    c.system_prompt = Some("You are Forge.".into());
+    c.extra_dirs = vec![
+        PathBuf::from("/home/user/bandito/agents/forge"),
+        PathBuf::from("/home/user/work/shop"),
+    ];
+    let s = ClaudeRuntime::new().spawn(c).await.unwrap();
+    let args = written_args(&args_out).await;
+    assert!(args.windows(2).any(|w| w == ["--effort", "high"]), "{args:?}");
+    let dirs: Vec<&str> = args
+        .windows(2)
+        .filter(|w| w[0] == "--add-dir")
+        .map(|w| w[1].as_str())
+        .collect();
+    assert_eq!(dirs, ["/home/user/bandito/agents/forge", "/home/user/work/shop"]);
+    // Placed after --model and before --append-system-prompt.
+    let model = position_of(&args, "--model");
+    let effort = position_of(&args, "--effort");
+    let add_dir = position_of(&args, "--add-dir");
+    let prompt = position_of(&args, "--append-system-prompt");
+    assert!(model < effort && effort < add_dir && add_dir < prompt, "{args:?}");
+    s.session.shutdown().await;
+}
+
+#[tokio::test]
+async fn effort_flag_carries_every_level() {
+    let dir = tempfile::tempdir().unwrap();
+    let levels = [
+        (Effort::Low, "low"),
+        (Effort::Medium, "medium"),
+        (Effort::High, "high"),
+        (Effort::Xhigh, "xhigh"),
+        (Effort::Max, "max"),
+    ];
+    for (i, (effort, name)) in levels.into_iter().enumerate() {
+        let args_out = dir.path().join(format!("args-{i}.json"));
+        let mut c = cfg("deny.jsonl", Some(&args_out));
+        c.effort = Some(effort);
+        let s = ClaudeRuntime::new().spawn(c).await.unwrap();
+        let args = written_args(&args_out).await;
+        assert!(
+            args.windows(2).any(|w| w[0] == "--effort" && w[1] == name),
+            "{name}: {args:?}"
+        );
+        s.session.shutdown().await;
+    }
 }
 
 #[tokio::test]

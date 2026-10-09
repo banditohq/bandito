@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Bandito — первый сервер</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0B0A09}
+a{color:#FFB067}a:hover{color:#FFD2A0}
+button{font:inherit;cursor:pointer;transition:color .15s ease,box-shadow .2s ease,transform .12s ease,filter .15s ease}
+button:hover{filter:brightness(1.12)}
+button:active{transform:scale(.98)}
+input{font:inherit}
+@keyframes bnd-rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes bnd-story{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes bnd-glow{0%,100%{box-shadow:0 0 0 0 rgba(255,138,31,0)}50%{box-shadow:0 0 40px -10px rgba(255,138,31,.55)}}
+@keyframes bnd-spin{to{transform:rotate(360deg)}}
+@keyframes bnd-hide{to{opacity:0;width:0;margin:0}}
+@keyframes bnd-show{from{opacity:0;transform:scale(.4)}to{opacity:1;transform:none}}
+@keyframes bnd-dim{from{opacity:.35}to{opacity:1}}
+@keyframes bnd-bar{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes bnd-pop{0%{opacity:0;transform:scale(.9)}60%{transform:scale(1.03)}100%{opacity:1;transform:none}}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; position: relative; overflow: hidden; color: #F3EBDD; font-family: Geist, -apple-system, sans-serif; background: radial-gradient(900px 400px at 50% -80px, rgba(255,138,31,.1), transparent 70%), #12100E;">
+  <div style="position: absolute; left: 18px; top: 18px; display: flex; gap: 8px;"><span style="width: 12px; height: 12px; border-radius: 50%; background: #FF5F57;"></span><span style="width: 12px; height: 12px; border-radius: 50%; background: #FEBC2E;"></span><span style="width: 12px; height: 12px; border-radius: 50%; background: #28C840;"></span></div>
+
+  <div style="width: 1080px; margin: 0 auto; padding-top: 74px; display: flex; flex-direction: column; gap: 26px;">
+    <div style="display: flex; align-items: center; gap: 12px; animation: bnd-rise .45s ease-out both;">
+      <div style="display: flex; gap: 6px;">
+        <span style="width: 26px; height: 4px; border-radius: 2px; background: #A9C7A2;"></span>
+        <span style="width: 26px; height: 4px; border-radius: 2px; background: #A9C7A2;"></span>
+        <span style="width: 26px; height: 4px; border-radius: 2px; background: rgba(243,235,221,.12); overflow: hidden;"><span style="display: block; height: 100%; background: #FF8A1F; transform-origin: left; animation: bnd-story .8s ease-out .3s both;"></span></span>
+        <span style="width: 26px; height: 4px; border-radius: 2px; background: rgba(243,235,221,.12);"></span>
+        <span style="width: 26px; height: 4px; border-radius: 2px; background: rgba(243,235,221,.12);"></span>
+      </div>
+      <span style="font-size: 12.5px; color: #867C6D;">шаг 3 из 5 · сервер</span>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 10px; animation: bnd-rise .45s ease-out .08s both;">
+      <h1 style="margin: 0; font-size: 38px; font-weight: 600; letter-spacing: -.035em;">Где будет жить ваша команда?</h1>
+      <p style="margin: 0; font-size: 15px; color: #BDB2A0; max-width: 640px; line-height: 1.55;">Агенты работают на компьютере, который не выключается. Подойдёт свой сервер, домашний ПК или — чтобы просто попробовать — этот Mac.</p>
+    </div>
+
+    <div role="radiogroup" aria-label="Где запустить" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; animation: bnd-rise .45s ease-out .16s both;">
+      <div role="radio" aria-checked="false" style="border-radius: 20px; padding: 20px; border: 1px solid rgba(243,235,221,.09); background: rgba(243,235,221,.025); display: flex; flex-direction: column; gap: 10px;">
+        <span style="width: 44px; height: 44px; border-radius: 14px; background: rgba(243,235,221,.06); color: #BDB2A0; display: grid; place-items: center;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16v10H4zM2 19h20"></path></svg></span>
+        <span style="font-size: 17px; font-weight: 600;">На этом Mac</span>
+        <span style="font-size: 13.5px; color: #867C6D; line-height: 1.5;">Быстро попробовать. Агенты работают, пока Mac не спит и не закрыт.</span>
+        <span style="font-size: 12px; color: #6E655A; margin-top: auto;">1 минута</span>
+      </div>
+      <div role="radio" aria-checked="true" style="border-radius: 20px; padding: 20px; border: 1px solid rgba(255,138,31,.5); background: linear-gradient(180deg, rgba(255,138,31,.1), rgba(255,138,31,.03)); display: flex; flex-direction: column; gap: 10px; position: relative; animation: bnd-glow 3.2s ease-in-out 1s infinite;">
+        <span style="position: absolute; right: 16px; top: 16px; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: rgba(169,199,162,.14); color: #C8DCC3;">рекомендуем</span>
+        <span style="width: 44px; height: 44px; border-radius: 14px; background: #E4620E; color: #FFFFFF; display: grid; place-items: center;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="7" rx="2"></rect><rect x="4" y="13" width="16" height="7" rx="2"></rect><path d="M8 7.5h.01M8 16.5h.01"></path></svg></span>
+        <span style="font-size: 17px; font-weight: 600;">На своём сервере</span>
+        <span style="font-size: 13.5px; color: #BDB2A0; line-height: 1.5;">Работает круглосуточно. VPS, домашний ПК или рабочий сервер — подключимся по SSH и всё установим сами.</span>
+        <span style="font-size: 12px; color: #867C6D; margin-top: auto;">3 минуты</span>
+      </div>
+      <div role="radio" aria-checked="false" style="border-radius: 20px; padding: 20px; border: 1px dashed rgba(243,235,221,.16); display: flex; flex-direction: column; gap: 10px;">
+        <span style="width: 44px; height: 44px; border-radius: 14px; background: rgba(163,189,235,.12); color: #A3BDEB; display: grid; place-items: center;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.7M12 17h.01"></path></svg></span>
+        <span style="font-size: 17px; font-weight: 600;">Сервера нет</span>
+        <span style="font-size: 13.5px; color: #867C6D; line-height: 1.5;">Подойдёт любой VPS от $5 в месяц. Покажем по шагам, где взять и что нажать.</span>
+        <a href="#" style="font-size: 13px; margin-top: auto;">Как получить сервер →</a>
+      </div>
+    </div>
+
+    <div style="border-radius: 22px; border: 1px solid rgba(243,235,221,.09); background: #171411; padding: 22px 24px; display: flex; gap: 28px; animation: bnd-rise .45s ease-out .24s both;">
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 14px;">
+        <span style="font-size: 15px; font-weight: 600;">Адрес сервера</span>
+        <div style="display: flex; gap: 10px;">
+          <label for="addr" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0);">Адрес сервера</label>
+          <input id="addr" value="deploy@vps-tokyo-1" style="flex: 1; height: 46px; border-radius: 14px; border: 1px solid rgba(255,138,31,.5); background: #121010; color: #F3EBDD; padding: 0 14px; font-family: 'Geist Mono', monospace; font-size: 14px; outline: none; box-shadow: 0 0 0 4px rgba(255,138,31,.1);">
+          <button onClick="{{connect}}" style="height: 46px; padding: 0 22px; border-radius: 14px; border: none; background: linear-gradient(180deg, #E4620E, #C94F09); color: #FFFFFF; font-weight: 600; box-shadow: 0 10px 26px -10px rgba(228,98,14,.9);">{{connectLabel}}</button>
+        </div>
+        <span style="font-size: 12.5px; color: #6E655A; line-height: 1.55;">Как вы обычно заходите по SSH: <span style="font-family: 'Geist Mono', monospace; color: #867C6D;">пользователь@адрес</span>. Мы используем ваши ключи из <span style="font-family: 'Geist Mono', monospace; color: #867C6D;">~/.ssh</span> — пароль не спросим.</span>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <span style="font-size: 12px; color: #867C6D;">Нашли в ваших настройках:</span>
+          <span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #F3EBDD; padding: 2px 9px; border-radius: 999px; background: rgba(255,138,31,.12); border: 1px solid rgba(255,138,31,.3);">vps-tokyo-1</span>
+          <span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #BDB2A0; padding: 2px 9px; border-radius: 999px; background: rgba(243,235,221,.05); border: 1px solid rgba(243,235,221,.08);">home-5080</span>
+        </div>
+      </div>
+      <div style="width: 360px; display: flex; flex-direction: column; gap: 12px; padding-left: 28px; border-left: 1px solid rgba(243,235,221,.07);">
+        <sc-if value="{{idle}}" hint-placeholder-val="{{ false }}">
+          <span style="font-size: 13px; font-weight: 600; color: #BDB2A0;">Что произойдёт</span>
+          <sc-for list="{{plan}}" as="p" hint-placeholder-count="4">
+            <div style="display: flex; gap: 10px; font-size: 13px; color: #BDB2A0;"><span style="font-family: 'Geist Mono', monospace; color: #FF8A1F;">{{p.n}}</span>{{p.text}}</div>
+          </sc-for>
+          <span style="font-size: 12px; color: #6E655A; line-height: 1.5;">Наружу ничего не открываем: сервер слушает только сам себя.</span>
+        </sc-if>
+        <sc-if value="{{busy}}" hint-placeholder-val="{{ true }}">
+          <div style="display: flex; justify-content: space-between; align-items: center;"><span style="font-size: 13px; font-weight: 600; color: #F3EBDD;">Подключаем vps-tokyo-1</span><span style="font-size: 12px; color: #867C6D;">≈ 40 с</span></div>
+          <div style="height: 4px; border-radius: 999px; background: rgba(243,235,221,.08); overflow: hidden;"><div style="height: 100%; background: linear-gradient(90deg, #FF8A1F, #FFB067); transform-origin: left; animation: bnd-bar 5.2s cubic-bezier(.4,0,.2,1) both;"></div></div>
+          <sc-for list="{{progress}}" as="p" hint-placeholder-count="5">
+            <div style="{{p.row}}">
+              <span style="position: relative; width: 18px; height: 18px; flex-shrink: 0;">
+                <span style="{{p.spin}}"></span>
+                <span style="{{p.check}}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#12100E" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4.5 4.5L19 7"></path></svg></span>
+              </span>
+              <span style="flex: 1;">{{p.text}}</span>
+              <span style="{{p.noteStyle}}">{{p.note}}</span>
+            </div>
+          </sc-for>
+          <div style="border-radius: 14px; padding: 12px 14px; background: rgba(169,199,162,.08); border: 1px solid rgba(169,199,162,.3); display: flex; align-items: center; gap: 10px; animation: bnd-pop .5s cubic-bezier(.2,.9,.3,1.2) 5.4s both;">
+            <span style="width: 9px; height: 9px; border-radius: 50%; background: #A9C7A2; box-shadow: 0 0 10px #A9C7A2;"></span>
+            <span style="flex: 1; font-size: 13px;"><b style="font-weight: 600;">Сервер на связи.</b> <span style="color: #BDB2A0;">Осталось войти в Codex — сделаем на следующем шаге.</span></span>
+            <a href="FirstAgent.dc.html" style="font-size: 13px; font-weight: 600; text-decoration: none;">Дальше →</a>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+    <span style="font-size: 13px; color: #867C6D;">Другие способы: Tailscale, прямое подключение, свой адрес — <a href="AddServer.dc.html">все варианты</a></span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { busy: true, run: 0 }; }
+  renderVals() {
+    const plan = [
+      { n: '1', text: 'Подключимся по SSH' },
+      { n: '2', text: 'Установим Bandito (≈ 20 МБ) как службу' },
+      { n: '3', text: 'Свяжем сервер с этим Mac' },
+      { n: '4', text: 'Проверим Claude Code, Codex и Grok и подскажем, где войти' }
+    ];
+    const steps = [
+      { text: 'Подключились по SSH', note: 'ключ ~/.ssh/id_ed25519', tone: '#6E655A' },
+      { text: 'Установили Bandito 0.5', note: 'служба systemd', tone: '#6E655A' },
+      { text: 'Связали с этим Mac', note: 'шифрованный канал', tone: '#6E655A' },
+      { text: 'Claude Code', note: 'Max ×20 ✓', tone: '#A9C7A2' },
+      { text: 'Codex', note: 'нужно войти', tone: '#FFB067' }
+    ];
+    const progress = steps.map((s, k) => {
+      const t = 0.5 + k * 1.0;
+      return {
+        ...s,
+        row: 'display: flex; align-items: center; gap: 10px; font-size: 13px; color: #F3EBDD; opacity: .35; animation: bnd-dim .3s ease-out ' + t.toFixed(1) + 's forwards;',
+        spin: 'position: absolute; inset: 1px; border-radius: 50%; border: 2px solid rgba(255,138,31,.25); border-top-color: #FF8A1F; animation: bnd-spin .8s linear infinite, bnd-hide .01s linear ' + (t + 0.8).toFixed(1) + 's forwards;',
+        check: 'position: absolute; inset: 0; border-radius: 50%; display: grid; place-items: center; background: ' + (s.tone === '#FFB067' ? '#FFB067' : '#A9C7A2') + '; animation: bnd-show .3s cubic-bezier(.2,.9,.3,1.3) ' + (t + 0.8).toFixed(1) + 's both;',
+        noteStyle: 'font-size: 11.5px; color: ' + s.tone + '; opacity: 0; animation: bnd-dim .3s ease-out ' + (t + 0.8).toFixed(1) + 's forwards;'
+      };
+    });
+    const busy = this.state.busy;
+    return {
+      plan, progress, busy, idle: !busy,
+      connectLabel: busy ? 'Ещё раз' : 'Подключить',
+      connect: () => { this.setState({ busy: false }); setTimeout(() => this.setState({ busy: true }), 40); }
+    };
+  }
+}
+</script>
+</body>
+</html>

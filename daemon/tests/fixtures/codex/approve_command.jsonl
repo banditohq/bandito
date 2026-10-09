@@ -1,0 +1,25 @@
+// codex app-server 0.161 (JSON-RPC over stdio). Handshake shapes from a real run; turn items follow the
+// generated protocol schema (`codex app-server generate-json-schema`). One command needs approval; host accepts.
+{"expect": {"method": "initialize", "params": {"clientInfo": {"name": "bandito"}}}}
+{"send": {"id": "$last:/id", "result": {"userAgent": "bandito/0.161.0", "codexHome": "/home/user/.codex", "platformFamily": "unix", "platformOs": "linux"}}}
+{"expect": {"method": "initialized"}}
+{"expect": {"method": "thread/start", "params": {"approvalPolicy": "untrusted", "sandbox": "workspace-write", "model": "gpt-5.5-codex", "developerInstructions": "You are Forge."}}}
+{"send": {"id": "$last:/id", "result": {"thread": {"id": "thr-1", "environments": [{"environmentId": "local", "cwd": "/home/user/work"}]}}}}
+{"send": {"method": "thread/started", "params": {"thread": {"id": "thr-1"}}}}
+{"expect": {"method": "turn/start", "params": {"threadId": "thr-1", "input": [{"type": "text", "text": "push it"}]}}}
+{"send": {"id": "$last:/id", "result": {"turn": {"id": "turn-1", "items": [], "status": "inProgress", "error": null}}}}
+{"send": {"method": "turn/started", "params": {"threadId": "thr-1", "turn": {"id": "turn-1", "items": [], "status": "inProgress"}}}}
+{"send": {"method": "item/started", "params": {"threadId": "thr-1", "turnId": "turn-1", "item": {"type": "userMessage", "id": "u-1", "content": [{"type": "text", "text": "push it"}]}}}}
+{"send": {"method": "account/rateLimits/updated", "params": {"rateLimits": {"limitId": "codex", "primary": {"usedPercent": 12, "windowDurationMins": 300, "resetsAt": 1791543600}, "secondary": {"usedPercent": 40, "windowDurationMins": 10080, "resetsAt": 1792026000}}}}}
+{"send": {"method": "item/started", "params": {"threadId": "thr-1", "turnId": "turn-1", "item": {"type": "commandExecution", "id": "item-1", "command": "git push origin main", "commandActions": [], "cwd": "/home/user/work", "status": "inProgress", "aggregatedOutput": null, "exitCode": null}}}}
+{"send": {"id": 0, "method": "item/commandExecution/requestApproval", "params": {"threadId": "thr-1", "turnId": "turn-1", "itemId": "item-1", "startedAtMs": 1791530170000, "command": "git push origin main", "cwd": "/home/user/work", "reason": "network access"}}}
+{"expect": {"id": 0, "result": {"decision": "accept"}}}
+{"send": {"method": "serverRequest/resolved", "params": {"threadId": "thr-1", "requestId": 0}}}
+{"send": {"method": "item/commandExecution/outputDelta", "params": {"threadId": "thr-1", "turnId": "turn-1", "itemId": "item-1", "delta": "Everything up-to-date\n"}}}
+{"send": {"method": "item/completed", "params": {"threadId": "thr-1", "turnId": "turn-1", "completedAtMs": 1791530171000, "item": {"type": "commandExecution", "id": "item-1", "command": "git push origin main", "commandActions": [], "status": "completed", "aggregatedOutput": "Everything up-to-date\n", "exitCode": 0, "durationMs": 900}}}}
+{"send": {"method": "item/started", "params": {"threadId": "thr-1", "turnId": "turn-1", "item": {"type": "agentMessage", "id": "m-1", "text": ""}}}}
+{"send": {"method": "item/agentMessage/delta", "params": {"threadId": "thr-1", "turnId": "turn-1", "itemId": "m-1", "delta": "Pus"}}}
+{"send": {"method": "item/agentMessage/delta", "params": {"threadId": "thr-1", "turnId": "turn-1", "itemId": "m-1", "delta": "hed."}}}
+{"send": {"method": "item/completed", "params": {"threadId": "thr-1", "turnId": "turn-1", "completedAtMs": 1791530172000, "item": {"type": "agentMessage", "id": "m-1", "text": "Pushed."}}}}
+{"send": {"method": "thread/tokenUsage/updated", "params": {"threadId": "thr-1", "turnId": "turn-1", "tokenUsage": {"last": {"inputTokens": 1200, "cachedInputTokens": 800, "outputTokens": 40, "reasoningOutputTokens": 10, "totalTokens": 1240}, "total": {"inputTokens": 1200, "cachedInputTokens": 800, "outputTokens": 40, "reasoningOutputTokens": 10, "totalTokens": 1240}}}}}
+{"send": {"method": "turn/completed", "params": {"threadId": "thr-1", "turn": {"id": "turn-1", "items": [], "status": "completed", "error": null}}}}
