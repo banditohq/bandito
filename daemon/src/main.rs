@@ -105,6 +105,11 @@ async fn status(sock: &Path) -> Result<()> {
 
 async fn daemon(home: &Path, sock: &Path, listen: SocketAddr) -> Result<()> {
     let store = Arc::new(Store::open(&home.join("bandito.db"))?);
+    let agents_root = home::default_agents_root(home);
+    let created = home::backfill(&store, &agents_root);
+    if created > 0 {
+        tracing::info!(count = created, "created folders for agents that had none");
+    }
     let hub = Hub::new(store);
     let mut runtimes = Runtimes::default();
     runtimes.insert(Arc::new(ClaudeRuntime::new()));
@@ -125,7 +130,7 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr) -> Result<()> {
     };
     let sup = Supervisor::new(hub, runtimes, mcp);
     sup.recover()?;
-    let app = App::new(sup.clone(), home::default_agents_root(home));
+    let app = App::new(sup.clone(), agents_root);
 
     let unix = rpc::unix::bind(sock)?;
     tokio::spawn(rpc::unix::run(app.clone(), unix));

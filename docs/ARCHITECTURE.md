@@ -42,7 +42,7 @@ Useful extras we surface: Claude's `rate_limit_event` and Codex `account/rateLim
 
 ## Events
 
-Everything an agent does becomes a row in `events` (append-only, global `seq`). Clients subscribe with `events.subscribe{after}` (live events, backfilled from `after`) and load a thread with `events.page{agent_id, before, limit}` (newest first, page by page). Global `seq` is contiguous on one connection, so a client that sees a jump re-subscribes from its last seq; a laptop that slept for a night catches up exactly.
+Everything an agent does becomes a row in `events` (append-only, global `seq`). Clients subscribe with `events.subscribe{after}` (live events, backfilled from `after`) and load a thread with `events.page{agent_id, before, limit}` (newest page first, each page oldest to newest). Global `seq` is contiguous on one connection, so a client that sees a jump re-subscribes from its last seq; a laptop that slept for a night catches up exactly.
 
 | kind | payload |
 |---|---|
@@ -67,7 +67,7 @@ Per agent `approval_mode`:
 - `always`: every tool call that the CLI asks about goes to the human.
 - `never`: auto-allow everything (for sandboxes).
 
-Risky = matches a rule. Built-in rules (editable): `git push*`, `git reset --hard*`, `rm -rf*`, `*deploy*`, `npm publish*`, `cargo publish*`, `kubectl delete*`, `terraform apply*`, `DROP TABLE*`, `prisma migrate deploy*`, writes outside the agent's `cwd`. Agent rules (`allow` / `ask` / `deny` patterns) win over built-ins. "Always allow here" on an approval adds an `allow` rule to that agent.
+Risky = matches a rule. Built-in rules (editable): `git push*`, `git reset --hard*`, `rm -rf*`, `*deploy*`, `npm publish*`, `cargo publish*`, `kubectl delete*`, `terraform apply*`, `DROP TABLE*`, `prisma migrate deploy*`, writes outside the agent's own folders (its `cwd` and its home folder). Agent rules (`allow` / `ask` / `deny` patterns) win over built-ins. "Always allow here" on an approval adds an `allow` rule to that agent.
 
 A pending approval blocks only that agent. Approvals time out after 24 h → deny.
 
@@ -190,7 +190,7 @@ Per agent `memory_mode`:
 | `daily` | every first message after 04:00 local | assistants with daily routines |
 | `full` | never; the CLI compacts on its own | short projects, debugging one long task |
 
-Before a chapter closes, the daemon sends a hidden wrap-up turn (`source: "system"`): *update your memory files with what matters from this chapter*. Then the session is dropped and `session.rotated` is emitted.
+Before a chapter closes, the daemon sends a wrap-up turn shown in the thread as a quiet line (`source: "system"`), excluded from history search: *update your memory files with what matters from this chapter*. Then the session is dropped and `session.rotated` is emitted.
 
 **Agent home.** Every agent gets its own folder on the server, `~/bandito/agents/<slug>/`, next to (not inside) the project it works on:
 
@@ -202,6 +202,8 @@ files/           anything the agent makes for itself
 ```
 
 The agent's instructions (built by the daemon, before the user's own) explain this layout. The CLI is allowed to write there (`--add-dir` for Claude, writable roots for Codex). The user can open, edit or delete these files; they are plain Markdown.
+
+**Grok.** Grok does not report context size, so Grok agents start new chapters by day only; its CLI has no extra-folder flag, so the agent's home is reachable through the same approval rules (the home counts as the agent's own folder).
 
 **Recall instead of remembering.** The crew MCP server also offers `history_search{query}` and `history_day{date}` over the agent's own past messages in the daemon's database, so an agent looks up what was said weeks ago instead of carrying it.
 

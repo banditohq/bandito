@@ -165,6 +165,32 @@ struct AgentPatchParams {
     #[serde(default, deserialize_with = "double_option")]
     context_budget: Option<Option<u32>>,
 }
+impl AgentPatchParams {
+    /// Whether the patch changes something a running session was started with, so
+    /// the session must be reloaded (the name is part of the system prompt).
+    /// `approval_mode` is not: approvals read it from the store on every request.
+    fn reloads_session(&self) -> bool {
+        let Self {
+            name,
+            role,
+            model,
+            cwd,
+            approval_mode: _,
+            system_prompt,
+            effort,
+            memory_mode,
+            context_budget,
+        } = self;
+        name.is_some()
+            || role.is_some()
+            || model.is_some()
+            || cwd.is_some()
+            || system_prompt.is_some()
+            || effort.is_some()
+            || memory_mode.is_some()
+            || context_budget.is_some()
+    }
+}
 /// `{"x": null}` → `Some(None)` (clear), missing → `None` (keep).
 fn double_option<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(d: D) -> Result<Option<Option<T>>, D::Error> {
     Option::<T>::deserialize(d).map(Some)
@@ -486,6 +512,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                 .ok_or_else(|| RpcError::new(SERVER_ERROR, format!("no agent {id}")))?;
             check_effort(current.runtime, patch.effort.flatten())?;
             check_context_budget(patch.context_budget.flatten())?;
+            let reload = patch.reloads_session();
             let a = store.agent_update(
                 &id,
                 AgentPatch {
@@ -500,8 +527,11 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                     context_budget: patch.context_budget,
                 },
             )?;
-            // New config takes effect with the next message.
-            app.sup.stop(&id).await;
+            // New config takes effect with the next session: the running one is
+            // closed when idle, or once its turn ends. The chapter itself goes on.
+            if reload {
+                app.sup.reload(&id).await;
+            }
             ok(a)
         }
         "agents.delete" => {
@@ -1414,6 +1444,78 @@ mod memory_tests {
         let store = Arc::new(Store::open_in_memory().unwrap());
         let sup = Supervisor::new(Hub::new(store), runtimes, None);
         App::new(sup, root)
+    }
+
+    #[tokio::test]
+    async fn update_reloads_the_session_only_when_it_needs_to() {
+        use crate::event::TurnStatus;
+        use crate::runtime::RuntimeOutput;
+        use crate::store::ApprovalMode;
+        use crate::supervisor::{Inbound, testing::MockRuntime};
+        use std::time::Duration;
+
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let log: Arc<std::sync::Mutex<Vec<String>>> = Arc::default();
+        let out: crate::supervisor::testing::Outs = Arc::default();
+        let mut runtimes = Runtimes::default();
+        runtimes.insert(Arc::new(MockRuntime {
+            log: log.clone(),
+            out: out.clone(),
+            spawns: Arc::default(),
+        }));
+        let sup = Supervisor::new(Hub::new(store.clone()), runtimes, None);
+        let app = App::new(sup.clone(), PathBuf::from("/unused"));
+        let id = store
+            .agent_create(NewAgent {
+                name: "Forge".into(),
+                role: String::new(),
+                runtime: RuntimeKind::Claude,
+                model: None,
+                cwd: std::env::temp_dir().display().to_string(),
+                approval_mode: ApprovalMode::Risky,
+                system_prompt: None,
+                effort: None,
+                memory_mode: crate::store::MemoryMode::Smart,
+                context_budget: None,
+            })
+            .unwrap()
+            .id;
+        let has = |line: &str| log.lock().unwrap().iter().any(|l| l == line);
+        let settle = || tokio::time::sleep(Duration::from_millis(50));
+
+        sup.send(&id, Inbound::user("go")).await.unwrap();
+        settle().await;
+        assert!(has("send go"));
+
+        // a new approval mode during a turn leaves the session running
+        call(&app, "agents.update", json!({ "id": id, "approval_mode": "always" }))
+            .await
+            .unwrap();
+        settle().await;
+        assert!(!has("shutdown"));
+
+        // a model change closes the session once the turn has ended
+        call(&app, "agents.update", json!({ "id": id, "model": "sonnet" }))
+            .await
+            .unwrap();
+        settle().await;
+        assert!(!has("shutdown"), "the turn is not cut");
+        let tx = out.lock().unwrap().get(&id).cloned().unwrap();
+        tx.send(RuntimeOutput::Event(EventBody::TurnCompleted {
+            turn_id: String::new(),
+            status: TurnStatus::Ok,
+            usage: None,
+            cost_usd: None,
+        }))
+        .await
+        .unwrap();
+        for _ in 0..300 {
+            if has("shutdown") {
+                break;
+            }
+            settle().await;
+        }
+        assert!(has("shutdown"));
     }
 
     async fn call(app: &App, method: &str, p: Value) -> RpcResult {

@@ -52,9 +52,12 @@ pub const RISKY: &[&str] = &[
 ///    - `Always` → `Ask("approval required for every action")`
 ///    - `Risky`  → if any segment of `req.command` matches a [`RISKY`] pattern
 ///      (case-insensitive) → `Ask("risky: <pattern>")`; else if any of
-///      `req.paths` is outside `cwd` ([`is_outside`]) → `Ask("writes outside <cwd>")`;
-///      else `Allow`.
-pub fn evaluate(mode: ApprovalMode, req: &ApprovalRequest, cwd: &str, rules: &[Rule]) -> Verdict {
+///      `req.paths` is outside every root ([`is_outside_all`]) →
+///      `Ask("writes outside <first root>")`; else `Allow`.
+///
+/// `roots` are the folders the agent owns: its working folder first, then its
+/// home folder when it has one. A path inside any of them is inside.
+pub fn evaluate(mode: ApprovalMode, req: &ApprovalRequest, roots: &[&str], rules: &[Rule]) -> Verdict {
     let subject = req.command.as_deref().unwrap_or(req.title.as_str());
     if let Some(rule) = rules.iter().find(|rule| glob_match(&rule.pattern, subject, false)) {
         return match rule.action {
@@ -76,8 +79,9 @@ pub fn evaluate(mode: ApprovalMode, req: &ApprovalRequest, cwd: &str, rules: &[R
                     }
                 }
             }
-            if req.paths.iter().any(|path| is_outside(path, cwd)) {
-                return Verdict::Ask(format!("writes outside {cwd}"));
+            if req.paths.iter().any(|path| is_outside_all(path, roots)) {
+                let first = roots.first().copied().unwrap_or_default();
+                return Verdict::Ask(format!("writes outside {first}"));
             }
             Verdict::Allow
         }
@@ -159,6 +163,12 @@ fn is_assignment(word: &str) -> bool {
     let mut chars = name.chars();
     matches!(chars.next(), Some(c) if c.is_ascii_alphabetic() || c == '_')
         && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+/// True if `path` lies outside every root (see [`is_outside`]). Inside any one
+/// root is enough to be inside.
+pub fn is_outside_all(path: &str, roots: &[&str]) -> bool {
+    roots.iter().all(|root| is_outside(path, root))
 }
 
 /// True if `path` (absolute, or relative to `cwd`) lands outside `cwd` after
@@ -381,7 +391,7 @@ mod tests {
     fn risky_git_push_asks() {
         let r = req(Some("git push origin main"), "Bash", &[]);
         assert_eq!(
-            evaluate(ApprovalMode::Risky, &r, CWD, &[]),
+            evaluate(ApprovalMode::Risky, &r, &[CWD], &[]),
             Verdict::Ask("risky: git push*".into())
         );
     }
@@ -390,7 +400,7 @@ mod tests {
     fn risky_checks_each_segment_after_prefix_strip() {
         let r = req(Some("cd app && GIT_SSH=x git push"), "Bash", &[]);
         assert_eq!(
-            evaluate(ApprovalMode::Risky, &r, CWD, &[]),
+            evaluate(ApprovalMode::Risky, &r, &[CWD], &[]),
             Verdict::Ask("risky: git push*".into())
         );
     }
@@ -398,14 +408,14 @@ mod tests {
     #[test]
     fn risky_safe_command_allowed() {
         let r = req(Some("cargo test"), "Bash", &[]);
-        assert_eq!(evaluate(ApprovalMode::Risky, &r, CWD, &[]), Verdict::Allow);
+        assert_eq!(evaluate(ApprovalMode::Risky, &r, &[CWD], &[]), Verdict::Allow);
     }
 
     #[test]
     fn risky_builtin_match_is_case_insensitive() {
         let r = req(Some("psql -c 'DROP TABLE users'"), "Bash", &[]);
         assert_eq!(
-            evaluate(ApprovalMode::Risky, &r, CWD, &[]),
+            evaluate(ApprovalMode::Risky, &r, &[CWD], &[]),
             Verdict::Ask("risky: *drop table*".into())
         );
     }
@@ -414,7 +424,7 @@ mod tests {
     fn risky_write_outside_cwd_asks_without_command() {
         let r = req(None, "Edit /etc/hosts", &["/etc/hosts"]);
         assert_eq!(
-            evaluate(ApprovalMode::Risky, &r, CWD, &[]),
+            evaluate(ApprovalMode::Risky, &r, &[CWD], &[]),
             Verdict::Ask("writes outside /home/u/app".into())
         );
     }
@@ -422,14 +432,40 @@ mod tests {
     #[test]
     fn risky_write_inside_cwd_allowed() {
         let r = req(None, "Edit src/main.rs", &["src/main.rs"]);
-        assert_eq!(evaluate(ApprovalMode::Risky, &r, CWD, &[]), Verdict::Allow);
+        assert_eq!(evaluate(ApprovalMode::Risky, &r, &[CWD], &[]), Verdict::Allow);
+    }
+
+    const HOME: &str = "/home/u/bandito/agents/forge";
+
+    #[test]
+    fn risky_write_inside_home_allowed_when_cwd_differs() {
+        let r = req(None, "Write notes", &["/home/u/bandito/agents/forge/notes/x.md"]);
+        assert_eq!(evaluate(ApprovalMode::Risky, &r, &[CWD, HOME], &[]), Verdict::Allow);
+    }
+
+    #[test]
+    fn risky_write_outside_every_root_asks_naming_the_first() {
+        let r = req(None, "Edit /etc/hosts", &["/etc/hosts"]);
+        assert_eq!(
+            evaluate(ApprovalMode::Risky, &r, &[CWD, HOME], &[]),
+            Verdict::Ask("writes outside /home/u/app".into())
+        );
+    }
+
+    #[test]
+    fn risky_home_sibling_with_common_prefix_is_outside() {
+        let r = req(None, "Edit forgery", &["/home/u/bandito/agents/forgery/x"]);
+        assert_eq!(
+            evaluate(ApprovalMode::Risky, &r, &[CWD, HOME], &[]),
+            Verdict::Ask("writes outside /home/u/app".into())
+        );
     }
 
     #[test]
     fn risky_command_reason_wins_over_outside_path() {
         let r = req(Some("rm -rf /"), "Bash", &["/etc/hosts"]);
         assert_eq!(
-            evaluate(ApprovalMode::Risky, &r, CWD, &[]),
+            evaluate(ApprovalMode::Risky, &r, &[CWD], &[]),
             Verdict::Ask("risky: rm -rf*".into())
         );
     }
@@ -438,7 +474,7 @@ mod tests {
     fn risky_allow_rule_overrides_builtin() {
         let r = req(Some("git push origin main"), "Bash", &[]);
         let rules = [rule("git push*", RuleAction::Allow)];
-        assert_eq!(evaluate(ApprovalMode::Risky, &r, CWD, &rules), Verdict::Allow);
+        assert_eq!(evaluate(ApprovalMode::Risky, &r, &[CWD], &rules), Verdict::Allow);
     }
 
     #[test]
@@ -446,7 +482,7 @@ mod tests {
         let r = req(Some("git push origin main"), "Bash", &[]);
         let rules = [rule("git push*", RuleAction::Ask)];
         assert_eq!(
-            evaluate(ApprovalMode::Risky, &r, CWD, &rules),
+            evaluate(ApprovalMode::Risky, &r, &[CWD], &rules),
             Verdict::Ask("rule: git push*".into())
         );
     }
@@ -454,7 +490,7 @@ mod tests {
     #[test]
     fn never_allows_risky_command() {
         let r = req(Some("git push"), "Bash", &[]);
-        assert_eq!(evaluate(ApprovalMode::Never, &r, CWD, &[]), Verdict::Allow);
+        assert_eq!(evaluate(ApprovalMode::Never, &r, &[CWD], &[]), Verdict::Allow);
     }
 
     #[test]
@@ -462,7 +498,7 @@ mod tests {
         let r = req(Some("git push"), "Bash", &[]);
         let rules = [rule("git push*", RuleAction::Deny)];
         assert_eq!(
-            evaluate(ApprovalMode::Never, &r, CWD, &rules),
+            evaluate(ApprovalMode::Never, &r, &[CWD], &rules),
             Verdict::Deny("rule: git push*".into())
         );
     }
@@ -471,7 +507,7 @@ mod tests {
     fn always_asks_for_every_action() {
         let r = req(Some("ls"), "Bash", &[]);
         assert_eq!(
-            evaluate(ApprovalMode::Always, &r, CWD, &[]),
+            evaluate(ApprovalMode::Always, &r, &[CWD], &[]),
             Verdict::Ask("approval required for every action".into())
         );
     }
@@ -480,20 +516,20 @@ mod tests {
     fn always_allow_rule_skips_prompt() {
         let r = req(Some("ls"), "Bash", &[]);
         let rules = [rule("ls*", RuleAction::Allow)];
-        assert_eq!(evaluate(ApprovalMode::Always, &r, CWD, &rules), Verdict::Allow);
+        assert_eq!(evaluate(ApprovalMode::Always, &r, &[CWD], &rules), Verdict::Allow);
     }
 
     #[test]
     fn first_matching_rule_wins() {
         let r = req(Some("git push"), "Bash", &[]);
         let rules = [rule("git *", RuleAction::Allow), rule("git push*", RuleAction::Deny)];
-        assert_eq!(evaluate(ApprovalMode::Risky, &r, CWD, &rules), Verdict::Allow);
+        assert_eq!(evaluate(ApprovalMode::Risky, &r, &[CWD], &rules), Verdict::Allow);
     }
 
     #[test]
     fn rule_matches_title_when_no_command() {
         let r = req(None, "Edit src/main.rs", &[]);
         let rules = [rule("Edit src/*", RuleAction::Allow)];
-        assert_eq!(evaluate(ApprovalMode::Always, &r, CWD, &rules), Verdict::Allow);
+        assert_eq!(evaluate(ApprovalMode::Always, &r, &[CWD], &rules), Verdict::Allow);
     }
 }

@@ -1,6 +1,8 @@
 //! Recall over an agent's own past conversation: the user and assistant
 //! messages in the event log. Older messages are not in the agent's context;
 //! the crew MCP server reads them through `history.search` / `history.day`.
+//! Messages Bandito sent itself (`source: "system"`, e.g. the wrap-up turn) are
+//! not conversation and are left out.
 
 use super::Store;
 use crate::event::{Event, EventBody};
@@ -26,6 +28,7 @@ impl Store {
             r"SELECT seq, agent_id, ts, kind, payload FROM events
               WHERE agent_id = ?1
                 AND kind IN ('message.user','message.assistant')
+                AND (kind <> 'message.user' OR json_extract(payload, '$.source') IS NOT 'system')
                 AND json_extract(payload, '$.text') LIKE ?2 ESCAPE '\'
               ORDER BY seq DESC LIMIT ?3",
         )?;
@@ -41,6 +44,7 @@ impl Store {
             "SELECT seq, agent_id, ts, kind, payload FROM events
              WHERE agent_id = ?1
                AND kind IN ('message.user','message.assistant')
+               AND (kind <> 'message.user' OR json_extract(payload, '$.source') IS NOT 'system')
                AND ts >= ?2 AND ts < ?3
              ORDER BY ts, seq LIMIT ?4",
         )?;
@@ -168,6 +172,26 @@ mod tests {
         assert_eq!(s.history_search("a", "note", 1000).unwrap().len(), 50);
         assert!(s.history_search("a", "   ", 20).unwrap().is_empty());
         assert!(s.history_search("a", "", 20).unwrap().is_empty());
+    }
+
+    #[test]
+    fn system_messages_are_not_history() {
+        let s = Store::open_in_memory().unwrap();
+        let mine = s.append_event("a", user("staging ok")).unwrap();
+        let wrap = s
+            .append_event(
+                "a",
+                EventBody::MessageUser {
+                    text: "Update your memory staging notes".into(),
+                    source: Source::System,
+                    from_agent: None,
+                },
+            )
+            .unwrap();
+        assert_eq!(seqs(&s.history_search("a", "staging", 20).unwrap()), [mine.seq]);
+        assert!(s.history_search("a", "memory", 20).unwrap().is_empty());
+        assert_eq!(seqs(&s.history_range("a", 0, i64::MAX, 100).unwrap()), [mine.seq]);
+        assert_ne!(wrap.seq, mine.seq);
     }
 
     #[test]

@@ -466,7 +466,14 @@ fn map_result(msg: &Value, out: &mut Vec<RuntimeOutput>) {
         }));
     }
     let usage = msg.get("usage").filter(|u| u.is_object()).map(|u| {
-        let n = |key: &str| u.get(key).and_then(Value::as_u64).unwrap_or(0);
+        // The top level sums every API call of a multi-step turn. The context the
+        // chapter holds now is the last call's, so that is what `iterations` gives.
+        let last = u
+            .get("iterations")
+            .and_then(Value::as_array)
+            .and_then(|calls| calls.last())
+            .unwrap_or(u);
+        let n = |key: &str| last.get(key).and_then(Value::as_u64).unwrap_or(0);
         Usage {
             input_tokens: n("input_tokens")
                 .saturating_add(n("cache_creation_input_tokens"))
@@ -727,6 +734,51 @@ mod tests {
                     output_tokens: 7,
                 }),
                 cost_usd: Some(0.5),
+            })]
+        );
+    }
+
+    #[test]
+    fn map_result_takes_context_from_the_last_iteration() {
+        // Two API calls in one turn: the first read a big context, the second is the context now held.
+        let msg = json!({"type": "result", "subtype": "success", "is_error": false, "result": "done",
+            "usage": {
+                "input_tokens": 90, "cache_creation_input_tokens": 500, "cache_read_input_tokens": 150_000, "output_tokens": 900,
+                "iterations": [
+                    {"input_tokens": 80, "cache_creation_input_tokens": 400, "cache_read_input_tokens": 149_000, "output_tokens": 800},
+                    {"input_tokens": 10, "cache_creation_input_tokens": 100, "cache_read_input_tokens": 20_000, "output_tokens": 100}
+                ]
+            }
+        });
+        assert_eq!(
+            map_message(&msg),
+            vec![RuntimeOutput::Event(EventBody::TurnCompleted {
+                turn_id: String::new(),
+                status: TurnStatus::Ok,
+                usage: Some(Usage {
+                    input_tokens: 20_110,
+                    output_tokens: 100,
+                }),
+                cost_usd: None,
+            })]
+        );
+    }
+
+    #[test]
+    fn map_result_with_empty_iterations_uses_the_top_level() {
+        let msg = json!({"type": "result", "subtype": "success", "is_error": false, "result": "ok",
+            "usage": {"input_tokens": 3, "output_tokens": 7, "iterations": []}
+        });
+        assert_eq!(
+            map_message(&msg),
+            vec![RuntimeOutput::Event(EventBody::TurnCompleted {
+                turn_id: String::new(),
+                status: TurnStatus::Ok,
+                usage: Some(Usage {
+                    input_tokens: 3,
+                    output_tokens: 7,
+                }),
+                cost_usd: None,
             })]
         );
     }

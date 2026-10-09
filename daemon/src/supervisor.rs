@@ -102,6 +102,8 @@ enum Cmd {
         reply: oneshot::Sender<Result<()>>,
     },
     Stop(oneshot::Sender<()>),
+    /// New settings for the next session: close the session now, or after the running turn.
+    Reload(oneshot::Sender<()>),
     /// Checks the per-turn and hop limits and, if they pass, counts one crew
     /// message against the running turn. Done in the actor so the check and the
     /// count are one step.
@@ -129,7 +131,7 @@ const MEMORY_BRIEFING: &str = "Your memory lives in {home} — plain Markdown fi
 - files/: anything you make for yourself.
 This conversation is split into sessions to stay fast and cheap; older messages are not in your context. If you need something from before, check your memory files, or use the history_search and history_day tools.";
 
-/// Hidden turn sent before a chapter closes, so the agent saves what matters.
+/// Turn sent before a chapter closes, so the agent saves what matters.
 const WRAP_UP: &str = "Before we continue: Bandito is about to start a fresh session to keep this conversation fast and cheap. Update your memory now — MEMORY.md (short: user, current work, open tasks, decisions, links), notes/<topic>.md for details, and today's journal. Then reply with one short line saying what you saved.";
 
 /// The memory day starts at this local time.
@@ -227,6 +229,8 @@ impl Supervisor {
             turn_chain: None,
             turn_crew_sends: 0,
             wrap_up: None,
+            rotate_due: None,
+            reload_after_turn: false,
             queue: VecDeque::new(),
             pending: HashMap::new(),
             status: None,
@@ -342,13 +346,32 @@ impl Supervisor {
         Ok(())
     }
 
-    /// Stop the agent's session (on delete, or when its config changed).
-    /// The next message starts a fresh session.
+    /// Stop the agent's session and its actor (on delete). Settings changes use
+    /// [`Supervisor::reload`] instead. The next message starts a fresh session.
     pub async fn stop(&self, agent_id: &str) {
         let tx = self.actors.lock().unwrap_or_else(|e| e.into_inner()).remove(agent_id);
         if let Some(tx) = tx {
             let (reply, rx) = oneshot::channel();
             if tx.send(Cmd::Stop(reply)).await.is_ok() {
+                let _ = rx.await;
+            }
+        }
+    }
+
+    /// Apply changed settings to the agent's next session without interrupting a
+    /// running turn: the session is closed now, or when the running turn ends.
+    /// The chapter goes on (the runtime session id is kept), so the next message
+    /// resumes it with the new settings. Does nothing for an agent with no actor.
+    pub async fn reload(&self, agent_id: &str) {
+        let tx = self
+            .actors
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(agent_id)
+            .cloned();
+        if let Some(tx) = tx.filter(|tx| !tx.is_closed()) {
+            let (reply, rx) = oneshot::channel();
+            if tx.send(Cmd::Reload(reply)).await.is_ok() {
                 let _ = rx.await;
             }
         }
@@ -388,6 +411,11 @@ struct Actor {
     /// Set while the wrap-up turn of a chapter that is closing runs: the reason
     /// the chapter closes ("context" or "new day"). Messages wait in the queue meanwhile.
     wrap_up: Option<&'static str>,
+    /// Set after a turn that left the chapter over budget: the chapter closes
+    /// when the next message comes ("context"), so nothing runs while the agent is idle.
+    rotate_due: Option<&'static str>,
+    /// Settings changed while a session was running: close that session once it is idle.
+    reload_after_turn: bool,
     queue: VecDeque<Inbound>,
     pending: HashMap<String, PendingApproval>,
     status: Option<AgentStatus>,
@@ -453,6 +481,11 @@ impl Actor {
             }
             Cmd::ReserveCrewSend(reply) => {
                 let _ = reply.send(self.reserve_crew_send());
+            }
+            Cmd::Reload(reply) => {
+                self.reload_after_turn = true;
+                self.release_if_idle().await;
+                let _ = reply.send(());
             }
             Cmd::Stop(_) => unreachable!("handled in run"),
         }
@@ -580,6 +613,23 @@ impl Actor {
         if self.queue.is_empty() {
             return Ok(());
         }
+        // A chapter that outgrew its budget closes now, before the message goes out.
+        if let Some(reason) = self.rotate_due.take() {
+            if self.session.is_some() {
+                if self.begin_rotation(reason).await {
+                    return Ok(());
+                }
+            } else {
+                let context_tokens = self
+                    .hub
+                    .store
+                    .agent_get(&self.id)
+                    .ok()
+                    .flatten()
+                    .map_or(0, |a| a.context_tokens);
+                self.start_chapter_without_session(reason, context_tokens);
+            }
+        }
         // A new day opens a new chapter before the message goes out.
         // (If the agent can't be loaded, `ensure_session` reports it below.)
         if let Ok(agent) = self.agent()
@@ -591,25 +641,52 @@ impl Actor {
                 }
             } else if agent.runtime_session_id.is_some() || agent.context_tokens > 0 {
                 // No session to close, but a stored session id would resume the old chapter.
-                match self.hub.store.agent_next_chapter(&self.id) {
-                    Ok(chapter) => {
-                        self.hub.emit(
-                            &self.id,
-                            EventBody::SessionRotated {
-                                chapter,
-                                reason: "new day".into(),
-                                context_tokens: agent.context_tokens,
-                            },
-                        );
-                    }
-                    Err(e) => tracing::warn!(agent = self.id, "start next chapter: {e:#}"),
-                }
+                self.start_chapter_without_session("new day", agent.context_tokens);
             }
         }
         let Some(msg) = self.queue.pop_front() else {
             return Ok(());
         };
         self.start_turn(msg).await
+    }
+
+    /// Start the next chapter when no CLI session is alive to close. The stored
+    /// session id is dropped by the store, so the new session cannot resume the old chapter.
+    fn start_chapter_without_session(&mut self, reason: &'static str, context_tokens: u64) {
+        self.reload_after_turn = false;
+        match self.hub.store.agent_next_chapter(&self.id) {
+            Ok(chapter) => {
+                self.hub.emit(
+                    &self.id,
+                    EventBody::SessionRotated {
+                        chapter,
+                        reason: reason.into(),
+                        context_tokens,
+                    },
+                );
+            }
+            Err(e) => tracing::warn!(agent = self.id, "start next chapter: {e:#}"),
+        }
+    }
+
+    /// Close the CLI session now unless something is running. A pending chapter
+    /// rotation or a running turn leaves `reload_after_turn` set; whoever ends
+    /// that work closes the session.
+    async fn release_if_idle(&mut self) {
+        if self.turn.is_some() || self.wrap_up.is_some() || self.rotate_due.is_some() {
+            return;
+        }
+        self.release_session().await;
+    }
+
+    /// Shut the CLI session down and forget it, but keep the chapter: the next
+    /// session resumes the same runtime session with the current settings.
+    async fn release_session(&mut self) {
+        if let Some(s) = self.session.take() {
+            s.shutdown().await;
+        }
+        self.output = None;
+        self.reload_after_turn = false;
     }
 
     /// Close the running chapter before the next message. With a home folder the
@@ -659,10 +736,7 @@ impl Actor {
                 0
             }
         };
-        if let Some(s) = self.session.take() {
-            s.shutdown().await;
-        }
-        self.output = None;
+        self.release_session().await;
         match self.hub.store.agent_next_chapter(&self.id) {
             Ok(chapter) => {
                 self.hub.emit(
@@ -791,9 +865,13 @@ impl Actor {
                 if let Some(tokens) = context
                     && let Ok(agent) = self.agent()
                     && context_due(&agent, tokens)
-                    && self.begin_rotation("context").await
                 {
-                    return;
+                    // Closed lazily: the next message runs the wrap-up first (see `pump`).
+                    self.rotate_due = Some("context");
+                }
+                // A rotation still pending closes the session itself, so only a plain reload happens here.
+                if self.reload_after_turn && self.rotate_due.is_none() {
+                    self.release_session().await;
                 }
                 self.after_turn().await;
             }
@@ -813,6 +891,8 @@ impl Actor {
             }
             RuntimeOutput::Exited { code, stderr_tail } => {
                 self.session = None;
+                // The next session starts with the current settings anyway.
+                self.reload_after_turn = false;
                 let failed = code != Some(0);
                 let detail = if failed {
                     let tail: Vec<&str> = stderr_tail.lines().rev().take(5).collect();
@@ -914,7 +994,10 @@ impl Actor {
     async fn approval(&mut self, req: ApprovalRequest) -> Result<()> {
         let agent = self.agent()?;
         let rules = self.hub.store.rule_list(Some(&self.id))?;
-        let verdict = policy::evaluate(agent.approval_mode, &req, &agent.cwd, &rules);
+        // The agent's own folders: its working folder, and its home when it has one.
+        let mut roots = vec![agent.cwd.as_str()];
+        roots.extend(agent.home_dir.as_deref());
+        let verdict = policy::evaluate(agent.approval_mode, &req, &roots, &rules);
         let subject = req.command.clone().unwrap_or_else(|| req.title.clone());
         match verdict {
             Verdict::Allow => match self.session.as_mut() {
@@ -996,26 +1079,24 @@ impl Actor {
     }
 }
 
+/// Test doubles shared by the supervisor and RPC tests: a runtime whose sessions
+/// log what they are asked to do.
 #[cfg(test)]
-mod tests {
+pub(crate) mod testing {
     use super::*;
-    use crate::event::Event;
     use crate::runtime::{RuntimeStatus, Spawned};
-    use crate::store::{AgentPatch, ApprovalMode, ApprovalStatus, Effort, NewAgent, Store};
     use async_trait::async_trait;
-    use std::time::Duration;
-    use tokio::sync::broadcast;
 
-    /// What the mock session was asked to do.
-    type Log = Arc<Mutex<Vec<String>>>;
+    /// What the mock sessions were asked to do.
+    pub type Log = Arc<Mutex<Vec<String>>>;
     /// Output channel of each spawned session, by agent id.
-    type Outs = Arc<Mutex<HashMap<String, mpsc::Sender<RuntimeOutput>>>>;
+    pub type Outs = Arc<Mutex<HashMap<String, mpsc::Sender<RuntimeOutput>>>>;
 
-    struct MockRuntime {
-        log: Log,
+    pub struct MockRuntime {
+        pub log: Log,
         /// The test pushes runtime output through these.
-        out: Outs,
-        spawns: Arc<Mutex<Vec<SpawnConfig>>>,
+        pub out: Outs,
+        pub spawns: Arc<Mutex<Vec<SpawnConfig>>>,
     }
 
     struct MockSession {
@@ -1065,6 +1146,16 @@ mod tests {
             })
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::testing::{Log, MockRuntime, Outs};
+    use super::*;
+    use crate::event::Event;
+    use crate::store::{AgentPatch, ApprovalMode, ApprovalStatus, Effort, NewAgent, Store};
+    use std::time::Duration;
+    use tokio::sync::broadcast;
 
     struct World {
         sup: Arc<Supervisor>,
@@ -1711,7 +1802,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn smart_chapter_closes_with_a_wrap_up_turn() {
+    async fn smart_chapter_closes_before_the_next_message() {
         let mut w = world(ApprovalMode::Risky);
         w.store.agent_set_home(&w.agent, HOME).unwrap();
         w.sup.send(&w.agent, Inbound::user("work")).await.unwrap();
@@ -1719,10 +1810,15 @@ mod tests {
         w.push(RuntimeOutput::SessionId("sess-1".into())).await;
         // 130k is over the 120k default budget
         w.push(done_with_usage(120_000, 10_000)).await;
-        w.wait_log(&format!("send {WRAP_UP}")).await;
+        w.wait(is_status(AgentStatus::Idle)).await;
+        // nothing closes while the agent is idle
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert!(!w.kinds().iter().any(|k| k == "session.rotated"));
+        assert!(!was_sent(&w, WRAP_UP));
 
-        // messages wait while the wrap-up runs
+        // the next message runs the wrap-up first, and waits behind it
         w.sup.send(&w.agent, Inbound::user("while saving")).await.unwrap();
+        w.wait_log(&format!("send {WRAP_UP}")).await;
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert!(!was_sent(&w, "while saving"));
 
@@ -1750,7 +1846,6 @@ mod tests {
         assert_eq!(spawns.len(), 2);
         assert_eq!(spawns[1].resume, None);
     }
-
     #[tokio::test]
     async fn full_memory_never_starts_a_new_chapter() {
         let w = world(ApprovalMode::Risky);
@@ -1786,9 +1881,14 @@ mod tests {
         w.sup.send(&w.agent, Inbound::user("work")).await.unwrap();
         w.wait_log("send work").await;
         w.push(done_with_usage(130_000, 0)).await;
+        w.wait(is_status(AgentStatus::Idle)).await;
+        assert!(!w.kinds().iter().any(|k| k == "session.rotated"));
+
+        w.sup.send(&w.agent, Inbound::user("next")).await.unwrap();
         let (chapter, reason, context_tokens) = rotated(&mut w).await;
         assert_eq!((chapter, reason.as_str(), context_tokens), (2, "context", 130_000));
         w.wait_log("shutdown").await;
+        w.wait_log("send next").await;
         assert!(
             !w.log
                 .lock()
@@ -1796,11 +1896,8 @@ mod tests {
                 .iter()
                 .any(|l| l.starts_with("send Before we continue"))
         );
-        w.sup.send(&w.agent, Inbound::user("next")).await.unwrap();
-        w.wait_log("send next").await;
         assert_eq!(w.spawns.lock().unwrap().len(), 2);
     }
-
     #[tokio::test]
     async fn a_failed_wrap_up_turn_still_closes_the_chapter() {
         let mut w = world(ApprovalMode::Risky);
@@ -1808,6 +1905,8 @@ mod tests {
         w.sup.send(&w.agent, Inbound::user("work")).await.unwrap();
         w.wait_log("send work").await;
         w.push(done_with_usage(130_000, 0)).await;
+        w.wait(is_status(AgentStatus::Idle)).await;
+        w.sup.send(&w.agent, Inbound::user("next")).await.unwrap();
         w.wait_log(&format!("send {WRAP_UP}")).await;
         w.push(RuntimeOutput::Event(EventBody::TurnCompleted {
             turn_id: String::new(),
@@ -1820,7 +1919,6 @@ mod tests {
         assert_eq!((chapter, reason.as_str()), (2, "context"));
         w.wait_log("shutdown").await;
     }
-
     #[tokio::test]
     async fn a_crashed_wrap_up_turn_still_closes_the_chapter() {
         let mut w = world(ApprovalMode::Risky);
@@ -1829,6 +1927,8 @@ mod tests {
         w.wait_log("send work").await;
         w.push(RuntimeOutput::SessionId("sess-1".into())).await;
         w.push(done_with_usage(130_000, 0)).await;
+        w.wait(is_status(AgentStatus::Idle)).await;
+        w.sup.send(&w.agent, Inbound::user("next")).await.unwrap();
         w.wait_log(&format!("send {WRAP_UP}")).await;
         w.push(RuntimeOutput::Exited {
             code: Some(1),
@@ -1842,6 +1942,80 @@ mod tests {
             a.runtime_session_id, None,
             "the next chapter does not resume the old session"
         );
+    }
+    #[tokio::test]
+    async fn reload_while_idle_closes_the_session_and_keeps_the_chapter() {
+        let mut w = world(ApprovalMode::Risky);
+        w.sup.send(&w.agent, Inbound::user("first")).await.unwrap();
+        w.wait_log("send first").await;
+        w.push(RuntimeOutput::SessionId("sess-1".into())).await;
+        w.push(done()).await;
+        w.wait(is_status(AgentStatus::Idle)).await;
+
+        w.sup.reload(&w.agent).await;
+        assert!(w.log.lock().unwrap().iter().any(|l| l == "shutdown"));
+        let a = w.store.agent_get(&w.agent).unwrap().unwrap();
+        assert_eq!(a.runtime_session_id.as_deref(), Some("sess-1"), "the chapter goes on");
+
+        // the next message starts a new session that resumes the same chapter
+        w.sup.send(&w.agent, Inbound::user("second")).await.unwrap();
+        w.wait_log("send second").await;
+        let spawns = w.spawns.lock().unwrap();
+        assert_eq!(spawns.len(), 2);
+        assert_eq!(spawns[1].resume.as_deref(), Some("sess-1"));
+    }
+
+    #[tokio::test]
+    async fn reload_during_a_turn_waits_for_the_turn_and_shuts_down_once() {
+        let mut w = world(ApprovalMode::Risky);
+        w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
+        w.wait_log("send go").await;
+        w.push(RuntimeOutput::SessionId("sess-1".into())).await;
+        w.sup.reload(&w.agent).await;
+        w.sup.reload(&w.agent).await;
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert!(
+            !w.log.lock().unwrap().iter().any(|l| l == "shutdown"),
+            "the turn is not cut"
+        );
+
+        w.push(done()).await;
+        w.wait_log("shutdown").await;
+        w.wait(is_status(AgentStatus::Idle)).await;
+        let shutdowns = w.log.lock().unwrap().iter().filter(|l| *l == "shutdown").count();
+        assert_eq!(shutdowns, 1, "two reloads, one shutdown");
+        let a = w.store.agent_get(&w.agent).unwrap().unwrap();
+        assert_eq!(a.runtime_session_id.as_deref(), Some("sess-1"));
+    }
+
+    #[tokio::test]
+    async fn reload_does_not_cut_short_a_pending_chapter_rotation() {
+        let mut w = world(ApprovalMode::Risky);
+        w.store.agent_set_home(&w.agent, HOME).unwrap();
+        w.sup.send(&w.agent, Inbound::user("work")).await.unwrap();
+        w.wait_log("send work").await;
+        w.push(done_with_usage(130_000, 0)).await;
+        w.wait(is_status(AgentStatus::Idle)).await;
+
+        // over budget and idle: the wrap-up still runs before the next message
+        w.sup.reload(&w.agent).await;
+        assert!(!w.log.lock().unwrap().iter().any(|l| l == "shutdown"));
+        w.sup.send(&w.agent, Inbound::user("next")).await.unwrap();
+        w.wait_log(&format!("send {WRAP_UP}")).await;
+        w.push(done()).await;
+        let (chapter, reason, _) = rotated(&mut w).await;
+        assert_eq!((chapter, reason.as_str()), (2, "context"));
+        w.wait_log("send next").await;
+        assert_eq!(w.spawns.lock().unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn reload_without_an_actor_does_nothing() {
+        let w = world(ApprovalMode::Risky);
+        w.sup.reload(&w.agent).await;
+        w.sup.reload("nobody").await;
+        assert!(w.spawns.lock().unwrap().is_empty(), "no session was started");
+        assert!(w.log.lock().unwrap().is_empty());
     }
 
     #[tokio::test]
