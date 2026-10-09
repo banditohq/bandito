@@ -89,6 +89,17 @@ public struct AvatarPose: Equatable, Sendable {
         return pose
     }
 
+    /// The part of each cycle in which `mood` moves: `(period, start, end)` with `start` and `end` as fractions of
+    /// the period. Outside it the pose does not change, so nothing has to be drawn. Nil: the mood moves all the time.
+    public static func activeWindow(for mood: AvatarMood) -> (period: Double, start: Double, end: Double)? {
+        switch mood {
+        case .idle: (5, 0.93, 1)
+        case .needsYou: (2, 0.6, 1)
+        case .error: (3, 0.7, 1)
+        case .working, .thinking, .sleeping: nil
+        }
+    }
+
     /// Seconds offset of an agent's rhythm, 0 to 5, from a stable hash of its name.
     public static func phase(for name: String) -> Double {
         Double(stableNameHash(name) % 5000) / 1000

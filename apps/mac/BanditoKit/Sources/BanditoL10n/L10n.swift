@@ -6,13 +6,32 @@ public enum L10n {
 
     static func tr(_ key: String, _ args: CVarArg...) -> String {
         let format = Bundle.module.localizedString(forKey: key, value: nil, table: "Localizable")
+        // Most strings take no arguments: skip formatting, only unescape the percent sign. Views read
+        // strings on every update, so this path has to be cheap.
+        if args.isEmpty { return format.contains("%%") ? format.replacingOccurrences(of: "%%", with: "%") : format }
         return String(format: format, locale: locale, arguments: args)
     }
 
     /// Locale of the language the strings come from. Plural rules and number formats follow it,
     /// not the system locale: a Russian UI on an English Mac still gets Russian plurals.
     public static var locale: Locale {
-        Locale(identifier: Bundle.module.preferredLocalizations.first ?? "en")
+        LocaleCache.shared.locale(for: Bundle.module.preferredLocalizations.first ?? "en")
+    }
+
+    /// One `Locale` per language identifier: making a `Locale` for every string was a hot spot.
+    final class LocaleCache: @unchecked Sendable {
+        static let shared = LocaleCache()
+        private let lock = NSLock()
+        private var cached: (id: String, locale: Locale)?
+
+        func locale(for id: String) -> Locale {
+            lock.lock()
+            defer { lock.unlock() }
+            if let cached, cached.id == id { return cached.locale }
+            let locale = Locale(identifier: id)
+            cached = (id, locale)
+            return locale
+        }
     }
 
     public static let languages: [(code: String, native: String)] = [

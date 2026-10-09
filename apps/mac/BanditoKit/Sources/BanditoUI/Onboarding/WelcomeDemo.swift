@@ -6,19 +6,24 @@ import SwiftUI
 /// `WelcomeTimeline` (message, typing, commands, approval, the click on "Allow", the result, confetti).
 /// Starts when it appears; "Replay" restarts it. Reduce Motion shows the finished frame.
 struct WelcomeDemoCard: View {
+    /// How long one run lasts, the confetti included. After it nothing moves.
+    static let runLength: TimeInterval = WelcomeTimeline.confettiAt + 3
+
     /// When the current run started.
     var start: Date
     var onReplay: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(MotionLevel.storageKey) private var motionLevel = MotionLevel.full.rawValue
+    /// True once the run is over (confetti included): the clock stops and the last frame stays on screen.
+    @State private var finished = false
 
     private var reduced: Bool {
         MotionLevel(stored: motionLevel).reducesMotion(systemReduceMotion: reduceMotion)
     }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduced)) { context in
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduced || finished)) { context in
             // Reduce Motion: the finished frame, far enough in that every step is already visible.
             let t = reduced ? 60 : context.date.timeIntervalSince(start)
             let frame = reduced ? WelcomeTimeline.finalFrame : WelcomeTimeline.demo(at: t)
@@ -32,6 +37,11 @@ struct WelcomeDemoCard: View {
         .overlay(RoundedRectangle(cornerRadius: 22).stroke(Color.Bandito.text.opacity(0.1), lineWidth: 1))
         .shadow(color: .black.opacity(0.6), radius: 40, y: 24)
         .accessibilityElement(children: .contain)
+        .task(id: start) {
+            finished = false
+            try? await Task.sleep(for: .seconds(WelcomeDemoCard.runLength))
+            if !Task.isCancelled { finished = true }
+        }
     }
 
     private func chat(frame: WelcomeDemoFrame, t: TimeInterval) -> some View {

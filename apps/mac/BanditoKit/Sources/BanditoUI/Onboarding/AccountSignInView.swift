@@ -147,6 +147,7 @@ struct AccountSignInView: View {
                 showGitHub = true
             }
             .disabled(models == nil)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             VStack(alignment: .leading, spacing: 16) {
                 Button {
