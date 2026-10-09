@@ -28,6 +28,12 @@ pub struct Agent {
     /// Chapter number of the current session, from 1.
     pub chapter: u32,
     pub last_turn_at: Option<i64>,
+    /// The runtime used when the primary one is out of usage. `None`: no fallback.
+    pub fallback_runtime: Option<RuntimeKind>,
+    pub fallback_model: Option<String>,
+    /// The runtime the agent runs on now, when it is not the primary one (see docs/ARCHITECTURE.md#fallback-subscription).
+    /// `None` means the primary `runtime`.
+    pub active_runtime: Option<RuntimeKind>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -49,6 +55,10 @@ pub struct NewAgent {
     pub memory_mode: MemoryMode,
     #[serde(default)]
     pub context_budget: Option<u32>,
+    #[serde(default)]
+    pub fallback_runtime: Option<RuntimeKind>,
+    #[serde(default)]
+    pub fallback_model: Option<String>,
 }
 
 fn default_memory() -> MemoryMode {
@@ -72,9 +82,16 @@ pub struct AgentPatch {
     pub effort: Option<Option<Effort>>,
     pub memory_mode: Option<MemoryMode>,
     pub context_budget: Option<Option<u32>>,
+    pub runtime: Option<RuntimeKind>,
+    pub fallback_runtime: Option<Option<RuntimeKind>>,
+    pub fallback_model: Option<Option<String>>,
 }
 
-const COLS: &str = "id, name, role, runtime, model, cwd, approval_mode, system_prompt, runtime_session_id, created_at, updated_at, effort, memory_mode, context_budget, home_dir, context_tokens, chapter, last_turn_at";
+const COLS: &str = "id, name, role, runtime, model, cwd, approval_mode, system_prompt, runtime_session_id, created_at, updated_at, effort, memory_mode, context_budget, home_dir, context_tokens, chapter, last_turn_at, fallback_runtime, fallback_model, active_runtime";
+
+fn runtime_column(r: &Row, i: usize) -> rusqlite::Result<Option<RuntimeKind>> {
+    Ok(r.get::<_, Option<String>>(i)?.as_deref().and_then(RuntimeKind::parse))
+}
 
 fn from_row(r: &Row) -> rusqlite::Result<Agent> {
     let runtime: String = r.get(3)?;
@@ -98,6 +115,9 @@ fn from_row(r: &Row) -> rusqlite::Result<Agent> {
         context_tokens: r.get::<_, i64>(15)?.max(0) as u64,
         chapter: r.get::<_, i64>(16)?.clamp(1, u32::MAX as i64) as u32,
         last_turn_at: r.get(17)?,
+        fallback_runtime: runtime_column(r, 18)?,
+        fallback_model: r.get(19)?,
+        active_runtime: runtime_column(r, 20)?,
     })
 }
 
@@ -140,10 +160,13 @@ impl Store {
             context_tokens: 0,
             chapter: 1,
             last_turn_at: None,
+            fallback_runtime: a.fallback_runtime,
+            fallback_model: a.fallback_model,
+            active_runtime: None,
         };
         let res = self.conn().execute(
             &format!(
-                "INSERT INTO agents ({COLS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)"
+                "INSERT INTO agents ({COLS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)"
             ),
             params![
                 agent.id,
@@ -163,7 +186,10 @@ impl Store {
                 agent.home_dir,
                 agent.context_tokens as i64,
                 agent.chapter,
-                agent.last_turn_at
+                agent.last_turn_at,
+                agent.fallback_runtime.map(RuntimeKind::as_str),
+                agent.fallback_model,
+                agent.active_runtime.map(RuntimeKind::as_str)
             ],
         );
         match res {
@@ -231,10 +257,24 @@ impl Store {
         if let Some(v) = p.context_budget {
             a.context_budget = v;
         }
+        if let Some(v) = p.runtime
+            && v != a.runtime
+        {
+            // The CLI session belongs to its runtime, and so does a fallback that is now the primary one.
+            a.runtime = v;
+            a.active_runtime = None;
+        }
+        if let Some(v) = p.fallback_runtime {
+            a.fallback_runtime = v;
+        }
+        if let Some(v) = p.fallback_model {
+            a.fallback_model = v;
+        }
         a.updated_at = now_ms();
         let res = self.conn().execute(
             "UPDATE agents SET name=?2, role=?3, model=?4, cwd=?5, approval_mode=?6, system_prompt=?7, updated_at=?8,
-             effort=?9, memory_mode=?10, context_budget=?11 WHERE id=?1",
+             effort=?9, memory_mode=?10, context_budget=?11, runtime=?12, fallback_runtime=?13, fallback_model=?14,
+             active_runtime=?15 WHERE id=?1",
             params![
                 a.id,
                 a.name,
@@ -246,7 +286,11 @@ impl Store {
                 a.updated_at,
                 a.effort.map(Effort::as_str),
                 a.memory_mode.as_str(),
-                a.context_budget
+                a.context_budget,
+                a.runtime.as_str(),
+                a.fallback_runtime.map(RuntimeKind::as_str),
+                a.fallback_model,
+                a.active_runtime.map(RuntimeKind::as_str)
             ],
         );
         match res {
@@ -284,6 +328,15 @@ impl Store {
         )?;
         let chapter: i64 = conn.query_row("SELECT chapter FROM agents WHERE id=?1", [id], |r| r.get(0))?;
         Ok(chapter.clamp(1, u32::MAX as i64) as u32)
+    }
+
+    /// Which runtime the agent runs on: `None` for the primary one, `Some` for a fallback.
+    pub fn agent_set_active_runtime(&self, id: &str, active: Option<RuntimeKind>) -> Result<()> {
+        self.conn().execute(
+            "UPDATE agents SET active_runtime=?2, updated_at=?3 WHERE id=?1",
+            params![id, active.map(RuntimeKind::as_str), now_ms()],
+        )?;
+        Ok(())
     }
 
     pub fn agent_set_session(&self, id: &str, session_id: Option<&str>) -> Result<()> {
@@ -325,6 +378,8 @@ mod tests {
             effort: None,
             memory_mode: crate::store::MemoryMode::Smart,
             context_budget: None,
+            fallback_runtime: None,
+            fallback_model: None,
         }
     }
 
