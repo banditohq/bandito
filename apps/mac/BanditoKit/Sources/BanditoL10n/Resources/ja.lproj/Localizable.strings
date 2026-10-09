@@ -88,6 +88,7 @@
 "approval.rule" = "ルール: %1$@";
 "approval.wants" = "%1$@ が実行を求めています";
 "approval.wantsPush" = "%1$@ がブランチを push しようとしています";
+"approval.withdrawn" = "取り下げ済み";
 "approvalMode.always" = "すべて";
 "approvalMode.never" = "なし";
 "approvalMode.risky" = "危険な操作のみ";

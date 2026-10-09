@@ -188,6 +188,7 @@
   "approval.deniedByYou": "你已拒绝 · {time}",
   "approval.deniedByPolicy": "被规则拒绝",
   "approval.expired": "已过期",
+  "approval.withdrawn": "已撤回",
   "banner.notLoggedIn": "{server} 上的 {runtime} 未登录。请在该服务器上运行 `{command}`。",
   "banner.offline": "{server} 已离线，正在重新连接…",
   "banner.limit": "已达到使用上限。将于 {time} 重置。",

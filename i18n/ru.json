@@ -991,6 +991,7 @@
   "inspector.instructionsPlaceholder": "Инструкции для агента",
   "memory.occupied": "занято {tokens} токенов",
   "approval.approvedByPolicy": "Разрешено правилом",
+  "approval.withdrawn": "Отозвано",
   "files.places.home": "Домашняя",
   "files.places.projects": "Проекты",
   "files.places.memory": "Память агентов",

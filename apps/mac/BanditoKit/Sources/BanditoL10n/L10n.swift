@@ -234,6 +234,7 @@ public enum L10n {
         public static func rule(rule: String) -> String { L10n.tr("approval.rule", rule) }
         public static func wants(name: String) -> String { L10n.tr("approval.wants", name) }
         public static func wantsPush(name: String) -> String { L10n.tr("approval.wantsPush", name) }
+        public static var withdrawn: String { L10n.tr("approval.withdrawn") }
 
         public enum Why {
             public static var always: String { L10n.tr("approval.why.always") }

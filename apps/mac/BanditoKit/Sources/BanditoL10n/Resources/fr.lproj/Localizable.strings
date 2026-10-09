@@ -88,6 +88,7 @@
 "approval.rule" = "règle : %1$@";
 "approval.wants" = "%1$@ veut exécuter";
 "approval.wantsPush" = "%1$@ veut pousser une branche";
+"approval.withdrawn" = "Retirée";
 "approvalMode.always" = "Tout";
 "approvalMode.never" = "Rien";
 "approvalMode.risky" = "Seulement le risqué";

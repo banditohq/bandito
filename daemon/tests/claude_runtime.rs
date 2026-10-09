@@ -314,6 +314,81 @@ async fn bandito_home_is_off_limits_to_the_file_tools() {
     s.session.shutdown().await;
 }
 
+/// The inline JSON of the one `--settings` argument.
+fn settings_arg(args: &[String]) -> serde_json::Value {
+    let i = args
+        .iter()
+        .position(|a| a == "--settings")
+        .unwrap_or_else(|| panic!("missing --settings in {args:?}"));
+    serde_json::from_str(&args[i + 1]).expect("settings are JSON")
+}
+
+/// The string list at `permissions.<key>` of the settings.
+fn permission_list(settings: &serde_json::Value, key: &str) -> Vec<String> {
+    settings["permissions"][key]
+        .as_array()
+        .unwrap_or_else(|| panic!("permissions.{key} is not a list: {settings}"))
+        .iter()
+        .map(|v| v.as_str().unwrap_or_default().to_string())
+        .collect()
+}
+
+#[tokio::test]
+async fn tools_the_policy_decides_are_asked_so_user_allow_rules_cannot_skip_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let args_out = dir.path().join("args.json");
+    let s = ClaudeRuntime::new()
+        .spawn(cfg("deny.jsonl", Some(&args_out)))
+        .await
+        .unwrap();
+    let args = written_args(&args_out).await;
+    let settings = settings_arg(&args);
+    // Claude Code checks deny, then ask, then allow, whatever file the rule came from. An `ask` here
+    // sends the call to `can_use_tool`, where the policy decides; a user or project `allow` no longer skips it.
+    assert_eq!(
+        permission_list(&settings, "ask"),
+        [
+            "Bash",
+            "Edit",
+            "Write",
+            "MultiEdit",
+            "NotebookEdit",
+            "WebFetch",
+            "Read",
+            "Grep",
+            "Glob"
+        ]
+    );
+    // The Bandito folder deny stays next to it.
+    let home = std::path::absolute(bandito::workspace::data_dir()).unwrap();
+    let deny = permission_list(&settings, "deny");
+    for tool in ["Read", "Edit", "Write"] {
+        let rule = format!("{tool}(/{}/**)", home.display());
+        assert!(deny.contains(&rule), "missing {rule} in {deny:?}");
+    }
+    s.session.shutdown().await;
+}
+
+#[tokio::test]
+async fn permission_mode_default_is_passed_once_so_a_user_default_mode_cannot_win() {
+    let dir = tempfile::tempdir().unwrap();
+    let args_out = dir.path().join("args.json");
+    let s = ClaudeRuntime::new()
+        .spawn(cfg("deny.jsonl", Some(&args_out)))
+        .await
+        .unwrap();
+    let args = written_args(&args_out).await;
+    let modes: Vec<&String> = args
+        .iter()
+        .enumerate()
+        .filter(|(_, a)| a.as_str() == "--permission-mode")
+        .map(|(i, _)| &args[i + 1])
+        .collect();
+    // One flag with `default`: a second value could override the first.
+    assert_eq!(modes, vec!["default"], "{args:?}");
+    s.session.shutdown().await;
+}
+
 /// Argv of a fake CLI, read once it has written it (it does so at startup).
 async fn written_args(path: &std::path::Path) -> Vec<String> {
     for _ in 0..250 {

@@ -351,6 +351,8 @@ public enum EventBody: Sendable, Hashable {
         approvalId: String, callId: String, tool: String, title: String, command: String?, diff: String?,
         reason: String)
     case approvalResolved(approvalId: String, decision: Decision, by: DecidedBy, remember: Bool)
+    /// The runtime took the request back: nobody decided it.
+    case approvalWithdrawn(approvalId: String)
     case turnCompleted(turnId: String, status: TurnStatus, usage: Usage?, costUsd: Double?)
     case agentStatus(status: AgentStatus, detail: String?)
     case usageLimits(runtime: String, windows: [LimitWindow])
@@ -397,6 +399,7 @@ extension Event: Decodable {
     private struct ApprovalResolvedP: Decodable {
         var approvalId: String; var decision: Decision; var by: DecidedBy; var remember: Bool
     }
+    private struct ApprovalWithdrawnP: Decodable { var approvalId: String }
     private struct TurnCompletedP: Decodable {
         var turnId: String; var status: TurnStatus; var usage: Usage?; var costUsd: Double?
     }
@@ -433,6 +436,8 @@ extension Event: Decodable {
         case "approval.resolved":
             let x = try p(ApprovalResolvedP.self)
             body = .approvalResolved(approvalId: x.approvalId, decision: x.decision, by: x.by, remember: x.remember)
+        case "approval.withdrawn":
+            body = .approvalWithdrawn(approvalId: try p(ApprovalWithdrawnP.self).approvalId)
         case "turn.completed":
             let x = try p(TurnCompletedP.self)
             body = .turnCompleted(turnId: x.turnId, status: x.status, usage: x.usage, costUsd: x.costUsd)

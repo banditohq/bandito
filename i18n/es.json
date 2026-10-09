@@ -188,6 +188,7 @@
   "approval.deniedByYou": "Denegado por ti · {time}",
   "approval.deniedByPolicy": "Denegado por una regla",
   "approval.expired": "Caducado",
+  "approval.withdrawn": "Retirada",
   "banner.notLoggedIn": "{runtime} no ha iniciado sesión en {server}. Ejecuta `{command}` allí.",
   "banner.offline": "{server} está sin conexión. Reconectando…",
   "banner.limit": "Límite de uso alcanzado. Se restablece a las {time}.",

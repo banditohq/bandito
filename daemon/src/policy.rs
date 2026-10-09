@@ -8,6 +8,8 @@
 use crate::runtime::ApprovalRequest;
 use crate::shell::{self, Env, Parsed, SimpleCommand, UserDir, canon, normalize_path as normalize};
 use crate::store::{ApprovalMode, Rule, RuleAction};
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -27,6 +29,30 @@ const WRITERS: &[&str] = &[
 ];
 /// Redirection targets that are not files.
 const DEVICES: &[&str] = &["/dev/null", "/dev/stdout", "/dev/stderr"];
+/// Folders and files under the home folder that hold credentials. A read or a command that reaches one is
+/// asked about in risky mode. Whole path components only.
+const SECRET_FOLDERS: &[&str] = &[
+    ".ssh",
+    ".aws",
+    ".gnupg",
+    ".config/gh",
+    "Library/Keychains",
+    ".netrc",
+    ".docker",
+    ".kube",
+    ".git-credentials",
+    ".npmrc",
+    ".pypirc",
+    ".cargo/credentials.toml",
+    ".cargo/credentials",
+    ".config/gcloud",
+    ".azure",
+    ".m2/settings.xml",
+    ".gradle/gradle.properties",
+    ".password-store",
+    ".local/share/keyrings",
+    ".terraform.d",
+];
 /// Words that mean SQL data loss. Matched in the raw command line.
 const SQL_LOSS: &[&str] = &["drop table", "drop database", "truncate table", "delete from"];
 /// Bandito's file names. Asked about in risky mode (refusing them would stop a grep over a source tree).
@@ -143,6 +169,12 @@ const WRITE_VALUE_FLAGS: &[(&str, &[&str])] = &[
 pub struct Protected {
     /// Absolute, lexically normalized. A component ending in `*` is a name pattern.
     pub paths: Vec<PathBuf>,
+    /// `paths` split into components, and with their symbolic links resolved (see [`resolved`]). Taken once
+    /// when the policy is built, so a line that is checked word by word does not split them again.
+    /// The credential folders under the home folder (see [`credential_targets`]).
+    credentials: Vec<Credential>,
+    path_parts: Vec<Vec<String>>,
+    real_parts: Vec<Vec<String>>,
     /// Lowercase: a command line containing one of these is refused (the data folder spelled out).
     pub words: Vec<String>,
     /// Lowercase names that are asked about in risky mode.
@@ -179,11 +211,24 @@ impl Protected {
                 words.push(format!("${{HOME}}/{rel}"));
             }
         }
+        // Taken once here: the credential folders of this home, as written and resolved.
+        let (credentials, real_parts) = with_scope(vec![canon(&home_text)], || {
+            (
+                credential_targets(&home_text),
+                paths
+                    .iter()
+                    .map(|p| parts(&resolved(&p.to_string_lossy())))
+                    .collect::<Vec<_>>(),
+            )
+        });
         let exe_name = exe
             .file_name()
             .map(|n| n.to_string_lossy().to_lowercase())
             .unwrap_or_default();
         Self {
+            credentials,
+            path_parts: paths.iter().map(|p| parts(&p.to_string_lossy())).collect(),
+            real_parts,
             paths,
             words: words.iter().map(|w| w.to_lowercase()).collect(),
             ask_words: ASK_WORDS.iter().map(|w| w.to_string()).collect(),
@@ -212,15 +257,29 @@ impl Protected {
     /// True when `abs` (absolute) is inside a protected path, or, with `recursive`, is a
     /// folder that contains one (deleting, copying or searching it reaches Bandito).
     fn touches(&self, abs: &str, recursive: bool) -> bool {
-        let cand = normalize(abs);
-        self.paths.iter().any(|path| {
-            let text = path.to_string_lossy();
-            match relate(&cand, &normalize(&text)) {
-                Relation::Inside => true,
-                Relation::Ancestor => recursive,
-                Relation::Unrelated => false,
-            }
-        })
+        // A line repeats its words: each answer is taken once per decision (see `RESOLVED`).
+        let key = (abs.to_string(), recursive);
+        if let Some(answer) = TOUCHES.with(|memo| memo.borrow().get(&key).copied()) {
+            return answer;
+        }
+        let answer = self.touches_uncached(abs, recursive);
+        TOUCHES.with(|memo| memo.borrow_mut().insert(key, answer));
+        answer
+    }
+
+    fn touches_uncached(&self, abs: &str, recursive: bool) -> bool {
+        // Both the path as written and where its links lead are compared: a link is the folder it points to.
+        let real = resolved(abs);
+        let (cand, real_cand) = (normalize(abs), normalize(&real));
+        let relation = |cand: &[&str], prot: &[String]| match relate(cand, prot) {
+            Relation::Inside => true,
+            Relation::Ancestor => recursive,
+            Relation::Unrelated => false,
+        };
+        self.path_parts
+            .iter()
+            .zip(&self.real_parts)
+            .any(|(path, real_path)| relation(&cand, path) || relation(&real_cand, real_path))
     }
 }
 
@@ -275,11 +334,37 @@ pub fn evaluate(
     rules: &[Rule],
     protected: &Protected,
 ) -> Verdict {
-    let cwd = roots.first().copied().unwrap_or("/");
+    evaluate_from(mode, req, roots, rules, protected, roots.first().copied())
+}
+
+/// [`evaluate`] for a Bash line that starts in the folder `start` (the folder the session's shell is in;
+/// None when it is not known). Relative paths of the line are taken from it.
+pub fn evaluate_from(
+    mode: ApprovalMode,
+    req: &ApprovalRequest,
+    roots: &[&str],
+    rules: &[Rule],
+    protected: &Protected,
+    start: Option<&str>,
+) -> Verdict {
+    // Links are followed inside the home folder and the agent's folders only.
+    let mut folders = vec![canon(&protected.env.home)];
+    folders.extend(roots.iter().map(|root| canon(root)));
+    with_scope(folders, || evaluate_scoped(mode, req, roots, rules, protected, start))
+}
+
+fn evaluate_scoped(
+    mode: ApprovalMode,
+    req: &ApprovalRequest,
+    roots: &[&str],
+    rules: &[Rule],
+    protected: &Protected,
+    start: Option<&str>,
+) -> Verdict {
     let parsed = req
         .command
         .as_deref()
-        .map(|command| shell::parse(command, Some(cwd), &protected.env));
+        .map(|command| shell::parse(command, start, &protected.env));
     match own_files(req, roots, protected, parsed.as_ref()) {
         Some(Verdict::Deny(reason)) => return Verdict::Deny(reason),
         Some(ask @ Verdict::Ask(_)) if mode != ApprovalMode::Never => return ask,
@@ -298,6 +383,89 @@ pub fn evaluate(
         ApprovalMode::Always => Verdict::Ask("approval required for every action".into()),
         ApprovalMode::Risky => risky(req, roots, protected, parsed.as_ref()),
     }
+}
+
+/// The folder a session's shell is in between its Bash calls. A `cd` in one call holds in the next.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum ShellCwd {
+    /// A new session: the shell starts in the agent's folder.
+    #[default]
+    Start,
+    Known(String),
+    /// The last line left the shell somewhere that cannot be known: relative paths are asked about.
+    Unknown,
+}
+
+impl ShellCwd {
+    /// The folder the next line starts in; `agent_folder` for a new session.
+    pub fn start(&self, agent_folder: &str) -> Option<String> {
+        match self {
+            ShellCwd::Start => Some(agent_folder.to_string()),
+            ShellCwd::Known(folder) => Some(folder.clone()),
+            ShellCwd::Unknown => None,
+        }
+    }
+
+    /// The folders a Bash line is judged from: where the shell is, or, when it is not known, both the agent's
+    /// folder and the home folder (the worst case for Protected files and credential folders).
+    pub fn starts(&self, agent_folder: &str, home: &str) -> Vec<String> {
+        match self {
+            ShellCwd::Unknown => vec![agent_folder.to_string(), home.to_string()],
+            _ => self.start(agent_folder).into_iter().collect(),
+        }
+    }
+
+    /// The state after `command`, run by a shell that starts it in `start`. A line that hides a move of the
+    /// folder, or that has a part the reader cannot follow, leaves the folder unknown. Otherwise the folder the
+    /// line ends in is known, after an explicit `cd` or from the start.
+    pub fn after(command: &str, start: Option<&str>, prot: &Protected) -> ShellCwd {
+        let parsed = shell::parse(command, start, &prot.env);
+        if parsed.hides_cwd || !parsed.opaque.is_empty() {
+            return ShellCwd::Unknown;
+        }
+        match parsed.end_cwd {
+            Some(folder) => ShellCwd::Known(folder),
+            None => ShellCwd::Unknown,
+        }
+    }
+
+    /// The state after `command` runs in this shell, with the agent's folder for a new session.
+    pub fn after_line(&self, command: &str, agent_folder: &str, prot: &Protected) -> ShellCwd {
+        ShellCwd::after(command, self.start(agent_folder).as_deref(), prot)
+    }
+}
+
+/// The verdict of a Bash line in the shell's state: judged from each folder the line may start in, and the most
+/// careful verdict wins (refused, then asked, then allowed). Other calls are judged from the agent's folder.
+pub fn evaluate_shell(
+    mode: ApprovalMode,
+    req: &ApprovalRequest,
+    roots: &[&str],
+    rules: &[Rule],
+    protected: &Protected,
+    shell: &ShellCwd,
+) -> Verdict {
+    let agent = roots.first().copied().unwrap_or("/");
+    let starts = if req.command.is_some() {
+        shell.starts(agent, &protected.env.home)
+    } else {
+        vec![agent.to_string()]
+    };
+    let verdicts: Vec<Verdict> = starts
+        .iter()
+        .map(|start| evaluate_from(mode, req, roots, rules, protected, Some(start)))
+        .collect();
+    verdicts
+        .iter()
+        .find(|v| matches!(v, Verdict::Deny(_)))
+        .or_else(|| verdicts.iter().find(|v| matches!(v, Verdict::Ask(_))))
+        .cloned()
+        .unwrap_or(Verdict::Allow)
+}
+
+/// The folder the shell is in after `command` runs from `start`; None when it cannot be known.
+pub fn shell_cwd_after(command: &str, start: Option<&str>, prot: &Protected) -> Option<String> {
+    shell::parse(command, start, &prot.env).end_cwd
 }
 
 /// Runs a policy decision; a panic becomes `Ask("policy error")`, logged without the command.
@@ -329,11 +497,17 @@ pub fn always_pattern(subject: &str, prot: &Protected) -> Option<String> {
 /// What is known about Bandito's own files in this call, if anything: a refusal, or a question.
 fn own_files(req: &ApprovalRequest, roots: &[&str], prot: &Protected, parsed: Option<&Parsed>) -> Option<Verdict> {
     let cwd = roots.first().copied().unwrap_or("/");
-    let texts: Vec<String> = [req.command.as_deref(), Some(req.title.as_str())]
-        .iter()
-        .flatten()
-        .map(|t| t.to_lowercase())
-        .collect();
+    // A search's pattern is text to find, not a command or a path: only the folders it searches are checked.
+    let searching = matches!(req.tool.as_str(), "Grep" | "Glob");
+    let texts: Vec<String> = if searching {
+        Vec::new()
+    } else {
+        [req.command.as_deref(), Some(req.title.as_str())]
+            .iter()
+            .flatten()
+            .map(|t| t.to_lowercase())
+            .collect()
+    };
     if texts
         .iter()
         .any(|text| prot.words.iter().any(|word| text.contains(word.as_str())))
@@ -343,6 +517,18 @@ fn own_files(req: &ApprovalRequest, roots: &[&str], prot: &Protected, parsed: Op
     for path in &req.paths {
         if prot.touches(&absolute_from(path, cwd, &prot.env.home), false) {
             return Some(Verdict::Deny(PROTECTED_MESSAGE.into()));
+        }
+    }
+    if searching {
+        let folders = search_roots(req, cwd, &prot.env.home);
+        // A search inside the data folder is refused in every mode.
+        if folders.iter().any(|root| prot.touches(root, false)) {
+            return Some(Verdict::Deny(PROTECTED_MESSAGE.into()));
+        }
+        // A search over a folder that holds the data folder would reach its files: asked in risky and always
+        // (never mode does not ask, so it goes on to the rules, and allows).
+        if folders.iter().any(|root| prot.touches(root, true)) {
+            return Some(Verdict::Ask("search reaches Bandito's files".into()));
         }
     }
     let mut unknown = false;
@@ -871,7 +1057,7 @@ fn sourced_file(cmd: &SimpleCommand, roots: &[&str]) -> Option<String> {
     let file = cmd.argv.get(1)?;
     let first = roots.first().copied().unwrap_or_default();
     match target_path(cmd.expanded[1].as_deref(), file, cmd.cwd.as_deref(), true) {
-        Some(Some(abs)) if is_outside_all(&abs, roots) => Some(format!("sources a file outside {first}")),
+        Some(Some(abs)) if escapes(&abs, roots) => Some(format!("sources a file outside {first}")),
         Some(Some(_)) => None,
         _ => Some("can't check: source of an unknown file".into()),
     }
@@ -882,8 +1068,37 @@ fn sourced_file(cmd: &SimpleCommand, roots: &[&str]) -> Option<String> {
 fn risky(req: &ApprovalRequest, roots: &[&str], prot: &Protected, parsed: Option<&Parsed>) -> Verdict {
     let cwd = roots.first().copied().unwrap_or("/");
     let first = roots.first().copied().unwrap_or_default();
+    let targets = &prot.credentials;
+    // A read is not a write: the read tools may read anywhere, except credential folders (the human decides).
+    if matches!(req.tool.as_str(), "Read" | "Grep" | "Glob") {
+        return read_verdict(req, cwd, &prot.env.home, targets);
+    }
     if let (Some(command), Some(parsed)) = (req.command.as_deref(), parsed) {
+        // A command that reaches a credential folder is asked about, reads included.
+        if let Some(folder) = parsed
+            .commands
+            .iter()
+            .find_map(|cmd| credential_reach(cmd, roots, &prot.env.home, targets))
+        {
+            return Verdict::Ask(format!("reads credentials: ~/{folder}"));
+        }
         let lowered = command.to_lowercase();
+        // Inline code is not read, but its words are on the line: a credential folder or Bandito's folder
+        // named in them is asked about.
+        if parsed.commands.iter().any(runs_inline_code) {
+            let home = prot.env.home.as_str();
+            if let Some(folder) = SECRET_FOLDERS
+                .iter()
+                .find(|folder| names_under_home(&lowered, home, folder))
+            {
+                return Verdict::Ask(format!("reads credentials: ~/{folder}"));
+            }
+            // Bandito's folder: by its path, and as `.bandito` under `~`.
+            let data = prot.env.bandito_home.to_lowercase();
+            if names_whole(&lowered, &data) || names_under_home(&lowered, home, ".bandito") {
+                return Verdict::Ask("inline code names Bandito's folder".into());
+            }
+        }
         if SQL_LOSS.iter().any(|word| lowered.contains(*word)) {
             return Verdict::Ask("risky: sql".into());
         }
@@ -902,7 +1117,7 @@ fn risky(req: &ApprovalRequest, roots: &[&str], prot: &Protected, parsed: Option
                 match target_path(exp.as_deref(), &text, cmd.cwd.as_deref(), true) {
                     None => {}
                     Some(None) => return Verdict::Ask("can't check: unknown path".into()),
-                    Some(Some(abs)) if !DEVICES.contains(&abs.as_str()) && is_outside_all(&abs, roots) => {
+                    Some(Some(abs)) if !DEVICES.contains(&abs.as_str()) && escapes(&abs, roots) => {
                         return Verdict::Ask(format!("writes outside {first}"));
                     }
                     Some(Some(_)) => {}
@@ -916,11 +1131,338 @@ fn risky(req: &ApprovalRequest, roots: &[&str], prot: &Protected, parsed: Option
     if req
         .paths
         .iter()
-        .any(|path| is_outside_all(&absolute_from(path, cwd, &prot.env.home), roots))
+        .any(|path| escapes(&absolute_from(path, cwd, &prot.env.home), roots))
     {
         return Verdict::Ask(format!("writes outside {first}"));
     }
     Verdict::Allow
+}
+
+/// The credential folder (from `SECRET_FOLDERS`, under `home`) that the absolute path `abs` lies in.
+/// With `recursive`, a folder that holds one counts too: archiving or searching it reaches the credentials.
+/// Whole components only, so `~/.sshx` is not `~/.ssh`.
+fn credential_folder(abs: &str, targets: &[Credential], recursive: bool) -> Option<&'static str> {
+    let key = (abs.to_string(), recursive);
+    if let Some(answer) = CREDENTIAL.with(|memo| memo.borrow().get(&key).copied()) {
+        return answer;
+    }
+    let answer = credential_folder_uncached(abs, targets, recursive);
+    CREDENTIAL.with(|memo| memo.borrow_mut().insert(key, answer));
+    answer
+}
+
+fn credential_folder_uncached(abs: &str, targets: &[Credential], recursive: bool) -> Option<&'static str> {
+    let real = resolved(abs);
+    let (cand, real_cand) = (normalize(abs), normalize(&real));
+    // As written first. A path under home can only reach a folder whose first name under home it shares, so
+    // only those are compared (this is on the path of every word of every line).
+    let lexical = targets.iter().find(|target| match cand.get(target.home_len) {
+        Some(head) => target.head.eq_ignore_ascii_case(head) && reaches(&cand, &target.path, recursive),
+        None => reaches(&cand, &target.path, recursive),
+    });
+    if let Some(target) = lexical {
+        return Some(target.name);
+    }
+    // Where its links lead, when a link changed the path (a link into the folder is the folder).
+    if real_cand == cand {
+        return None;
+    }
+    targets
+        .iter()
+        .find(|target| reaches(&real_cand, &target.real, recursive))
+        .map(|target| target.name)
+}
+
+/// Whether the components `cand` are inside `prot`, or (with `recursive`) contain it.
+fn reaches<S: AsRef<str>>(cand: &[&str], prot: &[S], recursive: bool) -> bool {
+    match relate(cand, prot) {
+        Relation::Inside => true,
+        Relation::Ancestor => recursive,
+        Relation::Unrelated => false,
+    }
+}
+
+/// One credential folder under the home folder: its name, its components, and those of where its links lead.
+struct Credential {
+    name: &'static str,
+    path: Vec<String>,
+    real: Vec<String>,
+    /// How many components the home folder has: the folder's own names start after them.
+    home_len: usize,
+    /// The first name of the folder under home (`.ssh`, `.config` for `.config/gh`).
+    head: String,
+}
+
+/// The components of a path, lexically normalized, owned: split once, compared many times.
+fn parts(path: &str) -> Vec<String> {
+    normalize(path).into_iter().map(str::to_string).collect()
+}
+
+/// Every credential folder under `home`. Taken once per decision, so a line with many words does not
+/// resolve the same folders again and again.
+fn credential_targets(home: &str) -> Vec<Credential> {
+    let home_len = parts(home).len();
+    SECRET_FOLDERS
+        .iter()
+        .map(|name| {
+            let path_text = format!("{home}/{name}");
+            let path = parts(&path_text);
+            let head = path.get(home_len).cloned().unwrap_or_default();
+            let real = parts(&resolved(&path_text));
+            Credential {
+                name,
+                path,
+                real,
+                home_len,
+                head,
+            }
+        })
+        .collect()
+}
+
+/// `abs` (absolute) with its symbolic links resolved: the longest existing prefix is canonicalized and the
+/// rest is kept. A path that does not exist resolves through the folders that do exist.
+pub fn resolved(abs: &str) -> String {
+    // Only the folders of the decision are followed through their links: outside them a path is judged as written.
+    if !SCOPE.with(|scope| inside_scope(abs, &scope.borrow())) {
+        return canon(abs);
+    }
+    if let Some(answer) = RESOLVED.with(|memo| memo.borrow().get(abs).cloned()) {
+        return answer;
+    }
+    let answer = resolve_path(abs);
+    RESOLVED.with(|memo| memo.borrow_mut().insert(abs.to_string(), answer.clone()));
+    answer
+}
+
+/// Whether the absolute path `abs` lies inside one of `folders`, judged lexically (`..` applied first, so a
+/// path that climbs out of a folder is outside it). Whole components only.
+fn inside_scope(abs: &str, folders: &[String]) -> bool {
+    let path = normalize(abs);
+    folders.iter().any(|folder| {
+        let root = normalize(folder);
+        root.len() <= path.len() && root.iter().zip(&path).all(|(a, b)| a == b)
+    })
+}
+
+/// Runs `f` with `folders` as the scope of link-following. The decision memos are cleared on entry and on exit,
+/// since their answers depend on the scope.
+fn with_scope<T>(folders: Vec<String>, f: impl FnOnce() -> T) -> T {
+    struct Restore(Vec<String>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            SCOPE.with(|scope| *scope.borrow_mut() = std::mem::take(&mut self.0));
+            clear_memos();
+        }
+    }
+    let previous = SCOPE.with(|scope| std::mem::replace(&mut *scope.borrow_mut(), folders));
+    let _restore = Restore(previous);
+    clear_memos();
+    f()
+}
+
+fn clear_memos() {
+    RESOLVED.with(|memo| memo.borrow_mut().clear());
+    LINKS.with(|memo| memo.borrow_mut().clear());
+    TOUCHES.with(|memo| memo.borrow_mut().clear());
+    CREDENTIAL.with(|memo| memo.borrow_mut().clear());
+}
+
+/// Links followed in one path before it is taken as a loop.
+const MAX_LINKS: usize = 40;
+
+/// `abs` with its symbolic links resolved, one component at a time: a link is replaced by its target (an absolute
+/// target restarts from the root), and `..` is applied to the resolved folder, after the link. A link whose target
+/// does not exist is still a link: its target is the answer, so a write through it is a write to that target.
+fn resolve_path(abs: &str) -> String {
+    let mut out = PathBuf::from("/");
+    let mut todo: std::collections::VecDeque<String> = abs.split('/').map(str::to_string).collect();
+    let mut hops = 0;
+    while let Some(part) = todo.pop_front() {
+        match part.as_str() {
+            "" | "." => {}
+            ".." => {
+                out.pop();
+            }
+            name => {
+                let next = out.join(name);
+                match link_target(&next) {
+                    Some(target) => {
+                        hops += 1;
+                        if hops > MAX_LINKS {
+                            return canon(abs);
+                        }
+                        if target.starts_with('/') {
+                            out = PathBuf::from("/");
+                        }
+                        for piece in target.split('/').rev() {
+                            todo.push_front(piece.to_string());
+                        }
+                    }
+                    None => out = next,
+                }
+            }
+        }
+    }
+    out.display().to_string()
+}
+
+/// Where the symbolic link `path` points (the link is read, not followed); None when `path` is not a link.
+fn link_target(path: &Path) -> Option<String> {
+    let key = path.display().to_string();
+    if let Some(answer) = LINKS.with(|memo| memo.borrow().get(&key).cloned()) {
+        return answer;
+    }
+    let answer = match std::fs::symlink_metadata(path) {
+        Ok(meta) if meta.file_type().is_symlink() => std::fs::read_link(path)
+            .ok()
+            .map(|target| target.to_string_lossy().into_owned()),
+        _ => None,
+    };
+    LINKS.with(|memo| memo.borrow_mut().insert(key, answer.clone()));
+    answer
+}
+
+thread_local! {
+    /// The folders whose paths are followed through their links for the decision being made (see `with_scope`).
+    static SCOPE: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+    /// Where each symbolic link points, per decision (`link_target`).
+    static LINKS: RefCell<HashMap<String, Option<String>>> = RefCell::new(HashMap::new());
+    /// `resolved` answers of the decision being made. A line repeats its words and each lookup walks the
+    /// file system, so the memo is cleared at the start of every decision (`evaluate_from`).
+    static RESOLVED: RefCell<HashMap<String, String>> = RefCell::new(HashMap::new());
+    /// `Protected::touches` answers of the decision being made, by path and recursion.
+    static TOUCHES: RefCell<HashMap<(String, bool), bool>> = RefCell::new(HashMap::new());
+    /// `credential_folder` answers of the decision being made, by path and recursion.
+    static CREDENTIAL: RefCell<HashMap<(String, bool), Option<&'static str>>> = RefCell::new(HashMap::new());
+}
+
+/// True when the absolute path `path` lies outside every root, or where its links lead does (a link from the
+/// project to a file outside it is a write outside). Roots are compared as written and resolved too.
+fn escapes(path: &str, roots: &[&str]) -> bool {
+    let real_roots: Vec<String> = roots.iter().map(|root| resolved(root)).collect();
+    let real_roots: Vec<&str> = real_roots.iter().map(String::as_str).collect();
+    is_outside_all(path, roots) || is_outside_all(&resolved(path), &real_roots)
+}
+
+/// The verdict for a read tool. Read names its file. Grep and Glob search from a folder (their `path`,
+/// else the agent's folder), so a credential folder is reached when it lies in that folder or holds one.
+fn read_verdict(req: &ApprovalRequest, cwd: &str, home: &str, targets: &[Credential]) -> Verdict {
+    let found = if req.tool == "Read" {
+        if req.paths.is_empty() {
+            return Verdict::Ask("can't check: unknown path".into());
+        }
+        req.paths
+            .iter()
+            .find_map(|path| credential_folder(&absolute_from(path, cwd, home), targets, false))
+    } else {
+        search_roots(req, cwd, home)
+            .iter()
+            .find_map(|root| credential_folder(root, targets, true))
+    };
+    match found {
+        Some(folder) => Verdict::Ask(format!("reads credentials: ~/{folder}")),
+        None => Verdict::Allow,
+    }
+}
+
+/// Where a search tool (Grep or Glob) looks: its `path`, else the agent's folder. Glob also looks in the
+/// folder its pattern starts in, so a pattern such as `~/.aws/*` is seen from the root it names.
+fn search_roots(req: &ApprovalRequest, cwd: &str, home: &str) -> Vec<String> {
+    let text = |key: &str| req.input.get(key).and_then(|v| v.as_str()).filter(|s| !s.is_empty());
+    let base = match text("path") {
+        Some(path) => absolute_from(path, cwd, home),
+        None => canon(cwd),
+    };
+    let pattern = if req.tool == "Glob" { text("pattern") } else { None };
+    let mut roots = vec![base.clone()];
+    if let Some(pattern) = pattern {
+        roots.push(static_prefix(&absolute_from(pattern, &base, home)));
+    }
+    roots
+}
+
+/// The folder a glob starts in: the components of the absolute path `abs` before the first wildcard.
+fn static_prefix(abs: &str) -> String {
+    let parts: Vec<&str> = normalize(abs)
+        .into_iter()
+        .take_while(|part| !part.contains(['*', '?', '[']))
+        .collect();
+    format!("/{}", parts.join("/"))
+}
+
+/// True for an interpreter that runs code given on the line, by its own flag: `python3 -c`, `node -e` or `-p`,
+/// `ruby -e`, `perl -e` or `-E`, `php -r`, and `deno eval`, `bun eval`. Short flags are read in clusters
+/// (`python3 -Sc`). `-r` is php's flag only: for the others it names a module or a requirements file.
+fn runs_inline_code(cmd: &SimpleCommand) -> bool {
+    let Some(name) = cmd.argv.first().map(|n| n.to_lowercase()) else {
+        return false;
+    };
+    let args = &cmd.argv[1..];
+    if matches!(name.as_str(), "deno" | "bun") && args.first().is_some_and(|a| a == "eval") {
+        return true;
+    }
+    let (letters, longs): (&[char], &[&str]) = if name.starts_with("python") {
+        (&['c'], &[])
+    } else if name == "node" {
+        (&['e', 'p'], &["--eval", "--print"])
+    } else if name == "ruby" || name == "bun" {
+        (&['e'], &["--eval"])
+    } else if name == "perl" {
+        (&['e', 'E'], &[])
+    } else if name == "php" {
+        (&['r'], &[])
+    } else {
+        return false;
+    };
+    args.iter().any(|arg| match arg.strip_prefix("--") {
+        Some(_) => longs.contains(&arg.as_str()),
+        None => arg.starts_with('-') && arg.chars().skip(1).any(|c| letters.contains(&c)),
+    })
+}
+
+/// Whether the lowercase text `lowered` names `folder` under the home folder: as `~/<folder>`, `$HOME/<folder>`,
+/// `${HOME}/<folder>` or `<home>/<folder>`, with the folder's name ending where a path component ends.
+fn names_under_home(lowered: &str, home: &str, folder: &str) -> bool {
+    let folder = folder.to_lowercase();
+    let home = home.to_lowercase();
+    ["~/", "$home/", "${home}/", &format!("{home}/")]
+        .iter()
+        .any(|anchor| names_whole(lowered, &format!("{anchor}{folder}")))
+}
+
+/// Whether `needle` occurs in `text` as a whole path: no name character right before it, and none right after.
+fn names_whole(text: &str, needle: &str) -> bool {
+    fn name_char(c: char) -> bool {
+        c.is_alphanumeric() || matches!(c, '_' | '-' | '.')
+    }
+    text.match_indices(needle).any(|(at, _)| {
+        let before = text[..at].chars().next_back();
+        let after = text[at + needle.len()..].chars().next();
+        !before.is_some_and(name_char) && !after.is_some_and(name_char)
+    })
+}
+
+/// The parts of a word after each `=` or `:` (`--file=$HOME/.ssh/k` has `$HOME/.ssh/k`). Most words have none,
+/// and the common case must not run the splitter: it is slow in a debug build.
+fn assigned_or_empty_parts(word: &str) -> impl Iterator<Item = &str> {
+    let has = word.bytes().any(|b| b == b'=' || b == b':');
+    word.split(['=', ':']).skip(1).take(if has { usize::MAX } else { 0 })
+}
+
+/// The credential folder that a simple command reaches: one of its words (or a redirect target,
+/// or the part after `=` or `:` of one) is in it. Words are already expanded: `~`, `$HOME`, `${HOME}`.
+/// A relative word is taken from the folder the command runs in.
+fn credential_reach(cmd: &SimpleCommand, roots: &[&str], home: &str, targets: &[Credential]) -> Option<&'static str> {
+    let cwd = cmd.cwd.as_deref().or(roots.first().copied()).unwrap_or("/");
+    let recursive = recursive_action(cmd);
+    cmd.expanded
+        .iter()
+        .flatten()
+        .map(String::as_str)
+        .chain(cmd.redirects.iter().filter_map(|r| r.expanded.as_deref()))
+        .flat_map(|word| std::iter::once(word).chain(assigned_or_empty_parts(word)))
+        .find_map(|piece| credential_folder(&absolute_from(piece, cwd, home), targets, recursive))
 }
 
 /// `*` matches any run of characters (including empty); `\x` matches `x` literally; every
@@ -980,8 +1522,8 @@ enum Relation {
     Unrelated,
 }
 
-fn relate(cand: &[&str], prot: &[&str]) -> Relation {
-    if !cand.iter().zip(prot).all(|(a, b)| same_component(a, b)) {
+fn relate<S: AsRef<str>>(cand: &[&str], prot: &[S]) -> Relation {
+    if !cand.iter().zip(prot).all(|(a, b)| same_component(a, b.as_ref())) {
         return Relation::Unrelated;
     }
     if cand.len() >= prot.len() {
@@ -1001,6 +1543,10 @@ fn same_component(a: &str, b: &str) -> bool {
 /// starts with a literal dot, or with a class (`[.]bandito`), does.
 fn wild_match(pattern: &str, text: &str) -> bool {
     if !pattern.contains(['*', '?', '[', '\\']) {
+        // ASCII names (nearly all) compare without allocating: every word of every line is checked this way.
+        if pattern.is_ascii() && text.is_ascii() {
+            return pattern.eq_ignore_ascii_case(text);
+        }
         return pattern.to_lowercase() == text.to_lowercase();
     }
     if text.starts_with('.') && matches!(pattern.chars().next(), Some('*' | '?')) {
@@ -1060,6 +1606,7 @@ fn lexical_absolute(path: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
     use std::time::{Duration, Instant};
 
     const CWD: &str = "/home/u/app";
@@ -1321,6 +1868,662 @@ mod tests {
             run(ApprovalMode::Risky, &r, &[CWD], &rules),
             Verdict::Ask("rule: git push*".into())
         );
+    }
+
+    /// A call of the Read tool on one file.
+    fn read_req(path: &str) -> ApprovalRequest {
+        ApprovalRequest {
+            tool: "Read".into(),
+            ..req(None, &format!("Read {path}"), &[path])
+        }
+    }
+
+    #[test]
+    fn risky_read_of_an_ordinary_file_is_allowed_without_asking() {
+        // A read is not a write: inside the folder, in the home folder and outside both, no card.
+        for path in [
+            "/home/u/app/src/main.rs",
+            "/home/u/notes/todo.md",
+            "/etc/hosts",
+            "~/notes/todo.md",
+        ] {
+            assert_eq!(
+                run(ApprovalMode::Risky, &read_req(path), &[CWD], &[]),
+                Verdict::Allow,
+                "{path}"
+            );
+        }
+    }
+
+    #[test]
+    fn risky_read_of_a_credential_folder_asks_naming_the_folder() {
+        let cases = [
+            ("/home/u/.ssh/id_rsa", ".ssh"),
+            ("~/.ssh/config", ".ssh"),
+            ("/home/u/.SSH/id_ed25519", ".ssh"),
+            ("/home/u/.aws/credentials", ".aws"),
+            ("/home/u/.gnupg/private-keys-v1.d/k.key", ".gnupg"),
+            ("/home/u/.config/gh/hosts.yml", ".config/gh"),
+            ("/home/u/Library/Keychains/login.keychain-db", "Library/Keychains"),
+        ];
+        for (path, folder) in cases {
+            assert_eq!(
+                run(ApprovalMode::Risky, &read_req(path), &[CWD], &[]),
+                Verdict::Ask(format!("reads credentials: ~/{folder}")),
+                "{path}"
+            );
+        }
+    }
+
+    #[test]
+    fn credential_folder_match_is_by_whole_component() {
+        // `.sshx` and `.ssh-keys` are other folders, not `.ssh`.
+        for path in ["/home/u/.sshx/id", "/home/u/.ssh-keys/id", "/home/u/.config/ghx/a"] {
+            assert_eq!(
+                run(ApprovalMode::Risky, &read_req(path), &[CWD], &[]),
+                Verdict::Allow,
+                "{path}"
+            );
+        }
+    }
+
+    #[test]
+    fn credential_folder_read_is_allowed_in_never_and_asked_in_always() {
+        let r = read_req("/home/u/.ssh/id_rsa");
+        assert_eq!(run(ApprovalMode::Never, &r, &[CWD], &[]), Verdict::Allow);
+        assert!(matches!(run(ApprovalMode::Always, &r, &[CWD], &[]), Verdict::Ask(_)));
+    }
+
+    #[test]
+    fn reading_bandito_files_is_refused_in_every_mode() {
+        let r = read_req("/home/u/.bandito/bandito.db");
+        for mode in [ApprovalMode::Never, ApprovalMode::Risky, ApprovalMode::Always] {
+            assert_eq!(
+                run(mode, &r, &[CWD], &[]),
+                Verdict::Deny(PROTECTED_MESSAGE.into()),
+                "{mode:?}"
+            );
+        }
+    }
+
+    /// A call of a search tool (Grep or Glob) as the CLI reports it: `path` and `pattern` in its input.
+    fn search_req(tool: &str, path: Option<&str>, pattern: &str) -> ApprovalRequest {
+        ApprovalRequest {
+            tool: tool.into(),
+            input: json!({"pattern": pattern, "path": path}),
+            paths: path.map(|p| vec![p.to_string()]).unwrap_or_default(),
+            // The title is what the CLI's tool shows: the tool and its pattern.
+            ..req(None, &format!("{tool} {pattern}"), &[])
+        }
+    }
+
+    #[test]
+    fn search_tools_are_checked_for_credential_folders() {
+        // Grep reads contents: a path in a credential folder, or a folder that holds one (it searches
+        // everything under it), is asked about. Without a path it searches the agent's folder.
+        let asked = |r: ApprovalRequest| match run(ApprovalMode::Risky, &r, &[CWD], &[]) {
+            Verdict::Ask(reason) => reason,
+            other => panic!("expected Ask, got {other:?}"),
+        };
+        assert_eq!(
+            asked(search_req("Grep", Some("/home/u/.ssh"), "BEGIN")),
+            "reads credentials: ~/.ssh"
+        );
+        assert_eq!(
+            asked(search_req("Glob", None, "/home/u/.aws/*")),
+            "reads credentials: ~/.aws"
+        );
+        assert_eq!(
+            asked(search_req("Glob", Some("/home/u/.gnupg"), "**/*.key")),
+            "reads credentials: ~/.gnupg"
+        );
+        assert_eq!(
+            run(ApprovalMode::Risky, &search_req("Grep", None, "TODO"), &[CWD], &[]),
+            Verdict::Allow
+        );
+        assert_eq!(
+            run(ApprovalMode::Risky, &search_req("Glob", None, "*.rs"), &[CWD], &[]),
+            Verdict::Allow
+        );
+        assert_eq!(
+            run(
+                ApprovalMode::Risky,
+                &search_req("Grep", Some("/home/u/app/src"), "x"),
+                &[CWD],
+                &[]
+            ),
+            Verdict::Allow
+        );
+    }
+
+    #[test]
+    fn search_tools_inside_the_data_folder_are_refused_in_every_mode() {
+        for mode in [ApprovalMode::Never, ApprovalMode::Risky, ApprovalMode::Always] {
+            assert_eq!(
+                run(mode, &search_req("Grep", Some("/home/u/.bandito"), "x"), &[CWD], &[]),
+                Verdict::Deny(PROTECTED_MESSAGE.into()),
+                "{mode:?}"
+            );
+            assert_eq!(
+                run(
+                    mode,
+                    &search_req("Grep", Some("/home/u/.bandito/logs"), "x"),
+                    &[CWD],
+                    &[]
+                ),
+                Verdict::Deny(PROTECTED_MESSAGE.into()),
+                "{mode:?}"
+            );
+            assert_eq!(
+                run(mode, &search_req("Glob", None, "/home/u/.bandito/*"), &[CWD], &[]),
+                Verdict::Deny(PROTECTED_MESSAGE.into()),
+                "{mode:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_search_over_a_folder_that_holds_the_data_folder_asks_and_never_allows_it() {
+        // The search would reach Bandito's files: a question in risky and always, a plain allow in never.
+        let reaches = Verdict::Ask("search reaches Bandito's files".into());
+        for r in [
+            search_req("Grep", Some("/home/u"), "x"),
+            search_req("Glob", None, "/home/u/**/*.db"),
+        ] {
+            assert_eq!(run(ApprovalMode::Never, &r, &[CWD], &[]), Verdict::Allow, "{}", r.title);
+            assert_eq!(run(ApprovalMode::Risky, &r, &[CWD], &[]), reaches, "{}", r.title);
+            assert_eq!(run(ApprovalMode::Always, &r, &[CWD], &[]), reaches, "{}", r.title);
+        }
+    }
+
+    #[test]
+    fn a_search_pattern_is_not_checked_as_a_command_or_title() {
+        // Grep's pattern is text to find, not a path: `~/.bandito` in it reads nothing of Bandito's.
+        assert_eq!(
+            run(
+                ApprovalMode::Risky,
+                &search_req("Grep", Some("."), "~/.bandito"),
+                &[CWD],
+                &[]
+            ),
+            Verdict::Allow
+        );
+        assert_eq!(
+            run(
+                ApprovalMode::Risky,
+                &search_req("Grep", None, "~/.ssh/id_rsa"),
+                &[CWD],
+                &[]
+            ),
+            Verdict::Allow
+        );
+    }
+
+    #[test]
+    fn credential_folders_include_netrc_docker_kube_git_npm_and_pypi() {
+        let cases = [
+            ("/home/u/.netrc", ".netrc"),
+            ("/home/u/.docker/config.json", ".docker"),
+            ("/home/u/.kube/config", ".kube"),
+            ("/home/u/.git-credentials", ".git-credentials"),
+            ("/home/u/.npmrc", ".npmrc"),
+            ("/home/u/.pypirc", ".pypirc"),
+            ("/home/u/.cargo/credentials.toml", ".cargo/credentials.toml"),
+            ("/home/u/.cargo/credentials", ".cargo/credentials"),
+            ("/home/u/.config/gcloud/credentials.db", ".config/gcloud"),
+            ("/home/u/.azure/accessTokens.json", ".azure"),
+            ("/home/u/.m2/settings.xml", ".m2/settings.xml"),
+            ("/home/u/.gradle/gradle.properties", ".gradle/gradle.properties"),
+            ("/home/u/.password-store/mail.gpg", ".password-store"),
+            ("/home/u/.local/share/keyrings/login.keyring", ".local/share/keyrings"),
+            ("/home/u/.terraform.d/credentials.tfrc.json", ".terraform.d"),
+        ];
+        for (path, folder) in cases {
+            assert_eq!(
+                run(ApprovalMode::Risky, &read_req(path), &[CWD], &[]),
+                Verdict::Ask(format!("reads credentials: ~/{folder}")),
+                "{path}"
+            );
+        }
+        assert_eq!(
+            shell_verdict(ApprovalMode::Risky, "cat ~/.npmrc"),
+            Verdict::Ask("reads credentials: ~/.npmrc".into())
+        );
+        // Whole names only: `.npmrc.bak` and `.kubeconfig` are other files.
+        assert_eq!(
+            run(ApprovalMode::Risky, &read_req("/home/u/.npmrc.bak"), &[CWD], &[]),
+            Verdict::Allow
+        );
+        assert_eq!(
+            run(ApprovalMode::Risky, &read_req("/home/u/.kubeconfig"), &[CWD], &[]),
+            Verdict::Allow
+        );
+    }
+
+    #[test]
+    fn the_shell_folder_carries_from_one_bash_call_to_the_next() {
+        let prot = prot();
+        // `cd ~` in one call leaves the shell in home; the next call's relative path is then in `.ssh`.
+        let carried = shell_cwd_after("cd ~", Some(CWD), &prot);
+        assert_eq!(carried.as_deref(), Some("/home/u"));
+        let r = req(Some("cat .ssh/id_rsa"), "Bash", &[]);
+        assert_eq!(
+            evaluate_from(ApprovalMode::Risky, &r, &[CWD], &[], &prot, carried.as_deref()),
+            Verdict::Ask("reads credentials: ~/.ssh".into())
+        );
+        // A session that starts in the agent's folder reads the same relative path inside it.
+        assert_eq!(
+            evaluate_from(ApprovalMode::Risky, &r, &[CWD], &[], &prot, Some(CWD)),
+            Verdict::Allow
+        );
+        // A folder that cannot be known leaves the relative path unknown: it is asked about.
+        let unknown = shell_cwd_after("cd $NOPE", Some(CWD), &prot);
+        assert_eq!(unknown, None);
+        assert!(matches!(
+            evaluate_from(ApprovalMode::Risky, &r, &[CWD], &[], &prot, unknown.as_deref()),
+            Verdict::Ask(_)
+        ));
+    }
+
+    #[test]
+    fn inline_code_that_names_a_credential_folder_asks() {
+        // The code given on the line is not run by the policy, but a credential folder named in it, as a
+        // path under `~`, `$HOME`, `${HOME}` or the home folder, is asked about. A script file's contents are not read.
+        let cases = [
+            (r#"python3 -c "print(open('/home/u/.ssh/id_rsa').read())""#, ".ssh"),
+            (r#"python3.12 -Sc "print(open('~/.aws/credentials').read())""#, ".aws"),
+            (
+                r#"node -e "console.log(require('fs').readFileSync('~/.config/gh/hosts.yml'))""#,
+                ".config/gh",
+            ),
+            (r#"ruby -e 'puts File.read("~/.npmrc")'"#, ".npmrc"),
+            (r#"perl -e 'open F, "$HOME/.gnupg/x"'"#, ".gnupg"),
+            (r#"php -r 'echo file_get_contents("~/.netrc");'"#, ".netrc"),
+            (r#"deno eval "Deno.readTextFile('~/.kube/config')""#, ".kube"),
+            (
+                r#"bun -e "require('fs').readFileSync('${HOME}/.docker/config.json')""#,
+                ".docker",
+            ),
+        ];
+        for (command, folder) in cases {
+            assert_eq!(
+                shell_verdict(ApprovalMode::Risky, command),
+                Verdict::Ask(format!("reads credentials: ~/{folder}")),
+                "{command}"
+            );
+        }
+    }
+
+    #[test]
+    fn inline_code_does_not_ask_about_names_that_only_look_like_credentials() {
+        // `-r` is php's flag only: pip's `-r requirements.txt` and node's `-r ts-node/register` run no code
+        // on the line. `.npmrc.example` is another file, and a folder name inside a string is not a path.
+        for command in [
+            "python3 -m pip install -r requirements.txt && cp .npmrc.example .npmrc",
+            "node -r ts-node/register x.js",
+            r#"node -e "console.log('.ssh is a folder name')""#,
+            r#"php -r 'echo file_get_contents("~/.npmrc.example");'"#,
+            r#"python3 -c "print(1 + 1)""#,
+            "python3 script.py",
+            "perl -e 'print 1'",
+        ] {
+            assert_eq!(shell_verdict(ApprovalMode::Risky, command), Verdict::Allow, "{command}");
+        }
+    }
+
+    #[test]
+    fn inline_code_naming_bandito_folder_is_refused_and_never_mode_allows_credentials() {
+        // The data folder spelled under `~` is refused by the protected rule before the inline check.
+        assert_eq!(
+            shell_verdict(
+                ApprovalMode::Risky,
+                r#"python3 -c "print(open('~/.bandito/bandito.db').read())""#
+            ),
+            Verdict::Deny(PROTECTED_MESSAGE.into())
+        );
+        // Never mode allows inline code that names a credential folder, as it allows the rest.
+        assert_eq!(
+            shell_verdict(
+                ApprovalMode::Never,
+                r#"python3 -c "print(open('/home/u/.ssh/id_rsa').read())""#
+            ),
+            Verdict::Allow
+        );
+    }
+
+    #[test]
+    fn a_symlink_is_judged_by_where_it_points() {
+        // A link in the project into the credential folder, a link to a file in it, and a link into
+        // Bandito's folder, in a real temporary tree (the policy reads the file system for links).
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().join("home");
+        let project = dir.path().join("project");
+        std::fs::create_dir_all(home.join(".ssh")).unwrap();
+        std::fs::write(home.join(".ssh/id_rsa"), "key").unwrap();
+        std::fs::create_dir_all(home.join(".bandito")).unwrap();
+        std::fs::write(home.join(".bandito/bandito.db"), "db").unwrap();
+        std::fs::create_dir_all(project.join("src")).unwrap();
+        std::fs::write(project.join("src/main.rs"), "fn main() {}").unwrap();
+        std::os::unix::fs::symlink(home.join(".ssh"), project.join("keys")).unwrap();
+        std::os::unix::fs::symlink(home.join(".ssh/id_rsa"), project.join("key_file")).unwrap();
+        std::os::unix::fs::symlink(home.join(".bandito"), project.join("data")).unwrap();
+        std::os::unix::fs::symlink(project.join("src"), project.join("source")).unwrap();
+        let prot = Protected::new(&home.join(".bandito"), Path::new("/usr/local/bin/bandito"), &home);
+        let cwd = project.display().to_string();
+        let roots = [cwd.as_str()];
+        let ask_ssh = Verdict::Ask("reads credentials: ~/.ssh".into());
+        let refused = Verdict::Deny(PROTECTED_MESSAGE.into());
+        // Reads through a link to the folder or to a file in it are asked about, as the folder is.
+        let r = read_req(&format!("{cwd}/keys/id_rsa"));
+        assert_eq!(evaluate(ApprovalMode::Risky, &r, &roots, &[], &prot), ask_ssh);
+        let r = read_req(&format!("{cwd}/key_file"));
+        assert_eq!(evaluate(ApprovalMode::Risky, &r, &roots, &[], &prot), ask_ssh);
+        // Bash reaches the credential folder through the link too.
+        let r = req(Some("cat keys/id_rsa"), "Bash", &[]);
+        assert_eq!(evaluate(ApprovalMode::Risky, &r, &roots, &[], &prot), ask_ssh);
+        // A link into Bandito's folder is refused in every mode, as the folder is.
+        for mode in [ApprovalMode::Never, ApprovalMode::Risky, ApprovalMode::Always] {
+            let r = read_req(&format!("{cwd}/data/bandito.db"));
+            assert_eq!(evaluate(mode, &r, &roots, &[], &prot), refused, "{mode:?}");
+            let r = req(Some("cat data/bandito.db"), "Bash", &[]);
+            assert_eq!(evaluate(mode, &r, &roots, &[], &prot), refused, "{mode:?}");
+        }
+        // Writing through a link out of the project is asked about, as a write outside it is.
+        let mut r = req(None, "Edit key_file", &[&format!("{cwd}/key_file")]);
+        r.tool = "Edit".into();
+        assert_eq!(
+            evaluate(ApprovalMode::Risky, &r, &roots, &[], &prot),
+            Verdict::Ask(format!("writes outside {cwd}"))
+        );
+        // A link that stays inside the project is an ordinary file.
+        let r = read_req(&format!("{cwd}/source/main.rs"));
+        assert_eq!(evaluate(ApprovalMode::Risky, &r, &roots, &[], &prot), Verdict::Allow);
+    }
+
+    #[test]
+    fn a_line_that_can_move_the_shell_elsewhere_leaves_the_folder_unknown() {
+        // The parser cannot follow what these run: a `cd` inside a wrapper, `eval`, `source`/`.`, `exec`.
+        let prot = prot();
+        for line in [
+            "command cd ~",
+            "builtin cd ~",
+            "eval \"cd ~\"",
+            ". ./s.sh",
+            "source ./s.sh",
+            "exec cd ~",
+            "ls {a,b}",
+            "cd ~ | cat",
+        ] {
+            assert_eq!(
+                ShellCwd::Start.after_line(line, CWD, &prot),
+                ShellCwd::Unknown,
+                "{line}"
+            );
+        }
+        // An explicit absolute `cd` gets the folder back.
+        assert_eq!(
+            ShellCwd::Unknown.after_line("cd /home/u/app && ls", CWD, &prot),
+            ShellCwd::Known("/home/u/app".into())
+        );
+    }
+
+    #[test]
+    fn an_unknown_folder_judges_relative_paths_from_the_agent_folder_and_from_home() {
+        // From home, `.bandito/x` is the data folder and `.ssh/id_rsa` a credential folder; from the agent's folder
+        // neither is. The unknown shell is judged from both, and the more careful verdict is the answer.
+        let prot = prot();
+        let unknown = ShellCwd::Unknown;
+        assert_eq!(
+            evaluate_shell(
+                ApprovalMode::Risky,
+                &req(Some("cat .bandito/x"), "Bash", &[]),
+                &[CWD],
+                &[],
+                &prot,
+                &unknown
+            ),
+            Verdict::Deny(PROTECTED_MESSAGE.into())
+        );
+        assert_eq!(
+            evaluate_shell(
+                ApprovalMode::Risky,
+                &req(Some("cat .ssh/id_rsa"), "Bash", &[]),
+                &[CWD],
+                &[],
+                &prot,
+                &unknown
+            ),
+            Verdict::Ask("reads credentials: ~/.ssh".into())
+        );
+        assert_eq!(
+            evaluate_shell(
+                ApprovalMode::Risky,
+                &req(Some("cat notes.txt"), "Bash", &[]),
+                &[CWD],
+                &[],
+                &prot,
+                &unknown
+            ),
+            Verdict::Allow
+        );
+        // A known folder is judged from that folder alone.
+        assert_eq!(
+            evaluate_shell(
+                ApprovalMode::Risky,
+                &req(Some("cat .ssh/id_rsa"), "Bash", &[]),
+                &[CWD],
+                &[],
+                &prot,
+                &ShellCwd::Known(CWD.into())
+            ),
+            Verdict::Allow
+        );
+    }
+
+    #[test]
+    fn command_cd_then_cat_bandito_is_refused() {
+        let prot = prot();
+        let shell = ShellCwd::Start.after_line("command cd ~", CWD, &prot);
+        let r = req(Some("cat .bandito/x"), "Bash", &[]);
+        assert_eq!(
+            evaluate_shell(ApprovalMode::Risky, &r, &[CWD], &[], &prot, &shell),
+            Verdict::Deny(PROTECTED_MESSAGE.into())
+        );
+    }
+
+    #[test]
+    fn eval_cd_then_cat_ssh_asks_and_source_then_cat_ssh_asks() {
+        let prot = prot();
+        let r = req(Some("cat .ssh/id_rsa"), "Bash", &[]);
+        for line in ["eval \"cd ~\"", ". ./s.sh"] {
+            let shell = ShellCwd::Start.after_line(line, CWD, &prot);
+            assert_eq!(
+                evaluate_shell(ApprovalMode::Risky, &r, &[CWD], &[], &prot, &shell),
+                Verdict::Ask("reads credentials: ~/.ssh".into()),
+                "{line}"
+            );
+        }
+    }
+
+    #[test]
+    fn links_are_followed_only_for_paths_inside_home_or_the_agent_folders() {
+        // Outside those folders a path is judged as written: no file-system call is made for it (a path under a
+        // network or external volume is not looked up at all).
+        let scope = ["/home/u".to_string(), "/home/u/app".to_string()];
+        assert!(!inside_scope("/Volumes/nonexistent-net/x", &scope));
+        assert!(!inside_scope("/homeless/x", &scope));
+        assert!(inside_scope("/home/u/app/src/main.rs", &scope));
+        assert!(inside_scope("/home/u/.ssh/id_rsa", &scope));
+        // `..` is applied before the check, so a path that climbs out is outside.
+        assert!(!inside_scope("/home/u/app/../../../Volumes/x", &scope));
+    }
+
+    #[test]
+    fn a_link_is_followed_before_dot_dot_and_a_dangling_link_is_its_target() {
+        // `proj/lnk/../bandito.db`: `lnk` is a link to Bandito's logs folder, so `..` is the data folder.
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().join("home");
+        let data = home.join(".bandito");
+        let project = dir.path().join("project");
+        std::fs::create_dir_all(data.join("logs")).unwrap();
+        std::fs::write(data.join("bandito.db"), "db").unwrap();
+        std::fs::create_dir_all(home.join(".ssh")).unwrap();
+        std::fs::create_dir_all(&project).unwrap();
+        std::os::unix::fs::symlink(data.join("logs"), project.join("lnk")).unwrap();
+        // A link whose target does not exist yet: a write through it lands in ~/.ssh.
+        std::os::unix::fs::symlink(home.join(".ssh/new"), project.join("x")).unwrap();
+        let prot = Protected::new(&data, Path::new("/usr/local/bin/bandito"), &home);
+        let cwd = project.display().to_string();
+        let roots = [cwd.as_str()];
+        let r = read_req(&format!("{cwd}/lnk/../bandito.db"));
+        for mode in [ApprovalMode::Never, ApprovalMode::Risky, ApprovalMode::Always] {
+            assert_eq!(
+                evaluate(mode, &r, &roots, &[], &prot),
+                Verdict::Deny(PROTECTED_MESSAGE.into()),
+                "{mode:?}"
+            );
+        }
+        let mut w = req(None, "Edit x", &[&format!("{cwd}/x")]);
+        w.tool = "Edit".into();
+        assert_eq!(
+            evaluate(ApprovalMode::Risky, &w, &roots, &[], &prot),
+            Verdict::Ask(format!("writes outside {cwd}"))
+        );
+    }
+
+    #[test]
+    fn a_new_session_starts_in_the_agent_folder_and_an_unknown_folder_stays_unknown() {
+        assert_eq!(ShellCwd::default().start(CWD), Some(CWD.to_string()));
+        assert_eq!(
+            ShellCwd::Known("/home/u".into()).start(CWD),
+            Some("/home/u".to_string())
+        );
+        assert_eq!(ShellCwd::Unknown.start(CWD), None);
+        assert_eq!(
+            ShellCwd::after("echo hi", Some(CWD), &prot()),
+            ShellCwd::Known(CWD.to_string())
+        );
+        assert_eq!(ShellCwd::after("cd $NOPE", Some(CWD), &prot()), ShellCwd::Unknown);
+    }
+
+    #[test]
+    fn risky_rm_rf_outside_the_folder_asks() {
+        assert!(matches!(
+            shell_verdict(ApprovalMode::Risky, "rm -rf /tmp/x"),
+            Verdict::Ask(_)
+        ));
+    }
+
+    /// The risky verdict for a shell line that reaches a credential folder.
+    fn credential_ask(command: &str) -> String {
+        match shell_verdict(ApprovalMode::Risky, command) {
+            Verdict::Ask(reason) => reason,
+            other => panic!("{command}: expected Ask, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn bash_reads_of_a_credential_folder_ask_even_when_routine() {
+        // Reads are asked about too: cat, cp, tar and ls are routine commands otherwise.
+        assert_eq!(credential_ask("cat ~/.ssh/id_rsa"), "reads credentials: ~/.ssh");
+        assert_eq!(
+            credential_ask("cp $HOME/.aws/credentials /tmp/x"),
+            "reads credentials: ~/.aws"
+        );
+        assert_eq!(credential_ask("tar czf x.tgz ~/.gnupg"), "reads credentials: ~/.gnupg");
+        assert_eq!(credential_ask("ls ~/.ssh"), "reads credentials: ~/.ssh");
+        assert_eq!(
+            credential_ask("cat < ~/.config/gh/hosts.yml"),
+            "reads credentials: ~/.config/gh"
+        );
+        assert_eq!(
+            credential_ask("cat ${HOME}/Library/Keychains/login.keychain-db"),
+            "reads credentials: ~/Library/Keychains"
+        );
+    }
+
+    #[test]
+    fn bash_reach_is_found_through_cd_options_and_shell_wrappers() {
+        // The folder a command runs in counts, and so does a path given after `--opt=` or inside `sh -c`.
+        assert_eq!(credential_ask("cd ~/.ssh && cat id_rsa"), "reads credentials: ~/.ssh");
+        assert_eq!(
+            credential_ask("ssh-add -l --file=$HOME/.ssh/id_ed25519"),
+            "reads credentials: ~/.ssh"
+        );
+        assert_eq!(credential_ask("sh -c 'cat ~/.aws/config'"), "reads credentials: ~/.aws");
+    }
+
+    #[test]
+    fn a_folder_holding_a_credential_folder_counts_only_when_read_whole() {
+        assert_eq!(
+            credential_folder("/home/u", &credential_targets("/home/u"), true),
+            Some(".ssh")
+        );
+        assert_eq!(
+            credential_folder("/home/u", &credential_targets("/home/u"), false),
+            None
+        );
+        assert_eq!(
+            credential_folder("/home/u/.config", &credential_targets("/home/u"), true),
+            Some(".config/gh")
+        );
+        assert_eq!(
+            credential_folder("/home/u/.config", &credential_targets("/home/u"), false),
+            None
+        );
+    }
+
+    #[test]
+    fn bash_archive_of_a_folder_that_holds_credentials_is_refused_by_the_protected_rule() {
+        // The Bandito service files sit under ~, ~/.config and ~/Library (protected globs), so
+        // archiving or copying those folders whole is refused before the credential question.
+        for command in [
+            "tar czf h.tgz ~",
+            "tar czf h.tgz ~/Library",
+            "cp -r ~/.config /tmp/backup",
+        ] {
+            assert_eq!(
+                shell_verdict(ApprovalMode::Risky, command),
+                Verdict::Deny(PROTECTED_MESSAGE.into()),
+                "{command}"
+            );
+        }
+        // Listing such a folder without the recursive action is harmless.
+        assert_eq!(shell_verdict(ApprovalMode::Risky, "ls ~/.config"), Verdict::Allow);
+    }
+
+    #[test]
+    fn bash_routine_command_outside_credential_folders_is_allowed() {
+        assert_eq!(shell_verdict(ApprovalMode::Risky, "echo hi"), Verdict::Allow);
+        assert_eq!(
+            shell_verdict(ApprovalMode::Risky, "cat ~/notes/todo.md"),
+            Verdict::Allow
+        );
+        assert_eq!(shell_verdict(ApprovalMode::Risky, "ls ~/.sshx"), Verdict::Allow);
+    }
+
+    #[test]
+    fn bash_credential_reach_is_allowed_in_never_and_asked_in_always() {
+        assert_eq!(shell_verdict(ApprovalMode::Never, "cat ~/.ssh/id_rsa"), Verdict::Allow);
+        assert_eq!(
+            shell_verdict(ApprovalMode::Never, "tar czf x.tgz ~/.gnupg"),
+            Verdict::Allow
+        );
+        assert!(matches!(
+            shell_verdict(ApprovalMode::Always, "cat ~/.ssh/id_rsa"),
+            Verdict::Ask(_)
+        ));
+    }
+
+    #[test]
+    fn bash_reading_bandito_files_stays_refused_in_every_mode() {
+        for mode in [ApprovalMode::Never, ApprovalMode::Risky, ApprovalMode::Always] {
+            assert_eq!(
+                shell_verdict(mode, "cat ~/.bandito/bandito.db"),
+                Verdict::Deny(PROTECTED_MESSAGE.into()),
+                "{mode:?}"
+            );
+        }
     }
 
     #[test]
@@ -1880,7 +3083,16 @@ mod probes {
             seed ^= seed << 17;
             seed
         };
-        let prot = users();
+        // Its own roots, under a folder that does not exist: the lines name nothing real, and a lookup under
+        // a real `/home` can be slow on macOS (the automounter). The test checks only that nothing panics.
+        let prot = Protected::new(
+            Path::new("/bandito-probe/u/.bandito"),
+            Path::new("/usr/local/bin/bandito"),
+            Path::new("/bandito-probe/u"),
+        )
+        .with_users(|name| (name == "u").then(|| "/bandito-probe/u".to_string()))
+        .with_pid(4242);
+        const ROOT: &str = "/bandito-probe/u/app";
         for _ in 0..50_000 {
             let count = (next() % 12) as usize;
             let mut line = String::new();
@@ -1888,7 +3100,7 @@ mod probes {
                 line.push_str(pieces[(next() % pieces.len() as u64) as usize]);
                 line.push(if next() % 3 == 0 { '\n' } else { ' ' });
             }
-            let _ = evaluate(ApprovalMode::Risky, &req(&line), &[APP], &[], &prot);
+            let _ = evaluate(ApprovalMode::Risky, &req(&line), &[ROOT], &[], &prot);
         }
     }
 }

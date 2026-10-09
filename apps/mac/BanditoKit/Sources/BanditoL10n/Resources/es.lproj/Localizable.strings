@@ -88,6 +88,7 @@
 "approval.rule" = "regla: %1$@";
 "approval.wants" = "%1$@ quiere ejecutar";
 "approval.wantsPush" = "%1$@ quiere subir una rama";
+"approval.withdrawn" = "Retirada";
 "approvalMode.always" = "Todo";
 "approvalMode.never" = "Nada";
 "approvalMode.risky" = "Solo lo arriesgado";

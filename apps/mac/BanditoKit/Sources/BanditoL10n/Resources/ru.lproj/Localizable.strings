@@ -150,6 +150,7 @@
 "approval.why.sql" = "меняет базу данных";
 "approval.why.sudo" = "запускает от администратора";
 "approval.why.yourRule" = "ваше правило: %1$@";
+"approval.withdrawn" = "Отозвано";
 "approvalMode.always" = "Всё подряд";
 "approvalMode.never" = "Ничего";
 "approvalMode.risky" = "Только рискованное";

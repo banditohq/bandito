@@ -88,6 +88,7 @@
 "approval.rule" = "规则：%1$@";
 "approval.wants" = "%1$@ 想要运行";
 "approval.wantsPush" = "%1$@ 想推送一个分支";
+"approval.withdrawn" = "已撤回";
 "approvalMode.always" = "全部";
 "approvalMode.never" = "无";
 "approvalMode.risky" = "仅危险操作";

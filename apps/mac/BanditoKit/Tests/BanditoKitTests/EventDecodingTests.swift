@@ -8,6 +8,15 @@ import Testing
         try RPCClient.decoder.decode(Event.self, from: Data(json.utf8))
     }
 
+    @Test func approvalWithdrawn() throws {
+        let e = try decode(#"{"seq":9,"agent_id":"a1","ts":1,"kind":"approval.withdrawn","payload":{"approval_id":"ap1"}}"#)
+        guard case .approvalWithdrawn(let id) = e.body else {
+            Issue.record("wrong body \(e.body)")
+            return
+        }
+        #expect(id == "ap1")
+    }
+
     @Test func approvalRequested() throws {
         let e = try decode(
             #"{"seq":6,"agent_id":"a1","ts":1,"kind":"approval.requested","payload":{"approval_id":"ap1","call_id":"c1","tool":"Bash","title":"git push","command":"git push origin main","reason":"risky: git push*"}}"#

@@ -88,6 +88,7 @@
 "approval.rule" = "규칙: %1$@";
 "approval.wants" = "%1$@이(가) 실행을 요청합니다";
 "approval.wantsPush" = "%1$@이(가) 브랜치를 push하려고 합니다";
+"approval.withdrawn" = "철회됨";
 "approvalMode.always" = "전부";
 "approvalMode.never" = "없음";
 "approvalMode.risky" = "위험한 작업만";

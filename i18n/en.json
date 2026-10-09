@@ -952,6 +952,7 @@
   "inspector.instructionsPlaceholder": "Instructions for the agent",
   "memory.occupied": "{tokens} tokens used",
   "approval.approvedByPolicy": "Allowed by a rule",
+  "approval.withdrawn": "Withdrawn",
   "files.places.home": "Home",
   "files.places.projects": "Projects",
   "files.places.memory": "Agent memory",

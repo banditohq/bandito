@@ -12,6 +12,8 @@ pub enum ApprovalStatus {
     Resolved,
     /// Never answered: timed out, or the session died first.
     Expired,
+    /// The runtime took the request back (its CLI cancelled it): nobody answered it.
+    Withdrawn,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -36,6 +38,7 @@ fn status_str(s: ApprovalStatus) -> &'static str {
         ApprovalStatus::Pending => "pending",
         ApprovalStatus::Resolved => "resolved",
         ApprovalStatus::Expired => "expired",
+        ApprovalStatus::Withdrawn => "withdrawn",
     }
 }
 
@@ -45,6 +48,7 @@ fn parse_status(s: &str) -> ApprovalStatus {
     match s {
         "pending" => ApprovalStatus::Pending,
         "resolved" => ApprovalStatus::Resolved,
+        "withdrawn" => ApprovalStatus::Withdrawn,
         _ => ApprovalStatus::Expired,
     }
 }
@@ -160,6 +164,19 @@ impl Store {
         self.approval_get(id)
     }
 
+    /// Pending → Withdrawn, `resolved_at = now_ms()`: the runtime took the request back, so there is no
+    /// decision. Returns `Ok(None)` if the approval is not pending.
+    pub fn approval_withdraw(&self, id: &str) -> Result<Option<Approval>> {
+        let changed = self.conn().execute(
+            "UPDATE approvals SET status='withdrawn', resolved_at=?2 WHERE id=?1 AND status='pending'",
+            params![id, now_ms()],
+        )?;
+        if changed == 0 {
+            return Ok(None);
+        }
+        self.approval_get(id)
+    }
+
     /// Pending → Expired for one agent (session died). Returns the expired rows.
     pub fn approval_expire_agent(&self, agent_id: &str) -> Result<Vec<Approval>> {
         self.expire_pending("agent_id = ?1", params![agent_id])
@@ -210,6 +227,25 @@ mod tests {
         s.conn()
             .execute("UPDATE approvals SET created_at = ?2 WHERE id = ?1", params![id, ts])
             .unwrap();
+    }
+
+    #[test]
+    fn withdrawn_approval_is_closed_without_a_decision() {
+        let s = Store::open_in_memory().unwrap();
+        let a = create(&s, "agent-1", "c1");
+        let w = s.approval_withdraw(&a.id).unwrap().expect("pending, so withdrawn");
+        assert_eq!(w.status, ApprovalStatus::Withdrawn);
+        assert_eq!(w.decision, None);
+        assert!(w.resolved_at.is_some());
+        assert_eq!(
+            s.approval_get(&a.id).unwrap().unwrap().status,
+            ApprovalStatus::Withdrawn
+        );
+        assert!(s.approval_list_pending(None).unwrap().is_empty());
+        // Closed once: a second withdrawal or an answer finds nothing pending.
+        assert_eq!(s.approval_withdraw(&a.id).unwrap(), None);
+        assert_eq!(s.approval_resolve(&a.id, Decision::Allow).unwrap(), None);
+        assert_eq!(s.approval_withdraw("missing").unwrap(), None);
     }
 
     #[test]

@@ -188,6 +188,7 @@
   "approval.deniedByYou": "거부함 · {time}",
   "approval.deniedByPolicy": "규칙에 의해 거부됨",
   "approval.expired": "만료됨",
+  "approval.withdrawn": "철회됨",
   "banner.notLoggedIn": "{server}에서 {runtime}에 로그인되어 있지 않습니다. 그곳에서 `{command}`을(를) 실행하세요.",
   "banner.offline": "{server}이(가) 오프라인입니다. 다시 연결하는 중…",
   "banner.limit": "사용 한도에 도달했습니다. {time}에 초기화됩니다.",

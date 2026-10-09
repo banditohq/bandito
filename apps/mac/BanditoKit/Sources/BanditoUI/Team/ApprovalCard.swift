@@ -25,6 +25,9 @@ struct ApprovalCard: View {
             resolvedLine(
                 icon: "xmark.circle", tint: Color.Bandito.danger,
                 text: by == .user ? L10n.Team.resolvedDenied : L10n.Approval.deniedByPolicy)
+        case .withdrawn:
+            // The CLI took the request back: a quiet line in the history, nothing to answer.
+            resolvedLine(icon: "arrow.uturn.backward.circle", tint: Color.Bandito.text3, text: L10n.Approval.withdrawn)
         }
     }
 

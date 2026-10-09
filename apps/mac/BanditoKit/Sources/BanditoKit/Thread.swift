@@ -42,6 +42,8 @@ public enum ApprovalState: Sendable, Hashable {
     case pending
     case approved(by: DecidedBy, remember: Bool)
     case denied(by: DecidedBy)
+    /// The runtime took the request back before anyone decided it.
+    case withdrawn
 }
 
 public struct ApprovalRow: Sendable, Hashable {
@@ -161,6 +163,11 @@ public struct AgentThread: Sendable, Hashable {
         case .approvalResolved(let id, let decision, let by, let remember):
             if let i = items.firstIndex(where: { $0.id == "approval-\(id)" }), case .approval(var row) = items[i] {
                 row.state = decision == .allow ? .approved(by: by, remember: remember) : .denied(by: by)
+                items[i] = .approval(row)
+            }
+        case .approvalWithdrawn(let id):
+            if let i = items.firstIndex(where: { $0.id == "approval-\(id)" }), case .approval(var row) = items[i] {
+                row.state = .withdrawn
                 items[i] = .approval(row)
             }
         case .turnCompleted(_, let status, _, _):

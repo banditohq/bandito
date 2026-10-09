@@ -88,6 +88,7 @@
 "approval.rule" = "regra: %1$@";
 "approval.wants" = "%1$@ quer executar";
 "approval.wantsPush" = "%1$@ quer enviar uma branch";
+"approval.withdrawn" = "Retirada";
 "approvalMode.always" = "Tudo";
 "approvalMode.never" = "Nada";
 "approvalMode.risky" = "Só o arriscado";

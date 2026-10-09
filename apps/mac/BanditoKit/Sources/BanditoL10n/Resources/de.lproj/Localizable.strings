@@ -88,6 +88,7 @@
 "approval.rule" = "Regel: %1$@";
 "approval.wants" = "%1$@ möchte ausführen";
 "approval.wantsPush" = "%1$@ möchte einen Branch pushen";
+"approval.withdrawn" = "Zurückgezogen";
 "approvalMode.always" = "Alles";
 "approvalMode.never" = "Nichts";
 "approvalMode.risky" = "Nur Riskantes";

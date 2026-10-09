@@ -409,6 +409,7 @@ impl Supervisor {
             protected: self.protected.clone(),
             session: None,
             output: None,
+            shell_cwd: policy::ShellCwd::default(),
             redactor: Redactor::default(),
             turn: None,
             turn_hops: 0,
@@ -686,6 +687,8 @@ struct Actor {
     new_chapter_after_turn: Option<&'static str>,
     /// The runtime of the running session (the primary one or the fallback).
     session_kind: Option<RuntimeKind>,
+    /// Where the session's shell is, between its Bash calls (a `cd` holds in the next call). Reset per session.
+    shell_cwd: policy::ShellCwd,
     /// The running turn reported that the runtime's usage is used up (see `marks_limit`).
     turn_limit: bool,
     /// The running turn is the retry of a message after a switch: it does not echo the message again.
@@ -996,6 +999,7 @@ impl Actor {
             })
             .await?;
         self.session = Some(spawned.session);
+        self.shell_cwd = policy::ShellCwd::default();
         self.output = Some(spawned.output);
         self.session_kind = Some(kind);
         self.agent_token = Some(token_guard);
@@ -1447,17 +1451,11 @@ impl Actor {
             return;
         };
         self.pending.remove(&id);
-        match self.hub.store.approval_resolve(&id, Decision::Deny) {
+        // The CLI took the request back: it is closed as withdrawn, nobody decided it.
+        match self.hub.store.approval_withdraw(&id) {
             Ok(Some(_)) => {
-                self.hub.emit(
-                    &self.id,
-                    EventBody::ApprovalResolved {
-                        approval_id: id,
-                        decision: Decision::Deny,
-                        by: DecidedBy::Policy,
-                        remember: false,
-                    },
-                );
+                self.hub
+                    .emit(&self.id, EventBody::ApprovalWithdrawn { approval_id: id });
             }
             Ok(None) => {}
             Err(e) => tracing::error!(agent = self.id, "cancel approval: {e:#}"),
@@ -1495,7 +1493,15 @@ impl Actor {
         // The agent's own folders: its working folder, and its home when it has one.
         let mut roots = vec![agent.cwd.as_str()];
         roots.extend(agent.home_dir.as_deref());
-        let verdict = policy::guarded(|| policy::evaluate(agent.approval_mode, &req, &roots, &rules, &self.protected));
+        // A Bash line is judged where the session's shell was left (both folders, when that is not known); the
+        // state moves on with the line.
+        let shell = self.shell_cwd.clone();
+        let verdict = policy::guarded(|| {
+            policy::evaluate_shell(agent.approval_mode, &req, &roots, &rules, &self.protected, &shell)
+        });
+        if let Some(command) = req.command.as_deref() {
+            self.shell_cwd = shell.after_line(command, &agent.cwd, &self.protected);
+        }
         let subject = req.command.clone().unwrap_or_else(|| req.title.clone());
         match verdict {
             Verdict::Allow => match self.session.as_mut() {
@@ -2144,17 +2150,35 @@ mod tests {
             unreachable!()
         };
         w.push(RuntimeOutput::ApprovalCancelled { key: "k1".into() }).await;
-        let e = w.wait(|b| matches!(b, EventBody::ApprovalResolved { .. })).await;
+        // The CLI withdrew the request: it is closed as withdrawn, not as a decision of the policy.
+        let e = w.wait(|b| matches!(b, EventBody::ApprovalWithdrawn { .. })).await;
         assert!(matches!(
             e.body,
-            EventBody::ApprovalResolved {
-                by: DecidedBy::Policy,
-                ..
-            }
+            EventBody::ApprovalWithdrawn { approval_id: ref id } if *id == approval_id
         ));
+        let stored = w.store.approval_get(&approval_id).unwrap().unwrap();
+        assert_eq!(stored.status, crate::store::ApprovalStatus::Withdrawn);
+        assert_eq!(stored.decision, None);
         w.wait(is_status(AgentStatus::Working)).await;
         assert!(w.sup.resolve(&approval_id, Decision::Allow, false).await.is_err());
         assert!(!w.log.lock().unwrap().iter().any(|l| l.starts_with("resolve k1")));
+    }
+
+    #[tokio::test]
+    async fn a_cd_holds_for_the_next_bash_call_of_the_same_session() {
+        let mut w = world(ApprovalMode::Risky);
+        w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
+        w.wait_log("send go").await;
+        // `cd ~` is routine and allowed; the shell is then in home.
+        w.push(approval("k1", "cd ~")).await;
+        w.wait_log("resolve k1 Allow").await;
+        // The relative path is in home's `.ssh` only because of that cd: the agent's folder is /home/u/app.
+        w.push(approval("k2", "cat .ssh/id_rsa")).await;
+        let e = w.wait(|b| matches!(b, EventBody::ApprovalRequested { .. })).await;
+        let EventBody::ApprovalRequested { reason, .. } = e.body else {
+            unreachable!()
+        };
+        assert_eq!(reason, "reads credentials: ~/.ssh");
     }
 
     #[tokio::test]

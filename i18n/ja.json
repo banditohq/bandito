@@ -188,6 +188,7 @@
   "approval.deniedByYou": "拒否しました · {time}",
   "approval.deniedByPolicy": "ルールにより拒否",
   "approval.expired": "期限切れ",
+  "approval.withdrawn": "取り下げ済み",
   "banner.notLoggedIn": "{server} で {runtime} にログインしていません。そこで `{command}` を実行してください。",
   "banner.offline": "{server} がオフラインです。再接続中…",
   "banner.limit": "使用上限に達しました。{time} にリセットされます。",

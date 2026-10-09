@@ -40,12 +40,37 @@ const BASE_ARGS: [&str; 11] = [
 fn bandito_home_rules(home: &std::path::Path) -> Vec<String> {
     let home = std::path::absolute(home).unwrap_or_else(|_| home.to_path_buf());
     let text = home.display().to_string();
-    let text = text.trim_end_matches('/');
+    // The rule is a glob. A glob character in the folder's own name becomes a bracket class that matches
+    // it (`(`, `)`, `[`, `]`, `*`, `?`, `{`, `}`); `!` and `\` are escaped with a backslash.
+    let text: String = text
+        .trim_end_matches('/')
+        .chars()
+        .map(|c| match c {
+            '(' | ')' | '[' | ']' | '*' | '?' | '{' | '}' => format!("[{c}]"),
+            '!' | '\\' => format!("\\{c}"),
+            c => c.to_string(),
+        })
+        .collect();
     ["Read", "Edit", "Write"]
         .iter()
         .map(|tool| format!("{tool}(/{text}/**)"))
         .collect()
 }
+
+/// Tools whose calls go through `can_use_tool` and the policy. Listed as `permissions.ask` in the
+/// `--settings` JSON. Grep (reads file contents) and Glob (reads names under a folder) are checked for
+/// credential folders and Bandito's folder too. LS only lists names and stays out.
+const POLICY_TOOLS: [&str; 9] = [
+    "Bash",
+    "Edit",
+    "Write",
+    "MultiEdit",
+    "NotebookEdit",
+    "WebFetch",
+    "Read",
+    "Grep",
+    "Glob",
+];
 
 const INIT_REQUEST_ID: &str = "init";
 /// Tool input strings longer than this are clipped in events and approvals.
@@ -223,8 +248,13 @@ impl Runtime for ClaudeRuntime {
             }
         }
         // The agent's file tools may not touch Bandito's own folder (see docs/ARCHITECTURE.md#approvals-policy).
+        // The tools the policy decides are asked, so an `allow` in the user's or the project's settings
+        // cannot run them without `can_use_tool`. Claude Code checks deny, then ask, then allow.
         // One argument of inline JSON, so no rule can be split at a space.
-        let settings = json!({"permissions": {"deny": bandito_home_rules(&crate::workspace::data_dir())}});
+        let settings = json!({"permissions": {
+            "deny": bandito_home_rules(&crate::workspace::data_dir()),
+            "ask": POLICY_TOOLS,
+        }});
         cmd.arg("--settings").arg(settings.to_string());
         cmd.current_dir(&cfg.cwd).envs(cfg.env.iter().map(|(k, v)| (k, v)));
         // Marks the CLI and its children for `host.processes` (see docs/ARCHITECTURE.md#host).
@@ -1562,5 +1592,27 @@ mod login_tests {
                 "{stdout}"
             );
         }
+    }
+
+    #[test]
+    fn bandito_home_rules_escape_glob_characters_in_the_folder_name() {
+        // Parentheses, brackets and wildcards in the folder's own name match themselves, not the pattern.
+        let rules = bandito_home_rules(std::path::Path::new("/srv/a(b)[c]*d?"));
+        assert_eq!(
+            rules,
+            [
+                "Read(//srv/a[(]b[)][[]c[]][*]d[?]/**)",
+                "Edit(//srv/a[(]b[)][[]c[]][*]d[?]/**)",
+                "Write(//srv/a[(]b[)][[]c[]][*]d[?]/**)",
+            ]
+        );
+        // Braces and `!` and backslashes match themselves too.
+        let rules = bandito_home_rules(std::path::Path::new("/srv/a{b}!c\\d"));
+        assert_eq!(rules[0], "Read(//srv/a[{]b[}]\\!c\\\\d/**)");
+        // A plain path is unchanged.
+        assert_eq!(
+            bandito_home_rules(std::path::Path::new("/home/u/.bandito"))[0],
+            "Read(//home/u/.bandito/**)"
+        );
     }
 }

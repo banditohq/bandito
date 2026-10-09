@@ -101,6 +101,7 @@ The risky checks read the command line. They stop a mistake. They do not stop an
 Где: Team → agent → Agent details → Details → Approvals (Одобрения)
 1. Keep the agents' rights small: a separate user on the server for each agent, and no keys you do not need.
 2. Keep Risky only (Только рискованное) or Everything (Всё подряд) on for agents that touch production.
+3. The checks look at the actions the agent asks for: the tool, the command text and the paths. They do not look inside a program the agent wrote and runs (a script, `npm test`, a build script, a git hook). Such a program can read whatever the server user can read. For real isolation use a container.
 ## Touch ID and auto-deny (planned)
 
 <!-- id: sec-touchid; covers: ; status: planned -->

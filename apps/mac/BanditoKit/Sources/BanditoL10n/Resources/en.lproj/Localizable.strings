@@ -150,6 +150,7 @@
 "approval.why.sql" = "changes a database";
 "approval.why.sudo" = "runs as administrator";
 "approval.why.yourRule" = "your rule: %1$@";
+"approval.withdrawn" = "Withdrawn";
 "approvalMode.always" = "Everything";
 "approvalMode.never" = "Nothing";
 "approvalMode.risky" = "Risky only";
