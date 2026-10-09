@@ -160,6 +160,23 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr) -> Result<()> {
         });
     }
 
+    {
+        // Uploads abandoned for an hour lose their temp file.
+        let app = app.clone();
+        tokio::spawn(async move {
+            let mut tick = tokio::time::interval(Duration::from_secs(600));
+            loop {
+                tick.tick().await;
+                let files = app.files.clone();
+                match tokio::task::spawn_blocking(move || files.sweep_uploads(Duration::from_secs(3600))).await {
+                    Ok(0) => {}
+                    Ok(n) => tracing::info!(count = n, "removed abandoned file uploads"),
+                    Err(e) => tracing::warn!("sweep file uploads: {e}"),
+                }
+            }
+        });
+    }
+
     tracing::info!(version = rpc::VERSION, socket = %sock.display(), %listen, "bandito daemon is running");
     shutdown_signal().await;
     tracing::info!("shutting down");

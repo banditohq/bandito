@@ -87,7 +87,7 @@ Migrations: numbered SQL files embedded in the binary, applied by `PRAGMA user_v
 
 JSON-RPC 2.0. Same methods on every transport.
 
-- Requests: `daemon.info`, `runtimes.status`, `agents.list|get|create|update|delete`, `agents.send{agent_id,text}`, `agents.interrupt`, `events.since{seq,limit,agent_id?}`, `approvals.list|resolve{approval_id,decision,remember}`, `rules.list|set|delete`, `schedules.list|create|update|delete|run_now`, `devices.list|revoke`, `pair.redeem{code,device_name}` (only unauthenticated method), `term.list|open|input|resize|rename|close|attach|detach` (see Terminals).
+- Requests: `daemon.info`, `runtimes.status`, `agents.list|get|create|update|delete`, `agents.send{agent_id,text}`, `agents.interrupt`, `events.since{seq,limit,agent_id?}`, `approvals.list|resolve{approval_id,decision,remember}`, `rules.list|set|delete`, `schedules.list|create|update|delete|run_now`, `devices.list|revoke`, `pair.redeem{code,device_name}` (only unauthenticated method), `term.list|open|input|resize|rename|close|attach|detach` (see Terminals), `fs.*` (see [Files](#files)).
 - Notifications (server → client): `event{seq, agent_id, kind, payload, ts}` for every event including `message.delta`; `term.output|gap|exit|closed` for attached terminals (see Terminals).
 
 ## Transports (connect any way you like)
@@ -95,7 +95,7 @@ JSON-RPC 2.0. Same methods on every transport.
 The daemon always listens on:
 
 1. Unix socket `~/.bandito/bandito.sock` (0600). Trusted: same user.
-2. `127.0.0.1:7878` HTTP + WebSocket (`/v1/rpc`, `/v1/health`). Token required.
+2. `127.0.0.1:7878` HTTP + WebSocket (`/v1/rpc`, `/v1/health`, `/v1/files/raw`). Token required.
 
 WebSocket upgrades that carry an `Origin` header are refused: native apps don't send one, browsers always do, so a web page can't drive the daemon through the user's browser. Unix socket paths are limited to ~104 bytes on macOS, so keep `BANDITO_HOME` short.
 
@@ -168,6 +168,41 @@ Environment: a terminal gets only a whitelist of the daemon's variables (`PATH`,
 Errors: code `-32021` (`TERM_ERROR`), message `<code>: <text>`, where `<code>` is `too_many`, `not_found`, `invalid_size`, `exited` or `busy`.
 
 When the daemon stops, every terminal is hung up (`TerminalManager::shutdown_all`). Feature string: `"terminals"` in `daemon.info`.
+## Files
+
+The app browses and edits files on the server: `fs.*` RPC methods, plus `GET`/`HEAD /v1/files/raw` to stream a file's bytes. Clients show the feature when `daemon.info.features` contains `"files"`.
+
+**Access.** Any paired device can use the file methods and the raw endpoint, with the rights of the user running the daemon. The model is owner-of-the-server: roots are a convenience limit, not a security boundary. `~` is the daemon user's home; other paths must be absolute. A relative path is `invalid_path`.
+
+Params are objects; unknown fields are `invalid_params`.
+
+| method | params | result |
+|---|---|---|
+| `fs.list` | `path`, `hidden?` (default false) | `Listing {path, parent, entries, truncated, skipped}` |
+| `fs.stat` | `path` | `Entry` |
+| `fs.read` | `path` | `TextFile {path, content, etag, size, modified_ms, readonly}`; text up to 2 MiB, binary refused |
+| `fs.write` | `path`, `content`, `etag?`, `create?` (default false) | `{etag}` |
+| `fs.create_file`, `fs.mkdir` | `path` | `Entry` |
+| `fs.rename`, `fs.copy` | `from`, `to` | `Entry` |
+| `fs.trash` | `path` | `{trashed_to}` |
+| `fs.search` | `root`, `query`, `limit?` (1–1000, default 200) | `[Entry]` |
+| `fs.projects` | `limit?` (1–200, default 30) | `[ProjectHint]` |
+| `fs.upload.begin` | `path` (destination) | `{upload_id}` |
+| `fs.upload.append` | `upload_id`, `offset`, `data` (standard base64) | `{written}` |
+| `fs.upload.commit` | `upload_id`, `overwrite?` (default false) | `Entry` |
+| `fs.upload.abort` | `upload_id` | `{}` |
+
+**Writing.** Overwriting an existing file needs the `etag` from the last `fs.read`. Without it, or with a stale one, the write is refused with `conflict`, and `error.data.etag` holds the current etag. `create: true` without an etag makes a new file and gives `exists` if the path is taken. `etag` on a missing file gives `not_found`.
+
+**Errors.** File failures use code `-32020` and `error.data.reason`: `not_found`, `exists`, `not_a_directory`, `is_a_directory`, `not_a_file`, `permission_denied`, `too_large` (`size`, `limit`), `binary`, `conflict` (`etag`), `invalid_path`, `outside_roots`, `cross_device`, `io`. Bad params are `-32602`.
+
+**Upload in chunks.** `begin` creates a temp file next to the destination. Each `append` must send `offset` equal to the bytes already written; a chunk is at most 1 MiB decoded, and the total at most 4 GiB. One WebSocket message may be up to 4 MiB, so a full 1 MiB chunk fits after base64. `commit` moves the file into place (`overwrite: false` gives `exists`). An upload idle for an hour is removed with its temp file (checked every 10 minutes). `abort` removes it at once.
+
+**Raw download.** `GET` or `HEAD /v1/files/raw?path=<percent-encoded>` (encode `+` as `%2B`; the query is form-decoded). Needs `Authorization: Bearer`: no token or an unknown one is 401, and an `Origin` header is 403. Errors: 400 for an invalid path, a folder or a non-regular file; 403 outside roots or no permission; 404 when missing. The body is streamed from the file.
+
+- `Range`: one `bytes=a-b`, `bytes=a-` or `bytes=-n` gives 206 with `Content-Range`. A range outside the file, a reversed range, or several ranges gives 416 with `Content-Range: bytes */size`.
+- `Content-Type` by extension: video, audio, image and PDF types as usual; text, markdown, code and config files as `text/plain; charset=utf-8`; SVG and HTML are never served as markup; anything else is `application/octet-stream`.
+- Always: `ETag: "<size>-<mtime_ms>"`, `Accept-Ranges: bytes`, `Cache-Control: private, no-cache`, `X-Content-Type-Options: nosniff`, `Content-Security-Policy: sandbox`, `Content-Disposition: inline; filename*=UTF-8''<name>`.
 
 ## Mac app
 
