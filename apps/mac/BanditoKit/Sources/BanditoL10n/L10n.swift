@@ -541,6 +541,7 @@ public enum L10n {
         public static var clear: String { L10n.tr("keys.clear") }
         public static var clearHint: String { L10n.tr("keys.clearHint") }
         public static var closeTerminal: String { L10n.tr("keys.closeTerminal") }
+        public static var closeWindow: String { L10n.tr("keys.closeWindow") }
         public static var collapse: String { L10n.tr("keys.collapse") }
         public static func conflict(name: String) -> String { L10n.tr("keys.conflict", name) }
         public static var copyPath: String { L10n.tr("keys.copyPath") }
@@ -646,6 +647,7 @@ public enum L10n {
     public enum Menu {
         public static var agent: String { L10n.tr("menu.agent") }
         public static var go: String { L10n.tr("menu.go") }
+        public static var terminals: String { L10n.tr("menu.terminals") }
         public static var view: String { L10n.tr("menu.view") }
     }
 
@@ -1271,6 +1273,73 @@ public enum L10n {
             public static var desc: String { L10n.tr("template.scratch.desc") }
             public static var meta: String { L10n.tr("template.scratch.meta") }
             public static var title: String { L10n.tr("template.scratch.title") }
+        }
+    }
+
+    public enum Terminals {
+        public static func connecting(server: String) -> String { L10n.tr("terminals.connecting", server) }
+        public static func desktop(name: String) -> String { L10n.tr("terminals.desktop", name) }
+        public static var desktopDefault: String { L10n.tr("terminals.desktopDefault") }
+        public static var empty: String { L10n.tr("terminals.empty") }
+        public static var emptyHint: String { L10n.tr("terminals.emptyHint") }
+        public static func error(message: String) -> String { L10n.tr("terminals.error", message) }
+        public static func gap(kb: String) -> String { L10n.tr("terminals.gap", kb) }
+        public static var inputToAll: String { L10n.tr("terminals.inputToAll") }
+        public static var inputToAllHint: String { L10n.tr("terminals.inputToAllHint") }
+        public static var layoutTitle: String { L10n.tr("terminals.layoutTitle") }
+        public static func newFailed(message: String) -> String { L10n.tr("terminals.newFailed", message) }
+        public static var noRoom: String { L10n.tr("terminals.noRoom") }
+        public static var noServer: String { L10n.tr("terminals.noServer") }
+        public static var rename: String { L10n.tr("terminals.rename") }
+        public static var restart: String { L10n.tr("terminals.restart") }
+        public static var updateServer: String { L10n.tr("terminals.updateServer") }
+        public static func windowCount(count: Int) -> String { L10n.tr("terminals.windowCount", count) }
+
+        public enum ConfirmClose {
+            public static var cancel: String { L10n.tr("terminals.confirmClose.cancel") }
+            public static var end: String { L10n.tr("terminals.confirmClose.end") }
+            public static var title: String { L10n.tr("terminals.confirmClose.title") }
+        }
+
+        public enum Dock {
+            public static var empty: String { L10n.tr("terminals.dock.empty") }
+            public static func lastHint(shortcut: String) -> String { L10n.tr("terminals.dock.lastHint", shortcut) }
+            public static func lines(count: Int) -> String { L10n.tr("terminals.dock.lines", count) }
+            public static var restore: String { L10n.tr("terminals.dock.restore") }
+            public static var running: String { L10n.tr("terminals.dock.running") }
+            public static var title: String { L10n.tr("terminals.dock.title") }
+            public static var waiting: String { L10n.tr("terminals.dock.waiting") }
+        }
+
+        public enum Exit {
+            public static func code(code: String) -> String { L10n.tr("terminals.exit.code", code) }
+            public static var plain: String { L10n.tr("terminals.exit.plain") }
+            public static func signal(signal: String) -> String { L10n.tr("terminals.exit.signal", signal) }
+        }
+
+        public enum Layouts {
+            public static var cols: String { L10n.tr("terminals.layouts.cols") }
+            public static var grid: String { L10n.tr("terminals.layouts.grid") }
+            public static var mainRight: String { L10n.tr("terminals.layouts.mainRight") }
+            public static var one: String { L10n.tr("terminals.layouts.one") }
+        }
+
+        public enum Pane {
+            public static var close: String { L10n.tr("terminals.pane.close") }
+            public static var collapse: String { L10n.tr("terminals.pane.collapse") }
+            public static var exitFullscreen: String { L10n.tr("terminals.pane.exitFullscreen") }
+            public static var fullscreen: String { L10n.tr("terminals.pane.fullscreen") }
+            public static var rename: String { L10n.tr("terminals.pane.rename") }
+            public static var split: String { L10n.tr("terminals.pane.split") }
+        }
+
+        public enum Sidebar {
+            public static var collapsed: String { L10n.tr("terminals.sidebar.collapsed") }
+            public static var collapsedHint: String { L10n.tr("terminals.sidebar.collapsedHint") }
+            public static var none: String { L10n.tr("terminals.sidebar.none") }
+            public static var noteBody: String { L10n.tr("terminals.sidebar.noteBody") }
+            public static var noteTitle: String { L10n.tr("terminals.sidebar.noteTitle") }
+            public static var onScreen: String { L10n.tr("terminals.sidebar.onScreen") }
         }
     }
 

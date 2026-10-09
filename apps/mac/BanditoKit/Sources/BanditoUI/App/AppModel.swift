@@ -10,8 +10,14 @@ public final class AppModel {
     public var selectedServerID: UUID?
     /// The last problem the user should know about (e.g. a token that could not be stored).
     public private(set) var lastError: String?
+    /// Text size of every terminal pane (⌘+ ⌘− ⌘0 and pinch).
+    public let terminalFont = TerminalFontStore()
 
     private static let storeKey = "servers.v1"
+    #if os(macOS)
+    /// One terminal controller per server, kept while the Terminals mode is away so output keeps being followed.
+    @ObservationIgnored private var terminalControllers: [UUID: TerminalController] = [:]
+    #endif
 
     public init() {
         load()
@@ -46,11 +52,28 @@ public final class AppModel {
     public func remove(_ id: UUID) {
         guard let i = servers.firstIndex(where: { $0.id == id }) else { return }
         let s = servers.remove(at: i)
+        #if os(macOS)
+        if let controller = terminalControllers.removeValue(forKey: id) {
+            Task { await controller.detachAll() }
+        }
+        #endif
         Task { await s.disconnect() }
         Keychain.setToken(nil, for: id)
         if selectedServerID == id { selectedServerID = servers.first?.id }
         save()
     }
+
+    #if os(macOS)
+    /// The terminals of `server`, created on first use.
+    func terminalController(for server: ServerModel) -> TerminalController {
+        if let existing = terminalControllers[server.id] {
+            return existing
+        }
+        let controller = TerminalController(server: server, font: terminalFont)
+        terminalControllers[server.id] = controller
+        return controller
+    }
+    #endif
 
     private func load() {
         var configs: [ServerConfig] = []

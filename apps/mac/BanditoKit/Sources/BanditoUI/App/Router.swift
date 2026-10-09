@@ -75,6 +75,8 @@ public final class Router {
     public var pendingAgentCwd: String?
     /// Team: text for the composer of the selected agent ("Ask about this place"). Taken once by the thread.
     public var pendingComposerText: String?
+    /// Terminals: a command from the menu bar, waiting for the Terminals mode to perform it.
+    public var terminalRequest: TerminalRequest?
     /// Browser: the open tab.
     public var browserTabID: String?
     /// Server screen: the screen being shown.
