@@ -222,6 +222,46 @@
 			<string>%1$lld инструмента</string>
 		</dict>
 	</dict>
+	<key>market.journal.calls24h</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%1$lld вызова за сутки</string>
+			<key>many</key>
+			<string>%1$lld вызовов за сутки</string>
+			<key>one</key>
+			<string>%1$lld вызов за сутки</string>
+			<key>other</key>
+			<string>%1$lld вызова за сутки</string>
+		</dict>
+	</dict>
+	<key>market.journal.errors24h</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%1$lld ошибки</string>
+			<key>many</key>
+			<string>%1$lld ошибок</string>
+			<key>one</key>
+			<string>%1$lld ошибка</string>
+			<key>other</key>
+			<string>%1$lld ошибки</string>
+		</dict>
+	</dict>
 	<key>market.skill.onAgents</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>

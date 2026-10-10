@@ -156,6 +156,34 @@
 			<string>도구 %1$lld개</string>
 		</dict>
 	</dict>
+	<key>market.journal.calls24h</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>other</key>
+			<string>24시간 동안 호출 %1$lld회</string>
+		</dict>
+	</dict>
+	<key>market.journal.errors24h</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>other</key>
+			<string>오류 %1$lld건</string>
+		</dict>
+	</dict>
 	<key>market.skill.onAgents</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>

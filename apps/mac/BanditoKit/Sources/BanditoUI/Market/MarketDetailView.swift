@@ -23,6 +23,8 @@ struct MarketDetailView: View {
     var onSetEnabled: (Bool) -> Void
     /// The "Tools" section; nil when the server cannot limit tools or the service is not connected.
     var tools: ToolsSectionInput?
+    /// The "Journal" section; nil when the server keeps none or the service is not connected.
+    var journal: JournalSectionInput?
 
     private var template: IntegrationCatalogEntry? { entry.template }
     /// The service's colour: its brand colour, or the palette colour of an own integration.
@@ -43,6 +45,11 @@ struct MarketDetailView: View {
                         if let tools {
                             section(L10n.Market.Tools.title) {
                                 ToolPermissionsBody(integration: integration, input: tools)
+                            }
+                        }
+                        if let journal {
+                            section(L10n.Market.Journal.title) {
+                                CallJournalBody(input: journal)
                             }
                         }
                     }

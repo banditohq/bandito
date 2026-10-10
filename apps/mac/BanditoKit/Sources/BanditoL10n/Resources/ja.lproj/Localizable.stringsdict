@@ -156,6 +156,34 @@
 			<string>%1$lld 個のツール</string>
 		</dict>
 	</dict>
+	<key>market.journal.calls24h</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>other</key>
+			<string>24 時間で %1$lld 回の呼び出し</string>
+		</dict>
+	</dict>
+	<key>market.journal.errors24h</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>other</key>
+			<string>エラー %1$lld 件</string>
+		</dict>
+	</dict>
 	<key>market.skill.onAgents</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>

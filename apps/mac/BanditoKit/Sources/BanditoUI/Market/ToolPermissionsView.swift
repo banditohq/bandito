@@ -15,6 +15,12 @@ struct ToolsSectionInput {
     var onMode: (IntegrationToolMode) -> Void
     var onWord: (IntegrationTool, ToolWord) -> Void
     var onCheck: () -> Void
+    /// The service's name, for the question before a tool that changes something.
+    var serviceName = ""
+    /// A service that is off cannot be tried.
+    var serviceOn = true
+    /// Runs a tool for the owner (`integrations.call_tool`); nil when the server cannot (an older daemon).
+    var onTry: ((IntegrationTool, JSONValue) async -> ToolTryOutcome)?
 }
 
 /// The body of the "Tools" section: the mode as three segments, a line that says what it does, and every tool with
@@ -70,6 +76,9 @@ struct ToolPermissionsBody: View {
                         word: ToolPermissionLogic.effectiveWord(
                             of: tool, mode: integration.toolMode, overrides: integration.toolOverrides),
                         saving: input.saving,
+                        serviceName: input.serviceName.isEmpty ? integration.name : input.serviceName,
+                        serviceOn: input.serviceOn,
+                        onTry: input.onTry,
                         onWord: { input.onWord(tool, $0) })
                 }
             }
@@ -101,41 +110,62 @@ struct ToolPermissionsBody: View {
     }
 }
 
-/// One tool: its name, what it does, a line from its description, and the three words.
+/// One tool: its name, what it does, a line from its description, Try, and the three words. Try opens the form of the
+/// tool under the row.
 private struct ToolRow: View {
     let tool: IntegrationTool
     let word: ToolWord
     let saving: Bool
+    let serviceName: String
+    let serviceOn: Bool
+    var onTry: ((IntegrationTool, JSONValue) async -> ToolTryOutcome)?
     var onWord: (ToolWord) -> Void
+
+    @State private var trying = false
 
     var body: some View {
         let kind = ToolPermissionLogic.kind(of: tool)
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
-                    Text(tool.name)
-                        .font(BanditoFont.mono(size: 12.5, weight: 500))
-                        .foregroundStyle(Color.Bandito.text)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    Chip(text: kind.title, tone: tone(kind))
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Text(tool.name)
+                            .font(BanditoFont.mono(size: 12.5, weight: 500))
+                            .foregroundStyle(Color.Bandito.text)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Chip(text: kind.title, tone: tone(kind))
+                    }
+                    if let line = summary {
+                        Text(line)
+                            .font(BanditoFont.text(size: 11.5, weight: 400))
+                            .foregroundStyle(Color.Bandito.text3)
+                            .lineLimit(1)
+                    }
                 }
-                if let line = summary {
-                    Text(line)
-                        .font(BanditoFont.text(size: 11.5, weight: 400))
-                        .foregroundStyle(Color.Bandito.text3)
-                        .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                if onTry != nil {
+                    Button(trying ? L10n.Market.Try.hide : L10n.Market.Try.button) { trying.toggle() }
+                        .banditoButton(.quiet())
+                        .disabled(!serviceOn)
+                        .help(serviceOn ? "" : L10n.Market.Try.offHint)
+                        .fixedSize()
                 }
+                SegmentedPicker(
+                    selection: Binding(get: { word }, set: { onWord($0) }),
+                    options: ToolWord.allCases.map { ($0, ToolPermissionsBody.title($0)) }
+                )
+                .fixedSize()
+                .disabled(saving)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            SegmentedPicker(
-                selection: Binding(get: { word }, set: { onWord($0) }),
-                options: ToolWord.allCases.map { ($0, ToolPermissionsBody.title($0)) }
-            )
-            .fixedSize()
-            .disabled(saving)
+            .padding(.vertical, 10)
+            if trying, serviceOn, let onTry {
+                ToolTryView(tool: tool, service: serviceName) { await onTry(tool, $0) }
+                    .id(tool.name)
+            }
         }
-        .padding(.vertical, 10)
+        // A service that is turned off closes the form.
+        .onChange(of: serviceOn) { _, on in if !on { trying = false } }
     }
 
     private func tone(_ kind: ToolPermissionLogic.Kind) -> ChipTone {

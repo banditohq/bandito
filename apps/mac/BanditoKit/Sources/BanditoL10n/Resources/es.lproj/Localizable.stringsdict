@@ -176,6 +176,38 @@
 			<string>%1$lld herramientas</string>
 		</dict>
 	</dict>
+	<key>market.journal.calls24h</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%1$lld llamada en 24 horas</string>
+			<key>other</key>
+			<string>%1$lld llamadas en 24 horas</string>
+		</dict>
+	</dict>
+	<key>market.journal.errors24h</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%1$lld error</string>
+			<key>other</key>
+			<string>%1$lld errores</string>
+		</dict>
+	</dict>
 	<key>market.skill.onAgents</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
