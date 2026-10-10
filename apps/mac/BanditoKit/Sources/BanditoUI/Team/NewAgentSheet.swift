@@ -221,13 +221,11 @@ struct NewAgentSheet: View {
             HStack(alignment: .top, spacing: 12) {
                 labeled(L10n.AgentSheet.name) {
                     TextField(defaultName, text: $draft.name)
-                        .textFieldStyle(.plain)
-                        .modifier(FieldBox())
+                        .banditoField()
                 }
                 labeled(L10n.AgentSheet.role) {
                     TextField(L10n.AgentSheet.rolePlaceholder, text: $draft.role)
-                        .textFieldStyle(.plain)
-                        .modifier(FieldBox())
+                        .banditoField()
                 }
             }
 
@@ -249,14 +247,11 @@ struct NewAgentSheet: View {
                 // A vertical TextField, not TextEditor: a TextEditor is a scroll view of its own, so the wheel over it
                 // scrolls it instead of the sheet. The field grows with the text (4 to 12 lines); Return adds a line.
                 TextField(L10n.AgentSheet.instructionsPlaceholder, text: $draft.instructions, axis: .vertical)
-                    .textFieldStyle(.plain)
+                    .banditoField()
                     .font(BanditoFont.font(size: 13, weight: 400))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(4...12)
-                    .padding(10)
                     .frame(maxWidth: .infinity, alignment: .topLeading)
-                    .background(Color.Bandito.bg, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.Bandito.line))
             }
 
             labeled(L10n.Capability.title) {
@@ -726,9 +721,8 @@ struct NewAgentSheet: View {
             }
             if draft.workplace == .new {
                 TextField(L10n.Workspace.Create.name, text: $draft.newWorkplace.name)
-                    .textFieldStyle(.plain)
+                    .banditoField()
                     .font(BanditoFont.font(size: 13.5, weight: 400))
-                    .modifier(FieldBox())
                 Text(L10n.Workspace.Draft.defaults(limits: draft.newWorkplace.limitsText))
                     .font(BanditoFont.font(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)

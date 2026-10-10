@@ -658,7 +658,7 @@
 "integrations.custom.kindWebHint" = "HTTP / SSE";
 "integrations.custom.manual" = "または手動で入力";
 "integrations.custom.paste" = "ドキュメントの設定を貼り付け";
-"integrations.custom.pastePlaceholder" = "mcpServers JSON  ·  npx -y @scope/package  ·  https://…";
+"integrations.custom.pastePlaceholder" = "{\"mcpServers\": {…}}\nnpx -y @scope/package · https://…";
 "integrations.custom.reason.command" = "「%1$@」は未対応のプログラムです。npx、uvx、docker、またはパスで始めてください。";
 "integrations.custom.reason.json" = "JSONが正しくありません。";
 "integrations.custom.reason.noServers" = "コマンドまたはアドレスを持つサーバーがありません。";

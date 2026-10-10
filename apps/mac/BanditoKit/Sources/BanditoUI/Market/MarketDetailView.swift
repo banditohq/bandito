@@ -20,27 +20,32 @@ struct MarketDetailView: View {
     var onSetEnabled: (Bool) -> Void
 
     private var template: IntegrationCatalogEntry? { entry.template }
+    /// The service's colour: its brand colour, or the palette colour of an own integration.
+    private var accent: Color { MarketTileStyle.color(of: entry) }
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                backButton
-                header
-                if let template {
-                    about(template)
+            ZStack(alignment: .top) {
+                heroBand
+                VStack(alignment: .leading, spacing: 24) {
+                    backButton
+                    header
+                    if let template {
+                        about(template)
+                    }
+                    if let integration = entry.integration {
+                        connection(integration)
+                    }
+                    if let template {
+                        links(template)
+                    }
                 }
-                if let integration = entry.integration {
-                    connection(integration)
-                }
-                if let template {
-                    links(template)
-                }
+                .frame(maxWidth: 760, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .padding(.horizontal, 30)
+                .padding(.top, 22)
+                .padding(.bottom, 30)
             }
-            .frame(maxWidth: 720, alignment: .leading)
-            .frame(maxWidth: .infinity, alignment: .topLeading)
-            .padding(.horizontal, 30)
-            .padding(.top, 22)
-            .padding(.bottom, 30)
         }
         .scrollIndicators(.never)
         .background {
@@ -51,6 +56,19 @@ struct MarketDetailView: View {
                 .frame(width: 0, height: 0)
                 .accessibilityHidden(true)
         }
+    }
+
+    // MARK: - hero
+
+    /// A 160 pt band at the top of the page: the service's colour at 22%, fading to nothing at its bottom edge.
+    /// It is decoration only and takes no clicks.
+    private var heroBand: some View {
+        LinearGradient(
+            colors: [accent.opacity(0.22), accent.opacity(0)], startPoint: .top, endPoint: .bottom)
+            .frame(maxWidth: .infinity)
+            .frame(height: 160)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 
     // MARK: - header
@@ -65,7 +83,15 @@ struct MarketDetailView: View {
 
     private var header: some View {
         HStack(alignment: .center, spacing: 16) {
-            MarketTile(entry: entry, size: 56, glow: true)
+            MarketTile(entry: entry, size: 64, glow: true)
+                .background {
+                    // A soft blur of the service's colour behind the tile.
+                    Circle()
+                        .fill(accent.opacity(0.35))
+                        .frame(width: 130, height: 130)
+                        .blur(radius: 30)
+                        .allowsHitTesting(false)
+                }
             VStack(alignment: .leading, spacing: 5) {
                 Text(entry.name)
                     .font(.system(size: 24, weight: .semibold))
@@ -141,7 +167,7 @@ struct MarketDetailView: View {
                         HStack(alignment: .firstTextBaseline, spacing: 9) {
                             Image(systemName: "checkmark")
                                 .font(.system(size: 10, weight: .bold))
-                                .foregroundStyle(Color.Bandito.ok)
+                                .foregroundStyle(accent)
                             paragraph(item)
                         }
                     }
@@ -283,12 +309,15 @@ struct MarketDetailView: View {
 
     // MARK: - pieces
 
+    /// A page section: its label and content in one card.
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             SectionLabel(title)
             content()
         }
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .banditoCard()
     }
 
     private func paragraph(_ text: String) -> some View {

@@ -234,12 +234,8 @@ private struct EmailBlock: View {
             if model.phase == .address {
                 HStack(spacing: 8) {
                     TextField(L10n.Onboarding.Account.emailPlaceholder, text: $model.email)
-                        .textFieldStyle(.plain)
+                        .banditoField()
                         .font(BanditoFont.font(size: 14.5, weight: 400))
-                        .padding(.horizontal, 14)
-                        .frame(height: 46)
-                        .background(Color.Bandito.surface1, in: RoundedRectangle(cornerRadius: 14))
-                        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.Bandito.text.opacity(0.12)))
                         .onSubmit { Task { await model.sendCode(now: Date()) } }
                         .accessibilityLabel(L10n.Onboarding.Account.emailLabel)
                     Button(L10n.Onboarding.Account.sendCode) {

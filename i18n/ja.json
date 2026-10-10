@@ -2147,7 +2147,7 @@
   "market.step.fillPath": "コマンドの例のフォルダーまたはパスを自分のものに置き換えます。",
   "market.step.connect": "「接続」を押し、項目を入力して接続を確認します。",
   "integrations.custom.paste": "ドキュメントの設定を貼り付け",
-  "integrations.custom.pastePlaceholder": "mcpServers JSON  ·  npx -y @scope/package  ·  https://…",
+  "integrations.custom.pastePlaceholder": "{\"mcpServers\": {…}}\nnpx -y @scope/package · https://…",
   "integrations.custom.recognizedProgram": "認識しました: プログラム {command}",
   "integrations.custom.recognizedWeb": "認識しました: Webアドレス {url}",
   "integrations.custom.recognizedMany": "見つかったサーバー: {count}。追加するものを選んでください。",

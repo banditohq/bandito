@@ -358,7 +358,8 @@ private struct ScreenSidebarContent: View {
 
 private struct ScreenUnsupported: View {
     var body: some View {
-        EmptyState(symbol: "display", title: L10n.Screen.unsupported, message: L10n.Screen.unsupportedText)
+        EmptyState(
+            symbol: "display", title: L10n.Screen.unsupported, message: L10n.Screen.unsupportedText, mascot: nil)
     }
 }
 

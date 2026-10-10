@@ -230,7 +230,7 @@ enum BubbleLook {
     }
 
     /// The person's bubble: a warm film of the text colour over the raised surface, with a faint edge.
-    static var userTint: Color { Color.Bandito.text.opacity(0.10) }
+    static var userTint: Color { Color.Bandito.text.opacity(0.13) }
     static var userBorder: Color { Color.Bandito.text.opacity(0.08) }
 
     /// The agent's bubble: the surface, with an edge that fades from top to bottom.

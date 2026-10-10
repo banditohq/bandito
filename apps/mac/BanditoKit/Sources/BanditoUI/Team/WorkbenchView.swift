@@ -401,11 +401,9 @@ private struct WorkbenchTabButton: View {
         HStack(spacing: 2) {
             if renaming, let terminalID {
                 TextField(L10n.Terminals.rename, text: $draft)
-                    .textFieldStyle(.plain)
+                    .banditoField()
                     .font(BanditoFont.font(size: 12.5, weight: 500))
                     .frame(width: 170)
-                    .padding(.horizontal, 9)
-                    .frame(height: 30)
                     .focused($nameFocused)
                     .onSubmit { commitRename(terminalID) }
                     .onExitCommand { renaming = false }

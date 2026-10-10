@@ -658,7 +658,7 @@
 "integrations.custom.kindWebHint" = "HTTP / SSE";
 "integrations.custom.manual" = "oder manuell ausfüllen";
 "integrations.custom.paste" = "Konfiguration aus der Dokumentation einfügen";
-"integrations.custom.pastePlaceholder" = "mcpServers JSON  ·  npx -y @scope/package  ·  https://…";
+"integrations.custom.pastePlaceholder" = "{\"mcpServers\": {…}}\nnpx -y @scope/package · https://…";
 "integrations.custom.reason.command" = "„%1$@“ ist kein bekanntes Programm. Beginnen Sie mit npx, uvx, docker oder einem Pfad.";
 "integrations.custom.reason.json" = "das JSON ist ungültig.";
 "integrations.custom.reason.noServers" = "es enthält keinen Server mit Befehl oder Adresse.";

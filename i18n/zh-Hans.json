@@ -2147,7 +2147,7 @@
   "market.step.fillPath": "把命令中的示例文件夹或路径替换为你自己的。",
   "market.step.connect": "点击“连接”，填写各项并检查连接。",
   "integrations.custom.paste": "粘贴文档中的配置",
-  "integrations.custom.pastePlaceholder": "mcpServers JSON  ·  npx -y @scope/package  ·  https://…",
+  "integrations.custom.pastePlaceholder": "{\"mcpServers\": {…}}\nnpx -y @scope/package · https://…",
   "integrations.custom.recognizedProgram": "已识别：程序 {command}",
   "integrations.custom.recognizedWeb": "已识别：网址 {url}",
   "integrations.custom.recognizedMany": "找到的服务器：{count}。请勾选要添加的。",

@@ -418,12 +418,8 @@ struct ReactionPicker: View {
                         .foregroundStyle(Color.Bandito.text3)
                         .fixedSize(horizontal: false, vertical: true)
                     TextField("", text: $typed)
-                        .textFieldStyle(.plain)
+                        .banditoField()
                         .font(.system(size: 18))
-                        .padding(.horizontal, 10)
-                        .frame(height: 34)
-                        .background(Color.Bandito.bg, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.Bandito.line))
                         .focused($typedFocused)
                         .accessibilityLabel(L10n.Message.reactMore)
                         .onChange(of: typed) { _, text in

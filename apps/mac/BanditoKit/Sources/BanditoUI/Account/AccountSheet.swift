@@ -189,13 +189,10 @@ struct AccountSheet: View {
     private var nicknameEditor: some View {
         HStack(spacing: 6) {
             TextField(L10n.Account.Nickname.placeholder, text: $nicknameDraft)
-                .textFieldStyle(.plain)
+                .banditoField()
                 .font(BanditoFont.font(size: 16, weight: 500))
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 12)
-                .frame(width: 240, height: 34)
-                .background(Color.Bandito.surface1, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.Bandito.line))
+                .frame(width: 240)
                 .focused($nicknameFocused)
                 .onSubmit { saveNickname() }
                 .onExitCommand { editingNickname = false }

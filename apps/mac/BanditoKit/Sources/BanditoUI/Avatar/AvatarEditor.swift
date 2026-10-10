@@ -128,7 +128,7 @@ struct AvatarEditor: View {
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(Color.Bandito.text3)
                     TextField(L10n.Avatar.emojiField, text: $emojiText)
-                        .textFieldStyle(.plain)
+                        .banditoField()
                         .font(BanditoFont.font(size: 13.5, weight: 400))
                         .focused($emojiFocused)
                         .accessibilityLabel(L10n.Avatar.emojiField)

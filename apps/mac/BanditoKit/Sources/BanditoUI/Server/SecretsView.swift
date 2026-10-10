@@ -177,7 +177,7 @@ private struct SecretEditor: View {
                 .foregroundStyle(Color.Bandito.text)
             field(L10n.Secrets.nameLabel) {
                 TextField(L10n.Secrets.namePlaceholder, text: $draft.name)
-                    .textFieldStyle(.roundedBorder)
+                    .banditoField()
                     .font(.system(size: 13, design: .monospaced))
                     .disabled(!draft.isNew)
                 if !draft.name.isEmpty && !SecretRules.isValidName(draft.name) {
@@ -188,7 +188,7 @@ private struct SecretEditor: View {
             }
             field(L10n.Secrets.valueLabel) {
                 SecureField(draft.isNew ? "" : L10n.Secrets.reenter, text: $draft.value)
-                    .textFieldStyle(.roundedBorder)
+                    .banditoField()
                     .font(.system(size: 13, design: .monospaced))
                 Text(L10n.Secrets.valueHint)
                     .font(.system(size: 11.5))

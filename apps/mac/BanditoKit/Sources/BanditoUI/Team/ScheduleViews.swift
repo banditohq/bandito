@@ -133,7 +133,7 @@ struct ScheduleEditor: View {
                 .foregroundStyle(Color.Bandito.text)
             field(L10n.Schedule.name, hint: L10n.Schedule.titleHint) {
                 TextField(L10n.Schedule.namePlaceholder, text: $form.title)
-                    .textFieldStyle(.roundedBorder)
+                    .banditoField()
                     // Return in the name adds the schedule, when it can be added.
                     .onSubmit { if canSubmit { save() } }
             }
@@ -153,12 +153,10 @@ struct ScheduleEditor: View {
                 // Vertical TextField: Return adds a line, the field grows with the text.
                 TextField(L10n.Inspector.promptPlaceholder, text: $form.prompt, axis: .vertical)
                     .accessibilityLabel(L10n.Inspector.promptLabel)
-                    .textFieldStyle(.plain)
+                    .banditoField()
                     .font(BanditoFont.font(size: 13, weight: 400))
                     .lineLimit(3...10)
-                    .padding(8)
                     .frame(maxWidth: .infinity, alignment: .topLeading)
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.Bandito.line, lineWidth: 1))
             }
             if form.cron == nil {
                 Text(L10n.Schedule.incomplete)
@@ -224,7 +222,7 @@ struct ScheduleEditor: View {
         case .custom:
             field(L10n.Inspector.cronLabel, hint: L10n.Schedule.cronHint) {
                 TextField("0 9 * * 1-5", text: $form.customCron)
-                    .textFieldStyle(.roundedBorder)
+                    .banditoField()
                     .font(BanditoFont.font(size: 13, weight: 400, mono: true))
             }
         }

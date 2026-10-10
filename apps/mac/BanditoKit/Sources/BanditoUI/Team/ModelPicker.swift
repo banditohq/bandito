@@ -193,7 +193,7 @@ struct ModelPicker: View {
     private var typingField: some View {
         HStack(spacing: 6) {
             TextField(L10n.ModelPicker.typePlaceholder, text: $selection)
-                .textFieldStyle(.plain)
+                .banditoField()
                 .font(BanditoFont.font(size: 13.5, weight: 400, mono: true))
                 .foregroundStyle(Color.Bandito.text)
                 .lineLimit(1)
@@ -209,7 +209,6 @@ struct ModelPicker: View {
             .banditoButton(.icon(size: 26, label: L10n.ModelPicker.backToList))
             .help(L10n.ModelPicker.backToList)
         }
-        .modifier(FieldBox())
         .onAppear { focused = true }
     }
 

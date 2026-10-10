@@ -186,7 +186,7 @@ private struct ContentBackdrop: View {
         ZStack {
             Color.Bandito.bg
             RadialGradient(
-                colors: [Color.Bandito.signal.opacity(0.07), Color.Bandito.signal.opacity(0)],
+                colors: [Color.Bandito.signal.opacity(0.09), Color.Bandito.signal.opacity(0)],
                 center: UnitPoint(x: 0.5, y: -0.05),
                 startRadius: 0,
                 endRadius: 700)

@@ -2231,7 +2231,7 @@
   "market.step.fillPath": "Замените в команде пример папки или пути на свой.",
   "market.step.connect": "Нажмите «Подключить», заполните поля и проверьте соединение.",
   "integrations.custom.paste": "Вставьте конфиг из документации",
-  "integrations.custom.pastePlaceholder": "mcpServers JSON  ·  npx -y @scope/package  ·  https://…",
+  "integrations.custom.pastePlaceholder": "{\"mcpServers\": {…}}\nnpx -y @scope/package · https://…",
   "integrations.custom.recognizedProgram": "Распознано: программа {command}",
   "integrations.custom.recognizedWeb": "Распознано: адрес {url}",
   "integrations.custom.recognizedMany": "Найдено серверов: {count}. Отметьте, какие добавить.",
