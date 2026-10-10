@@ -1287,7 +1287,8 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                 reply_to,
                 attachments,
             } = params(p)?;
-            if text.trim().is_empty() {
+            // Files alone are a message: the prompt then says there is no text (see `chat::runtime_text`).
+            if text.trim().is_empty() && attachments.is_empty() {
                 return Err(RpcError::new(INVALID_PARAMS, "message is empty"));
             }
             if text.len() > MAX_MESSAGE_BYTES {

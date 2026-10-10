@@ -227,6 +227,37 @@ mod tests {
         assert!(crate::rpc::features().contains(&"commands"));
     }
 
+    /// A message of files and no text goes to the runtime with `(без текста)` and the file list; the thread keeps
+    /// the empty text. (The attachment handler lives in `rpc::chat`; this test needs the mock runtime's log.)
+    #[tokio::test]
+    async fn a_message_with_only_files_reaches_the_runtime_with_a_placeholder() {
+        let r = rig();
+        let cwd = TempDir::new().unwrap();
+        let id = agent(&r.store, "Scout", RuntimeKind::Claude, cwd.path().to_str().unwrap());
+        let up = call(
+            &r.app,
+            "attachments.upload",
+            json!({"agent_id": id, "name": "pic.png", "data_base64": STANDARD.encode(b"png")}),
+        )
+        .await
+        .unwrap();
+        let uploaded = up["path"].as_str().unwrap().to_string();
+        let real = fs::canonicalize(&uploaded).unwrap().display().to_string();
+        call(
+            &r.app,
+            "agents.send",
+            json!({"agent_id": id, "text": "", "attachments": [uploaded]}),
+        )
+        .await
+        .unwrap();
+        wait_for(
+            &r.log,
+            &format!("send (без текста)\n\nВложения:\n- {real} (image/png, 3 байт)"),
+        )
+        .await;
+        assert_eq!(user_messages(&r.store, &id), vec![(String::new(), None)]);
+    }
+
     #[tokio::test]
     async fn claude_runs_its_own_commands_so_the_text_goes_as_typed() {
         let r = rig();
