@@ -102,7 +102,12 @@ enum BackupCmd {
     },
     /// Take the daemon out of safe mode without a restore. The daemon must be stopped. Its next start opens the
     /// database as it is; when that fails again with set-aside files in `backups/`, it goes back to safe mode.
-    ClearSafeMode,
+    /// Refused while the database does not open and `backups/` holds set-aside databases, unless `--force`.
+    ClearSafeMode {
+        /// Leave safe mode even though the database does not open (a missing one starts empty).
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -422,7 +427,7 @@ fn backup_cmd(cmd: BackupCmd, home: &Path) -> Result<()> {
             }
             Ok(())
         }
-        BackupCmd::ClearSafeMode => {
+        BackupCmd::ClearSafeMode { force } => {
             let Some(_lock) = bandito::backup::try_daemon_lock(home)? else {
                 bail!("the daemon is running. Stop it first: bandito service uninstall; or use the app (Backups)");
             };
@@ -432,6 +437,13 @@ fn backup_cmd(cmd: BackupCmd, home: &Path) -> Result<()> {
                 None => println!("The daemon is not in safe mode."),
             }
             if let Err(e) = bandito::backup::check_database_opens(home) {
+                // A missing database would start empty while the real one sits in backups/: not without --force.
+                if bandito::backup::has_set_aside(home) && !force {
+                    bail!(
+                        "the database does not open ({e:#}) and backups/ holds set-aside databases. \
+                         Restore a copy (bandito backup list, bandito backup restore <name>) or pass --force"
+                    );
+                }
                 println!("Warning: the database does not open yet: {e:#}");
             }
             bandito::backup::clear_safe_mode(home)?;
@@ -514,6 +526,11 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr, home_given: bool) 
             None
         }
     };
+    // No database but set-aside ones in backups/: `Store::open` would create an empty one and the daemon would run
+    // on it. That happens when a failed restore could not record safe mode, or the file was removed by hand.
+    if safe_mode.is_none() && restored.is_none() && !db_path.exists() && bandito::backup::has_set_aside(home) {
+        safe_mode = Some("there is no database, and backups/ holds databases a restore set aside".into());
+    }
     // Safe mode stays until something works: a restore that was applied, or a person's decision.
     if safe_mode.is_none() && restored.is_none() && was_safe {
         safe_mode = Some(

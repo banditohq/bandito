@@ -202,3 +202,40 @@ async fn a_database_that_does_not_open_with_set_aside_files_means_safe_mode_not_
         "left as it was"
     );
 }
+
+#[tokio::test]
+async fn no_database_with_set_aside_files_means_safe_mode_not_an_empty_start() {
+    let (_guard, home) = short_home();
+    // A failed restore that could not record safe mode, or a database removed by hand: only set-aside files remain.
+    let dir = home.join("backups");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("replaced-20270115-080000.db"), "old data").unwrap();
+
+    let _daemon = start(&home);
+    let info = wait_for_info(&home.join("bandito.sock")).await;
+    assert_eq!(info["safe_mode"], true, "{info}");
+    assert!(!home.join("bandito.db").exists(), "no empty database was created");
+}
+
+#[test]
+fn clear_safe_mode_refuses_without_a_database_while_files_are_set_aside() {
+    let (_guard, home) = short_home();
+    let dir = home.join("backups");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("replaced-20270115-080000.db"), "old data").unwrap();
+    let run = |extra: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_bandito"))
+            .arg("--home")
+            .arg(&home)
+            .args(["backup", "clear-safe-mode"])
+            .args(extra)
+            .env("BANDITO_HOME", &home)
+            .output()
+            .unwrap()
+    };
+    let refused = run(&[]);
+    assert!(!refused.status.success());
+    assert!(String::from_utf8_lossy(&refused.stderr).contains("--force"));
+    let forced = run(&["--force"]);
+    assert!(forced.status.success(), "{}", String::from_utf8_lossy(&forced.stderr));
+}
