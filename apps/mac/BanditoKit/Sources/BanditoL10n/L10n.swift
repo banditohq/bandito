@@ -279,7 +279,6 @@ public enum L10n {
 
     public enum Avatar {
         public static var allEmoji: String { L10n.tr("avatar.allEmoji") }
-        public static var chooseFile: String { L10n.tr("avatar.chooseFile") }
         public static var color: String { L10n.tr("avatar.color") }
         public static var colorAria: String { L10n.tr("avatar.colorAria") }
         public static var colorBlue: String { L10n.tr("avatar.colorBlue") }
@@ -290,20 +289,21 @@ public enum L10n {
         public static var colorSage: String { L10n.tr("avatar.colorSage") }
         public static var cropHint: String { L10n.tr("avatar.cropHint") }
         public static var customColor: String { L10n.tr("avatar.customColor") }
+        public static var dropZone: String { L10n.tr("avatar.dropZone") }
         public static var emojiField: String { L10n.tr("avatar.emojiField") }
         public static var face: String { L10n.tr("avatar.face") }
         public static var generate: String { L10n.tr("avatar.generate") }
+        public static var hint: String { L10n.tr("avatar.hint") }
         public static var noEmoji: String { L10n.tr("avatar.noEmoji") }
+        public static var noMatches: String { L10n.tr("avatar.noMatches") }
         public static var pickerMessage: String { L10n.tr("avatar.pickerMessage") }
-        public static var pictureCurrent: String { L10n.tr("avatar.pictureCurrent") }
-        public static var pictureEmpty: String { L10n.tr("avatar.pictureEmpty") }
         public static var pictureNeedsDaemon: String { L10n.tr("avatar.pictureNeedsDaemon") }
         public static var pictureTooLarge: String { L10n.tr("avatar.pictureTooLarge") }
         public static var pictureUnreadable: String { L10n.tr("avatar.pictureUnreadable") }
         public static var presets: String { L10n.tr("avatar.presets") }
         public static var removePicture: String { L10n.tr("avatar.removePicture") }
+        public static var replacePicture: String { L10n.tr("avatar.replacePicture") }
         public static var reset: String { L10n.tr("avatar.reset") }
-        public static var savePicture: String { L10n.tr("avatar.savePicture") }
         public static var set: String { L10n.tr("avatar.set") }
         public static var tabEmoji: String { L10n.tr("avatar.tabEmoji") }
         public static var tabFace: String { L10n.tr("avatar.tabFace") }

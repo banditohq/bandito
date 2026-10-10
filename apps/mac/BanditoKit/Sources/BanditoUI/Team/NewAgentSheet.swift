@@ -21,6 +21,8 @@ struct NewAgentSheet: View {
     /// The draft's picture, decoded for the header and the editor.
     @State private var previewPicture: CGImage?
     @State private var editingAvatar = false
+    /// What the avatar editor keeps while its popover is closed (a picture read from disk): choosing a file closes it.
+    @State private var avatarEditor = AvatarEditorModel()
     /// The server's workplaces, loaded when the sheet opens: what the workplace section can offer.
     @State private var workplaces: WorkspacesModel?
     /// The server's integrations, for the "Integrations" choice. Empty when the server has none.
@@ -140,7 +142,7 @@ struct NewAgentSheet: View {
         .help(L10n.Inspector.Avatar.help)
         .popover(isPresented: $editingAvatar, arrowEdge: .bottom) {
             AvatarEditor(
-                name: draft.name, look: draftLook, picture: previewPicture,
+                name: draft.name, look: draftLook, model: avatarEditor, picture: previewPicture,
                 pictureSupported: server?.supports("avatar_pictures") == true,
                 onSetPicture: { data in
                     draft.picture = data
@@ -151,6 +153,8 @@ struct NewAgentSheet: View {
                     previewPicture = nil
                 })
         }
+        // The file panel closed the popover; the picture it gave is framed in the editor shown again.
+        .onChange(of: avatarEditor.loadedCount) { _, _ in editingAvatar = true }
         .onChange(of: draft.picture, initial: true) { _, data in
             Task {
                 guard let data else {

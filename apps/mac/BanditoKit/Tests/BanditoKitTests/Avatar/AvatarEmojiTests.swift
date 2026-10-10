@@ -47,4 +47,31 @@ import Testing
         #expect(AvatarHex.hex(red: 0, green: 0, blue: 0) == "#000000")
         #expect(AvatarHex.hex(red: 2, green: -1, blue: 0.5) == "#FF0080")
     }
+
+    @Test func pastedTextGivesItsNewestEmoji() {
+        #expect(AvatarEmoji.last(of: "🦝") == "🦝")
+        #expect(AvatarEmoji.last(of: "hello 🦊 world") == "🦊")
+        #expect(AvatarEmoji.last(of: "🦝🦊") == "🦊")
+        #expect(AvatarEmoji.last(of: "🦝x") == "🦝")
+        #expect(AvatarEmoji.last(of: "raccoon") == nil)
+        #expect(AvatarEmoji.last(of: "") == nil)
+        #expect(AvatarEmoji.last(of: "  ") == nil)
+    }
+
+    @Test func searchFindsEmojiByUnicodeName() {
+        #expect(AvatarEmoji.search("raccoon", in: AvatarEmoji.popular) == ["🦝"])
+        #expect(AvatarEmoji.search("  ROCKET ", in: AvatarEmoji.popular) == ["🚀"])
+        #expect(AvatarEmoji.search("heart", in: AvatarEmoji.popular).contains("❤️"))
+    }
+
+    @Test func blankSearchKeepsEverythingAndNoMatchKeepsNothing() {
+        #expect(AvatarEmoji.search("", in: AvatarEmoji.popular) == AvatarEmoji.popular)
+        #expect(AvatarEmoji.search("   ", in: AvatarEmoji.popular) == AvatarEmoji.popular)
+        #expect(AvatarEmoji.search("zzzzqq", in: AvatarEmoji.popular).isEmpty)
+    }
+
+    @Test func searchNeedsEveryWord() {
+        #expect(AvatarEmoji.search("raccoon rocket", in: AvatarEmoji.popular).isEmpty)
+        #expect(AvatarEmoji.searchName(of: "❤️") == "heavy black heart")
+    }
 }

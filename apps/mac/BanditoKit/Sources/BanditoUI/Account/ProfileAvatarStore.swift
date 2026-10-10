@@ -29,6 +29,11 @@ final class ProfileAvatarStore {
     private(set) var removed = false
 
     @ObservationIgnored private var userID: String?
+    /// Whether `bind` has run once. The account object is set many times for one user; the picture is read once.
+    @ObservationIgnored private var started = false
+    /// Counts the changes of the picture (the read at bind, a save, a removal, a copy from the blob). A read that began
+    /// before a change and ends after it is stale and must not overwrite the change.
+    @ObservationIgnored private var revision = 0
     @ObservationIgnored private let directory: URL
     @ObservationIgnored private let defaults: UserDefaults
 
@@ -56,7 +61,12 @@ final class ProfileAvatarStore {
     /// Loads the state of `userID` (nil: nobody is signed in and nothing is shown). Only the file read is off the main
     /// thread; the state is set here.
     func bind(userID: String?) async {
+        // The same user again: nothing to read. A second read could end after a save and bring back the old picture.
+        if started, userID == self.userID { return }
+        started = true
         self.userID = userID
+        revision += 1
+        let mine = revision
         guard let userID else {
             image = nil
             updatedAt = 0
@@ -67,8 +77,8 @@ final class ProfileAvatarStore {
         removed = defaults.bool(forKey: Self.removedKeyPrefix + userID)
         let url = fileURL(for: userID)
         let loaded = await Task.detached { Self.readPicture(at: url) }.value
-        // The user may have changed while the file was read; only the current user's picture is shown.
-        guard self.userID == userID else { return }
+        // The user may have changed, or the picture may have been saved, while the file was read.
+        guard self.userID == userID, revision == mine else { return }
         image = loaded?.image
     }
 
@@ -85,10 +95,16 @@ final class ProfileAvatarStore {
     /// Stores a JPEG as the picture, changed at `time`. Throws when the bytes are not a picture within 64 KB.
     func setPicture(_ jpeg: Data, at time: Int64) async throws {
         guard let userID else { throw StoreError.invalidPicture }
+        let mine = revision
         guard let image = await Task.detached(operation: { Self.validate(jpeg) }).value else {
             throw StoreError.invalidPicture
         }
-        try await write(jpeg, to: fileURL(for: userID))
+        guard stillCurrent(mine, userID) else { return }
+        let url = fileURL(for: userID)
+        try await write(jpeg, to: url)
+        // A sign-out or reset (`clear`) may have run while the file was written: then the file is an orphan.
+        guard stillCurrent(mine, userID) else { return discard(url, userID: userID) }
+        revision += 1
         self.image = image
         removed = false
         record(time)
@@ -99,6 +115,7 @@ final class ProfileAvatarStore {
     func removePicture(at time: Int64) async throws {
         guard let userID else { return }
         try await removeFile(fileURL(for: userID))
+        revision += 1
         image = nil
         removed = true
         defaults.set(true, forKey: Self.removedKeyPrefix + userID)
@@ -111,13 +128,22 @@ final class ProfileAvatarStore {
     func apply(_ remote: SyncedProfile?) async throws -> Bool {
         guard let userID, let remote, remote.updatedAt > updatedAt else { return false }
         let url = fileURL(for: userID)
+        let mine = revision
         if remote.cleared {
             try await removeFile(url)
+            guard stillCurrent(mine, userID) else { return false }
+            revision += 1
             image = nil
             removed = true
         } else if let avatar = remote.avatar {
             guard let decoded = await Task.detached(operation: { Self.validate(avatar) }).value else { return false }
+            guard stillCurrent(mine, userID) else { return false }
             try await write(avatar, to: url)
+            guard stillCurrent(mine, userID) else {
+                discard(url, userID: userID)
+                return false
+            }
+            revision += 1
             image = decoded
             removed = false
         } else {
@@ -137,6 +163,7 @@ final class ProfileAvatarStore {
         }
         defaults.removeObject(forKey: Self.updatedKeyPrefix + userID)
         defaults.removeObject(forKey: Self.removedKeyPrefix + userID)
+        revision += 1
         image = nil
         updatedAt = 0
         removed = false
@@ -157,6 +184,18 @@ final class ProfileAvatarStore {
     }
 
     // MARK: - Private
+
+    /// Nothing changed the picture or the user since `revision` was `mine`.
+    private func stillCurrent(_ mine: Int, _ user: String) -> Bool {
+        revision == mine && userID == user
+    }
+
+    /// Removes a file written by a save that lost to a `clear` or a user change. Only when it is an orphan: for the same
+    /// user with a picture shown, the file belongs to the save that won.
+    private func discard(_ url: URL, userID user: String) {
+        guard userID != user || (image == nil && updatedAt == 0) else { return }
+        try? FileManager.default.removeItem(at: url)
+    }
 
     private func fileURL(for userID: String) -> URL {
         directory.appendingPathComponent(Self.fileName(userID: userID))

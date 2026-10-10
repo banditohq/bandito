@@ -17,6 +17,8 @@ struct PictureFraming: View {
     let onSave: (Data) async throws -> Void
     let onCancel: () -> Void
     var side: CGFloat = 240
+    /// Frame the profile photo in a circle.
+    var circular = false
 
     @State private var crop = AvatarCrop()
     @State private var busy = false
@@ -24,7 +26,7 @@ struct PictureFraming: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            AvatarCropFrame(image: image, crop: $crop, side: side)
+            AvatarCropFrame(image: image, crop: $crop, side: side, circular: circular)
             HStack(spacing: 8) {
                 Image(systemName: "minus.magnifyingglass")
                     .foregroundStyle(Color.Bandito.text3)
@@ -37,14 +39,15 @@ struct PictureFraming: View {
                 .font(BanditoFont.font(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
                 .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .center)
             if let error {
                 UserFacingErrorView(message: error)
             }
             HStack(spacing: 8) {
+                Spacer(minLength: 0)
                 Button(L10n.Common.cancel, action: onCancel)
                     .banditoButton(.quiet())
-                Spacer(minLength: 0)
-                Button(L10n.Avatar.savePicture) { save() }
+                Button(L10n.Common.save) { save() }
                     .banditoButton(.signal())
                     .disabled(busy)
             }
