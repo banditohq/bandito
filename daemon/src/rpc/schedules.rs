@@ -81,6 +81,7 @@ pub fn create(app: &App, mut s: NewSchedule) -> RpcResult {
         return Err(RpcError::new(INVALID_PARAMS, "prompt is empty"));
     }
     s.title = clean_title(s.title)?;
+    check_agent_interval(&s.cron, &s.tz)?;
     let next = scheduler::next_run(&s.cron, &s.tz, crate::store::now_ms())
         .map_err(|e| RpcError::new(INVALID_PARAMS, e.to_string()))?;
     let created = store.schedule_create(s, Some(next))?;
@@ -107,6 +108,7 @@ pub fn update(app: &App, id: &str, mut patch: SchedulePatch) -> RpcResult {
     let next = if timing_changed || switched_on {
         let cron = patch.cron.as_deref().unwrap_or(&cur.cron);
         let tz = patch.tz.as_deref().unwrap_or(&cur.tz);
+        check_agent_interval(cron, tz)?;
         crate::store::NextRun::Set(Some(
             scheduler::next_run(cron, tz, crate::store::now_ms())
                 .map_err(|e| RpcError::new(INVALID_PARAMS, e.to_string()))?,
@@ -198,7 +200,7 @@ fn check_agent_interval(cron: &str, tz: &str) -> Result<(), RpcError> {
         };
         return Err(RpcError::new(
             INVALID_PARAMS,
-            format!("runs every {shown}: the shortest interval for an agent is 5 minutes"),
+            format!("runs every {shown}: the shortest interval is 5 minutes"),
         ));
     }
     Ok(())
@@ -450,6 +452,44 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(listed[0]["human_ru"], "каждый день в 00:00");
+    }
+
+    #[tokio::test]
+    async fn the_owner_cannot_schedule_runs_closer_than_five_minutes_either() {
+        let (app, forge, _) = two_agents();
+        for cron in ["* * * * *", "*/2 * * * *", "0,2 * * * *"] {
+            let err = dispatch(
+                &app,
+                &Peer::Local,
+                "schedules.create",
+                json!({ "agent_id": forge, "cron": cron, "prompt": "x" }),
+            )
+            .await
+            .unwrap_err();
+            assert_eq!(err.code, INVALID_PARAMS, "{cron}");
+        }
+        let made = dispatch(
+            &app,
+            &Peer::Local,
+            "schedules.create",
+            json!({ "agent_id": forge, "cron": "*/5 * * * *", "prompt": "x" }),
+        )
+        .await
+        .unwrap();
+        let id = made["id"].as_str().unwrap();
+        let err = dispatch(
+            &app,
+            &Peer::Local,
+            "schedules.update",
+            json!({ "id": id, "cron": "* * * * *" }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, INVALID_PARAMS);
+        let kept = dispatch(&app, &Peer::Local, "schedules.list", json!({ "agent_id": forge }))
+            .await
+            .unwrap();
+        assert_eq!(kept[0]["cron"], "*/5 * * * *", "a refused update changes nothing");
     }
 
     #[tokio::test]

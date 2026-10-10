@@ -160,6 +160,22 @@
 			<string>ativo há %1$lld dias</string>
 		</dict>
 	</dict>
+	<key>integrations.status.connected</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%1$lld ferramenta</string>
+			<key>other</key>
+			<string>%1$lld ferramentas</string>
+		</dict>
+	</dict>
 	<key>memory.filesMeta</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
@@ -254,6 +270,22 @@
 			<string>≈ %1$lld minuto</string>
 			<key>other</key>
 			<string>≈ %1$lld minutos</string>
+		</dict>
+	</dict>
+	<key>schedule.step.hours</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%1$lld hora</string>
+			<key>other</key>
+			<string>%1$lld horas</string>
 		</dict>
 	</dict>
 	<key>server.cores</key>

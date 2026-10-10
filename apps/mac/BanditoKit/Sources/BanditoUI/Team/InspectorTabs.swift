@@ -14,7 +14,10 @@ struct DetailsTab: View {
     @State private var folder = ""
     @State private var instructions = ""
     @State private var schedules: [Schedule] = []
-    @State private var showingNewSchedule = false
+    @State private var integrations: [Integration] = []
+    /// The schedule sheet: a new one (`schedule` nil) or the one being edited.
+    @State private var scheduleTarget: ScheduleTarget?
+    @State private var deletingSchedule: Schedule?
     @State private var error: UserFacingMessage?
     /// Values the daemon changed on its own after the last change (for example an effort the runtime lacks).
     @State private var notes: [String] = []
@@ -160,29 +163,52 @@ struct DetailsTab: View {
                 CapabilityChips(enabled: capabilities)
             }
 
+            if !integrations.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    SectionLabel(L10n.Integrations.title)
+                    AgentIntegrationsPicker(integrations: integrations, choice: integrationChoice)
+                }
+            }
+
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     SectionLabel(L10n.Inspector.scheduleHeader)
                     Spacer()
-                    Button(L10n.Inspector.addSchedule) { showingNewSchedule = true }
+                    Button(L10n.Inspector.addSchedule) { scheduleTarget = ScheduleTarget(schedule: nil) }
                         .banditoButton(.link)
                         .font(BanditoFont.font(size: 12.5, weight: 500))
                         .foregroundStyle(BanditoPalette.peach)
                 }
                 if schedules.isEmpty {
-                    Text(L10n.Inspector.noSchedules)
-                        .font(BanditoFont.font(size: 12.5, weight: 400))
-                        .foregroundStyle(Color.Bandito.text3)
-                        .padding(.vertical, 6)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(L10n.Schedule.emptyHint)
+                            .font(BanditoFont.font(size: 12.5, weight: 400))
+                            .foregroundStyle(Color.Bandito.text3)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button(L10n.Inspector.addSchedule) { scheduleTarget = ScheduleTarget(schedule: nil) }
+                            .banditoButton(.quiet())
+                            .fixedSize()
+                    }
+                    .padding(.vertical, 6)
                 } else {
                     InspectorCard {
                         ForEach(schedules) { schedule in
-                            ScheduleRow(schedule: schedule) { enabled in
-                                change {
-                                    _ = try await server.updateSchedule(schedule.id, enabled: enabled)
-                                    await loadSchedules()
-                                }
-                            }
+                            ScheduleRow(
+                                schedule: schedule,
+                                onToggle: { enabled in
+                                    change {
+                                        _ = try await server.updateSchedule(schedule.id, enabled: enabled)
+                                        await loadSchedules()
+                                    }
+                                },
+                                onRunNow: {
+                                    change {
+                                        try await server.runScheduleNow(schedule.id)
+                                        await loadSchedules()
+                                    }
+                                },
+                                onEdit: { scheduleTarget = ScheduleTarget(schedule: schedule) },
+                                onDelete: { deletingSchedule = schedule })
                         }
                     }
                 }
@@ -246,9 +272,26 @@ struct DetailsTab: View {
             folder = agent.cwd
             instructions = agent.systemPrompt ?? ""
             await loadSchedules()
+            await loadIntegrations()
         }
-        .banditoSheet(isPresented: $showingNewSchedule, onDismiss: { Task { await loadSchedules() } }) {
-            ScheduleEditor(server: server, agentID: agent.id)
+        .banditoSheet(item: $scheduleTarget, onDismiss: { Task { await loadSchedules() } }) { target in
+            ScheduleEditor(server: server, agentID: agent.id, existing: target.schedule)
+        }
+        .confirmationDialog(
+            L10n.Schedule.deleteTitle(name: deletingSchedule.map(Self.scheduleName) ?? ""),
+            isPresented: Binding(get: { deletingSchedule != nil }, set: { if !$0 { deletingSchedule = nil } }),
+            titleVisibility: .visible,
+            presenting: deletingSchedule
+        ) { schedule in
+            Button(L10n.Common.delete, role: .destructive) {
+                change {
+                    try await server.deleteSchedule(schedule.id)
+                    await loadSchedules()
+                }
+            }
+            Button(L10n.Common.cancel, role: .cancel) {}
+        } message: { _ in
+            Text(L10n.Schedule.deleteMessage)
         }
     }
 
@@ -301,6 +344,33 @@ struct DetailsTab: View {
 
     private func loadSchedules() async {
         schedules = (try? await server.schedules(agentId: agent.id)) ?? []
+    }
+
+    /// The integrations of the server. A daemon without them shows no section.
+    private func loadIntegrations() async {
+        guard server.supports("integrations") else { return }
+        integrations = (try? await server.integrations()) ?? []
+    }
+
+    /// The integrations the agent uses. Choosing one sends the whole choice as the agent's list.
+    private var integrationChoice: Binding<IntegrationChoice> {
+        Binding(
+            get: { IntegrationChoice.from(agent.integrations) },
+            set: { next in
+                // Only ids the server still has are sent (an integration removed meanwhile is not offered).
+                let existing = Set(integrations.map(\.id))
+                change {
+                    _ = try await server.updateAgent(
+                        agent.id, patch: AgentPatch(integrations: next.limited(to: existing).patchChange))
+                }
+            })
+    }
+
+    /// A schedule's name in a sentence: its title, else its words, else its cron.
+    static func scheduleName(_ schedule: Schedule) -> String {
+        schedule.title
+            ?? schedule.humanText(languageCode: ModelDescription.currentLanguageCode)
+            ?? schedule.cron
     }
 
     /// Runs a change and shows its failure in the tab.
@@ -359,119 +429,6 @@ struct DetailsTab: View {
             modelChangedFrom: agent.model ?? "", to: text, stored: agent.effort,
             runtime: agent.runtime, lists: server.runtimeModels)
         apply(patch)
-    }
-}
-
-private struct ScheduleRow: View {
-    var schedule: Schedule
-    var onToggle: (Bool) -> Void
-    @State private var enabled: Bool
-    
-    init(schedule: Schedule, onToggle: @escaping (Bool) -> Void) {
-        self.schedule = schedule
-        self.onToggle = onToggle
-        _enabled = State(initialValue: schedule.enabled)
-    }
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "clock")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(BanditoPalette.peach)
-                .frame(width: 32, height: 32)
-                .background(BanditoPalette.peach.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(schedule.cron)
-                    .font(BanditoFont.font(size: 12.5, weight: 500, mono: true))
-                    .foregroundStyle(Color.Bandito.text)
-                Text(schedule.prompt)
-                    .font(BanditoFont.font(size: 12, weight: 400))
-                    .foregroundStyle(Color.Bandito.text3)
-                    .lineLimit(1)
-                if let next = schedule.nextRunAt {
-                    Text(L10n.Inspector.nextRun(time: TeamTime.label(ms: next)))
-                        .font(BanditoFont.font(size: 11, weight: 400))
-                        .foregroundStyle(Color.Bandito.text3)
-                }
-            }
-            Spacer(minLength: 8)
-            Toggle("", isOn: $enabled)
-                .toggleStyle(.switch)
-                .labelsHidden()
-                .onChange(of: enabled) { _, value in
-                    if value != schedule.enabled { onToggle(value) }
-                }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
-    }
-}
-
-/// New schedule: a cron expression and the prompt the agent receives on each run.
-private struct ScheduleEditor: View {
-    var server: ServerModel
-    var agentID: String
-
-    @Environment(\.dismiss) private var dismiss
-    @State private var cron = ""
-    @State private var prompt = ""
-    @State private var error: UserFacingMessage?
-    @State private var busy = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text(L10n.Inspector.addSchedule)
-                .font(BanditoFont.font(size: 16, weight: 650))
-                .foregroundStyle(Color.Bandito.text)
-            VStack(alignment: .leading, spacing: 6) {
-                SectionLabel(L10n.Inspector.cronLabel)
-                TextField("0 9 * * 1-5", text: $cron)
-                    .textFieldStyle(.roundedBorder)
-                    .font(BanditoFont.font(size: 13, weight: 400, mono: true))
-            }
-            VStack(alignment: .leading, spacing: 6) {
-                SectionLabel(L10n.Inspector.promptLabel)
-                // Vertical TextField for the same reason as the instructions above (inside a ScrollView).
-                TextField(L10n.Inspector.promptPlaceholder, text: $prompt, axis: .vertical)
-                    .accessibilityLabel(L10n.Inspector.promptLabel)
-                    .textFieldStyle(.plain)
-                    .font(BanditoFont.font(size: 13, weight: 400))
-                    .lineLimit(3...10)
-                    .padding(8)
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.Bandito.line, lineWidth: 1))
-            }
-            if let error {
-                InspectorError(message: error)
-            }
-            HStack {
-                Spacer()
-                Button(L10n.Common.cancel) { dismiss() }
-                    .banditoButton(.quiet())
-                Button(L10n.Inspector.addSchedule) { add() }
-                    .banditoButton(.signal())
-                    .disabled(busy || cron.trimmingCharacters(in: .whitespaces).isEmpty
-                        || prompt.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-        }
-        .padding(20)
-        .frame(width: 420)
-    }
-
-    private func add() {
-        busy = true
-        error = nil
-        Task {
-            do {
-                _ = try await server.createSchedule(
-                    agentId: agentID, cron: cron.trimmingCharacters(in: .whitespaces),
-                    tz: TimeZone.current.identifier, prompt: prompt.trimmingCharacters(in: .whitespacesAndNewlines))
-                dismiss()
-            } catch {
-                self.error = UserFacingError.message(for: error)
-                busy = false
-            }
-        }
     }
 }
 

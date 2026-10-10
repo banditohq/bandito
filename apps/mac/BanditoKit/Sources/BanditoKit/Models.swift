@@ -148,6 +148,8 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
     public var avatar: AvatarSpec?
     /// What the agent may do: `terminal`, `files`, `browser`, `team`, `screen`. `nil` = everything (see `AgentCapability`).
     public var capabilities: [String]?
+    /// The integrations (ids) the agent may use; `nil` = every enabled one (see `Integration`).
+    public var integrations: [String]?
     /// The newest user or assistant message; `nil` when there is none, or when the daemon predates the field.
     public var lastMessage: LastMessage?
     /// The status from the agent's newest `agent.status` event; `nil` before any, or when the daemon predates the field.
@@ -181,10 +183,12 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
         reportsPendingApprovalIds: Bool = false,
         reportsLastMessage: Bool = true,
         avatar: AvatarSpec? = nil,
-        capabilities: [String]? = nil
+        capabilities: [String]? = nil,
+        integrations: [String]? = nil
     ) {
         self.avatar = avatar
         self.capabilities = capabilities
+        self.integrations = integrations
         self.workspaceId = workspaceId
         self.id = id
         self.name = name
@@ -246,6 +250,7 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
         reportsLastMessage = c.contains(.lastMessage)
         avatar = try c.decodeIfPresent(AvatarSpec.self, forKey: .avatar)
         capabilities = try c.decodeIfPresent([String].self, forKey: .capabilities)
+        integrations = try c.decodeIfPresent([String].self, forKey: .integrations)
         status = try c.decodeIfPresent(AgentStatus.self, forKey: .status)
         pendingApprovals = try c.decodeIfPresent(Int.self, forKey: .pendingApprovals) ?? 0
         pendingApprovalIds = Set(try c.decodeIfPresent([String].self, forKey: .pendingApprovalIds) ?? [])
@@ -273,16 +278,19 @@ public struct NewAgent: Codable, Sendable {
     public var avatar: AvatarSpec?
     /// Sent only when set (see `Agent.capabilities`).
     public var capabilities: [String]?
+    /// Sent only when set: the integration ids the agent may use. Missing = every enabled one (see `Agent.integrations`).
+    public var integrations: [String]?
 
     public init(
         name: String, role: String = "", runtime: RuntimeKind, model: String? = nil, cwd: String,
         approvalMode: ApprovalMode = .risky, systemPrompt: String? = nil,
         effort: Effort? = nil, memoryMode: MemoryMode = .smart, contextBudget: Int? = nil,
         fallbackRuntime: RuntimeKind? = nil, fallbackModel: String? = nil, workspaceId: String? = nil,
-        avatar: AvatarSpec? = nil, capabilities: [String]? = nil
+        avatar: AvatarSpec? = nil, capabilities: [String]? = nil, integrations: [String]? = nil
     ) {
         self.avatar = avatar
         self.capabilities = capabilities
+        self.integrations = integrations
         self.workspaceId = workspaceId
         self.fallbackRuntime = fallbackRuntime
         self.fallbackModel = fallbackModel
@@ -574,6 +582,16 @@ public struct Schedule: Codable, Sendable, Identifiable, Hashable {
     public var lastRunAt: Int64?
     public var nextRunAt: Int64?
     public var createdAt: Int64
+    /// A short name, at most 80 characters; `nil` when none.
+    public var title: String?
+    /// The cron in words, in English and Russian, as the daemon writes them (`every 15 minutes`, `каждые 15 минут`).
+    public var humanEn: String?
+    public var humanRu: String?
+
+    /// The words for the app's language; the English ones for any language but Russian.
+    public func humanText(languageCode: String) -> String? {
+        languageCode.lowercased().hasPrefix("ru") ? humanRu : humanEn
+    }
 }
 
 public struct RuntimeStatus: Codable, Sendable, Hashable {

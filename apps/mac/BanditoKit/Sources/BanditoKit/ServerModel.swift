@@ -922,20 +922,25 @@ extension ServerModel {
         return try await rpc().call("schedules.list", P(agentId: agentId), as: [Schedule].self)
     }
 
+    /// Creates an owner schedule. `cron` is the expression in the server's zone `tz`; `title` is optional.
     @discardableResult
-    public func createSchedule(agentId: String, cron: String, tz: String, prompt: String) async throws -> Schedule {
-        struct P: Encodable { var agentId: String; var cron: String; var tz: String; var prompt: String }
+    public func createSchedule(
+        agentId: String, cron: String, tz: String, prompt: String, title: String? = nil
+    ) async throws -> Schedule {
+        struct P: Encodable { var agentId: String; var cron: String; var tz: String; var prompt: String; var title: String? }
         return try await rpc().call(
-            "schedules.create", P(agentId: agentId, cron: cron, tz: tz, prompt: prompt), as: Schedule.self)
+            "schedules.create", P(agentId: agentId, cron: cron, tz: tz, prompt: prompt, title: title), as: Schedule.self)
     }
 
+    /// Changes the fields that are set. `title` `.clear` sends `null`, which removes the title.
     @discardableResult
     public func updateSchedule(
-        _ id: String, cron: String? = nil, tz: String? = nil, prompt: String? = nil, enabled: Bool? = nil
+        _ id: String, cron: String? = nil, tz: String? = nil, prompt: String? = nil, enabled: Bool? = nil,
+        title: FieldChange<String>? = nil
     ) async throws -> Schedule {
-        struct P: Encodable { var id: String; var cron: String?; var tz: String?; var prompt: String?; var enabled: Bool? }
-        return try await rpc().call(
-            "schedules.update", P(id: id, cron: cron, tz: tz, prompt: prompt, enabled: enabled), as: Schedule.self)
+        let params = ScheduleUpdateParams(
+            id: id, cron: cron, tz: tz, prompt: prompt, enabled: enabled, title: title)
+        return try await rpc().call("schedules.update", params, as: Schedule.self)
     }
 
     public func deleteSchedule(_ id: String) async throws {
@@ -1061,5 +1066,31 @@ struct ListGeneration: Sendable, Equatable {
 
     func accepts(_ generation: ListGeneration) -> Bool {
         generation == self
+    }
+}
+
+/// `schedules.update` params: the id and the fields that are set. `title` `.clear` is sent as `null`.
+struct ScheduleUpdateParams: Encodable, Sendable {
+    var id: String
+    var cron: String?
+    var tz: String?
+    var prompt: String?
+    var enabled: Bool?
+    var title: FieldChange<String>?
+
+    enum Key: String, CodingKey { case id, cron, tz, prompt, enabled, title }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: Key.self)
+        try c.encode(id, forKey: .id)
+        try c.encodeIfPresent(cron, forKey: .cron)
+        try c.encodeIfPresent(tz, forKey: .tz)
+        try c.encodeIfPresent(prompt, forKey: .prompt)
+        try c.encodeIfPresent(enabled, forKey: .enabled)
+        switch title {
+        case nil: break
+        case .set(let value)?: try c.encode(value, forKey: .title)
+        case .clear?: try c.encodeNil(forKey: .title)
+        }
     }
 }

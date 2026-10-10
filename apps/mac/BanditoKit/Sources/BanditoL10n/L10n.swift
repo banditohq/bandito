@@ -890,8 +890,6 @@ public enum L10n {
         public static var loggedIn: String { L10n.tr("inspector.loggedIn") }
         public static var loggedOut: String { L10n.tr("inspector.loggedOut") }
         public static var model: String { L10n.tr("inspector.model") }
-        public static func nextRun(time: String) -> String { L10n.tr("inspector.nextRun", time) }
-        public static var noSchedules: String { L10n.tr("inspector.noSchedules") }
         public static var notInstalled: String { L10n.tr("inspector.notInstalled") }
         public static var placeBrowser: String { L10n.tr("inspector.placeBrowser") }
         public static var placeFolder: String { L10n.tr("inspector.placeFolder") }
@@ -905,7 +903,6 @@ public enum L10n {
         public static var runNow: String { L10n.tr("inspector.runNow") }
         public static var runsOn: String { L10n.tr("inspector.runsOn") }
         public static var scheduleHeader: String { L10n.tr("inspector.scheduleHeader") }
-        public static func scheduleSummary(time: String, when: String) -> String { L10n.tr("inspector.scheduleSummary", time, when) }
         public static var schedules: String { L10n.tr("inspector.schedules") }
         public static var server: String { L10n.tr("inspector.server") }
         public static func serverInfo(os: String, version: String, uptime: String) -> String { L10n.tr("inspector.serverInfo", os, version, uptime) }
@@ -926,6 +923,93 @@ public enum L10n {
         public enum Window {
             public static var fiveHour: String { L10n.tr("inspector.window.fiveHour") }
             public static var sevenDay: String { L10n.tr("inspector.window.sevenDay") }
+        }
+    }
+
+    public enum Integrations {
+        public static var addOwn: String { L10n.tr("integrations.addOwn") }
+        public static var catalog: String { L10n.tr("integrations.catalog") }
+        public static var check: String { L10n.tr("integrations.check") }
+        public static var checking: String { L10n.tr("integrations.checking") }
+        public static var connect: String { L10n.tr("integrations.connect") }
+        public static var connected: String { L10n.tr("integrations.connected") }
+        public static var edit: String { L10n.tr("integrations.edit") }
+        public static var empty: String { L10n.tr("integrations.empty") }
+        public static var hint: String { L10n.tr("integrations.hint") }
+        public static var more: String { L10n.tr("integrations.more") }
+        public static var remove: String { L10n.tr("integrations.remove") }
+        public static var removeMessage: String { L10n.tr("integrations.removeMessage") }
+        public static func removeTitle(name: String) -> String { L10n.tr("integrations.removeTitle", name) }
+        public static var title: String { L10n.tr("integrations.title") }
+        public static var toggleHelp: String { L10n.tr("integrations.toggleHelp") }
+        public static func toolsFound(names: String) -> String { L10n.tr("integrations.toolsFound", names) }
+
+        public enum Agent {
+            public static var all: String { L10n.tr("integrations.agent.all") }
+            public static var hint: String { L10n.tr("integrations.agent.hint") }
+        }
+
+        public enum Failure {
+            public static var missingProgram: String { L10n.tr("integrations.failure.missingProgram") }
+            public static var other: String { L10n.tr("integrations.failure.other") }
+            public static var rejected: String { L10n.tr("integrations.failure.rejected") }
+            public static var timeout: String { L10n.tr("integrations.failure.timeout") }
+            public static var unreachable: String { L10n.tr("integrations.failure.unreachable") }
+        }
+
+        public enum Kind {
+            public static var http: String { L10n.tr("integrations.kind.http") }
+            public static var stdio: String { L10n.tr("integrations.kind.stdio") }
+        }
+
+        public enum Problem {
+            public static var commandEmpty: String { L10n.tr("integrations.problem.commandEmpty") }
+            public static var keyEmpty: String { L10n.tr("integrations.problem.keyEmpty") }
+            public static func keyInvalid(key: String) -> String { L10n.tr("integrations.problem.keyInvalid", key) }
+            public static var nameEmpty: String { L10n.tr("integrations.problem.nameEmpty") }
+            public static var nameInvalid: String { L10n.tr("integrations.problem.nameInvalid") }
+            public static var nameTaken: String { L10n.tr("integrations.problem.nameTaken") }
+            public static func secretMissing(key: String) -> String { L10n.tr("integrations.problem.secretMissing", key) }
+            public static func secretNameInvalid(name: String) -> String { L10n.tr("integrations.problem.secretNameInvalid", name) }
+            public static var urlInvalid: String { L10n.tr("integrations.problem.urlInvalid") }
+            public static func valueMissing(key: String) -> String { L10n.tr("integrations.problem.valueMissing", key) }
+        }
+
+        public enum Settings {
+            public static var hint: String { L10n.tr("integrations.settings.hint") }
+            public static var `open`: String { L10n.tr("integrations.settings.open") }
+        }
+
+        public enum Sheet {
+            public static var addLine: String { L10n.tr("integrations.sheet.addLine") }
+            public static var addTitle: String { L10n.tr("integrations.sheet.addTitle") }
+            public static var args: String { L10n.tr("integrations.sheet.args") }
+            public static var argsHint: String { L10n.tr("integrations.sheet.argsHint") }
+            public static var command: String { L10n.tr("integrations.sheet.command") }
+            public static var composioHint: String { L10n.tr("integrations.sheet.composioHint") }
+            public static func connectTitle(name: String) -> String { L10n.tr("integrations.sheet.connectTitle", name) }
+            public static var docs: String { L10n.tr("integrations.sheet.docs") }
+            public static func editTitle(name: String) -> String { L10n.tr("integrations.sheet.editTitle", name) }
+            public static var headers: String { L10n.tr("integrations.sheet.headers") }
+            public static var keyPlaceholder: String { L10n.tr("integrations.sheet.keyPlaceholder") }
+            public static var kindLabel: String { L10n.tr("integrations.sheet.kindLabel") }
+            public static var name: String { L10n.tr("integrations.sheet.name") }
+            public static var nameHint: String { L10n.tr("integrations.sheet.nameHint") }
+            public static var secret: String { L10n.tr("integrations.sheet.secret") }
+            public static var secretHint: String { L10n.tr("integrations.sheet.secretHint") }
+            public static var secretNotSaved: String { L10n.tr("integrations.sheet.secretNotSaved") }
+            public static func storedSecret(name: String) -> String { L10n.tr("integrations.sheet.storedSecret", name) }
+            public static var url: String { L10n.tr("integrations.sheet.url") }
+            public static var urlHint: String { L10n.tr("integrations.sheet.urlHint") }
+            public static var valuePlaceholder: String { L10n.tr("integrations.sheet.valuePlaceholder") }
+            public static var variables: String { L10n.tr("integrations.sheet.variables") }
+        }
+
+        public enum Status {
+            public static func connected(count: Int) -> String { L10n.tr("integrations.status.connected", count) }
+            public static var disabled: String { L10n.tr("integrations.status.disabled") }
+            public static var failed: String { L10n.tr("integrations.status.failed") }
+            public static var unchecked: String { L10n.tr("integrations.status.unchecked") }
         }
     }
 
@@ -1113,6 +1197,7 @@ public enum L10n {
         public static var screen: String { L10n.tr("mode.screen") }
         public static var server: String { L10n.tr("mode.server") }
         public static var serverDevices: String { L10n.tr("mode.serverDevices") }
+        public static var serverIntegrations: String { L10n.tr("mode.serverIntegrations") }
         public static var serverJournal: String { L10n.tr("mode.serverJournal") }
         public static var serverOverview: String { L10n.tr("mode.serverOverview") }
         public static var serverPorts: String { L10n.tr("mode.serverPorts") }
@@ -1583,6 +1668,41 @@ public enum L10n {
         public static var claude: String { L10n.tr("runtime.claude") }
         public static var codex: String { L10n.tr("runtime.codex") }
         public static var grok: String { L10n.tr("runtime.grok") }
+    }
+
+    public enum Schedule {
+        public static var atLabel: String { L10n.tr("schedule.atLabel") }
+        public static var cronHint: String { L10n.tr("schedule.cronHint") }
+        public static var daysLabel: String { L10n.tr("schedule.daysLabel") }
+        public static var deleteMessage: String { L10n.tr("schedule.deleteMessage") }
+        public static func deleteTitle(name: String) -> String { L10n.tr("schedule.deleteTitle", name) }
+        public static var edit: String { L10n.tr("schedule.edit") }
+        public static var editTitle: String { L10n.tr("schedule.editTitle") }
+        public static var emptyHint: String { L10n.tr("schedule.emptyHint") }
+        public static var incomplete: String { L10n.tr("schedule.incomplete") }
+        public static var intervalLabel: String { L10n.tr("schedule.intervalLabel") }
+        public static var more: String { L10n.tr("schedule.more") }
+        public static var name: String { L10n.tr("schedule.name") }
+        public static var namePlaceholder: String { L10n.tr("schedule.namePlaceholder") }
+        public static var newTitle: String { L10n.tr("schedule.newTitle") }
+        public static func nextLater(when: String) -> String { L10n.tr("schedule.nextLater", when) }
+        public static func nextToday(time: String) -> String { L10n.tr("schedule.nextToday", time) }
+        public static var `repeat`: String { L10n.tr("schedule.repeat") }
+        public static var titleHint: String { L10n.tr("schedule.titleHint") }
+        public static var tooOften: String { L10n.tr("schedule.tooOften") }
+
+        public enum Rhythm {
+            public static var custom: String { L10n.tr("schedule.rhythm.custom") }
+            public static var daily: String { L10n.tr("schedule.rhythm.daily") }
+            public static var days: String { L10n.tr("schedule.rhythm.days") }
+            public static var every: String { L10n.tr("schedule.rhythm.every") }
+            public static var weekdays: String { L10n.tr("schedule.rhythm.weekdays") }
+        }
+
+        public enum Step {
+            public static func hours(count: Int) -> String { L10n.tr("schedule.step.hours", count) }
+            public static func minutes(count: Int) -> String { L10n.tr("schedule.step.minutes", count) }
+        }
     }
 
     public enum Screen {

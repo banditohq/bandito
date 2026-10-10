@@ -202,6 +202,26 @@
 			<string>работает %1$lld дня</string>
 		</dict>
 	</dict>
+	<key>integrations.status.connected</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%1$lld инструмента</string>
+			<key>many</key>
+			<string>%1$lld инструментов</string>
+			<key>one</key>
+			<string>%1$lld инструмент</string>
+			<key>other</key>
+			<string>%1$lld инструмента</string>
+		</dict>
+	</dict>
 	<key>memory.filesMeta</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
@@ -320,6 +340,26 @@
 			<string>≈ %1$lld минута</string>
 			<key>other</key>
 			<string>≈ %1$lld минуты</string>
+		</dict>
+	</dict>
+	<key>schedule.step.hours</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%1$lld часа</string>
+			<key>many</key>
+			<string>%1$lld часов</string>
+			<key>one</key>
+			<string>%1$lld час</string>
+			<key>other</key>
+			<string>%1$lld часа</string>
 		</dict>
 	</dict>
 	<key>server.cores</key>

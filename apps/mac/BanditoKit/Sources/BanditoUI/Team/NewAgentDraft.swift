@@ -66,6 +66,8 @@ public struct NewAgentDraft: Equatable, Sendable {
     /// The "What it may do" chips. Sent with `agents.create` as `capabilities`; a daemon without the field ignores it,
     /// so nothing is enforced until the daemon has it.
     public var capabilities: Set<AgentCapability> = AgentCapability.allOn
+    /// The integrations the agent may use. `.all` (the default) is sent as no list, which means every enabled one.
+    public var integrations: IntegrationChoice = .all
 
     public init() {}
 
@@ -182,7 +184,8 @@ public struct NewAgentDraft: Equatable, Sendable {
             fallbackModel: trimmed(fallbackModel).isEmpty ? nil : trimmed(fallbackModel),
             workspaceId: workspace,
             avatar: AvatarSpec(color: customHex ?? color.rawValue, face: face.rawValue, emoji: emoji),
-            capabilities: AgentCapability.wire(capabilities))
+            capabilities: AgentCapability.wire(capabilities),
+            integrations: integrations.wireIDs)
     }
 
     /// Model names offered in the menu. Other runtimes take free text only.

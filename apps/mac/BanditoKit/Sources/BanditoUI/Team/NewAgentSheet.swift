@@ -21,6 +21,8 @@ struct NewAgentSheet: View {
     @State private var editingAvatar = false
     /// The server's workplaces, loaded when the sheet opens: what the workplace section can offer.
     @State private var workplaces: WorkspacesModel?
+    /// The server's integrations, for the "Integrations" choice. Empty when the server has none.
+    @State private var integrations: [Integration] = []
     /// True once the `runtimes.status` request has finished, with or without an answer.
     @State private var runtimesAnswered = false
     /// The workplace made by an earlier attempt to create the agent, reused when the attempt is repeated.
@@ -99,6 +101,9 @@ struct NewAgentSheet: View {
         }
         .task {
             guard let server else { return }
+            if server.supports("integrations") {
+                integrations = (try? await server.integrations()) ?? []
+            }
             let loaded = WorkspacesModel(server: server)
             workplaces = loaded
             // The model lists are asked in the background; until they come the model field says "loading".
@@ -285,6 +290,12 @@ struct NewAgentSheet: View {
 
             labeled(L10n.Capability.title) {
                 CapabilityChips(enabled: $draft.capabilities)
+            }
+
+            if !integrations.isEmpty {
+                labeled(L10n.Integrations.title) {
+                    AgentIntegrationsPicker(integrations: integrations, choice: $draft.integrations)
+                }
             }
         }
         // A model that takes fewer levels (or a list that arrives late) moves the effort to the nearest level it takes.
@@ -770,6 +781,8 @@ struct NewAgentSheet: View {
                     agent = made
                 } else {
                     let workspaceID = try await workplaceForCreate(on: server)
+                    // Only integrations the server still has are sent with the new agent.
+                    draft.integrations = draft.integrations.limited(to: Set(integrations.map(\.id)))
                     agent = try await server.createAgent(
                         draft.makeNewAgent(
                             workspaceID: workspaceID, existingNames: agentNames, lists: server.runtimeModels))
