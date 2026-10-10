@@ -538,6 +538,25 @@ The page of a connected service has two more sections. **Journal** (feature `int
 
 The create sheet sends `schedules` always (the ticked indexes, possibly none) and the runtime the person picked among those installed and signed in on the server. It asks for the name with the agent rules and the daemon's 32 characters. When the reply has an `agent`, the app opens its chat and puts the template's `starter` into the input field without sending it; `errors` go into a notice over the window. The skill install sheet offers the server (`scope: user`) or one agent (`scope: project`); a place that is installed or in conflict is not offered, and a conflicting folder is never overwritten.
 
+## Agent bundles
+
+A bundle is a named set of 3–5 templates that the owner makes in one go (a team of bots). The catalog is `daemon/src/agent_bundles.json`: six entries, built into the binary and read by `daemon/src/agent_bundles.rs`, whose test holds every entry to the rules (strict parse, unique kebab-case ids, every template id exists in `agent_templates.json`, each listed once, English, Russian and the seven other languages filled, names short enough for a number suffix). An entry has `id`, `name_en`/`name_ru`, `description_en`/`description_ru`, `l10n` (`{name, description}` for the seven other languages), `icon` (an SF Symbol), `accent` (`#RRGGBB`), `templates` (ids) and `category` (the template categories). Code: `daemon/src/rpc/templates.rs`. Feature string: `"agent_bundles"`.
+
+**`agents.bundles`** answers the catalog as written: an array of the six entries.
+
+**`agents.create_bundle`** takes `bundle_id`, `language` (required), `runtime?` (passed to every template; default: each template's) and `workspace_id?`. An unknown bundle or an empty `language` is `INVALID_PARAMS`, and nothing is created. Otherwise the templates are made in the bundle's order, each by the code of `agents.create_from_template` with:
+- `name`: the template's name in `language` (the same language rule as the role: `ru`, `en`, or `l10n[tag].name`, English when that is empty), and when another agent already has that name, compared without case and outer spaces, the first free `<name> 2`, `<name> 3`… (agent names are not unique in the store);
+- `schedules`: absent, so the ones with `enabled_by_default`;
+- `model`: none.
+
+One template that fails does not stop the others. Its entry carries `error`. A step that fails after the agent exists (a skill, a schedule) leaves the agent in place, and its entry has both `agent` and `error`.
+
+The reply is `{agents: [{template_id, agent?, error?}], missing_integrations: [{id, required}]}`. `agents` keeps the bundle's order. `missing_integrations` lists each integration once, across all the templates, with `required` true when any template requires it (the same rule as `agents.create_from_template`).
+
+Rights: the owner's CLI and paired devices. Agents may not call either method (not in `AGENT_METHODS`; both are in the owner-only list of the trust tests in `rpc/mod.rs`). In safe mode they are refused like every other write.
+
+Known catalog issue: the `translator` names in `ja` and `ko` contain a middle dot, which the agent-name rule refuses. A bundle in those languages reports that template as an error. The test `bundle_names_fit_the_agent_name_rule_except_two_known_catalog_names` lists the pair and must change with the catalog.
+
 ## Logs
 
 `daemon.logs {lines?, level?}` returns the newest lines of the daemon's own log, for the app's journal view. `lines` is 1–2000 (default 500); `level` is the lowest level to show: `info` (default; debug and trace lines are left out), `warn` or `error`. The reply is `{source, lines}`, where `source` is `journald` or `file`.
