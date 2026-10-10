@@ -526,6 +526,8 @@ Nothing is rolled back once the agent exists: a failed step is listed in `errors
 
 Rights: the owner's CLI and paired devices. Agents (crew MCP) may not call either method: they are not in `AGENT_METHODS`, and both are in the owner-only list of the trust tests (`rpc/mod.rs`). In safe mode they are refused like every other write.
 
+Concurrency: `agents.create_from_template` and each template of `agents.create_bundle` run under one lock (`CREATE_LOCK` in `rpc/templates.rs`), held from the pick of the bot's name to the creation of its agent. Two requests at once therefore never pick the same " 2" name. The lock is never taken inside `create_from`.
+
 ### Marketplace pages
 
 The Mac app's Marketplace has three pages behind one switch: Services (`integrations`), Bots (`agent_templates`) and Skills (`skills`). A page shows only when `daemon.info.features` has its feature; the last page is kept in the app's defaults (`market.tab.v1`). Each page has its own sidebar rows and its own search (the name in the app's language and in English, and the description).
@@ -544,7 +546,7 @@ A bundle is a named set of 3–5 templates that the owner makes in one go (a tea
 
 **`agents.bundles`** answers the catalog as written: an array of the six entries.
 
-**`agents.create_bundle`** takes `bundle_id`, `language` (required), `runtime?` (passed to every template; default: each template's) and `workspace_id?`. An unknown bundle or an empty `language` is `INVALID_PARAMS`, and nothing is created. Otherwise the templates are made in the bundle's order, each by the code of `agents.create_from_template` with:
+**`agents.create_bundle`** takes `bundle_id`, `language` (required), `runtime?` (passed to every template; default: each template's) `workspace_id?` and `templates?` (a list of template ids of the bundle: absent makes all of them; given, makes only those, in the bundle's order, which is how a retry makes the ones still missing). An unknown bundle, an empty `language`, an empty `templates` list or a template id the bundle does not list is `INVALID_PARAMS`, and nothing is created. Otherwise the templates are made in the bundle's order, each by the code of `agents.create_from_template` with:
 - `name`: the template's name in `language` (the same language rule as the role: `ru`, `en`, or `l10n[tag].name`, English when that is empty), and when another agent already has that name, compared without case and outer spaces, the first free `<name> 2`, `<name> 3`… (agent names are not unique in the store);
 - `schedules`: absent, so the ones with `enabled_by_default`;
 - `model`: none.

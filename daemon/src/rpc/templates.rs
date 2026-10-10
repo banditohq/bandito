@@ -19,6 +19,11 @@ use std::path::PathBuf;
 /// The integrations catalog, read for the url of an entry: a connected integration may match an entry by url.
 const INTEGRATIONS_JSON: &str = include_str!("../integrations_catalog.json");
 
+/// Serializes the making of agents from templates and bundles. A name is picked (`free_name`) and the agent made in
+/// the same step: without the lock, two requests could pick the same free name. Held around one template's name and
+/// creation at a time, and never taken inside `create_from`, which the holders call.
+static CREATE_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 /// What `agents.create_from_template` takes. `runtime` defaults to the template's, `model` to none.
 #[derive(Deserialize)]
 struct CreateFromTemplate {
@@ -38,7 +43,8 @@ struct CreateFromTemplate {
 }
 
 /// What `agents.create_bundle` takes. The bots keep their templates' schedules (`enabled_by_default`) and their models
-/// (none).
+/// (none). `templates` absent makes every template of the bundle; present, it makes only those (a retry after a failed
+/// request makes the ones that are still missing).
 #[derive(Deserialize)]
 struct CreateBundle {
     bundle_id: String,
@@ -47,6 +53,8 @@ struct CreateBundle {
     runtime: Option<String>,
     #[serde(default)]
     workspace_id: Option<String>,
+    #[serde(default)]
+    templates: Option<Vec<String>>,
 }
 
 /// Answers the template and bundle methods. Unknown names get METHOD_NOT_FOUND.
@@ -63,6 +71,7 @@ pub(super) async fn dispatch(app: &App, method: &str, p: Value) -> RpcResult {
             let template = agent_templates::find(&req.template_id)
                 .map_err(|e| RpcError::new(SERVER_ERROR, format!("agent templates: {e}")))?
                 .ok_or_else(|| RpcError::new(INVALID_PARAMS, format!("no template {}", req.template_id)))?;
+            let _creating = CREATE_LOCK.lock().await;
             create_from(app, &template, req).await
         }
         "agents.bundles" => {
@@ -86,6 +95,18 @@ pub(super) async fn dispatch(app: &App, method: &str, p: Value) -> RpcResult {
                     .ok_or_else(|| RpcError::new(SERVER_ERROR, format!("bundle {} has no template {id}", bundle.id)))?;
                 templates.push(template);
             }
+            if let Some(wanted) = &req.templates {
+                if wanted.is_empty() {
+                    return Err(RpcError::new(INVALID_PARAMS, "templates is empty"));
+                }
+                if let Some(id) = wanted.iter().find(|id| !bundle.templates.contains(id)) {
+                    return Err(RpcError::new(
+                        INVALID_PARAMS,
+                        format!("bundle {} has no template {id}", bundle.id),
+                    ));
+                }
+                templates.retain(|t| wanted.contains(&t.id));
+            }
             create_bundle(app, &templates, &req).await
         }
         _ => Err(RpcError::new(METHOD_NOT_FOUND, format!("unknown method {method}"))),
@@ -101,6 +122,8 @@ async fn create_bundle(app: &App, templates: &[AgentTemplate], req: &CreateBundl
     let mut agents: Vec<Value> = Vec::with_capacity(templates.len());
     let mut missing: Vec<(String, bool)> = Vec::new();
     for t in templates {
+        // Held from the name's pick to the agent's creation, so no other request picks the same name meanwhile.
+        let _creating = CREATE_LOCK.lock().await;
         let language = resolve_language(t, &req.language);
         let name = match free_name(app, &template_name(t, &language)) {
             Ok(name) => name,
@@ -951,6 +974,7 @@ mod tests {
             language: "en".into(),
             runtime: None,
             workspace_id: None,
+            templates: None,
         };
         let reply = create_bundle(&app, &templates, &req).await.unwrap();
 
@@ -1043,6 +1067,92 @@ mod tests {
                     );
                 }
             }
+        }
+    }
+
+    #[tokio::test]
+    async fn a_bundle_makes_only_the_templates_it_is_asked_for() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, store) = app(dir.path());
+        let reply = call(
+            &app,
+            "agents.create_bundle",
+            json!({ "bundle_id": "startup-team", "language": "en", "templates": ["docs-writer"] }),
+        )
+        .await
+        .unwrap();
+        let entries = reply["agents"].as_array().unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0]["template_id"], "docs-writer");
+        assert_eq!(store.agent_list().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn a_template_outside_the_bundle_or_an_empty_list_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, store) = app(dir.path());
+        for list in [json!(["morning-digest"]), json!([])] {
+            let p = json!({ "bundle_id": "startup-team", "language": "en", "templates": list });
+            let err = call(&app, "agents.create_bundle", p).await.unwrap_err();
+            assert_eq!(err.code, INVALID_PARAMS);
+        }
+        assert!(store.agent_list().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_creation_waits_while_another_one_picks_its_name() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, store) = app(dir.path());
+        // Another creation is in progress: this one must wait for it.
+        let held = CREATE_LOCK.lock().await;
+        let waiting = tokio::spawn({
+            let app = app.clone();
+            async move {
+                dispatch(
+                    &app,
+                    &Peer::Local,
+                    "agents.create_from_template",
+                    request("docs-writer", "Waiter", "en", json!([])),
+                )
+                .await
+            }
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        assert!(
+            store.agent_list().unwrap().is_empty(),
+            "the creation must wait for the lock"
+        );
+        drop(held);
+        waiting.await.unwrap().unwrap();
+        assert_eq!(store.agent_list().unwrap().len(), 1);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn two_bundles_at_once_get_different_names() {
+        for _ in 0..5 {
+            let dir = tempfile::tempdir().unwrap();
+            let (app, store) = app(dir.path());
+            let run = |app: Arc<App>| {
+                tokio::spawn(async move {
+                    dispatch(
+                        &app,
+                        &Peer::Local,
+                        "agents.create_bundle",
+                        json!({ "bundle_id": "startup-team", "language": "ru" }),
+                    )
+                    .await
+                })
+            };
+            let (a, b) = (run(app.clone()), run(app.clone()));
+            a.await.unwrap().unwrap();
+            b.await.unwrap().unwrap();
+            let names: HashSet<String> = store
+                .agent_list()
+                .unwrap()
+                .into_iter()
+                .map(|a| a.name.to_lowercase())
+                .collect();
+            assert_eq!(names.len(), 8, "two teams of four, every name different");
         }
     }
 }
