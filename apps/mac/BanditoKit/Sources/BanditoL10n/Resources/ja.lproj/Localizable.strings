@@ -807,10 +807,8 @@
 "memory.smartDesc" = "会話が長くなったときと、毎朝の新しい一日で新しいチャプターを開始。ほとんどの人に合います。";
 "memory.splitHeader" = "チャプターへの分け方";
 "memory.title" = "メモリ";
-"memory.viewer.back" = "ファイル一覧に戻る";
 "memory.viewer.empty" = "このフォルダにはまだファイルがありません";
 "memory.viewer.openInFiles" = "ファイルで開く";
-"memory.viewer.up" = "1つ上のフォルダ";
 "menu.agent" = "エージェント";
 "menu.checkForUpdates" = "アップデートを確認…";
 "menu.go" = "移動";
@@ -1924,12 +1922,14 @@
 "viewer.mode.edit" = "編集";
 "viewer.mode.read" = "読む";
 "viewer.mode.split" = "並べて表示";
+"viewer.moreActions" = "その他";
+"viewer.notSaved" = "「%1$@」は未保存です — 開く";
 "viewer.readOnly" = "読み取り専用";
 "viewer.save" = "保存";
 "viewer.saveError" = "保存できませんでした: %1$@";
-"viewer.saved" = "✓ 保存済み";
+"viewer.savedStatus" = "保存しました";
+"viewer.saving" = "保存中…";
 "viewer.tooLarge" = "ファイルが 2 MB を超えているため、ここでは開けません。Mac にダウンロードしてください。";
-"viewer.unsaved" = "未保存の変更あり · ⌘S";
 "workbench.add" = "タブを追加";
 "workbench.agentInBrowser" = "エージェントがブラウザを使用中";
 "workbench.browser" = "ブラウザ";

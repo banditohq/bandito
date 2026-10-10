@@ -807,10 +807,8 @@
 "memory.smartDesc" = "대화가 길어지면 새 챕터를 시작하고, 매일 아침 새로 시작해요. 거의 모든 사람에게 맞아요.";
 "memory.splitHeader" = "챕터 나누는 방식";
 "memory.title" = "메모리";
-"memory.viewer.back" = "파일 목록으로";
 "memory.viewer.empty" = "이 폴더에 아직 파일이 없습니다";
 "memory.viewer.openInFiles" = "파일에서 열기";
-"memory.viewer.up" = "상위 폴더";
 "menu.agent" = "에이전트";
 "menu.checkForUpdates" = "업데이트 확인…";
 "menu.go" = "이동";
@@ -1924,12 +1922,14 @@
 "viewer.mode.edit" = "편집";
 "viewer.mode.read" = "읽기";
 "viewer.mode.split" = "나란히 보기";
+"viewer.moreActions" = "더 보기";
+"viewer.notSaved" = "“%1$@” 저장되지 않음 — 열기";
 "viewer.readOnly" = "읽기 전용";
 "viewer.save" = "저장";
 "viewer.saveError" = "저장할 수 없었어요: %1$@";
-"viewer.saved" = "✓ 저장됨";
+"viewer.savedStatus" = "저장됨";
+"viewer.saving" = "저장 중…";
 "viewer.tooLarge" = "파일이 2MB보다 커서 여기서 열 수 없어요. Mac으로 다운로드해 주세요.";
-"viewer.unsaved" = "저장되지 않은 변경 사항 · ⌘S";
 "workbench.add" = "탭 추가";
 "workbench.agentInBrowser" = "에이전트가 브라우저를 사용 중이에요";
 "workbench.browser" = "브라우저";

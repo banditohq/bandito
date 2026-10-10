@@ -924,9 +924,7 @@
   "team.leadHelp": "Главный агент: отвечает за остальных",
   "inspector.avatar.help": "Изменить аватар: картинка, эмодзи, цвет, лицо",
   "memory.viewer.openInFiles": "Открыть в файлах",
-  "memory.viewer.back": "К списку файлов",
   "memory.viewer.empty": "В этой папке пока нет файлов",
-  "memory.viewer.up": "Уровень вверх",
   "team.activity.thinking": "Думает…",
   "team.activity.coding": "Пишет код…",
   "team.activity.command": "Выполняет команду…",
@@ -1119,7 +1117,6 @@
   "viewer.mode.read": "Читать",
   "viewer.mode.edit": "Править",
   "viewer.mode.split": "Рядом",
-  "viewer.unsaved": "Есть несохранённое · ⌘S",
   "viewer.save": "Сохранить",
   "viewer.closeTab": "Закрыть вкладку",
   "viewer.closeUnsaved.title": "Сохранить изменения в «{name}»?",
@@ -1136,6 +1133,10 @@
   "viewer.error": "Не удалось открыть файл: {error}",
   "viewer.saveError": "Не удалось сохранить: {error}",
   "viewer.readOnly": "Только чтение",
+  "viewer.moreActions": "Ещё",
+  "viewer.notSaved": "«{name}» не сохранён — открыть",
+  "viewer.savedStatus": "Сохранено",
+  "viewer.saving": "Сохраняется…",
   "viewer.media.unavailable": "Не получается проиграть этот файл",
   "files.unsupported": "Обновите сервер, чтобы просматривать его файлы",
   "files.connecting": "Подключаемся к серверу…",
@@ -2186,6 +2187,5 @@
   "composer.attach.badName": "Такое имя файла нельзя прикрепить",
   "composer.attach.hiddenName": "Имя с точки в начале нельзя прикрепить",
   "composer.attach.nameTooLong": "Слишком длинное имя файла",
-  "composer.attach.failed": "Не получилось прикрепить файл",
-  "viewer.saved": "✓ Сохранено"
+  "composer.attach.failed": "Не получилось прикрепить файл"
 }

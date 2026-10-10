@@ -807,10 +807,8 @@
 "memory.smartDesc" = "Новая глава, когда разговор разрастается, и с утра нового дня. Подходит почти всем.";
 "memory.splitHeader" = "КАК ДЕЛИТЬ НА ГЛАВЫ";
 "memory.title" = "Память";
-"memory.viewer.back" = "К списку файлов";
 "memory.viewer.empty" = "В этой папке пока нет файлов";
 "memory.viewer.openInFiles" = "Открыть в файлах";
-"memory.viewer.up" = "Уровень вверх";
 "menu.agent" = "Агент";
 "menu.checkForUpdates" = "Проверить обновления…";
 "menu.go" = "Перейти";
@@ -1924,12 +1922,14 @@
 "viewer.mode.edit" = "Править";
 "viewer.mode.read" = "Читать";
 "viewer.mode.split" = "Рядом";
+"viewer.moreActions" = "Ещё";
+"viewer.notSaved" = "«%1$@» не сохранён — открыть";
 "viewer.readOnly" = "Только чтение";
 "viewer.save" = "Сохранить";
 "viewer.saveError" = "Не удалось сохранить: %1$@";
-"viewer.saved" = "✓ Сохранено";
+"viewer.savedStatus" = "Сохранено";
+"viewer.saving" = "Сохраняется…";
 "viewer.tooLarge" = "Файл больше 2 МБ — здесь его не открыть. Скачайте на Mac.";
-"viewer.unsaved" = "Есть несохранённое · ⌘S";
 "workbench.add" = "Добавить вкладку";
 "workbench.agentInBrowser" = "Агент в браузере";
 "workbench.browser" = "Браузер";

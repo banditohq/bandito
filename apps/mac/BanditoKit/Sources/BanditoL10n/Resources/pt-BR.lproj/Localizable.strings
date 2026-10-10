@@ -807,10 +807,8 @@
 "memory.smartDesc" = "Novo capítulo quando a conversa cresce, e um recomeço a cada manhã. Serve para quase todo mundo.";
 "memory.splitHeader" = "COMO DIVIDIR EM CAPÍTULOS";
 "memory.title" = "Memória";
-"memory.viewer.back" = "Voltar à lista de arquivos";
 "memory.viewer.empty" = "Ainda não há arquivos nesta pasta";
 "memory.viewer.openInFiles" = "Abrir em Arquivos";
-"memory.viewer.up" = "Subir uma pasta";
 "menu.agent" = "Agente";
 "menu.checkForUpdates" = "Verificar atualizações…";
 "menu.go" = "Ir";
@@ -1924,12 +1922,14 @@
 "viewer.mode.edit" = "Editar";
 "viewer.mode.read" = "Ler";
 "viewer.mode.split" = "Lado a lado";
+"viewer.moreActions" = "Mais";
+"viewer.notSaved" = "“%1$@” não foi salvo — abrir";
 "viewer.readOnly" = "Somente leitura";
 "viewer.save" = "Salvar";
 "viewer.saveError" = "Não foi possível salvar: %1$@";
-"viewer.saved" = "✓ Salvo";
+"viewer.savedStatus" = "Salvo";
+"viewer.saving" = "Salvando…";
 "viewer.tooLarge" = "O arquivo tem mais de 2 MB e não pode ser aberto aqui. Baixe-o para o Mac.";
-"viewer.unsaved" = "Alterações não salvas · ⌘S";
 "workbench.add" = "Adicionar aba";
 "workbench.agentInBrowser" = "O agente está usando o navegador";
 "workbench.browser" = "Navegador";

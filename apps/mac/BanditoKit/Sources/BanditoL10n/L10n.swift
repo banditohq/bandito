@@ -1153,10 +1153,8 @@ public enum L10n {
         public static var title: String { L10n.tr("memory.title") }
 
         public enum Viewer {
-            public static var back: String { L10n.tr("memory.viewer.back") }
             public static var empty: String { L10n.tr("memory.viewer.empty") }
             public static var openInFiles: String { L10n.tr("memory.viewer.openInFiles") }
-            public static var up: String { L10n.tr("memory.viewer.up") }
         }
     }
 
@@ -2630,12 +2628,14 @@ public enum L10n {
         public static var emptyFile: String { L10n.tr("viewer.emptyFile") }
         public static func error(error: String) -> String { L10n.tr("viewer.error", error) }
         public static var folder: String { L10n.tr("viewer.folder") }
+        public static var moreActions: String { L10n.tr("viewer.moreActions") }
+        public static func notSaved(name: String) -> String { L10n.tr("viewer.notSaved", name) }
         public static var readOnly: String { L10n.tr("viewer.readOnly") }
         public static var save: String { L10n.tr("viewer.save") }
         public static func saveError(error: String) -> String { L10n.tr("viewer.saveError", error) }
-        public static var saved: String { L10n.tr("viewer.saved") }
+        public static var savedStatus: String { L10n.tr("viewer.savedStatus") }
+        public static var saving: String { L10n.tr("viewer.saving") }
         public static var tooLarge: String { L10n.tr("viewer.tooLarge") }
-        public static var unsaved: String { L10n.tr("viewer.unsaved") }
 
         public enum Binary {
             public static var title: String { L10n.tr("viewer.binary.title") }

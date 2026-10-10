@@ -595,9 +595,7 @@
   "team.leadHelp": "主代理：负责统筹其他代理",
   "inspector.avatar.help": "编辑头像：图片、表情、颜色、脸",
   "memory.viewer.openInFiles": "在文件中打开",
-  "memory.viewer.back": "返回文件列表",
   "memory.viewer.empty": "这个文件夹里还没有文件",
-  "memory.viewer.up": "上一级文件夹",
   "team.activity.thinking": "思考中…",
   "team.activity.coding": "正在写代码…",
   "team.activity.command": "正在执行命令…",
@@ -1223,7 +1221,6 @@
   "viewer.mode.read": "阅读",
   "viewer.mode.edit": "编辑",
   "viewer.mode.split": "并排",
-  "viewer.unsaved": "有未存储的更改 · ⌘S",
   "viewer.save": "存储",
   "viewer.closeTab": "关闭标签页",
   "viewer.closeUnsaved.title": "要存储对“{name}”的更改吗？",
@@ -1240,6 +1237,10 @@
   "viewer.error": "无法打开文件：{error}",
   "viewer.saveError": "无法存储：{error}",
   "viewer.readOnly": "只读",
+  "viewer.moreActions": "更多",
+  "viewer.notSaved": "“{name}”未保存 — 打开",
+  "viewer.savedStatus": "已保存",
+  "viewer.saving": "正在保存…",
   "viewer.media.unavailable": "无法播放此文件",
   "files.unsupported": "请更新服务器以浏览其文件",
   "files.connecting": "正在连接服务器…",
@@ -2105,6 +2106,5 @@
   "composer.attach.badName": "此文件名无法添加",
   "composer.attach.hiddenName": "以点开头的文件名无法添加",
   "composer.attach.nameTooLong": "文件名过长",
-  "composer.attach.failed": "无法添加该文件",
-  "viewer.saved": "✓ 已保存"
+  "composer.attach.failed": "无法添加该文件"
 }

@@ -605,9 +605,7 @@
   "team.leadHelp": "Hauptagent: übernimmt für die anderen",
   "inspector.avatar.help": "Avatar bearbeiten: Bild, Emoji, Farbe, Gesicht",
   "memory.viewer.openInFiles": "In Dateien öffnen",
-  "memory.viewer.back": "Zurück zur Dateiliste",
   "memory.viewer.empty": "In diesem Ordner gibt es noch keine Dateien",
-  "memory.viewer.up": "Eine Ebene höher",
   "team.activity.thinking": "Denkt nach…",
   "team.activity.coding": "Schreibt Code…",
   "team.activity.command": "Führt einen Befehl aus…",
@@ -1242,7 +1240,6 @@
   "viewer.mode.read": "Lesen",
   "viewer.mode.edit": "Bearbeiten",
   "viewer.mode.split": "Nebeneinander",
-  "viewer.unsaved": "Ungesicherte Änderungen · ⌘S",
   "viewer.save": "Sichern",
   "viewer.closeTab": "Tab schließen",
   "viewer.closeUnsaved.title": "Änderungen an „{name}“ sichern?",
@@ -1259,6 +1256,10 @@
   "viewer.error": "Die Datei konnte nicht geöffnet werden: {error}",
   "viewer.saveError": "Konnte nicht gesichert werden: {error}",
   "viewer.readOnly": "Nur lesen",
+  "viewer.moreActions": "Mehr",
+  "viewer.notSaved": "„{name}“ ist nicht gesichert – öffnen",
+  "viewer.savedStatus": "Gesichert",
+  "viewer.saving": "Wird gesichert …",
   "viewer.media.unavailable": "Diese Datei kann nicht abgespielt werden",
   "files.unsupported": "Aktualisieren Sie den Server, um seine Dateien zu durchsuchen",
   "files.connecting": "Verbindung zum Server wird hergestellt…",
@@ -2130,6 +2131,5 @@
   "composer.attach.badName": "Dieser Dateiname geht nicht",
   "composer.attach.hiddenName": "Namen mit Punkt am Anfang können nicht angehängt werden",
   "composer.attach.nameTooLong": "Der Dateiname ist zu lang",
-  "composer.attach.failed": "Die Datei konnte nicht angehängt werden",
-  "viewer.saved": "✓ Gespeichert"
+  "composer.attach.failed": "Die Datei konnte nicht angehängt werden"
 }

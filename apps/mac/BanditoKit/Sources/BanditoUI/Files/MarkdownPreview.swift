@@ -6,8 +6,25 @@ import SwiftUI
 struct MarkdownPreview: View {
     let source: String
     var onToggleCheckbox: (Int) -> Void = { _ in }
+    /// Reading mode: no card around the page; the text sits in a centered column at most 720 pt wide.
+    var isBare = false
 
     var body: some View {
+        if isBare {
+            ScrollView {
+                MarkdownPage(source: source, insets: EdgeInsets(), onToggleCheckbox: onToggleCheckbox)
+                    .frame(maxWidth: 720)
+                    .padding(.horizontal, 24)
+                    .padding(.top, 20)
+                    .padding(.bottom, 40)
+                    .frame(maxWidth: .infinity)
+            }
+        } else {
+            card
+        }
+    }
+
+    private var card: some View {
         ScrollView {
             MarkdownPage(source: source, onToggleCheckbox: onToggleCheckbox)
         }
@@ -23,6 +40,8 @@ struct MarkdownPreview: View {
 /// The page itself, without scrolling, so it can be drawn offline (snapshots).
 struct MarkdownPage: View {
     let source: String
+    /// Space around the text inside the page.
+    var insets = EdgeInsets(top: 26, leading: 32, bottom: 26, trailing: 32)
     var onToggleCheckbox: (Int) -> Void = { _ in }
 
     var body: some View {
@@ -32,8 +51,7 @@ struct MarkdownPage: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 32)
-        .padding(.vertical, 26)
+        .padding(insets)
         .textSelection(.enabled)
     }
 }
@@ -55,8 +73,8 @@ private struct MarkdownBlockView: View {
                 .foregroundStyle(Color.Bandito.text)
                 .lineSpacing(4)
                 .frame(maxWidth: .infinity, alignment: .leading)
-        case .item(let text, let line, let checkbox):
-            item(text: text, line: line, checkbox: checkbox)
+        case .item(let text, let line, let checkbox, let number):
+            item(text: text, line: line, checkbox: checkbox, number: number)
         case .code(let language, let text, _):
             VStack(alignment: .leading, spacing: 6) {
                 if let language {
@@ -116,7 +134,7 @@ private struct MarkdownBlockView: View {
     }
 
     @ViewBuilder
-    private func item(text: String, line: Int, checkbox: Bool?) -> some View {
+    private func item(text: String, line: Int, checkbox: Bool?, number: String?) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             if let checked = checkbox {
                 Button {
@@ -127,6 +145,10 @@ private struct MarkdownBlockView: View {
                         .foregroundStyle(checked ? Self.signal : Color.Bandito.text3)
                 }
                 .banditoButton(.row(cornerRadius: 4, hoverOpacity: 0.08))
+            } else if let number {
+                Text(number)
+                    .font(.system(size: 14.5).monospacedDigit())
+                    .foregroundStyle(Color.Bandito.text3)
             } else {
                 Text("•")
                     .font(.system(size: 14.5))

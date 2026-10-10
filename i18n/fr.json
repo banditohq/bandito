@@ -606,9 +606,7 @@
   "team.leadHelp": "Agent principal : répond pour les autres",
   "inspector.avatar.help": "Modifier l’avatar : image, emoji, couleur, visage",
   "memory.viewer.openInFiles": "Ouvrir dans Fichiers",
-  "memory.viewer.back": "Retour à la liste des fichiers",
   "memory.viewer.empty": "Aucun fichier dans ce dossier pour l'instant",
-  "memory.viewer.up": "Dossier parent",
   "team.activity.thinking": "Réfléchit…",
   "team.activity.coding": "Écrit du code…",
   "team.activity.command": "Exécute une commande…",
@@ -1243,7 +1241,6 @@
   "viewer.mode.read": "Lire",
   "viewer.mode.edit": "Modifier",
   "viewer.mode.split": "Côte à côte",
-  "viewer.unsaved": "Modifications non enregistrées · ⌘S",
   "viewer.save": "Enregistrer",
   "viewer.closeTab": "Fermer l’onglet",
   "viewer.closeUnsaved.title": "Enregistrer les modifications de « {name} » ?",
@@ -1260,6 +1257,10 @@
   "viewer.error": "Impossible d’ouvrir le fichier : {error}",
   "viewer.saveError": "Impossible d’enregistrer : {error}",
   "viewer.readOnly": "Lecture seule",
+  "viewer.moreActions": "Plus",
+  "viewer.notSaved": "« {name} » n’est pas enregistré — ouvrir",
+  "viewer.savedStatus": "Enregistré",
+  "viewer.saving": "Enregistrement…",
   "viewer.media.unavailable": "Impossible de lire ce fichier",
   "files.unsupported": "Mettez à jour le serveur pour parcourir ses fichiers",
   "files.connecting": "Connexion au serveur…",
@@ -2131,6 +2132,5 @@
   "composer.attach.badName": "Ce nom de fichier ne peut pas être joint",
   "composer.attach.hiddenName": "Un nom commençant par un point ne peut pas être joint",
   "composer.attach.nameTooLong": "Le nom du fichier est trop long",
-  "composer.attach.failed": "Impossible de joindre le fichier",
-  "viewer.saved": "✓ Enregistré"
+  "composer.attach.failed": "Impossible de joindre le fichier"
 }

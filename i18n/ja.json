@@ -595,9 +595,7 @@
   "team.leadHelp": "メインエージェント: ほかのエージェントをまとめます",
   "inspector.avatar.help": "アバターを編集：画像、絵文字、色、顔",
   "memory.viewer.openInFiles": "ファイルで開く",
-  "memory.viewer.back": "ファイル一覧に戻る",
   "memory.viewer.empty": "このフォルダにはまだファイルがありません",
-  "memory.viewer.up": "1つ上のフォルダ",
   "team.activity.thinking": "考え中…",
   "team.activity.coding": "コードを書いています…",
   "team.activity.command": "コマンドを実行中…",
@@ -1223,7 +1221,6 @@
   "viewer.mode.read": "読む",
   "viewer.mode.edit": "編集",
   "viewer.mode.split": "並べて表示",
-  "viewer.unsaved": "未保存の変更あり · ⌘S",
   "viewer.save": "保存",
   "viewer.closeTab": "タブを閉じる",
   "viewer.closeUnsaved.title": "「{name}」の変更を保存しますか？",
@@ -1240,6 +1237,10 @@
   "viewer.error": "ファイルを開けませんでした: {error}",
   "viewer.saveError": "保存できませんでした: {error}",
   "viewer.readOnly": "読み取り専用",
+  "viewer.moreActions": "その他",
+  "viewer.notSaved": "「{name}」は未保存です — 開く",
+  "viewer.savedStatus": "保存しました",
+  "viewer.saving": "保存中…",
   "viewer.media.unavailable": "このファイルは再生できません",
   "files.unsupported": "サーバーのファイルを表示するには、サーバーを更新してください",
   "files.connecting": "サーバーに接続しています…",
@@ -2105,6 +2106,5 @@
   "composer.attach.badName": "このファイル名は添付できません",
   "composer.attach.hiddenName": "ドットで始まる名前は添付できません",
   "composer.attach.nameTooLong": "ファイル名が長すぎます",
-  "composer.attach.failed": "ファイルを添付できませんでした",
-  "viewer.saved": "✓ 保存済み"
+  "composer.attach.failed": "ファイルを添付できませんでした"
 }

@@ -606,9 +606,7 @@
   "team.leadHelp": "Agente principal: responde pelos outros",
   "inspector.avatar.help": "Editar o avatar: imagem, emoji, cor, rosto",
   "memory.viewer.openInFiles": "Abrir em Arquivos",
-  "memory.viewer.back": "Voltar à lista de arquivos",
   "memory.viewer.empty": "Ainda não há arquivos nesta pasta",
-  "memory.viewer.up": "Subir uma pasta",
   "team.activity.thinking": "Pensando…",
   "team.activity.coding": "Escrevendo código…",
   "team.activity.command": "Executando um comando…",
@@ -1243,7 +1241,6 @@
   "viewer.mode.read": "Ler",
   "viewer.mode.edit": "Editar",
   "viewer.mode.split": "Lado a lado",
-  "viewer.unsaved": "Alterações não salvas · ⌘S",
   "viewer.save": "Salvar",
   "viewer.closeTab": "Fechar aba",
   "viewer.closeUnsaved.title": "Salvar as alterações em “{name}”?",
@@ -1260,6 +1257,10 @@
   "viewer.error": "Não foi possível abrir o arquivo: {error}",
   "viewer.saveError": "Não foi possível salvar: {error}",
   "viewer.readOnly": "Somente leitura",
+  "viewer.moreActions": "Mais",
+  "viewer.notSaved": "“{name}” não foi salvo — abrir",
+  "viewer.savedStatus": "Salvo",
+  "viewer.saving": "Salvando…",
   "viewer.media.unavailable": "Não é possível reproduzir este arquivo",
   "files.unsupported": "Atualize o servidor para navegar pelos arquivos dele",
   "files.connecting": "Conectando ao servidor…",
@@ -2131,6 +2132,5 @@
   "composer.attach.badName": "Este nome de arquivo não pode ser anexado",
   "composer.attach.hiddenName": "Nome que começa com ponto não pode ser anexado",
   "composer.attach.nameTooLong": "O nome do arquivo é muito longo",
-  "composer.attach.failed": "Não foi possível anexar o arquivo",
-  "viewer.saved": "✓ Salvo"
+  "composer.attach.failed": "Não foi possível anexar o arquivo"
 }

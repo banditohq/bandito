@@ -895,9 +895,7 @@
   "team.leadHelp": "Main agent: answers for the others",
   "inspector.avatar.help": "Edit the avatar: picture, emoji, color, face",
   "memory.viewer.openInFiles": "Open in Files",
-  "memory.viewer.back": "Back to the file list",
   "memory.viewer.empty": "No files in this folder yet",
-  "memory.viewer.up": "Up one folder",
   "team.activity.thinking": "Thinking…",
   "team.activity.coding": "Writing code…",
   "team.activity.command": "Running a command…",
@@ -1080,7 +1078,6 @@
   "viewer.mode.read": "Read",
   "viewer.mode.edit": "Edit",
   "viewer.mode.split": "Side by side",
-  "viewer.unsaved": "Unsaved changes · ⌘S",
   "viewer.save": "Save",
   "viewer.closeTab": "Close tab",
   "viewer.closeUnsaved.title": "Save changes to “{name}”?",
@@ -1097,6 +1094,10 @@
   "viewer.error": "Could not open the file: {error}",
   "viewer.saveError": "Could not save: {error}",
   "viewer.readOnly": "Read only",
+  "viewer.moreActions": "More",
+  "viewer.notSaved": "“{name}” isn’t saved — open it",
+  "viewer.savedStatus": "Saved",
+  "viewer.saving": "Saving…",
   "viewer.media.unavailable": "Can’t play this file",
   "files.unsupported": "Update the server to browse its files",
   "files.connecting": "Connecting to the server…",
@@ -2131,6 +2132,5 @@
   "composer.attach.badName": "This file name can't be attached",
   "composer.attach.hiddenName": "A name that starts with a dot can't be attached",
   "composer.attach.nameTooLong": "The file name is too long",
-  "composer.attach.failed": "Could not attach the file",
-  "viewer.saved": "✓ Saved"
+  "composer.attach.failed": "Could not attach the file"
 }

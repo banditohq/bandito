@@ -5,9 +5,31 @@ import SwiftUI
 
 /// Rules of the file tab (the agent's memory files and folders). Pure, so they can be tested.
 enum MemoryViewerRules {
-    /// The save button shows only when a text file has changes that can be saved, in the viewer itself.
-    static func showsSave(isDirty: Bool, readOnly: Bool, showingViewer: Bool) -> Bool {
-        isDirty && !readOnly && showingViewer
+    /// One crumb of a folder list's path.
+    struct Crumb: Equatable {
+        var name: String
+        var path: String
+    }
+
+    /// The crumbs from the tab's root folder down to `current`, each with the path it opens. A folder outside the
+    /// root (it should not happen) is a single crumb of its own.
+    static func crumbs(root: String, current: String) -> [Crumb] {
+        func trimmed(_ path: String) -> String {
+            path.count > 1 && path.hasSuffix("/") ? String(path.dropLast()) : path
+        }
+        let root = trimmed(root)
+        let current = trimmed(current)
+        let first = Crumb(name: FilePath.lastComponent(root), path: root)
+        if current == root || current.isEmpty { return [first] }
+        let prefix = root.hasSuffix("/") ? root : root + "/"
+        guard current.hasPrefix(prefix) else { return [Crumb(name: FilePath.lastComponent(current), path: current)] }
+        var result = [first]
+        var path = root
+        for part in current.dropFirst(prefix.count).split(separator: "/") {
+            path = FilePath.join(path, String(part))
+            result.append(Crumb(name: String(part), path: path))
+        }
+        return result
     }
 
     /// The folder's list: folders first, then files, each by name.
@@ -30,10 +52,10 @@ struct WorkbenchFileTab: View {
     @State private var workspace = FileWorkspace()
     /// Entries of the folder on show. Empty for a file.
     @State private var entries: [FsEntry] = []
-    /// The folder the list shows; starts at the path itself for a folder and moves down when a subfolder opens.
+    /// The folder the list shows; starts at the path itself for a folder and moves with the crumbs and clicks.
     @State private var folder = ""
-    /// Folders above `folder`, for the way back.
-    @State private var history: [String] = []
+    /// The first crumb: the folder the tab started with (a file's own folder, when the tab opened a single file).
+    @State private var rootFolder = ""
     /// Whether the path is a folder (decided by its parent's listing) or a file.
     @State private var isFolder = false
     @State private var showingViewer = false
@@ -43,16 +65,15 @@ struct WorkbenchFileTab: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .overlay(alignment: .bottom) {
-                    Rectangle().fill(Color.Bandito.line).frame(height: 1)
-                }
             if showingViewer {
-                // The header's back button goes to the folder's list, or closes the tab for a single file.
-                FileViewer(server: server, workspace: workspace, onBack: isFolder ? { showingViewer = false } : close)
+                // One row of tools: the viewer's own. The folder crumb goes back to the list.
+                FileViewer(
+                    server: server, workspace: workspace, showsTabs: false,
+                    onOpenFolder: openFolder,
+                    onOpenInFiles: { router.openInFiles($0, isFile: true) },
+                    onFileClosed: fileClosed)
             } else {
+                listBar
                 folderList
             }
         }
@@ -61,56 +82,44 @@ struct WorkbenchFileTab: View {
         .task(id: "\(server.id.uuidString)|\(path)") { await resolve() }
     }
 
-    private var header: some View {
-        HStack(spacing: 10) {
-            if showingViewer && isFolder {
-                Button {
-                    showingViewer = false
-                } label: {
-                    Label(L10n.Memory.Viewer.back, systemImage: "chevron.left")
-                        .font(BanditoFont.font(size: 12.5, weight: 500))
-                        .lineLimit(1)
-                        .fixedSize()
+    /// The same 38 pt row as the viewer's: crumbs from the tab's root, and the "…" menu.
+    private var listBar: some View {
+        let crumbs = MemoryViewerRules.crumbs(root: rootFolder.isEmpty ? path : rootFolder, current: folder.isEmpty ? path : folder)
+        return ViewerBar {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 4) {
+                    ForEach(Array(crumbs.enumerated()), id: \.offset) { index, crumb in
+                        if index == crumbs.count - 1 {
+                            Text(crumb.name)
+                                .font(BanditoFont.font(size: 13, weight: 600))
+                                .foregroundStyle(Color.Bandito.text)
+                                .lineLimit(1)
+                                .padding(.horizontal, index == 0 ? 0 : 6)
+                                .help(crumb.path)
+                        } else {
+                            ViewerCrumb(name: crumb.name, help: crumb.path) { openCrumb(crumb.path) }
+                            ViewerCrumbSeparator()
+                        }
+                    }
                 }
-                .banditoButton(.quiet())
-            } else if !history.isEmpty && !showingViewer {
-                Button(action: goUp) {
-                    Label(L10n.Memory.Viewer.up, systemImage: "chevron.up")
-                        .font(BanditoFont.font(size: 12.5, weight: 500))
-                        .lineLimit(1)
-                        .fixedSize()
+            }
+            .defaultScrollAnchor(.trailing)
+        } trailing: {
+            if let problem = workspace.documents.values.first(where: \.needsAttention) {
+                // An edit that could not be written must not be forgotten: one click brings its file back.
+                ViewerIconButton(
+                    symbol: "exclamationmark.triangle.fill", label: L10n.Viewer.notSaved(name: problem.name)
+                ) {
+                    workspace.select(problem.path)
+                    showingViewer = true
                 }
-                .banditoButton(.quiet())
             }
-            Text(title)
-                .font(BanditoFont.font(size: 14, weight: 600))
-                .foregroundStyle(Color.Bandito.text)
-                .lineLimit(1)
-                .truncationMode(.head)
-                .help(path)
-            Spacer(minLength: 8)
-            if let document = workspace.selectedDocument,
-                MemoryViewerRules.showsSave(isDirty: document.isDirty, readOnly: document.readOnly, showingViewer: showingViewer)
-            {
-                Button(L10n.Viewer.save) {
-                    Task { await document.save(server: server) }
+            ViewerMoreMenu {
+                Button(L10n.Memory.Viewer.openInFiles, systemImage: "folder") {
+                    router.openInFiles(folder.isEmpty ? path : folder, isFile: false)
                 }
-                .banditoButton(.signal())
-                .disabled(document.isSaving)
-                .fixedSize()
             }
-            Button(L10n.Memory.Viewer.openInFiles) {
-                router.openInFiles(path, isFile: !isFolder)
-            }
-            .banditoButton(.quiet())
-            .fixedSize()
         }
-    }
-
-    /// The last part of the path: the file name, or the folder name.
-    private var title: String {
-        let shown = showingViewer ? (workspace.selectedDocument?.path ?? path) : (folder.isEmpty ? path : folder)
-        return URL(fileURLWithPath: shown).lastPathComponent
     }
 
     @ViewBuilder
@@ -133,32 +142,31 @@ struct WorkbenchFileTab: View {
                     ForEach(entries, id: \.path) { entry in
                         Button {
                             if entry.kind == .dir {
-                                history.append(folder)
-                                folder = entry.path
-                                Task { await load() }
+                                openCrumb(entry.path)
                             } else if entry.kind == .file {
                                 openFile(entry)
                             }
                         } label: {
                             HStack(spacing: 10) {
                                 Image(systemName: entry.kind == .dir ? "folder" : "doc")
-                                    .font(.system(size: 13))
+                                    .font(.system(size: 14))
+                                    .frame(width: 18)
                                     .foregroundStyle(entry.kind == .dir ? BanditoPalette.peach : Color.Bandito.text2)
                                 Text(entry.name)
                                     .font(BanditoFont.font(size: 13, weight: 400))
                                     .foregroundStyle(Color.Bandito.text)
                                     .lineLimit(1)
-                                    .truncationMode(.tail)
+                                    .truncationMode(.middle)
                                 Spacer(minLength: 8)
                             }
-                            .padding(.horizontal, 12)
+                            .padding(.horizontal, 10)
                             .frame(height: 30)
                             .contentShape(Rectangle())
                         }
                         .banditoButton(.row(cornerRadius: 8))
                     }
                 }
-                .padding(10)
+                .padding(8)
             }
         }
     }
@@ -170,11 +178,12 @@ struct WorkbenchFileTab: View {
             let listing = try await server.list(parent).entries
             if let entry = listing.first(where: { $0.path == path }), entry.kind != .dir {
                 isFolder = false
+                rootFolder = parent
                 openFile(entry)
             } else {
                 isFolder = true
                 folder = path
-                history = []
+                rootFolder = path
                 showingViewer = false
                 await load()
             }
@@ -195,15 +204,35 @@ struct WorkbenchFileTab: View {
         loaded = true
     }
 
-    private func goUp() {
-        guard let previous = history.popLast() else { return }
-        folder = previous
+    /// Shows a folder's list in this tab (a crumb, a click on a subfolder).
+    private func openCrumb(_ target: String) {
+        folder = target
         Task { await load() }
+    }
+
+    /// The viewer's folder crumb: back to the list of the file's folder. A single file turns the tab into that
+    /// folder's list, with the folder as its first crumb.
+    private func openFolder(_ target: String) {
+        if !isFolder {
+            isFolder = true
+            rootFolder = target
+        }
+        showingViewer = false
+        openCrumb(target)
     }
 
     private func openFile(_ entry: FsEntry) {
         workspace.open(entry, server: server)
         showingViewer = true
+    }
+
+    /// A file's tab closed in the viewer: a folder's tab goes back to its list; a single file's tab closes.
+    private func fileClosed() {
+        if isFolder {
+            showingViewer = false
+        } else if workspace.tabs.paths.isEmpty {
+            close()
+        }
     }
 
     private func close() {

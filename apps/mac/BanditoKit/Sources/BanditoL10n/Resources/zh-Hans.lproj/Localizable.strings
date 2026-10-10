@@ -807,10 +807,8 @@
 "memory.smartDesc" = "对话变长时开启新章节，每天早上重新开始。几乎适合所有人。";
 "memory.splitHeader" = "如何划分章节";
 "memory.title" = "记忆";
-"memory.viewer.back" = "返回文件列表";
 "memory.viewer.empty" = "这个文件夹里还没有文件";
 "memory.viewer.openInFiles" = "在文件中打开";
-"memory.viewer.up" = "上一级文件夹";
 "menu.agent" = "代理";
 "menu.checkForUpdates" = "检查更新…";
 "menu.go" = "前往";
@@ -1924,12 +1922,14 @@
 "viewer.mode.edit" = "编辑";
 "viewer.mode.read" = "阅读";
 "viewer.mode.split" = "并排";
+"viewer.moreActions" = "更多";
+"viewer.notSaved" = "“%1$@”未保存 — 打开";
 "viewer.readOnly" = "只读";
 "viewer.save" = "存储";
 "viewer.saveError" = "无法存储：%1$@";
-"viewer.saved" = "✓ 已保存";
+"viewer.savedStatus" = "已保存";
+"viewer.saving" = "正在保存…";
 "viewer.tooLarge" = "文件超过 2 MB，无法在此打开。请下载到 Mac。";
-"viewer.unsaved" = "有未存储的更改 · ⌘S";
 "workbench.add" = "添加标签页";
 "workbench.agentInBrowser" = "智能体正在使用浏览器";
 "workbench.browser" = "浏览器";
