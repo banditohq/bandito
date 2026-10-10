@@ -1182,6 +1182,12 @@
   "server.features.notInstalled": "Not installed",
   "server.features.installed": "Installed",
   "server.features.loginHelp": "Sign in on the server: {command}",
+  "server.features.signIn": "Sign in",
+  "server.passport.uptimeHours": {
+    "one": "up {count} hour",
+    "other": "up {count} hours"
+  },
+  "server.passport.uptimeLessHour": "up less than an hour",
   "server.update.available": "Bandito {version} is out",
   "server.update.current": "The server runs {version}",
   "server.update.howTo": "How to update",

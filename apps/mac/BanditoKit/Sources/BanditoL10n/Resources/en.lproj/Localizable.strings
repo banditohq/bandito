@@ -1436,6 +1436,7 @@
 "server.features.installed" = "Installed";
 "server.features.loginHelp" = "Sign in on the server: %1$@";
 "server.features.notInstalled" = "Not installed";
+"server.features.signIn" = "Sign in";
 "server.features.title" = "Capabilities";
 "server.health.bothFull" = "Disk and memory almost full";
 "server.health.diskFull" = "Disk almost full";
@@ -1455,6 +1456,7 @@
 "server.owner.agent" = "Agent";
 "server.owner.daemon" = "Bandito daemon";
 "server.owner.terminal" = "Terminal";
+"server.passport.uptimeLessHour" = "up less than an hour";
 "server.picker.connect" = "Connect server…";
 "server.picker.kindRemote" = "Server";
 "server.picker.manage" = "Manage servers…";

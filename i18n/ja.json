@@ -663,6 +663,11 @@
   "server.features.notInstalled": "未インストール",
   "server.features.installed": "インストール済み",
   "server.features.loginHelp": "サーバーでサインイン：{command}",
+  "server.features.signIn": "サインイン",
+  "server.passport.uptimeHours": {
+    "other": "稼働 {count} 時間"
+  },
+  "server.passport.uptimeLessHour": "稼働 1時間未満",
   "modelPicker.defaultLabel": "デフォルト · {name}",
   "modelPicker.defaultMenu": "デフォルト（{name}）",
   "modelPicker.defaultPlain": "デフォルト",

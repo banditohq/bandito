@@ -663,6 +663,11 @@
   "server.features.notInstalled": "설치되지 않음",
   "server.features.installed": "설치됨",
   "server.features.loginHelp": "서버에서 로그인: {command}",
+  "server.features.signIn": "로그인",
+  "server.passport.uptimeHours": {
+    "other": "{count}시간째 가동 중"
+  },
+  "server.passport.uptimeLessHour": "가동 중 1시간 미만",
   "modelPicker.defaultLabel": "기본값 · {name}",
   "modelPicker.defaultMenu": "기본값 ({name})",
   "modelPicker.defaultPlain": "기본값",

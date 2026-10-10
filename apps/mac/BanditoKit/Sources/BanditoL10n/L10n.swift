@@ -1932,6 +1932,7 @@ public enum L10n {
             public static var installed: String { L10n.tr("server.features.installed") }
             public static func loginHelp(command: String) -> String { L10n.tr("server.features.loginHelp", command) }
             public static var notInstalled: String { L10n.tr("server.features.notInstalled") }
+            public static var signIn: String { L10n.tr("server.features.signIn") }
             public static var title: String { L10n.tr("server.features.title") }
         }
 
@@ -1958,6 +1959,11 @@ public enum L10n {
             public static var agent: String { L10n.tr("server.owner.agent") }
             public static var daemon: String { L10n.tr("server.owner.daemon") }
             public static var terminal: String { L10n.tr("server.owner.terminal") }
+        }
+
+        public enum Passport {
+            public static func uptimeHours(count: Int) -> String { L10n.tr("server.passport.uptimeHours", count) }
+            public static var uptimeLessHour: String { L10n.tr("server.passport.uptimeLessHour") }
         }
 
         public enum Picker {

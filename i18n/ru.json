@@ -1223,6 +1223,14 @@
   "server.features.notInstalled": "Не установлен",
   "server.features.installed": "Установлен",
   "server.features.loginHelp": "Войдите на сервере: {command}",
+  "server.features.signIn": "Войти",
+  "server.passport.uptimeHours": {
+    "one": "работает {count} час",
+    "few": "работает {count} часа",
+    "many": "работает {count} часов",
+    "other": "работает {count} часов"
+  },
+  "server.passport.uptimeLessHour": "работает меньше часа",
   "server.update.available": "Вышла версия Bandito {version}",
   "server.update.current": "На сервере {version}",
   "server.update.howTo": "Как обновить",
