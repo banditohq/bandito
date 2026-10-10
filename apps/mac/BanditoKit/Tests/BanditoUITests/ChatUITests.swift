@@ -362,3 +362,20 @@ import Testing
         drafts.clear(formId: "never")
     }
 }
+
+@Suite struct ComposerFocusTests {
+    @Test func aRequestAlwaysFocuses() {
+        #expect(ComposerFocus.shouldTakeFocus(reason: .requested, otherFieldHasFocus: false))
+        #expect(ComposerFocus.shouldTakeFocus(reason: .requested, otherFieldHasFocus: true))
+    }
+
+    @Test func openingAnAgentFocusesUnlessAFieldIsBeingEdited() {
+        #expect(ComposerFocus.shouldTakeFocus(reason: .agentOpened, otherFieldHasFocus: false))
+        #expect(!ComposerFocus.shouldTakeFocus(reason: .agentOpened, otherFieldHasFocus: true))
+    }
+
+    @Test func aThreadUpdateNeverTakesTheFocus() {
+        #expect(!ComposerFocus.shouldTakeFocus(reason: .feedUpdate, otherFieldHasFocus: false))
+        #expect(!ComposerFocus.shouldTakeFocus(reason: .feedUpdate, otherFieldHasFocus: true))
+    }
+}

@@ -2,6 +2,9 @@ import BanditoDesign
 import BanditoKit
 import BanditoL10n
 import SwiftUI
+#if os(macOS)
+import AppKit
+#endif
 
 /// The message box under the thread. Enter sends, Shift+Enter starts a new line. While a turn runs,
 /// the send button becomes Stop (⌘. is the menu command, see `BanditoCommands`).
@@ -153,11 +156,11 @@ struct Composer: View {
         .animation(.easeOut(duration: BanditoMotion.fast), value: query != nil)
         .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: reply)
         .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: waitingForm?.formId)
-        .onAppear { focused = true }
+        .onAppear { takeFocus(.agentOpened) }
         .tourAnchor(.composer)
         .onChange(of: router.composerFocusAgentID, initial: true) { _, _ in
             guard let agentID = agent?.id else { return }
-            if router.takeComposerFocus(agentID: agentID) { focused = true }
+            if router.takeComposerFocus(agentID: agentID) { takeFocus(.requested) }
         }
         .onChange(of: draft) { old, new in
             slash.suppressed = false
@@ -187,6 +190,18 @@ struct Composer: View {
         } message: {
             Text(L10n.Slash.installMessage)
         }
+    }
+
+    /// Focuses the field when `ComposerFocus` allows it. Another text field being edited is told from the composer's
+    /// own by the focus state: the field editor is first responder while `focused` is false.
+    private func takeFocus(_ reason: ComposerFocus.Reason) {
+        var other = false
+        #if os(macOS)
+        if !focused, let editor = NSApp.keyWindow?.firstResponder as? NSTextView, editor.isFieldEditor || editor.isEditable {
+            other = true
+        }
+        #endif
+        if ComposerFocus.shouldTakeFocus(reason: reason, otherFieldHasFocus: other) { focused = true }
     }
 
     /// The bar above the field: whom the message answers, and the first words of the original.

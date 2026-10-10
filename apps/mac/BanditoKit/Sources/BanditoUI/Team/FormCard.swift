@@ -336,6 +336,7 @@ private struct PendingFormCard: View {
 private struct FormFieldView: View {
     var field: FormField
     @Binding var input: FormInput
+    @FocusState private var fieldFocused: Bool
     var problem: FormProblem?
     /// The field sits in the summary of a confirmation: a plain value, with the label above it.
     var summary: Bool
@@ -430,7 +431,11 @@ private struct FormFieldView: View {
                     : BanditoFont.font(size: 13.5, weight: 400))
             .foregroundStyle(Color.Bandito.text)
             .tint(Color.Bandito.signal)
+            .focused($fieldFocused)
             .modifier(FormFieldBox(plain: summary, failed: problem != nil, height: 40))
+            .contentShape(Rectangle())
+            // A click anywhere in the box puts the caret here, and takes the focus from the composer.
+            .simultaneousGesture(TapGesture().onEnded { fieldFocused = true })
             .accessibilityLabel(field.label)
     }
 
@@ -441,7 +446,10 @@ private struct FormFieldView: View {
             .foregroundStyle(Color.Bandito.text)
             .tint(Color.Bandito.signal)
             .lineLimit(summary ? 2...12 : 3...10)
+            .focused($fieldFocused)
             .modifier(FormFieldBox(plain: summary, failed: problem != nil, height: nil))
+            .contentShape(Rectangle())
+            .simultaneousGesture(TapGesture().onEnded { fieldFocused = true })
             .accessibilityLabel(field.label)
     }
 
