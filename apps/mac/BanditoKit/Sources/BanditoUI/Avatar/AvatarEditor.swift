@@ -67,9 +67,12 @@ struct AvatarEditor: View {
     private var faceTab: some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 5), spacing: 8) {
             ForEach(AvatarFace.faces, id: \.self) { face in
-                let selected = look.face == face
+                let selected = look.emoji == nil && look.face == face
                 Button {
                     look.face = face
+                    // An emoji is drawn instead of the face: picking a face means the face is what should show.
+                    look.emoji = nil
+                    emojiText = ""
                 } label: {
                     RaccoonAvatar(
                         name: name, color: look.palette, face: face, size: 44, mood: .idle,
