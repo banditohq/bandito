@@ -2130,6 +2130,7 @@
   "thread.browserRun.watchBeside": "Daneben ansehen",
   "thread.browserRun.fullscreen": "Vollbild",
   "thread.browserRun.noPicture": "Hier erscheint das Bild der Seite",
+  "thread.browserRun.closed": "Browser geschlossen",
   "thread.link.fileHelp": "Öffnet im Bereich · ⌥-Klick zeigt in „Dateien“",
   "thread.link.urlHelp": "Öffnet im Browser-Bereich · ⌘-Klick öffnet im Mac-Browser",
   "composer.attach.label": "Anhängen",

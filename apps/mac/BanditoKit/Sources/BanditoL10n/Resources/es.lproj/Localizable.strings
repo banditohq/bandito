@@ -1851,6 +1851,7 @@
 "terminals.updateServer" = "Actualiza el servidor para usar las terminales.";
 "thread.aTeammate" = "un compañero";
 "thread.attach" = "Adjuntar archivos";
+"thread.browserRun.closed" = "Navegador cerrado";
 "thread.browserRun.fullscreen" = "Pantalla completa";
 "thread.browserRun.noPicture" = "Aquí aparecerá la imagen de la página";
 "thread.browserRun.title" = "Agente en el navegador";

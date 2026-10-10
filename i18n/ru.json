@@ -2188,6 +2188,7 @@
   "thread.browserRun.watchBeside": "Смотреть рядом",
   "thread.browserRun.fullscreen": "Во весь экран",
   "thread.browserRun.noPicture": "Здесь появится картинка страницы",
+  "thread.browserRun.closed": "Браузер закрыт",
   "thread.link.fileHelp": "Откроется в панели · ⌥-клик покажет в «Файлах»",
   "thread.link.urlHelp": "Откроется во вкладке браузера · ⌘-клик откроет в браузере Mac",
   "composer.attach.label": "Прикрепить",

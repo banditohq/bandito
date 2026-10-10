@@ -1851,6 +1851,7 @@
 "terminals.updateServer" = "请更新服务器以使用终端。";
 "thread.aTeammate" = "队友";
 "thread.attach" = "附加文件";
+"thread.browserRun.closed" = "浏览器已关闭";
 "thread.browserRun.fullscreen" = "全屏";
 "thread.browserRun.noPicture" = "页面画面将显示在这里";
 "thread.browserRun.title" = "智能体在浏览器中";

@@ -1851,6 +1851,7 @@
 "terminals.updateServer" = "ターミナルを使うにはサーバーを更新してください。";
 "thread.aTeammate" = "チームメイト";
 "thread.attach" = "ファイルを添付";
+"thread.browserRun.closed" = "ブラウザは閉じられています";
 "thread.browserRun.fullscreen" = "全画面";
 "thread.browserRun.noPicture" = "ページの画像がここに表示されます";
 "thread.browserRun.title" = "ブラウザ内のエージェント";
