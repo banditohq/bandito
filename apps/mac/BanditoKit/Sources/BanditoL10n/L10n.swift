@@ -1261,6 +1261,20 @@ public enum L10n {
             public static var subtitle: String { L10n.tr("market.bots.subtitle") }
         }
 
+        public enum Bundle {
+            public static var create: String { L10n.tr("market.bundle.create") }
+            public static var creating: String { L10n.tr("market.bundle.creating") }
+            public static var members: String { L10n.tr("market.bundle.members") }
+            public static func missingRequired(names: String) -> String { L10n.tr("market.bundle.missingRequired", names) }
+            public static func openFirst(name: String) -> String { L10n.tr("market.bundle.openFirst", name) }
+            public static func resultTitle(created: String, total: String) -> String { L10n.tr("market.bundle.resultTitle", created, total) }
+            public static var services: String { L10n.tr("market.bundle.services") }
+        }
+
+        public enum Bundles {
+            public static var title: String { L10n.tr("market.bundles.title") }
+        }
+
         public enum Category {
             public static var business: String { L10n.tr("market.category.business") }
             public static var data: String { L10n.tr("market.category.data") }

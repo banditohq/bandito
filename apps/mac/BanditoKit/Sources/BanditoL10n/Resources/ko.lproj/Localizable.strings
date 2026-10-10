@@ -886,6 +886,14 @@
 "market.bots.create" = "봇 만들기";
 "market.bots.empty" = "이 서버에는 봇 템플릿이 없어요.";
 "market.bots.subtitle" = "준비된 봇을 고르고, 필요한 서비스를 연결해서 바로 일을 시키세요.";
+"market.bundle.create" = "팀 만들기";
+"market.bundle.creating" = "만드는 중…";
+"market.bundle.members" = "세트의 봇";
+"market.bundle.missingRequired" = "%1$@ 필요. 지금 팀을 만들고 나중에 연결할 수 있습니다. 그전까지 이를 쓰는 봇은 제 역할을 할 수 없습니다.";
+"market.bundle.openFirst" = "%1$@ 열기";
+"market.bundle.resultTitle" = "봇 %2$@개 중 %1$@개 생성";
+"market.bundle.services" = "세트가 사용하는 서비스";
+"market.bundles.title" = "세트";
 "market.category.business" = "비즈니스";
 "market.category.data" = "데이터";
 "market.category.design" = "디자인";
