@@ -43,8 +43,10 @@ enum ThreadScroll {
 
     /// What the thread keeps in state after a scroll geometry change: whether it follows the bottom and whether the
     /// "down" button shows. Equal values for a scroll that crosses no threshold: nothing is then written.
-    static func flags(was: Bool, old: ThreadScrollMetrics?, new: ThreadScrollMetrics) -> (atBottom: Bool, jump: Bool) {
-        let at = atBottom(was: was, old: old, new: new)
+    static func flags(
+        was: Bool, old: ThreadScrollMetrics?, new: ThreadScrollMetrics, pinned: Bool = false
+    ) -> (atBottom: Bool, jump: Bool) {
+        let at = atBottom(was: was, old: old, new: new, pinned: pinned)
         return (at, showsJump(atBottom: at, distance: new.distance))
     }
 
@@ -53,12 +55,22 @@ enum ThreadScroll {
     /// panel is resized: the bottom moves away without the person moving. A scroll up (the offset falls while the
     /// content did not shrink and the bottom is not reached) leaves it. From away, only the person's own scroll down
     /// (the offset rises) to within `bottomSlack` brings it back: content growing without a move never does.
-    static func atBottom(was: Bool, old: ThreadScrollMetrics?, new: ThreadScrollMetrics) -> Bool {
-        guard let old else { return new.distance <= bottomSlack || was }
-        let contentShrank = new.contentHeight < old.contentHeight
-        if new.offset < old.offset && !contentShrank && new.distance > 0 { return false }
-        if was { return true }
+    static func atBottom(was: Bool, old: ThreadScrollMetrics?, new: ThreadScrollMetrics, pinned: Bool = false) -> Bool {
+        guard let old else { return new.distance <= bottomSlack || was || pinned }
+        if leavesBottom(old: old, new: new) { return false }
+        if was || pinned { return true }
         return new.offset > old.offset && new.distance <= bottomSlack
+    }
+
+    /// Whether this change is the person scrolling up, away from the bottom. A smaller offset is not enough: a screen
+    /// that got taller (the composer shrank after a send, the panel was resized) moves the offset down by itself, and
+    /// whole-point rounding of three separate numbers leaves a distance of 1 or so that no one scrolled. So the screen
+    /// must keep its height, the content must not shrink, and the bottom must be more than a point away.
+    static func leavesBottom(old: ThreadScrollMetrics, new: ThreadScrollMetrics) -> Bool {
+        guard new.offset < old.offset else { return false }
+        if new.height != old.height { return false }
+        if new.contentHeight < old.contentHeight { return false }
+        return new.distance > 1
     }
 
     /// Whether the thread should be brought to its bottom now: it is at the bottom, its layout changed (the content

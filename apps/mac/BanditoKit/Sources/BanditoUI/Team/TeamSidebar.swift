@@ -14,6 +14,8 @@ struct TeamSidebar: View {
     var body: some View {
         if let server = app.currentServer {
             content(server)
+                // Many agents, some asleep: their "z" stands still here.
+                .environment(\.avatarSleepRests, true)
         } else {
             SidebarPlaceholder(mode: .team)
         }
