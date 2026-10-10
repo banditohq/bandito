@@ -1,13 +1,15 @@
 //! `integrations.*` JSON-RPC methods: the owner's MCP servers for the agents, the template catalog, and a test
 //! that starts a server and lists its tools. Owner and apps only. See docs/ARCHITECTURE.md#integrations.
 
-use super::{App, INVALID_PARAMS, METHOD_NOT_FOUND, RpcError, RpcResult, SERVER_ERROR, ok, params};
+use super::{App, INVALID_PARAMS, METHOD_NOT_FOUND, Peer, RpcError, RpcResult, SERVER_ERROR, ok, params};
 use crate::integrations::{self, Pair, Server, Transport};
-use crate::store::{Integration, IntegrationPatch, NewIntegration, Store};
+use crate::mcp_oauth::{self, Outcome, Target, Why};
+use crate::store::{Integration, IntegrationAuth, IntegrationPatch, NewIntegration, Store, now_ms};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::os::unix::process::CommandExt;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 
@@ -29,7 +31,183 @@ struct UpdateParams {
     patch: IntegrationPatch,
 }
 
-pub async fn dispatch(app: &App, method: &str, p: Value) -> RpcResult {
+#[derive(Deserialize)]
+struct BeginParams {
+    #[serde(default)]
+    integration: Option<String>,
+    #[serde(default)]
+    draft: Option<NewIntegration>,
+    /// A client registered with the service beforehand, for one without dynamic registration.
+    #[serde(default)]
+    client_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct CompleteParams {
+    state: String,
+    code: String,
+    #[serde(default)]
+    iss: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct StateParams {
+    state: String,
+}
+
+#[derive(Deserialize)]
+struct StatusParams {
+    #[serde(default)]
+    id: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct DisconnectParams {
+    id: String,
+    /// Also delete the integration.
+    #[serde(default)]
+    remove: bool,
+}
+
+fn invalid(e: anyhow::Error) -> RpcError {
+    RpcError::new(INVALID_PARAMS, format!("{e:#}"))
+}
+
+fn no_integration(id: &str) -> RpcError {
+    RpcError::new(SERVER_ERROR, format!("no integration {id}"))
+}
+
+/// The ids of the agents that get the integration in their sessions.
+fn users_of(store: &Store, id: &str) -> Vec<String> {
+    store
+        .agent_list()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|a| a.integrations.as_ref().is_none_or(|ids| ids.iter().any(|i| i == id)))
+        .map(|a| a.id)
+        .collect()
+}
+
+/// Their sessions start again from the next turn, with the token that is there now.
+async fn reload_agents(app: &App, agents: Vec<String>) {
+    for id in agents {
+        app.sup.reload(&id, None).await;
+    }
+}
+
+/// Renews the tokens that end soon, once a minute, and renews the sessions that held the old ones.
+pub fn spawn_oauth_refresher(app: Arc<App>) {
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(Duration::from_secs(60));
+        loop {
+            tick.tick().await;
+            let store = &app.sup.hub().store;
+            for id in mcp_oauth::refresh_due(store, now_ms()).await {
+                reload_agents(&app, users_of(store, &id)).await;
+            }
+        }
+    });
+}
+
+async fn oauth_dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResult {
+    let store = &app.sup.hub().store;
+    let device = super::redeem_source(peer);
+    match method {
+        "integrations.oauth_begin" => {
+            let BeginParams {
+                integration,
+                draft,
+                client_id,
+            } = params(p)?;
+            let target = match (integration, draft) {
+                (Some(id), None) => Target::Existing(store.integration_get(&id)?.ok_or_else(|| no_integration(&id))?),
+                (None, Some(draft)) => {
+                    check_new(&draft)?;
+                    if store.integration_list()?.iter().any(|i| i.name == draft.name) {
+                        return Err(RpcError::new(
+                            INVALID_PARAMS,
+                            format!("an integration named '{}' already exists", draft.name),
+                        ));
+                    }
+                    Target::Draft(draft)
+                }
+                _ => return Err(RpcError::new(INVALID_PARAMS, "give either integration or draft")),
+            };
+            let now = now_ms();
+            let begun = mcp_oauth::begin(store, &app.oauth, &device, target, client_id, now)
+                .await
+                .map_err(invalid)?;
+            ok(json!({
+                "authorize_url": begun.authorize_url,
+                "state": begun.state,
+                "expires_at": now + mcp_oauth::FLOW_TTL_MS,
+            }))
+        }
+        "integrations.oauth_complete" => {
+            let CompleteParams { state, code, iss } = params(p)?;
+            let now = now_ms();
+            let done = mcp_oauth::complete(store, &app.oauth, &device, &state, &code, iss.as_deref(), now)
+                .await
+                .map_err(invalid)?;
+            let id = done.integration.id.clone();
+            reload_agents(app, users_of(store, &id)).await;
+            let status = mcp_oauth::status(store, &id, now)?;
+            ok(json!({
+                "id": id,
+                "name": done.integration.name,
+                "created": done.created,
+                "status": status.status,
+                "expires_at": status.expires_at,
+            }))
+        }
+        "integrations.oauth_cancel" => {
+            let StateParams { state } = params(p)?;
+            ok(json!({ "cancelled": app.oauth.cancel(&state, &device) }))
+        }
+        "integrations.oauth_status" => {
+            let StatusParams { id } = params(p)?;
+            let now = now_ms();
+            let mut items = Vec::new();
+            for row in store.integration_list()? {
+                if row.auth != IntegrationAuth::Oauth || id.as_ref().is_some_and(|id| *id != row.id) {
+                    continue;
+                }
+                let s = mcp_oauth::status(store, &row.id, now)?;
+                items.push(json!({
+                    "id": row.id,
+                    "name": row.name,
+                    "status": s.status,
+                    "expires_at": s.expires_at,
+                    "scope": s.scope,
+                }));
+            }
+            ok(json!({ "integrations": items }))
+        }
+        "integrations.oauth_disconnect" => {
+            let DisconnectParams { id, remove } = params(p)?;
+            let row = store.integration_get(&id)?.ok_or_else(|| no_integration(&id))?;
+            if row.auth != IntegrationAuth::Oauth {
+                return Err(RpcError::new(
+                    INVALID_PARAMS,
+                    "that integration does not sign in in the browser",
+                ));
+            }
+            let users = users_of(store, &id);
+            let revoked = mcp_oauth::disconnect(store, &row).await?;
+            if remove {
+                store.integration_delete(&id)?;
+            }
+            reload_agents(app, users).await;
+            ok(json!({ "revoked": revoked, "removed": remove }))
+        }
+        _ => Err(RpcError::new(METHOD_NOT_FOUND, format!("unknown method {method}"))),
+    }
+}
+
+pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResult {
+    if method.starts_with("integrations.oauth_") {
+        return oauth_dispatch(app, peer, method, p).await;
+    }
     let store = &app.sup.hub().store;
     match method {
         "integrations.list" => ok(store.integration_list()?),
@@ -37,6 +215,12 @@ pub async fn dispatch(app: &App, method: &str, p: Value) -> RpcResult {
             .map_err(|e| RpcError::new(SERVER_ERROR, format!("catalog: {e}")))?),
         "integrations.add" => {
             let n: NewIntegration = params(p)?;
+            if n.auth == IntegrationAuth::Oauth {
+                return Err(RpcError::new(
+                    INVALID_PARAMS,
+                    "a browser sign-in is started with integrations.oauth_begin",
+                ));
+            }
             check_new(&n)?;
             if store.integration_list()?.iter().any(|i| i.name == n.name) {
                 return Err(RpcError::new(
@@ -54,6 +238,13 @@ pub async fn dispatch(app: &App, method: &str, p: Value) -> RpcResult {
             // Check the row as it will be after the patch.
             let after = apply(&cur, &patch);
             check_definition(&after)?;
+            if cur.auth == IntegrationAuth::Oauth && (after.url != cur.url || after.kind != cur.kind) {
+                // The tokens are for that server: another address needs another sign-in.
+                return Err(RpcError::new(
+                    INVALID_PARAMS,
+                    "disconnect the sign-in before changing the address",
+                ));
+            }
             if patch.name.as_deref().is_some_and(|n| n != cur.name)
                 && store
                     .integration_list()?
@@ -66,6 +257,10 @@ pub async fn dispatch(app: &App, method: &str, p: Value) -> RpcResult {
         }
         "integrations.remove" => {
             let Id { id } = params(p)?;
+            if let Some(row) = store.integration_get(&id)?.filter(|r| r.auth == IntegrationAuth::Oauth) {
+                // Its tokens go with it, and the service is told (a refusal there does not stop the removal).
+                mcp_oauth::disconnect(store, &row).await?;
+            }
             ok(json!({ "deleted": store.integration_delete(&id)? }))
         }
         "integrations.test" => {
@@ -93,19 +288,66 @@ pub async fn dispatch(app: &App, method: &str, p: Value) -> RpcResult {
 /// tools come back, or the error. With `draft`, every value of the row's environment and headers is a secret for
 /// the error text, since the owner typed them and they are not stored.
 async fn probe_row(store: &Store, row: &Integration, draft: bool) -> RpcResult {
-    let secrets: HashMap<String, String> = store.secrets_all()?.into_iter().collect();
-    let servers = integrations::resolve(&[row], &secrets);
-    let Some(mut server) = servers.into_iter().next() else {
-        return ok(json!({ "ok": false, "tools": [], "error": "a secret it names is not set" }));
-    };
-    if draft {
-        server = all_secret(server);
+    let oauth = row.auth == IntegrationAuth::Oauth;
+    let sign_in =
+        || ok(json!({ "ok": false, "tools": [], "error": "sign in to this service again", "needs_login": true }));
+    if oauth {
+        if draft {
+            return ok(
+                json!({ "ok": false, "tools": [], "error": "a browser sign-in cannot be tried before it is done" }),
+            );
+        }
+        // A token that is about to end is renewed first.
+        match mcp_oauth::refresh(store, &row.id, Why::Expiring(mcp_oauth::SESSION_SKEW_MS), now_ms()).await {
+            Ok(Outcome::NeedsLogin) => return sign_in(),
+            Ok(_) => {}
+            Err(e) => tracing::warn!(integration = row.name, "{e:#}"),
+        }
     }
-    match probe(&server, TEST_TIMEOUT).await {
+    let mut result = run_probe(store, row, draft).await;
+    if oauth
+        && let Err(e) = &result
+        && e.downcast_ref::<HttpStatus>().is_some_and(|s| s.0 == 401)
+        && let Some(stale) = mcp_oauth::access_token(store, &row.id)?
+    {
+        // The service refused the token: renew it once and try again.
+        match mcp_oauth::refresh(store, &row.id, Why::Rejected(stale), now_ms()).await {
+            Ok(Outcome::Refreshed) => result = run_probe(store, row, draft).await,
+            Ok(Outcome::NeedsLogin) => return sign_in(),
+            Ok(Outcome::Unchanged) => result = run_probe(store, row, draft).await,
+            Err(e) => tracing::warn!(integration = row.name, "{e:#}"),
+        }
+    }
+    match result {
         Ok(tools) => ok(json!({ "ok": true, "tools": tools })),
         Err(e) => ok(json!({ "ok": false, "tools": [], "error": format!("{e:#}") })),
     }
 }
+
+/// One run of the probe for `row`, with the secrets it names read now.
+async fn run_probe(store: &Store, row: &Integration, draft: bool) -> anyhow::Result<Vec<String>> {
+    let secrets: HashMap<String, String> = store.secrets_all()?.into_iter().collect();
+    let servers = integrations::resolve(&[row], &secrets);
+    let Some(mut server) = servers.into_iter().next() else {
+        anyhow::bail!("a secret it names is not set");
+    };
+    if draft {
+        server = all_secret(server);
+    }
+    probe(&server, TEST_TIMEOUT).await
+}
+
+/// An http server answered with this status: kept as a type so a 401 can be told from other failures.
+#[derive(Debug)]
+struct HttpStatus(u16);
+
+impl std::fmt::Display for HttpStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "the server answered with HTTP {}", self.0)
+    }
+}
+
+impl std::error::Error for HttpStatus {}
 
 /// Every environment and header value of a draft counts as a secret: a failure's stderr tail hides them all.
 fn all_secret(mut server: Server) -> Server {
@@ -160,6 +402,7 @@ fn draft_row(n: &NewIntegration) -> Integration {
         headers: n.headers.clone(),
         enabled: n.enabled,
         created_at: 0,
+        auth: n.auth,
     }
 }
 
@@ -464,7 +707,7 @@ async fn http_post(url: &str, headers: &[Pair], msg: &Value, session: Option<&st
     }
     let parsed = parse_http(&raw)?;
     if parsed.status >= 400 {
-        anyhow::bail!("the server answered with HTTP {}", parsed.status);
+        return Err(HttpStatus(parsed.status).into());
     }
     Ok(HttpReply {
         session: parsed.session,
@@ -747,6 +990,7 @@ mod tests {
             headers: BTreeMap::new(),
             enabled: true,
             created_at: 0,
+            auth: Default::default(),
         };
         let patch = IntegrationPatch {
             command: Some(None),
@@ -994,5 +1238,236 @@ mod tests {
         }
         std::fs::remove_dir_all(&dir).ok();
         assert!(gone, "pid {pid} still runs after the probe");
+    }
+
+    mod oauth {
+        use super::super::super::{App, Peer, UNAUTHORIZED, dispatch, features};
+        use crate::hub::Hub;
+        use crate::mcp_oauth::fake::Fake;
+        use crate::store::Store;
+        use crate::supervisor::{Runtimes, Supervisor};
+        use serde_json::{Value, json};
+        use std::path::PathBuf;
+        use std::sync::Arc;
+
+        const METHODS: [&str; 5] = [
+            "integrations.oauth_begin",
+            "integrations.oauth_complete",
+            "integrations.oauth_cancel",
+            "integrations.oauth_status",
+            "integrations.oauth_disconnect",
+        ];
+
+        fn app() -> Arc<App> {
+            let store = Arc::new(Store::open_in_memory().unwrap());
+            let sup = Supervisor::new(Hub::new(store), Runtimes::default(), None);
+            App::new(sup, PathBuf::from("unused-agents-root"))
+        }
+
+        async fn call(app: &App, method: &str, p: Value) -> super::super::RpcResult {
+            dispatch(app, &Peer::Local, method, p).await
+        }
+
+        /// Sign in to the fake server as a new integration called `notion`.
+        async fn sign_in(app: &App, fake: &Fake) -> Value {
+            let begun = call(
+                app,
+                "integrations.oauth_begin",
+                json!({ "draft": { "name": "notion", "kind": "http", "url": fake.url() } }),
+            )
+            .await
+            .unwrap();
+            let (code, state) = fake.authorize(begun["authorize_url"].as_str().unwrap());
+            assert_eq!(begun["state"], state);
+            call(
+                app,
+                "integrations.oauth_complete",
+                json!({ "state": state, "code": code }),
+            )
+            .await
+            .unwrap()
+        }
+
+        #[test]
+        fn the_daemon_advertises_browser_sign_in() {
+            assert!(features().contains(&"integrations_oauth"));
+        }
+
+        #[tokio::test]
+        async fn agents_and_strangers_cannot_sign_in_to_anything() {
+            let app = app();
+            for method in METHODS {
+                for peer in [Peer::Agent("a1".into()), Peer::Anonymous("1.2.3.4".into())] {
+                    let err = dispatch(&app, &peer, method, json!({})).await.unwrap_err();
+                    assert_eq!(err.code, UNAUTHORIZED, "{method}");
+                    assert!(!crate::rpc::allowed(&peer, method), "{method}");
+                }
+            }
+        }
+
+        #[tokio::test]
+        async fn a_sign_in_lists_as_oauth_hides_its_secrets_and_survives_a_probe() {
+            let app = app();
+            let fake = Fake::start().await;
+            let done = sign_in(&app, &fake).await;
+            let id = done["id"].as_str().unwrap().to_string();
+            assert_eq!(
+                (done["status"].as_str(), done["created"].as_bool()),
+                (Some("connected"), Some(true))
+            );
+            // The list shows how it signs in, and no token.
+            let access = fake.inner.lock().unwrap().access.clone();
+            let list = call(&app, "integrations.list", json!({})).await.unwrap();
+            assert_eq!(list[0]["auth"], "oauth");
+            assert!(!list.to_string().contains(&access));
+            // The secrets screen does not see the daemon's tokens, and cannot write or delete them.
+            let secrets = call(&app, "secrets.list", json!({})).await.unwrap();
+            assert_eq!(secrets, json!([]));
+            let name = crate::integrations::oauth_access_name(&id);
+            for (method, p) in [
+                (
+                    "secrets.set",
+                    json!({ "name": name, "value": "stolen-value", "agents": [] }),
+                ),
+                ("secrets.delete", json!({ "name": name })),
+            ] {
+                assert!(call(&app, method, p).await.is_err(), "{method}");
+            }
+            // `integrations.test` reaches the server with the daemon's token.
+            let tested = call(&app, "integrations.test", json!({ "id": id })).await.unwrap();
+            assert_eq!(tested["ok"], true, "{tested}");
+            assert_eq!(tested["tools"], json!(["search", "fetch"]));
+            // Status.
+            let st = call(&app, "integrations.oauth_status", json!({ "id": id }))
+                .await
+                .unwrap();
+            assert_eq!(st["integrations"][0]["status"], "connected");
+            assert!(!st.to_string().contains(&access));
+        }
+
+        #[tokio::test]
+        async fn a_401_from_the_service_renews_the_token_and_tries_again() {
+            let app = app();
+            let fake = Fake::start().await;
+            let done = sign_in(&app, &fake).await;
+            let id = done["id"].as_str().unwrap();
+            // The service stops accepting the stored token (revoked, rotated) but still honours the refresh token.
+            fake.set(|i| i.access = "at-rotated-elsewhere".into());
+            let stored_before = app
+                .sup
+                .hub()
+                .store
+                .secret_get(&crate::integrations::oauth_access_name(id))
+                .unwrap();
+            let tested = call(&app, "integrations.test", json!({ "id": id })).await.unwrap();
+            assert_eq!(tested["ok"], true, "{tested}");
+            let stored_after = app
+                .sup
+                .hub()
+                .store
+                .secret_get(&crate::integrations::oauth_access_name(id))
+                .unwrap();
+            assert_ne!(stored_before, stored_after);
+            assert_eq!(stored_after, Some(fake.inner.lock().unwrap().access.clone()));
+        }
+
+        #[tokio::test]
+        async fn when_the_service_refuses_the_refresh_too_the_answer_says_to_sign_in_again() {
+            let app = app();
+            let fake = Fake::start().await;
+            let done = sign_in(&app, &fake).await;
+            let id = done["id"].as_str().unwrap();
+            fake.set(|i| {
+                i.access = "at-rotated-elsewhere".into();
+                i.refresh_failure = Some((400, "invalid_grant".into()));
+            });
+            let tested = call(&app, "integrations.test", json!({ "id": id })).await.unwrap();
+            assert_eq!(
+                (tested["ok"].as_bool(), tested["needs_login"].as_bool()),
+                (Some(false), Some(true))
+            );
+            let st = call(&app, "integrations.oauth_status", json!({})).await.unwrap();
+            assert_eq!(st["integrations"][0]["status"], "needs_login");
+        }
+
+        #[tokio::test]
+        async fn disconnect_and_remove_delete_the_tokens_and_tell_the_service() {
+            let app = app();
+            let fake = Fake::start().await;
+            let done = sign_in(&app, &fake).await;
+            let id = done["id"].as_str().unwrap();
+            let gone = call(&app, "integrations.oauth_disconnect", json!({ "id": id }))
+                .await
+                .unwrap();
+            assert_eq!(gone, json!({ "revoked": true, "removed": false }));
+            // The row stays, signed out.
+            let st = call(&app, "integrations.oauth_status", json!({ "id": id }))
+                .await
+                .unwrap();
+            assert_eq!(st["integrations"][0]["status"], "not_connected");
+            // Signing in again, then removing the integration itself, takes the tokens with it.
+            let begun = call(&app, "integrations.oauth_begin", json!({ "integration": id }))
+                .await
+                .unwrap();
+            let (code, state) = fake.authorize(begun["authorize_url"].as_str().unwrap());
+            let back = call(
+                &app,
+                "integrations.oauth_complete",
+                json!({ "state": state, "code": code }),
+            )
+            .await
+            .unwrap();
+            assert_eq!(
+                (back["id"].as_str(), back["created"].as_bool()),
+                (Some(id), Some(false))
+            );
+            call(&app, "integrations.remove", json!({ "id": id })).await.unwrap();
+            assert!(app.sup.hub().store.secrets_all().unwrap().is_empty());
+            assert_eq!(fake.inner.lock().unwrap().revoked.len(), 4, "two tokens, twice");
+        }
+
+        #[tokio::test]
+        async fn the_address_of_a_signed_in_integration_is_fixed_and_add_cannot_claim_oauth() {
+            let app = app();
+            let fake = Fake::start().await;
+            let done = sign_in(&app, &fake).await;
+            let id = done["id"].as_str().unwrap();
+            let err = call(
+                &app,
+                "integrations.update",
+                json!({ "id": id, "url": "https://other.example/mcp" }),
+            )
+            .await
+            .unwrap_err();
+            assert!(err.message.contains("disconnect"), "{}", err.message);
+            call(&app, "integrations.update", json!({ "id": id, "enabled": false }))
+                .await
+                .unwrap();
+            let err = call(
+                &app,
+                "integrations.add",
+                json!({ "name": "x", "kind": "http", "url": "https://x.example/mcp", "auth": "oauth" }),
+            )
+            .await
+            .unwrap_err();
+            assert!(err.message.contains("oauth_begin"), "{}", err.message);
+        }
+
+        #[tokio::test]
+        async fn a_draft_that_is_not_a_valid_integration_never_starts() {
+            let app = app();
+            for draft in [
+                json!({ "name": "Bad Name", "kind": "http", "url": "https://x.example/mcp" }),
+                json!({ "name": "stdio-one", "kind": "stdio", "command": "npx" }),
+                json!({ "name": "plain", "kind": "http", "url": "http://x.example/mcp" }),
+            ] {
+                let err = call(&app, "integrations.oauth_begin", json!({ "draft": draft }))
+                    .await
+                    .unwrap_err();
+                assert_eq!(err.code, crate::rpc::INVALID_PARAMS, "{draft}");
+            }
+            let err = call(&app, "integrations.oauth_begin", json!({})).await.unwrap_err();
+            assert_eq!(err.code, crate::rpc::INVALID_PARAMS);
+        }
     }
 }

@@ -1169,6 +1169,19 @@ impl Actor {
         // The owner's MCP servers for this agent: enabled, in its list, with their secrets read now.
         let all_integrations = self.hub.store.integration_list()?;
         let chosen = crate::integrations::for_agent(&all_integrations, agent.integrations.as_deref());
+        // A browser sign-in whose token ends soon is renewed now; one that cannot be used is left out, and the agent
+        // is told when the person has to sign in again.
+        let unusable = crate::mcp_oauth::ready_for_session(&self.hub.store, &chosen, crate::store::now_ms()).await;
+        let relogin: Vec<&str> = chosen
+            .iter()
+            .filter(|i| unusable.iter().any(|(id, login)| *login && *id == i.id))
+            .map(|i| i.name.as_str())
+            .collect();
+        let relogin_line = crate::integrations::relogin_line(&relogin);
+        let chosen: Vec<&crate::store::Integration> = chosen
+            .into_iter()
+            .filter(|i| !unusable.iter().any(|(id, _)| *id == i.id))
+            .collect();
         let integration_secrets: Vec<(String, String)> = {
             let names = crate::integrations::secret_names(&chosen);
             self.hub
@@ -1208,6 +1221,9 @@ impl Actor {
         }
         let names: Vec<&str> = mcp_servers.iter().map(|s| s.name.as_str()).collect();
         if let Some(line) = crate::integrations::prompt_line(&names) {
+            blocks.push(line);
+        }
+        if let Some(line) = relogin_line {
             blocks.push(line);
         }
         if let Some(sp) = agent.system_prompt.as_deref().filter(|s| !s.trim().is_empty()) {

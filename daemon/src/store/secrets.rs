@@ -142,6 +142,15 @@ impl Store {
         Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
 
+    /// One secret's value, for the daemon's own use (the OAuth tokens of `mcp_oauth.rs`).
+    pub fn secret_get(&self, name: &str) -> Result<Option<String>> {
+        use rusqlite::OptionalExtension;
+        Ok(self
+            .conn()
+            .query_row("SELECT value FROM secrets WHERE name = ?1", [name], |r| r.get(0))
+            .optional()?)
+    }
+
     pub fn secrets_for_agent(&self, agent_id: &str) -> Result<Vec<(String, String)>> {
         let conn = self.conn();
         let mut stmt = conn.prepare("SELECT name, value, agents FROM secrets ORDER BY name")?;

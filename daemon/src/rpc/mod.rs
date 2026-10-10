@@ -85,6 +85,7 @@ pub fn features() -> Vec<&'static str> {
         "attachments",
         "integrations",
         "integrations_probe",
+        "integrations_oauth",
         "avatar_pictures",
         "lead",
     ];
@@ -126,6 +127,8 @@ pub struct App {
     pub data_home: PathBuf,
     /// The models each agent CLI offers, as last read (see docs/ARCHITECTURE.md#runtime-models).
     pub models: crate::runtime::models::ModelCache,
+    /// Browser sign-ins to MCP servers that wait for their answer (see docs/ARCHITECTURE.md#integrations).
+    pub oauth: crate::mcp_oauth::Flows,
 }
 
 impl App {
@@ -165,6 +168,7 @@ impl App {
             screens: Arc::new(crate::screen::ScreenManager::new(screens_dir())),
             data_home,
             models: crate::runtime::models::ModelCache::default(),
+            oauth: crate::mcp_oauth::Flows::default(),
         })
     }
 }
@@ -281,8 +285,8 @@ fn bind_to_agent(agent: &str, mut p: Value) -> Result<Value, RpcError> {
     Ok(p)
 }
 
-/// Where a `pair.redeem` comes from, for its rate limit.
-fn redeem_source(peer: &Peer) -> String {
+/// Who is calling, as a string: where a `pair.redeem` comes from, and which device a browser sign-in belongs to.
+pub(crate) fn redeem_source(peer: &Peer) -> String {
     match peer {
         Peer::Local => "local".into(),
         Peer::Anonymous(source) => source.clone(),
@@ -1098,7 +1102,12 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
         | "integrations.update"
         | "integrations.remove"
         | "integrations.test"
-        | "integrations.probe" => integrations::dispatch(app, method, p).await,
+        | "integrations.probe"
+        | "integrations.oauth_begin"
+        | "integrations.oauth_complete"
+        | "integrations.oauth_cancel"
+        | "integrations.oauth_status"
+        | "integrations.oauth_disconnect" => integrations::dispatch(app, peer, method, p).await,
         "agents.avatar_image_set" | "agents.avatar_image_get" | "agents.avatar_image_clear" => {
             avatar::dispatch(app, method, p).await
         }

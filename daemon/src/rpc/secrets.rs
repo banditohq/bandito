@@ -3,6 +3,7 @@
 //! See docs/ARCHITECTURE.md#secrets.
 
 use super::{App, INVALID_PARAMS, METHOD_NOT_FOUND, RpcError, RpcResult, ok, params};
+use crate::integrations::OAUTH_SECRET_PREFIX;
 use crate::store::{check_agents, check_name, check_value};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -23,10 +24,16 @@ struct SetParams {
 pub async fn dispatch(app: &App, method: &str, p: Value) -> RpcResult {
     let store = &app.sup.hub().store;
     match method {
-        "secrets.list" => ok(store.secret_list()?),
+        // The daemon's own sign-in tokens (`mcp_oauth.rs`) are not for the secrets screen.
+        "secrets.list" => ok(store
+            .secret_list()?
+            .into_iter()
+            .filter(|s| !s.name.starts_with(OAUTH_SECRET_PREFIX))
+            .collect::<Vec<_>>()),
         "secrets.set" => {
             let p: SetParams = params(p)?;
             check_name(&p.name).map_err(invalid)?;
+            check_not_oauth(&p.name)?;
             check_value(&p.value).map_err(invalid)?;
             check_agents(&p.agents).map_err(invalid)?;
             let before = agents_of(app, &p.name)?;
@@ -37,6 +44,7 @@ pub async fn dispatch(app: &App, method: &str, p: Value) -> RpcResult {
         "secrets.delete" => {
             let p: NameParams = params(p)?;
             check_name(&p.name).map_err(invalid)?;
+            check_not_oauth(&p.name)?;
             let before = agents_of(app, &p.name)?;
             let deleted = store.secret_delete(&p.name)?;
             if deleted {
@@ -46,6 +54,14 @@ pub async fn dispatch(app: &App, method: &str, p: Value) -> RpcResult {
         }
         _ => Err(RpcError::new(METHOD_NOT_FOUND, format!("unknown method {method}"))),
     }
+}
+
+/// The sign-in secrets belong to the daemon: disconnect the integration instead.
+fn check_not_oauth(name: &str) -> Result<(), RpcError> {
+    if name.starts_with(OAUTH_SECRET_PREFIX) {
+        return Err(RpcError::new(INVALID_PARAMS, format!("{name} is reserved")));
+    }
+    Ok(())
 }
 
 fn invalid(e: anyhow::Error) -> RpcError {

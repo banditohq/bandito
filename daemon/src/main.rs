@@ -528,6 +528,7 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr, home_given: bool) 
     });
 
     bandito::scheduler::spawn_loop(sup.clone());
+    rpc::integrations::spawn_oauth_refresher(app.clone());
     // Stops server screens that nobody has used for 30 minutes (see docs/ARCHITECTURE.md#screen).
     app.screens.spawn_idle_reaper();
 
