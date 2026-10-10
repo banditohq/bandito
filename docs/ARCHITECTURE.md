@@ -58,7 +58,7 @@ Everything an agent does becomes a row in `events` (append-only, global `seq`). 
 |---|---|
 | `turn.started` | `{turn_id, source: "user"\|"schedule"\|"crew"}`, plus `message_seq?` (the seq of the `message.user` this turn answers, when that message was shown before the turn began; see Queued messages under Chapters) |
 | `message.dropped` | `{seq, reason}`: the waiting `message.user` with this seq will get no turn (`crash`, `failed`, `stopped`, `restart`); see Queued messages under Chapters |
-| `message.user` | `{text, source, from_agent?, command?, reply_to?, attachments?, queued?}` (`text` is what the person typed; `command` names a slash command, see [Commands](#commands); `reply_to` is the seq of the message it answers and `attachments` the files it carries, see [Replies and attachments](#replies-and-attachments)) |
+| `message.user` | `{text, source, from_agent?, command?, reply_to?, attachments?, mentions?, queued?}` (`text` is what the person typed; `command` names a slash command, see [Commands](#commands); `reply_to` is the seq of the message it answers and `attachments` the files it carries, see [Replies and attachments](#replies-and-attachments); `mentions` are the `@` mentions in the text, see [Mentions](#mentions)) |
 | `message.assistant` | `{text}` (final text of a message) |
 | `message.delta` | `{text}` streaming chunk, **not persisted**, broadcast only |
 | `tool.call` | `{call_id, tool, title, input}` |
@@ -103,6 +103,35 @@ A reaction by the person on a message of the agent does not start a turn. The re
 `agents.send{agent_id, text, reply_to?, attachments?}`. `reply_to` is the seq of a message in the same thread. The prompt then starts with `В ответ на: > <first 300 characters of that message>` and a blank line, and the thread shows the reply in the event's `reply_to`.
 
 Files come first, from `attachments.upload{agent_id, name, data_base64}`. A file is at most 20 MB after decoding; the RPC socket takes one message up to 32 MB, which is what an upload of that size needs in base64 and JSON. Its name has no `/`, `\`, `..` or control characters, does not start with a dot, and is at most 200 bytes. It is saved in `<agent folder>/.bandito/attachments/<YYYY-MM-DD>/`, or in `<agent home>/files/attachments/<YYYY-MM-DD>/` when the agent has no folder or the folder would be Bandito's own data folder. The project's `.bandito` folder gets a `.gitignore` of `*` when it is first made (an existing one, or a link in its place, is left alone), so attachments never end up in the project's commits. A name taken on that day becomes `name (2).ext`, `name (3).ext`. The reply is `{path, name, size, mime}` (`mime` from the extension). A message may carry files with no text (`text: ""`); the runtime then reads `(без текста)` in place of the text. `agents.send` accepts `attachments: [path]` only for files in those folders of that agent (at most 20 per message). The event `message.user` carries them as `attachments: [{path, name, size, mime}]`, and the prompt lists them after the text: `Вложения:` and one `- <path> (<mime>, <size> байт)` line each. Nothing is written through a link: if `.bandito`, `attachments` or the day folder is a symbolic link, the upload is refused. `agents.send` takes a path only when its real location (links followed) is a file inside one of those folders, and the message carries that real path. The agent reads them by path; the agent's own folder is readable under the approval policy.
+
+## Mentions
+
+The person points an agent at something with `@` in the message box: a connected service, a teammate, a file of the agent's folder, or an open tab of the server's browser. Code: `daemon/src/mentions.rs` (types, shape, the note), `daemon/src/rpc/chat.rs` (`mentions_for`, the lookups). Feature string: `"mentions"`.
+
+`agents.send{agent_id, text, ..., mentions?}`, `mentions` is a list of `{kind, id, label}`, at most 20, `kind` one of `integration`, `agent`, `file`, `browser_tab`. `label` (at most 120 characters, no control characters) is the text after the `@` in `text`, which keeps the words as typed. The daemon checks every mention before anything is written, and a refusal (`invalid params`) sends nothing:
+
+| kind | `id` | accepted when |
+|---|---|---|
+| `integration` | the integration's id | it exists, is enabled, and is one the agent may use (`agents.integrations`, `null` = every enabled one) |
+| `agent` | the agent's id | the agent exists |
+| `file` | an absolute path, no `.` or `..` part | it exists, lies in the server's file roots, and its real path (links followed) is inside the agent's folder or its own home; Bandito's data folder is closed except for the agent's own home |
+| `browser_tab` | the tab id | the server's browser runs and lists that page |
+
+The same thing named twice is one mention. The event `message.user` keeps the checked list as `mentions` (a file by its real path), so a client draws chips from it; an old client ignores the field. The runtime gets a block after the text (and after the attachments), in English, one line each:
+
+```
+Mentioned:
+- linear (a connected service): use its tools (prefix mcp__linear__) for this request
+- @Scout is a teammate; hand this to them with crew_send if it belongs to them
+- file: /abs/path/src/main.rs
+- browser tab: https://example.com/docs ("Docs"); read it with the browser tool
+```
+
+The names are the daemon's (the integration's `name`, the agent's `name`, the tab's real address and title), not the label, so a client cannot put its own words in the block.
+
+**App.** `@` after a space (or at the start) opens the same kind of menu as `/`: SERVICES (connected ones the agent may use, then catalog services marked Connect), AGENTS (the crew except this agent), FILES (the agent's folder: `fs.list` for an empty word, `fs.search` with a pause and a limit for a typed one), BROWSER (`browser.status` then the tabs, when it runs). A pick leaves `@Label ` in the text and a chip in the draft; Backspace at the end of the text right after a chip takes the whole chip. A service that is not connected is not sent: the app asks "Connect X?" above the field and uses the Marketplace's connect (a browser sign-in, or the sheet of keys); the message goes once the service is connected (an agent with its own list of services gets the new one added). A daemon without `mentions` gets the text alone.
+
+**Search.** The menus find by the name in the app's language, by the English name, and by aliases, ignoring case and accents. Aliases are strings: `slash.alias.<command>` for the Bandito commands (`/new`, `/model`, `/effort`, `/memory`, `/changes`, `/terminal`, `/files`, `/usage`, `/pause`), `mention.alias.<kind>` for the groups of `@` (`integration`, `agent`, `file`, `browserTab`); the value is words separated by commas, in the language of the file (English in `en`). A word matches when it, or one of its words, begins with the typed text. A typed group name or alias (`@services`, `@сервисы`) lists the group.
 
 ## Approvals (policy)
 
@@ -229,7 +258,7 @@ Migrations: numbered SQL files embedded in the binary, applied by `PRAGMA user_v
 JSON-RPC 2.0. Same methods on every transport.
 
 - `devices.list` returns the paired devices as `{id, name, created_at, last_seen_at, current}`. `current` is `true` for the device whose token made the request; the owner's CLI is no device, so every row is `false` for it. Old apps ignore the field.
-- Chat: `forms.answer{form_id, action: "submit"\|"reject", values?, comment?}` (`values` checked against the form, `already_answered` on a second answer), `forms.list{agent_id?, status?}`, `messages.react{agent_id, seq, emoji: string|null}`, `attachments.upload{agent_id, name, data_base64}` (returns `{path, name, size, mime}`). `agents.send` also takes `reply_to?: seq` and `attachments?: [path]`. See [Forms](#forms), [Reactions](#reactions), [Replies and attachments](#replies-and-attachments).
+- Chat: `forms.answer{form_id, action: "submit"\|"reject", values?, comment?}` (`values` checked against the form, `already_answered` on a second answer), `forms.list{agent_id?, status?}`, `messages.react{agent_id, seq, emoji: string|null}`, `attachments.upload{agent_id, name, data_base64}` (returns `{path, name, size, mime}`). `agents.send` also takes `reply_to?: seq`, `attachments?: [path]` and `mentions?: [{kind, id, label}]`. See [Forms](#forms), [Reactions](#reactions), [Replies and attachments](#replies-and-attachments), [Mentions](#mentions).
 - Requests: `daemon.info` (also `safe_mode`, `safe_mode_error`, `last_restore`; see [Backups](#backups)), `runtimes.status` (each entry has `supported_capabilities`, see [Capabilities](#capabilities)), `runtimes.models{runtime?, refresh?}` (see [Runtime models](#runtime-models)), `agents.list|get|create|update|delete` (`update` takes `paused` too, see [Pause](#pause)), `agents.send{agent_id,text}` (replies `{queued: true}` when the agent is paused), `agents.interrupt`, `agents.new_chapter{id}` (owner only: starts the agent's next chapter now, with the same wrap-up as a context close; a running turn finishes first), `agents.pause_all{paused}`, `events.since{seq,limit,agent_id?}`, `approvals.list|resolve{approval_id,decision,remember}`, `rules.list|set|delete`, `schedules.list|create|update|delete|run_now`, `devices.list|revoke`, `pair.redeem{code,device_name}` (only unauthenticated method), `term.list|open|input|resize|rename|close|attach|detach` (see Terminals), `fs.*` (see [Files](#files)), `changes.checkpoints|diff|file|restore` (see [Changes](#changes)), `secrets.list|set|delete` (see [Secrets](#secrets), `host.stats|history|processes|ports|kill`, `setup.status|install|job` (see [Setup](#setup)), `commands.list|install` (see [Commands](#commands)), `browser.start|status|stop|control|touch|close_tab` (see [Browser](#browser)), `workspaces.list|create|update|delete|start|stop` (see [Workspaces](#workspaces)), `daemon.logs{lines,level}` (see [Logs](#logs)), `backups.list|create|restore|leave_safe_mode` (see [Backups](#backups)). `agents.create|update` also take `avatar` and `capabilities` (see [Capabilities](#capabilities)). `agents.avatar_image_set|get|clear` are the picture of the avatar (see Capabilities, avatar picture). `browser.agent.*` is for the crew MCP on the server only.
 - Notifications (server → client): `event{seq, agent_id, kind, payload, ts}` for every event including `message.delta`; `term.output|gap|exit|closed` for attached terminals (see Terminals).
 
@@ -765,6 +794,8 @@ Front matter is the YAML block between two `---` lines. The daemon reads top-lev
 - An unknown `/x` goes as typed, and the CLI deals with it.
 
 This applies to messages from people (`agents.send`) and to schedule prompts. Crew messages are not expanded.
+
+**Aliases (app only).** The commands of the Bandito group (`/new`, `/model`, `/effort`, `/memory`, `/changes`, `/terminal`, `/files`, `/usage`, `/pause`) run in the app, not on the daemon. The `/` menu finds them by their English name, which always works, and by the words of `slash.alias.<command>` in the app's language (ru: `/модель` finds `/model`). Case and accents do not matter. The daemon's own commands keep their names. See [Mentions](#mentions) for the same rule in `@`.
 
 Expansion: the front matter is dropped. `$ARGUMENTS` becomes the whole argument string, and `$1`…`$9` become the words of it. Words are split as a shell does for simple cases: spaces separate them, `"…"` and `'…'` group them (single quotes are literal), and a backslash escapes the next character. A file without placeholders, given arguments, gets `Arguments: <args>` appended after a blank line. A skill becomes `Use the skill below.`, its body, and `Task: <args>` (the last line only when there are arguments).
 

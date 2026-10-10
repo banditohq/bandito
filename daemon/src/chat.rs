@@ -106,8 +106,14 @@ pub const NO_TEXT: &str = "(без текста)";
 
 /// The text the runtime gets for a message: the reaction line first, then the quoted message it replies to,
 /// then the text, then the attachments as paths. `reply` is the text of the message replied to. A message with
-/// files and no text reads `(без текста)`.
-pub fn runtime_text(text: &str, note: Option<&str>, reply: Option<&str>, attachments: &[Attachment]) -> String {
+/// files and no text reads `(без текста)`. `mentioned` is the `Mentioned:` block of `@` mentions, last.
+pub fn runtime_text(
+    text: &str,
+    note: Option<&str>,
+    reply: Option<&str>,
+    attachments: &[Attachment],
+    mentioned: Option<&str>,
+) -> String {
     let mut out = String::new();
     if let Some(note) = note {
         out.push_str(note);
@@ -126,6 +132,10 @@ pub fn runtime_text(text: &str, note: Option<&str>, reply: Option<&str>, attachm
         for a in attachments {
             out.push_str(&format!("\n- {} ({}, {} байт)", a.path, a.mime, a.size));
         }
+    }
+    if let Some(mentioned) = mentioned {
+        out.push_str("\n\n");
+        out.push_str(mentioned);
     }
     out
 }
@@ -203,7 +213,7 @@ mod tests {
 
     #[test]
     fn plain_text_is_unchanged() {
-        assert_eq!(runtime_text("hi", None, None, &[]), "hi");
+        assert_eq!(runtime_text("hi", None, None, &[], None), "hi");
     }
 
     #[test]
@@ -215,7 +225,7 @@ mod tests {
             mime: "image/png".into(),
         }];
         let note = "(Реакции с прошлого раза: 👍 на «x»)";
-        let out = runtime_text("Да", Some(note), Some("Вопрос?"), &files);
+        let out = runtime_text("Да", Some(note), Some("Вопрос?"), &files, None);
         assert_eq!(
             out,
             "(Реакции с прошлого раза: 👍 на «x»)\n\nВ ответ на: > Вопрос?\n\nДа\n\nВложения:\n- /w/.bandito/attachments/2026-10-10/a.png (image/png, 12 байт)"
@@ -231,20 +241,20 @@ mod tests {
             mime: "image/png".into(),
         }];
         assert_eq!(
-            runtime_text("", None, None, &files),
+            runtime_text("", None, None, &files, None),
             "(без текста)\n\nВложения:\n- /w/.bandito/attachments/2026-10-10/a.png (image/png, 12 байт)"
         );
         assert_eq!(
-            runtime_text("  ", None, None, &files),
-            runtime_text("", None, None, &files)
+            runtime_text("  ", None, None, &files, None),
+            runtime_text("", None, None, &files, None)
         );
         // Without files an empty text stays empty; the daemon refuses such a message before it gets here.
-        assert_eq!(runtime_text("", None, None, &[]), "");
+        assert_eq!(runtime_text("", None, None, &[], None), "");
     }
 
     #[test]
     fn the_reply_quote_is_cut_at_300_characters() {
-        let out = runtime_text("ok", None, Some(&"а".repeat(301)), &[]);
+        let out = runtime_text("ok", None, Some(&"а".repeat(301)), &[], None);
         assert!(out.starts_with(&format!("В ответ на: > {}…\n\nok", "а".repeat(300))));
     }
 }

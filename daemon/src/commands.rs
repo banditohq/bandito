@@ -406,6 +406,8 @@ impl Prepared {
             chain: None,
             reply_to: None,
             attachments: Vec::new(),
+            mentions: Vec::new(),
+            mention_note: None,
         }
     }
 }

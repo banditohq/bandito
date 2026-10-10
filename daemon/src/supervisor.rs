@@ -11,6 +11,7 @@ use crate::event::{AgentChange, AgentStatus, DecidedBy, Decision, EventBody, Sou
 use crate::forms::{FormSpec, Outcome};
 use crate::hub::Hub;
 use crate::limit;
+use crate::mentions::Mention;
 use crate::policy::{self, Protected, Verdict};
 use crate::redact::Redactor;
 use crate::runtime::sandbox::SandboxPolicy;
@@ -68,6 +69,10 @@ pub struct Inbound {
     pub reply_to: Option<i64>,
     /// Files attached to the message (a human's message only), already saved in the agent's folder.
     pub attachments: Vec<Attachment>,
+    /// `@` mentions of the message (a human's message only), checked by `agents.send`.
+    pub mentions: Vec<Mention>,
+    /// The `Mentioned:` block the runtime reads after the text (see `crate::mentions::note`).
+    pub mention_note: Option<String>,
 }
 
 impl Inbound {
@@ -82,6 +87,8 @@ impl Inbound {
             command: None,
             reply_to: None,
             attachments: Vec::new(),
+            mentions: Vec::new(),
+            mention_note: None,
         }
     }
 
@@ -96,6 +103,8 @@ impl Inbound {
             command: None,
             reply_to: None,
             attachments: Vec::new(),
+            mentions: Vec::new(),
+            mention_note: None,
         }
     }
 }
@@ -636,6 +645,8 @@ impl Supervisor {
             command: None,
             reply_to: None,
             attachments: Vec::new(),
+            mentions: Vec::new(),
+            mention_note: None,
         };
         self.send(&to.id, msg).await?;
         Ok(to.id)
@@ -1121,6 +1132,7 @@ impl Actor {
                 command: msg.command.clone(),
                 reply_to: msg.reply_to,
                 attachments: msg.attachments.clone(),
+                mentions: msg.mentions.clone(),
                 queued,
             },
         );
@@ -1480,6 +1492,8 @@ impl Actor {
             command: None,
             reply_to: None,
             attachments: Vec::new(),
+            mentions: Vec::new(),
+            mention_note: None,
         };
         match self.start_turn(msg, None).await {
             Ok(()) => true,
@@ -1606,7 +1620,13 @@ impl Actor {
         self.turn_note = note.clone();
         self.turn_until = until;
         let quote = self.reply_quote(&msg);
-        let mut prompt = chat::runtime_text(&msg.text, note.as_deref(), quote.as_deref(), &msg.attachments);
+        let mut prompt = chat::runtime_text(
+            &msg.text,
+            note.as_deref(),
+            quote.as_deref(),
+            &msg.attachments,
+            msg.mention_note.as_deref(),
+        );
         if let Some(name) = self.lead_sender(&msg) {
             prompt = format!("{}\n\n{prompt}", FROM_LEAD.replace("{name}", &name));
         }
@@ -3027,6 +3047,7 @@ mod tests {
             command: None,
             reply_to: None,
             attachments: Vec::new(),
+            mentions: Vec::new(),
             queued: true,
         };
         let lost = w.store.append_event(&w.agent, queued("lost")).unwrap().seq;
@@ -3164,6 +3185,7 @@ mod tests {
                 command: None,
                 reply_to: None,
                 attachments: Vec::new(),
+                mentions: Vec::new(),
                 queued: false,
             }
         );
@@ -3245,6 +3267,8 @@ mod tests {
             command: None,
             reply_to: None,
             attachments: Vec::new(),
+            mentions: Vec::new(),
+            mention_note: None,
         };
         w.sup.send(&w.agent, msg).await.unwrap();
         w.wait_log("send hi").await;
@@ -3366,6 +3390,8 @@ mod tests {
             command: None,
             reply_to: None,
             attachments: Vec::new(),
+            mentions: Vec::new(),
+            mention_note: None,
         };
         w.sup.send(&w.agent, msg).await.unwrap();
         w.wait_log("send hi").await;
@@ -4474,6 +4500,8 @@ mod tests {
             command: None,
             reply_to: None,
             attachments: Vec::new(),
+            mentions: Vec::new(),
+            mention_note: None,
         };
         w.sup.send(&w.agent, wrap_up).await.unwrap();
         w.wait_log("send wrap up").await;
@@ -4951,6 +4979,31 @@ mod tests {
                 assert_eq!(reply_to, Some(quoted));
                 assert_eq!(attachments, vec![file]);
             }
+            other => panic!("not a message: {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn mentions_reach_the_prompt_after_the_text_and_stay_in_the_thread() {
+        let mut w = world(ApprovalMode::Risky);
+        let mention = Mention {
+            kind: crate::mentions::MentionKind::Agent,
+            id: "a-1".into(),
+            label: "Scout".into(),
+        };
+        let note = "Mentioned:\n- @Scout is a teammate; hand this to them with crew_send if it belongs to them";
+        let msg = Inbound {
+            mentions: vec![mention.clone()],
+            mention_note: Some(note.into()),
+            ..Inbound::user("ask @Scout")
+        };
+        w.sup.send(&w.agent, msg).await.unwrap();
+        w.wait_log(&format!("send ask @Scout\n\n{note}")).await;
+        let echo = w
+            .wait(|b| matches!(b, EventBody::MessageUser { text, .. } if text == "ask @Scout"))
+            .await;
+        match echo.body {
+            EventBody::MessageUser { mentions, .. } => assert_eq!(mentions, vec![mention]),
             other => panic!("not a message: {other:?}"),
         }
     }

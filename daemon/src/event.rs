@@ -3,6 +3,7 @@
 
 use crate::attachments::Attachment;
 use crate::forms::{FormAction, FormField, FormKind};
+use crate::mentions::Mention;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
@@ -121,6 +122,9 @@ pub enum EventBody {
         /// Files attached to the message.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         attachments: Vec<Attachment>,
+        /// `@` mentions in the text: services, teammates, files, browser tabs (see docs/ARCHITECTURE.md#mentions).
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        mentions: Vec<Mention>,
         /// True when the message was shown while it still waits for its turn (the agent was busy, saving its memory
         /// for a new chapter, or paused). The turn that takes it carries its seq in `turn.started.message_seq`.
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]

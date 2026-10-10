@@ -90,6 +90,7 @@ pub fn features() -> Vec<&'static str> {
         "integrations_oauth",
         "avatar_pictures",
         "lead",
+        "mentions",
     ];
     if cfg!(target_os = "linux") {
         list.push("screen");
@@ -624,6 +625,9 @@ struct SendParams {
     /// Paths of files in the agent's attachment folders (see `attachments.upload`).
     #[serde(default)]
     attachments: Vec<String>,
+    /// `@` mentions in the text (feature `mentions`; see docs/ARCHITECTURE.md#mentions).
+    #[serde(default)]
+    mentions: Vec<crate::mentions::Mention>,
 }
 #[derive(Deserialize)]
 struct SinceParams {
@@ -1383,6 +1387,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                 text,
                 reply_to,
                 attachments,
+                mentions,
             } = params(p)?;
             // Files alone are a message: the prompt then says there is no text (see `chat::runtime_text`).
             if text.trim().is_empty() && attachments.is_empty() {
@@ -1414,6 +1419,11 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                     .as_ref()
                     .ok_or_else(|| RpcError::new(INVALID_PARAMS, format!("no agent {agent_id}")))?;
                 msg.attachments = chat::attachments_for(app, agent, &attachments)?;
+            }
+            if !mentions.is_empty() {
+                let (kept, note) = chat::mentions_for(app, agent.as_ref(), &mentions).await?;
+                msg.mentions = kept;
+                msg.mention_note = note;
             }
             // A paused agent takes the message into its thread and starts nothing: `queued` says so.
             let queued = app.sup.send_held(&agent_id, msg).await?;
@@ -2169,6 +2179,7 @@ mod history_tests {
             command: None,
             reply_to: None,
             attachments: Vec::new(),
+            mentions: Vec::new(),
             queued: false,
         }
     }
@@ -4007,6 +4018,7 @@ mod pause_and_logs_tests {
                     command: None,
                     reply_to: None,
                     attachments: Vec::new(),
+                    mentions: Vec::new(),
                     queued: false,
                 },
             )
@@ -4024,6 +4036,7 @@ mod pause_and_logs_tests {
                     command: None,
                     reply_to: None,
                     attachments: Vec::new(),
+                    mentions: Vec::new(),
                     queued: false,
                 },
             )
