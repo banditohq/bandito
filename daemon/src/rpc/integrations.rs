@@ -5,7 +5,7 @@ use super::{App, INVALID_PARAMS, METHOD_NOT_FOUND, Peer, RpcError, RpcResult, SE
 use crate::integrations::{self, Pair, Server, Transport};
 use crate::mcp_oauth::{self, Outcome, Target, Why};
 use crate::recommend;
-use crate::store::{Integration, IntegrationAuth, IntegrationPatch, NewIntegration, Store, now_ms};
+use crate::store::{CallFilter, Integration, IntegrationAuth, IntegrationPatch, NewIntegration, Store, now_ms};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -381,6 +381,37 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                 .map_err(|e| RpcError::new(SERVER_ERROR, format!("recommend: {e}")))?;
             ok(found)
         }
+        "integrations.calls" => {
+            #[derive(Deserialize)]
+            struct CallsParams {
+                #[serde(default)]
+                integration: Option<String>,
+                #[serde(default)]
+                agent_id: Option<String>,
+                #[serde(default)]
+                limit: Option<i64>,
+                /// The `id` of the last call of the previous page.
+                #[serde(default)]
+                before: Option<i64>,
+            }
+            let CallsParams {
+                integration,
+                agent_id,
+                limit,
+                before,
+            } = params(p)?;
+            let limit = limit.unwrap_or(50);
+            if !(1..=200).contains(&limit) {
+                return Err(RpcError::new(INVALID_PARAMS, "limit must be 1 to 200".to_string()));
+            }
+            ok(store.tool_calls_list(&CallFilter {
+                integration,
+                agent_id,
+                before,
+                limit,
+            })?)
+        }
+        "integrations.call_stats" => ok(store.tool_call_stats(now_ms())?),
         _ => Err(RpcError::new(METHOD_NOT_FOUND, format!("unknown method {method}"))),
     }
 }
@@ -1204,6 +1235,67 @@ mod tests {
             ..Default::default()
         };
         assert!(check_definition(&apply(&cur, &renamed)).is_err());
+    }
+
+    #[tokio::test]
+    async fn the_call_journal_is_for_the_owner_and_its_filters_hold() {
+        let app = app();
+        let store = app.sup.hub().store.clone();
+        let now = now_ms();
+        let first = store
+            .tool_call_start("a1", "linear", "list", Some("allowed"), now - 1000)
+            .unwrap();
+        store.tool_call_finish(first, 5, true, None).unwrap();
+        store.tool_call_start("a2", "linear", "get", None, now - 500).unwrap();
+        store.tool_call_start("a1", "github", "x", None, now - 100).unwrap();
+
+        let all = owner(&app, "integrations.calls", json!({})).await.unwrap();
+        assert_eq!(all.as_array().unwrap().len(), 3);
+        assert_eq!(all[0]["integration"], "github", "newest first");
+        assert_eq!(all[0]["decision"], serde_json::Value::Null);
+        let linear = owner(&app, "integrations.calls", json!({ "integration": "linear" }))
+            .await
+            .unwrap();
+        assert_eq!(linear.as_array().unwrap().len(), 2);
+        let by_agent = owner(&app, "integrations.calls", json!({ "agent_id": "a1", "limit": 1 }))
+            .await
+            .unwrap();
+        assert_eq!(by_agent[0]["integration"], "github");
+        let before = all[0]["id"].clone();
+        let next = owner(
+            &app,
+            "integrations.calls",
+            json!({ "agent_id": "a1", "before": before }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(next.as_array().unwrap().len(), 1);
+        assert_eq!(next[0]["tool"], "list");
+
+        for limit in [0, 201] {
+            let err = owner(&app, "integrations.calls", json!({ "limit": limit }))
+                .await
+                .unwrap_err();
+            assert_eq!(err.code, INVALID_PARAMS, "limit {limit}");
+        }
+        let stats = owner(&app, "integrations.call_stats", json!({})).await.unwrap();
+        assert_eq!(stats[0]["integration"], "github");
+        assert_eq!(stats[1]["integration"], "linear");
+        assert_eq!(stats[1]["calls_24h"], 2);
+        assert_eq!(stats[1]["errors_24h"], 0);
+        assert!(super::super::features().contains(&"integrations_calls"));
+    }
+
+    #[tokio::test]
+    async fn agents_cannot_read_the_call_journal() {
+        let app = app();
+        let agent = super::super::Peer::Agent("agent-a".into());
+        for method in ["integrations.calls", "integrations.call_stats"] {
+            let err = super::super::dispatch(&app, &agent, method, json!({}))
+                .await
+                .unwrap_err();
+            assert_eq!(err.code, super::super::UNAUTHORIZED, "{method}");
+        }
     }
 
     fn app() -> std::sync::Arc<App> {

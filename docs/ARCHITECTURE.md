@@ -212,6 +212,7 @@ A pending approval blocks only that agent. Approvals time out after 24 h → den
 
 - `agents(id, name, role, runtime, model, cwd, approval_mode, system_prompt, runtime_session_id, created_at, updated_at, fallback_runtime, fallback_model, active_runtime, paused, use_personal_settings, avatar_color, avatar_face, capabilities)`: `avatar_color` and `avatar_face` are the [avatar](#capabilities) (both NULL = derived from the name); `capabilities` is a JSON array of [capabilities](#capabilities), NULL = all. `fallback_runtime`, `fallback_model` and `active_runtime` are the [fallback subscription](#fallback-subscription); `active_runtime` NULL means the primary `runtime`. `paused` is the [pause](#pause) flag
 - `events(seq INTEGER PRIMARY KEY, agent_id, ts, kind, payload JSON)`
+- `tool_calls(id INTEGER PRIMARY KEY, at_ms, agent_id, integration, tool, duration_ms, ok, error, decision)`: the [call journal](#call-journal) of integration tools; kept 30 days and at most 20 000 rows
 - `approvals(id, agent_id, call_id, tool, title, payload JSON, status, decision, created_at, resolved_at)`
 - `rules(id, agent_id NULL, pattern, action)`
 - `schedules(id, agent_id, cron, tz, prompt, enabled, last_run_at, next_run_at, title)`
@@ -457,6 +458,19 @@ The scan covers the folder and each real folder directly below it, and nothing d
 | `package.json` or requirements has `stripe` | `stripe` | `recommend.reason.stripePackage` | the file |
 
 A template that several rules suggest appears once, with the reason of its first rule. `toolbox-postgres` is the catalog's id of Google MCP Toolbox for PostgreSQL. The `reason_key` values the app must translate: `recommend.reason.gitRemoteGithub`, `gitRemoteGitlab`, `nextPackage`, `netlifyToml`, `vercelJson`, `sentryProperties`, `sentryPackage`, `sentryPython`, `supabaseFolder`, `supabasePackage`, `prismaSchema`, `wranglerToml`, `composePostgres`, `linearFolder`, `linearReadme`, `posthogPackage`, `stripePackage`.
+
+
+### Call journal
+
+Each call an agent makes to an integration's tool is one row of `tool_calls` (migration `0019_tool_calls.sql`; columns `id`, `at_ms`, `agent_id`, `integration`, `tool`, `duration_ms`, `ok`, `error`, `decision`; indexes on `(integration, at_ms)` and `(agent_id, at_ms)`). The daemon records a call when the runtime reports it as `tool.call` with the name `mcp__<integration>__<tool>`: `integration` and `tool` are the two parts of that name, without the prefix. `mcp__bandito__…` is the crew server's own tools, not an integration, and is never recorded. The row is written when the call starts; the `tool.result` with the same `call_id` fills `duration_ms` (measured by the daemon from the start), `ok` and, for a failure, `error`: the first 300 characters of the result text. Arguments and results are never stored; a success keeps no text. `decision` is the policy's verdict on the call's approval: `allowed`, `asked` (the human was asked; the answer is not recorded) or `denied`; `null` when the policy did not judge the call. A verdict that comes after the call's start updates its row. Code: `daemon/src/call_journal.rs` (the rules), `daemon/src/store/tool_calls.rs` (rows), the actor in `supervisor.rs` (`journal_event`).
+
+Limits of the recording: a call whose result never comes (the turn ended, the agent's process died, the daemon restarted) keeps its row with `duration_ms` and `ok` NULL. Claude Code reports MCP calls under the `mcp__` name and is recorded. Codex reports them as `<server>.<tool>` and Grok as ACP tool kinds; neither is recorded yet.
+
+Retention: every write removes the rows older than 30 days, then the oldest rows (by `at_ms`) beyond 20 000. Reads do not filter by age, so rows older than 30 days stay visible until the next write.
+
+RPC (owner and devices; agents are refused; feature `integrations_calls`):
+- `integrations.calls {integration?, agent_id?, limit? (1 to 200, default 50), before?}` → the rows, newest first. `before` is the `id` of the last row of the previous page. A `limit` out of range is `INVALID_PARAMS`.
+- `integrations.call_stats` → one entry per integration that has rows: `{integration, calls_24h, errors_24h, calls_7d, last_at}`, newest call first. An error is a call with `ok` false; a call without a result is not an error.
 
 ## Agent templates (data)
 

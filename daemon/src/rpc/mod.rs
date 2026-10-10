@@ -93,6 +93,7 @@ pub fn features() -> Vec<&'static str> {
         "integrations_oauth",
         "template_updates",
         "integrations_recommend",
+        "integrations_calls",
         "avatar_pictures",
         "lead",
         "mentions",
@@ -1212,7 +1213,9 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
         | "integrations.oauth_cancel"
         | "integrations.oauth_status"
         | "integrations.oauth_disconnect"
-        | "integrations.recommend" => integrations::dispatch(app, peer, method, p).await,
+        | "integrations.recommend"
+        | "integrations.calls"
+        | "integrations.call_stats" => integrations::dispatch(app, peer, method, p).await,
         "agents.avatar_image_set" | "agents.avatar_image_get" | "agents.avatar_image_clear" => {
             avatar::dispatch(app, method, p).await
         }
