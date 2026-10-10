@@ -316,6 +316,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             // What the tools may do can be named when the row is added; without it the row starts as the catalog says.
             let tools: ToolWords = params(p)?;
             check_tool_overrides(tools.tool_overrides.as_ref())?;
+            check_new_name(&n.name)?;
             check_new(&n)?;
             if store.integration_list()?.iter().any(|i| i.name == n.name) {
                 return Err(RpcError::new(
@@ -330,7 +331,11 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                     tool_overrides: tools.tool_overrides,
                     ..Default::default()
                 };
-                return ok(store.integration_update(&made.id, patch)?);
+                let done = store.integration_update(&made.id, patch)?;
+                // A new service whose tools are limited from the start: the sessions that would get it are
+                // started again, so Claude is told to send its calls to the daemon.
+                reload_agents(app, users_of(store, &done.id)).await;
+                return ok(done);
             }
             ok(made)
         }
@@ -350,6 +355,9 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                     "disconnect the sign-in before changing the address",
                 ));
             }
+            if let Some(name) = patch.name.as_deref().filter(|n| *n != cur.name) {
+                check_new_name(name)?;
+            }
             if patch.name.as_deref().is_some_and(|n| n != cur.name)
                 && store
                     .integration_list()?
@@ -358,7 +366,14 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             {
                 return Err(RpcError::new(INVALID_PARAMS, "that name is taken"));
             }
-            ok(store.integration_update(&id, patch)?)
+            let changes_tool_rules = changes_tool_rules(&patch);
+            let updated = store.integration_update(&id, patch)?;
+            if changes_tool_rules {
+                // The agents that have the service start their sessions again, with the new rules: Claude lists
+                // the service's calls as `permissions.ask` when the session starts.
+                reload_agents(app, users_of(store, &id)).await;
+            }
+            ok(updated)
         }
         "integrations.remove" => {
             let Id { id } = params(p)?;
@@ -619,6 +634,23 @@ fn apply(cur: &Integration, p: &IntegrationPatch) -> Integration {
         out.headers = v.clone();
     }
     out
+}
+
+/// A patch that moves what the agents may do with a service's tools.
+fn changes_tool_rules(patch: &IntegrationPatch) -> bool {
+    patch.tool_mode.is_some() || patch.tool_overrides.is_some()
+}
+
+/// A new name: two underscores in a row would make `mcp__<name>__<tool>` ambiguous, so none are taken. Names that
+/// exist keep working (the policy reads such a call every way it can be read).
+fn check_new_name(name: &str) -> Result<(), RpcError> {
+    if name.contains("__") {
+        return Err(RpcError::new(
+            INVALID_PARAMS,
+            "a name cannot hold two underscores in a row: use one, or a dash",
+        ));
+    }
+    Ok(())
 }
 
 /// `tool_mode` and `tool_overrides` of an `integrations.add`, read beside the row's own fields.
@@ -1869,6 +1901,68 @@ mod tests {
         assert_eq!(err.code, INVALID_PARAMS);
         let listed = owner(&app, "integrations.list", json!({})).await.unwrap();
         assert!(listed.as_array().unwrap().iter().all(|r| r.get("tool_mode").is_some()));
+    }
+
+    #[test]
+    fn only_a_patch_of_the_tool_rules_restarts_sessions() {
+        assert!(changes_tool_rules(&IntegrationPatch {
+            tool_mode: Some(crate::store::ToolMode::ReadOnly),
+            ..Default::default()
+        }));
+        assert!(changes_tool_rules(&IntegrationPatch {
+            tool_overrides: Some(Default::default()),
+            ..Default::default()
+        }));
+        assert!(!changes_tool_rules(&IntegrationPatch {
+            enabled: Some(false),
+            ..Default::default()
+        }));
+    }
+
+    #[tokio::test]
+    async fn two_underscores_are_refused_in_a_new_name_but_an_old_one_still_works() {
+        let app = app();
+        for bad in [json!({ "name": "a__b", "kind": "stdio", "command": "x" })] {
+            let err = owner(&app, "integrations.add", bad).await.unwrap_err();
+            assert_eq!(err.code, INVALID_PARAMS);
+            assert!(err.message.contains("two underscores"), "{}", err.message);
+        }
+        let ok = owner(
+            &app,
+            "integrations.add",
+            json!({ "name": "a_b", "kind": "stdio", "command": "x" }),
+        )
+        .await
+        .unwrap();
+        let err = owner(&app, "integrations.update", json!({ "id": ok["id"], "name": "c__d" }))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, INVALID_PARAMS);
+        // A row that already has `__` (made before the rule) keeps its name through other changes.
+        let old = app
+            .sup
+            .hub()
+            .store
+            .integration_create(crate::store::NewIntegration {
+                name: "old__one".into(),
+                kind: IntegrationKind::Stdio,
+                command: Some("x".into()),
+                args: vec![],
+                url: None,
+                env: BTreeMap::new(),
+                headers: BTreeMap::new(),
+                enabled: true,
+                auth: Default::default(),
+            })
+            .unwrap();
+        let still = owner(&app, "integrations.update", json!({ "id": old.id, "enabled": false }))
+            .await
+            .unwrap();
+        assert_eq!(still["name"], "old__one");
+        let same = owner(&app, "integrations.update", json!({ "id": old.id, "name": "old__one" }))
+            .await
+            .unwrap();
+        assert_eq!(same["name"], "old__one");
     }
 
     #[test]

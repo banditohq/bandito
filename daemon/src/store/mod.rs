@@ -99,6 +99,12 @@ impl Store {
         Ok(Self { conn: Mutex::new(conn) })
     }
 
+    /// Runs a statement that breaks the database, for a test of what the daemon does when it cannot read it.
+    #[cfg(test)]
+    pub fn break_for_test(&self, sql: &str) {
+        self.conn().execute_batch(sql).unwrap();
+    }
+
     fn conn(&self) -> std::sync::MutexGuard<'_, Connection> {
         self.conn.lock().unwrap_or_else(|e| e.into_inner())
     }

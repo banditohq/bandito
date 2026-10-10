@@ -579,6 +579,28 @@ pub fn codex_config(servers: &[Server]) -> CodexConfig {
     out
 }
 
+/// The owner limited the tools of this service: a mode other than `all`, or a word that denies or asks. Only Claude
+/// sends such calls to the daemon to decide; the other runtimes get no limited service at all.
+pub fn is_limited(row: &Integration) -> bool {
+    row.tool_mode != crate::store::ToolMode::All
+        || row
+            .tool_overrides
+            .values()
+            .any(|word| matches!(word, crate::store::ToolOverride::Deny | crate::store::ToolOverride::Ask))
+}
+
+/// The line for an agent whose runtime cannot hold a limit the owner set: the service is not in its session, and it
+/// is told so. `None` for none.
+pub fn limited_line(names: &[&str]) -> Option<String> {
+    (!names.is_empty()).then(|| {
+        names
+            .iter()
+            .map(|name| format!("{name} ограничен владельцем и в этом рантайме недоступен."))
+            .collect::<Vec<_>>()
+            .join(" ")
+    })
+}
+
 /// The line put in the agent's prompt when it has integrations; `None` for none.
 pub fn prompt_line(names: &[&str]) -> Option<String> {
     (!names.is_empty()).then(|| {

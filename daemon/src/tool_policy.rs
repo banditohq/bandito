@@ -3,7 +3,10 @@
 //!
 //! Order: the owner's word on the tool (`tool_overrides`), else the service's mode (`tool_mode`). A tool that reads
 //! runs in `read_only` and `confirm_writes`; one that changes something is refused in `read_only` and asked about in
-//! `confirm_writes`. Whether a tool reads comes from [`ToolCatalog`] (the annotations of `tools/list`); a tool that is
+//! `confirm_writes`. Tool names are compared as Claude Code writes them in `mcp__<service>__<tool>`: every character
+//! outside `A-Za-z0-9_-` is an underscore ([`normalize`]), on both sides, so `create.issue` and `create_issue` are one
+//! tool. A name that can be split in more than one way (`mcp__a__b__go` is `a` with `b__go`, or `a__b` with `go`) is
+//! judged both ways and the strictest verdict stands ([`judge_call`]). Whether a tool reads comes from [`ToolCatalog`] (the annotations of `tools/list`); a tool that is
 //! not known there counts as a write, so a doubt is a question or a refusal and never a silent run.
 //!
 //! Approval modes: a refusal (`deny`, or a write under `read_only`) stands in every mode, `never` included. A question
@@ -24,6 +27,11 @@ pub const REASON_CONFIRM_TOOL: &str = "service: confirm tool";
 pub const REASON_READ_ONLY: &str = "service: read only";
 /// Reason of a refusal that comes from the owner's word on this tool.
 pub const REASON_TOOL_DENIED: &str = "service: tool forbidden";
+
+/// Reason of a refusal because what the owner allowed could not be read.
+pub const REASON_UNCHECKED: &str = "service: permissions unreadable";
+/// Said to the agent when the owner's permissions could not be read: nothing runs, and it is worth another try.
+pub const UNCHECKED_MESSAGE: &str = "Bandito could not read what the owner allowed for this service just now, so the call was not run. Try again in a moment; if it keeps failing, tell the owner.";
 
 /// What is known about the tools of the services: whether a tool only reads. The answer comes from the annotations the
 /// server sent in `tools/list` (`readOnlyHint`), kept by the daemon. `None` when the tool is not known.
@@ -57,20 +65,40 @@ impl ToolCatalog for StoredTools {
         if integration_id != self.integration_id {
             return None;
         }
-        self.tools.iter().find(|t| t.name == tool).map(|t| t.read_only)
+        // Names that become one name after normalizing count as one tool, and it reads only if all of them do.
+        let wanted = normalize(tool);
+        let same: Vec<_> = self.tools.iter().filter(|t| normalize(&t.name) == wanted).collect();
+        (!same.is_empty()).then(|| same.iter().all(|t| t.read_only))
     }
 }
 
-/// The service and the tool a CLI's tool name refers to: `mcp__linear__create_issue` is the integration `linear` and
-/// the tool `create_issue`. The longest matching integration name wins, so `a__b` is not taken for `a`.
-pub fn split<'a>(name: &str, rows: &'a [Integration]) -> Option<(&'a Integration, String)> {
-    let rest = name.strip_prefix(MCP_PREFIX)?;
+/// A name as Claude Code writes it into `mcp__<service>__<tool>`: every character outside `A-Za-z0-9_-` becomes an
+/// underscore, one for each UTF-16 unit (the CLI replaces with a JavaScript regular expression).
+pub fn normalize(name: &str) -> String {
+    let mut out = String::with_capacity(name.len());
+    for c in name.chars() {
+        if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+            out.push(c);
+        } else {
+            out.extend(std::iter::repeat_n('_', c.len_utf16()));
+        }
+    }
+    out
+}
+
+/// Every way a CLI's tool name can be read as a service and a tool: `mcp__linear__create_issue` is the integration
+/// `linear` and the tool `create_issue`. A name with `__` inside is ambiguous (`a` with `b__go`, `a__b` with `go`):
+/// all the readings are returned, so the caller can judge each. The tool is returned as written in the call.
+pub fn splits<'a>(name: &str, rows: &'a [Integration]) -> Vec<(&'a Integration, String)> {
+    let Some(rest) = name.strip_prefix(MCP_PREFIX) else {
+        return Vec::new();
+    };
     rows.iter()
         .filter_map(|row| {
-            let tool = rest.strip_prefix(row.name.as_str())?.strip_prefix("__")?;
+            let tool = rest.strip_prefix(normalize(&row.name).as_str())?.strip_prefix("__")?;
             (!tool.is_empty()).then_some((row, tool.to_string()))
         })
-        .max_by_key(|(row, _)| row.name.len())
+        .collect()
 }
 
 /// The answer of this layer: what happens to the call, and the sentence the agent reads when it is refused.
@@ -87,8 +115,24 @@ enum Base {
     Deny(&'static str, String),
 }
 
+/// The owner's word on a tool: the words of every name that normalizes to this one, the strictest of them.
+fn word_for(row: &Integration, tool: &str) -> Option<ToolOverride> {
+    fn rank(word: ToolOverride) -> u8 {
+        match word {
+            ToolOverride::Allow => 0,
+            ToolOverride::Ask => 1,
+            ToolOverride::Deny => 2,
+        }
+    }
+    row.tool_overrides
+        .iter()
+        .filter(|(name, _)| normalize(name) == tool)
+        .map(|(_, word)| *word)
+        .max_by_key(|word| rank(*word))
+}
+
 fn base(row: &Integration, tool: &str, catalog: &dyn ToolCatalog) -> Option<Base> {
-    if let Some(word) = row.tool_overrides.get(tool) {
+    if let Some(word) = word_for(row, tool) {
         return Some(match word {
             ToolOverride::Allow => Base::Allow,
             ToolOverride::Ask => Base::Ask(REASON_CONFIRM_TOOL),
@@ -127,6 +171,8 @@ pub fn judge(
     rules: &[Rule],
     subject: &str,
 ) -> Option<Judged> {
+    let tool = normalize(tool);
+    let tool = tool.as_str();
     let (verdict, message) = match base(row, tool, catalog)? {
         Base::Deny(reason, message) => (Verdict::Deny(reason.to_string()), Some(message)),
         Base::Ask(_) if mode == ApprovalMode::Never => (Verdict::Allow, None),
@@ -157,6 +203,36 @@ pub fn judge(
 
 /// The longest value of an argument the card shows whole, in bytes.
 const VALUE_SHOWN_BYTES: usize = 400;
+
+/// Decide a call named `name` (`mcp__<service>__<tool>`). Every way of reading the name as a service and a tool is judged
+/// and the strictest verdict stands: a refusal over a question, a question over a call that runs, and a reading with no
+/// opinion keeps the normal policy in charge unless another reading refuses or asks. `None`: no reading has an
+/// opinion, or the name is no tool of a service. `catalog_of` reads what is known about a service's tools; its error is
+/// the caller's to turn into a refusal.
+pub fn judge_call(
+    name: &str,
+    rows: &[Integration],
+    mode: ApprovalMode,
+    rules: &[Rule],
+    subject: &str,
+    mut catalog_of: impl FnMut(&Integration) -> anyhow::Result<Box<dyn ToolCatalog>>,
+) -> anyhow::Result<Option<Judged>> {
+    let mut asked: Option<Judged> = None;
+    let mut allowed: Option<Judged> = None;
+    let mut open = false;
+    for (row, tool) in splits(name, rows) {
+        let catalog = catalog_of(row)?;
+        match judge(row, &tool, catalog.as_ref(), mode, rules, subject) {
+            None => open = true,
+            Some(judged) => match judged.verdict {
+                Verdict::Deny(_) => return Ok(Some(judged)),
+                Verdict::Ask(_) => asked = asked.or(Some(judged)),
+                Verdict::Allow => allowed = allowed.or(Some(judged)),
+            },
+        }
+    }
+    Ok(asked.or(if open { None } else { allowed }))
+}
 
 /// The arguments of a call as the card shows them: indented JSON, cut to `limit` characters.
 pub fn arguments_text(input: &serde_json::Value, limit: usize) -> Option<String> {
@@ -394,23 +470,139 @@ mod tests {
     }
 
     #[test]
-    fn a_tool_name_is_split_into_the_service_and_the_tool() {
+    fn a_tool_name_is_read_as_each_service_it_can_belong_to() {
         let rows = vec![
             row("a", ToolMode::All, &[]),
             row("a__b", ToolMode::All, &[]),
             row("linear", ToolMode::All, &[]),
         ];
-        let (svc, tool) = split("mcp__linear__create_issue", &rows).unwrap();
-        assert_eq!((svc.name.as_str(), tool.as_str()), ("linear", "create_issue"));
-        // The longest name wins.
-        let (svc, tool) = split("mcp__a__b__go", &rows).unwrap();
-        assert_eq!((svc.name.as_str(), tool.as_str()), ("a__b", "go"));
-        let (svc, tool) = split("mcp__a__go", &rows).unwrap();
-        assert_eq!((svc.name.as_str(), tool.as_str()), ("a", "go"));
-        assert!(split("Bash", &rows).is_none());
-        assert!(split("mcp__nobody__x", &rows).is_none());
-        assert!(split("mcp__linear__", &rows).is_none());
-        assert!(split("mcp__linearx__x", &rows).is_none());
+        let one = splits("mcp__linear__create_issue", &rows);
+        assert_eq!(one.len(), 1);
+        assert_eq!((one[0].0.name.as_str(), one[0].1.as_str()), ("linear", "create_issue"));
+        // Both readings of an ambiguous name are returned.
+        let both: Vec<(String, String)> = splits("mcp__a__b__go", &rows)
+            .into_iter()
+            .map(|(r, t)| (r.name.clone(), t))
+            .collect();
+        assert_eq!(
+            both,
+            vec![
+                ("a".to_string(), "b__go".to_string()),
+                ("a__b".to_string(), "go".to_string())
+            ]
+        );
+        assert_eq!(splits("mcp__a__go", &rows).len(), 1);
+        assert!(splits("Bash", &rows).is_empty());
+        assert!(splits("mcp__nobody__x", &rows).is_empty());
+        assert!(splits("mcp__linear__", &rows).is_empty());
+        assert!(splits("mcp__linearx__x", &rows).is_empty());
+    }
+
+    fn catalog_of(known: Known) -> impl FnMut(&Integration) -> anyhow::Result<Box<dyn ToolCatalog>> {
+        let mut once = Some(known);
+        move |_| Ok(Box::new(once.take().unwrap_or_else(|| Known::of(&[]))) as Box<dyn ToolCatalog>)
+    }
+
+    #[test]
+    fn the_strictest_reading_of_an_ambiguous_name_stands() {
+        // `a` is read-only and `a__b` is open: mcp__a__b__go is `go` of a__b, but also `b__go` of a, which is refused.
+        let rows = vec![row("a", ToolMode::ReadOnly, &[]), row("a__b", ToolMode::All, &[])];
+        for mode in MODES {
+            let judged = judge_call("mcp__a__b__go", &rows, mode, &[], "t", |_| {
+                Ok(Box::new(NoToolCache) as Box<dyn ToolCatalog>)
+            })
+            .unwrap()
+            .unwrap();
+            assert!(matches!(judged.verdict, Verdict::Deny(_)), "{mode:?}");
+            assert!(judged.agent_message.is_some());
+        }
+        // A question beats a call that runs; a reading with no opinion leaves the normal policy in charge.
+        let confirm = vec![row("a", ToolMode::ConfirmWrites, &[]), row("a__b", ToolMode::All, &[])];
+        let asked = judge_call("mcp__a__b__go", &confirm, ApprovalMode::Risky, &[], "t", |_| {
+            Ok(Box::new(NoToolCache) as Box<dyn ToolCatalog>)
+        })
+        .unwrap()
+        .unwrap();
+        assert!(matches!(asked.verdict, Verdict::Ask(_)));
+        let reads = vec![
+            row("a", ToolMode::ReadOnly, &[("b__go", ToolOverride::Allow)]),
+            row("a__b", ToolMode::All, &[]),
+        ];
+        assert_eq!(
+            judge_call("mcp__a__b__go", &reads, ApprovalMode::Risky, &[], "t", |_| Ok(
+                Box::new(NoToolCache) as Box<dyn ToolCatalog>
+            ))
+            .unwrap(),
+            None,
+            "one reading allows, the other has no opinion: the normal policy decides"
+        );
+        // Not a tool of a service at all.
+        assert_eq!(
+            judge_call("Bash", &rows, ApprovalMode::Risky, &[], "t", catalog_of(Known::of(&[]))).unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn a_catalog_error_is_the_callers_to_handle() {
+        let rows = vec![row("svc", ToolMode::ReadOnly, &[])];
+        let err = judge_call("mcp__svc__x", &rows, ApprovalMode::Risky, &[], "t", |_| {
+            anyhow::bail!("database is locked")
+        });
+        assert!(err.is_err());
+    }
+
+    #[test]
+    fn names_are_compared_as_claude_code_writes_them() {
+        assert_eq!(normalize("create.issue"), "create_issue");
+        assert_eq!(normalize("a b/c"), "a_b_c");
+        assert_eq!(normalize("ok-name_1"), "ok-name_1");
+        // One underscore for each UTF-16 unit: a letter outside ASCII is one, an emoji is two.
+        assert_eq!(normalize("é"), "_");
+        assert_eq!(normalize("😀"), "__");
+        // An override on `create.issue` reaches the call Claude Code names `mcp__svc__create_issue`.
+        let svc = row("svc", ToolMode::All, &[("create.issue", ToolOverride::Deny)]);
+        let judged = judge_call(
+            "mcp__svc__create_issue",
+            &[svc],
+            ApprovalMode::Risky,
+            &[],
+            "t",
+            catalog_of(Known::of(&[])),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(judged.verdict, Verdict::Deny(REASON_TOOL_DENIED.into()));
+        // Two names that normalize alike: the stricter word wins.
+        let both = row(
+            "svc",
+            ToolMode::All,
+            &[("a.b", ToolOverride::Allow), ("a b", ToolOverride::Deny)],
+        );
+        let judged = judge(&both, "a_b", &Known::of(&[]), ApprovalMode::Risky, &[], "t").unwrap();
+        assert!(matches!(judged.verdict, Verdict::Deny(_)));
+    }
+
+    #[test]
+    fn what_the_probe_saw_is_matched_by_normalized_name() {
+        let tool = |name: &str, read_only: bool| crate::store::IntegrationTool {
+            name: name.into(),
+            title: None,
+            description: None,
+            read_only,
+            destructive: false,
+            input_schema: None,
+            seen_at: 1,
+        };
+        let stored = StoredTools::new(
+            "i1".into(),
+            vec![tool("list.issues", true), tool("a.b", true), tool("a b", false)],
+        );
+        assert_eq!(stored.read_only("i1", "list_issues"), Some(true));
+        // Two names that become one: it reads only if both do.
+        assert_eq!(stored.read_only("i1", "a_b"), Some(false));
+        assert_eq!(stored.read_only("i1", "unknown"), None);
+        assert_eq!(stored.read_only("other", "list_issues"), None);
     }
 
     #[test]
