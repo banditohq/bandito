@@ -1092,7 +1092,7 @@
   "menubar.resolveFailed": "Impossible d’envoyer votre réponse : {error}",
   "team.delete.action": "Supprimer",
   "team.changes": "Modifications",
-  "changes.title": "Modifications : {name}",
+  "changes.heading": "Modifications",
   "changes.task": "Tâche « {task} »",
   "changes.fileCount": {
     "one": "{count} fichier",
@@ -1120,11 +1120,12 @@
     "one": "{count} fichier décoché",
     "other": "{count} fichiers décochés"
   },
-  "changes.rollbackAll": "Annuler toute la tâche",
+  "changes.rollbackAll": "Tout annuler",
   "changes.rollbackConfirmTitle": "Annuler toute la tâche ?",
   "changes.rollbackConfirmMessage": "Les fichiers reviennent à leur état d’avant la tâche. Vous pouvez annuler cela depuis la notification.",
   "changes.rollbackConfirmAction": "Annuler",
   "changes.askAgent": "Demander à {name} à propos de cet emplacement",
+  "changes.askAgentLabel": "Demander à l’agent",
   "changes.askPlace": "Regardez {path}:{line} — qu’est-ce qui a changé ici et pourquoi ?",
   "changes.keepFiles": {
     "one": "Garder {count} fichier",

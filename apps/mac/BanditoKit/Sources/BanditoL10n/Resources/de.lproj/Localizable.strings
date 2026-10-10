@@ -287,10 +287,12 @@
 "capability.title" = "Was er darf";
 "changes.agentGone" = "Dieser Agent existiert nicht mehr";
 "changes.askAgent" = "%1$@ zu dieser Stelle fragen";
+"changes.askAgentLabel" = "Agent fragen";
 "changes.askPlace" = "Sehen Sie sich %1$@:%2$@ an — was hat sich hier geändert und warum?";
 "changes.binary" = "Binärdatei geändert";
 "changes.emptyMessage" = "Hier erscheinen die Dateien, die der Agent im Projekt ändert.";
 "changes.emptyTitle" = "Noch nichts geändert";
+"changes.heading" = "Änderungen";
 "changes.inline" = "Zeilenweise";
 "changes.keepAria" = "%1$@ behalten";
 "changes.keepHint" = "Haken Sie eine Datei ab, damit sie wieder so wird wie vor der Aufgabe. Der Rest bleibt.";
@@ -300,7 +302,7 @@
 "changes.point.start" = "Vor der Aufgabe";
 "changes.point.turnEnd" = "Ende des Zugs";
 "changes.renamedFrom" = "umbenannt von %1$@";
-"changes.rollbackAll" = "Ganze Aufgabe zurücksetzen";
+"changes.rollbackAll" = "Alles zurücksetzen";
 "changes.rollbackConfirmAction" = "Zurücksetzen";
 "changes.rollbackConfirmMessage" = "Die Dateien werden wieder in den Zustand vor der Aufgabe versetzt. Sie können das über die Meldung rückgängig machen.";
 "changes.rollbackConfirmTitle" = "Ganze Aufgabe zurücksetzen?";
@@ -312,7 +314,6 @@
 "changes.status.renamed" = "umbenannt";
 "changes.task" = "Aufgabe «%1$@»";
 "changes.timeline" = "Wiederherstellungspunkte";
-"changes.title" = "Änderungen: %1$@";
 "changes.truncated" = "Der Unterschied ist bei 512 KiB abgeschnitten";
 "changes.undo" = "Rückgängig";
 "changes.updateServer" = "Aktualisieren Sie den Server";

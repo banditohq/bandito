@@ -287,10 +287,12 @@
 "capability.title" = "Qué puede hacer";
 "changes.agentGone" = "Este agente ya no existe";
 "changes.askAgent" = "Preguntar a %1$@ por este lugar";
+"changes.askAgentLabel" = "Preguntar al agente";
 "changes.askPlace" = "Mira %1$@:%2$@ — ¿qué cambió aquí y por qué?";
 "changes.binary" = "Archivo binario modificado";
 "changes.emptyMessage" = "Aquí aparecerán los archivos que el agente cambie en el proyecto.";
 "changes.emptyTitle" = "Todavía no hay cambios";
+"changes.heading" = "Cambios";
 "changes.inline" = "En línea";
 "changes.keepAria" = "Mantener %1$@";
 "changes.keepHint" = "Desmarca un archivo para devolverlo a como estaba antes de la tarea. El resto se mantiene.";
@@ -300,7 +302,7 @@
 "changes.point.start" = "Antes de la tarea";
 "changes.point.turnEnd" = "Fin del turno";
 "changes.renamedFrom" = "renombrado desde %1$@";
-"changes.rollbackAll" = "Revertir toda la tarea";
+"changes.rollbackAll" = "Revertir todo";
 "changes.rollbackConfirmAction" = "Revertir";
 "changes.rollbackConfirmMessage" = "Los archivos vuelven a como estaban antes de la tarea. Puedes deshacerlo desde el aviso.";
 "changes.rollbackConfirmTitle" = "¿Revertir toda la tarea?";
@@ -312,7 +314,6 @@
 "changes.status.renamed" = "renombrado";
 "changes.task" = "Tarea «%1$@»";
 "changes.timeline" = "Puntos de restauración";
-"changes.title" = "Cambios: %1$@";
 "changes.truncated" = "La diferencia se corta en 512 KiB";
 "changes.undo" = "Deshacer";
 "changes.updateServer" = "Actualiza el servidor";

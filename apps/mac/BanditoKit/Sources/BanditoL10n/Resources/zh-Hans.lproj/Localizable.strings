@@ -287,10 +287,12 @@
 "capability.title" = "可以做什么";
 "changes.agentGone" = "此代理已不存在";
 "changes.askAgent" = "就此处询问 %1$@";
+"changes.askAgentLabel" = "询问智能体";
 "changes.askPlace" = "请查看 %1$@:%2$@ — 这里改了什么，为什么要改？";
 "changes.binary" = "二进制文件已更改";
 "changes.emptyMessage" = "智能体在项目中更改的文件会显示在这里。";
 "changes.emptyTitle" = "尚无更改";
+"changes.heading" = "变更";
 "changes.inline" = "内联";
 "changes.keepAria" = "保留 %1$@";
 "changes.keepHint" = "取消勾选某个文件，即可将其恢复为任务开始前的样子。其余内容保持不变。";
@@ -300,7 +302,7 @@
 "changes.point.start" = "任务开始前";
 "changes.point.turnEnd" = "本轮结束";
 "changes.renamedFrom" = "由 %1$@ 重命名";
-"changes.rollbackAll" = "回滚整个任务";
+"changes.rollbackAll" = "全部回滚";
 "changes.rollbackConfirmAction" = "回滚";
 "changes.rollbackConfirmMessage" = "文件将恢复为任务开始前的样子。可在通知中撤销此操作。";
 "changes.rollbackConfirmTitle" = "回滚整个任务？";
@@ -312,7 +314,6 @@
 "changes.status.renamed" = "已重命名";
 "changes.task" = "任务“%1$@”";
 "changes.timeline" = "恢复点";
-"changes.title" = "变更：%1$@";
 "changes.truncated" = "差异内容已在 512 KiB 处截断";
 "changes.undo" = "撤销";
 "changes.updateServer" = "请更新服务器";

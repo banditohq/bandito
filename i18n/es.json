@@ -1092,7 +1092,7 @@
   "menubar.resolveFailed": "No se pudo enviar tu respuesta: {error}",
   "team.delete.action": "Borrar",
   "team.changes": "Cambios",
-  "changes.title": "Cambios: {name}",
+  "changes.heading": "Cambios",
   "changes.task": "Tarea «{task}»",
   "changes.fileCount": {
     "one": "{count} archivo",
@@ -1120,11 +1120,12 @@
     "one": "{count} archivo desmarcado",
     "other": "{count} archivos desmarcados"
   },
-  "changes.rollbackAll": "Revertir toda la tarea",
+  "changes.rollbackAll": "Revertir todo",
   "changes.rollbackConfirmTitle": "¿Revertir toda la tarea?",
   "changes.rollbackConfirmMessage": "Los archivos vuelven a como estaban antes de la tarea. Puedes deshacerlo desde el aviso.",
   "changes.rollbackConfirmAction": "Revertir",
   "changes.askAgent": "Preguntar a {name} por este lugar",
+  "changes.askAgentLabel": "Preguntar al agente",
   "changes.askPlace": "Mira {path}:{line} — ¿qué cambió aquí y por qué?",
   "changes.keepFiles": {
     "one": "Mantener {count} archivo",

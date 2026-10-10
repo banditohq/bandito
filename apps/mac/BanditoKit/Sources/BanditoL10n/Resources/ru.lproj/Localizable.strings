@@ -287,10 +287,12 @@
 "capability.title" = "Что ему можно";
 "changes.agentGone" = "Агент не найден";
 "changes.askAgent" = "Спросить %1$@ об этом месте";
+"changes.askAgentLabel" = "Спросить агента";
 "changes.askPlace" = "Посмотри %1$@:%2$@ — что здесь изменилось и почему?";
 "changes.binary" = "Бинарный файл изменён";
 "changes.emptyMessage" = "Здесь появятся файлы, которые агент поменял в проекте";
 "changes.emptyTitle" = "Пока ничего не изменено";
+"changes.heading" = "Изменения";
 "changes.inline" = "Построчно";
 "changes.keepAria" = "Оставить %1$@";
 "changes.keepHint" = "Снимите галочку — файл вернётся к виду до задачи. Остальное останется.";
@@ -300,7 +302,7 @@
 "changes.point.start" = "До задачи";
 "changes.point.turnEnd" = "Конец хода";
 "changes.renamedFrom" = "переименован из %1$@";
-"changes.rollbackAll" = "Откатить всю задачу";
+"changes.rollbackAll" = "Откатить всё";
 "changes.rollbackConfirmAction" = "Откатить";
 "changes.rollbackConfirmMessage" = "Файлы вернутся к виду до задачи. Откат можно отменить из уведомления.";
 "changes.rollbackConfirmTitle" = "Откатить всю задачу?";
@@ -312,7 +314,6 @@
 "changes.status.renamed" = "переименован";
 "changes.task" = "Задача «%1$@»";
 "changes.timeline" = "Точки возврата";
-"changes.title" = "Изменения: %1$@";
 "changes.truncated" = "Разница обрезана на 512 КиБ";
 "changes.undo" = "Отменить";
 "changes.updateServer" = "Обновите сервер";

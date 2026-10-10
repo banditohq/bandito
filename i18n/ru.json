@@ -943,7 +943,7 @@
   "team.activity.browsing": "Открывает сайт…",
   "team.activity.searching": "Ищет в интернете…",
   "team.header.openInspector": "Открыть сведения агента",
-  "changes.title": "Изменения: {name}",
+  "changes.heading": "Изменения",
   "changes.task": "Задача «{task}»",
   "changes.fileCount": {
     "one": "{count} файл",
@@ -977,11 +977,12 @@
     "many": "Снято {count} файлов",
     "other": "Снято {count} файла"
   },
-  "changes.rollbackAll": "Откатить всю задачу",
+  "changes.rollbackAll": "Откатить всё",
   "changes.rollbackConfirmTitle": "Откатить всю задачу?",
   "changes.rollbackConfirmMessage": "Файлы вернутся к виду до задачи. Откат можно отменить из уведомления.",
   "changes.rollbackConfirmAction": "Откатить",
   "changes.askAgent": "Спросить {name} об этом месте",
+  "changes.askAgentLabel": "Спросить агента",
   "changes.askPlace": "Посмотри {path}:{line} — что здесь изменилось и почему?",
   "changes.keepFiles": {
     "one": "Оставить {count} файл",

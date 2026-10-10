@@ -287,10 +287,12 @@
 "capability.title" = "What it may do";
 "changes.agentGone" = "This agent no longer exists";
 "changes.askAgent" = "Ask %1$@ about this place";
+"changes.askAgentLabel" = "Ask agent";
 "changes.askPlace" = "Look at %1$@:%2$@ — what changed here and why?";
 "changes.binary" = "Binary file changed";
 "changes.emptyMessage" = "Files the agent changes in the project will appear here.";
 "changes.emptyTitle" = "Nothing changed yet";
+"changes.heading" = "Changes";
 "changes.inline" = "Inline";
 "changes.keepAria" = "Keep %1$@";
 "changes.keepHint" = "Untick a file to put it back as it was before the task. The rest stays.";
@@ -300,7 +302,7 @@
 "changes.point.start" = "Before the task";
 "changes.point.turnEnd" = "End of turn";
 "changes.renamedFrom" = "renamed from %1$@";
-"changes.rollbackAll" = "Roll back the whole task";
+"changes.rollbackAll" = "Roll back all";
 "changes.rollbackConfirmAction" = "Roll back";
 "changes.rollbackConfirmMessage" = "Files go back to how they were before the task. You can undo this from the notice.";
 "changes.rollbackConfirmTitle" = "Roll back the whole task?";
@@ -312,7 +314,6 @@
 "changes.status.renamed" = "renamed";
 "changes.task" = "Task «%1$@»";
 "changes.timeline" = "Restore points";
-"changes.title" = "Changes: %1$@";
 "changes.truncated" = "The diff is cut at 512 KiB";
 "changes.undo" = "Undo";
 "changes.updateServer" = "Update the server";

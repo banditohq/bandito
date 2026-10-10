@@ -1075,7 +1075,7 @@
   "menubar.resolveFailed": "回答を送信できませんでした: {error}",
   "team.delete.action": "削除",
   "team.changes": "変更",
-  "changes.title": "変更: {name}",
+  "changes.heading": "変更",
   "changes.task": "タスク「{task}」",
   "changes.fileCount": {
     "other": "{count} 件のファイル"
@@ -1100,11 +1100,12 @@
   "changes.unticked": {
     "other": "{count} 件のファイルのチェックを外しました"
   },
-  "changes.rollbackAll": "タスク全体を元に戻す",
+  "changes.rollbackAll": "すべて元に戻す",
   "changes.rollbackConfirmTitle": "タスク全体を元に戻しますか？",
   "changes.rollbackConfirmMessage": "ファイルはタスク開始前の状態に戻ります。通知から取り消すことができます。",
   "changes.rollbackConfirmAction": "元に戻す",
   "changes.askAgent": "この箇所について {name} に質問",
+  "changes.askAgentLabel": "エージェントに質問",
   "changes.askPlace": "{path}:{line} を見てください。ここで何が変わり、なぜ変わったのか教えてください。",
   "changes.keepFiles": {
     "other": "{count} 件のファイルを残す"

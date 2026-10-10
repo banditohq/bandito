@@ -1091,7 +1091,7 @@
   "menubar.resolveFailed": "Ihre Antwort konnte nicht gesendet werden: {error}",
   "team.delete.action": "Löschen",
   "team.changes": "Änderungen",
-  "changes.title": "Änderungen: {name}",
+  "changes.heading": "Änderungen",
   "changes.task": "Aufgabe «{task}»",
   "changes.fileCount": {
     "one": "{count} Datei",
@@ -1119,11 +1119,12 @@
     "one": "{count} Datei abgewählt",
     "other": "{count} Dateien abgewählt"
   },
-  "changes.rollbackAll": "Ganze Aufgabe zurücksetzen",
+  "changes.rollbackAll": "Alles zurücksetzen",
   "changes.rollbackConfirmTitle": "Ganze Aufgabe zurücksetzen?",
   "changes.rollbackConfirmMessage": "Die Dateien werden wieder in den Zustand vor der Aufgabe versetzt. Sie können das über die Meldung rückgängig machen.",
   "changes.rollbackConfirmAction": "Zurücksetzen",
   "changes.askAgent": "{name} zu dieser Stelle fragen",
+  "changes.askAgentLabel": "Agent fragen",
   "changes.askPlace": "Sehen Sie sich {path}:{line} an — was hat sich hier geändert und warum?",
   "changes.keepFiles": {
     "one": "{count} Datei behalten",

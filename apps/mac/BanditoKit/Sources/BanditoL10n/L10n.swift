@@ -413,11 +413,13 @@ public enum L10n {
     public enum Changes {
         public static var agentGone: String { L10n.tr("changes.agentGone") }
         public static func askAgent(name: String) -> String { L10n.tr("changes.askAgent", name) }
+        public static var askAgentLabel: String { L10n.tr("changes.askAgentLabel") }
         public static func askPlace(path: String, line: String) -> String { L10n.tr("changes.askPlace", path, line) }
         public static var binary: String { L10n.tr("changes.binary") }
         public static var emptyMessage: String { L10n.tr("changes.emptyMessage") }
         public static var emptyTitle: String { L10n.tr("changes.emptyTitle") }
         public static func fileCount(count: Int) -> String { L10n.tr("changes.fileCount", count) }
+        public static var heading: String { L10n.tr("changes.heading") }
         public static var inline: String { L10n.tr("changes.inline") }
         public static func keepAria(name: String) -> String { L10n.tr("changes.keepAria", name) }
         public static func keepFiles(count: Int) -> String { L10n.tr("changes.keepFiles", count) }
@@ -435,7 +437,6 @@ public enum L10n {
         public static var sideBySide: String { L10n.tr("changes.sideBySide") }
         public static func task(task: String) -> String { L10n.tr("changes.task", task) }
         public static var timeline: String { L10n.tr("changes.timeline") }
-        public static func title(name: String) -> String { L10n.tr("changes.title", name) }
         public static var truncated: String { L10n.tr("changes.truncated") }
         public static var undo: String { L10n.tr("changes.undo") }
         public static func unticked(count: Int) -> String { L10n.tr("changes.unticked", count) }

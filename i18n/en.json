@@ -914,7 +914,7 @@
   "team.activity.browsing": "Opening a website…",
   "team.activity.searching": "Searching the web…",
   "team.header.openInspector": "Open the agent's details",
-  "changes.title": "Changes: {name}",
+  "changes.heading": "Changes",
   "changes.task": "Task «{task}»",
   "changes.fileCount": {
     "one": "{count} file",
@@ -942,11 +942,12 @@
     "one": "{count} file unticked",
     "other": "{count} files unticked"
   },
-  "changes.rollbackAll": "Roll back the whole task",
+  "changes.rollbackAll": "Roll back all",
   "changes.rollbackConfirmTitle": "Roll back the whole task?",
   "changes.rollbackConfirmMessage": "Files go back to how they were before the task. You can undo this from the notice.",
   "changes.rollbackConfirmAction": "Roll back",
   "changes.askAgent": "Ask {name} about this place",
+  "changes.askAgentLabel": "Ask agent",
   "changes.askPlace": "Look at {path}:{line} — what changed here and why?",
   "changes.keepFiles": {
     "one": "Keep {count} file",
