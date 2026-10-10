@@ -14,6 +14,9 @@ struct MarketEntry: Identifiable, Equatable {
     let integration: Integration?
 
     var isConnected: Bool { integration != nil }
+
+    /// The category of the catalog template; nil for an own integration.
+    var category: String? { template?.category }
 }
 
 /// The page of the Marketplace for one filter and one search: the connected row above the grid, and the grid.
@@ -23,6 +26,18 @@ struct MarketPage: Equatable {
     /// The catalog entries the filter and the search keep, in the order of `MarketLogic.entries`. Under the All filter
     /// the connected ones are not here: they are in `connected`.
     var grid: [MarketEntry]
+}
+
+/// One step of "How to connect" on the page of a service.
+enum MarketStep: Equatable {
+    /// Get the key or token (the documentation says where).
+    case getKey
+    /// Put your own parts into the address (a project, a server id).
+    case fillAddress
+    /// Put your own folder or repository path into the command.
+    case fillPath
+    /// Press Connect, paste the key, check.
+    case connect
 }
 
 /// Why the page has nothing to show.
@@ -65,8 +80,11 @@ enum MarketLogic {
     static func visible(_ entries: [MarketEntry], filter: MarketFilter, query: String) -> [MarketEntry] {
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
         return entries.filter { entry in
-            guard filter == .connected else { return true }
-            return entry.isConnected
+            switch filter {
+            case .all: true
+            case .connected: entry.isConnected
+            case .category(let name): entry.category == name
+            }
         }.filter { entry in
             needle.isEmpty
                 || entry.name.localizedCaseInsensitiveContains(needle)
@@ -85,7 +103,27 @@ enum MarketLogic {
                 grid: visible(entries, filter: .all, query: query).filter { !$0.isConnected })
         case .connected:
             return MarketPage(connected: [], grid: connected)
+        case .category:
+            // A category lists its services whether or not they are connected.
+            return MarketPage(connected: [], grid: visible(entries, filter: filter, query: query))
         }
+    }
+
+    /// The entry whose page is open, or nil when it is gone (removed, or the catalog reloaded without it).
+    static func entry(withID id: String?, in entries: [MarketEntry]) -> MarketEntry? {
+        guard let id else { return nil }
+        return entries.first { $0.id == id }
+    }
+
+    /// The steps of "How to connect" for a catalog entry, from its fields. Pure data, so the view only translates it.
+    static func steps(for template: IntegrationCatalogEntry) -> [MarketStep] {
+        var steps: [MarketStep] = []
+        let keys = template.kind == .http ? template.headersKeys : template.envKeys
+        if keys.contains(where: \.secret) { steps.append(.getKey) }
+        if template.kind == .http, template.url == nil { steps.append(.fillAddress) }
+        if template.kind == .stdio, template.args.contains(where: { $0.hasPrefix("/path/") }) { steps.append(.fillPath) }
+        steps.append(.connect)
+        return steps
     }
 
     /// What to say when the page is empty: a search with no match, or the Connected filter with nothing connected.

@@ -38,6 +38,8 @@ pub struct CatalogEntry {
     pub icon: String,
     /// One of [`CATALOG_CATEGORIES`].
     pub category: Option<String>,
+    /// The service's brand color as `#RRGGBB`, for its tile in the app.
+    pub accent: Option<String>,
     pub publisher: Option<String>,
     pub official: Option<bool>,
     pub homepage: Option<String>,

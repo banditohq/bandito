@@ -122,4 +122,62 @@ private func connection(
         let shown = MarketLogic.page(entries, filter: .all, query: "")
         #expect(MarketLogic.emptyState(shown, filter: .all, query: "") == nil)
     }
+
+    private func categorized(_ id: String, _ category: String?, kind: IntegrationKind = .stdio, keys: [IntegrationHeaderKey] = [], url: String? = nil, args: [String] = []) -> IntegrationCatalogEntry {
+        IntegrationCatalogEntry(
+            id: id, name: id, descriptionEn: id, descriptionRu: id, kind: kind, command: kind == .stdio ? "run" : nil,
+            args: args, url: url, headersKeys: kind == .http ? keys : [], envKeys: kind == .stdio ? keys : [], docsUrl: "", icon: "",
+            category: category)
+    }
+
+    @Test func aCategoryListsItsServicesConnectedOrNot() {
+        let cat = [categorized("a", "dev"), categorized("b", "web"), categorized("c", "dev")]
+        let entries = MarketLogic.entries(catalog: cat, integrations: [connection("i1", "c"), connection("own", "mine")], languageCode: "en")
+        let page = MarketLogic.page(entries, filter: .category("dev"), query: "")
+        #expect(page.connected.isEmpty)
+        #expect(page.grid.map(\.id) == ["catalog:a", "catalog:c"])
+        #expect(MarketLogic.page(entries, filter: .category("web"), query: "zzz").grid.isEmpty)
+        let none = MarketLogic.page(entries, filter: .category("design"), query: "")
+        #expect(MarketLogic.emptyState(none, filter: .category("design"), query: "") == nil)
+    }
+
+    @Test func sidebarCategoriesFollowTheFixedOrderThenUnknownOnes() {
+        let cat = [categorized("a", "web"), categorized("b", "zeta"), categorized("c", "dev"), categorized("d", nil), categorized("e", "dev")]
+        #expect(MarketCategory.present(in: cat) == ["dev", "web", "zeta"])
+        #expect(MarketFilter.rows(categories: ["dev"]).map(\.id) == ["all", "connected", "category:dev"])
+        #expect(MarketCategory.present(in: []).isEmpty)
+    }
+
+    @Test func theOpenPageIsFoundByIDAndGoneWhenTheEntryIs() {
+        let entries = MarketLogic.entries(catalog: catalog, integrations: [connection("o1", "my-tool")], languageCode: "en")
+        #expect(MarketLogic.entry(withID: "catalog:linear", in: entries)?.name == "Linear")
+        #expect(MarketLogic.entry(withID: "own:o1", in: entries)?.name == "my-tool")
+        #expect(MarketLogic.entry(withID: nil, in: entries) == nil)
+        let after = MarketLogic.entries(catalog: catalog, integrations: [], languageCode: "en")
+        #expect(MarketLogic.entry(withID: "own:o1", in: after) == nil)
+    }
+
+    @Test func connectStepsComeFromTheFields() {
+        let key = IntegrationHeaderKey(key: "K", labelEn: "k", labelRu: "к", secret: true, valueTemplate: "{secret}")
+        #expect(MarketLogic.steps(for: categorized("a", nil)) == [.connect])
+        #expect(MarketLogic.steps(for: categorized("a", nil, kind: .http, keys: [key], url: "https://x.test")) == [.getKey, .connect])
+        #expect(MarketLogic.steps(for: categorized("a", nil, kind: .http, keys: [key])) == [.getKey, .fillAddress, .connect])
+        #expect(MarketLogic.steps(for: categorized("a", nil, keys: [key], args: ["-y", "/path/to/x"])) == [.getKey, .fillPath, .connect])
+    }
+
+    @Test func tileColourIsTheBrandAccentOrAStablePaletteChoice() {
+        let branded = IntegrationCatalogEntry(
+            id: "a", name: "A", descriptionEn: "", descriptionRu: "", kind: .stdio, docsUrl: "", icon: "", accent: "#5E6AD2")
+        let broken = IntegrationCatalogEntry(
+            id: "b", name: "B", descriptionEn: "", descriptionRu: "", kind: .stdio, docsUrl: "", icon: "", accent: "nope")
+        let entries = MarketLogic.entries(
+            catalog: [branded, broken], integrations: [connection("o", "my-tool")], languageCode: "en")
+        #expect(MarketTileStyle.accent(of: entries[0]) == 0x5E6AD2)
+        #expect(MarketTileStyle.accent(of: entries[1]) == nil)
+        #expect(MarketTileStyle.accent(of: entries[2]) == nil)
+        let index = MarketTileStyle.paletteIndex(for: "my-tool")
+        #expect(index == MarketTileStyle.paletteIndex(for: "My-Tool"))
+        #expect((0..<AvatarColor.allCases.count).contains(index))
+        #expect(MarketTileStyle.paletteIndex(for: "x", count: 0) == 0)
+    }
 }

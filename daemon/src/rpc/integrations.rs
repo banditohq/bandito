@@ -505,6 +505,12 @@ mod tests {
                 e.id
             );
             assert!(e.publisher.is_some() && e.official.is_some(), "{}", e.id);
+            let accent = e.accent.as_deref().unwrap_or_default();
+            assert!(
+                accent.len() == 7 && accent.starts_with('#') && accent[1..].chars().all(|c| c.is_ascii_hexdigit()),
+                "{}: accent {accent}",
+                e.id
+            );
             assert!(e.long_en.is_some() && e.long_ru.is_some(), "{}", e.id);
             assert!(e.needs_en.is_some() && e.needs_ru.is_some(), "{}", e.id);
             for abilities in [&e.abilities_en, &e.abilities_ru] {

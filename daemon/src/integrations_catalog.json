@@ -36,7 +36,8 @@
       }
     ],
     "docs_url": "https://github.com/github/github-mcp-server",
-    "icon": "github"
+    "icon": "github",
+    "accent": "#24292F"
   },
   {
     "id": "linear",
@@ -73,7 +74,8 @@
       }
     ],
     "docs_url": "https://linear.app/docs/mcp",
-    "icon": "linear"
+    "icon": "linear",
+    "accent": "#5E6AD2"
   },
   {
     "id": "atlassian",
@@ -110,7 +112,8 @@
       }
     ],
     "docs_url": "https://support.atlassian.com/atlassian-rovo-mcp-server/docs/configuring-authentication-via-api-token/",
-    "icon": "atlassian"
+    "icon": "atlassian",
+    "accent": "#0052CC"
   },
   {
     "id": "stripe",
@@ -149,7 +152,8 @@
       }
     ],
     "docs_url": "https://docs.stripe.com/mcp",
-    "icon": "stripe"
+    "icon": "stripe",
+    "accent": "#635BFF"
   },
   {
     "id": "supabase",
@@ -189,7 +193,8 @@
       }
     ],
     "docs_url": "https://supabase.com/docs/guides/getting-started/mcp",
-    "icon": "database"
+    "icon": "database",
+    "accent": "#3ECF8E"
   },
   {
     "id": "cloudflare",
@@ -226,7 +231,8 @@
       }
     ],
     "docs_url": "https://developers.cloudflare.com/agents/model-context-protocol/mcp-servers-for-cloudflare/",
-    "icon": "cloud"
+    "icon": "cloud",
+    "accent": "#F38020"
   },
   {
     "id": "context7",
@@ -261,7 +267,8 @@
       }
     ],
     "docs_url": "https://github.com/upstash/context7",
-    "icon": "book"
+    "icon": "book",
+    "accent": "#0E7490"
   },
   {
     "id": "brave-search",
@@ -304,7 +311,8 @@
       }
     ],
     "docs_url": "https://github.com/brave/brave-search-mcp-server",
-    "icon": "search"
+    "icon": "search",
+    "accent": "#FB542B"
   },
   {
     "id": "exa",
@@ -341,7 +349,8 @@
       }
     ],
     "docs_url": "https://github.com/exa-labs/exa-mcp-server",
-    "icon": "search"
+    "icon": "search",
+    "accent": "#4F6BED"
   },
   {
     "id": "firecrawl",
@@ -380,7 +389,8 @@
       }
     ],
     "docs_url": "https://github.com/firecrawl/firecrawl-mcp-server",
-    "icon": "web"
+    "icon": "web",
+    "accent": "#F9542E"
   },
   {
     "id": "playwright",
@@ -414,7 +424,8 @@
       "@playwright/mcp@latest"
     ],
     "docs_url": "https://github.com/microsoft/playwright-mcp",
-    "icon": "playwright"
+    "icon": "playwright",
+    "accent": "#2EAD33"
   },
   {
     "id": "fetch",
@@ -445,7 +456,8 @@
       "mcp-server-fetch"
     ],
     "docs_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/fetch",
-    "icon": "globe"
+    "icon": "globe",
+    "accent": "#0EA5E9"
   },
   {
     "id": "filesystem",
@@ -480,7 +492,8 @@
       "/path/to/allowed/folder"
     ],
     "docs_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem",
-    "icon": "folder"
+    "icon": "folder",
+    "accent": "#D97706"
   },
   {
     "id": "memory",
@@ -512,7 +525,8 @@
       "@modelcontextprotocol/server-memory"
     ],
     "docs_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/memory",
-    "icon": "brain"
+    "icon": "brain",
+    "accent": "#8B5CF6"
   },
   {
     "id": "sequential-thinking",
@@ -544,7 +558,8 @@
       "@modelcontextprotocol/server-sequential-thinking"
     ],
     "docs_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking",
-    "icon": "steps"
+    "icon": "steps",
+    "accent": "#14B8A6"
   },
   {
     "id": "git",
@@ -577,7 +592,8 @@
       "/path/to/repo"
     ],
     "docs_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/git",
-    "icon": "branch"
+    "icon": "branch",
+    "accent": "#F05033"
   },
   {
     "id": "time",
@@ -606,7 +622,8 @@
       "mcp-server-time"
     ],
     "docs_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/time",
-    "icon": "clock"
+    "icon": "clock",
+    "accent": "#64748B"
   },
   {
     "id": "composio",
@@ -644,6 +661,7 @@
       }
     ],
     "docs_url": "https://docs.composio.dev/docs/mcp",
-    "icon": "composio"
+    "icon": "composio",
+    "accent": "#1F2937"
   }
 ]

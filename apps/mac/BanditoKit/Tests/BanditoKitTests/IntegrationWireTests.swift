@@ -33,6 +33,33 @@ import Testing
         #expect(bare.enabled)
     }
 
+    @Test func catalogEntryReadsTheDetailFieldsAndFallsBackWithoutThem() throws {
+        let full = try decode(
+            IntegrationCatalogEntry.self,
+            ##"{"id":"brave-search","name":"Brave Search","description_en":"Short.","description_ru":"Коротко.","kind":"stdio","command":"npx","args":["-y","@brave/x"],"env_keys":[{"key":"BRAVE_API_KEY","label_en":"Key","label_ru":"Ключ","secret":true,"value_template":"{secret}"}],"docs_url":"https://d.test","icon":"search","category":"web","accent":"#FB542B","publisher":"Brave","official":true,"homepage":"https://brave.test","long_en":"Long.","long_ru":"Длинно.","abilities_en":["A","B"],"abilities_ru":["А","Б"],"needs_en":"Node.","needs_ru":"Нода."}"##)
+        #expect(full.category == "web")
+        #expect(full.accent == "#FB542B")
+        #expect(full.official)
+        #expect(full.publisher == "Brave")
+        #expect(full.envKeys.map(\.key) == ["BRAVE_API_KEY"])
+        #expect(full.longDescription(languageCode: "ru") == "Длинно.")
+        #expect(full.longDescription(languageCode: "fr") == "Long.")
+        #expect(full.abilities(languageCode: "ru") == ["А", "Б"])
+        #expect(full.needs(languageCode: "en") == "Node.")
+
+        // An older daemon sends none of them.
+        let bare = try decode(
+            IntegrationCatalogEntry.self,
+            #"{"id":"fetch","name":"Fetch","description_en":"Short.","description_ru":"Коротко.","kind":"stdio","docs_url":"https://d.test","icon":"globe"}"#)
+        #expect(bare.category == nil)
+        #expect(bare.accent == nil)
+        #expect(!bare.official)
+        #expect(bare.envKeys.isEmpty)
+        #expect(bare.longDescription(languageCode: "ru") == "Коротко.")
+        #expect(bare.abilities(languageCode: "en").isEmpty)
+        #expect(bare.needs(languageCode: "en") == nil)
+    }
+
     @Test func catalogEntryReadsTheTemplateAndPicksTheLanguage() throws {
         let entry = try decode(
             IntegrationCatalogEntry.self,
