@@ -256,10 +256,10 @@ async fn tail_after_exit(
     stderr_tail(buf, secrets)
 }
 
-/// The last characters of the collected stderr, with every secret value replaced by its `••••NAME`.
+/// The last characters of the collected stderr, with every secret value replaced by its `••••NAME`, however short.
 fn stderr_tail(buf: &std::sync::Mutex<Vec<u8>>, secrets: &[(String, String)]) -> String {
     let raw = String::from_utf8_lossy(&buf.lock().unwrap_or_else(|e| e.into_inner())).into_owned();
-    let redacted = crate::redact::Redactor::new(secrets.iter().cloned())
+    let redacted = crate::redact::Redactor::exact(secrets.iter().cloned())
         .redact(&raw)
         .into_owned();
     let mut tail: Vec<char> = redacted.chars().rev().take(ERROR_TAIL_CHARS).collect();
@@ -276,12 +276,16 @@ fn with_stderr(message: String, tail: String) -> String {
     }
 }
 
-/// The secret values of an environment or a header, by name: what the redaction must hide.
+/// The secret values of an environment or a header, by name: what the redaction must hide. A value with a template
+/// (`Bearer {secret}`) also hides its last word, the secret without the prefix, since a server may print it alone.
 fn secret_pairs(pairs: &[Pair]) -> Vec<(String, String)> {
     pairs
         .iter()
         .filter(|p| p.secret)
-        .map(|p| (p.key.clone(), p.value.clone()))
+        .flat_map(|p| {
+            let word = p.value.split_whitespace().last().filter(|w| *w != p.value.as_str());
+            std::iter::once((p.key.clone(), p.value.clone())).chain(word.map(|w| (p.key.clone(), w.to_string())))
+        })
         .collect()
 }
 
@@ -711,6 +715,23 @@ mod tests {
         let error = answer["error"].as_str().unwrap();
         assert!(error.contains("boom") && !error.contains("tok-real-value"), "{answer}");
         assert!(error.contains("••••TOKEN"), "{answer}");
+    }
+
+    #[tokio::test]
+    async fn a_probe_hides_a_template_secret_without_its_prefix_and_a_short_one_whole() {
+        let app = app();
+        // The header value is `Bearer <secret>`; the server prints the secret alone, and a 2-byte secret too.
+        let draft = json!({ "draft": {
+            "name": "tok",
+            "kind": "stdio",
+            "command": "sh",
+            "args": ["-c", "echo 'got tok-real-value, q7 and Bearer tok-real-value' >&2; exit 1"],
+            "env": { "AUTH": "Bearer tok-real-value", "TOKEN": "q7" }
+        } });
+        let answer = owner(&app, "integrations.probe", draft).await.unwrap();
+        let error = answer["error"].as_str().unwrap();
+        assert!(!error.contains("tok-real-value") && !error.contains("q7"), "{answer}");
+        assert!(error.contains("••••AUTH") && error.contains("••••TOKEN"), "{answer}");
     }
 
     #[test]

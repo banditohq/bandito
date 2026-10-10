@@ -30,8 +30,11 @@ const CMD_CHARS: usize = 200;
 pub const TOP_PROCESSES: usize = 15;
 /// Apps in `host.stats` → `app_groups`: the biggest by memory.
 pub const APP_GROUPS: usize = 25;
-/// Processes listed per app in `host.stats` → `app_groups[].top`: the biggest by memory.
+/// Processes listed per app in `host.stats` → `app_groups[].top`: the biggest by memory, then up to `APP_TOP_CPU` more
+/// by CPU.
 pub const APP_TOP: usize = 3;
+/// Processes added per app to `app_groups[].top` by CPU, beyond the `APP_TOP` biggest by memory.
+pub const APP_TOP_CPU: usize = 2;
 /// How long a process gets to exit after SIGTERM from `host.kill_process` before SIGKILL.
 pub const OWN_GRACE: Duration = Duration::from_secs(5);
 /// How long `host.kill_process` waits for the process to exit before it answers.
@@ -75,7 +78,8 @@ pub struct AppGroup {
     pub cpu_percent: f32,
     pub memory_bytes: u64,
     pub process_count: u32,
-    /// Up to `APP_TOP` of the app's processes, the biggest by memory first, so a group opens without `top_processes`.
+    /// Up to `APP_TOP` of the app's processes by memory, then up to `APP_TOP_CPU` by CPU, without repeats, so a group
+    /// opens without `top_processes`.
     pub top: Vec<AppProcess>,
 }
 
@@ -667,25 +671,35 @@ fn is_owned(class: Option<&TreeOwner>) -> bool {
     matches!(class, Some(TreeOwner::Owned(_)))
 }
 
-/// Sums every given process by its app: the `count` apps biggest by memory (ties by name), each with its `top` biggest
-/// processes by memory (ties by pid). Every given process is counted, so the sums are exact.
+/// Sums every given process by its app, and keeps the `count` apps with the best worse rank. Each app ranks by memory
+/// and by CPU (0 is the biggest), and is kept by the larger of its two ranks, so an app busy with CPU stays in the list
+/// even outside the memory top. Every given process is counted, so the sums are exact. Each app's `top`: its `top`
+/// biggest by memory, then up to `APP_TOP_CPU` more by CPU, without repeats, only those that use any CPU.
 fn group_apps(rows: &[AppRow], count: usize, top: usize) -> Vec<AppGroup> {
     let mut by_app: HashMap<&str, Vec<&AppRow>> = HashMap::new();
     for row in rows {
         by_app.entry(row.app.as_str()).or_default().push(row);
     }
-    let mut groups: Vec<AppGroup> = by_app
+    let groups: Vec<AppGroup> = by_app
         .into_iter()
         .map(|(app, mut members)| {
             members.sort_by(|a, b| b.rss_bytes.cmp(&a.rss_bytes).then(a.pid.cmp(&b.pid)));
+            let mut by_cpu = members.clone();
+            by_cpu.sort_by(|a, b| b.cpu_percent.total_cmp(&a.cpu_percent).then(a.pid.cmp(&b.pid)));
+            let mut listed: Vec<&AppRow> = members.iter().take(top).copied().collect();
+            let extra: Vec<&AppRow> = by_cpu
+                .into_iter()
+                .filter(|m| m.cpu_percent > 0.0 && !listed.iter().any(|l| l.pid == m.pid))
+                .take(APP_TOP_CPU)
+                .collect();
+            listed.extend(extra);
             AppGroup {
                 name: app.to_string(),
                 cpu_percent: members.iter().map(|m| m.cpu_percent).sum::<f32>(),
                 memory_bytes: members.iter().map(|m| m.rss_bytes).sum(),
                 process_count: u32::try_from(members.len()).unwrap_or(u32::MAX),
-                top: members
-                    .iter()
-                    .take(top)
+                top: listed
+                    .into_iter()
                     .map(|m| AppProcess {
                         pid: m.pid,
                         name: m.name.clone(),
@@ -696,9 +710,37 @@ fn group_apps(rows: &[AppRow], count: usize, top: usize) -> Vec<AppGroup> {
             }
         })
         .collect();
-    groups.sort_by(|a, b| b.memory_bytes.cmp(&a.memory_bytes).then_with(|| a.name.cmp(&b.name)));
-    groups.truncate(count);
-    groups
+
+    let n = groups.len();
+    let by_name = |a: usize, b: usize| groups[a].name.cmp(&groups[b].name);
+    let mut by_memory: Vec<usize> = (0..n).collect();
+    by_memory.sort_by(|&a, &b| {
+        groups[b]
+            .memory_bytes
+            .cmp(&groups[a].memory_bytes)
+            .then_with(|| by_name(a, b))
+    });
+    let mut by_cpu: Vec<usize> = (0..n).collect();
+    by_cpu.sort_by(|&a, &b| {
+        groups[b]
+            .cpu_percent
+            .total_cmp(&groups[a].cpu_percent)
+            .then_with(|| by_name(a, b))
+    });
+    let mut memory_rank = vec![0; n];
+    for (rank, &i) in by_memory.iter().enumerate() {
+        memory_rank[i] = rank;
+    }
+    let mut cpu_rank = vec![0; n];
+    for (rank, &i) in by_cpu.iter().enumerate() {
+        cpu_rank[i] = rank;
+    }
+    let mut order: Vec<usize> = (0..n).collect();
+    order.sort_by_key(|&i| (memory_rank[i].max(cpu_rank[i]), memory_rank[i]));
+    order.truncate(count);
+    let mut kept: Vec<AppGroup> = order.into_iter().map(|i| groups[i].clone()).collect();
+    kept.sort_by(|a, b| b.memory_bytes.cmp(&a.memory_bytes).then_with(|| a.name.cmp(&b.name)));
+    kept
 }
 
 /// The app of a macOS executable path: the outermost `*.app` bundle without `.app`, so a helper
@@ -2070,14 +2112,54 @@ mod tests {
 
     #[test]
     fn app_groups_are_cut_to_the_count_and_ties_break_by_name() {
+        // CPU follows memory here, so both ranks agree.
         let rows: Vec<AppRow> = (0..5)
-            .map(|i| app_row(i, &format!("app{i}"), if i < 2 { 1000 } else { 1 + i as u64 }, 0.0))
+            .map(|i| {
+                let rss = if i < 2 { 1000 } else { 1 + i as u64 };
+                app_row(i, &format!("app{i}"), rss, rss as f32)
+            })
             .collect();
         let groups = group_apps(&rows, 3, 3);
         let names: Vec<&str> = groups.iter().map(|g| g.name.as_str()).collect();
         // app0 and app1 tie at 1000: by name. Then app4 (5) is third; app3 (4) and app2 (3) are cut by the count.
         assert_eq!(names, ["app0", "app1", "app4"]);
         assert!(group_apps(&[], 25, 3).is_empty());
+    }
+
+    #[test]
+    fn an_app_busy_with_cpu_outside_the_memory_top_is_kept_by_its_cpu_rank() {
+        // Memory ranks: A, B, D, C. CPU ranks: C, D, A, B. The worse of the two ranks decides: A and D (2) before B and C (3).
+        let rows = vec![
+            app_row(1, "A", 1000, 0.0),
+            app_row(2, "B", 900, 0.0),
+            app_row(3, "C", 1, 90.0),
+            app_row(4, "D", 2, 80.0),
+        ];
+        let names: Vec<String> = group_apps(&rows, 2, APP_TOP).into_iter().map(|g| g.name).collect();
+        // Kept apps come out biggest memory first.
+        assert_eq!(names, ["A", "D"]);
+    }
+
+    #[test]
+    fn a_group_lists_three_by_memory_then_two_more_by_cpu_without_repeats() {
+        // Seven processes: memory 100 down to 40. Pid 1 is also the busiest, and pids 7 and 6 use the most CPU of the rest.
+        let rows: Vec<AppRow> = (1..=7)
+            .map(|pid| {
+                let cpu = match pid {
+                    1 => 50.0,
+                    7 => 9.0,
+                    6 => 8.0,
+                    _ => 0.0,
+                };
+                app_row(pid, "app", 100 - 10 * (pid as u64 - 1), cpu)
+            })
+            .collect();
+        let groups = group_apps(&rows, 1, APP_TOP);
+        assert_eq!(pids(&groups[0]), [1, 2, 3, 7, 6]);
+        assert_eq!(groups[0].process_count, 7);
+        // A group with no CPU use lists only its memory top.
+        let idle: Vec<AppRow> = (1..=5).map(|pid| app_row(pid, "idle", 10 * pid as u64, 0.0)).collect();
+        assert_eq!(pids(&group_apps(&idle, 1, APP_TOP)[0]), [5, 4, 3]);
     }
 
     #[test]

@@ -419,7 +419,7 @@ mod tests {
         for a in apps {
             assert!(a["name"].is_string() && a["cpu_percent"].is_number(), "{a}");
             let top = a["top"].as_array().expect("top");
-            assert!(top.len() <= host::APP_TOP, "{a}");
+            assert!(top.len() <= host::APP_TOP + host::APP_TOP_CPU, "{a}");
             assert!(a["process_count"].as_u64().unwrap() >= top.len() as u64, "{a}");
             for p in top {
                 assert!(p["pid"].is_i64() && p["name"].is_string(), "{p}");
