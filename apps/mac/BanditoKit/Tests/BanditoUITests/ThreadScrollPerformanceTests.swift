@@ -112,7 +112,7 @@ import Testing
     }
 
     @Test func aMessageIsParsedOnceHoweverOftenItIsDrawn() {
-        let cache = MessageRenderCache(limit: 1000)
+        let cache = MessageRenderCache()
         let texts = messages(300)
         for _ in 0..<5 {
             for text in texts { _ = cache.blocks(for: text, markdown: true) }
@@ -135,14 +135,13 @@ import Testing
         #expect(plain.count == 1)
     }
 
-    /// The cost the cache takes out of every redraw of a long thread: 300 messages, parsed (cold) and read (warm).
-    @Test func redrawingThreeHundredMessagesCostsLookupsNotParsing() {
-        let cache = MessageRenderCache(limit: 1000)
-        let texts = messages(300)
-        let clock = ContinuousClock()
-        let cold = clock.measure { for text in texts { _ = cache.blocks(for: text, markdown: true) } }
-        let warm = clock.measure { for text in texts { _ = cache.blocks(for: text, markdown: true) } }
-        print("thread-bench: 300 messages cold \(cold), warm \(warm)")
-        #expect(warm < cold)
+    @Test func aStreamingTextIsNotKept() {
+        let cache = MessageRenderCache(limit: 1 << 20)
+        _ = cache.blocks(for: "partial", markdown: true, cached: false)
+        _ = cache.blocks(for: "partial", markdown: true, cached: false)
+        #expect(cache.parses == 2)
+        _ = cache.blocks(for: "partial", markdown: true)
+        _ = cache.blocks(for: "partial", markdown: true)
+        #expect(cache.parses == 3)
     }
 }

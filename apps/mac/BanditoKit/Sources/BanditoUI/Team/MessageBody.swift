@@ -9,9 +9,11 @@ struct MessageBodyView: View {
     var text: String
     /// Inline Markdown (the agent's messages); the person's own text is shown as typed.
     var markdown: Bool
+    /// A text still streaming in is drawn without the cache.
+    var streaming = false
 
     var body: some View {
-        let blocks = MessageRenderCache.shared.blocks(for: text, markdown: markdown)
+        let blocks = MessageRenderCache.shared.blocks(for: text, markdown: markdown, cached: !streaming)
         if blocks.contains(where: { if case .code = $0 { return true } else { return false } }) {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
@@ -44,8 +46,8 @@ enum RenderedBlock {
 }
 
 /// The parsed bodies of messages, by text. Parsing Markdown and finding links is the costly part of drawing a bubble;
-/// it must not be redone every time a row is built (a scroll builds rows again and again). Bounded, so a long stream
-/// (a new text at every token) does not fill the memory.
+/// it must not be redone every time a row is built (a scroll builds rows again and again). Bounded by size (8 MB of text), and a
+/// message still streaming is never kept: its text changes at every token.
 final class MessageRenderCache: @unchecked Sendable {
     static let shared = MessageRenderCache()
 
@@ -55,16 +57,20 @@ final class MessageRenderCache: @unchecked Sendable {
     private let parsedCounter = NSLock()
     private var parsedCount = 0
 
-    init(limit: Int = 800) { cache.countLimit = limit }
+    init(limit: Int = 8 << 20) { cache.totalCostLimit = limit }
 
     var parses: Int { parsedCounter.withLock { parsedCount } }
 
-    func blocks(for text: String, markdown: Bool) -> [RenderedBlock] {
+    func blocks(for text: String, markdown: Bool, cached: Bool = true) -> [RenderedBlock] {
+        guard cached else {
+            parsedCounter.withLock { parsedCount += 1 }
+            return Self.build(text, markdown: markdown)
+        }
         let key = (markdown ? "m:" : "p:") + text as NSString
         if let hit = cache.object(forKey: key) { return hit.blocks }
         let built = Self.build(text, markdown: markdown)
         parsedCounter.withLock { parsedCount += 1 }
-        cache.setObject(Entry(built), forKey: key)
+        cache.setObject(Entry(built), forKey: key, cost: text.utf8.count)
         return built
     }
 

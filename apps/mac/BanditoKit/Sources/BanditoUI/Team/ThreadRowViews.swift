@@ -180,7 +180,7 @@ private struct ItemView: View {
             }
         case .streaming(let text):
             HStack {
-                AgentBubble(text: text)
+                AgentBubble(text: text, streaming: true)
                 Spacer(minLength: 120)
             }
         case .tool(let row):
@@ -242,6 +242,13 @@ struct UserBubble<Header: View>: View {
     }
 }
 
+extension AgentBubble where Header == EmptyView {
+    init(text: String, streaming: Bool = false) {
+        self.init(text: text) { EmptyView() }
+        self.streaming = streaming
+    }
+}
+
 extension UserBubble where Header == EmptyView {
     init(text: String) {
         self.init(text: text) { EmptyView() }
@@ -253,6 +260,8 @@ extension UserBubble where Header == EmptyView {
 struct AgentBubble<Header: View>: View {
     var text: String
     var header: Header
+    /// The text is still streaming in: it is not kept in the render cache.
+    var streaming = false
 
     init(text: String, @ViewBuilder header: () -> Header) {
         self.text = text
@@ -262,7 +271,7 @@ struct AgentBubble<Header: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             header
-            MessageBodyView(text: text, markdown: true)
+            MessageBodyView(text: text, markdown: true, streaming: streaming)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)

@@ -61,6 +61,9 @@ struct MessageContainer<Bubble: View>: View {
     /// The mouse is down and moving over the bubble: a text selection is under way, so the row stays away.
     @State private var dragging = false
     @State private var copied = false
+    /// Keyboard focus in the row: on the bubble or on one of the action buttons. The action row shows while it is there.
+    private enum Part { case bubble, actions }
+    @FocusState private var focus: Part?
     @State private var copyReset: Task<Void, Never>?
 
     private var canReact: Bool { chat.reactionsOn && seq != nil }
@@ -70,7 +73,7 @@ struct MessageContainer<Bubble: View>: View {
     private var flashing: Bool { chat.highlightedID == itemID }
     private var rowOpacity: Double {
         MessageActionsPlacement.opacity(
-            hovering: hovering, open: reactOpen || selecting, selectingText: dragging, isUser: fromUser,
+            hovering: hovering, open: reactOpen || selecting || focus != nil, selectingText: dragging, isUser: fromUser,
             isLastAgent: itemID == chat.lastAgentID)
     }
 
@@ -87,6 +90,19 @@ struct MessageContainer<Bubble: View>: View {
                         }
                     }
                     .onHover(perform: setHover)
+                    .focusable()
+                    .focused($focus, equals: .bubble)
+                    .accessibilityActions {
+                        Button(L10n.Thread.copy, action: copyRaw)
+                        if canReply { Button(L10n.Thread.reply, action: reply) }
+                        if canReact, let seq {
+                            ForEach(ReactionRules.common, id: \.self) { emoji in
+                                Button("\(L10n.Message.react) \(emoji)") {
+                                    chat.onReact(seq, emoji == mine ? nil : emoji)
+                                }
+                            }
+                        }
+                    }
                     .simultaneousGesture(
                         DragGesture(minimumDistance: 4)
                             .onChanged { _ in if !dragging { dragging = true } }
@@ -205,6 +221,7 @@ struct MessageContainer<Bubble: View>: View {
                 .font(.system(size: 13, weight: .medium))
         }
         .buttonStyle(MessageActionStyle(label: label))
+        .focused($focus, equals: .actions)
         .help(label)
     }
 
@@ -219,6 +236,7 @@ struct MessageContainer<Bubble: View>: View {
         .menuStyle(.button)
         .menuIndicator(.hidden)
         .buttonStyle(MessageActionStyle(label: L10n.Message.more))
+        .focused($focus, equals: .actions)
         .help(L10n.Message.more)
         .fixedSize()
     }
