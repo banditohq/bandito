@@ -68,13 +68,14 @@ private struct ScreenToolbar: View {
                 .foregroundStyle(Color.Bandito.text)
             Spacer(minLength: 8)
 
-            Picker(L10n.Screen.quality, selection: $model.quality) {
-                Text(L10n.Screen.qualityAuto).tag(ScreenQuality.auto)
-                Text(L10n.Screen.qualityFaster).tag(ScreenQuality.faster)
-                Text(L10n.Screen.qualitySharper).tag(ScreenQuality.sharper)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
+            SegmentedPicker(
+                selection: $model.quality,
+                options: [
+                    (ScreenQuality.auto, L10n.Screen.qualityAuto),
+                    (ScreenQuality.faster, L10n.Screen.qualityFaster),
+                    (ScreenQuality.sharper, L10n.Screen.qualitySharper),
+                ]
+            )
             .frame(width: 200)
 
             Button {
@@ -278,12 +279,13 @@ private struct ScreenSidebarContent: View {
                         .font(.system(size: 13))
                         .foregroundStyle(Color.Bandito.text2)
                     Spacer(minLength: 8)
-                    Picker(L10n.Screen.clipboard, selection: $model.clipboard) {
-                        Text(L10n.Screen.clipboardShared).tag(ScreenClipboard.shared)
-                        Text(L10n.Screen.clipboardOff).tag(ScreenClipboard.off)
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
+                    SegmentedPicker(
+                        selection: $model.clipboard,
+                        options: [
+                            (ScreenClipboard.shared, L10n.Screen.clipboardShared),
+                            (ScreenClipboard.off, L10n.Screen.clipboardOff),
+                        ]
+                    )
                     .frame(width: 150)
                 }
                 HStack {

@@ -16,8 +16,8 @@ struct ThreadRowView: View {
         switch row {
         case .day(let date):
             DayDivider(date: date)
-        case .chapter(let number):
-            ChapterDivider(number: number, agentName: agentName)
+        case .chapter(let number, let saved):
+            ChapterDivider(number: number, saved: saved, agentName: agentName)
         case .toolGroup(let tools):
             ToolGroupCard(tools: tools, duration: nil)
         case .item(let item):
@@ -69,6 +69,9 @@ private struct ItemView: View {
             .tourAnchor(.approvals)
         case .note(_, let text, let kind, _):
             NoteLine(text: text, isError: kind == .error)
+        case .chapter:
+            // Shown as a ChapterDivider between the rows (see ThreadRows.build), never as an item.
+            EmptyView()
         case .runtimeSwitch(_, let from, let to, let until, _):
             NoteLine(
                 text: RuntimeSwitchNote.text(from: from, to: to, until: until, primary: primaryRuntime),
@@ -199,9 +202,10 @@ private struct NoteLine: View {
     }
 }
 
-/// `Глава N · …` between two chapters of the memory.
+/// `Глава N · …` between two chapters of the memory. An unsaved chapter says so in peach, with a tooltip.
 private struct ChapterDivider: View {
     var number: Int
+    var saved: Bool
     var agentName: String
 
     var body: some View {
@@ -209,9 +213,11 @@ private struct ChapterDivider: View {
             Rule()
             Image(systemName: "book.closed")
                 .font(.system(size: 12))
-            Text(L10n.Chapter.resumed(count: number, name: agentName))
+            Text(saved ? L10n.Chapter.resumed(count: number, name: agentName) : L10n.Thread.chapterNotSaved(chapter: "\(number)"))
                 .font(BanditoFont.font(size: 12, weight: 400))
+                .foregroundStyle(saved ? Color.Bandito.text3 : BanditoPalette.peach)
                 .lineLimit(1)
+                .optionalHelp(saved ? nil : L10n.Thread.chapterNotSavedHelp)
             Rule()
         }
         .foregroundStyle(Color.Bandito.text3)

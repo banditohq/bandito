@@ -23,20 +23,41 @@ public struct ServerConfig: Codable, Sendable, Hashable, Identifiable, CustomStr
     public var endpoint: ServerEndpoint
     /// Device token for WebSocket endpoints. The app keeps it in the Keychain; it is never encoded.
     public var token: String?
+    /// True for the daemon this app installed on this Mac (`LocalDaemonPairing` sets it). Configs saved before this
+    /// flag existed decode as false; `LocalDaemonUpgrade.confirmsThisMac` checks them at launch.
+    public var isThisMac: Bool
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, endpoint
+        case id, name, endpoint, isThisMac
     }
 
-    public init(id: UUID = UUID(), name: String, endpoint: ServerEndpoint, token: String? = nil) {
+    public init(
+        id: UUID = UUID(), name: String, endpoint: ServerEndpoint, token: String? = nil, isThisMac: Bool = false
+    ) {
         self.id = id
         self.name = name
         self.endpoint = endpoint
         self.token = token
+        self.isThisMac = isThisMac
     }
 
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        endpoint = try container.decode(ServerEndpoint.self, forKey: .endpoint)
+        isThisMac = try container.decodeIfPresent(Bool.self, forKey: .isThisMac) ?? false
+    }
+
+    /// For logs and debugging: the name and the kind of connection only. The id, the address and the token
+    /// stay out, so a printed config cannot leak them.
     public var description: String {
-        "ServerConfig(id: \(id), name: \(name), endpoint: \(endpoint), token: \(token == nil ? "nil" : "<redacted>"))"
+        let kind = switch endpoint {
+        case .local: "local"
+        case .webSocket: "WebSocket"
+        case .ssh: "ssh"
+        }
+        return "ServerConfig(name: \(name), connection: \(kind))"
     }
 }
 
@@ -66,12 +87,25 @@ public final class ServerModel: Identifiable {
     public nonisolated var id: UUID { config.id }
 
     public private(set) var state: ConnectionState = .disconnected
-    public internal(set) var info: DaemonInfo?
+    public internal(set) var info: DaemonInfo? {
+        didSet {
+            // A listing asked for before the daemon's info was known is sent now that it is.
+            if info != nil, runtimeModelsWanted {
+                Task { _ = try? await self.refreshRuntimeModels() }
+            }
+        }
+    }
     public private(set) var agents: [Agent] = []
     public private(set) var threads: [String: AgentThread] = [:]
     public private(set) var runtimes: [RuntimeStatus] = []
     /// When `runtimes` was last read from the daemon; nil until the first answer.
     public private(set) var runtimesFetchedAt: Date?
+    /// The models each agent CLI offers, by runtime raw value (`claude`, `codex`, `grok`). Kept after a later failure.
+    public private(set) var runtimeModels: [String: RuntimeModelList] = [:]
+    /// What the last request for `runtimeModels` came to. See `RuntimeModelsStatus`.
+    public private(set) var runtimeModelsStatus: RuntimeModelsStatus = .unknown
+    /// A listing was asked for and waits for the daemon's info.
+    private var runtimeModelsWanted = false
     /// Rate-limit windows per runtime, as last learned (from `usage.*` calls or live events).
     public private(set) var usage: [UsageEntry] = []
     /// Why the last `refreshUsage` could not read a runtime, by runtime id.
@@ -82,6 +116,10 @@ public final class ServerModel: Identifiable {
     private var usageRefreshStartedAt: Date?
     /// How long an automatic refresh waits after the last request before it asks the runtimes again.
     public static let usageRefreshInterval: TimeInterval = 30
+    /// Limits older than this are asked again when a surface opens.
+    public static let usageStaleAfter: TimeInterval = UsageFreshness.staleAfter
+    /// How often the limits refresh in the background while the app is active.
+    public static let usageBackgroundInterval: TimeInterval = 300
     /// The last failure of a background operation (subscription, reconnect, unreadable updates).
     public internal(set) var lastError: FailureKind?
     /// Whether an agent's thread has events older than the ones loaded.
@@ -594,6 +632,17 @@ public final class ServerModel: Identifiable {
         return try await task.value
     }
 
+    /// True when no limits are known yet, or the newest ones were received more than `usageStaleAfter` ago.
+    public var usageIsStale: Bool {
+        UsageFreshness.isStale(usage, now: Date(), after: Self.usageStaleAfter)
+    }
+
+    /// Asks the runtimes for fresh limits when the known ones are stale. Otherwise does nothing.
+    public func refreshUsageIfStale() async {
+        guard usageIsStale else { return }
+        _ = try? await refreshUsage()
+    }
+
     /// The `usage.refresh` call itself.
     private func askRuntimesForUsage() async throws -> [UsageEntry] {
         struct Refusal: Decodable { var runtime: String; var message: String }
@@ -611,6 +660,36 @@ extension ServerModel {
     public func refreshRuntimes() async throws {
         runtimes = try await rpc().call("runtimes.status", NoParams(), as: [RuntimeStatus].self)
         runtimesFetchedAt = Date()
+    }
+
+    /// Asks the daemon which models each agent CLI offers. `refresh` skips the daemon's 15-minute cache.
+    /// Until the daemon's info is known the request waits and is sent when the info arrives. A daemon without
+    /// `runtime_models` is not asked: the status becomes `.unsupported`, which is not the same as a failed request.
+    public func refreshRuntimeModels(refresh: Bool = false) async throws {
+        runtimeModelsWanted = true
+        let gate = RuntimeModelsGate.decide(
+            hasInfo: info != nil, supportsModels: info?.supports("runtime_models") ?? false)
+        switch gate {
+        case .wait:
+            return
+        case .unsupported:
+            runtimeModelsWanted = false
+            runtimeModelsStatus = .unsupported
+            return
+        case .ask:
+            break
+        }
+        runtimeModelsWanted = false
+        struct P: Encodable { var refresh: Bool }
+        do {
+            let lists = try await rpc().call("runtimes.models", P(refresh: refresh), as: [RuntimeModelList].self)
+            runtimeModels = Dictionary(
+                lists.map { ($0.runtime.rawValue, $0) }, uniquingKeysWith: { _, last in last })
+            runtimeModelsStatus = .loaded
+        } catch {
+            runtimeModelsStatus = .failed((error as? RPCError)?.message ?? error.localizedDescription)
+            throw error
+        }
     }
 
     public func rules(agentId: String? = nil) async throws -> [Rule] {
@@ -748,4 +827,16 @@ public struct DaemonLog: Decodable, Sendable, Equatable {
 /// The lowest level `daemon.logs` shows.
 public enum DaemonLogLevel: String, CaseIterable, Sendable {
     case info, warn, error
+}
+
+/// When the limits of a server were last received. Pure, so the rule is tested without a server.
+public enum UsageFreshness {
+    /// Limits older than this many seconds are stale.
+    public static let staleAfter: TimeInterval = 120
+
+    /// True when `entries` is empty, or the newest of them was received more than `after` seconds before `now`.
+    public static func isStale(_ entries: [UsageEntry], now: Date, after: TimeInterval) -> Bool {
+        guard let newest = entries.map(\.updatedAt).max() else { return true }
+        return now.timeIntervalSince1970 - Double(newest) / 1000 > after
+    }
 }

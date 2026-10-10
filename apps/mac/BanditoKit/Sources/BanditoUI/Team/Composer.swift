@@ -99,7 +99,7 @@ struct Composer: View {
                 Text(L10n.Thread.hintStop)
                 Text(L10n.Thread.hintSearch)
             }
-            .font(BanditoFont.font(size: 11, weight: 400, mono: true))
+            .font(BanditoFont.font(size: 11, weight: 400))
             .foregroundStyle(Color.Bandito.text3.opacity(0.7))
         }
         .animation(.easeOut(duration: BanditoMotion.fast), value: query != nil)
@@ -142,7 +142,8 @@ struct Composer: View {
         HStack(spacing: 6) {
             ContextRing(fraction: contextFraction, size: 16)
             Text("\(Int((contextFraction * 100).rounded()))%")
-                .font(BanditoFont.font(size: 11.5, weight: 400, mono: true))
+                .font(BanditoFont.font(size: 11.5, weight: 400))
+                .monospacedDigit()
         }
         .foregroundStyle(Color.Bandito.text3)
         .help(L10n.Composer.contextHint)

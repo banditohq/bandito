@@ -15,6 +15,8 @@ struct ThreadHeader: View {
     var showsChanges: Bool
     /// Whether the server has the `terminals` feature. Without it the terminal button is hidden.
     var showsTerminal: Bool
+    /// The models each runtime offers, to show a model's name rather than its id.
+    var models: [String: RuntimeModelList] = [:]
     var onChanges: () -> Void = {}
     var onTerminal: () -> Void = {}
     var onSchedules: () -> Void = {}
@@ -80,7 +82,8 @@ struct ThreadHeader: View {
     }
 
     private var caption: String {
-        [agent.model ?? agent.runtime.title, agent.effort?.title].compactMap { $0 }.joined(separator: " · ")
+        let model = agent.model.map { RuntimeModelDisplay.name(id: $0, runtime: agent.runtime, lists: models) }
+        return [model ?? agent.runtime.title, agent.effort?.title].compactMap { $0 }.joined(separator: " · ")
     }
 
     private var statusTint: Color {
@@ -107,7 +110,8 @@ struct ThreadHeader: View {
                         Text("+\(changes.additions)").foregroundStyle(Color.Bandito.ok)
                         Text("−\(changes.deletions)").foregroundStyle(Color.Bandito.danger)
                     }
-                    .font(BanditoFont.font(size: 11, weight: 500, mono: true))
+                    .font(BanditoFont.font(size: 11, weight: 500))
+                    .monospacedDigit()
                 }
             }
             .font(BanditoFont.font(size: 12, weight: 500))

@@ -41,6 +41,10 @@ struct ApprovalsSection: View {
         .task(id: server?.info != nil) {
             await reload(server)
         }
+        // An agent that is deleted takes its rule's scope back to "all agents".
+        .onChange(of: server?.agents.map(\.id) ?? []) { _, ids in
+            scope = SelectChoices.scope(scope, agentIDs: ids)
+        }
     }
 
     /// No server selected: say so and offer the way to add one. Same action as Settings → Servers.
@@ -71,22 +75,19 @@ struct ApprovalsSection: View {
             }
             HStack(alignment: .bottom, spacing: 10) {
                 labeled(L10n.Settings.Approvals.then) {
-                    Picker("", selection: $action) {
-                        Text(L10n.Settings.Approvals.allow).tag(RuleAction.allow)
-                        Text(L10n.Settings.Approvals.ask).tag(RuleAction.ask)
-                        Text(L10n.Settings.Approvals.deny).tag(RuleAction.deny)
-                    }
-                    .labelsHidden()
+                    BanditoSelect(
+                        selection: $action, sections: [SelectSection(options: actionChoices)],
+                        label: L10n.Settings.Approvals.then, placeholder: L10n.Settings.Approvals.ask,
+                        field: { SelectFieldView(option: $0?.titleOnly, placeholder: L10n.Settings.Approvals.ask) },
+                        footer: { _ in EmptyView() })
                 }
                 .frame(width: 150)
                 labeled(L10n.Settings.Approvals.forWhom) {
-                    Picker("", selection: $scope) {
-                        Text(L10n.Settings.Approvals.allAgents).tag("*")
-                        ForEach(server.agents) { agent in
-                            Text(agent.name).tag(agent.id)
-                        }
-                    }
-                    .labelsHidden()
+                    BanditoSelect(
+                        selection: $scope, sections: [SelectSection(options: scopeChoices(server))],
+                        label: L10n.Settings.Approvals.forWhom, placeholder: L10n.Settings.Approvals.allAgents,
+                        field: { SelectFieldView(option: $0?.titleOnly, placeholder: L10n.Settings.Approvals.allAgents) },
+                        footer: { _ in EmptyView() })
                 }
                 .frame(width: 170)
                 Spacer(minLength: 0)
@@ -103,6 +104,26 @@ struct ApprovalsSection: View {
         }
         .padding(14)
         .banditoCard()
+    }
+
+    /// What to do with a matching action, each with what it means (`SelectChoices.approvalActions`).
+    private var actionChoices: [SelectOption<RuleAction>] {
+        SelectChoices.approvalActions(
+            allow: .init(title: L10n.Settings.Approvals.allow, subtitle: L10n.Settings.Approvals.allowDesc),
+            ask: .init(title: L10n.Settings.Approvals.ask, subtitle: L10n.Settings.Approvals.askDesc),
+            deny: .init(title: L10n.Settings.Approvals.deny, subtitle: L10n.Settings.Approvals.denyDesc))
+    }
+
+    /// "All agents", then each agent with its avatar colour as a dot (the colour the sidebar gives it by name).
+    private func scopeChoices(_ server: ServerModel) -> [SelectOption<String>] {
+        SelectChoices.scopes(
+            allAgentsTitle: L10n.Settings.Approvals.allAgents,
+            agents: server.agents.map { agent in
+                (
+                    id: agent.id, name: agent.name,
+                    tint: AvatarResolver.resolve(name: agent.name, color: nil, face: .auto).color.color
+                )
+            })
     }
 
     private func rulesTable(_ server: ServerModel) -> some View {

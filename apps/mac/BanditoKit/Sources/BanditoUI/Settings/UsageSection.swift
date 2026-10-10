@@ -29,11 +29,14 @@ struct UsageSection: View {
                         .font(.system(size: 13))
                         .foregroundStyle(Color.Bandito.text2)
                 }
-                ForEach(snapshot.cards) { card in
-                    UsageCardView(card: card, example: snapshot.isExample, now: Date())
-                        .padding(14)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .banditoCard()
+                // Countdowns tick: the clock is read every 30 seconds, as in the usage popover.
+                TimelineView(.periodic(from: .now, by: 30)) { context in
+                    ForEach(snapshot.cards) { card in
+                        UsageCardView(card: card, example: snapshot.isExample, now: context.date)
+                            .padding(14)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .banditoCard()
+                    }
                 }
                 if let error {
                     UserFacingErrorView(message: error)

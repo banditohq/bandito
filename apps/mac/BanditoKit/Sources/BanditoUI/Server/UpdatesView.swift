@@ -15,7 +15,7 @@ struct UpdatesView: View {
                 let available = release.updateAvailable(current: info.version)
                 ServerCard {
                     row(L10n.Updates.daemonVersion, info.version)
-                    row(L10n.Updates.latestVersion, release.latest?.description ?? L10n.Updates.unknown)
+                    row(L10n.Updates.latestVersion, release.latest?.description ?? L10n.Updates.unknown, mono: release.latest != nil)
                     HStack {
                         Text(available ? L10n.Updates.available : L10n.Updates.upToDate)
                             .font(.system(size: 13, weight: .medium))
@@ -53,14 +53,15 @@ struct UpdatesView: View {
         .task { await release.load() }
     }
 
-    private func row(_ label: String, _ value: String) -> some View {
+    /// A label and a value. Versions are monospaced; the words for "unknown" are regular text.
+    private func row(_ label: String, _ value: String, mono: Bool = true) -> some View {
         HStack {
             Text(label)
                 .font(.system(size: 13))
                 .foregroundStyle(Color.Bandito.text3)
             Spacer(minLength: 8)
             Text(value)
-                .font(.system(size: 13, design: .monospaced))
+                .font(mono ? .system(size: 13, design: .monospaced) : .system(size: 13))
                 .foregroundStyle(Color.Bandito.text)
         }
     }

@@ -28,13 +28,28 @@ struct KeysAndGesturesSection: View {
         var conflicts: [Command]
     }
 
+    /// Below this content width the two key columns become one, so no row is squeezed.
+    static let twoColumnsMinWidth: CGFloat = 760
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        // The page takes exactly the width the window gives it and clips anything wider. Without this, a
+        // wide header or footer pushes the settings sidebar out of the window.
+        GeometryReader { geometry in
+            page(width: geometry.size.width)
+                .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
+                .clipped()
+        }
+        .onDisappear { stopRecording() }
+    }
+
+    private func page(width: CGFloat) -> some View {
+        let contentWidth = width - 2 * 34
+        return VStack(alignment: .leading, spacing: 0) {
             header
             toolbar
                 .padding(.bottom, 14)
             if tab == .keys {
-                keyGroups
+                keyGroups(twoColumns: contentWidth >= Self.twoColumnsMinWidth)
                 keysFooter
             } else {
                 gestureCards
@@ -43,7 +58,6 @@ struct KeysAndGesturesSection: View {
         .padding(.horizontal, 34)
         .padding(.vertical, 26)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .onDisappear { stopRecording() }
     }
 
     // MARK: header
@@ -54,18 +68,52 @@ struct KeysAndGesturesSection: View {
                 Text(SettingsSection.keysGestures.title)
                     .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(Color.Bandito.text)
+                    .lineLimit(1)
                 Text(L10n.Settings.keysIntro)
                     .font(.system(size: 13.5))
                     .foregroundStyle(Color.Bandito.text3)
             }
-            Spacer(minLength: 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
             if tab == .keys {
-                SegmentedPicker(
-                    selection: Binding(get: { preset }, set: { choose($0) }),
-                    options: KeymapPreset.allCases.map { ($0, $0.title) })
+                presetPicker
             }
         }
         .padding(.bottom, 18)
+    }
+
+    /// The preset switch: a segmented control when it fits, otherwise a compact select that names the current preset.
+    private var presetPicker: some View {
+        ViewThatFits(in: .horizontal) {
+            SegmentedPicker(
+                selection: Binding(get: { preset }, set: { choose($0) }),
+                options: KeymapPreset.allCases.map { ($0, $0.title) })
+                .fixedSize()
+            BanditoSelect(
+                selection: Binding(get: { preset }, set: { choose($0) }),
+                sections: [SelectSection(options: KeymapPreset.allCases.map { SelectOption(value: $0, title: $0.title) })],
+                label: L10n.Keys.presetMenu(name: preset.title), placeholder: preset.title,
+                field: { _ in
+                    // The field names the set ("Set: Bandito"); the panel lists the sets.
+                    HStack(spacing: 8) {
+                        Text(L10n.Keys.presetMenu(name: preset.title))
+                            .font(.system(size: 13))
+                            .lineLimit(1)
+                            .fixedSize()
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(Color.Bandito.text3)
+                            .accessibilityHidden(true)
+                    }
+                    .foregroundStyle(Color.Bandito.text)
+                    .padding(.horizontal, 12)
+                    .frame(height: 30)
+                    .background(Color.Bandito.text.opacity(0.06), in: Capsule())
+                    .overlay(Capsule().stroke(Color.Bandito.text.opacity(0.12), lineWidth: 1))
+                },
+                footer: { _ in EmptyView() },
+                style: .compact)
+                .fixedSize()
+        }
     }
 
     private var toolbar: some View {
@@ -87,23 +135,30 @@ struct KeysAndGesturesSection: View {
             SegmentedPicker(
                 selection: $tab,
                 options: [(Tab.keys, L10n.Keys.tabKeys), (Tab.gestures, L10n.Keys.tabGestures)])
+                .fixedSize()
         }
     }
 
     // MARK: keys
 
-    /// Groups in the order of `KeyContext`, split over two columns.
-    private var keyGroups: some View {
+    /// Groups in the order of `KeyContext`: two columns when there is room, otherwise one.
+    private func keyGroups(twoColumns: Bool) -> some View {
         let groups = KeyContext.allCases.compactMap { context -> (KeyContext, [Command])? in
             let commands = Command.all.filter { $0.context == context && matches($0) }
             return commands.isEmpty ? nil : (context, commands)
         }
-        let left = groups.enumerated().filter { $0.offset.isMultiple(of: 2) }.map(\.element)
-        let right = groups.enumerated().filter { !$0.offset.isMultiple(of: 2) }.map(\.element)
         return ScrollView {
-            HStack(alignment: .top, spacing: 26) {
-                column(left)
-                column(right)
+            Group {
+                if twoColumns {
+                    let left = groups.enumerated().filter { $0.offset.isMultiple(of: 2) }.map(\.element)
+                    let right = groups.enumerated().filter { !$0.offset.isMultiple(of: 2) }.map(\.element)
+                    HStack(alignment: .top, spacing: 26) {
+                        column(left)
+                        column(right)
+                    }
+                } else {
+                    column(groups)
+                }
             }
             .padding(.bottom, 12)
         }
@@ -145,6 +200,7 @@ struct KeysAndGesturesSection: View {
                     .lineLimit(1)
                 Button(L10n.Keys.replace) { replace(waiting) }
                     .banditoButton(.quiet(size: .regular))
+                    .fixedSize()
             }
             Button {
                 startRecording(command)
@@ -166,6 +222,8 @@ struct KeysAndGesturesSection: View {
         let tint = recording || custom ? Color.Bandito.signal : Color.Bandito.text.opacity(0.14)
         return Text(text)
             .font(.system(size: 12, design: .monospaced))
+            .lineLimit(1)
+            .fixedSize()
             .foregroundStyle(recording || custom ? Color.Bandito.signalGlow : Color.Bandito.text)
             .padding(.horizontal, 9)
             .frame(minWidth: 44, minHeight: 26)
@@ -177,7 +235,24 @@ struct KeysAndGesturesSection: View {
                     .strokeBorder(tint.opacity(recording || custom ? 0.8 : 1)))
     }
 
+    /// Status and actions. The buttons fold into one «…» menu when the row is too narrow; the error line sits below.
     private var keysFooter: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ViewThatFits(in: .horizontal) {
+                footerRow(folded: false)
+                footerRow(folded: true)
+            }
+            if let message {
+                UserFacingErrorView(message: message)
+            }
+        }
+        .padding(.top, 12)
+        .overlay(alignment: .top) {
+            Rectangle().fill(Color.Bandito.text.opacity(0.06)).frame(height: 1)
+        }
+    }
+
+    private func footerRow(folded: Bool) -> some View {
         HStack(spacing: 10) {
             Circle()
                 .fill(Color.Bandito.signal)
@@ -185,27 +260,45 @@ struct KeysAndGesturesSection: View {
             Text(L10n.Keys.customizedCount(count: keymap.customizedCount))
                 .font(.system(size: 12.5))
                 .foregroundStyle(Color.Bandito.text3)
-            if let message {
-                UserFacingErrorView(message: message)
+                .lineLimit(1)
+                .fixedSize()
+            Spacer(minLength: 8)
+            if folded {
+                Menu {
+                    Button(L10n.Keys.exportButton) { exportKeys() }
+                    Button(L10n.Keys.importButton) { importKeys() }
+                    Divider()
+                    Button(L10n.Keys.resetAll, role: .destructive) { resetAll() }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.Bandito.text2)
+                        .frame(width: 30, height: 26)
+                }
+                .menuStyle(.button)
+                .menuIndicator(.hidden)
+                .banditoButton(.icon(size: 30, label: L10n.Keys.moreActions))
+                .fixedSize()
+            } else {
+                Button(L10n.Keys.exportButton) { exportKeys() }
+                    .banditoButton(.quiet(size: .regular))
+                    .fixedSize()
+                Button(L10n.Keys.importButton) { importKeys() }
+                    .banditoButton(.quiet(size: .regular))
+                    .fixedSize()
+                Button(L10n.Keys.resetAll) { resetAll() }
+                    .banditoButton(.quiet(size: .regular))
+                    .foregroundStyle(Color.Bandito.danger)
+                    .fixedSize()
             }
-            Spacer()
-            Button(L10n.Keys.exportButton) { exportKeys() }
-                .banditoButton(.quiet(size: .regular))
-            Button(L10n.Keys.importButton) { importKeys() }
-                .banditoButton(.quiet(size: .regular))
-            Button(L10n.Keys.resetAll) {
-                stopRecording()
-                pending = nil
-                keymap.resetAll()
-                preset = .bandito
-            }
-            .banditoButton(.quiet(size: .regular))
-            .foregroundStyle(Color.Bandito.danger)
         }
-        .padding(.top, 12)
-        .overlay(alignment: .top) {
-            Rectangle().fill(Color.Bandito.text.opacity(0.06)).frame(height: 1)
-        }
+    }
+
+    private func resetAll() {
+        stopRecording()
+        pending = nil
+        keymap.resetAll()
+        preset = .bandito
     }
 
     private func matches(_ command: Command) -> Bool {

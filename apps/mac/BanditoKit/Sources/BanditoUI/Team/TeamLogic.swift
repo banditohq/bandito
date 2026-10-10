@@ -8,8 +8,8 @@ import Foundation
 public enum ThreadRow: Sendable {
     /// Start of a calendar day (local time).
     case day(Date)
-    /// Start of a memory chapter, from a `Chapter N · …` note.
-    case chapter(Int)
+    /// Start of a memory chapter; `saved` is false when its memory was not saved.
+    case chapter(number: Int, saved: Bool)
     /// Any other item, shown as it is.
     case item(ThreadItem)
     /// Consecutive tool calls, shown as one card.
@@ -21,7 +21,7 @@ extension ThreadRow: Identifiable {
     public var id: String {
         switch self {
         case .day(let date): "day-\(date.timeIntervalSince1970)"
-        case .chapter(let number): "chapter-\(number)"
+        case .chapter(let number, _): "chapter-\(number)"
         case .item(let item): item.id
         case .toolGroup(let tools): "tools-\(tools.first?.callId ?? "")"
         }
@@ -55,8 +55,8 @@ public enum ThreadRows {
                     lastDay = day
                 }
             }
-            if case .note(_, let text, _, _) = item, let number = chapterNumber(in: text) {
-                rows.append(.chapter(number))
+            if case .chapter(_, let number, let saved, _) = item {
+                rows.append(.chapter(number: number, saved: saved))
             } else {
                 rows.append(.item(item))
             }
@@ -70,15 +70,9 @@ public enum ThreadRows {
         switch item {
         case .user(_, _, _, _, let ts), .assistant(_, _, let ts), .note(_, _, _, let ts): ts
         case .runtimeSwitch(_, _, _, _, let ts): ts
+        case .chapter(_, _, _, let ts): ts
         case .streaming, .tool, .approval: nil
         }
-    }
-
-    /// The number in a `Chapter N · …` note, which the daemon writes when a session rotates.
-    static func chapterNumber(in text: String) -> Int? {
-        guard text.hasPrefix("Chapter ") else { return nil }
-        let digits = text.dropFirst("Chapter ".count).prefix { $0.isNumber }
-        return Int(digits)
     }
 }
 

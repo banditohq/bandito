@@ -3,6 +3,10 @@ import BanditoL10n
 import SwiftUI
 import UserNotifications
 
+#if os(macOS)
+import AppKit
+#endif
+
 /// Settings → Notifications: the system permission, and which events post a notification.
 struct NotificationsSection: View {
     @AppStorage("notify.needsYou") private var needsYou = true
@@ -19,6 +23,17 @@ struct NotificationsSection: View {
                             Task { await request() }
                         }
                         .banditoButton(.signal())
+                        .fixedSize()
+                    } else if status == .denied {
+                        HStack(spacing: 8) {
+                            Chip(text: Self.statusText(status), tone: .neutral)
+                                .fixedSize()
+                            Button(L10n.Settings.Notifications.openSystem) {
+                                SystemActions.open(Self.systemSettingsURL)
+                            }
+                            .banditoButton(.quiet())
+                            .fixedSize()
+                        }
                     } else {
                         Chip(text: Self.statusText(status), tone: status == .authorized ? .ok : .neutral)
                             .fixedSize()
@@ -34,6 +49,12 @@ struct NotificationsSection: View {
             .banditoCard()
         }
         .task { await refresh() }
+        #if os(macOS)
+        // The person may have switched the permission in System Settings and come back: read it again.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { await refresh() }
+        }
+        #endif
     }
 
     private func toggle(_ title: String, _ hint: String, _ isOn: Binding<Bool>) -> some View {
@@ -52,6 +73,9 @@ struct NotificationsSection: View {
         _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
         await refresh()
     }
+
+    /// The Notifications pane of System Settings.
+    static let systemSettingsURL = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension")!
 
     static func statusText(_ status: UNAuthorizationStatus) -> String {
         switch status {

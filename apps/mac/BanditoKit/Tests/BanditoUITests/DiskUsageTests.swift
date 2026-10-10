@@ -4,18 +4,24 @@ import Testing
 @testable import BanditoUI
 
 @Suite struct DiskUsageTests {
-    static let units = HostFormat.Units(
-        byte: "Б", kilobyte: "КБ", megabyte: "МБ", gigabyte: "ГБ", terabyte: "ТБ", perSecond: "/с")
-    static let gib: Int64 = 1_073_741_824
+    /// 236.1 decimal GB, which is what Finder and the Files sidebar showed; it is 220 binary GiB.
+    static let freeBytes: Int64 = 236_100_000_000
 
-    @Test func usedAndTotalShareOneUnit() {
-        let usage = HostFormat.diskUsage(used: 692 * Self.gib, total: 994 * Self.gib, locale: Locale(identifier: "ru_RU"), units: Self.units)
-        #expect(usage.used == "692")
-        #expect(usage.total == "994 ГБ")
+    @Test func diskSpaceUsesDecimalUnits() {
+        let text = HostFormat.diskBytes(Self.freeBytes)
+        #expect(text.contains("236"))
+        #expect(!text.contains("220"))
+    }
+
+    @Test func usedAndTotalUseTheSameDecimalUnits() {
+        let usage = HostFormat.diskUsage(used: 692_000_000_000, total: 994_000_000_000)
+        #expect(usage.used.contains("692"))
+        #expect(usage.total.contains("994"))
+        #expect(usage.total == HostFormat.diskBytes(994_000_000_000))
     }
 
     @Test func emptyDiskDoesNotDivideByZero() {
-        let usage = HostFormat.diskUsage(used: 0, total: 0, locale: Locale(identifier: "en_US"), units: Self.units)
-        #expect(usage.used == "0")
+        let usage = HostFormat.diskUsage(used: 0, total: 0)
+        #expect(usage.used.contains("0"))
     }
 }

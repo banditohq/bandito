@@ -137,7 +137,8 @@ struct QuickOpenPalette: View {
                 servers: L10n.Common.serverCount(count: app.servers.count),
                 agents: L10n.Common.agentCount(count: allAgents.count)))
         }
-        .font(BanditoFont.font(size: 11.5, weight: 400, mono: true))
+        .font(BanditoFont.font(size: 11.5, weight: 400))
+        .monospacedDigit()
         .foregroundStyle(Color.Bandito.text3)
         .padding(.horizontal, 18)
         .padding(.vertical, 11)
@@ -170,7 +171,7 @@ struct QuickOpenPalette: View {
                 Spacer(minLength: 8)
                 if let trailing = row.trailing {
                     Text(trailing)
-                        .font(BanditoFont.font(size: 11.5, weight: 400, mono: true))
+                        .font(BanditoFont.font(size: 11.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                 }
             }

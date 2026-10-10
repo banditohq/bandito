@@ -125,7 +125,7 @@ struct ApprovalCard: View {
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .font(BanditoFont.font(size: 13.5, weight: 400, mono: true))
+        .font(BanditoFont.font(size: 13.5, weight: 400, mono: row.command != nil))
         .padding(.horizontal, 15)
         .padding(.vertical, 13)
         .background(Color.Bandito.bg, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -139,7 +139,7 @@ struct ApprovalCard: View {
             Text(text)
                 .lineLimit(1)
             Text(row.command ?? row.title)
-                .font(BanditoFont.font(size: 12, weight: 400, mono: true))
+                .font(BanditoFont.font(size: 12, weight: 400, mono: row.command != nil))
                 .foregroundStyle(Color.Bandito.text3)
                 .lineLimit(1)
         }

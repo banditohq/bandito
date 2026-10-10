@@ -22,8 +22,18 @@ struct DetailsTab: View {
 
     private var effort: Binding<Effort> {
         Binding(
-            get: { agent.effort ?? .medium },
+            get: {
+                RuntimeModelDisplay.effort(
+                    agent.effort ?? .medium, modelID: agent.model ?? "", runtime: agent.runtime,
+                    lists: server.runtimeModels) ?? .medium
+            },
             set: { value in change { _ = try await server.updateAgent(agent.id, effort: value) } })
+    }
+
+    /// The effort levels the agent's saved model takes. Empty for a model that takes no effort.
+    private var effortLevels: [Effort] {
+        RuntimeModelDisplay.effortLevels(
+            modelID: agent.model ?? "", runtime: agent.runtime, lists: server.runtimeModels)
     }
 
     var body: some View {
@@ -45,50 +55,30 @@ struct DetailsTab: View {
                     }
                 }
                 InspectorRow(label: L10n.Inspector.runsOn) {
-                    Menu {
-                        ForEach(RuntimeKind.pickable.filter { $0 != agent.runtime }, id: \.self) { kind in
-                            Button(kind.title) { switchRuntime(to: kind) }
-                        }
-                    } label: {
-                        Text(runtimeLine)
-                    }
-                    .menuStyle(.button)
-                    .banditoButton(.link)
-                    .fixedSize()
+                    BanditoSelect(
+                        selection: runtimeBinding, sections: [SelectSection(options: runtimeChoices)],
+                        label: L10n.Inspector.runsOn, placeholder: agent.runtime.title)
+                        .frame(maxWidth: 260)
                 }
                 InspectorRow(label: L10n.Inspector.model) {
-                    TextField(L10n.AgentSheet.modelDefault, text: $modelDraft)
-                        .textFieldStyle(.plain)
-                        .multilineTextAlignment(.trailing)
-                        .frame(maxWidth: 170)
-                        .onSubmit(saveModel)
+                    ModelPicker(
+                        runtime: agent.runtime, selection: $modelDraft,
+                        models: server.runtimeModels[agent.runtime.rawValue],
+                        status: server.runtimeModelsStatus, onCommit: saveModel)
+                        .frame(maxWidth: 260)
                 }
                 InspectorRow(label: L10n.AgentSheet.fallbackLabel) {
-                    Menu {
-                        Button(L10n.AgentSheet.fallbackNone) { setFallback(nil) }
-                        ForEach(NewAgentDraft.fallbackOptions(for: agent.runtime), id: \.self) { kind in
-                            Button(kind.title) { setFallback(kind) }
-                        }
-                    } label: {
-                        Text(agent.fallbackRuntime?.title ?? L10n.AgentSheet.fallbackNone)
-                    }
-                    .menuStyle(.button)
-                    .banditoButton(.link)
-                    .fixedSize()
+                    BanditoSelect(
+                        selection: fallbackBinding, sections: [SelectSection(options: fallbackChoices)],
+                        label: L10n.AgentSheet.fallbackLabel, placeholder: L10n.AgentSheet.fallbackNone)
+                        .frame(maxWidth: 260)
                 }
                 InspectorRow(label: L10n.Inspector.approvals) {
-                    Menu {
-                        ForEach(ApprovalMode.allCases, id: \.self) { mode in
-                            Button(mode.title) {
-                                change { _ = try await server.updateAgent(agent.id, approvalMode: mode) }
-                            }
-                        }
-                    } label: {
-                        Text(agent.approvalMode.title)
-                    }
-                    .menuStyle(.button)
-                    .banditoButton(.link)
-                    .fixedSize()
+                    BanditoSelect(
+                        selection: approvalBinding,
+                        sections: [SelectSection(options: ApprovalMode.allCases.map { SelectOption(value: $0, title: $0.title) })],
+                        label: L10n.Inspector.approvals, placeholder: agent.approvalMode.title)
+                        .frame(maxWidth: 260)
                 }
                 InspectorRow(label: L10n.Inspector.project) {
                     TextField("", text: $folder)
@@ -102,9 +92,16 @@ struct DetailsTab: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 SectionLabel(L10n.Effort.title)
-                SegmentedPicker(
-                    selection: effort,
-                    options: EffortLevels.levels(for: agent.runtime).map { ($0, $0.title) })
+                if effortLevels.isEmpty {
+                    Text(L10n.ModelPicker.noEffort)
+                        .font(BanditoFont.font(size: 12.5, weight: 400))
+                        .foregroundStyle(Color.Bandito.text3)
+                        .padding(.vertical, 6)
+                } else {
+                    SegmentedPicker(
+                        selection: effort,
+                        options: effortLevels.map { ($0, $0.title) })
+                }
             }
 
             VStack(alignment: .leading, spacing: 8) {
@@ -137,11 +134,14 @@ struct DetailsTab: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 SectionLabel(L10n.Inspector.instructionsHeader)
-                TextEditor(text: $instructions)
+                // A vertical TextField, not TextEditor: this view is inside a ScrollView, and a TextEditor would take
+                // the wheel for its own scrolling. Return adds a line; the field grows from 4 to 12 lines.
+                TextField(L10n.Inspector.instructionsPlaceholder, text: $instructions, axis: .vertical)
+                    .textFieldStyle(.plain)
                     .font(BanditoFont.font(size: 13, weight: 400))
-                    .scrollContentBackground(.hidden)
-                    .frame(minHeight: 96)
+                    .lineLimit(4...12)
                     .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
                     .background(Color.Bandito.bg, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.Bandito.line, lineWidth: 1))
@@ -178,9 +178,45 @@ struct DetailsTab: View {
         }
     }
 
-    private var runtimeLine: String {
-        let plan = server.usage.first { $0.runtime == agent.runtime.rawValue }?.plan?.label
-        return [agent.runtime.title, plan].compactMap { $0 }.joined(separator: " · ")
+    /// The runtime the agent runs on. Choosing another one switches it, as the old menu did.
+    private var runtimeBinding: Binding<RuntimeKind> {
+        Binding(
+            get: { agent.runtime },
+            set: { kind in
+                if kind != agent.runtime {
+                    switchRuntime(to: kind)
+                }
+            })
+    }
+
+    /// The three runtimes, each with its plan as the subtitle when the server reports one.
+    private var runtimeChoices: [SelectOption<RuntimeKind>] {
+        RuntimeKind.pickable.map { kind in
+            let plan = server.usage.first { $0.runtime == kind.rawValue }?.plan?.label
+            return SelectOption(value: kind, title: kind.title, subtitle: plan)
+        }
+    }
+
+    private var fallbackBinding: Binding<RuntimeKind?> {
+        Binding(get: { agent.fallbackRuntime }, set: { setFallback($0) })
+    }
+
+    private var fallbackChoices: [SelectOption<RuntimeKind?>] {
+        let none = SelectOption<RuntimeKind?>(value: nil, title: L10n.AgentSheet.fallbackNone, icon: "minus")
+        let runtimes = NewAgentDraft.fallbackOptions(for: agent.runtime).map { kind in
+            SelectOption<RuntimeKind?>(value: kind, title: kind.title, icon: "arrow.right")
+        }
+        return [none] + runtimes
+    }
+
+    private var approvalBinding: Binding<ApprovalMode> {
+        Binding(
+            get: { agent.approvalMode },
+            set: { mode in
+                // Choosing the mode already set is not a change: no request.
+                guard mode != agent.approvalMode else { return }
+                change { _ = try await server.updateAgent(agent.id, approvalMode: mode) }
+            })
     }
 
     private func saveFolder() {
@@ -222,10 +258,15 @@ struct DetailsTab: View {
             patch.fallbackRuntime = .clear
             patch.fallbackModel = .clear
         }
+        // A model is kept only when the new runtime's list names it; otherwise the new runtime gets its default.
+        patch.model = RuntimeModelDisplay.modelChange(
+            afterSwitchingTo: kind, current: agent.model ?? "", lists: server.runtimeModels)
         apply(patch)
     }
 
     private func setFallback(_ kind: RuntimeKind?) {
+        // Choosing the fallback already set is not a change: no request.
+        guard kind != agent.fallbackRuntime else { return }
         if let kind {
             apply(AgentPatch(fallbackRuntime: .set(kind)))
         } else {
@@ -233,12 +274,17 @@ struct DetailsTab: View {
         }
     }
 
-    /// An empty field goes back to the runtime's default model.
-    private func saveModel() {
-        let text = modelDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+    /// An empty model goes back to the runtime's default model. Saved when a model is picked or a typed id is confirmed.
+    private func saveModel(_ value: String) {
+        let text = value.trimmingCharacters(in: .whitespacesAndNewlines)
         let next: FieldChange<String> = text.isEmpty ? .clear : .set(text)
         if text == (agent.model ?? "") { return }
-        apply(AgentPatch(model: next))
+        var patch = AgentPatch(model: next)
+        // One request: a model change that needs another effort carries it along. Opening the inspector writes nothing.
+        patch.effort = RuntimeModelDisplay.effortWrite(
+            modelChangedFrom: agent.model ?? "", to: text, stored: agent.effort,
+            runtime: agent.runtime, lists: server.runtimeModels)
+        apply(patch)
     }
 }
 
@@ -311,9 +357,14 @@ private struct ScheduleEditor: View {
             }
             VStack(alignment: .leading, spacing: 6) {
                 SectionLabel(L10n.Inspector.promptLabel)
-                TextEditor(text: $prompt)
+                // Vertical TextField for the same reason as the instructions above (inside a ScrollView).
+                TextField(L10n.Inspector.promptPlaceholder, text: $prompt, axis: .vertical)
+                    .accessibilityLabel(L10n.Inspector.promptLabel)
+                    .textFieldStyle(.plain)
                     .font(BanditoFont.font(size: 13, weight: 400))
-                    .frame(minHeight: 90)
+                    .lineLimit(3...10)
+                    .padding(8)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.Bandito.line, lineWidth: 1))
             }
             if let error {
@@ -588,6 +639,7 @@ struct WhereTab: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
+            SectionLabel(L10n.Inspector.workplace)
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 11) {
                     Image(systemName: inContainer ? "shippingbox" : "house")
@@ -596,16 +648,19 @@ struct WhereTab: View {
                         .frame(width: 34, height: 34)
                         .background(BanditoPalette.peach.opacity(0.13), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(workplaceTitle)
-                            .font(BanditoFont.font(size: 14, weight: 600))
-                            .foregroundStyle(Color.Bandito.text)
-                            .lineLimit(1)
+                        // With the change select on, its field is the place's name: the title would say it twice.
+                        if !showsChangeMenu {
+                            Text(workplaceTitle)
+                                .font(BanditoFont.font(size: 14, weight: 600))
+                                .foregroundStyle(Color.Bandito.text)
+                                .lineLimit(1)
+                        }
                         Text(workplaceSubtitle)
                             .font(BanditoFont.font(size: 12, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                     }
                     Spacer()
-                    if workplaces?.supported == true {
+                    if showsChangeMenu {
                         changeMenu
                     }
                 }
@@ -679,25 +734,36 @@ struct WhereTab: View {
     }
 
     /// Lists the shared server and the containers. Choosing one asks first: the agent starts a new chapter there.
+    private var showsChangeMenu: Bool { workplaces?.supported == true }
+
+    /// The place the agent runs in, shown as the field's name; choosing another place asks first.
     private var changeMenu: some View {
-        Menu {
-            Button(L10n.Workspace.Shared.title) {
-                pendingMove = MoveTarget(id: Workspace.sharedID, name: L10n.Workspace.Shared.title)
-            }
-            .disabled(!inContainer)
-            ForEach(workplaces?.containers ?? []) { container in
-                Button(container.name) {
-                    pendingMove = MoveTarget(id: container.id, name: container.name)
-                }
-                .disabled(container.id == agent.workspaceId)
-            }
-        } label: {
-            Text(L10n.Workspace.Location.change)
-                .font(BanditoFont.font(size: 12.5, weight: 500))
-        }
-        .menuStyle(.button)
-        .banditoButton(.quiet(size: .regular))
+        BanditoSelect(
+            selection: Binding(get: { agent.workspaceId }, set: { id in
+                afterSelectPanelCloses { askMove(to: id) }
+            }),
+            sections: [SelectSection(options: workplaceChoices)],
+            label: L10n.Workspace.Location.change, placeholder: workplaceTitle,
+            style: .compact)
         .fixedSize()
+    }
+
+    /// The shared server, then the containers, from `SelectChoices.workplaces`.
+    private var workplaceChoices: [SelectOption<String>] {
+        SelectChoices.workplaces(
+            sharedTitle: L10n.Workspace.Shared.title, sharedEnabled: inContainer,
+            containers: (workplaces?.containers ?? []).map { SelectChoices.Place(id: $0.id, name: $0.name) },
+            currentID: agent.workspaceId)
+    }
+
+    /// Asks before the move: the confirmation dialog runs `move(to:)`. The agent's own place asks nothing.
+    private func askMove(to id: String) {
+        guard id != agent.workspaceId else { return }
+        if id == Workspace.sharedID {
+            pendingMove = MoveTarget(id: id, name: L10n.Workspace.Shared.title)
+        } else if let container = workplaces?.containers.first(where: { $0.id == id }) {
+            pendingMove = MoveTarget(id: container.id, name: container.name)
+        }
     }
 
     /// `agents.update {workspace_id}`. The daemon's warnings are shown under the header.
@@ -743,7 +809,7 @@ struct WhereTab: View {
                     if let plan { Chip(text: plan, tone: .signal) }
                 }
                 Text(status.installed ? (status.version ?? "") : L10n.Inspector.notInstalled)
-                    .font(BanditoFont.font(size: 11.5, weight: 400, mono: true))
+                    .font(BanditoFont.font(size: 11.5, weight: 400, mono: status.installed))
                     .foregroundStyle(Color.Bandito.text3)
                     .lineLimit(1)
             }

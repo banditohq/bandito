@@ -189,7 +189,7 @@ struct SlashMenuView: View {
                 .banditoButton(.link)
                 .foregroundStyle(BanditoPalette.peach)
         }
-        .font(BanditoFont.font(size: 11.5, weight: 400, mono: true))
+        .font(BanditoFont.font(size: 11.5, weight: 400))
         .foregroundStyle(Color.Bandito.text3)
         .padding(.horizontal, 14)
         .padding(.vertical, 9)

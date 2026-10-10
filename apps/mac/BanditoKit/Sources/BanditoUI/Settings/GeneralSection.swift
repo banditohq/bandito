@@ -20,14 +20,12 @@ struct GeneralSection: View {
         SettingsPage(title: SettingsSection.general.title, intro: nil) {
             VStack(spacing: 0) {
                 SettingsRow(title: L10n.Settings.language, hint: L10n.Settings.languageRestart) {
-                    Picker("", selection: $language) {
-                        Text(L10n.Settings.Language.system).tag(Self.systemLanguage)
-                        ForEach(L10n.languages, id: \.code) { entry in
-                            Text(entry.native).tag(entry.code)
-                        }
-                    }
-                    .labelsHidden()
-                    .frame(width: 220)
+                    BanditoSelect(
+                        selection: $language, sections: [SelectSection(options: languageChoices)],
+                        label: L10n.Settings.language, placeholder: L10n.Settings.Language.system,
+                        field: { SelectFieldView(option: $0?.titleOnly, placeholder: L10n.Settings.Language.system) },
+                        footer: { _ in EmptyView() })
+                        .frame(width: 220)
                 }
                 Divider().padding(.horizontal, 16)
                 SettingsRow(title: L10n.Settings.showExamples, hint: L10n.Settings.showExamplesHint) {
@@ -49,12 +47,22 @@ struct GeneralSection: View {
                 }
                 Divider().padding(.horizontal, 16)
                 SettingsRow(title: L10n.Settings.Updates.channel, hint: L10n.Settings.channelHint) {
-                    Picker("", selection: $updateChannel) {
-                        Text(L10n.Settings.Updates.stable).tag(AppUpdatePreferences.Channel.stable.rawValue)
-                        Text(L10n.Settings.Updates.beta).tag(AppUpdatePreferences.Channel.beta.rawValue)
-                    }
-                    .labelsHidden()
-                    .frame(width: 220)
+                    BanditoSelect(
+                        selection: $updateChannel,
+                        sections: [
+                            SelectSection(options: [
+                                SelectOption(
+                                    value: AppUpdatePreferences.Channel.stable.rawValue,
+                                    title: L10n.Settings.Updates.stable, subtitle: L10n.Settings.Updates.stableDesc),
+                                SelectOption(
+                                    value: AppUpdatePreferences.Channel.beta.rawValue,
+                                    title: L10n.Settings.Updates.beta, subtitle: L10n.Settings.Updates.betaDesc),
+                            ])
+                        ],
+                        label: L10n.Settings.Updates.channel, placeholder: L10n.Settings.Updates.stable,
+                        field: { SelectFieldView(option: $0?.titleOnly, placeholder: L10n.Settings.Updates.stable) },
+                        footer: { _ in EmptyView() })
+                        .frame(width: 220)
                 }
             }
             .banditoCard()
@@ -65,6 +73,14 @@ struct GeneralSection: View {
         .onChange(of: launchAtLogin) { _, on in
             setLaunchAtLogin(on)
         }
+    }
+
+    /// "System", then every language: its own name, and its name in the language the interface is in now.
+    private var languageChoices: [SelectOption<String>] {
+        SelectChoices.languages(
+            system: SelectOption(value: Self.systemLanguage, title: L10n.Settings.Language.system),
+            entries: L10n.languages,
+            localizedName: { L10n.locale.localizedString(forIdentifier: $0) })
     }
 
     /// The language code the app was told to use, or "system". Reads only the app's own domain: the global

@@ -12,7 +12,7 @@ final class SettingsNavigation {
     var requested: SettingsSection?
 }
 
-/// The Settings window (⌘,): 12 sections in a left navigation. Opens at 1040 × 760 pt, never smaller than 820 × 560.
+/// The Settings window (⌘,): 12 sections in a left navigation. Opens at 980 × 680 pt, never smaller than 860 × 560.
 public struct SettingsWindow: View {
     @State private var section: SettingsSection = .general
 
@@ -24,11 +24,15 @@ public struct SettingsWindow: View {
                 .frame(width: 240)
                 .frame(maxHeight: .infinity)
                 .background(Color.Bandito.bg)
-            content
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color.Bandito.surface1)
+            // A page can never push the navigation out of the window: it gets the leftover width and clips the rest.
+            GeometryReader { _ in
+                content
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
+            .background(Color.Bandito.surface1)
         }
-        .frame(minWidth: 820, idealWidth: 1040, maxWidth: .infinity, minHeight: 560, idealHeight: 760, maxHeight: .infinity)
+        .frame(minWidth: 860, idealWidth: 980, maxWidth: .infinity, minHeight: 560, idealHeight: 680, maxHeight: .infinity)
         .preferredColorScheme(.dark)
         .onAppear(perform: takeRequest)
         .onChange(of: SettingsNavigation.shared.requested) { _, _ in takeRequest() }

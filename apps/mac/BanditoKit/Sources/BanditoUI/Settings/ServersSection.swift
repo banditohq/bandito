@@ -16,7 +16,7 @@ struct ServersSection: View {
                     if index > 0 {
                         Divider().padding(.horizontal, 16)
                     }
-                    SettingsRow(title: server.config.name, hint: server.config.description) {
+                    SettingsRow(title: server.config.name, hint: Self.addressText(server.config.endpoint)) {
                         HStack(spacing: 12) {
                             Chip(text: Self.stateText(server.state), tone: server.state == .connected ? .ok : .neutral)
                                 .fixedSize()
@@ -56,6 +56,14 @@ struct ServersSection: View {
             Button(L10n.Common.cancel, role: .cancel) {}
         } message: { _ in
             Text(L10n.Settings.Servers.deleteMessage)
+        }
+    }
+
+    /// The human address under the name: `user@host`, `host:port`, or "This Mac". Never the id or the token.
+    static func addressText(_ endpoint: ServerEndpoint) -> String {
+        switch ServerAddress(endpoint: endpoint) {
+        case .thisMac: L10n.Server.Add.thisMac
+        case .remote(let text): text
         }
     }
 

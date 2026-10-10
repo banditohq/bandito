@@ -1,6 +1,9 @@
 import BanditoKit
 import Foundation
 import Observation
+#if os(macOS)
+import AppKit
+#endif
 
 /// App-wide state: saved servers and which one is in front. What is selected inside a server lives in `Router`.
 @MainActor
@@ -12,12 +15,26 @@ public final class AppModel {
             if oldValue != selectedServerID { onServerChanged?() }
         }
     }
+    /// Asks the server in front for fresh limits each `ServerModel.usageBackgroundInterval` while the app is active.
+    /// Runs until it is cancelled; the root view starts it once.
+    public func keepUsageFresh() async {
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(ServerModel.usageBackgroundInterval))
+            #if os(macOS)
+            guard NSApplication.shared.isActive else { continue }
+            #endif
+            await currentServer?.refreshUsageIfStale()
+        }
+    }
+
     /// Called when the server in front changes. The app drops the actions that were aimed at the old server.
     @ObservationIgnored public var onServerChanged: (() -> Void)?
     /// The last problem the user should know about (e.g. a token that could not be stored).
     public private(set) var lastError: String?
     /// Text size of every terminal pane (⌘+ ⌘− ⌘0 and pinch).
     public let terminalFont = TerminalFontStore()
+    /// Keeps this Mac's daemon at the version of the app (see `LocalDaemonUpgradeModel`).
+    let localUpgrade = LocalDaemonUpgradeModel()
     /// System notifications for agent events; nil until `startNotifications` runs.
     public private(set) var notifications: NotificationService?
 
@@ -85,12 +102,68 @@ public final class AppModel {
         }
     }
 
+    /// Marks the saved servers that are this Mac's daemon but were saved before the flag existed
+    /// (`LocalDaemonUpgrade.confirmsThisMac`). The checks run in parallel, each with its own time limit. A confirmed
+    /// server is replaced by a marked copy (`markThisMac`). A QA copy never reads this Mac's installed daemon.
+    func confirmThisMacServers(
+        binary: URL = LocalDaemonUpgrade.installedBinary(),
+        runner: CommandRunner = ProcessCommandRunner(),
+        timeout: Duration = .seconds(3)
+    ) async {
+        guard !QABuild.isRunningQA else { return }
+        let candidates = servers.filter { !$0.config.isThisMac }.map(\.config)
+        let confirmed = await withTaskGroup(of: UUID?.self) { group in
+            for config in candidates {
+                group.addTask {
+                    await LocalDaemonUpgrade.confirmsThisMac(
+                        config, binary: binary, runner: runner, timeout: timeout) ? config.id : nil
+                }
+            }
+            var ids: [UUID] = []
+            for await id in group {
+                if let id { ids.append(id) }
+            }
+            return ids
+        }
+        for id in confirmed {
+            await markThisMac(id)
+        }
+    }
+
+    /// Replaces a confirmed server with a copy that has the flag. The old model is disconnected first. The list is
+    /// read again after that await: the copy is made only if the same model is still there and still unmarked, so a
+    /// change made meanwhile is not overwritten. The copy connects, and is checked for an upgrade.
+    private func markThisMac(_ id: UUID) async {
+        guard let old = servers.first(where: { $0.id == id }), !old.config.isThisMac else { return }
+        await old.disconnect()
+        guard let index = servers.firstIndex(where: { $0.id == id }),
+            servers[index] === old, !servers[index].config.isThisMac
+        else { return }
+        var config = old.config
+        config.isThisMac = true
+        let rebuilt = ServerModel(config: config)
+        attachNotifications(rebuilt)
+        servers[index] = rebuilt
+        // The waiting upgrade of the old model would hold the old model: it ends, and the copy starts its own.
+        localUpgrade.forget(serverID: id)
+        save()
+        await rebuilt.connect()
+        await localUpgrade.upgradeIfNeeded(rebuilt)
+    }
+
     public func connectAll() async {
         await migrateLocalServers()
+        // The check of this Mac's daemon runs beside the connects and does not hold them up. A server it confirms is
+        // replaced and connected by `markThisMac`.
+        Task { await confirmThisMacServers() }
         await withTaskGroup(of: Void.self) { group in
             for s in reachableServers {
                 group.addTask { await s.connect() }
             }
+        }
+        // After the connects: each server has answered `daemon.info`, so its version is known.
+        for s in reachableServers where s.state == .connected {
+            await localUpgrade.upgradeIfNeeded(s)
         }
     }
 
@@ -193,6 +266,7 @@ public final class AppModel {
     public func remove(_ id: UUID) {
         guard let i = servers.firstIndex(where: { $0.id == id }) else { return }
         let s = servers.remove(at: i)
+        localUpgrade.forget(serverID: id)
         #if os(macOS)
         if let controller = terminalControllers.removeValue(forKey: id) {
             Task { await controller.detachAll() }

@@ -112,15 +112,30 @@ public struct NewAgentDraft: Equatable, Sendable {
         workplace != .new || newWorkplace.canCreate
     }
 
-    /// Switches the runtime. The effort is lowered to a level the new runtime offers.
-    public mutating func setRuntime(_ next: RuntimeKind) {
+    /// Switches the runtime. The effort is lowered to a level the new runtime offers. The model is kept only when
+    /// the new runtime offers it (see `RuntimeModelDisplay.model(afterSwitchingTo:keeping:lists:)`); `lists` are the
+    /// server's model lists. Choosing the runtime that is already chosen changes nothing.
+    public mutating func setRuntime(_ next: RuntimeKind, lists: [String: RuntimeModelList] = [:]) {
+        let previous = runtime
         runtime = next
         effort = next.clampedEffort(effort)
+        if next != previous {
+            model = RuntimeModelDisplay.model(afterSwitchingTo: next, keeping: model, lists: lists)
+        }
         // The fallback must be another runtime: a fallback that became the primary is dropped.
         if fallbackRuntime == next {
             fallbackRuntime = nil
             fallbackModel = ""
         }
+    }
+
+    /// Picks the fallback runtime (nil: do not switch). The fallback model is kept only when the new runtime offers it.
+    public mutating func setFallbackRuntime(_ next: RuntimeKind?, lists: [String: RuntimeModelList] = [:]) {
+        guard next != fallbackRuntime else { return }
+        fallbackRuntime = next
+        fallbackModel = next.map {
+            RuntimeModelDisplay.model(afterSwitchingTo: $0, keeping: fallbackModel, lists: lists)
+        } ?? ""
     }
 
     /// The runtimes that can be the fallback of `runtime`: the other pickable ones.
@@ -130,8 +145,11 @@ public struct NewAgentDraft: Equatable, Sendable {
 
     /// The request for `agents.create`. `workspaceID` is the id of the container made for `.new` (see
     /// `WorkplaceCreation.prepare`); the other choices name their workspace themselves. `existingNames` are the
-    /// names of the server's agents, used for the default name.
-    public func makeNewAgent(workspaceID: String? = nil, existingNames: [String] = []) -> NewAgent {
+    /// names of the server's agents, used for the default name. `lists` are the server's model lists: a model that
+    /// takes no effort is sent without one, and the effort is moved to a level the model takes.
+    public func makeNewAgent(
+        workspaceID: String? = nil, existingNames: [String] = [], lists: [String: RuntimeModelList] = [:]
+    ) -> NewAgent {
         let model = trimmed(model)
         let instructions = trimmed(instructions)
         let workspace: String?
@@ -148,7 +166,7 @@ public struct NewAgentDraft: Equatable, Sendable {
             cwd: trimmed(cwd),
             approvalMode: approval.mode,
             systemPrompt: instructions.isEmpty ? nil : instructions,
-            effort: effort,
+            effort: RuntimeModelDisplay.effort(effort, modelID: model, runtime: runtime, lists: lists),
             memoryMode: memory,
             fallbackRuntime: fallbackRuntime,
             fallbackModel: trimmed(fallbackModel).isEmpty ? nil : trimmed(fallbackModel),

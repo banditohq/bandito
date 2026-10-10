@@ -240,16 +240,21 @@ struct FirstServerStep: View {
                     .banditoButton(.quiet(size: .regular))
                 }
                 if model.suggestions.count > Self.visibleSuggestions {
-                    Menu {
-                        ForEach(model.suggestions.dropFirst(Self.visibleSuggestions), id: \.self) { host in
-                            Button { model.address = host } label: { Text(host).oneLine() }
-                        }
-                    } label: {
-                        Text(L10n.Onboarding.Server.moreHosts(count: model.suggestions.count - Self.visibleSuggestions))
-                            .lineLimit(1)
-                            .fixedSize(horizontal: true, vertical: false)
-                    }
-                    .banditoButton(.quiet(size: .regular))
+                    // The hosts past the chips: choosing one fills the address. The field keeps the count until one of
+                    // them is the address.
+                    let hidden = model.suggestions.count - Self.visibleSuggestions
+                    BanditoSelect(
+                        selection: Binding(get: { model.address }, set: { model.address = $0 }),
+                        sections: [
+                            SelectSection(
+                                options: model.suggestions.dropFirst(Self.visibleSuggestions).map { host in
+                                    SelectOption(value: host, title: host, monospaced: true)
+                                })
+                        ],
+                        label: L10n.Onboarding.Server.moreHosts(count: hidden),
+                        placeholder: L10n.Onboarding.Server.moreHosts(count: hidden),
+                        style: .regular)
+                        .fixedSize()
                 }
             }
         }
@@ -408,7 +413,7 @@ struct FirstServerStep: View {
                             .font(BanditoFont.font(size: 12.5, weight: 600))
                             .foregroundStyle(Color.Bandito.text3)
                         Text(detail)
-                            .font(BanditoFont.font(size: 12.5, weight: 400, mono: true))
+                            .font(BanditoFont.font(size: 12.5, weight: 400))
                             .foregroundStyle(Color.Bandito.text2)
                             .textSelection(.enabled)
                             .fixedSize(horizontal: false, vertical: true)

@@ -69,7 +69,8 @@ public struct LocalDaemonPairing: Sendable {
         } catch let error as RPCError {
             throw InstallError.pairingFailed(error.message)
         }
-        let config = ServerConfig(id: id, name: name, endpoint: .webSocket(url: url), token: paired.token)
+        let config = ServerConfig(
+            id: id, name: name, endpoint: .webSocket(url: url), token: paired.token, isThisMac: true)
         return PairedServer(config: config, deviceID: paired.device.id)
     }
 

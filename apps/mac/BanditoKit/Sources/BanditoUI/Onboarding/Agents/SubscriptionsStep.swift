@@ -272,7 +272,7 @@ struct SubscriptionsStep: View {
             }
             if action == .installByHand, let hint = model.component(kind)?.hint {
                 Text(hint)
-                    .font(BanditoFont.font(size: 12, weight: 400, mono: true))
+                    .font(BanditoFont.font(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -421,7 +421,7 @@ struct SubscriptionsStep: View {
                     Button(L10n.Onboarding.Subs.openLink) { SystemActions.open(link) }
                         .banditoButton(.quiet(size: .regular))
                     Text(L10n.Onboarding.Subs.linkHost(host: link.host ?? ""))
-                        .font(BanditoFont.font(size: 12, weight: 400, mono: true))
+                        .font(BanditoFont.font(size: 12, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                 }
                 Spacer()

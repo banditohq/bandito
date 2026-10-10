@@ -48,8 +48,11 @@ struct AccountSheet: View {
             isPresented: $confirmingSignOut,
             titleVisibility: .visible
         ) {
-            Button(L10n.Account.SignOut.confirm, role: .destructive) {
+            Button(L10n.Account.SignOut.confirm) {
                 Task { await signOut() }
+            }
+            Button(L10n.Account.SignOut.forget, role: .destructive) {
+                Task { await signOut(forgetThisMac: true) }
             }
             Button(L10n.Common.cancel, role: .cancel) {}
         } message: {
@@ -475,9 +478,9 @@ struct AccountSheet: View {
     }
 
     /// Signs out after the person confirmed it. On failure nothing is cleared: the message shows and the card stays.
-    private func signOut() async {
+    private func signOut(forgetThisMac: Bool = false) async {
         do {
-            try await hub.signOut()
+            try await hub.signOut(forgetThisMac: forgetThisMac)
             route = nil
             resetting = false
             errorText = nil

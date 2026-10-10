@@ -23,6 +23,16 @@ enum FileFormat {
         return ByteCountFormatter.string(fromByteCount: entry.size, countStyle: .file)
     }
 
+    /// The Size column: a dash for folders, the size for files, empty for links and other entries (as before).
+    static func sizeCell(of entry: FsEntry) -> String {
+        entry.kind == .dir ? "—" : size(of: entry)
+    }
+
+    /// "Document · 6.4 KB" under the file name in the preview. Folders have no size, so they show only the kind.
+    static func subtitle(kind: String, size: String) -> String {
+        size.isEmpty ? kind : "\(kind) · \(size)"
+    }
+
     /// The word for a category, shown under the file name in the preview.
     static func kind(_ category: FileCategory) -> String {
         switch category {

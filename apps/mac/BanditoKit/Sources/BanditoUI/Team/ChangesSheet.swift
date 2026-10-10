@@ -203,7 +203,7 @@ struct ChangesSheet: View {
                             .truncationMode(.middle)
                         if let caption = fileCaption(change) {
                             Text(caption)
-                                .font(BanditoFont.font(size: 11.5, weight: 400, mono: true))
+                                .font(BanditoFont.font(size: 11.5, weight: 400, mono: change.status != .renamed))
                                 .foregroundStyle(Color.Bandito.text3)
                                 .lineLimit(1)
                                 .truncationMode(.head)
@@ -218,7 +218,8 @@ struct ChangesSheet: View {
                             Text("−\(deletions)").foregroundStyle(Color.Bandito.danger)
                         }
                     }
-                    .font(BanditoFont.font(size: 11.5, weight: 400, mono: true))
+                    .font(BanditoFont.font(size: 11.5, weight: 400))
+                    .monospacedDigit()
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())

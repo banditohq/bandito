@@ -442,5 +442,45 @@
 			<string>Выполняет %1$lld команды</string>
 		</dict>
 	</dict>
+	<key>usage.window.days</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%1$lld дня</string>
+			<key>many</key>
+			<string>%1$lld дней</string>
+			<key>one</key>
+			<string>%1$lld день</string>
+			<key>other</key>
+			<string>%1$lld дня</string>
+		</dict>
+	</dict>
+	<key>usage.window.hours</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%1$lld часа</string>
+			<key>many</key>
+			<string>%1$lld часов</string>
+			<key>one</key>
+			<string>%1$lld час</string>
+			<key>other</key>
+			<string>%1$lld часа</string>
+		</dict>
+	</dict>
 </dict>
 </plist>

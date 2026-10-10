@@ -76,7 +76,10 @@ struct InspectorView: View {
     }
 
     private var subtitle: String {
-        [agent.role.isEmpty ? nil : agent.role, agent.runtime.title, agent.model].compactMap { $0 }
+        let model = agent.model.map {
+            RuntimeModelDisplay.name(id: $0, runtime: agent.runtime, lists: server.runtimeModels)
+        }
+        return [agent.role.isEmpty ? nil : agent.role, agent.runtime.title, model].compactMap { $0 }
             .joined(separator: " · ")
     }
 }

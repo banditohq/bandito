@@ -85,7 +85,8 @@ public struct OnboardingFlow: View {
     private var topBar: some View {
         HStack {
             Text(L10n.Onboarding.stepOf(step: "\(onboarding.step.position)", total: "5"))
-                .font(BanditoFont.font(size: 12, weight: 500, mono: true))
+                .font(BanditoFont.font(size: 12, weight: 500))
+                .monospacedDigit()
                 .foregroundStyle(Color.Bandito.text3)
             Spacer()
             // The language menu sits where Skip sits on the other steps. Welcome has nothing to skip to.

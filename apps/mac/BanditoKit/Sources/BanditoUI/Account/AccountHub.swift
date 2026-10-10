@@ -10,13 +10,30 @@ extension Logger {
     static let account = Logger(subsystem: "dev.bandito", category: "account")
 }
 
-/// Sign-out in the order that keeps this Mac safe: the sync key and the local session are removed first, and only
-/// then is the server asked to end the session. A failed server call is logged and changes nothing locally.
+/// Sign-out in the order that keeps this Mac safe. A plain sign-out parks the sync key (so the next sign-in to the
+/// same account needs no approval); "forget this Mac" deletes it. The key is parked before anything is removed:
+/// if parking fails, the error reaches the caller and nothing is deleted. Then the local key and the session are
+/// removed, and only then is the server asked to end the session. A failed server call is logged and changes
+/// nothing locally.
 @MainActor
 enum SignOutSteps {
     static func run(
-        keys: SecretStore, session: Session?, revoke: (Session) async throws -> Void, log: (String) -> Void
+        keys: SecretStore, session: Session?, forgetThisMac: Bool,
+        revoke: (Session) async throws -> Void, log: (String) -> Void
     ) async throws {
+        if forgetThisMac {
+            // Forgetting removes the parked key first, so a failure here leaves the live key and the session in place.
+            try ParkedSyncKey.clearParked(in: keys)
+        } else if let accountID = session?.user.id {
+            // The parked key belongs to the session's account. Without a session there is nothing to park under.
+            do {
+                if let key = try SyncKey.load(from: keys) {
+                    try ParkedSyncKey.park(key, accountID: accountID, in: keys)
+                }
+            } catch SyncKeyError.invalidKey {
+                // A damaged key cannot be parked; the sign-out below removes it like any other key.
+            }
+        }
         try keys.save(nil, account: SyncKey.keychainAccount)
         try keys.save(nil, account: AccountClient.sessionAccount)
         guard let session else { return }
@@ -119,6 +136,9 @@ public final class AccountHub {
     public let keys: SecretStore
 
     @ObservationIgnored private var watchTask: Task<Void, Never>?
+    /// True from the first step of `signOut` until it ends. `inspect` writes no restored key meanwhile: the two
+    /// run on the main actor, and the check and the write happen with no suspension between them.
+    @ObservationIgnored private var signingOut = false
 
     public init(keys: SecretStore = KeychainStore(service: "dev.bandito.account")) {
         self.keys = keys
@@ -152,15 +172,49 @@ public final class AccountHub {
         guard me.device.approved else {
             return (.waitForApproval, me)
         }
+        // The blob belongs to the session's account, as `SyncStore` reads it.
+        let blobAccountID = try await client.restoreSession()?.user.id
         let blob = try await client.getSync()
-        let hasKey = try SyncKey.load(from: keys) != nil
+        var hasKey = try SyncKey.load(from: keys) != nil
+        var parked: (accountID: String, key: SymmetricKey)?
+        if !hasKey {
+            parked = try ParkedSyncKey.loadParked(from: keys)
+        }
+        var opens = false
+        if let parked, let blob, let blobAccountID, parked.accountID == blobAccountID {
+            opens = Self.opensBlob(blob, key: parked.key, accountID: blobAccountID)
+        }
+        // The session is read again, and the sign-out flag with it. Nothing is awaited after this line: the decision and
+        // the writes below run in one step on the main actor. A sign-out that started during the reads above has set
+        // the flag or removed the session, and then nothing is written.
+        let sessionNow = try await client.restoreSession()?.user.id
+        let decision = ParkedSyncKey.restoreDecision(
+            approved: true, hasBlob: blob != nil, hasMainKey: hasKey, signingOut: signingOut,
+            parkedAccountID: parked?.accountID, blobOpensWithParked: opens,
+            blobAccountID: blobAccountID, sessionUserID: sessionNow, meUserID: me.user.id)
+        if let parked, decision == .restore {
+            try SyncKey.save(parked.key, to: keys)
+            try ParkedSyncKey.clearParked(in: keys)
+            hasKey = true
+        } else if decision == .discard {
+            // Same account, but the blob is not its history any more: the parked key is useless here.
+            try ParkedSyncKey.clearParked(in: keys)
+        }
         return (AccountRoute.decide(approved: true, hasBlob: blob != nil, hasKey: hasKey), me)
+    }
+
+    /// Whether the sync blob opens with `key` for `accountID`, at the blob's version.
+    private static func opensBlob(_ blob: SyncBlob, key: SymmetricKey, accountID: String) -> Bool {
+        let associatedData = SyncKey.blobAssociatedData(accountID: accountID, version: blob.version)
+        return (try? SyncKey.openBlob(blob.blob, key: key, associatedData: associatedData)) != nil
     }
 
     /// The first device of an account: makes the sync key (if there is none) and writes the first, empty blob.
     public func createFirstBlob() async throws {
         _ = try SyncKey.loadOrCreate(from: keys)
         try await syncStore?.push(SyncPayload())
+        // A new history: a key parked from an earlier sign-in is not needed any more.
+        try ParkedSyncKey.clearParked(in: keys)
     }
 
     /// The reset path: the server forgets the sync data and the other devices, then this Mac has a fresh key.
@@ -170,6 +224,7 @@ public final class AccountHub {
         _ = try await syncStore?.resetAccount()
         // The old key must not be used for the new history: it is replaced, not reused.
         _ = try SyncKey.rotate(in: keys)
+        try ParkedSyncKey.clearParked(in: keys)
         profile.clear()
     }
 
@@ -190,14 +245,17 @@ public final class AccountHub {
     }
 
     /// Signs out: the sync key and the local session go first, then the server is asked to end the session
-    /// (best effort, see `SignOutSteps`). The account's nickname and colour leave this Mac too. If the local
-    /// steps fail, the error reaches the caller and the account stays as it was.
-    public func signOut() async throws {
+    /// (best effort, see `SignOutSteps`). A plain sign-out parks the sync key, so signing in again to this account
+    /// needs no approval; `forgetThisMac` deletes it as well. The account's nickname and colour leave this Mac too.
+    /// If the local steps fail, the error reaches the caller and the account stays as it was.
+    public func signOut(forgetThisMac: Bool = false) async throws {
+        signingOut = true
+        defer { signingOut = false }
         let client = try await prepare()
         let session = (try? await client.restoreSession()) ?? nil
         stopWatchingPending()
         try await SignOutSteps.run(
-            keys: keys, session: session,
+            keys: keys, session: session, forgetThisMac: forgetThisMac,
             revoke: { try await client.revoke($0) },
             log: { Logger.account.error("\($0, privacy: .public)") })
         pending = []

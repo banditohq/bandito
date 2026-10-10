@@ -3,7 +3,7 @@ import Foundation
 
 /// Text for when a limit resets. Pure functions, so the usage popover and the tests share them.
 public enum Countdown {
-    /// "in 2 h 14 min", "in 41 min", "less than a minute", "in 5 d 20 h".
+    /// "in 2 h 14 min", "in 41 min", "in 2 h", "less than a minute", "in 5 d 20 h", "in 5 d".
     /// With `exhausted`, a clock with seconds for a limit that is used up: "again in 5:48:12".
     public static func text(to reset: Date, now: Date, exhausted: Bool = false) -> String {
         let remaining = reset.timeIntervalSince(now)
@@ -19,10 +19,15 @@ public enum Countdown {
             return L10n.Countdown.minutes(count: minutes)
         }
         let hours = minutes / 60
+        // A zero smaller unit is left out: "in 2 h", "in 5 d", never "in 5 d 0 h".
         if hours < 24 {
-            return L10n.Countdown.hoursMinutes(hours: String(hours), minutes: String(minutes % 60))
+            return minutes % 60 == 0
+                ? L10n.Countdown.hours(count: hours)
+                : L10n.Countdown.hoursMinutes(hours: String(hours), minutes: String(minutes % 60))
         }
-        return L10n.Countdown.daysHours(days: String(hours / 24), hours: String(hours % 24))
+        return hours % 24 == 0
+            ? L10n.Countdown.days(count: hours / 24)
+            : L10n.Countdown.daysHours(days: String(hours / 24), hours: String(hours % 24))
     }
 
     /// When the limit resets: the time alone if it is today ("at 20:59"), otherwise the date and time.

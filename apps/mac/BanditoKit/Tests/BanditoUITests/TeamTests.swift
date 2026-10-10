@@ -140,19 +140,58 @@ import Testing
         #expect(days.count == 2)
     }
 
-    @Test func chapterNoteBecomesChapterDivider() {
+    @Test func savedChapterBecomesChapterDivider() {
         let items: [ThreadItem] = [
-            .note(id: "n1", text: "Chapter 4 · memory saved", kind: .info, ts: 1_000),
+            .chapter(id: "c1", number: 4, saved: true, ts: 1_000),
             .note(id: "n2", text: "Stopped", kind: .info, ts: 2_000),
         ]
         let rows = ThreadRows.build(items, calendar: utc)
-        guard case .chapter(let number) = rows[1] else {
+        guard case .chapter(4, true) = rows[1] else {
             Issue.record("expected chapter divider in \(rows)")
             return
         }
-        #expect(number == 4)
         guard case .item = rows[2] else {
             Issue.record("expected plain note, got \(rows[2])")
+            return
+        }
+    }
+
+    /// The divider comes from the event's chapter number, so the language of a note's text does not matter.
+    @Test func chapterNumberDoesNotDependOnLanguage() {
+        for text in ["Chapter 4 · memory saved", "Глава 4 · память сохранена"] {
+            let rows = ThreadRows.build([.note(id: "n", text: text, kind: .info, ts: 1_000)], calendar: utc)
+            guard case .item = rows[1] else {
+                Issue.record("a note must stay a note, got \(rows) for \(text)")
+                return
+            }
+        }
+        let rows = ThreadRows.build([.chapter(id: "c", number: 4, saved: true, ts: 1_000)], calendar: utc)
+        guard case .chapter(4, true) = rows[1] else {
+            Issue.record("expected divider for chapter 4, got \(rows)")
+            return
+        }
+    }
+
+    /// An unsaved chapter keeps its boundary: the divider is there and flags the missing memory.
+    @Test func unsavedChapterKeepsADividerInOrder() {
+        let items: [ThreadItem] = [
+            .chapter(id: "c4", number: 4, saved: false, ts: 1_000),
+            .note(id: "n", text: "Stopped", kind: .info, ts: 2_000),
+            .chapter(id: "c5", number: 5, saved: true, ts: 3_000),
+        ]
+        let rows = ThreadRows.build(items, calendar: utc)
+        // rows: day, unsaved chapter 4, note, saved chapter 5
+        #expect(rows.count == 4)
+        guard case .chapter(4, false) = rows[1] else {
+            Issue.record("expected unsaved divider for chapter 4 at row 1, got \(rows)")
+            return
+        }
+        guard case .item = rows[2] else {
+            Issue.record("expected the note at row 2, got \(rows[2])")
+            return
+        }
+        guard case .chapter(5, true) = rows[3] else {
+            Issue.record("expected saved divider for chapter 5 at row 3, got \(rows[3])")
             return
         }
     }

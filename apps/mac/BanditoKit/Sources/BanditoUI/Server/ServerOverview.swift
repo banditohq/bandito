@@ -8,6 +8,7 @@ import SwiftUI
 struct ServerOverview: View {
     let server: ServerModel?
     @Environment(Router.self) private var router
+    @Environment(AppModel.self) private var app
     @State private var monitor = HostMonitor()
     @State private var setup = SetupModel()
     @State private var release = ReleaseStatus()
@@ -23,11 +24,15 @@ struct ServerOverview: View {
     var body: some View {
         ServerPage(title: L10n.Mode.serverOverview, trailing: { trailing }) {
             if let server, server.supports("host") {
-                // The daemon's own check wins; the GitHub hint is only for a daemon that has not reported one yet.
-                if daemonUpdate.shownOffer(current: DaemonUpdateOffer.offer(for: server.info), serverID: server.id) != nil {
-                    DaemonUpdateBanner(server: server, model: daemonUpdate)
-                } else if release.updateAvailable(current: server.info?.version) {
-                    updateBanner(server)
+                LocalDaemonUpgradeBanner(server: server, model: app.localUpgrade)
+                // This Mac's daemon is replaced by the bundled one: the release offers would be the same update, shown twice.
+                if !app.localUpgrade.replacesOffer(for: server) {
+                    // The daemon's own check wins; the GitHub hint is only for a daemon that has not reported one yet.
+                    if daemonUpdate.shownOffer(current: DaemonUpdateOffer.offer(for: server.info), serverID: server.id) != nil {
+                        DaemonUpdateBanner(server: server, model: daemonUpdate)
+                    } else if release.updateAvailable(current: server.info?.version) {
+                        updateBanner(server)
+                    }
                 }
                 tiles
                 if let error = monitor.error {
@@ -136,7 +141,7 @@ struct ServerOverview: View {
     private var tiles: some View {
         let stats = monitor.stats
         let points = monitor.history
-        let root = stats?.disks.first { $0.mount == "/" } ?? stats?.disks.first
+        let root = stats?.primaryDisk
         let rx = stats?.netRxBps ?? 0
         let tx = stats?.netTxBps ?? 0
         let diskTotal = root?.total ?? 0
@@ -167,7 +172,7 @@ struct ServerOverview: View {
                 let usage = HostFormat.diskUsage(used: diskUsed, total: diskTotal)
                 MetricTile(
                     label: L10n.Server.Tile.disk,
-                    value: HostFormat.bytes(max(0, diskTotal - diskUsed)),
+                    value: HostFormat.diskBytes(max(0, diskTotal - diskUsed)),
                     note: "",
                     series: [],
                     tint: Color.Bandito.text,

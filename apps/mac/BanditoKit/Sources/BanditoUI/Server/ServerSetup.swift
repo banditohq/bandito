@@ -12,6 +12,50 @@ struct SetupLine: Identifiable, Hashable {
     var hint: String?
 }
 
+/// The chip of one "Capabilities" line: its text, its color, and a tooltip when the user has to act.
+struct SetupBadge: Equatable {
+    var text: String
+    var tone: ChipTone
+    var help: String?
+
+    /// A runtime (Claude Code, Codex, Grok) is judged by the daemon's runtime report: installed, then logged in.
+    /// Without a report for it, the setup status is shown.
+    static func make(for line: SetupLine, runtimes: [RuntimeStatus]) -> SetupBadge {
+        if let kind = RuntimeKind(rawValue: line.id), let status = runtimes.first(where: { $0.kind == kind }) {
+            return runtime(status)
+        }
+        return SetupBadge(
+            text: ServerFeaturesCard.label(line.state),
+            tone: line.state == .ready ? .ok : .neutral,
+            help: line.state == .ready ? nil : line.hint)
+    }
+
+    static func runtime(_ status: RuntimeStatus) -> SetupBadge {
+        guard status.installed else {
+            return SetupBadge(text: L10n.Server.Features.notInstalled, tone: .danger, help: nil)
+        }
+        switch status.loggedIn {
+        case false?:
+            let help = loginCommand(status.kind).map { L10n.Server.Features.loginHelp(command: $0) }
+            return SetupBadge(text: L10n.Connect.needsLogin, tone: .warning, help: help)
+        case true?:
+            return SetupBadge(text: L10n.Setup.ready, tone: .ok, help: nil)
+        case nil:
+            return SetupBadge(text: L10n.Server.Features.installed, tone: .neutral, help: nil)
+        }
+    }
+
+    /// The command that signs the runtime in on the server. Nil for kinds without a login.
+    static func loginCommand(_ kind: RuntimeKind) -> String? {
+        switch kind {
+        case .claude: "claude login"
+        case .codex: "codex login"
+        case .grok: "grok login"
+        case .api: nil
+        }
+    }
+}
+
 /// The calls the setup model makes to a server. `ServerModel` is the real one; tests pass a fake.
 @MainActor
 protocol SetupServer: AnyObject {
@@ -150,7 +194,10 @@ struct ServerFeaturesCard: View {
                             .lineLimit(1)
                             .minimumScaleFactor(0.85)
                     }
-                    Chip(text: Self.label(line.state), tone: line.state == .ready ? .ok : .neutral)
+                    let badge = SetupBadge.make(for: line, runtimes: server.runtimes)
+                    Chip(text: badge.text, tone: badge.tone)
+                        .fixedSize()
+                        .optionalHelp(badge.help)
                 }
             }
             if let job = setup.job {

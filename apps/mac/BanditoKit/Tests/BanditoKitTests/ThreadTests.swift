@@ -99,8 +99,60 @@ import Testing
     @Test mutating func sessionRotatedIsANote() {
         var t = AgentThread()
         t.apply(ev(.sessionRotated(chapter: 2, reason: "smart", contextTokens: 120_400)))
-        guard case .note(_, "Chapter 2 · memory saved", .info, _) = t.items[0] else {
-            Issue.record("expected chapter note")
+        guard case .chapter(_, 2, true, _) = t.items[0] else {
+            Issue.record("expected chapter item, got \(t.items)")
+            return
+        }
+    }
+
+    @Test mutating func chapterWhoseMemorySaveFailedIsMarkedUnsaved() {
+        var t = AgentThread()
+        t.apply(ev(.messageUser(text: "Update your memory files.", source: .system, fromAgent: nil)))
+        t.apply(ev(.turnCompleted(turnId: "w", status: .error, usage: nil, costUsd: nil)))
+        t.apply(ev(.sessionRotated(chapter: 2, reason: "context", contextTokens: 130_000)))
+        guard case .chapter(_, 2, false, _) = t.items.last else {
+            Issue.record("expected unsaved chapter, got \(t.items)")
+            return
+        }
+    }
+
+    @Test mutating func interruptedMemorySaveIsMarkedUnsaved() {
+        var t = AgentThread()
+        t.apply(ev(.messageUser(text: "Update your memory files.", source: .system, fromAgent: nil)))
+        t.apply(ev(.turnCompleted(turnId: "w", status: .interrupted, usage: nil, costUsd: nil)))
+        t.apply(ev(.sessionRotated(chapter: 2, reason: "context", contextTokens: 130_000)))
+        guard case .chapter(_, 2, false, _) = t.items.last else {
+            Issue.record("an interrupted memory save must leave the chapter unsaved, got \(t.items)")
+            return
+        }
+    }
+
+    @Test mutating func chapterWhoseMemorySaveSucceededIsSaved() {
+        var t = AgentThread()
+        t.apply(ev(.messageUser(text: "Update your memory files.", source: .system, fromAgent: nil)))
+        t.apply(ev(.turnCompleted(turnId: "w", status: .ok, usage: nil, costUsd: nil)))
+        t.apply(ev(.sessionRotated(chapter: 2, reason: "context", contextTokens: 130_000)))
+        guard case .chapter(_, 2, true, _) = t.items.last else {
+            Issue.record("expected saved chapter item, got \(t.items)")
+            return
+        }
+    }
+
+    @Test mutating func chapterClosedWithoutWrapUpIsMarkedUnsaved() {
+        var t = AgentThread()
+        t.apply(ev(.sessionRotated(chapter: 3, reason: "new day, memory not saved", contextTokens: 0)))
+        guard case .chapter(_, 3, false, _) = t.items.last else {
+            Issue.record("expected unsaved chapter, got \(t.items)")
+            return
+        }
+    }
+
+    @Test mutating func failedOrdinaryTurnDoesNotMarkTheChapter() {
+        var t = AgentThread()
+        t.apply(ev(.turnCompleted(turnId: "x", status: .error, usage: nil, costUsd: nil)))
+        t.apply(ev(.sessionRotated(chapter: 2, reason: "context", contextTokens: 130_000)))
+        guard case .chapter(_, 2, true, _) = t.items.last else {
+            Issue.record("expected saved chapter item, got \(t.items)")
             return
         }
     }
