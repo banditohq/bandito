@@ -126,7 +126,7 @@ Text is 4.5:1 or better (`text3` is the floor, 4.6:1 on `bg`); focus rings and m
 
 ## Forbidden
 
-- System controls for input and choice: no bare `TextField` look, `.textFieldStyle(.plain)` or `.roundedBorder`, system `Picker`, `Menu` as a select, or system `Toggle` style, and no blue system focus ring.
+- System controls for input and choice: no bare `TextField` look or `.roundedBorder`, system `Picker`, `Menu` as a select, or system `Toggle` style, and no blue system focus ring. A field on its own uses `.banditoField()`. `.textFieldStyle(.plain)` is right only in two cases: the field sits inside a container that already draws the fill and border (a search capsule, the ⌘K palette, a select's search, a list row being renamed), or it is text edited in place (the agent's name and role in its card). Never a field box inside another box.
 - Own button looks: no `.buttonStyle(.plain)` on a clickable thing, no hand-drawn capsule. Use `.banditoButton`.
 - Orange fills on buttons or large surfaces. Orange is a dot, a ring, a glow, or accent text.
 - More than one `.signal` button in a view.
