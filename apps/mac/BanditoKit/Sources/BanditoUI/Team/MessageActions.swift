@@ -89,8 +89,8 @@ struct MessageContainer<Bubble: View>: View {
                     .onHover(perform: setHover)
                     .simultaneousGesture(
                         DragGesture(minimumDistance: 4)
-                            .onChanged { _ in dragging = true }
-                            .onEnded { _ in dragging = false })
+                            .onChanged { _ in if !dragging { dragging = true } }
+                            .onEnded { _ in if dragging { dragging = false } })
                     .contextMenu { contextMenuItems }
                     .popover(isPresented: $selecting, arrowEdge: .bottom) {
                         SelectableTextPanel(text: text)
@@ -120,7 +120,7 @@ struct MessageContainer<Bubble: View>: View {
         .padding(.bottom, MessageActionsPlacement.reservedBelow)
         .frame(maxWidth: .infinity, alignment: fromUser ? .trailing : .leading)
         // After a reaction is picked the row goes away; it comes back when the pointer re-enters.
-        .onChange(of: reactOpen) { _, open in if !open { setHover(false) } }
+        .onChange(of: reactOpen) { _, open in if !open && hovering { setHover(false) } }
         .onDisappear {
             hideTask?.cancel()
             copyReset?.cancel()
@@ -132,12 +132,14 @@ struct MessageContainer<Bubble: View>: View {
     /// The row stays a moment (250 ms) after the pointer leaves the bubble, so that it can be reached across the gap.
     private func setHover(_ on: Bool) {
         hideTask?.cancel()
+        hideTask = nil
         if on {
-            hovering = true
-        } else {
+            // A hover event repeats while the content moves under a still pointer: write only a real change.
+            if !hovering { hovering = true }
+        } else if hovering {
             hideTask = Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(250))
-                if !Task.isCancelled { hovering = false }
+                if !Task.isCancelled, hovering { hovering = false }
             }
         }
     }
