@@ -150,4 +150,40 @@ import Testing
         #expect(groups.map(\.appName) == ["A", "B"])
         #expect(groups[0].cpuPercent == 25)
     }
+
+    @Test func statsDecodeTheAppGroupsAndOldDaemonsLeaveThemOut() throws {
+        let with = try RPCClient.decoder.decode(
+            HostStats.self, from: Data(
+                #"{"os":"macos","kernel":"25","arch":"arm64","hostname":"mini","cpus":8,"cpu_percent":5.0,"load":[0.1,0.2,0.3],"mem_total":10,"mem_used":5,"swap_total":0,"swap_used":0,"disks":[],"net_rx_bps":0,"net_tx_bps":0,"net_supported":true,"uptime_s":60,"app_groups":[{"name":"Google Chrome","cpu_percent":12.5,"memory_bytes":900,"process_count":40,"top_pids":[11,12,13]}]}"#
+                    .utf8))
+        #expect(with.appGroups == [HostAppGroup(name: "Google Chrome", cpuPercent: 12.5, memoryBytes: 900, processCount: 40, topPids: [11, 12, 13])])
+        let without = try RPCClient.decoder.decode(
+            HostStats.self, from: Data(
+                #"{"os":"macos","kernel":"25","arch":"arm64","hostname":"mini","cpus":8,"cpu_percent":5.0,"load":[0.1,0.2,0.3],"mem_total":10,"mem_used":5,"swap_total":0,"swap_used":0,"disks":[],"net_rx_bps":0,"net_tx_bps":0,"net_supported":true,"uptime_s":60}"#
+                    .utf8))
+        #expect(without.appGroups == nil)
+    }
+
+    @Test func appGroupsUseTheDaemonsSumsAndListTheProcessesTheListKnows() {
+        // The daemon counted 40 Chrome processes and names three; the list knows pids 11 and 12, not 99.
+        let apps = [
+            HostAppGroup(name: "Google Chrome", cpuPercent: 12.5, memoryBytes: 900, processCount: 40, topPids: [11, 99, 12]),
+            HostAppGroup(name: "Preview", cpuPercent: 0, memoryBytes: 50, processCount: 1, topPids: [30]),
+        ]
+        let rows = [
+            entry(11, "Google Chrome Helper", memory: 500, cpu: 3), entry(12, "Google Chrome", memory: 100, cpu: 1),
+            entry(30, "Preview", memory: 50, cpu: 0),
+        ]
+        let groups = HostProcessList.appGroups(apps, rows: rows, sort: .memory)
+        #expect(groups.map(\.appName) == ["Google Chrome", "Preview"])
+        #expect(groups[0].rssBytes == 900 && groups[0].cpuPercent == 12.5)
+        #expect(groups[0].processCount == 40 && groups[0].isGroup)
+        #expect(groups[0].members.map(\.pid) == [11, 12])
+        #expect(groups[1].isGroup == false && groups[1].members.map(\.pid) == [30])
+        // An app whose processes the list does not name is still shown with its sums, and has nothing to expand.
+        let unknown = HostProcessList.appGroups(
+            [HostAppGroup(name: "Dock", cpuPercent: 1, memoryBytes: 7, processCount: 3, topPids: [77])],
+            rows: rows, sort: .cpu)
+        #expect(unknown[0].members.isEmpty && unknown[0].processCount == 3 && unknown[0].rssBytes == 7)
+    }
 }

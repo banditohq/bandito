@@ -28,6 +28,10 @@ const GRACE: Duration = Duration::from_secs(3);
 const CMD_CHARS: usize = 200;
 /// Processes in `host.stats` → `top_processes`: the biggest by memory.
 pub const TOP_PROCESSES: usize = 15;
+/// Apps in `host.stats` → `app_groups`: the biggest by memory.
+pub const APP_GROUPS: usize = 25;
+/// Pids listed per app in `host.stats` → `app_groups[].top_pids`: the biggest by memory.
+pub const APP_TOP_PIDS: usize = 3;
 /// How long a process gets to exit after SIGTERM from `host.kill_process` before SIGKILL.
 pub const OWN_GRACE: Duration = Duration::from_secs(5);
 /// How long `host.kill_process` waits for the process to exit before it answers.
@@ -56,6 +60,23 @@ pub struct HostStats {
     pub uptime_s: u64,
     /// The biggest processes of the whole server by memory. Read when `host.stats` answers, not sampled.
     pub top_processes: Vec<TopProcess>,
+    /// Every process of the server grouped by app, the biggest `APP_GROUPS` by memory. Read when `host.stats`
+    /// answers, not sampled. Empty where the process table cannot be read.
+    pub app_groups: Vec<AppGroup>,
+}
+
+/// One app in `host.stats` → `app_groups`: all of its processes summed, helpers included.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct AppGroup {
+    /// On macOS the outermost `*.app` bundle of the executable without `.app` (helpers belong to their app); else the
+    /// executable's file name.
+    pub name: String,
+    /// Share of one CPU, summed over the app's processes (can exceed 100).
+    pub cpu_percent: f32,
+    pub memory_bytes: u64,
+    pub process_count: u32,
+    /// Up to `APP_TOP_PIDS` of the app's processes, the biggest by memory first.
+    pub top_pids: Vec<i32>,
 }
 
 /// One of the biggest processes of the server (`host.stats` → `top_processes`).
@@ -209,6 +230,8 @@ struct ProcRow {
     ppid: i32,
     /// Short name: the program's file name.
     name: String,
+    /// The app the process is grouped under in `app_groups`: see `AppGroup::name`.
+    app: String,
     /// The command: its arguments on Linux, the executable's path on macOS. Truncated.
     cmd: String,
     rss_bytes: u64,
@@ -332,6 +355,7 @@ impl Sampler {
             net_supported: raw.net.is_some(),
             uptime_s: raw.uptime_s,
             top_processes: Vec::new(),
+            app_groups: Vec::new(),
         };
         let mut st = self.lock();
         st.prev = Some(now_counters);
@@ -412,18 +436,20 @@ impl Sampler {
         }
     }
 
-    /// The biggest processes by memory and the busiest by CPU, `TOP_PROCESSES` of each, without repeats (see
-    /// `top_pids`). Biggest memory first.
-    pub fn top_processes(&self) -> Vec<TopProcess> {
+    /// The two process lists of `host.stats`, from one reading of the table: `top_processes` (the biggest by memory
+    /// and the busiest by CPU, `TOP_PROCESSES` of each, without repeats, biggest memory first) and `app_groups` (all
+    /// processes by app). Both are empty where the table cannot be read.
+    pub fn process_lists(&self) -> (Vec<TopProcess>, Vec<AppGroup>) {
         let Some(procs) = self.procs() else {
-            return Vec::new();
+            return (Vec::new(), Vec::new());
         };
+        let cpu_of = |pid: i32| procs.cpu.get(&pid).copied().unwrap_or(0.0);
         let rows: Vec<(i32, u64, f32)> = procs
             .table
             .iter()
-            .map(|(&pid, row)| (pid, row.rss_bytes, procs.cpu.get(&pid).copied().unwrap_or(0.0)))
+            .map(|(&pid, row)| (pid, row.rss_bytes, cpu_of(pid)))
             .collect();
-        top_pids(&rows, TOP_PROCESSES)
+        let top = top_pids(&rows, TOP_PROCESSES)
             .into_iter()
             .map(|pid| {
                 let row = &procs.table[&pid];
@@ -431,12 +457,23 @@ impl Sampler {
                     pid,
                     name: row.name.clone(),
                     rss_bytes: row.rss_bytes,
-                    cpu_percent: procs.cpu.get(&pid).copied().unwrap_or(0.0),
+                    cpu_percent: cpu_of(pid),
                     own: row.own,
                     own_safe: row.own && procs.classes.get(&pid) == Some(&TreeOwner::Free),
                 }
             })
-            .collect()
+            .collect();
+        let apps: Vec<AppRow> = procs
+            .table
+            .iter()
+            .map(|(&pid, row)| AppRow {
+                pid,
+                app: row.app.clone(),
+                rss_bytes: row.rss_bytes,
+                cpu_percent: cpu_of(pid),
+            })
+            .collect();
+        (top, group_apps(&apps, APP_GROUPS, APP_TOP_PIDS))
     }
 
     /// Listening TCP ports, one entry per port and address.
@@ -600,6 +637,59 @@ fn top_pids(rows: &[(i32, u64, f32)], count: usize) -> Vec<i32> {
     }
     chosen.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
     chosen.into_iter().map(|(pid, _)| pid).collect()
+}
+
+/// One process as `group_apps` sees it.
+struct AppRow {
+    pid: i32,
+    app: String,
+    rss_bytes: u64,
+    cpu_percent: f32,
+}
+
+/// Sums every process by its app: the `count` apps biggest by memory (ties by name), each with its `top` biggest
+/// processes by memory (ties by pid). No process is left out, so the sums are exact.
+fn group_apps(rows: &[AppRow], count: usize, top: usize) -> Vec<AppGroup> {
+    let mut by_app: HashMap<&str, AppGroup> = HashMap::new();
+    // Every app's processes as (memory, pid), kept apart from the group so the group stays a plain struct.
+    let mut pids_of: HashMap<&str, Vec<(u64, i32)>> = HashMap::new();
+    for row in rows {
+        let group = by_app.entry(row.app.as_str()).or_insert_with(|| AppGroup {
+            name: row.app.clone(),
+            cpu_percent: 0.0,
+            memory_bytes: 0,
+            process_count: 0,
+            top_pids: Vec::new(),
+        });
+        group.cpu_percent += row.cpu_percent;
+        group.memory_bytes += row.rss_bytes;
+        group.process_count += 1;
+        pids_of
+            .entry(row.app.as_str())
+            .or_default()
+            .push((row.rss_bytes, row.pid));
+    }
+    let mut groups: Vec<AppGroup> = by_app
+        .into_iter()
+        .map(|(app, mut group)| {
+            let mut pids = pids_of.remove(app).unwrap_or_default();
+            pids.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+            group.top_pids = pids.iter().take(top).map(|&(_, pid)| pid).collect();
+            group
+        })
+        .collect();
+    groups.sort_by(|a, b| b.memory_bytes.cmp(&a.memory_bytes).then_with(|| a.name.cmp(&b.name)));
+    groups.truncate(count);
+    groups
+}
+
+/// The app of a macOS executable path: the outermost `*.app` bundle without `.app`, so a helper
+/// (`Google Chrome.app/.../Google Chrome Helper (Renderer).app/...`) belongs to its app. `None` without a bundle.
+#[cfg(any(target_os = "macos", test))]
+fn bundle_app(path: &str) -> Option<String> {
+    path.split('/')
+        .find_map(|part| part.strip_suffix(".app").filter(|name| !name.is_empty()))
+        .map(str::to_string)
 }
 
 /// Whether a process of the daemon's user may be stopped from the app, by who owns it. Fail-closed: a tree that
@@ -1033,6 +1123,7 @@ struct TableLine {
     uid: u32,
     cpu_ticks: u64,
     name: String,
+    app: String,
     cmd: String,
 }
 
@@ -1048,13 +1139,16 @@ fn parse_table_line(line: &str) -> Option<TableLine> {
     if cmd.is_empty() {
         return None;
     }
+    let name = cmd.rsplit('/').next().unwrap_or_default().to_string();
     Some(TableLine {
         pid: pid.parse().ok()?,
         ppid: ppid.parse().ok()?,
         rss_bytes: rss.parse::<u64>().ok()? * 1024,
         uid: uid.parse().ok()?,
         cpu_ticks: parse_cpu_time(time)?,
-        name: cmd.rsplit('/').next().unwrap_or_default().to_string(),
+        // The app is read from the whole path: `cmd` is cut to CMD_CHARS below.
+        app: bundle_app(cmd).unwrap_or_else(|| name.clone()),
+        name,
         cmd: truncate_chars(cmd, CMD_CHARS),
     })
 }
@@ -1287,6 +1381,7 @@ mod plat {
                 pid,
                 ProcRow {
                     ppid: st.ppid,
+                    app: st.name.clone(),
                     name: st.name,
                     cmd,
                     rss_bytes: st.rss_pages * page_size(),
@@ -1463,6 +1558,7 @@ mod plat {
                         ProcRow {
                             ppid: line.ppid,
                             name: line.name,
+                            app: line.app,
                             cmd: line.cmd,
                             rss_bytes: line.rss_bytes,
                             cpu_ticks: line.cpu_ticks,
@@ -1895,10 +1991,104 @@ mod tests {
         assert_eq!(st.start, 98765);
     }
 
+    #[test]
+    fn a_macos_helper_belongs_to_the_outermost_app_bundle() {
+        let main = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+        let helper = "/Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/130/\
+            Helpers/Google Chrome Helper (Renderer).app/Contents/MacOS/Google Chrome Helper (Renderer)";
+        assert_eq!(bundle_app(main).as_deref(), Some("Google Chrome"));
+        assert_eq!(bundle_app(helper).as_deref(), Some("Google Chrome"));
+        assert_eq!(
+            bundle_app("/Applications/Visual Studio Code.app/Contents/MacOS/Electron").as_deref(),
+            Some("Visual Studio Code")
+        );
+        // No bundle: the caller falls back to the file name. An empty `.app` name is no bundle.
+        assert_eq!(bundle_app("/usr/sbin/cfprefsd"), None);
+        assert_eq!(bundle_app("/usr/bin/.app/x"), None);
+    }
+
+    #[test]
+    fn apps_are_summed_with_exact_totals_and_ordered_by_memory() {
+        let row = |pid: i32, app: &str, rss: u64, cpu: f32| AppRow {
+            pid,
+            app: app.into(),
+            rss_bytes: rss,
+            cpu_percent: cpu,
+        };
+        let rows = vec![
+            row(10, "Google Chrome", 100, 1.5),
+            row(11, "Google Chrome", 300, 2.0),
+            row(12, "Google Chrome", 200, 0.5),
+            row(13, "Google Chrome", 50, 0.0),
+            row(20, "sshd", 400, 0.25),
+            row(30, "cargo", 10, 3.0),
+            row(31, "cargo", 10, 0.0),
+        ];
+        let groups = group_apps(&rows, 10, 3);
+        let names: Vec<&str> = groups.iter().map(|g| g.name.as_str()).collect();
+        // 650 for Chrome, 400 for sshd, 20 for cargo.
+        assert_eq!(names, ["Google Chrome", "sshd", "cargo"]);
+        let chrome = &groups[0];
+        assert_eq!(chrome.memory_bytes, 650);
+        assert_eq!(chrome.process_count, 4);
+        assert!((chrome.cpu_percent - 4.0).abs() < 0.001);
+        // Only the three biggest by memory, biggest first; the fourth process is counted but not listed.
+        assert_eq!(chrome.top_pids, [11, 12, 10]);
+        assert_eq!(groups[2].process_count, 2);
+        assert_eq!(groups[2].top_pids, [30, 31]);
+    }
+
+    #[test]
+    fn app_groups_are_cut_to_the_count_and_ties_break_by_name() {
+        let rows: Vec<AppRow> = (0..5)
+            .map(|i| AppRow {
+                pid: i,
+                app: format!("app{i}"),
+                rss_bytes: if i < 2 { 1000 } else { 1 + i as u64 },
+                cpu_percent: 0.0,
+            })
+            .collect();
+        let groups = group_apps(&rows, 3, 3);
+        let names: Vec<&str> = groups.iter().map(|g| g.name.as_str()).collect();
+        // app0 and app1 tie at 1000: by name. Then app4 (5) is third; app3 (4) and app2 (3) are cut by the count.
+        assert_eq!(names, ["app0", "app1", "app4"]);
+        assert!(group_apps(&[], 25, 3).is_empty());
+    }
+
+    #[test]
+    fn linux_apps_are_grouped_by_the_file_name() {
+        // Linux has no bundles: the app is the executable's file name, the same name for every instance.
+        let rows = vec![
+            AppRow {
+                pid: 1,
+                app: "node".into(),
+                rss_bytes: 5,
+                cpu_percent: 1.0,
+            },
+            AppRow {
+                pid: 2,
+                app: "node".into(),
+                rss_bytes: 7,
+                cpu_percent: 1.0,
+            },
+            AppRow {
+                pid: 3,
+                app: "bash".into(),
+                rss_bytes: 1,
+                cpu_percent: 0.0,
+            },
+        ];
+        let groups = group_apps(&rows, APP_GROUPS, APP_TOP_PIDS);
+        assert_eq!(groups.len(), 2);
+        assert_eq!((groups[0].name.as_str(), groups[0].process_count), ("node", 2));
+        assert_eq!(groups[0].top_pids, [2, 1]);
+    }
+
     fn row(ppid: i32) -> ProcRow {
         ProcRow {
             ppid,
             name: String::new(),
+            app: String::new(),
             cmd: String::new(),
             rss_bytes: 0,
             cpu_ticks: 0,
