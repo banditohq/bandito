@@ -820,7 +820,7 @@ mod tests {
 
     #[test]
     fn the_catalog_parses_and_every_entry_is_complete() {
-        use crate::integrations::{CATALOG_CATEGORIES, CatalogEntry};
+        use crate::integrations::{CATALOG_CATEGORIES, CATALOG_LANGUAGES, CatalogEntry};
         let cat: Vec<CatalogEntry> = serde_json::from_str(CATALOG_JSON).unwrap();
         assert!(cat.len() >= 18, "{}", cat.len());
         let mut ids = std::collections::HashSet::new();
@@ -858,6 +858,50 @@ mod tests {
                 "{}",
                 e.id
             );
+            // The other app languages: every one of them, every field filled in, and a label for every key.
+            let l10n = e.l10n.as_ref().unwrap_or_else(|| panic!("{}: no l10n", e.id));
+            assert_eq!(l10n.len(), CATALOG_LANGUAGES.len(), "{}: every language", e.id);
+            let mut keys: Vec<&str> = e
+                .headers_keys
+                .iter()
+                .flatten()
+                .chain(e.env_keys.iter().flatten())
+                .map(|k| k.key.as_str())
+                .collect();
+            keys.sort_unstable();
+            let en_abilities = e.abilities_en.as_ref().map_or(0, Vec::len);
+            for (lang, t) in l10n {
+                assert!(
+                    CATALOG_LANGUAGES.contains(&lang.as_str()),
+                    "{}: unknown language {lang}",
+                    e.id
+                );
+                assert!(
+                    !t.description.trim().is_empty() && !t.long.trim().is_empty() && !t.needs.trim().is_empty(),
+                    "{} {lang}: an empty text",
+                    e.id
+                );
+                assert_eq!(
+                    t.abilities.len(),
+                    en_abilities,
+                    "{} {lang}: abilities as in English",
+                    e.id
+                );
+                assert!(
+                    t.abilities.iter().all(|a| !a.trim().is_empty()),
+                    "{} {lang}: an empty ability",
+                    e.id
+                );
+                let labels = t.labels.clone().unwrap_or_default();
+                let mut label_keys: Vec<&str> = labels.keys().map(String::as_str).collect();
+                label_keys.sort_unstable();
+                assert_eq!(label_keys, keys, "{} {lang}: the labels cover the keys", e.id);
+                assert!(
+                    labels.values().all(|l| !l.trim().is_empty()),
+                    "{} {lang}: an empty label",
+                    e.id
+                );
+            }
             match e.kind {
                 IntegrationKind::Stdio => {
                     assert!(

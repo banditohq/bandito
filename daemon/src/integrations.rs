@@ -58,11 +58,31 @@ pub struct CatalogEntry {
     /// `oauth` for a service that signs in in the browser (see docs/ARCHITECTURE.md#integrations): Connect starts the
     /// sign-in, and the entry holds no header keys.
     pub auth: Option<String>,
+    /// The texts for the other app languages, by language code (see [`CATALOG_LANGUAGES`]).
+    pub l10n: Option<BTreeMap<String, CatalogTranslation>>,
+}
+
+/// One language of a catalog entry's `l10n`: the texts the app shows in that language. `labels` maps the `key` of
+/// each header or env entry to its label.
+#[cfg(test)]
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CatalogTranslation {
+    pub description: String,
+    pub long: String,
+    pub abilities: Vec<String>,
+    pub needs: String,
+    pub labels: Option<BTreeMap<String, String>>,
 }
 
 /// The categories a catalog entry may have.
 #[cfg(test)]
 pub const CATALOG_CATEGORIES: [&str; 6] = ["dev", "productivity", "data", "web", "design", "other"];
+
+/// The languages of an entry's `l10n`: the app's languages other than English and Russian (which have their own
+/// fields). Every entry has all of them (`i18n/languages.json`).
+#[cfg(test)]
+pub const CATALOG_LANGUAGES: [&str; 7] = ["de", "es", "fr", "ja", "ko", "pt-BR", "zh-Hans"];
 
 /// Marks a secret inside a value: `secret:<NAME>`, read when the session starts.
 pub const SECRET_PREFIX: &str = "secret:";
