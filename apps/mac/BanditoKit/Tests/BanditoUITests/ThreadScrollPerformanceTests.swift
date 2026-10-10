@@ -137,8 +137,8 @@ import Testing
     }
 
     @Test func theLeastRecentlyUsedBodyLeavesFirst() {
-        // Room for two of these three bodies.
-        let cache = MessageRenderCache(limit: 25)
+        // 28 bytes: room for two of these three bodies (13, 14 and 13 bytes).
+        let cache = MessageRenderCache(limit: 28)
         _ = cache.blocks(for: "first message", markdown: true)
         _ = cache.blocks(for: "second message", markdown: true)
         _ = cache.blocks(for: "first message", markdown: true)
