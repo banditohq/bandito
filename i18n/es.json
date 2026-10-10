@@ -2374,5 +2374,22 @@
   "recommend.reason.linearReadme": "El README menciona Linear",
   "recommend.reason.posthogPackage": "El proyecto usa PostHog",
   "recommend.reason.stripePackage": "El proyecto usa Stripe",
-  "recommend.reason.other": "Encontrado en el proyecto"
+  "recommend.reason.other": "Encontrado en el proyecto",
+  "market.tools.title": "Herramientas",
+  "market.tools.mode.all": "Todo",
+  "market.tools.mode.confirmWrites": "Con confirmación",
+  "market.tools.mode.readOnly": "Solo lectura",
+  "market.tools.hint.all": "Los agentes usan cada herramienta según su modo de aprobación.",
+  "market.tools.hint.confirmWrites": "Las herramientas que solo leen se ejecutan. Las que cambian algo esperan tu sí.",
+  "market.tools.hint.readOnly": "Las herramientas que solo leen se ejecutan. Las que cambian algo se rechazan.",
+  "market.tools.kind.reads": "lee",
+  "market.tools.kind.changes": "cambia",
+  "market.tools.kind.deletes": "borra",
+  "market.tools.word.allow": "Permitir",
+  "market.tools.word.ask": "Preguntar",
+  "market.tools.word.deny": "Denegar",
+  "market.tools.notChecked": "Aún no se conocen las herramientas. Comprueba el servicio para listarlas. Hasta entonces, cualquier herramienta cuenta como una que cambia algo.",
+  "market.tools.unreached": "Para los agentes {agents} (Codex o Grok) el servicio está desactivado en este modo.",
+  "approval.why.serviceConfirm": "este servicio pide confirmar los cambios",
+  "approval.why.serviceTool": "pediste confirmar esta herramienta"
 }

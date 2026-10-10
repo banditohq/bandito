@@ -235,3 +235,25 @@ row for that agent on this server; another agent gets its own row.
 1. Click Connect (Подключить) on a suggestion. The service leaves the row once it is connected.
 2. Click the cross to hide the row for this agent.
 
+## Tools of a service
+
+<!-- id: market-tools; covers: -->
+The page of a connected service has a section Tools (Инструменты) that says what the agents may do with its tools. Three
+segments set the mode for the whole service: Everything (Всё) lets the agents use every tool as their approval mode says;
+With confirmation (С подтверждением) runs the tools that only read and asks you before each tool that changes something;
+Read only (Только чтение) runs the tools that only read and refuses the rest, in every approval mode, even when the agent's approval is Nothing
+(Ничего). A new service from the catalog starts With confirmation; one you add yourself starts with
+Everything. Under the segments every tool the last check found is listed, marked reads (читает), changes (меняет) or
+deletes (удаляет), with three words: Allow (Разрешить), Ask (Спрашивать), Deny (Запретить). The word of a tool wins over
+the mode; a word that equals what the mode does anyway is not kept. A tool the service did not mark as only reading counts
+as one that changes something, and so does every tool of a service that was never checked: use Check (Проверить) to list
+them. The refusal reaches the agent with a sentence that says who forbade it, so it does not retry. A question is an
+ordinary approval card in the chat with the service, the tool and its arguments (long values cut). The settings are
+kept by Bandito for agents that run on Claude. An agent on Codex or Grok cannot be held to them, so when the mode is not
+Everything (or a tool has Ask or Deny) the service is not given to such an agent at all: its prompt says the owner limited
+it, and the section lists these agents by name.
+Где: Marketplace → Services (Сервисы) → a connected service → View (Посмотреть) → Tools (Инструменты)
+1. Click a segment to set the mode. The line under it says what it does.
+2. Click Allow (Разрешить), Ask (Спрашивать) or Deny (Запретить) on a tool to give it a word of its own.
+3. Click Check (Проверить) when the section says no tools are known yet.
+

@@ -306,13 +306,16 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
         "integrations.catalog" => ok(serde_json::from_str::<Value>(CATALOG_JSON)
             .map_err(|e| RpcError::new(SERVER_ERROR, format!("catalog: {e}")))?),
         "integrations.add" => {
-            let n: NewIntegration = params(p)?;
+            let n: NewIntegration = params(p.clone())?;
             if n.auth == IntegrationAuth::Oauth {
                 return Err(RpcError::new(
                     INVALID_PARAMS,
                     "a browser sign-in is started with integrations.oauth_begin",
                 ));
             }
+            // What the tools may do can be named when the row is added; without it the row starts as the catalog says.
+            let tools: ToolWords = params(p)?;
+            check_tool_overrides(tools.tool_overrides.as_ref())?;
             check_new(&n)?;
             if store.integration_list()?.iter().any(|i| i.name == n.name) {
                 return Err(RpcError::new(
@@ -320,10 +323,24 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                     format!("an integration named '{}' already exists", n.name),
                 ));
             }
-            ok(store.integration_create(n)?)
+            let made = store.integration_create(n)?;
+            if tools.tool_mode.is_some() || tools.tool_overrides.is_some() {
+                let patch = IntegrationPatch {
+                    tool_mode: tools.tool_mode,
+                    tool_overrides: tools.tool_overrides,
+                    ..Default::default()
+                };
+                let done = store.integration_update(&made.id, patch)?;
+                // A new service whose tools are limited from the start: the sessions that would get it are
+                // started again, so Claude is told to send its calls to the daemon.
+                reload_agents(app, users_of(store, &done.id)).await;
+                return ok(done);
+            }
+            ok(made)
         }
         "integrations.update" => {
             let UpdateParams { id, patch } = params(p)?;
+            check_tool_overrides(patch.tool_overrides.as_ref())?;
             let cur = store
                 .integration_get(&id)?
                 .ok_or_else(|| RpcError::new(SERVER_ERROR, format!("no integration {id}")))?;
@@ -337,6 +354,9 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                     "disconnect the sign-in before changing the address",
                 ));
             }
+            if let Some(name) = patch.name.as_deref().filter(|n| *n != cur.name) {
+                check_new_name(name)?;
+            }
             if patch.name.as_deref().is_some_and(|n| n != cur.name)
                 && store
                     .integration_list()?
@@ -345,7 +365,14 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             {
                 return Err(RpcError::new(INVALID_PARAMS, "that name is taken"));
             }
-            ok(store.integration_update(&id, patch)?)
+            let changes_tool_rules = changes_tool_rules(&cur, &patch);
+            let updated = store.integration_update(&id, patch)?;
+            if changes_tool_rules {
+                // The agents that have the service start their sessions again, with the new rules: Claude lists
+                // the service's calls as `permissions.ask` when the session starts.
+                reload_agents(app, users_of(store, &id)).await;
+            }
+            ok(updated)
         }
         "integrations.remove" => {
             let Id { id } = params(p)?;
@@ -608,7 +635,66 @@ fn apply(cur: &Integration, p: &IntegrationPatch) -> Integration {
     out
 }
 
+/// A patch that moves what the agents may do with a service's tools. A new name is one too: the calls of the service are
+/// named after it, so a session that still knows the old name would decide them under the wrong one.
+fn changes_tool_rules(cur: &Integration, patch: &IntegrationPatch) -> bool {
+    patch.tool_mode.is_some()
+        || patch.tool_overrides.is_some()
+        || patch.name.as_deref().is_some_and(|name| name != cur.name)
+}
+
+/// A new name: two underscores in a row would make `mcp__<name>__<tool>` ambiguous, so none are taken. Names that
+/// exist keep working (the policy reads such a call every way it can be read).
+fn check_new_name(name: &str) -> Result<(), RpcError> {
+    if name.contains("__") {
+        return Err(RpcError::new(
+            INVALID_PARAMS,
+            "a name cannot hold two underscores in a row: use one, or a dash",
+        ));
+    }
+    Ok(())
+}
+
+/// `tool_mode` and `tool_overrides` of an `integrations.add`, read beside the row's own fields.
+#[derive(Deserialize)]
+struct ToolWords {
+    #[serde(default)]
+    tool_mode: Option<crate::store::ToolMode>,
+    #[serde(default)]
+    tool_overrides: Option<std::collections::BTreeMap<String, crate::store::ToolOverride>>,
+}
+
+/// At most this many tools carry an override of their own.
+const MAX_TOOL_OVERRIDES: usize = 500;
+/// The longest tool name an override may name, in characters.
+const MAX_TOOL_NAME: usize = 128;
+
+/// The names an override list holds must be plain tool names, and there must not be a flood of them.
+fn check_tool_overrides(
+    overrides: Option<&std::collections::BTreeMap<String, crate::store::ToolOverride>>,
+) -> Result<(), RpcError> {
+    let Some(map) = overrides else {
+        return Ok(());
+    };
+    if map.len() > MAX_TOOL_OVERRIDES {
+        return Err(RpcError::new(
+            INVALID_PARAMS,
+            format!("at most {MAX_TOOL_OVERRIDES} tools can have a word of their own"),
+        ));
+    }
+    if map.keys().any(|name| {
+        name.trim().is_empty() || name.chars().count() > MAX_TOOL_NAME || name.chars().any(char::is_control)
+    }) {
+        return Err(RpcError::new(
+            INVALID_PARAMS,
+            "a tool name is 1 to 128 characters with no control characters",
+        ));
+    }
+    Ok(())
+}
+
 fn check_new(n: &NewIntegration) -> Result<(), RpcError> {
+    check_new_name(&n.name)?;
     check_definition(&draft_row(n))
 }
 
@@ -626,6 +712,8 @@ fn draft_row(n: &NewIntegration) -> Integration {
         enabled: n.enabled,
         created_at: 0,
         auth: n.auth,
+        tool_mode: Default::default(),
+        tool_overrides: Default::default(),
     }
 }
 
@@ -1446,6 +1534,8 @@ mod tests {
             enabled: true,
             created_at: 0,
             auth: Default::default(),
+            tool_mode: Default::default(),
+            tool_overrides: Default::default(),
         };
         let patch = IntegrationPatch {
             command: Some(None),
@@ -1742,6 +1832,184 @@ mod tests {
             Some("https://mcp.linear.app/old"),
             "the address is untouched"
         );
+    }
+
+    #[tokio::test]
+    async fn the_mode_and_the_words_for_tools_are_added_updated_and_checked() {
+        let app = app();
+        // A catalog service starts asking, an own one starts open; both are listed with the fields.
+        let catalog = owner(
+            &app,
+            "integrations.add",
+            json!({ "name": "fetch", "kind": "stdio", "command": "uvx", "args": ["mcp-server-fetch"] }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(catalog["tool_mode"], "confirm_writes");
+        assert_eq!(catalog["tool_overrides"], json!({}));
+        let own = owner(
+            &app,
+            "integrations.add",
+            json!({ "name": "mine", "kind": "stdio", "command": "mytool", "tool_mode": "read_only",
+                    "tool_overrides": { "delete_all": "deny" } }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(own["tool_mode"], "read_only", "named when added");
+        assert_eq!(own["tool_overrides"], json!({ "delete_all": "deny" }));
+        let plain = owner(
+            &app,
+            "integrations.add",
+            json!({ "name": "plain", "kind": "stdio", "command": "x" }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(plain["tool_mode"], "all");
+
+        let id = plain["id"].clone();
+        let updated = owner(
+            &app,
+            "integrations.update",
+            json!({ "id": id, "tool_mode": "confirm_writes", "tool_overrides": { "search": "allow", "send": "ask" } }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(updated["tool_mode"], "confirm_writes");
+        assert_eq!(updated["tool_overrides"], json!({ "search": "allow", "send": "ask" }));
+        // Another field leaves them as they are.
+        let off = owner(&app, "integrations.update", json!({ "id": id, "enabled": false }))
+            .await
+            .unwrap();
+        assert_eq!(off["tool_mode"], "confirm_writes");
+        assert_eq!(off["tool_overrides"]["send"], "ask");
+
+        for bad in [
+            json!({ "id": id, "tool_mode": "everything" }),
+            json!({ "id": id, "tool_overrides": { "x": "maybe" } }),
+            json!({ "id": id, "tool_overrides": { "": "deny" } }),
+            json!({ "id": id, "tool_overrides": { "a\nb": "deny" } }),
+            json!({ "id": id, "tool_overrides": { "t".repeat(129): "deny" } }),
+        ] {
+            let err = owner(&app, "integrations.update", bad.clone()).await.unwrap_err();
+            assert_eq!(err.code, INVALID_PARAMS, "{bad}");
+        }
+        let too_many: serde_json::Map<String, Value> = (0..501).map(|i| (format!("tool{i}"), json!("deny"))).collect();
+        let err = owner(
+            &app,
+            "integrations.update",
+            json!({ "id": id, "tool_overrides": too_many }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, INVALID_PARAMS);
+        let listed = owner(&app, "integrations.list", json!({})).await.unwrap();
+        assert!(listed.as_array().unwrap().iter().all(|r| r.get("tool_mode").is_some()));
+    }
+
+    #[test]
+    fn only_a_patch_of_the_tool_rules_or_the_name_restarts_sessions() {
+        let cur = Integration {
+            id: "i".into(),
+            name: "svc".into(),
+            kind: IntegrationKind::Stdio,
+            command: Some("x".into()),
+            args: vec![],
+            url: None,
+            env: BTreeMap::new(),
+            headers: BTreeMap::new(),
+            enabled: true,
+            created_at: 0,
+            auth: Default::default(),
+            tool_mode: Default::default(),
+            tool_overrides: Default::default(),
+        };
+        let patch = |p: IntegrationPatch| changes_tool_rules(&cur, &p);
+        assert!(patch(IntegrationPatch {
+            tool_mode: Some(crate::store::ToolMode::ReadOnly),
+            ..Default::default()
+        }));
+        assert!(patch(IntegrationPatch {
+            tool_overrides: Some(Default::default()),
+            ..Default::default()
+        }));
+        assert!(patch(IntegrationPatch {
+            name: Some("renamed".into()),
+            ..Default::default()
+        }));
+        // The same name again, or another field, is not a change of the rules.
+        assert!(!patch(IntegrationPatch {
+            name: Some("svc".into()),
+            ..Default::default()
+        }));
+        assert!(!patch(IntegrationPatch {
+            enabled: Some(false),
+            ..Default::default()
+        }));
+    }
+
+    #[tokio::test]
+    async fn a_browser_sign_in_draft_is_held_to_the_name_rule() {
+        let app = app();
+        let err = owner(
+            &app,
+            "integrations.oauth_begin",
+            json!({ "draft": { "name": "a__b", "kind": "http", "url": "https://example.com/mcp" } }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, INVALID_PARAMS);
+        assert!(err.message.contains("two underscores"), "{}", err.message);
+    }
+
+    #[tokio::test]
+    async fn two_underscores_are_refused_in_a_new_name_but_an_old_one_still_works() {
+        let app = app();
+        for bad in [json!({ "name": "a__b", "kind": "stdio", "command": "x" })] {
+            let err = owner(&app, "integrations.add", bad).await.unwrap_err();
+            assert_eq!(err.code, INVALID_PARAMS);
+            assert!(err.message.contains("two underscores"), "{}", err.message);
+        }
+        let ok = owner(
+            &app,
+            "integrations.add",
+            json!({ "name": "a_b", "kind": "stdio", "command": "x" }),
+        )
+        .await
+        .unwrap();
+        let err = owner(&app, "integrations.update", json!({ "id": ok["id"], "name": "c__d" }))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, INVALID_PARAMS);
+        // A row that already has `__` (made before the rule) keeps its name through other changes.
+        let old = app
+            .sup
+            .hub()
+            .store
+            .integration_create(crate::store::NewIntegration {
+                name: "old__one".into(),
+                kind: IntegrationKind::Stdio,
+                command: Some("x".into()),
+                args: vec![],
+                url: None,
+                env: BTreeMap::new(),
+                headers: BTreeMap::new(),
+                enabled: true,
+                auth: Default::default(),
+            })
+            .unwrap();
+        let still = owner(&app, "integrations.update", json!({ "id": old.id, "enabled": false }))
+            .await
+            .unwrap();
+        assert_eq!(still["name"], "old__one");
+        let same = owner(&app, "integrations.update", json!({ "id": old.id, "name": "old__one" }))
+            .await
+            .unwrap();
+        assert_eq!(same["name"], "old__one");
+    }
+
+    #[test]
+    fn the_tool_permissions_feature_is_offered() {
+        assert!(crate::rpc::features().contains(&"tool_permissions"));
     }
 
     #[test]

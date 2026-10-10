@@ -118,6 +118,8 @@ pub const MAX_TEAM_ASSIGNS_PER_TURN: u8 = 12;
 pub const MAX_CREW_MESSAGES_PER_CHAIN: u32 = 20;
 /// Chain counters are dropped all at once when there are more than this many.
 const MAX_TRACKED_CHAINS: usize = 10_000;
+/// How much of a service tool's arguments an approval card shows, in characters.
+const TOOL_ARGUMENTS_SHOWN: usize = 2000;
 
 /// Crew state of the turn that is running for one agent.
 #[derive(Debug, Clone, PartialEq)]
@@ -1257,6 +1259,16 @@ impl Actor {
             .into_iter()
             .filter(|i| !unusable.iter().any(|(id, _)| *id == i.id))
             .collect();
+        // Only Claude sends the calls of a limited service to the daemon to decide. Another runtime would run them
+        // unasked, so it does not get the service, and its prompt says why.
+        let (chosen, held_back): (Vec<&crate::store::Integration>, Vec<&crate::store::Integration>) =
+            if kind == RuntimeKind::Claude {
+                (chosen, Vec::new())
+            } else {
+                chosen.into_iter().partition(|i| !crate::integrations::is_limited(i))
+            };
+        let held_back_names: Vec<&str> = held_back.iter().map(|i| i.name.as_str()).collect();
+        let limited_line = crate::integrations::limited_line(&held_back_names);
         let integration_secrets: Vec<(String, String)> = {
             let names = crate::integrations::secret_names(&chosen);
             let mut all = self.hub.store.secrets_all()?;
@@ -1304,6 +1316,9 @@ impl Actor {
         }
         let names: Vec<&str> = mcp_servers.iter().map(|s| s.name.as_str()).collect();
         if let Some(line) = crate::integrations::prompt_line(&names) {
+            blocks.push(line);
+        }
+        if let Some(line) = limited_line {
             blocks.push(line);
         }
         if let Some(line) = relogin_line {
@@ -1358,6 +1373,12 @@ impl Actor {
                 (self.workspaces.spec(&ws), None)
             }
         };
+        // The services the owner limited: the CLI sends every call of theirs to the daemon to decide.
+        let gated_tools: Vec<String> = chosen
+            .iter()
+            .filter(|i| i.tool_mode != crate::store::ToolMode::All || !i.tool_overrides.is_empty())
+            .map(|i| i.name.clone())
+            .collect();
         let spawned = rt
             .spawn(SpawnConfig {
                 agent_id: agent.id.clone(),
@@ -1396,6 +1417,7 @@ impl Actor {
                 personal_settings: agent.use_personal_settings,
                 capabilities: agent.capabilities.clone(),
                 mcp_servers,
+                gated_tools,
             })
             .await?;
         self.root = spawned
@@ -2129,7 +2151,25 @@ impl Actor {
         // Before the policy looks at it, so what is stored, shown and remembered has no secret in it.
         self.redactor.redact_approval(&mut req);
         let agent = self.agent()?;
-        let rules = self.hub.store.rule_list(Some(&self.id))?;
+        let rules = match self.hub.store.rule_list(Some(&self.id)) {
+            Ok(rules) => rules,
+            // The owner's rules cannot be read: a call of a service's tool is refused, not left waiting.
+            Err(e) if req.tool.starts_with(crate::tool_policy::MCP_PREFIX) => {
+                tracing::error!(
+                    agent = self.id,
+                    tool = req.tool,
+                    "rules unreadable, call refused: {e:#}"
+                );
+                return self
+                    .refuse(
+                        &req,
+                        crate::tool_policy::REASON_UNCHECKED,
+                        Some(crate::tool_policy::UNCHECKED_MESSAGE),
+                    )
+                    .await;
+            }
+            Err(e) => return Err(e),
+        };
         // The agent's own folders: its working folder, and its home when it has one.
         let mut roots = vec![agent.cwd.as_str()];
         roots.extend(agent.home_dir.as_deref());
@@ -2137,14 +2177,29 @@ impl Actor {
         // state moves on with the line.
         // The verdict, and the folder the line leaves the shell in. The folder is applied when the line goes ahead:
         // at once when it is allowed, on the user's yes when it is asked about, and never after a refusal.
-        let policy::Judgement { verdict, shell_after } = policy::judge_guarded(
-            agent.approval_mode,
-            &req,
-            &roots,
-            &rules,
-            &self.protected,
-            &self.shell_cwd,
-        );
+        // A call of a tool of one of the owner's services is first decided by the service's mode and the owner's
+        // word on the tool (see `tool_policy`); what that leaves open goes to the normal policy.
+        let gate = self.tool_gate(&req, &agent, &rules);
+        let (verdict, shell_after, agent_message) = match gate {
+            Some(judged) => {
+                if matches!(judged.verdict, Verdict::Ask(_)) {
+                    // The card shows the arguments the service would get, cut.
+                    req.diff = crate::tool_policy::arguments_text(&req.input, TOOL_ARGUMENTS_SHOWN);
+                }
+                (judged.verdict, None, judged.agent_message)
+            }
+            None => {
+                let policy::Judgement { verdict, shell_after } = policy::judge_guarded(
+                    agent.approval_mode,
+                    &req,
+                    &roots,
+                    &rules,
+                    &self.protected,
+                    &self.shell_cwd,
+                );
+                (verdict, shell_after, None)
+            }
+        };
         let subject = req.command.clone().unwrap_or_else(|| req.title.clone());
         match verdict {
             Verdict::Allow => {
@@ -2156,23 +2211,7 @@ impl Actor {
                     None => Ok(()),
                 }
             }
-            Verdict::Deny(reason) => {
-                let a = self.record(&req, &reason)?;
-                self.hub.store.approval_resolve(&a, Decision::Deny)?;
-                self.hub.emit(
-                    &self.id,
-                    EventBody::ApprovalResolved {
-                        approval_id: a,
-                        decision: Decision::Deny,
-                        by: DecidedBy::Policy,
-                        remember: false,
-                    },
-                );
-                match self.session.as_mut() {
-                    Some(s) => s.resolve(&req.key, Decision::Deny).await,
-                    None => Ok(()),
-                }
-            }
+            Verdict::Deny(reason) => self.refuse(&req, &reason, agent_message.as_deref()).await,
             Verdict::Ask(reason) => {
                 let a = self.record(&req, &reason)?;
                 self.pending.insert(
@@ -2186,6 +2225,93 @@ impl Actor {
                 );
                 self.set_status(AgentStatus::NeedsYou, None);
                 Ok(())
+            }
+        }
+    }
+
+    /// Refuse a call: it is recorded and closed as the policy's doing, and the CLI is told, with `message` when there is
+    /// one. Whatever fails while recording, the CLI still gets its answer, so the call never waits for nothing.
+    async fn refuse(&mut self, req: &ApprovalRequest, reason: &str, message: Option<&str>) -> Result<()> {
+        let recorded = self.record(req, reason).and_then(|a| {
+            self.hub.store.approval_resolve(&a, Decision::Deny)?;
+            Ok(a)
+        });
+        match recorded {
+            Ok(a) => {
+                self.hub.emit(
+                    &self.id,
+                    EventBody::ApprovalResolved {
+                        approval_id: a,
+                        decision: Decision::Deny,
+                        by: DecidedBy::Policy,
+                        remember: false,
+                    },
+                );
+            }
+            Err(e) => tracing::error!(agent = self.id, "record a refusal: {e:#}"),
+        }
+        match (self.session.as_mut(), message) {
+            (Some(s), Some(message)) => s.deny_with_message(&req.key, message).await,
+            (Some(s), None) => s.resolve(&req.key, Decision::Deny).await,
+            (None, _) => Ok(()),
+        }
+    }
+
+    /// The decision of the service's mode for a call of `mcp__<service>__<tool>`, if the call is one and the mode has an
+    /// opinion (docs/ARCHITECTURE.md#tool-permissions). When the database cannot be read the call is refused, not left
+    /// waiting: what the owner allowed cannot be checked, so nothing runs.
+    fn tool_gate(
+        &self,
+        req: &ApprovalRequest,
+        agent: &crate::store::Agent,
+        rules: &[crate::store::Rule],
+    ) -> Option<crate::tool_policy::Judged> {
+        use crate::tool_policy::{GONE_MESSAGE, Judged, MCP_PREFIX, REASON_GONE};
+        if !req.tool.starts_with(MCP_PREFIX) {
+            return None;
+        }
+        let mode = agent.approval_mode;
+        let store = &self.hub.store;
+        let subject = req.command.as_deref().unwrap_or(req.title.as_str());
+        let judged = store.integration_list().and_then(|all| {
+            // Only the services this agent has now: a name that is none of them is not a service of its own.
+            let rows: Vec<crate::store::Integration> =
+                crate::integrations::for_agent(&all, agent.integrations.as_deref())
+                    .into_iter()
+                    .cloned()
+                    .collect();
+            if crate::tool_policy::splits(&req.tool, &rows).is_empty() {
+                // Bandito's own crew server, and the owner's personal MCP servers when the agent reads the owner's own
+                // settings, are no integrations: the normal policy decides them. Any other name is a service the
+                // agent no longer has, and a stale session must not reach it unchecked.
+                let crew = format!("{MCP_PREFIX}{}__", crate::integrations::RESERVED_NAME);
+                if req.tool.starts_with(&crew) || agent.use_personal_settings {
+                    return Ok(None);
+                }
+                return Ok(Some(Judged {
+                    verdict: Verdict::Deny(REASON_GONE.to_string()),
+                    agent_message: Some(GONE_MESSAGE.to_string()),
+                }));
+            }
+            crate::tool_policy::judge_call(&req.tool, &rows, mode, rules, subject, |row| {
+                // What the last probe of the service saw: a tool it did not list counts as a write.
+                let tools = store.integration_tools(&row.id)?;
+                Ok(Box::new(crate::tool_policy::StoredTools::new(row.id.clone(), tools))
+                    as Box<dyn crate::tool_policy::ToolCatalog>)
+            })
+        });
+        match judged {
+            Ok(judged) => judged,
+            Err(e) => {
+                tracing::error!(
+                    agent = self.id,
+                    tool = req.tool,
+                    "tool permissions unreadable, call refused: {e:#}"
+                );
+                Some(crate::tool_policy::Judged {
+                    verdict: Verdict::Deny(crate::tool_policy::REASON_UNCHECKED.to_string()),
+                    agent_message: Some(crate::tool_policy::UNCHECKED_MESSAGE.to_string()),
+                })
             }
         }
     }
@@ -2407,6 +2533,10 @@ pub(crate) mod testing {
             self.log.lock().unwrap().push(format!("resolve {key} {decision:?}"));
             Ok(())
         }
+        async fn deny_with_message(&mut self, key: &str, message: &str) -> Result<()> {
+            self.log.lock().unwrap().push(format!("deny_message {key} {message}"));
+            Ok(())
+        }
         async fn shutdown(self: Box<Self>) {
             self.log.lock().unwrap().push("shutdown".into());
         }
@@ -2458,6 +2588,11 @@ mod tests {
     }
 
     fn world(mode: ApprovalMode) -> World {
+        world_on(mode, RuntimeKind::Claude)
+    }
+
+    /// A world whose agent runs on `runtime` (a mock that reports that kind).
+    fn world_on(mode: ApprovalMode, runtime: RuntimeKind) -> World {
         let store = Arc::new(Store::open_in_memory().unwrap());
         let agent = store
             .agent_create(NewAgent {
@@ -2467,7 +2602,7 @@ mod tests {
                 integrations: None,
                 name: "Forge".into(),
                 role: "builder".into(),
-                runtime: RuntimeKind::Claude,
+                runtime,
                 model: Some("opus".into()),
                 cwd: "/bandito-probe/u/app".into(),
                 approval_mode: mode,
@@ -2479,23 +2614,58 @@ mod tests {
                 fallback_model: None,
             })
             .unwrap();
-        attach(store, agent.id)
+        attach_kind(store, agent.id, runtime)
     }
 
     /// A world over an existing store and agent, with a fresh supervisor and a mock runtime
     /// (as after a daemon restart).
     fn attach(store: Arc<Store>, agent: String) -> World {
+        attach_kind(store, agent, RuntimeKind::Claude)
+    }
+
+    /// The mock runtime reporting another kind (Codex, Grok).
+    struct KindMock {
+        kind: RuntimeKind,
+        inner: MockRuntime,
+    }
+
+    #[async_trait::async_trait]
+    impl Runtime for KindMock {
+        fn kind(&self) -> RuntimeKind {
+            self.kind
+        }
+        async fn status(&self) -> crate::runtime::RuntimeStatus {
+            crate::runtime::RuntimeStatus {
+                kind: self.kind,
+                installed: true,
+                version: None,
+                logged_in: None,
+                detail: None,
+            }
+        }
+        async fn spawn(&self, cfg: SpawnConfig) -> Result<crate::runtime::Spawned> {
+            self.inner.spawn(cfg).await
+        }
+    }
+
+    /// [`attach`] with a mock that reports `kind`.
+    fn attach_kind(store: Arc<Store>, agent: String, kind: RuntimeKind) -> World {
         let hub = Hub::new(store.clone());
         let events = hub.subscribe();
         let log: Log = Arc::default();
         let out: Outs = Arc::default();
         let spawns = Arc::new(Mutex::new(Vec::new()));
         let mut rts = Runtimes::default();
-        rts.insert(Arc::new(MockRuntime {
+        let mock = MockRuntime {
             log: log.clone(),
             out: out.clone(),
             spawns: spawns.clone(),
-        }));
+        };
+        if kind == RuntimeKind::Claude {
+            rts.insert(Arc::new(mock));
+        } else {
+            rts.insert(Arc::new(KindMock { kind, inner: mock }));
+        }
         World {
             sup: Supervisor::new(hub, rts, None),
             store,
@@ -2539,6 +2709,19 @@ mod tests {
                 tokio::time::sleep(Duration::from_millis(10)).await;
             }
             panic!("log never had {line:?}: {:?}", self.log.lock().unwrap());
+        }
+
+        async fn wait_log_prefix(&self, prefix: &str) {
+            for _ in 0..300 {
+                if self.log.lock().unwrap().iter().any(|l| l.starts_with(prefix)) {
+                    return;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            panic!(
+                "log never had a line starting {prefix:?}: {:?}",
+                self.log.lock().unwrap()
+            );
         }
 
         fn kinds(&self) -> Vec<String> {
@@ -2954,6 +3137,388 @@ mod tests {
                 ..
             }
         ));
+        assert!(w.store.approval_list_pending(None).unwrap().is_empty());
+    }
+
+    /// A service of the owner's, with the mode and the words for its tools, before the session starts.
+    fn add_service(w: &World, name: &str, mode: crate::store::ToolMode, words: &[(&str, crate::store::ToolOverride)]) {
+        let row = w
+            .store
+            .integration_create(crate::store::NewIntegration {
+                name: name.into(),
+                kind: crate::store::IntegrationKind::Http,
+                command: None,
+                args: vec![],
+                url: Some("https://example.com/mcp".into()),
+                env: Default::default(),
+                headers: Default::default(),
+                enabled: true,
+                auth: Default::default(),
+            })
+            .unwrap();
+        w.store
+            .integration_update(
+                &row.id,
+                crate::store::IntegrationPatch {
+                    tool_mode: Some(mode),
+                    tool_overrides: Some(words.iter().map(|(t, o)| (t.to_string(), *o)).collect()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+    }
+
+    fn service_call(key: &str, tool: &str) -> RuntimeOutput {
+        RuntimeOutput::Approval(ApprovalRequest {
+            key: key.into(),
+            call_id: format!("call-{key}"),
+            tool: tool.into(),
+            title: tool.into(),
+            command: None,
+            diff: None,
+            paths: vec![],
+            input: json!({"title": "Fix the login", "body": "x".repeat(5000)}),
+        })
+    }
+
+    #[tokio::test]
+    async fn a_read_only_service_refuses_a_write_and_tells_the_agent_why() {
+        let mut w = world(ApprovalMode::Risky);
+        add_service(&w, "mysvc", crate::store::ToolMode::ReadOnly, &[]);
+        w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
+        w.wait_log("send go").await;
+        // Claude is told to send every call of this service to the daemon.
+        assert_eq!(w.spawns.lock().unwrap()[0].gated_tools, vec!["mysvc".to_string()]);
+        w.push(service_call("k1", "mcp__mysvc__create_issue")).await;
+        let e = w.wait(|b| matches!(b, EventBody::ApprovalResolved { .. })).await;
+        assert!(matches!(
+            e.body,
+            EventBody::ApprovalResolved {
+                decision: Decision::Deny,
+                by: DecidedBy::Policy,
+                ..
+            }
+        ));
+        let log = w.log.lock().unwrap().clone();
+        let said = log
+            .iter()
+            .find(|l| l.starts_with("deny_message k1 "))
+            .expect("the agent got words");
+        assert!(
+            said.contains("read only") && said.contains("create_issue") && said.contains("mysvc"),
+            "{said}"
+        );
+        assert!(w.store.approval_list_pending(None).unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn the_probe_decides_which_tools_read() {
+        let w = world(ApprovalMode::Risky);
+        add_service(&w, "mysvc", crate::store::ToolMode::ReadOnly, &[]);
+        let id = w.store.integration_list().unwrap()[0].id.clone();
+        let tool = |name: &str, read_only: bool| crate::store::IntegrationTool {
+            name: name.into(),
+            title: None,
+            description: None,
+            read_only,
+            destructive: false,
+            input_schema: None,
+            seen_at: 1,
+        };
+        w.store
+            .integration_tools_replace(&id, &[tool("list_issues", true), tool("create_issue", false)])
+            .unwrap();
+        w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
+        w.wait_log("send go").await;
+        // Annotated as reading: runs. Annotated as changing, or not listed at all: refused.
+        w.push(service_call("k1", "mcp__mysvc__list_issues")).await;
+        w.wait_log("resolve k1 Allow").await;
+        w.push(service_call("k2", "mcp__mysvc__create_issue")).await;
+        w.wait_log_prefix("deny_message k2 ").await;
+        w.push(service_call("k3", "mcp__mysvc__never_listed")).await;
+        w.wait_log_prefix("deny_message k3 ").await;
+    }
+
+    #[tokio::test]
+    async fn a_confirm_writes_service_asks_with_its_name_the_tool_and_cut_arguments() {
+        let mut w = world(ApprovalMode::Risky);
+        add_service(&w, "mysvc", crate::store::ToolMode::ConfirmWrites, &[]);
+        w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
+        w.wait_log("send go").await;
+        w.push(service_call("k1", "mcp__mysvc__create_issue")).await;
+        let e = w.wait(|b| matches!(b, EventBody::ApprovalRequested { .. })).await;
+        let EventBody::ApprovalRequested {
+            tool,
+            title,
+            diff,
+            reason,
+            ..
+        } = e.body
+        else {
+            panic!("not a request");
+        };
+        assert_eq!(tool, "mcp__mysvc__create_issue");
+        assert_eq!(title, "mcp__mysvc__create_issue");
+        assert_eq!(reason, crate::tool_policy::REASON_CONFIRM_MODE);
+        let shown = diff.expect("the arguments are on the card");
+        assert!(shown.contains("Fix the login"));
+        assert!(
+            shown.chars().count() <= TOOL_ARGUMENTS_SHOWN + 2,
+            "cut: {}",
+            shown.chars().count()
+        );
+        assert_eq!(w.store.approval_list_pending(None).unwrap().len(), 1);
+        assert!(!w.log.lock().unwrap().iter().any(|l| l.starts_with("resolve k1")));
+    }
+
+    #[tokio::test]
+    async fn never_drops_the_question_but_not_the_refusals() {
+        let mut w = world(ApprovalMode::Never);
+        add_service(
+            &w,
+            "mysvc",
+            crate::store::ToolMode::ConfirmWrites,
+            &[("drop_all", crate::store::ToolOverride::Deny)],
+        );
+        w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
+        w.wait_log("send go").await;
+        w.push(service_call("k1", "mcp__mysvc__create_issue")).await;
+        w.wait_log("resolve k1 Allow").await;
+        w.push(service_call("k2", "mcp__mysvc__drop_all")).await;
+        w.wait(|b| {
+            matches!(
+                b,
+                EventBody::ApprovalResolved {
+                    decision: Decision::Deny,
+                    ..
+                }
+            )
+        })
+        .await;
+        let log = w.log.lock().unwrap().clone();
+        assert!(
+            log.iter()
+                .any(|l| l.starts_with("deny_message k2 ") && l.contains("forbade")),
+            "{log:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_service_left_as_all_goes_the_normal_way() {
+        let w = world(ApprovalMode::Never);
+        add_service(&w, "mysvc", crate::store::ToolMode::All, &[]);
+        w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
+        w.wait_log("send go").await;
+        assert!(w.spawns.lock().unwrap()[0].gated_tools.is_empty());
+        w.push(service_call("k1", "mcp__mysvc__create_issue")).await;
+        w.wait_log("resolve k1 Allow").await;
+        // A tool name that belongs to no service of the agent is refused: it is not one of its own.
+        w.push(service_call("k2", "mcp__unknown__thing")).await;
+        w.wait_log_prefix("deny_message k2 ").await;
+    }
+
+    #[tokio::test]
+    async fn codex_and_grok_do_not_get_a_service_the_owner_limited() {
+        for runtime in [RuntimeKind::Codex, RuntimeKind::Grok] {
+            let w = world_on(ApprovalMode::Risky, runtime);
+            add_service(&w, "limited", crate::store::ToolMode::ReadOnly, &[]);
+            add_service(
+                &w,
+                "asking",
+                crate::store::ToolMode::All,
+                &[("send", crate::store::ToolOverride::Ask)],
+            );
+            add_service(
+                &w,
+                "denying",
+                crate::store::ToolMode::All,
+                &[("drop", crate::store::ToolOverride::Deny)],
+            );
+            // Only an allow word does not limit a service.
+            add_service(
+                &w,
+                "open",
+                crate::store::ToolMode::All,
+                &[("list", crate::store::ToolOverride::Allow)],
+            );
+            add_service(&w, "plain", crate::store::ToolMode::All, &[]);
+            w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
+            w.wait_log("send go").await;
+            let spawns = w.spawns.lock().unwrap();
+            let names: Vec<&str> = spawns[0].mcp_servers.iter().map(|s| s.name.as_str()).collect();
+            assert_eq!(
+                names,
+                vec!["open", "plain"],
+                "{runtime:?}: no limited service is passed"
+            );
+            assert!(
+                spawns[0].gated_tools.iter().all(|n| n == "open"),
+                "{:?}",
+                spawns[0].gated_tools
+            );
+            let prompt = spawns[0].system_prompt.clone().unwrap();
+            for name in ["limited", "asking", "denying"] {
+                assert!(
+                    prompt.contains(&format!("{name} ограничен владельцем и в этом рантайме недоступен.")),
+                    "{runtime:?}: {prompt}"
+                );
+            }
+            assert!(!prompt.contains("open ограничен") && !prompt.contains("plain ограничен"));
+        }
+    }
+
+    #[tokio::test]
+    async fn claude_gets_a_limited_service_and_no_such_line() {
+        let w = world(ApprovalMode::Risky);
+        add_service(&w, "limited", crate::store::ToolMode::ReadOnly, &[]);
+        w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
+        w.wait_log("send go").await;
+        let spawns = w.spawns.lock().unwrap();
+        assert_eq!(spawns[0].mcp_servers.len(), 1);
+        assert_eq!(spawns[0].gated_tools, vec!["limited".to_string()]);
+        assert!(
+            !spawns[0]
+                .system_prompt
+                .clone()
+                .unwrap()
+                .contains("ограничен владельцем")
+        );
+    }
+
+    #[tokio::test]
+    async fn a_session_that_restarts_takes_the_new_mode() {
+        let w = world(ApprovalMode::Risky);
+        add_service(&w, "mysvc", crate::store::ToolMode::All, &[]);
+        w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
+        w.wait_log("send go").await;
+        assert!(w.spawns.lock().unwrap()[0].gated_tools.is_empty());
+        w.push(done()).await;
+        let id = w.store.integration_list().unwrap()[0].id.clone();
+        w.store
+            .integration_update(
+                &id,
+                crate::store::IntegrationPatch {
+                    tool_mode: Some(crate::store::ToolMode::ReadOnly),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        // What the RPC does after such a change: the sessions of the agents that have the service start again.
+        w.sup.reload(&w.agent, None).await;
+        w.sup.send(&w.agent, Inbound::user("again")).await.unwrap();
+        w.wait_log("send again").await;
+        let spawns = w.spawns.lock().unwrap();
+        assert_eq!(spawns.len(), 2, "a new session started");
+        assert_eq!(spawns[1].gated_tools, vec!["mysvc".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn a_call_of_a_service_the_agent_no_longer_has_is_refused() {
+        let w = world(ApprovalMode::Never);
+        add_service(&w, "mysvc", crate::store::ToolMode::All, &[]);
+        w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
+        w.wait_log("send go").await;
+        // The service is renamed under the running session: the old name is nobody's now.
+        let id = w.store.integration_list().unwrap()[0].id.clone();
+        w.store
+            .integration_update(
+                &id,
+                crate::store::IntegrationPatch {
+                    name: Some("renamed".into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        w.push(service_call("k1", "mcp__mysvc__list")).await;
+        w.wait_log_prefix("deny_message k1 ").await;
+        let said = w
+            .log
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|l| l.starts_with("deny_message k1 "))
+            .cloned()
+            .unwrap();
+        assert!(said.contains("no longer available"), "{said}");
+        // A removed service is refused the same way.
+        w.store.integration_delete(&id).unwrap();
+        w.push(service_call("k2", "mcp__renamed__list")).await;
+        w.wait_log_prefix("deny_message k2 ").await;
+        // Bandito's own crew tools are no integration and go the normal way.
+        w.push(service_call("k3", "mcp__bandito__team_list")).await;
+        w.wait_log("resolve k3 Allow").await;
+    }
+
+    #[tokio::test]
+    async fn a_service_outside_the_agents_list_is_not_its_own() {
+        let w = world(ApprovalMode::Never);
+        add_service(&w, "mine", crate::store::ToolMode::All, &[]);
+        add_service(&w, "foreign", crate::store::ToolMode::All, &[]);
+        let mine = w
+            .store
+            .integration_list()
+            .unwrap()
+            .into_iter()
+            .find(|i| i.name == "mine")
+            .unwrap()
+            .id;
+        w.store
+            .agent_update(
+                &w.agent,
+                crate::store::AgentPatch {
+                    integrations: Some(Some(vec![mine])),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
+        w.wait_log("send go").await;
+        w.push(service_call("k1", "mcp__mine__list")).await;
+        w.wait_log("resolve k1 Allow").await;
+        w.push(service_call("k2", "mcp__foreign__list")).await;
+        w.wait_log_prefix("deny_message k2 ").await;
+    }
+
+    #[tokio::test]
+    async fn an_ambiguous_name_is_refused_when_one_reading_is() {
+        let w = world(ApprovalMode::Risky);
+        add_service(&w, "a", crate::store::ToolMode::ReadOnly, &[]);
+        add_service(&w, "a__b", crate::store::ToolMode::All, &[]);
+        w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
+        w.wait_log("send go").await;
+        w.push(service_call("k1", "mcp__a__b__go")).await;
+        w.wait_log_prefix("deny_message k1 ").await;
+    }
+
+    #[tokio::test]
+    async fn an_override_on_a_tool_with_a_dot_reaches_the_name_claude_code_gives_it() {
+        let w = world(ApprovalMode::Never);
+        add_service(
+            &w,
+            "mysvc",
+            crate::store::ToolMode::All,
+            &[("create.issue", crate::store::ToolOverride::Deny)],
+        );
+        w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
+        w.wait_log("send go").await;
+        w.push(service_call("k1", "mcp__mysvc__create_issue")).await;
+        w.wait_log_prefix("deny_message k1 ").await;
+    }
+
+    #[tokio::test]
+    async fn when_the_permissions_cannot_be_read_the_call_is_refused_not_left_waiting() {
+        let w = world(ApprovalMode::Risky);
+        add_service(&w, "mysvc", crate::store::ToolMode::ReadOnly, &[]);
+        w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
+        w.wait_log("send go").await;
+        // The table of tools is gone: reading it fails.
+        w.store.break_for_test("DROP TABLE integration_tools");
+        w.push(service_call("k1", "mcp__mysvc__list_issues")).await;
+        w.wait_log_prefix("deny_message k1 ").await;
+        let log = w.log.lock().unwrap().clone();
+        let said = log.iter().find(|l| l.starts_with("deny_message k1 ")).unwrap();
+        assert!(said.contains("could not read") && said.contains("not run"), "{said}");
+        // A call that is no tool of a service is not touched by the failure.
         assert!(w.store.approval_list_pending(None).unwrap().is_empty());
     }
 

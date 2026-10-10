@@ -78,6 +78,47 @@ impl IntegrationAuth {
     }
 }
 
+/// What the agents may do with an integration's tools (docs/ARCHITECTURE.md#tool-permissions).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolMode {
+    /// Every tool runs as the agent's approval mode says.
+    #[default]
+    All,
+    /// A tool that reads runs; a tool that changes something (or that is not known to read) is refused.
+    ReadOnly,
+    /// A tool that reads runs; a tool that changes something waits for the owner's yes.
+    ConfirmWrites,
+}
+
+impl ToolMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::All => "all",
+            Self::ReadOnly => "read_only",
+            Self::ConfirmWrites => "confirm_writes",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "all" => Some(Self::All),
+            "read_only" => Some(Self::ReadOnly),
+            "confirm_writes" => Some(Self::ConfirmWrites),
+            _ => None,
+        }
+    }
+}
+
+/// The owner's word on one tool, over the mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolOverride {
+    Allow,
+    Ask,
+    Deny,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Integration {
     pub id: String,
@@ -95,6 +136,12 @@ pub struct Integration {
     /// `oauth` for a service the owner signed in to in the browser; `none` for the rest.
     #[serde(default)]
     pub auth: IntegrationAuth,
+    /// What the agents may do with its tools.
+    #[serde(default)]
+    pub tool_mode: ToolMode,
+    /// The owner's word per tool name; it wins over `tool_mode`.
+    #[serde(default)]
+    pub tool_overrides: BTreeMap<String, ToolOverride>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -135,6 +182,9 @@ pub struct IntegrationPatch {
     pub env: Option<BTreeMap<String, String>>,
     pub headers: Option<BTreeMap<String, String>>,
     pub enabled: Option<bool>,
+    pub tool_mode: Option<ToolMode>,
+    /// Replaces the whole map.
+    pub tool_overrides: Option<BTreeMap<String, ToolOverride>>,
 }
 
 /// A field that is present (even as `null`) reads as `Some`, so `null` can clear it.
@@ -142,7 +192,8 @@ fn present_or_null<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Opti
     Option::<String>::deserialize(d).map(Some)
 }
 
-const COLS: &str = "id, name, kind, command, args, url, env, headers, enabled, created_at, auth";
+const COLS: &str =
+    "id, name, kind, command, args, url, env, headers, enabled, created_at, auth, tool_mode, tool_overrides";
 
 fn json_column<T: serde::de::DeserializeOwned + Default>(r: &Row, i: usize) -> rusqlite::Result<T> {
     let text: String = r.get(i)?;
@@ -163,6 +214,8 @@ fn from_row(r: &Row) -> rusqlite::Result<Integration> {
         enabled: r.get::<_, i64>(8)? != 0,
         created_at: r.get(9)?,
         auth: IntegrationAuth::parse(&r.get::<_, String>(10)?).unwrap_or_default(),
+        tool_mode: ToolMode::parse(&r.get::<_, String>(11)?).unwrap_or_default(),
+        tool_overrides: json_column(r, 12)?,
     })
 }
 
@@ -199,10 +252,18 @@ impl Store {
             enabled: n.enabled,
             created_at: now_ms(),
             auth: n.auth,
+            tool_mode: ToolMode::All,
+            tool_overrides: BTreeMap::new(),
+        };
+        // A service of the catalog starts with its changing tools behind a question; an own one is left as it is.
+        let row = Integration {
+            tool_mode: crate::integrations::default_tool_mode(&row),
+            ..row
         };
         let res = self.conn().execute(
-            "INSERT INTO integrations (id, name, kind, command, args, url, env, headers, enabled, created_at, auth)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            "INSERT INTO integrations (id, name, kind, command, args, url, env, headers, enabled, created_at, auth,
+             tool_mode, tool_overrides)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
             params![
                 row.id,
                 row.name,
@@ -215,6 +276,8 @@ impl Store {
                 i64::from(row.enabled),
                 row.created_at,
                 row.auth.as_str(),
+                row.tool_mode.as_str(),
+                serde_json::to_string(&row.tool_overrides)?,
             ],
         );
         match res {
@@ -255,9 +318,15 @@ impl Store {
         if let Some(v) = p.enabled {
             row.enabled = v;
         }
+        if let Some(v) = p.tool_mode {
+            row.tool_mode = v;
+        }
+        if let Some(v) = p.tool_overrides {
+            row.tool_overrides = v;
+        }
         let res = self.conn().execute(
             "UPDATE integrations SET name = ?2, kind = ?3, command = ?4, args = ?5, url = ?6, env = ?7,
-             headers = ?8, enabled = ?9 WHERE id = ?1",
+             headers = ?8, enabled = ?9, tool_mode = ?10, tool_overrides = ?11 WHERE id = ?1",
             params![
                 row.id,
                 row.name,
@@ -268,6 +337,8 @@ impl Store {
                 serde_json::to_string(&row.env)?,
                 serde_json::to_string(&row.headers)?,
                 i64::from(row.enabled),
+                row.tool_mode.as_str(),
+                serde_json::to_string(&row.tool_overrides)?,
             ],
         );
         match res {
@@ -476,6 +547,63 @@ mod tests {
             capabilities: None,
             integrations: None,
         }
+    }
+
+    #[test]
+    fn a_catalog_service_starts_asking_and_an_own_one_starts_open() {
+        let s = Store::open_in_memory().unwrap();
+        // Named like a template of the catalog.
+        let catalog = s.integration_create(new("fetch")).unwrap();
+        assert_eq!(catalog.tool_mode, ToolMode::ConfirmWrites);
+        assert!(catalog.tool_overrides.is_empty());
+        let own = s.integration_create(new("my-own-tool")).unwrap();
+        assert_eq!(own.tool_mode, ToolMode::All);
+        // What was stored is what is read back.
+        assert_eq!(
+            s.integration_get(&catalog.id).unwrap().unwrap().tool_mode,
+            ToolMode::ConfirmWrites
+        );
+    }
+
+    #[test]
+    fn the_mode_and_the_words_for_tools_are_patched_and_kept() {
+        let s = Store::open_in_memory().unwrap();
+        let a = s.integration_create(new("my-own-tool")).unwrap();
+        let patched = s
+            .integration_update(
+                &a.id,
+                IntegrationPatch {
+                    tool_mode: Some(ToolMode::ReadOnly),
+                    tool_overrides: Some(BTreeMap::from([("delete".to_string(), ToolOverride::Deny)])),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        assert_eq!(patched.tool_mode, ToolMode::ReadOnly);
+        assert_eq!(s.integration_get(&a.id).unwrap().unwrap(), patched);
+        // A patch that names neither leaves them.
+        let renamed = s
+            .integration_update(
+                &a.id,
+                IntegrationPatch {
+                    enabled: Some(false),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        assert_eq!(renamed.tool_mode, ToolMode::ReadOnly);
+        assert_eq!(renamed.tool_overrides.get("delete"), Some(&ToolOverride::Deny));
+        // The words are replaced as a whole.
+        let cleared = s
+            .integration_update(
+                &a.id,
+                IntegrationPatch {
+                    tool_overrides: Some(BTreeMap::new()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        assert!(cleared.tool_overrides.is_empty());
     }
 
     #[test]

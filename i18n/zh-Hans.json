@@ -2345,5 +2345,22 @@
   "recommend.reason.linearReadme": "README 提到了 Linear",
   "recommend.reason.posthogPackage": "项目使用 PostHog",
   "recommend.reason.stripePackage": "项目使用 Stripe",
-  "recommend.reason.other": "在项目中发现"
+  "recommend.reason.other": "在项目中发现",
+  "market.tools.title": "工具",
+  "market.tools.mode.all": "全部",
+  "market.tools.mode.confirmWrites": "需确认",
+  "market.tools.mode.readOnly": "只读",
+  "market.tools.hint.all": "智能体按各自的审批模式使用所有工具。",
+  "market.tools.hint.confirmWrites": "只读取的工具直接运行，会改动内容的工具要等你同意。",
+  "market.tools.hint.readOnly": "只读取的工具可以运行，会改动内容的工具会被拒绝。",
+  "market.tools.kind.reads": "读取",
+  "market.tools.kind.changes": "修改",
+  "market.tools.kind.deletes": "删除",
+  "market.tools.word.allow": "允许",
+  "market.tools.word.ask": "询问",
+  "market.tools.word.deny": "禁止",
+  "market.tools.notChecked": "目前还不知道有哪些工具。检查一下服务即可列出；在此之前，所有工具都按“会改动内容”处理。",
+  "market.tools.unreached": "对于智能体 {agents}（Codex 或 Grok），此模式下该服务已关闭。",
+  "approval.why.serviceConfirm": "此服务在改动前需要确认",
+  "approval.why.serviceTool": "你设置了需确认此工具"
 }

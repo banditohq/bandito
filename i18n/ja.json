@@ -2345,5 +2345,22 @@
   "recommend.reason.linearReadme": "README に Linear の記載があります",
   "recommend.reason.posthogPackage": "プロジェクトは PostHog を使っています",
   "recommend.reason.stripePackage": "プロジェクトは Stripe を使っています",
-  "recommend.reason.other": "プロジェクト内で見つかりました"
+  "recommend.reason.other": "プロジェクト内で見つかりました",
+  "market.tools.title": "ツール",
+  "market.tools.mode.all": "すべて",
+  "market.tools.mode.confirmWrites": "確認あり",
+  "market.tools.mode.readOnly": "読み取りのみ",
+  "market.tools.hint.all": "エージェントは、承認モードに従ってすべてのツールを使います。",
+  "market.tools.hint.confirmWrites": "読み取るだけのツールはそのまま動きます。何かを変更するツールは、あなたの承認を待ちます。",
+  "market.tools.hint.readOnly": "読み取るだけのツールは動きます。何かを変更するツールは拒否されます。",
+  "market.tools.kind.reads": "読み取り",
+  "market.tools.kind.changes": "変更",
+  "market.tools.kind.deletes": "削除",
+  "market.tools.word.allow": "許可",
+  "market.tools.word.ask": "確認",
+  "market.tools.word.deny": "拒否",
+  "market.tools.notChecked": "ツールはまだ分かっていません。サービスを確認すると一覧が出ます。それまでは、すべてのツールが何かを変更するものとして扱われます。",
+  "market.tools.unreached": "エージェント {agents}（Codex または Grok）では、このモードのときサービスはオフになります。",
+  "approval.why.serviceConfirm": "このサービスは変更前に確認を求めます",
+  "approval.why.serviceTool": "このツールは確認するよう設定しています"
 }

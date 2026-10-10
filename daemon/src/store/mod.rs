@@ -29,7 +29,8 @@ pub use auth::Device;
 pub use checkpoints::{Checkpoint, CheckpointKind};
 pub use forms::{Form, FormStatus};
 pub use integrations::{
-    Integration, IntegrationAuth, IntegrationKind, IntegrationPatch, IntegrationTool, NewIntegration,
+    Integration, IntegrationAuth, IntegrationKind, IntegrationPatch, IntegrationTool, NewIntegration, ToolMode,
+    ToolOverride,
 };
 pub use reactions::Reaction;
 pub use rules::{Rule, RuleAction};
@@ -57,6 +58,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../../migrations/0017_agent_lead.sql"),
     include_str!("../../migrations/0018_integration_auth.sql"),
     include_str!("../../migrations/0019_integration_tools.sql"),
+    include_str!("../../migrations/0020_integration_tool_mode.sql"),
 ];
 
 pub struct Store {
@@ -95,6 +97,12 @@ impl Store {
             tx.commit()?;
         }
         Ok(Self { conn: Mutex::new(conn) })
+    }
+
+    /// Runs a statement that breaks the database, for a test of what the daemon does when it cannot read it.
+    #[cfg(test)]
+    pub fn break_for_test(&self, sql: &str) {
+        self.conn().execute_batch(sql).unwrap();
     }
 
     fn conn(&self) -> std::sync::MutexGuard<'_, Connection> {

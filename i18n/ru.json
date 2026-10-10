@@ -2435,5 +2435,22 @@
   "recommend.reason.linearReadme": "В README упоминается Linear",
   "recommend.reason.posthogPackage": "Проект использует PostHog",
   "recommend.reason.stripePackage": "Проект использует Stripe",
-  "recommend.reason.other": "Нашли в проекте"
+  "recommend.reason.other": "Нашли в проекте",
+  "market.tools.title": "Инструменты",
+  "market.tools.mode.all": "Всё",
+  "market.tools.mode.confirmWrites": "С подтверждением",
+  "market.tools.mode.readOnly": "Только чтение",
+  "market.tools.hint.all": "Агенты используют все инструменты так, как велит их режим одобрений.",
+  "market.tools.hint.confirmWrites": "Инструменты, которые только читают, работают сразу. Те, что что-то меняют, ждут вашего «да».",
+  "market.tools.hint.readOnly": "Инструменты, которые только читают, работают. Те, что что-то меняют, получают отказ.",
+  "market.tools.kind.reads": "читает",
+  "market.tools.kind.changes": "меняет",
+  "market.tools.kind.deletes": "удаляет",
+  "market.tools.word.allow": "Разрешить",
+  "market.tools.word.ask": "Спрашивать",
+  "market.tools.word.deny": "Запретить",
+  "market.tools.notChecked": "Инструменты пока не известны. Проверьте сервис, чтобы получить их список. До тех пор любой инструмент считается меняющим данные.",
+  "market.tools.unreached": "Для агентов {agents} (Codex/Grok) сервис в этом режиме отключён.",
+  "approval.why.serviceConfirm": "этот сервис просит подтверждать изменения",
+  "approval.why.serviceTool": "вы просили подтверждать этот инструмент"
 }
