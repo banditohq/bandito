@@ -184,6 +184,9 @@ pub enum OnError {
     Ignore,
     /// Keep going and show this warning.
     Warn(String),
+    /// Run it again, up to `attempts` times in all with `delay` between, then stop the install with an error.
+    /// For `launchctl bootstrap`, which fails with "5: Input/output error" for a moment after a `bootout`.
+    Retry { attempts: u32, delay: Duration },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -206,6 +209,13 @@ pub enum Action {
     },
     /// Send SIGTERM to the pid stored in this file (no-op if the file or process is gone).
     StopPid(PathBuf),
+    /// Run `argv` until it fails, at most for `timeout`: waits for something to be gone. `launchctl print` of the
+    /// service keeps answering while launchd still unloads it after `bootout`. Never an error: when the time is up,
+    /// the next step runs anyway.
+    WaitUntilFails {
+        argv: Vec<String>,
+        timeout: Duration,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -295,6 +305,11 @@ pub fn install_plan(spec: &InstallSpec, paths: &Paths, os: Os, probe: &Probe) ->
                         contents: launchd_plist(&spec.exe, &args, &paths.log_file, &spec.path_env),
                     },
                     run(&["launchctl", "bootout", &format!("{domain}/{LABEL}")], OnError::Ignore),
+                    // `bootout` returns before launchd has let go of the service; a `bootstrap` right away fails.
+                    Action::WaitUntilFails {
+                        argv: vec!["launchctl".into(), "print".into(), format!("{domain}/{LABEL}")],
+                        timeout: Duration::from_secs(10),
+                    },
                     run(
                         &[
                             "launchctl",
@@ -302,7 +317,10 @@ pub fn install_plan(spec: &InstallSpec, paths: &Paths, os: Os, probe: &Probe) ->
                             &domain,
                             &paths.plist_file.display().to_string(),
                         ],
-                        OnError::Fail,
+                        OnError::Retry {
+                            attempts: 5,
+                            delay: Duration::from_secs(1),
+                        },
                     ),
                 ],
                 warnings: Vec::new(),
@@ -369,9 +387,10 @@ pub fn describe(plan: &Plan) -> String {
             Action::Remove(p) => format!("remove {}", p.display()),
             Action::Run { argv, on_error } => {
                 let suffix = match on_error {
-                    OnError::Fail => "",
-                    OnError::Ignore => " (failure ignored)",
-                    OnError::Warn(_) => " (failure shown as a warning)",
+                    OnError::Fail => String::new(),
+                    OnError::Ignore => " (failure ignored)".to_string(),
+                    OnError::Warn(_) => " (failure shown as a warning)".to_string(),
+                    OnError::Retry { attempts, .. } => format!(" (tried up to {attempts} times)"),
                 };
                 format!("run: {}{suffix}", display_argv(argv))
             }
@@ -382,6 +401,13 @@ pub fn describe(plan: &Plan) -> String {
                 pid_file.display()
             ),
             Action::StopPid(p) => format!("stop the process whose pid is in {}", p.display()),
+            Action::WaitUntilFails { argv, timeout } => {
+                format!(
+                    "wait until `{}` fails (up to {} s)",
+                    display_argv(argv),
+                    timeout.as_secs()
+                )
+            }
         };
         out.push_str(&line);
         out.push('\n');
@@ -549,6 +575,15 @@ fn stop_pid_file(path: &Path) -> Result<()> {
 }
 
 /// Run every action of a plan in order. Returns the warnings to show.
+/// Runs `argv` once. None when it succeeded, else what went wrong (its stderr, or why it could not start).
+fn run_once(argv: &[String]) -> Option<String> {
+    match Command::new(&argv[0]).args(&argv[1..]).stdin(Stdio::null()).output() {
+        Ok(out) if out.status.success() => None,
+        Ok(out) => Some(String::from_utf8_lossy(&out.stderr).trim().to_string()),
+        Err(e) => Some(e.to_string()),
+    }
+}
+
 pub fn execute(plan: &Plan) -> Result<Vec<String>> {
     let mut warnings = plan.warnings.clone();
     for action in &plan.actions {
@@ -568,18 +603,30 @@ pub fn execute(plan: &Plan) -> Result<Vec<String>> {
                 Err(e) => return Err(e).with_context(|| format!("remove {}", path.display())),
             },
             Action::Run { argv, on_error } => {
-                let outcome = Command::new(&argv[0]).args(&argv[1..]).stdin(Stdio::null()).output();
-                let failure = match outcome {
-                    Ok(out) if out.status.success() => None,
-                    Ok(out) => Some(String::from_utf8_lossy(&out.stderr).trim().to_string()),
-                    Err(e) => Some(e.to_string()),
+                let (attempts, delay) = match on_error {
+                    OnError::Retry { attempts, delay } => ((*attempts).max(1), *delay),
+                    _ => (1, Duration::ZERO),
                 };
+                let mut failure = run_once(argv);
+                for _ in 1..attempts {
+                    if failure.is_none() {
+                        break;
+                    }
+                    std::thread::sleep(delay);
+                    failure = run_once(argv);
+                }
                 if let Some(detail) = failure {
                     match on_error {
-                        OnError::Fail => bail!("`{}` failed: {detail}", display_argv(argv)),
+                        OnError::Fail | OnError::Retry { .. } => bail!("`{}` failed: {detail}", display_argv(argv)),
                         OnError::Ignore => {}
                         OnError::Warn(msg) => warnings.push(msg.clone()),
                     }
+                }
+            }
+            Action::WaitUntilFails { argv, timeout } => {
+                let deadline = Instant::now() + *timeout;
+                while run_once(argv).is_none() && Instant::now() < deadline {
+                    std::thread::sleep(Duration::from_millis(200));
                 }
             }
             Action::Spawn { argv, log, pid_file } => {
@@ -1057,6 +1104,94 @@ mod tests {
 
     fn temp_dir() -> tempfile::TempDir {
         tempfile::tempdir().expect("temp dir")
+    }
+
+    #[test]
+    fn macos_waits_for_the_old_service_and_retries_the_bootstrap() {
+        let paths = Paths::new(Path::new("/Users/u/.bandito"), Path::new("/Users/u"));
+        let plan = install_plan(
+            &spec(None),
+            &paths,
+            Os::MacOs,
+            &Probe {
+                systemd_user: false,
+                setsid: false,
+            },
+        );
+        let bootout = plan
+            .actions
+            .iter()
+            .position(|a| matches!(a, Action::Run { argv, .. } if argv[1] == "bootout"));
+        let wait = plan.actions.iter().position(
+            |a| matches!(a, Action::WaitUntilFails { argv, .. } if argv[1] == "print" && argv[2].ends_with("/dev.bandito.daemon")),
+        );
+        let bootstrap = plan.actions.iter().position(|a| {
+            matches!(a, Action::Run { argv, on_error: OnError::Retry { attempts, .. } } if argv[1] == "bootstrap" && *attempts > 1)
+        });
+        assert!(bootout < wait && wait < bootstrap, "{plan:?}");
+        assert!(bootout.is_some());
+    }
+
+    #[test]
+    fn a_retried_step_runs_again_until_it_succeeds() {
+        let dir = temp_dir();
+        let marker = dir.path().join("tried");
+        // Fails the first time (no marker yet), succeeds the second.
+        let script = format!("[ -e '{0}' ] || {{ touch '{0}'; exit 5; }}", marker.display());
+        let plan = Plan {
+            mode: None,
+            actions: vec![Action::Run {
+                argv: vec!["sh".into(), "-c".into(), script],
+                on_error: OnError::Retry {
+                    attempts: 3,
+                    delay: Duration::from_millis(10),
+                },
+            }],
+            warnings: Vec::new(),
+        };
+        execute(&plan).expect("the second attempt succeeds");
+        assert!(marker.exists());
+    }
+
+    #[test]
+    fn a_retried_step_that_keeps_failing_stops_the_install() {
+        let plan = Plan {
+            mode: None,
+            actions: vec![Action::Run {
+                argv: vec!["false".into()],
+                on_error: OnError::Retry {
+                    attempts: 2,
+                    delay: Duration::from_millis(10),
+                },
+            }],
+            warnings: Vec::new(),
+        };
+        assert!(execute(&plan).is_err());
+    }
+
+    #[test]
+    fn waiting_ends_as_soon_as_the_command_fails_and_never_errors() {
+        let quick = Plan {
+            mode: None,
+            actions: vec![Action::WaitUntilFails {
+                argv: vec!["false".into()],
+                timeout: Duration::from_secs(10),
+            }],
+            warnings: Vec::new(),
+        };
+        let started = Instant::now();
+        execute(&quick).expect("waiting is never an error");
+        assert!(started.elapsed() < Duration::from_secs(2));
+
+        let never = Plan {
+            mode: None,
+            actions: vec![Action::WaitUntilFails {
+                argv: vec!["true".into()],
+                timeout: Duration::from_millis(300),
+            }],
+            warnings: Vec::new(),
+        };
+        execute(&never).expect("a wait that times out goes on");
     }
 
     #[test]
