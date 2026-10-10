@@ -1399,7 +1399,9 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             let Id { id } = params(p)?;
             app.sup.stop(&id).await;
             let deleted = store.agent_delete(&id)?;
-            crate::avatar::remove(&app.data_home, &id);
+            if deleted {
+                crate::avatar::remove(&app.data_home, &id);
+            }
             if deleted {
                 app.sup.hub().emit(
                     &id,
