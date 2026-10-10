@@ -29,7 +29,8 @@ pub use auth::Device;
 pub use checkpoints::{Checkpoint, CheckpointKind};
 pub use forms::{Form, FormStatus};
 pub use integrations::{
-    Integration, IntegrationAuth, IntegrationKind, IntegrationPatch, NewIntegration, ToolMode, ToolOverride,
+    Integration, IntegrationAuth, IntegrationKind, IntegrationPatch, IntegrationTool, NewIntegration, ToolMode,
+    ToolOverride,
 };
 pub use reactions::Reaction;
 pub use rules::{Rule, RuleAction};
@@ -56,7 +57,8 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../../migrations/0016_integrations.sql"),
     include_str!("../../migrations/0017_agent_lead.sql"),
     include_str!("../../migrations/0018_integration_auth.sql"),
-    include_str!("../../migrations/0019_integration_tool_mode.sql"),
+    include_str!("../../migrations/0019_integration_tools.sql"),
+    include_str!("../../migrations/0020_integration_tool_mode.sql"),
 ];
 
 pub struct Store {

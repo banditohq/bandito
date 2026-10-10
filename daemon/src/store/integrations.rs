@@ -5,7 +5,23 @@ use super::{Store, new_id, now_ms};
 use anyhow::{Result, bail};
 use rusqlite::{OptionalExtension, Row, params};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::BTreeMap;
+
+/// A tool an integration's server listed at its last successful probe (see docs/ARCHITECTURE.md#integrations).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct IntegrationTool {
+    pub name: String,
+    pub title: Option<String>,
+    pub description: Option<String>,
+    /// The server's `readOnlyHint` annotation.
+    pub read_only: bool,
+    /// The server's `destructiveHint` annotation.
+    pub destructive: bool,
+    /// The tool's `inputSchema`; `None` when the server gave none or it was too large to keep.
+    pub input_schema: Option<Value>,
+    pub seen_at: i64,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -348,6 +364,7 @@ impl Store {
         let conn = self.conn();
         let tx = conn.unchecked_transaction()?;
         let n = tx.execute("DELETE FROM integrations WHERE id = ?1", [id])?;
+        tx.execute("DELETE FROM integration_tools WHERE integration_id = ?1", [id])?;
         let lists: Vec<(String, String)> = {
             let mut stmt = tx.prepare("SELECT id, integrations FROM agents WHERE integrations IS NOT NULL")?;
             let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
@@ -367,11 +384,135 @@ impl Store {
         tx.commit()?;
         Ok(n > 0)
     }
+
+    /// Replaces the tools of an integration with the list of its latest successful probe: a tool it no longer
+    /// lists is dropped. `false` (nothing written) when the integration does not exist, e.g. it was removed while
+    /// the probe ran.
+    pub fn integration_tools_replace(&self, integration_id: &str, tools: &[IntegrationTool]) -> Result<bool> {
+        let conn = self.conn();
+        let tx = conn.unchecked_transaction()?;
+        let exists: bool = tx.query_row(
+            "SELECT EXISTS(SELECT 1 FROM integrations WHERE id = ?1)",
+            [integration_id],
+            |r| r.get(0),
+        )?;
+        if !exists {
+            return Ok(false);
+        }
+        tx.execute(
+            "DELETE FROM integration_tools WHERE integration_id = ?1",
+            [integration_id],
+        )?;
+        for t in tools {
+            tx.execute(
+                "INSERT OR REPLACE INTO integration_tools
+                    (integration_id, name, title, description, read_only, destructive, input_schema, seen_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                params![
+                    integration_id,
+                    t.name,
+                    t.title,
+                    t.description,
+                    t.read_only,
+                    t.destructive,
+                    t.input_schema.as_ref().map(Value::to_string),
+                    t.seen_at,
+                ],
+            )?;
+        }
+        tx.commit()?;
+        Ok(true)
+    }
+
+    /// The tools of an integration, by name. Empty when none was ever listed.
+    pub fn integration_tools(&self, integration_id: &str) -> Result<Vec<IntegrationTool>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT name, title, description, read_only, destructive, input_schema, seen_at
+             FROM integration_tools WHERE integration_id = ?1 ORDER BY name",
+        )?;
+        let rows = stmt.query_map([integration_id], |r| {
+            let schema: Option<String> = r.get(5)?;
+            Ok(IntegrationTool {
+                name: r.get(0)?,
+                title: r.get(1)?,
+                description: r.get(2)?,
+                read_only: r.get(3)?,
+                destructive: r.get(4)?,
+                input_schema: schema.and_then(|s| serde_json::from_str(&s).ok()),
+                seen_at: r.get(6)?,
+            })
+        })?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn tool(name: &str, read_only: bool) -> IntegrationTool {
+        IntegrationTool {
+            name: name.into(),
+            title: Some(format!("{name} title")),
+            description: None,
+            read_only,
+            destructive: !read_only,
+            input_schema: Some(serde_json::json!({ "type": "object" })),
+            seen_at: 1,
+        }
+    }
+
+    #[test]
+    fn tools_are_replaced_per_integration_and_leave_with_it() {
+        let store = Store::open_in_memory().unwrap();
+        let a = store.integration_create(new("a")).unwrap();
+        let b = store.integration_create(new("b")).unwrap();
+        assert!(
+            store
+                .integration_tools_replace(&a.id, &[tool("search", true), tool("delete", false)])
+                .unwrap()
+        );
+        assert!(store.integration_tools_replace(&b.id, &[tool("other", true)]).unwrap());
+        // A later probe that no longer lists `delete` drops it; `b` keeps its own.
+        assert!(store.integration_tools_replace(&a.id, &[tool("search", true)]).unwrap());
+        let names: Vec<String> = store
+            .integration_tools(&a.id)
+            .unwrap()
+            .into_iter()
+            .map(|t| t.name)
+            .collect();
+        assert_eq!(names, ["search"]);
+        assert_eq!(store.integration_tools(&b.id).unwrap().len(), 1);
+        // Removing `a` removes its tools and nothing of `b`.
+        assert!(store.integration_delete(&a.id).unwrap());
+        assert!(store.integration_tools(&a.id).unwrap().is_empty());
+        assert_eq!(store.integration_tools(&b.id).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn annotations_and_schema_come_back_as_written() {
+        let store = Store::open_in_memory().unwrap();
+        let a = store.integration_create(new("a")).unwrap();
+        let mut bare = tool("bare", false);
+        bare.title = None;
+        bare.input_schema = None;
+        store
+            .integration_tools_replace(&a.id, &[tool("read", true), bare.clone()])
+            .unwrap();
+        let got = store.integration_tools(&a.id).unwrap();
+        let read = got.iter().find(|t| t.name == "read").unwrap();
+        assert!(read.read_only && !read.destructive);
+        assert_eq!(read.input_schema, Some(serde_json::json!({ "type": "object" })));
+        assert_eq!(got.iter().find(|t| t.name == "bare"), Some(&bare));
+    }
+
+    #[test]
+    fn tools_of_a_missing_integration_are_not_saved() {
+        let store = Store::open_in_memory().unwrap();
+        assert!(!store.integration_tools_replace("gone", &[tool("x", true)]).unwrap());
+        assert!(store.integration_tools("gone").unwrap().is_empty());
+    }
 
     fn new(name: &str) -> NewIntegration {
         NewIntegration {

@@ -31,13 +31,33 @@ pub trait ToolCatalog {
     fn read_only(&self, integration_id: &str, tool: &str) -> Option<bool>;
 }
 
-/// No tool is known: every tool counts as a write. Used until a source of annotations is connected, and by sessions
-/// that have none.
+/// No tool is known: every tool counts as a write. For callers that have no probe to read.
 pub struct NoToolCache;
 
 impl ToolCatalog for NoToolCache {
     fn read_only(&self, _integration_id: &str, _tool: &str) -> Option<bool> {
         None
+    }
+}
+
+/// The tools of one service as the last probe saw them (`integration_tools`).
+pub struct StoredTools {
+    integration_id: String,
+    tools: Vec<crate::store::IntegrationTool>,
+}
+
+impl StoredTools {
+    pub fn new(integration_id: String, tools: Vec<crate::store::IntegrationTool>) -> Self {
+        Self { integration_id, tools }
+    }
+}
+
+impl ToolCatalog for StoredTools {
+    fn read_only(&self, integration_id: &str, tool: &str) -> Option<bool> {
+        if integration_id != self.integration_id {
+            return None;
+        }
+        self.tools.iter().find(|t| t.name == tool).map(|t| t.read_only)
     }
 }
 

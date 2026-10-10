@@ -2231,16 +2231,9 @@ impl Actor {
             return Ok(None);
         };
         let subject = req.command.as_deref().unwrap_or(req.title.as_str());
-        Ok(crate::tool_policy::judge(
-            row,
-            &tool,
-            // No tool annotations are kept yet: every tool counts as a write until the cache of `tools/list` is
-            // connected here (`ToolCatalog`).
-            &crate::tool_policy::NoToolCache,
-            mode,
-            rules,
-            subject,
-        ))
+        // What the last probe of the service saw: a tool it did not list counts as a write.
+        let known = crate::tool_policy::StoredTools::new(row.id.clone(), self.hub.store.integration_tools(&row.id)?);
+        Ok(crate::tool_policy::judge(row, &tool, &known, mode, rules, subject))
     }
 
     /// Record a daemon-asked approval. Its answer channel waits in `pending`, and it shows in the feed
@@ -2596,6 +2589,19 @@ mod tests {
                 tokio::time::sleep(Duration::from_millis(10)).await;
             }
             panic!("log never had {line:?}: {:?}", self.log.lock().unwrap());
+        }
+
+        async fn wait_log_prefix(&self, prefix: &str) {
+            for _ in 0..300 {
+                if self.log.lock().unwrap().iter().any(|l| l.starts_with(prefix)) {
+                    return;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            panic!(
+                "log never had a line starting {prefix:?}: {:?}",
+                self.log.lock().unwrap()
+            );
         }
 
         fn kinds(&self) -> Vec<String> {
@@ -3083,6 +3089,34 @@ mod tests {
             "{said}"
         );
         assert!(w.store.approval_list_pending(None).unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn the_probe_decides_which_tools_read() {
+        let w = world(ApprovalMode::Risky);
+        add_service(&w, "mysvc", crate::store::ToolMode::ReadOnly, &[]);
+        let id = w.store.integration_list().unwrap()[0].id.clone();
+        let tool = |name: &str, read_only: bool| crate::store::IntegrationTool {
+            name: name.into(),
+            title: None,
+            description: None,
+            read_only,
+            destructive: false,
+            input_schema: None,
+            seen_at: 1,
+        };
+        w.store
+            .integration_tools_replace(&id, &[tool("list_issues", true), tool("create_issue", false)])
+            .unwrap();
+        w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
+        w.wait_log("send go").await;
+        // Annotated as reading: runs. Annotated as changing, or not listed at all: refused.
+        w.push(service_call("k1", "mcp__mysvc__list_issues")).await;
+        w.wait_log("resolve k1 Allow").await;
+        w.push(service_call("k2", "mcp__mysvc__create_issue")).await;
+        w.wait_log_prefix("deny_message k2 ").await;
+        w.push(service_call("k3", "mcp__mysvc__never_listed")).await;
+        w.wait_log_prefix("deny_message k3 ").await;
     }
 
     #[tokio::test]
