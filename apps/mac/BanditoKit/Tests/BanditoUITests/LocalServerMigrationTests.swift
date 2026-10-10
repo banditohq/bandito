@@ -29,20 +29,15 @@ private struct StoppedDaemon: CommandRunner {
 
 private let storeKey = "servers.v1"
 
-/// Saves `servers` where AppModel loads them. Returns what was there before, for `restoreSaved`.
-private func saveServers(_ servers: [ServerConfig]) -> Data? {
-    let defaults = UserDefaults.standard
-    let previous = defaults.data(forKey: storeKey)
-    defaults.set(try! JSONEncoder().encode(servers), forKey: storeKey)
-    return previous
+/// A UserDefaults suite of its own for one test. The test removes it with `removePersistentDomain` when it ends.
+private func isolatedDefaults() -> (defaults: UserDefaults, suite: String) {
+    let suite = "test-\(UUID())"
+    return (UserDefaults(suiteName: suite)!, suite)
 }
 
-private func restoreSaved(_ previous: Data?) {
-    if let previous {
-        UserDefaults.standard.set(previous, forKey: storeKey)
-    } else {
-        UserDefaults.standard.removeObject(forKey: storeKey)
-    }
+/// Saves `servers` where AppModel loads them, in the test's own defaults.
+private func saveServers(_ servers: [ServerConfig], in defaults: UserDefaults) {
+    defaults.set(try! JSONEncoder().encode(servers), forKey: storeKey)
 }
 
 @MainActor
@@ -53,10 +48,11 @@ private func restoreSaved(_ previous: Data?) {
 
     @Test func aLocalServerBecomesAWebSocketServerWithItsToken() async throws {
         let stored = Recorder()
-        let previous = saveServers([ServerConfig(id: id, name: "This Mac", endpoint: local.endpoint)])
-        defer { restoreSaved(previous) }
+        let (defaults, suite) = isolatedDefaults()
+        defer { defaults.removePersistentDomain(forName: suite) }
+        saveServers([ServerConfig(id: id, name: "This Mac", endpoint: local.endpoint)], in: defaults)
         do {
-            let app = AppModel()
+            let app = AppModel(defaults: defaults)
             let pairing = LocalDaemonPairing(runner: HealthyDaemon(), binary: URL(fileURLWithPath: "/bin/bandito"),
                 redeem: { url, code, _ in
                     guard url.absoluteString == "ws://127.0.0.1:17779/v1/rpc", code == "sunset-orbit" else {
@@ -78,16 +74,17 @@ private func restoreSaved(_ previous: Data?) {
             #expect(stored.token(for: id) == "bdt_mac")
             // Saved as a WebSocket server; the token is never in the saved list.
             let saved = try JSONDecoder().decode(
-                [ServerConfig].self, from: try #require(UserDefaults.standard.data(forKey: storeKey)))
+                [ServerConfig].self, from: try #require(defaults.data(forKey: storeKey)))
             #expect(saved.first?.endpoint == .webSocket(url: URL(string: "ws://127.0.0.1:17779/v1/rpc")!))
             #expect(saved.first?.token == nil)
         }
     }
 
     @Test func aTokenThatCannotBeKeptIsRevokedOnTheDaemonAndReported() async throws {
-        let previous = saveServers([ServerConfig(id: id, name: "This Mac", endpoint: local.endpoint)])
-        defer { restoreSaved(previous) }
-        let app = AppModel()
+        let (defaults, suite) = isolatedDefaults()
+        defer { defaults.removePersistentDomain(forName: suite) }
+        saveServers([ServerConfig(id: id, name: "This Mac", endpoint: local.endpoint)], in: defaults)
+        let app = AppModel(defaults: defaults)
         let log = RevokeLog()
         await app.migrateLocalServers(
             pairing: LocalDaemonPairing(
@@ -112,10 +109,11 @@ private func restoreSaved(_ previous: Data?) {
 
     @Test func aServerThatCannotBePairedStaysLocalForTheNextLaunch() async throws {
         let stored = Recorder()
-        let previous = saveServers([ServerConfig(id: id, name: "This Mac", endpoint: local.endpoint)])
-        defer { restoreSaved(previous) }
+        let (defaults, suite) = isolatedDefaults()
+        defer { defaults.removePersistentDomain(forName: suite) }
+        saveServers([ServerConfig(id: id, name: "This Mac", endpoint: local.endpoint)], in: defaults)
         do {
-            let app = AppModel()
+            let app = AppModel(defaults: defaults)
             let pairing = LocalDaemonPairing(runner: StoppedDaemon(), binary: URL(fileURLWithPath: "/bin/bandito"))
 
             await app.migrateLocalServers(pairing: pairing, storeToken: { token, owner in
@@ -133,10 +131,11 @@ private func restoreSaved(_ previous: Data?) {
     @Test func aWebSocketServerIsLeftAlone() async throws {
         let webSocket = ServerConfig(
             id: id, name: "srv", endpoint: .webSocket(url: URL(string: "wss://srv.example.ts.net/v1/rpc")!))
-        let previous = saveServers([webSocket])
-        defer { restoreSaved(previous) }
+        let (defaults, suite) = isolatedDefaults()
+        defer { defaults.removePersistentDomain(forName: suite) }
+        saveServers([webSocket], in: defaults)
         do {
-            let app = AppModel()
+            let app = AppModel(defaults: defaults)
             await app.migrateLocalServers(
                 pairing: LocalDaemonPairing(runner: StoppedDaemon(), binary: URL(fileURLWithPath: "/bin/bandito")),
                 storeToken: { _, _ in

@@ -53,15 +53,13 @@ private let storeKey = "servers.v1"
             })
     }
 
-    /// An AppModel that holds `config`, with the saved list restored afterwards.
+    /// An AppModel that holds `config`, in a UserDefaults suite of its own that is removed afterwards.
     private func withApp(_ config: ServerConfig, _ body: (AppModel) async throws -> Void) async rethrows {
-        let defaults = UserDefaults.standard
-        let previous = defaults.data(forKey: storeKey)
+        let suite = "test-\(UUID())"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
         defaults.set(try! JSONEncoder().encode([config]), forKey: storeKey)
-        defer {
-            if let previous { defaults.set(previous, forKey: storeKey) } else { defaults.removeObject(forKey: storeKey) }
-        }
-        try await body(AppModel())
+        try await body(AppModel(defaults: defaults))
     }
 
     // MARK: words and button

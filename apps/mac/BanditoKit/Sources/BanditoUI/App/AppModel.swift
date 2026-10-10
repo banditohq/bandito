@@ -53,12 +53,15 @@ public final class AppModel {
     public private(set) var notifications: NotificationService?
 
     private static let storeKey = "servers.v1"
+    /// Where the saved server list lives (`servers.v1`). The app uses `.standard`; tests pass their own suite.
+    @ObservationIgnored private let defaults: UserDefaults
     #if os(macOS)
     /// One terminal controller per server, kept while the Terminals mode is away so output keeps being followed.
     @ObservationIgnored private var terminalControllers: [UUID: TerminalController] = [:]
     #endif
 
-    public init() {
+    public init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         load()
     }
 
@@ -459,7 +462,7 @@ public final class AppModel {
 
     private func load() {
         var configs: [ServerConfig] = []
-        if let data = UserDefaults.standard.data(forKey: Self.storeKey),
+        if let data = defaults.data(forKey: Self.storeKey),
             let saved = try? JSONDecoder().decode([ServerConfig].self, from: data)
         {
             configs = saved
@@ -486,7 +489,7 @@ public final class AppModel {
             return c
         }
         if let data = try? JSONEncoder().encode(configs) {
-            UserDefaults.standard.set(data, forKey: Self.storeKey)
+            defaults.set(data, forKey: Self.storeKey)
         }
     }
 }
