@@ -1,15 +1,132 @@
 //! Vendored skills: each folder under `daemon/skills/<id>/` is a copy of the author's folder at a pinned commit, and
-//! `skills_catalog.json` describes them. Nothing serves them yet (RPC and the binary embedding come next); the tests
-//! hold the data to the rules the install path relies on.
+//! `skills_catalog.json` describes them. The files are compiled into the binary (`build.rs`). The `skills.*` RPC
+//! methods (`rpc::skills`) serve the catalog and install or remove a skill; see docs/ARCHITECTURE.md#skills.
+//! The tests hold the data to the rules the install path relies on.
+
+use crate::commands::{self, InstallError, InstallFile, InstallKind};
+use crate::runtime::RuntimeKind;
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD;
+use serde_json::Value;
+use std::collections::HashSet;
+use std::fs;
+use std::path::{Path, PathBuf};
+
+include!(concat!(env!("OUT_DIR"), "/bundled_skills.rs"));
+
+const CATALOG: &str = include_str!("skills_catalog.json");
+
+/// The catalog entries, as written in `skills_catalog.json` (the files are listed by path, not by content).
+pub fn catalog() -> Vec<Value> {
+    serde_json::from_str(CATALOG).expect("skills_catalog.json is valid JSON: the tests check it")
+}
+
+/// Whether `id` is an entry of the catalog.
+pub fn is_catalog_id(id: &str) -> bool {
+    catalog()
+        .iter()
+        .any(|e| e.get("id").and_then(Value::as_str) == Some(id))
+}
+
+/// The files of skill `id` as bundled, `(path, bytes)`, or None when the skill is not bundled.
+fn bundled_files(id: &str) -> Option<&'static [(&'static str, &'static [u8])]> {
+    SKILLS.iter().find(|(name, _)| *name == id).map(|(_, files)| *files)
+}
+
+/// The bytes of one file of a bundled skill: `path` is relative to the skill folder, with `/` separators.
+pub fn bundled_file(id: &str, path: &str) -> Option<&'static [u8]> {
+    bundled_files(id)?
+        .iter()
+        .find(|(rel, _)| *rel == path)
+        .map(|(_, bytes)| *bytes)
+}
+
+/// Writes skill `id` into `base/.claude/skills/<id>/`, with every bundled file (LICENSE included), replacing an
+/// older copy. `base` is the daemon user's home or an agent's folder. The same code as `commands.install` with
+/// `kind: skill` and `overwrite: true`.
+pub fn install(base: &Path, id: &str) -> Result<PathBuf, InstallError> {
+    let Some(files) = bundled_files(id) else {
+        return unknown(id);
+    };
+    let install_files: Vec<InstallFile> = files
+        .iter()
+        .map(|(rel, _)| InstallFile {
+            path: (*rel).to_string(),
+            // The path came from the same table, so the file is there.
+            content: STANDARD.encode(bundled_file(id, rel).expect("listed file is bundled")),
+        })
+        .collect();
+    commands::install(base, InstallKind::Skill, id, &install_files, true)
+}
+
+/// Removes `base/.claude/skills/<id>/`. Only a real folder (not a link) that holds a `SKILL.md` file is removed.
+/// Links inside it are removed as links and never followed, so nothing outside the folder is touched.
+pub fn remove(base: &Path, id: &str) -> Result<PathBuf, InstallError> {
+    if !is_catalog_id(id) {
+        return unknown(id);
+    }
+    let skills_dir = base.join(".claude").join("skills");
+    let target = skills_dir.join(id);
+    let Ok(meta) = fs::symlink_metadata(&target) else {
+        return Err(InstallError {
+            reason: "not_installed",
+            message: format!("skill {id} is not installed here"),
+        });
+    };
+    if meta.file_type().is_symlink() || !meta.is_dir() {
+        return Err(InstallError {
+            reason: "not_a_skill_folder",
+            message: format!("{} is not a skill folder; a link is not removed", target.display()),
+        });
+    }
+    // The folder's `.claude/skills` must be real folders too: nothing is removed through a link on the way.
+    for dir in [base.join(".claude"), skills_dir] {
+        if fs::symlink_metadata(&dir).is_ok_and(|m| m.file_type().is_symlink()) {
+            return Err(InstallError {
+                reason: "not_a_skill_folder",
+                message: format!("{} is a link; skills are not removed through it", dir.display()),
+            });
+        }
+    }
+    let skill_md = fs::symlink_metadata(target.join("SKILL.md"));
+    if !skill_md.is_ok_and(|m| m.is_file()) {
+        return Err(InstallError {
+            reason: "not_a_skill_folder",
+            message: format!("{} has no SKILL.md; it is not removed", target.display()),
+        });
+    }
+    fs::remove_dir_all(&target).map_err(|e| InstallError {
+        reason: "io",
+        message: format!("{}: {e}", target.display()),
+    })?;
+    Ok(target)
+}
+
+/// Ids of the skills in `home` (the daemon user's folder) or in an agent's folder `cwd` (pass `home` as None), as
+/// `commands.list` reports them: source `skill`, named by the folder that holds `SKILL.md`.
+pub fn installed_in(home: Option<&Path>, cwd: &Path) -> HashSet<String> {
+    commands::discover(home, cwd, RuntimeKind::Claude)
+        .into_iter()
+        .filter(|c| c.source == commands::CommandSource::Skill)
+        .filter_map(|c| c.path.parent()?.file_name()?.to_str().map(str::to_string))
+        .collect()
+}
+
+fn unknown<T>(id: &str) -> Result<T, InstallError> {
+    Err(InstallError {
+        reason: "unknown_skill",
+        message: format!("no skill {id} in the catalog"),
+    })
+}
 
 #[cfg(test)]
 mod tests {
+    use super::CATALOG;
     use serde::Deserialize;
     use std::collections::HashSet;
     use std::fs;
     use std::path::{Path, PathBuf};
 
-    const CATALOG: &str = include_str!("skills_catalog.json");
     const ALLOWED_LICENSES: [&str; 7] = [
         "MIT",
         "Apache-2.0",
