@@ -940,6 +940,7 @@
 "message.reactionMine" = "내 반응 지우기";
 "message.reactionOf" = "%1$@의 반응";
 "message.reactionSame" = "같은 반응 남기기";
+"message.resend" = "다시 보내기";
 "message.selectText" = "텍스트 선택";
 "mode.browser" = "브라우저";
 "mode.connectServer" = "사용하려면 서버를 연결하세요.";
@@ -1924,7 +1925,9 @@
 "thread.messageFor" = "%1$@에게 보낸 메시지";
 "thread.messageFrom" = "%1$@의 메시지";
 "thread.more" = "더 보기";
+"thread.notDelivered" = "전달되지 않음";
 "thread.placeholder" = "작업이나 질문을 입력하세요…";
+"thread.queued" = "대기 중";
 "thread.react" = "반응";
 "thread.reply" = "답장";
 "thread.reviewApproved" = "%1$@이(가) 변경 사항을 검토 · 승인";

@@ -70,12 +70,6 @@ import Testing
         #expect(AgentActivity.current(in: items) == .coding)
     }
 
-    @Test func turnStartIsTheNewestUserMessage() {
-        let items: [ThreadItem] = [user("a", ts: 1_000), tool("c1", "Read", ok: true), user("b", ts: 5_000)]
-        #expect(AgentActivity.turnStart(in: items) == 5_000)
-        #expect(AgentActivity.turnStart(in: [tool("c1", "Read", ok: true)]) == nil)
-    }
-
     @Test func elapsedSecondsCountsWholeSeconds() {
         let now = Date(timeIntervalSince1970: 1_700_000_012.5)
         #expect(AgentActivity.elapsedSeconds(since: 1_700_000_000_000, now: now) == 12)

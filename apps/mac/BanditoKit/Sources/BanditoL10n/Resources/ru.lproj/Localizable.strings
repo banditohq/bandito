@@ -940,6 +940,7 @@
 "message.reactionMine" = "Снять реакцию";
 "message.reactionOf" = "Реакция: %1$@";
 "message.reactionSame" = "Поставить такую же реакцию";
+"message.resend" = "Отправить снова";
 "message.selectText" = "Выделить текст";
 "mode.browser" = "Браузер";
 "mode.connectServer" = "Подключите сервер, чтобы им пользоваться.";
@@ -1924,7 +1925,9 @@
 "thread.messageFor" = "Сообщение для %1$@";
 "thread.messageFrom" = "Сообщение от %1$@";
 "thread.more" = "Ещё";
+"thread.notDelivered" = "Не доставлено";
 "thread.placeholder" = "Напишите задачу или вопрос…";
+"thread.queued" = "В очереди";
 "thread.react" = "Реакция";
 "thread.reply" = "Ответить";
 "thread.reviewApproved" = "%1$@ проверил изменения · одобрил";

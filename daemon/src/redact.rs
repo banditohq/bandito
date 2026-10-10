@@ -264,6 +264,7 @@ mod tests {
             turn_id: "t1".into(),
             source: Source::User,
             reactions_until: None,
+            message_seq: None,
         };
         assert_eq!(r.redact_event(body.clone()), body);
     }

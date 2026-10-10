@@ -101,6 +101,10 @@ pub enum EventBody {
         source: Source,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         reactions_until: Option<i64>,
+        /// Seq of the `message.user` this turn answers, when that message was shown before the turn began
+        /// (it waited behind a turn, a wrap-up or a pause). Absent when the message is shown right after this event.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        message_seq: Option<i64>,
     },
     #[serde(rename = "message.user")]
     MessageUser {
@@ -117,7 +121,16 @@ pub enum EventBody {
         /// Files attached to the message.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         attachments: Vec<Attachment>,
+        /// True when the message was shown while it still waits for its turn (the agent was busy, saving its memory
+        /// for a new chapter, or paused). The turn that takes it carries its seq in `turn.started.message_seq`.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        queued: bool,
     },
+    /// A message shown as waiting (`message.user` with `queued: true`) will not get a turn: the queue was lost
+    /// (a crash, a stop, a restart) or the session could not start. `reason`: `crash`, `stopped`, `failed`,
+    /// `restart`. The message stays in the thread; a client shows it as not delivered.
+    #[serde(rename = "message.dropped")]
+    MessageDropped { seq: i64, reason: String },
     #[serde(rename = "message.assistant")]
     MessageAssistant { text: String },
     /// Streaming chunk. Broadcast only, never stored.

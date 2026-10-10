@@ -172,6 +172,8 @@ async fn wait_for_reply(
     let deadline = tokio::time::Instant::now() + limit;
     let mut cursor = after;
     let mut taken = false;
+    // The seq of the main agent's message when it was shown while it waited: the turn that names it takes it.
+    let mut waiting: Option<i64> = None;
     let mut reply: Option<String> = None;
     loop {
         let batch = store.events_since(cursor, 500, Some(&target.id))?;
@@ -182,8 +184,22 @@ async fn wait_for_reply(
                 EventBody::MessageUser {
                     source: Source::Crew,
                     from_agent: Some(from),
+                    queued,
                     ..
-                } if !taken && from.eq_ignore_ascii_case(&lead.name) => taken = true,
+                } if !taken && waiting.is_none() && from.eq_ignore_ascii_case(&lead.name) => {
+                    if queued {
+                        waiting = Some(event.seq);
+                    } else {
+                        taken = true;
+                    }
+                }
+                EventBody::TurnStarted {
+                    message_seq: Some(seq), ..
+                } if !taken && waiting == Some(seq) => taken = true,
+                // The message will not get a turn: nothing to wait for.
+                EventBody::MessageDropped { seq, .. } if !taken && waiting == Some(seq) => {
+                    return Ok(("error", None));
+                }
                 EventBody::MessageAssistant { text } if taken => reply = Some(text),
                 EventBody::TurnCompleted { status, .. } if taken => {
                     let name = match status {
@@ -356,6 +372,7 @@ mod tests {
             command: None,
             reply_to: None,
             attachments: Vec::new(),
+            queued: false,
         });
         emit(EventBody::MessageAssistant {
             text: "thinking".into(),
@@ -372,6 +389,84 @@ mod tests {
             .unwrap();
         // The answer before the task is not the answer to it.
         assert_eq!((status, reply.as_deref()), ("completed", Some("391")));
+    }
+
+    fn crew_task(queued: bool) -> EventBody {
+        EventBody::MessageUser {
+            text: "count".into(),
+            source: Source::Crew,
+            from_agent: Some("Boss".into()),
+            command: None,
+            reply_to: None,
+            attachments: Vec::new(),
+            queued,
+        }
+    }
+
+    fn turn_end(id: &str) -> EventBody {
+        EventBody::TurnCompleted {
+            turn_id: id.into(),
+            status: TurnStatus::Ok,
+            usage: None,
+            cost_usd: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn a_task_queued_behind_another_turn_does_not_return_that_turns_answer() {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let boss = add(&store, "Boss");
+        let scout = add(&store, "Scout");
+        store.agent_set_lead(&boss.id, true).unwrap();
+        let after = store.last_seq().unwrap();
+        let emit = |body| store.append_event(&scout.id, body).unwrap();
+        // The scout is busy with a turn of the human; the task waits behind it.
+        emit(EventBody::TurnStarted {
+            turn_id: "other".into(),
+            source: Source::User,
+            reactions_until: None,
+            message_seq: None,
+        });
+        let task = emit(crew_task(true)).seq;
+        emit(EventBody::MessageAssistant {
+            text: "answer to someone else".into(),
+        });
+        emit(turn_end("other"));
+        emit(EventBody::TurnStarted {
+            turn_id: "mine".into(),
+            source: Source::Crew,
+            reactions_until: None,
+            message_seq: Some(task),
+        });
+        emit(EventBody::MessageAssistant { text: "391".into() });
+        emit(turn_end("mine"));
+        let (status, reply) = wait_for_reply(&store, &boss, &scout, after, Duration::from_secs(5))
+            .await
+            .unwrap();
+        assert_eq!((status, reply.as_deref()), ("completed", Some("391")));
+    }
+
+    #[tokio::test]
+    async fn a_queued_task_that_is_dropped_ends_the_wait() {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let boss = add(&store, "Boss");
+        let scout = add(&store, "Scout");
+        store.agent_set_lead(&boss.id, true).unwrap();
+        let after = store.last_seq().unwrap();
+        let task = store.append_event(&scout.id, crew_task(true)).unwrap().seq;
+        store
+            .append_event(
+                &scout.id,
+                EventBody::MessageDropped {
+                    seq: task,
+                    reason: "crash".into(),
+                },
+            )
+            .unwrap();
+        let (status, reply) = wait_for_reply(&store, &boss, &scout, after, Duration::from_secs(5))
+            .await
+            .unwrap();
+        assert_eq!((status, reply), ("error", None));
     }
 
     #[tokio::test]
@@ -396,6 +491,7 @@ mod tests {
                             command: None,
                             reply_to: None,
                             attachments: Vec::new(),
+                            queued: false,
                         },
                     )
                     .unwrap();

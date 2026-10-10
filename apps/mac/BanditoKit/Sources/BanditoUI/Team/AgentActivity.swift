@@ -43,17 +43,6 @@ enum AgentActivity: Equatable {
         return .thinking
     }
 
-    /// When the turn started: the timestamp (Unix ms) of the newest message the agent was given. `nil` when the
-    /// thread has none yet.
-    static func turnStart(in items: [ThreadItem]) -> Int64? {
-        for item in items.reversed() {
-            if case .user(_, _, _, _, let ts, _) = item {
-                return ts
-            }
-        }
-        return nil
-    }
-
     /// The localized caption of this activity.
     var title: String {
         switch self {

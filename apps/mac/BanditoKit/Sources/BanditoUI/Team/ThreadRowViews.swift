@@ -53,6 +53,8 @@ struct ThreadRowKey: Equatable {
     var quoted: ReplyTarget?
     var flashing: Bool
     var isLastAgent: Bool
+    /// 0 for a message that is not waiting, 1 while it is queued, 2 when it was not delivered.
+    var waiting: Int
 
     init(
         row: ThreadRow, agentName: String, primaryRuntime: String, agentID: String, folder: String?, chat: ThreadChat
@@ -72,7 +74,9 @@ struct ThreadRowKey: Equatable {
             quoted = (chat.repliesOn ? seq.flatMap { chat.replies[$0] } : nil).flatMap { chat.original($0) }
             flashing = chat.highlightedID == item.id
             isLastAgent = chat.lastAgentID == item.id
+            waiting = seq.map { chat.waiting.contains($0) ? 1 : chat.undelivered.contains($0) ? 2 : 0 } ?? 0
         } else {
+            waiting = 0
             reactions = nil
             quoted = nil
             flashing = false
@@ -156,7 +160,15 @@ private struct ItemView: View {
                         itemID: id, seq: seq, text: text, fromUser: true, chat: chat, files: files, agentID: agentID,
                         server: server
                     ) {
-                        UserBubble(text: text) { quote(forSeq: seq) }
+                        VStack(alignment: .trailing, spacing: 4) {
+                            UserBubble(text: text) { quote(forSeq: seq) }
+                            if let seq, chat.waiting.contains(seq) || chat.undelivered.contains(seq) {
+                                Text(chat.undelivered.contains(seq) ? L10n.Thread.notDelivered : L10n.Thread.queued)
+                                    .font(BanditoFont.text(size: 11.5, weight: 400))
+                                    .foregroundStyle(Color.Bandito.text3)
+                                    .padding(.trailing, 4)
+                            }
+                        }
                     }
                 }
             } else {

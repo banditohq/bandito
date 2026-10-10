@@ -1322,6 +1322,7 @@ public enum L10n {
         public static var reactionMine: String { L10n.tr("message.reactionMine") }
         public static func reactionOf(name: String) -> String { L10n.tr("message.reactionOf", name) }
         public static var reactionSame: String { L10n.tr("message.reactionSame") }
+        public static var resend: String { L10n.tr("message.resend") }
         public static var selectText: String { L10n.tr("message.selectText") }
     }
 
@@ -2601,8 +2602,10 @@ public enum L10n {
         public static func messageFor(name: String) -> String { L10n.tr("thread.messageFor", name) }
         public static func messageFrom(name: String) -> String { L10n.tr("thread.messageFrom", name) }
         public static var more: String { L10n.tr("thread.more") }
+        public static var notDelivered: String { L10n.tr("thread.notDelivered") }
         public static func notRanCommands(count: Int) -> String { L10n.tr("thread.notRanCommands", count) }
         public static var placeholder: String { L10n.tr("thread.placeholder") }
+        public static var queued: String { L10n.tr("thread.queued") }
         public static func ranCommands(count: Int) -> String { L10n.tr("thread.ranCommands", count) }
         public static var react: String { L10n.tr("thread.react") }
         public static var reply: String { L10n.tr("thread.reply") }

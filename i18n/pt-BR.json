@@ -1,5 +1,7 @@
 {
   "thread.savingMemory": "Salvando memória antes de um novo capítulo",
+  "thread.queued": "Na fila",
+  "thread.notDelivered": "Não entregue",
   "thread.aTeammate": "um colega",
   "onboarding.server.newHostTitle": "Servidor novo — confirme",
   "onboarding.skip": "Configurar depois",
@@ -2167,6 +2169,7 @@
   "message.reactMore": "Mais…",
   "message.reactPickerHint": "Escolha um emoji no painel",
   "message.copied": "Copiado",
+  "message.resend": "Enviar novamente",
   "message.more": "Mais",
   "message.copyAsText": "Copiar como texto",
   "message.selectText": "Selecionar texto",

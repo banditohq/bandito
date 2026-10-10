@@ -69,7 +69,7 @@ public struct LastMessage: Codable, Sendable, Hashable {
     /// and nothing but user and assistant messages counts. Nil for any other event.
     init?(event e: Event) {
         switch e.body {
-        case .messageUser(let text, let source, _, _, _) where source != .system:
+        case .messageUser(let text, let source, _, _, _, _) where source != .system:
             self.init(role: "user", text: Self.cut(text), ts: e.ts)
         case .messageAssistant(let text):
             self.init(role: "assistant", text: Self.cut(text), ts: e.ts)
@@ -403,11 +403,16 @@ public enum AgentChange: String, Codable, Sendable, Hashable {
 
 /// The typed body of an event (`kind` + `payload` on the wire).
 public enum EventBody: Sendable, Hashable {
-    case turnStarted(turnId: String, source: MessageSource)
-    /// `replyTo` is the `seq` of the message this one answers; `attachments` are the files it carries.
+    /// `messageSeq`: the `seq` of the `message.user` this turn answers, when that message was shown before the turn
+    /// began (it waited). Nil when the message comes right after this event.
+    case turnStarted(turnId: String, source: MessageSource, messageSeq: Int64? = nil)
+    /// `replyTo` is the `seq` of the message this one answers; `attachments` are the files it carries. `queued`: shown
+    /// while it still waits for its turn (the agent was busy, saving its memory, or paused).
     case messageUser(
         text: String, source: MessageSource, fromAgent: String?, replyTo: Int64? = nil,
-        attachments: [AgentAttachment] = [])
+        attachments: [AgentAttachment] = [], queued: Bool = false)
+    /// A message shown as waiting (`queued`) will not get a turn (`reason`: crash, stopped, failed, restart).
+    case messageDropped(seq: Int64, reason: String)
     case messageAssistant(text: String)
     case messageDelta(text: String)
     case toolCall(callId: String, tool: String, title: String, input: JSONValue)
@@ -460,10 +465,11 @@ public struct Event: Sendable, Hashable, Identifiable {
 extension Event: Decodable {
     private enum Keys: String, CodingKey { case seq, agentId, ts, kind, payload }
 
-    private struct TurnStartedP: Decodable { var turnId: String; var source: MessageSource }
+    private struct TurnStartedP: Decodable { var turnId: String; var source: MessageSource; var messageSeq: Int64? }
+    private struct MessageDroppedP: Decodable { var seq: Int64; var reason: String }
     private struct MessageUserP: Decodable {
         var text: String; var source: MessageSource; var fromAgent: String?
-        var replyTo: Int64?; var attachments: [AgentAttachment]?
+        var replyTo: Int64?; var attachments: [AgentAttachment]?; var queued: Bool?
     }
     private struct FormRequestedP: Decodable {
         var formId: String
@@ -509,12 +515,14 @@ extension Event: Decodable {
         func p<T: Decodable>(_ t: T.Type) throws -> T { try c.decode(T.self, forKey: .payload) }
         switch kind {
         case "turn.started":
-            let x = try p(TurnStartedP.self); body = .turnStarted(turnId: x.turnId, source: x.source)
+            let x = try p(TurnStartedP.self); body = .turnStarted(turnId: x.turnId, source: x.source, messageSeq: x.messageSeq)
         case "message.user":
             let x = try p(MessageUserP.self)
             body = .messageUser(
                 text: x.text, source: x.source, fromAgent: x.fromAgent, replyTo: x.replyTo,
-                attachments: x.attachments ?? [])
+                attachments: x.attachments ?? [], queued: x.queued ?? false)
+        case "message.dropped":
+            let x = try p(MessageDroppedP.self); body = .messageDropped(seq: x.seq, reason: x.reason)
         case "message.assistant": body = .messageAssistant(text: try p(TextP.self).text)
         case "message.delta": body = .messageDelta(text: try p(TextP.self).text)
         case "tool.call":

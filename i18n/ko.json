@@ -1,5 +1,7 @@
 {
   "thread.savingMemory": "새 챕터 전에 메모리 저장 중",
+  "thread.queued": "대기 중",
+  "thread.notDelivered": "전달되지 않음",
   "thread.aTeammate": "팀원",
   "onboarding.server.newHostTitle": "새 서버예요 — 확인해 주세요",
   "onboarding.skip": "나중에 설정",
@@ -2139,6 +2141,7 @@
   "message.reactMore": "더 보기…",
   "message.reactPickerHint": "패널에서 이모지를 골라 주세요",
   "message.copied": "복사했어요",
+  "message.resend": "다시 보내기",
   "message.more": "더 보기",
   "message.copyAsText": "텍스트로 복사",
   "message.selectText": "텍스트 선택",

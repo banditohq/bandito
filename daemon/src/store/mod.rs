@@ -126,6 +126,23 @@ impl Store {
         })
     }
 
+    /// Messages shown as waiting (`queued: true`) that no `turn.started` has taken and no `message.dropped` has
+    /// closed, as `(agent_id, seq)`. After a daemon restart these have lost their place in the in-memory queue.
+    pub fn queued_messages_unresolved(&self) -> Result<Vec<(String, i64)>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT e.agent_id, e.seq FROM events e
+             WHERE e.kind = 'message.user' AND json_extract(e.payload, '$.queued') = 1
+               AND NOT EXISTS (
+                 SELECT 1 FROM events t WHERE t.agent_id = e.agent_id AND t.seq > e.seq
+                   AND ((t.kind = 'turn.started' AND json_extract(t.payload, '$.message_seq') = e.seq)
+                     OR (t.kind = 'message.dropped' AND json_extract(t.payload, '$.seq') = e.seq)))
+             ORDER BY e.seq",
+        )?;
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)))?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
     /// Events with `seq > after`, oldest first.
     pub fn events_since(&self, after: i64, limit: u32, agent_id: Option<&str>) -> Result<Vec<Event>> {
         let conn = self.conn();
@@ -228,16 +245,42 @@ impl Store {
         }))
     }
 
-    /// The seq of the agent's newest message from the human (`message.user` with source `user`), if any.
-    pub fn last_user_message_seq(&self, agent_id: &str) -> Result<Option<i64>> {
-        Ok(self
-            .conn()
+    /// The seq of the human message the agent is answering: the one the newest human turn took
+    /// (`turn.started.message_seq`, or else the message written right after that `turn.started`). A message that
+    /// still waits behind the turn is not it. Before any human turn: the newest message that did not wait.
+    pub fn current_user_message_seq(&self, agent_id: &str) -> Result<Option<i64>> {
+        let conn = self.conn();
+        let turn: Option<(i64, Option<i64>)> = conn
             .query_row(
-                "SELECT seq FROM events WHERE agent_id = ?1 AND kind = 'message.user'
+                "SELECT seq, json_extract(payload, '$.message_seq') FROM events
+                   WHERE agent_id = ?1 AND kind = 'turn.started'
                    AND json_extract(payload, '$.source') = 'user' ORDER BY seq DESC LIMIT 1",
                 [agent_id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .optional()?;
+        if let Some((_, Some(taken))) = turn {
+            return Ok(Some(taken));
+        }
+        let after = turn.map_or(0, |(seq, _)| seq);
+        // Not queued: written when its turn began (right after `turn.started`), or sent to an idle agent.
+        let not_queued = "SELECT seq FROM events WHERE agent_id = ?1 AND kind = 'message.user'
+                   AND json_extract(payload, '$.source') = 'user'
+                   AND COALESCE(json_extract(payload, '$.queued'), 0) = 0";
+        let first_after: Option<i64> = conn
+            .query_row(
+                &format!("{not_queued} AND seq > ?2 ORDER BY seq ASC LIMIT 1"),
+                params![agent_id, after],
                 |r| r.get(0),
             )
+            .optional()?;
+        if first_after.is_some() && after > 0 {
+            return Ok(first_after);
+        }
+        Ok(conn
+            .query_row(&format!("{not_queued} ORDER BY seq DESC LIMIT 1"), [agent_id], |r| {
+                r.get(0)
+            })
             .optional()?)
     }
 

@@ -138,10 +138,11 @@ pub struct ApprovalSpec {
     pub input: serde_json::Value,
 }
 
-/// A message waiting for its turn. `echoed`: it is already in the thread, because it arrived while the agent was paused.
+/// A message waiting for its turn. `echoed`: the seq of its `message.user` event when it is already in the thread,
+/// because it arrived while the agent was busy (a turn, a wrap-up for a new chapter) or paused.
 struct Queued {
     msg: Inbound,
-    echoed: bool,
+    echoed: Option<i64>,
 }
 
 enum Cmd {
@@ -442,6 +443,16 @@ impl Supervisor {
         for f in self.hub.store.form_expire_all()? {
             self.hub
                 .emit(&f.agent_id, form_answered_event(&f.id, &Outcome::Expired));
+        }
+        // The queue lives in memory: a message that was shown as waiting will not get its turn now.
+        for (agent_id, seq) in self.hub.store.queued_messages_unresolved()? {
+            self.hub.emit(
+                &agent_id,
+                EventBody::MessageDropped {
+                    seq,
+                    reason: "restart".into(),
+                },
+            );
         }
         for a in self.hub.store.approval_expire_older_than(i64::MAX)? {
             self.hub.emit(
@@ -993,10 +1004,15 @@ impl Actor {
         match cmd {
             Cmd::Send(msg, reply) => {
                 let held = self.is_paused();
-                if held {
-                    self.echo(&msg);
-                }
-                self.queue.push_back(Queued { msg, echoed: held });
+                // A message that cannot start now is shown now, marked as waiting. One that starts at once is
+                // shown by its turn, as before.
+                let waits = held
+                    || self.turn.is_some()
+                    || self.wrap_up.is_some()
+                    || !self.queue.is_empty()
+                    || self.chapter_pending();
+                let echoed = waits.then(|| self.echo(&msg, true)).filter(|seq| *seq > 0);
+                self.queue.push_back(Queued { msg, echoed });
                 let res = self.pump().await.map(|()| held);
                 let _ = reply.send(res);
             }
@@ -1094,8 +1110,9 @@ impl Actor {
     }
 
     /// Shows a message in the thread: what the person typed, or its text when no expansion was typed.
-    fn echo(&self, msg: &Inbound) {
-        self.hub.emit(
+    /// `queued`: the message still waits for its turn. Returns the seq of the event.
+    fn echo(&self, msg: &Inbound, queued: bool) -> i64 {
+        let ev = self.hub.emit(
             &self.id,
             EventBody::MessageUser {
                 text: msg.typed.clone().unwrap_or_else(|| msg.text.clone()),
@@ -1104,8 +1121,10 @@ impl Actor {
                 command: msg.command.clone(),
                 reply_to: msg.reply_to,
                 attachments: msg.attachments.clone(),
+                queued,
             },
         );
+        ev.seq
     }
 
     /// The sender's name when `msg` is a crew message from the main agent of the crew.
@@ -1462,7 +1481,7 @@ impl Actor {
             reply_to: None,
             attachments: Vec::new(),
         };
-        match self.start_turn(msg, false).await {
+        match self.start_turn(msg, None).await {
             Ok(()) => true,
             Err(e) => {
                 tracing::warn!(agent = self.id, "wrap-up turn: {e:#}");
@@ -1545,8 +1564,8 @@ impl Actor {
         }
     }
 
-    /// Start a turn for `msg` on the session, spawning it if needed. `echoed`: the message is already in the thread.
-    async fn start_turn(&mut self, msg: Inbound, echoed: bool) -> Result<()> {
+    /// Start a turn for `msg` on the session, spawning it if needed. `echoed`: the seq of the message's event when it is already in the thread.
+    async fn start_turn(&mut self, msg: Inbound, echoed: Option<i64>) -> Result<()> {
         if let Err(e) = self.ensure_session().await {
             let message = format!("could not start the agent: {e:#}");
             self.hub.emit(
@@ -1556,6 +1575,15 @@ impl Actor {
                 },
             );
             self.set_status(AgentStatus::Error, Some(message));
+            if let Some(seq) = echoed {
+                self.hub.emit(
+                    &self.id,
+                    EventBody::MessageDropped {
+                        seq,
+                        reason: "failed".into(),
+                    },
+                );
+            }
             return Err(e);
         }
         let retry = std::mem::take(&mut self.next_turn_is_retry);
@@ -1594,10 +1622,11 @@ impl Actor {
                 turn_id: turn_id.clone(),
                 source: msg.source,
                 reactions_until: until,
+                message_seq: echoed,
             },
         );
-        if !retry && !echoed {
-            self.echo(&msg);
+        if !retry && echoed.is_none() {
+            self.echo(&msg, false);
         }
         self.set_status(AgentStatus::Working, None);
         let dirs = if msg.source == Source::System || retry {
@@ -1903,7 +1932,7 @@ impl Actor {
                 if failed {
                     self.set_status(AgentStatus::Error, detail);
                     // Don't respawn in a loop: drop what was queued behind the crash.
-                    self.queue.clear();
+                    self.drop_queue("crash");
                 } else {
                     self.after_turn().await;
                 }
@@ -1973,7 +2002,7 @@ impl Actor {
             .and_then(|e| limit::blocked_until(&e.windows, e.updated_at, now));
         self.switch_runtime(&agent, current, target, until).await;
         self.next_turn_is_retry = true;
-        if let Err(e) = self.start_turn(msg, false).await {
+        if let Err(e) = self.start_turn(msg, None).await {
             tracing::warn!(agent = self.id, "retry on {}: {e:#}", target.as_str());
         }
         true
@@ -2240,7 +2269,23 @@ impl Actor {
         });
     }
 
+    /// Empties the queue. A message that was shown as waiting is marked as not delivered, with `reason`.
+    fn drop_queue(&mut self, reason: &str) {
+        for queued in std::mem::take(&mut self.queue) {
+            if let Some(seq) = queued.echoed {
+                self.hub.emit(
+                    &self.id,
+                    EventBody::MessageDropped {
+                        seq,
+                        reason: reason.into(),
+                    },
+                );
+            }
+        }
+    }
+
     async fn close(&mut self) {
+        self.drop_queue("stopped");
         if let Some(s) = self.session.take() {
             s.shutdown().await;
         }
@@ -2689,9 +2734,9 @@ mod tests {
         let w = world(ApprovalMode::Risky);
         w.sup.send(&w.agent, Inbound::user("running")).await.unwrap();
         w.wait_log("send running").await;
-        // Queued while the first turn runs: not in the thread yet.
+        // Queued while the first turn runs: in the thread at once, marked as waiting.
         assert!(!w.sup.send_held(&w.agent, Inbound::user("queued")).await.unwrap());
-        assert_eq!(user_texts(&w), vec!["running"]);
+        assert_eq!(user_texts(&w), vec!["running", "queued"]);
 
         // Pausing interrupts the turn; the queued message stays where it is.
         assert!(w.sup.set_paused(&w.agent, true).await.unwrap());
@@ -2931,6 +2976,79 @@ mod tests {
         assert_eq!(w.spawns.lock().unwrap().len(), 2, "a new session after the crash");
     }
 
+    /// `(seq, reason)` of every `message.dropped` of the world's agent.
+    fn dropped(w: &World) -> Vec<(i64, String)> {
+        w.store
+            .events_since(0, 1000, Some(&w.agent))
+            .unwrap()
+            .into_iter()
+            .filter_map(|e| match e.body {
+                EventBody::MessageDropped { seq, reason } => Some((seq, reason)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn messages_queued_behind_a_crash_are_marked_dropped() {
+        let mut w = world(ApprovalMode::Risky);
+        w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
+        w.wait_log("send go").await;
+        w.sup.send(&w.agent, Inbound::user("waiting")).await.unwrap();
+        let seq = user_events(&w).iter().find(|m| m.0 == "waiting").unwrap().2;
+        w.push(RuntimeOutput::Exited {
+            code: Some(1),
+            stderr_tail: "boom".into(),
+        })
+        .await;
+        w.wait(is_status(AgentStatus::Error)).await;
+        assert_eq!(dropped(&w), vec![(seq, "crash".to_string())]);
+        assert_eq!(user_texts(&w), vec!["go", "waiting"], "the message stays in the thread");
+    }
+
+    #[tokio::test]
+    async fn stopping_the_agent_marks_its_waiting_messages_dropped() {
+        let w = world(ApprovalMode::Risky);
+        w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
+        w.wait_log("send go").await;
+        w.sup.send(&w.agent, Inbound::user("waiting")).await.unwrap();
+        let seq = user_events(&w).iter().find(|m| m.0 == "waiting").unwrap().2;
+        w.sup.stop(&w.agent).await;
+        assert_eq!(dropped(&w), vec![(seq, "stopped".to_string())]);
+    }
+
+    #[tokio::test]
+    async fn recover_marks_unresolved_waiting_messages_dropped_once() {
+        let w = world(ApprovalMode::Risky);
+        let queued = |text: &str| EventBody::MessageUser {
+            text: text.into(),
+            source: Source::User,
+            from_agent: None,
+            command: None,
+            reply_to: None,
+            attachments: Vec::new(),
+            queued: true,
+        };
+        let lost = w.store.append_event(&w.agent, queued("lost")).unwrap().seq;
+        let taken = w.store.append_event(&w.agent, queued("taken")).unwrap().seq;
+        w.store
+            .append_event(
+                &w.agent,
+                EventBody::TurnStarted {
+                    turn_id: "t".into(),
+                    source: Source::User,
+                    reactions_until: None,
+                    message_seq: Some(taken),
+                },
+            )
+            .unwrap();
+        w.sup.recover().unwrap();
+        assert_eq!(dropped(&w), vec![(lost, "restart".to_string())]);
+        // A second start finds nothing left to drop.
+        w.sup.recover().unwrap();
+        assert_eq!(dropped(&w).len(), 1);
+    }
+
     #[tokio::test]
     async fn stop_shuts_down_and_marks_offline() {
         let mut w = world(ApprovalMode::Risky);
@@ -3046,6 +3164,7 @@ mod tests {
                 command: None,
                 reply_to: None,
                 attachments: Vec::new(),
+                queued: false,
             }
         );
 
@@ -3644,6 +3763,96 @@ mod tests {
         assert_eq!(spawns.len(), 2);
         assert_eq!(spawns[1].resume, None);
     }
+    /// The human `message.user` events of the world's agent as `(text, queued, seq)`.
+    fn user_events(w: &World) -> Vec<(String, bool, i64)> {
+        w.store
+            .events_since(0, 1000, Some(&w.agent))
+            .unwrap()
+            .into_iter()
+            .filter_map(|e| match e.body {
+                EventBody::MessageUser {
+                    text,
+                    queued,
+                    source: Source::User,
+                    ..
+                } => Some((text, queued, e.seq)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// `message_seq` of every human `turn.started` of the world's agent.
+    fn turn_message_seqs(w: &World) -> Vec<Option<i64>> {
+        w.store
+            .events_since(0, 1000, Some(&w.agent))
+            .unwrap()
+            .into_iter()
+            .filter_map(|e| match e.body {
+                EventBody::TurnStarted {
+                    source: Source::User,
+                    message_seq,
+                    ..
+                } => Some(message_seq),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn a_message_sent_during_the_wrap_up_is_shown_at_once_and_only_once() {
+        let mut w = world(ApprovalMode::Risky);
+        w.store.agent_set_home(&w.agent, HOME).unwrap();
+        w.sup.send(&w.agent, Inbound::user("work")).await.unwrap();
+        w.wait_log("send work").await;
+        w.push(RuntimeOutput::SessionId("sess-1".into())).await;
+        w.push(done_with_usage(120_000, 10_000)).await;
+        w.wait(is_status(AgentStatus::Idle)).await;
+
+        // The next message runs the wrap-up first; it is in the thread before the wrap-up ends.
+        w.sup.send(&w.agent, Inbound::user("while saving")).await.unwrap();
+        w.wait_log(&format!("send {WRAP_UP}")).await;
+        let shown = user_events(&w);
+        assert_eq!(shown.len(), 2, "{shown:?}");
+        assert_eq!((shown[1].0.as_str(), shown[1].1), ("while saving", true));
+        let seq = shown[1].2;
+        assert!(!was_sent(&w, "while saving"));
+
+        w.push(done()).await;
+        rotated(&mut w).await;
+        w.wait_log("send while saving").await;
+        // Still one copy, and its turn names it.
+        let shown = user_events(&w);
+        assert_eq!(shown.iter().filter(|m| m.0 == "while saving").count(), 1, "{shown:?}");
+        assert_eq!(turn_message_seqs(&w), vec![None, Some(seq)]);
+    }
+
+    #[tokio::test]
+    async fn a_message_sent_during_a_turn_is_shown_at_once_and_its_turn_names_it() {
+        let w = world(ApprovalMode::Risky);
+        w.sup.send(&w.agent, Inbound::user("first")).await.unwrap();
+        w.wait_log("send first").await;
+        w.sup.send(&w.agent, Inbound::user("second")).await.unwrap();
+        w.sup.send(&w.agent, Inbound::user("third")).await.unwrap();
+        let shown = user_events(&w);
+        let flags: Vec<_> = shown.iter().map(|m| (m.0.as_str(), m.1)).collect();
+        assert_eq!(flags, vec![("first", false), ("second", true), ("third", true)]);
+
+        w.push(done()).await;
+        w.wait_log("send second").await;
+        w.push(done()).await;
+        w.wait_log("send third").await;
+        assert_eq!(user_texts(&w), vec!["first", "second", "third"], "no second echo");
+        assert_eq!(turn_message_seqs(&w), vec![None, Some(shown[1].2), Some(shown[2].2)]);
+    }
+
+    #[tokio::test]
+    async fn a_message_to_an_idle_agent_is_not_marked_as_waiting() {
+        let w = world(ApprovalMode::Risky);
+        w.sup.send(&w.agent, Inbound::user("hello")).await.unwrap();
+        w.wait_log("send hello").await;
+        assert_eq!(user_events(&w).iter().map(|m| m.1).collect::<Vec<_>>(), vec![false]);
+    }
+
     #[tokio::test]
     async fn full_memory_never_starts_a_new_chapter() {
         let w = world(ApprovalMode::Risky);
