@@ -214,6 +214,42 @@ A notification when an agent stops because of a failure.
 Где: Settings (⌘,) → Notifications (Уведомления) → Error (Ошибка)
 1. Turn the switch on or off. It is on by default.
 
+## Sounds (Звуки)
+
+<!-- id: set-sounds; covers: settings:sounds -->
+Short sounds for clicks, typing, switching tabs, sending a message, and agent events. Off by default.
+Где: Settings (⌘,) → Sounds (Звуки)
+1. Turn on Sounds (Звуки) to hear them.
+2. Each event (click, typing, tab, send, done, waiting for you, error) has its own switch.
+
+## Sounds on (sound.enabled)
+
+<!-- id: set-sound-enabled; covers: setting:sound.enabled -->
+The main switch of all app sounds. Off by default.
+Где: Settings (⌘,) → Sounds (Звуки) → Sounds (Звуки)
+1. Turn it on; the other controls become active.
+
+## Sound pack (sound.kit)
+
+<!-- id: set-sound-kit; covers: setting:sound.kit -->
+Four packs made by the app itself: Soft (Мягкий), Mechanical (Механика), Glass (Стекло), Retro (Ретро).
+Где: Settings (⌘,) → Sounds (Звуки) → Pack (Набор)
+1. Pick a pack; ▶ plays a sample.
+
+## Volume (sound.volume)
+
+<!-- id: set-sound-volume; covers: setting:sound.volume -->
+How loud the app sounds are, separate from the Mac volume.
+Где: Settings (⌘,) → Sounds (Звуки) → Volume (Громкость)
+1. Drag the slider.
+
+## Sounds when the window is in the background (sound.background)
+
+<!-- id: set-sound-background; covers: setting:sound.background -->
+When no Bandito window is on screen, only "agent finished" and "agent waits for you" can play, and only with this switch on.
+Где: Settings (⌘,) → Sounds (Звуки) → Also when the window is in the background (И когда окно в фоне)
+1. Turn it on to hear agents while you work in other apps.
+
 ## Appearance (Внешний вид)
 
 <!-- id: set-appearance; covers: settings:appearance -->
