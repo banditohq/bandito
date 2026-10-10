@@ -36,6 +36,7 @@ enum QACommand: Equatable {
     case window(QASize)
     case files(path: String)
     case settings
+    case settingsSection(SettingsSection)
     case onboarding
     case tab(ServerSection)
     /// The workbench of the agent on screen: `details`, `terminal`, `browser`, `changes`, `toggle`, `split`.
@@ -59,6 +60,8 @@ enum QACommand: Equatable {
             return .files(path: path)
         case ("settings", nil):
             return .settings
+        case ("settings", let name?):
+            return SettingsSection(rawValue: name).map { .settingsSection($0) }
         case ("onboarding", nil):
             return .onboarding
         case ("tab", let name?):
@@ -142,6 +145,9 @@ enum QAHooks {
         case .files(let path):
             router.openInFiles(path, isFile: false)
         case .settings:
+            WindowActions.showSettings()
+        case .settingsSection(let section):
+            SettingsNavigation.shared.requested = section
             WindowActions.showSettings()
         case .onboarding:
             onboarding.replay()
