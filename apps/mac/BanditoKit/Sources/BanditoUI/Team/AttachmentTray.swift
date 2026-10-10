@@ -85,12 +85,32 @@ enum AttachmentTray {
 
 /// The files waiting in the composer of each agent. Kept here, not in the view, so a file added to one agent's composer
 /// is not lost when the person goes to another agent and back.
+///
+/// Every file gets one task: it reads the bytes and uploads them. The tasks are chained, so one upload runs at a time.
+/// `remove` cancels the file's task, and a task that is cancelled before its upload starts does nothing.
 @MainActor
 @Observable
 final class AttachmentTrays {
     static let shared = AttachmentTrays()
 
     private var trays: [String: [DraftFile]] = [:]
+    /// The task of each file that still has work to do, by the file's id.
+    @ObservationIgnored private var tasks: [UUID: Task<Void, Never>] = [:]
+    /// The last task in the chain: the next upload waits for it.
+    @ObservationIgnored private var chainTail: Task<Void, Never>?
+
+    /// Where the bytes of a file come from: a file on disk, or a picture already in memory.
+    private enum Source {
+        case file(URL)
+        case picture(Data)
+    }
+
+    /// Uploads one file: its bytes, its name and the agent it goes to. The server's `attachments.upload` in the app.
+    typealias Uploader = (Data, String, String) async throws -> AgentAttachment
+
+    static func uploader(_ server: ServerModel) -> Uploader {
+        { data, name, agentID in try await server.uploadAttachment(data, name: name, agentId: agentID) }
+    }
 
     func files(for agentID: String) -> [DraftFile] {
         trays[agentID] ?? []
@@ -98,6 +118,11 @@ final class AttachmentTrays {
 
     /// Adds files from disk. A file that breaks a rule is shown as failed at once and is not read.
     func add(urls: [URL], agentID: String, server: ServerModel) {
+        add(urls: urls, agentID: agentID, upload: Self.uploader(server))
+    }
+
+    /// `add` with the upload given. Tests use it; the app passes the server's upload.
+    func add(urls: [URL], agentID: String, upload: @escaping Uploader) {
         for url in urls {
             let name = url.lastPathComponent
             let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?.int64Value ?? 0
@@ -108,19 +133,17 @@ final class AttachmentTrays {
             let preview = AttachmentRules.isImage(name: name) ? NSImage(contentsOf: url) : nil
             let file = DraftFile(name: name, size: size, preview: preview, state: .uploading)
             append(file, agentID: agentID)
-            Task {
-                do {
-                    let data = try await Task.detached(priority: .utility) { try Data(contentsOf: url) }.value
-                    upload(data, file: file.id, agentID: agentID, server: server)
-                } catch {
-                    setState(.failed(.upload), of: file.id, agentID: agentID)
-                }
-            }
+            enqueue(file.id, name: name, agentID: agentID, upload: upload, source: .file(url))
         }
     }
 
     /// Adds a picture that has no file yet: a screenshot or one from the clipboard. The bytes are PNG.
     func addPicture(_ data: Data, name: String, agentID: String, server: ServerModel) {
+        addPicture(data, name: name, agentID: agentID, upload: Self.uploader(server))
+    }
+
+    /// `addPicture` with the upload given. Tests use it; the app passes the server's upload.
+    func addPicture(_ data: Data, name: String, agentID: String, upload: @escaping Uploader) {
         let size = Int64(data.count)
         if let failure = AttachmentTray.failure(name: name, size: size) {
             append(DraftFile(name: name, size: size, preview: nil, state: .failed(failure)), agentID: agentID)
@@ -128,10 +151,13 @@ final class AttachmentTrays {
         }
         let file = DraftFile(name: name, size: size, preview: NSImage(data: data), state: .uploading)
         append(file, agentID: agentID)
-        upload(data, file: file.id, agentID: agentID, server: server)
+        enqueue(file.id, name: name, agentID: agentID, upload: upload, source: .picture(data))
     }
 
+    /// Takes a file out of the tray. Its upload, if one is waiting or running, is cancelled.
     func remove(_ id: UUID, agentID: String) {
+        tasks[id]?.cancel()
+        tasks[id] = nil
         trays[agentID]?.removeAll { $0.id == id }
     }
 
@@ -165,19 +191,35 @@ final class AttachmentTrays {
         trays[agentID, default: []].append(file)
     }
 
-    private func upload(_ data: Data, file: UUID, agentID: String, server: ServerModel) {
-        let name = trays[agentID]?.first(where: { $0.id == file })?.name ?? ""
-        Task {
+    /// Queues the read and upload of one file behind the uploads already queued.
+    private func enqueue(_ id: UUID, name: String, agentID: String, upload: @escaping Uploader, source: Source) {
+        let previous = chainTail
+        let task = Task { [weak self] in
+            // One upload at a time: this one starts when the one before it has finished (or was cancelled).
+            await previous?.value
+            guard !Task.isCancelled, let self else { return }
             do {
-                let attachment = try await server.uploadAttachment(data, name: name, agentId: agentID)
-                setState(.ready(attachment), of: file, agentID: agentID)
+                let data: Data
+                switch source {
+                case .file(let url):
+                    data = try await Task.detached(priority: .utility) { try Data(contentsOf: url) }.value
+                case .picture(let bytes):
+                    data = bytes
+                }
+                // Removed while it was read: no upload.
+                guard !Task.isCancelled else { return }
+                let attachment = try await upload(data, name, agentID)
+                self.finish(id, agentID: agentID, .ready(attachment))
             } catch {
-                setState(.failed(.upload), of: file, agentID: agentID)
+                if !Task.isCancelled { self.finish(id, agentID: agentID, .failed(.upload)) }
             }
+            self.tasks[id] = nil
         }
+        tasks[id] = task
+        chainTail = task
     }
 
-    private func setState(_ state: DraftFile.State, of id: UUID, agentID: String) {
+    private func finish(_ id: UUID, agentID: String, _ state: DraftFile.State) {
         guard let index = trays[agentID]?.firstIndex(where: { $0.id == id }) else { return }
         trays[agentID]?[index].state = state
     }
