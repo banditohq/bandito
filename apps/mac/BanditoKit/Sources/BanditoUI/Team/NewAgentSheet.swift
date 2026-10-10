@@ -73,6 +73,12 @@ struct NewAgentSheet: View {
         .onChange(of: server?.supports("agent_own_folder") ?? false, initial: true) { _, optional in
             draft.folderOptional = optional
         }
+        // The containers are loaded once the sheet opens. A chosen container that is gone by then becomes a new one.
+        // A failed load keeps the choice: an empty list is not proof that the container is gone.
+        .onChange(of: workplaces?.loading) { _, loading in
+            guard loading == false, let workplaces, workplaces.errorText == nil else { return }
+            draft.workplace = SelectChoices.workplace(draft.workplace, containerIDs: workplaces.containers.map(\.id))
+        }
         .task {
             guard let server else { return }
             let loaded = WorkspacesModel(server: server)
@@ -540,7 +546,7 @@ struct NewAgentSheet: View {
                         selection: $draft.memory, sections: memorySections, label: L10n.AgentSheet.memory,
                         placeholder: memoryName(draft.memory),
                         // The field shows only the mode's name; the description is for the panel.
-                        field: { option in SelectFieldView(option: option.map(Self.withoutSubtitle), placeholder: "") },
+                        field: { option in SelectFieldView(option: option?.titleOnly, placeholder: "") },
                         footer: { _ in EmptyView() })
                     Text(L10n.AgentSheet.memoryAuto)
                         .font(BanditoFont.font(size: 11.5, weight: 400))
@@ -602,29 +608,41 @@ struct NewAgentSheet: View {
     private var separateFields: some View {
         let containers = workplaces?.containers ?? []
         return VStack(alignment: .leading, spacing: 8) {
-            HStack {
+            if containers.isEmpty {
+                // Nothing to choose from: the place is the new one, shown as text.
                 Text(workplaceName(containers))
                     .font(BanditoFont.font(size: 13, weight: 400))
                     .foregroundStyle(Color.Bandito.text)
-                Spacer(minLength: 0)
-                Menu {
-                    ForEach(containers) { container in
-                        Button(container.name) { draft.workplace = .existing(container.id) }
-                    }
-                    if !containers.isEmpty {
-                        Divider()
-                    }
-                    Button(L10n.Workspace.Choice.newOne) { draft.workplace = .new }
-                } label: {
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.system(size: 10))
-                        .foregroundStyle(Color.Bandito.text3)
-                }
-                .menuStyle(.button)
-                .banditoButton(.row(cornerRadius: 5, hoverOpacity: 0.08))
-                .fixedSize()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .modifier(FieldBox())
+            } else {
+                BanditoSelect(
+                    selection: Binding(get: { existingWorkplaceID }, set: { id in
+                        if let id { draft.workplace = .existing(id) }
+                    }),
+                    sections: [SelectSection(options: containers.map { SelectOption<String?>(value: $0.id, title: $0.name) })],
+                    label: L10n.AgentSheet.workplace, placeholder: L10n.Workspace.Choice.newOne,
+                    footer: { close in
+                        // A new place is not a container: it sits under the list, after a divider.
+                        VStack(alignment: .leading, spacing: 0) {
+                            Divider().padding(.vertical, 4)
+                            Button {
+                                draft.workplace = .new
+                                close()
+                            } label: {
+                                Text(L10n.Workspace.Choice.newOne)
+                                    .font(BanditoFont.font(size: 13, weight: 500))
+                                    .foregroundStyle(Color.Bandito.text)
+                                    .lineLimit(1)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 8)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .contentShape(Rectangle())
+                            }
+                            .banditoButton(.row(cornerRadius: 9))
+                        }
+                    })
             }
-            .modifier(FieldBox())
             if draft.workplace == .new {
                 TextField(L10n.Workspace.Create.name, text: $draft.newWorkplace.name)
                     .textFieldStyle(.plain)
@@ -660,6 +678,12 @@ struct NewAgentSheet: View {
                 }
             }
         }
+    }
+
+    /// The id of the existing container the draft points at; nil for the shared server or a new container.
+    private var existingWorkplaceID: String? {
+        if case .existing(let id) = draft.workplace { return id }
+        return nil
     }
 
     private func workplaceName(_ containers: [Workspace]) -> String {
@@ -854,13 +878,6 @@ struct NewAgentSheet: View {
         case .daily: L10n.Memory.dailyDesc
         case .full: L10n.Memory.fullDesc
         }
-    }
-
-    /// The same option without its subtitle, for a field that shows only the title.
-    static func withoutSubtitle<Value: Hashable>(_ option: SelectOption<Value>) -> SelectOption<Value> {
-        var copy = option
-        copy.subtitle = nil
-        return copy
     }
 
     private func memoryName(_ mode: MemoryMode) -> String {

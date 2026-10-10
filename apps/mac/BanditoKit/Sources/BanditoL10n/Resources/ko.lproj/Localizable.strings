@@ -1268,7 +1268,9 @@
 "settings.approvals.add" = "추가";
 "settings.approvals.allAgents" = "모든 에이전트";
 "settings.approvals.allow" = "허용";
+"settings.approvals.allowDesc" = "묻지 않고 실행해요";
 "settings.approvals.ask" = "묻기";
+"settings.approvals.askDesc" = "실행하기 전에 물어봐요";
 "settings.approvals.autoDeny" = "30분 안에 응답하지 않으면";
 "settings.approvals.autoDenyHint" = "거부하고 에이전트에게 다른 방법을 찾도록 요청해요. 영원히 기다리지 않아요.";
 "settings.approvals.browser.delete" = "사이트의 “삭제”";
@@ -1283,6 +1285,7 @@
 "settings.approvals.columnScope" = "대상";
 "settings.approvals.deleteAria" = "규칙 %1$@ 삭제";
 "settings.approvals.deny" = "거부";
+"settings.approvals.denyDesc" = "절대 실행하지 않아요";
 "settings.approvals.empty" = "아직 규칙이 없어요.";
 "settings.approvals.forWhom" = "대상";
 "settings.approvals.intro" = "Bandito는 에이전트의 모든 작업을 확인해요. 일상적인 작업은 자동으로 진행되고, 아래 규칙이나 내장 검사에 해당하는 작업은 나의 결정을 기다려요.";
@@ -1366,6 +1369,7 @@
 "settings.updates.app" = "앱";
 "settings.updates.auto" = "자동으로 업데이트";
 "settings.updates.beta" = "베타";
+"settings.updates.betaDesc" = "새 기능을 먼저 받아요";
 "settings.updates.channel" = "업데이트 채널";
 "settings.updates.check" = "지금 확인";
 "settings.updates.daemon" = "데몬 업데이트";
@@ -1375,6 +1379,7 @@
 "settings.updates.openServer" = "서버 → 업데이트 열기";
 "settings.updates.restartDaemon" = "데몬 재시작";
 "settings.updates.stable" = "안정 버전";
+"settings.updates.stableDesc" = "검증된 빌드를 받아요";
 "settings.usage" = "사용량";
 "settings.usage.intro" = "에이전트의 구독과 API 예산이에요. 각 막대는 해당 기간에 남은 양을 보여줘요.";
 "settings.workplaces.body" = "작업 장소는 서버 화면에서 설정해요. 각각 서버와 공용, 컨테이너, 또는 별도 사용자 중 하나예요.";

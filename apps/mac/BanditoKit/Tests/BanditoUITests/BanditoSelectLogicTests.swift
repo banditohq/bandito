@@ -123,4 +123,16 @@ import Testing
         #expect(SelectFilter.groups(sections, query: "claude").map(\.title) == ["Other"])
         #expect(SelectFilter.groups(sections, query: "nothing-matches").isEmpty)
     }
+
+    // MARK: Field
+
+    @Test func titleOnlyDropsTheSubtitleAndKeepsTheRest() {
+        let option = SelectOption(value: 1, title: "Forge", subtitle: "Writes code", icon: "star", monospaced: true)
+        let shown = option.titleOnly
+        #expect(shown.value == 1)
+        #expect(shown.title == "Forge")
+        #expect(shown.subtitle == nil)
+        #expect(shown.icon == "star")
+        #expect(shown.monospaced)
+    }
 }

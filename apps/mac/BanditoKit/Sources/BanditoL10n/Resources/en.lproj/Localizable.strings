@@ -1268,7 +1268,9 @@
 "settings.approvals.add" = "Add";
 "settings.approvals.allAgents" = "All agents";
 "settings.approvals.allow" = "Allow";
+"settings.approvals.allowDesc" = "Runs without asking";
 "settings.approvals.ask" = "Ask";
+"settings.approvals.askDesc" = "Asks before it acts";
 "settings.approvals.autoDeny" = "If you do not answer within 30 minutes";
 "settings.approvals.autoDenyHint" = "Decline and ask the agent to find another way, instead of waiting forever.";
 "settings.approvals.browser.delete" = "«Delete» on sites";
@@ -1283,6 +1285,7 @@
 "settings.approvals.columnScope" = "For";
 "settings.approvals.deleteAria" = "Delete rule %1$@";
 "settings.approvals.deny" = "Deny";
+"settings.approvals.denyDesc" = "Never runs it";
 "settings.approvals.empty" = "No rules yet.";
 "settings.approvals.forWhom" = "For";
 "settings.approvals.intro" = "Bandito checks each action of an agent. Routine work goes on by itself; everything that matches a rule below or a built-in check waits for you.";
@@ -1366,6 +1369,7 @@
 "settings.updates.app" = "App";
 "settings.updates.auto" = "Update automatically";
 "settings.updates.beta" = "Beta";
+"settings.updates.betaDesc" = "New things sooner";
 "settings.updates.channel" = "Update channel";
 "settings.updates.check" = "Check now";
 "settings.updates.daemon" = "Update daemon";
@@ -1375,6 +1379,7 @@
 "settings.updates.openServer" = "Open Server → Updates";
 "settings.updates.restartDaemon" = "Restart daemon";
 "settings.updates.stable" = "Stable";
+"settings.updates.stableDesc" = "Tested builds";
 "settings.usage" = "Usage";
 "settings.usage.intro" = "Subscriptions and API budgets of your agents. Each bar shows what is left in its window.";
 "settings.workplaces.body" = "Workplaces are set up on the Server screen. Each one is shared with the server, a container, or a separate user.";

@@ -81,35 +81,38 @@ struct KeysAndGesturesSection: View {
         .padding(.bottom, 18)
     }
 
-    /// The preset switch: a segmented control when it fits, otherwise a menu that names the current preset.
+    /// The preset switch: a segmented control when it fits, otherwise a compact select that names the current preset.
     private var presetPicker: some View {
         ViewThatFits(in: .horizontal) {
             SegmentedPicker(
                 selection: Binding(get: { preset }, set: { choose($0) }),
                 options: KeymapPreset.allCases.map { ($0, $0.title) })
                 .fixedSize()
-            Menu {
-                ForEach(KeymapPreset.allCases, id: \.self) { item in
-                    Button(item.title) { choose(item) }
-                }
-            } label: {
-                HStack(spacing: 8) {
-                    Text(L10n.Keys.presetMenu(name: preset.title))
-                        .font(.system(size: 13))
-                        .lineLimit(1)
-                        .fixedSize()
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(Color.Bandito.text3)
-                }
-                .foregroundStyle(Color.Bandito.text)
-                .padding(.horizontal, 12)
-                .frame(height: 30)
-            }
-            .menuStyle(.button)
-            .menuIndicator(.hidden)
-            .banditoButton(.row(cornerRadius: 9, hoverOpacity: 0.08))
-            .fixedSize()
+            BanditoSelect(
+                selection: Binding(get: { preset }, set: { choose($0) }),
+                sections: [SelectSection(options: KeymapPreset.allCases.map { SelectOption(value: $0, title: $0.title) })],
+                label: L10n.Keys.presetMenu(name: preset.title), placeholder: preset.title,
+                field: { _ in
+                    // The field names the set ("Set: Bandito"); the panel lists the sets.
+                    HStack(spacing: 8) {
+                        Text(L10n.Keys.presetMenu(name: preset.title))
+                            .font(.system(size: 13))
+                            .lineLimit(1)
+                            .fixedSize()
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(Color.Bandito.text3)
+                            .accessibilityHidden(true)
+                    }
+                    .foregroundStyle(Color.Bandito.text)
+                    .padding(.horizontal, 12)
+                    .frame(height: 30)
+                    .background(Color.Bandito.text.opacity(0.06), in: Capsule())
+                    .overlay(Capsule().stroke(Color.Bandito.text.opacity(0.12), lineWidth: 1))
+                },
+                footer: { _ in EmptyView() },
+                style: .compact)
+                .fixedSize()
         }
     }
 

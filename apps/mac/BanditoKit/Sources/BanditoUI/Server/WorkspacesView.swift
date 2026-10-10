@@ -427,22 +427,16 @@ struct WorkspaceCreateSheet: View {
             }
             HStack(alignment: .top, spacing: 14) {
                 field(L10n.Workspace.Create.cpu) {
-                    Picker("", selection: $draft.limits.cpus) {
-                        Text(L10n.Workspace.Create.unlimited).tag(Double?.none)
-                        ForEach(Self.cpuPresets, id: \.self) { cpus in
-                            Text("\(NewWorkplaceDraft.formatted(cpus)) CPU").tag(Double?.some(cpus))
-                        }
-                    }
-                    .labelsHidden()
+                    BanditoSelect(
+                        selection: $draft.limits.cpus,
+                        sections: [SelectSection(options: cpuChoices)],
+                        label: L10n.Workspace.Create.cpu, placeholder: L10n.Workspace.Create.unlimited)
                 }
                 field(L10n.Workspace.Create.memory) {
-                    Picker("", selection: $draft.limits.memoryMb) {
-                        Text(L10n.Workspace.Create.unlimited).tag(Int?.none)
-                        ForEach(Self.memoryPresets, id: \.self) { mb in
-                            Text("\(mb) MB").tag(Int?.some(mb))
-                        }
-                    }
-                    .labelsHidden()
+                    BanditoSelect(
+                        selection: $draft.limits.memoryMb,
+                        sections: [SelectSection(options: memoryChoices)],
+                        label: L10n.Workspace.Create.memory, placeholder: L10n.Workspace.Create.unlimited)
                 }
             }
             field(L10n.Workspace.Create.network) {
@@ -480,6 +474,22 @@ struct WorkspaceCreateSheet: View {
         .padding(24)
         .frame(width: 480)
         .background(Color.Bandito.surface2)
+    }
+
+    /// "Unlimited", then the CPU presets.
+    private var cpuChoices: [SelectOption<Double?>] {
+        [SelectOption(value: nil, title: L10n.Workspace.Create.unlimited)]
+            + Self.cpuPresets.map { cpus in
+                SelectOption(value: cpus, title: "\(NewWorkplaceDraft.formatted(cpus)) CPU")
+            }
+    }
+
+    /// "Unlimited", then the memory presets.
+    private var memoryChoices: [SelectOption<Int?>] {
+        [SelectOption(value: nil, title: L10n.Workspace.Create.unlimited)]
+            + Self.memoryPresets.map { mb in
+                SelectOption(value: mb, title: "\(mb) MB")
+            }
     }
 
     private func field<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {

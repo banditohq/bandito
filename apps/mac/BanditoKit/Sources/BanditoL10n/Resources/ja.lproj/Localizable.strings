@@ -1268,7 +1268,9 @@
 "settings.approvals.add" = "追加";
 "settings.approvals.allAgents" = "すべてのエージェント";
 "settings.approvals.allow" = "許可";
+"settings.approvals.allowDesc" = "確認せずに実行します";
 "settings.approvals.ask" = "確認する";
+"settings.approvals.askDesc" = "実行前に確認します";
 "settings.approvals.autoDeny" = "30 分以内に応答しなかった場合";
 "settings.approvals.autoDenyHint" = "拒否して、エージェントに別の方法を探すよう依頼します。永遠に待つことはありません。";
 "settings.approvals.browser.delete" = "サイト上の「削除」";
@@ -1283,6 +1285,7 @@
 "settings.approvals.columnScope" = "対象";
 "settings.approvals.deleteAria" = "ルール %1$@ を削除";
 "settings.approvals.deny" = "拒否";
+"settings.approvals.denyDesc" = "実行しません";
 "settings.approvals.empty" = "ルールはまだありません。";
 "settings.approvals.forWhom" = "対象";
 "settings.approvals.intro" = "Bandito はエージェントのすべての操作を確認します。通常の作業は自動で進みます。下のルールや組み込みの確認に該当するものは、あなたの判断を待ちます。";
@@ -1366,6 +1369,7 @@
 "settings.updates.app" = "アプリ";
 "settings.updates.auto" = "自動でアップデート";
 "settings.updates.beta" = "ベータ版";
+"settings.updates.betaDesc" = "新機能を先に";
 "settings.updates.channel" = "アップデートチャンネル";
 "settings.updates.check" = "今すぐ確認";
 "settings.updates.daemon" = "デーモンを更新";
@@ -1375,6 +1379,7 @@
 "settings.updates.openServer" = "サーバー → アップデート を開く";
 "settings.updates.restartDaemon" = "デーモンを再起動";
 "settings.updates.stable" = "安定版";
+"settings.updates.stableDesc" = "動作確認済みのビルド";
 "settings.usage" = "使用状況";
 "settings.usage.intro" = "エージェントのサブスクリプションと API の予算です。各バーは、その期間で残っている量を示します。";
 "settings.workplaces.body" = "作業場所は「サーバー」画面で設定します。それぞれ、サーバーと共有、コンテナ、または別ユーザーのいずれかです。";

@@ -1268,7 +1268,9 @@
 "settings.approvals.add" = "Добавить";
 "settings.approvals.allAgents" = "Все агенты";
 "settings.approvals.allow" = "Разрешать";
+"settings.approvals.allowDesc" = "Выполняет без вопроса";
 "settings.approvals.ask" = "Спрашивать";
+"settings.approvals.askDesc" = "Спросит, прежде чем сделать";
 "settings.approvals.autoDeny" = "Если вы не ответили за 30 минут";
 "settings.approvals.autoDenyHint" = "Отклонить и попросить агента найти другой путь, а не ждать вечно.";
 "settings.approvals.browser.delete" = "«Удалить» на сайтах";
@@ -1283,6 +1285,7 @@
 "settings.approvals.columnScope" = "Для кого";
 "settings.approvals.deleteAria" = "Удалить правило %1$@";
 "settings.approvals.deny" = "Запрещать";
+"settings.approvals.denyDesc" = "Никогда не выполняет";
 "settings.approvals.empty" = "Правил пока нет.";
 "settings.approvals.forWhom" = "Для кого";
 "settings.approvals.intro" = "Bandito проверяет каждое действие агента. Обычная работа идёт сама, а всё, что подходит под правило ниже или встроенную проверку, ждёт вас.";
@@ -1366,6 +1369,7 @@
 "settings.updates.app" = "Приложение";
 "settings.updates.auto" = "Обновлять автоматически";
 "settings.updates.beta" = "Бета";
+"settings.updates.betaDesc" = "Новое раньше";
 "settings.updates.channel" = "Канал обновлений";
 "settings.updates.check" = "Проверить сейчас";
 "settings.updates.daemon" = "Обновить демон";
@@ -1375,6 +1379,7 @@
 "settings.updates.openServer" = "Открыть «Сервер» → «Обновления»";
 "settings.updates.restartDaemon" = "Перезапустить демон";
 "settings.updates.stable" = "Стабильный";
+"settings.updates.stableDesc" = "Проверенные сборки";
 "settings.usage" = "Использование";
 "settings.usage.intro" = "Подписки и бюджеты API ваших агентов. Полоса показывает, сколько осталось в каждом окне.";
 "settings.workplaces.body" = "Рабочие места настраиваются в режиме «Сервер». Каждое — общее с сервером, контейнер или отдельный пользователь.";

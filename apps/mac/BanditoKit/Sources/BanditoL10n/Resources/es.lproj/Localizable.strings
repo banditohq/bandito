@@ -1268,7 +1268,9 @@
 "settings.approvals.add" = "Añadir";
 "settings.approvals.allAgents" = "Todos los agentes";
 "settings.approvals.allow" = "Permitir";
+"settings.approvals.allowDesc" = "Actúa sin preguntar";
 "settings.approvals.ask" = "Preguntar";
+"settings.approvals.askDesc" = "Pregunta antes de actuar";
 "settings.approvals.autoDeny" = "Si no respondes en 30 minutos";
 "settings.approvals.autoDenyHint" = "Rechazar y pedir al agente que busque otra forma, en vez de esperar para siempre.";
 "settings.approvals.browser.delete" = "«Eliminar» en sitios web";
@@ -1283,6 +1285,7 @@
 "settings.approvals.columnScope" = "Para";
 "settings.approvals.deleteAria" = "Borrar la regla %1$@";
 "settings.approvals.deny" = "Denegar";
+"settings.approvals.denyDesc" = "Nunca lo ejecuta";
 "settings.approvals.empty" = "Todavía no hay reglas.";
 "settings.approvals.forWhom" = "Para";
 "settings.approvals.intro" = "Bandito revisa cada acción de un agente. El trabajo rutinario sigue solo; todo lo que coincida con una regla de abajo o con una comprobación integrada espera tu permiso.";
@@ -1366,6 +1369,7 @@
 "settings.updates.app" = "App";
 "settings.updates.auto" = "Actualizar automáticamente";
 "settings.updates.beta" = "Beta";
+"settings.updates.betaDesc" = "Novedades antes";
 "settings.updates.channel" = "Canal de actualización";
 "settings.updates.check" = "Buscar ahora";
 "settings.updates.daemon" = "Actualizar el daemon";
@@ -1375,6 +1379,7 @@
 "settings.updates.openServer" = "Abrir Servidor → Actualizaciones";
 "settings.updates.restartDaemon" = "Reiniciar el daemon";
 "settings.updates.stable" = "Estable";
+"settings.updates.stableDesc" = "Versiones probadas";
 "settings.usage" = "Uso";
 "settings.usage.intro" = "Suscripciones y presupuestos de API de tus agentes. Cada barra muestra lo que queda en su ventana.";
 "settings.workplaces.body" = "Los lugares de trabajo se configuran en la pantalla Servidor. Cada uno se comparte con el servidor, un contenedor o un usuario aparte.";

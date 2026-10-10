@@ -639,6 +639,7 @@ struct WhereTab: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
+            SectionLabel(L10n.Inspector.workplace)
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 11) {
                     Image(systemName: inContainer ? "shippingbox" : "house")
@@ -647,16 +648,19 @@ struct WhereTab: View {
                         .frame(width: 34, height: 34)
                         .background(BanditoPalette.peach.opacity(0.13), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(workplaceTitle)
-                            .font(BanditoFont.font(size: 14, weight: 600))
-                            .foregroundStyle(Color.Bandito.text)
-                            .lineLimit(1)
+                        // With the change select on, its field is the place's name: the title would say it twice.
+                        if !showsChangeMenu {
+                            Text(workplaceTitle)
+                                .font(BanditoFont.font(size: 14, weight: 600))
+                                .foregroundStyle(Color.Bandito.text)
+                                .lineLimit(1)
+                        }
                         Text(workplaceSubtitle)
                             .font(BanditoFont.font(size: 12, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                     }
                     Spacer()
-                    if workplaces?.supported == true {
+                    if showsChangeMenu {
                         changeMenu
                     }
                 }
@@ -730,25 +734,36 @@ struct WhereTab: View {
     }
 
     /// Lists the shared server and the containers. Choosing one asks first: the agent starts a new chapter there.
+    private var showsChangeMenu: Bool { workplaces?.supported == true }
+
+    /// The place the agent runs in, shown as the field's name; choosing another place asks first.
     private var changeMenu: some View {
-        Menu {
-            Button(L10n.Workspace.Shared.title) {
-                pendingMove = MoveTarget(id: Workspace.sharedID, name: L10n.Workspace.Shared.title)
-            }
-            .disabled(!inContainer)
-            ForEach(workplaces?.containers ?? []) { container in
-                Button(container.name) {
-                    pendingMove = MoveTarget(id: container.id, name: container.name)
-                }
-                .disabled(container.id == agent.workspaceId)
-            }
-        } label: {
-            Text(L10n.Workspace.Location.change)
-                .font(BanditoFont.font(size: 12.5, weight: 500))
-        }
-        .menuStyle(.button)
-        .banditoButton(.quiet(size: .regular))
+        BanditoSelect(
+            selection: Binding(get: { agent.workspaceId }, set: { id in
+                afterSelectPanelCloses { askMove(to: id) }
+            }),
+            sections: [SelectSection(options: workplaceChoices)],
+            label: L10n.Workspace.Location.change, placeholder: workplaceTitle,
+            style: .compact)
         .fixedSize()
+    }
+
+    /// The shared server, then the containers, from `SelectChoices.workplaces`.
+    private var workplaceChoices: [SelectOption<String>] {
+        SelectChoices.workplaces(
+            sharedTitle: L10n.Workspace.Shared.title, sharedEnabled: inContainer,
+            containers: (workplaces?.containers ?? []).map { SelectChoices.Place(id: $0.id, name: $0.name) },
+            currentID: agent.workspaceId)
+    }
+
+    /// Asks before the move: the confirmation dialog runs `move(to:)`. The agent's own place asks nothing.
+    private func askMove(to id: String) {
+        guard id != agent.workspaceId else { return }
+        if id == Workspace.sharedID {
+            pendingMove = MoveTarget(id: id, name: L10n.Workspace.Shared.title)
+        } else if let container = workplaces?.containers.first(where: { $0.id == id }) {
+            pendingMove = MoveTarget(id: container.id, name: container.name)
+        }
     }
 
     /// `agents.update {workspace_id}`. The daemon's warnings are shown under the header.

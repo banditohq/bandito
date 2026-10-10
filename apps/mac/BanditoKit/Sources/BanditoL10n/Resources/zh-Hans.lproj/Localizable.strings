@@ -1268,7 +1268,9 @@
 "settings.approvals.add" = "添加";
 "settings.approvals.allAgents" = "所有代理";
 "settings.approvals.allow" = "允许";
+"settings.approvals.allowDesc" = "直接执行，不再询问";
 "settings.approvals.ask" = "询问";
+"settings.approvals.askDesc" = "执行前先询问";
 "settings.approvals.autoDeny" = "如果 30 分钟内未作回应";
 "settings.approvals.autoDenyHint" = "拒绝该操作，并要求代理寻找其他方法，而不是无限期等待。";
 "settings.approvals.browser.delete" = "网站上的“删除”";
@@ -1283,6 +1285,7 @@
 "settings.approvals.columnScope" = "适用于";
 "settings.approvals.deleteAria" = "删除规则 %1$@";
 "settings.approvals.deny" = "拒绝";
+"settings.approvals.denyDesc" = "从不执行";
 "settings.approvals.empty" = "还没有规则。";
 "settings.approvals.forWhom" = "适用于";
 "settings.approvals.intro" = "Bandito 会检查代理的每一项操作。日常工作会自动继续；符合下方规则或内置检查的操作会等待处理。";
@@ -1366,6 +1369,7 @@
 "settings.updates.app" = "应用";
 "settings.updates.auto" = "自动更新";
 "settings.updates.beta" = "测试版";
+"settings.updates.betaDesc" = "新功能更早推送";
 "settings.updates.channel" = "更新渠道";
 "settings.updates.check" = "立即检查";
 "settings.updates.daemon" = "更新守护进程";
@@ -1375,6 +1379,7 @@
 "settings.updates.openServer" = "打开“服务器 → 更新”";
 "settings.updates.restartDaemon" = "重启守护进程";
 "settings.updates.stable" = "稳定版";
+"settings.updates.stableDesc" = "经过测试的版本";
 "settings.usage" = "用量";
 "settings.usage.intro" = "代理的订阅和 API 预算。每个进度条显示其时间窗口内的剩余量。";
 "settings.workplaces.body" = "工作区在“服务器”页面中设置。每个工作区都与服务器共享、位于容器中，或属于独立用户。";

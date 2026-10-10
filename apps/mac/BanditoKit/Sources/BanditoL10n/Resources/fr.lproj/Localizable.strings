@@ -1268,7 +1268,9 @@
 "settings.approvals.add" = "Ajouter";
 "settings.approvals.allAgents" = "Tous les agents";
 "settings.approvals.allow" = "Autoriser";
+"settings.approvals.allowDesc" = "Agit sans demander";
 "settings.approvals.ask" = "Demander";
+"settings.approvals.askDesc" = "Demande avant d'agir";
 "settings.approvals.autoDeny" = "Si vous ne répondez pas dans les 30 minutes";
 "settings.approvals.autoDenyHint" = "Refuser et demander à l’agent de trouver une autre voie, au lieu d’attendre indéfiniment.";
 "settings.approvals.browser.delete" = "« Supprimer » sur les sites";
@@ -1283,6 +1285,7 @@
 "settings.approvals.columnScope" = "Pour";
 "settings.approvals.deleteAria" = "Supprimer la règle %1$@";
 "settings.approvals.deny" = "Refuser";
+"settings.approvals.denyDesc" = "Ne l'exécute jamais";
 "settings.approvals.empty" = "Aucune règle pour l’instant.";
 "settings.approvals.forWhom" = "Pour";
 "settings.approvals.intro" = "Bandito vérifie chaque action d’un agent. Le travail courant avance tout seul ; tout ce qui correspond à une règle ci-dessous ou à une vérification intégrée attend votre accord.";
@@ -1366,6 +1369,7 @@
 "settings.updates.app" = "App";
 "settings.updates.auto" = "Mettre à jour automatiquement";
 "settings.updates.beta" = "Bêta";
+"settings.updates.betaDesc" = "Les nouveautés plus tôt";
 "settings.updates.channel" = "Canal de mise à jour";
 "settings.updates.check" = "Vérifier maintenant";
 "settings.updates.daemon" = "Mettre à jour le démon";
@@ -1375,6 +1379,7 @@
 "settings.updates.openServer" = "Ouvrir Serveur → Mises à jour";
 "settings.updates.restartDaemon" = "Redémarrer le démon";
 "settings.updates.stable" = "Stable";
+"settings.updates.stableDesc" = "Versions éprouvées";
 "settings.usage" = "Utilisation";
 "settings.usage.intro" = "Abonnements et budgets API de vos agents. Chaque barre indique ce qui reste dans sa fenêtre.";
 "settings.workplaces.body" = "Les espaces de travail se configurent dans l’écran Serveur. Chacun est partagé avec le serveur, un conteneur ou un utilisateur distinct.";

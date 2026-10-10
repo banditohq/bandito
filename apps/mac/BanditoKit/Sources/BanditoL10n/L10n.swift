@@ -1760,7 +1760,9 @@ public enum L10n {
             public static var add: String { L10n.tr("settings.approvals.add") }
             public static var allAgents: String { L10n.tr("settings.approvals.allAgents") }
             public static var allow: String { L10n.tr("settings.approvals.allow") }
+            public static var allowDesc: String { L10n.tr("settings.approvals.allowDesc") }
             public static var ask: String { L10n.tr("settings.approvals.ask") }
+            public static var askDesc: String { L10n.tr("settings.approvals.askDesc") }
             public static var autoDeny: String { L10n.tr("settings.approvals.autoDeny") }
             public static var autoDenyHint: String { L10n.tr("settings.approvals.autoDenyHint") }
             public static var browserChecks: String { L10n.tr("settings.approvals.browserChecks") }
@@ -1771,6 +1773,7 @@ public enum L10n {
             public static var columnScope: String { L10n.tr("settings.approvals.columnScope") }
             public static func deleteAria(pattern: String) -> String { L10n.tr("settings.approvals.deleteAria", pattern) }
             public static var deny: String { L10n.tr("settings.approvals.deny") }
+            public static var denyDesc: String { L10n.tr("settings.approvals.denyDesc") }
             public static var empty: String { L10n.tr("settings.approvals.empty") }
             public static var forWhom: String { L10n.tr("settings.approvals.forWhom") }
             public static var intro: String { L10n.tr("settings.approvals.intro") }
@@ -1863,6 +1866,7 @@ public enum L10n {
             public static var app: String { L10n.tr("settings.updates.app") }
             public static var auto: String { L10n.tr("settings.updates.auto") }
             public static var beta: String { L10n.tr("settings.updates.beta") }
+            public static var betaDesc: String { L10n.tr("settings.updates.betaDesc") }
             public static var channel: String { L10n.tr("settings.updates.channel") }
             public static var check: String { L10n.tr("settings.updates.check") }
             public static var daemon: String { L10n.tr("settings.updates.daemon") }
@@ -1872,6 +1876,7 @@ public enum L10n {
             public static var openServer: String { L10n.tr("settings.updates.openServer") }
             public static var restartDaemon: String { L10n.tr("settings.updates.restartDaemon") }
             public static var stable: String { L10n.tr("settings.updates.stable") }
+            public static var stableDesc: String { L10n.tr("settings.updates.stableDesc") }
         }
 
         public enum Usage {

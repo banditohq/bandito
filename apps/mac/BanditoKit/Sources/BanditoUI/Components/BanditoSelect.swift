@@ -37,6 +37,16 @@ public struct SelectOption<Value: Hashable>: Identifiable {
     }
 }
 
+extension SelectOption {
+    /// The same option without its subtitle: for a field that shows only the chosen title, while the panel keeps the
+    /// descriptions.
+    public var titleOnly: SelectOption {
+        var copy = self
+        copy.subtitle = nil
+        return copy
+    }
+}
+
 /// A group of choices with an optional heading (shown with `SectionLabel`).
 public struct SelectSection<Value: Hashable> {
     public var title: String?
@@ -48,6 +58,13 @@ public struct SelectSection<Value: Hashable> {
     }
 }
 
+/// How a select field looks. `.field` is the form row: full width, 40 points high, the subtitle beside the title.
+/// `.compact` is a small capsule for toolbars and tight places: 28 points high, no subtitle, its size is its content.
+/// `.regular` is the same capsule at the height of a regular quiet button (38 points), to sit beside those buttons.
+public enum SelectStyle: Sendable {
+    case field, compact, regular
+}
+
 /// The standard look of a select field: the chosen option's icon, title and subtitle, and the chevron. A field with
 /// no chosen option shows the placeholder.
 public struct SelectFieldView: View {
@@ -57,17 +74,53 @@ public struct SelectFieldView: View {
     let tint: Color?
     let isPlaceholder: Bool
     let monospaced: Bool
+    let style: SelectStyle
 
-    public init<Value: Hashable>(option: SelectOption<Value>?, placeholder: String) {
+    public init<Value: Hashable>(option: SelectOption<Value>?, placeholder: String, style: SelectStyle = .field) {
         title = option?.title ?? placeholder
         subtitle = option?.subtitle
         icon = option?.icon
         tint = option?.tint
         isPlaceholder = option == nil
         monospaced = option?.monospaced ?? false
+        self.style = style
     }
 
     public var body: some View {
+        if style == .field {
+            fieldLabel
+        } else {
+            capsuleLabel
+        }
+    }
+
+    /// The capsule of `.compact` (28 points, the small text) and `.regular` (38 points, the quiet button's text size).
+    private var capsuleLabel: some View {
+        let regular = style == .regular
+        return HStack(spacing: 6) {
+            if let icon {
+                Image(systemName: icon)
+                    .font(.system(size: regular ? 13 : 11.5, weight: .medium))
+                    .foregroundStyle(tint ?? Color.Bandito.text2)
+                    .accessibilityHidden(true)
+            }
+            Text(title)
+                .font(BanditoFont.font(size: regular ? 13.5 : 12.5, weight: 500, mono: monospaced))
+                .foregroundStyle(isPlaceholder ? Color.Bandito.text3 : Color.Bandito.text)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+            Image(systemName: "chevron.up.chevron.down")
+                .font(.system(size: regular ? 10 : 9))
+                .foregroundStyle(Color.Bandito.text3)
+                .accessibilityHidden(true)
+        }
+        .padding(.horizontal, regular ? 18 : 12)
+        .frame(height: regular ? 38 : 28)
+        .background(Color.Bandito.text.opacity(0.06), in: Capsule())
+        .overlay(Capsule().stroke(Color.Bandito.text.opacity(0.12), lineWidth: 1))
+    }
+
+    private var fieldLabel: some View {
         HStack(spacing: 10) {
             if let icon {
                 Image(systemName: icon)
@@ -99,7 +152,8 @@ public struct SelectFieldView: View {
 /// A field that opens a panel of choices. The whole field is the button: a click anywhere on it opens the panel. The
 /// panel sits under the field, as wide as the field (280 to 520 points), with search above eight options, keyboard
 /// movement (↑ ↓ choose, Esc closes), and a checkmark on the chosen option only. A `footer` sits under the options and
-/// gets a `close` action, for an item that does something else (such as "Other model…").
+/// gets a `close` action, for an item that does something else (such as "Other model…"). `style` sets the button's
+/// hover look and whether the field takes the full width: `.compact` keeps its own size (see `SelectStyle`).
 public struct BanditoSelect<Value: Hashable, Field: View, Footer: View>: View {
     private let selection: Binding<Value>
     private let sections: [SelectSection<Value>]
@@ -107,9 +161,13 @@ public struct BanditoSelect<Value: Hashable, Field: View, Footer: View>: View {
     private let placeholder: String
     private let field: (SelectOption<Value>?) -> Field
     private let footer: (@escaping () -> Void) -> Footer
+    private let style: SelectStyle
 
     @State private var isOpen = false
     @State private var fieldWidth: CGFloat = 0
+    /// What VoiceOver reads for the field instead of the chosen title, and a hint. Nil keeps the default.
+    private var valueOverride: String?
+    private var hintOverride: String?
 
     /// - Parameters:
     ///   - selection: The value of the chosen option.
@@ -118,10 +176,12 @@ public struct BanditoSelect<Value: Hashable, Field: View, Footer: View>: View {
     ///   - placeholder: The field's text when no option is chosen.
     ///   - field: The field's look, given the chosen option (nil when there is none).
     ///   - footer: Shown under the options. It is given the action that closes the panel.
+    ///   - style: `.field` (full width, the default) or `.compact` (a small capsule that keeps its size).
     public init(
         selection: Binding<Value>, sections: [SelectSection<Value>], label: String, placeholder: String,
         field: @escaping (SelectOption<Value>?) -> Field,
-        footer: @escaping (@escaping () -> Void) -> Footer
+        footer: @escaping (@escaping () -> Void) -> Footer,
+        style: SelectStyle = .field
     ) {
         self.selection = selection
         self.sections = sections
@@ -129,19 +189,30 @@ public struct BanditoSelect<Value: Hashable, Field: View, Footer: View>: View {
         self.placeholder = placeholder
         self.field = field
         self.footer = footer
+        self.style = style
+    }
+
+    /// Overrides what VoiceOver reads for the field: a value other than the chosen title (for example a status), and a
+    /// hint. Nil keeps the default.
+    public func accessibility(value: String? = nil, hint: String? = nil) -> BanditoSelect {
+        var copy = self
+        copy.valueOverride = value
+        copy.hintOverride = hint
+        return copy
     }
 
     public var body: some View {
         let chosen = sections.flatMap(\.options).first { $0.value == selection.wrappedValue }
+        let fills = style == .field
         Button {
             isOpen = true
         } label: {
             field(chosen)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: fills ? .infinity : nil, alignment: .leading)
                 .contentShape(Rectangle())
         }
-        .banditoButton(.row(cornerRadius: 12))
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .banditoButton(style == .field ? .row(cornerRadius: 12) : .brighten)
+        .frame(maxWidth: fills ? .infinity : nil, alignment: .leading)
         .background {
             GeometryReader { proxy in
                 Color.clear.preference(key: SelectFieldWidthKey.self, value: proxy.size.width)
@@ -149,7 +220,8 @@ public struct BanditoSelect<Value: Hashable, Field: View, Footer: View>: View {
         }
         .onPreferenceChange(SelectFieldWidthKey.self) { fieldWidth = $0 }
         .accessibilityLabel(label)
-        .accessibilityValue(chosen?.title ?? placeholder)
+        .accessibilityValue(valueOverride ?? chosen?.title ?? placeholder)
+        .accessibilityHint(hintOverride ?? "")
         .popover(isPresented: $isOpen, attachmentAnchor: .rect(.bounds), arrowEdge: .bottom) {
             SelectPanel(
                 selection: selection, sections: sections, footer: footer { isOpen = false },
@@ -163,12 +235,13 @@ public struct BanditoSelect<Value: Hashable, Field: View, Footer: View>: View {
 extension BanditoSelect where Field == SelectFieldView, Footer == EmptyView {
     /// A select with the standard field and no footer.
     public init(
-        selection: Binding<Value>, sections: [SelectSection<Value>], label: String, placeholder: String
+        selection: Binding<Value>, sections: [SelectSection<Value>], label: String, placeholder: String,
+        style: SelectStyle = .field
     ) {
         self.init(
             selection: selection, sections: sections, label: label, placeholder: placeholder,
-            field: { SelectFieldView(option: $0, placeholder: placeholder) },
-            footer: { _ in EmptyView() })
+            field: { SelectFieldView(option: $0, placeholder: placeholder, style: style) },
+            footer: { _ in EmptyView() }, style: style)
     }
 }
 
@@ -176,12 +249,19 @@ extension BanditoSelect where Field == SelectFieldView {
     /// A select with the standard field and a footer.
     public init(
         selection: Binding<Value>, sections: [SelectSection<Value>], label: String, placeholder: String,
-        footer: @escaping (@escaping () -> Void) -> Footer
+        style: SelectStyle = .field, footer: @escaping (@escaping () -> Void) -> Footer
     ) {
         self.init(
             selection: selection, sections: sections, label: label, placeholder: placeholder,
-            field: { SelectFieldView(option: $0, placeholder: placeholder) }, footer: footer)
+            field: { SelectFieldView(option: $0, placeholder: placeholder, style: style) }, footer: footer,
+            style: style)
     }
+}
+
+/// Runs an action once the panel has closed. A sheet or a dialog opened while the popover is still going away is lost,
+/// so the action waits for the popover to finish.
+public func afterSelectPanelCloses(_ action: @escaping () -> Void) {
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: action)
 }
 
 /// The field's width, reported up so the panel can match it.
