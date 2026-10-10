@@ -939,6 +939,7 @@
 "message.reactionMine" = "取消回应";
 "message.reactionOf" = "%1$@ 的回应";
 "message.reactionSame" = "同样回应";
+"message.resend" = "重新发送";
 "message.selectText" = "选择文字";
 "mode.browser" = "浏览器";
 "mode.connectServer" = "连接服务器后即可使用。";
@@ -1923,6 +1924,7 @@
 "thread.messageFor" = "发给 %1$@ 的消息";
 "thread.messageFrom" = "来自 %1$@ 的消息";
 "thread.more" = "更多";
+"thread.notDelivered" = "未送达";
 "thread.placeholder" = "输入任务或问题…";
 "thread.queued" = "排队中";
 "thread.react" = "回应";

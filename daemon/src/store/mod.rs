@@ -126,6 +126,23 @@ impl Store {
         })
     }
 
+    /// Messages shown as waiting (`queued: true`) that no `turn.started` has taken and no `message.dropped` has
+    /// closed, as `(agent_id, seq)`. After a daemon restart these have lost their place in the in-memory queue.
+    pub fn queued_messages_unresolved(&self) -> Result<Vec<(String, i64)>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT e.agent_id, e.seq FROM events e
+             WHERE e.kind = 'message.user' AND json_extract(e.payload, '$.queued') = 1
+               AND NOT EXISTS (
+                 SELECT 1 FROM events t WHERE t.agent_id = e.agent_id AND t.seq > e.seq
+                   AND ((t.kind = 'turn.started' AND json_extract(t.payload, '$.message_seq') = e.seq)
+                     OR (t.kind = 'message.dropped' AND json_extract(t.payload, '$.seq') = e.seq)))
+             ORDER BY e.seq",
+        )?;
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)))?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
     /// Events with `seq > after`, oldest first.
     pub fn events_since(&self, after: i64, limit: u32, agent_id: Option<&str>) -> Result<Vec<Event>> {
         let conn = self.conn();

@@ -32,6 +32,11 @@ public enum ThreadItem: Sendable, Hashable, Identifiable {
         }
     }
 
+    var isChapter: Bool {
+        if case .chapter = self { return true }
+        return false
+    }
+
     /// The `seq` of the event this item is, when it is a message a person can react to or answer: a message from the
     /// person or the agent. A message finalized from a stream (`…-s`), and a crew or schedule message, have none.
     public var messageSeq: Int64? {
@@ -112,10 +117,13 @@ public struct AgentThread: Sendable, Hashable {
     /// When the running turn began (Unix ms, the time of its `turn.started`); nil when no turn runs or its start is
     /// not in the loaded history. The "Thinking · N min" counter counts from here, not from the last message.
     public internal(set) var turnStartedAt: Int64?
-    /// Seqs of the messages that were shown while they waited for their turn (`queued`), and of those whose turn has
-    /// begun (named by `turn.started.messageSeq`). A message waits while it is in the first set and not in the second.
+    /// Seqs of the messages that were shown while they waited for their turn (`queued`); for each message whose turn
+    /// began (named by `turn.started.messageSeq`) the seq of that `turn.started`; for each message that will get no
+    /// turn (`message.dropped`) the seq of that event. A message waits while it is queued and in neither of the
+    /// others. The sets grow only with the loaded events and are rebuilt with the thread.
     private var queuedSeqs: Set<Int64> = []
-    private var startedSeqs: Set<Int64> = []
+    private var startedAt: [Int64: Int64] = [:]
+    private var droppedAt: [Int64: Int64] = [:]
     /// Reactions by the `seq` of the message they are on.
     public private(set) var reactions: [Int64: MessageReactions] = [:]
     /// The message each reply answers: `seq` of the reply to `seq` of the original.
@@ -133,7 +141,14 @@ public struct AgentThread: Sendable, Hashable {
     public init() {}
 
     /// The messages that are in the thread but not yet taken by a turn.
-    public var waitingSeqs: Set<Int64> { queuedSeqs.subtracting(startedSeqs) }
+    public var waitingSeqs: Set<Int64> {
+        queuedSeqs.filter { startedAt[$0] == nil && droppedAt[$0] == nil }
+    }
+
+    /// The messages shown as waiting that the daemon gave up on: no turn will take them.
+    public var undeliveredSeqs: Set<Int64> {
+        queuedSeqs.filter { startedAt[$0] == nil && droppedAt[$0] != nil }
+    }
 
     /// The daemon closes a chapter with "… memory not saved" when it could not run the memory-save turn at all
     /// (see `unsaved` in daemon/src/supervisor.rs).
@@ -196,7 +211,9 @@ public struct AgentThread: Sendable, Hashable {
         case .turnStarted(_, _, let messageSeq):
             turnRunning = true
             turnStartedAt = e.ts
-            if let messageSeq { startedSeqs.insert(messageSeq) }
+            if let messageSeq { startedAt[messageSeq] = e.seq }
+        case .messageDropped(let seq, _):
+            droppedAt[seq] = e.seq
         case .messageUser(let text, let source, let from, let replyTo, let files, let queued):
             if queued, source != .system, e.seq > 0 { queuedSeqs.insert(e.seq) }
             if source != .system {
@@ -292,7 +309,7 @@ public struct AgentThread: Sendable, Hashable {
             memorySaveRunning = false
             memorySaveFailed = false
             items.append(.chapter(id: e.id, number: chapter, saved: !unsaved, ts: e.ts))
-            moveWaitingMessagesToEnd()
+            reorderWaitingAcrossChapters()
         case .runtimeSwitched(let from, let to, let until):
             items.append(.runtimeSwitch(id: e.id, from: from, to: to, until: until, ts: e.ts))
         case .formRequested(let formId, let spec):
@@ -346,18 +363,34 @@ public struct AgentThread: Sendable, Hashable {
         items.insert(.form(row), at: at ?? items.endIndex)
     }
 
-    /// A message that waited through a memory save is read by the agent in the new chapter, so it moves below the
-    /// chapter divider: the thread shows the order the agent works in. One copy, never a second (see
-    /// docs/ARCHITECTURE.md, Chapters).
-    private mutating func moveWaitingMessagesToEnd() {
-        for seq in waitingSeqs.sorted() {
+    /// A message that waited through a memory save is read by the agent in the new chapter, so it sits right below that
+    /// chapter's divider: the thread shows the order the agent works in. One copy, never a second (see
+    /// docs/ARCHITECTURE.md, Chapters). The place is worked out from everything loaded (queued, started and dropped
+    /// seqs, and the dividers in `items`), so it does not depend on which page of history held which event; the
+    /// function gives the same result when it runs again.
+    private mutating func reorderWaitingAcrossChapters() {
+        let dividers: [Int64] = items.compactMap {
+            if case .chapter(let id, _, _, _) = $0 { return ThreadItem.seq(ofEventID: id) }
+            return nil
+        }
+        guard !dividers.isEmpty else { return }
+        var placed: [Int64: Int] = [:]
+        for seq in queuedSeqs.sorted() {
+            // The message waited through every divider between its arrival and the end of its wait.
+            let end = min(startedAt[seq] ?? .max, droppedAt[seq] ?? .max)
+            guard let divider = dividers.filter({ $0 > seq && $0 < end }).max() else { continue }
             let id = ThreadItem.messageID(seq: seq)
             // A crew or schedule message has a quiet line of its own in front of it.
             let wanted: Set<String> = [id, id + "-n"]
             let moving = items.filter { wanted.contains($0.id) }
             guard !moving.isEmpty else { continue }
             items.removeAll { wanted.contains($0.id) }
-            items.append(contentsOf: moving)
+            guard let at = items.firstIndex(where: { $0.id == ThreadItem.messageID(seq: divider) }) else {
+                items.append(contentsOf: moving)
+                continue
+            }
+            items.insert(contentsOf: moving, at: at + 1 + placed[divider, default: 0])
+            placed[divider, default: 0] += moving.count
         }
     }
 
@@ -365,7 +398,9 @@ public struct AgentThread: Sendable, Hashable {
     /// of history, or the live events that came while a page was loading.
     public mutating func mergeMessageMeta(from other: AgentThread) {
         queuedSeqs.formUnion(other.queuedSeqs)
-        startedSeqs.formUnion(other.startedSeqs)
+        startedAt.merge(other.startedAt) { mine, _ in mine }
+        droppedAt.merge(other.droppedAt) { mine, _ in mine }
+        reorderWaitingAcrossChapters()
         for (seq, theirs) in other.reactions { reactions[seq, default: MessageReactions()].merge(theirs) }
         for (seq, to) in other.replies where replies[seq] == nil { replies[seq] = to }
         for (seq, files) in other.attachments where attachments[seq] == nil { attachments[seq] = files }

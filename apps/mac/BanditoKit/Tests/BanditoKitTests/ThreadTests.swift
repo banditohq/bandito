@@ -188,6 +188,55 @@ import Testing
         #expect(messageSeq == 5)
     }
 
+    @Test mutating func aDroppedMessageIsUndeliveredNotWaiting() {
+        var t = AgentThread()
+        t.apply(ev(.messageUser(text: "first", source: .user, fromAgent: nil)))
+        t.apply(ev(.messageUser(text: "lost", source: .user, fromAgent: nil, queued: true)))
+        let lost = seq
+        #expect(t.waitingSeqs == [lost] && t.undeliveredSeqs.isEmpty)
+        t.apply(ev(.messageDropped(seq: lost, reason: "restart")))
+        #expect(t.waitingSeqs.isEmpty)
+        #expect(t.undeliveredSeqs == [lost])
+        // The message itself stays in the thread.
+        #expect(t.items.count == 2)
+    }
+
+    /// The page boundary falls between the queued message and the chapter divider: the order is the same as when
+    /// everything is read at once.
+    @Test mutating func waitingMessageMovesBelowTheDividerWhenThePagesAreMerged() {
+        var all: [Event] = []
+        func add(_ body: EventBody, _ t: inout ThreadTests) { all.append(t.ev(body)) }
+        add(.messageUser(text: "work", source: .user, fromAgent: nil), &self)
+        add(.turnCompleted(turnId: "t0", status: .ok, usage: nil, costUsd: nil), &self)
+        add(.messageUser(text: "Update your memory files.", source: .system, fromAgent: nil), &self)
+        add(.messageUser(text: "asked while saving", source: .user, fromAgent: nil, queued: true), &self)
+        let queued = seq
+        // page boundary here
+        add(.turnCompleted(turnId: "w", status: .ok, usage: nil, costUsd: nil), &self)
+        add(.sessionRotated(chapter: 2, reason: "context", contextTokens: 130_000), &self)
+        add(.turnStarted(turnId: "t1", source: .user, messageSeq: queued), &self)
+        add(.messageAssistant(text: "here you go"), &self)
+
+        var whole = AgentThread()
+        for e in all { whole.apply(e) }
+
+        var newer = AgentThread()
+        for e in all[4...] { newer.apply(e) }
+        var older = AgentThread()
+        for e in all[..<4] { older.apply(e) }
+        // As `loadOlder` does it.
+        var merged = newer
+        merged.items = older.items + newer.items
+        merged.mergeMessageMeta(from: older)
+
+        #expect(merged.items.map(\.id) == whole.items.map(\.id))
+        let ids = merged.items.map(\.id)
+        let divider = ids.firstIndex { $0.hasPrefix("s") && merged.items[ids.firstIndex(of: $0)!].isChapter } ?? -1
+        #expect(ids[divider + 1] == ThreadItem.messageID(seq: queued))
+        #expect(ids.filter { $0 == ThreadItem.messageID(seq: queued) }.count == 1)
+        #expect(merged.waitingSeqs.isEmpty)
+    }
+
     @Test mutating func sessionRotatedIsANote() {
         var t = AgentThread()
         t.apply(ev(.sessionRotated(chapter: 2, reason: "smart", contextTokens: 120_400)))

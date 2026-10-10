@@ -939,6 +939,7 @@
 "message.reactionMine" = "Remover sua reação";
 "message.reactionOf" = "Reação de %1$@";
 "message.reactionSame" = "Reagir da mesma forma";
+"message.resend" = "Enviar novamente";
 "message.selectText" = "Selecionar texto";
 "mode.browser" = "Navegador";
 "mode.connectServer" = "Conecte um servidor para usá-lo.";
@@ -1923,6 +1924,7 @@
 "thread.messageFor" = "Mensagem para %1$@";
 "thread.messageFrom" = "Mensagem de %1$@";
 "thread.more" = "Mais";
+"thread.notDelivered" = "Não entregue";
 "thread.placeholder" = "Escreva uma tarefa ou uma pergunta…";
 "thread.queued" = "Na fila";
 "thread.react" = "Reagir";

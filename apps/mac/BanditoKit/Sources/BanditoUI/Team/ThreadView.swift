@@ -580,8 +580,9 @@ struct ThreadView: View {
             reactions: current.reactions,
             replies: current.replies,
             attachments: current.attachments,
-            // A waiting message is marked only while the agent is busy: after a restart the queue is gone.
-            waiting: current.turnRunning ? current.waitingSeqs : [],
+            waiting: current.waitingSeqs,
+            undelivered: current.undeliveredSeqs,
+            onResend: { seq in resend(seq) },
             highlightedID: highlightedID,
             original: { seq in Self.original(seq, in: current.items) },
             onReply: { target in
@@ -606,6 +607,19 @@ struct ThreadView: View {
             }
         }
         return nil
+    }
+
+    /// Sends a message the daemon gave up on once more, with the files it carried. The old line stays as it was.
+    private func resend(_ seq: Int64) {
+        let agentID = agent.id
+        let id = ThreadItem.messageID(seq: seq)
+        guard case .user(_, let text, _, _, _, _)? = thread.items.first(where: { $0.id == id }) else { return }
+        let files = thread.attachments[seq] ?? []
+        Task {
+            do { try await server.send(text, to: agentID, attachments: files) } catch {
+                actionError = UserFacingError.message(for: error)
+            }
+        }
     }
 
     private func react(_ seq: Int64, _ emoji: String?) {

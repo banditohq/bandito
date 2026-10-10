@@ -444,6 +444,16 @@ impl Supervisor {
             self.hub
                 .emit(&f.agent_id, form_answered_event(&f.id, &Outcome::Expired));
         }
+        // The queue lives in memory: a message that was shown as waiting will not get its turn now.
+        for (agent_id, seq) in self.hub.store.queued_messages_unresolved()? {
+            self.hub.emit(
+                &agent_id,
+                EventBody::MessageDropped {
+                    seq,
+                    reason: "restart".into(),
+                },
+            );
+        }
         for a in self.hub.store.approval_expire_older_than(i64::MAX)? {
             self.hub.emit(
                 &a.agent_id,
@@ -1565,6 +1575,15 @@ impl Actor {
                 },
             );
             self.set_status(AgentStatus::Error, Some(message));
+            if let Some(seq) = echoed {
+                self.hub.emit(
+                    &self.id,
+                    EventBody::MessageDropped {
+                        seq,
+                        reason: "failed".into(),
+                    },
+                );
+            }
             return Err(e);
         }
         let retry = std::mem::take(&mut self.next_turn_is_retry);
@@ -1913,7 +1932,7 @@ impl Actor {
                 if failed {
                     self.set_status(AgentStatus::Error, detail);
                     // Don't respawn in a loop: drop what was queued behind the crash.
-                    self.queue.clear();
+                    self.drop_queue("crash");
                 } else {
                     self.after_turn().await;
                 }
@@ -2250,7 +2269,23 @@ impl Actor {
         });
     }
 
+    /// Empties the queue. A message that was shown as waiting is marked as not delivered, with `reason`.
+    fn drop_queue(&mut self, reason: &str) {
+        for queued in std::mem::take(&mut self.queue) {
+            if let Some(seq) = queued.echoed {
+                self.hub.emit(
+                    &self.id,
+                    EventBody::MessageDropped {
+                        seq,
+                        reason: reason.into(),
+                    },
+                );
+            }
+        }
+    }
+
     async fn close(&mut self) {
+        self.drop_queue("stopped");
         if let Some(s) = self.session.take() {
             s.shutdown().await;
         }
@@ -2939,6 +2974,79 @@ mod tests {
         w.sup.send(&w.agent, Inbound::user("again")).await.unwrap();
         w.wait_log("send again").await;
         assert_eq!(w.spawns.lock().unwrap().len(), 2, "a new session after the crash");
+    }
+
+    /// `(seq, reason)` of every `message.dropped` of the world's agent.
+    fn dropped(w: &World) -> Vec<(i64, String)> {
+        w.store
+            .events_since(0, 1000, Some(&w.agent))
+            .unwrap()
+            .into_iter()
+            .filter_map(|e| match e.body {
+                EventBody::MessageDropped { seq, reason } => Some((seq, reason)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn messages_queued_behind_a_crash_are_marked_dropped() {
+        let mut w = world(ApprovalMode::Risky);
+        w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
+        w.wait_log("send go").await;
+        w.sup.send(&w.agent, Inbound::user("waiting")).await.unwrap();
+        let seq = user_events(&w).iter().find(|m| m.0 == "waiting").unwrap().2;
+        w.push(RuntimeOutput::Exited {
+            code: Some(1),
+            stderr_tail: "boom".into(),
+        })
+        .await;
+        w.wait(is_status(AgentStatus::Error)).await;
+        assert_eq!(dropped(&w), vec![(seq, "crash".to_string())]);
+        assert_eq!(user_texts(&w), vec!["go", "waiting"], "the message stays in the thread");
+    }
+
+    #[tokio::test]
+    async fn stopping_the_agent_marks_its_waiting_messages_dropped() {
+        let w = world(ApprovalMode::Risky);
+        w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
+        w.wait_log("send go").await;
+        w.sup.send(&w.agent, Inbound::user("waiting")).await.unwrap();
+        let seq = user_events(&w).iter().find(|m| m.0 == "waiting").unwrap().2;
+        w.sup.stop(&w.agent).await;
+        assert_eq!(dropped(&w), vec![(seq, "stopped".to_string())]);
+    }
+
+    #[tokio::test]
+    async fn recover_marks_unresolved_waiting_messages_dropped_once() {
+        let w = world(ApprovalMode::Risky);
+        let queued = |text: &str| EventBody::MessageUser {
+            text: text.into(),
+            source: Source::User,
+            from_agent: None,
+            command: None,
+            reply_to: None,
+            attachments: Vec::new(),
+            queued: true,
+        };
+        let lost = w.store.append_event(&w.agent, queued("lost")).unwrap().seq;
+        let taken = w.store.append_event(&w.agent, queued("taken")).unwrap().seq;
+        w.store
+            .append_event(
+                &w.agent,
+                EventBody::TurnStarted {
+                    turn_id: "t".into(),
+                    source: Source::User,
+                    reactions_until: None,
+                    message_seq: Some(taken),
+                },
+            )
+            .unwrap();
+        w.sup.recover().unwrap();
+        assert_eq!(dropped(&w), vec![(lost, "restart".to_string())]);
+        // A second start finds nothing left to drop.
+        w.sup.recover().unwrap();
+        assert_eq!(dropped(&w).len(), 1);
     }
 
     #[tokio::test]

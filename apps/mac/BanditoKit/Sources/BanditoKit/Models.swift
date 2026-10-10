@@ -411,6 +411,8 @@ public enum EventBody: Sendable, Hashable {
     case messageUser(
         text: String, source: MessageSource, fromAgent: String?, replyTo: Int64? = nil,
         attachments: [AgentAttachment] = [], queued: Bool = false)
+    /// A message shown as waiting (`queued`) will not get a turn (`reason`: crash, stopped, failed, restart).
+    case messageDropped(seq: Int64, reason: String)
     case messageAssistant(text: String)
     case messageDelta(text: String)
     case toolCall(callId: String, tool: String, title: String, input: JSONValue)
@@ -464,6 +466,7 @@ extension Event: Decodable {
     private enum Keys: String, CodingKey { case seq, agentId, ts, kind, payload }
 
     private struct TurnStartedP: Decodable { var turnId: String; var source: MessageSource; var messageSeq: Int64? }
+    private struct MessageDroppedP: Decodable { var seq: Int64; var reason: String }
     private struct MessageUserP: Decodable {
         var text: String; var source: MessageSource; var fromAgent: String?
         var replyTo: Int64?; var attachments: [AgentAttachment]?; var queued: Bool?
@@ -518,6 +521,8 @@ extension Event: Decodable {
             body = .messageUser(
                 text: x.text, source: x.source, fromAgent: x.fromAgent, replyTo: x.replyTo,
                 attachments: x.attachments ?? [], queued: x.queued ?? false)
+        case "message.dropped":
+            let x = try p(MessageDroppedP.self); body = .messageDropped(seq: x.seq, reason: x.reason)
         case "message.assistant": body = .messageAssistant(text: try p(TextP.self).text)
         case "message.delta": body = .messageDelta(text: try p(TextP.self).text)
         case "tool.call":

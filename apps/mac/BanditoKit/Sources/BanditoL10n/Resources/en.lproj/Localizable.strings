@@ -939,6 +939,7 @@
 "message.reactionMine" = "Take your reaction off";
 "message.reactionOf" = "Reaction from %1$@";
 "message.reactionSame" = "React the same way";
+"message.resend" = "Send again";
 "message.selectText" = "Select text";
 "mode.browser" = "Browser";
 "mode.connectServer" = "Connect a server to use it.";
@@ -1923,6 +1924,7 @@
 "thread.messageFor" = "Message for %1$@";
 "thread.messageFrom" = "Message from %1$@";
 "thread.more" = "More";
+"thread.notDelivered" = "Not delivered";
 "thread.placeholder" = "Write a task or a question…";
 "thread.queued" = "Queued";
 "thread.react" = "React";

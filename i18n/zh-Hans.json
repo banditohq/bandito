@@ -1,6 +1,7 @@
 {
   "thread.savingMemory": "开始新章节前保存记忆",
   "thread.queued": "排队中",
+  "thread.notDelivered": "未送达",
   "thread.aTeammate": "队友",
   "onboarding.server.newHostTitle": "新服务器 — 请确认",
   "onboarding.skip": "稍后设置",
@@ -2140,6 +2141,7 @@
   "message.reactMore": "更多…",
   "message.reactPickerHint": "请在面板中选择表情",
   "message.copied": "已复制",
+  "message.resend": "重新发送",
   "message.more": "更多",
   "message.copyAsText": "复制为文本",
   "message.selectText": "选择文字",

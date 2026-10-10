@@ -26,6 +26,10 @@ struct ThreadChat {
     var attachments: [Int64: [MessageAttachment]] = [:]
     /// Messages shown while they wait for their turn, by `seq`: they carry a quiet "Queued" line.
     var waiting: Set<Int64> = []
+    /// Messages the daemon gave up on (no turn will take them), by `seq`: a quiet "Not delivered" line, and Send again.
+    var undelivered: Set<Int64> = []
+    /// Sends the text of an undelivered message again.
+    var onResend: (Int64) -> Void = { _ in }
     /// The id of the row that flashes after a jump to it.
     var highlightedID: String?
     /// The row id of the agent's last message. Its action row stays faintly visible (see `MessageActionsPlacement`).
@@ -262,7 +266,10 @@ struct MessageContainer<Bubble: View>: View {
                 }
             }
         }
-        if canReply || canReact { Divider() }
+        if fromUser, let seq, chat.undelivered.contains(seq) {
+            Button(L10n.Message.resend) { chat.onResend(seq) }
+        }
+        if canReply || canReact || (seq.map { chat.undelivered.contains($0) } ?? false) { Divider() }
         Button(L10n.Thread.copy, action: copyRaw)
         Button(L10n.Message.copyAsText, action: copyPlain)
         Button(L10n.Message.selectText) { selecting = true }

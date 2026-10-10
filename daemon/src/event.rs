@@ -126,6 +126,11 @@ pub enum EventBody {
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         queued: bool,
     },
+    /// A message shown as waiting (`message.user` with `queued: true`) will not get a turn: the queue was lost
+    /// (a crash, a stop, a restart) or the session could not start. `reason`: `crash`, `stopped`, `failed`,
+    /// `restart`. The message stays in the thread; a client shows it as not delivered.
+    #[serde(rename = "message.dropped")]
+    MessageDropped { seq: i64, reason: String },
     #[serde(rename = "message.assistant")]
     MessageAssistant { text: String },
     /// Streaming chunk. Broadcast only, never stored.
