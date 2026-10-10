@@ -305,7 +305,7 @@ private struct SelectPanel<Value: Hashable, Footer: View>: View {
                         .foregroundStyle(Color.Bandito.text3)
                         .accessibilityHidden(true)
                     TextField(L10n.Select.search, text: $model.query)
-                        .banditoField()
+                        .textFieldStyle(.plain)
                         .font(BanditoFont.text(size: 13, weight: 400))
                         .foregroundStyle(Color.Bandito.text)
                         .focused($searchFocused)

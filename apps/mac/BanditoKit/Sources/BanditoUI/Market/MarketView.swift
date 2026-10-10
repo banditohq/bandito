@@ -167,7 +167,7 @@ struct MarketView: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(Color.Bandito.text3)
             TextField(L10n.Market.search, text: $query)
-                .banditoField()
+                .textFieldStyle(.plain)
                 .font(BanditoFont.text(size: 13, weight: 400))
                 .foregroundStyle(Color.Bandito.text)
         }

@@ -66,7 +66,7 @@ struct FolderPicker: View {
                 .font(.system(size: 12))
                 .foregroundStyle(Color.Bandito.text3)
             TextField(L10n.FolderPicker.search, text: $query)
-                .banditoField()
+                .textFieldStyle(.plain)
                 .font(BanditoFont.text(size: 12.5, weight: 400))
                 .onSubmit {
                     if FolderPickerLogic.isPath(query) {
@@ -146,7 +146,7 @@ struct FolderPicker: View {
                 TextField(L10n.FolderPicker.newFolderName, text: Binding(
                     get: { newFolder ?? "" }, set: { newFolder = $0 })
                 )
-                .banditoField()
+                .textFieldStyle(.plain)
                 .font(BanditoFont.text(size: 12.5, weight: 400))
                 .focused($newFolderFocused)
                 .onSubmit { Task { await createFolder() } }
