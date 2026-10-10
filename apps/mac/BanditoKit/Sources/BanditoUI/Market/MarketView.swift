@@ -146,6 +146,10 @@ struct MarketView: View {
                 Text(L10n.Mode.market)
                     .font(BanditoFont.display(size: 24, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
+                    // Unbounded is wide: in a narrow window the title shrinks instead of breaking inside the word.
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .layoutPriority(1)
                 Text(L10n.Market.subtitle)
                     .font(BanditoFont.text(size: 13, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
