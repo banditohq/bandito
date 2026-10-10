@@ -57,13 +57,17 @@ import Testing
         #expect(ServiceLogo.image(for: "brave-search") != nil)
         for id in ["gitlab", "vercel", "netlify", "toolbox-postgres", "grafana", "posthog", "huggingface", "mongodb",
                    "railway", "render", "snyk", "prisma", "todoist", "airtable", "clickup", "zapier", "intercom",
-                   "wix", "shopify-dev"] {
+                   "wix", "shopify-dev", "deepl", "perplexity", "kagi"] {
             #expect(ServiceLogo.image(for: id) != nil, "\(id)")
         }
         #expect(ServiceLogo.image(for: "neon") == nil)
         #expect(ServiceLogo.image(for: "composio") == nil)
         #expect(ServiceLogo.image(for: "bitrix24-docs") == nil)
         #expect(ServiceLogo.image(for: "yandex-metrika") == nil)
+        for id in ["tavily", "fal", "stability-ai", "apify", "browserbase", "brightdata", "serpapi", "alpha-vantage",
+                   "openweather"] {
+            #expect(ServiceLogo.image(for: id) == nil, "\(id)")
+        }
     }
 
     @Test func logoIsReadOnceAndAMissIsRemembered() {
