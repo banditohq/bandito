@@ -60,6 +60,7 @@ struct SkillsPage: View {
     var onView: (SkillEntry) -> Void
     var onInstall: (SkillEntry) -> Void
     var onRemoveEverywhere: (SkillEntry) -> Void
+    var onUpdate: (SkillEntry) -> Void
     var onRetry: () -> Void
 
     @Environment(Router.self) private var router
@@ -77,8 +78,9 @@ struct SkillsPage: View {
                         SkillCard(
                             skill: skill, languageCode: languageCode,
                             canInstall: SkillLogic.canInstall(skill, agents: agents),
+                            updating: model.busy.contains { $0.hasPrefix(skill.id + "|") },
                             onView: { onView(skill) }, onInstall: { onInstall(skill) },
-                            onRemove: { onRemoveEverywhere(skill) })
+                            onRemove: { onRemoveEverywhere(skill) }, onUpdate: { onUpdate(skill) })
                     }
                 }
             } else if let failure = model.failure {
@@ -102,9 +104,12 @@ struct SkillCard: View {
     let skill: SkillEntry
     let languageCode: String
     let canInstall: Bool
+    /// An install or an update of this skill is running.
+    var updating = false
     var onView: () -> Void
     var onInstall: () -> Void
     var onRemove: () -> Void
+    var onUpdate: () -> Void = {}
 
     var body: some View {
         let state = SkillLogic.State(skill)
@@ -175,15 +180,20 @@ struct SkillCard: View {
     /// Installed for the server: the word and Remove. On some agents: the count and Install. Else Install.
     @ViewBuilder
     private func actions(_ state: SkillLogic.State) -> some View {
+        let hasUpdate = SkillLogic.hasUpdate(skill)
         switch state.badge {
         case .installed:
-            Label {
-                Text(L10n.Market.Skill.installed)
-            } icon: {
-                Image(systemName: "checkmark")
+            if hasUpdate {
+                updateButton
+            } else {
+                Label {
+                    Text(L10n.Market.Skill.installed)
+                } icon: {
+                    Image(systemName: "checkmark")
+                }
+                .font(BanditoFont.text(size: 12.5, weight: 500))
+                .foregroundStyle(Color.Bandito.ok)
             }
-            .font(BanditoFont.text(size: 12.5, weight: 500))
-            .foregroundStyle(Color.Bandito.ok)
             Button(L10n.Market.Skill.remove, action: onRemove)
                 .banditoButton(.link)
                 .fixedSize()
@@ -191,10 +201,22 @@ struct SkillCard: View {
             Text(L10n.Market.Skill.onAgents(count: count))
                 .font(BanditoFont.text(size: 12.5, weight: 500))
                 .foregroundStyle(Color.Bandito.text2)
-            if canInstall { installButton }
+            if hasUpdate {
+                updateButton
+            } else if canInstall {
+                installButton
+            }
         case .none:
             if canInstall { installButton }
         }
+    }
+
+    /// The copy of the skill is behind the catalog: Update installs the catalog's copy in the same place.
+    private var updateButton: some View {
+        Button(updating ? L10n.Market.Update.updating : L10n.Market.Update.button, action: onUpdate)
+            .banditoButton(.lightPill())
+            .disabled(updating)
+            .fixedSize()
     }
 
     private var installButton: some View {
@@ -215,6 +237,7 @@ struct SkillDetailPanel: View {
     var onClose: () -> Void
     var onInstall: () -> Void
     var onRemove: (SkillLogic.Target) -> Void
+    var onUpdate: (SkillLogic.Target) -> Void = { _ in }
 
     @Environment(\.openURL) private var openURL
 
@@ -294,10 +317,12 @@ struct SkillDetailPanel: View {
         VStack(alignment: .leading, spacing: 10) {
             SectionLabel(L10n.Market.Skill.Section.places)
             if state.installedForEveryone {
-                placeRow(L10n.Market.Skill.everyone, target: .everyone)
+                placeRow(L10n.Market.Skill.everyone, target: .everyone, update: skill.updates.user)
             }
             ForEach(state.installedAgents, id: \.self) { id in
-                placeRow(SkillLogic.agentName(id, agents: agents), target: .agent(id))
+                placeRow(
+                    SkillLogic.agentName(id, agents: agents), target: .agent(id),
+                    update: skill.updates.projects.contains(id))
             }
             if state.conflictForEveryone {
                 conflictRow(SkillText.conflictEveryone())
@@ -308,7 +333,7 @@ struct SkillDetailPanel: View {
         }
     }
 
-    private func placeRow(_ title: String, target: SkillLogic.Target) -> some View {
+    private func placeRow(_ title: String, target: SkillLogic.Target, update: Bool) -> some View {
         HStack(spacing: 10) {
             Image(systemName: "checkmark")
                 .font(.system(size: 10, weight: .bold))
@@ -318,9 +343,17 @@ struct SkillDetailPanel: View {
                 .foregroundStyle(Color.Bandito.text)
                 .lineLimit(1)
             Spacer(minLength: 8)
+            let working = busy.contains(SkillsMarketModel.busyKey(skill.id, target))
+            if update {
+                Chip(text: L10n.Market.Update.available, tone: .info)
+                Button(working ? L10n.Market.Update.updating : L10n.Market.Update.button) { onUpdate(target) }
+                    .banditoButton(.lightPill())
+                    .disabled(working)
+                    .fixedSize()
+            }
             Button(L10n.Market.Skill.remove) { onRemove(target) }
                 .banditoButton(.quiet())
-                .disabled(busy.contains(SkillsMarketModel.busyKey(skill.id, target)))
+                .disabled(working)
                 .fixedSize()
         }
     }

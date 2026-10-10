@@ -31,6 +31,12 @@ struct MarketView: View {
     @State private var panel: MarketPanelState?
     @State private var panelBusy = false
     @State private var removingSkill: SkillRemoval?
+    /// Services that an update from the template is running for, by integration id.
+    @State private var updating: Set<String> = []
+    /// "Suited to the project": what the daemon suggested for `recommendedFor`, and a counter that bumps when the person
+    /// closes a row, so the view reads the stored choice again.
+    @State private var recommendations: [IntegrationRecommendation] = []
+    @State private var hideTick = 0
 
     private let columns = [GridItem(.adaptive(minimum: 240), spacing: 14, alignment: .top)]
 
@@ -51,6 +57,9 @@ struct MarketView: View {
         }
         .task(id: "\(loadKey)|\(tab.rawValue)") {
             await loadTab()
+        }
+        .task(id: recommendationKey) {
+            await loadRecommendations()
         }
         .onChange(of: tab) { _, _ in
             query = ""
@@ -164,6 +173,7 @@ struct MarketView: View {
                             SectionLabel(L10n.Integrations.connected)
                             connectedRow(shown.connected)
                         }
+                        recommendationRow
                         SectionLabel(L10n.Integrations.catalog)
                         if !shown.grid.isEmpty {
                             LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
@@ -306,6 +316,7 @@ struct MarketView: View {
             onView: { panel = .skillDetail($0.id) },
             onInstall: { panel = .skillInstall($0.id) },
             onRemoveEverywhere: { removingSkill = SkillRemoval(skill: $0, target: .everyone, place: "") },
+            onUpdate: { skill in Task { await updateSkill(skill, targets: SkillLogic.updateTargets(skill)) } },
             onRetry: { if let server { Task { await skills.load(from: server) } } })
         if let error {
             UserFacingErrorView(message: error)
@@ -356,7 +367,8 @@ struct MarketView: View {
                                 removingSkill = SkillRemoval(
                                     skill: skill, target: target,
                                     place: { if case .agent(let agent) = target { SkillLogic.agentName(agent, agents: server.agents) } else { "" } }())
-                            })
+                            },
+                            onUpdate: { target in Task { await updateSkill(skill, targets: [target]) } })
                     }
                     .transition(.opacity)
                 }
@@ -454,6 +466,9 @@ struct MarketView: View {
                     menu(integration)
                 }
                 statusLine(status)
+                if let update = integration.templateUpdate {
+                    updateLine(integration, update)
+                }
                 if status == .needsLogin {
                     Button(L10n.Integrations.Oauth.signInAgain) { signInAgain(integration) }
                         .banditoButton(.quiet())
@@ -472,6 +487,29 @@ struct MarketView: View {
             .frame(width: 300, alignment: .topLeading)
         }
         .onTapGesture { router.marketDetail = entry.id }
+    }
+
+    /// "Update available · 1.2 → 1.3" and Update: the catalog's definition of this service moved on.
+    private func updateLine(_ integration: Integration, _ update: TemplateUpdate) -> some View {
+        let working = updating.contains(integration.id)
+        return HStack(spacing: 8) {
+            Label {
+                Text(UpdateLine(update).text)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            } icon: {
+                Image(systemName: "arrow.triangle.2.circlepath")
+            }
+            .font(BanditoFont.text(size: 12, weight: 500))
+            .foregroundStyle(Color.Bandito.info)
+            Spacer(minLength: 4)
+            Button(working ? L10n.Market.Update.updating : L10n.Market.Update.button) {
+                Task { await updateFromTemplate(integration) }
+            }
+            .banditoButton(.quiet())
+            .disabled(working)
+            .fixedSize()
+        }
     }
 
     private func menu(_ integration: Integration) -> some View {
@@ -577,6 +615,8 @@ struct MarketView: View {
             router.marketSkillFilter = .all
             bots.reset()
             skills.reset()
+            recommendations = []
+            updating = []
             panel = nil
             panelBusy = false
             removingSkill = nil
@@ -644,6 +684,105 @@ struct MarketView: View {
     private func signedIn(_ id: String) async {
         await reload()
         await check(id)
+    }
+
+    /// Brings a connected service up to its catalog template. The last check no longer says anything about the new
+    /// definition, so it is dropped; the list is read again.
+    private func updateFromTemplate(_ integration: Integration) async {
+        guard let server, !updating.contains(integration.id) else { return }
+        updating.insert(integration.id)
+        defer { updating.remove(integration.id) }
+        do {
+            try await server.updateIntegrationFromTemplate(integration.id)
+            tests[integration.id] = nil
+            await reload()
+        } catch {
+            self.error = UserFacingError.message(for: error)
+        }
+    }
+
+    /// Updates a skill in each place it is behind: the same install, in the same scope.
+    private func updateSkill(_ skill: SkillEntry, targets: [SkillLogic.Target]) async {
+        guard let server else { return }
+        for target in targets {
+            if let failure = await skills.change(skill.id, target: target, install: true, on: server) {
+                error = SkillText.message(for: failure)
+                return
+            }
+        }
+        error = nil
+    }
+
+    // MARK: - suggestions
+
+    /// The agent the row of suggestions is for, when the server can suggest and there is one.
+    private var recommendationAgent: Agent? {
+        guard tab == .services, let server, server.supports("integrations"), server.supports("integrations_recommend")
+        else { return nil }
+        return RecommendationLogic.agent(
+            selected: router.selectedAgentID, remembered: LastOpenedAgent.load(serverID: server.id.uuidString),
+            agents: server.agents)
+    }
+
+    /// Asks again when the server, the agent or the connected services change (a connected service leaves the list).
+    private var recommendationKey: String {
+        "\(loadKey)|\(recommendationAgent?.id ?? "")|\(integrations.map(\.id).joined(separator: ","))"
+    }
+
+    private func isRecommendationHidden(_ agent: Agent) -> Bool {
+        _ = hideTick
+        guard let server else { return true }
+        return RecommendationStore.isHidden(server: server.id.uuidString, agent: agent.id)
+    }
+
+    private func loadRecommendations() async {
+        guard let server, let agent = recommendationAgent, !isRecommendationHidden(agent) else {
+            if !recommendations.isEmpty { recommendations = [] }
+            return
+        }
+        do {
+            let list = try await server.recommendedIntegrations(agentID: agent.id)
+            guard !Task.isCancelled, recommendationAgent?.id == agent.id else { return }
+            recommendations = list
+        } catch {
+            // The row is a hint: a failed ask just leaves it out.
+            guard !Task.isCancelled else { return }
+            recommendations = []
+        }
+    }
+
+    /// "Suited to <agent>'s project": up to six services, shown over the catalog under All with no search.
+    @ViewBuilder
+    private var recommendationRow: some View {
+        if router.marketFilter == .all, query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            let server, let agent = recommendationAgent, !isRecommendationHidden(agent)
+        {
+            let items = RecommendationLogic.items(recommendations, catalog: catalog, integrations: integrations)
+            if !items.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        SectionLabel(L10n.Market.Recommend.title(agent: agent.name))
+                        Spacer(minLength: 8)
+                        Button {
+                            RecommendationStore.hide(server: server.id.uuidString, agent: agent.id)
+                            hideTick += 1
+                        } label: {
+                            Image(systemName: "xmark")
+                        }
+                        .banditoButton(.icon(size: 24, label: L10n.Market.Recommend.hide))
+                    }
+                    ScrollView(.horizontal) {
+                        HStack(alignment: .top, spacing: 12) {
+                            ForEach(items) { item in
+                                RecommendationCard(item: item, onConnect: { connect(item.template) })
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
+                    .scrollIndicators(.never)
+                }
+            }
+        }
     }
 
     private func setEnabled(_ integration: Integration, _ on: Bool) async {

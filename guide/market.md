@@ -206,3 +206,32 @@ from every agent that used it; removing an agent's copy touches that agent's fol
 never removed.
 Где: Marketplace → Skills (Скиллы) → Remove (Удалить) on an installed card, or on the skill's page
 1. Click Remove (Удалить) and confirm in the dialog.
+
+## Updates
+
+<!-- id: market-updates; covers: -->
+When the catalog has moved on, Bandito says so and updates in one click. A connected service shows Update available (Есть
+обновление) with the old and the new version of its package, for example 1.2.0 → 1.3.0, or New service address (Новый адрес
+сервиса) when the service's address changed, and the button Update (Обновить). Update takes the command and the address
+from the catalog; your keys, headers and variables, and whether the service is on for the agents, stay as they are. A skill
+whose installed copy is older than the catalog's shows Update (Обновить) instead of Installed (Установлено): it installs
+the catalog's copy in the same place, for the server or for the agent, and its page marks each place that is behind. Agents
+pick up a new service definition at their next session.
+Где: Marketplace → Services (Сервисы) → a connected card → Update (Обновить); Marketplace → Skills (Скиллы) → a card or its page → Update (Обновить)
+1. Click Update (Обновить). The button says Updating… (Обновляем…) while it works.
+2. If it fails, the reason shows under the list, as for the other actions of the card.
+
+## Suited to the project
+
+<!-- id: market-recommend; covers: -->
+On the Services page, above the catalog, a row Suited to the project of <agent> (Подойдут для проекта <агент>) suggests up
+to six services that are not connected yet. The server looks at the agent's project folder (the folder itself and the
+folders directly in it: a git remote on GitHub, package.json, a Sentry or Supabase config, and the like) and each card says
+why in small text, with the file that showed it in monospace. The agent is the one open in the window, else the last one
+you opened. The row shows under All (Все) with an empty search, and only when the server can suggest and has an agent.
+Connect (Подключить) works as on the other cards, including the sign-in in the browser. The cross at the right hides the
+row for that agent on this server; another agent gets its own row.
+Где: Marketplace → Services (Сервисы) → the row above the catalog → Connect (Подключить), cross (Скрыть подсказки)
+1. Click Connect (Подключить) on a suggestion. The service leaves the row once it is connected.
+2. Click the cross to hide the row for this agent.
+
