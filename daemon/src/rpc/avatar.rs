@@ -136,7 +136,9 @@ mod tests {
             .unwrap();
         let sup = Supervisor::new(Hub::new(store), Runtimes::default(), None);
         let home = std::env::temp_dir().join(format!("bandito-avatar-rpc-{}", crate::store::new_id()));
-        (App::new(sup, home), agent.id)
+        // Its own data folder: the tests delete it at the end, so it must never be the real `~/.bandito`.
+        let files = crate::files::FileService::new(home.clone(), None);
+        (App::new_in_home(sup, home.join("agents"), files, home), agent.id)
     }
 
     async fn call(app: &App, method: &str, p: Value) -> RpcResult {

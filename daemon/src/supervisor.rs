@@ -2749,7 +2749,8 @@ mod tests {
         w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
         w.wait_log("send go").await;
         // Refused by the protected rule: into the data folder.
-        w.push(approval("k1", "cd ~/.bandito")).await;
+        w.push(approval("k1", &format!("cd {}", crate::home::data_home().display())))
+            .await;
         w.wait_log("resolve k1 Deny").await;
         // Still the agent's folder: `.ssh/id_rsa` there is a routine read.
         w.push(approval("k2", "cat .ssh/id_rsa")).await;
