@@ -408,10 +408,7 @@ fn backup_cmd(cmd: BackupCmd, home: &Path) -> Result<()> {
             Ok(())
         }
         BackupCmd::Restore { name } => {
-            // A running daemon holds the database open and would write over the restored file.
-            if std::os::unix::net::UnixStream::connect(home.join("bandito.sock")).is_ok() {
-                bail!("Stop the daemon first: bandito service stop");
-            }
+            // restore takes the daemon lock itself: it refuses while a daemon runs.
             bandito::backup::restore(home, &name, bandito::store::now_ms())?;
             println!("Restored {name}. The database before the restore is in the backups list (before-restore).");
             Ok(())
@@ -452,6 +449,10 @@ async fn status(sock: &Path) -> Result<()> {
 async fn daemon(home: &Path, sock: &Path, listen: SocketAddr, home_given: bool) -> Result<()> {
     // Before anything starts: sessions recovered below are children too.
     rpc::unix::become_subreaper();
+    // One daemon per data folder: the lock is held until this function returns (see docs/ARCHITECTURE.md#backups).
+    let Some(_daemon_lock) = bandito::backup::try_daemon_lock(home)? else {
+        bail!("another bandito daemon already runs in {}", home.display());
+    };
     bandito::update::set_data_home(home);
     // Before the store opens: migrations change the file, so the copy must come first. A failed copy does not stop the start.
     match bandito::backup::on_start(home, rpc::VERSION, bandito::store::now_ms()) {

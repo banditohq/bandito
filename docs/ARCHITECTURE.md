@@ -194,11 +194,13 @@ Migrations: numbered SQL files embedded in the binary, applied by `PRAGMA user_v
 
 ## Backups
 
-- Where: `<home>/backups/`, folder mode 0700, files 0600. Copies are `bandito-<UTC time>-<reason>.db`, made with `VACUUM INTO` over a read-only connection, so rows still in the WAL are included. Code: `daemon/src/backup.rs`.
+- Where: `<home>/backups/`, folder mode 0700, files 0600. Copies are `bandito-<UTC time>-<reason>.db`, made with `VACUUM INTO` over a read-only connection (busy timeout 5 s), so rows still in the WAL are included. Code: `daemon/src/backup.rs`.
+- Atomic copies: a copy is first written as `<name>.partial`, checked with `PRAGMA quick_check` (must answer `ok`), and only then renamed to its final name. A cut-off file never gets a final name. `.partial` files are not copies: they are not listed, counted or pruned; the daemon removes leftovers of a crash at its next start.
+- One daemon per data folder: the daemon takes an exclusive `flock` on `<home>/run/daemon.lock` before anything else and holds it for its whole life; a second daemon exits with an error. `restore` takes the same lock and refuses while it is held.
 - When: at each daemon start before the store opens, if there is no copy, the newest is older than 20 h, or the version in `backups/last-version` differs (reason `start`, or `upgrade` when the version changed). While the daemon runs, once an hour it checks and makes a `daily` copy if the newest is older than 24 h. Before `bandito backup restore`, a `before-restore` copy of the current database.
-- How many: the 14 newest `bandito-*.db` copies are kept (pruned after each new copy). Other files in the folder are not touched.
+- How many: the 14 newest copies are kept (pruned after each new copy and after a restore). Other files in the folder are not touched.
 - A failed copy is logged as a warning and does not stop the daemon.
-- List: `bandito backup list` (name and size, newest first). Restore: stop the daemon first (the command refuses while `bandito.sock` answers), then `bandito backup restore <name>`. The current database is copied to `before-restore` first; the old `-wal`/`-shm` files are removed and the copy replaces `bandito.db`.
+- List: `bandito backup list` (name and size, newest first). Restore: stop the daemon first (`bandito service uninstall`), then `bandito backup restore <name>`; the command refuses while the daemon lock is held and says so. The chosen copy must pass `quick_check` and be a regular file (symlinks are refused). The current database is copied to `before-restore` first; then the copy goes to `bandito.db.restore-tmp`, the old `-wal`/`-shm` files are removed and the temporary file replaces `bandito.db`. If any step fails, the temporary file is removed. After the restore: `bandito service install`.
 
 ## RPC
 
