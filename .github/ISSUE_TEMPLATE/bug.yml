@@ -31,13 +31,13 @@ body:
     attributes:
       label: Mac app version
       description: Bandito menu → About Bandito.
-      placeholder: "0.1.6"
+      placeholder: "0.1.7"
   - type: input
     id: daemon_version
     attributes:
       label: Daemon version
       description: Run `bandito --version` in the terminal.
-      placeholder: "bandito 0.1.6"
+      placeholder: "bandito 0.1.7"
   - type: dropdown
     id: where
     attributes:
