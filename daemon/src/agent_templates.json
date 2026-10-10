@@ -397,6 +397,10 @@
       {
         "id": "notion",
         "required": false
+      },
+      {
+        "id": "atlassian",
+        "required": false
       }
     ],
     "skills": [],
