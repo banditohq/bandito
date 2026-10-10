@@ -177,6 +177,8 @@ private struct WorkbenchHeader: View {
     var body: some View {
         HStack(spacing: 6) {
             // The strip takes what the buttons leave and scrolls sideways; the buttons never leave the panel.
+            // The chosen tab is scrolled into view, so a tab opened from elsewhere is never hidden past the edge.
+            ScrollViewReader { strip in
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 4) {
                     ForEach(paneState.tabs, id: \.self) { tab in
@@ -193,9 +195,15 @@ private struct WorkbenchHeader: View {
                                 Task { await app.terminalController(for: server).rename(id, to: name) }
                                 #endif
                             })
+                        .id(tab)
                     }
                 }
                 .padding(.vertical, 2)
+            }
+            .onChange(of: paneState.selected, initial: true) { _, selected in
+                guard let selected else { return }
+                withAnimation(.easeOut(duration: BanditoMotion.fast)) { strip.scrollTo(selected) }
+            }
             }
             .frame(maxWidth: .infinity)
             .layoutPriority(0)
