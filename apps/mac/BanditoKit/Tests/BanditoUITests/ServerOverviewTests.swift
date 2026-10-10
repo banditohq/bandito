@@ -51,6 +51,9 @@ import Testing
 
     @Test func catalogLogosLoadFromTheBundle() {
         #expect(ServiceLogo.image(for: "github") != nil)
+        #expect(ServiceLogo.image(for: "linear") != nil)
+        #expect(ServiceLogo.image(for: "notion") != nil)
+        #expect(ServiceLogo.image(for: "sentry") != nil)
         #expect(ServiceLogo.image(for: "brave-search") != nil)
         #expect(ServiceLogo.image(for: "composio") == nil)
     }
