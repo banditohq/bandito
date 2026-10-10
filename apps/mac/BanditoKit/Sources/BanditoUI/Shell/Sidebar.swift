@@ -24,13 +24,27 @@ struct Sidebar: View {
     }
 }
 
-/// 52 pt high, like the title bar. The traffic lights sit on the left; search and new agent on the right.
+/// 52 pt high, like the title bar. The traffic lights sit on the left, then the brand; the empty strip between the
+/// brand and the buttons zooms the window on a double-click. Search and new agent sit on the right.
 private struct SidebarTopRow: View {
     @Environment(Router.self) private var router
 
     var body: some View {
         HStack(spacing: 8) {
-            Spacer()
+            // Room for the traffic lights. The brand does nothing when clicked.
+            HStack(spacing: 7) {
+                RaccoonAvatar(name: "Bandito", color: .peach, face: .chevronDash, size: 22)
+                Text(L10n.App.name)
+                    .font(BanditoFont.font(size: 16, weight: 650))
+                    .foregroundStyle(Color.Bandito.text)
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+            .padding(.leading, 62)
+            .accessibilityElement(children: .combine)
+            Color.clear
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(TitleBarZoomArea())
             Button {
                 router.paletteOpen = true
             } label: {

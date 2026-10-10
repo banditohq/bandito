@@ -23,6 +23,18 @@ struct NewAgentSheet: View {
 
     private var server: ServerModel? { app.currentServer }
 
+    /// Asks the server for its model lists again (the model picker's "Повторить").
+    private var retryModels: (() -> Void)? {
+        guard let server else { return nil }
+        return { Task { try? await server.refreshRuntimeModels(refresh: true) } }
+    }
+
+    /// Updates this Mac's server to the app's daemon (the model picker's "Обновить"). Only for this Mac's own server.
+    private var updateThisMac: (() -> Void)? {
+        guard let server, server.isThisMacServer else { return nil }
+        return { Task { await app.localUpgrade.upgradeByRequest(server) } }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -165,7 +177,8 @@ struct NewAgentSheet: View {
                 ModelPicker(
                     runtime: draft.runtime, selection: $draft.model,
                     models: server?.runtimeModels[draft.runtime.rawValue],
-                    status: server?.runtimeModelsStatus ?? .unknown)
+                    status: server?.runtimeModelsStatus ?? .unknown,
+                    onRetry: retryModels, onUpdate: updateThisMac)
             }
             if effortLevels.isEmpty {
                 Text(L10n.ModelPicker.noEffort)
@@ -195,7 +208,8 @@ struct NewAgentSheet: View {
                     ModelPicker(
                         runtime: fallback, selection: $draft.fallbackModel,
                         models: server?.runtimeModels[fallback.rawValue],
-                        status: server?.runtimeModelsStatus ?? .unknown)
+                        status: server?.runtimeModelsStatus ?? .unknown,
+                        onRetry: retryModels, onUpdate: updateThisMac)
                 }
             }
             Text(L10n.AgentSheet.fallbackHint)

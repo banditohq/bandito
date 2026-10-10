@@ -160,6 +160,7 @@ private struct BrowserToolbar: View {
         }
         .padding(.horizontal, 14)
         .frame(height: 52)
+        .titleBarZoomOnDoubleClick()
         .background(Color.Bandito.bg)
         .overlay(alignment: .bottom) {
             Rectangle().fill(Color.Bandito.text.opacity(0.05)).frame(height: 1)

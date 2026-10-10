@@ -351,4 +351,44 @@ func eventPage(_ seqs: ClosedRange<Int>) -> String {
         #expect(model.pendingApprovalCount(of: "a") == 0)
         await model.disconnect()
     }
+
+    /// A connect that a disconnect and a newer connect have superseded fails late, when its link finally gives up.
+    /// That failure must not replace the state of the connection that is up now. The retry of the terminals does
+    /// exactly this sequence: disconnect, then connect.
+    @Test func aSupersededConnectDoesNotOverwriteTheCurrentState() async throws {
+        let stalled = FakeTransport(handlers: daemonHandlers())
+        await stalled.holdConnect()
+        let fresh = FakeTransport(handlers: daemonHandlers())
+        let (model, queue) = makeModel([stalled, fresh])
+
+        let stale = Task { await model.connect() }
+        try await eventually { queue.made.count == 1 && model.state == .connecting }
+        await model.disconnect()
+        await model.connect()
+        #expect(model.state == .connected)
+        #expect(queue.made.count == 2)
+
+        await stalled.releaseConnect()
+        await stale.value
+        #expect(model.state == .connected)
+        await model.disconnect()
+    }
+
+    /// A plain connect does nothing while an attempt runs: the terminals' retry therefore disconnects first.
+    @Test func connectWhileAnAttemptStallsDoesNothing() async throws {
+        let stalled = FakeTransport(handlers: daemonHandlers())
+        await stalled.holdConnect()
+        let (model, queue) = makeModel([stalled])
+
+        let stale = Task { await model.connect() }
+        try await eventually { queue.made.count == 1 && model.state == .connecting }
+        await model.connect()
+        #expect(queue.made.count == 1)
+        #expect(model.state == .connecting)
+
+        await stalled.releaseConnect()
+        await stale.value
+        #expect(model.state == .connected)
+        await model.disconnect()
+    }
 }

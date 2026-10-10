@@ -55,6 +55,7 @@ struct ThreadHeader: View {
         }
         .padding(.horizontal, 16)
         .frame(height: 52)
+        .titleBarZoomOnDoubleClick()
         .overlay(alignment: .bottom) {
             Rectangle().fill(Color.Bandito.text.opacity(0.05)).frame(height: 1)
         }

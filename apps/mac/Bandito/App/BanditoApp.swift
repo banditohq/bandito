@@ -68,6 +68,7 @@ struct BanditoApp: App {
                 .environment(keymap)
                 .environment(gestures)
                 .environment(demo)
+                .environment(accountHub)
                 .focusEffectDisabled()
         }
 

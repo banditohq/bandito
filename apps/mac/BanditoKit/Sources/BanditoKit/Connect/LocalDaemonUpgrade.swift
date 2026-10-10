@@ -14,6 +14,20 @@ public enum LocalDaemonUpgrade {
         return bundled > installed
     }
 
+    /// What the Updates page says about this Mac's daemon. `checking` until the bundle has been read; `unknown` when a
+    /// version is missing or does not parse, which must not read as "up to date".
+    public static func standing(
+        bundleRead: Bool, bundledVersion: String?, serverVersion: String?, isLocalServer: Bool, isQA: Bool
+    ) -> LocalUpgradeStanding {
+        guard bundleRead else { return .checking }
+        guard let bundledVersion, SemanticVersion(bundledVersion) != nil,
+            let serverVersion, SemanticVersion(serverVersion) != nil
+        else { return .unknown }
+        return decide(
+            serverVersion: serverVersion, bundledVersion: bundledVersion, isLocalServer: isLocalServer, isQA: isQA)
+            ? .due(bundled: bundledVersion) : .upToDate
+    }
+
     /// The version in the answer of `bandito --version` (`bandito 0.1.2\n` → `0.1.2`). Nil for any other answer.
     public static func parseVersion(_ output: String) -> String? {
         let parts = output.split(whereSeparator: \.isWhitespace)
@@ -81,6 +95,15 @@ public enum LocalDaemonUpgrade {
         return ["127.0.0.1", "::1", "localhost"].contains(
             (url.host() ?? "").lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "[]")))
     }
+}
+
+/// What the Updates page says about this Mac's daemon (see `LocalDaemonUpgrade.standing`).
+public enum LocalUpgradeStanding: Equatable, Sendable {
+    case checking
+    case unknown
+    case upToDate
+    /// The app bundle carries a newer daemon with this version.
+    case due(bundled: String)
 }
 
 /// What the upgrade of this Mac's daemon needs from the installer. `LocalInstaller` conforms; tests pass a fake.

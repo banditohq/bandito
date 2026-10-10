@@ -27,4 +27,23 @@ import Testing
         #expect(!ReleaseFeed.isUpdateAvailable(current: "0.6.0-dev", latest: latest))
         #expect(!ReleaseFeed.isUpdateAvailable(current: "dev", latest: latest))
     }
+
+    @Test func standingSaysUpToDateWhenInstalledIsNotOlderThanTheRelease() throws {
+        let latest = try #require(SemanticVersion("0.1.1"))
+        #expect(ReleaseFeed.standing(installed: "0.1.3", latest: latest) == .upToDate)
+        #expect(ReleaseFeed.standing(installed: "0.1.1", latest: latest) == .upToDate)
+        #expect(ReleaseFeed.standing(installed: "0.2.0-dev", latest: latest) == .upToDate)
+    }
+
+    @Test func standingOffersTheReleaseOnlyWhenItIsNewer() throws {
+        let latest = try #require(SemanticVersion("0.1.4"))
+        #expect(ReleaseFeed.standing(installed: "0.1.3", latest: latest) == .available(latest))
+    }
+
+    @Test func standingIsUnknownWithoutAReleaseOrAVersionToCompare() throws {
+        let latest = try #require(SemanticVersion("0.1.1"))
+        #expect(ReleaseFeed.standing(installed: "0.1.3", latest: nil) == .unknown)
+        #expect(ReleaseFeed.standing(installed: "dev", latest: latest) == .unknown)
+        #expect(ReleaseFeed.standing(installed: nil, latest: latest) == .unknown)
+    }
 }

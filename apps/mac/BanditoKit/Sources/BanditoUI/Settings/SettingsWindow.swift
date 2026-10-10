@@ -12,6 +12,17 @@ final class SettingsNavigation {
     var requested: SettingsSection?
 }
 
+/// Hands a route over to the main window: Settings closes, the main window comes forward with the route applied.
+@MainActor
+enum SettingsHandoff {
+    static func openMainWindow(router: Router, _ route: (Router) -> Void) {
+        route(router)
+        // The key window is Settings when this runs from a Settings page.
+        WindowActions.closeKeyWindow()
+        WindowActions.showMainWindow()
+    }
+}
+
 /// The Settings window (⌘,): 12 sections in a left navigation. Opens at 980 × 680 pt, never smaller than 860 × 560.
 public struct SettingsWindow: View {
     @State private var section: SettingsSection = .general

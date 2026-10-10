@@ -44,6 +44,13 @@ public enum ReleaseFeed {
         return current < latest
     }
 
+    /// Where the installed version stands against the newest published release. A version newer than the newest
+    /// release (a build ahead of the feed) is up to date, not a conflict.
+    public static func standing(installed: String?, latest: SemanticVersion?) -> ReleaseStanding {
+        guard let latest, let installed, let current = SemanticVersion(installed) else { return .unknown }
+        return current < latest ? .available(latest) : .upToDate
+    }
+
     /// The latest version: from the cache while it is fresh, else from GitHub. When GitHub cannot be
     /// reached, the last cached answer is returned, or `nil` if there is none.
     public static func latest(now: Date = Date(), session: URLSession = .shared) async -> SemanticVersion? {
@@ -78,4 +85,14 @@ public enum ReleaseFeed {
             UserDefaults.standard.set(data, forKey: cacheKey)
         }
     }
+}
+
+/// What the Updates screens say about the newest release next to the installed version.
+public enum ReleaseStanding: Equatable, Sendable {
+    /// Nothing to compare: no release is known yet, or the installed version does not parse (such as "dev").
+    case unknown
+    /// A newer release is published than the installed version.
+    case available(SemanticVersion)
+    /// The installed version is the newest release, or newer than it.
+    case upToDate
 }

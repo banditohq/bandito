@@ -89,7 +89,7 @@ public enum InstallError: Error, Sendable, Equatable, LocalizedError {
     case releaseCheckFailed(ReleaseVerifier.Failure)
     /// A release file could not be downloaded. The text says what went wrong.
     case downloadFailed(String)
-    /// The latest release is older than this app: its release is still being published. `tag` is that release.
+    /// The release this app needs (`version`, `X.Y.Z`) is not published yet: the newest release is older than the app.
     case releaseStillPublishing(String)
     /// This Mac's daemon did not answer `running: true` in time. The last lines of its log went to the install log.
     case localDaemonNotStarted
@@ -122,8 +122,8 @@ public enum InstallError: Error, Sendable, Equatable, LocalizedError {
             return "Release signature check failed — the download may have been tampered with. Nothing was installed."
         case .downloadFailed(let detail):
             return "Downloading Bandito failed: \(detail)"
-        case .releaseStillPublishing(let tag):
-            return "Release \(tag) is still being published — try again in a few minutes."
+        case .releaseStillPublishing(let version):
+            return "Bandito \(version) for servers is not released yet. Update the app or try again later."
         case .localDaemonNotStarted:
             return "Bandito did not start on this Mac."
         case .tokenNotSaved:

@@ -441,10 +441,13 @@ struct ServerOverview: View {
                     .foregroundStyle(Color.Bandito.text2)
             }
             Spacer(minLength: 8)
-            Button(L10n.Server.Update.howTo) {
-                router.requestTerminalCommand(ReleaseFeed.installCommand)
+            // This Mac's server is updated from the app, never from a terminal command.
+            if !server.isThisMacServer {
+                Button(L10n.Server.Update.howTo) {
+                    router.requestTerminalCommand(ReleaseFeed.installCommand)
+                }
+                .banditoButton(.lightPill())
             }
-            .banditoButton(.lightPill())
         }
         .padding(14)
         .background(Color.Bandito.signal.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))

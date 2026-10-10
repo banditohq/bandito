@@ -19,8 +19,13 @@ struct UsagePopover: View {
         }
         .frame(width: 344)
         .task {
-            // Opening the popover asks for fresh limits when the known ones are over two minutes old.
-            await refresh(force: false)
+            // Opening the popover asks for fresh limits when the known ones are over two minutes old. A subscription whose
+            // limit windows did not come asks at once, at most once in two minutes.
+            let now = Date()
+            let entries = app.currentServer?.usage ?? []
+            let asking = UsageWindowsRequest.isDue(entries: entries, lastAsked: UsageWindowsRequest.lastAsked, now: now)
+            if asking { UsageWindowsRequest.lastAsked = now }
+            await refresh(force: asking)
         }
     }
 
@@ -30,6 +35,9 @@ struct UsagePopover: View {
             ? snapshot.cards.map { .card($0, problem: nil) }
             : UsageRow.make(cards: snapshot.cards, runtimes: server?.runtimes ?? [], errors: server?.usageErrors ?? [:])
         let noneInstalled = !snapshot.isExample && rows.isEmpty && !(server?.runtimes.isEmpty ?? true)
+        // A block for each runtime with agents or a subscription; the rest go on one line at the bottom.
+        let agentRuntimes = Set((server?.agents ?? []).map { $0.runtime.rawValue })
+        let split = UsageRow.split(rows, agentRuntimes: agentRuntimes)
         return VStack(alignment: .leading, spacing: 10) {
             header(snapshot)
             if noneInstalled {
@@ -50,13 +58,21 @@ struct UsagePopover: View {
                     .foregroundStyle(Color.Bandito.text3)
                     .padding(.vertical, 12)
             }
-            ForEach(rows) { row in
+            ForEach(split.blocks) { row in
                 switch row {
                 case .card(let card, let problem):
-                    UsageCardView(card: card, example: snapshot.isExample, now: now, problem: problem)
+                    UsageCardView(
+                        card: card, example: snapshot.isExample, now: now, problem: problem, updating: refreshing)
                 case .waiting(_, let name, let text, let problem):
                     UsageWaitingView(name: name, text: text, problem: problem)
                 }
+            }
+            if !split.others.isEmpty {
+                Text(Self.othersLine(split.others))
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Color.Bandito.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 2)
             }
             if snapshot.updatedAt != nil {
                 HStack(alignment: .top, spacing: 9) {
@@ -82,6 +98,22 @@ struct UsagePopover: View {
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(Color.Bandito.surface2))
+    }
+
+    /// "Also: Codex — needs sign-in, Grok — no limits": the runtimes without a block, each with its short reason.
+    static func othersLine(_ others: [UsageOtherRuntime]) -> String {
+        let items = others.map { other in
+            L10n.Usage.More.item(name: other.name, reason: reason(other.reason))
+        }
+        return L10n.Usage.More.line(list: items.joined(separator: ", "))
+    }
+
+    private static func reason(_ reason: UsageOtherReason) -> String {
+        switch reason {
+        case .needsLogin: L10n.Usage.More.needsLogin
+        case .noLimits: L10n.Usage.More.noLimits
+        case .noData: L10n.Usage.More.noData
+        }
     }
 
     private func header(_ snapshot: UsageSnapshot) -> some View {
@@ -195,6 +227,8 @@ struct UsageCardView: View {
     var now: Date
     /// What went wrong when the last refresh read this runtime; shown in grey under the windows.
     var problem: UsageProblem? = nil
+    /// A request for the limits is running: a card without windows says it is updating. Otherwise it says nothing.
+    var updating = false
 
     var body: some View {
         let warn = card.windows.contains(where: \.exhausted)
@@ -221,6 +255,11 @@ struct UsageCardView: View {
                         .foregroundStyle(Color.Bandito.text3)
                         .lineLimit(1)
                 }
+            }
+            if card.windows.isEmpty, updating, !example {
+                Text(L10n.Usage.updating)
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Color.Bandito.text3)
             }
             ForEach(card.windows) { line in
                 UsageWindowRow(line: line, now: now)

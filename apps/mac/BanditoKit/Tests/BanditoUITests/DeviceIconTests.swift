@@ -22,4 +22,11 @@ import Testing
         #expect(DeviceIcon.symbol(platform: nil, name: "Pixel 9") == "desktopcomputer")
         #expect(DeviceIcon.symbol(platform: nil, name: "Ann's Mac") == "desktopcomputer")
     }
+
+    @Test func theModelIsTakenFromAFullModelName() {
+        #expect(DeviceIcon.macModel(in: "Ann's MacBook Pro") == "MacBook Pro")
+        #expect(DeviceIcon.macModel(in: "Ann's Mac mini") == "Mac mini")
+        #expect(DeviceIcon.macModel(in: "Ann's MacBook") == "MacBook")
+        #expect(DeviceIcon.macModel(in: "Ann's Mac") == nil)
+    }
 }

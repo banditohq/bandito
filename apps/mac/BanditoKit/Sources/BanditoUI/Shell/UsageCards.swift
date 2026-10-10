@@ -344,3 +344,71 @@ public struct UsageSnapshot: Sendable {
         cards.contains { $0.windows.contains(where: \.exhausted) }
     }
 }
+
+/// Why a runtime has no block in the popover, in the words of its one-line summary.
+public enum UsageOtherReason: Equatable, Sendable {
+    case needsLogin
+    case noLimits
+    case noData
+}
+
+/// A runtime the popover names on its summary line instead of giving it a block.
+public struct UsageOtherRuntime: Equatable, Sendable {
+    public var runtime: String
+    public var name: String
+    public var reason: UsageOtherReason
+}
+
+extension UsageRow {
+    /// Splits the popover's rows. A runtime gets a block when it has agents, or a subscription (a plan) or limit
+    /// windows. Any other runtime goes on the one-line summary with its short reason. Pure, so the rule is tested.
+    public static func split(
+        _ rows: [UsageRow], agentRuntimes: Set<String>
+    ) -> (blocks: [UsageRow], others: [UsageOtherRuntime]) {
+        var blocks: [UsageRow] = []
+        var others: [UsageOtherRuntime] = []
+        for row in rows {
+            switch row {
+            case .card(let card, let problem):
+                let hasData = !card.windows.isEmpty || card.plan != nil
+                if hasData || agentRuntimes.contains(card.runtime) {
+                    blocks.append(row)
+                } else {
+                    others.append(UsageOtherRuntime(
+                        runtime: card.runtime, name: card.name, reason: reason(for: card.runtime, problem: problem)))
+                }
+            case .waiting(let runtime, let name, _, let problem):
+                if agentRuntimes.contains(runtime) {
+                    blocks.append(row)
+                } else {
+                    others.append(UsageOtherRuntime(runtime: runtime, name: name, reason: reason(for: runtime, problem: problem)))
+                }
+            }
+        }
+        return (blocks, others)
+    }
+
+    private static func reason(for runtime: String, problem: UsageProblem?) -> UsageOtherReason {
+        if problem?.kind == .needsLogin { return .needsLogin }
+        return runtime == "grok" ? .noLimits : .noData
+    }
+}
+
+/// When the popover asks the runtimes again for limit windows that did not come. A subscription (a plan is known)
+/// whose windows are missing gets one request, and not more often than `interval`.
+public enum UsageWindowsRequest {
+    /// Two minutes between such requests.
+    public static let interval: TimeInterval = 120
+
+    /// The popover's record of its last such request, shared by every opening in this launch.
+    @MainActor
+    static var lastAsked: Date?
+
+    /// Whether to ask now. Pure: the caller keeps `lastAsked`.
+    public static func isDue(entries: [UsageEntry], lastAsked: Date?, now: Date) -> Bool {
+        guard entries.contains(where: { $0.plan != nil && $0.windows.isEmpty }) else { return false }
+        guard let lastAsked else { return true }
+        return now.timeIntervalSince(lastAsked) >= interval
+    }
+}
+

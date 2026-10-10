@@ -158,7 +158,7 @@ final class StubURLProtocol: URLProtocol {
 
         let error = try await fetchError(stubbedSource(), version: "v0.2.0")
 
-        #expect(error == .releaseStillPublishing("v0.1.0"))
+        #expect(error == .releaseStillPublishing("0.2.0"))
     }
 
     @Test func aLatestDownloadWithoutAnAppVersionNamesItsTag() async throws {

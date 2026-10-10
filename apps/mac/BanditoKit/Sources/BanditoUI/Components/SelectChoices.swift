@@ -15,25 +15,28 @@ public enum SelectChoices {
         public var isOnline: Bool
         /// The daemon has a newer release to install.
         public var hasUpdate: Bool
+        /// An SF Symbol for the kind of device: a laptop or desktop for this Mac, a server rack otherwise.
+        public var icon: String
 
-        public init(id: UUID, name: String, address: String, isOnline: Bool, hasUpdate: Bool) {
+        public init(id: UUID, name: String, address: String, isOnline: Bool, hasUpdate: Bool, icon: String = "server.rack") {
             self.id = id
             self.name = name
             self.address = address
             self.isOnline = isOnline
             self.hasUpdate = hasUpdate
+            self.icon = icon
         }
     }
 
-    /// One row per server, in the order given. An update is said in the subtitle, after the address. The dot is only
-    /// drawn for a server with an update; other rows keep the clear dot so the names line up.
+    /// One row per server, in the order given. The row shows the kind of device, and an update is said in the subtitle,
+    /// after the address.
     public static func servers(_ rows: [ServerRow], updateText: String) -> [SelectOption<UUID>] {
         rows.map { row in
             SelectOption(
                 value: row.id, title: row.name,
                 subtitle: row.hasUpdate ? "\(row.address) · \(updateText)" : row.address,
-                icon: "circle.fill",
-                tint: row.hasUpdate ? Color.Bandito.signal : Color.clear,
+                icon: row.icon,
+                tint: row.hasUpdate ? Color.Bandito.signal : nil,
                 help: row.hasUpdate ? updateText : nil)
         }
     }

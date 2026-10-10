@@ -221,9 +221,13 @@ public final class ServerModel: Identifiable {
         reconnectTask?.cancel()
         reconnectTask = nil
         state = .connecting
+        // `open` takes the next generation before its first suspension, so this is the attempt it starts.
+        let attempt = generation + 1
         do {
             try await open()
         } catch {
+            // A superseded attempt (a disconnect, or a newer connect) must not write its failure over the current state.
+            guard attempt == generation else { return }
             // A connection lost during this attempt has already scheduled a reconnect: keep retrying instead of giving up.
             if reconnectTask == nil { state = .failed(FailureKind.classify(error)) }
         }

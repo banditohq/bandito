@@ -19,14 +19,6 @@ enum ModelListHint: Equatable {
     case failed(String)
     /// The list came, but the CLI gave none. The text is the daemon's `error`: `not_installed` or a reason.
     case runtimeError(String)
-
-    /// The menu says "could not get the list" first, and the help gives the reason.
-    var isFailure: Bool {
-        switch self {
-        case .failed, .runtimeError: true
-        case .none, .loading, .unsupported: false
-        }
-    }
 }
 
 /// The rules of the model field, pure so they are tested without a view.

@@ -1042,14 +1042,16 @@ public enum L10n {
         public static func defaultMenu(name: String) -> String { L10n.tr("modelPicker.defaultMenu", name) }
         public static var defaultPlain: String { L10n.tr("modelPicker.defaultPlain") }
         public static func failed(reason: String) -> String { L10n.tr("modelPicker.failed", reason) }
-        public static var failedMenu: String { L10n.tr("modelPicker.failedMenu") }
+        public static var loadFailed: String { L10n.tr("modelPicker.loadFailed") }
         public static var loading: String { L10n.tr("modelPicker.loading") }
         public static var noEffort: String { L10n.tr("modelPicker.noEffort") }
         public static var notInstalled: String { L10n.tr("modelPicker.notInstalled") }
+        public static var oldDaemon: String { L10n.tr("modelPicker.oldDaemon") }
         public static var other: String { L10n.tr("modelPicker.other") }
         public static var otherVersions: String { L10n.tr("modelPicker.otherVersions") }
         public static var typePlaceholder: String { L10n.tr("modelPicker.typePlaceholder") }
         public static var unsupported: String { L10n.tr("modelPicker.unsupported") }
+        public static var updateButton: String { L10n.tr("modelPicker.updateButton") }
     }
 
     public enum New {
@@ -1325,7 +1327,7 @@ public enum L10n {
                 public static var noRoute: String { L10n.tr("onboarding.server.err.noRoute") }
                 public static var refused: String { L10n.tr("onboarding.server.err.refused") }
                 public static var releaseCheck: String { L10n.tr("onboarding.server.err.releaseCheck") }
-                public static func releasePublishing(tag: String) -> String { L10n.tr("onboarding.server.err.releasePublishing", tag) }
+                public static func releasePublishing(version: String) -> String { L10n.tr("onboarding.server.err.releasePublishing", version) }
                 public static var timedOut: String { L10n.tr("onboarding.server.err.timedOut") }
                 public static var tokenNotSaved: String { L10n.tr("onboarding.server.err.tokenNotSaved") }
                 public static var unknownHost: String { L10n.tr("onboarding.server.err.unknownHost") }
@@ -1643,6 +1645,7 @@ public enum L10n {
 
         public enum Picker {
             public static var connect: String { L10n.tr("server.picker.connect") }
+            public static var kindRemote: String { L10n.tr("server.picker.kindRemote") }
             public static var manage: String { L10n.tr("server.picker.manage") }
         }
 
@@ -1764,6 +1767,8 @@ public enum L10n {
 
         public enum Account {
             public static var intro: String { L10n.tr("settings.account.intro") }
+            public static var openProfile: String { L10n.tr("settings.account.openProfile") }
+            public static var openProfileHint: String { L10n.tr("settings.account.openProfileHint") }
             public static var signIn: String { L10n.tr("settings.account.signIn") }
             public static var signedOutHint: String { L10n.tr("settings.account.signedOutHint") }
             public static var state: String { L10n.tr("settings.account.state") }
@@ -1946,6 +1951,12 @@ public enum L10n {
         public static var servers: String { L10n.tr("sidebar.servers") }
         public static func sharedChat(count: Int) -> String { L10n.tr("sidebar.sharedChat", count) }
         public static var team: String { L10n.tr("sidebar.team") }
+
+        public enum NoServer {
+            public static var connect: String { L10n.tr("sidebar.noServer.connect") }
+            public static var hint: String { L10n.tr("sidebar.noServer.hint") }
+            public static var title: String { L10n.tr("sidebar.noServer.title") }
+        }
     }
 
     public enum Slash {
@@ -2079,6 +2090,7 @@ public enum L10n {
     }
 
     public enum Terminals {
+        public static func connectTimeout(server: String) -> String { L10n.tr("terminals.connectTimeout", server) }
         public static func connecting(server: String) -> String { L10n.tr("terminals.connecting", server) }
         public static var empty: String { L10n.tr("terminals.empty") }
         public static var emptyHint: String { L10n.tr("terminals.emptyHint") }
@@ -2233,11 +2245,18 @@ public enum L10n {
         public static var available: String { L10n.tr("updates.available") }
         public static var badgeCurrent: String { L10n.tr("updates.badgeCurrent") }
         public static var badgeNew: String { L10n.tr("updates.badgeNew") }
+        public static var checkFailed: String { L10n.tr("updates.checkFailed") }
+        public static var checking: String { L10n.tr("updates.checking") }
+        public static var copied: String { L10n.tr("updates.copied") }
+        public static var copyCommand: String { L10n.tr("updates.copyCommand") }
         public static var daemonVersion: String { L10n.tr("updates.daemonVersion") }
         public static var howButton: String { L10n.tr("updates.howButton") }
         public static var howText: String { L10n.tr("updates.howText") }
         public static var howTitle: String { L10n.tr("updates.howTitle") }
         public static var latestVersion: String { L10n.tr("updates.latestVersion") }
+        public static var manual: String { L10n.tr("updates.manual") }
+        public static var mostRecent: String { L10n.tr("updates.mostRecent") }
+        public static var thisMacNote: String { L10n.tr("updates.thisMacNote") }
         public static var unknown: String { L10n.tr("updates.unknown") }
         public static var upToDate: String { L10n.tr("updates.upToDate") }
     }
@@ -2262,10 +2281,19 @@ public enum L10n {
         public static func resetTime(time: String) -> String { L10n.tr("usage.resetTime", time) }
         public static func resetToday(time: String) -> String { L10n.tr("usage.resetToday", time) }
         public static var title: String { L10n.tr("usage.title") }
+        public static var updating: String { L10n.tr("usage.updating") }
         public static func used(percent: String) -> String { L10n.tr("usage.used", percent) }
 
         public enum Error {
             public static var unknown: String { L10n.tr("usage.error.unknown") }
+        }
+
+        public enum More {
+            public static func item(name: String, reason: String) -> String { L10n.tr("usage.more.item", name, reason) }
+            public static func line(list: String) -> String { L10n.tr("usage.more.line", list) }
+            public static var needsLogin: String { L10n.tr("usage.more.needsLogin") }
+            public static var noData: String { L10n.tr("usage.more.noData") }
+            public static var noLimits: String { L10n.tr("usage.more.noLimits") }
         }
 
         public enum Updated {

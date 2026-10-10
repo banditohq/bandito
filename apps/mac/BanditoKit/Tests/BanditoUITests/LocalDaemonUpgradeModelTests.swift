@@ -23,15 +23,21 @@ final class FakeReplacer: DaemonReplacing {
     var bundledReads = 0
     var failNextUpgrade = false
     var reportsNewVersion = true
+    /// Makes reading the bundle take a moment, so two requests can overlap.
+    var bundleDelay: Duration?
+    /// Makes the copy and the restart take a moment, so a second request can overlap the first.
+    var upgradeDelay: Duration?
     weak var server: FakeUpgradeServer?
 
     func bundledVersion() async -> String? {
         bundledReads += 1
+        if let bundleDelay { try? await Task.sleep(for: bundleDelay) }
         return bundled
     }
 
     func upgrade() async throws {
         upgrades += 1
+        if let upgradeDelay { try? await Task.sleep(for: upgradeDelay) }
         if failNextUpgrade {
             failNextUpgrade = false
             throw InstallError.serviceFailed("launchctl refused")
@@ -114,6 +120,50 @@ final class FakeReplacer: DaemonReplacing {
         await model.upgradeIfNeeded(server)
         #expect(replacer.upgrades == 0)
         #expect(model.phase == .idle)
+    }
+
+    @Test func aRequestedUpgradeRunsAgainAfterAFailure() async {
+        let (model, server, replacer) = setUp()
+        replacer.failNextUpgrade = true
+        await model.upgradeIfNeeded(server)
+        await model.upgradeByRequest(server)
+        #expect(replacer.upgrades == 2)
+        #expect(model.phase == .idle)
+        #expect(server.runningVersion == "0.1.2")
+    }
+
+    @Test func twoRequestsAtOnceRunOneUpgrade() async {
+        let (model, server, replacer) = setUp()
+        replacer.bundleDelay = .milliseconds(20)
+        replacer.upgradeDelay = .milliseconds(20)
+        async let first: Void = model.upgradeByRequest(server)
+        async let second: Void = model.upgradeByRequest(server)
+        _ = await (first, second)
+        #expect(replacer.upgrades == 1)
+        #expect(model.phase == .idle)
+    }
+
+    @Test func theStandingIsCheckingUntilTheBundleIsRead() async {
+        let (model, server, _) = setUp()
+        #expect(model.standing(for: server) == .checking)
+        await model.readBundled()
+        #expect(model.standing(for: server) == .due(bundled: "0.1.2"))
+    }
+
+    @Test func aRequestedUpgradeWaitsForBusyAgents() async {
+        let (model, server, replacer) = setUp()
+        server.hasBusyAgents = true
+        await model.upgradeByRequest(server)
+        #expect(replacer.upgrades == 0)
+        #expect(model.phase == .waitingForAgents(serverID: server.serverID, version: "0.1.2"))
+    }
+
+    @Test func aRequestedUpgradeLeavesAnUpToDateDaemonAlone() async {
+        let (model, server, replacer) = setUp()
+        server.runningVersion = "0.1.2"
+        await model.upgradeByRequest(server)
+        #expect(replacer.upgrades == 0)
+        #expect(model.replacesOffer(for: server) == false)
     }
 
     @Test func aFailedUpgradeShowsItsErrorAndRetryRunsIt() async {

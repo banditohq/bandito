@@ -109,6 +109,7 @@ private struct ScreenToolbar: View {
         }
         .padding(.horizontal, 14)
         .frame(height: 52)
+        .titleBarZoomOnDoubleClick()
         // The shortcuts come from the keymap, so a rebinding in Settings applies here too.
         .keymapShortcut("screen.sendCtrlAltDelete", keymap: keymap) { model.sendCtrlAltDelete() }
         .keymapShortcut("screen.takeControl", keymap: keymap) {

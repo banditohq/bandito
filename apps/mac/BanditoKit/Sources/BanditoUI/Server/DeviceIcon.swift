@@ -16,3 +16,12 @@ enum DeviceIcon {
         return "desktopcomputer"
     }
 }
+
+extension DeviceIcon {
+    /// The Mac model that a device name names in full ("Ivan's MacBook Pro" → "MacBook Pro"). Nil when it names none.
+    static func macModel(in name: String) -> String? {
+        let lower = name.lowercased()
+        return ["MacBook Pro", "MacBook Air", "MacBook", "Mac mini", "Mac Studio", "Mac Pro", "iMac"]
+            .first { lower.contains($0.lowercased()) }
+    }
+}
