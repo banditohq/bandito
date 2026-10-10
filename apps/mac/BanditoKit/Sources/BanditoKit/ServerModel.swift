@@ -87,7 +87,20 @@ public final class ServerModel: Identifiable {
     public let config: ServerConfig
     public nonisolated var id: UUID { config.id }
 
-    public private(set) var state: ConnectionState = .disconnected
+    public private(set) var state: ConnectionState = .disconnected {
+        didSet {
+            if state != oldValue { onStateChange?(state) }
+        }
+    }
+    /// The server answers and refuses this device's key: it stopped there, or it is still being retried (a remote
+    /// server) and the last attempt was refused. Cleared by the next successful connection.
+    public var refusesKey: Bool {
+        if state == .failed(.keyRejected) { return true }
+        if case .reconnecting = state { return lastError == .keyRejected }
+        return false
+    }
+    /// Called on the main actor each time `state` changes. The app model repairs a rejected key from it.
+    @ObservationIgnored public var onStateChange: (@MainActor (ConnectionState) -> Void)?
     public internal(set) var info: DaemonInfo? {
         didSet {
             // A listing asked for before the daemon's info was known is sent now that it is.
@@ -381,7 +394,15 @@ public final class ServerModel: Identifiable {
                     return
                 } catch {
                     if Task.isCancelled { return }
-                    model.lastError = FailureKind.classify(error)
+                    let kind = FailureKind.classify(error)
+                    model.lastError = kind
+                    // This Mac's own daemon that refuses the key refuses it again: retrying cannot help. A remote
+                    // server may answer 401/403 from a proxy or firewall in front of it, so it keeps its backoff.
+                    if kind == .keyRejected, LocalDaemonUpgrade.isThisMac(model.config) {
+                        model.reconnectTask = nil
+                        model.state = .failed(kind)
+                        return
+                    }
                 }
             }
         }

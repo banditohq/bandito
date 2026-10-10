@@ -33,6 +33,8 @@ public enum UserFacingError {
             UserFacingMessage(text: L10n.Failure.noAnswer, canRetry: true)
         case .deviceRevoked:
             UserFacingMessage(text: L10n.Failure.deviceRevoked)
+        case .keyRejected:
+            UserFacingMessage(text: L10n.Failure.keyRejected)
         case .reason(let reason):
             if let text = reasonText(reason) {
                 UserFacingMessage(text: text)

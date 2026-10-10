@@ -12,6 +12,8 @@ struct FirstServerStep: View {
     /// Onboarding: the "next" button of the connected state goes to the flow's bottom bar, at the fixed place.
     /// The add-server sheet keeps it inside the step.
     var placesNextInFooter = false
+    /// The add-server sheet opened by "Connect again": the own-server panel starts with this address.
+    var initialAddress: String?
 
     @Environment(AppModel.self) private var app
     @Environment(AccountHub.self) private var hub
@@ -39,6 +41,10 @@ struct FirstServerStep: View {
         .frame(maxWidth: placesNextInFooter ? 760 : 620, alignment: .topLeading)
         .task {
             model.accountHub = hub
+            if let initialAddress, model.address.isEmpty, case .choosing = model.phase {
+                model.choose(.ownServer)
+                model.address = initialAddress
+            }
             await model.loadSuggestions()
         }
         .onChange(of: model.isConnected) { _, connected in

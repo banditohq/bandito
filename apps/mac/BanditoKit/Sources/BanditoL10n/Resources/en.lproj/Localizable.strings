@@ -400,10 +400,15 @@
 "empty.noServers.title" = "No servers";
 "error.disconnected" = "Disconnected from %1$@";
 "error.generic" = "Something went wrong: %1$@";
+"failure.connectAgain" = "Connect again";
 "failure.copy" = "Copy";
 "failure.details" = "Details";
 "failure.deviceRevoked" = "This device is no longer connected to the server. Connect it again.";
 "failure.generic" = "Something went wrong.";
+"failure.keyRejected" = "The server did not accept this Mac's key. The server may have been reinstalled, or the key was revoked.";
+"failure.keyRejectedThisMac" = "This Mac's server did not accept the app's key. It may have lost its data.";
+"failure.keyRepairFailed" = "Could not pair with this Mac's server again.";
+"failure.keyRepairing" = "Pairing with this Mac's server again…";
 "failure.noAnswer" = "The server is not responding. Check that it is on and the connection works.";
 "failure.reason.binary" = "This is not a text file, so it cannot be shown here.";
 "failure.reason.cloneFailed" = "The repository could not be cloned.";

@@ -1,6 +1,8 @@
 import BanditoKit
+import BanditoL10n
 import Foundation
 import Observation
+import os
 #if os(macOS)
 import AppKit
 #endif
@@ -86,7 +88,12 @@ public final class AppModel {
     }
 
     /// Feeds one server's live events to the notifications. Servers added later are attached as they come.
+    /// Also watches the server's connection: a refused key is repaired or reported (`serverStateChanged`).
     private func attachNotifications(_ server: ServerModel) {
+        server.onStateChange = { [weak self, weak server] state in
+            guard let self, let server else { return }
+            self.serverStateChanged(server, state)
+        }
         server.onLiveEvent = { [weak self, weak server] event in
             guard let self, let server else { return }
             // Answered in the app or on another device: the notification of that approval goes away.
@@ -100,6 +107,120 @@ public final class AppModel {
             guard let notice = Self.notice(for: event, in: server) else { return }
             self.notifications?.handle(notice)
         }
+    }
+
+    // MARK: refused key
+
+    /// Where a server stands after its key was refused.
+    public enum KeyRepairPhase: Equatable, Sendable {
+        /// This Mac's server is being paired again.
+        case repairing
+        /// The pairing again did not work. The message says why; "Connect again" tries by hand.
+        case failed(UserFacingMessage)
+    }
+
+    /// Per server: a repair of a refused key in progress, or the one that failed. Absent when nothing is going on.
+    public private(set) var keyRepair: [UUID: KeyRepairPhase] = [:]
+    /// Servers whose automatic repair already ran since they last connected: one try per event.
+    @ObservationIgnored private var repairTried: Set<UUID> = []
+
+    /// A connected server is healthy again: its next refused key is a new event. A refused key on this Mac's own
+    /// server is repaired once, automatically (`KeyRepair.action`).
+    private func serverStateChanged(_ server: ServerModel, _ state: ConnectionState) {
+        let id = server.id
+        switch state {
+        case .connected:
+            repairTried.remove(id)
+            keyRepair[id] = nil
+        case .failed(.keyRejected):
+            let action = KeyRepair.action(
+                for: .keyRejected, config: server.config, alreadyTried: repairTried.contains(id),
+                isQA: QABuild.isRunningQA)
+            if action == .repairThisMac { Task { await repairThisMac(id: id) } }
+        default:
+            break
+        }
+    }
+
+    /// The text of the add-server flow for a remote server whose key was refused: its address, or nil.
+    func reconnectAddress(for server: ServerModel) -> String? {
+        KeyRepair.reconnectAddress(for: server.config)
+    }
+
+    /// Pairs with this Mac's daemon again and puts the new token in the server's place: `bandito pair` makes a code
+    /// (over the unix socket, so only this user can), the code is exchanged over loopback, the token goes to the
+    /// Keychain, and the server is rebuilt with it (same id, so its selection and favourites stay) and connected.
+    /// One run at a time per server. A failure is kept in `keyRepair` for the "Connect again" button.
+    func repairThisMac(
+        id: UUID,
+        pairing: LocalDaemonPairing = .installed(),
+        storeToken: (String, UUID) -> Bool = { Keychain.setToken($0, for: $1) },
+        eraseToken: (UUID) -> Void = { Keychain.setToken(nil, for: $0) },
+        revoke: (URL, String, String) async throws -> Void = { try await Pairing.revoke(url: $0, token: $1, deviceID: $2) }
+    ) async {
+        guard keyRepair[id] != .repairing,
+            let old = servers.first(where: { $0.id == id }),
+            KeyRepair.canRepairThisMac(old.config, isQA: QABuild.isRunningQA)
+        else { return }
+        keyRepair[id] = .repairing
+        repairTried.insert(id)
+        let paired: PairedServer
+        do {
+            paired = try await pairing.pair(
+                name: old.config.name, id: id, deviceName: Host.current().localizedName ?? "This Mac")
+        } catch {
+            // The server may have been removed while the pairing ran: no state for an id that is gone.
+            keyRepair[id] = servers.contains { $0.id == id } ? .failed(Self.repairFailure(error)) : nil
+            return
+        }
+        // Still the server that was repaired? If not, the new device is of no use to anyone: it is revoked, and
+        // nothing is written to the Keychain.
+        guard servers.contains(where: { $0 === old }) else {
+            await revokeQuietly(paired, revoke: revoke)
+            keyRepair[id] = nil
+            return
+        }
+        guard let token = paired.config.token, storeToken(token, id) else {
+            await revokeQuietly(paired, revoke: revoke)
+            keyRepair[id] = .failed(UserFacingMessage(text: L10n.Failure.keyRepairFailed))
+            return
+        }
+        old.onStateChange = nil
+        await old.disconnect()
+        // Read again after the await: the server may have been removed meanwhile. Then the token just written
+        // is erased and the device revoked, as if nothing had happened.
+        guard let current = servers.firstIndex(where: { $0 === old }) else {
+            if !servers.contains(where: { $0.id == id }) { eraseToken(id) }
+            await revokeQuietly(paired, revoke: revoke)
+            keyRepair[id] = nil
+            return
+        }
+        let model = ServerModel(config: paired.config)
+        attachNotifications(model)
+        servers[current] = model
+        localUpgrade.forget(serverID: id)
+        save()
+        keyRepair[id] = nil
+        await model.connect()
+        if model.state == .connected { await localUpgrade.upgradeIfNeeded(model) }
+    }
+
+    private static let repairLog = Logger(subsystem: "dev.bandito", category: "repair")
+
+    /// Revokes a device the app made and cannot keep. A failure is logged (the error, never the token).
+    private func revokeQuietly(
+        _ paired: PairedServer, revoke: (URL, String, String) async throws -> Void
+    ) async {
+        guard case .webSocket(let url) = paired.config.endpoint, let token = paired.config.token else { return }
+        do {
+            try await revoke(url, token, paired.deviceID)
+        } catch {
+            Self.repairLog.error("could not revoke the unused device: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    static func repairFailure(_ error: Error) -> UserFacingMessage {
+        UserFacingMessage(text: L10n.Failure.keyRepairFailed, technical: error.localizedDescription)
     }
 
     /// The sound an agent event makes: an approval or question waiting, a finished turn, or an error.
@@ -292,6 +413,8 @@ public final class AppModel {
     public func remove(_ id: UUID) {
         guard let i = servers.firstIndex(where: { $0.id == id }) else { return }
         let s = servers.remove(at: i)
+        keyRepair[id] = nil
+        repairTried.remove(id)
         localUpgrade.forget(serverID: id)
         #if os(macOS)
         if let controller = terminalControllers.removeValue(forKey: id) {

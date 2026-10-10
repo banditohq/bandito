@@ -400,10 +400,15 @@
 "empty.noServers.title" = "서버 없음";
 "error.disconnected" = "%1$@와의 연결이 끊어졌어요";
 "error.generic" = "문제가 발생했어요: %1$@";
+"failure.connectAgain" = "다시 연결";
 "failure.copy" = "복사";
 "failure.details" = "자세히";
 "failure.deviceRevoked" = "이 기기는 더 이상 서버에 연결되어 있지 않아요. 다시 연결해 주세요.";
 "failure.generic" = "문제가 생겼어요.";
+"failure.keyRejected" = "서버가 이 Mac의 키를 받아들이지 않았어요. 서버를 다시 설치했거나 키가 취소됐을 수 있어요.";
+"failure.keyRejectedThisMac" = "이 Mac의 서버가 앱의 키를 받아들이지 않았어요. 데이터가 사라졌을 수 있어요.";
+"failure.keyRepairFailed" = "이 Mac의 서버에 다시 연결하지 못했어요.";
+"failure.keyRepairing" = "이 Mac의 서버에 다시 연결하는 중…";
 "failure.noAnswer" = "서버가 응답하지 않아요. 전원이 켜져 있고 연결이 정상인지 확인하세요.";
 "failure.reason.binary" = "텍스트 파일이 아니라서 여기에 표시할 수 없어요.";
 "failure.reason.cloneFailed" = "저장소를 클론할 수 없었어요.";

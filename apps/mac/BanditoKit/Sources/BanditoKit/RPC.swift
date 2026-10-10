@@ -60,6 +60,9 @@ public struct RPCError: Error, Sendable, Equatable, LocalizedError {
     public static let insecureTransport = -3
     /// Client-side: this operation is not available for the server's connection kind yet.
     public static let unsupportedTransport = -4
+    /// Client-side: the server answered the WebSocket handshake with 401 or 403 — it is there, and does not accept
+    /// this device's key (the daemon lost its data, was reinstalled, or the device was revoked).
+    public static let keyRejected = -5
 }
 
 /// A JSON-RPC notification other than `event` (for example `term.output`), with its raw params.
@@ -97,6 +100,9 @@ public actor RPCClient {
     private var timers: [Int: Task<Void, Never>] = [:]
     private var readTask: Task<Void, Never>?
     private var closed = false
+    /// Why the read loop ended, when the transport said it with a specific error (`keyRejected`). Pending and later
+    /// calls fail with it instead of the plain `disconnected`.
+    private var endError: RPCError?
 
     /// Event notifications that could not be decoded and were skipped.
     public private(set) var decodeFailures = 0
@@ -149,6 +155,7 @@ public actor RPCClient {
                 let text = try await transport.receive()
                 handle(text)
             } catch {
+                if let rpc = error as? RPCError, rpc.code == RPCError.keyRejected { endError = rpc }
                 break
             }
         }
@@ -162,7 +169,7 @@ public actor RPCClient {
         slots.removeAll()
         for timer in timers.values { timer.cancel() }
         timers.removeAll()
-        let error = RPCError(code: RPCError.disconnected, message: "disconnected from the server")
+        let error = endError ?? RPCError(code: RPCError.disconnected, message: "disconnected from the server")
         for (_, slot) in pending {
             if case .waiting(let c) = slot { c.resume(throwing: error) }
         }
@@ -249,7 +256,7 @@ public actor RPCClient {
     }
 
     private func perform(_ method: String, paramsJSON paramsString: String, timeout: Duration) async throws -> Data {
-        if closed { throw RPCError(code: RPCError.disconnected, message: "disconnected from the server") }
+        if closed { throw endError ?? RPCError(code: RPCError.disconnected, message: "disconnected from the server") }
         let id = nextId
         nextId += 1
         let request = "{\"jsonrpc\":\"2.0\",\"id\":\(id),\"method\":\(jsonString(method)),\"params\":\(paramsString)}"
@@ -277,7 +284,7 @@ public actor RPCClient {
             case .waiting?, nil:
                 // Unreachable: only this call moves a slot out of `.sent`. `nil` means
                 // the client was failed while the request was being sent.
-                c.resume(throwing: RPCError(code: RPCError.disconnected, message: "disconnected from the server"))
+                c.resume(throwing: endError ?? RPCError(code: RPCError.disconnected, message: "disconnected from the server"))
             }
         }
     }

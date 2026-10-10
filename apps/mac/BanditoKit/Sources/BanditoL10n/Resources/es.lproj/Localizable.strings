@@ -400,10 +400,15 @@
 "empty.noServers.title" = "Sin servidores";
 "error.disconnected" = "Se perdió la conexión con %1$@";
 "error.generic" = "Algo salió mal: %1$@";
+"failure.connectAgain" = "Conectar de nuevo";
 "failure.copy" = "Copiar";
 "failure.details" = "Detalles";
 "failure.deviceRevoked" = "Este dispositivo ya no está conectado al servidor. Vuelve a conectarlo.";
 "failure.generic" = "Algo salió mal.";
+"failure.keyRejected" = "El servidor no aceptó la clave de este Mac. Puede que lo hayan reinstalado o que la clave se haya revocado.";
+"failure.keyRejectedThisMac" = "El servidor de este Mac no aceptó la clave de la app. Puede que haya perdido sus datos.";
+"failure.keyRepairFailed" = "No se pudo volver a conectar con el servidor de este Mac.";
+"failure.keyRepairing" = "Volviendo a conectar con el servidor de este Mac…";
 "failure.noAnswer" = "El servidor no responde. Comprueba que está encendido y que la conexión funciona.";
 "failure.reason.binary" = "No es un archivo de texto, así que no se puede mostrar aquí.";
 "failure.reason.cloneFailed" = "No se pudo clonar el repositorio.";

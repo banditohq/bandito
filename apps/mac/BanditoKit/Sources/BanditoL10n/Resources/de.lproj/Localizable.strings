@@ -400,10 +400,15 @@
 "empty.noServers.title" = "Keine Server";
 "error.disconnected" = "Verbindung zu %1$@ getrennt";
 "error.generic" = "Etwas ist schiefgelaufen: %1$@";
+"failure.connectAgain" = "Erneut verbinden";
 "failure.copy" = "Kopieren";
 "failure.details" = "Details";
 "failure.deviceRevoked" = "Dieses Gerät ist nicht mehr mit dem Server verbunden — verbinden Sie es erneut.";
 "failure.generic" = "Etwas ist schiefgelaufen.";
+"failure.keyRejected" = "Der Server hat den Schlüssel dieses Macs nicht akzeptiert. Vielleicht wurde der Server neu installiert oder der Schlüssel widerrufen.";
+"failure.keyRejectedThisMac" = "Der Server dieses Macs hat den Schlüssel der App nicht akzeptiert. Möglicherweise hat er seine Daten verloren.";
+"failure.keyRepairFailed" = "Die erneute Verbindung mit dem Server dieses Macs ist fehlgeschlagen.";
+"failure.keyRepairing" = "Verbindung mit dem Server dieses Macs wird erneut hergestellt …";
 "failure.noAnswer" = "Der Server antwortet nicht. Prüfen Sie, ob er eingeschaltet ist und die Verbindung funktioniert.";
 "failure.reason.binary" = "Das ist keine Textdatei, daher kann sie hier nicht angezeigt werden.";
 "failure.reason.cloneFailed" = "Das Repository konnte nicht geklont werden.";
