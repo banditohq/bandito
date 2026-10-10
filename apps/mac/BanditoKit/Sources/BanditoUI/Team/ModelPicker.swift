@@ -94,7 +94,7 @@ struct ModelPicker: View {
     private func hintText(_ text: String, action: (String, () -> Void)?) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             Text(text)
-                .font(BanditoFont.font(size: 12, weight: 400))
+                .font(BanditoFont.text(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
                 .fixedSize(horizontal: false, vertical: true)
             if let action {
@@ -175,7 +175,7 @@ struct ModelPicker: View {
                         .frame(width: 18)
                         .accessibilityHidden(true)
                     Text(L10n.ModelPicker.other)
-                        .font(BanditoFont.font(size: 13, weight: 500))
+                        .font(BanditoFont.text(size: 13, weight: 500))
                         .foregroundStyle(Color.Bandito.text)
                     Spacer(minLength: 0)
                 }
@@ -194,7 +194,7 @@ struct ModelPicker: View {
         HStack(spacing: 6) {
             TextField(L10n.ModelPicker.typePlaceholder, text: $selection)
                 .banditoField()
-                .font(BanditoFont.font(size: 13.5, weight: 400, mono: true))
+                .font(BanditoFont.mono(size: 13.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text)
                 .lineLimit(1)
                 .focused($focused)

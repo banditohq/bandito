@@ -69,13 +69,13 @@ struct AvatarEditor: View {
                 let title = name.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !title.isEmpty {
                     Text(title)
-                        .font(BanditoFont.font(size: 15, weight: 600))
+                        .font(BanditoFont.text(size: 15, weight: 600))
                         .foregroundStyle(Color.Bandito.text)
                         .lineLimit(1)
                         .truncationMode(.tail)
                 }
                 Text(L10n.Avatar.hint)
-                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -129,7 +129,7 @@ struct AvatarEditor: View {
                         .foregroundStyle(Color.Bandito.text3)
                     TextField(L10n.Avatar.emojiField, text: $emojiText)
                         .banditoField()
-                        .font(BanditoFont.font(size: 13.5, weight: 400))
+                        .font(BanditoFont.text(size: 13.5, weight: 400))
                         .focused($emojiFocused)
                         .accessibilityLabel(L10n.Avatar.emojiField)
                 }
@@ -149,7 +149,7 @@ struct AvatarEditor: View {
             }
             if shown.isEmpty {
                 Text(L10n.Avatar.noMatches)
-                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .frame(maxWidth: .infinity, minHeight: 60)
             } else {
@@ -161,7 +161,7 @@ struct AvatarEditor: View {
                     emojiText = ""
                 }
                 .banditoButton(.link)
-                .font(BanditoFont.font(size: 12.5, weight: 500))
+                .font(BanditoFont.text(size: 12.5, weight: 500))
             }
         }
         // The system palette types into the field above; the newest character becomes the emoji.
@@ -187,7 +187,7 @@ struct AvatarEditor: View {
                         emojiText = ""
                     } label: {
                         Text(emoji)
-                            .font(.system(size: 20))
+                            .font(BanditoFont.text(size: 20, weight: 400))
                             .frame(width: cell, height: cell)
                             .background(
                                 selected ? Color.Bandito.text.opacity(0.12) : Color.clear,

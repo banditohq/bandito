@@ -92,12 +92,12 @@ struct TeamHome: View {
             RaccoonAvatar(name: "Bandito", color: .peach, face: .chevronDash, size: 56)
             VStack(alignment: .leading, spacing: 5) {
                 Text(L10n.Team.Home.title)
-                    .font(BanditoFont.font(size: 24, weight: 650))
+                    .font(BanditoFont.display(size: 22, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
                 Text(L10n.Team.Home.subtitle)
-                    .font(BanditoFont.font(size: 13.5, weight: 400))
+                    .font(BanditoFont.text(size: 13.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -143,12 +143,12 @@ struct TeamHome: View {
         } label: {
             VStack(alignment: .leading, spacing: 6) {
                 Text(template.title)
-                    .font(BanditoFont.font(size: 13.5, weight: 600))
+                    .font(BanditoFont.display(size: 12.5, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
                 Text(template.description)
-                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
@@ -171,7 +171,7 @@ struct TeamHome: View {
                 .padding(.top, 1)
                 .accessibilityHidden(true)
             Text(text)
-                .font(BanditoFont.font(size: 12.5, weight: 400))
+                .font(BanditoFont.text(size: 12.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)

@@ -64,7 +64,7 @@ private struct ScreenToolbar: View {
         let holder = model.status?.controller ?? .none
         HStack(spacing: 10) {
             Text(L10n.Screen.shared)
-                .font(.system(size: 14, weight: .semibold))
+                .font(BanditoFont.text(size: 14, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
             Spacer(minLength: 8)
 
@@ -82,7 +82,7 @@ private struct ScreenToolbar: View {
                 model.sendCtrlAltDelete()
             } label: {
                 Text(keymap.binding(for: "screen.sendCtrlAltDelete")?.symbols ?? "")
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(BanditoFont.mono(size: 12, weight: 400))
             }
             .banditoButton(.quiet())
             .help(L10n.Screen.sendCAD)
@@ -186,7 +186,7 @@ private struct ScreenCanvas: View {
                     .font(.system(size: 34))
                     .foregroundStyle(Color.Bandito.text3)
                 Text(L10n.Screen.asleep)
-                    .font(.system(size: 13))
+                    .font(BanditoFont.text(size: 13, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                 if let text = model.errorText {
                     UserFacingErrorView(message: text)
@@ -215,17 +215,17 @@ private struct WhoIsHere: View {
                     .fill(agent ? Color.Bandito.info : Color.Bandito.surface3)
                     .frame(width: 8, height: 8)
                 Text(agent ? L10n.Screen.agentControls : L10n.Screen.youWatch)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(BanditoFont.text(size: 13, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                 Spacer(minLength: 0)
             }
             if model.asksToTakeControl {
                 Text(L10n.Screen.askTakeControl)
-                    .font(.system(size: 12))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.signal)
             }
             Text(agent ? L10n.Screen.agentBusy : L10n.Screen.hint)
-                .font(.system(size: 12))
+                .font(BanditoFont.text(size: 12, weight: 400))
                 .lineSpacing(2)
                 .foregroundStyle(Color.Bandito.text2)
         }
@@ -277,7 +277,7 @@ private struct ScreenSidebarContent: View {
             VStack(spacing: 12) {
                 HStack {
                     Text(L10n.Screen.clipboard)
-                        .font(.system(size: 13))
+                        .font(BanditoFont.text(size: 13, weight: 400))
                         .foregroundStyle(Color.Bandito.text2)
                     Spacer(minLength: 8)
                     SegmentedPicker(
@@ -291,11 +291,11 @@ private struct ScreenSidebarContent: View {
                 }
                 HStack {
                     Text(L10n.Screen.quality)
-                        .font(.system(size: 13))
+                        .font(BanditoFont.text(size: 13, weight: 400))
                         .foregroundStyle(Color.Bandito.text2)
                     Spacer(minLength: 8)
                     Text(qualityName)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(BanditoFont.text(size: 13, weight: 600))
                         .foregroundStyle(Color.Bandito.text)
                 }
             }
@@ -304,7 +304,7 @@ private struct ScreenSidebarContent: View {
             Spacer(minLength: 12)
 
             Text(L10n.Screen.sleepHint)
-                .font(.system(size: 12))
+                .font(BanditoFont.text(size: 12, weight: 400))
                 .lineSpacing(2)
                 .foregroundStyle(Color.Bandito.text2)
                 .padding(12)
@@ -330,10 +330,10 @@ private struct ScreenSidebarContent: View {
                 }
             VStack(alignment: .leading, spacing: 3) {
                 Text(L10n.Screen.shared)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(BanditoFont.text(size: 13, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                 Text(L10n.Screen.sharedSub)
-                    .font(.system(size: 11.5))
+                    .font(BanditoFont.text(size: 11.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
             }
             Spacer(minLength: 0)
@@ -368,7 +368,7 @@ private struct ScreenNote: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 13))
+            .font(BanditoFont.text(size: 13, weight: 400))
             .foregroundStyle(Color.Bandito.text3)
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity, maxHeight: .infinity)

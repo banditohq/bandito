@@ -90,13 +90,13 @@ struct AccountSection: View {
             ProfileAvatar(name: name, color: AvatarColor.at(hub.profile.colorIndex), picture: hub.avatar.image, size: 56)
             VStack(alignment: .leading, spacing: 5) {
                 Text(name ?? L10n.Account.title)
-                    .font(BanditoFont.font(size: 18, weight: 600))
+                    .font(BanditoFont.display(size: 16.5, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 if let user = hub.me?.user {
                     Text(user.email ?? user.githubLogin.map { "@\($0)" } ?? "")
-                        .font(BanditoFont.font(size: 13, weight: 400))
+                        .font(BanditoFont.text(size: 13, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -123,7 +123,7 @@ struct AccountSection: View {
                 Text(L10n.Account.Method.email)
             }
         }
-        .font(BanditoFont.font(size: 12, weight: 500))
+        .font(BanditoFont.text(size: 12, weight: 500))
         .foregroundStyle(Color.Bandito.text2)
         .lineLimit(1)
     }

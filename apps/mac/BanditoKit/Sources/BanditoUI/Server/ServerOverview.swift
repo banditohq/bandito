@@ -220,7 +220,7 @@ struct ServerOverview: View {
                 SectionLabel(L10n.Server.Processes.title)
                 Spacer(minLength: 8)
                 Text(L10n.Server.Processes.hint)
-                    .font(.system(size: 12))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
             }
             if !monitor.processesSupported {
@@ -246,10 +246,10 @@ struct ServerOverview: View {
             ownerAvatar(row, name: name)
             VStack(alignment: .leading, spacing: 2) {
                 Text(name)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(BanditoFont.text(size: 13, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                 Text(row.commandNames)
-                    .font(.system(size: 11.5, design: .monospaced))
+                    .font(BanditoFont.mono(size: 11.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -257,7 +257,7 @@ struct ServerOverview: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             VStack(alignment: .leading, spacing: 4) {
                 Text(L10n.Server.Processes.cpu(percent: HostFormat.percent(row.cpuPercent)))
-                    .font(.system(size: 11.5))
+                    .font(BanditoFont.text(size: 11.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                 GeometryReader { proxy in
                     ZStack(alignment: .leading) {
@@ -269,7 +269,7 @@ struct ServerOverview: View {
             }
             .frame(width: 120)
             Text(HostFormat.bytes(row.rssBytes))
-                .font(.system(size: 12))
+                .font(BanditoFont.text(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .frame(width: 70, alignment: .trailing)
             if row.canStop {
@@ -357,11 +357,11 @@ struct ServerOverview: View {
                 HStack(spacing: 10) {
                     PortBadge(port: port.port)
                     Text(port.process ?? "—")
-                        .font(.system(size: 13))
+                        .font(BanditoFont.text(size: 13, weight: 400))
                         .foregroundStyle(Color.Bandito.text)
                         .lineLimit(1)
                     Text(ownerLabel(port))
-                        .font(.system(size: 12))
+                        .font(BanditoFont.text(size: 12, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .lineLimit(1)
                     Spacer(minLength: 8)
@@ -388,21 +388,21 @@ struct ServerOverview: View {
             ForEach(secrets.prefix(3)) { secret in
                 HStack(spacing: 10) {
                     Text(secret.name)
-                        .font(.system(size: 12.5, design: .monospaced))
+                        .font(BanditoFont.mono(size: 12.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text)
                         .lineLimit(1)
                     Spacer(minLength: 8)
                     Text(SecretsView.masked(secret.tail))
-                        .font(.system(size: 12, design: .monospaced))
+                        .font(BanditoFont.mono(size: 12, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                     Text(SecretsView.whoLabel(secret.agents, server: server))
-                        .font(.system(size: 12))
+                        .font(BanditoFont.text(size: 12, weight: 400))
                         .foregroundStyle(Color.Bandito.text2)
                         .lineLimit(1)
                 }
             }
             Text(L10n.Secrets.hint)
-                .font(.system(size: 11.5))
+                .font(BanditoFont.text(size: 11.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
         }
     }
@@ -440,10 +440,10 @@ struct ServerOverview: View {
                 .foregroundStyle(Color.Bandito.signal)
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.Server.Update.available(version: release.latest?.description ?? ""))
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(BanditoFont.text(size: 13, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                 Text(L10n.Server.Update.current(version: server.info?.version ?? ""))
-                    .font(.system(size: 12))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
             }
             Spacer(minLength: 8)
@@ -500,24 +500,24 @@ private struct MetricTile: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline) {
                 Text(label)
-                    .font(.system(size: 12.5))
+                    .font(BanditoFont.text(size: 12.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                 Spacer(minLength: 6)
                 Text(note)
-                    .font(.system(size: 11.5))
+                    .font(BanditoFont.text(size: 11.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .lineLimit(1)
             }
             .frame(height: TileHeight.header)
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(value)
-                    .font(.system(size: 26, weight: .semibold))
+                    .font(BanditoFont.display(size: 24, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
                 if let valueNote {
                     Text(valueNote)
-                        .font(.system(size: 12.5))
+                        .font(BanditoFont.text(size: 12.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .lineLimit(1)
                 }
@@ -531,7 +531,7 @@ private struct MetricTile: View {
                         .padding(.top, 4)
                     if let caption {
                         Text(caption)
-                            .font(.system(size: 11.5))
+                            .font(BanditoFont.text(size: 11.5, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
@@ -589,7 +589,7 @@ struct PortBadge: View {
 
     var body: some View {
         Text(verbatim: ":\(port)")
-            .font(.system(size: 12, design: .monospaced))
+            .font(BanditoFont.mono(size: 12, weight: 400))
             .foregroundStyle(Color.Bandito.ok)
             .padding(.horizontal, 7)
             .padding(.vertical, 2)

@@ -35,10 +35,10 @@ struct AccountIllustration: View {
             }
             VStack(alignment: .leading, spacing: 8) {
                 Text(L10n.Onboarding.Account.heroTitle)
-                    .font(BanditoFont.font(size: 22, weight: 600))
+                    .font(BanditoFont.display(size: 20, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                 Text(L10n.Onboarding.Account.heroText)
-                    .font(BanditoFont.font(size: 14.5, weight: 400))
+                    .font(BanditoFont.text(size: 14.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                     .lineSpacing(2)
             }

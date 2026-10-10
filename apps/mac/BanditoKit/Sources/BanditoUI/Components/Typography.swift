@@ -1,47 +1,22 @@
 import BanditoDesign
 import SwiftUI
 
-/// The one place where the brand typeface is chosen.
-/// `nil` means the system font (SF Pro / SF Mono). When Geist is bundled, set the family names here.
-public enum BanditoFont {
-    public static let sansName: String? = nil
-    public static let monoName: String? = nil
-
-    /// Font for an explicit size and numeric weight (400, 500, 600, 700).
-    static func font(size: CGFloat, weight: Int, mono: Bool = false) -> Font {
-        let fontWeight = fontWeight(weight)
-        if mono {
-            if let monoName {
-                return .custom(monoName, size: size).weight(fontWeight)
-            }
-            return .system(size: size, weight: fontWeight, design: .monospaced)
-        }
-        if let sansName {
-            return .custom(sansName, size: size).weight(fontWeight)
-        }
-        return .system(size: size, weight: fontWeight, design: .default)
-    }
-
-    static func fontWeight(_ weight: Int) -> Font.Weight {
-        switch weight {
-        case ..<450: .regular
-        case ..<550: .medium
-        case ..<650: .semibold
-        default: .bold
-        }
-    }
-}
-
-/// Brand text styles. Sizes and weights come from `BanditoType`.
+/// Brand text styles. Sizes and weights come from `BanditoType`; the faces from `BanditoFont`
+/// (display Unbounded, text Onest, mono JetBrains Mono).
 public enum BanditoTextStyle: CaseIterable, Sendable {
     case title, heading, body, small, mono, label
 }
 
 public extension Font {
     /// Brand font for a text style. Tracking and uppercase are applied by the view that uses the style.
+    /// `title` and `heading` are display (Unbounded), `mono` is JetBrains Mono, the rest is Onest.
     static func bandito(_ style: BanditoTextStyle) -> Font {
         let metrics = style.metrics
-        return BanditoFont.font(size: metrics.size, weight: metrics.weight, mono: style == .mono)
+        switch style {
+        case .title, .heading: return BanditoFont.display(size: metrics.size, weight: metrics.weight)
+        case .mono: return BanditoFont.mono(size: metrics.size, weight: metrics.weight)
+        case .body, .small, .label: return BanditoFont.text(size: metrics.size, weight: metrics.weight)
+        }
     }
 }
 

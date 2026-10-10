@@ -10,7 +10,7 @@ struct DeviceCodeText: View {
 
     var body: some View {
         Text(code)
-            .font(BanditoFont.font(size: 30, weight: 600, mono: true))
+            .font(BanditoFont.mono(size: 30, weight: 600))
             .foregroundStyle(Color.Bandito.text)
             .tracking(2)
             .textSelection(.enabled)
@@ -37,13 +37,13 @@ struct ResetConfirmation: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(L10n.Onboarding.Account.resetWarning)
-                .font(BanditoFont.font(size: 13.5, weight: 400))
+                .font(BanditoFont.text(size: 13.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .lineSpacing(2)
             HStack(spacing: 8) {
                 TextField(L10n.Onboarding.Account.resetWordHint, text: $typed)
                     .banditoField()
-                    .font(BanditoFont.font(size: 14, weight: 400, mono: true))
+                    .font(BanditoFont.mono(size: 14, weight: 400))
                     .frame(maxWidth: 200)
                 Button(L10n.Onboarding.Account.resetAction) {
                     Task { await run() }
@@ -135,26 +135,26 @@ struct DeviceApprovalStep: View {
     private var waiting: some View {
         VStack(alignment: .leading, spacing: 18) {
             Text(L10n.Onboarding.Account.approvalTitle)
-                .font(BanditoFont.font(size: 34, weight: 600))
+                .font(BanditoFont.display(size: 31.5, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
             Text(L10n.Onboarding.Account.approvalSubtitle)
-                .font(BanditoFont.font(size: 15, weight: 400))
+                .font(BanditoFont.text(size: 15, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .lineSpacing(2)
             DeviceCodeText(code: model?.ownFingerprint ?? "")
             Text(L10n.Onboarding.Account.approvalHint)
-                .font(BanditoFont.font(size: 13.5, weight: 400))
+                .font(BanditoFont.text(size: 13.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
                 .lineSpacing(2)
             HStack(spacing: 10) {
                 waitingPulse
                 Text(L10n.Onboarding.Account.approvalWaiting)
-                    .font(BanditoFont.font(size: 13.5, weight: 400))
+                    .font(BanditoFont.text(size: 13.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
             }
             Button(L10n.Onboarding.Account.noOtherDevice) { mode = .recover }
                 .banditoButton(.link)
-                .font(BanditoFont.font(size: 13, weight: 500))
+                .font(BanditoFont.text(size: 13, weight: 500))
                 .foregroundStyle(Color.Bandito.signal)
         }
     }
@@ -173,12 +173,12 @@ struct DeviceApprovalStep: View {
         }()
         return VStack(alignment: .leading, spacing: 18) {
             Text(L10n.Onboarding.Account.senderTitle(code: code))
-                .font(BanditoFont.font(size: 26, weight: 600))
+                .font(BanditoFont.display(size: 24, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
                 .lineSpacing(2)
             DeviceCodeText(code: code)
             Text(L10n.Onboarding.Account.senderHint)
-                .font(BanditoFont.font(size: 14, weight: 400))
+                .font(BanditoFont.text(size: 14, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .lineSpacing(2)
             HStack(spacing: 10) {
@@ -195,10 +195,10 @@ struct DeviceApprovalStep: View {
     private var refused: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(L10n.Onboarding.Account.refusedTitle)
-                .font(BanditoFont.font(size: 26, weight: 600))
+                .font(BanditoFont.display(size: 24, weight: 600))
                 .foregroundStyle(Color.Bandito.danger)
             Text(L10n.Onboarding.Account.refusedText)
-                .font(BanditoFont.font(size: 14, weight: 400))
+                .font(BanditoFont.text(size: 14, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .lineSpacing(2)
             Button(L10n.Onboarding.Account.understood) { onNoAccess() }
@@ -222,10 +222,10 @@ struct DeviceApprovalStep: View {
     private var recover: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(L10n.Onboarding.Account.recoverTitle)
-                .font(BanditoFont.font(size: 26, weight: 600))
+                .font(BanditoFont.display(size: 24, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
             Text(L10n.Onboarding.Account.recoverText)
-                .font(BanditoFont.font(size: 14, weight: 400))
+                .font(BanditoFont.text(size: 14, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .lineSpacing(2)
             ResetConfirmation {
@@ -243,7 +243,7 @@ struct DeviceApprovalStep: View {
             }
             Button(L10n.Onboarding.Account.signInAgain) { Task { await signOut() } }
                 .banditoButton(.link)
-                .font(BanditoFont.font(size: 13, weight: 500))
+                .font(BanditoFont.text(size: 13, weight: 500))
                 .foregroundStyle(Color.Bandito.text3)
         }
     }
@@ -332,15 +332,15 @@ struct ApproveDeviceSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             Text(L10n.Onboarding.Account.approveTitle(name: device.name, platform: device.platform))
-                .font(BanditoFont.font(size: 20, weight: 600))
+                .font(BanditoFont.display(size: 18.5, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
                 .fixedSize(horizontal: false, vertical: true)
             Text(L10n.Onboarding.Account.approveHowTo)
-                .font(BanditoFont.font(size: 13.5, weight: 400))
+                .font(BanditoFont.text(size: 13.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .lineSpacing(2)
             Text(L10n.Onboarding.Account.approveThisMac)
-                .font(BanditoFont.font(size: 12.5, weight: 500))
+                .font(BanditoFont.text(size: 12.5, weight: 500))
                 .foregroundStyle(Color.Bandito.text3)
             DeviceCodeText(code: model?.ownFingerprint ?? hub.identity?.fingerprint ?? "")
             if let model {
@@ -403,14 +403,14 @@ private struct CodeEntryRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(L10n.Onboarding.Account.approveEnterCode)
-                .font(BanditoFont.font(size: 12.5, weight: 500))
+                .font(BanditoFont.text(size: 12.5, weight: 500))
                 .foregroundStyle(Color.Bandito.text3)
             TextField(
                 "XXXX-XXXX-XXXX-XXXX",
                 text: Binding(get: { model.code.value }, set: { model.enter($0) })
             )
             .banditoField()
-            .font(BanditoFont.font(size: 20, weight: 600, mono: true))
+            .font(BanditoFont.mono(size: 20, weight: 600))
             .accessibilityLabel(L10n.Onboarding.Account.approveEnterCode)
         }
     }
@@ -426,7 +426,7 @@ struct PendingDevicesBanner: View {
             HStack(spacing: 12) {
                 PulseDot(t: 0, color: Color.Bandito.signal)
                 Text(L10n.Onboarding.Account.bannerText(name: device.name, platform: device.platform))
-                    .font(BanditoFont.font(size: 13.5, weight: 500))
+                    .font(BanditoFont.text(size: 13.5, weight: 500))
                     .foregroundStyle(Color.Bandito.text)
                 Spacer()
                 Button(L10n.Onboarding.Account.bannerCheck) { checking = device }

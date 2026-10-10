@@ -26,7 +26,7 @@ struct UsageSection: View {
                 }
                 if snapshot.cards.isEmpty {
                     Text(L10n.Usage.empty)
-                        .font(.system(size: 13))
+                        .font(BanditoFont.text(size: 13, weight: 400))
                         .foregroundStyle(Color.Bandito.text2)
                 }
                 // Countdowns tick: the clock is read every 30 seconds, as in the usage popover.

@@ -64,7 +64,7 @@ private struct SignalButtonBody: View {
                     .accessibilityHidden(true)
                 configuration.label
             }
-            .font(BanditoFont.font(size: size.fontSize, weight: 600))
+            .font(BanditoFont.display(size: size.fontSize * 0.92, weight: 600))
             .foregroundStyle(isEnabled ? Color.Bandito.bg : Color.Bandito.text3)
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)
@@ -90,7 +90,7 @@ public struct QuietButtonStyle: ButtonStyle {
     public func makeBody(configuration: Configuration) -> some View {
         InteractiveBody(isPressed: configuration.isPressed) { hovered in
             configuration.label
-                .font(BanditoFont.font(size: size.fontSize, weight: 500))
+                .font(BanditoFont.text(size: size.fontSize, weight: 500))
                 .foregroundStyle(Color.Bandito.text)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
@@ -114,7 +114,7 @@ public struct LightPillButtonStyle: ButtonStyle {
     public func makeBody(configuration: Configuration) -> some View {
         InteractiveBody(isPressed: configuration.isPressed) { hovered in
             configuration.label
-                .font(BanditoFont.font(size: size.fontSize, weight: 600))
+                .font(BanditoFont.display(size: size.fontSize * 0.92, weight: 600))
                 .foregroundStyle(Color.Bandito.bg)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)

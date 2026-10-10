@@ -50,22 +50,24 @@ struct IntegrationEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(title)
-                .font(.system(size: 17, weight: .semibold))
+                .font(BanditoFont.display(size: 15.5, weight: 600))
+                .lineLimit(1)
+                .truncationMode(.tail)
                 .foregroundStyle(Color.Bandito.text)
             if let catalogEntry {
                 Text(catalogEntry.description(languageCode: ModelDescription.currentLanguageCode))
-                    .font(.system(size: 12.5))
+                    .font(BanditoFont.text(size: 12.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                     .fixedSize(horizontal: false, vertical: true)
                 if catalogEntry.id == "composio" {
                     Text(L10n.Integrations.Sheet.composioHint)
-                        .font(.system(size: 12))
+                        .font(BanditoFont.text(size: 12, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if let url = URL(string: catalogEntry.docsUrl) {
                     Link(L10n.Integrations.Sheet.docs, destination: url)
-                        .font(.system(size: 12.5, weight: .medium))
+                        .font(BanditoFont.text(size: 12.5, weight: 500))
                         .foregroundStyle(Color.Bandito.info)
                         .fixedSize()
                 }
@@ -82,7 +84,7 @@ struct IntegrationEditor: View {
 
             if let problem = currentProblem, attempted {
                 Text(Self.text(problem))
-                    .font(.system(size: 12.5))
+                    .font(BanditoFont.text(size: 12.5, weight: 400))
                     .foregroundStyle(Color.Bandito.danger)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -144,7 +146,7 @@ struct IntegrationEditor: View {
         field(L10n.Integrations.Sheet.name, hint: L10n.Integrations.Sheet.nameHint) {
             TextField(L10n.Integrations.Sheet.name, text: $draft.name)
                 .banditoField()
-                .font(BanditoFont.font(size: 13, weight: 400, mono: true))
+                .font(BanditoFont.mono(size: 13, weight: 400))
         }
         switch draft.kind {
         case .stdio:
@@ -152,13 +154,13 @@ struct IntegrationEditor: View {
                 TextField(L10n.Integrations.Custom.commandLine, text: $draft.commandLine, axis: .vertical)
                     .lineLimit(1...4)
                     .banditoField()
-                    .font(BanditoFont.font(size: 13, weight: 400, mono: true))
+                    .font(BanditoFont.mono(size: 13, weight: 400))
             }
         case .http:
             field(L10n.Integrations.Sheet.url, hint: L10n.Integrations.Sheet.urlHint) {
                 TextField(catalogEntry?.urlHint ?? L10n.Integrations.Sheet.urlHint, text: $draft.url)
                     .banditoField()
-                    .font(BanditoFont.font(size: 13, weight: 400, mono: true))
+                    .font(BanditoFont.mono(size: 13, weight: 400))
             }
         }
         if !draft.headers.isEmpty || draft.kind == .http {
@@ -172,12 +174,12 @@ struct IntegrationEditor: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label)
-                .font(.system(size: 12))
+                .font(BanditoFont.text(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
             content()
             if let hint {
                 Text(hint)
-                    .font(.system(size: 11.5))
+                    .font(BanditoFont.text(size: 11.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
             }
         }
@@ -187,7 +189,7 @@ struct IntegrationEditor: View {
     private func pairs(_ title: String, items: Binding<[IntegrationPair]>) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .font(.system(size: 12))
+                .font(BanditoFont.text(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
             ForEach(items) { $pair in
                 IntegrationPairRow(pair: $pair) {
@@ -307,16 +309,16 @@ struct IntegrationPairRow: View {
             HStack(spacing: 8) {
                 TextField(L10n.Integrations.Sheet.keyPlaceholder, text: $pair.key)
                     .banditoField()
-                    .font(BanditoFont.font(size: 12.5, weight: 400, mono: true))
+                    .font(BanditoFont.mono(size: 12.5, weight: 400))
                     .frame(width: 130)
                 if pair.isSecret {
                     SecureField(L10n.Integrations.Sheet.valuePlaceholder, text: $pair.value)
                         .banditoField()
-                        .font(BanditoFont.font(size: 12.5, weight: 400, mono: true))
+                        .font(BanditoFont.mono(size: 12.5, weight: 400))
                 } else {
                     TextField(L10n.Integrations.Sheet.valuePlaceholder, text: $pair.value)
                         .banditoField()
-                        .font(BanditoFont.font(size: 12.5, weight: 400, mono: true))
+                        .font(BanditoFont.mono(size: 12.5, weight: 400))
                 }
                 if pair.template == nil {
                     Toggle(isOn: $pair.isSecret) {
@@ -336,7 +338,7 @@ struct IntegrationPairRow: View {
             if pair.isSecret {
                 Text(pair.storedSecret.map { L10n.Integrations.Sheet.storedSecret(name: $0) }
                     ?? L10n.Integrations.Sheet.secretHint)
-                    .font(.system(size: 11.5))
+                    .font(BanditoFont.text(size: 11.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .fixedSize(horizontal: false, vertical: true)
             }

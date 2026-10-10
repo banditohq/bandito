@@ -102,7 +102,7 @@ private struct IdentityCard: View {
             VStack(alignment: .leading, spacing: 3) {
                 TextField(L10n.AgentSheet.name, text: $name)
                     .banditoField()
-                    .font(BanditoFont.font(size: 19, weight: 650))
+                    .font(BanditoFont.display(size: 17.5, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1)
                     .focused($focused, equals: .name)
@@ -114,7 +114,7 @@ private struct IdentityCard: View {
                         .foregroundStyle(Color.Bandito.text3)
                     TextField(L10n.Inspector.addRole, text: $role)
                         .banditoField()
-                        .font(BanditoFont.font(size: 12.5, weight: 400))
+                        .font(BanditoFont.text(size: 12.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .lineLimit(1)
                         .focused($focused, equals: .role)
@@ -281,11 +281,11 @@ struct InspectorRow<Value: View>: View {
     var body: some View {
         HStack(spacing: 10) {
             Text(label)
-                .font(BanditoFont.font(size: 12.5, weight: 400))
+                .font(BanditoFont.text(size: 12.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
             Spacer(minLength: 10)
             value
-                .font(BanditoFont.font(size: 13, weight: 500))
+                .font(BanditoFont.text(size: 13, weight: 500))
                 .foregroundStyle(Color.Bandito.text)
         }
         .padding(.horizontal, compact ? 16 : 14)

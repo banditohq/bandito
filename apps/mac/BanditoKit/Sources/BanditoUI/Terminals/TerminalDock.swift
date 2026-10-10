@@ -30,7 +30,7 @@ struct TerminalDock: View {
                 .frame(maxWidth: .infinity)
                 if let shortcut = keymap.binding(for: "terminals.restoreCollapsed")?.symbols {
                     Text(L10n.Terminals.Dock.lastHint(shortcut: shortcut))
-                        .font(.system(size: 12))
+                        .font(BanditoFont.text(size: 12, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .fixedSize()
                 }
@@ -68,11 +68,11 @@ struct DockCard: View {
                 }
                 VStack(alignment: .leading, spacing: 1) {
                     Text(name)
-                        .font(.system(size: 12.5, weight: .semibold))
+                        .font(BanditoFont.text(size: 12.5, weight: 600))
                         .foregroundStyle(Color.Bandito.text)
                         .lineLimit(1)
                     Text(subtitle(activity: activity, waiting: waiting))
-                        .font(.system(size: 11))
+                        .font(BanditoFont.text(size: 11, weight: 400))
                         .foregroundStyle(waiting ? BanditoPalette.peach : Color.Bandito.text3)
                         .lineLimit(1)
                 }
@@ -82,7 +82,7 @@ struct DockCard: View {
                 )
                 .frame(width: 56, height: 22)
                 Text(L10n.Terminals.Dock.restore)
-                    .font(.system(size: 11.5, weight: .semibold))
+                    .font(BanditoFont.text(size: 11.5, weight: 600))
                     .foregroundStyle(BanditoPalette.peach)
             }
             .padding(.horizontal, 12)

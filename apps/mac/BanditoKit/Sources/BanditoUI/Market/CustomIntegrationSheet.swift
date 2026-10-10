@@ -47,7 +47,9 @@ struct CustomIntegrationSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             Text(L10n.Integrations.addOwn)
-                .font(.system(size: 20, weight: .semibold))
+                .font(BanditoFont.display(size: 18.5, weight: 600))
+                .lineLimit(1)
+                .truncationMode(.tail)
                 .foregroundStyle(Color.Bandito.text)
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
@@ -67,7 +69,7 @@ struct CustomIntegrationSheet: View {
             buttons
             if checkAsked {
                 Text(L10n.Integrations.Custom.trialNote)
-                    .font(.system(size: 11.5))
+                    .font(BanditoFont.text(size: 11.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }
@@ -83,16 +85,16 @@ struct CustomIntegrationSheet: View {
     private var pasteZone: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(L10n.Integrations.Custom.paste)
-                .font(.system(size: 13, weight: .semibold))
+                .font(BanditoFont.text(size: 13, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
             ZStack(alignment: .topLeading) {
                 TextEditor(text: $pasted)
-                    .font(BanditoFont.font(size: 12.5, weight: 400, mono: true))
+                    .font(BanditoFont.mono(size: 12.5, weight: 400))
                     .banditoEditor()
                 if pasted.isEmpty {
                     // Two lines, both in the monospaced face. The padding is the field's own plus the editor's inset.
                     Text(L10n.Integrations.Custom.pastePlaceholder)
-                        .font(BanditoFont.font(size: 12.5, weight: 400, mono: true))
+                        .font(BanditoFont.mono(size: 12.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.horizontal, 17)
@@ -121,7 +123,7 @@ struct CustomIntegrationSheet: View {
             } icon: {
                 Image(systemName: "checkmark.circle.fill")
             }
-            .font(.system(size: 12.5, weight: .medium))
+            .font(BanditoFont.text(size: 12.5, weight: 500))
             .foregroundStyle(Color.Bandito.ok)
         case .web(let url):
             Label {
@@ -129,7 +131,7 @@ struct CustomIntegrationSheet: View {
             } icon: {
                 Image(systemName: "checkmark.circle.fill")
             }
-            .font(.system(size: 12.5, weight: .medium))
+            .font(BanditoFont.text(size: 12.5, weight: 500))
             .foregroundStyle(Color.Bandito.ok)
         case .many(let count):
             Label {
@@ -137,7 +139,7 @@ struct CustomIntegrationSheet: View {
             } icon: {
                 Image(systemName: "checkmark.circle.fill")
             }
-            .font(.system(size: 12.5, weight: .medium))
+            .font(BanditoFont.text(size: 12.5, weight: 500))
             .foregroundStyle(Color.Bandito.ok)
         case .failed(let failure):
             Label {
@@ -146,7 +148,7 @@ struct CustomIntegrationSheet: View {
             } icon: {
                 Image(systemName: "exclamationmark.triangle.fill")
             }
-            .font(.system(size: 12.5, weight: .medium))
+            .font(BanditoFont.text(size: 12.5, weight: 500))
             .foregroundStyle(Color.Bandito.danger)
         }
     }
@@ -160,10 +162,10 @@ struct CustomIntegrationSheet: View {
                 )) {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(server.name ?? "—")
-                            .font(.system(size: 13, weight: .medium))
+                            .font(BanditoFont.text(size: 13, weight: 500))
                             .foregroundStyle(Color.Bandito.text)
                         Text(summary(of: server))
-                            .font(BanditoFont.font(size: 11.5, weight: 400, mono: true))
+                            .font(BanditoFont.mono(size: 11.5, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                             .lineLimit(1)
                             .truncationMode(.middle)
@@ -186,7 +188,7 @@ struct CustomIntegrationSheet: View {
         HStack(spacing: 10) {
             Rectangle().fill(Color.Bandito.line).frame(height: 1)
             Text(L10n.Integrations.Custom.manual)
-                .font(.system(size: 12))
+                .font(BanditoFont.text(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
                 .fixedSize()
             Rectangle().fill(Color.Bandito.line).frame(height: 1)
@@ -204,22 +206,22 @@ struct CustomIntegrationSheet: View {
                     get: { draft.title },
                     set: { draft.setTitle($0, existingNames: existingNames) }))
                 .banditoField()
-                .font(.system(size: 13))
+                .font(BanditoFont.text(size: 13, weight: 400))
             if editingName {
                 TextField(
                     L10n.Integrations.Sheet.name,
                     text: Binding(get: { draft.name }, set: { draft.setName($0) })
                 )
                 .banditoField()
-                .font(BanditoFont.font(size: 12.5, weight: 400, mono: true))
+                .font(BanditoFont.mono(size: 12.5, weight: 400))
                 .onSubmit { editingName = false }
                 Text(L10n.Integrations.Sheet.nameHint)
-                    .font(.system(size: 11.5))
+                    .font(BanditoFont.text(size: 11.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
             } else if !draft.name.isEmpty {
                 Button { editingName = true } label: {
                     Text(L10n.Integrations.Custom.willBe(name: draft.name))
-                        .font(BanditoFont.font(size: 11.5, weight: 400, mono: true))
+                        .font(BanditoFont.mono(size: 11.5, weight: 400))
                 }
                 .banditoButton(.link)
                 .help(L10n.Integrations.Custom.editName)
@@ -255,11 +257,11 @@ struct CustomIntegrationSheet: View {
                             .fill(Color.Bandito.text.opacity(0.1)))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(BanditoFont.text(size: 13, weight: 600))
                         .foregroundStyle(Color.Bandito.text)
                         .lineLimit(1)
                     Text(caption)
-                        .font(.system(size: 11.5))
+                        .font(BanditoFont.text(size: 11.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .lineLimit(1)
                 }
@@ -287,9 +289,9 @@ struct CustomIntegrationSheet: View {
                 TextField("npx -y @scope/package", text: $draft.commandLine, axis: .vertical)
                     .lineLimit(1...4)
                     .banditoField()
-                    .font(BanditoFont.font(size: 12.5, weight: 400, mono: true))
+                    .font(BanditoFont.mono(size: 12.5, weight: 400))
                 Text(L10n.Integrations.Custom.commandHint)
-                    .font(.system(size: 11.5))
+                    .font(BanditoFont.text(size: 11.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
             }
             pairs(L10n.Integrations.Custom.variables, items: $draft.env)
@@ -298,9 +300,9 @@ struct CustomIntegrationSheet: View {
                 label(L10n.Integrations.Sheet.url)
                 TextField("https://…", text: $draft.url)
                     .banditoField()
-                    .font(BanditoFont.font(size: 12.5, weight: 400, mono: true))
+                    .font(BanditoFont.mono(size: 12.5, weight: 400))
                 Text(L10n.Integrations.Sheet.urlHint)
-                    .font(.system(size: 11.5))
+                    .font(BanditoFont.text(size: 11.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
             }
             pairs(L10n.Integrations.Sheet.headers, items: $draft.headers)
@@ -328,7 +330,7 @@ struct CustomIntegrationSheet: View {
 
     private func label(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 12))
+            .font(BanditoFont.text(size: 12, weight: 400))
             .foregroundStyle(Color.Bandito.text3)
     }
 
@@ -338,7 +340,7 @@ struct CustomIntegrationSheet: View {
     private var feedback: some View {
         if let problem = currentProblem, attempted {
             Text(IntegrationEditor.text(problem))
-                .font(.system(size: 12.5))
+                .font(BanditoFont.text(size: 12.5, weight: 400))
                 .foregroundStyle(Color.Bandito.danger)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -354,7 +356,7 @@ struct CustomIntegrationSheet: View {
         HStack(spacing: 10) {
             if !queue.isEmpty {
                 Text(L10n.Integrations.Custom.remaining(count: queue.count))
-                    .font(.system(size: 12))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
             }
             Spacer(minLength: 8)
@@ -566,17 +568,17 @@ struct IntegrationTestResult: View {
         VStack(alignment: .leading, spacing: 4) {
             if result.ok {
                 Text(L10n.Integrations.toolsFound(names: result.tools.joined(separator: ", ")))
-                    .font(.system(size: 12.5, weight: .medium))
+                    .font(BanditoFont.text(size: 12.5, weight: 500))
                     .foregroundStyle(Color.Bandito.ok)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
                 Text(IntegrationFailureText.text(IntegrationFailure.classify(result.error)))
-                    .font(.system(size: 12.5, weight: .medium))
+                    .font(BanditoFont.text(size: 12.5, weight: 500))
                     .foregroundStyle(Color.Bandito.danger)
                     .fixedSize(horizontal: false, vertical: true)
                 if let raw = result.error, !raw.isEmpty {
                     Text(raw)
-                        .font(BanditoFont.font(size: 11, weight: 400, mono: true))
+                        .font(BanditoFont.mono(size: 11, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .lineLimit(6)
                         .truncationMode(.tail)

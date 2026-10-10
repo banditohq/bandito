@@ -12,7 +12,7 @@ struct UserFacingErrorView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(message.text)
-                .font(.system(size: 12.5))
+                .font(BanditoFont.text(size: 12.5, weight: 400))
                 .foregroundStyle(Color.Bandito.danger)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -24,7 +24,7 @@ struct UserFacingErrorView: View {
                 DisclosureGroup(L10n.Failure.details) {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(technical)
-                            .font(.system(size: 11.5, design: .monospaced))
+                            .font(BanditoFont.mono(size: 11.5, weight: 400))
                             .foregroundStyle(Color.Bandito.text2)
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -33,7 +33,7 @@ struct UserFacingErrorView: View {
                     }
                     .padding(.top, 4)
                 }
-                .font(.system(size: 12))
+                .font(BanditoFont.text(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
             }
         }

@@ -38,7 +38,7 @@ public struct RadioRow: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
                         Text(title)
-                            .font(BanditoFont.font(size: 13.5, weight: 600))
+                            .font(BanditoFont.text(size: 13.5, weight: 600))
                             .foregroundStyle(Color.Bandito.text)
                         if let badge {
                             Chip(text: badge, tone: .ok)
@@ -46,7 +46,7 @@ public struct RadioRow: View {
                     }
                     if let description {
                         Text(description)
-                            .font(BanditoFont.font(size: 12, weight: 400))
+                            .font(BanditoFont.text(size: 12, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                             .fixedSize(horizontal: false, vertical: true)
                     }

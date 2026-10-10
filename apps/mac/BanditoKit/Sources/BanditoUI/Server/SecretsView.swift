@@ -23,7 +23,7 @@ struct SecretsView: View {
         ) {
             if let server, server.supports("secrets") {
                 Text(L10n.Secrets.hint)
-                    .font(.system(size: 13))
+                    .font(BanditoFont.text(size: 13, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                 ServerCard {
                     HStack(spacing: 12) {
@@ -34,23 +34,23 @@ struct SecretsView: View {
                     }
                     if secrets.isEmpty {
                         Text(L10n.Secrets.empty)
-                            .font(.system(size: 13))
+                            .font(BanditoFont.text(size: 13, weight: 400))
                             .foregroundStyle(Color.Bandito.text2)
                             .padding(.vertical, 8)
                     }
                     ForEach(secrets) { secret in
                         HStack(spacing: 12) {
                             Text(secret.name)
-                                .font(.system(size: 13, design: .monospaced))
+                                .font(BanditoFont.mono(size: 13, weight: 400))
                                 .foregroundStyle(Color.Bandito.text)
                                 .lineLimit(1)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             Text(Self.masked(secret.tail))
-                                .font(.system(size: 12.5, design: .monospaced))
+                                .font(BanditoFont.mono(size: 12.5, weight: 400))
                                 .foregroundStyle(Color.Bandito.text3)
                                 .frame(width: 110, alignment: .leading)
                             Text(Self.whoLabel(secret.agents, server: server))
-                                .font(.system(size: 12.5))
+                                .font(BanditoFont.text(size: 12.5, weight: 400))
                                 .foregroundStyle(Color.Bandito.text2)
                                 .lineLimit(1)
                                 .frame(width: 200, alignment: .leading)
@@ -173,25 +173,27 @@ private struct SecretEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(draft.isNew ? L10n.Secrets.addTitle : L10n.Secrets.editTitle(name: draft.name))
-                .font(.system(size: 17, weight: .semibold))
+                .font(BanditoFont.display(size: 15.5, weight: 600))
+                .lineLimit(1)
+                .truncationMode(.tail)
                 .foregroundStyle(Color.Bandito.text)
             field(L10n.Secrets.nameLabel) {
                 TextField(L10n.Secrets.namePlaceholder, text: $draft.name)
                     .banditoField()
-                    .font(.system(size: 13, design: .monospaced))
+                    .font(BanditoFont.mono(size: 13, weight: 400))
                     .disabled(!draft.isNew)
                 if !draft.name.isEmpty && !SecretRules.isValidName(draft.name) {
                     Text(L10n.Secrets.nameRule)
-                        .font(.system(size: 11.5))
+                        .font(BanditoFont.text(size: 11.5, weight: 400))
                         .foregroundStyle(Color.Bandito.danger)
                 }
             }
             field(L10n.Secrets.valueLabel) {
                 SecureField(draft.isNew ? "" : L10n.Secrets.reenter, text: $draft.value)
                     .banditoField()
-                    .font(.system(size: 13, design: .monospaced))
+                    .font(BanditoFont.mono(size: 13, weight: 400))
                 Text(L10n.Secrets.valueHint)
-                    .font(.system(size: 11.5))
+                    .font(BanditoFont.text(size: 11.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
             }
             field(L10n.Secrets.agentsLabel) {
@@ -247,7 +249,7 @@ private struct SecretEditor: View {
     private func field<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label)
-                .font(.system(size: 12))
+                .font(BanditoFont.text(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
             content()
         }

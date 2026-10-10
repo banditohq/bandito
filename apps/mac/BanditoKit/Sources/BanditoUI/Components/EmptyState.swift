@@ -53,13 +53,13 @@ public struct EmptyState: View {
                 .accessibilityHidden(true)
 
             Text(title)
-                .font(.system(size: 18, weight: .semibold))
+                .font(BanditoFont.display(size: 16.5, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
                 .multilineTextAlignment(.center)
 
             if let message {
                 Text(message)
-                    .font(.system(size: 13.5))
+                    .font(BanditoFont.text(size: 13.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 360)

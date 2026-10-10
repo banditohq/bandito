@@ -136,7 +136,7 @@ private struct RaccoonFace: View {
                 ForEach(0..<2, id: \.self) { index in
                     let progress = pose.zProgresses[index]
                     Text("z")
-                        .font(BanditoFont.font(size: size * (index == 0 ? 0.3 : 0.24), weight: 700))
+                        .font(BanditoFont.text(size: size * (index == 0 ? 0.3 : 0.24), weight: 700))
                         .foregroundStyle(Color.Bandito.info)
                         .opacity(zOpacity(progress))
                         .offset(x: size * 0.36 + size * 0.2 * progress, y: -size * 0.36 - size * 0.42 * progress)

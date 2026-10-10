@@ -47,23 +47,23 @@ struct PortsView: View {
                                 .frame(width: 80, alignment: .leading)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(port.process ?? "—")
-                                    .font(.system(size: 13))
+                                    .font(BanditoFont.text(size: 13, weight: 400))
                                     .foregroundStyle(Color.Bandito.text)
                                     .lineLimit(1)
                                 if let pid = port.pid {
                                     Text(verbatim: "pid \(pid)")
-                                        .font(.system(size: 11, design: .monospaced))
+                                        .font(BanditoFont.mono(size: 11, weight: 400))
                                         .foregroundStyle(Color.Bandito.text3)
                                 }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             Text(ownerLabel(port, server: server))
-                                .font(.system(size: 12.5))
+                                .font(BanditoFont.text(size: 12.5, weight: 400))
                                 .foregroundStyle(Color.Bandito.text2)
                                 .lineLimit(1)
                                 .frame(width: 160, alignment: .leading)
                             Text(port.addr == "*" ? L10n.Ports.allInterfaces : port.addr)
-                                .font(port.addr == "*" ? .system(size: 12) : .system(size: 12, design: .monospaced))
+                                .font(port.addr == "*" ? BanditoFont.text(size: 12) : BanditoFont.mono(size: 12))
                                 .foregroundStyle(Color.Bandito.text3)
                                 .lineLimit(1)
                                 .frame(width: 110, alignment: .leading)

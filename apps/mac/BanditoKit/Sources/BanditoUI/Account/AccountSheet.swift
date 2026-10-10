@@ -121,7 +121,7 @@ struct AccountSheet: View {
                 nicknameLine(name: name, me: me)
             }
             Text(me.user.email ?? me.user.githubLogin.map { "@\($0)" } ?? "")
-                .font(BanditoFont.font(size: 13, weight: 400))
+                .font(BanditoFont.text(size: 13, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
                 .lineLimit(1)
                 .truncationMode(.middle)
@@ -131,7 +131,7 @@ struct AccountSheet: View {
             } else {
                 Button(L10n.Account.Photo.remove) { removePhoto() }
                     .banditoButton(.link)
-                    .font(BanditoFont.font(size: 12, weight: 500))
+                    .font(BanditoFont.text(size: 12, weight: 500))
             }
         }
         .frame(maxWidth: .infinity)
@@ -169,7 +169,7 @@ struct AccountSheet: View {
         } label: {
             HStack(spacing: 8) {
                 Text(name ?? L10n.Account.title)
-                    .font(BanditoFont.font(size: 20, weight: 600))
+                    .font(BanditoFont.display(size: 18.5, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -190,7 +190,7 @@ struct AccountSheet: View {
         HStack(spacing: 6) {
             TextField(L10n.Account.Nickname.placeholder, text: $nicknameDraft)
                 .banditoField()
-                .font(BanditoFont.font(size: 16, weight: 500))
+                .font(BanditoFont.text(size: 16, weight: 500))
                 .multilineTextAlignment(.center)
                 .frame(width: 240)
                 .focused($nicknameFocused)
@@ -232,7 +232,7 @@ struct AccountSheet: View {
                 Text(L10n.Account.Method.email)
             }
         }
-        .font(BanditoFont.font(size: 11.5, weight: 500))
+        .font(BanditoFont.text(size: 11.5, weight: 500))
         .foregroundStyle(Color.Bandito.text2)
         .lineLimit(1)
         .padding(.horizontal, 9)
@@ -335,13 +335,13 @@ struct AccountSheet: View {
                     .background(Color.Bandito.text.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 VStack(alignment: .leading, spacing: 3) {
                     Text(DeviceDescriptor.current.name)
-                        .font(BanditoFont.font(size: 13.5, weight: 500))
+                        .font(BanditoFont.text(size: 13.5, weight: 500))
                         .foregroundStyle(Color.Bandito.text)
                         .lineLimit(1)
                         .truncationMode(.middle)
                     HStack(spacing: 6) {
                         Text(hub.identity?.fingerprint ?? "")
-                            .font(BanditoFont.font(size: 13, weight: 500, mono: true))
+                            .font(BanditoFont.mono(size: 13, weight: 500))
                             .foregroundStyle(Color.Bandito.text2)
                             .textSelection(.enabled)
                             .lineLimit(1)
@@ -359,7 +359,7 @@ struct AccountSheet: View {
                 Spacer(minLength: 0)
             }
             Text(L10n.Account.ThisMac.hint)
-                .font(BanditoFont.font(size: 12, weight: 400))
+                .font(BanditoFont.text(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -387,13 +387,13 @@ struct AccountSheet: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 8) {
                     Text(device.name)
-                        .font(BanditoFont.font(size: 13.5, weight: 500))
+                        .font(BanditoFont.text(size: 13.5, weight: 500))
                         .foregroundStyle(Color.Bandito.text)
                         .lineLimit(1)
                         .truncationMode(.middle)
                     if device.current {
                         Text(L10n.Onboarding.Account.settingsThisDevice)
-                            .font(BanditoFont.font(size: 11.5, weight: 500))
+                            .font(BanditoFont.text(size: 11.5, weight: 500))
                             .foregroundStyle(Color.Bandito.signal)
                             .lineLimit(1)
                             .fixedSize()
@@ -401,7 +401,7 @@ struct AccountSheet: View {
                 }
                 if !device.current, let seen = Self.date(from: device.lastSeenAt) {
                     Text(L10n.Account.Device.lastSeen(when: seen.formatted(.relative(presentation: .named))))
-                        .font(BanditoFont.font(size: 12, weight: 400))
+                        .font(BanditoFont.text(size: 12, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .lineLimit(1)
                 }
@@ -432,7 +432,7 @@ struct AccountSheet: View {
                         Text(L10n.Account.Sync.on)
                     }
                 }
-                .font(BanditoFont.font(size: 13, weight: 500))
+                .font(BanditoFont.text(size: 13, weight: 500))
                 .foregroundStyle(Color.Bandito.text)
                 .help(L10n.Account.Sync.what)
                 Spacer(minLength: 8)
@@ -440,7 +440,7 @@ struct AccountSheet: View {
                     Task { await syncNow() }
                 }
                 .banditoButton(.link)
-                .font(BanditoFont.font(size: 12.5, weight: 500))
+                .font(BanditoFont.text(size: 12.5, weight: 500))
                 .fixedSize()
                 .disabled(syncing)
             }
@@ -479,7 +479,7 @@ struct AccountSheet: View {
                 .foregroundStyle(Color.Bandito.text2)
                 .frame(width: 20)
             Text(title)
-                .font(BanditoFont.font(size: 13.5, weight: 500))
+                .font(BanditoFont.text(size: 13.5, weight: 500))
                 .foregroundStyle(Color.Bandito.text)
                 .lineLimit(1)
             Spacer(minLength: 8)
@@ -499,13 +499,13 @@ struct AccountSheet: View {
                     confirmingSignOut = true
                 }
                 .banditoButton(.link)
-                .font(BanditoFont.font(size: 13, weight: 500))
+                .font(BanditoFont.text(size: 13, weight: 500))
                 Spacer(minLength: 8)
                 Button(L10n.Onboarding.Account.resetAccountAction) {
                     resetting.toggle()
                 }
                 .banditoButton(.link)
-                .font(BanditoFont.font(size: 13, weight: 500))
+                .font(BanditoFont.text(size: 13, weight: 500))
                 .foregroundStyle(Color.Bandito.danger)
             }
             if resetting {

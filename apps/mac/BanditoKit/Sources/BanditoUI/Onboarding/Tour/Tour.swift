@@ -86,15 +86,15 @@ struct TourLayer: View {
             HStack(spacing: 10) {
                 RaccoonAvatar(name: "Bandito", color: .peach, size: 26)
                 Text(L10n.Tour.counter(step: String(tour.index + 1), total: String(tour.steps.count)))
-                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .monospacedDigit()
                     .foregroundStyle(Color.Bandito.text3)
             }
             Text(title(anchor))
-                .font(BanditoFont.font(size: 17, weight: 600))
+                .font(BanditoFont.display(size: 15.5, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
             Text(text(anchor))
-                .font(BanditoFont.font(size: 13.5, weight: 400))
+                .font(BanditoFont.text(size: 13.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
@@ -110,7 +110,7 @@ struct TourLayer: View {
                     onboarding.endTour()
                 }
                 .buttonStyle(.plain)
-                .font(BanditoFont.font(size: 13, weight: 400))
+                .font(BanditoFont.text(size: 13, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
                 Spacer()
                 Button(tour.hasNext(available: available) ? L10n.Common.next : L10n.Tour.finish) {

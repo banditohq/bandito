@@ -1,5 +1,6 @@
 #if os(macOS)
 import AppKit
+import BanditoDesign
 @preconcurrency import SwiftTerm
 import SwiftUI
 
@@ -23,7 +24,7 @@ enum TerminalTheme {
     }
 
     static func font(size: Double) -> NSFont {
-        NSFont.monospacedSystemFont(ofSize: CGFloat(size), weight: .regular)
+        BanditoFont.appKitTerminalMono(size: CGFloat(size))
     }
 }
 

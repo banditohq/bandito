@@ -21,7 +21,7 @@ struct FileListHeader: View {
                     .frame(minWidth: FileColumns.sizeMinWidth, alignment: .trailing)
             }
         }
-        .font(.system(size: 11.5))
+        .font(BanditoFont.text(size: 11.5, weight: 400))
         .foregroundStyle(Color.Bandito.text3)
         .lineLimit(1)
         .padding(.horizontal, 22)
@@ -73,14 +73,14 @@ struct FileRow: View {
             if showsSize {
                 // Folders have no size: a dash in the quiet color, as Finder shows it.
                 Text(FileFormat.sizeCell(of: entry))
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(BanditoFont.mono(size: 12, weight: 400))
                     .foregroundStyle(entry.kind == .dir ? Color.Bandito.text3 : Color.Bandito.text2)
                     .lineLimit(1)
                     .fixedSize()
                     .frame(minWidth: FileColumns.sizeMinWidth, alignment: .trailing)
             }
         }
-        .font(.system(size: 13))
+        .font(BanditoFont.text(size: 13, weight: 400))
         .foregroundStyle(entry.hidden ? Color.Bandito.text3 : Color.Bandito.text)
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
@@ -109,7 +109,7 @@ struct FileTile: View {
         VStack(spacing: 8) {
             FileGlyph(category: FileCategory.of(entry), size: 48)
             Text(entry.name)
-                .font(.system(size: 12.5))
+                .font(BanditoFont.text(size: 12.5, weight: 400))
                 .foregroundStyle(entry.hidden ? Color.Bandito.text3 : Color.Bandito.text)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
@@ -140,12 +140,12 @@ struct UploadStrip: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(L10n.Files.Upload.title(name: job.name, folder: FilePath.lastComponent(folder)))
-                    .font(.system(size: 12.5))
+                    .font(BanditoFont.text(size: 12.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1)
                 Spacer(minLength: 8)
                 Text(L10n.Files.Upload.count(done: String(job.index), total: String(job.total)))
-                    .font(.system(size: 12.5, weight: .semibold))
+                    .font(BanditoFont.text(size: 12.5, weight: 600))
                     .foregroundStyle(Color.Bandito.signal)
                     .monospacedDigit()
             }

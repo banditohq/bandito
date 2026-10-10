@@ -34,11 +34,11 @@ struct ServerPicker: View {
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(L10n.Sidebar.NoServer.title)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(BanditoFont.text(size: 13, weight: 600))
                         .foregroundStyle(Color.Bandito.text)
                         .lineLimit(1)
                     Text(L10n.Sidebar.NoServer.hint)
-                        .font(.system(size: 11.5))
+                        .font(BanditoFont.text(size: 11.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -128,11 +128,11 @@ struct ServerPicker: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
                 Text(Self.name(server))
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(BanditoFont.text(size: 13, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1)
                 Text(Self.summary(server))
-                    .font(.system(size: 11.5))
+                    .font(BanditoFont.text(size: 11.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .lineLimit(1)
             }
@@ -159,7 +159,7 @@ struct ServerPicker: View {
                 .frame(width: 18)
                 .accessibilityHidden(true)
             Text(title)
-                .font(BanditoFont.font(size: 13, weight: 500))
+                .font(BanditoFont.text(size: 13, weight: 500))
                 .foregroundStyle(Color.Bandito.text)
                 .lineLimit(1)
         }

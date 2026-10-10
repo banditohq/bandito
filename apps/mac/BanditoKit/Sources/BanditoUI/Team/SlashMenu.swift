@@ -77,7 +77,7 @@ struct SlashMenuView: View {
                 VStack(alignment: .leading, spacing: 1) {
                     if entries.isEmpty {
                         Text(L10n.Slash.none)
-                            .font(BanditoFont.font(size: 13, weight: 400))
+                            .font(BanditoFont.text(size: 13, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 22)
@@ -86,7 +86,7 @@ struct SlashMenuView: View {
                         let group = entries.enumerated().filter { $0.element.origin == origin }
                         if !group.isEmpty {
                             Text(groupTitle(origin))
-                                .font(BanditoFont.font(size: 10.5, weight: 600))
+                                .font(BanditoFont.text(size: 10.5, weight: 600))
                                 .tracking(0.8)
                                 .foregroundStyle(Color.Bandito.text3)
                                 .padding(.horizontal, 10)
@@ -124,7 +124,7 @@ struct SlashMenuView: View {
                         Text(filterTitle(filter))
                         Text("\(model.count(for: filter))").opacity(0.6)
                     }
-                    .font(BanditoFont.font(size: 12, weight: on ? 600 : 400))
+                    .font(BanditoFont.text(size: 12, weight: on ? 600 : 400))
                     .foregroundStyle(on ? Color.Bandito.text : Color.Bandito.text3)
                     .padding(.horizontal, 10)
                     .frame(height: 26)
@@ -140,28 +140,28 @@ struct SlashMenuView: View {
     private func row(_ entry: SlashEntry, selected: Bool) -> some View {
         HStack(spacing: 10) {
             Text(glyph(entry.origin))
-                .font(BanditoFont.font(size: 12, weight: 400))
+                .font(BanditoFont.text(size: 12, weight: 400))
                 .foregroundStyle(tint(entry.origin))
                 .frame(width: 26, height: 26)
                 .background(tint(entry.origin).opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
             Text("/" + entry.name)
-                .font(BanditoFont.font(size: 13, weight: 400, mono: true))
+                .font(BanditoFont.mono(size: 13, weight: 400))
                 .foregroundStyle(selected ? BanditoPalette.peach : Color.Bandito.text)
                 .lineLimit(1)
             if let hint = entry.argsHint, !hint.isEmpty {
                 Text(hint)
-                    .font(BanditoFont.font(size: 12, weight: 400, mono: true))
+                    .font(BanditoFont.mono(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .lineLimit(1)
             }
             Text(entry.description ?? "")
-                .font(BanditoFont.font(size: 12.5, weight: 400))
+                .font(BanditoFont.text(size: 12.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Text(sourceTitle(entry.origin))
-                .font(BanditoFont.font(size: 10.5, weight: 600))
+                .font(BanditoFont.text(size: 10.5, weight: 600))
                 .foregroundStyle(tint(entry.origin))
                 .padding(.horizontal, 7)
                 .padding(.vertical, 1)
@@ -189,7 +189,7 @@ struct SlashMenuView: View {
                 .banditoButton(.link)
                 .foregroundStyle(BanditoPalette.peach)
         }
-        .font(BanditoFont.font(size: 11.5, weight: 400))
+        .font(BanditoFont.text(size: 11.5, weight: 400))
         .foregroundStyle(Color.Bandito.text3)
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
@@ -256,16 +256,18 @@ struct SnippetEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(L10n.Slash.snippetTitle)
-                .font(BanditoFont.font(size: 17, weight: 600))
+                .font(BanditoFont.display(size: 15.5, weight: 600))
+                .lineLimit(1)
+                .truncationMode(.tail)
                 .foregroundStyle(Color.Bandito.text)
             TextField(L10n.Slash.snippetName, text: $name)
                 .banditoField()
             TextEditor(text: $text)
-                .font(BanditoFont.font(size: 13, weight: 400))
+                .font(BanditoFont.text(size: 13, weight: 400))
                 .frame(height: 120)
                 .banditoEditor()
             Text(L10n.Slash.snippetHint)
-                .font(BanditoFont.font(size: 12, weight: 400))
+                .font(BanditoFont.text(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
             HStack {
                 Spacer()

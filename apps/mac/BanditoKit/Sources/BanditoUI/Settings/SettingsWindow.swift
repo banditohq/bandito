@@ -59,7 +59,9 @@ public struct SettingsWindow: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 3) {
                 Text(L10n.Settings.title)
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(BanditoFont.display(size: 15.5, weight: 600))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                     .foregroundStyle(Color.Bandito.text)
                     .padding(.horizontal, 10)
                     .padding(.top, 26)
@@ -72,7 +74,7 @@ public struct SettingsWindow: View {
                         HStack(spacing: 10) {
                             SettingsBadge(symbol: item.symbol, tint: item.tint)
                             Text(item.title)
-                                .font(.system(size: 13, weight: selected ? .semibold : .regular))
+                                .font(BanditoFont.text(size: 13, weight: selected ? 600 : 400))
                                 .foregroundStyle(selected ? Color.Bandito.text : Color.Bandito.text2)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.85)

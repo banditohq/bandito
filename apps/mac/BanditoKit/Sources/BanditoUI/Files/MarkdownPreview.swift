@@ -69,7 +69,7 @@ private struct MarkdownBlockView: View {
             heading(level: level, text: text)
         case .paragraph(let text, _):
             Text(MarkdownInline.attributed(text))
-                .font(.system(size: 14.5))
+                .font(BanditoFont.text(size: 14.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text)
                 .lineSpacing(4)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -79,11 +79,11 @@ private struct MarkdownBlockView: View {
             VStack(alignment: .leading, spacing: 6) {
                 if let language {
                     Text(language)
-                        .font(.system(size: 10.5, weight: .semibold))
+                        .font(BanditoFont.text(size: 10.5, weight: 600))
                         .foregroundStyle(Color.Bandito.text3)
                 }
                 Text(text)
-                    .font(.system(size: 12.5, design: .monospaced))
+                    .font(BanditoFont.mono(size: 12.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                     .lineSpacing(3)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -93,7 +93,7 @@ private struct MarkdownBlockView: View {
         case .quote(let text, _):
             // The bar is an overlay so it takes the height of the text, not of the whole stack.
             Text(MarkdownInline.attributed(text))
-                .font(.system(size: 13.5))
+                .font(BanditoFont.text(size: 13.5, weight: 400))
                 .foregroundStyle(Self.purple)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, 8)
@@ -115,19 +115,19 @@ private struct MarkdownBlockView: View {
         switch level {
         case 1:
             Text(MarkdownInline.attributed(text))
-                .font(.system(size: 26, weight: .bold))
+                .font(BanditoFont.text(size: 26, weight: 700))
                 .foregroundStyle(Color.Bandito.text)
                 .padding(.bottom, 4)
         case 2:
             Text(MarkdownInline.attributed(text))
-                .font(.system(size: 13, weight: .semibold))
+                .font(BanditoFont.text(size: 13, weight: 600))
                 .textCase(.uppercase)
                 .tracking(1)
                 .foregroundStyle(Self.signal)
                 .padding(.top, 6)
         default:
             Text(MarkdownInline.attributed(text))
-                .font(.system(size: 15, weight: .semibold))
+                .font(BanditoFont.text(size: 15, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
                 .padding(.top, 2)
         }
@@ -147,15 +147,15 @@ private struct MarkdownBlockView: View {
                 .banditoButton(.row(cornerRadius: 4, hoverOpacity: 0.08))
             } else if let number {
                 Text(number)
-                    .font(.system(size: 14.5).monospacedDigit())
+                    .font(BanditoFont.text(size: 14.5, weight: 400)).monospacedDigit()
                     .foregroundStyle(Color.Bandito.text3)
             } else {
                 Text("•")
-                    .font(.system(size: 14.5))
+                    .font(BanditoFont.text(size: 14.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
             }
             Text(MarkdownInline.attributed(text))
-                .font(.system(size: 14.5))
+                .font(BanditoFont.text(size: 14.5, weight: 400))
                 .strikethrough(checkbox == true)
                 .foregroundStyle(checkbox == true ? Color.Bandito.text3 : Color.Bandito.text)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -171,7 +171,7 @@ enum MarkdownInline {
                 markdown: text, options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
             ?? AttributedString(text)
         for run in result.runs where run.inlinePresentationIntent?.contains(.code) == true {
-            result[run.range].font = .system(size: 12.5, design: .monospaced)
+            result[run.range].font = BanditoFont.mono(size: 12.5)
             result[run.range].foregroundColor = Color(hex: 0xFFB067)
             result[run.range].backgroundColor = Color(hex: 0xFF8A1F).opacity(0.09)
         }

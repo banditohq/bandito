@@ -32,7 +32,7 @@ struct FilePreviewPanel: View {
                     Image(systemName: "cursorarrow.click")
                         .font(.system(size: 22))
                     Text(L10n.Files.Preview.placeholder)
-                        .font(.system(size: 13))
+                        .font(BanditoFont.text(size: 13, weight: 400))
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -96,12 +96,12 @@ private struct FolderDetails: View {
                 FileGlyph(category: .folder, size: 56)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(entry.name)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(BanditoFont.text(size: 15, weight: 600))
                         .foregroundStyle(Color.Bandito.text)
                         .lineLimit(2)
                         .truncationMode(.middle)
                     Text(FileFormat.kind(.folder))
-                        .font(.system(size: 12))
+                        .font(BanditoFont.text(size: 12, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                 }
             }
@@ -116,7 +116,7 @@ private struct FolderDetails: View {
                 PropertyRow(title: L10n.Files.Preview.path, value: entry.path, mono: true, wraps: true)
             }
             .padding(.horizontal, 18)
-            .font(.system(size: 12.5))
+            .font(BanditoFont.text(size: 12.5, weight: 400))
 
             Spacer(minLength: 0)
 
@@ -155,12 +155,12 @@ private struct FileDetails: View {
                 FileGlyph(category: category, size: 44)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(entry.name)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(BanditoFont.text(size: 15, weight: 600))
                         .foregroundStyle(Color.Bandito.text)
                         .lineLimit(2)
                         .truncationMode(.middle)
                     Text(subtitle)
-                        .font(.system(size: 12))
+                        .font(BanditoFont.text(size: 12, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                 }
             }
@@ -178,7 +178,7 @@ private struct FileDetails: View {
                 PropertyRow(title: L10n.Files.Preview.path, value: entry.path, mono: true, wraps: true)
             }
             .padding(.horizontal, 18)
-            .font(.system(size: 12.5))
+            .font(BanditoFont.text(size: 12.5, weight: 400))
 
             Spacer(minLength: 0)
 
@@ -237,7 +237,7 @@ private struct TextSnippet: View {
         Group {
             if let lines {
                 Text(lines.joined(separator: "\n"))
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(BanditoFont.mono(size: 11, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                     .lineSpacing(3)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -283,7 +283,7 @@ private struct PropertyRow: View {
                 .fixedSize()
                 .frame(width: 70, alignment: .leading)
             Text(value)
-                .font(mono ? .system(size: 11.5, design: .monospaced) : .system(size: 12.5))
+                .font(mono ? BanditoFont.mono(size: 11.5) : BanditoFont.text(size: 12.5))
                 .foregroundStyle(mono ? Color.Bandito.text2 : Color.Bandito.text)
                 .lineLimit(wraps ? nil : 2)
                 .truncationMode(wraps ? .tail : .middle)

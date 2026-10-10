@@ -84,7 +84,7 @@ struct BrowserMainArea: View {
                     BrowserToolbar(model: model, onOpenFullscreen: onOpenFullscreen)
                     if let error = model.addressError {
                         Text(error)
-                            .font(.system(size: 12))
+                            .font(BanditoFont.text(size: 12, weight: 400))
                             .foregroundStyle(Color.Bandito.danger)
                             .lineLimit(1)
                             .minimumScaleFactor(0.85)
@@ -233,7 +233,7 @@ private struct BrowserToolbar: View {
             TextField(L10n.Browser.addressPlaceholder, text: $model.addressText)
                 .textFieldStyle(.plain)
                 // Regular text, as in Safari: a monospaced placeholder looked spaced out.
-                .font(BanditoFont.font(size: 13, weight: 400))
+                .font(BanditoFont.text(size: 13, weight: 400))
                 .foregroundStyle(Color.Bandito.text)
                 .accessibilityLabel(L10n.Browser.address)
                 .focused($addressFocused)
@@ -251,7 +251,7 @@ private struct BrowserToolbar: View {
             // In a narrow panel the note would squeeze the address out: only the field is kept there.
             if model.status?.running == true, !compact {
                 Text(L10n.Browser.onServer)
-                    .font(.system(size: 11.5))
+                    .font(BanditoFont.text(size: 11.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
@@ -307,10 +307,10 @@ private struct ChromeInstallCard: View {
     var body: some View {
         VStack(spacing: 12) {
             Text(L10n.Browser.needsChrome)
-                .font(.system(size: 15, weight: .semibold))
+                .font(BanditoFont.text(size: 15, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
             Text(L10n.Browser.needsChromeHint)
-                .font(.system(size: 12.5))
+                .font(BanditoFont.text(size: 12.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 380)
@@ -318,19 +318,19 @@ private struct ChromeInstallCard: View {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
                     Text(L10n.Browser.installing)
-                        .font(.system(size: 12.5))
+                        .font(BanditoFont.text(size: 12.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text2)
                 }
             }
             if let command = setup.passwordCommand {
                 Text(command)
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(BanditoFont.mono(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                     .textSelection(.enabled)
             }
             if setup.job?.state == .failed {
                 Text(L10n.Browser.installFailed)
-                    .font(.system(size: 12))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.danger)
             } else if let error = setup.error ?? model.errorText {
                 UserFacingErrorView(message: error)
@@ -408,7 +408,7 @@ private struct ControlBanner: View {
             case .agentDriving:
                 AgentDots()
                 Text(L10n.Browser.agentDrivingNow)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(BanditoFont.text(size: 13, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
@@ -423,7 +423,7 @@ private struct ControlBanner: View {
                 .banditoButton(.lightPill())
             case .askToTake:
                 Text(L10n.Browser.askTakeControl)
-                    .font(.system(size: 13))
+                    .font(BanditoFont.text(size: 13, weight: 400))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
@@ -434,7 +434,7 @@ private struct ControlBanner: View {
                 .banditoButton(.lightPill())
             case .userHolds:
                 Text(L10n.Browser.userHolds)
-                    .font(.system(size: 12.5))
+                    .font(BanditoFont.text(size: 12.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                     .lineLimit(1)
                 Spacer(minLength: 8)
@@ -504,7 +504,7 @@ private struct PageSurface: View {
                     VStack(spacing: 10) {
                         ProgressView().controlSize(.small)
                         Text(L10n.Browser.connecting)
-                            .font(.system(size: 12.5))
+                            .font(BanditoFont.text(size: 12.5, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                     }
                 }
@@ -653,10 +653,10 @@ private struct BrowserStopped: View {
                 .foregroundStyle(Color.Bandito.text3)
             VStack(spacing: 6) {
                 Text(L10n.Browser.stopped)
-                    .font(.system(size: 13))
+                    .font(BanditoFont.text(size: 13, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                 Text(L10n.Browser.stoppedHint)
-                    .font(.system(size: 12))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .multilineTextAlignment(.center)
             }
@@ -685,10 +685,10 @@ private struct BrowserUnsupported: View {
         VStack(spacing: 14) {
             ExampleChip()
             Text(L10n.Browser.unsupported)
-                .font(.system(size: 14, weight: .semibold))
+                .font(BanditoFont.text(size: 14, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
             Text(L10n.Browser.missingChrome)
-                .font(.system(size: 12.5))
+                .font(BanditoFont.text(size: 12.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
             Button(L10n.Browser.openServer) {
                 router.select(mode: .server)
@@ -704,7 +704,7 @@ private struct EmptyNote: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 13))
+            .font(BanditoFont.text(size: 13, weight: 400))
             .foregroundStyle(Color.Bandito.text3)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -790,7 +790,7 @@ private struct BrowserSidebarContent: View {
     private var hintCard: some View {
         HStack(alignment: .top, spacing: 8) {
             Text(L10n.Browser.hintShort)
-                .font(.system(size: 12))
+                .font(BanditoFont.text(size: 12, weight: 400))
                 .lineSpacing(2)
                 .foregroundStyle(Color.Bandito.text2)
                 .fixedSize(horizontal: false, vertical: true)
@@ -844,7 +844,7 @@ private struct BrowserSidebarContent: View {
                     .foregroundStyle(Color.Bandito.info)
                     .background(Color.Bandito.info.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
                 Text(verbatim: "\(L10n.Browser.previewTitle) :\(port)")
-                    .font(.system(size: 13))
+                    .font(BanditoFont.text(size: 13, weight: 400))
                     .foregroundStyle(Color.Bandito.text)
                 Spacer(minLength: 0)
                 Button {
@@ -867,13 +867,13 @@ private struct BrowserSidebarContent: View {
     private func portRow(_ port: ListeningPort) -> some View {
         HStack(spacing: 10) {
             Text(verbatim: ":\(port.port)")
-                .font(.system(size: 12, design: .monospaced))
+                .font(BanditoFont.mono(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.ok)
                 .padding(.horizontal, 7)
                 .padding(.vertical, 2)
                 .background(Color.Bandito.ok.opacity(0.1), in: RoundedRectangle(cornerRadius: 6))
             Text(port.process ?? "")
-                .font(.system(size: 13))
+                .font(BanditoFont.text(size: 13, weight: 400))
                 .foregroundStyle(Color.Bandito.text)
                 .lineLimit(1)
             Spacer(minLength: 0)
@@ -912,13 +912,13 @@ private struct BrowserTabRow: View {
             Button(action: onSelect) {
                 HStack(spacing: 10) {
                     Text(label.initial)
-                        .font(.system(size: 12, weight: .bold))
+                        .font(BanditoFont.display(size: 11, weight: 700))
                         .foregroundStyle(Color.Bandito.onSignal)
                         .frame(width: 26, height: 26)
                         .background(Color.Bandito.text2.opacity(0.25), in: RoundedRectangle(cornerRadius: 8))
                     VStack(alignment: .leading, spacing: 1) {
                         Text(label.title)
-                            .font(.system(size: 13, weight: .medium))
+                            .font(BanditoFont.text(size: 13, weight: 500))
                             .foregroundStyle(Color.Bandito.text)
                             .lineLimit(1)
                         HStack(spacing: 5) {
@@ -930,7 +930,7 @@ private struct BrowserTabRow: View {
                                     .accessibilityLabel(L10n.Browser.controlAgent)
                             }
                             Text(label.domain)
-                                .font(.system(size: 11.5))
+                                .font(BanditoFont.text(size: 11.5, weight: 400))
                                 .foregroundStyle(Color.Bandito.text3)
                                 .lineLimit(1)
                         }

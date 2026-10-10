@@ -96,13 +96,13 @@ struct DaemonUpdateBanner: View {
                 VStack(alignment: .leading, spacing: 2) {
                     // Once the daemon no longer offers the release, only its outcome is left to say.
                     Text(current == nil ? (status ?? "") : L10n.Server.DaemonUpdate.title(latest: offer.latest, current: offer.current))
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(BanditoFont.text(size: 13, weight: 600))
                         .foregroundStyle(Color.Bandito.text)
                     if current != nil, case .failed(let failure) = model.phase {
                         UserFacingErrorView(message: failure.wrapped { L10n.Server.DaemonUpdate.failed(error: $0) })
                     } else if current != nil, let status {
                         Text(status)
-                            .font(.system(size: 12))
+                            .font(BanditoFont.text(size: 12, weight: 400))
                             .foregroundStyle(Color.Bandito.text2)
                     }
                 }

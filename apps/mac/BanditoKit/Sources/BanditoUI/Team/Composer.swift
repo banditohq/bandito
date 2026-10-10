@@ -102,7 +102,7 @@ struct Composer: View {
 
                     TextField(L10n.Thread.placeholder, text: $draft, axis: .vertical)
                         .textFieldStyle(.plain)
-                        .font(BanditoFont.font(size: 14.5, weight: 400))
+                        .font(BanditoFont.text(size: 14.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text)
                         .tint(Color.Bandito.signal)
                         .lineLimit(1...8)
@@ -162,7 +162,7 @@ struct Composer: View {
                     Text(L10n.Thread.hintStop)
                     Text(L10n.Thread.hintSearch)
                 }
-                .font(BanditoFont.font(size: 11, weight: 400))
+                .font(BanditoFont.text(size: 11, weight: 400))
                 .foregroundStyle(Color.Bandito.text3.opacity(0.7))
             }
         }
@@ -225,11 +225,11 @@ struct Composer: View {
                 .frame(width: 3, height: 32)
             VStack(alignment: .leading, spacing: 2) {
                 Text(target.fromUser ? L10n.Reply.toSelf : L10n.Reply.toAgent(name: agentName))
-                    .font(BanditoFont.font(size: 12, weight: 600))
+                    .font(BanditoFont.text(size: 12, weight: 600))
                     .foregroundStyle(Color.Bandito.signal)
                     .lineLimit(1)
                 Text(target.excerpt)
-                    .font(BanditoFont.font(size: 12.5, weight: 400))
+                    .font(BanditoFont.text(size: 12.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -255,7 +255,7 @@ struct Composer: View {
         HStack(spacing: 10) {
             StatusDot(status: .needsYou, size: 7, ringColor: Color.Bandito.signal.opacity(0.15))
             Text(L10n.Composer.formWaiting(name: agentName))
-                .font(BanditoFont.font(size: 12.5, weight: 500))
+                .font(BanditoFont.text(size: 12.5, weight: 500))
                 .foregroundStyle(Color.Bandito.text)
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
@@ -284,7 +284,7 @@ struct Composer: View {
             HStack(spacing: 6) {
                 ContextRing(fraction: contextFraction, size: 16)
                 Text("\(percent)%")
-                    .font(BanditoFont.font(size: 11.5, weight: 400))
+                    .font(BanditoFont.text(size: 11.5, weight: 400))
                     .monospacedDigit()
             }
             .foregroundStyle(Color.Bandito.text3)
@@ -304,13 +304,13 @@ struct Composer: View {
     private func contextPopover(percent: Int) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(L10n.Composer.contextPopover(percent: "\(percent)"))
-                .font(BanditoFont.font(size: 12.5, weight: 400))
+                .font(BanditoFont.text(size: 12.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text)
                 .fixedSize(horizontal: false, vertical: true)
             if server?.supportsNewChapter == true {
                 if asksNewChapter {
                     Text(L10n.Composer.NewChapter.confirm)
-                        .font(BanditoFont.font(size: 12.5, weight: 400))
+                        .font(BanditoFont.text(size: 12.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text)
                         .fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: 8) {
@@ -344,7 +344,7 @@ struct Composer: View {
                 }
                 if running {
                     Text(L10n.Composer.NewChapter.afterTurn)
-                        .font(BanditoFont.font(size: 11.5, weight: 400))
+                        .font(BanditoFont.text(size: 11.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -621,13 +621,13 @@ struct Composer: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(Color.Bandito.text3)
             Text(file.name)
-                .font(BanditoFont.font(size: 12.5, weight: 500))
+                .font(BanditoFont.text(size: 12.5, weight: 500))
                 .foregroundStyle(Color.Bandito.text2)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
             if let detail = file.detailText {
                 Text(detail)
-                    .font(BanditoFont.font(size: 11.5, weight: 400))
+                    .font(BanditoFont.text(size: 11.5, weight: 400))
                     .foregroundStyle(file.failureText == nil ? Color.Bandito.text3 : Color.Bandito.danger)
                     .monospacedDigit()
                     .lineLimit(1)

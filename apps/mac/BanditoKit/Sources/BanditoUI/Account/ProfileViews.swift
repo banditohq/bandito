@@ -117,7 +117,7 @@ struct ProfileAvatar: View {
                         .clipShape(Circle())
                 } else if let initial {
                     Text(initial)
-                        .font(BanditoFont.font(size: size * 0.42, weight: 600))
+                        .font(BanditoFont.display(size: size * 0.38, weight: 600))
                         .foregroundStyle(Color.Bandito.bg)
                 } else {
                     Image(systemName: "person.fill")

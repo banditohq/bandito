@@ -197,12 +197,12 @@ struct TerminalToolbar: View {
         let workspace = controller.workspace
         HStack(spacing: 10) {
             Text(L10n.Mode.terminals)
-                .font(.system(size: 14, weight: .semibold))
+                .font(BanditoFont.text(size: 14, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
                 .lineLimit(1)
                 .fixedSize()
             Text(L10n.Terminals.windowCount(count: workspace.onScreen.count))
-                .font(.system(size: 12))
+                .font(BanditoFont.text(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
                 .lineLimit(1)
                 .fixedSize()
@@ -288,12 +288,12 @@ struct TerminalInputToAllStrip: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(BanditoPalette.peach)
             Text(L10n.Terminals.inputToAll)
-                .font(.system(size: 12.5))
+                .font(BanditoFont.text(size: 12.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text)
             Spacer(minLength: 8)
             Button(action: turnOff) {
                 Text(L10n.Terminals.inputToAllOff)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(BanditoFont.text(size: 12, weight: 600))
                     .padding(.horizontal, 8)
                     .frame(height: 24)
             }
@@ -358,7 +358,7 @@ struct TerminalsLoading: View {
                     VStack(spacing: 12) {
                         ProgressView().controlSize(.small)
                         Text(L10n.Terminals.connecting(server: server.config.name))
-                            .font(.system(size: 13))
+                            .font(BanditoFont.text(size: 13, weight: 400))
                             .foregroundStyle(Color.Bandito.text2)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)

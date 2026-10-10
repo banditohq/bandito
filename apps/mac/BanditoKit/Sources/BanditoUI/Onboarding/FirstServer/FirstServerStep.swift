@@ -55,12 +55,12 @@ struct FirstServerStep: View {
         VStack(alignment: .leading, spacing: 26) {
             VStack(alignment: .leading, spacing: 10) {
                 Text(L10n.Onboarding.Server.title)
-                    .font(BanditoFont.font(size: 38, weight: 600))
+                    .font(BanditoFont.display(size: 35, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(L10n.Onboarding.Server.subtitle)
-                    .font(BanditoFont.font(size: 15, weight: 400))
+                    .font(BanditoFont.text(size: 15, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                     .lineSpacing(2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -149,12 +149,12 @@ struct FirstServerStep: View {
     private var commandSteps: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(L10n.Onboarding.Server.commandStep1)
-                .font(BanditoFont.font(size: 13.5, weight: 600))
+                .font(BanditoFont.text(size: 13.5, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
             HStack(spacing: 10) {
                 ScrollView(.horizontal) {
                     Text(Self.installCommand)
-                        .font(BanditoFont.font(size: 12.5, weight: 400, mono: true))
+                        .font(BanditoFont.mono(size: 12.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text)
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
@@ -169,11 +169,11 @@ struct FirstServerStep: View {
             .background(Color.Bandito.surface2, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.Bandito.text.opacity(0.1)))
             Text(L10n.Onboarding.Server.commandHint)
-                .font(BanditoFont.font(size: 12.5, weight: 400))
+                .font(BanditoFont.text(size: 12.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
                 .fixedSize(horizontal: false, vertical: true)
             Text(L10n.Onboarding.Server.commandStep2)
-                .font(BanditoFont.font(size: 13.5, weight: 600))
+                .font(BanditoFont.text(size: 13.5, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
         }
     }
@@ -182,13 +182,13 @@ struct FirstServerStep: View {
         VStack(alignment: .leading, spacing: 10) {
             if model.setupMode == .automatic {
                 Text(L10n.Onboarding.Server.addressTitle)
-                    .font(BanditoFont.font(size: 13, weight: 500))
+                    .font(BanditoFont.text(size: 13, weight: 500))
                     .foregroundStyle(Color.Bandito.text2)
             }
             HStack(spacing: 8) {
                 TextField("user@host:22", text: $model.address)
                     .banditoField()
-                    .font(BanditoFont.font(size: 14, weight: 400, mono: true))
+                    .font(BanditoFont.mono(size: 14, weight: 400))
                     .onSubmit { model.startOwnServer(app: app) }
                 Button {
                     model.startOwnServer(app: app)
@@ -201,7 +201,7 @@ struct FirstServerStep: View {
             }
             if let addressError = model.addressError {
                 Text(addressError)
-                    .font(BanditoFont.font(size: 13, weight: 400))
+                    .font(BanditoFont.text(size: 13, weight: 400))
                     .foregroundStyle(Color.Bandito.danger)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -211,7 +211,7 @@ struct FirstServerStep: View {
             Text(model.setupMode == .command
                 ? L10n.Onboarding.Server.commandConnectHint
                 : L10n.Onboarding.Server.addressHint(path: "~/.ssh"))
-                .font(BanditoFont.font(size: 12.5, weight: 400))
+                .font(BanditoFont.text(size: 12.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
                 .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
@@ -222,7 +222,7 @@ struct FirstServerStep: View {
     private var suggestionChips: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(L10n.Onboarding.Server.foundInConfig)
-                .font(BanditoFont.font(size: 12.5, weight: 400))
+                .font(BanditoFont.text(size: 12.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
             FlowLayout(spacing: 6) {
                 ForEach(model.suggestions.prefix(Self.visibleSuggestions), id: \.self) { host in
@@ -264,7 +264,7 @@ struct FirstServerStep: View {
     private var checklistView: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text(L10n.Onboarding.Server.installingTitle)
-                .font(BanditoFont.font(size: 26, weight: 600))
+                .font(BanditoFont.display(size: 24, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
             checklistRows
             journalPanel
@@ -279,7 +279,7 @@ struct FirstServerStep: View {
                 HStack(spacing: 12) {
                     markView(model.checklist.mark(at: index))
                     Text(model.checklist.items[index].title)
-                        .font(BanditoFont.font(size: 14.5, weight: 400))
+                        .font(BanditoFont.text(size: 14.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text)
                 }
                 .banditoAnimation(BanditoMotion.ease, value: model.checklist.mark(at: index))
@@ -295,7 +295,7 @@ struct FirstServerStep: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
                         Text(model.checklist.formattedLog.joined(separator: "\n"))
-                            .font(BanditoFont.font(size: 11.5, weight: 400, mono: true))
+                            .font(BanditoFont.mono(size: 11.5, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .textSelection(.enabled)
@@ -314,10 +314,10 @@ struct FirstServerStep: View {
             }
         } label: {
             Text(showLog ? L10n.Onboarding.Server.hideJournal : L10n.Onboarding.Server.showJournal)
-                .font(BanditoFont.font(size: 12.5, weight: 500))
+                .font(BanditoFont.text(size: 12.5, weight: 500))
                 .foregroundStyle(Color.Bandito.text2)
         }
-        .font(BanditoFont.font(size: 12.5, weight: 500))
+        .font(BanditoFont.text(size: 12.5, weight: 500))
         .foregroundStyle(Color.Bandito.text2)
     }
 
@@ -340,19 +340,19 @@ struct FirstServerStep: View {
     private func hostReview(_ preview: HostKeyPreview) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(L10n.Onboarding.Server.fingerprintTitle)
-                .font(BanditoFont.font(size: 24, weight: 600))
+                .font(BanditoFont.display(size: 22, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
             Text(L10n.Onboarding.Server.keyType(type: preview.keyType))
-                .font(BanditoFont.font(size: 12.5, weight: 500))
+                .font(BanditoFont.text(size: 12.5, weight: 500))
                 .foregroundStyle(Color.Bandito.text3)
             Text(preview.fingerprint)
-                .font(BanditoFont.font(size: 16, weight: 600, mono: true))
+                .font(BanditoFont.mono(size: 16, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
                 .textSelection(.enabled)
                 .padding(14)
                 .background(Color.Bandito.surface1, in: RoundedRectangle(cornerRadius: 12))
             Text(L10n.Onboarding.Server.fingerprintHint)
-                .font(BanditoFont.font(size: 13.5, weight: 400))
+                .font(BanditoFont.text(size: 13.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .lineSpacing(2)
             HStack(spacing: 10) {
@@ -377,27 +377,27 @@ struct FirstServerStep: View {
             // A server this Mac has not met yet is the normal first step, not a failure: a calm title for it.
             if model.failure == .sshFailed(.hostKeyUnknown) {
                 Text(L10n.Onboarding.Server.newHostTitle)
-                    .font(BanditoFont.font(size: 24, weight: 600))
+                    .font(BanditoFont.display(size: 22, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
             } else {
                 Text(L10n.Onboarding.Server.failedTitle)
-                    .font(BanditoFont.font(size: 24, weight: 600))
+                    .font(BanditoFont.display(size: 22, weight: 600))
                     .foregroundStyle(Color.Bandito.danger)
             }
             checklistRows
             if let failure = model.failure {
                 Text(Self.failureText(failure))
-                    .font(BanditoFont.font(size: 14, weight: 400))
+                    .font(BanditoFont.text(size: 14, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                     .lineSpacing(2)
                     .fixedSize(horizontal: false, vertical: true)
                 if let next = Self.nextStepText(InstallFailureAdvice.nextStep(for: failure)) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(L10n.Onboarding.Server.nextStepTitle)
-                            .font(BanditoFont.font(size: 12.5, weight: 600))
+                            .font(BanditoFont.text(size: 12.5, weight: 600))
                             .foregroundStyle(Color.Bandito.text3)
                         Text(next)
-                            .font(BanditoFont.font(size: 13.5, weight: 400))
+                            .font(BanditoFont.text(size: 13.5, weight: 400))
                             .foregroundStyle(Color.Bandito.text)
                             .lineSpacing(2)
                             .fixedSize(horizontal: false, vertical: true)
@@ -406,10 +406,10 @@ struct FirstServerStep: View {
                 if InstallFailureAdvice.showsDetails(failure), let detail = failure.errorDescription {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(L10n.Onboarding.Server.detailsTitle)
-                            .font(BanditoFont.font(size: 12.5, weight: 600))
+                            .font(BanditoFont.text(size: 12.5, weight: 600))
                             .foregroundStyle(Color.Bandito.text3)
                         Text(detail)
-                            .font(BanditoFont.font(size: 12.5, weight: 400))
+                            .font(BanditoFont.text(size: 12.5, weight: 400))
                             .foregroundStyle(Color.Bandito.text2)
                             .textSelection(.enabled)
                             .fixedSize(horizontal: false, vertical: true)
@@ -422,11 +422,11 @@ struct FirstServerStep: View {
             }
             if let command = model.knownHostCommand {
                 Text(L10n.Onboarding.Server.removeOldKey)
-                    .font(BanditoFont.font(size: 13.5, weight: 400))
+                    .font(BanditoFont.text(size: 13.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                 HStack(spacing: 10) {
                     Text(command)
-                        .font(BanditoFont.font(size: 13, weight: 400, mono: true))
+                        .font(BanditoFont.mono(size: 13, weight: 400))
                         .foregroundStyle(Color.Bandito.text)
                         .textSelection(.enabled)
                     CopyCommandButton(text: command)
@@ -435,7 +435,7 @@ struct FirstServerStep: View {
             if let command = model.proxyCommand {
                 HStack(spacing: 10) {
                     Text(command)
-                        .font(BanditoFont.font(size: 13, weight: 400, mono: true))
+                        .font(BanditoFont.mono(size: 13, weight: 400))
                         .foregroundStyle(Color.Bandito.text)
                         .textSelection(.enabled)
                     CopyCommandButton(text: command)
@@ -502,10 +502,10 @@ struct FirstServerStep: View {
             : L10n.Onboarding.Server.Err.appNotConnectedServer
         return VStack(alignment: .leading, spacing: 16) {
             Text(L10n.Onboarding.Server.connectFailedTitle)
-                .font(BanditoFont.font(size: 24, weight: 600))
+                .font(BanditoFont.display(size: 22, weight: 600))
                 .foregroundStyle(Color.Bandito.danger)
             Text(text)
-                .font(BanditoFont.font(size: 14, weight: 400))
+                .font(BanditoFont.text(size: 14, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .lineSpacing(2)
             HStack(spacing: 10) {
@@ -532,12 +532,12 @@ struct FirstServerStep: View {
         } else if case .sshFailed(.keyNotAccepted) = failure, let command = Self.copyKeyCommand(model.address) {
             VStack(alignment: .leading, spacing: 10) {
                 Text(L10n.Onboarding.Server.copyKeyHint)
-                    .font(BanditoFont.font(size: 13.5, weight: 400))
+                    .font(BanditoFont.text(size: 13.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 10) {
                     Text(command)
-                        .font(BanditoFont.font(size: 13, weight: 400, mono: true))
+                        .font(BanditoFont.mono(size: 13, weight: 400))
                         .foregroundStyle(Color.Bandito.text)
                         .textSelection(.enabled)
                     CopyCommandButton(text: command)
@@ -600,10 +600,10 @@ struct FirstServerStep: View {
     private func connected(_ config: ServerConfig) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(L10n.Onboarding.Server.connectedTitle)
-                .font(BanditoFont.font(size: 26, weight: 600))
+                .font(BanditoFont.display(size: 24, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
             Text(config.name)
-                .font(BanditoFont.font(size: 14, weight: 500))
+                .font(BanditoFont.text(size: 14, weight: 500))
                 .foregroundStyle(Color.Bandito.text2)
             if let syncError = model.syncError {
                 HStack(spacing: 10) {
@@ -632,7 +632,7 @@ struct FirstServerStep: View {
                 ids: ["screen", "browser", "containers"])
             if model.setup.error != nil {
                 Text(L10n.Onboarding.Server.componentsFailed)
-                    .font(BanditoFont.font(size: 12.5, weight: 400))
+                    .font(BanditoFont.text(size: 12.5, weight: 400))
                     .foregroundStyle(Color.Bandito.danger)
             }
             if let command = model.setup.passwordCommand, let server {
@@ -652,7 +652,7 @@ struct FirstServerStep: View {
                     Text(L10n.Onboarding.Server.checkAgain).oneLine()
                 }
                 .buttonStyle(.plain)
-                .font(BanditoFont.font(size: 12.5, weight: 500))
+                .font(BanditoFont.text(size: 12.5, weight: 500))
                 .foregroundStyle(Color.Bandito.signal)
             }
         }
@@ -670,11 +670,11 @@ struct FirstServerStep: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
                     Text(title)
-                        .font(BanditoFont.font(size: 13, weight: 500))
+                        .font(BanditoFont.text(size: 13, weight: 500))
                         .foregroundStyle(Color.Bandito.text2)
                     if let note {
                         Text(note)
-                            .font(BanditoFont.font(size: 12, weight: 400))
+                            .font(BanditoFont.text(size: 12, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                     }
                 }
@@ -693,12 +693,12 @@ struct FirstServerStep: View {
                 .frame(width: 28, height: 28)
                 .background(Color.Bandito.text.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             Text(line.title)
-                .font(BanditoFont.font(size: 13.5, weight: 400))
+                .font(BanditoFont.text(size: 13.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text)
                 .lineLimit(1)
             Spacer(minLength: 8)
             Text(Self.componentStatus(line.state))
-                .font(BanditoFont.font(size: 12.5, weight: 500))
+                .font(BanditoFont.text(size: 12.5, weight: 500))
                 .foregroundStyle(line.state == .ready ? AvatarColor.sage.color : Color.Bandito.text3)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
@@ -726,12 +726,12 @@ struct FirstServerStep: View {
     private func passwordCard(command: String, server: ServerModel) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(L10n.Onboarding.Server.passwordHint)
-                .font(BanditoFont.font(size: 13, weight: 400))
+                .font(BanditoFont.text(size: 13, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .lineSpacing(2)
             HStack(spacing: 10) {
                 Text(command)
-                    .font(BanditoFont.font(size: 12.5, weight: 400, mono: true))
+                    .font(BanditoFont.mono(size: 12.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text)
                     .textSelection(.enabled)
                 Button { SystemActions.copy(command) } label: { Text(L10n.Onboarding.Server.copy).oneLine() }
@@ -852,7 +852,7 @@ private struct ServerOptionCard: View {
     private var badgeView: some View {
         if let badge {
             Text(badge)
-                .font(BanditoFont.font(size: 11, weight: 600))
+                .font(BanditoFont.text(size: 11, weight: 600))
                 .foregroundStyle(AvatarColor.sage.color)
                 .oneLine()
                 .padding(.horizontal, 8)
@@ -863,7 +863,7 @@ private struct ServerOptionCard: View {
 
     private var titleView: some View {
         Text(title)
-            .font(BanditoFont.font(size: 16, weight: 600))
+            .font(BanditoFont.text(size: 16, weight: 600))
             .foregroundStyle(Color.Bandito.text)
             .lineLimit(2)
             .fixedSize(horizontal: false, vertical: true)
@@ -871,7 +871,7 @@ private struct ServerOptionCard: View {
 
     private var textView: some View {
         Text(text)
-            .font(BanditoFont.font(size: 13.5, weight: 400))
+            .font(BanditoFont.text(size: 13.5, weight: 400))
             .foregroundStyle(Color.Bandito.text2)
             .lineSpacing(2)
             .fixedSize(horizontal: false, vertical: true)
@@ -881,7 +881,7 @@ private struct ServerOptionCard: View {
     private var footer: some View {
         if let chip {
             Text(chip)
-                .font(BanditoFont.font(size: 12, weight: 500))
+                .font(BanditoFont.text(size: 12, weight: 500))
                 .foregroundStyle(Color.Bandito.text3)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
@@ -890,7 +890,7 @@ private struct ServerOptionCard: View {
                 .background(Color.Bandito.text.opacity(0.06), in: Capsule())
         } else if let link {
             Text(link)
-                .font(BanditoFont.font(size: 12.5, weight: 500))
+                .font(BanditoFont.text(size: 12.5, weight: 500))
                 .foregroundStyle(Color.Bandito.signal)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)

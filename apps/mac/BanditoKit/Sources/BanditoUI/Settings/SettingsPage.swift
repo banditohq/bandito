@@ -49,11 +49,13 @@ struct SettingsPage<Content: View>: View {
             VStack(alignment: .leading, spacing: 0) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(title)
-                        .font(BanditoFont.font(size: 22, weight: 650))
+                        .font(BanditoFont.display(size: 20, weight: 600))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                         .foregroundStyle(Color.Bandito.text)
                     if let intro {
                         Text(intro)
-                            .font(.system(size: 13.5))
+                            .font(BanditoFont.text(size: 13.5, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                             .lineSpacing(2)
                             .fixedSize(horizontal: false, vertical: true)
@@ -128,12 +130,12 @@ struct SettingsRow<Control: View>: View {
     private var textBlock: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title)
-                .font(.system(size: 13, weight: .medium))
+                .font(BanditoFont.text(size: 13, weight: 500))
                 .foregroundStyle(Color.Bandito.text)
                 .fixedSize(horizontal: false, vertical: true)
             if let hint {
                 Text(hint)
-                    .font(.system(size: 12))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .fixedSize(horizontal: false, vertical: true)
             }

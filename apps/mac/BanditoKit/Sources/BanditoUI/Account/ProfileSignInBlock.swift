@@ -18,10 +18,10 @@ struct ProfileSignInBlock: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(L10n.Account.SignIn.title)
-                .font(BanditoFont.font(size: 20, weight: 600))
+                .font(BanditoFont.display(size: 18.5, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
             Text(L10n.Account.SignIn.text)
-                .font(BanditoFont.font(size: 13.5, weight: 400))
+                .font(BanditoFont.text(size: 13.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .fixedSize(horizontal: false, vertical: true)
             if let setupError {
@@ -75,7 +75,7 @@ struct ProfileSignInBlock: View {
         case .waiting(let flow):
             VStack(alignment: .leading, spacing: 12) {
                 Text(UserCodeFormat.grouped(flow.userCode))
-                    .font(BanditoFont.font(size: 28, weight: 600, mono: true))
+                    .font(BanditoFont.mono(size: 28, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                     .tracking(3)
                     .textSelection(.enabled)
@@ -92,7 +92,7 @@ struct ProfileSignInBlock: View {
                 }
                 if copiedNote {
                     Text(L10n.Onboarding.Account.Github.copied)
-                        .font(BanditoFont.font(size: 12.5, weight: 400))
+                        .font(BanditoFont.text(size: 12.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                 }
                 HStack(spacing: 8) {
@@ -150,7 +150,7 @@ private struct ProfileEmailFields: View {
                 HStack(spacing: 8) {
                     TextField(L10n.Onboarding.Account.emailPlaceholder, text: $model.email)
                         .banditoField()
-                        .font(BanditoFont.font(size: 14, weight: 400))
+                        .font(BanditoFont.text(size: 14, weight: 400))
                         .onSubmit { send() }
                         .accessibilityLabel(L10n.Onboarding.Account.emailLabel)
                     Button(L10n.Onboarding.Account.sendCode) { send() }
@@ -160,12 +160,12 @@ private struct ProfileEmailFields: View {
                 }
             } else {
                 Text(L10n.Onboarding.Account.codeHint(email: model.email))
-                    .font(BanditoFont.font(size: 13.5, weight: 400))
+                    .font(BanditoFont.text(size: 13.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                     .fixedSize(horizontal: false, vertical: true)
                 TextField("000000", text: $codeText)
                     .banditoField()
-                    .font(BanditoFont.font(size: 20, weight: 600, mono: true))
+                    .font(BanditoFont.mono(size: 20, weight: 600))
                     .frame(width: 180)
                     .accessibilityLabel(L10n.Onboarding.Account.emailLabel)
                     .onChange(of: codeText) { _, text in
@@ -188,7 +188,7 @@ private struct ProfileEmailFields: View {
                 }
                 if model.isBusy {
                     Text(L10n.Onboarding.Account.checking)
-                        .font(BanditoFont.font(size: 13, weight: 400))
+                        .font(BanditoFont.text(size: 13, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                 }
             }

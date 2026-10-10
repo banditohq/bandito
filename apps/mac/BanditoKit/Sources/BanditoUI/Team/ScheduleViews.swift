@@ -35,12 +35,12 @@ struct ScheduleRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 if let title = schedule.title {
                     Text(title)
-                        .font(BanditoFont.font(size: 12.5, weight: 500))
+                        .font(BanditoFont.text(size: 12.5, weight: 500))
                         .foregroundStyle(Color.Bandito.text)
                         .lineLimit(1)
                     if let words {
                         Text(words)
-                            .font(BanditoFont.font(size: 11.5, weight: 400))
+                            .font(BanditoFont.text(size: 11.5, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                             .lineLimit(1)
                     }
@@ -51,12 +51,12 @@ struct ScheduleRow: View {
                         .lineLimit(1)
                 }
                 Text(schedule.prompt)
-                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .lineLimit(1)
                 if let next = schedule.nextRunAt {
                     Text(Self.nextText(ms: next))
-                        .font(BanditoFont.font(size: 11, weight: 400))
+                        .font(BanditoFont.text(size: 11, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                 }
             }
@@ -129,7 +129,9 @@ struct ScheduleEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(existing == nil ? L10n.Schedule.newTitle : L10n.Schedule.editTitle)
-                .font(BanditoFont.font(size: 20, weight: 650))
+                .font(BanditoFont.display(size: 18.5, weight: 600))
+                .lineLimit(1)
+                .truncationMode(.tail)
                 .foregroundStyle(Color.Bandito.text)
             field(L10n.Schedule.name, hint: L10n.Schedule.titleHint) {
                 TextField(L10n.Schedule.namePlaceholder, text: $form.title)
@@ -154,17 +156,17 @@ struct ScheduleEditor: View {
                 TextField(L10n.Inspector.promptPlaceholder, text: $form.prompt, axis: .vertical)
                     .accessibilityLabel(L10n.Inspector.promptLabel)
                     .banditoField()
-                    .font(BanditoFont.font(size: 13, weight: 400))
+                    .font(BanditoFont.text(size: 13, weight: 400))
                     .lineLimit(3...10)
                     .frame(maxWidth: .infinity, alignment: .topLeading)
             }
             if form.cron == nil {
                 Text(L10n.Schedule.incomplete)
-                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
             } else if form.tooOften(now: Date()) {
                 Text(L10n.Schedule.tooOften)
-                    .font(BanditoFont.font(size: 12, weight: 500))
+                    .font(BanditoFont.text(size: 12, weight: 500))
                     .foregroundStyle(Color.Bandito.danger)
             }
             if let error {
@@ -223,7 +225,7 @@ struct ScheduleEditor: View {
             field(L10n.Inspector.cronLabel, hint: L10n.Schedule.cronHint) {
                 TextField("0 9 * * 1-5", text: $form.customCron)
                     .banditoField()
-                    .font(BanditoFont.font(size: 13, weight: 400, mono: true))
+                    .font(BanditoFont.mono(size: 13, weight: 400))
             }
         }
     }
@@ -253,12 +255,12 @@ struct ScheduleEditor: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label)
-                .font(.system(size: 12))
+                .font(BanditoFont.text(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
             content()
             if let hint {
                 Text(hint)
-                    .font(.system(size: 11.5))
+                    .font(BanditoFont.text(size: 11.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
             }
         }
@@ -323,7 +325,7 @@ private struct DayChip: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(BanditoFont.font(size: 12.5, weight: 500))
+                .font(BanditoFont.text(size: 12.5, weight: 500))
                 .foregroundStyle(on ? Color.Bandito.text : Color.Bandito.text3)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)

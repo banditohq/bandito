@@ -23,7 +23,7 @@ struct OnboardingLanguageMenu: View {
                             .font(.system(size: 12, weight: .medium))
                             .accessibilityHidden(true)
                         Text(InterfaceLanguage.current)
-                            .font(BanditoFont.font(size: 12.5, weight: 500))
+                            .font(BanditoFont.text(size: 12.5, weight: 500))
                             .lineLimit(1)
                             .fixedSize(horizontal: true, vertical: false)
                         Image(systemName: "chevron.down")
@@ -42,7 +42,7 @@ struct OnboardingLanguageMenu: View {
             if picked {
                 HStack(spacing: 10) {
                     Text(L10n.Settings.languageRestart)
-                        .font(BanditoFont.font(size: 12, weight: 400))
+                        .font(BanditoFont.text(size: 12, weight: 400))
                         .foregroundStyle(Color.Bandito.text2)
                     Button(L10n.Terminals.restart) {
                         SystemActions.relaunch()
