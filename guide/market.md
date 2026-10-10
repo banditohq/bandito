@@ -54,8 +54,9 @@ name, the publisher with the Official (Официальный) badge when the se
 the right: Connect (Подключить), or the status and Configure (Настроить) when it is connected.
 Below: What it can do (Что умеет), About (Описание), What you need (Что понадобится), How to connect (Как подключить)
 with one to three steps made from the service's fields (get the key, fill in the address or the path, press Connect),
-and the links Documentation (Документация) and Website (Сайт). A connected service also shows its status, the tools
-from the last check, the switch Available to agents (Доступно агентам), Check (Проверить) and Remove (Удалить).
+and the links Documentation (Документация) and Website (Сайт). A connected service also shows its status with the number of tools from the
+last check and To the list (К списку), which jumps to the Tools section below; then the switch Available to agents
+(Доступно агентам), Check (Проверить) and Remove (Удалить).
 Где: Marketplace → a card → View (Посмотреть)
 1. Click View (Посмотреть) on a card. The page opens in the same area.
 2. Click Marketplace (Маркетплейс) at the top left, or press Esc, to go back to the list.

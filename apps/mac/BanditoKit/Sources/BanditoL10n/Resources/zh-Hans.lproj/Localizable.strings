@@ -929,7 +929,6 @@
 "market.section.how" = "如何连接";
 "market.section.links" = "链接";
 "market.section.needs" = "所需条件";
-"market.section.tools" = "上次检查发现的工具";
 "market.skill.by" = "作者：%1$@";
 "market.skill.claudeOnly" = "仅限 Claude";
 "market.skill.conflictAgent" = "%1$@ 的文件夹里已有同名文件夹，且不是 Bandito 放的。Bandito 绝不会覆盖它：请先移动或重命名该文件夹，再安装技能。";
@@ -979,6 +978,7 @@
 "market.tools.mode.readOnly" = "只读";
 "market.tools.notChecked" = "目前还不知道有哪些工具。检查一下服务即可列出；在此之前，所有工具都按“会改动内容”处理。";
 "market.tools.title" = "工具";
+"market.tools.toList" = "查看列表";
 "market.tools.unreached" = "对于智能体 %1$@（Codex 或 Grok），此模式下该服务已关闭。";
 "market.tools.word.allow" = "允许";
 "market.tools.word.ask" = "询问";

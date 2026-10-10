@@ -929,7 +929,6 @@
 "market.section.how" = "Cómo conectar";
 "market.section.links" = "Enlaces";
 "market.section.needs" = "Qué necesitas";
-"market.section.tools" = "Herramientas de la última comprobación";
 "market.skill.by" = "de %1$@";
 "market.skill.claudeOnly" = "Solo Claude";
 "market.skill.conflictAgent" = "Ya hay una carpeta con este nombre en la carpeta de %1$@ y Bandito no la puso ahí. Bandito nunca la sobrescribe: muévela o renómbrala y luego instala el skill.";
@@ -979,6 +978,7 @@
 "market.tools.mode.readOnly" = "Solo lectura";
 "market.tools.notChecked" = "Aún no se conocen las herramientas. Comprueba el servicio para listarlas. Hasta entonces, cualquier herramienta cuenta como una que cambia algo.";
 "market.tools.title" = "Herramientas";
+"market.tools.toList" = "A la lista";
 "market.tools.unreached" = "Para los agentes %1$@ (Codex o Grok) el servicio está desactivado en este modo.";
 "market.tools.word.allow" = "Permitir";
 "market.tools.word.ask" = "Preguntar";

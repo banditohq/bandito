@@ -232,7 +232,7 @@ struct ToolTryResultView: View {
                         .foregroundStyle(Color.Bandito.text3)
                 }
                 if !text.isEmpty {
-                    box(title: L10n.Market.Try.result, text: text, failed: result.isError)
+                    box(title: L10n.Market.Try.result, text: ToolResultText.display(text), failed: result.isError)
                 }
                 if let structured {
                     box(title: L10n.Market.Try.structured, text: structured, failed: false)

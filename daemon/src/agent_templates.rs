@@ -139,6 +139,22 @@ mod tests {
         assert_eq!(templates.len(), 16);
     }
 
+    /// A bot gets its template's name in the app's language, so every name must pass the agent name rule.
+    #[test]
+    fn every_name_in_every_language_is_a_valid_agent_name() {
+        for t in catalog() {
+            let mut names = vec![t.name_en.clone(), t.name_ru.clone()];
+            names.extend(t.l10n.values().map(|l| l.name.clone()));
+            for name in names {
+                assert!(
+                    crate::store::validate_name(&name).is_ok(),
+                    "{}: {name:?} is not a valid agent name",
+                    t.id
+                );
+            }
+        }
+    }
+
     #[test]
     fn ids_are_unique_and_kebab_case() {
         let mut seen = HashSet::new();
