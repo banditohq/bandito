@@ -153,17 +153,34 @@ import Testing
         #expect(DictationState.next(.idle, .granted) == .idle)
     }
 
-    @Test func silenceEndsAfterTwoSecondsAndVoiceResetsIt() {
+    @Test func twoSecondsAfterTheLastFragmentEndTheDictation() {
         let start = Date(timeIntervalSince1970: 1_000)
         var watch = SilenceWatch(since: start)
-        #expect(!watch.isSilent(at: start.addingTimeInterval(1.9)))
-        #expect(watch.isSilent(at: start.addingTimeInterval(2)))
-        watch.heard(level: 0.5, at: start.addingTimeInterval(1.5))
-        #expect(!watch.isSilent(at: start.addingTimeInterval(3)))
-        watch.heard(level: 0.001, at: start.addingTimeInterval(3.5))
-        #expect(watch.lastVoice == start.addingTimeInterval(1.5))
-        watch.heardText(at: start.addingTimeInterval(4))
+        watch.recognised("hello", at: start.addingTimeInterval(1))
+        #expect(!watch.isSilent(at: start.addingTimeInterval(2.9)))
+        #expect(watch.isSilent(at: start.addingTimeInterval(3)))
+        // A newer fragment starts the two seconds again.
+        watch.recognised("hello there", at: start.addingTimeInterval(4))
         #expect(!watch.isSilent(at: start.addingTimeInterval(5.9)))
+        #expect(watch.isSilent(at: start.addingTimeInterval(6)))
+    }
+
+    @Test func withNoSpeechAtAllTheDictationEndsAfterEightSeconds() {
+        let start = Date(timeIntervalSince1970: 1_000)
+        var watch = SilenceWatch(since: start)
+        #expect(!watch.isSilent(at: start.addingTimeInterval(7.9)))
+        #expect(watch.isSilent(at: start.addingTimeInterval(8)))
+        // Whitespace is not speech: it does not count as a fragment.
+        watch.recognised("   ", at: start.addingTimeInterval(7))
+        #expect(watch.lastFragment == nil)
+        #expect(watch.isSilent(at: start.addingTimeInterval(8)))
+    }
+
+    @Test func escBelongsToTheDictationOnlyWhileItRecords() {
+        #expect(DictationEscape.takesEscape(.recording))
+        #expect(!DictationEscape.takesEscape(.idle))
+        #expect(!DictationEscape.takesEscape(.requesting))
+        #expect(!DictationEscape.takesEscape(.stopping))
     }
 }
 
@@ -175,7 +192,7 @@ import Testing
             .note(id: "n1", text: "session", kind: .info, ts: 3),
             .assistant(id: "a2", text: "Done", ts: 4),
         ]
-        let reply = ReadAloudRules.lastReply(in: items)
+        let reply = ReadAloudRules.finalReply(in: items)
         #expect(reply?.id == "a2")
         #expect(reply?.text == "Done")
     }
@@ -185,6 +202,53 @@ import Testing
             .assistant(id: "a1", text: "Old", ts: 1),
             .user(id: "u2", text: "Stop", source: .user, from: nil, ts: 2),
         ]
-        #expect(ReadAloudRules.lastReply(in: items) == nil)
+        #expect(ReadAloudRules.finalReply(in: items) == nil)
+    }
+
+    private let person = ThreadItem.user(id: "u1", text: "Hi", source: .user, from: nil, ts: 1)
+
+    @Test func historyIsNotReadButTheReplyOfATurnSeenRunningIs() {
+        let tracker = ReadAloudTracker()
+        let history: [ThreadItem] = [.assistant(id: "s1", text: "Old", ts: 1)]
+        #expect(tracker.observe(items: history, turnRunning: false) == nil)
+        let sent = history + [person]
+        #expect(tracker.observe(items: sent, turnRunning: true) == nil)
+        let answered = sent + [.assistant(id: "s2", text: "New", ts: 3)]
+        // The reply arrives while the turn still runs: it waits for the turn to end.
+        #expect(tracker.observe(items: answered, turnRunning: true) == nil)
+        #expect(tracker.observe(items: answered, turnRunning: false) == SpokenReply(id: "s2", text: "New"))
+        // Read once, however often the thread changes afterwards.
+        #expect(tracker.observe(items: answered, turnRunning: false) == nil)
+        #expect(tracker.read == ["s2"])
+    }
+
+    @Test func aReplyThatArrivesAfterTheTurnEndedIsReadAtOnce() {
+        let tracker = ReadAloudTracker()
+        _ = tracker.observe(items: [person], turnRunning: true)
+        let items = [person, .assistant(id: "s3", text: "Done", ts: 4)]
+        #expect(tracker.observe(items: items, turnRunning: false) == SpokenReply(id: "s3", text: "Done"))
+    }
+
+    @Test func streamedTextFinalisedByAnotherEventIsNotAFinalReply() {
+        let tracker = ReadAloudTracker()
+        let items: [ThreadItem] = [person, .assistant(id: "s5-s", text: "Half", ts: 5)]
+        _ = tracker.observe(items: [person], turnRunning: true)
+        #expect(tracker.observe(items: items, turnRunning: false) == nil)
+    }
+
+    @Test func aReplyBeforeThePersonsLastMessageIsNotReadWhenATurnStarts() {
+        let tracker = ReadAloudTracker()
+        let items: [ThreadItem] = [.assistant(id: "s1", text: "Old", ts: 1), person]
+        #expect(tracker.observe(items: items, turnRunning: true) == nil)
+        #expect(tracker.observe(items: items, turnRunning: false) == nil)
+    }
+
+    @Test func resetForgetsTheTurnsOfTheAgent() {
+        let tracker = ReadAloudTracker()
+        _ = tracker.observe(items: [person], turnRunning: true)
+        tracker.reset()
+        #expect(!tracker.sawTurn)
+        let items = [person, .assistant(id: "s9", text: "Hi", ts: 9)]
+        #expect(tracker.observe(items: items, turnRunning: false) == nil)
     }
 }

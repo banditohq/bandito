@@ -242,7 +242,14 @@ struct Composer: View {
         .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: reply)
         .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: waitingForm?.formId)
         .onAppear { takeFocus(.agentOpened) }
-        .onDisappear { dictation.cancel() }
+        .onDisappear {
+            dictation.cancel()
+            router.dictationRecording = false
+        }
+        .onChange(of: dictation.phase) { _, phase in
+            let recording = DictationEscape.takesEscape(phase)
+            if router.dictationRecording != recording { router.dictationRecording = recording }
+        }
         .onChange(of: router.dictationRequest) { _, _ in toggleDictation() }
         .tourAnchor(.composer)
         .onChange(of: router.composerFocusAgentID, initial: true) { _, _ in
@@ -565,8 +572,8 @@ struct Composer: View {
     // MARK: Keys and menu actions
 
     private func handleMenuKey(_ key: KeyEquivalent) -> KeyPress.Result {
-        // Esc while dictating ends the dictation, before any menu or the reply.
-        if dictation.isActive, key == .escape {
+        // Esc while the dictation records ends it, before any menu or the reply (the menu's deny item steps aside).
+        if DictationEscape.takesEscape(dictation.phase), key == .escape {
             dictation.stop()
             return .handled
         }

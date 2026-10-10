@@ -88,7 +88,7 @@ Speak instead of typing. Speech is turned into text on this Mac; no audio is sen
 Где: Team → agent thread → composer, the microphone button (Надиктовать) next to +, or ⌥⌘D (menu Team → Dictate into the message)
 1. Press the microphone or ⌥⌘D. The first time, macOS asks for the microphone and for speech recognition: allow both. If you refused, a line above the field says so and links to System Settings.
 2. Speak. The words appear in the field at the caret. While it listens the microphone is filled and has a cream dot.
-3. Stop it with the microphone again, ⌥⌘D or Esc, or let it stop by itself after two seconds of silence. Check the text, then press ↵ to send.
+3. Stop it with the microphone again, ⌥⌘D or Esc, or let it stop by itself: two seconds after the last words it recognised, or eight seconds if you said nothing. Check the text, then press ↵ to send.
 4. A language without an offline speech model cannot be dictated. The line above the field says how to add it: System Settings → Keyboard → Dictation.
 
 ## Read replies aloud
@@ -97,7 +97,7 @@ Speak instead of typing. Speech is turned into text on this Mac; no audio is sen
 Hear an agent's answer. The voice follows the language of the text. Markdown is read as plain sentences; a code block is not read, it becomes "code skipped" (код пропущен).
 Где: the ⋯ menu of an agent's message (or right-click) → Read aloud (Прочитать вслух); Inspector → Details → Read replies aloud (Читать ответы вслух)
 1. Point at an agent's message, press ⋯ and choose Read aloud. Choose Stop reading (Остановить) to stop.
-2. To hear every new finished reply of one agent, turn on Read replies aloud in its Details. It is off by default and kept on this Mac, per agent. Replies are read only while Bandito is the active app; opening a thread reads nothing from its history.
+2. To hear every new finished reply of one agent, turn on Read replies aloud in its Details. It is off by default and kept on this Mac, per agent. A reply is read once, when its turn has ended. It is read only while Bandito is the active app; opening a thread reads nothing from its history.
 
 ## Attach a file to a message
 

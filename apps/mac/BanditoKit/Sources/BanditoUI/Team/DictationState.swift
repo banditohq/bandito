@@ -55,26 +55,38 @@ enum DictationState {
     }
 }
 
-/// Two seconds without voice end a dictation. Voice is a buffer whose level reaches `threshold`, or new recognised text.
+/// When a dictation ends by itself: two seconds after its last recognised fragment; with no fragment at all, eight
+/// seconds after it started. Only recognised text counts, not the sound level.
 struct SilenceWatch {
-    static let threshold: Float = 0.02
-    static let window: TimeInterval = 2
+    static let afterText: TimeInterval = 2
+    static let noSpeech: TimeInterval = 8
 
-    private(set) var lastVoice: Date
+    private(set) var started: Date
+    /// When the newest non-empty fragment was recognised; nil while nothing has been.
+    private(set) var lastFragment: Date?
 
     init(since start: Date) {
-        lastVoice = start
+        started = start
     }
 
-    mutating func heard(level: Float, at time: Date) {
-        if level >= Self.threshold { lastVoice = time }
-    }
-
-    mutating func heardText(at time: Date) {
-        lastVoice = time
+    /// A partial result. Whitespace-only text is not speech.
+    mutating func recognised(_ fragment: String, at time: Date) {
+        guard !fragment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        lastFragment = time
     }
 
     func isSilent(at time: Date) -> Bool {
-        time.timeIntervalSince(lastVoice) >= Self.window
+        if let lastFragment {
+            return time.timeIntervalSince(lastFragment) >= Self.afterText
+        }
+        return time.timeIntervalSince(started) >= Self.noSpeech
+    }
+}
+
+/// Esc belongs to the dictation while it records: it stops the dictation and the app's Esc commands (deny an approval)
+/// leave it alone. Pure.
+enum DictationEscape {
+    static func takesEscape(_ phase: DictationPhase) -> Bool {
+        phase == .recording
     }
 }

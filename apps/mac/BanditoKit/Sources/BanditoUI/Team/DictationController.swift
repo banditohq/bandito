@@ -75,7 +75,6 @@ final class DictationController {
         }
         let callbacks = DictationEngine.Callbacks(
             onText: { [weak self] partial in self?.received(partial) },
-            onLevel: { [weak self] level in self?.heard(level) },
             onEnd: { [weak self] failure in
                 if let failure { self?.fail(failure) } else { self?.finish() }
             })
@@ -94,14 +93,10 @@ final class DictationController {
         if result.draft != text.wrappedValue { text.wrappedValue = result.draft }
         span = result.span
         placeCaret?(result.span.end)
-        silence?.heardText(at: Date())
+        silence?.recognised(partial, at: Date())
     }
 
-    private func heard(_ level: Float) {
-        silence?.heard(level: level, at: Date())
-    }
-
-    /// Two seconds without voice stop the dictation. Checked four times a second.
+    /// Two seconds after the last recognised fragment (eight with none) the dictation stops. Checked four times a second.
     private func startWatchdog() {
         watchdog?.cancel()
         watchdog = Task { [weak self] in

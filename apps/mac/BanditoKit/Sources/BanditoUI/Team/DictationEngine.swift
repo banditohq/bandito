@@ -9,8 +9,6 @@ final class DictationEngine {
     struct Callbacks {
         /// The newest best transcription of everything said so far in this dictation.
         var onText: (String) -> Void
-        /// A buffer of microphone audio with its level (RMS, 0 to 1).
-        var onLevel: (Float) -> Void
         /// The engine is done. Nil when it ended because it was stopped.
         var onEnd: (DictationFailure?) -> Void
     }
@@ -42,8 +40,6 @@ final class DictationEngine {
         let input = audio.inputNode
         input.installTap(onBus: 0, bufferSize: 1024, format: input.outputFormat(forBus: 0)) { buffer, _ in
             request.append(buffer)
-            let level = Self.level(of: buffer)
-            DispatchQueue.main.async { callbacks.onLevel(level) }
         }
         do {
             audio.prepare()
@@ -82,15 +78,5 @@ final class DictationEngine {
         if audio.isRunning { audio.stop() }
         task = nil
         request = nil
-    }
-
-    /// Root mean square of the first channel, clamped to 0 to 1.
-    private nonisolated static func level(of buffer: AVAudioPCMBuffer) -> Float {
-        guard let samples = buffer.floatChannelData?[0], buffer.frameLength > 0 else { return 0 }
-        var sum: Float = 0
-        for index in 0..<Int(buffer.frameLength) {
-            sum += samples[index] * samples[index]
-        }
-        return min(1, (sum / Float(buffer.frameLength)).squareRoot())
     }
 }

@@ -93,7 +93,9 @@ public struct BanditoCommands: Commands {
             Divider()
             item("team.approve") { resolveFirstApproval(.allow) }
                 .disabled(!hasPendingApproval)
+            // While a dictation records, Esc is the dictation's: this item steps aside so the composer gets the key.
             item("team.deny") { resolveFirstApproval(.deny) }
+                .disabled(router.dictationRecording)
                 .disabled(!hasPendingApproval)
             Divider()
             item("team.stop") { interruptSelected() }
