@@ -450,7 +450,16 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr, home_given: bool) 
     // Before anything starts: sessions recovered below are children too.
     rpc::unix::become_subreaper();
     // One daemon per data folder: the lock is held until this function returns (see docs/ARCHITECTURE.md#backups).
-    let Some(_daemon_lock) = bandito::backup::try_daemon_lock(home)? else {
+    // During an upgrade or a launchd restart the old daemon may still be exiting: wait for it a little.
+    let mut lock = bandito::backup::try_daemon_lock(home)?;
+    for _ in 0..100 {
+        if lock.is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        lock = bandito::backup::try_daemon_lock(home)?;
+    }
+    let Some(_daemon_lock) = lock else {
         bail!("another bandito daemon already runs in {}", home.display());
     };
     bandito::update::set_data_home(home);
