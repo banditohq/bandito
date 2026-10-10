@@ -8,6 +8,7 @@ use super::{
     Session, SpawnConfig, Spawned, capitalized, clip_input,
 };
 use crate::event::{Decision, EventBody, LimitWindow, TOOL_OUTPUT_LIMIT, TurnStatus, Usage, truncate_output};
+use crate::store::Capability;
 use anyhow::bail;
 use async_trait::async_trait;
 use serde::Deserialize;
@@ -19,6 +20,9 @@ use tokio::process::Command;
 
 /// Message sent back to Claude when the human (or policy) says no.
 pub const DENY_MESSAGE: &str = "Denied by the user in Bandito";
+
+/// The settings sources an agent loads by default: the project's and the local ones, not the user's.
+const PROJECT_SETTING_SOURCES: &str = "project,local";
 
 /// Flags every session starts with.
 const BASE_ARGS: [&str; 11] = [
@@ -71,6 +75,30 @@ const POLICY_TOOLS: [&str; 9] = [
     "Grep",
     "Glob",
 ];
+
+/// Permission rules for the capabilities an agent does not have (see docs/ARCHITECTURE.md#capabilities):
+/// `Bash` without `terminal`, and the file-changing tools without `files`. Reading stays.
+fn capability_deny_rules(caps: Option<&[Capability]>) -> Vec<String> {
+    let has = |c: Capability| caps.is_none_or(|list| list.contains(&c));
+    let mut rules = Vec::new();
+    if !has(Capability::Terminal) {
+        rules.push("Bash".to_string());
+    }
+    if !has(Capability::Files) {
+        rules.extend(["Edit", "Write", "MultiEdit", "NotebookEdit"].map(String::from));
+    }
+    rules
+}
+
+/// The `--settings` JSON of a session. Deny rules come first: Claude Code checks deny, then ask, then allow.
+/// The file tools may not touch Bandito's own folder (see docs/ARCHITECTURE.md#approvals-policy). The tools the
+/// policy decides are asked, so an `allow` in the user's or the project's settings cannot run them without
+/// `can_use_tool`.
+fn permission_settings(home: &std::path::Path, caps: Option<&[Capability]>) -> Value {
+    let mut deny = bandito_home_rules(home);
+    deny.extend(capability_deny_rules(caps));
+    json!({"permissions": {"deny": deny, "ask": POLICY_TOOLS}})
+}
 
 const INIT_REQUEST_ID: &str = "init";
 /// Tool input strings longer than this are clipped in events and approvals.
@@ -216,6 +244,10 @@ impl Runtime for ClaudeRuntime {
         let program = cfg.program.clone().unwrap_or_else(|| PathBuf::from(&self.program));
         let mut cmd = Command::new(&program);
         cmd.args(BASE_ARGS);
+        // The owner's own settings (their CLAUDE.md, hooks, plugins, MCP servers) load only when the agent keeps them.
+        if !cfg.personal_settings {
+            cmd.arg("--setting-sources").arg(PROJECT_SETTING_SOURCES);
+        }
         if let Some(model) = &cfg.model {
             cmd.arg("--model").arg(model);
         }
@@ -247,14 +279,8 @@ impl Runtime for ClaudeRuntime {
                 }
             }
         }
-        // The agent's file tools may not touch Bandito's own folder (see docs/ARCHITECTURE.md#approvals-policy).
-        // The tools the policy decides are asked, so an `allow` in the user's or the project's settings
-        // cannot run them without `can_use_tool`. Claude Code checks deny, then ask, then allow.
         // One argument of inline JSON, so no rule can be split at a space.
-        let settings = json!({"permissions": {
-            "deny": bandito_home_rules(&crate::workspace::data_dir()),
-            "ask": POLICY_TOOLS,
-        }});
+        let settings = permission_settings(&crate::workspace::data_dir(), cfg.capabilities.as_deref());
         cmd.arg("--settings").arg(settings.to_string());
         cmd.current_dir(&cfg.cwd).envs(cfg.env.iter().map(|(k, v)| (k, v)));
         // Marks the CLI and its children for `host.processes` (see docs/ARCHITECTURE.md#host).
@@ -511,6 +537,10 @@ impl ClaudeSession {
 
 #[async_trait]
 impl Session for ClaudeSession {
+    fn pid(&self) -> Option<u32> {
+        self.proc.pid()
+    }
+
     async fn send(&mut self, text: &str) -> anyhow::Result<()> {
         self.proc.send(&json!({
             "type": "user",
@@ -1592,6 +1622,48 @@ mod login_tests {
                 "{stdout}"
             );
         }
+    }
+
+    #[test]
+    fn capabilities_deny_the_tools_they_leave_out() {
+        use crate::store::ALL_CAPABILITIES;
+        // No list is all capabilities.
+        assert!(capability_deny_rules(None).is_empty());
+        assert!(capability_deny_rules(Some(&ALL_CAPABILITIES)).is_empty());
+        // Without the shell only Bash is denied; without files the four file-changing tools are.
+        assert_eq!(
+            capability_deny_rules(Some(&[
+                Capability::Files,
+                Capability::Browser,
+                Capability::Team,
+                Capability::Screen
+            ])),
+            ["Bash"]
+        );
+        assert_eq!(
+            capability_deny_rules(Some(&[Capability::Terminal, Capability::Browser])),
+            ["Edit", "Write", "MultiEdit", "NotebookEdit"]
+        );
+        // An empty list denies both.
+        assert_eq!(capability_deny_rules(Some(&[])).len(), 5);
+    }
+
+    #[test]
+    fn session_settings_put_the_capability_denials_after_the_folder_rules() {
+        let home = std::path::Path::new("/home/u/.bandito");
+        let settings = permission_settings(home, Some(&[Capability::Files, Capability::Browser]));
+        let deny: Vec<&str> = settings["permissions"]["deny"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_str().unwrap())
+            .collect();
+        assert_eq!(deny[..3], bandito_home_rules(home)[..]);
+        assert_eq!(&deny[3..], ["Bash"]);
+        assert_eq!(settings["permissions"]["ask"], json!(POLICY_TOOLS));
+        // Every capability: the folder rules alone.
+        let all = permission_settings(home, None);
+        assert_eq!(all["permissions"]["deny"], json!(bandito_home_rules(home)));
     }
 
     #[test]

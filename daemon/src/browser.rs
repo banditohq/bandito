@@ -909,6 +909,9 @@ mod tests {
         let store = Arc::new(Store::open_in_memory().unwrap());
         let agent = store
             .agent_create(NewAgent {
+                use_personal_settings: false,
+                avatar: None,
+                capabilities: None,
                 name: "Forge".into(),
                 role: "builder".into(),
                 runtime: RuntimeKind::Claude,

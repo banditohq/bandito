@@ -24,19 +24,38 @@ struct ServerPicker: View {
                 hint: Self.hasUpdate(server) ? L10n.Updates.available : nil)
             .fixedSize(horizontal: false, vertical: true)
         } else {
-            // No server yet: the place of the picker says so and offers the way to connect one.
-            VStack(alignment: .leading, spacing: 8) {
-                Text(L10n.Empty.NoServers.title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.Bandito.text)
-                    .lineLimit(1)
-                Button(L10n.Empty.NoServers.action) {
+            // No server yet: the place of the picker is a card of the same height, with one way to connect one.
+            HStack(spacing: 10) {
+                Image(systemName: "server.rack")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color.Bandito.text2)
+                    .frame(width: 28, height: 28)
+                    .background(Color.Bandito.text.opacity(0.06), in: Circle())
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(L10n.Sidebar.NoServer.title)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.Bandito.text)
+                        .lineLimit(1)
+                    Text(L10n.Sidebar.NoServer.hint)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Color.Bandito.text3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+                Button(L10n.Sidebar.NoServer.connect) {
                     router.sheet = .addServer
                 }
-                .banditoButton(.signal())
-                .frame(maxWidth: .infinity)
+                .banditoButton(.lightPill())
+                .fixedSize()
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.Bandito.text.opacity(0.035)))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(Color.Bandito.text.opacity(0.08)))
         }
     }
 
@@ -44,13 +63,36 @@ struct ServerPicker: View {
         server.info?.hostname ?? server.config.name
     }
 
-    /// Where the server is: this Mac, the host of a WebSocket URL, or the ssh target.
+    /// Where the server is: this Mac (with its model), the host of a WebSocket URL, or the ssh target (user@host).
     static func address(_ server: ServerModel) -> String {
+        if isThisMac(server) { return thisMacLabel }
         switch server.config.endpoint {
-        case .local: L10n.Server.Add.thisMac
-        case .webSocket(let url): url.host ?? url.absoluteString
-        case .ssh(let target, _): target
+        case .local: return thisMacLabel
+        case .webSocket(let url): return url.host ?? url.absoluteString
+        case .ssh(let target, _): return target
         }
+    }
+
+    /// Whether the server is this Mac's own daemon.
+    static func isThisMac(_ server: ServerModel) -> Bool {
+        LocalDaemonUpgrade.isThisMac(server.config)
+    }
+
+    /// "This Mac · MacBook Pro", or "This Mac" when no model is known.
+    static var thisMacLabel: String {
+        guard let model = MacModel.current() else { return L10n.Server.Add.thisMac }
+        return "\(L10n.Server.Add.thisMac) · \(model)"
+    }
+
+    /// What kind of device the server is, in the words of the switcher: "This Mac" or "Server".
+    static func kindName(_ server: ServerModel) -> String {
+        isThisMac(server) ? L10n.Server.Add.thisMac : L10n.Server.Picker.kindRemote
+    }
+
+    /// The symbol of the server's device: a laptop or a desktop for this Mac (by its model), a server rack otherwise.
+    static func symbol(_ server: ServerModel) -> String {
+        guard isThisMac(server) else { return "server.rack" }
+        return DeviceIcon.symbol(platform: nil, name: MacModel.current() ?? "")
     }
 
     /// The servers to switch to, built by `SelectChoices.servers` from each server's name, address and state.
@@ -59,7 +101,7 @@ struct ServerPicker: View {
             servers.map { candidate in
                 SelectChoices.ServerRow(
                     id: candidate.id, name: name(candidate), address: address(candidate),
-                    isOnline: isOnline(candidate), hasUpdate: hasUpdate(candidate))
+                    isOnline: isOnline(candidate), hasUpdate: hasUpdate(candidate), icon: symbol(candidate))
             },
             updateText: L10n.Updates.available)
     }
@@ -79,10 +121,16 @@ struct ServerPicker: View {
                 .fill(Self.statusColor(server))
                 .frame(width: 8, height: 8)
                 .shadow(color: Self.statusColor(server).opacity(0.6), radius: 4)
+            Image(systemName: Self.symbol(server))
+                .font(.system(size: 14, weight: .regular))
+                .foregroundStyle(Color.Bandito.text2)
+                .frame(width: 18)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
                 Text(Self.name(server))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color.Bandito.text)
+                    .lineLimit(1)
                 Text(Self.summary(server))
                     .font(.system(size: 11.5))
                     .foregroundStyle(Color.Bandito.text3)
@@ -153,8 +201,8 @@ struct ServerPicker: View {
         }
     }
 
+    /// "This Mac · 1 agent" or "Server · 1 agent", under the name in the field.
     static func summary(_ server: ServerModel) -> String {
-        let working = server.agents.filter { server.thread(for: $0.id).status == .working }.count
-        return "\(L10n.Common.agentCount(count: server.agents.count)) · \(L10n.Common.workingCount(count: working))"
+        "\(kindName(server)) · \(L10n.Common.agentCount(count: server.agents.count))"
     }
 }

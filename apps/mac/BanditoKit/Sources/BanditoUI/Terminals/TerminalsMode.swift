@@ -28,6 +28,7 @@ struct TerminalsContent: View {
 
     var body: some View {
         let controller = app.terminalController(for: server)
+        let place = TerminalDisplayOwner.terminals
         Group {
             if !server.supports("terminals") {
                 TerminalsPlaceholder(symbol: "terminal", title: L10n.Terminals.updateServer, detail: nil, action: nil)
@@ -49,6 +50,9 @@ struct TerminalsContent: View {
         .task(id: server.id) {
             await controller.start()
         }
+        // The Terminals mode draws the terminal views while it is on screen; a workbench pane gives them up.
+        .onAppear { controller.claimDisplay(place) }
+        .onDisappear { controller.releaseDisplay(place) }
         .onChange(of: router.terminalRequest) { _, request in
             guard let request else { return }
             router.terminalRequest = nil
@@ -234,6 +238,7 @@ struct TerminalToolbar: View {
         }
         .padding(.horizontal, 14)
         .frame(height: 52)
+        .titleBarZoomOnDoubleClick()
         .background(Color(hex: 0x12100E))
         .overlay(alignment: .bottom) {
             Rectangle().fill(Color.Bandito.text.opacity(0.05)).frame(height: 1)
@@ -324,31 +329,72 @@ struct TerminalsPlaceholder: View {
     }
 }
 
-/// Shown until the server's terminals are read: connecting, a failure with retry, or a spinner.
+/// Shown until the server's terminals are read: connecting, a failure with retry, or a spinner. A connection that does
+/// not come within `connectTimeout` gives way to an error with a retry, instead of a spinner that never ends.
 struct TerminalsLoading: View {
     let server: ServerModel
+    /// Counts the attempts; a retry starts a new one, with its own timer.
+    @State private var attempt = 0
+    @State private var timedOut = false
+
+    /// How long the connection may take before the page says so.
+    static let connectTimeout: Duration = .seconds(10)
 
     var body: some View {
-        switch server.state {
-        case .failed(let kind):
-            VStack(spacing: 14) {
-                UserFacingErrorView(message: UserFacingError.message(for: kind))
-                    .frame(maxWidth: 420)
-                Button(L10n.Banner.retry) {
-                    Task { await server.connect() }
+        Group {
+            switch server.state {
+            case .failed(let kind):
+                VStack(spacing: 14) {
+                    UserFacingErrorView(message: UserFacingError.message(for: kind))
+                        .frame(maxWidth: 420)
+                    Button(L10n.Banner.retry, action: reconnect)
+                        .banditoButton(.quiet())
                 }
-                .banditoButton(.quiet())
+                .padding(28)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            default:
+                if timedOut, server.state != .connected {
+                    VStack(spacing: 14) {
+                        UserFacingErrorView(
+                            message: UserFacingMessage(
+                                text: L10n.Terminals.connectTimeout(server: server.config.name), canRetry: true),
+                            onRetry: retry)
+                            .frame(maxWidth: 420)
+                    }
+                    .padding(28)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    VStack(spacing: 12) {
+                        ProgressView().controlSize(.small)
+                        Text(L10n.Terminals.connecting(server: server.config.name))
+                            .font(.system(size: 13))
+                            .foregroundStyle(Color.Bandito.text2)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             }
-            .padding(28)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        default:
-            VStack(spacing: 12) {
-                ProgressView().controlSize(.small)
-                Text(L10n.Terminals.connecting(server: server.config.name))
-                    .font(.system(size: 13))
-                    .foregroundStyle(Color.Bandito.text2)
+        }
+        .task(id: attempt) {
+            timedOut = false
+            do {
+                try await Task.sleep(for: Self.connectTimeout)
+            } catch {
+                return
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            timedOut = true
+        }
+    }
+
+    /// A new attempt from a clean state: a stalled attempt is dropped first, since `connect` does nothing while one runs.
+    private func retry() {
+        attempt += 1
+        reconnect()
+    }
+
+    private func reconnect() {
+        Task {
+            await server.disconnect()
+            await server.connect()
         }
     }
 }

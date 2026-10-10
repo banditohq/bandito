@@ -287,6 +287,41 @@ async fn the_token_stays_out_of_argv_and_its_files_go_with_the_session() {
 }
 
 #[tokio::test]
+async fn user_settings_are_left_out_unless_the_agent_keeps_them() {
+    let dir = tempfile::tempdir().unwrap();
+    let off_out = dir.path().join("off.json");
+    let _s = ClaudeRuntime::new()
+        .spawn(cfg("deny.jsonl", Some(&off_out)))
+        .await
+        .unwrap();
+    let args = written_args(&off_out).await;
+    let i = args
+        .iter()
+        .position(|a| a == "--setting-sources")
+        .unwrap_or_else(|| panic!("missing --setting-sources in {args:?}"));
+    assert_eq!(args[i + 1], "project,local", "the user's settings stay out by default");
+    // The Bandito policy is passed either way: leaving the user's settings out must not drop it.
+    assert!(
+        args.iter().any(|a| a == "--settings"),
+        "the policy is missing: {args:?}"
+    );
+
+    let on_out = dir.path().join("on.json");
+    let mut c = cfg("deny.jsonl", Some(&on_out));
+    c.personal_settings = true;
+    let _s = ClaudeRuntime::new().spawn(c).await.unwrap();
+    let args = written_args(&on_out).await;
+    assert!(
+        !args.iter().any(|a| a == "--setting-sources"),
+        "all sources load: {args:?}"
+    );
+    assert!(
+        args.iter().any(|a| a == "--settings"),
+        "the policy is missing: {args:?}"
+    );
+}
+
+#[tokio::test]
 async fn bandito_home_is_off_limits_to_the_file_tools() {
     let dir = tempfile::tempdir().unwrap();
     let args_out = dir.path().join("args.json");

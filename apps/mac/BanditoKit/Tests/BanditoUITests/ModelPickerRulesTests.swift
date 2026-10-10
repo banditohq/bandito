@@ -141,17 +141,10 @@ import Testing
     @Test func anOldDaemonIsUnsupportedNotFailed() {
         let hint = ModelPickerRules.hint(list: nil, status: .unsupported)
         #expect(hint == .unsupported)
-        #expect(!hint.isFailure)
     }
 
     @Test func aFailedRequestIsAFailureWithItsReason() {
         let hint = ModelPickerRules.hint(list: nil, status: .failed("timed out"))
         #expect(hint == .failed("timed out"))
-        #expect(hint.isFailure)
-    }
-
-    @Test func aRuntimeErrorIsAFailureForTheMenu() {
-        #expect(ModelListHint.runtimeError("not_installed").isFailure)
-        #expect(!ModelListHint.none.isFailure)
     }
 }

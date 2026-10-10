@@ -6,6 +6,7 @@
 //! Stdout carries the protocol only, so logs must go to stderr.
 
 use crate::rpc::unix::call_agent;
+use crate::store::{ALL_CAPABILITIES, Capability};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -110,8 +111,8 @@ fn text_of(v: Value, method: &str) -> Result<String> {
 }
 
 /// Serve MCP until the reader reaches EOF. Every request gets one reply line;
-/// notifications (no `id`) get none.
-pub async fn serve<R, W>(mut reader: R, mut writer: W, backend: &dyn CrewBackend) -> Result<()>
+/// notifications (no `id`) get none. `on` are the agent's capabilities: only their tools are served.
+pub async fn serve<R, W>(mut reader: R, mut writer: W, backend: &dyn CrewBackend, on: &[Capability]) -> Result<()>
 where
     R: AsyncBufRead + Unpin,
     W: AsyncWrite + Unpin,
@@ -129,7 +130,7 @@ where
                 if line.trim().is_empty() {
                     continue;
                 }
-                if let Some(reply) = handle_line(&line, backend).await {
+                if let Some(reply) = handle_line(&line, backend, on).await {
                     write_reply(&mut writer, &reply).await?;
                 }
             }
@@ -189,7 +190,7 @@ async fn write_reply<W: AsyncWrite + Unpin>(writer: &mut W, reply: &Value) -> Re
 }
 
 /// Reply to one incoming line, or `None` when no reply is due.
-async fn handle_line(line: &str, backend: &dyn CrewBackend) -> Option<Value> {
+async fn handle_line(line: &str, backend: &dyn CrewBackend, on: &[Capability]) -> Option<Value> {
     let Ok(msg) = serde_json::from_str::<Value>(line) else {
         return Some(error_reply(Value::Null, PARSE_ERROR, "parse error"));
     };
@@ -199,8 +200,8 @@ async fn handle_line(line: &str, backend: &dyn CrewBackend) -> Option<Value> {
     let outcome: Result<Value, Fault> = match method {
         "initialize" => Ok(initialize(&params)),
         "ping" => Ok(json!({})),
-        "tools/list" => Ok(json!({ "tools": tools_list() })),
-        "tools/call" => call_tool(&params, backend).await,
+        "tools/list" => Ok(json!({ "tools": tools_list(on) })),
+        "tools/call" => call_tool(&params, backend, on).await,
         "" => Err((INVALID_REQUEST, "invalid request: no method".into())),
         other => Err((METHOD_NOT_FOUND, format!("Method not found: {other}"))),
     };
@@ -228,7 +229,8 @@ fn initialize(params: &Value) -> Value {
     })
 }
 
-fn tools_list() -> Vec<Value> {
+/// The tools served to an agent with these capabilities. A tool of a capability the agent lacks is not listed.
+fn tools_list(on: &[Capability]) -> Vec<Value> {
     let mut tools = vec![
         crew_list_tool(),
         crew_send_tool(),
@@ -237,7 +239,18 @@ fn tools_list() -> Vec<Value> {
     ];
     tools.extend(screen_tools());
     tools.extend(browser_tool_defs());
+    tools.retain(|t| capability_of(t["name"].as_str().unwrap_or_default()).is_none_or(|c| on.contains(&c)));
     tools
+}
+
+/// The capability a tool needs; `None` for the tools every agent has (the history tools).
+fn capability_of(tool: &str) -> Option<Capability> {
+    match tool {
+        "crew_list" | "crew_send" => Some(Capability::Team),
+        t if BROWSER_TOOLS.contains(&t) => Some(Capability::Browser),
+        t if SCREEN_TOOLS.iter().any(|(name, _)| *name == t) => Some(Capability::Screen),
+        _ => None,
+    }
 }
 
 fn crew_list_tool() -> Value {
@@ -297,9 +310,13 @@ fn history_day_tool() -> Value {
     })
 }
 
-async fn call_tool(params: &Value, backend: &dyn CrewBackend) -> Result<Value, Fault> {
+async fn call_tool(params: &Value, backend: &dyn CrewBackend, on: &[Capability]) -> Result<Value, Fault> {
     let name = params.get("name").and_then(Value::as_str).unwrap_or_default();
     let args = params.get("arguments").cloned().unwrap_or(Value::Null);
+    // A tool of a capability the agent lacks is unknown to it, as if it were never registered.
+    if capability_of(name).is_some_and(|c| !on.contains(&c)) {
+        return Err((INVALID_PARAMS, format!("Unknown tool: {name}")));
+    }
     match name {
         "crew_list" => Ok(tool_result(crew_list(backend).await)),
         "crew_send" => Ok(tool_result(crew_send(&args, backend).await)),
@@ -687,7 +704,7 @@ async fn history_day(args: &Value, backend: &dyn CrewBackend) -> Result<String, 
 
 /// Run the crew MCP server on stdin/stdout, for the agent whose session token it is given: from
 /// `token_file` when one is named (the daemon's way), else from `BANDITO_AGENT_TOKEN`.
-pub async fn serve_stdio(sock: PathBuf, token_file: Option<PathBuf>) -> Result<()> {
+pub async fn serve_stdio(sock: PathBuf, token_file: Option<PathBuf>, capabilities: Option<String>) -> Result<()> {
     let from_file = match &token_file {
         Some(path) => Some(
             std::fs::read_to_string(path).with_context(|| format!("read the agent token file {}", path.display()))?,
@@ -695,8 +712,21 @@ pub async fn serve_stdio(sock: PathBuf, token_file: Option<PathBuf>) -> Result<(
         None => None,
     };
     let token = token_from(from_file.as_deref(), std::env::var("BANDITO_AGENT_TOKEN").ok())?;
+    let on = parse_capabilities(capabilities.as_deref())?;
     let backend = DaemonBackend { sock, token };
-    serve(BufReader::new(tokio::io::stdin()), tokio::io::stdout(), &backend).await
+    serve(BufReader::new(tokio::io::stdin()), tokio::io::stdout(), &backend, &on).await
+}
+
+/// The `--capabilities` list of `bandito mcp`: comma-separated names. Missing means all of them; empty means none.
+fn parse_capabilities(list: Option<&str>) -> Result<Vec<Capability>> {
+    let Some(list) = list else {
+        return Ok(ALL_CAPABILITIES.to_vec());
+    };
+    list.split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| Capability::parse(s).ok_or_else(|| anyhow::anyhow!("unknown capability {s}")))
+        .collect()
 }
 
 /// The session token: the token file's contents when a file is named, else `BANDITO_AGENT_TOKEN`.
@@ -809,10 +839,14 @@ mod tests {
         }
     }
 
-    /// Feed raw input through `serve` and parse every reply line.
+    /// Feed raw input through `serve` and parse every reply line. The agent has every capability.
     async fn replies(input: &str, backend: &MockBackend) -> Vec<Value> {
+        replies_with(input, backend, &ALL_CAPABILITIES).await
+    }
+
+    async fn replies_with(input: &str, backend: &MockBackend, on: &[Capability]) -> Vec<Value> {
         let mut out = Vec::new();
-        serve(input.as_bytes(), &mut out, backend).await.unwrap();
+        serve(input.as_bytes(), &mut out, backend, on).await.unwrap();
         String::from_utf8(out)
             .unwrap()
             .lines()
@@ -1275,5 +1309,91 @@ mod tests {
         let all = replies(input, &backend).await;
         let ids: Vec<&Value> = all.iter().map(|r| &r["id"]).collect();
         assert_eq!(ids, [&json!(1), &json!(2)]);
+    }
+
+    /// The tool names an agent with these capabilities gets from `tools/list`.
+    async fn listed(on: &[Capability]) -> Vec<String> {
+        let backend = MockBackend::default();
+        let request = json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/list" });
+        let r = replies_with(&format!("{request}\n"), &backend, on).await.remove(0);
+        r["result"]["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t["name"].as_str().unwrap().to_string())
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn each_capability_switches_its_own_tools() {
+        let all = listed(&ALL_CAPABILITIES).await;
+        assert!(all.iter().any(|n| n == "crew_send") && all.iter().any(|n| n == "browser_open"));
+        assert!(all.iter().any(|n| n == "screen_click"));
+
+        let no_browser = listed(&[
+            Capability::Terminal,
+            Capability::Files,
+            Capability::Team,
+            Capability::Screen,
+        ])
+        .await;
+        assert!(!no_browser.iter().any(|n| n.starts_with("browser_")));
+        assert!(no_browser.iter().any(|n| n == "screen_click") && no_browser.iter().any(|n| n == "crew_list"));
+
+        let no_team = listed(&[Capability::Browser, Capability::Screen]).await;
+        assert!(!no_team.iter().any(|n| n.starts_with("crew_")));
+        assert!(no_team.iter().any(|n| n == "browser_open"));
+
+        let no_screen = listed(&[Capability::Browser, Capability::Team]).await;
+        assert!(!no_screen.iter().any(|n| n.starts_with("screen_")));
+
+        // The shell and the files are not MCP tools: they change the settings, not this list.
+        assert_eq!(
+            listed(&[Capability::Terminal, Capability::Files]).await,
+            ["history_search", "history_day"]
+        );
+        assert_eq!(listed(&[]).await, ["history_search", "history_day"]);
+    }
+
+    #[tokio::test]
+    async fn a_tool_of_a_missing_capability_is_unknown_and_never_reaches_the_daemon() {
+        let backend = MockBackend::default();
+        let browser = format!(
+            "{}\n",
+            tool_call("browser_open", json!({ "url": "https://example.com" }))
+        );
+        let r = replies_with(&browser, &backend, &[Capability::Team]).await.remove(0);
+        assert_eq!(r["error"]["code"], json!(INVALID_PARAMS));
+        assert!(
+            r["error"]["message"]
+                .as_str()
+                .unwrap()
+                .contains("Unknown tool: browser_open")
+        );
+
+        let send = format!(
+            "{}\n",
+            tool_call("crew_send", json!({ "to": "Scout", "message": "hi" }))
+        );
+        let r = replies_with(&send, &backend, &[Capability::Browser]).await.remove(0);
+        assert_eq!(r["error"]["code"], json!(INVALID_PARAMS));
+        assert!(backend.sent.lock().unwrap().is_empty());
+
+        // The history tools need no capability.
+        let history = format!("{}\n", tool_call("history_search", json!({ "query": "x" })));
+        let r = replies_with(&history, &backend, &[]).await.remove(0);
+        assert_eq!(r["result"]["isError"], json!(false));
+    }
+
+    #[test]
+    fn the_capabilities_flag_names_the_granted_ones() {
+        assert_eq!(parse_capabilities(None).unwrap(), ALL_CAPABILITIES.to_vec());
+        assert!(parse_capabilities(Some("")).unwrap().is_empty());
+        assert_eq!(
+            parse_capabilities(Some("browser, team")).unwrap(),
+            [Capability::Browser, Capability::Team]
+        );
+        let err = parse_capabilities(Some("browser,shell")).unwrap_err().to_string();
+        assert!(err.contains("unknown capability shell"), "{err}");
     }
 }

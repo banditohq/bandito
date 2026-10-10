@@ -90,4 +90,31 @@ import Testing
         #expect(!LocalDaemonUpgrade.isThisMac(ServerConfig(
             name: "LAN", endpoint: .webSocket(url: try #require(URL(string: "ws://192.168.1.20:7878/v1/rpc"))))))
     }
+
+    @Test func standingIsCheckingBeforeTheBundleIsRead() {
+        let standing = LocalDaemonUpgrade.standing(
+            bundleRead: false, bundledVersion: "0.1.3", serverVersion: "0.1.3", isLocalServer: true, isQA: false)
+        #expect(standing == .checking)
+    }
+
+    @Test func standingIsUnknownWhenAVersionIsMissingOrUnreadable() {
+        let cases: [(String?, String?)] = [(nil, "0.1.3"), ("0.1.3", nil), ("dev", "0.1.3"), ("0.1.3", "nightly")]
+        for (bundled, server) in cases {
+            let standing = LocalDaemonUpgrade.standing(
+                bundleRead: true, bundledVersion: bundled, serverVersion: server, isLocalServer: true, isQA: false)
+            #expect(standing == .unknown)
+        }
+    }
+
+    @Test func standingIsDueOnlyForANewerBundledDaemon() {
+        #expect(LocalDaemonUpgrade.standing(
+            bundleRead: true, bundledVersion: "0.1.4", serverVersion: "0.1.3", isLocalServer: true, isQA: false)
+            == .due(bundled: "0.1.4"))
+        #expect(LocalDaemonUpgrade.standing(
+            bundleRead: true, bundledVersion: "0.1.3", serverVersion: "0.1.3", isLocalServer: true, isQA: false)
+            == .upToDate)
+        #expect(LocalDaemonUpgrade.standing(
+            bundleRead: true, bundledVersion: "0.1.4", serverVersion: "0.1.3", isLocalServer: true, isQA: true)
+            == .upToDate)
+    }
 }

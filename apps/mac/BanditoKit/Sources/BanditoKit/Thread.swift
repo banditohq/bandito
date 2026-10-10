@@ -40,6 +40,8 @@ public struct ToolRow: Sendable, Hashable {
     /// `nil` while running.
     public var ok: Bool?
     public var output: String?
+    /// Unix milliseconds when the call started; `nil` when the event did not say.
+    public var startedAt: Int64? = nil
 }
 
 public enum ApprovalState: Sendable, Hashable {
@@ -159,7 +161,8 @@ public struct AgentThread: Sendable, Hashable {
                     items[i] = .tool(row)
                 }
             } else {
-                items.append(.tool(ToolRow(callId: callId, tool: tool, title: title, ok: nil, output: nil)))
+                items.append(
+                    .tool(ToolRow(callId: callId, tool: tool, title: title, ok: nil, output: nil, startedAt: e.ts)))
             }
         case .toolResult(let callId, let ok, let output):
             if let i = toolIndex(callId), case .tool(var row) = items[i] {
@@ -212,7 +215,8 @@ public struct AgentThread: Sendable, Hashable {
             items.append(.chapter(id: e.id, number: chapter, saved: !unsaved, ts: e.ts))
         case .runtimeSwitched(let from, let to, let until):
             items.append(.runtimeSwitch(id: e.id, from: from, to: to, until: until, ts: e.ts))
-        case .usageLimits, .unknown:
+        case .usageLimits, .agentChanged, .unknown:
+            // Not part of a thread: the team's agent list reads its own records.
             break
         }
     }

@@ -79,9 +79,9 @@ targets:
         ENABLE_USER_SCRIPT_SANDBOXING: NO
         PRODUCT_NAME: Bandito
         PRODUCT_BUNDLE_IDENTIFIER: dev.bandito.mac
-        MARKETING_VERSION: 0.1.3
+        MARKETING_VERSION: 0.1.4
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        CURRENT_PROJECT_VERSION: 238
+        CURRENT_PROJECT_VERSION: 250
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Bandito
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools

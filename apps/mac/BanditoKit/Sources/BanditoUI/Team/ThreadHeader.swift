@@ -17,23 +17,38 @@ struct ThreadHeader: View {
     var showsTerminal: Bool
     /// The models each runtime offers, to show a model's name rather than its id.
     var models: [String: RuntimeModelList] = [:]
+    /// Opens the agent's inspector on its details tab. The capsule is the button.
+    var onInspect: () -> Void = {}
+    /// The server's main agent: a crown on the avatar.
+    var isLead = false
     var onChanges: () -> Void = {}
     var onTerminal: () -> Void = {}
     var onSchedules: () -> Void = {}
-    var onDetails: () -> Void = {}
+    /// Opens or closes the workbench panel.
+    var onTogglePanel: () -> Void = {}
+    /// The agent's browser tool is running and the browser is not open in the panel: the chip is shown.
+    var showsBrowserChip = false
+    var onShowBrowser: () -> Void = {}
 
     var body: some View {
         // Centered when there is room; on a narrow window the capsule sits on the left and gives up its caption, and
         // never runs under the buttons.
         HStack(spacing: 10) {
             Color.clear.frame(width: 0)
-            ViewThatFits(in: .horizontal) {
-                capsule(showsCaption: true)
-                capsule(showsCaption: false)
+            Button(action: onInspect) {
+                ViewThatFits(in: .horizontal) {
+                    capsule(showsCaption: true)
+                    capsule(showsCaption: false)
+                }
             }
+            .banditoButton(.row(cornerRadius: 18, hoverOpacity: 0.06))
+            .help(L10n.Team.Header.openInspector)
             .frame(maxWidth: .infinity)
             .layoutPriority(1)
             HStack(spacing: 6) {
+                if showsBrowserChip {
+                    browserChip
+                }
                 if showsChanges {
                     changesButton
                 }
@@ -41,12 +56,13 @@ struct ThreadHeader: View {
                     iconButton("terminal", help: L10n.Team.Header.terminal, action: onTerminal)
                 }
                 iconButton("clock", help: L10n.Team.Header.schedules, action: onSchedules)
-                iconButton("sidebar.right", help: L10n.Inspector.toggleAria, action: onDetails)
+                iconButton("sidebar.right", help: L10n.Workbench.togglePanel, action: onTogglePanel)
             }
             .fixedSize()
         }
         .padding(.horizontal, 16)
         .frame(height: 52)
+        .titleBarZoomOnDoubleClick()
         .overlay(alignment: .bottom) {
             Rectangle().fill(Color.Bandito.text.opacity(0.05)).frame(height: 1)
         }
@@ -57,6 +73,12 @@ struct ThreadHeader: View {
             AgentAvatar(
                 name: agent.name, size: 26,
                 mood: AvatarMood.make(status: status, turnRunning: turnRunning, paused: agent.paused))
+                .overlay(alignment: .topTrailing) {
+                    if isLead {
+                        LeadCrown(size: 11)
+                            .offset(x: 4, y: -4)
+                    }
+                }
             Text(agent.name)
                 .font(BanditoFont.font(size: 13, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
@@ -123,6 +145,32 @@ struct ThreadHeader: View {
         }
         .banditoButton(.row(cornerRadius: 15, hoverOpacity: 0.08))
         .help(L10n.Team.changes)
+    }
+
+    /// "The agent is using the browser · Show": opens the browser tab of the panel.
+    private var browserChip: some View {
+        Button(action: onShowBrowser) {
+            HStack(spacing: 7) {
+                Image(systemName: "globe")
+                    .font(.system(size: 12, weight: .medium))
+                Text(L10n.Workbench.agentInBrowser)
+                    .lineLimit(1)
+                    .fixedSize()
+                Rectangle().fill(Color.Bandito.text.opacity(0.12)).frame(width: 1, height: 12)
+                Text(L10n.Workbench.show)
+                    .font(BanditoFont.font(size: 12, weight: 600))
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+            .font(BanditoFont.font(size: 12, weight: 500))
+            .foregroundStyle(Color.Bandito.text2)
+            .padding(.horizontal, 11)
+            .frame(height: 30)
+            .background(Color.Bandito.text.opacity(0.05), in: Capsule())
+            .overlay(Capsule().stroke(Color.Bandito.line, lineWidth: 1))
+        }
+        .banditoButton(.row(cornerRadius: 15, hoverOpacity: 0.08))
+        .help(L10n.Workbench.agentInBrowser)
     }
 
     private func iconButton(_ symbol: String, help: String, action: @escaping () -> Void) -> some View {

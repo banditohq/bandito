@@ -21,6 +21,7 @@ struct Composer: View {
     var onStop: () -> Void
 
     @Environment(Router.self) private var router
+    @Environment(AppModel.self) private var app
     @FocusState private var focused: Bool
     @State private var slash = SlashMenuModel()
 
@@ -274,11 +275,10 @@ struct Composer: View {
             router.openInspector(.memory)
         case .changes:
             draft = ""
-            router.sheet = .changes(agentID: agent.id)
+            router.showInWorkbench(.changes, agentID: agent.id)
         case .terminal:
             draft = ""
-            router.pendingTerminalCwd = agent.cwd
-            router.select(mode: .terminals)
+            showAgentTerminal(agent: agent, server: server)
         case .files:
             draft = ""
             router.filesPath = agent.cwd
@@ -302,6 +302,13 @@ struct Composer: View {
                 slash.notice = UserFacingError.message(for: error)
             }
         }
+    }
+
+    /// `/terminal`: the agent's terminal in the workbench panel, as the header's terminal button does.
+    private func showAgentTerminal(agent: Agent, server: ServerModel) {
+        #if os(macOS)
+        WorkbenchTerminals.showAgentTerminal(server: server, agent: agent, app: app, router: router)
+        #endif
     }
 
     private func perform(_ operation: @escaping () async throws -> Void) {

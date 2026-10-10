@@ -15,35 +15,20 @@ struct UpdatesView: View {
                 let available = release.updateAvailable(current: info.version)
                 ServerCard {
                     row(L10n.Updates.daemonVersion, info.version)
-                    row(L10n.Updates.latestVersion, release.latest?.description ?? L10n.Updates.unknown, mono: release.latest != nil)
+                    row(L10n.Updates.latestVersion, latestText(current: info.version), mono: latestIsVersion(current: info.version))
                     HStack {
                         Text(available ? L10n.Updates.available : L10n.Updates.upToDate)
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(Color.Bandito.text)
                         Spacer(minLength: 8)
                         Chip(text: available ? L10n.Updates.badgeNew : L10n.Updates.badgeCurrent, tone: available ? .signal : .ok)
+                            .fixedSize()
                     }
                 }
                 ServerCard {
                     SectionLabel(L10n.Updates.howTitle)
-                    Text(L10n.Updates.howText)
-                        .font(.system(size: 13))
-                        .foregroundStyle(Color.Bandito.text2)
-                        .lineSpacing(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(ReleaseFeed.installCommand)
-                        .font(.system(size: 12, design: .monospaced))
-                        .foregroundStyle(Color.Bandito.text)
-                        .textSelection(.enabled)
-                        .padding(10)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.Bandito.bg, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    HStack {
-                        Spacer()
-                        Button(L10n.Updates.howButton) {
-                            router.requestTerminalCommand(ReleaseFeed.installCommand)
-                        }
-                        .banditoButton(.signal())
+                    ServerUpdateActions(server: server) {
+                        router.requestTerminalCommand(ReleaseFeed.installCommand)
                     }
                 }
             } else {
@@ -51,6 +36,17 @@ struct UpdatesView: View {
             }
         }
         .task { await release.load() }
+    }
+
+    /// The newest release, unless the daemon already runs it or a newer one: then the line says so.
+    private func latestText(current: String) -> String {
+        if latestIsVersion(current: current) { return release.latest?.description ?? "" }
+        return release.latest == nil ? L10n.Updates.unknown : L10n.Updates.mostRecent
+    }
+
+    /// Whether the line shows a version number (monospaced) rather than a word.
+    private func latestIsVersion(current: String) -> Bool {
+        release.latest != nil && ReleaseFeed.standing(installed: current, latest: release.latest) != .upToDate
     }
 
     /// A label and a value. Versions are monospaced; the words for "unknown" are regular text.

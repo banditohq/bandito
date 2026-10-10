@@ -28,6 +28,7 @@ import Testing
             "host.processes": { _ in #"{"supported":true,"owners":[]}"# },
             "host.ports": { _ in #"{"supported":false,"ports":[]}"# },
             "host.kill": { _ in "{}" },
+            "host.kill_process": { _ in #"{"ok":true,"killed":true}"# },
             "secrets.list": { _ in "[\(secret)]" },
             "secrets.set": { _ in secret },
             "secrets.delete": { _ in #"{"deleted":true}"# },
@@ -116,6 +117,8 @@ import Testing
         #expect(try await model.hostPorts().ports.isEmpty)
         try await model.kill(pid: 42)
         #expect(intValue(await lastParams("host.kill", fake)["pid"]) == 42)
+        #expect(try await model.killProcess(pid: 7) == true)
+        #expect(intValue(await lastParams("host.kill_process", fake)["pid"]) == 7)
         await model.disconnect()
     }
 

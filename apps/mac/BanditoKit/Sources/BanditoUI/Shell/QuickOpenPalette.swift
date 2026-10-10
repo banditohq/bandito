@@ -311,11 +311,11 @@ struct QuickOpenPalette: View {
     }
 
     private var terminalRows: [PaletteRow] {
-        let matches = FuzzyMatch.rank(query, terminals) { $0.info.title }
+        let matches = FuzzyMatch.rank(query, terminals) { $0.name }
         return matches.map { ranked in
             let item = ranked.item
             return PaletteRow(
-                id: "terminal-\(item.server.id)-\(item.info.id)", kind: .files, title: item.info.title,
+                id: "terminal-\(item.server.id)-\(item.info.id)", kind: .files, title: item.name,
                 ranges: ranked.match.ranges, subtitle: item.info.cwd, monoSubtitle: true,
                 leading: AnyView(IconTile(symbol: "terminal")), trailing: L10n.Palette.tagTerminal,
                 enabled: true,
@@ -387,7 +387,8 @@ struct QuickOpenPalette: View {
     private func loadTerminals() async -> [PaletteTerminal] {
         guard let server = app.currentServer, server.supports("terminals") else { return [] }
         let list = (try? await server.terminals()) ?? []
-        return list.map { PaletteTerminal(server: server, info: $0) }
+        let names = TerminalNames.names(for: list, agents: server.agents)
+        return list.map { PaletteTerminal(server: server, info: $0, name: names[$0.id] ?? $0.title) }
     }
 
     private func loadPorts() async -> [PalettePort] {
@@ -455,6 +456,8 @@ private struct PaletteRow: Identifiable {
 private struct PaletteTerminal {
     let server: ServerModel
     let info: TermInfo
+    /// The name the terminal has on screen.
+    let name: String
 }
 
 private struct PalettePort {

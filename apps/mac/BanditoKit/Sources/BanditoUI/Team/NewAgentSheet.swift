@@ -23,6 +23,18 @@ struct NewAgentSheet: View {
 
     private var server: ServerModel? { app.currentServer }
 
+    /// Asks the server for its model lists again (the model picker's "Повторить").
+    private var retryModels: (() -> Void)? {
+        guard let server else { return nil }
+        return { Task { try? await server.refreshRuntimeModels(refresh: true) } }
+    }
+
+    /// Updates this Mac's server to the app's daemon (the model picker's "Обновить"). Only for this Mac's own server.
+    private var updateThisMac: (() -> Void)? {
+        guard let server, server.isThisMacServer else { return nil }
+        return { Task { await app.localUpgrade.upgradeByRequest(server) } }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -111,34 +123,7 @@ struct NewAgentSheet: View {
                 Text(L10n.AgentSheet.title)
                     .font(BanditoFont.font(size: 20, weight: 650))
                     .foregroundStyle(Color.Bandito.text)
-                HStack(spacing: 7) {
-                    ForEach(AvatarColor.allCases, id: \.self) { color in
-                        Button {
-                            draft.color = color
-                        } label: {
-                            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                .fill(color.color)
-                                .frame(width: 22, height: 22)
-                                .overlay {
-                                    if draft.color == color {
-                                        RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                            .stroke(color.color, lineWidth: 1.5)
-                                            .frame(width: 28, height: 28)
-                                    }
-                                }
-                        }
-                        .banditoButton(.row(cornerRadius: 9, hoverOpacity: 0.08))
-                        .accessibilityLabel(colorName(color))
-                        .accessibilityAddTraits(draft.color == color ? .isSelected : [])
-                    }
-                    Rectangle().fill(Color.Bandito.text.opacity(0.1)).frame(width: 1, height: 18).padding(.horizontal, 3)
-                    Text(L10n.AgentSheet.faceLabel)
-                        .font(BanditoFont.font(size: 12, weight: 400))
-                        .foregroundStyle(Color.Bandito.text3)
-                    ForEach(AvatarFace.faces, id: \.self) { face in
-                        faceButton(face)
-                    }
-                }
+                AvatarStylePicker(color: $draft.color, face: $draft.face)
             }
             Spacer(minLength: 0)
             Menu {
@@ -164,25 +149,6 @@ struct NewAgentSheet: View {
         }
         .padding(.horizontal, 28)
         .padding(.vertical, 18)
-    }
-
-    private func faceButton(_ face: AvatarFace) -> some View {
-        let selected = draft.face == face
-        return Button {
-            draft.face = face
-        } label: {
-            Text(AvatarFace.glyph(face))
-                .font(BanditoFont.font(size: 12, weight: 400, mono: true))
-                .foregroundStyle(selected ? Color.Bandito.text : Color.Bandito.text3)
-                .padding(.horizontal, 7)
-                .padding(.vertical, 2)
-                .background(
-                    selected ? Color.Bandito.text.opacity(0.1) : Color.clear,
-                    in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-        }
-        .banditoButton(.row(cornerRadius: 6, hoverOpacity: 0.08))
-        .accessibilityLabel(faceName(face))
-        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     // MARK: Left column
@@ -211,7 +177,8 @@ struct NewAgentSheet: View {
                 ModelPicker(
                     runtime: draft.runtime, selection: $draft.model,
                     models: server?.runtimeModels[draft.runtime.rawValue],
-                    status: server?.runtimeModelsStatus ?? .unknown)
+                    status: server?.runtimeModelsStatus ?? .unknown,
+                    onRetry: retryModels, onUpdate: updateThisMac)
             }
             if effortLevels.isEmpty {
                 Text(L10n.ModelPicker.noEffort)
@@ -241,7 +208,8 @@ struct NewAgentSheet: View {
                     ModelPicker(
                         runtime: fallback, selection: $draft.fallbackModel,
                         models: server?.runtimeModels[fallback.rawValue],
-                        status: server?.runtimeModelsStatus ?? .unknown)
+                        status: server?.runtimeModelsStatus ?? .unknown,
+                        onRetry: retryModels, onUpdate: updateThisMac)
                 }
             }
             Text(L10n.AgentSheet.fallbackHint)
@@ -261,6 +229,10 @@ struct NewAgentSheet: View {
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                     .background(Color.Bandito.bg, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.Bandito.line))
+            }
+
+            labeled(L10n.Capability.title) {
+                CapabilityChips(enabled: $draft.capabilities)
             }
         }
         // A model that takes fewer levels (or a list that arrives late) moves the effort to the nearest level it takes.
@@ -885,25 +857,6 @@ struct NewAgentSheet: View {
         case .smart: L10n.Memory.smartChapters
         case .daily: L10n.Memory.daily
         case .full: L10n.Memory.full
-        }
-    }
-
-    private func colorName(_ color: AvatarColor) -> String {
-        switch color {
-        case .peach: L10n.AgentSheet.colorPeach
-        case .sky: L10n.AgentSheet.colorSky
-        case .sage: L10n.AgentSheet.colorSage
-        case .rose: L10n.AgentSheet.colorRose
-        case .lilac: L10n.AgentSheet.colorLilac
-        case .cream: L10n.AgentSheet.colorCream
-        }
-    }
-
-    private func faceName(_ face: AvatarFace) -> String {
-        switch face {
-        case .auto, .chevronDash: L10n.AgentSheet.faceSquint
-        case .dots: L10n.AgentSheet.faceDots
-        case .carets: L10n.AgentSheet.faceSmile
         }
     }
 }

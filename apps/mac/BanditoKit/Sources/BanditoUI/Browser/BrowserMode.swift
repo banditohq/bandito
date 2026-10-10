@@ -58,7 +58,7 @@ private struct BrowserContent: View {
 }
 
 /// The main area: toolbar, the control banner, and the page (or the preview, or an empty state).
-private struct BrowserMainArea: View {
+struct BrowserMainArea: View {
     @Bindable var model: BrowserModel
     @Environment(Router.self) private var router
 
@@ -160,6 +160,7 @@ private struct BrowserToolbar: View {
         }
         .padding(.horizontal, 14)
         .frame(height: 52)
+        .titleBarZoomOnDoubleClick()
         .background(Color.Bandito.bg)
         .overlay(alignment: .bottom) {
             Rectangle().fill(Color.Bandito.text.opacity(0.05)).frame(height: 1)

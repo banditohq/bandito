@@ -495,13 +495,13 @@ private func steps(_ runner: ScriptedRunner) -> [String] {
     @Test func aReleaseThatIsStillBeingPublishedStopsBeforeAnythingIsSent() async throws {
         let source = FakeReleaseSource(
             archive: TestRelease.archive, sums: Data(), signatureBase64: "",
-            failure: .releaseStillPublishing("v0.1.0"))
+            failure: .releaseStillPublishing("0.2.0"))
         let runner = ScriptedRunner(respond: DaemonAnswers.answer(probe: DaemonAnswers.probeNew))
         let installer = makeInstaller(runner: runner, redeem: RedeemLog(), script: { self.script }, source: source)
 
         let events = await collect(installer.install(target: target, deviceName: "Test Mac"))
 
-        #expect(failure(events) == .releaseStillPublishing("v0.1.0"))
+        #expect(failure(events) == .releaseStillPublishing("0.2.0"))
         #expect(steps(runner) == [DaemonAnswers.probeCommand])
     }
 

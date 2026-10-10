@@ -84,6 +84,18 @@ public struct LastMessage: Codable, Sendable, Hashable {
     }
 }
 
+/// How an agent's avatar looks: the tile color and the face, by their wire names (`AvatarColor`, `AvatarFace` in the
+/// UI). The daemon may not have the field yet; `nil` on `Agent` means the look is derived from the name.
+public struct AvatarSpec: Codable, Sendable, Hashable {
+    public var color: String
+    public var face: String
+
+    public init(color: String, face: String) {
+        self.color = color
+        self.face = face
+    }
+}
+
 public struct Agent: Codable, Sendable, Identifiable, Hashable {
     public var id: String
     public var name: String
@@ -118,6 +130,10 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
     public var workspaceId: String
     /// Paused: messages wait in the thread and no session starts until it is resumed (`agents.update {paused}`).
     public var paused: Bool
+    /// The avatar the owner chose; `nil` = derived from the name. Wire field `avatar` (not yet sent by every daemon).
+    public var avatar: AvatarSpec?
+    /// What the agent may do: `terminal`, `files`, `browser`, `team`, `screen`. `nil` = everything (see `AgentCapability`).
+    public var capabilities: [String]?
     /// The newest user or assistant message; `nil` when there is none, or when the daemon predates the field.
     public var lastMessage: LastMessage?
     /// The status from the agent's newest `agent.status` event; `nil` before any, or when the daemon predates the field.
@@ -149,8 +165,12 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
         pendingApprovals: Int = 0,
         pendingApprovalIds: Set<String> = [],
         reportsPendingApprovalIds: Bool = false,
-        reportsLastMessage: Bool = true
+        reportsLastMessage: Bool = true,
+        avatar: AvatarSpec? = nil,
+        capabilities: [String]? = nil
     ) {
+        self.avatar = avatar
+        self.capabilities = capabilities
         self.workspaceId = workspaceId
         self.id = id
         self.name = name
@@ -210,6 +230,8 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
         paused = try c.decodeIfPresent(Bool.self, forKey: .paused) ?? false
         lastMessage = try c.decodeIfPresent(LastMessage.self, forKey: .lastMessage)
         reportsLastMessage = c.contains(.lastMessage)
+        avatar = try c.decodeIfPresent(AvatarSpec.self, forKey: .avatar)
+        capabilities = try c.decodeIfPresent([String].self, forKey: .capabilities)
         status = try c.decodeIfPresent(AgentStatus.self, forKey: .status)
         pendingApprovals = try c.decodeIfPresent(Int.self, forKey: .pendingApprovals) ?? 0
         pendingApprovalIds = Set(try c.decodeIfPresent([String].self, forKey: .pendingApprovalIds) ?? [])
@@ -233,13 +255,20 @@ public struct NewAgent: Codable, Sendable {
     public var fallbackModel: String?
     /// The workspace to run in; omitted from the request when `nil` (the daemon uses `shared`).
     public var workspaceId: String?
+    /// Sent only when set; a daemon without the field ignores it.
+    public var avatar: AvatarSpec?
+    /// Sent only when set (see `Agent.capabilities`).
+    public var capabilities: [String]?
 
     public init(
         name: String, role: String = "", runtime: RuntimeKind, model: String? = nil, cwd: String,
         approvalMode: ApprovalMode = .risky, systemPrompt: String? = nil,
         effort: Effort? = nil, memoryMode: MemoryMode = .smart, contextBudget: Int? = nil,
-        fallbackRuntime: RuntimeKind? = nil, fallbackModel: String? = nil, workspaceId: String? = nil
+        fallbackRuntime: RuntimeKind? = nil, fallbackModel: String? = nil, workspaceId: String? = nil,
+        avatar: AvatarSpec? = nil, capabilities: [String]? = nil
     ) {
+        self.avatar = avatar
+        self.capabilities = capabilities
         self.workspaceId = workspaceId
         self.fallbackRuntime = fallbackRuntime
         self.fallbackModel = fallbackModel
@@ -339,6 +368,11 @@ public struct UsageEntry: Codable, Sendable, Hashable {
     }
 }
 
+/// What happened to an agent's record (`agent_changed` events).
+public enum AgentChange: String, Codable, Sendable, Hashable {
+    case created, updated, deleted
+}
+
 /// The typed body of an event (`kind` + `payload` on the wire).
 public enum EventBody: Sendable, Hashable {
     case turnStarted(turnId: String, source: MessageSource)
@@ -361,6 +395,8 @@ public enum EventBody: Sendable, Hashable {
     /// The agent moved to another runtime: to its fallback when the limit ran out, or back to the primary.
     /// `until` is when the limit resets (Unix seconds), if the daemon knows it.
     case runtimeSwitched(from: String, to: String, until: Int64?)
+    /// An agent's record was created, changed or deleted, by any client. Read `agents.list` to see the change.
+    case agentChanged(action: AgentChange)
     case error(message: String)
     /// A kind this app version doesn't know yet. Shown as nothing; kept for forward compatibility.
     case unknown(kind: String)
@@ -408,6 +444,7 @@ extension Event: Decodable {
     private struct SessionRotatedP: Decodable { var chapter: Int; var reason: String; var contextTokens: Int }
     private struct RuntimeSwitchedP: Decodable { var from: String; var to: String; var until: Int64? }
     private struct ErrorP: Decodable { var message: String }
+    private struct AgentChangedRawP: Decodable { var action: String }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
@@ -451,6 +488,14 @@ extension Event: Decodable {
         case "runtime.switched":
             let x = try p(RuntimeSwitchedP.self)
             body = .runtimeSwitched(from: x.from, to: x.to, until: x.until)
+        case "agent_changed":
+            // An action this app does not know is kept as an unknown event, not a decode failure.
+            let raw = try p(AgentChangedRawP.self).action
+            if let action = AgentChange(rawValue: raw) {
+                body = .agentChanged(action: action)
+            } else {
+                body = .unknown(kind: kind)
+            }
         case "error": body = .error(message: try p(ErrorP.self).message)
         default: body = .unknown(kind: kind)
         }

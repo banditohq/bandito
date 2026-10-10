@@ -21,12 +21,14 @@ struct TeamSidebar: View {
 
     @ViewBuilder
     private func content(_ server: ServerModel) -> some View {
-        let agents = server.sortedAgents
+        // The main agent goes first in the whole list, before the list is split into its groups.
+        let lead = LeadAgentStore.shared.id(server: server.id.uuidString)
+        let agents = LeadAgent.leadFirst(server.sortedAgents, id: \.id, lead: lead)
         let shown = TeamSelection.shownAgentID(server: server, selected: router.selectedAgentID, pinned: Set(pins.ids))
         let waiting = agents.filter { server.needsPerson($0.id) }
         let waitingIDs = Set(waiting.map(\.id))
         let others = agents.filter { !waitingIDs.contains($0.id) }
-        // The grid holds two tiles; further pins stay pinned but are not shown as tiles.
+        // The pinned row holds up to `pinnedTiles`; further pins stay pinned but are not in the row.
         let pinned = Array(agents.filter { pins.isPinned($0.id) }.prefix(TeamSidebarOrder.pinnedTiles))
 
         ScrollView {
@@ -59,7 +61,9 @@ struct TeamSidebar: View {
                         .padding(.bottom, 6)
                     VStack(spacing: 2) {
                         ForEach(Array(others.enumerated()), id: \.element.id) { index, agent in
-                            teamRow(agent, thread: server.thread(for: agent.id), server: server, selected: shown == agent.id)
+                            teamRow(
+                                agent, thread: server.thread(for: agent.id), server: server, selected: shown == agent.id,
+                                isLead: lead == agent.id)
                                 .banditoRise(delay: Double(index) * 0.06)
                         }
                     }
@@ -88,44 +92,42 @@ struct TeamSidebar: View {
 
     // MARK: pinned
 
+    /// Pinned agents as a row of round avatars, as pinned chats are shown: 36 pt, the name under each on one line, a
+    /// status dot. A click opens the chat; the context menu has Unpin. No row without pinned agents.
     private func pinnedGrid(_ agents: [Agent], server: ServerModel, shown: String?) -> some View {
-        HStack(spacing: 8) {
-            ForEach(agents) { agent in
-                let thread = server.thread(for: agent.id)
-                Button {
-                    router.selectAgent(agent.id, on: server)
-                } label: {
-                    VStack(spacing: 8) {
-                        AgentAvatar(
-                            name: agent.name, size: 52,
-                            mood: AvatarMood.make(
-                                status: server.status(of: agent.id), turnRunning: thread.turnRunning, paused: agent.paused))
-                        Text(agent.name)
-                            .font(BanditoFont.font(size: 13, weight: 600))
-                            .foregroundStyle(Color.Bandito.text)
-                            .lineLimit(1)
-                        if !agent.role.isEmpty {
-                            Chip(text: agent.role)
+        // A row that scrolls sideways when the pins do not fit the sidebar.
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(alignment: .top, spacing: 12) {
+                ForEach(agents) { agent in
+                    let thread = server.thread(for: agent.id)
+                    let status = server.status(of: agent.id)
+                    Button {
+                        router.selectAgent(agent.id, on: server)
+                    } label: {
+                        VStack(spacing: 4) {
+                            ZStack(alignment: .bottomTrailing) {
+                                AgentAvatar(
+                                    name: agent.name, size: 36,
+                                    mood: AvatarMood.make(status: status, turnRunning: thread.turnRunning, paused: agent.paused))
+                                StatusDot(status: status, size: 10, ringColor: Color.Bandito.surface1)
+                            }
+                            Text(agent.name)
+                                .font(BanditoFont.font(size: 11, weight: 500))
+                                .foregroundStyle(shown == agent.id ? Color.Bandito.text : Color.Bandito.text2)
+                                .lineLimit(1)
+                                .frame(width: 60)
                         }
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 4)
+                        .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(
-                        Color.Bandito.text.opacity(shown == agent.id ? 0.08 : 0.035),
-                        in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(Color.Bandito.line, lineWidth: 1))
-                    .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .banditoButton(.row(cornerRadius: 10, hoverOpacity: 0.06))
+                    .help(agent.name)
+                    .contextMenu { menu(for: agent, server: server) }
                 }
-                .banditoButton(.row(cornerRadius: 16))
-                .contextMenu { menu(for: agent, server: server) }
             }
-            if agents.count == 1 {
-                Color.clear.frame(maxWidth: .infinity)
+            .padding(.horizontal, 18)
             }
-        }
-        .padding(.horizontal, 8)
         .tourAnchor(.agents)
     }
 
@@ -173,13 +175,13 @@ struct TeamSidebar: View {
 
     // MARK: team
 
-    private func teamRow(_ agent: Agent, thread: AgentThread, server: ServerModel, selected: Bool) -> some View {
+    private func teamRow(_ agent: Agent, thread: AgentThread, server: ServerModel, selected: Bool, isLead: Bool) -> some View {
         return Button {
             router.selectAgent(agent.id, on: server)
         } label: {
             AgentRow(
                 agent: agent, thread: thread, status: server.status(of: agent.id), isSelected: selected,
-                lastActivity: lastActivityLabel(agent, thread: thread))
+                lastActivity: lastActivityLabel(agent, thread: thread), isLead: isLead)
                 .contentShape(Rectangle())
         }
         .banditoButton(.row(cornerRadius: 10))
@@ -202,6 +204,12 @@ struct TeamSidebar: View {
         }
         .disabled(!PauseActions.available(on: server))
         .help(PauseActions.available(on: server) ? "" : L10n.Team.pauseUnavailable)
+        let serverKey = server.id.uuidString
+        let isLead = LeadAgentStore.shared.id(server: serverKey) == agent.id
+        Button(isLead ? L10n.Agent.Menu.removeLead : L10n.Agent.Menu.makeLead) {
+            // One main agent per server: making another one main replaces the old choice.
+            LeadAgentStore.shared.set(isLead ? nil : agent.id, server: serverKey)
+        }
         Divider()
         Button(L10n.Agent.Menu.delete, role: .destructive) {
             pendingDelete = agent
@@ -213,7 +221,9 @@ struct TeamSidebar: View {
         Task {
             do {
                 try await server.deleteAgent(agent.id)
+                LeadAgentStore.shared.forget(agentID: agent.id, server: server.id.uuidString)
                 router.drafts[agent.id] = nil
+                router.forgetWorkbench(agentID: agent.id)
                 if router.selectedAgentID == agent.id { router.selectedAgentID = nil }
             } catch {
                 actionError = UserFacingError.message(for: error)
@@ -241,6 +251,8 @@ struct AgentRow: View {
     var isSelected = false
     /// Time of the last event, already formatted.
     var lastActivity = ""
+    /// The server's main agent: a crown on the avatar.
+    var isLead = false
 
     var body: some View {
         HStack(alignment: .center, spacing: 11) {
@@ -250,6 +262,12 @@ struct AgentRow: View {
                 .overlay(alignment: .bottomTrailing) {
                     StatusDot(status: status, size: 11, ringColor: Color.Bandito.surface1)
                         .offset(x: 2, y: 2)
+                }
+                .overlay(alignment: .topTrailing) {
+                    if isLead {
+                        LeadCrown(size: 14)
+                            .offset(x: 4, y: -4)
+                    }
                 }
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {

@@ -2,7 +2,7 @@ import BanditoKit
 import BanditoL10n
 import Foundation
 
-// Logic behind the "What changed" sheet (ChangesSheet.swift draws it). Free of views, so it is tested alone.
+// Logic behind the "What changed" view (ChangesView.swift draws it). Free of views, so it is tested alone.
 
 /// Whether a line of a unified diff is unchanged, only in the new file, or only in the old one.
 enum ChangeLineKind: Sendable, Equatable {

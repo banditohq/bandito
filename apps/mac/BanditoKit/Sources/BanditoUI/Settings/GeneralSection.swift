@@ -28,19 +28,27 @@ struct GeneralSection: View {
                         .frame(width: 220)
                 }
                 Divider().padding(.horizontal, 16)
-                SettingsRow(title: L10n.Settings.showExamples, hint: L10n.Settings.showExamplesHint) {
+                SettingsRow(
+                    title: L10n.Settings.showExamples, hint: L10n.Settings.showExamplesHint, keepsControlBeside: true
+                ) {
                     Toggle("", isOn: $demo.enabled)
                         .labelsHidden()
                         .toggleStyle(BanditoToggleStyle())
                 }
                 Divider().padding(.horizontal, 16)
-                SettingsRow(title: L10n.Settings.launchAtLogin, hint: launchError ?? L10n.Settings.launchAtLoginHint) {
+                SettingsRow(
+                    title: L10n.Settings.launchAtLogin, hint: launchError ?? L10n.Settings.launchAtLoginHint,
+                    keepsControlBeside: true
+                ) {
                     Toggle("", isOn: $launchAtLogin)
                         .labelsHidden()
                         .toggleStyle(BanditoToggleStyle())
                 }
                 Divider().padding(.horizontal, 16)
-                SettingsRow(title: L10n.Settings.autoCheckUpdates, hint: L10n.Settings.autoCheckUpdatesHint) {
+                SettingsRow(
+                    title: L10n.Settings.autoCheckUpdates, hint: L10n.Settings.autoCheckUpdatesHint,
+                    keepsControlBeside: true
+                ) {
                     Toggle("", isOn: $autoCheckUpdates)
                         .labelsHidden()
                         .toggleStyle(BanditoToggleStyle())

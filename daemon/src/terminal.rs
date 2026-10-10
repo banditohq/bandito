@@ -191,6 +191,8 @@ struct Session {
     id: String,
     /// Session leader and process group id of the child (it calls setsid).
     pid: i32,
+    /// The shell as a root of its processes, for the owner checks (see `host::register_root`).
+    _root: crate::host::RootGuard,
     cwd: String,
     command: Vec<String>,
     created_at: i64,
@@ -385,10 +387,12 @@ impl TerminalManager {
         drop(slave);
 
         let pid = child.id() as i32;
+        let root = crate::host::register_root(pid, crate::host::Owner::terminal(&id));
         let exited = Arc::new(AtomicBool::new(false));
         let session = Arc::new(Session {
             id,
             pid,
+            _root: root,
             cwd: spec.cwd.to_string_lossy().into_owned(),
             command,
             created_at: now_ms(),

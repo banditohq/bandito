@@ -18,12 +18,16 @@ struct ModelPicker: View {
     /// Called when a model is picked, or a typed id is confirmed (Return or leaving the field). The inspector saves here.
     var onCommit: (String) -> Void = { _ in }
 
-    /// What the panel chooses between. The failure notice is a row that cannot be chosen.
+    /// What the panel chooses between.
     private enum Choice: Hashable {
         case automatic
         case model(String)
-        case notice
     }
+
+    /// Asks the server for its lists again ("Повторить"). Nil when there is no server to ask.
+    var onRetry: (() -> Void)?
+    /// Updates this Mac's server to the app's daemon, for an old daemon. Nil for another server: then the line only says so.
+    var onUpdate: (() -> Void)?
 
     @State private var typing = false
     /// The value the field had when typing began. Leaving the field without Return goes back to it.
@@ -60,13 +64,45 @@ struct ModelPicker: View {
     // MARK: Panel
 
     private var select: some View {
-        BanditoSelect(
-            selection: choice, sections: sections, label: L10n.AgentSheet.model,
-            placeholder: L10n.ModelPicker.defaultPlain,
-            field: { option in fieldView(for: option) },
-            footer: { close in footerView(close: close) }
-        )
-        .optionalHelp(helpText)
+        VStack(alignment: .leading, spacing: 6) {
+            BanditoSelect(
+                selection: choice, sections: sections, label: L10n.AgentSheet.model,
+                placeholder: L10n.ModelPicker.defaultPlain,
+                field: { option in fieldView(for: option) },
+                footer: { close in footerView(close: close) }
+            )
+            .optionalHelp(helpText)
+            hintLine
+        }
+    }
+
+    /// Under the field: why the list is missing, in full (it wraps, it is not cut), and the one action that helps.
+    @ViewBuilder
+    private var hintLine: some View {
+        switch hint {
+        case .unsupported:
+            hintText(L10n.ModelPicker.oldDaemon, action: onUpdate.map { (L10n.ModelPicker.updateButton, $0) })
+        case .failed:
+            hintText(L10n.ModelPicker.loadFailed, action: onRetry.map { (L10n.Banner.retry, $0) })
+        case .runtimeError(let error) where error != RuntimeModelDisplay.notInstalledError:
+            hintText(L10n.ModelPicker.loadFailed, action: onRetry.map { (L10n.Banner.retry, $0) })
+        case .none, .loading, .runtimeError:
+            EmptyView()
+        }
+    }
+
+    private func hintText(_ text: String, action: (String, () -> Void)?) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(text)
+                .font(BanditoFont.font(size: 12, weight: 400))
+                .foregroundStyle(Color.Bandito.text3)
+                .fixedSize(horizontal: false, vertical: true)
+            if let action {
+                Button(action.0, action: action.1)
+                    .banditoButton(.link)
+                    .fixedSize()
+            }
+        }
     }
 
     /// The selection as the panel sees it. Choosing commits the change, as picking in the old menu did.
@@ -79,8 +115,6 @@ struct ModelPicker: View {
                     selection = ""
                 case .model(let id):
                     selection = id
-                case .notice:
-                    return
                 }
                 onCommit(selection)
             })
@@ -89,12 +123,6 @@ struct ModelPicker: View {
     private var sections: [SelectSection<Choice>] {
         let grouped = ModelPickerRules.grouped(options)
         var main: [SelectOption<Choice>] = []
-        if hint.isFailure {
-            main.append(
-                SelectOption(
-                    value: .notice, title: L10n.ModelPicker.failedMenu, icon: "exclamationmark.triangle",
-                    tint: Color.Bandito.danger, isEnabled: false, help: helpText))
-        }
         main.append(SelectOption(value: .automatic, title: defaultMenuTitle))
         if let typed = ModelPickerRules.typedSelection(selection, options: options) {
             main.append(SelectOption(value: .model(typed), title: typed, monospaced: true))

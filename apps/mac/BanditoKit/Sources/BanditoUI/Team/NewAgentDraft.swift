@@ -56,6 +56,9 @@ public struct NewAgentDraft: Equatable, Sendable {
     public var workplace: WorkplaceChoice = .shared
     /// The container to make when `workplace` is `.new`.
     public var newWorkplace = NewWorkplaceDraft()
+    /// The "What it may do" chips. Sent with `agents.create` as `capabilities`; a daemon without the field ignores it,
+    /// so nothing is enforced until the daemon has it.
+    public var capabilities: Set<AgentCapability> = AgentCapability.allOn
 
     public init() {}
 
@@ -170,7 +173,9 @@ public struct NewAgentDraft: Equatable, Sendable {
             memoryMode: memory,
             fallbackRuntime: fallbackRuntime,
             fallbackModel: trimmed(fallbackModel).isEmpty ? nil : trimmed(fallbackModel),
-            workspaceId: workspace)
+            workspaceId: workspace,
+            avatar: AvatarSpec(color: color.rawValue, face: face.rawValue),
+            capabilities: AgentCapability.wire(capabilities))
     }
 
     /// Model names offered in the menu. Other runtimes take free text only.

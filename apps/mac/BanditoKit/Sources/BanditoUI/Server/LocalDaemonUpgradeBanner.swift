@@ -52,11 +52,15 @@ final class LocalDaemonUpgradeModel {
     private(set) var phase: Phase = .idle
     /// The daemon version in the app bundle, once it has been read. Nil when the bundle has no daemon.
     private(set) var bundled: String?
+    /// True once the bundle has been read, even when it carries no daemon: until then `bundled` says nothing.
+    private(set) var bundleRead = false
 
     @ObservationIgnored private let installer: any DaemonReplacing
     @ObservationIgnored private let pollInterval: Duration
     @ObservationIgnored private let returnTimeout: Duration
     @ObservationIgnored private let isQA: Bool
+    /// A request is in progress. Set before the first suspension, so a second request at once is refused.
+    @ObservationIgnored private var requesting = false
     /// Servers already upgraded (or attempted) in this launch: one attempt each. A waiting upgrade is not an attempt.
     @ObservationIgnored private var tried: Set<UUID> = []
     /// Servers whose waiting upgrade the person confirmed: it runs even while agents are busy.
@@ -91,6 +95,41 @@ final class LocalDaemonUpgradeModel {
         guard server.isConnectedNow, !tried.contains(id), waiting[id] == nil else { return }
         bundled = await installer.bundledVersion()
         guard let target = bundled, replacesOffer(for: server) else { return }
+        if server.hasBusyAgents {
+            phase = .waitingForAgents(serverID: id, version: target)
+            startWaiting(server)
+            return
+        }
+        tried.insert(id)
+        await perform(server, target: target)
+    }
+
+    /// Reads the bundled daemon version, so `replacesOffer` can answer on a page that opens before any upgrade ran.
+    func readBundled() async {
+        bundled = await installer.bundledVersion()
+        bundleRead = true
+    }
+
+    /// The Updates page's word for this Mac's daemon. Reads the bundle when it has not been read yet.
+    func standing(for server: any LocalUpgradeServer) -> LocalUpgradeStanding {
+        LocalDaemonUpgrade.standing(
+            bundleRead: bundleRead, bundledVersion: bundled, serverVersion: server.runningVersion,
+            isLocalServer: server.isThisMacServer, isQA: isQA)
+    }
+
+    /// The person asks for the upgrade now (Server or Settings → Updates). Same rules as the automatic upgrade, but
+    /// it is not limited to one attempt per launch: a failed upgrade can be asked for again. Busy agents make it wait
+    /// for the person's confirmation, as the banner says.
+    func upgradeByRequest(_ server: any LocalUpgradeServer) async {
+        guard !isQA, server.isThisMacServer, server.isConnectedNow, !requesting else { return }
+        if case .upgrading = phase { return }
+        requesting = true
+        defer { requesting = false }
+        await readBundled()
+        guard let target = bundled, replacesOffer(for: server) else { return }
+        let id = server.serverID
+        tried.remove(id)
+        cancelWaiting(id)
         if server.hasBusyAgents {
             phase = .waitingForAgents(serverID: id, version: target)
             startWaiting(server)

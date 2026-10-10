@@ -1,3 +1,6 @@
+#if canImport(AppKit)
+import AppKit
+#endif
 import BanditoDesign
 import BanditoKit
 import BanditoL10n
@@ -15,6 +18,9 @@ struct FolderPicker: View {
     @State private var recent = RecentFolders()
     @State private var query = ""
     @State private var newFolder: String?
+    @FocusState private var newFolderFocused: Bool
+    /// True while a create is waiting for the daemon: a second Return does not send another mkdir.
+    @State private var creatingFolder = false
     @State private var error: UserFacingMessage?
     /// "Clone from a link": the form replaces the folder tree while it is open.
     @State private var cloneOpen = false
@@ -103,6 +109,10 @@ struct FolderPicker: View {
                 .padding(.vertical, 8)
             ScrollView {
                 VStack(alignment: .leading, spacing: 1) {
+                    // "New folder" comes first in the list, as in Finder, with its name selected for typing.
+                    if newFolder != nil {
+                        newFolderRow
+                    }
                     ForEach(visibleDirectories, id: \.path) { entry in
                         row(icon: "folder", tint: BanditoPalette.peach, name: entry.name, active: false) {
                             Task { await open(entry.path) }
@@ -114,24 +124,45 @@ struct FolderPicker: View {
                             }
                         }
                     }
-                    if newFolder != nil {
-                        TextField(L10n.FolderPicker.newFolderPlaceholder, text: Binding(
-                            get: { newFolder ?? "" }, set: { newFolder = $0 })
-                        )
-                        .textFieldStyle(.plain)
-                        .font(BanditoFont.font(size: 13, weight: 400))
-                        .padding(.horizontal, 10)
-                        .frame(height: 30)
-                        .onSubmit { Task { await createFolder() } }
-                    }
                 }
                 .padding(6)
             }
-            if let error {
+            if let error, newFolder == nil {
                 UserFacingErrorView(message: error)
                     .padding(.horizontal, 12)
                     .padding(.bottom, 6)
             }
+        }
+    }
+
+    /// The row for a new folder: folder icon, a name field that has focus, Return creates and chooses the folder,
+    /// Escape cancels. A failure shows in red under the row.
+    private var newFolderRow: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                Image(systemName: "folder.badge.plus")
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(BanditoPalette.peach)
+                TextField(L10n.FolderPicker.newFolderName, text: Binding(
+                    get: { newFolder ?? "" }, set: { newFolder = $0 })
+                )
+                .textFieldStyle(.plain)
+                .font(BanditoFont.font(size: 12.5, weight: 400))
+                .focused($newFolderFocused)
+                .onSubmit { Task { await createFolder() } }
+                .onExitCommand { newFolder = nil; error = nil }
+            }
+            .padding(.horizontal, 8)
+            .frame(height: 28)
+            .background(Color.Bandito.signal.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+            if let error {
+                UserFacingErrorView(message: error)
+                    .padding(.horizontal, 8)
+            }
+        }
+        .onAppear {
+            newFolderFocused = true
+            selectNameText()
         }
     }
 
@@ -153,7 +184,14 @@ struct FolderPicker: View {
 
     private var footer: some View {
         HStack(spacing: 6) {
-            Button(L10n.FolderPicker.newFolder) { newFolder = newFolder == nil ? "" : nil }
+            Button(L10n.FolderPicker.newFolder) {
+                if newFolder == nil {
+                    error = nil
+                    newFolder = L10n.FolderPicker.newFolderName
+                } else {
+                    newFolder = nil
+                }
+            }
                 .banditoButton(.quiet(size: .regular))
                 .disabled(listing == nil)
             Button(L10n.FolderPicker.clone) {
@@ -223,14 +261,34 @@ struct FolderPicker: View {
         }
     }
 
+    /// Selects the whole name, so typing replaces "New folder" as in Finder. The field editor takes the selection once
+    /// the field has focus, so the request waits one turn of the run loop.
+    private func selectNameText() {
+        #if canImport(AppKit)
+        DispatchQueue.main.async {
+            NSApp.sendAction(#selector(NSText.selectAll(_:)), to: nil, from: nil)
+        }
+        #endif
+    }
+
     private func createFolder() async {
-        guard let name = newFolder?.trimmingCharacters(in: .whitespaces), !name.isEmpty,
-            let parent = listing?.path
-        else { return }
+        guard !creatingFolder, let typed = newFolder, let parent = listing?.path else { return }
+        // Checked before the daemon is asked: an empty name, a slash, "." or ".." never reaches mkdir.
+        if let problem = FolderPickerLogic.newFolderProblem(typed) {
+            error = UserFacingMessage(text: problem.message)
+            return
+        }
+        let name = typed.trimmingCharacters(in: .whitespaces)
+        creatingFolder = true
+        defer { creatingFolder = false }
+        error = nil
         do {
             let entry = try await server.mkdir(parent + "/" + name)
             newFolder = nil
+            // The new folder is chosen at once: the agent works in it.
             await open(entry.path)
+            // Only a folder that opened is chosen; a failed open keeps the previous listing, which is not the new folder.
+            if error == nil { choose() }
         } catch {
             self.error = UserFacingError.message(for: error)
         }
@@ -317,6 +375,25 @@ struct FolderPicker: View {
 
 /// Text rules of the folder picker. Pure, so it can be tested.
 enum FolderPickerLogic {
+    /// Why a new folder's name cannot be used, or nil when it can. The rule is the clone's name rule (`CloneLogic`).
+    enum NewFolderProblem: Equatable {
+        case empty
+        case invalid
+
+        var message: String {
+            switch self {
+            case .empty: L10n.FolderPicker.nameEmpty
+            case .invalid: L10n.FolderPicker.nameInvalid
+            }
+        }
+    }
+
+    static func newFolderProblem(_ typed: String) -> NewFolderProblem? {
+        let trimmed = typed.trimmingCharacters(in: .whitespaces)
+        if trimmed.isEmpty { return .empty }
+        return CloneLogic.isValidName(trimmed) ? nil : .invalid
+    }
+
     /// A typed path rather than a search: starts with `/` or `~`.
     static func isPath(_ text: String) -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespaces)

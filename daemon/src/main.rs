@@ -61,6 +61,10 @@ enum Cmd {
         /// The file the daemon wrote the session token to (under `$BANDITO_HOME/run`).
         #[arg(long)]
         token_file: Option<PathBuf>,
+        /// The capabilities whose tools this server serves, comma-separated (see docs/ARCHITECTURE.md#capabilities).
+        /// Missing: all of them. Empty: none.
+        #[arg(long)]
+        capabilities: Option<String>,
     },
     /// Check for a newer signed release, or install one (and restart the daemon when a service runs it).
     Update {
@@ -103,11 +107,17 @@ enum ServiceCmd {
     },
 }
 
+/// The data folder named by `--home`, else `$BANDITO_HOME`, else `~/.bandito`. Touches nothing on disk.
+fn home_path(arg: Option<PathBuf>) -> Result<PathBuf> {
+    match arg.or_else(|| std::env::var_os("BANDITO_HOME").map(PathBuf::from)) {
+        Some(d) => Ok(d),
+        None => Ok(dirs::home_dir().context("no home directory")?.join(".bandito")),
+    }
+}
+
+/// The data folder of the daemon and the CLI, created (mode 0700) when it is missing.
 fn home_dir(arg: Option<PathBuf>) -> Result<PathBuf> {
-    let dir = match arg.or_else(|| std::env::var_os("BANDITO_HOME").map(PathBuf::from)) {
-        Some(d) => d,
-        None => dirs::home_dir().context("no home directory")?.join(".bandito"),
-    };
+    let dir = home_path(arg)?;
     std::fs::create_dir_all(&dir).with_context(|| format!("create {}", dir.display()))?;
     use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))?;
@@ -143,7 +153,13 @@ fn main() -> Result<()> {
         .init();
     let cli = Cli::parse();
     let home_given = cli.home.is_some();
-    let home = home_dir(cli.home)?;
+    // `mcp` runs as a child of an agent session under the sandbox, which denies every access to the data
+    // folder: it must not create, stat or chmod it (the daemon made it). Its session files are readable.
+    let home = if matches!(cli.cmd, Cmd::Mcp { .. }) {
+        home_path(cli.home)?
+    } else {
+        home_dir(cli.home)?
+    };
     // One source for the data folder: every module reads it through `home::data_home()` from here on.
     bandito::home::set_data_home(&home);
     // Tools installed by `setup` go first on PATH. Done before the runtime starts any thread.
@@ -162,7 +178,11 @@ async fn run_command(cmd: Cmd, home: PathBuf, home_given: bool) -> Result<()> {
         Cmd::Pair { json } => pair(&sock, json).await,
         Cmd::Info { json } => info(&home, &sock, json).await,
         Cmd::Service { cmd } => service_cmd(cmd, &home).await,
-        Cmd::Mcp { token_file, .. } => bandito::crew::serve_stdio(home.join("agent.sock"), token_file).await,
+        Cmd::Mcp {
+            token_file,
+            capabilities,
+            ..
+        } => bandito::crew::serve_stdio(home.join("agent.sock"), token_file, capabilities).await,
         Cmd::Update {
             check,
             json,
@@ -519,6 +539,14 @@ mod tests {
 
     fn parse(args: &[&str]) -> Cmd {
         Cli::try_parse_from(args).expect("parses").cmd
+    }
+
+    #[test]
+    fn the_crew_bridge_home_is_resolved_without_creating_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("not-yet");
+        assert_eq!(home_path(Some(missing.clone())).unwrap(), missing);
+        assert!(!missing.exists(), "resolving the data folder must not create it");
     }
 
     #[test]

@@ -125,6 +125,9 @@ mod tests {
     fn new_agent(store: &Store, name: &str) -> String {
         store
             .agent_create(NewAgent {
+                use_personal_settings: false,
+                avatar: None,
+                capabilities: None,
                 name: name.into(),
                 role: "builder".into(),
                 runtime: RuntimeKind::Claude,

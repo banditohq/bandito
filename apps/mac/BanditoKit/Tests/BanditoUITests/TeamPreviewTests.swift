@@ -69,10 +69,11 @@ import Testing
         #expect(order == ["d", "c", "a", "b", "e"])
     }
 
-    @Test func onlyTwoPinnedAgentsAreTilesAtTheTop() {
+    @Test func eightPinnedAgentsAreTilesAtTheTop() {
+        #expect(TeamSidebarOrder.pinnedTiles == 8)
         let agents = ["a", "b", "c"].map { agent($0) }
         let order = TeamSidebarOrder.ids(agents: agents, pinned: ["a", "b", "c"]) { _ in false }
-        #expect(order == ["a", "b", "c"], "the third pin is still pinned but sorts with the rest")
+        #expect(order == ["a", "b", "c"])
         let withWaiting = TeamSidebarOrder.ids(agents: agents, pinned: ["a", "b", "c"]) { $0 == "c" }
         #expect(withWaiting == ["a", "b", "c"])
     }

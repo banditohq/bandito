@@ -37,7 +37,26 @@ actor FakeTransport: RPCTransport {
         self.inbound = InboundIterator(stream.makeAsyncIterator())
     }
 
-    func connect() async throws {}
+    /// While held, `connect` waits: a connection attempt that stalls before the link is up.
+    private var holdingConnect = false
+    private var connectWaiters: [CheckedContinuation<Void, Never>] = []
+
+    func connect() async throws {
+        guard holdingConnect else { return }
+        await withCheckedContinuation { connectWaiters.append($0) }
+    }
+
+    /// Makes the next `connect` wait until `releaseConnect`.
+    func holdConnect() {
+        holdingConnect = true
+    }
+
+    /// Lets the stalled `connect` go on.
+    func releaseConnect() {
+        holdingConnect = false
+        connectWaiters.forEach { $0.resume() }
+        connectWaiters = []
+    }
 
     func send(_ text: String) async throws {
         sent.append(text)

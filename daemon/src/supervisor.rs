@@ -5,7 +5,7 @@
 use crate::agent_token::{AgentTokens, SessionToken};
 use crate::checkpoint;
 use crate::event::LimitWindow;
-use crate::event::{AgentStatus, DecidedBy, Decision, EventBody, Source, TurnStatus, Usage};
+use crate::event::{AgentChange, AgentStatus, DecidedBy, Decision, EventBody, Source, TurnStatus, Usage};
 use crate::hub::Hub;
 use crate::limit;
 use crate::policy::{self, Protected, Verdict};
@@ -13,8 +13,8 @@ use crate::redact::Redactor;
 use crate::runtime::sandbox::SandboxPolicy;
 use crate::runtime::{ApprovalRequest, Runtime, RuntimeKind, RuntimeOutput, Session, SpawnConfig};
 use crate::store::{
-    Agent, CheckpointKind, DEFAULT_CONTEXT_BUDGET, MemoryMode, RuleAction, Store, UsageEntry, WorkspaceKind, new_id,
-    now_ms,
+    Agent, CheckpointKind, DEFAULT_CONTEXT_BUDGET, MemoryMode, RuleAction, Store, UsageEntry, WorkspaceKind,
+    capabilities_csv, new_id, now_ms,
 };
 use crate::workspace::{self, WorkspaceManager, WorkspaceSpec};
 use anyhow::{Result, anyhow, bail};
@@ -406,6 +406,7 @@ impl Supervisor {
             tokens: self.agent_tokens.clone(),
             sandbox_on: self.agent_sandbox.clone(),
             agent_token: None,
+            root: None,
             protected: self.protected.clone(),
             session: None,
             output: None,
@@ -460,6 +461,12 @@ impl Supervisor {
         if !self.hub.store.agent_set_paused(agent_id, paused)? {
             return Ok(false);
         }
+        self.hub.emit(
+            agent_id,
+            EventBody::AgentChanged {
+                action: AgentChange::Updated,
+            },
+        );
         self.call(agent_id, Cmd::PauseChanged).await?;
         Ok(true)
     }
@@ -667,6 +674,8 @@ struct Actor {
     sandbox_on: Arc<AtomicBool>,
     /// The token of the running session. Dropping it (when the session ends) revokes the token.
     agent_token: Option<SessionToken>,
+    /// The session's CLI as a root of its processes, for the owner checks (see `host::register_root`).
+    root: Option<crate::host::RootGuard>,
     protected: Arc<Protected>,
     session: Option<Box<dyn Session>>,
     output: Option<mpsc::Receiver<RuntimeOutput>>,
@@ -989,6 +998,10 @@ impl Actor {
                 program: None,
                 mcp: mcp.map(|(prog, mut args)| {
                     args.extend(["--agent".to_string(), agent.id.clone()]);
+                    // The crew server registers only the tools of these capabilities. Missing = all of them.
+                    if let Some(list) = &agent.capabilities {
+                        args.extend(["--capabilities".to_string(), capabilities_csv(list)]);
+                    }
                     // The bridge reads the token from this file, so the token stays out of argument lists.
                     if let Some(file) = &token_file_arg {
                         args.extend(["--token-file".to_string(), file.clone()]);
@@ -1002,8 +1015,14 @@ impl Actor {
                 agent_token: Some(token.clone()),
                 agent_mcp_file: token_guard.config_file().map(Path::to_path_buf),
                 sandbox,
+                personal_settings: agent.use_personal_settings,
+                capabilities: agent.capabilities.clone(),
             })
             .await?;
+        self.root = spawned
+            .session
+            .pid()
+            .map(|pid| crate::host::register_root(pid as i32, crate::host::Owner::agent(&agent.id)));
         self.session = Some(spawned.session);
         self.shell_cwd = policy::ShellCwd::default();
         self.output = Some(spawned.output);
@@ -1120,6 +1139,7 @@ impl Actor {
             s.shutdown().await;
         }
         self.agent_token = None;
+        self.root = None;
         self.output = None;
         self.session_kind = None;
         self.reload_after_turn = false;
@@ -1288,6 +1308,7 @@ impl Actor {
                 let stderr_tail = self.redactor.redact(&stderr_tail).into_owned();
                 self.session = None;
                 self.agent_token = None;
+                self.root = None;
                 let failed = code != Some(0);
                 let detail = if failed {
                     let tail: Vec<&str> = stderr_tail.lines().rev().take(5).collect();
@@ -1423,8 +1444,16 @@ impl Actor {
     async fn switch_runtime(&mut self, agent: &Agent, from: RuntimeKind, to: RuntimeKind, until: Option<i64>) {
         self.release_session().await;
         let active = (to != agent.runtime).then_some(to);
-        if let Err(e) = self.hub.store.agent_set_active_runtime(&self.id, active) {
-            tracing::warn!(agent = self.id, "set the active runtime: {e:#}");
+        match self.hub.store.agent_set_active_runtime(&self.id, active) {
+            Ok(()) => {
+                self.hub.emit(
+                    &self.id,
+                    EventBody::AgentChanged {
+                        action: AgentChange::Updated,
+                    },
+                );
+            }
+            Err(e) => tracing::warn!(agent = self.id, "set the active runtime: {e:#}"),
         }
         self.hub.emit(
             &self.id,
@@ -1654,6 +1683,7 @@ impl Actor {
             s.shutdown().await;
         }
         self.agent_token = None;
+        self.root = None;
         self.output = None;
         if self.turn.is_some() {
             self.end_turn(TurnStatus::Interrupted, None);
@@ -1794,6 +1824,9 @@ mod tests {
         let store = Arc::new(Store::open_in_memory().unwrap());
         let agent = store
             .agent_create(NewAgent {
+                use_personal_settings: false,
+                avatar: None,
+                capabilities: None,
                 name: "Forge".into(),
                 role: "builder".into(),
                 runtime: RuntimeKind::Claude,
@@ -2094,6 +2127,28 @@ mod tests {
         assert_eq!(user_texts(&w), vec!["running", "queued"]);
     }
 
+    /// The `agent_changed` actions stored for the world's agent, in order.
+    fn agent_changes(w: &World) -> Vec<crate::event::AgentChange> {
+        w.store
+            .events_since(0, 1000, Some(&w.agent))
+            .unwrap()
+            .into_iter()
+            .filter_map(|e| match e.body {
+                EventBody::AgentChanged { action } => Some(action),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn every_pause_is_announced_once_and_a_no_op_is_not() {
+        let w = world(ApprovalMode::Risky);
+        assert!(w.sup.set_paused(&w.agent, true).await.unwrap());
+        assert!(!w.sup.set_paused(&w.agent, true).await.unwrap());
+        assert!(w.sup.set_paused(&w.agent, false).await.unwrap());
+        assert_eq!(agent_changes(&w), vec![AgentChange::Updated, AgentChange::Updated]);
+    }
+
     #[tokio::test]
     async fn set_paused_reports_only_real_changes() {
         let w = world(ApprovalMode::Risky);
@@ -2331,6 +2386,9 @@ mod tests {
     fn add_agent(store: &Store, name: &str) -> String {
         store
             .agent_create(NewAgent {
+                use_personal_settings: false,
+                avatar: None,
+                capabilities: None,
                 name: name.into(),
                 role: String::new(),
                 runtime: RuntimeKind::Claude,
@@ -2610,12 +2668,54 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn the_crew_server_and_the_session_get_the_agents_capabilities() {
+        use crate::store::{AgentPatch, Capability};
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let hub = Hub::new(store.clone());
+        let spawns = Arc::new(Mutex::new(Vec::new()));
+        let mut rts = Runtimes::default();
+        rts.insert(Arc::new(MockRuntime {
+            log: Arc::default(),
+            out: Arc::default(),
+            spawns: spawns.clone(),
+        }));
+        let id = add_agent(&store, "Forge");
+        store
+            .agent_update(
+                &id,
+                AgentPatch {
+                    capabilities: Some(Some(vec![Capability::Team, Capability::Browser])),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let sup = Supervisor::new(hub, rts, Some((PathBuf::from("/bin/bandito"), vec!["mcp".into()])));
+        sup.send(&id, Inbound::user("go")).await.unwrap();
+        let spawn = spawns.lock().unwrap()[0].clone();
+        let (_, args) = spawn.mcp.clone().unwrap();
+        assert_eq!(
+            args,
+            vec![
+                "mcp".to_string(),
+                "--agent".to_string(),
+                id,
+                "--capabilities".to_string(),
+                "team,browser".to_string()
+            ]
+        );
+        assert_eq!(spawn.capabilities, Some(vec![Capability::Team, Capability::Browser]));
+    }
+
+    #[tokio::test]
     async fn unknown_agent_and_missing_runtime() {
         let w = world(ApprovalMode::Risky);
         assert!(w.sup.send("nope", Inbound::user("x")).await.is_err());
         let codex = w
             .store
             .agent_create(NewAgent {
+                use_personal_settings: false,
+                avatar: None,
+                capabilities: None,
                 name: "Scout".into(),
                 role: String::new(),
                 runtime: RuntimeKind::Codex,
@@ -3155,6 +3255,9 @@ mod tests {
         let store = Arc::new(Store::open_in_memory().unwrap());
         let agent = store
             .agent_create(NewAgent {
+                use_personal_settings: false,
+                avatar: None,
+                capabilities: None,
                 name: "Forge".into(),
                 role: "builder".into(),
                 runtime: RuntimeKind::Claude,
@@ -3319,6 +3422,9 @@ mod tests {
         let store = Arc::new(Store::open_in_memory().unwrap());
         let agent = store
             .agent_create(NewAgent {
+                use_personal_settings: false,
+                avatar: None,
+                capabilities: None,
                 name: "Forge".into(),
                 role: "builder".into(),
                 runtime: RuntimeKind::Claude,
@@ -3422,6 +3528,8 @@ mod tests {
                 until: None,
             }
         );
+        // The record changed too (its active runtime): announced like any other change.
+        assert!(agent_changes(&w).contains(&AgentChange::Updated));
         wait_in(&codex_log, "send fix the build").await;
         let agent = w.store.agent_get(&w.agent).unwrap().unwrap();
         assert_eq!(agent.active_runtime, Some(RuntimeKind::Codex));
@@ -3565,7 +3673,7 @@ mod tests {
 mod workspace_tests {
     use super::testing::MockRuntime;
     use super::*;
-    use crate::store::{ApprovalMode, MemoryMode, Network, NewAgent, NewWorkspace, Store, WorkspaceKind};
+    use crate::store::{AgentPatch, ApprovalMode, MemoryMode, Network, NewAgent, NewWorkspace, Store, WorkspaceKind};
     use crate::workspace::testing::fake_docker;
     use crate::workspace::{WorkspaceManager, WorkspaceSpec};
     use std::time::Duration;
@@ -3586,6 +3694,9 @@ mod workspace_tests {
         store
             .agent_create_in(
                 NewAgent {
+                    use_personal_settings: false,
+                    avatar: None,
+                    capabilities: None,
                     name: name.into(),
                     role: String::new(),
                     runtime: RuntimeKind::Claude,
@@ -3630,6 +3741,24 @@ mod workspace_tests {
         sup.send(&id, Inbound::user("go")).await.unwrap();
         let cfg = first_spawn(&spawns).await;
         assert_eq!(cfg.workspace, Some(WorkspaceSpec::Shared));
+    }
+
+    #[tokio::test]
+    async fn a_session_takes_the_agents_personal_settings_choice() {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let id = agent(&store, "Forge", "shared");
+        store
+            .agent_update(
+                &id,
+                AgentPatch {
+                    use_personal_settings: Some(true),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let (sup, spawns) = rig(store, scratch_manager());
+        sup.send(&id, Inbound::user("go")).await.unwrap();
+        assert!(first_spawn(&spawns).await.personal_settings);
     }
 
     #[tokio::test]

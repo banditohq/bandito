@@ -6,7 +6,7 @@
 
 use crate::store::now_ms;
 use serde::Serialize;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 #[cfg(any(target_os = "linux", test))]
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::os::unix::fs::MetadataExt;
@@ -26,6 +26,12 @@ const GRACE: Duration = Duration::from_secs(3);
 /// Longest command line in a reply, in characters.
 #[cfg(any(target_os = "linux", target_os = "macos", test))]
 const CMD_CHARS: usize = 200;
+/// Processes in `host.stats` → `top_processes`: the biggest by memory.
+pub const TOP_PROCESSES: usize = 15;
+/// How long a process gets to exit after SIGTERM from `host.kill_process` before SIGKILL.
+pub const OWN_GRACE: Duration = Duration::from_secs(5);
+/// How long `host.kill_process` waits for the process to exit before it answers.
+pub const OWN_WAIT: Duration = Duration::from_secs(1);
 
 /// One sample of the server.
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -48,6 +54,24 @@ pub struct HostStats {
     /// False where the byte counters cannot be read (macOS without `netstat`).
     pub net_supported: bool,
     pub uptime_s: u64,
+    /// The biggest processes of the whole server by memory. Read when `host.stats` answers, not sampled.
+    pub top_processes: Vec<TopProcess>,
+}
+
+/// One of the biggest processes of the server (`host.stats` → `top_processes`).
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct TopProcess {
+    pub pid: i32,
+    /// Short name: the program's file name.
+    pub name: String,
+    pub rss_bytes: u64,
+    /// Share of one CPU. The first reading after the daemon starts reports 0 (as `processes` does).
+    pub cpu_percent: f32,
+    /// Runs as the daemon's user.
+    pub own: bool,
+    /// The app may stop it: it runs as the daemon's user, belongs to no agent, terminal or the daemon, and its
+    /// process tree could be read. False when any of that is not known.
+    pub own_safe: bool,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -178,22 +202,24 @@ struct Raw {
     uptime_s: u64,
 }
 
-/// A process as the platform reports it.
-struct ProcInfo {
-    pid: i32,
+/// One process of the table the platform reads: what the trees, the lists and the kill checks need.
+#[derive(Clone)]
+struct ProcRow {
+    /// Parent pid (0 for the kernel, 1 for launchd or init).
+    ppid: i32,
+    /// Short name: the program's file name.
     name: String,
+    /// The command: its arguments on Linux, the executable's path on macOS. Truncated.
     cmd: String,
     rss_bytes: u64,
-    cpu: CpuReading,
-    owner: Option<Owner>,
+    /// Cumulative CPU time in ticks: clock ticks on Linux, hundredths of a second on macOS (see `clk_tck`).
+    cpu_ticks: u64,
+    /// Runs as the daemon's user.
+    own: bool,
 }
 
-/// Linux gives cumulative ticks (turned into a rate by the sampler); macOS gives the rate.
-#[allow(dead_code)] // each platform builds one variant
-enum CpuReading {
-    Ticks(u64),
-    Percent(f32),
-}
+/// Every process of the server at one moment, by pid.
+type Table = HashMap<i32, ProcRow>;
 
 /// Readings from the previous sample, to turn counters into rates.
 #[derive(Clone, Copy)]
@@ -219,9 +245,26 @@ struct State {
     ring: VecDeque<Point>,
     latest: Option<HostStats>,
     prev: Option<Counters>,
-    /// Linux: process CPU ticks at the previous `processes()` call, by pid.
-    proc_ticks: HashMap<i32, u64>,
-    proc_at: Option<Instant>,
+    cpu: CpuState,
+}
+
+/// The CPU time of every process at the last reading, and the shares that reading gave.
+#[derive(Default)]
+struct CpuState {
+    ticks: HashMap<i32, u64>,
+    at: Option<Instant>,
+    shares: HashMap<i32, f32>,
+}
+
+/// Readings closer together than this keep the last shares: a share over a few milliseconds is noise.
+const MIN_CPU_WINDOW: Duration = Duration::from_secs(1);
+
+/// One reading of the process table, with who owns each process and its CPU share.
+struct Procs {
+    table: Table,
+    classes: HashMap<i32, TreeOwner>,
+    /// Share of one CPU since the previous reading. A process seen for the first time has none.
+    cpu: HashMap<i32, f32>,
 }
 
 /// Keeps the host's samples and answers the questions the app asks.
@@ -288,6 +331,7 @@ impl Sampler {
             net_tx_bps,
             net_supported: raw.net.is_some(),
             uptime_s: raw.uptime_s,
+            top_processes: Vec::new(),
         };
         let mut st = self.lock();
         st.prev = Some(now_counters);
@@ -311,46 +355,48 @@ impl Sampler {
         select_history(&points, now_ms(), range, max_points)
     }
 
+    /// One reading of the process table: who owns each process, and its CPU share. `None` where the platform
+    /// cannot read the table or its owner marks, so nothing is shown or stopped.
+    fn procs(&self) -> Option<Procs> {
+        let table = plat::read_table()?;
+        let markers = plat::read_markers()?;
+        let roots = roots();
+        let mut classes: HashMap<i32, TreeOwner> = table
+            .keys()
+            .map(|&pid| (pid, tree_owner(&table, &roots, &markers, pid)))
+            .collect();
+        classes.insert(self_pid(), TreeOwner::Owned(daemon_owner()));
+        let cpu = cpu_shares(&mut self.lock().cpu, &table, Instant::now(), plat::clk_tck());
+        Some(Procs { table, classes, cpu })
+    }
+
     /// Processes that belong to an agent, a terminal or the daemon, grouped by owner.
     pub fn processes(&self) -> ProcessReport {
-        let Some(procs) = scan_processes() else {
+        let Some(procs) = self.procs() else {
             return ProcessReport {
                 supported: false,
                 owners: Vec::new(),
             };
         };
-        let now = Instant::now();
-        let clk = plat::clk_tck();
-        let mut st = self.lock();
-        let elapsed = st.proc_at.map(|at| now.duration_since(at));
-        let mut ticks_now = HashMap::new();
         let mut groups: HashMap<Owner, OwnerGroup> = HashMap::new();
-        for p in procs {
-            let cpu = match p.cpu {
-                CpuReading::Ticks(ticks) => {
-                    ticks_now.insert(p.pid, ticks);
-                    cpu_from_ticks(st.proc_ticks.get(&p.pid).copied(), ticks, elapsed, clk)
-                }
-                CpuReading::Percent(percent) => percent,
+        for (&pid, row) in &procs.table {
+            let Some(TreeOwner::Owned(owner)) = procs.classes.get(&pid) else {
+                continue;
             };
-            let Some(owner) = p.owner else { continue };
             let group = groups.entry(owner.clone()).or_insert_with(|| OwnerGroup {
-                owner,
+                owner: owner.clone(),
                 cpu_percent: 0.0,
                 rss_bytes: 0,
                 processes: Vec::new(),
             });
-            group.cpu_percent += cpu;
-            group.rss_bytes += p.rss_bytes;
+            group.cpu_percent += procs.cpu.get(&pid).copied().unwrap_or(0.0);
+            group.rss_bytes += row.rss_bytes;
             group.processes.push(ProcessEntry {
-                pid: p.pid,
-                name: p.name,
-                cmd: p.cmd,
+                pid,
+                name: row.name.clone(),
+                cmd: row.cmd.clone(),
             });
         }
-        st.proc_ticks = ticks_now;
-        st.proc_at = Some(now);
-        drop(st);
         let mut owners: Vec<OwnerGroup> = groups.into_values().collect();
         for g in &mut owners {
             g.processes.sort_by_key(|p| p.pid);
@@ -366,16 +412,51 @@ impl Sampler {
         }
     }
 
+    /// The biggest processes by memory and the busiest by CPU, `TOP_PROCESSES` of each, without repeats (see
+    /// `top_pids`). Biggest memory first.
+    pub fn top_processes(&self) -> Vec<TopProcess> {
+        let Some(procs) = self.procs() else {
+            return Vec::new();
+        };
+        let rows: Vec<(i32, u64, f32)> = procs
+            .table
+            .iter()
+            .map(|(&pid, row)| (pid, row.rss_bytes, procs.cpu.get(&pid).copied().unwrap_or(0.0)))
+            .collect();
+        top_pids(&rows, TOP_PROCESSES)
+            .into_iter()
+            .map(|pid| {
+                let row = &procs.table[&pid];
+                TopProcess {
+                    pid,
+                    name: row.name.clone(),
+                    rss_bytes: row.rss_bytes,
+                    cpu_percent: procs.cpu.get(&pid).copied().unwrap_or(0.0),
+                    own: row.own,
+                    own_safe: row.own && procs.classes.get(&pid) == Some(&TreeOwner::Free),
+                }
+            })
+            .collect()
+    }
+
     /// Listening TCP ports, one entry per port and address.
     pub fn ports(&self) -> PortReport {
         let unsupported = PortReport {
             supported: false,
             ports: Vec::new(),
         };
-        let Some(procs) = scan_processes() else {
+        let Some(procs) = self.procs() else {
             return unsupported;
         };
-        let Some(mut ports) = plat::listening(&procs) else {
+        let owners: HashMap<i32, Owner> = procs
+            .classes
+            .iter()
+            .filter_map(|(pid, class)| match class {
+                TreeOwner::Owned(owner) => Some((*pid, owner.clone())),
+                _ => None,
+            })
+            .collect();
+        let Some(mut ports) = plat::listening(&procs.table, &owners) else {
             return unsupported;
         };
         let mut seen = HashSet::new();
@@ -383,6 +464,219 @@ impl Sampler {
         ports.sort_by(|a, b| a.port.cmp(&b.port).then_with(|| a.addr.cmp(&b.addr)));
         PortReport { supported: true, ports }
     }
+}
+
+/// Share of one CPU of every process since the last reading kept in `state`. Readings closer together than
+/// `MIN_CPU_WINDOW` return the last shares, and the first reading gives none.
+fn cpu_shares(state: &mut CpuState, table: &Table, now: Instant, clk_tck: f64) -> HashMap<i32, f32> {
+    if let Some(at) = state.at
+        && now.duration_since(at) < MIN_CPU_WINDOW
+    {
+        return state.shares.clone();
+    }
+    let elapsed = state.at.map(|at| now.duration_since(at));
+    let shares: HashMap<i32, f32> = table
+        .iter()
+        .map(|(&pid, row)| {
+            (
+                pid,
+                cpu_from_ticks(state.ticks.get(&pid).copied(), row.cpu_ticks, elapsed, clk_tck),
+            )
+        })
+        .collect();
+    state.ticks = table.iter().map(|(&pid, row)| (pid, row.cpu_ticks)).collect();
+    state.at = Some(now);
+    state.shares = shares.clone();
+    shares
+}
+
+/// Who owns a process, from its tree (see `tree_owner`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum TreeOwner {
+    /// The nearest of the process and its ancestors that is a root or carries an owner's mark.
+    Owned(Owner),
+    /// The walk reached init without finding an owner: the process is the daemon user's and belongs to nobody.
+    Free,
+    /// The tree could not be read to the end: a parent is missing from the table. Such a process is not stopped.
+    Unknown,
+}
+
+/// Deepest ancestor chain the walk follows. Real trees are far shallower; a longer one is not trusted.
+const MAX_TREE_DEPTH: usize = 256;
+
+/// Who owns `pid`. Walks up from the process: the first of itself and its ancestors that is a root (an agent's CLI or
+/// a terminal's shell, see `register_root`) or carries an owner's environment mark decides. The environment mark is
+/// only a second sign: a system binary such as `zsh` or `sleep` hides its environment from `ps` on macOS, and its
+/// children are then owned through the tree.
+fn tree_owner(table: &Table, roots: &HashMap<i32, Owner>, markers: &HashMap<i32, Owner>, pid: i32) -> TreeOwner {
+    let mut cur = pid;
+    for _ in 0..MAX_TREE_DEPTH {
+        if let Some(owner) = roots.get(&cur).or_else(|| markers.get(&cur)) {
+            return TreeOwner::Owned(owner.clone());
+        }
+        if cur <= 1 {
+            return TreeOwner::Free;
+        }
+        let Some(row) = table.get(&cur) else {
+            return TreeOwner::Unknown;
+        };
+        if row.ppid == cur {
+            return TreeOwner::Unknown;
+        }
+        cur = row.ppid;
+    }
+    TreeOwner::Unknown
+}
+
+impl Owner {
+    /// An agent's process: its CLI, and the children of it.
+    pub fn agent(id: &str) -> Self {
+        Self {
+            kind: OwnerKind::Agent,
+            id: Some(id.to_string()),
+        }
+    }
+
+    /// A terminal's process: its shell, and the children of it.
+    pub fn terminal(id: &str) -> Self {
+        Self {
+            kind: OwnerKind::Terminal,
+            id: Some(id.to_string()),
+        }
+    }
+}
+
+/// Pids of agent CLIs and terminal shells, each with its owner: the roots of the process trees. Registered by their
+/// owners (see `register_root`), so an owner's processes are told apart even where their environment is hidden.
+static ROOTS: Mutex<BTreeMap<i32, Owner>> = Mutex::new(BTreeMap::new());
+
+/// Keeps a root registered. Dropping it removes the root; the owner keeps it as long as its process is its own.
+#[must_use = "dropping the guard at once unregisters the root"]
+pub struct RootGuard {
+    pid: i32,
+}
+
+/// Records `pid` as a root of `owner`'s processes. Keep the guard as long as the process belongs to the owner.
+pub fn register_root(pid: i32, owner: Owner) -> RootGuard {
+    ROOTS.lock().unwrap_or_else(|e| e.into_inner()).insert(pid, owner);
+    RootGuard { pid }
+}
+
+impl Drop for RootGuard {
+    fn drop(&mut self) {
+        ROOTS.lock().unwrap_or_else(|e| e.into_inner()).remove(&self.pid);
+    }
+}
+
+/// The registered roots. The daemon's own process is classified directly (see `Sampler::procs`), and its children
+/// belong to nobody here: a child is only the daemon's by being the daemon's process.
+fn roots() -> HashMap<i32, Owner> {
+    ROOTS
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .iter()
+        .map(|(pid, owner)| (*pid, owner.clone()))
+        .collect()
+}
+
+/// The owner marks of the environment of every process, read where the platform gives them: `None` if the platform
+/// cannot read them at all.
+fn markers() -> Option<HashMap<i32, Owner>> {
+    plat::read_markers()
+}
+
+/// The pids of the two top lists over `(pid, memory, cpu share)` rows: the `count` biggest by memory and the `count`
+/// busiest by CPU, without repeats, biggest memory first. Ties keep the lower pid first.
+fn top_pids(rows: &[(i32, u64, f32)], count: usize) -> Vec<i32> {
+    let mut by_memory = rows.to_vec();
+    by_memory.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+    let mut by_cpu = rows.to_vec();
+    by_cpu.sort_by(|a, b| b.2.total_cmp(&a.2).then(a.0.cmp(&b.0)));
+    let mut chosen: Vec<(i32, u64)> = by_memory.iter().take(count).map(|r| (r.0, r.1)).collect();
+    for row in by_cpu.iter().take(count) {
+        if !chosen.iter().any(|(pid, _)| *pid == row.0) {
+            chosen.push((row.0, row.1));
+        }
+    }
+    chosen.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+    chosen.into_iter().map(|(pid, _)| pid).collect()
+}
+
+/// Whether a process of the daemon's user may be stopped from the app, by who owns it. Fail-closed: a tree that
+/// cannot be read to the end is refused like an agent's process.
+fn stoppable(class: &TreeOwner) -> Result<(), HostError> {
+    match class {
+        TreeOwner::Free => Ok(()),
+        TreeOwner::Owned(_) => Err(HostError::Forbidden(
+            "an agent's or terminal's process: stop it from its agent or terminal".into(),
+        )),
+        TreeOwner::Unknown => Err(HostError::Forbidden("cannot read the process tree: not stopped".into())),
+    }
+}
+
+/// Sends SIGTERM to a process of the daemon's user that belongs to no agent, terminal or the daemon, and whose tree
+/// can be read to the end. Returns the process's start time, which `force_own_after` checks before SIGKILL.
+///
+/// The checks run in this order, and the start time is read first and again just before the signal:
+/// a pid that another process takes meanwhile has another start time, and is refused. What stays open is the
+/// time between the second reading and `kill(2)`: a few microseconds in which the process must exit and its pid
+/// be reused. macOS has no pidfd to close that, and Linux is not given one here.
+pub fn terminate_own(pid: i32) -> Result<String, HostError> {
+    if pid <= 0 {
+        return Err(HostError::InvalidPid);
+    }
+    if pid == 1 {
+        return Err(HostError::Forbidden("pid 1 is the system's".into()));
+    }
+    if pid == self_pid() {
+        return Err(HostError::Forbidden("the daemon itself".into()));
+    }
+    let start = plat::start_time(pid).ok_or(HostError::NotFound)?;
+    let table = plat::read_table().ok_or_else(|| HostError::Forbidden("cannot read the process table".into()))?;
+    let row = table.get(&pid).ok_or(HostError::NotFound)?;
+    if !row.own {
+        return Err(HostError::Forbidden("another user's process".into()));
+    }
+    let marks = markers().ok_or_else(|| HostError::Forbidden("cannot read the process owners".into()))?;
+    stoppable(&tree_owner(&table, &roots(), &marks, pid))?;
+    if plat::start_time(pid).as_deref() != Some(start.as_str()) {
+        return Err(HostError::NotFound);
+    }
+    // SAFETY: pid is positive and was checked above; SIGTERM only asks the process to end.
+    if unsafe { libc::kill(pid, libc::SIGTERM) } != 0 {
+        let err = std::io::Error::last_os_error();
+        return Err(if err.raw_os_error() == Some(libc::ESRCH) {
+            HostError::NotFound
+        } else {
+            HostError::Io(err.to_string())
+        });
+    }
+    Ok(start)
+}
+
+/// Whether `pid` is gone (exited or a zombie) within `wait`.
+pub fn wait_gone(pid: i32, wait: Duration) -> bool {
+    let deadline = Instant::now() + wait;
+    while alive(pid) {
+        if Instant::now() >= deadline {
+            return false;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    true
+}
+
+/// After `grace`, SIGKILL the process if it is still there with the start time `terminate_own` read.
+/// A pid that another process has taken since is left alone.
+pub async fn force_own_after(pid: i32, start: String, grace: Duration) {
+    tokio::time::sleep(grace).await;
+    let _ = tokio::task::spawn_blocking(move || {
+        if plat::start_time(pid).as_deref() == Some(start.as_str()) && alive(pid) {
+            // SAFETY: pid is positive; its start time was just checked, so it is the same process.
+            unsafe { libc::kill(pid, libc::SIGKILL) };
+        }
+    })
+    .await;
 }
 
 /// Stats that do not change while the daemon runs.
@@ -700,9 +994,13 @@ fn parse_ipv6_hex(s: &str) -> Option<Ipv6Addr> {
 struct PidStat {
     name: String,
     state: char,
+    /// Parent pid.
+    ppid: i32,
     /// utime + stime, in clock ticks.
     ticks: u64,
     rss_pages: u64,
+    /// Start time since boot, in clock ticks: with the pid it tells one process from a later one with the same pid.
+    start: u64,
 }
 
 #[cfg(any(target_os = "linux", test))]
@@ -712,48 +1010,78 @@ fn parse_pid_stat(s: &str) -> Option<PidStat> {
     let close = s.rfind(')')?;
     let name = s.get(open + 1..close)?.to_string();
     let f: Vec<&str> = s.get(close + 1..)?.split_whitespace().collect();
-    // f[0] is field 3 (state). utime is field 14, stime 15, rss 24 (proc(5)).
+    // f[0] is field 3 (state). utime is field 14, stime 15, starttime 22, rss 24 (proc(5)).
     let state = f.first()?.chars().next()?;
     let num = |i: usize| f.get(i).and_then(|v| v.parse::<u64>().ok());
     Some(PidStat {
         name,
         state,
+        ppid: f.get(1)?.parse().ok()?,
         ticks: num(11)? + num(12)?,
         rss_pages: num(21)?,
+        start: num(19)?,
     })
 }
 
-/// One `ps -E` line: `pid rss %cpu command… KEY=VALUE…`.
+/// One line of `ps -axww -o pid=,ppid=,rss=,uid=,time=,comm=` (macOS).
 #[cfg(any(target_os = "macos", test))]
 #[derive(Debug, Clone, PartialEq)]
-struct PsRow {
+struct TableLine {
     pid: i32,
+    ppid: i32,
     rss_bytes: u64,
-    cpu_percent: f32,
+    uid: u32,
+    cpu_ticks: u64,
     name: String,
     cmd: String,
-    owner: Option<Owner>,
 }
 
 #[cfg(any(target_os = "macos", test))]
-fn parse_ps_line(line: &str) -> Option<PsRow> {
+fn parse_table_line(line: &str) -> Option<TableLine> {
     let (pid, rest) = take_field(line)?;
+    let (ppid, rest) = take_field(rest)?;
     let (rss, rest) = take_field(rest)?;
-    let (cpu, rest) = take_field(rest)?;
-    let words: Vec<&str> = rest.split_whitespace().collect();
-    let owner = owner_from_pairs(words.iter().copied());
-    let cmd_words: Vec<&str> = words.iter().copied().filter(|w| !is_env_word(w)).collect();
-    let name = cmd_words
-        .first()
-        .map_or_else(String::new, |p| p.rsplit('/').next().unwrap_or_default().to_string());
-    Some(PsRow {
+    let (uid, rest) = take_field(rest)?;
+    let (time, rest) = take_field(rest)?;
+    // The command is the executable's path, which may hold spaces: its file name is the short name.
+    let cmd = rest.trim();
+    if cmd.is_empty() {
+        return None;
+    }
+    Some(TableLine {
         pid: pid.parse().ok()?,
+        ppid: ppid.parse().ok()?,
         rss_bytes: rss.parse::<u64>().ok()? * 1024,
-        cpu_percent: cpu.parse().ok()?,
-        name,
-        cmd: truncate_chars(&cmd_words.join(" "), CMD_CHARS),
-        owner,
+        uid: uid.parse().ok()?,
+        cpu_ticks: parse_cpu_time(time)?,
+        name: cmd.rsplit('/').next().unwrap_or_default().to_string(),
+        cmd: truncate_chars(cmd, CMD_CHARS),
     })
+}
+
+/// Cumulative CPU time as `ps` prints it, `[[dd-]hh:]mm:ss.ss`, in hundredths of a second.
+#[cfg(any(target_os = "macos", test))]
+fn parse_cpu_time(text: &str) -> Option<u64> {
+    let (days, clock) = match text.split_once('-') {
+        Some((d, rest)) => (d.parse::<u64>().ok()?, rest),
+        None => (0, text),
+    };
+    let parts: Vec<&str> = clock.split(':').collect();
+    let (hours, minutes, seconds) = match parts.as_slice() {
+        [m, s] => (0, m.parse::<u64>().ok()?, s.parse::<f64>().ok()?),
+        [h, m, s] => (h.parse::<u64>().ok()?, m.parse::<u64>().ok()?, s.parse::<f64>().ok()?),
+        _ => return None,
+    };
+    let whole_minutes = (days * 24 + hours) * 60 + minutes;
+    Some(whole_minutes * 6000 + (seconds * 100.0).round() as u64)
+}
+
+/// One line of `ps -axww -E -o pid=,command=` (macOS): the owner marks shown in the environment after the command.
+#[cfg(any(target_os = "macos", test))]
+fn parse_marker_line(line: &str) -> Option<(i32, Owner)> {
+    let (pid, rest) = take_field(line)?;
+    let owner = owner_from_pairs(rest.split_whitespace())?;
+    Some((pid.parse().ok()?, owner))
 }
 
 /// The first whitespace-separated word and the text after it.
@@ -765,18 +1093,6 @@ fn take_field(s: &str) -> Option<(&str, &str)> {
         return None;
     }
     Some((&s[..end], &s[end..]))
-}
-
-/// `KEY=VALUE` where the key is upper case, as in environment variables.
-#[cfg(any(target_os = "macos", test))]
-fn is_env_word(w: &str) -> bool {
-    let Some((key, _)) = w.split_once('=') else {
-        return false;
-    };
-    key.starts_with(|c: char| c.is_ascii_uppercase() || c == '_')
-        && key
-            .chars()
-            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
 }
 
 /// One listening socket from `lsof -nP -iTCP -sTCP:LISTEN -Fpcn`.
@@ -941,10 +1257,16 @@ mod plat {
         )
     }
 
-    pub(super) fn scan_all() -> Option<Vec<ProcInfo>> {
-        let mut out = Vec::new();
+    fn my_uid() -> u32 {
+        // SAFETY: getuid has no preconditions.
+        unsafe { libc::getuid() }
+    }
+
+    /// Every process whose `/proc` entry can be read. A process that exits while the table is read is skipped.
+    pub(super) fn read_table() -> Option<Table> {
+        let me = my_uid();
+        let mut table = Table::new();
         for pid in pids()? {
-            // A process that exits during the scan is skipped.
             let Ok(stat) = fs::read_to_string(format!("/proc/{pid}/stat")) else {
                 continue;
             };
@@ -960,26 +1282,40 @@ mod plat {
             } else {
                 truncate_chars(&args.join(" "), CMD_CHARS)
             };
-            // Only our own processes can be read; the others have no owner.
+            let own = fs::metadata(format!("/proc/{pid}")).is_ok_and(|m| m.uid() == me);
+            table.insert(
+                pid,
+                ProcRow {
+                    ppid: st.ppid,
+                    name: st.name,
+                    cmd,
+                    rss_bytes: st.rss_pages * page_size(),
+                    cpu_ticks: st.ticks,
+                    own,
+                },
+            );
+        }
+        Some(table)
+    }
+
+    /// The owner marks in the environment of every process whose environment can be read.
+    pub(super) fn read_markers() -> Option<HashMap<i32, Owner>> {
+        let mut marks = HashMap::new();
+        for pid in pids()? {
             let owner = fs::read(format!("/proc/{pid}/environ"))
                 .ok()
                 .and_then(|env| owner_from_environ(&env));
-            out.push(ProcInfo {
-                pid,
-                name: st.name,
-                cmd,
-                rss_bytes: st.rss_pages * page_size(),
-                cpu: CpuReading::Ticks(st.ticks),
-                owner,
-            });
+            if let Some(owner) = owner {
+                marks.insert(pid, owner);
+            }
         }
-        Some(out)
+        Some(marks)
     }
 
-    pub(super) fn process_owner(pid: i32) -> Option<Owner> {
-        fs::read(format!("/proc/{pid}/environ"))
-            .ok()
-            .and_then(|env| owner_from_environ(&env))
+    /// The process's start time: the same pid with another start time is another process.
+    pub(super) fn start_time(pid: i32) -> Option<String> {
+        let stat = fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+        parse_pid_stat(&stat).map(|st| st.start.to_string())
     }
 
     /// The address as people write it: IPv4-mapped IPv6 shows as IPv4.
@@ -1012,24 +1348,22 @@ mod plat {
         found
     }
 
-    pub(super) fn listening(procs: &[ProcInfo]) -> Option<Vec<PortEntry>> {
+    pub(super) fn listening(table: &Table, owners: &HashMap<i32, Owner>) -> Option<Vec<PortEntry>> {
         let mut listens = parse_proc_net_tcp(&read("/proc/net/tcp"), false);
         listens.extend(parse_proc_net_tcp(&read("/proc/net/tcp6"), true));
         let inodes: HashSet<u64> = listens.iter().map(|l| l.inode).collect();
-        let owners = socket_owners(&inodes);
-        let by_pid: HashMap<i32, &ProcInfo> = procs.iter().map(|p| (p.pid, p)).collect();
+        let by_inode = socket_owners(&inodes);
         Some(
             listens
                 .into_iter()
                 .map(|l| {
-                    let pid = owners.get(&l.inode).copied();
-                    let proc = pid.and_then(|p| by_pid.get(&p).copied());
+                    let pid = by_inode.get(&l.inode).copied();
                     PortEntry {
                         port: l.port,
                         addr: display_addr(l.addr),
                         pid,
-                        process: proc.map(|p| p.name.clone()),
-                        owner: proc.and_then(|p| p.owner.clone()),
+                        process: pid.and_then(|p| table.get(&p)).map(|row| row.name.clone()),
+                        owner: pid.and_then(|p| owners.get(&p).cloned()),
                     }
                 })
                 .collect(),
@@ -1101,38 +1435,60 @@ mod plat {
     }
 
     pub(super) fn clk_tck() -> f64 {
-        // Not used on macOS: ps reports percentages.
+        // `ps` gives CPU time to the hundredth of a second, the ticks of `ProcRow::cpu_ticks`.
         100.0
     }
 
-    pub(super) fn is_zombie(_pid: i32) -> bool {
-        false
+    /// Whether the process has exited and waits to be reaped: its state starts with `Z`.
+    pub(super) fn is_zombie(pid: i32) -> bool {
+        run("ps", &["-o", "stat=", "-p", &pid.to_string()]).is_some_and(|stat| stat.trim_start().starts_with('Z'))
     }
 
-    pub(super) fn scan_all() -> Option<Vec<ProcInfo>> {
-        let out = run("ps", &["-ww", "-A", "-E", "-o", "pid=,rss=,%cpu=,command="])?;
+    fn my_uid() -> u32 {
+        // SAFETY: getuid has no preconditions.
+        unsafe { libc::getuid() }
+    }
+
+    /// Every process, from one `ps` call: parent, memory, owner, CPU time and the executable's path.
+    pub(super) fn read_table() -> Option<Table> {
+        let out = run("ps", &["-axww", "-o", "pid=,ppid=,rss=,uid=,time=,comm="])?;
+        let me = my_uid();
         Some(
             out.lines()
-                .filter_map(parse_ps_line)
-                .map(|row| ProcInfo {
-                    pid: row.pid,
-                    name: row.name,
-                    cmd: row.cmd,
-                    rss_bytes: row.rss_bytes,
-                    cpu: CpuReading::Percent(row.cpu_percent),
-                    owner: row.owner,
+                .filter_map(parse_table_line)
+                .map(|line| {
+                    let own = line.uid == me;
+                    (
+                        line.pid,
+                        ProcRow {
+                            ppid: line.ppid,
+                            name: line.name,
+                            cmd: line.cmd,
+                            rss_bytes: line.rss_bytes,
+                            cpu_ticks: line.cpu_ticks,
+                            own,
+                        },
+                    )
                 })
                 .collect(),
         )
     }
 
-    pub(super) fn process_owner(pid: i32) -> Option<Owner> {
-        scan_all()?.into_iter().find(|p| p.pid == pid)?.owner
+    /// The owner marks of the environments `ps` shows. Apple's own programs show none, which is why the tree counts.
+    pub(super) fn read_markers() -> Option<HashMap<i32, Owner>> {
+        let out = run("ps", &["-axww", "-E", "-o", "pid=,command="])?;
+        Some(out.lines().filter_map(parse_marker_line).collect())
     }
 
-    pub(super) fn listening(procs: &[ProcInfo]) -> Option<Vec<PortEntry>> {
+    /// The process's start time as `ps` prints it. A pid reused by another process starts later.
+    pub(super) fn start_time(pid: i32) -> Option<String> {
+        let start = run("ps", &["-o", "lstart=", "-p", &pid.to_string()])?;
+        let start = start.trim();
+        (!start.is_empty()).then(|| start.to_string())
+    }
+
+    pub(super) fn listening(table: &Table, owners: &HashMap<i32, Owner>) -> Option<Vec<PortEntry>> {
         let out = run_any("lsof", &["-nP", "-iTCP", "-sTCP:LISTEN", "-Fpcn"])?;
-        let by_pid: HashMap<i32, &ProcInfo> = procs.iter().map(|p| (p.pid, p)).collect();
         Some(
             parse_lsof(&out)
                 .into_iter()
@@ -1140,8 +1496,8 @@ mod plat {
                     port: l.port,
                     addr: l.addr,
                     pid: Some(l.pid),
-                    process: Some(l.process),
-                    owner: by_pid.get(&l.pid).and_then(|p| p.owner.clone()),
+                    process: table.get(&l.pid).map(|row| row.name.clone()).or(Some(l.process)),
+                    owner: owners.get(&l.pid).cloned(),
                 })
                 .collect(),
         )
@@ -1152,6 +1508,18 @@ mod plat {
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
 mod plat {
     use super::*;
+
+    pub(super) fn read_table() -> Option<Table> {
+        None
+    }
+
+    pub(super) fn read_markers() -> Option<HashMap<i32, Owner>> {
+        None
+    }
+
+    pub(super) fn start_time(_pid: i32) -> Option<String> {
+        None
+    }
 
     pub(super) fn read_raw() -> Raw {
         Raw {
@@ -1173,15 +1541,7 @@ mod plat {
         false
     }
 
-    pub(super) fn scan_all() -> Option<Vec<ProcInfo>> {
-        None
-    }
-
-    pub(super) fn process_owner(_pid: i32) -> Option<Owner> {
-        None
-    }
-
-    pub(super) fn listening(_procs: &[ProcInfo]) -> Option<Vec<PortEntry>> {
+    pub(super) fn listening(_table: &Table, _owners: &HashMap<i32, Owner>) -> Option<Vec<PortEntry>> {
         None
     }
 }
@@ -1232,17 +1592,6 @@ fn daemon_owner() -> Owner {
 }
 
 /// Every process, with the daemon's own marked as the daemon.
-fn scan_processes() -> Option<Vec<ProcInfo>> {
-    let me = self_pid();
-    let mut procs = plat::scan_all()?;
-    for p in &mut procs {
-        if p.pid == me {
-            p.owner = Some(daemon_owner());
-        }
-    }
-    Some(procs)
-}
-
 /// Whether `pid` exists and is not a zombie. EPERM means it exists but belongs to someone else.
 fn alive(pid: i32) -> bool {
     // SAFETY: signal 0 checks that the process exists and may be signalled; it sends nothing.
@@ -1253,9 +1602,13 @@ fn alive(pid: i32) -> bool {
 
 fn owner_of(pid: i32) -> Option<Owner> {
     if pid == self_pid() {
-        Some(daemon_owner())
-    } else {
-        plat::process_owner(pid)
+        return Some(daemon_owner());
+    }
+    let table = plat::read_table()?;
+    let marks = markers()?;
+    match tree_owner(&table, &roots(), &marks, pid) {
+        TreeOwner::Owned(owner) => Some(owner),
+        TreeOwner::Free | TreeOwner::Unknown => None,
     }
 }
 
@@ -1419,14 +1772,12 @@ mod tests {
     }
 
     #[test]
-    fn ps_line_gives_pid_memory_cpu_and_agent_owner() {
-        let line =
-            "  4242  51200   3.5 /usr/local/bin/node server.js --port 3000 BANDITO_AGENT_ID=agent-7 HOME=/Users/me";
-        let row = parse_ps_line(line).unwrap();
-        assert_eq!((row.pid, row.rss_bytes, row.cpu_percent), (4242, 51200 * 1024, 3.5));
-        assert_eq!(row.name, "node");
-        assert_eq!(row.cmd, "/usr/local/bin/node server.js --port 3000");
-        assert_eq!(row.owner.unwrap().id.as_deref(), Some("agent-7"));
+    fn marker_line_gives_the_owner_from_the_environment() {
+        let line = "  4242 /usr/local/bin/node server.js --port 3000 BANDITO_AGENT_ID=agent-7 HOME=/Users/me";
+        let (pid, owner) = parse_marker_line(line).unwrap();
+        assert_eq!(pid, 4242);
+        assert_eq!(owner, Owner::agent("agent-7"));
+        assert!(parse_marker_line("  77 /bin/sleep 30 HOME=/Users/me").is_none());
     }
 
     #[test]
@@ -1530,5 +1881,219 @@ mod tests {
         assert!((cpu_from_ticks(Some(1000), 1050, two_s, 100.0) - 25.0).abs() < 0.01);
         assert_eq!(cpu_from_ticks(None, 1100, one_s, 100.0), 0.0);
         assert_eq!(cpu_from_ticks(Some(1000), 1100, None, 100.0), 0.0);
+    }
+
+    #[test]
+    fn pid_stat_reads_the_start_time_and_memory() {
+        // Fields after the name: state, ppid, pgrp, session, tty, tpgid, flags, minflt, cminflt, majflt,
+        // cmajflt, utime 12, stime 13, cutime, cstime, priority, nice, threads, itrealvalue, starttime 20, vsize, rss 22.
+        let stat = "123 (sleep) S 1 123 123 0 -1 4194560 100 0 0 0 5 7 0 0 20 0 1 0 98765 1000000 300";
+        let st = parse_pid_stat(stat).unwrap();
+        assert_eq!(st.name, "sleep");
+        assert_eq!(st.ticks, 12);
+        assert_eq!(st.rss_pages, 300);
+        assert_eq!(st.start, 98765);
+    }
+
+    fn row(ppid: i32) -> ProcRow {
+        ProcRow {
+            ppid,
+            name: String::new(),
+            cmd: String::new(),
+            rss_bytes: 0,
+            cpu_ticks: 0,
+            own: true,
+        }
+    }
+
+    #[test]
+    fn the_process_tree_decides_the_owner() {
+        // 100 is an agent's CLI, 101 and 102 its children (system binaries in the real tree), 200 a terminal's shell.
+        let table: Table = [
+            (1, row(0)),
+            (100, row(1)),
+            (101, row(100)),
+            (102, row(101)),
+            (200, row(1)),
+            (201, row(200)),
+            (300, row(1)),
+            (103, row(1)),
+            (400, row(999)),
+            (500, row(500)),
+        ]
+        .into_iter()
+        .collect();
+        let roots: HashMap<i32, Owner> = [(100, Owner::agent("a1")), (200, Owner::terminal("t1"))]
+            .into_iter()
+            .collect();
+        // 103 carries an agent's environment mark, and no root.
+        let marks: HashMap<i32, Owner> = [(103, Owner::agent("a2"))].into_iter().collect();
+        let walk = |pid| tree_owner(&table, &roots, &marks, pid);
+        assert_eq!(walk(102), TreeOwner::Owned(Owner::agent("a1")));
+        assert_eq!(walk(101), TreeOwner::Owned(Owner::agent("a1")));
+        assert_eq!(walk(201), TreeOwner::Owned(Owner::terminal("t1")));
+        assert_eq!(walk(103), TreeOwner::Owned(Owner::agent("a2")));
+        assert_eq!(walk(300), TreeOwner::Free);
+        assert_eq!(walk(1), TreeOwner::Free);
+        // A parent missing from the table: the tree cannot be read to the end.
+        assert_eq!(walk(400), TreeOwner::Unknown);
+        // A process that is its own parent, and a pid that is not in the table at all.
+        assert_eq!(walk(500), TreeOwner::Unknown);
+        assert_eq!(walk(777), TreeOwner::Unknown);
+    }
+
+    #[test]
+    fn a_zombie_counts_as_gone() {
+        // Exited but not reaped by its parent: the process is still in the table, and it is gone for `wait_gone`.
+        let mut child = std::process::Command::new("sleep").arg("30").spawn().unwrap();
+        let pid = child.id() as i32;
+        // SAFETY: the child is this test's own and is signalled only here.
+        unsafe {
+            libc::kill(pid, libc::SIGKILL);
+        }
+        assert!(wait_gone(pid, Duration::from_secs(5)));
+        child.wait().unwrap();
+    }
+
+    #[test]
+    fn a_process_that_is_not_free_is_refused_as_stoppable() {
+        assert!(stoppable(&TreeOwner::Free).is_ok());
+        let agent = stoppable(&TreeOwner::Owned(Owner::agent("a1"))).unwrap_err();
+        assert!(
+            matches!(agent, HostError::Forbidden(ref why) if why.contains("agent")),
+            "{agent:?}"
+        );
+        // The fail-closed case: the tree could not be read, so the process is not stopped.
+        let unknown = stoppable(&TreeOwner::Unknown).unwrap_err();
+        assert!(
+            matches!(unknown, HostError::Forbidden(ref why) if why.contains("tree")),
+            "{unknown:?}"
+        );
+    }
+
+    #[test]
+    fn the_nearest_owner_wins() {
+        let table: Table = [(1, row(0)), (100, row(1)), (101, row(100)), (102, row(101))]
+            .into_iter()
+            .collect();
+        let roots: HashMap<i32, Owner> = [(100, Owner::agent("outer")), (101, Owner::agent("inner"))]
+            .into_iter()
+            .collect();
+        assert_eq!(
+            tree_owner(&table, &roots, &HashMap::new(), 102),
+            TreeOwner::Owned(Owner::agent("inner"))
+        );
+    }
+
+    #[test]
+    fn the_table_has_this_process_with_its_parent_and_its_user() {
+        let table = plat::read_table().expect("the process table");
+        let me = table.get(&(std::process::id() as i32)).expect("this process");
+        // SAFETY: getppid has no preconditions.
+        assert_eq!(me.ppid, unsafe { libc::getppid() });
+        assert!(me.own);
+        assert!(me.rss_bytes > 0);
+    }
+
+    #[test]
+    fn a_child_of_a_registered_root_is_owned_by_it() {
+        // `sh` waits for its background `sleep`: the child keeps its parent in the table.
+        let mut shell = std::process::Command::new("sh")
+            .args(["-c", "sleep 30 & echo $!; wait"])
+            .stdout(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut line = String::new();
+        std::io::BufRead::read_line(&mut std::io::BufReader::new(shell.stdout.take().unwrap()), &mut line).unwrap();
+        let sleep_pid: i32 = line.trim().parse().unwrap();
+        let _root = register_root(shell.id() as i32, Owner::agent("tree-test"));
+        let table = plat::read_table().expect("the process table");
+        let marks = markers().expect("the owner marks");
+        assert_eq!(
+            tree_owner(&table, &roots(), &marks, sleep_pid),
+            TreeOwner::Owned(Owner::agent("tree-test"))
+        );
+        // SAFETY: both pids are children of this test and are signalled only here.
+        unsafe {
+            libc::kill(sleep_pid, libc::SIGKILL);
+        }
+        let _ = shell.kill();
+        let _ = shell.wait();
+    }
+
+    #[test]
+    fn cpu_shares_are_the_change_in_cpu_time_and_repeats_within_a_second_are_kept() {
+        let mut state = CpuState::default();
+        let t0 = Instant::now();
+        let table = |ticks: u64| -> Table {
+            [(
+                7,
+                ProcRow {
+                    cpu_ticks: ticks,
+                    ..row(1)
+                },
+            )]
+            .into_iter()
+            .collect()
+        };
+        // The first reading has nothing to compare with.
+        assert_eq!(cpu_shares(&mut state, &table(100), t0, 100.0)[&7], 0.0);
+        // 200 ticks at 100 per second is 2 s of CPU in 2 s of wall time: a whole CPU.
+        let two_s = t0 + Duration::from_secs(2);
+        assert!((cpu_shares(&mut state, &table(300), two_s, 100.0)[&7] - 100.0).abs() < 0.01);
+        // A reading only half a second later keeps the last share.
+        let later = two_s + Duration::from_millis(500);
+        assert!((cpu_shares(&mut state, &table(900), later, 100.0)[&7] - 100.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn the_top_lists_are_the_biggest_by_memory_and_the_busiest_by_cpu() {
+        // Pid 2 is the busiest, pid 3 the biggest: both are listed, biggest memory first.
+        assert_eq!(top_pids(&[(1, 100, 0.0), (2, 50, 90.0), (3, 300, 0.0)], 1), vec![3, 2]);
+        // Ties keep the lower pid first.
+        assert_eq!(top_pids(&[(9, 5, 0.0), (3, 5, 0.0), (7, 5, 0.0)], 3), vec![3, 7, 9]);
+    }
+
+    #[test]
+    fn the_top_lists_have_each_count_without_repeats() {
+        // Memory grows with the pid, so the biggest 15 are 6..=20; CPU is equal, so the busiest 15 are 1..=15.
+        let rows: Vec<(i32, u64, f32)> = (1..=20).map(|i| (i, i as u64 * 1_000, 0.0)).collect();
+        let top = top_pids(&rows, 15);
+        assert_eq!(top.len(), 20);
+        assert_eq!(top[0], 20);
+        let mut sorted = top.clone();
+        sorted.sort_unstable();
+        sorted.dedup();
+        assert_eq!(sorted.len(), 20, "no process is listed twice");
+    }
+
+    #[test]
+    fn cpu_time_reads_minutes_hours_and_days_in_hundredths() {
+        assert_eq!(parse_cpu_time("107:33.19"), Some(645_319));
+        assert_eq!(parse_cpu_time("1:02:03.45"), Some(372_345));
+        assert_eq!(parse_cpu_time("2-01:02:03.45"), Some(17_652_345));
+        assert_eq!(parse_cpu_time("0:01.50"), Some(150));
+        assert_eq!(parse_cpu_time("soon"), None);
+    }
+
+    #[test]
+    fn table_line_reads_pid_parent_memory_user_cpu_time_and_the_file_name() {
+        let line = parse_table_line(
+            "  4242     1 204800  501 0:01.50 /Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        )
+        .unwrap();
+        assert_eq!(
+            (line.pid, line.ppid, line.rss_bytes, line.uid, line.cpu_ticks),
+            (4242, 1, 204_800 * 1024, 501, 150)
+        );
+        assert_eq!(line.name, "Google Chrome");
+        assert_eq!(line.cmd, "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome");
+        let launchd = parse_table_line("1 0 18416 0 107:33.19 /sbin/launchd").unwrap();
+        assert_eq!(
+            (launchd.ppid, launchd.name.as_str(), launchd.cpu_ticks),
+            (0, "launchd", 645_319)
+        );
+        assert!(parse_table_line("not a process line").is_none());
+        assert!(parse_table_line("12 1 abc 501 0:00.00 /bin/x").is_none());
     }
 }

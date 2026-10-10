@@ -148,39 +148,79 @@ struct AgentBubble: View {
     }
 }
 
-/// Live text of a reply still being written: the same bubble, with three dots after it.
+/// The bubble shown while the agent's turn runs: three dots in a row that rise in a wave, the caption of what the agent
+/// is doing, and how long the turn has run. Still dots when motion is reduced.
 struct TypingIndicator: View {
+    var activity: AgentActivity
+    /// When the turn started (Unix ms); the elapsed time is not shown without it.
+    var since: Int64?
+
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(MotionLevel.storageKey) private var motionLevel = MotionLevel.full.rawValue
     /// Repeating motion stands still: Reduce Motion, or "Less" / "Off" in settings.
     private var still: Bool { reduceMotion || !MotionLevel(stored: motionLevel).allowsRepeatingMotion }
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 9) {
             TimelineView(.animation(minimumInterval: 1.0 / 20, paused: still)) { context in
                 let time = context.date.timeIntervalSinceReferenceDate
-                ForEach(0..<3, id: \.self) { index in
-                    Circle()
-                        .fill(Color.Bandito.text2)
-                        .frame(width: 5, height: 5)
-                        .opacity(Self.opacity(time: time, index: index, reduceMotion: reduceMotion))
+                HStack(spacing: 4) {
+                    ForEach(0..<3, id: \.self) { index in
+                        Circle()
+                            .fill(Color.Bandito.text2)
+                            .frame(width: 6, height: 6)
+                            .opacity(Self.opacity(time: time, index: index, still: still))
+                            .offset(y: Self.lift(time: time, index: index, still: still))
+                    }
+                }
+            }
+            Text(activity.title)
+                .font(BanditoFont.font(size: 12.5, weight: 400))
+                .foregroundStyle(Color.Bandito.text2)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+            if since != nil {
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    if let seconds = AgentActivity.elapsedSeconds(since: since, now: context.date) {
+                        Text("· \(AgentActivity.elapsedText(seconds: seconds))")
+                            .font(BanditoFont.font(size: 12, weight: 400))
+                            .foregroundStyle(Color.Bandito.text3)
+                            .monospacedDigit()
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                    }
                 }
             }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 13)
+        .padding(.vertical, 11)
         .background(
             Color.Bandito.surface1,
             in: UnevenRoundedRectangle(
                 topLeadingRadius: 18, bottomLeadingRadius: 6, bottomTrailingRadius: 18, topTrailingRadius: 18))
+        .overlay(
+            UnevenRoundedRectangle(
+                topLeadingRadius: 18, bottomLeadingRadius: 6, bottomTrailingRadius: 18, topTrailingRadius: 18)
+                .stroke(Color.Bandito.line, lineWidth: 1))
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// Each dot brightens in turn, 0.2 s apart, over a 1.2 s cycle. Reduce Motion keeps them at a middle level.
-    static func opacity(time: Double, index: Int, reduceMotion: Bool) -> Double {
-        if reduceMotion { return 0.6 }
+    /// Each dot brightens in turn, 0.2 s apart, over a 1.2 s cycle. Still dots stay at a middle level.
+    static func opacity(time: Double, index: Int, still: Bool) -> Double {
+        if still { return 0.6 }
+        return 0.25 + 0.75 * peak(time: time, index: index)
+    }
+
+    /// The same wave as the brightness, lifting each dot by up to 3 pt. Still dots do not move.
+    static func lift(time: Double, index: Int, still: Bool) -> Double {
+        if still { return 0 }
+        return -3 * peak(time: time, index: index)
+    }
+
+    /// 0...1 where a dot is at the top of its beat.
+    private static func peak(time: Double, index: Int) -> Double {
         let fraction = (time + Double(index) * 0.2).truncatingRemainder(dividingBy: 1.2) / 1.2
-        return 0.25 + 0.75 * max(0, 1 - abs(fraction - 0.4) / 0.4)
+        return max(0, 1 - abs(fraction - 0.4) / 0.4)
     }
 }
 

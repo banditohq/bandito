@@ -51,6 +51,10 @@ struct BanditoApp: App {
                     // The daemons' update checks are re-read hourly, and the Server screen re-reads on open.
                     await model.refreshDaemonInfoHourly()
                 }
+                .task {
+                    // Agents made elsewhere show up when the app comes back to the front.
+                    await model.watchAppActivation()
+                }
                 .preferredColorScheme(.dark)
                 .background(WindowChrome())
         }
@@ -68,6 +72,7 @@ struct BanditoApp: App {
                 .environment(keymap)
                 .environment(gestures)
                 .environment(demo)
+                .environment(accountHub)
                 .focusEffectDisabled()
         }
 

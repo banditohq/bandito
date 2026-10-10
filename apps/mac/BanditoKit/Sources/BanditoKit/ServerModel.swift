@@ -1,4 +1,5 @@
 import Foundation
+import os
 import Observation
 
 /// How the app reaches a server. See docs/ARCHITECTURE.md#transports.
@@ -96,6 +97,23 @@ public final class ServerModel: Identifiable {
         }
     }
     public private(set) var agents: [Agent] = []
+    /// When `agents` was last read from the daemon (`agents.list`); nil until the first read.
+    public private(set) var agentsReadAt: Date?
+    /// Agent changes that arrive close together are answered by one `agents.list` after this delay.
+    public nonisolated static let agentsRefreshDelay: Duration = .milliseconds(300)
+    /// Coming back to the front re-reads the agents when the last read is older than this (seconds).
+    public nonisolated static let agentsStaleAfter: TimeInterval = 30
+    /// A refresh is waiting out its delay.
+    @ObservationIgnored private var agentsRefreshScheduled = false
+    /// An `agents.list` request is in flight.
+    @ObservationIgnored private var agentsRefreshing = false
+    /// Counts the deletions seen: an `agents.list` answer asked for before one may list the deleted agent, and is dropped.
+    @ObservationIgnored private var agentsGeneration = ListGeneration()
+    /// A failed `agents.list` is asked again after this delay.
+    @ObservationIgnored var agentsRetryDelay: Duration = .seconds(30)
+    /// A retry is waiting out its delay.
+    @ObservationIgnored private var agentsRetryScheduled = false
+    private static let log = Logger(subsystem: "dev.bandito", category: "agents")
     public private(set) var threads: [String: AgentThread] = [:]
     public private(set) var runtimes: [RuntimeStatus] = []
     /// When `runtimes` was last read from the daemon; nil until the first answer.
@@ -221,9 +239,13 @@ public final class ServerModel: Identifiable {
         reconnectTask?.cancel()
         reconnectTask = nil
         state = .connecting
+        // `open` takes the next generation before its first suspension, so this is the attempt it starts.
+        let attempt = generation + 1
         do {
             try await open()
         } catch {
+            // A superseded attempt (a disconnect, or a newer connect) must not write its failure over the current state.
+            guard attempt == generation else { return }
             // A connection lost during this attempt has already scheduled a reconnect: keep retrying instead of giving up.
             if reconnectTask == nil { state = .failed(FailureKind.classify(error)) }
         }
@@ -264,7 +286,7 @@ public final class ServerModel: Identifiable {
             notificationPump = startNotificationPump(c)
             let daemon = try await c.call("daemon.info", NoParams(), as: DaemonInfo.self)
             info = daemon
-            agents = try await c.call("agents.list", NoParams(), as: [Agent].self)
+            setAgents(try await c.call("agents.list", NoParams(), as: [Agent].self))
             runtimes = try await c.call("runtimes.status", NoParams(), as: [RuntimeStatus].self)
             runtimesFetchedAt = Date()
             try checkCurrent(attempt)
@@ -420,6 +442,19 @@ public final class ServerModel: Identifiable {
         if case .usageLimits(let runtime, let windows) = e.body {
             recordUsage(runtime: runtime, windows: windows)
         }
+        // Records change from any client or path: created and updated agents are read again, deleted ones leave
+        // the list. An event from an agent the list does not have (it was made elsewhere) asks for the list too.
+        if case .agentChanged(let action) = e.body {
+            switch action {
+            case .deleted:
+                agentsGeneration.advance()
+                agents.removeAll { $0.id == e.agentId }
+            case .created, .updated:
+                requestAgentsRefresh()
+            }
+        } else if !agents.contains(where: { $0.id == e.agentId }) {
+            requestAgentsRefresh()
+        }
         // The team's view of the agent follows its live events: newest message, status, pending approvals.
         if let i = agents.firstIndex(where: { $0.id == e.agentId }) {
             switch e.body {
@@ -478,6 +513,71 @@ public final class ServerModel: Identifiable {
 
     private static func nowMs() -> Int64 {
         Int64(Date().timeIntervalSince1970 * 1000)
+    }
+
+    private func setAgents(_ list: [Agent]) {
+        agents = list
+        agentsReadAt = Date()
+    }
+
+    /// Reads `agents.list` after `agentsRefreshDelay`. Requests that come meanwhile share that one read.
+    private func requestAgentsRefresh() {
+        guard !agentsRefreshScheduled else { return }
+        agentsRefreshScheduled = true
+        Task { [weak self] in
+            try? await Task.sleep(for: Self.agentsRefreshDelay)
+            await self?.runAgentsRefresh()
+        }
+    }
+
+    /// One `agents.list` at a time: a refresh asked for while one is in flight is asked again after it. A failed read
+    /// is logged and asked again after `agentsRetryDelay`; its time counts as the last read, so the app coming back to
+    /// the front does not ask again at once.
+    private func runAgentsRefresh() async {
+        agentsRefreshScheduled = false
+        guard !agentsRefreshing else {
+            requestAgentsRefresh()
+            return
+        }
+        guard let c = client else { return }
+        agentsRefreshing = true
+        defer { agentsRefreshing = false }
+        let generation = agentsGeneration
+        do {
+            let list = try await c.call("agents.list", NoParams(), as: [Agent].self)
+            guard client === c else { return }
+            guard agentsGeneration.accepts(generation) else {
+                // An agent was deleted while the answer was on its way: that answer may still list it.
+                requestAgentsRefresh()
+                return
+            }
+            setAgents(list)
+        } catch {
+            guard client === c else { return }
+            Self.log.error("agents.list failed: \(String(describing: error), privacy: .public)")
+            agentsReadAt = Date()
+            scheduleAgentsRetry()
+        }
+    }
+
+    private func scheduleAgentsRetry() {
+        guard !agentsRetryScheduled else { return }
+        agentsRetryScheduled = true
+        let delay = agentsRetryDelay
+        Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            guard let self else { return }
+            self.agentsRetryScheduled = false
+            self.requestAgentsRefresh()
+        }
+    }
+
+    /// Called when the app comes back to the front. Re-reads the agents when the last read is older than
+    /// `agentsStaleAfter`: a daemon from before `agent_changed` sends no event for changes made elsewhere.
+    public func refreshAgentsIfStale(now: Date = Date()) {
+        guard state == .connected else { return }
+        let stale = agentsReadAt.map { now.timeIntervalSince($0) > Self.agentsStaleAfter } ?? true
+        if stale { requestAgentsRefresh() }
     }
 
     private func replaceAgent(_ a: Agent) {
@@ -583,13 +683,14 @@ public final class ServerModel: Identifiable {
         struct P: Encodable { var paused: Bool }
         struct Reply: Decodable { var changed: Int }
         let reply = try await rpc().call("agents.pause_all", P(paused: paused), as: Reply.self)
-        agents = try await rpc().call("agents.list", NoParams(), as: [Agent].self)
+        setAgents(try await rpc().call("agents.list", NoParams(), as: [Agent].self))
         return reply.changed
     }
 
     public func deleteAgent(_ id: String) async throws {
         struct P: Encodable { var id: String }
         try await rpc().call("agents.delete", P(id: id))
+        agentsGeneration.advance()
         agents.removeAll { $0.id == id }
         threads[id] = nil
         oldestSeq[id] = nil
@@ -838,5 +939,19 @@ public enum UsageFreshness {
     public static func isStale(_ entries: [UsageEntry], now: Date, after: TimeInterval) -> Bool {
         guard let newest = entries.map(\.updatedAt).max() else { return true }
         return now.timeIntervalSince1970 - Double(newest) / 1000 > after
+    }
+}
+
+/// Counts the changes that make an `agents.list` answer out of date. A read takes the value when it is asked for; its
+/// answer is used only while the value is still the same.
+struct ListGeneration: Sendable, Equatable {
+    private(set) var value = 0
+
+    mutating func advance() {
+        value += 1
+    }
+
+    func accepts(_ generation: ListGeneration) -> Bool {
+        generation == self
     }
 }

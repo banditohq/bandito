@@ -36,8 +36,11 @@ enum QACommand: Equatable {
     case window(QASize)
     case files(path: String)
     case settings
+    case settingsSection(SettingsSection)
     case onboarding
     case tab(ServerSection)
+    /// The workbench of the agent on screen: `details`, `terminal`, `browser`, `changes`, `toggle`, `split`.
+    case workbench(String)
 
     static func parse(_ text: String) -> QACommand? {
         let line = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -57,16 +60,20 @@ enum QACommand: Equatable {
             return .files(path: path)
         case ("settings", nil):
             return .settings
+        case ("settings", let name?):
+            return SettingsSection(rawValue: name).map { .settingsSection($0) }
         case ("onboarding", nil):
             return .onboarding
         case ("tab", let name?):
             return ServerSection(rawValue: name).map { .tab($0) }
+        case ("workbench", let action?) where ["details", "terminal", "browser", "changes", "toggle", "split"].contains(action):
+            return .workbench(action)
         default:
             return nil
         }
     }
 
-    /// The sheets a QA run can open (`Sheet.changes` needs an agent id, so it is not one of them).
+    /// The sheets a QA run can open.
     static func parseSheet(_ name: String) -> Sheet? {
         switch name {
         case "newAgent": .newAgent
@@ -85,6 +92,7 @@ enum QAHooks {
     private static var router: Router?
     private static var onboarding: OnboardingModel?
     private static var observer: NSObjectProtocol?
+    private static weak var app: AppModel?
 
     /// Adds the server named by `-qa.server` and selects it, so the server is in place before the first connect
     /// (called from `AppModel.load`). A server with the same endpoint but another token (a new pairing of the QA
@@ -92,6 +100,7 @@ enum QAHooks {
     /// is added. Only in a QA copy.
     static func addLaunchServer(to model: AppModel) {
         guard QABuild.isRunningQA else { return }
+        app = model
         guard let text = defaults.string(forKey: "qa.server"), let url = URL(string: text) else { return }
         let endpoint = ServerEndpoint.webSocket(url: url)
         guard let path = defaults.string(forKey: "qa.tokenFile"), let token = readToken(atPath: path) else {
@@ -137,11 +146,38 @@ enum QAHooks {
             router.openInFiles(path, isFile: false)
         case .settings:
             WindowActions.showSettings()
+        case .settingsSection(let section):
+            SettingsNavigation.shared.requested = section
+            WindowActions.showSettings()
         case .onboarding:
             onboarding.replay()
         case .tab(let section):
             router.select(mode: .server)
             router.serverSection = section
+        case .workbench(let action):
+            runWorkbench(action, router: router)
+        }
+    }
+
+    /// The workbench of the agent on screen, as its buttons would open it.
+    private static func runWorkbench(_ action: String, router: Router) {
+        guard let agentID = router.shownAgentID ?? router.selectedAgentID else {
+            NSLog("QA: no agent on screen for workbench \(action)")
+            return
+        }
+        switch action {
+        case "details": router.showInWorkbench(.details, agentID: agentID)
+        case "browser": router.showInWorkbench(.browser, agentID: agentID)
+        case "changes": router.showInWorkbench(.changes, agentID: agentID)
+        case "toggle": router.toggleWorkbench()
+        case "split": router.toggleWorkbenchSplit(agentID: agentID)
+        case "terminal":
+            #if os(macOS)
+            guard let app, let server = app.currentServer, let agent = server.agents.first(where: { $0.id == agentID })
+            else { return }
+            WorkbenchTerminals.showAgentTerminal(server: server, agent: agent, app: app, router: router)
+            #endif
+        default: break
         }
     }
 

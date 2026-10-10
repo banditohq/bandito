@@ -77,8 +77,16 @@ public struct BanditoCommands: Commands {
         }
         CommandMenu(L10n.Menu.agent) {
             item("global.newAgent") { router.sheet = .newAgent }
-            item("team.agentDetails") { router.inspectorOpen.toggle() }
+            item("team.agentDetails") { router.toggleDetails() }
             item("team.whatChanged") { openChanges() }
+            item("team.workbench.toggle") { router.toggleWorkbench() }
+            item("team.workbench.split") {
+                if let id = selectedAgentID { router.toggleWorkbenchSplit(agentID: id) }
+            }
+            item("team.workbench.closeTab") { router.closeFocusedWorkbenchTab() }
+            ForEach(1...9, id: \.self) { number in
+                item("team.workbench.tab\(number)") { router.selectFocusedWorkbenchTab(at: number - 1) }
+            }
             Divider()
             item("team.approve") { resolveFirstApproval(.allow) }
                 .disabled(!hasPendingApproval)
@@ -102,9 +110,11 @@ public struct BanditoCommands: Commands {
     }
 
     /// A menu item for `commandID`, titled and shortcut from the registry.
+    /// Team commands act on the agent on screen, so they are offered only while Team mode is on screen.
     private func item(_ commandID: String, action: @escaping () -> Void) -> some View {
         Button(Command.find(commandID)?.title ?? commandID, action: action)
             .banditoShortcut(keymap.binding(for: commandID))
+            .disabled(commandID.hasPrefix("team.") && router.mode != .team)
     }
 
     /// A terminal command: it is handed to the Terminals mode, so it only works while that mode is shown.
@@ -147,7 +157,7 @@ public struct BanditoCommands: Commands {
 
     private func openChanges() {
         guard let id = selectedAgentID else { return }
-        router.sheet = .changes(agentID: id)
+        router.showInWorkbench(.changes, agentID: id)
     }
 
     private func resolveFirstApproval(_ decision: Decision) {

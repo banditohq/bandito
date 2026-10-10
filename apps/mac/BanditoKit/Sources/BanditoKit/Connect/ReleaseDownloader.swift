@@ -110,7 +110,7 @@ public struct GitHubReleaseSource: ReleaseSource {
         if fellBack, let tag, let version, let latest = SemanticVersion(tag), let wanted = SemanticVersion(version),
             latest < wanted
         {
-            throw InstallError.releaseStillPublishing(tag)
+            throw InstallError.releaseStillPublishing(wanted.description)
         }
 
         // The signature files come from the same release as the archive, not from whatever latest is by now.

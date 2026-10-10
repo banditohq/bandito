@@ -50,6 +50,11 @@ pub struct JsonProcess {
 }
 
 impl JsonProcess {
+    /// The pid of the child: it leads its own process group on Unix, so the group id is the pid.
+    pub fn pid(&self) -> Option<u32> {
+        self.pgid
+    }
+
     /// Spawn `cmd`: sets stdin/stdout/stderr piped, kill_on_drop(true), own process group (unix);
     /// starts the writer, stderr tail and pump tasks. `label` names the CLI in logs and errors.
     pub fn spawn(

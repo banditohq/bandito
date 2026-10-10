@@ -69,6 +69,7 @@ Everything an agent does becomes a row in `events` (append-only, global `seq`). 
 | `agent.status` | `{status: "idle"\|"working"\|"needs_you"\|"error"\|"offline", detail?}` |
 | `usage.limits` | `{runtime, windows:[{name, utilization, resets_at}]}` |
 | `runtime.switched` | `{from, to, until?}`: the agent moved to another runtime (see [Fallback subscription](#fallback-subscription)); `until` is when the limit resets (Unix seconds), if known |
+| `agent_changed` | `{action: "created"\|"updated"\|"deleted"}`: an agent record was created, changed or deleted, by any client or path (RPC `agents.create`/`update`/`delete`, pause, runtime switch). Clients re-read `agents.list` on `created`/`updated`, and on an event from an agent they do not know; `deleted` removes the agent locally. No event for bookkeeping fields (context size, chapter, session) |
 | `error` | `{message}` |
 
 ## Approvals (policy)
@@ -88,7 +89,7 @@ Per agent `approval_mode`:
 - the daemon's service files: `~/.config/systemd/user/bandito*`, `/etc/systemd/system/bandito*`, `~/Library/LaunchAgents/dev.bandito*`;
 - the data folder spelled out in the raw command line (`~/.bandito`, `$HOME/.bandito`, `${HOME}/.bandito`, the absolute path), so a `python -c` that names it is refused too.
 
-The Claude runtime also starts with `--settings` carrying `permissions.deny` for `Read`, `Edit` and `Write` under the data folder, so the file tools refuse it without asking.
+The Claude runtime also starts with `--settings` carrying `permissions.deny` for `Read`, `Edit` and `Write` under the data folder, so the file tools refuse it without asking. It adds the denials of the agent's [capabilities](#capabilities): `Bash` without `terminal`, and `Edit`, `Write`, `MultiEdit` and `NotebookEdit` without `files`.
 
 It also carries `permissions.ask` for `Bash`, `Edit`, `Write`, `MultiEdit`, `NotebookEdit`, `WebFetch` and `Read`. Claude Code checks deny, then ask, then allow, whatever file a rule came from. So an `allow` in `~/.claude/settings.json`, `.claude/settings.json` or `.claude/settings.local.json` (a user's own, or one in a cloned repository) does not run these tools without the policy: the call goes to `can_use_tool`, and the policy decides as below. The CLI is started with `--permission-mode default` (once), so a `defaultMode` in those files does not win. Grep and Glob are asked about too: Grep reads file contents, Glob lists names under a folder. The policy checks both for credential folders and for Bandito's folder. A search whose folder is inside the data folder is refused in every mode. A search whose folder holds the data folder (its root is above it) is asked about in risky and always modes, and allowed in never mode. Only the folder the search covers is checked (`path`, and a Glob pattern's folder): the pattern and the title are text to find, so `Grep` for `~/.bandito` is not a read of it. LS only lists names and is not asked about.
 
@@ -148,7 +149,7 @@ A pending approval blocks only that agent. Approvals time out after 24 h → den
 
 ## Store (SQLite)
 
-- `agents(id, name, role, runtime, model, cwd, approval_mode, system_prompt, runtime_session_id, created_at, updated_at, fallback_runtime, fallback_model, active_runtime, paused)`: `fallback_runtime`, `fallback_model` and `active_runtime` are the [fallback subscription](#fallback-subscription); `active_runtime` NULL means the primary `runtime`. `paused` is the [pause](#pause) flag
+- `agents(id, name, role, runtime, model, cwd, approval_mode, system_prompt, runtime_session_id, created_at, updated_at, fallback_runtime, fallback_model, active_runtime, paused, use_personal_settings, avatar_color, avatar_face, capabilities)`: `avatar_color` and `avatar_face` are the [avatar](#capabilities) (both NULL = derived from the name); `capabilities` is a JSON array of [capabilities](#capabilities), NULL = all. `fallback_runtime`, `fallback_model` and `active_runtime` are the [fallback subscription](#fallback-subscription); `active_runtime` NULL means the primary `runtime`. `paused` is the [pause](#pause) flag
 - `events(seq INTEGER PRIMARY KEY, agent_id, ts, kind, payload JSON)`
 - `approvals(id, agent_id, call_id, tool, title, payload JSON, status, decision, created_at, resolved_at)`
 - `rules(id, agent_id NULL, pattern, action)`
@@ -165,7 +166,7 @@ Migrations: numbered SQL files embedded in the binary, applied by `PRAGMA user_v
 JSON-RPC 2.0. Same methods on every transport.
 
 - `devices.list` returns the paired devices as `{id, name, created_at, last_seen_at, current}`. `current` is `true` for the device whose token made the request; the owner's CLI is no device, so every row is `false` for it. Old apps ignore the field.
-- Requests: `daemon.info`, `runtimes.status`, `runtimes.models{runtime?, refresh?}` (see [Runtime models](#runtime-models)), `agents.list|get|create|update|delete` (`update` takes `paused` too, see [Pause](#pause)), `agents.send{agent_id,text}` (replies `{queued: true}` when the agent is paused), `agents.interrupt`, `agents.pause_all{paused}`, `events.since{seq,limit,agent_id?}`, `approvals.list|resolve{approval_id,decision,remember}`, `rules.list|set|delete`, `schedules.list|create|update|delete|run_now`, `devices.list|revoke`, `pair.redeem{code,device_name}` (only unauthenticated method), `term.list|open|input|resize|rename|close|attach|detach` (see Terminals), `fs.*` (see [Files](#files)), `changes.checkpoints|diff|file|restore` (see [Changes](#changes)), `secrets.list|set|delete` (see [Secrets](#secrets), `host.stats|history|processes|ports|kill`, `setup.status|install|job` (see [Setup](#setup)), `commands.list|install` (see [Commands](#commands)), `browser.start|status|stop|control|touch` (see [Browser](#browser)), `workspaces.list|create|update|delete|start|stop` (see [Workspaces](#workspaces)), `daemon.logs{lines,level}` (see [Logs](#logs)). `browser.agent.*` is for the crew MCP on the server only.
+- Requests: `daemon.info`, `runtimes.status` (each entry has `supported_capabilities`, see [Capabilities](#capabilities)), `runtimes.models{runtime?, refresh?}` (see [Runtime models](#runtime-models)), `agents.list|get|create|update|delete` (`update` takes `paused` too, see [Pause](#pause)), `agents.send{agent_id,text}` (replies `{queued: true}` when the agent is paused), `agents.interrupt`, `agents.pause_all{paused}`, `events.since{seq,limit,agent_id?}`, `approvals.list|resolve{approval_id,decision,remember}`, `rules.list|set|delete`, `schedules.list|create|update|delete|run_now`, `devices.list|revoke`, `pair.redeem{code,device_name}` (only unauthenticated method), `term.list|open|input|resize|rename|close|attach|detach` (see Terminals), `fs.*` (see [Files](#files)), `changes.checkpoints|diff|file|restore` (see [Changes](#changes)), `secrets.list|set|delete` (see [Secrets](#secrets), `host.stats|history|processes|ports|kill`, `setup.status|install|job` (see [Setup](#setup)), `commands.list|install` (see [Commands](#commands)), `browser.start|status|stop|control|touch` (see [Browser](#browser)), `workspaces.list|create|update|delete|start|stop` (see [Workspaces](#workspaces)), `daemon.logs{lines,level}` (see [Logs](#logs)). `agents.create|update` also take `avatar` and `capabilities` (see [Capabilities](#capabilities)). `browser.agent.*` is for the crew MCP on the server only.
 - Notifications (server → client): `event{seq, agent_id, kind, payload, ts}` for every event including `message.delta`; `term.output|gap|exit|closed` for attached terminals (see Terminals).
 
 ## Transports (connect any way you like)
@@ -247,7 +248,7 @@ On macOS, the Claude, Grok and Codex sessions of the shared workspace run under 
 
 **Switching it off.** `"agent_sandbox": false` in `$BANDITO_HOME/config.json` turns the sandbox off for new sessions. It is on by default. It has no effect on Linux.
 
-**Checked on macOS** (tests in `daemon/src/runtime/sandbox.rs`): a read of the database is denied; a connect to `bandito.sock` is denied, also from an orphan started by a shell; a connect to `agent.sock` and a read of the own token file work; other sessions' token files are denied; `open` and `launchctl` cannot start; an Apple event sent by a small program is refused under the profile and accepted without it; writes to `~/.zshrc` and `~/Library/LaunchAgents` are denied in a temporary home, and a file elsewhere in the home stays writable; writes into the project, `git`, `node` and `curl` work; `nc` to the network works where there is a network.
+**Checked on macOS** (tests in `daemon/src/runtime/sandbox.rs`): a read of the database is denied; a connect to `bandito.sock` is denied, also from an orphan started by a shell; a connect to `agent.sock` and a read of the own token file work; other sessions' token files are denied; the crew bridge (`bandito mcp`) starts under the profile, so it never creates or stats the data folder; `open` and `launchctl` cannot start; an Apple event sent by a small program is refused under the profile and accepted without it; writes to `~/.zshrc` and `~/Library/LaunchAgents` are denied in a temporary home, and a file elsewhere in the home stays writable; writes into the project, `git`, `node` and `curl` work; `nc` to the network works where there is a network.
 
 **Not verified.** The Claude and Grok CLIs may run their own shell tool under `sandbox-exec`. Then their commands fail inside this profile, since nested sandboxes are refused. This was not tested with the real CLIs; check it before relying on the sandbox.
 
@@ -266,6 +267,30 @@ A paused agent (`agents.update {paused: true}`, or all agents at once with `agen
 - The flag is in the store (`agents.paused`), so the apps see it in `agents.list|get`. The queue is in memory: messages held at a daemon restart are lost, as messages waiting for a turn already are. They stay visible in the thread.
 
 `agents.pause_all` is for the owner's CLI and the apps. It returns how many agents changed. Clients show the pause controls when `daemon.info.features` contains `"pause"`.
+
+## Personal settings
+
+A Claude agent's CLI loads only the project's and the local settings by default (`--setting-sources project,local`). The owner's own user settings stay out: their `~/.claude/CLAUDE.md`, hooks, plugins and MCP servers. Otherwise an agent answers with the owner's private instructions (its projects, its rules).
+
+`agents.create|update|get` take and return `use_personal_settings` (default `false`, stored in `agents.use_personal_settings`). `true` restores the CLI's default: all setting sources load. The flag is read when a session starts, so a change reloads the running session like the other config. Codex and Grok are not changed by this flag (see their runtime notes).
+
+## Capabilities
+
+An agent has a list of capabilities, the things it may use: `terminal` (the shell), `files` (changing files; reading stays), `browser`, `team` (the crew: `crew_list`, `crew_send`) and `screen`. `agents.create` and `agents.update` take `capabilities` as a list of those names. On create, `null` or a missing field means all of them. On update, a missing field keeps the list, `null` gives all of them back, and `[]` means none. An unknown name is `INVALID_PARAMS`. `agents.get`, `agents.list`, `agents.create` and `agents.update` return `capabilities`, `null` for all.
+
+A change applies from the next session, as a model change does: a running session is reloaded like the other config. What each capability switches off:
+
+- Claude: without `terminal`, `Bash` is denied; without `files`, `Edit`, `Write`, `MultiEdit` and `NotebookEdit` are denied (see [Runtimes](#runtimes)). Claude Code applies these deny rules before each tool call; an agent without `terminal` could not run a shell command in a live check on QA.
+- Every runtime, through the crew MCP: a tool of a missing capability is not listed, and a call to it is refused as an unknown tool.
+
+Only Claude can switch `terminal` and `files` off. Grok and Codex cannot, so `supported_capabilities` in each `runtimes.status` entry is `browser`, `team` and `screen` for them (Claude has all five; the API runtime is not served and has none). The app shows the other two as unavailable for those runtimes. `agents.create` and `agents.update` refuse a list that leaves out `terminal` or `files` for Grok or Codex, with `INVALID_PARAMS` and the message `<runtime> не умеет запрещать <capability>` (for example `grok не умеет запрещать terminal`). The check uses the runtime the agent will run on after the patch. A list that keeps them, or `null`, is accepted: it means the agent may use them, and nothing is promised beyond that.
+
+The two extra layers below are best effort. They are **not guarantees**: an agent on Grok or Codex can still run a shell command or change a file.
+
+- Grok, as an extra layer: a permission request Grok sends for a command (ACP kind `execute`) is refused, and one for a change of files (`edit`, `delete`, `move`) is refused, when the agent lacks the capability. The refusal is an automatic reject: the owner gets no card. Grok asks only when its own permission mode asks. With `permission_mode = "always-approve"` in its config (`~/.grok/config.toml`), it runs commands without asking, and those are not refused. The daemon passes Grok no permission mode (`grok agent stdio` has no flag for it).
+- Codex, as an extra layer: without `files`, the thread's sandbox is `read-only` (`sandbox_mode`, set with `-c` and in `thread/start`). That applies only where Codex's own sandbox is in charge. On macOS, with the daemon's own sandbox (on by default for shared-workspace agents), Codex's sandbox stays off, because a macOS sandbox does not nest; there the file-change approvals Codex asks for are declined, with no card. Whether Codex asks for every file change is not verified. Agents stored with `files` off before this rule keep the read-only sandbox where it applies.
+
+`avatar` is `{color, face}` or `null`, which means the app derives it from the agent's name. The daemon keeps both names trimmed and 1 to 32 characters, and does not check them against the app's list. A change of the avatar reloads nothing.
 
 ## Logs
 
@@ -292,6 +317,8 @@ Loop guards: every crew message belongs to a chain, which starts with each user 
 A refused `crew_send` comes back to the agent as a tool error that tells it to report to the user. The counters are in memory: a daemon restart resets them, and they are dropped all at once when more than 10 000 chains are tracked. A crew message sent while the agent has no running turn is not counted against the per-turn limit.
 
 These limits stop accidental loops. They are not a security boundary: an agent with shell access runs as your user and can do anything you can.
+
+The daemon starts the crew server with `--capabilities <list>` when the agent has capabilities set (see [Capabilities](#capabilities)); the server then lists only the tools of those. The crew tools need `team`, the browser tools `browser`, the screen tools `screen`. The history tools need none.
 
 Browser tools are on the same server, through the same crew MCP: `browser_open`, `browser_snapshot`, `browser_click`, `browser_type`, `browser_press`, `browser_back`, `browser_screenshot`, `browser_tabs`, `browser_switch`. They are described in [Browser](#browser).
 
@@ -501,18 +528,25 @@ The app shows what the server is doing: CPU, memory, disks, network, the process
 | `host.processes` | `{}` | `{supported, owners: [{owner, cpu_percent, rss_bytes, processes: [{pid, name, cmd}]}]}` |
 | `host.ports` | `{}` | `{supported, ports: [{port, addr, pid, process, owner?}]}`, unique by port and address |
 | `host.kill` | `pid` | `{}` |
+| `host.kill_process` | `pid` | `{ok: true, killed}`: only a process of the daemon's user whose tree can be read and that belongs to no agent, terminal or the daemon (refused: `forbidden`, the reason says which); SIGTERM now, `killed` says whether it was gone within 1 s (a zombie counts as gone); SIGKILL after 5 s if it is still the same process (same start time). Paired devices may call it: they are the owner's own. |
 
-`HostStats` fields: `os`, `kernel`, `arch`, `hostname`, `cpus`, `cpu_percent` (busy share of all CPUs), `load` (1, 5, 15 min), `mem_total`, `mem_used`, `swap_total`, `swap_used`, `disks: [{mount, total, used}]` (`/` and the daemon user's home, one entry per device), `net_rx_bps`, `net_tx_bps`, `net_supported`, `uptime_s`. Bytes everywhere unless a name says `_bps`.
+`HostStats` fields: `os`, `kernel`, `arch`, `hostname`, `cpus`, `cpu_percent` (busy share of all CPUs), `load` (1, 5, 15 min), `mem_total`, `mem_used`, `swap_total`, `swap_used`, `disks: [{mount, total, used}]` (`/` and the daemon user's home, one entry per device), `net_rx_bps`, `net_tx_bps`, `net_supported`, `uptime_s`, `top_processes`. Bytes everywhere unless a name says `_bps`.
+
+`top_processes`: the union of the 15 biggest processes of the whole server by memory and the 15 busiest by CPU, without repeats, biggest memory first. Each entry is `{pid, name, rss_bytes, cpu_percent, own, own_safe}`. `name` is the program's file name; `own` says the process runs as the daemon's user; `own_safe` says the app may stop it (see `host.kill_process`). It is read when `host.stats` answers, not in the 10 s sample. The first CPU reading after the daemon starts is 0.
+
+**Stopping a process.** `host.kill_process` reads the process's start time first, reads the process table and the owner marks, and refuses unless the tree is known and the process has no owner. It reads the start time again just before SIGTERM: a pid that another process took meanwhile has another start time and is refused. The window that stays open is between that second reading and `kill(2)`: a few microseconds in which the process must exit and its pid be reused. macOS has no pidfd to close it, and Linux is not given one here. SIGKILL after the grace period checks the start time again, so a reused pid is left alone.
 
 **Sampling.** The daemon samples every 10 s and keeps the last 24 h (8640 samples) in memory. The history is lost on restart.
 
 **Sources.** Linux: `/proc/stat`, `loadavg`, `meminfo` (used = total − available), `net/dev` (loopback excluded), `uptime`, `sys/kernel/osrelease`, `/etc/os-release` (`PRETTY_NAME`), `statvfs`. macOS: `sysctl` (`hw.ncpu`, `hw.memsize`, `kern.boottime`, `kern.osrelease`, `kern.osproductversion`, `vm.loadavg`), `vm_stat` (used = active + wired + compressed pages), `netstat -ib`, `ps`, `lsof`, `statvfs`.
 
-**Owners.** Every agent CLI is started with `BANDITO_AGENT_ID=<agent id>` in its environment, and every terminal's process with `BANDITO_TERM_ID=<terminal id>`. Children inherit the variable, so a test run or a dev server started by an agent is listed under that agent. The daemon's own process is `{kind: "daemon", id: null}`. Other processes have no owner and are not listed. An owner's `cpu_percent` is summed over its processes, so it can exceed 100.
+**Owners.** A process belongs to the owner of its nearest ancestor (or itself) that is a root: an agent's CLI, or a terminal's shell, registered by the daemon when it starts them. The environment mark (`BANDITO_AGENT_ID=<agent id>` for an agent CLI, `BANDITO_TERM_ID=<terminal id>` for a terminal) is a second sign, read where `ps` or `/proc` shows it. The tree is needed on macOS: Apple's own programs (`zsh`, `sleep`) hide their environment from `ps`, so their children are owned through their parents. A test run or a dev server started by an agent is listed under that agent. The daemon's own process is `{kind: "daemon", id: null}`; its children belong to nobody. Other processes are not listed. An owner's `cpu_percent` is summed over its processes, so it can exceed 100.
 
-**CPU per process.** Linux: the share of one core between two `host.processes` calls, from the process's utime + stime. The first call reports 0. macOS: the `%cpu` that `ps` gives, which is an average over the process's life, not a current rate.
+**Fail-closed.** A process whose tree cannot be read to the end (a parent missing from the process table) has no owner it can be shown under, and is never stopped from the app. The same goes for a process that the process table cannot be read for at all.
 
-**Ports.** Linux: `/proc/net/tcp` and `tcp6`, state LISTEN. The socket's owner is found through `/proc/<pid>/fd`, so a port of another user's process has `pid: null`. IPv4-mapped IPv6 addresses print as IPv4. macOS: `lsof -nP -iTCP -sTCP:LISTEN`; `addr` `*` means all interfaces.
+**CPU per process.** Both platforms: the share of one core between two readings, from the change in the process's CPU time (Linux utime + stime, macOS the `time` column of `ps`, to the hundredth of a second). The first reading reports 0. Readings closer together than one second keep the previous shares, so a second `host.*` call right after another does not show noise.
+
+**Ports.** Owners come from the same tree as the processes. Linux: `/proc/net/tcp` and `tcp6`, state LISTEN. The socket's owner is found through `/proc/<pid>/fd`, so a port of another user's process has `pid: null`. IPv4-mapped IPv6 addresses print as IPv4. macOS: `lsof -nP -iTCP -sTCP:LISTEN`; `addr` `*` means all interfaces.
 
 **Kill.** `host.kill` sends SIGTERM to a process that belongs to an agent or a terminal. The daemon itself, processes without an owner (init, other users) and `pid` ≤ 0 are refused with `reason: "forbidden"` (or `-32602` for `pid` ≤ 0, since `kill(0)` and `kill(-1)` would signal whole groups). After 3 s SIGKILL follows if the process is still there with the same owner.
 
@@ -783,7 +817,7 @@ The agent's instructions (built by the daemon, before the user's own) explain th
 
 **Recall instead of remembering.** The crew MCP server also offers `history_search{query}` and `history_day{date}` over the agent's own past messages in the daemon's database, so an agent looks up what was said weeks ago instead of carrying it.
 
-**Changing an agent.** `agents.update` applies name, role, model, effort, system prompt, memory mode, context budget, folder, runtime, fallback and workspace from the next session: an idle agent's session is closed at once, a running one when its turn ends. The chapter goes on, except after a folder, runtime or workspace change, which starts a new chapter (a CLI session is tied to its folder, its runtime and where it runs; see [Workspaces](#workspaces)). A runtime change also resets effort to null, with a `warnings` entry in the response, when the new runtime does not offer the old level. The approval mode is read on every request and needs no restart.
+**Changing an agent.** `agents.update` applies name, role, model, effort, system prompt, memory mode, context budget, folder, runtime, fallback, workspace and capabilities from the next session: an idle agent's session is closed at once, a running one when its turn ends. The chapter goes on, except after a folder, runtime or workspace change, which starts a new chapter (a CLI session is tied to its folder, its runtime and where it runs; see [Workspaces](#workspaces)). A runtime change also resets effort to null, with a `warnings` entry in the response, when the new runtime does not offer the old level. The approval mode is read on every request and needs no restart.
 
 **Effort.** Each agent has an `effort` (`low`, `medium`, `high`, `xhigh`, `max`). The daemon maps it to the runtime (`--effort` for Claude, the turn's `effort` for Codex, `--reasoning-effort` for Grok) and refuses levels a runtime does not offer.
 

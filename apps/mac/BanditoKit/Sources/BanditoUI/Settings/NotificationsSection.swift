@@ -25,15 +25,12 @@ struct NotificationsSection: View {
                         .banditoButton(.signal())
                         .fixedSize()
                     } else if status == .denied {
-                        HStack(spacing: 8) {
-                            Chip(text: Self.statusText(status), tone: .neutral)
-                                .fixedSize()
-                            Button(L10n.Settings.Notifications.openSystem) {
-                                SystemActions.open(Self.systemSettingsURL)
-                            }
-                            .banditoButton(.quiet())
-                            .fixedSize()
+                        // The hint already says it is off in System Settings: only the way there is shown.
+                        Button(L10n.Settings.Notifications.openSystem) {
+                            SystemActions.open(Self.systemSettingsURL)
                         }
+                        .banditoButton(.quiet())
+                        .fixedSize()
                     } else {
                         Chip(text: Self.statusText(status), tone: status == .authorized ? .ok : .neutral)
                             .fixedSize()
@@ -58,7 +55,7 @@ struct NotificationsSection: View {
     }
 
     private func toggle(_ title: String, _ hint: String, _ isOn: Binding<Bool>) -> some View {
-        SettingsRow(title: title, hint: hint) {
+        SettingsRow(title: title, hint: hint, keepsControlBeside: true) {
             Toggle("", isOn: isOn)
                 .labelsHidden()
                 .toggleStyle(BanditoToggleStyle())

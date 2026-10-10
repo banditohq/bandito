@@ -9,15 +9,15 @@ enum ChangesViewMode: Hashable {
 }
 
 /// "What changed": the files an agent changed since a restore point, their diffs, and what to do about
-/// them (keep, roll back, ask the agent). Opened with ⌘⇧D. Design: docs/design/Changes.dc.html.
-struct ChangesSheet: View {
+/// them (keep, roll back, ask the agent). A tab of the workbench (⌘⇧D). Design: docs/design/Changes.dc.html.
+struct ChangesContent: View {
     var agentID: String
-    /// Called after a rollback with what it restored, so the window can offer to undo it.
-    var onRolledBack: (RollbackNotice) -> Void
+    /// Closes the view: the tab's close, or the sheet's. Called after "Keep" with nothing to change, after a rollback,
+    /// and after the agent was asked.
+    var onDone: () -> Void
 
     @Environment(AppModel.self) private var app
     @Environment(Router.self) private var router
-    @Environment(\.dismiss) private var dismiss
 
     @State private var checkpoints: [Checkpoint] = []
     @State private var loaded = false
@@ -36,6 +36,8 @@ struct ChangesSheet: View {
     @State private var loadError: UserFacingMessage?
     @State private var busy = false
     @State private var confirmRollback = false
+    /// Below this width the list goes on top of the diff, not beside it.
+    static let sideBySideMinWidth: CGFloat = 700
 
     private var server: ServerModel? { app.currentServer }
     private var agent: Agent? { server?.agents.first { $0.id == agentID } }
@@ -63,7 +65,7 @@ struct ChangesSheet: View {
                 message(L10n.Changes.agentGone)
             }
         }
-        .frame(minWidth: 880, idealWidth: 1100, maxWidth: .infinity, minHeight: 560, idealHeight: 740, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.Bandito.surface2)
         .task(id: agentID) { await loadCheckpoints() }
         .task(id: FileLoadKey(base: base?.id, path: selectedPath)) { await loadFile() }
@@ -78,8 +80,15 @@ struct ChangesSheet: View {
     // MARK: - Layout
 
     private func sheetBody(_ agent: Agent) -> some View {
+        GeometryReader { outer in
+            sheetContent(agent, width: Double(outer.size.width))
+                .frame(width: outer.size.width, height: outer.size.height)
+        }
+    }
+
+    private func sheetContent(_ agent: Agent, width: Double) -> some View {
         VStack(spacing: 0) {
-            header(agent)
+            header(agent, panelWidth: width)
             if !timeline.isEmpty {
                 RestorePointStrip(
                     points: timeline, baseID: base?.id, nowTitle: L10n.Changes.now, onSelect: choose)
@@ -97,50 +106,89 @@ struct ChangesSheet: View {
             } else if files.isEmpty {
                 message(L10n.Changes.empty)
             } else {
-                HStack(spacing: 0) {
-                    fileList
-                    diffPane
+                // Wide: the list beside the diff. Narrow (the workbench panel): the list on top, at most 40 % of the
+                // height, and the diff below it.
+                GeometryReader { proxy in
+                    if proxy.size.width < Self.sideBySideMinWidth {
+                        VStack(spacing: 0) {
+                            fileList(compact: true)
+                                .frame(maxHeight: proxy.size.height * 0.4)
+                            diffPane
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        }
+                    } else {
+                        HStack(spacing: 0) {
+                            fileList(compact: false)
+                            diffPane
+                        }
+                    }
                 }
                 footer(agent)
             }
         }
     }
 
-    private func header(_ agent: Agent) -> some View {
-        HStack(spacing: 12) {
-            AgentAvatar(name: agent.name, size: 36)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(L10n.Changes.title(name: agent.name))
-                    .font(BanditoFont.font(size: 17, weight: 650))
-                    .foregroundStyle(Color.Bandito.text)
+    /// The compact header of the workbench tab: avatar, one-line title, the diff layout. The tab closes the view, so
+    /// there is no close button here. Narrow, the title leaves the header (the avatar's tooltip has it) and the layout
+    /// switch shows icons instead of words.
+    private func header(_ agent: Agent, panelWidth: Double) -> some View {
+        HStack(spacing: 10) {
+            AgentAvatar(name: agent.name, size: 24)
+                .help(L10n.Changes.title(name: agent.name))
+            VStack(alignment: .leading, spacing: 2) {
+                if WorkbenchLayout.showsAgentTitle(panelWidth: panelWidth) {
+                    Text(L10n.Changes.title(name: agent.name))
+                        .font(BanditoFont.font(size: 14, weight: 650))
+                        .foregroundStyle(Color.Bandito.text)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
                 summaryLine
-                    .font(BanditoFont.font(size: 12.5, weight: 400))
+                    .font(BanditoFont.font(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .lineLimit(1)
             }
-            Spacer(minLength: 12)
-            SegmentedPicker(
-                selection: $viewMode,
-                options: [(.inline, L10n.Changes.inline), (.sideBySide, L10n.Changes.sideBySide)]
-            )
-            .frame(width: 210)
-            Button { dismiss() } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.Bandito.text2)
-                    .frame(width: 32, height: 32)
-                    .background(Color.Bandito.text.opacity(0.05), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .layoutPriority(0)
+            ViewThatFits(in: .horizontal) {
+                SegmentedPicker(
+                    selection: $viewMode,
+                    options: [(.inline, L10n.Changes.inline), (.sideBySide, L10n.Changes.sideBySide)]
+                )
+                .frame(width: 210)
+                viewModeIcons
             }
-            .banditoButton(.row(cornerRadius: 10, hoverOpacity: 0.08))
-            .keyboardShortcut(.cancelAction)
-            .help(L10n.Common.close)
-            .accessibilityLabel(L10n.Common.close)
+            .layoutPriority(1)
         }
-        .padding(.horizontal, 22)
-        .padding(.vertical, 14)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
         .overlay(alignment: .bottom) {
             Rectangle().fill(Color.Bandito.text.opacity(0.06)).frame(height: 1)
         }
+    }
+
+    /// The two layouts as icons, for a narrow panel.
+    private var viewModeIcons: some View {
+        HStack(spacing: 4) {
+            viewModeIcon(.inline, symbol: "text.alignleft", label: L10n.Changes.inline)
+            viewModeIcon(.sideBySide, symbol: "rectangle.split.2x1", label: L10n.Changes.sideBySide)
+        }
+    }
+
+    private func viewModeIcon(_ mode: ChangesViewMode, symbol: String, label: String) -> some View {
+        Button {
+            viewMode = mode
+        } label: {
+            Image(systemName: symbol)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(viewMode == mode ? Color.Bandito.text : Color.Bandito.text3)
+                .frame(width: 28, height: 28)
+                .background(
+                    viewMode == mode ? Color.Bandito.text.opacity(0.08) : Color.clear,
+                    in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        }
+        .banditoButton(.icon(size: 28, label: label))
+        .help(label)
     }
 
     /// "Task «…» · 6 files · +412 −18" (the parts appear once they are known).
@@ -159,7 +207,7 @@ struct ChangesSheet: View {
         }
     }
 
-    private var fileList: some View {
+    private func fileList(compact: Bool) -> some View {
         VStack(spacing: 0) {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
@@ -178,9 +226,13 @@ struct ChangesSheet: View {
                 .background(Color.Bandito.text.opacity(0.03), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .padding(10)
         }
-        .frame(width: 320)
-        .overlay(alignment: .trailing) {
-            Rectangle().fill(Color.Bandito.text.opacity(0.06)).frame(width: 1)
+        .frame(width: compact ? nil : 320)
+        .frame(maxWidth: compact ? .infinity : nil)
+        .overlay(alignment: compact ? .bottom : .trailing) {
+            Rectangle()
+                .fill(Color.Bandito.text.opacity(0.06))
+                .frame(width: compact ? nil : 1, height: compact ? 1 : nil)
+                .frame(maxWidth: compact ? .infinity : nil, maxHeight: compact ? nil : .infinity)
         }
     }
 
@@ -398,13 +450,13 @@ struct ChangesSheet: View {
         router.selectAgent(agent.id, on: server)
         router.pendingComposerText = L10n.Changes.askPlace(path: path, line: String(line))
         router.select(mode: .team)
-        dismiss()
+        onDone()
     }
 
     private func keepFiles() {
         let paths = RollbackPlan.paths(files: files, keep: keep)
         guard !paths.isEmpty else {
-            dismiss()
+            onDone()
             return
         }
         Task { await restore(paths: paths) }
@@ -422,12 +474,11 @@ struct ChangesSheet: View {
         do {
             let result = try await server.restore(agentID: agentID, checkpointID: base.id, paths: paths)
             if !result.restored.isEmpty {
-                onRolledBack(
-                    RollbackNotice(
-                        server: server, agentID: agentID,
-                        count: result.restored.count, undoCheckpointID: result.undo))
+                router.rollbackNotice = RollbackNotice(
+                    server: server, agentID: agentID,
+                    count: result.restored.count, undoCheckpointID: result.undo)
             }
-            dismiss()
+            onDone()
         } catch {
             loadError = UserFacingError.message(for: error)
         }

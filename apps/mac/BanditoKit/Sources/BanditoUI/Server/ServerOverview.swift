@@ -304,9 +304,14 @@ struct ServerOverview: View {
     }
 
     private func ownerName(_ row: ProcessRow, server: ServerModel) -> String {
-        switch row.owner.kind {
-        case .agent: server.agents.first { $0.id == row.owner.id }?.name ?? L10n.Server.Owner.agent
-        case .terminal: L10n.Server.Owner.terminal
+        ownerName(row.owner, server: server)
+    }
+
+    private func ownerName(_ owner: ProcessOwnerRef, server: ServerModel) -> String {
+        switch owner.kind {
+        case .agent: server.agents.first { $0.id == owner.id }?.name ?? L10n.Server.Owner.agent
+        case .terminal:
+            owner.id.flatMap { app.terminalController(for: server).displayTitle($0) } ?? L10n.Server.Owner.terminal
         case .daemon: L10n.Server.Owner.daemon
         }
     }
@@ -406,7 +411,8 @@ struct ServerOverview: View {
     private func ownerLabel(_ port: ListeningPort) -> String {
         switch port.owner?.kind {
         case .agent: server?.agents.first { $0.id == port.owner?.id }?.name ?? L10n.Server.Owner.agent
-        case .terminal: L10n.Server.Owner.terminal
+        case .terminal:
+            server.flatMap { app.terminalController(for: $0).displayTitle(port.owner?.id ?? "") } ?? L10n.Server.Owner.terminal
         case .daemon: L10n.Server.Owner.daemon
         case nil: ""
         }
@@ -441,10 +447,13 @@ struct ServerOverview: View {
                     .foregroundStyle(Color.Bandito.text2)
             }
             Spacer(minLength: 8)
-            Button(L10n.Server.Update.howTo) {
-                router.requestTerminalCommand(ReleaseFeed.installCommand)
+            // This Mac's server is updated from the app, never from a terminal command.
+            if !server.isThisMacServer {
+                Button(L10n.Server.Update.howTo) {
+                    router.requestTerminalCommand(ReleaseFeed.installCommand)
+                }
+                .banditoButton(.lightPill())
             }
-            .banditoButton(.lightPill())
         }
         .padding(14)
         .background(Color.Bandito.signal.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))

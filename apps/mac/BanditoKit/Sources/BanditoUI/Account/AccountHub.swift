@@ -136,21 +136,38 @@ public final class AccountHub {
     public let keys: SecretStore
 
     @ObservationIgnored private var watchTask: Task<Void, Never>?
+    /// The first `prepare` in progress. Calls that come meanwhile wait for it, so the device identity is read once.
+    @ObservationIgnored private var preparing: Task<AccountClient, Error>?
+    /// Reads this device's identity. The app reads the Keychain; tests pass their own.
+    @ObservationIgnored private let loadIdentity: @Sendable () async throws -> DeviceIdentity
     /// True from the first step of `signOut` until it ends. `inspect` writes no restored key meanwhile: the two
     /// run on the main actor, and the check and the write happen with no suspension between them.
     @ObservationIgnored private var signingOut = false
 
-    public init(keys: SecretStore = KeychainStore(service: "dev.bandito.account")) {
+    public init(
+        keys: SecretStore = KeychainStore(service: "dev.bandito.account"),
+        loadIdentity: @escaping @Sendable () async throws -> DeviceIdentity = { try await DeviceIdentityStore.shared.load() }
+    ) {
         self.keys = keys
+        self.loadIdentity = loadIdentity
         // A stored session is enough to know someone is signed in; no device key is read for that.
         signedIn = ((try? keys.load(account: AccountClient.sessionAccount)) ?? nil) != nil
     }
 
-    /// Reads this device's keys (creating them once) and builds the client. Throws if the Keychain refuses.
+    /// Reads this device's keys (creating them once) and builds the client. Throws if the Keychain refuses. Calls
+    /// made while the first one runs share its result, so the keys are read once and no second client is built.
     @discardableResult
     public func prepare() async throws -> AccountClient {
         if let client { return client }
-        let identity = try await DeviceIdentityStore.shared.load()
+        if let preparing { return try await preparing.value }
+        let task = Task { try await self.makeClient() }
+        preparing = task
+        defer { preparing = nil }
+        return try await task.value
+    }
+
+    private func makeClient() async throws -> AccountClient {
+        let identity = try await loadIdentity()
         let client = try AccountClient(identity: identity, sessions: keys)
         self.identity = identity
         self.client = client
