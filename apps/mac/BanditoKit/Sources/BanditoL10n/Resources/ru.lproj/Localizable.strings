@@ -1008,7 +1008,6 @@
 "market.section.how" = "Как подключить";
 "market.section.links" = "Ссылки";
 "market.section.needs" = "Что понадобится";
-"market.section.tools" = "Инструменты из последней проверки";
 "market.skill.by" = "автор: %1$@";
 "market.skill.claudeOnly" = "Только Claude";
 "market.skill.conflictAgent" = "Папка с таким именем уже лежит в папке агента %1$@, и её создал не Bandito. Bandito её никогда не перезаписывает: переместите или переименуйте папку, потом установите скилл.";

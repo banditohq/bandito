@@ -2533,7 +2533,6 @@
   "inspector.readAloud": "Читать ответы вслух",
   "inspector.readAloudHint": "Готовый ответ этого агента читается вслух, когда Bandito — активное приложение.",
   "keys.dictate": "Диктовка в сообщение",
-  "market.section.tools": "Инструменты из последней проверки",
   "claudeImport.title": "Импорт из Claude Code",
   "menu.importClaude": "Импорт из Claude Code…",
   "claudeImport.subtitle": "Агенты, скиллы и команды с этого Mac и из Codex. На Mac ничего не меняется и не удаляется.",

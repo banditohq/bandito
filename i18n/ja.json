@@ -2437,7 +2437,6 @@
   "inspector.readAloud": "返信を読み上げる",
   "inspector.readAloudHint": "Bandito が前面にあるとき、このエージェントの完了した返信を読み上げます。",
   "keys.dictate": "メッセージに音声入力",
-  "market.section.tools": "前回の確認で見つかったツール",
   "claudeImport.title": "Claude Code から取り込む",
   "menu.importClaude": "Claude Code から取り込む…",
   "claudeImport.subtitle": "この Mac と Codex にあるエージェント、スキル、コマンドを取り込みます。Mac 上のものは変更も削除もされません。",

@@ -2437,7 +2437,6 @@
   "inspector.readAloud": "朗读回复",
   "inspector.readAloudHint": "Bandito 处于前台时，朗读此智能体已完成的回复。",
   "keys.dictate": "语音输入到消息",
-  "market.section.tools": "上次检查发现的工具",
   "claudeImport.title": "从 Claude Code 导入",
   "menu.importClaude": "从 Claude Code 导入…",
   "claudeImport.subtitle": "导入此 Mac 和 Codex 上的智能体、技能和命令。Mac 上的内容不会被更改或删除。",

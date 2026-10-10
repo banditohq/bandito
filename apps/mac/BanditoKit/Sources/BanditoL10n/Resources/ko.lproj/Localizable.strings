@@ -1008,7 +1008,6 @@
 "market.section.how" = "연결 방법";
 "market.section.links" = "링크";
 "market.section.needs" = "필요한 것";
-"market.section.tools" = "마지막 확인에서 찾은 도구";
 "market.skill.by" = "제작: %1$@";
 "market.skill.claudeOnly" = "Claude 전용";
 "market.skill.conflictAgent" = "%1$@의 폴더에 같은 이름의 폴더가 이미 있고, Bandito가 만든 것이 아니에요. Bandito는 덮어쓰지 않아요. 폴더를 옮기거나 이름을 바꾼 뒤 스킬을 설치하세요.";

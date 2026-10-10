@@ -1008,7 +1008,6 @@
 "market.section.how" = "How to connect";
 "market.section.links" = "Links";
 "market.section.needs" = "What you need";
-"market.section.tools" = "Tools from the last check";
 "market.skill.by" = "by %1$@";
 "market.skill.claudeOnly" = "Claude only";
 "market.skill.conflictAgent" = "A folder with this name is already in the folder of %1$@, and Bandito did not put it there. Bandito never overwrites it: move or rename it, then install the skill.";

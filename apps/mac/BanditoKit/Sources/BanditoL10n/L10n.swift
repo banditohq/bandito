@@ -1441,7 +1441,6 @@ public enum L10n {
             public static var how: String { L10n.tr("market.section.how") }
             public static var links: String { L10n.tr("market.section.links") }
             public static var needs: String { L10n.tr("market.section.needs") }
-            public static var tools: String { L10n.tr("market.section.tools") }
         }
 
         public enum Skill {

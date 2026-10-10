@@ -2437,7 +2437,6 @@
   "inspector.readAloud": "답변 소리 내어 읽기",
   "inspector.readAloudHint": "Bandito가 활성 앱일 때 이 에이전트의 완료된 답변을 소리 내어 읽습니다.",
   "keys.dictate": "메시지에 받아쓰기",
-  "market.section.tools": "마지막 확인에서 찾은 도구",
   "claudeImport.title": "Claude Code에서 가져오기",
   "menu.importClaude": "Claude Code에서 가져오기…",
   "claudeImport.subtitle": "이 Mac과 Codex의 에이전트, 스킬, 명령을 가져와요. Mac에서는 아무것도 바꾸거나 지우지 않아요.",

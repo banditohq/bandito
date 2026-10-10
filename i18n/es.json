@@ -2468,7 +2468,6 @@
   "inspector.readAloud": "Leer las respuestas en voz alta",
   "inspector.readAloudHint": "Cuando Bandito es la app activa, se lee en voz alta una respuesta terminada de este agente.",
   "keys.dictate": "Dictar en el mensaje",
-  "market.section.tools": "Herramientas de la última comprobación",
   "claudeImport.title": "Importar desde Claude Code",
   "menu.importClaude": "Importar desde Claude Code…",
   "claudeImport.subtitle": "Agentes, skills y comandos de este Mac y de Codex. En el Mac no se cambia ni se borra nada.",

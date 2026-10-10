@@ -1008,7 +1008,6 @@
 "market.section.how" = "So verbinden Sie";
 "market.section.links" = "Links";
 "market.section.needs" = "Was Sie brauchen";
-"market.section.tools" = "Werkzeuge der letzten Prüfung";
 "market.skill.by" = "von %1$@";
 "market.skill.claudeOnly" = "Nur Claude";
 "market.skill.conflictAgent" = "Ein Ordner mit diesem Namen liegt schon im Ordner von %1$@, und Bandito hat ihn nicht angelegt. Bandito überschreibt ihn nie: Verschieben oder benennen Sie ihn um und installieren Sie den Skill dann.";

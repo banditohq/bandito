@@ -1008,7 +1008,6 @@
 "market.section.how" = "Cómo conectar";
 "market.section.links" = "Enlaces";
 "market.section.needs" = "Qué necesitas";
-"market.section.tools" = "Herramientas de la última comprobación";
 "market.skill.by" = "de %1$@";
 "market.skill.claudeOnly" = "Solo Claude";
 "market.skill.conflictAgent" = "Ya hay una carpeta con este nombre en la carpeta de %1$@ y Bandito no la puso ahí. Bandito nunca la sobrescribe: muévela o renómbrala y luego instala el skill.";

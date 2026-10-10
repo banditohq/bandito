@@ -2468,7 +2468,6 @@
   "inspector.readAloud": "Read replies aloud",
   "inspector.readAloudHint": "A finished reply of this agent is read aloud when Bandito is the active app.",
   "keys.dictate": "Dictate into the message",
-  "market.section.tools": "Tools from the last check",
   "claudeImport.title": "Import from Claude Code",
   "menu.importClaude": "Import from Claude Code…",
   "claudeImport.subtitle": "Agents, skills and commands from this Mac, and from Codex. Nothing on the Mac is changed or deleted.",
