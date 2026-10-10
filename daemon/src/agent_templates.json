@@ -13,9 +13,9 @@
         "role": "Morgen-Nachrichtenüberblick",
         "description": "Ein kurzer Nachrichtenüberblick aus Ihren Quellen, an jedem Werktag morgens.",
         "long": "Werktags morgens liest er die Nachrichtenquellen, die Sie nennen (RSS-Feeds, Nachrichtenseiten), und schreibt einen kurzen Überblick: die fünf nützlichsten Meldungen, eine Zeile pro Meldung, mit Links. Er arbeitet nur mit dem, was er öffnen kann, und erfindet keine Schlagzeilen.",
-        "starter": "Erstellen Sie den heutigen Überblick aus meinen Quellen: [Seiten oder Feeds hier einfügen]. Schwerpunkt: KI-Werkzeuge und Open-Source-Releases.",
+        "starter": "Erstelle den heutigen Überblick aus meinen Quellen: [Seiten oder Feeds hier einfügen]. Schwerpunkt: KI-Werkzeuge und Open-Source-Releases.",
         "schedule_prompts": [
-          "Bereiten Sie den Morgen-Überblick aus den Quellen in Ihren Anweisungen vor. Höchstens 250 Wörter."
+          "Bereite den Morgen-Überblick aus den Quellen in deinen Anweisungen vor. Höchstens 250 Wörter."
         ]
       },
       "es": {
@@ -33,9 +33,9 @@
         "role": "Résumé matinal de l'actualité",
         "description": "Un bref résumé d'actualités de vos sources, chaque matin en semaine.",
         "long": "Chaque matin en semaine, il lit les sources d'actualité que vous indiquez (flux RSS, sites d'information) et rédige un bref résumé : les cinq informations les plus utiles, une ligne par information, avec les liens. Il ne travaille qu'avec ce qu'il peut ouvrir et n'invente aucun titre.",
-        "starter": "Faites le résumé d'aujourd'hui à partir de mes sources : [collez ici les sites ou flux]. Concentrez-vous sur les outils d'IA et les sorties open source.",
+        "starter": "Fais le résumé d'aujourd'hui à partir de mes sources : [colle ici les sites ou flux]. Concentre-toi sur les outils d'IA et les sorties open source.",
         "schedule_prompts": [
-          "Préparez le résumé du matin à partir des sources de vos instructions. 250 mots maximum."
+          "Prépare le résumé du matin à partir des sources de tes instructions. 250 mots maximum."
         ]
       },
       "ja": {
@@ -124,9 +124,9 @@
         "role": "Code-Reviewer",
         "description": "Prüft offene Pull Requests auf Fehler, riskante Änderungen und fehlende Tests.",
         "long": "Er liest die offenen GitHub-Pull-Requests, auf die Sie zeigen, sucht nach Logikfehlern, riskanten Änderungen und fehlenden Tests und schreibt die Zusammenfassung ins Gespräch. Auf GitHub genehmigt, mergt oder kommentiert er nichts, wenn Sie es nicht ausdrücklich verlangen.",
-        "starter": "Prüfen Sie Pull Request #[Nummer] in [Besitzer/Repo]. Konzentrieren Sie sich auf die Fehlerbehandlung und die Tests.",
+        "starter": "Prüfe Pull Request #[Nummer] in [Besitzer/Repo]. Konzentriere dich auf die Fehlerbehandlung und die Tests.",
         "schedule_prompts": [
-          "Listen Sie offene Pull Requests ohne Review auf und prüfen Sie den ältesten. Veröffentlichen Sie nichts auf GitHub."
+          "Liste offene Pull Requests ohne Review auf und prüfe den ältesten. Veröffentliche nichts auf GitHub."
         ]
       },
       "es": {
@@ -144,9 +144,9 @@
         "role": "Relecteur de code",
         "description": "Relit les pull requests ouvertes pour repérer bugs, changements risqués et tests manquants.",
         "long": "Il lit les pull requests GitHub ouvertes que vous lui indiquez, cherche les erreurs de logique, les changements risqués et les tests manquants, et rédige le bilan de relecture dans le chat. Il n'approuve, ne fusionne et ne commente rien sur GitHub sans votre demande explicite.",
-        "starter": "Relisez la pull request #[numéro] dans [propriétaire/dépôt]. Concentrez-vous sur la gestion des erreurs et les tests.",
+        "starter": "Relis la pull request #[numéro] dans [propriétaire/dépôt]. Concentre-toi sur la gestion des erreurs et les tests.",
         "schedule_prompts": [
-          "Listez les pull requests ouvertes sans relecture et relisez la plus ancienne. Ne publiez rien sur GitHub."
+          "Liste les pull requests ouvertes sans relecture et relis la plus ancienne. Ne publie rien sur GitHub."
         ]
       },
       "ja": {
@@ -235,9 +235,9 @@
         "role": "Fehler-Triage im Bereitschaftsdienst",
         "description": "Sortiert neue Sentry-Fehler nach Auswirkung und schreibt eine kurze Einschätzung zu jedem.",
         "long": "Er prüft Sentry auf neue und wachsende Probleme, sortiert sie nach der Zahl betroffener Nutzer und schreibt eine kurze Einschätzung: wahrscheinliche Ursache, Ort im Code und was man zuerst prüfen sollte. Er liest Sentry nur: Probleme werden weder geschlossen, zugewiesen noch stummgeschaltet.",
-        "starter": "Prüfen Sie Sentry für die letzten 24 Stunden im Projekt [Projekt] und sortieren Sie die neuen Fehler nach betroffenen Nutzern.",
+        "starter": "Prüfe Sentry für die letzten 24 Stunden im Projekt [Projekt] und sortiere die neuen Fehler nach betroffenen Nutzern.",
         "schedule_prompts": [
-          "Prüfen Sie Sentry auf neue und wachsende Fehler seit dem letzten Lauf. Melden Sie nur Probleme mit mehr als zehn betroffenen Nutzern oder solche, die heute neu sind."
+          "Prüfe Sentry auf neue und wachsende Fehler seit dem letzten Lauf. Melde nur Probleme mit mehr als zehn betroffenen Nutzern oder solche, die heute neu sind."
         ]
       },
       "es": {
@@ -255,9 +255,9 @@
         "role": "Tri des erreurs d'astreinte",
         "description": "Classe les nouvelles erreurs Sentry par impact et rédige un bref diagnostic pour chacune.",
         "long": "Il examine Sentry à la recherche de problèmes nouveaux ou en hausse, les classe par nombre d'utilisateurs touchés et rédige un bref diagnostic : cause probable, emplacement dans le code et première piste à vérifier. Il ne fait que lire Sentry : il ne résout, n'assigne ni ne met en sourdine aucun problème.",
-        "starter": "Vérifiez Sentry sur les dernières 24 heures dans le projet [projet] et classez les nouvelles erreurs par utilisateurs touchés.",
+        "starter": "Vérifie Sentry sur les dernières 24 heures dans le projet [projet] et classe les nouvelles erreurs par utilisateurs touchés.",
         "schedule_prompts": [
-          "Vérifiez Sentry pour les erreurs nouvelles ou en hausse depuis la dernière exécution. Ne signalez que celles qui touchent plus de dix utilisateurs ou qui sont apparues aujourd'hui."
+          "Vérifie Sentry pour les erreurs nouvelles ou en hausse depuis la dernière exécution. Ne signale que celles qui touchent plus de dix utilisateurs ou qui sont apparues aujourd'hui."
         ]
       },
       "ja": {
@@ -346,9 +346,9 @@
         "role": "Aufgabenverwaltung für Linear",
         "description": "Bringt Ordnung in Linear: Morgenübersicht und Sichtung neuer Aufgaben.",
         "long": "Jeden Morgen fasst er die offenen Linear-Aufgaben des Teams zusammen: was fällig ist, was blockiert ist und was niemandem gehört. Neue Aufgaben kann er sichten und Priorität, Labels und Zuständigen vorschlagen. Jede Änderung zeigt er vorher, und er führt sie erst nach Ihrer Zustimmung aus.",
-        "starter": "Fassen Sie die offenen Aufgaben meines Teams in Linear zusammen: was überfällig, blockiert oder ohne Zuständigen ist. Danach schlagen Sie eine Sichtung der neuen vor.",
+        "starter": "Fasse die offenen Aufgaben meines Teams in Linear zusammen: was überfällig, blockiert oder ohne Zuständigen ist. Danach schlage eine Sichtung der neuen vor.",
         "schedule_prompts": [
-          "Fassen Sie überfällige, blockierte und nicht zugewiesene Linear-Aufgaben zusammen. Schlagen Sie eine Sichtung der seit dem letzten Lauf erstellten Aufgaben vor. Ändern Sie nichts."
+          "Fasse überfällige, blockierte und nicht zugewiesene Linear-Aufgaben zusammen. Schlage eine Sichtung der seit dem letzten Lauf erstellten Aufgaben vor. Ändere nichts."
         ]
       },
       "es": {
@@ -366,9 +366,9 @@
         "role": "Gestionnaire de tâches Linear",
         "description": "Remet de l'ordre dans Linear : synthèse du matin et tri des nouvelles tâches.",
         "long": "Chaque matin, il résume ce qui est ouvert dans Linear pour l'équipe du propriétaire : ce qui arrive à échéance, ce qui est bloqué et ce qui n'a pas de responsable. Il peut trier les nouvelles tâches en proposant une priorité, des libellés et un responsable. Il montre d'abord chaque changement proposé et ne l'applique qu'après votre accord.",
-        "starter": "Résumez les tâches ouvertes de mon équipe dans Linear : ce qui est en retard, bloqué ou sans responsable. Proposez ensuite un tri des nouvelles.",
+        "starter": "Résume les tâches ouvertes de mon équipe dans Linear : ce qui est en retard, bloqué ou sans responsable. Propose ensuite un tri des nouvelles.",
         "schedule_prompts": [
-          "Résumez les tâches en retard, bloquées et non assignées dans Linear. Proposez un tri des tâches créées depuis la dernière exécution. Ne modifiez rien."
+          "Résume les tâches en retard, bloquées et non assignées dans Linear. Propose un tri des tâches créées depuis la dernière exécution. Ne modifie rien."
         ]
       },
       "ja": {
@@ -461,9 +461,9 @@
         "role": "Web-Rechercheur",
         "description": "Durchsucht das Web und schreibt zu Ihrer Frage einen Bericht mit belegten Quellen.",
         "long": "Zu einer Frage sucht er im Web, öffnet die relevantesten Quellen und schreibt einen kurzen Bericht: was bekannt ist, wie sicher das ist und welche Links jede Aussage stützen. Er sagt, wenn Quellen sich widersprechen oder fehlen.",
-        "starter": "Recherchieren Sie: Was sind die wichtigsten Optionen für [Thema] im Jahr 2026, und was sagen unabhängige Tests dazu? Geben Sie mir einen Bericht mit Links.",
+        "starter": "Recherchiere: Was sind die wichtigsten Optionen für [Thema] im Jahr 2026, und was sagen unabhängige Tests dazu? Gib mir einen Bericht mit Links.",
         "schedule_prompts": [
-          "Prüfen Sie die Themen aus Ihren Anweisungen auf Neuigkeiten der letzten Woche und schreiben Sie zu jedem einen kurzen Bericht. Kennzeichnen Sie, was bestätigt ist."
+          "Prüfe die Themen aus deinen Anweisungen auf Neuigkeiten der letzten Woche und schreibe zu jedem einen kurzen Bericht. Kennzeichne, was bestätigt ist."
         ]
       },
       "es": {
@@ -481,9 +481,9 @@
         "role": "Chercheur web",
         "description": "Fait des recherches sur le web et rédige une synthèse sourcée sur la question posée.",
         "long": "Pour une question donnée, il cherche sur le web, ouvre les sources les plus pertinentes et rédige une courte synthèse : ce qui est connu, le degré de certitude et les liens qui étayent chaque affirmation. Il signale les sources contradictoires ou absentes.",
-        "starter": "Recherchez : quelles sont les principales options pour [sujet] en 2026, et que disent les avis indépendants ? Donnez-moi une synthèse avec des liens.",
+        "starter": "Recherche : quelles sont les principales options pour [sujet] en 2026, et que disent les avis indépendants ? Donne-moi une synthèse avec des liens.",
         "schedule_prompts": [
-          "Vérifiez les sujets de vos instructions pour les nouveautés de la semaine passée et rédigez une courte synthèse pour chacun. Indiquez ce qui est confirmé."
+          "Vérifie les sujets de tes instructions pour les nouveautés de la semaine passée et rédige une courte synthèse pour chacun. Indique ce qui est confirmé."
         ]
       },
       "ja": {
@@ -572,9 +572,9 @@
         "role": "Übersetzer und Lokalisierer",
         "description": "Übersetzt und lokalisiert Oberflächentexte und Dokumente, Platzhalter und Ton bleiben erhalten.",
         "long": "Er übersetzt Texte, App-Zeichenketten und Dokumentation in die Sprachen, die Sie nennen. Platzhalter, Formatierung und Fachbegriffe bleiben einheitlich. In einem Projekt kann er fehlende Übersetzungen direkt in die Dateien eintragen, damit Sie sie wie jede andere Änderung prüfen.",
-        "starter": "Übersetzen Sie die neuen Zeichenketten in [Datei] ins Deutsche und Französische. Behalten Sie die Platzhalter und die Du-Form bei. Listen Sie unklare Formulierungen auf.",
+        "starter": "Übersetze die neuen Zeichenketten in [Datei] ins Deutsche und Französische. Behalte die Platzhalter und die Du-Form bei. Liste unklare Formulierungen auf.",
         "schedule_prompts": [
-          "Finden Sie Zeichenketten in den Lokalisierungsdateien ohne Übersetzung für die Zielsprachen und ergänzen Sie sie. Listen Sie die neuen Zeichenketten und offene Zweifel auf."
+          "Finde Zeichenketten in den Lokalisierungsdateien ohne Übersetzung für die Zielsprachen und ergänze sie. Liste die neuen Zeichenketten und offene Zweifel auf."
         ]
       },
       "es": {
@@ -592,9 +592,9 @@
         "role": "Traducteur et localisateur",
         "description": "Traduit et localise les textes d'interface et les documents, en gardant les variables et le ton.",
         "long": "Il traduit textes, chaînes d'application et documentation dans les langues que vous indiquez. Il garde les variables, la mise en forme et la terminologie cohérentes. Dans un projet, il peut ajouter directement les traductions manquantes dans les fichiers, pour que vous les relisiez comme tout autre changement.",
-        "starter": "Traduisez les nouvelles chaînes de [fichier] en allemand et en français. Gardez les variables et le tutoiement. Listez les formulations ambiguës.",
+        "starter": "Traduis les nouvelles chaînes de [fichier] en allemand et en français. Garde les variables et le tutoiement. Liste les formulations ambiguës.",
         "schedule_prompts": [
-          "Repérez dans les fichiers de localisation les chaînes sans traduction pour les langues cibles et ajoutez-les. Listez les nouvelles chaînes et les doutes."
+          "Repère dans les fichiers de localisation les chaînes sans traduction pour les langues cibles et ajoute-les. Liste les nouvelles chaînes et les doutes."
         ]
       },
       "ja": {
@@ -676,9 +676,9 @@
         "role": "Dokumentationsautor",
         "description": "Macht aus Code und Notizen verständliche Dokumentation und findet Texte, die vom Code abweichen.",
         "long": "Er schreibt und aktualisiert Dokumentation aus Code, Notizen und Beispielen: einen README-Abschnitt, eine Anleitungsseite oder einen API-Eintrag. Außerdem gleicht er vorhandene Texte mit dem Code ab und zeigt, was veraltet ist. Änderungen bereitet er in den von Ihnen genannten Dateien vor, den Commit machen Sie.",
-        "starter": "Schreiben Sie den Installationsabschnitt der README für [Projekt]. Lesen Sie zuerst das Installationsskript und die Konfigurationsdatei und markieren Sie, was Sie nicht bestätigen konnten.",
+        "starter": "Schreibe den Installationsabschnitt der README für [Projekt]. Lies zuerst das Installationsskript und die Konfigurationsdatei und markiere, was du nicht bestätigen konntest.",
         "schedule_prompts": [
-          "Gleichen Sie die Dokumente aus Ihren Anweisungen mit dem aktuellen Code ab. Listen Sie alle Abweichungen auf und bereiten Sie die Korrekturen in den Dateien vor. Committen Sie nichts."
+          "Gleiche die Dokumente aus deinen Anweisungen mit dem aktuellen Code ab. Liste alle Abweichungen auf und bereite die Korrekturen in den Dateien vor. Committe nichts."
         ]
       },
       "es": {
@@ -696,9 +696,9 @@
         "role": "Rédacteur de documentation",
         "description": "Transforme le code et les notes en documentation claire et repère les textes qui ne suivent plus le code.",
         "long": "Il rédige et met à jour la documentation à partir du code, des notes et des exemples : une section du README, une page de guide ou une entrée d'API. Il compare aussi les textes existants au code et signale ce qui est périmé. Il prépare les modifications dans les fichiers que vous indiquez ; le commit reste à votre charge.",
-        "starter": "Rédigez la section d'installation du README de [projet]. Lisez d'abord le script d'installation et le fichier de configuration, et signalez ce que vous n'avez pas pu confirmer.",
+        "starter": "Rédige la section d'installation du README de [projet]. Lis d'abord le script d'installation et le fichier de configuration, et signale ce que tu n'as pas pu confirmer.",
         "schedule_prompts": [
-          "Comparez les documents de vos instructions au code actuel. Listez tous les écarts et préparez les corrections dans les fichiers. Ne faites aucun commit."
+          "Compare les documents de tes instructions au code actuel. Liste tous les écarts et prépare les corrections dans les fichiers. Ne fais aucun commit."
         ]
       },
       "ja": {
@@ -780,9 +780,9 @@
         "role": "SEO-Auditor",
         "description": "Prüft Seiten auf SEO-Probleme und ordnet die Korrekturen nach Wirkung.",
         "long": "Er öffnet die Seiten der genannten Website und prüft die Grundlagen: Titel und Beschreibungen, Überschriften, interne und defekte Links, Canonical-Tags, Alt-Texte von Bildern und Hinweise auf Ladezeit, die im HTML sichtbar sind. Er liefert eine Liste der Korrekturen, sortiert nach erwarteter Wirkung, mit Seite und genauem Problem.",
-        "starter": "Prüfen Sie die SEO von [Website] anhand der wichtigsten Seiten aus der Sitemap. Beginnen Sie mit dem, was die Indexierung blockiert, und nennen Sie die wichtigsten Korrekturen.",
+        "starter": "Prüfe die SEO von [Website] anhand der wichtigsten Seiten aus der Sitemap. Beginne mit dem, was die Indexierung blockiert, und nenne die wichtigsten Korrekturen.",
         "schedule_prompts": [
-          "Prüfen Sie die Seiten der Website aus Ihren Anweisungen und vergleichen Sie mit den Ergebnissen der Vorwoche. Melden Sie nur neue oder ungelöste Probleme."
+          "Prüfe die Seiten der Website aus deinen Anweisungen und vergleiche mit den Ergebnissen der Vorwoche. Melde nur neue oder ungelöste Probleme."
         ]
       },
       "es": {
@@ -800,9 +800,9 @@
         "role": "Auditeur SEO",
         "description": "Analyse les pages d'un site à la recherche de problèmes de référencement et classe les corrections par impact.",
         "long": "Il ouvre les pages du site que vous indiquez et vérifie les bases : titres et descriptions, titres de section, liens internes et cassés, balises canonical, textes alternatifs des images et indices de vitesse visibles dans le HTML. Il renvoie une liste de corrections classée par impact attendu, avec la page et le problème exact.",
-        "starter": "Auditez le SEO de [site] sur les pages principales de son sitemap. Commencez par ce qui bloque l'indexation et donnez-moi les corrections prioritaires.",
+        "starter": "Audite le SEO de [site] sur les pages principales de son sitemap. Commence par ce qui bloque l'indexation et donne-moi les corrections prioritaires.",
         "schedule_prompts": [
-          "Auditez les pages du site de vos instructions et comparez avec les constats de la semaine dernière. Ne signalez que les problèmes nouveaux ou non résolus."
+          "Audite les pages du site de tes instructions et compare avec les constats de la semaine dernière. Ne signale que les problèmes nouveaux ou non résolus."
         ]
       },
       "ja": {
@@ -891,9 +891,9 @@
         "role": "Datenanalyst (nur Lesezugriff)",
         "description": "Beantwortet Geschäftsfragen mit Berichten aus Ihrer Supabase-Datenbank, nur lesend.",
         "long": "Stellen Sie eine Geschäftsfrage: Er schreibt SQL nur zum Lesen für Ihr Supabase-Projekt, führt es aus und nennt die Zahlen zusammen mit der Abfrage, damit Sie sie prüfen können. Daten schreibt, ändert oder löscht er nicht.",
-        "starter": "Wie viele Bestellungen hatten wir letzten Monat pro Woche, und wie hoch war der durchschnittliche Bestellwert? Zeigen Sie mir auch die Abfrage.",
+        "starter": "Wie viele Bestellungen hatten wir letzten Monat pro Woche, und wie hoch war der durchschnittliche Bestellwert? Zeig mir auch die Abfrage.",
         "schedule_prompts": [
-          "Erstellen Sie die Übersicht der letzten Woche: Bestellungen, Umsatz und Durchschnittsbestellwert pro Tag, mit Abfrage. Markieren Sie Tage, die mehr als 30 % vom Durchschnitt der Vorwoche abweichen."
+          "Erstelle die Übersicht der letzten Woche: Bestellungen, Umsatz und Durchschnittsbestellwert pro Tag, mit Abfrage. Markiere Tage, die mehr als 30 % vom Durchschnitt der Vorwoche abweichen."
         ]
       },
       "es": {
@@ -911,9 +911,9 @@
         "role": "Analyste de données (lecture seule)",
         "description": "Répond à vos questions métier par des rapports issus de votre base Supabase, en lecture seule.",
         "long": "Posez une question métier : il écrit du SQL en lecture seule sur votre projet Supabase, l'exécute et donne les chiffres avec la requête utilisée, pour que vous puissiez les vérifier. Il n'écrit, ne modifie et ne supprime aucune donnée.",
-        "starter": "Combien de commandes avons-nous eues le mois dernier, par semaine, et quel était le panier moyen ? Montrez-moi aussi la requête.",
+        "starter": "Combien de commandes avons-nous eues le mois dernier, par semaine, et quel était le panier moyen ? Montre-moi aussi la requête.",
         "schedule_prompts": [
-          "Préparez le bilan de la semaine passée : commandes, chiffre d'affaires et panier moyen par jour, avec la requête. Signalez les jours qui s'écartent de plus de 30 % de la moyenne de la semaine précédente."
+          "Prépare le bilan de la semaine passée : commandes, chiffre d'affaires et panier moyen par jour, avec la requête. Signale les jours qui s'écartent de plus de 30 % de la moyenne de la semaine précédente."
         ]
       },
       "ja": {
@@ -998,7 +998,7 @@
         "role": "Entwurf für Support-Antworten",
         "description": "Entwirft Antworten auf Kundennachrichten, die Sie prüfen und selbst absenden.",
         "long": "Fügen Sie eine Kundennachricht ein, oder nennen Sie das Postfach, wenn ein verbundenes Werkzeug es lesen kann. Er entwirft eine Antwort in der Sprache des Kunden, in Ihrem Ton und nur mit den Fakten, die Sie ihm geben. Er sendet nie etwas. Unbekanntes markiert er, damit Sie es vor dem Absenden ergänzen können.",
-        "starter": "Entwerfen Sie eine Antwort auf diese Kundennachricht in deren Sprache. Nutzen Sie nur Fakten, die ich Ihnen gebe, und markieren Sie fehlende: [Nachricht hier einfügen].",
+        "starter": "Entwirf eine Antwort auf diese Kundennachricht in deren Sprache. Nutze nur Fakten, die ich dir gebe, und markiere fehlende: [Nachricht hier einfügen].",
         "schedule_prompts": []
       },
       "es": {
@@ -1014,7 +1014,7 @@
         "role": "Rédacteur de réponses support",
         "description": "Rédige des brouillons de réponse aux messages clients, que vous relisez et envoyez vous-même.",
         "long": "Collez le message d'un client, ou indiquez la boîte de réception si un outil connecté peut la lire : il rédige une réponse dans la langue du client, sur votre ton, avec les seuls faits que vous lui donnez. Il n'envoie jamais rien. Il marque ce qu'il ne sait pas pour que vous complétiez avant d'envoyer.",
-        "starter": "Rédigez un brouillon de réponse à ce message client dans sa langue. Utilisez uniquement les faits que je vous donne et signalez ceux qui manquent : [collez le message ici].",
+        "starter": "Rédige un brouillon de réponse à ce message client dans sa langue. Utilise uniquement les faits que je te donne et signale ceux qui manquent : [colle le message ici].",
         "schedule_prompts": []
       },
       "ja": {
@@ -1084,9 +1084,9 @@
         "role": "Social-Media-Manager",
         "description": "Plant eine Woche Beiträge und schreibt Entwürfe für Bildunterschriften, die Sie selbst veröffentlichen.",
         "long": "Jede Woche schlägt er einen Plan für die von Ihnen genannten Kanäle vor: Themen, Formate, Entwürfe der Texte und den passenden Tag, gestützt auf Ihre Produktnotizen und frühere erfolgreiche Beiträge. Er veröffentlicht nichts. Die Entwürfe, die Ihnen gefallen, übertragen Sie selbst auf die Plattform.",
-        "starter": "Planen Sie die Beiträge für nächste Woche für [Kanal] rund um [Produkt oder Neuigkeit]. Nehmen Sie meine letzten drei Beiträge als Vorlage für den Ton. Geben Sie mir Entwürfe.",
+        "starter": "Plane die Beiträge für nächste Woche für [Kanal] rund um [Produkt oder Neuigkeit]. Nimm meine letzten drei Beiträge als Vorlage für den Ton. Gib mir Entwürfe.",
         "schedule_prompts": [
-          "Planen Sie die Beiträge dieser Woche für die Kanäle aus Ihren Anweisungen und schreiben Sie die Entwürfe. Markieren Sie jede Aussage, die geprüft werden muss."
+          "Plane die Beiträge dieser Woche für die Kanäle aus deinen Anweisungen und schreibe die Entwürfe. Markiere jede Aussage, die geprüft werden muss."
         ]
       },
       "es": {
@@ -1104,9 +1104,9 @@
         "role": "Responsable des réseaux sociaux",
         "description": "Planifie une semaine de publications et rédige des légendes que vous publiez vous-même.",
         "long": "Chaque semaine, il propose un plan de publications pour les canaux que vous indiquez : sujets, formats, brouillons de légendes et jour conseillé, à partir de vos notes produit et des publications qui ont déjà marché. Il ne publie rien : vous reportez vous-même les brouillons retenus sur la plateforme.",
-        "starter": "Planifiez les publications de la semaine prochaine pour [canal] autour de [produit ou actualité]. Prenez mes trois dernières publications comme référence de ton. Donnez-moi des brouillons.",
+        "starter": "Planifie les publications de la semaine prochaine pour [canal] autour de [produit ou actualité]. Prends mes trois dernières publications comme référence de ton. Donne-moi des brouillons.",
         "schedule_prompts": [
-          "Planifiez les publications de cette semaine pour les canaux de vos instructions et rédigez les brouillons. Signalez chaque affirmation à vérifier."
+          "Planifie les publications de cette semaine pour les canaux de tes instructions et rédige les brouillons. Signale chaque affirmation à vérifier."
         ]
       },
       "ja": {
@@ -1186,9 +1186,9 @@
         "role": "Zahlungsbeobachter (nur lesend)",
         "description": "Liest Stripe und schreibt eine Zahlungsübersicht. Nur Lesezugriff: keine Abbuchungen, Erstattungen oder Überweisungen.",
         "long": "Werktags liest er Ihr Stripe-Konto und schreibt eine kurze Übersicht: eingegangene Zahlungen, fehlgeschlagene, Erstattungen, Rückbuchungen und alles, was deutlich vom Üblichen abweicht. Er liest nur. Geld anlegen, erstatten oder verschieben kann er nicht, und das sagt er auch, wenn Sie ihn darum bitten.",
-        "starter": "Fassen Sie die Stripe-Aktivität der letzten 7 Tage zusammen: Zahlungen, Fehlschläge, Erstattungen und Rückbuchungen, verglichen mit der Vorwoche. Nur lesen.",
+        "starter": "Fasse die Stripe-Aktivität der letzten 7 Tage zusammen: Zahlungen, Fehlschläge, Erstattungen und Rückbuchungen, verglichen mit der Vorwoche. Nur lesen.",
         "schedule_prompts": [
-          "Fassen Sie die gestrige Stripe-Aktivität mit dem Vortag zusammen: erfolgreiche und fehlgeschlagene Zahlungen, Erstattungen und neue Rückbuchungen. Nur lesen."
+          "Fasse die gestrige Stripe-Aktivität mit dem Vortag zusammen: erfolgreiche und fehlgeschlagene Zahlungen, Erstattungen und neue Rückbuchungen. Nur lesen."
         ]
       },
       "es": {
@@ -1206,9 +1206,9 @@
         "role": "Surveillant des paiements (lecture seule)",
         "description": "Lit Stripe et rédige un récapitulatif des paiements. Lecture seule : aucun prélèvement, remboursement ni virement.",
         "long": "Chaque jour ouvré, il lit votre compte Stripe et rédige un bref récapitulatif : paiements encaissés, échecs, remboursements, litiges et tout ce qui sort de l'ordinaire. Il ne fait que lire. Il ne peut ni créer, rembourser ni déplacer de l'argent, et le dit si on le lui demande.",
-        "starter": "Résumez l'activité Stripe des 7 derniers jours : paiements, échecs, remboursements et litiges, comparés à la semaine précédente. Lecture seule.",
+        "starter": "Résume l'activité Stripe des 7 derniers jours : paiements, échecs, remboursements et litiges, comparés à la semaine précédente. Lecture seule.",
         "schedule_prompts": [
-          "Résumez l'activité Stripe d'hier comparée à celle d'avant-hier : paiements réussis et échoués, remboursements et nouveaux litiges. Lecture seule."
+          "Résume l'activité Stripe d'hier comparée à celle d'avant-hier : paiements réussis et échoués, remboursements et nouveaux litiges. Lecture seule."
         ]
       },
       "ja": {
@@ -1293,9 +1293,9 @@
         "role": "DevOps-Bereitschaft",
         "description": "Prüft Cloudflare und Server-Logs auf Probleme und schreibt eine verständliche Störungsübersicht.",
         "long": "Er prüft die Cloudflare-Zonen und die Server-Logs, die Sie nennen, sucht nach Fehlern, Ausreißern und fehlgeschlagenen Health-Checks und schreibt, was er gefunden hat, mit wahrscheinlicher Ursache und dem ersten Schritt. Er liest und berichtet nur. Neustarts sowie DNS- und Firewall-Änderungen genehmigen Sie und führen sie selbst aus.",
-        "starter": "Prüfen Sie Cloudflare und die Logs von [Server] für die letzte Stunde. Sagen Sie mir, was ausfällt und was ich zuerst tun sollte. Ändern Sie nichts.",
+        "starter": "Prüfe Cloudflare und die Logs von [Server] für die letzte Stunde. Sag mir, was ausfällt und was ich zuerst tun sollte. Ändere nichts.",
         "schedule_prompts": [
-          "Prüfen Sie den Zustand der Dienste aus Ihren Anweisungen und der Cloudflare-Zonen. Melden Sie nur Probleme; ist alles in Ordnung, reicht eine Zeile."
+          "Prüfe den Zustand der Dienste aus deinen Anweisungen und der Cloudflare-Zonen. Melde nur Probleme; ist alles in Ordnung, reicht eine Zeile."
         ]
       },
       "es": {
@@ -1313,9 +1313,9 @@
         "role": "Astreinte DevOps",
         "description": "Vérifie Cloudflare et les journaux serveur à la recherche de problèmes, et rédige un résumé clair de l'incident.",
         "long": "Il vérifie les zones Cloudflare et les journaux serveur que vous indiquez, cherche les erreurs, les pics et les contrôles de santé en échec, et décrit ce qu'il a trouvé avec la cause probable et la première action. Il lit et signale seulement ; les redémarrages et les changements de DNS ou de pare-feu, vous les validez et les lancez vous-même.",
-        "starter": "Vérifiez Cloudflare et les journaux de [serveur] sur la dernière heure. Dites-moi ce qui échoue et quoi faire en premier. Ne changez rien.",
+        "starter": "Vérifie Cloudflare et les journaux de [serveur] sur la dernière heure. Dis-moi ce qui échoue et quoi faire en premier. Ne change rien.",
         "schedule_prompts": [
-          "Vérifiez l'état des services de vos instructions et des zones Cloudflare. Signalez seulement les problèmes ; si tout va bien, une ligne suffit."
+          "Vérifie l'état des services de tes instructions et des zones Cloudflare. Signale seulement les problèmes ; si tout va bien, une ligne suffit."
         ]
       },
       "ja": {
@@ -1406,9 +1406,9 @@
         "role": "QA-Tester",
         "description": "Führt Ihre Testszenarien in einem echten Browser aus und meldet Fehler mit Schritten zur Reproduktion.",
         "long": "Er führt die Szenarien aus Ihrer Liste im Browser über Playwright aus: Registrierung, Kasse, Formulare, Navigation. Zu jedem Fehler schreibt er die genauen Schritte, das Erwartete, das Tatsächliche und eine Beschreibung des Screenshots. Er prüft die Testkopie, die Sie angeben, und ändert deren Code nicht.",
-        "starter": "Führen Sie diese Szenarien auf der Testseite [Adresse] aus: Registrierung, in den Warenkorb legen, Kasse mit einer Testkarte. Melden Sie jeden Fehler mit Schritten.",
+        "starter": "Führe diese Szenarien auf der Testseite [Adresse] aus: Registrierung, in den Warenkorb legen, Kasse mit einer Testkarte. Melde jeden Fehler mit Schritten.",
         "schedule_prompts": [
-          "Führen Sie die Smoke-Szenarien aus Ihren Anweisungen auf der Testseite aus. Melden Sie nur Fehler und unzuverlässige Schritte und nennen Sie, wie viele bestanden haben."
+          "Führe die Smoke-Szenarien aus deinen Anweisungen auf der Testseite aus. Melde nur Fehler und unzuverlässige Schritte und nenne, wie viele bestanden haben."
         ]
       },
       "es": {
@@ -1426,9 +1426,9 @@
         "role": "Testeur QA",
         "description": "Exécute vos scénarios de test dans un vrai navigateur et signale ce qui casse, avec les étapes pour reproduire.",
         "long": "Il exécute avec Playwright les scénarios que vous listez dans le navigateur : inscription, paiement, formulaires, navigation. Pour chaque échec, il écrit les étapes exactes, le résultat attendu, le résultat obtenu et la description de la capture. Il teste la copie de test que vous indiquez et ne modifie pas le code de l'application.",
-        "starter": "Lancez ces scénarios sur le site de test [adresse] : inscription, ajout au panier, paiement avec une carte de test. Signalez chaque échec avec ses étapes.",
+        "starter": "Lance ces scénarios sur le site de test [adresse] : inscription, ajout au panier, paiement avec une carte de test. Signale chaque échec avec ses étapes.",
         "schedule_prompts": [
-          "Lancez les scénarios de fumée de vos instructions sur le site de test. Ne signalez que les échecs et les étapes instables, et dis combien ont réussi."
+          "Lance les scénarios de fumée de tes instructions sur le site de test. Ne signale que les échecs et les étapes instables, et dis combien ont réussi."
         ]
       },
       "ja": {
@@ -1519,9 +1519,9 @@
         "role": "Sekretär für Notizen und Protokolle",
         "description": "Macht aus Besprechungsnotizen ein Protokoll mit Entscheidungen und Aufgaben in Ihrem Notion.",
         "long": "Nach einem Termin oder am Tagesende macht er aus Ihren rohen Notizen ein sauberes Protokoll: Entscheidungen, offene Fragen und Aufgaben mit Verantwortlichen und Terminen. Das Protokoll legt er auf der von Ihnen genannten Notion-Seite oder in der Datenbank ab. Aufgaben erstellt er dort erst nach Ihrer Bestätigung.",
-        "starter": "Hier sind meine Notizen von der heutigen Besprechung: [Notizen einfügen]. Machen Sie ein Protokoll mit Entscheidungen und Aufgaben, speichern Sie es unter der Seite „Besprechungen“ in Notion und zeigen Sie mir die Aufgaben zur Bestätigung.",
+        "starter": "Hier sind meine Notizen von der heutigen Besprechung: [Notizen einfügen]. Mach ein Protokoll mit Entscheidungen und Aufgaben, speichere es unter der Seite „Besprechungen“ in Notion und zeig mir die Aufgaben zur Bestätigung.",
         "schedule_prompts": [
-          "Erstellen Sie aus den heutigen Besprechungsnotizen auf der Notion-Seite aus Ihren Anweisungen ein Protokoll. Erstellen Sie keine Aufgaben, sondern listen Sie sie zur Bestätigung durch den Eigentümer auf."
+          "Erstelle aus den heutigen Besprechungsnotizen auf der Notion-Seite aus deinen Anweisungen ein Protokoll. Erstelle keine Aufgaben, sondern liste sie zur Bestätigung durch den Eigentümer auf."
         ]
       },
       "es": {
@@ -1539,9 +1539,9 @@
         "role": "Secrétaire des notes et réunions",
         "description": "Transforme les notes de réunion en compte rendu avec décisions et tâches dans votre Notion.",
         "long": "Après une réunion ou en fin de journée, il transforme vos notes brutes en compte rendu propre : décisions, questions ouvertes et actions avec responsable et échéance. Il range le compte rendu dans la page ou la base Notion que vous indiquez, et ne crée les tâches qu'après votre confirmation.",
-        "starter": "Voici mes notes de la réunion d'aujourd'hui : [collez les notes]. Faites un compte rendu avec décisions et actions, rangez-le sous la page « Réunions » dans Notion et montrez-moi les tâches à confirmer.",
+        "starter": "Voici mes notes de la réunion d'aujourd'hui : [colle les notes]. Fais un compte rendu avec décisions et actions, range-le sous la page « Réunions » dans Notion et montre-moi les tâches à confirmer.",
         "schedule_prompts": [
-          "Rédigez un compte rendu à partir des notes de réunion du jour sur la page Notion de vos instructions. Ne créez pas de tâches : listez-les pour que le propriétaire les confirme."
+          "Rédige un compte rendu à partir des notes de réunion du jour sur la page Notion de tes instructions. Ne crée pas de tâches : liste-les pour que le propriétaire les confirme."
         ]
       },
       "ja": {
@@ -1626,9 +1626,9 @@
         "role": "Code-Mentor",
         "description": "Erklärt Code und Konzepte Schritt für Schritt und prüft, ob Sie sie verstanden haben.",
         "long": "Zeigen Sie ihm Code, den Sie nicht verstehen, oder nennen Sie ein Thema, das Sie lernen wollen. Er erklärt es Schritt für Schritt auf Ihrem Niveau, stellt Fragen, um Ihr Verständnis zu prüfen, und gibt kleine Übungen. Er arbeitet mit dem Code, den Sie zeigen, und die Änderungen überlässt er Ihnen.",
-        "starter": "Erklären Sie mir Schritt für Schritt, was diese Funktion macht, und prüfen Sie, ob ich es verstanden habe: [Code einfügen]. Stellen Sie mir zuerst Fragen; die Antwort geben Sie später.",
+        "starter": "Erkläre mir Schritt für Schritt, was diese Funktion macht, und prüfe, ob ich es verstanden habe: [Code einfügen]. Stell mir zuerst Fragen, die Antwort gibst du später.",
         "schedule_prompts": [
-          "Geben Sie dem Eigentümer eine kurze Übung zum Thema aus Ihren Anweisungen, mit einem Hinweis, und bitten Sie um eine Antwort. Geben Sie keine Lösung."
+          "Gib dem Eigentümer eine kurze Übung zum Thema aus deinen Anweisungen, mit einem Hinweis, und bitte um eine Antwort. Gib keine Lösung."
         ]
       },
       "es": {
@@ -1646,9 +1646,9 @@
         "role": "Mentor en code",
         "description": "Explique le code et les notions pas à pas et vérifie que vous avez compris.",
         "long": "Montrez-lui le code que vous ne comprenez pas, ou indiquez un sujet que vous voulez apprendre. Il l'explique pas à pas à votre niveau, pose des questions pour vérifier votre compréhension et propose de petits exercices. Il travaille sur le code que vous lui montrez et laisse les modifications à votre charge.",
-        "starter": "Expliquez-moi pas à pas ce que fait cette fonction, et vérifiez que j'ai compris : [collez le code]. Posez-moi d'abord des questions, la réponse viendra après.",
+        "starter": "Explique-moi pas à pas ce que fait cette fonction, et vérifie que j'ai compris : [colle le code]. Pose-moi d'abord des questions, la réponse viendra après.",
         "schedule_prompts": [
-          "Proposez au propriétaire un court exercice sur le sujet de vos instructions, avec un indice, et demandez-lui sa réponse. Ne donnez pas la solution."
+          "Propose au propriétaire un court exercice sur le sujet de tes instructions, avec un indice, et demande-lui sa réponse. Ne donne pas la solution."
         ]
       },
       "ja": {
