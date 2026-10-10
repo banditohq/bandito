@@ -62,6 +62,10 @@ struct MarketView: View {
         }
         .task(id: "\(loadKey)|\(tab.rawValue)") {
             await loadTab()
+            openRequestedBot()
+        }
+        .task(id: router.pendingBotTemplate) {
+            openRequestedBot()
         }
         .task(id: recommendationKey) {
             await loadRecommendations()
@@ -482,6 +486,16 @@ struct MarketView: View {
         } else {
             error = nil
         }
+    }
+
+    /// The Team home asked for a bot's create panel: it opens once the Bots page has the templates. The request is
+    /// taken once; a template the catalog does not list is dropped.
+    private func openRequestedBot() {
+        guard tab == .bots, server == nil || bots.loaded || bots.failure != nil,
+            let id = router.takePendingBotTemplate()
+        else { return }
+        guard server != nil, bots.templates.contains(where: { $0.id == id }) else { return }
+        panel = .botCreate(id)
     }
 
     /// Reads what the open page needs: the bot templates (and the skill names they point to), or the skills.

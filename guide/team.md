@@ -57,10 +57,10 @@ Pause all agents (Пауза для всех агентов) pauses every agent 
 ## Team home (⌘0)
 
 <!-- id: team-home; covers: -->
-The screen shown in the Team mode when no chat is open: a greeting with the raccoon, the New agent (Новый агент) button, the six agents used last (each with its status: working, waiting or asleep, and the time of its last event), the templates and a few ideas for what to hand off.
+The screen shown in the Team mode when no chat is open: a greeting with the raccoon, the New agent (Новый агент) button, the six agents used last (each with its status: working, waiting or asleep, and the time of its last event), the templates and a few ideas for what to hand off. The last message of an agent shows as one plain line. The templates start with the built-in ones; on a server with Bots in the Marketplace they are the first five bots of the Marketplace, then From scratch (С нуля), and All bots in the marketplace (Все боты в маркетплейсе →) opens the Bots page.
 Где: Sidebar → TEAM (КОМАНДА) label; ⌘0; swipe right with two fingers in a chat
 1. Click the TEAM label above the agents, press ⌘0, or swipe right with two fingers in a chat.
-2. Click New agent, or a template, to open the New agent sheet; click an agent to open its chat.
+2. Click New agent, or a template, to open the New agent sheet; a bot tile opens the create sheet of that bot in the Marketplace; click an agent to open its chat.
 3. Swipe left with two fingers to return to the chat you left.
 
 ## Search and quick open (⌘K)

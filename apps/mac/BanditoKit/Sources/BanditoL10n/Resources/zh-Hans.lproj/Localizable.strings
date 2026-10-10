@@ -1945,6 +1945,7 @@
 "team.header.browser" = "在面板中打开智能体的浏览器";
 "team.header.openInspector" = "打开智能体详情";
 "team.header.terminal" = "在代理的文件夹中打开终端";
+"team.home.allBots" = "市场中的全部机器人 →";
 "team.home.asleep" = "休眠中";
 "team.home.idea1" = "看看昨天的改动，列出看起来有风险的地方。";
 "team.home.idea2" = "查明主分支上测试失败的原因并修复。";

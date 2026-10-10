@@ -28,6 +28,21 @@ enum TeamHomeLogic {
         }
     }
 
+    /// How many bots of the server's catalog the template section offers.
+    static let botLimit = 5
+
+    /// What the template section shows: the built-in starting points, or the first bots of the server's catalog.
+    enum TemplateSource: Equatable {
+        case builtIn
+        case bots([BotTemplate])
+    }
+
+    /// The bots of the catalog when the server has `agent_templates` (the first `botLimit`, in the server's order);
+    /// the built-in templates otherwise.
+    static func templateSource(supportsBots: Bool, bots: [BotTemplate]) -> TemplateSource {
+        supportsBots ? .bots(Array(bots.prefix(botLimit))) : .builtIn
+    }
+
     /// The status word of a recent agent: working, needs you, error, and "asleep" for an agent that waits or is offline.
     static func statusWord(_ status: AgentStatus) -> String {
         switch status {
@@ -47,6 +62,8 @@ struct TeamHome: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.controlActiveState) private var controlActiveState
     @AppStorage(MotionLevel.storageKey) private var motionLevel = MotionLevel.full.rawValue
+    /// The bot templates of the server (the catalog of the Marketplace's Bots page), for the template section.
+    @State private var bots = BotsMarketModel()
 
     private static let columns = [GridItem(.adaptive(minimum: 210, maximum: 400), spacing: 12, alignment: .top)]
     private static let ideaColumns = [GridItem(.adaptive(minimum: 260, maximum: 520), spacing: 12, alignment: .top)]
@@ -61,6 +78,7 @@ struct TeamHome: View {
         let recent = TeamHomeLogic.recent(server.agents) { agent in
             AgentPreview.timestamp(thread: server.thread(for: agent.id), agent: agent)
         }
+        let source = TeamHomeLogic.templateSource(supportsBots: server.supports("agent_templates"), bots: bots.templates)
         ScrollView {
             VStack(alignment: .leading, spacing: 30) {
                 header
@@ -74,9 +92,22 @@ struct TeamHome: View {
                     }
                 }
                 section(L10n.Team.Home.templates) {
-                    LazyVGrid(columns: Self.columns, spacing: 12) {
-                        ForEach(AgentTemplate.allCases, id: \.self) { template in
-                            templateCard(template)
+                    VStack(alignment: .leading, spacing: 12) {
+                        LazyVGrid(columns: Self.columns, spacing: 12) {
+                            switch source {
+                            case .builtIn:
+                                ForEach(AgentTemplate.allCases, id: \.self) { template in
+                                    templateCard(template)
+                                }
+                            case .bots(let list):
+                                ForEach(list) { template in
+                                    botCard(template)
+                                }
+                                templateCard(.scratch)
+                            }
+                        }
+                        if source != .builtIn {
+                            allBotsLink
                         }
                     }
                 }
@@ -95,7 +126,14 @@ struct TeamHome: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.Bandito.bg)
+        .onChange(of: server.id) { _, _ in bots.reset() }
+        .task(id: "\(server.id.uuidString)|\(server.info != nil)") {
+            await bots.load(from: server)
+        }
     }
+
+    /// The language of the bots' names and descriptions: the app's own, as the Marketplace reads them.
+    private var languageCode: String { ModelDescription.currentLanguageCode }
 
     private static var ideas: [String] {
         [L10n.Team.Home.idea1, L10n.Team.Home.idea2, L10n.Team.Home.idea3, L10n.Team.Home.idea4]
@@ -227,37 +265,69 @@ struct TeamHome: View {
 
     private func templateCard(_ template: AgentTemplate) -> some View {
         let tile = TeamHomeLogic.tile(for: template)
-        return Button {
+        let symbol = Image(systemName: tile.symbol)
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(BanditoPalette.avatarMask)
+            .frame(width: 32, height: 32)
+            .background(tile.color.color, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        return templateTile(picture: symbol, title: template.title, description: template.description) {
             router.pendingTemplate = template
             router.sheet = .newAgent
-        } label: {
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: tile.symbol)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(BanditoPalette.avatarMask)
-                    .frame(width: 32, height: 32)
-                    .background(tile.color.color, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(template.title)
-                        .font(BanditoFont.display(size: 12.5, weight: 600))
-                        .foregroundStyle(Color.Bandito.text)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.85)
-                    Text(template.description)
-                        .font(BanditoFont.text(size: 12, weight: 400))
-                        .foregroundStyle(Color.Bandito.text3)
-                        .multilineTextAlignment(.leading)
-                        .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// A bot of the server's catalog: its tile in the bot's colour and icon. A click opens its create panel in the
+    /// Marketplace's Bots page.
+    private func botCard(_ template: BotTemplate) -> some View {
+        templateTile(
+            picture: BotTile(template: template, size: 32),
+            title: template.name(languageCode: languageCode),
+            description: template.description(languageCode: languageCode)
+        ) {
+            router.showBots(template: template.id)
+        }
+    }
+
+    /// The tile of one template or bot: the picture, its name and a line of what it does, on the Marketplace card
+    /// that lifts a little under the pointer.
+    private func templateTile<Picture: View>(
+        picture: Picture, title: String, description: String, action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            MarketCardFrame {
+                HStack(alignment: .top, spacing: 12) {
+                    picture
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(title)
+                            .font(BanditoFont.display(size: 12.5, weight: 600))
+                            .foregroundStyle(Color.Bandito.text)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
+                        Text(description)
+                            .font(BanditoFont.text(size: 12, weight: 400))
+                            .foregroundStyle(Color.Bandito.text3)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
             }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .topLeading)
-            .banditoCard(hoverLift: true)
             .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .banditoButton(.row(cornerRadius: 14))
+    }
+
+    /// Opens the Marketplace on its Bots page: all the bots of the catalog.
+    private var allBotsLink: some View {
+        Button(L10n.Team.Home.allBots) {
+            router.showBots()
+        }
+        .banditoButton(.link)
+        .lineLimit(1)
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     /// A hint to hand off. Quiet on purpose: the only orange on the home is the agent that needs the person.

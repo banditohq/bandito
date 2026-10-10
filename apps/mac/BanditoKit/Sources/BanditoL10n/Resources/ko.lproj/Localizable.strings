@@ -1945,6 +1945,7 @@
 "team.header.browser" = "패널에서 에이전트의 브라우저 열기";
 "team.header.openInspector" = "에이전트 세부 정보 열기";
 "team.header.terminal" = "에이전트 폴더에서 터미널 열기";
+"team.home.allBots" = "마켓플레이스의 모든 봇 →";
 "team.home.asleep" = "잠듦";
 "team.home.idea1" = "어제 바뀐 내용을 살펴보고 위험해 보이는 부분을 정리해 줘.";
 "team.home.idea2" = "메인 브랜치에서 테스트가 실패하는 이유를 찾아 고쳐 줘.";

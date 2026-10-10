@@ -1935,6 +1935,7 @@
   "team.home.title": "あなたのチーム",
   "team.home.subtitle": "前回の続きから再開するか、新しいエージェントに次の仕事を任せましょう。",
   "team.home.templates": "テンプレートから始める",
+  "team.home.allBots": "マーケットのすべてのボット →",
   "team.home.recent": "最近のエージェント",
   "team.home.asleep": "休止中",
   "team.home.ideas": "任せられること",

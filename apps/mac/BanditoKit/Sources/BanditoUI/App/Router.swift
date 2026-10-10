@@ -419,6 +419,24 @@ public final class Router {
         return pendingTemplate
     }
 
+    /// Opens the Marketplace on its Bots page (the Team home's "All bots"). With `template`, the create panel of that
+    /// bot opens too, once the page has the template (a tile of the Team home).
+    public func showBots(template: String? = nil) {
+        marketTab = .bots
+        marketDetail = nil
+        MarketTabStore.save(.bots)
+        pendingBotTemplate = template
+        select(mode: .market)
+    }
+
+    /// The bot whose create panel the Bots page opens. Taken once, by the page.
+    public private(set) var pendingBotTemplate: String?
+
+    public func takePendingBotTemplate() -> String? {
+        defer { pendingBotTemplate = nil }
+        return pendingBotTemplate
+    }
+
     /// The composer's text of each agent, by agent id. Kept here rather than in the thread view, so a draft stays with
     /// its agent when the view is recreated or the person goes to another agent.
     public var drafts: [String: String] = [:]
