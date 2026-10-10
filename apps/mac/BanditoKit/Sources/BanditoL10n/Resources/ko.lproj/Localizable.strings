@@ -929,7 +929,6 @@
 "market.section.how" = "연결 방법";
 "market.section.links" = "링크";
 "market.section.needs" = "필요한 것";
-"market.section.tools" = "마지막 확인에서 찾은 도구";
 "market.skill.by" = "제작: %1$@";
 "market.skill.claudeOnly" = "Claude 전용";
 "market.skill.conflictAgent" = "%1$@의 폴더에 같은 이름의 폴더가 이미 있고, Bandito가 만든 것이 아니에요. Bandito는 덮어쓰지 않아요. 폴더를 옮기거나 이름을 바꾼 뒤 스킬을 설치하세요.";
@@ -979,6 +978,7 @@
 "market.tools.mode.readOnly" = "읽기 전용";
 "market.tools.notChecked" = "아직 알려진 도구가 없어요. 서비스를 확인하면 목록이 나와요. 그때까지는 모든 도구를 무언가를 바꾸는 것으로 봐요.";
 "market.tools.title" = "도구";
+"market.tools.toList" = "목록으로";
 "market.tools.unreached" = "에이전트 %1$@(Codex 또는 Grok)에서는 이 모드일 때 서비스가 꺼져요.";
 "market.tools.word.allow" = "허용";
 "market.tools.word.ask" = "묻기";

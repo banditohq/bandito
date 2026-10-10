@@ -929,7 +929,6 @@
 "market.section.how" = "How to connect";
 "market.section.links" = "Links";
 "market.section.needs" = "What you need";
-"market.section.tools" = "Tools from the last check";
 "market.skill.by" = "by %1$@";
 "market.skill.claudeOnly" = "Claude only";
 "market.skill.conflictAgent" = "A folder with this name is already in the folder of %1$@, and Bandito did not put it there. Bandito never overwrites it: move or rename it, then install the skill.";
@@ -979,6 +978,7 @@
 "market.tools.mode.readOnly" = "Read only";
 "market.tools.notChecked" = "No tools are known yet. Check the service to list them. Until then every tool counts as one that changes something.";
 "market.tools.title" = "Tools";
+"market.tools.toList" = "To the list";
 "market.tools.unreached" = "For agents %1$@ (Codex or Grok) the service is turned off in this mode.";
 "market.tools.word.allow" = "Allow";
 "market.tools.word.ask" = "Ask";
