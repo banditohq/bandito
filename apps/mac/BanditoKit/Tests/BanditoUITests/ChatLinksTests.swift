@@ -130,23 +130,7 @@ import Testing
     }
 }
 
-@Suite struct BrowserRunDomainTests {
-    @Test func theHostWithoutWww() {
-        #expect(BrowserRunDomain.host(of: "https://www.shop.example/cart") == "shop.example")
-        #expect(BrowserRunDomain.host(of: "https://docs.example.org/a?b=1") == "docs.example.org")
-    }
-
-    @Test func noHostNoTitleDomain() {
-        #expect(BrowserRunDomain.host(of: "about:blank") == nil)
-        #expect(BrowserRunDomain.host(of: "") == nil)
-    }
-
-    @Test func aNewTabPageIsNotADomain() {
-        // `chrome://newtab/` has the host "newtab": the card must not call it a site.
-        #expect(BrowserRunDomain.host(of: "chrome://newtab/") == nil)
-        #expect(BrowserRunDomain.host(of: "chrome-search://local-ntp/local-ntp.html") == nil)
-    }
-
+@Suite struct ChatFileLinkTests {
     @Test func fileLinkURLRoundTrips() {
         let url = ChatLinkText.fileURL(path: "/Users/me/my file.png")
         #expect(url != nil)

@@ -30,7 +30,6 @@ final class BrowserModel {
     /// through the model would redraw the whole tree each time. The picture views listen to `frames` instead (see
     /// `BrowserFrameLayer`); a view that needs only to know whether a picture exists reads `hasFrame`.
     @ObservationIgnored let frames = BrowserFrameStore()
-    var frame: CGImage? { frames.image }
     /// Whether a picture of the page exists. Written only when it changes.
     private(set) var hasFrame = false
     /// The page size in CSS pixels, from the last frame (what clicks are scaled from).

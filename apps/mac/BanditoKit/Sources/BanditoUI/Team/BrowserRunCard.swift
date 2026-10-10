@@ -3,17 +3,6 @@ import BanditoKit
 import BanditoL10n
 import SwiftUI
 
-/// The host of a page address for the card's title: `shop.example` for `https://www.shop.example/cart`. `nil` for
-/// an address without a host, or not a web page (`about:blank`, `chrome://newtab`, an empty page).
-enum BrowserRunDomain {
-    static func host(of address: String) -> String? {
-        guard let url = URL(string: address), url.scheme == "http" || url.scheme == "https",
-              let host = url.host, !host.isEmpty
-        else { return nil }
-        return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
-    }
-}
-
 /// The size of the picture in the card. Pure, so the rules are easy to read and test.
 enum BrowserRunPreview {
     /// The tallest the picture gets, in points.
