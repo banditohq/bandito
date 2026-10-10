@@ -1962,6 +1962,7 @@
   },
   "integrations.status.failed": "Verificação falhou",
   "integrations.status.needsLogin": "É preciso entrar de novo",
+  "integrations.status.refreshError": "Não foi possível renovar o acesso; vamos tentar de novo",
   "integrations.oauth.title": "Conectar {name}",
   "integrations.oauth.starting": "Abrindo o navegador…",
   "integrations.oauth.waiting": "Aguardando sua permissão no navegador…",

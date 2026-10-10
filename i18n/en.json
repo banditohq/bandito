@@ -1962,6 +1962,7 @@
   },
   "integrations.status.failed": "Check failed",
   "integrations.status.needsLogin": "Needs sign-in again",
+  "integrations.status.refreshError": "Couldn't renew the sign-in, will retry",
   "integrations.oauth.title": "Connect {name}",
   "integrations.oauth.starting": "Opening the browser…",
   "integrations.oauth.waiting": "Waiting for your permission in the browser…",

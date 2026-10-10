@@ -733,6 +733,7 @@
 "integrations.status.disabled" = "Aus";
 "integrations.status.failed" = "Prüfung fehlgeschlagen";
 "integrations.status.needsLogin" = "Erneut anmelden nötig";
+"integrations.status.refreshError" = "Anmeldung konnte nicht erneuert werden, neuer Versuch folgt";
 "integrations.status.unchecked" = "Noch nicht geprüft";
 "integrations.title" = "Integrationen";
 "integrations.toolsFound" = "Werkzeuge: %1$@";

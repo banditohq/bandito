@@ -733,6 +733,7 @@
 "integrations.status.disabled" = "已关闭";
 "integrations.status.failed" = "检查失败";
 "integrations.status.needsLogin" = "需要重新登录";
+"integrations.status.refreshError" = "无法续期登录，稍后会重试";
 "integrations.status.unchecked" = "尚未检查";
 "integrations.title" = "集成";
 "integrations.toolsFound" = "工具：%1$@";

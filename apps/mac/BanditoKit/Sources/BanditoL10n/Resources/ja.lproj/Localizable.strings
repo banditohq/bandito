@@ -733,6 +733,7 @@
 "integrations.status.disabled" = "無効";
 "integrations.status.failed" = "確認に失敗";
 "integrations.status.needsLogin" = "再ログインが必要です";
+"integrations.status.refreshError" = "ログインを更新できませんでした。再試行します";
 "integrations.status.unchecked" = "未確認";
 "integrations.title" = "連携";
 "integrations.toolsFound" = "ツール: %1$@";

@@ -50,11 +50,15 @@ public enum OAuthConnection: Sendable, Equatable {
     case connected
     /// The service refused the renewal (or the token ran out with nothing to renew it): the owner signs in again.
     case needsLogin
+    /// The sign-in is there, but renewing it keeps failing for a reason that may pass (the service is down): the
+    /// daemon tries again by itself.
+    case refreshError
     case notConnected
 
     init(wire: String) {
         switch wire {
         case "connected": self = .connected
+        case "refresh_error": self = .refreshError
         case "needs_login": self = .needsLogin
         default: self = .notConnected
         }
@@ -67,15 +71,20 @@ public struct OAuthStatus: Decodable, Sendable, Equatable {
     public var status: String
     public var expiresAt: Int64?
     public var scope: String?
+    /// For `refresh_error`: a short text from the daemon (English), fit for a tooltip.
+    public var error: String?
 
     public var connection: OAuthConnection { OAuthConnection(wire: status) }
 
-    public init(id: String, name: String, status: String, expiresAt: Int64? = nil, scope: String? = nil) {
+    public init(
+        id: String, name: String, status: String, expiresAt: Int64? = nil, scope: String? = nil, error: String? = nil
+    ) {
         self.id = id
         self.name = name
         self.status = status
         self.expiresAt = expiresAt
         self.scope = scope
+        self.error = error
     }
 }
 

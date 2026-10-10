@@ -733,6 +733,7 @@
 "integrations.status.disabled" = "Выключена";
 "integrations.status.failed" = "Проверка не прошла";
 "integrations.status.needsLogin" = "Нужно войти снова";
+"integrations.status.refreshError" = "Не удалось обновить вход, попробуем ещё раз";
 "integrations.status.unchecked" = "Ещё не проверена";
 "integrations.title" = "Интеграции";
 "integrations.toolsFound" = "Инструменты: %1$@";

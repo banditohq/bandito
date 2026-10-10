@@ -733,6 +733,7 @@
 "integrations.status.disabled" = "Desactivada";
 "integrations.status.failed" = "La comprobación falló";
 "integrations.status.needsLogin" = "Hay que iniciar sesión de nuevo";
+"integrations.status.refreshError" = "No se pudo renovar el inicio de sesión; se reintentará";
 "integrations.status.unchecked" = "Aún sin comprobar";
 "integrations.title" = "Integraciones";
 "integrations.toolsFound" = "Herramientas: %1$@";

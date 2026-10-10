@@ -48,8 +48,6 @@ public final class OAuthSignIn {
     @ObservationIgnored private var attempt: (server: any OAuthServer, target: OAuthBeginTarget, name: String)?
     /// Changes with each start and each cancel, so an answer that arrives late knows it is out of date.
     @ObservationIgnored private var run = UUID()
-    /// The state of the sign-in that was handed to the server last: a second callback with it is ignored.
-    @ObservationIgnored private var spentState: String?
 
     public init(
         defaults: UserDefaults = .standard, now: @escaping () -> Date = Date.init,
@@ -145,20 +143,20 @@ public final class OAuthSignIn {
 
     // MARK: - the way back
 
-    /// Takes a `bandito://oauth/callback` address. Returns the server it belongs to, or nil when `url` is not a
-    /// callback at all (the caller may then treat it as something else).
+    /// Takes a `bandito://oauth/callback` address. Returns the server it belongs to, or nil when the app did nothing
+    /// with it: `url` is not a callback, or it is not the answer to the sign-in the app waits for. Any web page can
+    /// open `bandito://oauth/callback?state=x`, so a callback with another state (or with no sign-in pending, or the
+    /// echo of one that was handed over already) is dropped without a word: no sheet, no navigation, the pending
+    /// sign-in untouched.
     @discardableResult
     public func handle(_ url: URL, server lookup: (UUID) -> (any OAuthServer)?) async -> UUID? {
         guard let callback = OAuthCallback.parse(url) else { return nil }
-        // The same answer twice (a browser that opens the address again) is the first one's echo.
-        if let state = callback.state, state == spentState { return pending?.serverID ?? attempt?.server.oauthServerID }
-        guard let record = pending, record.state == callback.state,
-            now().timeIntervalSince(record.startedAt) <= Self.lifetime
-        else {
-            let stale = pending
+        guard let record = pending, let state = callback.state, state == record.state else { return nil }
+        guard now().timeIntervalSince(record.startedAt) <= Self.lifetime else {
+            // The right state, too late: the daemon has forgotten it, the owner starts again.
             forget()
-            phase = .failed(name: stale?.name ?? "", message: Self.lost, canRetry: false)
-            return stale?.serverID
+            phase = .failed(name: record.name, message: Self.lost, canRetry: false)
+            return record.serverID
         }
         guard let server = lookup(record.serverID) else {
             forget()
@@ -176,7 +174,6 @@ public final class OAuthSignIn {
         }
         // The state is spent from here on, whatever the server answers.
         forget()
-        spentState = record.state
         authorizeURL = nil
         run = UUID()
         phase = .finishing(name: name)
@@ -193,7 +190,6 @@ public final class OAuthSignIn {
 
     private func remember(_ record: Pending) {
         pending = record
-        spentState = nil
         if let data = try? JSONEncoder().encode(record) { defaults.set(data, forKey: Self.storeKey) }
     }
 

@@ -733,6 +733,7 @@
 "integrations.status.disabled" = "꺼짐";
 "integrations.status.failed" = "확인 실패";
 "integrations.status.needsLogin" = "다시 로그인해야 해요";
+"integrations.status.refreshError" = "로그인을 갱신하지 못했어요. 다시 시도할게요";
 "integrations.status.unchecked" = "아직 확인 안 함";
 "integrations.title" = "연동";
 "integrations.toolsFound" = "도구: %1$@";

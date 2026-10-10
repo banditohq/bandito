@@ -733,6 +733,7 @@
 "integrations.status.disabled" = "Désactivée";
 "integrations.status.failed" = "Échec de la vérification";
 "integrations.status.needsLogin" = "Reconnexion nécessaire";
+"integrations.status.refreshError" = "Impossible de renouveler la connexion, nouvel essai à venir";
 "integrations.status.unchecked" = "Pas encore vérifiée";
 "integrations.title" = "Intégrations";
 "integrations.toolsFound" = "Outils : %1$@";

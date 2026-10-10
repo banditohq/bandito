@@ -1961,6 +1961,7 @@
   },
   "integrations.status.failed": "Prüfung fehlgeschlagen",
   "integrations.status.needsLogin": "Erneut anmelden nötig",
+  "integrations.status.refreshError": "Anmeldung konnte nicht erneuert werden, neuer Versuch folgt",
   "integrations.oauth.title": "{name} verbinden",
   "integrations.oauth.starting": "Browser wird geöffnet …",
   "integrations.oauth.waiting": "Warte auf Ihre Freigabe im Browser …",

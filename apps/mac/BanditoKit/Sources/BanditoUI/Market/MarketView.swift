@@ -572,6 +572,15 @@ struct IntegrationStatusLine: View {
             }
             .font(BanditoFont.text(size: 12.5, weight: 500))
             .foregroundStyle(Color.Bandito.signal)
+        case .refreshError:
+            Label {
+                Text(L10n.Integrations.Status.refreshError)
+                    .fixedSize(horizontal: false, vertical: true)
+            } icon: {
+                Image(systemName: "arrow.triangle.2.circlepath")
+            }
+            .font(BanditoFont.text(size: 12.5, weight: 500))
+            .foregroundStyle(Color.Bandito.signal)
         case .failed(let failure):
             Label {
                 Text(IntegrationFailureText.text(failure))

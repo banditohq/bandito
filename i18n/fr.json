@@ -1962,6 +1962,7 @@
   },
   "integrations.status.failed": "Échec de la vérification",
   "integrations.status.needsLogin": "Reconnexion nécessaire",
+  "integrations.status.refreshError": "Impossible de renouveler la connexion, nouvel essai à venir",
   "integrations.oauth.title": "Connecter {name}",
   "integrations.oauth.starting": "Ouverture du navigateur…",
   "integrations.oauth.waiting": "En attente de votre autorisation dans le navigateur…",

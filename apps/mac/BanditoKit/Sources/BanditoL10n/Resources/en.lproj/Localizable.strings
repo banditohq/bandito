@@ -733,6 +733,7 @@
 "integrations.status.disabled" = "Off";
 "integrations.status.failed" = "Check failed";
 "integrations.status.needsLogin" = "Needs sign-in again";
+"integrations.status.refreshError" = "Couldn't renew the sign-in, will retry";
 "integrations.status.unchecked" = "Not checked yet";
 "integrations.title" = "Integrations";
 "integrations.toolsFound" = "Tools: %1$@";

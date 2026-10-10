@@ -1935,6 +1935,7 @@
   },
   "integrations.status.failed": "확인 실패",
   "integrations.status.needsLogin": "다시 로그인해야 해요",
+  "integrations.status.refreshError": "로그인을 갱신하지 못했어요. 다시 시도할게요",
   "integrations.oauth.title": "{name} 연결",
   "integrations.oauth.starting": "브라우저를 여는 중…",
   "integrations.oauth.waiting": "브라우저에서 허용하기를 기다리는 중…",

@@ -1935,6 +1935,7 @@
   },
   "integrations.status.failed": "確認に失敗",
   "integrations.status.needsLogin": "再ログインが必要です",
+  "integrations.status.refreshError": "ログインを更新できませんでした。再試行します",
   "integrations.oauth.title": "{name} を接続",
   "integrations.oauth.starting": "ブラウザを開いています…",
   "integrations.oauth.waiting": "ブラウザでの許可を待っています…",

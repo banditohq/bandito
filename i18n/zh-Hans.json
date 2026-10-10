@@ -1935,6 +1935,7 @@
   },
   "integrations.status.failed": "检查失败",
   "integrations.status.needsLogin": "需要重新登录",
+  "integrations.status.refreshError": "无法续期登录，稍后会重试",
   "integrations.oauth.title": "连接 {name}",
   "integrations.oauth.starting": "正在打开浏览器…",
   "integrations.oauth.waiting": "正在等待你在浏览器中授权…",

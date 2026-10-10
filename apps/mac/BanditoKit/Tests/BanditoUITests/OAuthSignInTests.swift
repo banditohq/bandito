@@ -120,14 +120,42 @@ private final class Rig {
         defer { rig.tearDown() }
         let server = FakeServer()
         await rig.oauth.begin(server: server, target: .draft(linear), name: "Linear")
-        _ = await rig.oauth.handle(callback("someone-elses-state")) { _ in server }
-        #expect(server.completed.isEmpty)
-        guard case .failed(_, let message, let canRetry) = rig.oauth.phase else {
-            Issue.record("expected a failure, got \(rig.oauth.phase)")
-            return
+        // Any web page can open bandito://oauth/callback?state=x: nothing happens, nothing is shown.
+        let strangers = [
+            callback("someone-elses-state"),
+            URL(string: "bandito://oauth/callback?code=c")!,
+            URL(string: "bandito://oauth/callback?error=access_denied&state=someone-elses-state")!,
+            URL(string: "bandito://oauth/callback?state=")!,
+        ]
+        for url in strangers {
+            let handled = await rig.oauth.handle(url) { _ in server }
+            #expect(handled == nil, "\(url)")
+            #expect(rig.oauth.phase == .waiting(name: "Linear"), "\(url)")
         }
-        #expect(!message.text.isEmpty)
-        #expect(!canRetry)
+        #expect(server.completed.isEmpty)
+        #expect(server.cancelled.isEmpty, "the pending sign-in is not given up")
+        #expect(rig.defaults.data(forKey: OAuthSignIn.storeKey) != nil, "the pending state stays on disk")
+        // The real answer still works afterwards, and the pending state survived on disk for it.
+        let handled = await rig.oauth.handle(callback("state-1")) { _ in server }
+        #expect(handled == server.oauthServerID)
+        #expect(rig.oauth.phase == .connected(name: "linear", integrationID: "i1"))
+    }
+
+    @Test func aCallbackWithNothingPendingIsIgnored() async {
+        let rig = Rig()
+        defer { rig.tearDown() }
+        let server = FakeServer()
+        let handled = await rig.oauth.handle(callback("state-1")) { _ in server }
+        #expect(handled == nil)
+        #expect(rig.oauth.phase == .idle)
+        #expect(!rig.oauth.isActive)
+        #expect(server.completed.isEmpty && server.cancelled.isEmpty)
+        // A sign-in that was handed over is over: its echo changes nothing either.
+        await rig.oauth.begin(server: server, target: .draft(linear), name: "Linear")
+        _ = await rig.oauth.handle(callback("state-1")) { _ in server }
+        let echo = await rig.oauth.handle(callback("state-1")) { _ in server }
+        #expect(echo == nil)
+        #expect(server.completed.count == 1)
     }
 
     @Test func theSameCallbackTwiceCompletesOnce() async {
@@ -277,6 +305,11 @@ private final class Rig {
                 == .needsLogin)
         #expect(IntegrationStatus.of(row, test: nil, connection: .connected) == .unchecked)
         #expect(IntegrationStatus.of(row, test: IntegrationTest(ok: true, tools: ["a"]), connection: .connected) == .connected(tools: 1))
+        // A renewal that keeps failing is its own word, but a refusal still wins over it.
+        #expect(IntegrationStatus.of(row, test: nil, connection: .refreshError) == .refreshError)
+        #expect(
+            IntegrationStatus.of(row, test: IntegrationTest(ok: false, error: "x", needsLogin: true), connection: .refreshError)
+                == .needsLogin)
         // A key-based integration never reads as needing a sign-in, and a switched-off one stays off.
         let plain = Integration(id: "i2", name: "fetch", kind: .http, url: "https://x")
         #expect(IntegrationStatus.of(plain, test: nil, connection: .notConnected) == .unchecked)

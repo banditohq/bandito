@@ -68,7 +68,7 @@ come to this Mac. A sheet says Waiting for your permission in the browser (Жд�
 browser again (Открыть браузер снова) and Cancel (Отмена). After you allow access the browser brings you back to Bandito,
 the sheet says Connected (Подключено) and the card shows the tools. If the access is refused, expires or is revoked, the
 card says Needs sign-in again (Нужно войти снова) with the button Sign in again (Войти снова); the agents see the service
-as off until then. Remove (Удалить) also withdraws the access on the service's side when it can.
+as off until then. If the service is out of reach when Bandito renews the access, the card says Couldn't renew the sign-in, will retry (Не удалось обновить вход, попробуем ещё раз): the access still works, and Bandito tries again by itself. Remove (Удалить) also withdraws the access on the service's side when it can.
 Где: Marketplace → a catalog card or a service's page → Connect (Подключить), then the sheet; Sign in again (Войти снова) on a card, in its menu (…), or on its page
 1. Click Connect (Подключить). The browser opens the service's page.
 2. Allow access there. Come back to Bandito if the browser does not bring you back by itself.

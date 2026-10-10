@@ -56,8 +56,10 @@ import Testing
         #expect(done.created && done.name == "linear")
         let list = try decode(
             [OAuthStatus].self,
-            #"[{"id":"a","name":"a","status":"connected","expires_at":5,"scope":"read"},{"id":"b","name":"b","status":"needs_login"},{"id":"c","name":"c","status":"not_connected"},{"id":"d","name":"d","status":"something_new"}]"#)
-        #expect(list.map(\.connection) == [.connected, .needsLogin, .notConnected, .notConnected])
+            #"[{"id":"a","name":"a","status":"connected","expires_at":5,"scope":"read"},{"id":"b","name":"b","status":"needs_login"},{"id":"c","name":"c","status":"not_connected"},{"id":"d","name":"d","status":"something_new"},{"id":"e","name":"e","status":"refresh_error","error":"the service answered HTTP 503"}]"#)
+        #expect(list.map(\.connection) == [.connected, .needsLogin, .notConnected, .notConnected, .refreshError])
+        #expect(list[4].error == "the service answered HTTP 503")
+        #expect(list[0].error == nil)
     }
 
     @Test func aDraftGoesOutAsTheAddBodyAndAnExistingOneAsItsId() throws {

@@ -1962,6 +1962,7 @@
   },
   "integrations.status.failed": "La comprobación falló",
   "integrations.status.needsLogin": "Hay que iniciar sesión de nuevo",
+  "integrations.status.refreshError": "No se pudo renovar el inicio de sesión; se reintentará",
   "integrations.oauth.title": "Conectar {name}",
   "integrations.oauth.starting": "Abriendo el navegador…",
   "integrations.oauth.waiting": "Esperando tu permiso en el navegador…",

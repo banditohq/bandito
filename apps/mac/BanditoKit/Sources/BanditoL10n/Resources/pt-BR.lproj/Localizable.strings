@@ -733,6 +733,7 @@
 "integrations.status.disabled" = "Desativada";
 "integrations.status.failed" = "Verificação falhou";
 "integrations.status.needsLogin" = "É preciso entrar de novo";
+"integrations.status.refreshError" = "Não foi possível renovar o acesso; vamos tentar de novo";
 "integrations.status.unchecked" = "Ainda não verificada";
 "integrations.title" = "Integrações";
 "integrations.toolsFound" = "Ferramentas: %1$@";

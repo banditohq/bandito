@@ -2019,6 +2019,7 @@
   },
   "integrations.status.failed": "Проверка не прошла",
   "integrations.status.needsLogin": "Нужно войти снова",
+  "integrations.status.refreshError": "Не удалось обновить вход, попробуем ещё раз",
   "integrations.oauth.title": "Подключить {name}",
   "integrations.oauth.starting": "Открываем браузер…",
   "integrations.oauth.waiting": "Ждём разрешения в браузере…",

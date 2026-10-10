@@ -1060,6 +1060,7 @@ public enum L10n {
             public static var disabled: String { L10n.tr("integrations.status.disabled") }
             public static var failed: String { L10n.tr("integrations.status.failed") }
             public static var needsLogin: String { L10n.tr("integrations.status.needsLogin") }
+            public static var refreshError: String { L10n.tr("integrations.status.refreshError") }
             public static var unchecked: String { L10n.tr("integrations.status.unchecked") }
         }
     }
