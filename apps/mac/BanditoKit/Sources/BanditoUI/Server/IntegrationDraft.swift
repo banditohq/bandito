@@ -338,10 +338,27 @@ public struct IntegrationDraft: Equatable, Sendable {
         return IntegrationSave(secrets: secrets, create: create, patch: nil)
     }
 
+    /// What `integrations.probe` gets: the definition `build` would save, but with each typed secret as its value (the
+    /// daemon holds it only in memory, nothing is written). A stored secret that is not retyped keeps its reference.
+    public func probeDraft() -> NewIntegration {
+        var none: [IntegrationSecretWrite] = []
+        let name = trimmed(name)
+        return NewIntegration(
+            name: name,
+            kind: kind,
+            command: kind == .stdio ? trimmed(command) : nil,
+            args: kind == .stdio ? args : [],
+            url: kind == .http ? trimmed(url) : nil,
+            env: resolve(env, name: name, secrets: &none, inline: true),
+            headers: resolve(headers, name: name, secrets: &none, inline: true),
+            enabled: false)
+    }
+
     /// The values as the daemon stores them: a secret becomes `secret:<NAME>` (through its template when it has
-    /// one), and its value goes into `secrets`. A stored secret that is not retyped keeps its reference.
+    /// one), and its value goes into `secrets`. A stored secret that is not retyped keeps its reference. With `inline`
+    /// a typed secret is its value instead, and `secrets` stays empty.
     private func resolve(
-        _ pairs: [IntegrationPair], name: String, secrets: inout [IntegrationSecretWrite]
+        _ pairs: [IntegrationPair], name: String, secrets: inout [IntegrationSecretWrite], inline: Bool = false
     ) -> [String: String] {
         var result: [String: String] = [:]
         for item in pairs {
@@ -352,6 +369,10 @@ public struct IntegrationDraft: Equatable, Sendable {
                 continue
             }
             let typed = trimmed(item.value)
+            if inline, !typed.isEmpty {
+                result[key] = item.template.map { $0.replacingOccurrences(of: "{secret}", with: typed) } ?? typed
+                continue
+            }
             let secret: String
             if !typed.isEmpty {
                 secret = item.storedSecret ?? Self.secretName(integration: name, key: key)

@@ -5,8 +5,9 @@ import SwiftUI
 
 /// "Своя интеграция": adds an MCP server that is not in the catalog. The owner pastes what the server's documentation
 /// shows (a Claude Desktop or Cursor config, one server's object, a command, or a URL) and the fields fill themselves;
-/// or fills them by hand. "Check" tries the connection before the owner commits: it adds the server turned off, and
-/// leaving the sheet without "Add" takes it away again, with the secrets the sheet wrote.
+/// or fills them by hand. "Check" tries the connection before the owner commits. A daemon with `integrations_probe`
+/// tries the draft and saves nothing. An older daemon adds the server turned off, and leaving the sheet without "Add"
+/// takes it away again, with the secrets the sheet wrote.
 struct CustomIntegrationSheet: View {
     let server: ServerModel
     let existingNames: [String]
@@ -67,7 +68,10 @@ struct CustomIntegrationSheet: View {
 
             feedback
             buttons
-            if checkAsked {
+            if let test {
+                IntegrationTestResult(result: test)
+            }
+            if checkAsked, !probes {
                 Text(L10n.Integrations.Custom.trialNote)
                     .font(BanditoFont.text(size: 11.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
@@ -344,9 +348,6 @@ struct CustomIntegrationSheet: View {
                 .foregroundStyle(Color.Bandito.danger)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        if let test {
-            IntegrationTestResult(result: test)
-        }
         if let error {
             UserFacingErrorView(message: error, onRetry: { add() })
         }
@@ -445,17 +446,38 @@ struct CustomIntegrationSheet: View {
 
     // MARK: - actions
 
-    /// "Check": adds the server turned off (once), then tries it.
+    /// Whether the daemon can try a draft without saving it (`integrations_probe`). Older daemons get the trial below.
+    private var probes: Bool { server.supports("integrations_probe") }
+
+    /// "Check": with the daemon's probe, tries the draft as it stands and saves nothing. An older daemon has no probe:
+    /// the server is added turned off (once), then tried.
     private func check() {
         attempted = true
         checkAsked = true
         error = nil
         guard currentProblem == nil else { return }
+        if probes {
+            probeDraft()
+            return
+        }
         busy = true
         Task {
             defer { busy = false }
             guard let id = await persist(enabled: draft.editingID == nil ? false : nil) else { return }
             await runCheck(id)
+        }
+    }
+
+    /// "Check" with the daemon's probe: the result shows under the buttons, and nothing is written.
+    private func probeDraft() {
+        checking = true
+        Task {
+            defer { checking = false }
+            do {
+                test = try await server.probeIntegration(draft.probeDraft())
+            } catch {
+                self.error = UserFacingError.message(for: error)
+            }
         }
     }
 
