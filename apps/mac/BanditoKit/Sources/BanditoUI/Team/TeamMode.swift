@@ -168,7 +168,7 @@ private struct EmptyTeam: View {
                     .font(.system(size: 34))
                     .foregroundStyle(Color.Bandito.text3)
                 switch app.currentServer?.state {
-                case .failed(.keyRejected):
+                case .failed(.keyRejected), .reconnecting where app.currentServer?.refusesKey == true:
                     if let server = app.currentServer { KeyRejectedNotice(server: server) }
                 case .failed(let kind):
                     UserFacingErrorView(message: UserFacingError.message(for: kind))

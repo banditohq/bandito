@@ -180,4 +180,48 @@ private let storeKey = "servers.v1"
             #expect(app.keyRepair[id] == nil)
         }
     }
+
+    // MARK: a server removed while the pairing runs
+
+    /// The pairing runs `onPair` (the person removes the server there), then goes on as a healthy daemon.
+    private struct RemovingDaemon: CommandRunner {
+        let onPair: @Sendable () async -> Void
+        let succeed: Bool
+        func run(_ executable: String, _ arguments: [String], stdin: Data?) async throws -> CommandResult {
+            if arguments.contains("info") {
+                return CommandResult(status: 0, stdout: #"{"listen":"127.0.0.1:17781","running":true}"#, stderr: "")
+            }
+            await onPair()
+            guard succeed else { return CommandResult(status: 1, stdout: "", stderr: "gone") }
+            return CommandResult(status: 0, stdout: #"{"code":"sunset-orbit","expires_in_ms":600000}"#, stderr: "")
+        }
+    }
+
+    @Test func aServerRemovedDuringPairingGetsNoKeychainEntryAndItsDeviceIsRevoked() async throws {
+        let tokens = Tokens()
+        await withApp(thisMac()) { app in
+            let id = self.id
+            let runner = RemovingDaemon(onPair: { await MainActor.run { app.remove(id) } }, succeed: true)
+            await app.repairThisMac(
+                id: id, pairing: pairing(runner),
+                storeToken: { tokens.stored[$1] = $0; return true },
+                eraseToken: { tokens.stored[$0] = nil },
+                revoke: { _, token, _ in tokens.revoked.append(token) })
+
+            #expect(app.servers.isEmpty)
+            #expect(tokens.stored.isEmpty)
+            #expect(tokens.revoked == ["bdt_new"])
+            #expect(app.keyRepair[id] == nil)
+        }
+    }
+
+    @Test func aPairingThatFailsAfterTheServerWasRemovedLeavesNoFailureBehind() async throws {
+        await withApp(thisMac()) { app in
+            let id = self.id
+            let runner = RemovingDaemon(onPair: { await MainActor.run { app.remove(id) } }, succeed: false)
+            await app.repairThisMac(id: id, pairing: pairing(runner), storeToken: { _, _ in true })
+
+            #expect(app.keyRepair[id] == nil)
+        }
+    }
 }

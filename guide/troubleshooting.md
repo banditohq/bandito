@@ -52,7 +52,7 @@ The server answers, but it does not know this Mac's key: it was reinstalled, los
 Где: Team (the empty chat of that server); any message about the connection
 1. On This Mac the app pairs with the server again by itself, once, and connects. If that works you see nothing.
 2. If it did not work, click Connect again (Подключить заново) under the message. The app pairs with this Mac's server again; the details of a failure are under Details (Подробнее).
-3. On another server, click Connect again (Подключить заново): the add-server sheet opens with the server's address. Connect it the same way as the first time; the old entry is replaced.
+3. On another server, click Connect again (Подключить заново): the add-server sheet opens with the server's address. Connect it the same way as the first time. If it is the same server, the old entry is replaced; with a different address a second entry appears, and you can remove the old one in Settings (⌘,) → Servers (Серверы).
 
 ## Something went wrong. (Что-то пошло не так.)
 

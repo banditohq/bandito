@@ -120,4 +120,67 @@ private final class RefusingServer: @unchecked Sendable {
         #expect(WebSocketTransport.rejection(forStatus: 101) == nil)
         #expect(WebSocketTransport.rejection(forStatus: nil) == nil)
     }
+
+    // MARK: reconnecting after a refused key
+
+    /// The first connection works; the next `rejected` ones are refused (keyRejected); every later one works.
+    @MainActor
+    private func model(isThisMac: Bool, rejected: Int, attempts: AttemptCounter) -> ServerModel {
+        let url = isThisMac ? "ws://127.0.0.1:17777/v1/rpc" : "wss://srv.example.ts.net/v1/rpc"
+        return ServerModel(
+            config: ServerConfig(name: "x", endpoint: .webSocket(url: URL(string: url)!), token: "t", isThisMac: isThisMac),
+            makeTransport: { _ in
+                let n = attempts.next()
+                if n >= 2, n < 2 + rejected { return RejectingTransport() }
+                return n == 1 ? attempts.first : FakeTransport(handlers: daemonHandlers())
+            },
+            reconnectDelay: { _ in .milliseconds(10) })
+    }
+
+    @MainActor
+    @Test func aRemoteServerKeepsRetryingAndShowsTheRefusalUntilItConnects() async throws {
+        let attempts = AttemptCounter()
+        let model = model(isThisMac: false, rejected: 3, attempts: attempts)
+        await model.connect()
+        await attempts.first.dropConnection()
+
+        try await eventually { model.refusesKey }
+        // It did not give up: after the refusals the next attempt connected, and the refusal is gone.
+        try await eventually { model.state == .connected }
+        #expect(attempts.count >= 5)
+        #expect(!model.refusesKey)
+        await model.disconnect()
+    }
+
+    @MainActor
+    @Test func thisMacsOwnDaemonStopsAtTheFirstRefusal() async throws {
+        let attempts = AttemptCounter()
+        let model = model(isThisMac: true, rejected: 3, attempts: attempts)
+        await model.connect()
+        await attempts.first.dropConnection()
+
+        try await eventually { model.state == .failed(.keyRejected) }
+        try await Task.sleep(for: .milliseconds(150))
+        #expect(attempts.count == 2)
+        #expect(model.refusesKey)
+        await model.disconnect()
+    }
+}
+
+private struct RejectingTransport: RPCTransport {
+    func connect() async throws {
+        throw RPCError(code: RPCError.keyRejected, message: "rejected")
+    }
+    func send(_ text: String) async throws {}
+    func receive() async throws -> String { throw RPCError(code: RPCError.keyRejected, message: "rejected") }
+    func close() async {}
+}
+
+// @unchecked: `n` is guarded by `lock`.
+private final class AttemptCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var n = 0
+    let first = FakeTransport(handlers: daemonHandlers())
+    var count: Int { lock.withLock { n } }
+    func next() -> Int { lock.withLock { n += 1; return n } }
 }
