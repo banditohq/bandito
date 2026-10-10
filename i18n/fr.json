@@ -1523,6 +1523,7 @@
   "terminals.layouts.grid": "Grille 2×2",
   "terminals.inputToAll": "Saisie dans tous",
   "terminals.inputToAllHint": "Ce que vous tapez dans le volet actif va dans tous les volets à l’écran",
+  "terminals.inputToAllOff": "Désactiver",
   "terminals.restart": "Redémarrer",
   "terminals.gap": "… {kb} Ko ignorés …",
   "terminals.error": "Erreur du terminal : {message}",

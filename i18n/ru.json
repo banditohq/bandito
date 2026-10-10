@@ -1434,6 +1434,7 @@
   "terminals.layouts.grid": "Сетка 2×2",
   "terminals.inputToAll": "Ввод во все",
   "terminals.inputToAllHint": "Ввод в фокусной панели уходит во все панели на экране",
+  "terminals.inputToAllOff": "Выключить",
   "terminals.restart": "Перезапустить",
   "terminals.gap": "… пропущено {kb} КБ …",
   "terminals.error": "Ошибка терминала: {message}",

@@ -2387,6 +2387,7 @@ public enum L10n {
         public static func gap(kb: String) -> String { L10n.tr("terminals.gap", kb) }
         public static var inputToAll: String { L10n.tr("terminals.inputToAll") }
         public static var inputToAllHint: String { L10n.tr("terminals.inputToAllHint") }
+        public static var inputToAllOff: String { L10n.tr("terminals.inputToAllOff") }
         public static var layoutTitle: String { L10n.tr("terminals.layoutTitle") }
         public static func newFailed(message: String) -> String { L10n.tr("terminals.newFailed", message) }
         public static var noRoom: String { L10n.tr("terminals.noRoom") }

@@ -1500,6 +1500,7 @@
   "terminals.layouts.grid": "2×2 网格",
   "terminals.inputToAll": "输入到所有窗格",
   "terminals.inputToAllHint": "在当前聚焦窗格中输入的内容，会发送到屏幕上的所有窗格",
+  "terminals.inputToAllOff": "关闭",
   "terminals.restart": "重启",
   "terminals.gap": "… 已跳过 {kb} KB …",
   "terminals.error": "终端错误：{message}",

@@ -1523,6 +1523,7 @@
   "terminals.layouts.grid": "Grade 2×2",
   "terminals.inputToAll": "Digitar em todos",
   "terminals.inputToAllHint": "O que você digitar no painel em foco vai para todos os painéis da tela",
+  "terminals.inputToAllOff": "Desativar",
   "terminals.restart": "Reiniciar",
   "terminals.gap": "… {kb} KB ignorados …",
   "terminals.error": "Erro do terminal: {message}",

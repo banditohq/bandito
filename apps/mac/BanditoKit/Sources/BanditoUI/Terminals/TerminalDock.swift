@@ -17,11 +17,6 @@ struct TerminalDock: View {
                     .fixedSize()
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        if workspace.collapsed.isEmpty {
-                            Text(L10n.Terminals.Dock.empty)
-                                .font(.system(size: 12))
-                                .foregroundStyle(Color.Bandito.text3)
-                        }
                         ForEach(workspace.collapsed, id: \.id) { entry in
                             DockCard(
                                 entry: entry,

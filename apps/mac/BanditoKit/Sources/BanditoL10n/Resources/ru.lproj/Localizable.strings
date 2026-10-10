@@ -1770,6 +1770,7 @@
 "terminals.gap" = "… пропущено %1$@ КБ …";
 "terminals.inputToAll" = "Ввод во все";
 "terminals.inputToAllHint" = "Ввод в фокусной панели уходит во все панели на экране";
+"terminals.inputToAllOff" = "Выключить";
 "terminals.layoutTitle" = "Расположение";
 "terminals.layouts.cols" = "Рядом";
 "terminals.layouts.grid" = "Сетка 2×2";

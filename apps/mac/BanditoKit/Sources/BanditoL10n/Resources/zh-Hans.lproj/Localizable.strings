@@ -1770,6 +1770,7 @@
 "terminals.gap" = "… 已跳过 %1$@ KB …";
 "terminals.inputToAll" = "输入到所有窗格";
 "terminals.inputToAllHint" = "在当前聚焦窗格中输入的内容，会发送到屏幕上的所有窗格";
+"terminals.inputToAllOff" = "关闭";
 "terminals.layoutTitle" = "布局";
 "terminals.layouts.cols" = "并排";
 "terminals.layouts.grid" = "2×2 网格";

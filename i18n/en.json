@@ -1389,6 +1389,7 @@
   "terminals.layouts.grid": "Grid 2×2",
   "terminals.inputToAll": "Input to all",
   "terminals.inputToAllHint": "What you type in the focused pane goes to every pane on screen",
+  "terminals.inputToAllOff": "Turn off",
   "terminals.restart": "Restart",
   "terminals.gap": "… {kb} KB skipped …",
   "terminals.error": "Terminal error: {message}",

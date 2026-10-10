@@ -1500,6 +1500,7 @@
   "terminals.layouts.grid": "2×2 격자",
   "terminals.inputToAll": "모두에게 입력",
   "terminals.inputToAllHint": "포커스된 패널에 입력한 내용이 화면의 모든 패널로 전달돼요",
+  "terminals.inputToAllOff": "끄기",
   "terminals.restart": "다시 시작",
   "terminals.gap": "… {kb}KB 건너뜀 …",
   "terminals.error": "터미널 오류: {message}",

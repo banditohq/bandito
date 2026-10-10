@@ -1770,6 +1770,7 @@
 "terminals.gap" = "… %1$@ KB を省略 …";
 "terminals.inputToAll" = "すべてに入力";
 "terminals.inputToAllHint" = "フォーカスのあるペインに入力した内容が、画面上のすべてのペインに送られます";
+"terminals.inputToAllOff" = "オフにする";
 "terminals.layoutTitle" = "レイアウト";
 "terminals.layouts.cols" = "並べて表示";
 "terminals.layouts.grid" = "グリッド 2×2";

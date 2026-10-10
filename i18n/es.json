@@ -1523,6 +1523,7 @@
   "terminals.layouts.grid": "Cuadrícula 2×2",
   "terminals.inputToAll": "Escribir en todas",
   "terminals.inputToAllHint": "Lo que escribes en el panel activo llega a todos los paneles de la pantalla",
+  "terminals.inputToAllOff": "Desactivar",
   "terminals.restart": "Reiniciar",
   "terminals.gap": "… {kb} KB omitidos …",
   "terminals.error": "Error de terminal: {message}",

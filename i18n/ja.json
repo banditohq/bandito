@@ -1500,6 +1500,7 @@
   "terminals.layouts.grid": "グリッド 2×2",
   "terminals.inputToAll": "すべてに入力",
   "terminals.inputToAllHint": "フォーカスのあるペインに入力した内容が、画面上のすべてのペインに送られます",
+  "terminals.inputToAllOff": "オフにする",
   "terminals.restart": "再起動",
   "terminals.gap": "… {kb} KB を省略 …",
   "terminals.error": "ターミナルのエラー: {message}",

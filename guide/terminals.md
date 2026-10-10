@@ -14,8 +14,8 @@ The sidebar lists the terminals On screen (На экране), Collapsed (Свё
 
 <!-- id: terminals-new; covers: -->
 Opens a new shell on the server in the default folder, or in the folder of a selected agent or file.
-Где: Terminals → toolbar → New terminal (Новый терминал) (⌘T); Menu Terminals → New terminal (Новый терминал)
-1. Press ⌘T or choose New terminal (Новый терминал) from the Terminals menu.
+Где: Terminals → toolbar → + (tooltip New terminal (Новый терминал)) (⌘T); Menu Terminals → New terminal (Новый терминал)
+1. Press ⌘T, click + in the toolbar, or choose New terminal (Новый терминал) from the Terminals menu.
 2. To start a terminal in an agent's folder, use /terminal in the Team mode or Terminal here in Files (see [files.md](files.md)).
 3. If the server is not reachable, the message says Could not open a terminal: … and offers Retry (Повторить).
 
@@ -30,8 +30,8 @@ Adds a new pane next to the focused one. If there is no room, the app says No ro
 
 <!-- id: terminals-layout; covers: -->
 Four ways to arrange the panes on screen: One window (Одно окно), Side by side (Рядом), Main and two on the right (Главное и два справа), and Grid 2×2 (Grid 2×2). At most as many panes as the layout has room for are on screen; the rest wait in the dock.
-Где: Terminals → toolbar → Layout (Расположение)
-1. Click Layout (Расположение) and choose the arrangement.
+Где: Terminals → toolbar → the layout icon (tooltip Layout (Расположение))
+1. Click the layout icon in the toolbar. The current arrangement has a check mark; choose another one from the menu.
 
 ## Move between panes
 
@@ -98,9 +98,9 @@ When the process in a pane has ended, the pane says so with the exit code or sig
 
 <!-- id: terminals-input-all; covers: -->
 A switch that sends what you type in the focused pane to every pane on screen. Use it for the same command on several servers' panes or in several folders.
-Где: Terminals → toolbar → Input to all (Ввод во все)
-1. Switch Input to all (Ввод во все) on. The hint says: What you type in the focused pane goes to every pane on screen.
-2. Switch it off when you are done.
+Где: Terminals → toolbar → … (More) → Input to all (Ввод во все)
+1. Choose Input to all (Ввод во все) in the … menu. The hint says: What you type in the focused pane goes to every pane on screen. While it is on, a strip above the panes says Input to all (Ввод во все) with Turn off (Выключить).
+2. Click Turn off (Выключить) on the strip, or choose Input to all (Ввод во все) again, when you are done.
 
 ## Terminal errors (Terminal error, Update the server to use terminals)
 

@@ -1770,6 +1770,7 @@
 "terminals.gap" = "… %1$@ KB übersprungen …";
 "terminals.inputToAll" = "Eingabe an alle";
 "terminals.inputToAllHint" = "Was Sie im aktiven Bereich tippen, geht an alle Bereiche auf dem Bildschirm";
+"terminals.inputToAllOff" = "Ausschalten";
 "terminals.layoutTitle" = "Anordnung";
 "terminals.layouts.cols" = "Nebeneinander";
 "terminals.layouts.grid" = "Raster 2×2";

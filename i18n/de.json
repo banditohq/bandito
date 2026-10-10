@@ -1522,6 +1522,7 @@
   "terminals.layouts.grid": "Raster 2×2",
   "terminals.inputToAll": "Eingabe an alle",
   "terminals.inputToAllHint": "Was Sie im aktiven Bereich tippen, geht an alle Bereiche auf dem Bildschirm",
+  "terminals.inputToAllOff": "Ausschalten",
   "terminals.restart": "Neu starten",
   "terminals.gap": "… {kb} KB übersprungen …",
   "terminals.error": "Terminal-Fehler: {message}",
