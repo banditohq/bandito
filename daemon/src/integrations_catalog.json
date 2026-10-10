@@ -37,7 +37,107 @@
     ],
     "docs_url": "https://github.com/github/github-mcp-server",
     "icon": "github",
-    "accent": "#24292F"
+    "accent": "#24292F",
+    "l10n": {
+      "de": {
+        "description": "Repositories, Issues und Pull Requests über den eigenen MCP-Server von GitHub.",
+        "long": "Der eigene MCP-Server von GitHub erlaubt dem Agenten die Arbeit mit Ihren Repositories, Issues und Pull Requests. Zum Beispiel: die offenen Issues mit dem Label bug finden und zusammenfassen oder die Änderungen in einem Pull Request lesen.",
+        "abilities": [
+          "Code durchsuchen und Dateien in Repositories lesen",
+          "Issues lesen, anlegen und kommentieren",
+          "Pull Requests lesen und öffnen",
+          "Optionale Werkzeuggruppen: Actions, Sicherheitswarnungen, Projekte, Gists"
+        ],
+        "needs": "Ein persönliches GitHub-Zugriffstoken mit den Berechtigungen, die Ihre Aufgaben brauchen.",
+        "labels": {
+          "Authorization": "Persönliches Zugriffstoken"
+        }
+      },
+      "es": {
+        "description": "Repositorios, issues y pull requests, a través del servidor MCP oficial de GitHub.",
+        "long": "El servidor MCP oficial de GitHub permite al agente trabajar con tus repositorios, issues y pull requests. Por ejemplo: buscar los issues abiertos con la etiqueta bug y resumirlos, o leer los cambios de un pull request.",
+        "abilities": [
+          "Buscar código y leer archivos de los repositorios",
+          "Leer, crear y comentar issues",
+          "Leer y abrir pull requests",
+          "Grupos opcionales de herramientas: Actions, alertas de seguridad, proyectos, gists"
+        ],
+        "needs": "Un token de acceso personal de GitHub con los permisos que necesiten tus tareas.",
+        "labels": {
+          "Authorization": "Token de acceso personal"
+        }
+      },
+      "fr": {
+        "description": "Dépôts, tickets et pull requests, via le serveur MCP officiel de GitHub.",
+        "long": "Le serveur MCP officiel de GitHub permet à l'agent de travailler avec vos dépôts, tickets et pull requests. Par exemple : trouver les tickets ouverts avec le libellé bug et les résumer, ou lire les modifications d'une pull request.",
+        "abilities": [
+          "Rechercher du code et lire des fichiers dans les dépôts",
+          "Lire, créer et commenter des tickets",
+          "Lire et ouvrir des pull requests",
+          "Groupes d'outils facultatifs : Actions, alertes de sécurité, projets, gists"
+        ],
+        "needs": "Un jeton d'accès personnel GitHub avec les droits dont vos tâches ont besoin.",
+        "labels": {
+          "Authorization": "Jeton d'accès personnel"
+        }
+      },
+      "ja": {
+        "description": "GitHub 公式の MCP サーバーで、リポジトリ、Issue、プルリクエストを扱います。",
+        "long": "GitHub 公式の MCP サーバーを使うと、エージェントがリポジトリ、Issue、プルリクエストを操作できます。例: bug ラベルの付いた未解決の Issue を探して要約する、プルリクエストの変更内容を読む。",
+        "abilities": [
+          "コードを検索し、リポジトリ内のファイルを読む",
+          "Issue の閲覧、作成、コメント",
+          "プルリクエストの閲覧と作成",
+          "任意のツール群: Actions、セキュリティアラート、プロジェクト、gist"
+        ],
+        "needs": "タスクに必要な権限を持つ GitHub の個人用アクセストークン。",
+        "labels": {
+          "Authorization": "個人用アクセストークン"
+        }
+      },
+      "ko": {
+        "description": "GitHub 공식 MCP 서버로 리포지토리, 이슈, 풀 리퀘스트를 다뤄요.",
+        "long": "GitHub 공식 MCP 서버를 쓰면 에이전트가 리포지토리, 이슈, 풀 리퀘스트를 다룰 수 있어요. 예를 들어 bug 라벨이 붙은 열린 이슈를 찾아 요약하거나, 풀 리퀘스트의 변경 내용을 읽을 수 있어요.",
+        "abilities": [
+          "코드 검색과 리포지토리 파일 읽기",
+          "이슈 읽기, 만들기, 댓글 달기",
+          "풀 리퀘스트 읽기와 열기",
+          "선택 도구 묶음: Actions, 보안 경고, 프로젝트, gist"
+        ],
+        "needs": "작업에 필요한 권한을 가진 GitHub 개인 액세스 토큰이 필요해요.",
+        "labels": {
+          "Authorization": "개인 액세스 토큰"
+        }
+      },
+      "pt-BR": {
+        "description": "Repositórios, issues e pull requests, pelo servidor MCP oficial do GitHub.",
+        "long": "O servidor MCP oficial do GitHub permite que o agente trabalhe com seus repositórios, issues e pull requests. Por exemplo: encontrar as issues abertas com o rótulo bug e resumi-las, ou ler as mudanças de um pull request.",
+        "abilities": [
+          "Pesquisar código e ler arquivos dos repositórios",
+          "Ler, criar e comentar issues",
+          "Ler e abrir pull requests",
+          "Grupos opcionais de ferramentas: Actions, alertas de segurança, projetos, gists"
+        ],
+        "needs": "Um token de acesso pessoal do GitHub com as permissões que suas tarefas precisam.",
+        "labels": {
+          "Authorization": "Token de acesso pessoal"
+        }
+      },
+      "zh-Hans": {
+        "description": "通过 GitHub 官方 MCP 服务器处理仓库、议题和拉取请求。",
+        "long": "GitHub 官方 MCP 服务器让智能体可以处理您的仓库、议题和拉取请求。例如：找出带有 bug 标签的未关闭议题并加以总结，或读取某个拉取请求中的改动。",
+        "abilities": [
+          "搜索代码并读取仓库中的文件",
+          "读取、创建议题并发表评论",
+          "读取和打开拉取请求",
+          "可选的工具组：Actions、安全警报、项目、gist"
+        ],
+        "needs": "一个个人访问令牌（GitHub），权限需满足您的任务。",
+        "labels": {
+          "Authorization": "个人访问令牌"
+        }
+      }
+    }
   },
   {
     "id": "linear",
@@ -65,7 +165,72 @@
     "auth": "oauth",
     "docs_url": "https://linear.app/docs/mcp",
     "icon": "linear",
-    "accent": "#5E6AD2"
+    "accent": "#5E6AD2",
+    "l10n": {
+      "de": {
+        "description": "Issues, Projekte und Zyklen in Linear, über den MCP-Server von Linear.",
+        "long": "Der MCP-Server von Linear erlaubt dem Agenten, Ihre Issues und Projekte zu lesen und zu ändern. Zum Beispiel: die Issues anzeigen, die Ihnen in diesem Zyklus zugewiesen sind, oder aus einer Fehlermeldung ein Issue anlegen.",
+        "abilities": [
+          "Issues und Projekte finden und lesen",
+          "Issues anlegen und ändern"
+        ],
+        "needs": "Ein Linear-Konto. Melden Sie sich nach dem Klick auf „Verbinden“ im Browser an."
+      },
+      "es": {
+        "description": "Incidencias, proyectos y ciclos en Linear, a través del servidor MCP de Linear.",
+        "long": "El servidor MCP de Linear permite al agente leer y actualizar tus incidencias y proyectos. Por ejemplo: listar las incidencias asignadas a ti en este ciclo, o crear una incidencia a partir de un informe de error.",
+        "abilities": [
+          "Buscar y leer incidencias y proyectos",
+          "Crear y actualizar incidencias"
+        ],
+        "needs": "Una cuenta de Linear. Inicia sesión en el navegador después de pulsar Conectar."
+      },
+      "fr": {
+        "description": "Tickets, projets et cycles dans Linear, via le serveur MCP de Linear.",
+        "long": "Le serveur MCP de Linear permet à l'agent de lire et de mettre à jour vos tickets et projets. Par exemple : lister les tickets qui vous sont assignés dans ce cycle, ou créer un ticket à partir d'un bug signalé.",
+        "abilities": [
+          "Trouver et lire tickets et projets",
+          "Créer et mettre à jour des tickets"
+        ],
+        "needs": "Un compte Linear. Connectez-vous dans le navigateur après avoir cliqué sur Connecter."
+      },
+      "ja": {
+        "description": "Linear の MCP サーバーで、Issue、プロジェクト、サイクルを扱います。",
+        "long": "Linear の MCP サーバーを使うと、エージェントが Issue とプロジェクトを読み取り、更新できます。例: 今のサイクルであなたに割り当てられた Issue を一覧にする、バグ報告から Issue を作成する。",
+        "abilities": [
+          "Issue とプロジェクトを探して読む",
+          "Issue を作成し、更新する"
+        ],
+        "needs": "Linear のアカウント。「接続」を押したあと、ブラウザでサインインしてください。"
+      },
+      "ko": {
+        "description": "Linear의 MCP 서버로 Linear의 이슈, 프로젝트, 사이클을 다뤄요.",
+        "long": "Linear MCP 서버를 쓰면 에이전트가 이슈와 프로젝트를 읽고 업데이트할 수 있어요. 예를 들어 이번 사이클에 내게 배정된 이슈 목록을 보거나, 버그 보고서로 이슈를 만들 수 있어요.",
+        "abilities": [
+          "이슈와 프로젝트 찾기와 읽기",
+          "이슈 만들기와 업데이트"
+        ],
+        "needs": "Linear 계정이 필요해요. 연결을 누른 뒤 브라우저에서 로그인하세요."
+      },
+      "pt-BR": {
+        "description": "Issues, projetos e ciclos no Linear, pelo servidor MCP do Linear.",
+        "long": "O servidor MCP do Linear permite que o agente leia e atualize suas issues e projetos. Por exemplo: listar as issues atribuídas a você neste ciclo, ou criar uma issue a partir de um relato de bug.",
+        "abilities": [
+          "Encontrar e ler issues e projetos",
+          "Criar e atualizar issues"
+        ],
+        "needs": "Uma conta no Linear. Entre no navegador depois de clicar em Conectar."
+      },
+      "zh-Hans": {
+        "description": "通过 Linear 的 MCP 服务器处理 Linear 中的议题、项目和周期。",
+        "long": "Linear 的 MCP 服务器让智能体可以读取和更新您的议题和项目。例如：列出本周期分配给您的议题，或根据一份 bug 报告创建议题。",
+        "abilities": [
+          "查找并读取议题和项目",
+          "创建并更新议题"
+        ],
+        "needs": "一个 Linear 账号。点击“连接”后在浏览器中登录。"
+      }
+    }
   },
   {
     "id": "notion",
@@ -97,7 +262,86 @@
     "auth": "oauth",
     "docs_url": "https://developers.notion.com/guides/mcp/get-started-with-mcp",
     "icon": "notion",
-    "accent": "#2F3437"
+    "accent": "#2F3437",
+    "l10n": {
+      "de": {
+        "description": "Seiten, Datenbanken und Suche in Ihrem Notion-Arbeitsbereich, über den eigenen MCP-Server von Notion.",
+        "long": "Der MCP-Server von Notion erlaubt dem Agenten, Ihren Arbeitsbereich zu durchsuchen sowie Seiten und Datenbanken zu lesen und zu ändern. Der Server ist in der Beta-Phase, und die verfügbaren Werkzeuge hängen von Ihrem Notion-Tarif ab. Zum Beispiel: die Besprechungsnotizen der letzten Woche finden oder eine Zeile in einer Aufgabendatenbank ergänzen.",
+        "abilities": [
+          "Den Arbeitsbereich durchsuchen",
+          "Seiten und Datenbanken lesen",
+          "Seiten anlegen und ändern",
+          "Die verfügbaren Werkzeuge hängen von Ihrem Notion-Tarif ab"
+        ],
+        "needs": "Ein Notion-Konto mit Zugriff auf den Arbeitsbereich. Melden Sie sich nach dem Klick auf „Verbinden“ im Browser an."
+      },
+      "es": {
+        "description": "Páginas, bases de datos y búsqueda en tu espacio de trabajo de Notion, a través del servidor MCP oficial de Notion.",
+        "long": "El servidor MCP de Notion permite al agente buscar en tu espacio de trabajo y leer y actualizar páginas y bases de datos. Está en beta, y las herramientas disponibles dependen de tu plan de Notion. Por ejemplo: encontrar las notas de la reunión de la semana pasada, o añadir una fila a una base de datos de tareas.",
+        "abilities": [
+          "Buscar en el espacio de trabajo",
+          "Leer páginas y bases de datos",
+          "Crear y actualizar páginas",
+          "Las herramientas disponibles dependen de tu plan de Notion"
+        ],
+        "needs": "Una cuenta de Notion con acceso al espacio de trabajo. Inicia sesión en el navegador después de pulsar Conectar."
+      },
+      "fr": {
+        "description": "Pages, bases de données et recherche dans votre espace de travail Notion, via le serveur MCP officiel de Notion.",
+        "long": "Le serveur MCP de Notion permet à l'agent de rechercher dans votre espace de travail et de lire et mettre à jour pages et bases de données. Il est en bêta, et les outils proposés dépendent de votre offre Notion. Par exemple : retrouver les notes de la réunion de la semaine dernière, ou ajouter une ligne dans une base de tâches.",
+        "abilities": [
+          "Rechercher dans l'espace de travail",
+          "Lire pages et bases de données",
+          "Créer et mettre à jour des pages",
+          "Les outils disponibles dépendent de votre offre Notion"
+        ],
+        "needs": "Un compte Notion ayant accès à l'espace de travail. Connectez-vous dans le navigateur après avoir cliqué sur Connecter."
+      },
+      "ja": {
+        "description": "Notion の公式 MCP サーバーで、ワークスペースのページ、データベース、検索を扱います。",
+        "long": "Notion の MCP サーバーを使うと、エージェントがワークスペースを検索し、ページとデータベースを読み取り、更新できます。ベータ版で、使えるツールは Notion のプランによって異なります。例: 先週の会議メモを探す、タスクのデータベースに行を追加する。",
+        "abilities": [
+          "ワークスペースを検索",
+          "ページとデータベースを読む",
+          "ページを作成し、更新する",
+          "使えるツールは Notion のプランによって異なる"
+        ],
+        "needs": "ワークスペースへのアクセス権がある Notion アカウント。「接続」を押したあと、ブラウザでサインインしてください。"
+      },
+      "ko": {
+        "description": "Notion의 공식 MCP 서버로 워크스페이스의 페이지, 데이터베이스, 검색을 다뤄요.",
+        "long": "Notion MCP 서버를 쓰면 에이전트가 워크스페이스를 검색하고, 페이지와 데이터베이스를 읽고 업데이트할 수 있어요. 베타 버전이며, 제공되는 도구는 Notion 요금제에 따라 달라요. 예를 들어 지난주 회의 노트를 찾거나, 작업 데이터베이스에 행을 추가할 수 있어요.",
+        "abilities": [
+          "워크스페이스 검색",
+          "페이지와 데이터베이스 읽기",
+          "페이지 만들기와 업데이트",
+          "사용할 수 있는 도구는 Notion 요금제에 따라 달라요"
+        ],
+        "needs": "워크스페이스에 접근할 수 있는 Notion 계정이 필요해요. 연결을 누른 뒤 브라우저에서 로그인하세요."
+      },
+      "pt-BR": {
+        "description": "Páginas, bancos de dados e pesquisa no seu workspace do Notion, pelo servidor MCP oficial do Notion.",
+        "long": "O servidor MCP do Notion permite que o agente pesquise no seu workspace e leia e atualize páginas e bancos de dados. Ele está em beta, e as ferramentas disponíveis dependem do seu plano do Notion. Por exemplo: encontrar as anotações da reunião da semana passada, ou adicionar uma linha a um banco de tarefas.",
+        "abilities": [
+          "Pesquisar no workspace",
+          "Ler páginas e bancos de dados",
+          "Criar e atualizar páginas",
+          "As ferramentas disponíveis dependem do seu plano do Notion"
+        ],
+        "needs": "Uma conta no Notion com acesso ao workspace. Entre no navegador depois de clicar em Conectar."
+      },
+      "zh-Hans": {
+        "description": "通过 Notion 官方 MCP 服务器处理您 Notion 工作区中的页面、数据库和搜索。",
+        "long": "Notion 的 MCP 服务器让智能体可以搜索您的工作区，并读取和更新页面与数据库。该服务目前处于测试版，可用的工具取决于您的 Notion 套餐。例如：找出上周的会议纪要，或在任务数据库中添加一行。",
+        "abilities": [
+          "搜索工作区",
+          "读取页面和数据库",
+          "创建并更新页面",
+          "可用的工具取决于您的 Notion 套餐"
+        ],
+        "needs": "一个可以访问该工作区的 Notion 账号。点击“连接”后在浏览器中登录。"
+      }
+    }
   },
   {
     "id": "atlassian",
@@ -135,7 +379,100 @@
     ],
     "docs_url": "https://support.atlassian.com/atlassian-rovo-mcp-server/docs/configuring-authentication-via-api-token/",
     "icon": "atlassian",
-    "accent": "#0052CC"
+    "accent": "#0052CC",
+    "l10n": {
+      "de": {
+        "description": "Jira und Confluence über den Rovo-MCP-Server von Atlassian, mit einem API-Token.",
+        "long": "Der Rovo-MCP-Server von Atlassian verbindet den Agenten mit Ihrem Jira und Confluence. Die Anmeldung mit einem API-Token funktioniert nur, wenn der Administrator Ihrer Organisation sie erlaubt hat.",
+        "abilities": [
+          "Mit Inhalten aus Jira und Confluence arbeiten",
+          "Der Zugriff richtet sich nach den Berechtigungen des Tokens",
+          "Anmeldung mit einem persönlichen API-Token oder einem Schlüssel für ein Dienstkonto"
+        ],
+        "needs": "Ein API-Token von Atlassian; der Administrator Ihrer Organisation muss die Anmeldung mit einem Token aktivieren. Der Wert des Headers ist Base64 von „E-Mail:Token“.",
+        "labels": {
+          "Authorization": "Base64 von E-Mail:API-Token"
+        }
+      },
+      "es": {
+        "description": "Jira y Confluence a través del servidor MCP Rovo de Atlassian, con un token de API.",
+        "long": "El servidor MCP Rovo de Atlassian conecta al agente con tu Jira y Confluence. Iniciar sesión con un token de API solo funciona si el administrador de tu organización lo ha permitido.",
+        "abilities": [
+          "Trabajar con contenido de Jira y Confluence desde el agente",
+          "Acceso limitado por los permisos del token",
+          "Autenticación con un token de API personal o una clave de cuenta de servicio"
+        ],
+        "needs": "Un token de API de Atlassian; el administrador de tu organización debe activar la autenticación por token de API. El valor del encabezado es Base64 de correo:token.",
+        "labels": {
+          "Authorization": "Base64 de correo:token de API"
+        }
+      },
+      "fr": {
+        "description": "Jira et Confluence via le serveur MCP Rovo d'Atlassian, avec un jeton d'API.",
+        "long": "Le serveur MCP Rovo d'Atlassian relie l'agent à vos Jira et Confluence. La connexion par jeton d'API ne fonctionne que si l'administrateur de votre organisation l'a autorisée.",
+        "abilities": [
+          "Travailler avec le contenu de Jira et Confluence depuis l'agent",
+          "Accès limité par les droits du jeton",
+          "Authentification par jeton d'API personnel ou clé de compte de service"
+        ],
+        "needs": "Un jeton d'API Atlassian ; l'administrateur de votre organisation doit activer l'authentification par jeton d'API. La valeur de l'en-tête est le Base64 de « e-mail:jeton ».",
+        "labels": {
+          "Authorization": "Base64 de « e-mail:jeton d'API »"
+        }
+      },
+      "ja": {
+        "description": "Atlassian の Rovo MCP サーバーを通じて、API トークンで Jira と Confluence を扱います。",
+        "long": "Atlassian の Rovo MCP サーバーは、エージェントを Jira と Confluence につなぎます。API トークンでのサインインは、組織の管理者が許可している場合にだけ使えます。",
+        "abilities": [
+          "エージェントから Jira と Confluence の内容を扱う",
+          "アクセス範囲はトークンの権限で制限される",
+          "個人用 API トークンまたはサービスアカウントの鍵で認証"
+        ],
+        "needs": "Atlassian の API トークン。組織の管理者が API トークンでの認証を有効にしている必要があります。ヘッダーの値は「メール:トークン」を Base64 でエンコードしたものです。",
+        "labels": {
+          "Authorization": "「メール:API トークン」の Base64"
+        }
+      },
+      "ko": {
+        "description": "Atlassian의 Rovo MCP 서버로 API 토큰을 이용해 Jira와 Confluence를 다뤄요.",
+        "long": "Atlassian Rovo MCP 서버는 에이전트를 Jira와 Confluence에 연결해요. API 토큰으로 로그인하는 것은 조직 관리자가 허용한 경우에만 동작해요.",
+        "abilities": [
+          "에이전트에서 Jira와 Confluence 내용 다루기",
+          "토큰 권한에 따라 접근이 제한돼요",
+          "개인 API 토큰 또는 서비스 계정 키로 인증"
+        ],
+        "needs": "Atlassian API 토큰이 필요해요. 조직 관리자가 API 토큰 인증을 켜 두어야 해요. 헤더 값은 「이메일:토큰」을 Base64로 인코딩한 값이에요.",
+        "labels": {
+          "Authorization": "「이메일:API 토큰」의 Base64"
+        }
+      },
+      "pt-BR": {
+        "description": "Jira e Confluence pelo servidor MCP Rovo da Atlassian, com um token de API.",
+        "long": "O servidor MCP Rovo da Atlassian conecta o agente ao seu Jira e Confluence. Entrar com um token de API só funciona se o administrador da sua organização tiver permitido.",
+        "abilities": [
+          "Trabalhar com conteúdo do Jira e do Confluence pelo agente",
+          "Acesso limitado pelas permissões do token",
+          "Autenticação por token de API pessoal ou chave de conta de serviço"
+        ],
+        "needs": "Um token de API da Atlassian; o administrador da sua organização precisa ativar a autenticação por token de API. O valor do cabeçalho é o Base64 de e-mail:token.",
+        "labels": {
+          "Authorization": "Base64 de e-mail:token de API"
+        }
+      },
+      "zh-Hans": {
+        "description": "通过 Atlassian 的 Rovo MCP 服务器，使用 API 令牌连接 Jira 和 Confluence。",
+        "long": "Atlassian 的 Rovo MCP 服务器让智能体连接您的 Jira 和 Confluence。只有当组织管理员允许时，才能使用 API 令牌登录。",
+        "abilities": [
+          "让智能体处理 Jira 和 Confluence 的内容",
+          "访问范围受令牌权限限制",
+          "通过个人 API 令牌或服务账户密钥进行身份验证"
+        ],
+        "needs": "一个 Atlassian API 令牌；组织管理员必须启用 API 令牌身份验证。请求头的值为“邮箱:令牌”的 Base64 编码。",
+        "labels": {
+          "Authorization": "“邮箱:API 令牌”的 Base64"
+        }
+      }
+    }
   },
   {
     "id": "stripe",
@@ -175,7 +512,107 @@
     ],
     "docs_url": "https://docs.stripe.com/mcp",
     "icon": "stripe",
-    "accent": "#635BFF"
+    "accent": "#635BFF",
+    "l10n": {
+      "de": {
+        "description": "Stripe-API und Dokumentationssuche, mit einem Agenten-API-Schlüssel.",
+        "long": "Der MCP-Server von Stripe erlaubt dem Agenten, Daten in Ihrem Stripe-Konto zu lesen und zu ändern, und die Stripe-Dokumentation zu durchsuchen. Zum Beispiel: die letzten fehlgeschlagenen Zahlungen anzeigen oder herausfinden, wie ein Abo eingerichtet wird. Verwenden Sie zuerst einen Schlüssel für den Testmodus.",
+        "abilities": [
+          "Stripe-Objekte lesen: Kunden, Zahlungen, Rechnungen, Abos",
+          "Objekte wie Produkte, Preise und Zahlungslinks anlegen und ändern",
+          "Stripe-Dokumentation durchsuchen",
+          "Riskante Aktionen wie Erstattungen brauchen Ihre Bestätigung in Stripe"
+        ],
+        "needs": "Ein Agenten-API-Schlüssel von Stripe mit nur den Berechtigungen, die der Agent braucht. Ab dem 31. Oktober 2026 nimmt Stripe keine Schlüssel mit vollem Zugriff mehr an.",
+        "labels": {
+          "Authorization": "Agenten-API-Schlüssel von Stripe"
+        }
+      },
+      "es": {
+        "description": "API de Stripe y búsqueda en la documentación, con una clave de API para agentes.",
+        "long": "El servidor MCP de Stripe permite al agente leer y cambiar datos de tu cuenta de Stripe y buscar en la documentación de Stripe. Por ejemplo: listar los pagos fallidos recientes, o averiguar cómo configurar una suscripción. Usa primero una clave del modo de prueba.",
+        "abilities": [
+          "Leer objetos de Stripe: clientes, pagos, facturas, suscripciones",
+          "Crear y actualizar objetos, como productos, precios y enlaces de pago",
+          "Buscar en la documentación de Stripe",
+          "Las acciones de riesgo, como los reembolsos, necesitan tu confirmación en Stripe"
+        ],
+        "needs": "Una clave de API de Stripe para agentes, solo con los permisos que necesita el agente. A partir del 31 de octubre de 2026, Stripe deja de aceptar claves secretas con acceso completo.",
+        "labels": {
+          "Authorization": "Clave de API de agente de Stripe"
+        }
+      },
+      "fr": {
+        "description": "API Stripe et recherche dans la documentation, avec une clé d'API pour agent.",
+        "long": "Le serveur MCP de Stripe permet à l'agent de lire et de modifier les données de votre compte Stripe, et de rechercher dans la documentation Stripe. Par exemple : lister les paiements récents échoués, ou savoir comment configurer un abonnement. Commencez par une clé du mode test.",
+        "abilities": [
+          "Lire les objets Stripe : clients, paiements, factures, abonnements",
+          "Créer et mettre à jour des objets, comme les produits, les prix et les liens de paiement",
+          "Rechercher dans la documentation Stripe",
+          "Les actions sensibles, comme un remboursement, demandent votre confirmation dans Stripe"
+        ],
+        "needs": "Une clé d'API Stripe pour agent, avec seulement les droits dont l'agent a besoin. Stripe n'acceptera plus les clés secrètes à accès complet à partir du 31 octobre 2026.",
+        "labels": {
+          "Authorization": "Clé d'API d'agent Stripe"
+        }
+      },
+      "ja": {
+        "description": "Stripe の API とドキュメント検索を、エージェント用 API キーで利用します。",
+        "long": "Stripe の MCP サーバーを使うと、エージェントが Stripe アカウントのデータを読み取り、変更し、Stripe のドキュメントを検索できます。例: 最近失敗した支払いを一覧にする、定期購読の設定方法を調べる。最初はテストモードのキーを使ってください。",
+        "abilities": [
+          "Stripe のオブジェクトを読む: 顧客、支払い、請求書、定期購読",
+          "商品、価格、支払いリンクなどのオブジェクトを作成・更新",
+          "Stripe のドキュメントを検索",
+          "返金などのリスクの高い操作には Stripe での確認が必要"
+        ],
+        "needs": "必要な権限だけを持つ Stripe のエージェント用 API キー。2026 年 10 月 31 日以降、Stripe はフルアクセスのシークレットキーを受け付けなくなります。",
+        "labels": {
+          "Authorization": "Stripe のエージェント用 API キー"
+        }
+      },
+      "ko": {
+        "description": "Stripe API와 문서 검색을 에이전트 API 키로 이용해요.",
+        "long": "Stripe MCP 서버를 쓰면 에이전트가 Stripe 계정의 데이터를 읽고 변경하고, Stripe 문서를 검색할 수 있어요. 예를 들어 최근 실패한 결제를 보거나, 구독을 설정하는 방법을 찾을 수 있어요. 먼저 테스트 모드 키를 사용하세요.",
+        "abilities": [
+          "Stripe 객체 읽기: 고객, 결제, 청구서, 구독",
+          "상품, 가격, 결제 링크 같은 객체 만들기와 업데이트",
+          "Stripe 문서 검색",
+          "환불 같은 위험한 작업은 Stripe에서 확인이 필요해요"
+        ],
+        "needs": "에이전트가 필요한 권한만 가진 Stripe 에이전트 API 키가 필요해요. Stripe는 2026년 10월 31일부터 전체 권한 비밀 키를 받지 않아요.",
+        "labels": {
+          "Authorization": "Stripe 에이전트 API 키"
+        }
+      },
+      "pt-BR": {
+        "description": "API do Stripe e pesquisa na documentação, com uma chave de API de agente.",
+        "long": "O servidor MCP do Stripe permite que o agente leia e altere dados da sua conta Stripe e pesquise na documentação do Stripe. Por exemplo: listar os pagamentos recusados recentes, ou descobrir como configurar uma assinatura. Use primeiro uma chave do modo de teste.",
+        "abilities": [
+          "Ler objetos do Stripe: clientes, pagamentos, faturas, assinaturas",
+          "Criar e atualizar objetos, como produtos, preços e links de pagamento",
+          "Pesquisar na documentação do Stripe",
+          "Ações de risco, como reembolsos, precisam da sua confirmação no Stripe"
+        ],
+        "needs": "Uma chave de API de agente do Stripe, apenas com as permissões que o agente precisa. A partir de 31 de outubro de 2026, o Stripe deixa de aceitar chaves secretas com acesso total.",
+        "labels": {
+          "Authorization": "Chave de API de agente do Stripe"
+        }
+      },
+      "zh-Hans": {
+        "description": "通过智能体 API 密钥使用 Stripe 的 API 并搜索其文档。",
+        "long": "Stripe 的 MCP 服务器让智能体可以读取和修改您 Stripe 账户中的数据，并搜索 Stripe 文档。例如：列出最近失败的付款，或查找如何设置订阅。请先使用测试模式的密钥。",
+        "abilities": [
+          "读取 Stripe 对象：客户、付款、发票、订阅",
+          "创建并更新对象，如商品、价格和付款链接",
+          "搜索 Stripe 文档",
+          "退款等高风险操作需要您在 Stripe 中确认"
+        ],
+        "needs": "一个仅具有智能体所需权限的 Stripe 智能体 API 密钥。自 2026 年 10 月 31 日起，Stripe 将不再接受拥有完全访问权限的密钥。",
+        "labels": {
+          "Authorization": "Stripe 智能体 API 密钥"
+        }
+      }
+    }
   },
   {
     "id": "supabase",
@@ -216,7 +653,107 @@
     ],
     "docs_url": "https://supabase.com/docs/guides/getting-started/mcp",
     "icon": "database",
-    "accent": "#3ECF8E"
+    "accent": "#3ECF8E",
+    "l10n": {
+      "de": {
+        "description": "Supabase-Projekte verwalten und ihre Datenbanken abfragen, mit einem Zugriffstoken.",
+        "long": "Der MCP-Server von Supabase erlaubt dem Agenten, mit Ihren Projekten zu arbeiten: Tabellen ansehen, Abfragen ausführen und die Dokumentation lesen. Beschränken Sie ihn auf ein Projekt und schalten Sie den Nur-Lese-Modus ein, bevor Sie ihn auf echte Daten richten.",
+        "abilities": [
+          "Tabellen ansehen und SQL ausführen",
+          "Mit einem Projekt arbeiten, festgelegt durch project_ref in der Adresse",
+          "Nur-Lese-Modus mit read_only=true in der Adresse",
+          "Werkzeuggruppen mit dem Parameter features wählen"
+        ],
+        "needs": "Ein persönliches Zugriffstoken von Supabase (Dashboard, Account, Access tokens). Ergänzen Sie die Adresse um Ihre project_ref und read_only=true.",
+        "labels": {
+          "Authorization": "Zugriffstoken von Supabase"
+        }
+      },
+      "es": {
+        "description": "Gestiona proyectos de Supabase y consulta sus bases de datos, con un token de acceso.",
+        "long": "El servidor MCP de Supabase permite al agente trabajar con tus proyectos: ver tablas, ejecutar consultas y leer la documentación. Limítalo a un solo proyecto y activa el modo de solo lectura antes de conectarlo a datos reales.",
+        "abilities": [
+          "Revisar tablas y ejecutar SQL",
+          "Trabajar con un proyecto, indicado por project_ref en la dirección",
+          "Modo de solo lectura con read_only=true en la dirección",
+          "Elegir grupos de herramientas con el parámetro features"
+        ],
+        "needs": "Un token de acceso personal de Supabase (Dashboard, Account, Access tokens). Edita la dirección: tu project_ref y read_only=true.",
+        "labels": {
+          "Authorization": "Token de acceso de Supabase"
+        }
+      },
+      "fr": {
+        "description": "Gérez vos projets Supabase et interrogez leurs bases de données, avec un jeton d'accès.",
+        "long": "Le serveur MCP de Supabase permet à l'agent de travailler avec vos projets : consulter les tables, exécuter des requêtes et lire la documentation. Limitez-le à un seul projet et activez le mode lecture seule avant de le connecter à des données réelles.",
+        "abilities": [
+          "Consulter les tables et exécuter du SQL",
+          "Travailler avec un projet, défini par project_ref dans l'adresse",
+          "Mode lecture seule avec read_only=true dans l'adresse",
+          "Choisir les groupes d'outils avec le paramètre features"
+        ],
+        "needs": "Un jeton d'accès personnel Supabase (Dashboard, Account, Access tokens). Modifiez l'adresse : votre project_ref, et read_only=true.",
+        "labels": {
+          "Authorization": "Jeton d'accès Supabase"
+        }
+      },
+      "ja": {
+        "description": "Supabase のプロジェクトを管理し、データベースに問い合わせます。アクセストークンを使います。",
+        "long": "Supabase の MCP サーバーを使うと、エージェントがプロジェクトを扱えます。テーブルを見る、クエリを実行する、ドキュメントを読むなどです。実際のデータに接続する前に、1 つのプロジェクトに限定し、読み取り専用モードをオンにしてください。",
+        "abilities": [
+          "テーブルを確認し SQL を実行",
+          "アドレスの project_ref で決まる 1 つのプロジェクトを扱う",
+          "アドレスに read_only=true を付けると読み取り専用",
+          "features パラメーターでツール群を選ぶ"
+        ],
+        "needs": "Supabase の個人用アクセストークン（Dashboard、Account、Access tokens）。アドレスを編集してください: 自分の project_ref と read_only=true。",
+        "labels": {
+          "Authorization": "Supabase のアクセストークン"
+        }
+      },
+      "ko": {
+        "description": "Supabase 프로젝트를 관리하고 데이터베이스를 조회해요. 액세스 토큰을 사용해요.",
+        "long": "Supabase MCP 서버를 쓰면 에이전트가 프로젝트를 다룰 수 있어요. 테이블을 보고, 쿼리를 실행하고, 문서를 읽을 수 있어요. 실제 데이터에 연결하기 전에 한 프로젝트로 제한하고 읽기 전용 모드를 켜세요.",
+        "abilities": [
+          "테이블 살펴보기와 SQL 실행",
+          "주소의 project_ref로 정해진 한 프로젝트 다루기",
+          "주소에 read_only=true를 넣으면 읽기 전용",
+          "features 매개변수로 도구 묶음 고르기"
+        ],
+        "needs": "Supabase 개인 액세스 토큰이 필요해요(Dashboard, Account, Access tokens). 주소를 고쳐 주세요: 내 project_ref와 read_only=true.",
+        "labels": {
+          "Authorization": "Supabase 액세스 토큰"
+        }
+      },
+      "pt-BR": {
+        "description": "Gerencie projetos do Supabase e consulte os bancos de dados, com um token de acesso.",
+        "long": "O servidor MCP do Supabase permite que o agente trabalhe com seus projetos: ver tabelas, executar consultas e ler a documentação. Limite-o a um projeto e ative o modo somente leitura antes de apontá-lo para dados reais.",
+        "abilities": [
+          "Ver tabelas e executar SQL",
+          "Trabalhar com um projeto, definido por project_ref no endereço",
+          "Modo somente leitura com read_only=true no endereço",
+          "Escolher grupos de ferramentas com o parâmetro features"
+        ],
+        "needs": "Um token de acesso pessoal do Supabase (Dashboard, Account, Access tokens). Edite o endereço: seu project_ref e read_only=true.",
+        "labels": {
+          "Authorization": "Token de acesso do Supabase"
+        }
+      },
+      "zh-Hans": {
+        "description": "使用访问令牌管理 Supabase 项目并查询其数据库。",
+        "long": "Supabase 的 MCP 服务器让智能体可以处理您的项目：查看数据表、运行查询并阅读文档。在将其连接到真实数据之前，请将其限定为一个项目，并开启只读模式。",
+        "abilities": [
+          "查看数据表并运行 SQL",
+          "只处理一个项目，由地址中的 project_ref 指定",
+          "地址中加入 read_only=true 即为只读模式",
+          "通过 features 参数选择工具组"
+        ],
+        "needs": "一个 Supabase 个人访问令牌（Dashboard、Account、Access tokens）。请编辑地址：填入您的 project_ref，并加上 read_only=true。",
+        "labels": {
+          "Authorization": "Supabase 访问令牌"
+        }
+      }
+    }
   },
   {
     "id": "cloudflare",
@@ -254,7 +791,100 @@
     ],
     "docs_url": "https://developers.cloudflare.com/agents/model-context-protocol/mcp-servers-for-cloudflare/",
     "icon": "cloud",
-    "accent": "#F38020"
+    "accent": "#F38020",
+    "l10n": {
+      "de": {
+        "description": "Die Cloudflare-API für den Agenten, mit einem API-Token.",
+        "long": "Der API-MCP-Server von Cloudflare erlaubt dem Agenten, über die API mit Ihrem Cloudflare-Konto zu arbeiten. Erstellen Sie ein Token nur mit den Berechtigungen, die die Aufgabe braucht.",
+        "abilities": [
+          "Die Cloudflare-API für Ihr Konto aufrufen",
+          "Der Zugriff richtet sich nach den Berechtigungen des Tokens",
+          "Benutzer-Tokens und Konto-Tokens funktionieren beide"
+        ],
+        "needs": "Ein API-Token von Cloudflare.",
+        "labels": {
+          "Authorization": "API-Token von Cloudflare"
+        }
+      },
+      "es": {
+        "description": "La API de Cloudflare desde un agente, con un token de API.",
+        "long": "El servidor MCP de la API de Cloudflare permite al agente trabajar con tu cuenta de Cloudflare a través de la API. Crea un token solo con los permisos que necesite la tarea.",
+        "abilities": [
+          "Llamar a la API de Cloudflare en tu cuenta",
+          "Acceso limitado por los permisos del token",
+          "Funcionan tanto los tokens de usuario como los de cuenta"
+        ],
+        "needs": "Un token de API de Cloudflare.",
+        "labels": {
+          "Authorization": "Token de API de Cloudflare"
+        }
+      },
+      "fr": {
+        "description": "L'API Cloudflare pour l'agent, avec un jeton d'API.",
+        "long": "Le serveur MCP de l'API Cloudflare permet à l'agent de travailler avec votre compte Cloudflare via l'API. Créez un jeton avec seulement les droits dont la tâche a besoin.",
+        "abilities": [
+          "Appeler l'API Cloudflare pour votre compte",
+          "Accès limité par les droits du jeton",
+          "Les jetons utilisateur et les jetons de compte fonctionnent tous les deux"
+        ],
+        "needs": "Un jeton d'API Cloudflare.",
+        "labels": {
+          "Authorization": "Jeton d'API Cloudflare"
+        }
+      },
+      "ja": {
+        "description": "エージェントから Cloudflare API を、API トークンで利用します。",
+        "long": "Cloudflare の API 用 MCP サーバーを使うと、エージェントが API を通じて Cloudflare アカウントを操作できます。作業に必要な権限だけを持つトークンを作成してください。",
+        "abilities": [
+          "アカウントの Cloudflare API を呼び出す",
+          "アクセス範囲はトークンの権限で制限される",
+          "ユーザートークンとアカウントトークンのどちらも使える"
+        ],
+        "needs": "Cloudflare の API トークン。",
+        "labels": {
+          "Authorization": "Cloudflare の API トークン"
+        }
+      },
+      "ko": {
+        "description": "에이전트에서 API 토큰으로 Cloudflare API를 이용해요.",
+        "long": "Cloudflare API MCP 서버를 쓰면 에이전트가 API를 통해 Cloudflare 계정을 다룰 수 있어요. 작업에 필요한 권한만 가진 토큰을 만드세요.",
+        "abilities": [
+          "내 계정의 Cloudflare API 호출",
+          "토큰 권한에 따라 접근이 제한돼요",
+          "사용자 토큰과 계정 토큰 모두 쓸 수 있어요"
+        ],
+        "needs": "Cloudflare API 토큰이 필요해요.",
+        "labels": {
+          "Authorization": "Cloudflare API 토큰"
+        }
+      },
+      "pt-BR": {
+        "description": "A API da Cloudflare a partir de um agente, com um token de API.",
+        "long": "O servidor MCP da API da Cloudflare permite que o agente trabalhe com sua conta Cloudflare pela API. Crie um token apenas com as permissões que a tarefa precisa.",
+        "abilities": [
+          "Chamar a API da Cloudflare na sua conta",
+          "Acesso limitado pelas permissões do token",
+          "Tokens de usuário e tokens de conta funcionam"
+        ],
+        "needs": "Um token de API da Cloudflare.",
+        "labels": {
+          "Authorization": "Token de API da Cloudflare"
+        }
+      },
+      "zh-Hans": {
+        "description": "通过 API 令牌，让智能体使用 Cloudflare API。",
+        "long": "Cloudflare 的 API MCP 服务器让智能体通过 API 操作您的 Cloudflare 账户。请只创建带有任务所需权限的令牌。",
+        "abilities": [
+          "在您的账户上调用 Cloudflare API",
+          "访问范围受令牌权限限制",
+          "用户令牌和账户令牌均可使用"
+        ],
+        "needs": "一个 Cloudflare API 令牌。",
+        "labels": {
+          "Authorization": "Cloudflare API 令牌"
+        }
+      }
+    }
   },
   {
     "id": "sentry",
@@ -284,7 +914,79 @@
     "auth": "oauth",
     "docs_url": "https://github.com/getsentry/sentry-mcp",
     "icon": "sentry",
-    "accent": "#362D59"
+    "accent": "#362D59",
+    "l10n": {
+      "de": {
+        "description": "Fehler, Probleme und Projekte in Sentry, über den eigenen MCP-Server von Sentry.",
+        "long": "Der MCP-Server von Sentry erlaubt dem Agenten, die Fehler Ihrer Projekte einzusehen. Zum Beispiel: das häufigste Problem in der Produktion dieser Woche finden oder den Stack-Trace und die Ereignisse hinter einem Problem lesen.",
+        "abilities": [
+          "Probleme finden und ihre Stack-Traces lesen",
+          "Projekte und Teams einer Organisation ansehen",
+          "Projekte, Teams und Benachrichtigungen innerhalb Ihrer Berechtigungen ändern"
+        ],
+        "needs": "Ein Sentry-Konto mit Zugriff auf die Organisation. Melden Sie sich nach dem Klick auf „Verbinden“ im Browser an."
+      },
+      "es": {
+        "description": "Errores, incidencias y proyectos en Sentry, a través del servidor MCP propio de Sentry.",
+        "long": "El servidor MCP de Sentry permite al agente revisar los errores que notifican tus proyectos. Por ejemplo: encontrar el problema más frecuente en producción esta semana, o leer el stack trace y los eventos de una incidencia.",
+        "abilities": [
+          "Encontrar incidencias y leer sus stack traces",
+          "Ver los proyectos y equipos de una organización",
+          "Cambiar proyectos, equipos y alertas dentro de tus permisos"
+        ],
+        "needs": "Una cuenta de Sentry con acceso a la organización. Inicia sesión en el navegador después de pulsar Conectar."
+      },
+      "fr": {
+        "description": "Erreurs, problèmes et projets dans Sentry, via le serveur MCP officiel de Sentry.",
+        "long": "Le serveur MCP de Sentry permet à l'agent de consulter les erreurs signalées par vos projets. Par exemple : trouver le problème le plus fréquent en production cette semaine, ou lire la trace de pile et les événements d'un problème.",
+        "abilities": [
+          "Trouver des problèmes et lire leurs traces de pile",
+          "Consulter les projets et équipes d'une organisation",
+          "Modifier projets, équipes et alertes dans la limite de vos droits"
+        ],
+        "needs": "Un compte Sentry ayant accès à l'organisation. Connectez-vous dans le navigateur après avoir cliqué sur Connecter."
+      },
+      "ja": {
+        "description": "Sentry の公式 MCP サーバーで、エラー、Issue、プロジェクトを扱います。",
+        "long": "Sentry の MCP サーバーを使うと、エージェントがプロジェクトから報告されたエラーを確認できます。例: 今週、本番環境で最も多い Issue を探す、Issue の背後にあるスタックトレースとイベントを読む。",
+        "abilities": [
+          "Issue を探し、スタックトレースを読む",
+          "組織のプロジェクトとチームを確認する",
+          "権限の範囲内でプロジェクト、チーム、アラートを変更する"
+        ],
+        "needs": "組織にアクセスできる Sentry アカウント。「接続」を押したあと、ブラウザでサインインしてください。"
+      },
+      "ko": {
+        "description": "Sentry의 공식 MCP 서버로 Sentry의 오류, 이슈, 프로젝트를 다뤄요.",
+        "long": "Sentry MCP 서버를 쓰면 에이전트가 프로젝트에서 보고된 오류를 살펴볼 수 있어요. 예를 들어 이번 주 운영 환경에서 가장 자주 발생한 이슈를 찾거나, 이슈 뒤의 스택 트레이스와 이벤트를 읽을 수 있어요.",
+        "abilities": [
+          "이슈 찾기와 스택 트레이스 읽기",
+          "조직의 프로젝트와 팀 살펴보기",
+          "내 권한 안에서 프로젝트, 팀, 알림 변경"
+        ],
+        "needs": "조직에 접근할 수 있는 Sentry 계정이 필요해요. 연결을 누른 뒤 브라우저에서 로그인하세요."
+      },
+      "pt-BR": {
+        "description": "Erros, issues e projetos no Sentry, pelo servidor MCP oficial do Sentry.",
+        "long": "O servidor MCP do Sentry permite que o agente veja os erros que seus projetos registram. Por exemplo: encontrar a issue mais frequente em produção nesta semana, ou ler o stack trace e os eventos por trás de uma issue.",
+        "abilities": [
+          "Encontrar issues e ler seus stack traces",
+          "Ver os projetos e equipes de uma organização",
+          "Alterar projetos, equipes e alertas dentro das suas permissões"
+        ],
+        "needs": "Uma conta no Sentry com acesso à organização. Entre no navegador depois de clicar em Conectar."
+      },
+      "zh-Hans": {
+        "description": "通过 Sentry 官方 MCP 服务器处理 Sentry 中的错误、问题和项目。",
+        "long": "Sentry 的 MCP 服务器让智能体查看您项目上报的错误。例如：找出本周生产环境中最常见的问题，或读取某个问题背后的堆栈跟踪和事件。",
+        "abilities": [
+          "查找问题并读取其堆栈跟踪",
+          "查看组织的项目和团队",
+          "在您的权限范围内更改项目、团队和告警"
+        ],
+        "needs": "一个有权访问该组织的 Sentry 账号。点击“连接”后在浏览器中登录。"
+      }
+    }
   },
   {
     "id": "context7",
@@ -320,7 +1022,93 @@
     ],
     "docs_url": "https://github.com/upstash/context7",
     "icon": "book",
-    "accent": "#0E7490"
+    "accent": "#0E7490",
+    "l10n": {
+      "de": {
+        "description": "Aktuelle Dokumentation von Bibliotheken und Frameworks für den Agenten.",
+        "long": "Context7 gibt dem Agenten die aktuelle Dokumentation der Bibliothek, die Sie nennen. Zum Beispiel: Fragen Sie, wie eine neue Funktion eines Frameworks funktioniert, und der Agent liest es in der Dokumentation nach, statt zu raten.",
+        "abilities": [
+          "Eine Bibliothek über ihren Namen finden (resolve-library-id)",
+          "Ihre Dokumentation abfragen (query-docs)"
+        ],
+        "needs": "Ein API-Schlüssel von Context7.",
+        "labels": {
+          "Authorization": "Context7-API-Schlüssel"
+        }
+      },
+      "es": {
+        "description": "Documentación actualizada de bibliotecas y frameworks para el agente.",
+        "long": "Context7 da al agente la documentación actualizada de la biblioteca que indiques. Por ejemplo: pregunta cómo usar una función nueva de un framework, y el agente la leerá en la documentación en lugar de adivinarla.",
+        "abilities": [
+          "Encontrar una biblioteca por su nombre (resolve-library-id)",
+          "Consultar su documentación (query-docs)"
+        ],
+        "needs": "Una clave de API de Context7.",
+        "labels": {
+          "Authorization": "Clave de API de Context7"
+        }
+      },
+      "fr": {
+        "description": "Documentation à jour des bibliothèques et frameworks pour l'agent.",
+        "long": "Context7 donne à l'agent la documentation à jour de la bibliothèque que vous nommez. Par exemple : demandez comment utiliser une nouvelle fonction d'un framework, et l'agent la lit dans la documentation au lieu de deviner.",
+        "abilities": [
+          "Trouver une bibliothèque par son nom (resolve-library-id)",
+          "Interroger sa documentation (query-docs)"
+        ],
+        "needs": "Une clé d'API Context7.",
+        "labels": {
+          "Authorization": "Clé d'API Context7"
+        }
+      },
+      "ja": {
+        "description": "ライブラリやフレームワークの最新ドキュメントをエージェントに提供します。",
+        "long": "Context7 は、指定したライブラリの最新ドキュメントをエージェントに提供します。例: フレームワークの新しい関数の使い方を尋ねると、エージェントは推測せずにドキュメントを読んで答えます。",
+        "abilities": [
+          "名前でライブラリを探す (resolve-library-id)",
+          "そのドキュメントに問い合わせる (query-docs)"
+        ],
+        "needs": "Context7 の API キー。",
+        "labels": {
+          "Authorization": "Context7 の API キー"
+        }
+      },
+      "ko": {
+        "description": "라이브러리와 프레임워크의 최신 문서를 에이전트에 제공해요.",
+        "long": "Context7은 지정한 라이브러리의 최신 문서를 에이전트에 제공해요. 예를 들어 프레임워크의 새 함수를 어떻게 쓰는지 물으면, 에이전트가 추측하지 않고 문서를 읽어서 답해요.",
+        "abilities": [
+          "이름으로 라이브러리 찾기 (resolve-library-id)",
+          "라이브러리 문서 조회 (query-docs)"
+        ],
+        "needs": "Context7 API 키가 필요해요.",
+        "labels": {
+          "Authorization": "Context7 API 키"
+        }
+      },
+      "pt-BR": {
+        "description": "Documentação atualizada de bibliotecas e frameworks para o agente.",
+        "long": "O Context7 dá ao agente a documentação atualizada da biblioteca que você indicar. Por exemplo: pergunte como usar uma função nova de um framework, e o agente lê a resposta na documentação em vez de adivinhar.",
+        "abilities": [
+          "Encontrar uma biblioteca pelo nome (resolve-library-id)",
+          "Consultar a documentação dela (query-docs)"
+        ],
+        "needs": "Uma chave de API do Context7.",
+        "labels": {
+          "Authorization": "Chave de API do Context7"
+        }
+      },
+      "zh-Hans": {
+        "description": "为智能体提供库和框架的最新文档。",
+        "long": "Context7 为智能体提供您所指定库的最新文档。例如：询问某个框架新函数的用法，智能体会阅读文档作答，而不是凭猜测。",
+        "abilities": [
+          "按名称查找库 (resolve-library-id)",
+          "查询库的文档 (query-docs)"
+        ],
+        "needs": "一个 Context7 API 密钥。",
+        "labels": {
+          "Authorization": "Context7 API 密钥"
+        }
+      }
+    }
   },
   {
     "id": "brave-search",
@@ -364,7 +1152,107 @@
     ],
     "docs_url": "https://github.com/brave/brave-search-mcp-server",
     "icon": "search",
-    "accent": "#FB542B"
+    "accent": "#FB542B",
+    "l10n": {
+      "de": {
+        "description": "Web-, Nachrichten-, Bild- und Videosuche über die Brave Search API.",
+        "long": "Der eigene MCP-Server von Brave gibt dem Agenten eine Websuche. Zum Beispiel: aktuelle Nachrichten zu einem Thema finden oder nach Bildern suchen. Er läuft als Programm auf Ihrem Server.",
+        "abilities": [
+          "Websuche",
+          "Suche nach Nachrichten, Bildern und Videos",
+          "Suche nach Orten in der Nähe",
+          "Zusammenfassungen der Suchergebnisse"
+        ],
+        "needs": "Node.js (npx) auf dem Server und ein Schlüssel für die Brave Search API aus dem Entwicklerportal.",
+        "labels": {
+          "BRAVE_API_KEY": "Schlüssel für die Brave Search API"
+        }
+      },
+      "es": {
+        "description": "Búsqueda web, de noticias, imágenes y vídeos a través de la API de Brave Search.",
+        "long": "El servidor MCP propio de Brave da al agente búsqueda web. Por ejemplo: encontrar noticias recientes sobre un tema, o buscar imágenes. Se ejecuta en tu servidor como un programa.",
+        "abilities": [
+          "Búsqueda web",
+          "Búsqueda de noticias, imágenes y vídeos",
+          "Búsqueda de lugares cercanos",
+          "Resúmenes de los resultados de búsqueda"
+        ],
+        "needs": "Node.js (npx) en el servidor y una clave de API de Brave Search del panel de desarrollador.",
+        "labels": {
+          "BRAVE_API_KEY": "Clave de API de Brave Search"
+        }
+      },
+      "fr": {
+        "description": "Recherche sur le web, dans les actualités, les images et les vidéos via l'API Brave Search.",
+        "long": "Le serveur MCP officiel de Brave donne à l'agent une recherche sur le web. Par exemple : trouver les actualités récentes sur un sujet, ou chercher des images. Il fonctionne sur votre serveur comme un programme.",
+        "abilities": [
+          "Recherche sur le web",
+          "Recherche d'actualités, d'images et de vidéos",
+          "Recherche de lieux à proximité",
+          "Résumés des résultats de recherche"
+        ],
+        "needs": "Node.js (npx) sur le serveur, et une clé d'API Brave Search depuis le tableau de bord développeur.",
+        "labels": {
+          "BRAVE_API_KEY": "Clé d'API Brave Search"
+        }
+      },
+      "ja": {
+        "description": "Brave Search API を通じて、ウェブ、ニュース、画像、動画を検索します。",
+        "long": "Brave 公式の MCP サーバーは、エージェントにウェブ検索を提供します。例: あるテーマの最新ニュースを探す、画像を検索する。サーバー上でプログラムとして動作します。",
+        "abilities": [
+          "ウェブ検索",
+          "ニュース、画像、動画の検索",
+          "近くの場所の検索",
+          "検索結果の要約"
+        ],
+        "needs": "サーバーに Node.js (npx) があること、そして開発者ダッシュボードで取得した Brave Search API キー。",
+        "labels": {
+          "BRAVE_API_KEY": "Brave Search API キー"
+        }
+      },
+      "ko": {
+        "description": "Brave Search API로 웹, 뉴스, 이미지, 동영상을 검색해요.",
+        "long": "Brave 공식 MCP 서버는 에이전트에 웹 검색 기능을 제공해요. 예를 들어 어떤 주제의 최신 뉴스를 찾거나 이미지를 검색할 수 있어요. 서버에서 프로그램으로 실행돼요.",
+        "abilities": [
+          "웹 검색",
+          "뉴스, 이미지, 동영상 검색",
+          "주변 장소 검색",
+          "검색 결과 요약"
+        ],
+        "needs": "서버에 Node.js(npx)가 있어야 하고, 개발자 대시보드에서 받은 Brave Search API 키가 필요해요.",
+        "labels": {
+          "BRAVE_API_KEY": "Brave Search API 키"
+        }
+      },
+      "pt-BR": {
+        "description": "Pesquisa na web, de notícias, imagens e vídeos pela API do Brave Search.",
+        "long": "O servidor MCP oficial do Brave dá ao agente pesquisa na web. Por exemplo: encontrar notícias recentes sobre um tema, ou procurar imagens. Ele roda no seu servidor como um programa.",
+        "abilities": [
+          "Pesquisa na web",
+          "Pesquisa de notícias, imagens e vídeos",
+          "Pesquisa de lugares próximos",
+          "Resumos dos resultados da pesquisa"
+        ],
+        "needs": "Node.js (npx) no servidor e uma chave de API do Brave Search, do painel de desenvolvedor.",
+        "labels": {
+          "BRAVE_API_KEY": "Chave de API do Brave Search"
+        }
+      },
+      "zh-Hans": {
+        "description": "通过 Brave Search API 搜索网页、新闻、图片和视频。",
+        "long": "Brave 官方 MCP 服务器为智能体提供网页搜索。例如：查找某个主题的最新新闻，或搜索图片。它作为程序在您的服务器上运行。",
+        "abilities": [
+          "网页搜索",
+          "新闻、图片和视频搜索",
+          "本地地点搜索",
+          "搜索结果摘要"
+        ],
+        "needs": "服务器上的 Node.js (npx)，以及从开发者后台获取的 Brave Search API 密钥。",
+        "labels": {
+          "BRAVE_API_KEY": "Brave Search API 密钥"
+        }
+      }
+    }
   },
   {
     "id": "exa",
@@ -402,7 +1290,100 @@
     ],
     "docs_url": "https://github.com/exa-labs/exa-mcp-server",
     "icon": "search",
-    "accent": "#4F6BED"
+    "accent": "#4F6BED",
+    "l10n": {
+      "de": {
+        "description": "Websuche und Abruf von Seiten über Exa.",
+        "long": "Der MCP-Server von Exa gibt dem Agenten eine Websuche und die Möglichkeit, gefundene Seiten zu lesen. Zum Beispiel: aktuelle Artikel zu einem Thema finden und den besten davon lesen.",
+        "abilities": [
+          "Websuche (web_search_exa)",
+          "Inhalt einer Seite abrufen (web_fetch_exa)",
+          "Erweiterte Suche und ein Agenten-Werkzeug, in der Adresse eingeschaltet"
+        ],
+        "needs": "Ein API-Schlüssel von Exa (dashboard.exa.ai/api-keys).",
+        "labels": {
+          "x-api-key": "Exa-API-Schlüssel"
+        }
+      },
+      "es": {
+        "description": "Búsqueda web y obtención de páginas con Exa.",
+        "long": "El servidor MCP de Exa da al agente búsqueda web y una forma de leer las páginas que encuentra. Por ejemplo: buscar artículos recientes sobre un tema y leer el mejor.",
+        "abilities": [
+          "Búsqueda web (web_search_exa)",
+          "Obtener el contenido de una página (web_fetch_exa)",
+          "Búsqueda avanzada y una herramienta para agentes, que se activan en la dirección"
+        ],
+        "needs": "Una clave de API de Exa (dashboard.exa.ai/api-keys).",
+        "labels": {
+          "x-api-key": "Clave de API de Exa"
+        }
+      },
+      "fr": {
+        "description": "Recherche sur le web et récupération de pages avec Exa.",
+        "long": "Le serveur MCP d'Exa donne à l'agent une recherche sur le web et un moyen de lire les pages trouvées. Par exemple : trouver des articles récents sur un sujet et lire le meilleur.",
+        "abilities": [
+          "Recherche sur le web (web_search_exa)",
+          "Récupérer le contenu d'une page (web_fetch_exa)",
+          "Recherche avancée et outil d'agent, activés dans l'adresse"
+        ],
+        "needs": "Une clé d'API Exa (dashboard.exa.ai/api-keys).",
+        "labels": {
+          "x-api-key": "Clé d'API Exa"
+        }
+      },
+      "ja": {
+        "description": "Exa を通じて、ウェブ検索とページの取得を行います。",
+        "long": "Exa の MCP サーバーは、エージェントにウェブ検索と、見つかったページを読む手段を提供します。例: あるテーマの最新記事を探して、最も良いものを読む。",
+        "abilities": [
+          "ウェブ検索 (web_search_exa)",
+          "ページの内容を取得 (web_fetch_exa)",
+          "高度な検索とエージェント用ツールは、アドレスで有効にする"
+        ],
+        "needs": "Exa の API キー（dashboard.exa.ai/api-keys）。",
+        "labels": {
+          "x-api-key": "Exa の API キー"
+        }
+      },
+      "ko": {
+        "description": "Exa로 웹 검색과 페이지 가져오기를 해요.",
+        "long": "Exa MCP 서버는 에이전트에 웹 검색과, 찾은 페이지를 읽는 방법을 제공해요. 예를 들어 주제의 최신 글을 찾아 가장 좋은 글을 읽을 수 있어요.",
+        "abilities": [
+          "웹 검색 (web_search_exa)",
+          "페이지 내용 가져오기 (web_fetch_exa)",
+          "고급 검색과 에이전트 도구는 주소에서 켜요"
+        ],
+        "needs": "Exa API 키가 필요해요(dashboard.exa.ai/api-keys).",
+        "labels": {
+          "x-api-key": "Exa API 키"
+        }
+      },
+      "pt-BR": {
+        "description": "Pesquisa na web e leitura de páginas pelo Exa.",
+        "long": "O servidor MCP do Exa dá ao agente pesquisa na web e uma forma de ler as páginas encontradas. Por exemplo: encontrar artigos recentes sobre um tema e ler o melhor deles.",
+        "abilities": [
+          "Pesquisa na web (web_search_exa)",
+          "Obter o conteúdo de uma página (web_fetch_exa)",
+          "Pesquisa avançada e uma ferramenta de agente, ativadas no endereço"
+        ],
+        "needs": "Uma chave de API do Exa (dashboard.exa.ai/api-keys).",
+        "labels": {
+          "x-api-key": "Chave de API do Exa"
+        }
+      },
+      "zh-Hans": {
+        "description": "通过 Exa 进行网页搜索并获取页面内容。",
+        "long": "Exa 的 MCP 服务器为智能体提供网页搜索，以及读取所找到页面的方式。例如：查找某个主题的最新文章，并阅读其中最好的一篇。",
+        "abilities": [
+          "网页搜索 (web_search_exa)",
+          "获取页面内容 (web_fetch_exa)",
+          "高级搜索和智能体工具，在地址中开启"
+        ],
+        "needs": "一个 Exa API 密钥（dashboard.exa.ai/api-keys）。",
+        "labels": {
+          "x-api-key": "Exa API 密钥"
+        }
+      }
+    }
   },
   {
     "id": "firecrawl",
@@ -442,7 +1423,107 @@
     ],
     "docs_url": "https://github.com/firecrawl/firecrawl-mcp-server",
     "icon": "web",
-    "accent": "#F9542E"
+    "accent": "#F9542E",
+    "l10n": {
+      "de": {
+        "description": "Websites mit Firecrawl auslesen, durchsuchen und durchlaufen.",
+        "long": "Der MCP-Server von Firecrawl erlaubt dem Agenten, Webseiten in sauberen Text umzuwandeln, im Web zu suchen und ganze Websites zu durchlaufen. Zum Beispiel: die Preisseiten mehrerer Wettbewerber sammeln.",
+        "abilities": [
+          "Eine Seite als Text auslesen (firecrawl_scrape)",
+          "Im Web suchen (firecrawl_search)",
+          "Eine Website kartieren und durchlaufen (firecrawl_map, firecrawl_crawl)",
+          "Ein Recherche-Agent (firecrawl_agent)"
+        ],
+        "needs": "Ein API-Schlüssel von Firecrawl. Ohne Schlüssel funktionieren nur Auslesen und Suche, mit einer Begrenzung der Anfragen.",
+        "labels": {
+          "Authorization": "Firecrawl-API-Schlüssel"
+        }
+      },
+      "es": {
+        "description": "Extrae, busca y recorre sitios web con Firecrawl.",
+        "long": "El servidor MCP de Firecrawl permite al agente convertir páginas web en texto limpio, buscar en la web y recorrer sitios enteros. Por ejemplo: reunir las páginas de precios de varios competidores.",
+        "abilities": [
+          "Extraer una página como texto (firecrawl_scrape)",
+          "Buscar en la web (firecrawl_search)",
+          "Mapear y recorrer un sitio (firecrawl_map, firecrawl_crawl)",
+          "Un agente de investigación (firecrawl_agent)"
+        ],
+        "needs": "Una clave de API de Firecrawl. Sin ella, solo funcionan la extracción y la búsqueda, con un límite de frecuencia.",
+        "labels": {
+          "Authorization": "Clave de API de Firecrawl"
+        }
+      },
+      "fr": {
+        "description": "Extraire, rechercher et parcourir des sites web avec Firecrawl.",
+        "long": "Le serveur MCP de Firecrawl permet à l'agent de transformer des pages web en texte propre, de chercher sur le web et de parcourir des sites entiers. Par exemple : rassembler les pages tarifaires de plusieurs concurrents.",
+        "abilities": [
+          "Extraire une page en texte (firecrawl_scrape)",
+          "Rechercher sur le web (firecrawl_search)",
+          "Cartographier et parcourir un site (firecrawl_map, firecrawl_crawl)",
+          "Un agent de recherche (firecrawl_agent)"
+        ],
+        "needs": "Une clé d'API Firecrawl. Sans clé, seuls l'extraction et la recherche fonctionnent, avec une limite de débit.",
+        "labels": {
+          "Authorization": "Clé d'API Firecrawl"
+        }
+      },
+      "ja": {
+        "description": "Firecrawl でウェブサイトを取得、検索、巡回します。",
+        "long": "Firecrawl の MCP サーバーを使うと、エージェントがウェブページをきれいなテキストに変換し、ウェブを検索し、サイト全体を巡回できます。例: 競合数社の料金ページを集める。",
+        "abilities": [
+          "ページをテキストとして取得 (firecrawl_scrape)",
+          "ウェブを検索 (firecrawl_search)",
+          "サイトをマップ化して巡回 (firecrawl_map, firecrawl_crawl)",
+          "調査用エージェント (firecrawl_agent)"
+        ],
+        "needs": "Firecrawl の API キー。キーがなければ、取得と検索だけが利用でき、呼び出し頻度に制限があります。",
+        "labels": {
+          "Authorization": "Firecrawl の API キー"
+        }
+      },
+      "ko": {
+        "description": "Firecrawl로 웹사이트를 스크레이핑하고, 검색하고, 크롤링해요.",
+        "long": "Firecrawl MCP 서버를 쓰면 에이전트가 웹페이지를 깔끔한 텍스트로 바꾸고, 웹을 검색하고, 사이트 전체를 크롤링할 수 있어요. 예를 들어 경쟁사 여러 곳의 가격 페이지를 모을 수 있어요.",
+        "abilities": [
+          "페이지를 텍스트로 스크레이핑 (firecrawl_scrape)",
+          "웹 검색 (firecrawl_search)",
+          "사이트 맵 만들기와 크롤링 (firecrawl_map, firecrawl_crawl)",
+          "리서치 에이전트 (firecrawl_agent)"
+        ],
+        "needs": "Firecrawl API 키가 필요해요. 키가 없으면 스크레이핑과 검색만 되고, 요청 횟수에 제한이 있어요.",
+        "labels": {
+          "Authorization": "Firecrawl API 키"
+        }
+      },
+      "pt-BR": {
+        "description": "Extraia, pesquise e percorra sites com o Firecrawl.",
+        "long": "O servidor MCP do Firecrawl permite que o agente transforme páginas da web em texto limpo, pesquise na web e percorra sites inteiros. Por exemplo: reunir as páginas de preços de vários concorrentes.",
+        "abilities": [
+          "Extrair uma página em texto (firecrawl_scrape)",
+          "Pesquisar na web (firecrawl_search)",
+          "Mapear e percorrer um site (firecrawl_map, firecrawl_crawl)",
+          "Um agente de pesquisa (firecrawl_agent)"
+        ],
+        "needs": "Uma chave de API do Firecrawl. Sem ela, só funcionam a extração e a pesquisa, com limite de requisições.",
+        "labels": {
+          "Authorization": "Chave de API do Firecrawl"
+        }
+      },
+      "zh-Hans": {
+        "description": "使用 Firecrawl 抓取、搜索和爬取网站。",
+        "long": "Firecrawl 的 MCP 服务器让智能体把网页转换为干净的文本、搜索网络，并爬取整个网站。例如：收集几家竞争对手的价格页面。",
+        "abilities": [
+          "将页面抓取为文本 (firecrawl_scrape)",
+          "搜索网络 (firecrawl_search)",
+          "绘制网站地图并爬取 (firecrawl_map, firecrawl_crawl)",
+          "研究型智能体 (firecrawl_agent)"
+        ],
+        "needs": "一个 Firecrawl API 密钥。没有密钥时只能抓取和搜索，并有频率限制。",
+        "labels": {
+          "Authorization": "Firecrawl API 密钥"
+        }
+      }
+    }
   },
   {
     "id": "playwright",
@@ -477,7 +1558,86 @@
     ],
     "docs_url": "https://github.com/microsoft/playwright-mcp",
     "icon": "playwright",
-    "accent": "#2EAD33"
+    "accent": "#2EAD33",
+    "l10n": {
+      "de": {
+        "description": "Steuert einen Browser: Seiten öffnen, klicken, Text eingeben, Screenshots machen.",
+        "long": "Der MCP-Server von Playwright erlaubt dem Agenten, einen echten Browser zu benutzen. Zum Beispiel: Ihre Website öffnen, ein Formular ausfüllen und berichten, was die Seite zeigt. Er läuft als Programm auf Ihrem Server.",
+        "abilities": [
+          "Seiten öffnen und zwischen ihnen wechseln",
+          "Klicken, Text eingeben und Formulare ausfüllen",
+          "Den Barrierefreiheits-Snapshot der Seite lesen",
+          "Screenshots machen, Konsole und Netzwerkanfragen lesen"
+        ],
+        "needs": "Node.js 18 oder neuer (npx) auf dem Server."
+      },
+      "es": {
+        "description": "Controla un navegador: abre páginas, haz clic, escribe y toma capturas.",
+        "long": "El servidor MCP de Playwright permite al agente usar un navegador real. Por ejemplo: abrir tu sitio, rellenar un formulario e informar de lo que muestra la página. Se ejecuta en tu servidor como un programa.",
+        "abilities": [
+          "Abrir páginas y moverse entre ellas",
+          "Hacer clic, escribir y rellenar formularios",
+          "Leer la instantánea de accesibilidad de la página",
+          "Hacer capturas y leer la consola y las peticiones de red"
+        ],
+        "needs": "Node.js 18 o más reciente (npx) en el servidor."
+      },
+      "fr": {
+        "description": "Pilote un navigateur : ouvrir des pages, cliquer, saisir, faire des captures d'écran.",
+        "long": "Le serveur MCP de Playwright permet à l'agent d'utiliser un vrai navigateur. Par exemple : ouvrir votre site, remplir un formulaire et dire ce qu'affiche la page. Il fonctionne sur votre serveur comme un programme.",
+        "abilities": [
+          "Ouvrir des pages et passer de l'une à l'autre",
+          "Cliquer, saisir du texte et remplir des formulaires",
+          "Lire l'instantané d'accessibilité de la page",
+          "Faire des captures d'écran, lire la console et les requêtes réseau"
+        ],
+        "needs": "Node.js 18 ou plus récent (npx) sur le serveur."
+      },
+      "ja": {
+        "description": "ブラウザを操作します。ページを開く、クリック、入力、スクリーンショットの撮影。",
+        "long": "Playwright の MCP サーバーを使うと、エージェントが実際のブラウザを操作できます。例: 自分のサイトを開き、フォームに入力して、ページに何が表示されるかを報告する。サーバー上でプログラムとして動作します。",
+        "abilities": [
+          "ページを開き、ページ間を移動",
+          "クリック、テキスト入力、フォーム入力",
+          "ページのアクセシビリティスナップショットを読む",
+          "スクリーンショットの撮影、コンソールとネットワークリクエストの確認"
+        ],
+        "needs": "サーバーに Node.js 18 以降 (npx) があること。"
+      },
+      "ko": {
+        "description": "브라우저를 조작해요. 페이지 열기, 클릭, 입력, 스크린샷 찍기.",
+        "long": "Playwright MCP 서버를 쓰면 에이전트가 실제 브라우저를 사용할 수 있어요. 예를 들어 내 사이트를 열고, 양식을 채우고, 페이지에 무엇이 보이는지 알려줄 수 있어요. 서버에서 프로그램으로 실행돼요.",
+        "abilities": [
+          "페이지 열기와 페이지 사이 이동",
+          "클릭, 텍스트 입력, 양식 채우기",
+          "페이지의 접근성 스냅샷 읽기",
+          "스크린샷 찍기, 콘솔과 네트워크 요청 확인"
+        ],
+        "needs": "서버에 Node.js 18 이상(npx)이 있어야 해요."
+      },
+      "pt-BR": {
+        "description": "Controla um navegador: abre páginas, clica, digita e tira capturas de tela.",
+        "long": "O servidor MCP do Playwright permite que o agente use um navegador de verdade. Por exemplo: abrir seu site, preencher um formulário e relatar o que a página mostra. Ele roda no seu servidor como um programa.",
+        "abilities": [
+          "Abrir páginas e navegar entre elas",
+          "Clicar, digitar e preencher formulários",
+          "Ler o snapshot de acessibilidade da página",
+          "Tirar capturas de tela e ler o console e as requisições de rede"
+        ],
+        "needs": "Node.js 18 ou mais recente (npx) no servidor."
+      },
+      "zh-Hans": {
+        "description": "操控浏览器：打开页面、点击、输入文字、截图。",
+        "long": "Playwright 的 MCP 服务器让智能体可以使用真实的浏览器。例如：打开您的网站，填写表单，并报告页面显示的内容。它作为程序在您的服务器上运行。",
+        "abilities": [
+          "打开页面并在页面间切换",
+          "点击、输入文字和填写表单",
+          "读取页面的无障碍快照",
+          "截图，读取控制台和网络请求"
+        ],
+        "needs": "服务器上的 Node.js 18 或更高版本（npx）。"
+      }
+    }
   },
   {
     "id": "fetch",
@@ -509,7 +1669,79 @@
     ],
     "docs_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/fetch",
     "icon": "globe",
-    "accent": "#0EA5E9"
+    "accent": "#0EA5E9",
+    "l10n": {
+      "de": {
+        "description": "Lädt Webseiten und wandelt sie für das Modell in Text um.",
+        "long": "Ein Referenzserver des MCP-Projekts. Er lädt eine Seite herunter und wandelt sie für den Agenten in Markdown um. Zum Beispiel: einen Artikel über seinen Link lesen. Er kann auf lokale und interne Adressen zugreifen, verwenden Sie ihn deshalb mit Bedacht.",
+        "abilities": [
+          "Eine Adresse abrufen und den Inhalt als Markdown extrahieren (fetch)",
+          "Lange Seiten in Teilen lesen",
+          "Hält sich bei den Anfragen des Agenten an robots.txt"
+        ],
+        "needs": "uv (uvx) auf dem Server."
+      },
+      "es": {
+        "description": "Descarga páginas web y las convierte en texto para el modelo.",
+        "long": "Un servidor de referencia del proyecto MCP. Descarga una página y la convierte a Markdown para el agente. Por ejemplo: leer un artículo a partir de su enlace. Puede acceder a direcciones locales e internas, así que úsalo con cuidado.",
+        "abilities": [
+          "Descargar una URL y extraer su contenido en Markdown (fetch)",
+          "Leer páginas largas por partes",
+          "Respeta robots.txt en las peticiones del agente"
+        ],
+        "needs": "uv (uvx) en el servidor."
+      },
+      "fr": {
+        "description": "Récupère des pages web et les convertit en texte pour le modèle.",
+        "long": "Un serveur de référence du projet MCP. Il télécharge une page et la convertit en Markdown pour l'agent. Par exemple : lire un article à partir de son lien. Il peut accéder à des adresses locales et internes, utilisez-le donc avec précaution.",
+        "abilities": [
+          "Récupérer une URL et extraire son contenu en Markdown (fetch)",
+          "Lire les longues pages par parties",
+          "Respecte robots.txt pour les requêtes de l'agent"
+        ],
+        "needs": "uv (uvx) sur le serveur."
+      },
+      "ja": {
+        "description": "ウェブページを取得し、モデルが読めるテキストに変換します。",
+        "long": "MCP プロジェクトの参照サーバーです。ページをダウンロードし、エージェント向けに Markdown へ変換します。例: リンクから記事を読む。ローカルや社内のアドレスにもアクセスできるため、注意して使ってください。",
+        "abilities": [
+          "URL を取得し、内容を Markdown として抽出 (fetch)",
+          "長いページを分割して読む",
+          "エージェントのリクエストで robots.txt に従う"
+        ],
+        "needs": "サーバーに uv (uvx) があること。"
+      },
+      "ko": {
+        "description": "웹페이지를 가져와 모델이 읽을 수 있는 텍스트로 바꿔요.",
+        "long": "MCP 프로젝트의 참조 서버예요. 페이지를 내려받아 에이전트를 위해 Markdown으로 변환해요. 예를 들어 링크로 기사를 읽을 수 있어요. 로컬과 내부 주소에도 접근할 수 있으니 주의해서 쓰세요.",
+        "abilities": [
+          "URL을 가져와 내용을 Markdown으로 추출 (fetch)",
+          "긴 페이지를 나눠서 읽기",
+          "에이전트의 요청에서 robots.txt를 지켜요"
+        ],
+        "needs": "서버에 uv (uvx)가 있어야 해요."
+      },
+      "pt-BR": {
+        "description": "Busca páginas da web e as converte em texto para o modelo.",
+        "long": "Um servidor de referência do projeto MCP. Ele baixa uma página e a converte em Markdown para o agente. Por exemplo: ler um artigo pelo link. Ele pode acessar endereços locais e internos, então use com cuidado.",
+        "abilities": [
+          "Buscar uma URL e extrair o conteúdo em Markdown (fetch)",
+          "Ler páginas longas em partes",
+          "Respeita o robots.txt nas requisições do agente"
+        ],
+        "needs": "uv (uvx) no servidor."
+      },
+      "zh-Hans": {
+        "description": "抓取网页并将其转换为供模型使用的文本。",
+        "long": "MCP 项目的参考服务器。它下载页面，并为智能体转换为 Markdown。例如：通过链接阅读一篇文章。它可以访问本地和内网地址，请谨慎使用。",
+        "abilities": [
+          "抓取 URL 并以 Markdown 提取内容 (fetch)",
+          "分段读取长页面",
+          "智能体的请求遵守 robots.txt"
+        ],
+        "needs": "服务器上的 uv (uvx)。"
+      }
+    }
   },
   {
     "id": "filesystem",
@@ -545,7 +1777,86 @@
     ],
     "docs_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem",
     "icon": "folder",
-    "accent": "#D97706"
+    "accent": "#D97706",
+    "l10n": {
+      "de": {
+        "description": "Liest und schreibt Dateien in den Ordnern, die Sie erlauben. Ersetzen Sie das letzte Argument durch Ihren Ordner.",
+        "long": "Ein Referenzserver des MCP-Projekts. Er gibt dem Agenten Dateioperationen in den Ordnern, die Sie angeben, und nur dort. Ersetzen Sie das letzte Argument durch den Ordner auf dem Server.",
+        "abilities": [
+          "Text- und Mediendateien lesen",
+          "Dateien schreiben und bearbeiten",
+          "Ordner auflisten, Dateien suchen, einen Verzeichnisbaum anzeigen",
+          "Dateien verschieben und Ordner anlegen"
+        ],
+        "needs": "Node.js (npx) auf dem Server und der Ordner, der freigegeben werden soll."
+      },
+      "es": {
+        "description": "Lee y escribe archivos en las carpetas que permitas. Sustituye el último argumento por la carpeta.",
+        "long": "Un servidor de referencia del proyecto MCP. Da al agente operaciones con archivos solo en las carpetas que indiques. Sustituye el último argumento por la carpeta del servidor.",
+        "abilities": [
+          "Leer archivos de texto y multimedia",
+          "Escribir y editar archivos",
+          "Listar carpetas, buscar archivos y mostrar un árbol de directorios",
+          "Mover archivos y crear carpetas"
+        ],
+        "needs": "Node.js (npx) en el servidor y la carpeta que vas a permitir."
+      },
+      "fr": {
+        "description": "Lit et écrit des fichiers dans les dossiers que vous autorisez. Remplacez le dernier argument par le dossier.",
+        "long": "Un serveur de référence du projet MCP. Il donne à l'agent des opérations sur les fichiers, uniquement dans les dossiers que vous indiquez. Remplacez le dernier argument par le dossier sur le serveur.",
+        "abilities": [
+          "Lire les fichiers texte et médias",
+          "Écrire et modifier des fichiers",
+          "Lister des dossiers, chercher des fichiers, afficher une arborescence",
+          "Déplacer des fichiers et créer des dossiers"
+        ],
+        "needs": "Node.js (npx) sur le serveur, et le dossier à autoriser."
+      },
+      "ja": {
+        "description": "許可したフォルダー内のファイルを読み書きします。最後の引数をフォルダーに置き換えてください。",
+        "long": "MCP プロジェクトの参照サーバーです。指定したフォルダーの中だけで、エージェントにファイル操作を提供します。最後の引数を、サーバー上のフォルダーに置き換えてください。",
+        "abilities": [
+          "テキストとメディアのファイルを読む",
+          "ファイルを書き込み、編集する",
+          "フォルダーの一覧、ファイル検索、ディレクトリツリーの表示",
+          "ファイルの移動とフォルダーの作成"
+        ],
+        "needs": "サーバーに Node.js (npx) があること、そして許可するフォルダー。"
+      },
+      "ko": {
+        "description": "허용한 폴더의 파일을 읽고 써요. 마지막 인자를 폴더로 바꾸세요.",
+        "long": "MCP 프로젝트의 참조 서버예요. 지정한 폴더 안에서만 에이전트에 파일 작업을 제공해요. 마지막 인자를 서버의 폴더로 바꾸세요.",
+        "abilities": [
+          "텍스트와 미디어 파일 읽기",
+          "파일 쓰기와 편집",
+          "폴더 목록, 파일 검색, 디렉터리 트리 보기",
+          "파일 이동과 폴더 만들기"
+        ],
+        "needs": "서버에 Node.js(npx)가 있어야 하고, 허용할 폴더가 필요해요."
+      },
+      "pt-BR": {
+        "description": "Lê e grava arquivos nas pastas que você permitir. Troque o último argumento pela pasta.",
+        "long": "Um servidor de referência do projeto MCP. Ele dá ao agente operações com arquivos, somente nas pastas que você listar. Troque o último argumento pela pasta no servidor.",
+        "abilities": [
+          "Ler arquivos de texto e de mídia",
+          "Gravar e editar arquivos",
+          "Listar pastas, pesquisar arquivos e mostrar a árvore de diretórios",
+          "Mover arquivos e criar pastas"
+        ],
+        "needs": "Node.js (npx) no servidor e a pasta a ser permitida."
+      },
+      "zh-Hans": {
+        "description": "读写您允许的文件夹中的文件。请将最后一个参数替换为该文件夹。",
+        "long": "MCP 项目的参考服务器。它只在您列出的文件夹内为智能体提供文件操作。请将最后一个参数替换为服务器上的文件夹。",
+        "abilities": [
+          "读取文本和媒体文件",
+          "写入和编辑文件",
+          "列出文件夹、搜索文件、显示目录树",
+          "移动文件和创建文件夹"
+        ],
+        "needs": "服务器上的 Node.js (npx)，以及要允许的文件夹。"
+      }
+    }
   },
   {
     "id": "memory",
@@ -578,7 +1889,79 @@
     ],
     "docs_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/memory",
     "icon": "brain",
-    "accent": "#8B5CF6"
+    "accent": "#8B5CF6",
+    "l10n": {
+      "de": {
+        "description": "Dauerhaftes Gedächtnis für den Agenten als Wissensgraph.",
+        "long": "Ein Referenzserver des MCP-Projekts. Der Agent speichert Fakten als Entitäten, Beziehungen und Beobachtungen und findet sie in späteren Gesprächen wieder. Zum Beispiel: Ihre Vorlieben für ein Projekt merken.",
+        "abilities": [
+          "Entitäten und Beziehungen anlegen",
+          "Beobachtungen hinzufügen und entfernen",
+          "Den Graphen durchsuchen und Knoten öffnen"
+        ],
+        "needs": "Node.js (npx) auf dem Server."
+      },
+      "es": {
+        "description": "Memoria persistente para el agente en forma de grafo de conocimiento.",
+        "long": "Un servidor de referencia del proyecto MCP. El agente guarda datos como entidades, relaciones y observaciones, y los encuentra en conversaciones posteriores. Por ejemplo: recordar tus preferencias sobre un proyecto.",
+        "abilities": [
+          "Crear entidades y relaciones",
+          "Añadir y quitar observaciones",
+          "Buscar en el grafo y abrir nodos"
+        ],
+        "needs": "Node.js (npx) en el servidor."
+      },
+      "fr": {
+        "description": "Mémoire persistante de l'agent, sous forme de graphe de connaissances.",
+        "long": "Un serveur de référence du projet MCP. L'agent enregistre des faits sous forme d'entités, de relations et d'observations, et les retrouve dans les conversations suivantes. Par exemple : retenir vos préférences pour un projet.",
+        "abilities": [
+          "Créer des entités et des relations",
+          "Ajouter et supprimer des observations",
+          "Rechercher dans le graphe et ouvrir des nœuds"
+        ],
+        "needs": "Node.js (npx) sur le serveur."
+      },
+      "ja": {
+        "description": "知識グラフとして、エージェントに永続的なメモリを提供します。",
+        "long": "MCP プロジェクトの参照サーバーです。エージェントは事実をエンティティ、関係、観察として保存し、後の会話で見つけ出します。例: あるプロジェクトに関するあなたの好みを覚えておく。",
+        "abilities": [
+          "エンティティと関係を作成",
+          "観察を追加・削除",
+          "グラフを検索し、ノードを開く"
+        ],
+        "needs": "サーバーに Node.js (npx) があること。"
+      },
+      "ko": {
+        "description": "지식 그래프 형태로 에이전트에 영구 메모리를 제공해요.",
+        "long": "MCP 프로젝트의 참조 서버예요. 에이전트가 사실을 엔티티, 관계, 관찰 기록으로 저장하고, 이후 대화에서 다시 찾아요. 예를 들어 어떤 프로젝트에 대한 내 선호를 기억할 수 있어요.",
+        "abilities": [
+          "엔티티와 관계 만들기",
+          "관찰 기록 추가와 삭제",
+          "그래프 검색과 노드 열기"
+        ],
+        "needs": "서버에 Node.js(npx)가 있어야 해요."
+      },
+      "pt-BR": {
+        "description": "Memória persistente para o agente, como um grafo de conhecimento.",
+        "long": "Um servidor de referência do projeto MCP. O agente guarda fatos como entidades, relações e observações, e os encontra em conversas futuras. Por exemplo: lembrar suas preferências sobre um projeto.",
+        "abilities": [
+          "Criar entidades e relações",
+          "Adicionar e remover observações",
+          "Pesquisar no grafo e abrir nós"
+        ],
+        "needs": "Node.js (npx) no servidor."
+      },
+      "zh-Hans": {
+        "description": "以知识图谱的形式为智能体提供持久记忆。",
+        "long": "MCP 项目的参考服务器。智能体将事实存储为实体、关系和观察，并在之后的对话中找回它们。例如：记住您对某个项目的偏好。",
+        "abilities": [
+          "创建实体和关系",
+          "添加和删除观察",
+          "搜索图谱并打开节点"
+        ],
+        "needs": "服务器上的 Node.js (npx)。"
+      }
+    }
   },
   {
     "id": "sequential-thinking",
@@ -611,7 +1994,79 @@
     ],
     "docs_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking",
     "icon": "steps",
-    "accent": "#14B8A6"
+    "accent": "#14B8A6",
+    "l10n": {
+      "de": {
+        "description": "Schrittweises Lösen von Aufgaben über eine Kette von Gedanken.",
+        "long": "Ein Referenzserver des MCP-Projekts. Er gibt dem Agenten ein Werkzeug, um ein schwieriges Problem Schritt für Schritt durchzuarbeiten, frühere Schritte zu überarbeiten und andere Wege auszuprobieren.",
+        "abilities": [
+          "Ein Problem in Gedankenschritte zerlegen (sequential_thinking)",
+          "Frühere Schritte überarbeiten",
+          "In andere Gedankengänge verzweigen"
+        ],
+        "needs": "Node.js (npx) auf dem Server."
+      },
+      "es": {
+        "description": "Resolución de problemas paso a paso mediante una secuencia de pensamientos.",
+        "long": "Un servidor de referencia del proyecto MCP. Da al agente una herramienta para resolver un problema difícil por pasos, revisar pasos anteriores y probar otras ramas.",
+        "abilities": [
+          "Dividir un problema en pasos de pensamiento (sequential_thinking)",
+          "Revisar pasos anteriores",
+          "Ramificarse en otras líneas de razonamiento"
+        ],
+        "needs": "Node.js (npx) en el servidor."
+      },
+      "fr": {
+        "description": "Résolution de problèmes pas à pas, par une suite de réflexions.",
+        "long": "Un serveur de référence du projet MCP. Il donne à l'agent un outil pour résoudre un problème difficile étape par étape, réviser les étapes précédentes et explorer d'autres pistes.",
+        "abilities": [
+          "Découper un problème en étapes de réflexion (sequential_thinking)",
+          "Réviser les étapes précédentes",
+          "Se ramifier vers d'autres raisonnements"
+        ],
+        "needs": "Node.js (npx) sur le serveur."
+      },
+      "ja": {
+        "description": "一連の思考を通じて、問題を段階的に解決します。",
+        "long": "MCP プロジェクトの参照サーバーです。難しい問題を段階的に検討し、前の段階を見直し、別の筋道も試すためのツールをエージェントに提供します。",
+        "abilities": [
+          "問題を思考のステップに分ける (sequential_thinking)",
+          "前のステップを見直す",
+          "別の推論の道筋に分岐する"
+        ],
+        "needs": "サーバーに Node.js (npx) があること。"
+      },
+      "ko": {
+        "description": "생각의 순서를 따라 단계적으로 문제를 풀어요.",
+        "long": "MCP 프로젝트의 참조 서버예요. 어려운 문제를 단계별로 풀고, 이전 단계를 고치고, 다른 갈래를 시도하는 도구를 에이전트에 제공해요.",
+        "abilities": [
+          "문제를 생각 단계로 나누기 (sequential_thinking)",
+          "이전 단계 고치기",
+          "다른 추론 갈래로 나뉘기"
+        ],
+        "needs": "서버에 Node.js(npx)가 있어야 해요."
+      },
+      "pt-BR": {
+        "description": "Resolução de problemas passo a passo por uma sequência de pensamentos.",
+        "long": "Um servidor de referência do projeto MCP. Ele dá ao agente uma ferramenta para resolver um problema difícil em etapas, rever etapas anteriores e testar outros caminhos.",
+        "abilities": [
+          "Dividir um problema em etapas de pensamento (sequential_thinking)",
+          "Rever etapas anteriores",
+          "Ramificar para outras linhas de raciocínio"
+        ],
+        "needs": "Node.js (npx) no servidor."
+      },
+      "zh-Hans": {
+        "description": "通过一连串的思考逐步解决问题。",
+        "long": "MCP 项目的参考服务器。它为智能体提供一个工具，用于分步解决难题、修订先前的步骤，并尝试其他分支。",
+        "abilities": [
+          "将问题拆分为思考步骤 (sequential_thinking)",
+          "修订先前的步骤",
+          "分支到其他推理路线"
+        ],
+        "needs": "服务器上的 Node.js (npx)。"
+      }
+    }
   },
   {
     "id": "git",
@@ -645,7 +2100,79 @@
     ],
     "docs_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/git",
     "icon": "branch",
-    "accent": "#F05033"
+    "accent": "#F05033",
+    "l10n": {
+      "de": {
+        "description": "Liest, durchsucht und ändert Git-Repositories.",
+        "long": "Ein Referenzserver des MCP-Projekts. Er gibt dem Agenten Git-Befehle für ein Repository auf dem Server. Zum Beispiel: den Verlauf eines Branches anzeigen oder vorbereitete Änderungen committen. Ersetzen Sie das letzte Argument durch den Pfad zum Repository.",
+        "abilities": [
+          "Status, Diff, Verlauf und Anzeige eines Commits",
+          "Hinzufügen, Zurücksetzen und Commit",
+          "Branches anlegen und wechseln"
+        ],
+        "needs": "uv (uvx) auf dem Server und der Pfad zum Repository."
+      },
+      "es": {
+        "description": "Lee, busca y modifica repositorios Git.",
+        "long": "Un servidor de referencia del proyecto MCP. Da al agente comandos de Git para un repositorio del servidor. Por ejemplo: mostrar el historial de una rama, o confirmar los cambios preparados. Sustituye el último argumento por la ruta del repositorio.",
+        "abilities": [
+          "Estado, diff, historial y mostrar un commit",
+          "Añadir, restablecer y confirmar (commit)",
+          "Crear y cambiar de rama"
+        ],
+        "needs": "uv (uvx) en el servidor y la ruta del repositorio."
+      },
+      "fr": {
+        "description": "Lit, recherche et modifie les dépôts Git.",
+        "long": "Un serveur de référence du projet MCP. Il donne à l'agent des commandes Git pour un dépôt sur le serveur. Par exemple : afficher l'historique d'une branche, ou valider les modifications préparées. Remplacez le dernier argument par le chemin du dépôt.",
+        "abilities": [
+          "Statut, diff, journal et affichage d'un commit",
+          "Ajouter, réinitialiser et valider (commit)",
+          "Créer et changer de branche"
+        ],
+        "needs": "uv (uvx) sur le serveur, et le chemin du dépôt."
+      },
+      "ja": {
+        "description": "Git リポジトリを読み取り、検索し、変更します。",
+        "long": "MCP プロジェクトの参照サーバーです。サーバー上のリポジトリに対する Git コマンドをエージェントに提供します。例: ブランチの履歴を表示する、ステージされた変更をコミットする。最後の引数をリポジトリのパスに置き換えてください。",
+        "abilities": [
+          "status、diff、log、show",
+          "add、reset、commit",
+          "ブランチの作成と切り替え"
+        ],
+        "needs": "サーバーに uv (uvx) があること、そしてリポジトリのパス。"
+      },
+      "ko": {
+        "description": "Git 리포지토리를 읽고, 검색하고, 변경해요.",
+        "long": "MCP 프로젝트의 참조 서버예요. 서버에 있는 리포지토리에 대해 에이전트에 Git 명령을 제공해요. 예를 들어 브랜치의 로그를 보거나, 스테이징된 변경을 커밋할 수 있어요. 마지막 인자를 리포지토리 경로로 바꾸세요.",
+        "abilities": [
+          "status, diff, log, show",
+          "add, reset, commit",
+          "브랜치 만들기와 전환"
+        ],
+        "needs": "서버에 uv (uvx)가 있어야 하고, 리포지토리 경로가 필요해요."
+      },
+      "pt-BR": {
+        "description": "Lê, pesquisa e altera repositórios Git.",
+        "long": "Um servidor de referência do projeto MCP. Ele dá ao agente comandos Git para um repositório no servidor. Por exemplo: mostrar o log de uma branch, ou fazer commit das mudanças preparadas. Troque o último argumento pelo caminho do repositório.",
+        "abilities": [
+          "Status, diff, log e show",
+          "Add, reset e commit",
+          "Criar e trocar de branch"
+        ],
+        "needs": "uv (uvx) no servidor e o caminho do repositório."
+      },
+      "zh-Hans": {
+        "description": "读取、搜索和修改 Git 仓库。",
+        "long": "MCP 项目的参考服务器。它为智能体提供服务器上某个仓库的 Git 命令。例如：查看某个分支的日志，或提交已暂存的改动。请将最后一个参数替换为仓库路径。",
+        "abilities": [
+          "status、diff、log 和 show",
+          "add、reset 和 commit",
+          "创建和切换分支"
+        ],
+        "needs": "服务器上的 uv (uvx)，以及仓库的路径。"
+      }
+    }
   },
   {
     "id": "time",
@@ -675,7 +2202,72 @@
     ],
     "docs_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/time",
     "icon": "clock",
-    "accent": "#64748B"
+    "accent": "#64748B",
+    "l10n": {
+      "de": {
+        "description": "Aktuelle Uhrzeit und Umrechnung zwischen Zeitzonen.",
+        "long": "Ein Referenzserver des MCP-Projekts. Er nennt dem Agenten die aktuelle Uhrzeit in jeder Zeitzone und rechnet eine Uhrzeit zwischen Zeitzonen um. Zum Beispiel: Wie spät ist es in Tokio, wenn es in Berlin 15:00 Uhr ist?",
+        "abilities": [
+          "Aktuelle Uhrzeit in einer Zeitzone (get_current_time)",
+          "Eine Uhrzeit zwischen Zeitzonen umrechnen (convert_time)"
+        ],
+        "needs": "uv (uvx) auf dem Server."
+      },
+      "es": {
+        "description": "Hora actual y conversión entre zonas horarias.",
+        "long": "Un servidor de referencia del proyecto MCP. Indica al agente la hora actual en cualquier zona horaria y convierte una hora entre zonas. Por ejemplo: qué hora es en Tokio cuando en Berlín son las 15:00.",
+        "abilities": [
+          "Hora actual en una zona horaria (get_current_time)",
+          "Convertir una hora entre zonas (convert_time)"
+        ],
+        "needs": "uv (uvx) en el servidor."
+      },
+      "fr": {
+        "description": "Heure actuelle et conversion entre fuseaux horaires.",
+        "long": "Un serveur de référence du projet MCP. Il indique à l'agent l'heure actuelle dans n'importe quel fuseau horaire et convertit une heure d'un fuseau à un autre. Par exemple : quelle heure il est à Tokyo quand il est 15 h à Berlin.",
+        "abilities": [
+          "Heure actuelle dans un fuseau horaire (get_current_time)",
+          "Convertir une heure entre fuseaux (convert_time)"
+        ],
+        "needs": "uv (uvx) sur le serveur."
+      },
+      "ja": {
+        "description": "現在時刻の取得と、タイムゾーン間の時刻変換。",
+        "long": "MCP プロジェクトの参照サーバーです。任意のタイムゾーンの現在時刻をエージェントに伝え、ゾーン間で時刻を変換します。例: ベルリンが 15:00 のとき、東京では何時か。",
+        "abilities": [
+          "タイムゾーンの現在時刻 (get_current_time)",
+          "ゾーン間の時刻変換 (convert_time)"
+        ],
+        "needs": "サーバーに uv (uvx) があること。"
+      },
+      "ko": {
+        "description": "현재 시각과 시간대 사이의 시각 변환을 제공해요.",
+        "long": "MCP 프로젝트의 참조 서버예요. 모든 시간대의 현재 시각을 에이전트에 알려주고, 시간대 사이에서 시각을 변환해요. 예를 들어 베를린이 15:00일 때 도쿄는 몇 시인지 알 수 있어요.",
+        "abilities": [
+          "시간대의 현재 시각 (get_current_time)",
+          "시간대 사이 시각 변환 (convert_time)"
+        ],
+        "needs": "서버에 uv (uvx)가 있어야 해요."
+      },
+      "pt-BR": {
+        "description": "Hora atual e conversão de fuso horário.",
+        "long": "Um servidor de referência do projeto MCP. Ele informa ao agente a hora atual em qualquer fuso e converte um horário entre fusos. Por exemplo: que horas são em Tóquio quando são 15h em Berlim.",
+        "abilities": [
+          "Hora atual em um fuso (get_current_time)",
+          "Converter um horário entre fusos (convert_time)"
+        ],
+        "needs": "uv (uvx) no servidor."
+      },
+      "zh-Hans": {
+        "description": "当前时间查询及时区之间的时间换算。",
+        "long": "MCP 项目的参考服务器。它告诉智能体任意时区的当前时间，并在时区之间换算时间。例如：柏林时间 15:00 时，东京是几点。",
+        "abilities": [
+          "查询某时区的当前时间 (get_current_time)",
+          "在时区之间换算时间 (convert_time)"
+        ],
+        "needs": "服务器上的 uv (uvx)。"
+      }
+    }
   },
   {
     "id": "composio",
@@ -714,6 +2306,99 @@
     ],
     "docs_url": "https://docs.composio.dev/docs/mcp",
     "icon": "composio",
-    "accent": "#1F2937"
+    "accent": "#1F2937",
+    "l10n": {
+      "de": {
+        "description": "Hunderte Apps über einen MCP-Server. Ersetzen Sie in der Adresse die Server-ID und die Benutzer-ID durch Ihre.",
+        "long": "Composio gibt dem Agenten einen Satz Apps hinter einem MCP-Server. Sie erstellen den Server in Composio, wählen seine Apps und erhalten eine Adresse für Ihren Benutzer. Bei den gewählten Apps müssen Sie sich vorher anmelden.",
+        "abilities": [
+          "Die Apps nutzen, die Sie dem Composio-Server hinzugefügt haben",
+          "Den Server auf ausgewählte Werkzeuge beschränken",
+          "Eine Adresse und ein Schlüssel für alle"
+        ],
+        "needs": "Ein Composio-Konto, ein dort angelegter MCP-Server und Ihr Composio-API-Schlüssel. Ergänzen Sie die Adresse um die Server-ID und die Benutzer-ID.",
+        "labels": {
+          "x-api-key": "Composio-API-Schlüssel"
+        }
+      },
+      "es": {
+        "description": "Cientos de aplicaciones a través de un solo servidor MCP. Sustituye en la dirección el id del servidor y el id de usuario por los tuyos.",
+        "long": "Composio da al agente un conjunto de aplicaciones detrás de un solo servidor MCP. Creas el servidor en Composio, eliges sus aplicaciones y obtienes una dirección para tu usuario. Primero hay que iniciar sesión en las aplicaciones que elijas.",
+        "abilities": [
+          "Usar las aplicaciones que añadas al servidor de Composio",
+          "Limitar el servidor a las herramientas elegidas",
+          "Una dirección y una clave para todas"
+        ],
+        "needs": "Una cuenta de Composio, un servidor MCP creado allí y tu clave de API de Composio. Edita la dirección: id del servidor e id de usuario.",
+        "labels": {
+          "x-api-key": "Clave de API de Composio"
+        }
+      },
+      "fr": {
+        "description": "Des centaines d'applications via un seul serveur MCP. Remplacez dans l'adresse l'identifiant du serveur et celui de l'utilisateur par les vôtres.",
+        "long": "Composio donne à l'agent un ensemble d'applications derrière un seul serveur MCP. Vous créez le serveur dans Composio, choisissez ses applications et obtenez une adresse pour votre utilisateur. Il faut d'abord vous connecter aux applications choisies.",
+        "abilities": [
+          "Utiliser les applications ajoutées au serveur Composio",
+          "Limiter le serveur à certains outils",
+          "Une adresse et une clé pour toutes"
+        ],
+        "needs": "Un compte Composio, un serveur MCP créé dans Composio et votre clé d'API Composio. Modifiez l'adresse : identifiant du serveur et identifiant de l'utilisateur.",
+        "labels": {
+          "x-api-key": "Clé d'API Composio"
+        }
+      },
+      "ja": {
+        "description": "1 つの MCP サーバーで数百のアプリを扱います。アドレス内のサーバー ID とユーザー ID を自分のものに置き換えてください。",
+        "long": "Composio は、1 つの MCP サーバーの裏にある複数のアプリを、エージェントに提供します。Composio でサーバーを作成し、使うアプリを選び、ユーザー用のアドレスを取得します。選んだアプリには、事前にサインインしておく必要があります。",
+        "abilities": [
+          "Composio サーバーに追加したアプリを使う",
+          "サーバーを選んだツールに限定する",
+          "1 つのアドレスと 1 つのキーで全てのアプリを扱う"
+        ],
+        "needs": "Composio のアカウント、そこで作成した MCP サーバー、Composio の API キー。アドレスのサーバー ID とユーザー ID を編集してください。",
+        "labels": {
+          "x-api-key": "Composio の API キー"
+        }
+      },
+      "ko": {
+        "description": "MCP 서버 하나로 수백 개의 앱을 써요. 주소의 서버 ID와 사용자 ID를 내 것으로 바꾸세요.",
+        "long": "Composio는 MCP 서버 하나 뒤에 있는 앱 묶음을 에이전트에 제공해요. Composio에서 서버를 만들고, 앱을 고르고, 사용자용 주소를 받아요. 고른 앱에는 먼저 로그인해야 해요.",
+        "abilities": [
+          "Composio 서버에 추가한 앱 사용",
+          "선택한 도구로 서버 제한",
+          "주소 하나와 키 하나로 모든 앱 사용"
+        ],
+        "needs": "Composio 계정, 거기서 만든 MCP 서버, Composio API 키가 필요해요. 주소의 서버 ID와 사용자 ID를 고치세요.",
+        "labels": {
+          "x-api-key": "Composio API 키"
+        }
+      },
+      "pt-BR": {
+        "description": "Centenas de apps por um único servidor MCP. No endereço, troque o id do servidor e o id do usuário pelos seus.",
+        "long": "O Composio dá ao agente um conjunto de apps atrás de um único servidor MCP. Você cria o servidor no Composio, escolhe os apps e recebe um endereço para o seu usuário. Antes, é preciso entrar nos apps escolhidos.",
+        "abilities": [
+          "Usar os apps adicionados ao servidor do Composio",
+          "Limitar o servidor às ferramentas escolhidas",
+          "Um endereço e uma chave para todos"
+        ],
+        "needs": "Uma conta no Composio, um servidor MCP criado lá e sua chave de API do Composio. Edite o endereço: id do servidor e id do usuário.",
+        "labels": {
+          "x-api-key": "Chave de API do Composio"
+        }
+      },
+      "zh-Hans": {
+        "description": "通过一个 MCP 服务器使用数百个应用。请将地址中的服务器 ID 和用户 ID 替换为您自己的。",
+        "long": "Composio 在一个 MCP 服务器背后为智能体提供一组应用。您在 Composio 中创建服务器、选择应用，并获得为您的用户准备的地址。使用前，需要先登录所选的应用。",
+        "abilities": [
+          "使用添加到 Composio 服务器中的应用",
+          "将服务器限制在所选工具范围内",
+          "所有应用共用一个地址和一个密钥"
+        ],
+        "needs": "一个 Composio 账号、在其中创建的 MCP 服务器，以及您的 Composio API 密钥。请编辑地址中的服务器 ID 和用户 ID。",
+        "labels": {
+          "x-api-key": "Composio API 密钥"
+        }
+      }
+    }
   }
 ]
