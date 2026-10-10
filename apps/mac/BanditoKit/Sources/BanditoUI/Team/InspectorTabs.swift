@@ -15,8 +15,7 @@ struct DetailsTab: View {
     @State private var instructions = ""
     @State private var schedules: [Schedule] = []
     @State private var integrations: [Integration] = []
-    /// The schedule sheet: a new one (`schedule` nil) or the one being edited.
-    @State private var scheduleTarget: ScheduleTarget?
+    @Environment(Router.self) private var router
     @State private var deletingSchedule: Schedule?
     @State private var error: UserFacingMessage?
     /// Values the daemon changed on its own after the last change (for example an effort the runtime lacks).
@@ -224,7 +223,7 @@ struct DetailsTab: View {
                 HStack {
                     SectionLabel(L10n.Inspector.scheduleHeader)
                     Spacer()
-                    Button(L10n.Inspector.addSchedule) { scheduleTarget = ScheduleTarget(schedule: nil) }
+                    Button(L10n.Inspector.addSchedule) { router.sheet = .schedule(agentID: agent.id, existing: nil) }
                         .banditoButton(.link)
                         .font(BanditoFont.font(size: 12.5, weight: 500))
                         .foregroundStyle(BanditoPalette.peach)
@@ -235,7 +234,7 @@ struct DetailsTab: View {
                             .font(BanditoFont.font(size: 12.5, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                             .fixedSize(horizontal: false, vertical: true)
-                        Button(L10n.Inspector.addSchedule) { scheduleTarget = ScheduleTarget(schedule: nil) }
+                        Button(L10n.Inspector.addSchedule) { router.sheet = .schedule(agentID: agent.id, existing: nil) }
                             .banditoButton(.quiet())
                             .fixedSize()
                     }
@@ -257,7 +256,7 @@ struct DetailsTab: View {
                                         await loadSchedules()
                                     }
                                 },
-                                onEdit: { scheduleTarget = ScheduleTarget(schedule: schedule) },
+                                onEdit: { router.sheet = .schedule(agentID: agent.id, existing: schedule) },
                                 onDelete: { deletingSchedule = schedule })
                         }
                     }
@@ -324,8 +323,9 @@ struct DetailsTab: View {
             await loadSchedules()
             await loadIntegrations()
         }
-        .banditoSheet(item: $scheduleTarget, onDismiss: { Task { await loadSchedules() } }) { target in
-            ScheduleEditor(server: server, agentID: agent.id, existing: target.schedule)
+        // The schedule sheet is the main window's sheet; reload the list when it closes.
+        .onChange(of: router.sheet) { old, new in
+            if case .schedule = old, new == nil { Task { await loadSchedules() } }
         }
         .confirmationDialog(
             L10n.Schedule.deleteTitle(name: deletingSchedule.map(Self.scheduleName) ?? ""),

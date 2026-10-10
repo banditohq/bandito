@@ -134,6 +134,10 @@ struct MainWindow: View {
         case .newAgent: NewAgentSheet()
         case .account: AccountSheet()
         case .addServer: AddServerSheet()
+        case .schedule(let agentID, let existing):
+            if let server = app.currentServer {
+                ScheduleEditor(server: server, agentID: agentID, existing: existing)
+            }
         }
     }
 }

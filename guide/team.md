@@ -194,11 +194,11 @@ The main settings of the agent. Each row changes the agent for the next message.
 
 ## Schedules (SCHEDULE)
 
-<!-- id: team-schedules; covers: -->
-Runs a prompt for the agent at a set time, for example every morning. A schedule is a cron expression with a prompt.
+<!-- id: team-schedules; covers: sheet:schedule -->
+Runs a prompt for the agent at a set time, for example every morning. A schedule is a repeat rule with a time and a prompt. The New schedule (Новое расписание) sheet opens over the main window.
 Где: Team → agent → Agent details → Details → SCHEDULE → Add schedule (Добавить)
 1. Click Add schedule (Добавить).
-2. Type the time as a cron expression in Schedule (cron) and the request in Prompt (Запрос).
+2. Choose how often in Repeat (Повтор): Every, Every day, Weekdays, Days of the week, or Other (cron). Set the time in At (В) and the request in Prompt (Запрос). Only Other (cron) takes a cron expression.
 3. Click Add schedule (Добавить) to save. The list shows Next run (Next run …) for each schedule.
 4. Use the switch in a row to pause or resume it.
 

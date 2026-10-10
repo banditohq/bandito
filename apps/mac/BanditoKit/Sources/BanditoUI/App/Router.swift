@@ -55,12 +55,16 @@ public enum Sheet: Identifiable, Hashable, Sendable {
     case addServer
     /// Sign in or create an account (Onboarding's account step, reused from Settings).
     case account
+    /// A new schedule of the agent (`existing` nil), or the change of an existing one. Shown on the main window,
+    /// not on the inspector, which is too narrow for it.
+    case schedule(agentID: String, existing: Schedule?)
 
     public var id: String {
         switch self {
         case .newAgent: "newAgent"
         case .addServer: "addServer"
         case .account: "account"
+        case .schedule(let agentID, let existing): "schedule-\(agentID)-\(existing?.id ?? "new")"
         }
     }
 }
