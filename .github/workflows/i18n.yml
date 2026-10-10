@@ -6,6 +6,8 @@ on:
   push:
     branches: [main]
     paths: ["i18n/**", "apps/mac/BanditoKit/Sources/BanditoL10n/**"]
+  # Called by ci.yml, which runs this only when the app part of a change (or a workflow) changed.
+  workflow_call:
 
 # A newer push to the same PR or branch cancels the run for the older one.
 concurrency:
