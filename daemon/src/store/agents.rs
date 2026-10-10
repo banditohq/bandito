@@ -57,6 +57,9 @@ pub struct Agent {
     /// A paused agent takes messages into its history but starts no session, and its scheduled
     /// runs are skipped (see docs/ARCHITECTURE.md#pause).
     pub paused: bool,
+    /// Whether the agent's CLI also loads the owner's own Claude settings (see docs/ARCHITECTURE.md#personal-settings).
+    /// Read when a session starts.
+    pub use_personal_settings: bool,
     /// The newest user or assistant message; `null` when there is none. Only set by `agent_view` and
     /// `agent_list_view`, the reads the wire uses (see docs/ARCHITECTURE.md#team-preview).
     #[serde(default)]
@@ -98,6 +101,9 @@ pub struct NewAgent {
     pub fallback_runtime: Option<RuntimeKind>,
     #[serde(default)]
     pub fallback_model: Option<String>,
+    /// Loads the owner's own Claude settings in new sessions (see docs/ARCHITECTURE.md#personal-settings).
+    #[serde(default)]
+    pub use_personal_settings: bool,
 }
 
 fn default_memory() -> MemoryMode {
@@ -126,9 +132,10 @@ pub struct AgentPatch {
     pub runtime: Option<RuntimeKind>,
     pub fallback_runtime: Option<Option<RuntimeKind>>,
     pub fallback_model: Option<Option<String>>,
+    pub use_personal_settings: Option<bool>,
 }
 
-const COLS: &str = "id, name, role, runtime, model, cwd, approval_mode, system_prompt, runtime_session_id, created_at, updated_at, effort, memory_mode, context_budget, home_dir, context_tokens, chapter, last_turn_at, fallback_runtime, fallback_model, active_runtime, workspace_id, paused";
+const COLS: &str = "id, name, role, runtime, model, cwd, approval_mode, system_prompt, runtime_session_id, created_at, updated_at, effort, memory_mode, context_budget, home_dir, context_tokens, chapter, last_turn_at, fallback_runtime, fallback_model, active_runtime, workspace_id, paused, use_personal_settings";
 
 /// The newest message of the agent in `agents.id`, as one JSON array `[kind, ts, text]` (text cut to
 /// `LAST_MESSAGE_CHARS` in SQL too, so a long message is not read in full). One correlated subquery per agent, served by
@@ -177,6 +184,7 @@ fn from_row(r: &Row) -> rusqlite::Result<Agent> {
         active_runtime: runtime_column(r, 20)?,
         workspace_id: r.get(21)?,
         paused: r.get(22)?,
+        use_personal_settings: r.get(23)?,
         last_message: None,
         status: None,
         pending_approval_ids: Vec::new(),
@@ -187,9 +195,9 @@ fn from_row(r: &Row) -> rusqlite::Result<Agent> {
 /// `from_row` for `view_sql()`: the agent columns, then the message, the status and the pending count.
 fn from_row_view(r: &Row) -> rusqlite::Result<Agent> {
     let mut agent = from_row(r)?;
-    agent.last_message = last_message_column(r, 23)?;
-    agent.status = status_column(r, 24)?;
-    agent.pending_approval_ids = pending_ids_column(r, 25)?;
+    agent.last_message = last_message_column(r, 24)?;
+    agent.status = status_column(r, 25)?;
+    agent.pending_approval_ids = pending_ids_column(r, 26)?;
     agent.pending_approvals = agent.pending_approval_ids.len() as u32;
     Ok(agent)
 }
@@ -278,6 +286,7 @@ impl Store {
             active_runtime: None,
             workspace_id: workspace_id.to_string(),
             paused: false,
+            use_personal_settings: a.use_personal_settings,
             last_message: None,
             status: None,
             pending_approval_ids: Vec::new(),
@@ -285,7 +294,7 @@ impl Store {
         };
         let res = self.conn().execute(
             &format!(
-                "INSERT INTO agents ({COLS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)"
+                "INSERT INTO agents ({COLS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)"
             ),
             params![
                 agent.id,
@@ -310,7 +319,8 @@ impl Store {
                 agent.fallback_model,
                 agent.active_runtime.map(RuntimeKind::as_str),
                 agent.workspace_id,
-                agent.paused
+                agent.paused,
+                agent.use_personal_settings
             ],
         );
         match res {
@@ -416,11 +426,14 @@ impl Store {
         if let Some(v) = p.fallback_model {
             a.fallback_model = v;
         }
+        if let Some(v) = p.use_personal_settings {
+            a.use_personal_settings = v;
+        }
         a.updated_at = now_ms();
         let res = self.conn().execute(
             "UPDATE agents SET name=?2, role=?3, model=?4, cwd=?5, approval_mode=?6, system_prompt=?7, updated_at=?8,
              effort=?9, memory_mode=?10, context_budget=?11, runtime=?12, fallback_runtime=?13, fallback_model=?14,
-             active_runtime=?15, workspace_id=?16 WHERE id=?1",
+             active_runtime=?15, workspace_id=?16, use_personal_settings=?17 WHERE id=?1",
             params![
                 a.id,
                 a.name,
@@ -437,7 +450,8 @@ impl Store {
                 a.fallback_runtime.map(RuntimeKind::as_str),
                 a.fallback_model,
                 a.active_runtime.map(RuntimeKind::as_str),
-                a.workspace_id
+                a.workspace_id,
+                a.use_personal_settings
             ],
         );
         match res {
@@ -536,6 +550,7 @@ mod tests {
             context_budget: None,
             fallback_runtime: None,
             fallback_model: None,
+            use_personal_settings: false,
         }
     }
 
@@ -599,6 +614,50 @@ mod tests {
         assert!(s.agent_set_paused(&a.id, false).unwrap());
         assert!(!s.agent_get(&a.id).unwrap().unwrap().paused);
         assert!(!s.agent_set_paused("missing", true).unwrap());
+    }
+
+    #[test]
+    fn personal_settings_are_off_by_default_and_stored_per_agent() {
+        let s = Store::open_in_memory().unwrap();
+        let a = s.agent_create(new("Forge")).unwrap();
+        assert!(!a.use_personal_settings);
+        let on = s
+            .agent_update(
+                &a.id,
+                AgentPatch {
+                    use_personal_settings: Some(true),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        assert!(on.use_personal_settings);
+        assert!(s.agent_get(&a.id).unwrap().unwrap().use_personal_settings);
+        // A patch that does not mention it keeps it.
+        let renamed = s
+            .agent_update(
+                &a.id,
+                AgentPatch {
+                    role: Some("reviewer".into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        assert!(renamed.use_personal_settings);
+        let off = s
+            .agent_update(
+                &a.id,
+                AgentPatch {
+                    use_personal_settings: Some(false),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        assert!(!off.use_personal_settings);
+        assert!(!s.agent_view(&a.id).unwrap().unwrap().use_personal_settings);
+        // Created with the flag set.
+        let mut with_flag = new("Scout");
+        with_flag.use_personal_settings = true;
+        assert!(s.agent_create(with_flag).unwrap().use_personal_settings);
     }
 
     #[test]

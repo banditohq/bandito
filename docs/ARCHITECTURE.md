@@ -148,7 +148,7 @@ A pending approval blocks only that agent. Approvals time out after 24 h → den
 
 ## Store (SQLite)
 
-- `agents(id, name, role, runtime, model, cwd, approval_mode, system_prompt, runtime_session_id, created_at, updated_at, fallback_runtime, fallback_model, active_runtime, paused)`: `fallback_runtime`, `fallback_model` and `active_runtime` are the [fallback subscription](#fallback-subscription); `active_runtime` NULL means the primary `runtime`. `paused` is the [pause](#pause) flag
+- `agents(id, name, role, runtime, model, cwd, approval_mode, system_prompt, runtime_session_id, created_at, updated_at, fallback_runtime, fallback_model, active_runtime, paused, use_personal_settings)`: `fallback_runtime`, `fallback_model` and `active_runtime` are the [fallback subscription](#fallback-subscription); `active_runtime` NULL means the primary `runtime`. `paused` is the [pause](#pause) flag
 - `events(seq INTEGER PRIMARY KEY, agent_id, ts, kind, payload JSON)`
 - `approvals(id, agent_id, call_id, tool, title, payload JSON, status, decision, created_at, resolved_at)`
 - `rules(id, agent_id NULL, pattern, action)`
@@ -247,7 +247,7 @@ On macOS, the Claude, Grok and Codex sessions of the shared workspace run under 
 
 **Switching it off.** `"agent_sandbox": false` in `$BANDITO_HOME/config.json` turns the sandbox off for new sessions. It is on by default. It has no effect on Linux.
 
-**Checked on macOS** (tests in `daemon/src/runtime/sandbox.rs`): a read of the database is denied; a connect to `bandito.sock` is denied, also from an orphan started by a shell; a connect to `agent.sock` and a read of the own token file work; other sessions' token files are denied; `open` and `launchctl` cannot start; an Apple event sent by a small program is refused under the profile and accepted without it; writes to `~/.zshrc` and `~/Library/LaunchAgents` are denied in a temporary home, and a file elsewhere in the home stays writable; writes into the project, `git`, `node` and `curl` work; `nc` to the network works where there is a network.
+**Checked on macOS** (tests in `daemon/src/runtime/sandbox.rs`): a read of the database is denied; a connect to `bandito.sock` is denied, also from an orphan started by a shell; a connect to `agent.sock` and a read of the own token file work; other sessions' token files are denied; the crew bridge (`bandito mcp`) starts under the profile, so it never creates or stats the data folder; `open` and `launchctl` cannot start; an Apple event sent by a small program is refused under the profile and accepted without it; writes to `~/.zshrc` and `~/Library/LaunchAgents` are denied in a temporary home, and a file elsewhere in the home stays writable; writes into the project, `git`, `node` and `curl` work; `nc` to the network works where there is a network.
 
 **Not verified.** The Claude and Grok CLIs may run their own shell tool under `sandbox-exec`. Then their commands fail inside this profile, since nested sandboxes are refused. This was not tested with the real CLIs; check it before relying on the sandbox.
 
@@ -266,6 +266,12 @@ A paused agent (`agents.update {paused: true}`, or all agents at once with `agen
 - The flag is in the store (`agents.paused`), so the apps see it in `agents.list|get`. The queue is in memory: messages held at a daemon restart are lost, as messages waiting for a turn already are. They stay visible in the thread.
 
 `agents.pause_all` is for the owner's CLI and the apps. It returns how many agents changed. Clients show the pause controls when `daemon.info.features` contains `"pause"`.
+
+## Personal settings
+
+A Claude agent's CLI loads only the project's and the local settings by default (`--setting-sources project,local`). The owner's own user settings stay out: their `~/.claude/CLAUDE.md`, hooks, plugins and MCP servers. Otherwise an agent answers with the owner's private instructions (its projects, its rules).
+
+`agents.create|update|get` take and return `use_personal_settings` (default `false`, stored in `agents.use_personal_settings`). `true` restores the CLI's default: all setting sources load. The flag is read when a session starts, so a change reloads the running session like the other config. Codex and Grok are not changed by this flag (see their runtime notes).
 
 ## Logs
 
@@ -501,18 +507,25 @@ The app shows what the server is doing: CPU, memory, disks, network, the process
 | `host.processes` | `{}` | `{supported, owners: [{owner, cpu_percent, rss_bytes, processes: [{pid, name, cmd}]}]}` |
 | `host.ports` | `{}` | `{supported, ports: [{port, addr, pid, process, owner?}]}`, unique by port and address |
 | `host.kill` | `pid` | `{}` |
+| `host.kill_process` | `pid` | `{ok: true, killed}`: only a process of the daemon's user whose tree can be read and that belongs to no agent, terminal or the daemon (refused: `forbidden`, the reason says which); SIGTERM now, `killed` says whether it was gone within 1 s (a zombie counts as gone); SIGKILL after 5 s if it is still the same process (same start time). Paired devices may call it: they are the owner's own. |
 
-`HostStats` fields: `os`, `kernel`, `arch`, `hostname`, `cpus`, `cpu_percent` (busy share of all CPUs), `load` (1, 5, 15 min), `mem_total`, `mem_used`, `swap_total`, `swap_used`, `disks: [{mount, total, used}]` (`/` and the daemon user's home, one entry per device), `net_rx_bps`, `net_tx_bps`, `net_supported`, `uptime_s`. Bytes everywhere unless a name says `_bps`.
+`HostStats` fields: `os`, `kernel`, `arch`, `hostname`, `cpus`, `cpu_percent` (busy share of all CPUs), `load` (1, 5, 15 min), `mem_total`, `mem_used`, `swap_total`, `swap_used`, `disks: [{mount, total, used}]` (`/` and the daemon user's home, one entry per device), `net_rx_bps`, `net_tx_bps`, `net_supported`, `uptime_s`, `top_processes`. Bytes everywhere unless a name says `_bps`.
+
+`top_processes`: the union of the 15 biggest processes of the whole server by memory and the 15 busiest by CPU, without repeats, biggest memory first. Each entry is `{pid, name, rss_bytes, cpu_percent, own, own_safe}`. `name` is the program's file name; `own` says the process runs as the daemon's user; `own_safe` says the app may stop it (see `host.kill_process`). It is read when `host.stats` answers, not in the 10 s sample. The first CPU reading after the daemon starts is 0.
+
+**Stopping a process.** `host.kill_process` reads the process's start time first, reads the process table and the owner marks, and refuses unless the tree is known and the process has no owner. It reads the start time again just before SIGTERM: a pid that another process took meanwhile has another start time and is refused. The window that stays open is between that second reading and `kill(2)`: a few microseconds in which the process must exit and its pid be reused. macOS has no pidfd to close it, and Linux is not given one here. SIGKILL after the grace period checks the start time again, so a reused pid is left alone.
 
 **Sampling.** The daemon samples every 10 s and keeps the last 24 h (8640 samples) in memory. The history is lost on restart.
 
 **Sources.** Linux: `/proc/stat`, `loadavg`, `meminfo` (used = total − available), `net/dev` (loopback excluded), `uptime`, `sys/kernel/osrelease`, `/etc/os-release` (`PRETTY_NAME`), `statvfs`. macOS: `sysctl` (`hw.ncpu`, `hw.memsize`, `kern.boottime`, `kern.osrelease`, `kern.osproductversion`, `vm.loadavg`), `vm_stat` (used = active + wired + compressed pages), `netstat -ib`, `ps`, `lsof`, `statvfs`.
 
-**Owners.** Every agent CLI is started with `BANDITO_AGENT_ID=<agent id>` in its environment, and every terminal's process with `BANDITO_TERM_ID=<terminal id>`. Children inherit the variable, so a test run or a dev server started by an agent is listed under that agent. The daemon's own process is `{kind: "daemon", id: null}`. Other processes have no owner and are not listed. An owner's `cpu_percent` is summed over its processes, so it can exceed 100.
+**Owners.** A process belongs to the owner of its nearest ancestor (or itself) that is a root: an agent's CLI, or a terminal's shell, registered by the daemon when it starts them. The environment mark (`BANDITO_AGENT_ID=<agent id>` for an agent CLI, `BANDITO_TERM_ID=<terminal id>` for a terminal) is a second sign, read where `ps` or `/proc` shows it. The tree is needed on macOS: Apple's own programs (`zsh`, `sleep`) hide their environment from `ps`, so their children are owned through their parents. A test run or a dev server started by an agent is listed under that agent. The daemon's own process is `{kind: "daemon", id: null}`; its children belong to nobody. Other processes are not listed. An owner's `cpu_percent` is summed over its processes, so it can exceed 100.
 
-**CPU per process.** Linux: the share of one core between two `host.processes` calls, from the process's utime + stime. The first call reports 0. macOS: the `%cpu` that `ps` gives, which is an average over the process's life, not a current rate.
+**Fail-closed.** A process whose tree cannot be read to the end (a parent missing from the process table) has no owner it can be shown under, and is never stopped from the app. The same goes for a process that the process table cannot be read for at all.
 
-**Ports.** Linux: `/proc/net/tcp` and `tcp6`, state LISTEN. The socket's owner is found through `/proc/<pid>/fd`, so a port of another user's process has `pid: null`. IPv4-mapped IPv6 addresses print as IPv4. macOS: `lsof -nP -iTCP -sTCP:LISTEN`; `addr` `*` means all interfaces.
+**CPU per process.** Both platforms: the share of one core between two readings, from the change in the process's CPU time (Linux utime + stime, macOS the `time` column of `ps`, to the hundredth of a second). The first reading reports 0. Readings closer together than one second keep the previous shares, so a second `host.*` call right after another does not show noise.
+
+**Ports.** Owners come from the same tree as the processes. Linux: `/proc/net/tcp` and `tcp6`, state LISTEN. The socket's owner is found through `/proc/<pid>/fd`, so a port of another user's process has `pid: null`. IPv4-mapped IPv6 addresses print as IPv4. macOS: `lsof -nP -iTCP -sTCP:LISTEN`; `addr` `*` means all interfaces.
 
 **Kill.** `host.kill` sends SIGTERM to a process that belongs to an agent or a terminal. The daemon itself, processes without an owner (init, other users) and `pid` ≤ 0 are refused with `reason: "forbidden"` (or `-32602` for `pid` ≤ 0, since `kill(0)` and `kill(-1)` would signal whole groups). After 3 s SIGKILL follows if the process is still there with the same owner.
 

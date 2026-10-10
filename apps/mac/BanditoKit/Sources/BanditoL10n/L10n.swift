@@ -1601,12 +1601,18 @@ public enum L10n {
         }
 
         public enum Detail {
+            public static var agentMark: String { L10n.tr("server.detail.agentMark") }
             public static var average: String { L10n.tr("server.detail.average") }
             public static var diskNoHistory: String { L10n.tr("server.detail.diskNoHistory") }
             public static var download: String { L10n.tr("server.detail.download") }
             public static var hint: String { L10n.tr("server.detail.hint") }
             public static var now: String { L10n.tr("server.detail.now") }
             public static var peak: String { L10n.tr("server.detail.peak") }
+            public static var stillRunning: String { L10n.tr("server.detail.stillRunning") }
+            public static func stopAria(name: String) -> String { L10n.tr("server.detail.stopAria", name) }
+            public static var stopConfirm: String { L10n.tr("server.detail.stopConfirm") }
+            public static var stopMessage: String { L10n.tr("server.detail.stopMessage") }
+            public static func stopTitle(name: String) -> String { L10n.tr("server.detail.stopTitle", name) }
             public static var topProcesses: String { L10n.tr("server.detail.topProcesses") }
             public static var upload: String { L10n.tr("server.detail.upload") }
         }

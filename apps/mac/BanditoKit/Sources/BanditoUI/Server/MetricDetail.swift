@@ -26,9 +26,14 @@ struct MetricDetailView: View {
     let metric: OverviewMetric
     let monitor: HostMonitor
     let server: ServerModel
-    let ownerName: (ProcessRow) -> String
+    let ownerName: (ProcessOwnerRef) -> String
 
     @State private var selected: Date?
+    /// The process the user chose to stop, until the user confirms or cancels.
+    @State private var stopping: HostProcessEntry?
+    @State private var stopError: UserFacingMessage?
+    /// Set when the daemon sent SIGTERM but the process was still running a second later.
+    @State private var stillRunning = false
 
     /// One drawn sample: a time, a value and the line it belongs to.
     private struct Sample: Identifiable {
@@ -68,6 +73,17 @@ struct MetricDetailView: View {
         .padding(18)
         .frame(width: 520, alignment: .leading)
         .background(Color.Bandito.surface2)
+        .confirmationDialog(
+            stopping.map { L10n.Server.Detail.stopTitle(name: $0.name) } ?? "",
+            isPresented: Binding(get: { stopping != nil }, set: { if !$0 { stopping = nil } }),
+            titleVisibility: .visible,
+            presenting: stopping
+        ) { row in
+            Button(L10n.Server.Detail.stopConfirm, role: .destructive) { stop(row) }
+            Button(L10n.Common.cancel, role: .cancel) {}
+        } message: { _ in
+            Text(L10n.Server.Detail.stopMessage)
+        }
     }
 
     // MARK: - Numbers
@@ -150,6 +166,8 @@ struct MetricDetailView: View {
 
     // MARK: - Processes
 
+    /// The biggest processes of the server (`top_processes`). Hidden while there are none, and for a daemon
+    /// that does not send the list.
     @ViewBuilder
     private var topProcesses: some View {
         let rows = topRows
@@ -157,20 +175,67 @@ struct MetricDetailView: View {
             VStack(alignment: .leading, spacing: 6) {
                 SectionLabel(L10n.Server.Detail.topProcesses)
                 ForEach(rows) { row in
-                    HStack(spacing: 10) {
-                        Text(ownerName(row))
-                            .font(.system(size: 13))
-                            .foregroundStyle(Color.Bandito.text)
-                            .lineLimit(1)
-                        Spacer(minLength: 8)
-                        Text(processValue(row))
-                            .font(.system(size: 12.5, weight: .medium))
-                            .foregroundStyle(Color.Bandito.text2)
-                            .lineLimit(1)
-                    }
-                    .padding(.vertical, 3)
+                    processRow(row)
+                }
+                if stillRunning {
+                    Text(L10n.Server.Detail.stillRunning)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.Bandito.text2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let stopError {
+                    UserFacingErrorView(message: stopError)
                 }
             }
+        }
+    }
+
+    private func processRow(_ row: HostProcessEntry) -> some View {
+        HStack(spacing: 10) {
+            if row.isAgent, let owner = row.owner {
+                AgentAvatar(name: ownerName(owner), size: 20)
+                    .help(L10n.Server.Detail.agentMark)
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(row.name)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.Bandito.text)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                if let owner = row.owner {
+                    Text(ownerName(owner))
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Color.Bandito.text3)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 8)
+            Text(processValue(row))
+                .font(.system(size: 12.5, weight: .medium).monospacedDigit())
+                .foregroundStyle(Color.Bandito.text2)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+            if row.canStop {
+                Button(L10n.Server.Detail.stopConfirm) {
+                    stopping = row
+                }
+                .banditoButton(.quiet())
+                .help(L10n.Server.Detail.stopAria(name: row.name))
+            }
+        }
+        .padding(.vertical, 3)
+    }
+
+    private func stop(_ row: HostProcessEntry) {
+        stopError = nil
+        stillRunning = false
+        Task {
+            do {
+                stillRunning = !(try await server.killProcess(pid: row.pid))
+            } catch {
+                stopError = UserFacingError.message(for: error)
+            }
+            await monitor.refresh(server)
         }
     }
 
@@ -268,15 +333,17 @@ struct MetricDetailView: View {
         }
     }
 
-    private var topRows: [ProcessRow] {
+    /// The CPU list is sorted by CPU among the biggest processes by memory, which is all the daemon sends.
+    private var topRows: [HostProcessEntry] {
+        let top = monitor.stats?.topProcesses ?? []
         switch metric {
-        case .cpu: monitor.processes.sorted { $0.cpuPercent > $1.cpuPercent }.prefix(5).map { $0 }
-        case .memory: monitor.processes.sorted { $0.rssBytes > $1.rssBytes }.prefix(5).map { $0 }
-        case .network, .disk: []
+        case .cpu: return HostProcessList.rows(top: top, owners: monitor.ownerGroups, sort: .cpu)
+        case .memory: return HostProcessList.rows(top: top, owners: monitor.ownerGroups, sort: .memory)
+        case .network, .disk: return []
         }
     }
 
-    private func processValue(_ row: ProcessRow) -> String {
+    private func processValue(_ row: HostProcessEntry) -> String {
         metric == .memory ? HostFormat.bytes(row.rssBytes) : HostFormat.percent(row.cpuPercent)
     }
 

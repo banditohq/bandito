@@ -312,6 +312,7 @@ mod tests {
 
     fn new_agent(name: &str) -> NewAgent {
         NewAgent {
+            use_personal_settings: false,
             name: name.into(),
             role: String::new(),
             runtime: RuntimeKind::Claude,

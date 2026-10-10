@@ -175,6 +175,7 @@ mod tests {
         let s = Store::open_in_memory().unwrap();
         let agent = s
             .agent_create(NewAgent {
+                use_personal_settings: false,
                 name: "Forge".into(),
                 role: String::new(),
                 runtime: RuntimeKind::Claude,

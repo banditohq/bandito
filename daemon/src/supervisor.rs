@@ -406,6 +406,7 @@ impl Supervisor {
             tokens: self.agent_tokens.clone(),
             sandbox_on: self.agent_sandbox.clone(),
             agent_token: None,
+            root: None,
             protected: self.protected.clone(),
             session: None,
             output: None,
@@ -667,6 +668,8 @@ struct Actor {
     sandbox_on: Arc<AtomicBool>,
     /// The token of the running session. Dropping it (when the session ends) revokes the token.
     agent_token: Option<SessionToken>,
+    /// The session's CLI as a root of its processes, for the owner checks (see `host::register_root`).
+    root: Option<crate::host::RootGuard>,
     protected: Arc<Protected>,
     session: Option<Box<dyn Session>>,
     output: Option<mpsc::Receiver<RuntimeOutput>>,
@@ -1002,8 +1005,13 @@ impl Actor {
                 agent_token: Some(token.clone()),
                 agent_mcp_file: token_guard.config_file().map(Path::to_path_buf),
                 sandbox,
+                personal_settings: agent.use_personal_settings,
             })
             .await?;
+        self.root = spawned
+            .session
+            .pid()
+            .map(|pid| crate::host::register_root(pid as i32, crate::host::Owner::agent(&agent.id)));
         self.session = Some(spawned.session);
         self.shell_cwd = policy::ShellCwd::default();
         self.output = Some(spawned.output);
@@ -1120,6 +1128,7 @@ impl Actor {
             s.shutdown().await;
         }
         self.agent_token = None;
+        self.root = None;
         self.output = None;
         self.session_kind = None;
         self.reload_after_turn = false;
@@ -1288,6 +1297,7 @@ impl Actor {
                 let stderr_tail = self.redactor.redact(&stderr_tail).into_owned();
                 self.session = None;
                 self.agent_token = None;
+                self.root = None;
                 let failed = code != Some(0);
                 let detail = if failed {
                     let tail: Vec<&str> = stderr_tail.lines().rev().take(5).collect();
@@ -1654,6 +1664,7 @@ impl Actor {
             s.shutdown().await;
         }
         self.agent_token = None;
+        self.root = None;
         self.output = None;
         if self.turn.is_some() {
             self.end_turn(TurnStatus::Interrupted, None);
@@ -1794,6 +1805,7 @@ mod tests {
         let store = Arc::new(Store::open_in_memory().unwrap());
         let agent = store
             .agent_create(NewAgent {
+                use_personal_settings: false,
                 name: "Forge".into(),
                 role: "builder".into(),
                 runtime: RuntimeKind::Claude,
@@ -2331,6 +2343,7 @@ mod tests {
     fn add_agent(store: &Store, name: &str) -> String {
         store
             .agent_create(NewAgent {
+                use_personal_settings: false,
                 name: name.into(),
                 role: String::new(),
                 runtime: RuntimeKind::Claude,
@@ -2616,6 +2629,7 @@ mod tests {
         let codex = w
             .store
             .agent_create(NewAgent {
+                use_personal_settings: false,
                 name: "Scout".into(),
                 role: String::new(),
                 runtime: RuntimeKind::Codex,
@@ -3155,6 +3169,7 @@ mod tests {
         let store = Arc::new(Store::open_in_memory().unwrap());
         let agent = store
             .agent_create(NewAgent {
+                use_personal_settings: false,
                 name: "Forge".into(),
                 role: "builder".into(),
                 runtime: RuntimeKind::Claude,
@@ -3319,6 +3334,7 @@ mod tests {
         let store = Arc::new(Store::open_in_memory().unwrap());
         let agent = store
             .agent_create(NewAgent {
+                use_personal_settings: false,
                 name: "Forge".into(),
                 role: "builder".into(),
                 runtime: RuntimeKind::Claude,
@@ -3565,7 +3581,7 @@ mod tests {
 mod workspace_tests {
     use super::testing::MockRuntime;
     use super::*;
-    use crate::store::{ApprovalMode, MemoryMode, Network, NewAgent, NewWorkspace, Store, WorkspaceKind};
+    use crate::store::{AgentPatch, ApprovalMode, MemoryMode, Network, NewAgent, NewWorkspace, Store, WorkspaceKind};
     use crate::workspace::testing::fake_docker;
     use crate::workspace::{WorkspaceManager, WorkspaceSpec};
     use std::time::Duration;
@@ -3586,6 +3602,7 @@ mod workspace_tests {
         store
             .agent_create_in(
                 NewAgent {
+                    use_personal_settings: false,
                     name: name.into(),
                     role: String::new(),
                     runtime: RuntimeKind::Claude,
@@ -3630,6 +3647,24 @@ mod workspace_tests {
         sup.send(&id, Inbound::user("go")).await.unwrap();
         let cfg = first_spawn(&spawns).await;
         assert_eq!(cfg.workspace, Some(WorkspaceSpec::Shared));
+    }
+
+    #[tokio::test]
+    async fn a_session_takes_the_agents_personal_settings_choice() {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let id = agent(&store, "Forge", "shared");
+        store
+            .agent_update(
+                &id,
+                AgentPatch {
+                    use_personal_settings: Some(true),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let (sup, spawns) = rig(store, scratch_manager());
+        sup.send(&id, Inbound::user("go")).await.unwrap();
+        assert!(first_spawn(&spawns).await.personal_settings);
     }
 
     #[tokio::test]

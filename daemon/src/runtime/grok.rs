@@ -208,6 +208,10 @@ struct GrokSession {
 
 #[async_trait]
 impl Session for GrokSession {
+    fn pid(&self) -> Option<u32> {
+        self.proc.pid()
+    }
+
     async fn send(&mut self, text: &str) -> anyhow::Result<()> {
         let frame = {
             let mut guard = locked(&self.state);

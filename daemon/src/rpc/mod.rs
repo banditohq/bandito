@@ -432,6 +432,7 @@ struct AgentPatchParams {
     fallback_model: Option<Option<String>>,
     /// Pauses or resumes the agent (see docs/ARCHITECTURE.md#pause). Not stored with the other fields.
     paused: Option<bool>,
+    use_personal_settings: Option<bool>,
 }
 impl AgentPatchParams {
     /// Whether the patch changes something a running session was started with, so
@@ -456,6 +457,7 @@ impl AgentPatchParams {
             workspace_id,
             // Applied by `Supervisor::set_paused`: a pause starts no new session.
             paused: _,
+            use_personal_settings,
         } = self;
         workspace_id.as_ref().is_some_and(|w| *w != current.workspace_id)
             || runtime.as_ref().is_some_and(|r| *r != current.runtime)
@@ -467,6 +469,9 @@ impl AgentPatchParams {
             || effort.as_ref().is_some_and(|e| *e != current.effort)
             || memory_mode.as_ref().is_some_and(|m| *m != current.memory_mode)
             || context_budget.as_ref().is_some_and(|b| *b != current.context_budget)
+            || use_personal_settings
+                .as_ref()
+                .is_some_and(|u| *u != current.use_personal_settings)
     }
 }
 /// `{"x": null}` → `Some(None)` (clear), missing → `None` (keep).
@@ -978,6 +983,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                     runtime: patch.runtime,
                     fallback_runtime: patch.fallback_runtime,
                     fallback_model: patch.fallback_model,
+                    use_personal_settings: patch.use_personal_settings,
                 },
             )?;
             // New config takes effect with the next session: the running one is
@@ -1292,7 +1298,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
         }
         "secrets.list" | "secrets.set" | "secrets.delete" => secrets::dispatch(app, method, p).await,
 
-        "host.stats" | "host.history" | "host.processes" | "host.ports" | "host.kill" => {
+        "host.stats" | "host.history" | "host.processes" | "host.ports" | "host.kill" | "host.kill_process" => {
             host::dispatch(app, method, p).await
         }
 
@@ -1324,6 +1330,7 @@ mod crew_tests {
         let add = |name: &str, role: &str| {
             store
                 .agent_create(NewAgent {
+                    use_personal_settings: false,
                     name: name.into(),
                     role: role.into(),
                     runtime: RuntimeKind::Claude,
@@ -1430,6 +1437,7 @@ mod history_tests {
         let store = Arc::new(Store::open_in_memory().unwrap());
         let agent = store
             .agent_create(NewAgent {
+                use_personal_settings: false,
                 name: "Forge".into(),
                 role: String::new(),
                 runtime: RuntimeKind::Claude,
@@ -1842,6 +1850,7 @@ mod schedule_tests {
         let store = Arc::new(Store::open_in_memory().unwrap());
         let agent = store
             .agent_create(NewAgent {
+                use_personal_settings: false,
                 name: "Forge".into(),
                 role: String::new(),
                 runtime: RuntimeKind::Claude,
@@ -2028,6 +2037,46 @@ mod memory_tests {
     }
 
     #[tokio::test]
+    async fn personal_settings_are_off_by_default_and_travel_on_the_wire() {
+        let (app, _dir) = app_in_tempdir();
+        let created = call(&app, "agents.create", new_agent("Forge", "claude")).await.unwrap();
+        assert_eq!(created["use_personal_settings"], json!(false));
+        let id = created["id"].as_str().unwrap().to_string();
+        let on = call(
+            &app,
+            "agents.update",
+            json!({ "id": id, "use_personal_settings": true }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(on["use_personal_settings"], json!(true));
+        let got = call(&app, "agents.get", json!({ "id": id })).await.unwrap();
+        assert_eq!(got["use_personal_settings"], json!(true));
+        let mut p = new_agent("Scout", "claude");
+        p["use_personal_settings"] = json!(true);
+        let scout = call(&app, "agents.create", p).await.unwrap();
+        assert_eq!(scout["use_personal_settings"], json!(true));
+    }
+
+    #[tokio::test]
+    async fn a_personal_settings_change_reloads_the_session() {
+        let (app, _dir) = app_in_tempdir();
+        let created = call(&app, "agents.create", new_agent("Forge", "claude")).await.unwrap();
+        let current = app
+            .sup
+            .hub()
+            .store
+            .agent_get(created["id"].as_str().unwrap())
+            .unwrap()
+            .unwrap();
+        // The flag is read when a session starts, so changing it takes effect only with a new one.
+        let same: AgentPatchParams = serde_json::from_value(json!({ "use_personal_settings": false })).unwrap();
+        assert!(!same.changes_session(&current));
+        let on: AgentPatchParams = serde_json::from_value(json!({ "use_personal_settings": true })).unwrap();
+        assert!(on.changes_session(&current));
+    }
+
+    #[tokio::test]
     async fn update_reloads_the_session_only_when_it_changes_something() {
         use crate::event::TurnStatus;
         use crate::runtime::RuntimeOutput;
@@ -2049,6 +2098,7 @@ mod memory_tests {
         let cwd = std::env::temp_dir().display().to_string();
         let id = store
             .agent_create(NewAgent {
+                use_personal_settings: false,
                 name: "Forge".into(),
                 role: String::new(),
                 runtime: RuntimeKind::Claude,
@@ -2695,6 +2745,7 @@ mod trust_tests {
         "events.since",
         "usage.refresh",
         "host.stats",
+        "host.kill_process",
         "changes.checkpoints",
         "browser.start",
         "browser.stop",
@@ -2877,6 +2928,7 @@ mod pause_and_logs_tests {
     fn new_agent(store: &Store, name: &str) -> String {
         store
             .agent_create(NewAgent {
+                use_personal_settings: false,
                 name: name.into(),
                 role: String::new(),
                 runtime: RuntimeKind::Claude,

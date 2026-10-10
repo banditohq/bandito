@@ -216,6 +216,7 @@ mod tests {
         let store = Arc::new(Store::open_in_memory().unwrap());
         let agent = store
             .agent_create(NewAgent {
+                use_personal_settings: false,
                 name: "Forge".into(),
                 role: String::new(),
                 runtime: RuntimeKind::Claude,
@@ -420,6 +421,7 @@ mod tests {
             .hub()
             .store
             .agent_create(NewAgent {
+                use_personal_settings: false,
                 name: "Scout".into(),
                 role: String::new(),
                 runtime: RuntimeKind::Claude,

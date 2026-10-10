@@ -20,6 +20,9 @@ use tokio::process::Command;
 /// Message sent back to Claude when the human (or policy) says no.
 pub const DENY_MESSAGE: &str = "Denied by the user in Bandito";
 
+/// The settings sources an agent loads by default: the project's and the local ones, not the user's.
+const PROJECT_SETTING_SOURCES: &str = "project,local";
+
 /// Flags every session starts with.
 const BASE_ARGS: [&str; 11] = [
     "-p",
@@ -216,6 +219,10 @@ impl Runtime for ClaudeRuntime {
         let program = cfg.program.clone().unwrap_or_else(|| PathBuf::from(&self.program));
         let mut cmd = Command::new(&program);
         cmd.args(BASE_ARGS);
+        // The owner's own settings (their CLAUDE.md, hooks, plugins, MCP servers) load only when the agent keeps them.
+        if !cfg.personal_settings {
+            cmd.arg("--setting-sources").arg(PROJECT_SETTING_SOURCES);
+        }
         if let Some(model) = &cfg.model {
             cmd.arg("--model").arg(model);
         }
@@ -511,6 +518,10 @@ impl ClaudeSession {
 
 #[async_trait]
 impl Session for ClaudeSession {
+    fn pid(&self) -> Option<u32> {
+        self.proc.pid()
+    }
+
     async fn send(&mut self, text: &str) -> anyhow::Result<()> {
         self.proc.send(&json!({
             "type": "user",

@@ -304,8 +304,12 @@ struct ServerOverview: View {
     }
 
     private func ownerName(_ row: ProcessRow, server: ServerModel) -> String {
-        switch row.owner.kind {
-        case .agent: server.agents.first { $0.id == row.owner.id }?.name ?? L10n.Server.Owner.agent
+        ownerName(row.owner, server: server)
+    }
+
+    private func ownerName(_ owner: ProcessOwnerRef, server: ServerModel) -> String {
+        switch owner.kind {
+        case .agent: server.agents.first { $0.id == owner.id }?.name ?? L10n.Server.Owner.agent
         case .terminal: L10n.Server.Owner.terminal
         case .daemon: L10n.Server.Owner.daemon
         }

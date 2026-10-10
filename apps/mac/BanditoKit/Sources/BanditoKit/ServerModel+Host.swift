@@ -26,4 +26,11 @@ extension ServerModel {
         struct P: Encodable { var pid: Int }
         try await rpc().call("host.kill", P(pid: pid))
     }
+
+    /// Ends one of the daemon user's processes that belongs to no agent or terminal (`host.kill_process`). Returns
+    /// whether it was gone within a second; the daemon sends SIGKILL after five seconds if it is still running.
+    public func killProcess(pid: Int) async throws -> Bool {
+        struct P: Encodable { var pid: Int }
+        return try await rpc().call("host.kill_process", P(pid: pid), as: HostKillReply.self).killed
+    }
 }

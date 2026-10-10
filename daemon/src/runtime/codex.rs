@@ -558,6 +558,10 @@ struct CodexSession {
 
 #[async_trait]
 impl Session for CodexSession {
+    fn pid(&self) -> Option<u32> {
+        self.proc.pid()
+    }
+
     async fn send(&mut self, text: &str) -> anyhow::Result<()> {
         let mut st = locked(&self.state);
         if st.thread_id.is_some() {

@@ -136,6 +136,8 @@ pub struct SpawnConfig {
     pub agent_mcp_file: Option<PathBuf>,
     /// The sandbox for this session, on macOS (see `sandbox`). `None`: not sandboxed.
     pub sandbox: Option<sandbox::SandboxPolicy>,
+    /// Whether the CLI also loads the owner's own settings (user scope). Off: only the project's and the local ones.
+    pub personal_settings: bool,
 }
 
 /// A live session with one agent CLI.
@@ -149,6 +151,10 @@ pub trait Session: Send {
     async fn resolve(&mut self, key: &str, decision: Decision) -> anyhow::Result<()>;
     /// Close stdin and wait for the child to exit (kill after a grace period).
     async fn shutdown(self: Box<Self>);
+    /// The pid of the CLI process, while the session has one. The host uses it as the root of the session's processes.
+    fn pid(&self) -> Option<u32> {
+        None
+    }
 }
 
 pub struct Spawned {

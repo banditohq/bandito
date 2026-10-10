@@ -46,6 +46,8 @@ final class HostMonitor {
     private(set) var stats: HostStats?
     private(set) var history: [HostPoint] = []
     private(set) var processes: [ProcessRow] = []
+    /// The owners of the processes, as `host.processes` reports them (agents, terminals, the daemon).
+    private(set) var ownerGroups: [ProcessOwner] = []
     private(set) var processesSupported = true
     private(set) var ports: [ListeningPort] = []
     private(set) var portsSupported = true
@@ -73,6 +75,7 @@ final class HostMonitor {
             let reply = try await server.hostProcesses()
             processesSupported = reply.supported
             processes = ProcessRow.rows(from: reply.owners)
+            ownerGroups = reply.owners
         } catch {
             failures.append(UserFacingError.message(for: error))
         }
