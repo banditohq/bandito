@@ -711,6 +711,7 @@
 "integrations.failure.rejected" = "Der Server hat den Schlüssel abgelehnt. Prüfen Sie den Wert des Geheimnisses.";
 "integrations.failure.timeout" = "Der Server hat nicht rechtzeitig geantwortet.";
 "integrations.failure.unreachable" = "Der Server ist nicht erreichbar. Prüfen Sie Adresse und Netzwerk.";
+"integrations.oauth.connected" = "Verbunden";
 "integrations.oauth.denied" = "Der Zugriff wurde nicht erlaubt, deshalb bleibt %1$@ getrennt.";
 "integrations.oauth.done" = "Fertig";
 "integrations.oauth.failed" = "Die Anmeldung wurde nicht abgeschlossen.";

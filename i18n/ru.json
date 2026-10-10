@@ -2313,5 +2313,6 @@
   "integrations.custom.variables": "Переменные окружения",
   "integrations.custom.add": "Добавить",
   "integrations.custom.trialNote": "Проверка добавляет сервер выключенным. Если выйти без «Добавить», он удалится.",
-  "integrations.problem.quoteUnclosed": "В команде не закрыты кавычки."
+  "integrations.problem.quoteUnclosed": "В команде не закрыты кавычки.",
+  "integrations.oauth.connected": "Подключено"
 }

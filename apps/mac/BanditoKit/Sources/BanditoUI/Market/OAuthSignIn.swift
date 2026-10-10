@@ -179,7 +179,8 @@ public final class OAuthSignIn {
         phase = .finishing(name: name)
         do {
             let done = try await server.oauthComplete(state: record.state, code: code, iss: callback.iss)
-            phase = .connected(name: done.name, integrationID: done.id)
+            // The name the person saw while signing in (the template's), not the integration's id-like name.
+            phase = .connected(name: name, integrationID: done.id)
         } catch {
             phase = .failed(name: name, message: Self.failure(error), canRetry: true)
         }

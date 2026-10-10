@@ -2226,5 +2226,6 @@
   "integrations.custom.variables": "环境变量",
   "integrations.custom.add": "添加",
   "integrations.custom.trialNote": "检查时会先以关闭状态添加服务器。不点“添加”就关闭会将其移除。",
-  "integrations.problem.quoteUnclosed": "命令中的引号没有闭合。"
+  "integrations.problem.quoteUnclosed": "命令中的引号没有闭合。",
+  "integrations.oauth.connected": "已连接"
 }

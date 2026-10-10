@@ -711,6 +711,7 @@
 "integrations.failure.rejected" = "Сервер не принял ключ. Проверьте значение секрета.";
 "integrations.failure.timeout" = "Сервер не ответил вовремя.";
 "integrations.failure.unreachable" = "Не удалось связаться с сервером. Проверьте адрес и сеть.";
+"integrations.oauth.connected" = "Подключено";
 "integrations.oauth.denied" = "Доступ не разрешён, поэтому %1$@ остаётся отключённым.";
 "integrations.oauth.done" = "Готово";
 "integrations.oauth.failed" = "Войти не получилось.";

@@ -71,7 +71,7 @@ struct OAuthSignInSheet: View {
             progress(L10n.Integrations.Oauth.finishing)
         case .connected:
             Label {
-                Text(L10n.Integrations.connected)
+                Text(L10n.Integrations.Oauth.connected)
             } icon: {
                 Image(systemName: "checkmark.circle.fill")
             }

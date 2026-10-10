@@ -101,7 +101,7 @@ private final class Rig {
         #expect(server.completed.first?.state == "state-1")
         #expect(server.completed.first?.code == "code-1")
         #expect(server.completed.first?.iss == "https://mcp.example")
-        #expect(rig.oauth.phase == .connected(name: "linear", integrationID: "i1"))
+        #expect(rig.oauth.phase == .connected(name: "Linear", integrationID: "i1"))
     }
 
     @Test func aCallbackForTheServerThatBeganDoesNotReachAnotherOne() async {
@@ -138,7 +138,7 @@ private final class Rig {
         // The real answer still works afterwards, and the pending state survived on disk for it.
         let handled = await rig.oauth.handle(callback("state-1")) { _ in server }
         #expect(handled == server.oauthServerID)
-        #expect(rig.oauth.phase == .connected(name: "linear", integrationID: "i1"))
+        #expect(rig.oauth.phase == .connected(name: "Linear", integrationID: "i1"))
     }
 
     @Test func aCallbackWithNothingPendingIsIgnored() async {
@@ -166,7 +166,7 @@ private final class Rig {
         _ = await rig.oauth.handle(callback("state-1")) { _ in server }
         _ = await rig.oauth.handle(callback("state-1")) { _ in server }
         #expect(server.completed.count == 1)
-        #expect(rig.oauth.phase == .connected(name: "linear", integrationID: "i1"))
+        #expect(rig.oauth.phase == .connected(name: "Linear", integrationID: "i1"))
     }
 
     @Test func aCallbackAfterTenMinutesIsRefused() async {
@@ -278,7 +278,7 @@ private final class Rig {
         let again = rig.restarted()
         _ = await again.handle(callback("state-1")) { id in id == server.oauthServerID ? server : nil }
         #expect(server.completed.count == 1)
-        #expect(again.phase == .connected(name: "linear", integrationID: "i1"))
+        #expect(again.phase == .connected(name: "Linear", integrationID: "i1"))
     }
 
     @Test func aNewSignInDropsTheOneThatWasWaiting() async {

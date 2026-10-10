@@ -711,6 +711,7 @@
 "integrations.failure.rejected" = "サーバーがキーを拒否しました。シークレットの値を確認してください。";
 "integrations.failure.timeout" = "サーバーが時間内に応答しませんでした。";
 "integrations.failure.unreachable" = "サーバーに接続できません。アドレスとネットワークを確認してください。";
+"integrations.oauth.connected" = "接続済み";
 "integrations.oauth.denied" = "アクセスが許可されなかったため、%1$@ は未接続のままです。";
 "integrations.oauth.done" = "完了";
 "integrations.oauth.failed" = "ログインを完了できませんでした。";

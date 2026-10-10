@@ -711,6 +711,7 @@
 "integrations.failure.rejected" = "服务器拒绝了该密钥。请检查密钥的值。";
 "integrations.failure.timeout" = "服务器未能及时响应。";
 "integrations.failure.unreachable" = "无法连接到服务器。请检查地址和网络。";
+"integrations.oauth.connected" = "已连接";
 "integrations.oauth.denied" = "未授权访问，因此 %1$@ 仍未连接。";
 "integrations.oauth.done" = "完成";
 "integrations.oauth.failed" = "登录未能完成。";

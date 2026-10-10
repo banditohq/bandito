@@ -711,6 +711,7 @@
 "integrations.failure.rejected" = "The server refused the key. Check the secret's value.";
 "integrations.failure.timeout" = "The server did not answer in time.";
 "integrations.failure.unreachable" = "The server could not be reached. Check the address and the network.";
+"integrations.oauth.connected" = "Connected";
 "integrations.oauth.denied" = "Access was not allowed, so %1$@ stays disconnected.";
 "integrations.oauth.done" = "Done";
 "integrations.oauth.failed" = "The sign-in did not finish.";

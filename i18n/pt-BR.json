@@ -2254,5 +2254,6 @@
   "integrations.custom.variables": "Variáveis de ambiente",
   "integrations.custom.add": "Adicionar",
   "integrations.custom.trialNote": "Verificar adiciona o servidor desativado. Se sair sem Adicionar, ele é removido.",
-  "integrations.problem.quoteUnclosed": "Há uma aspa sem fechar no comando."
+  "integrations.problem.quoteUnclosed": "Há uma aspa sem fechar no comando.",
+  "integrations.oauth.connected": "Conectado"
 }

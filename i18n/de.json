@@ -2253,5 +2253,6 @@
   "integrations.custom.variables": "Umgebungsvariablen",
   "integrations.custom.add": "Hinzufügen",
   "integrations.custom.trialNote": "Beim Prüfen wird der Server deaktiviert hinzugefügt. Schließen Sie ohne Hinzufügen, wird er wieder entfernt.",
-  "integrations.problem.quoteUnclosed": "Im Befehl ist ein Anführungszeichen nicht geschlossen."
+  "integrations.problem.quoteUnclosed": "Im Befehl ist ein Anführungszeichen nicht geschlossen.",
+  "integrations.oauth.connected": "Verbunden"
 }

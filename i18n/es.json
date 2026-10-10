@@ -2254,5 +2254,6 @@
   "integrations.custom.variables": "Variables de entorno",
   "integrations.custom.add": "Añadir",
   "integrations.custom.trialNote": "Comprobar añade el servidor desactivado. Si sales sin pulsar Añadir, se elimina.",
-  "integrations.problem.quoteUnclosed": "Hay una comilla sin cerrar en el comando."
+  "integrations.problem.quoteUnclosed": "Hay una comilla sin cerrar en el comando.",
+  "integrations.oauth.connected": "Conectado"
 }

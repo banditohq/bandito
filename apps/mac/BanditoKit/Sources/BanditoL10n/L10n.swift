@@ -1037,6 +1037,7 @@ public enum L10n {
         }
 
         public enum Oauth {
+            public static var connected: String { L10n.tr("integrations.oauth.connected") }
             public static func denied(name: String) -> String { L10n.tr("integrations.oauth.denied", name) }
             public static var done: String { L10n.tr("integrations.oauth.done") }
             public static var failed: String { L10n.tr("integrations.oauth.failed") }

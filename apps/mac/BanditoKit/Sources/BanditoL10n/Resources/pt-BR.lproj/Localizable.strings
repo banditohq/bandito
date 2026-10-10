@@ -711,6 +711,7 @@
 "integrations.failure.rejected" = "O servidor recusou a chave. Verifique o valor do segredo.";
 "integrations.failure.timeout" = "O servidor não respondeu a tempo.";
 "integrations.failure.unreachable" = "Não foi possível alcançar o servidor. Verifique o endereço e a rede.";
+"integrations.oauth.connected" = "Conectado";
 "integrations.oauth.denied" = "O acesso não foi permitido, então %1$@ continua desconectado.";
 "integrations.oauth.done" = "Pronto";
 "integrations.oauth.failed" = "O login não foi concluído.";

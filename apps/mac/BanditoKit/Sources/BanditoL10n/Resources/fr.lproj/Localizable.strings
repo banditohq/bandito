@@ -711,6 +711,7 @@
 "integrations.failure.rejected" = "Le serveur a refusé la clé. Vérifiez la valeur du secret.";
 "integrations.failure.timeout" = "Le serveur n'a pas répondu à temps.";
 "integrations.failure.unreachable" = "Le serveur est injoignable. Vérifiez l'adresse et le réseau.";
+"integrations.oauth.connected" = "Connecté";
 "integrations.oauth.denied" = "L’accès n’a pas été autorisé, %1$@ reste donc déconnecté.";
 "integrations.oauth.done" = "Terminé";
 "integrations.oauth.failed" = "La connexion n’a pas abouti.";
