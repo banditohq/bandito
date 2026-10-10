@@ -70,13 +70,13 @@ impl Store {
     /// never written back. The live file is opened read-only and not changed. Failing to read it is not an error.
     pub fn open_safe_mode(live_db: &Path) -> Result<Self> {
         let store = Self::open_in_memory()?;
-        if live_db.is_file() {
-            if let Err(e) = store.import_devices_from(live_db) {
-                tracing::warn!(
-                    "safe mode: could not read the paired devices from {}: {e:#}",
-                    live_db.display()
-                );
-            }
+        if live_db.is_file()
+            && let Err(e) = store.import_devices_from(live_db)
+        {
+            tracing::warn!(
+                "safe mode: could not read the paired devices from {}: {e:#}",
+                live_db.display()
+            );
         }
         Ok(store)
     }

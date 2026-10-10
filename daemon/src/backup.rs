@@ -1937,8 +1937,7 @@ mod tests {
         }
         let oldest = names(home.path())
             .into_iter()
-            .filter(|n| n.starts_with("bandito-"))
-            .next_back()
+            .rfind(|n| n.starts_with("bandito-"))
             .unwrap();
         prune_except(home.path(), KEEP, &[&oldest]);
         assert!(dir.join(&oldest).exists(), "the named copy stays");
