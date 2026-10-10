@@ -135,24 +135,25 @@ enum BrowserToolbarLayout {
     }
 }
 
-/// Carries the toolbar's measured width up from its background.
-private struct BrowserToolbarWidthKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
 private struct BrowserToolbar: View {
     @Bindable var model: BrowserModel
     var onOpenFullscreen: (() -> Void)?
     @FocusState private var addressFocused: Bool
     @Environment(Keymap.self) private var keymap
-    @State private var width: CGFloat = 0
 
+    /// The width is the one the toolbar is OFFERED (a `GeometryReader`), never the width its own content measures: a
+    /// toolbar too wide for a narrow panel would measure itself wide, stay in its wide form and push the panel's
+    /// edge out of the window. The bar is then fitted to the offered width, so the address field gives way.
     var body: some View {
-        let compact = BrowserToolbarLayout.opensOnMacAsIcon(width: width)
+        GeometryReader { proxy in
+            bar(compact: BrowserToolbarLayout.opensOnMacAsIcon(width: proxy.size.width))
+                .frame(width: proxy.size.width, height: proxy.size.height)
+        }
+        .frame(height: 52)
+        .clipped()
+    }
+
+    private func bar(compact: Bool) -> some View {
         HStack(spacing: 6) {
             Button {
                 Task { await model.goBack() }
@@ -217,12 +218,6 @@ private struct BrowserToolbar: View {
         .frame(height: 52)
         .titleBarZoomOnDoubleClick()
         .background(Color.Bandito.bg)
-        .background(
-            GeometryReader { proxy in
-                Color.clear.preference(key: BrowserToolbarWidthKey.self, value: proxy.size.width)
-            }
-        )
-        .onPreferenceChange(BrowserToolbarWidthKey.self) { width = $0 }
         .overlay(alignment: .bottom) {
             Rectangle().fill(Color.Bandito.text.opacity(0.05)).frame(height: 1)
         }
