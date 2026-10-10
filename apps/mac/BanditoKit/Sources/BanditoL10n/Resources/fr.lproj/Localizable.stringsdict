@@ -2,6 +2,86 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>changes.fileCount</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%1$lld fichier</string>
+			<key>other</key>
+			<string>%1$lld fichiers</string>
+		</dict>
+	</dict>
+	<key>changes.keepFiles</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>Garder %1$lld fichier</string>
+			<key>other</key>
+			<string>Garder %1$lld fichiers</string>
+		</dict>
+	</dict>
+	<key>changes.placeCount</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%1$lld emplacement</string>
+			<key>other</key>
+			<string>%1$lld emplacements</string>
+		</dict>
+	</dict>
+	<key>changes.rolledBack</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%1$lld fichier annulé</string>
+			<key>other</key>
+			<string>%1$lld fichiers annulés</string>
+		</dict>
+	</dict>
+	<key>changes.unticked</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%1$lld fichier décoché</string>
+			<key>other</key>
+			<string>%1$lld fichiers décochés</string>
+		</dict>
+	</dict>
 	<key>chapter.tokensUsed</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
@@ -176,6 +256,70 @@
 			<string>≈ %1$lld minutes</string>
 		</dict>
 	</dict>
+	<key>server.cores</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%1$lld cœur</string>
+			<key>other</key>
+			<string>%1$lld cœurs</string>
+		</dict>
+	</dict>
+	<key>terminals.dock.lines</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>+%1$lld ligne</string>
+			<key>other</key>
+			<string>+%1$lld lignes</string>
+		</dict>
+	</dict>
+	<key>terminals.windowCount</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%1$lld fenêtre</string>
+			<key>other</key>
+			<string>%1$lld fenêtres</string>
+		</dict>
+	</dict>
+	<key>thread.notRanCommands</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%1$lld commande n’a pas été exécutée</string>
+			<key>other</key>
+			<string>%1$lld commandes n’ont pas été exécutées</string>
+		</dict>
+	</dict>
 	<key>thread.ranCommands</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
@@ -190,6 +334,22 @@
 			<string>%1$lld commande exécutée</string>
 			<key>other</key>
 			<string>%1$lld commandes exécutées</string>
+		</dict>
+	</dict>
+	<key>thread.runningCommands</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>Exécution de %1$lld commande</string>
+			<key>other</key>
+			<string>Exécution de %1$lld commandes</string>
 		</dict>
 	</dict>
 	<key>usage.window.days</key>
