@@ -79,6 +79,9 @@ impl Url {
         }
         let (host, port) = if let Some(inner) = authority.strip_prefix('[') {
             let (host, after) = inner.split_once(']').ok_or_else(|| anyhow!("not a valid address"))?;
+            if !after.is_empty() && !after.starts_with(':') {
+                bail!("not a valid address");
+            }
             let port = after.strip_prefix(':');
             (format!("[{}]", host.to_ascii_lowercase()), port)
         } else {
