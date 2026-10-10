@@ -266,6 +266,8 @@ struct InspectorCard<Content: View>: View {
 /// One line of a card: the label on the left, the value (text or control) on the right.
 struct InspectorRow<Value: View>: View {
     var label: String
+    /// The calm layout of the agent's details: rows of 32 pt with 16 pt sides.
+    var compact = false
     @ViewBuilder var value: Value
 
     var body: some View {
@@ -278,8 +280,9 @@ struct InspectorRow<Value: View>: View {
                 .font(BanditoFont.font(size: 13, weight: 500))
                 .foregroundStyle(Color.Bandito.text)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
+        .padding(.horizontal, compact ? 16 : 14)
+        .padding(.vertical, compact ? 3 : 11)
+        .frame(minHeight: compact ? 32 : nil)
         .overlay(alignment: .bottom) {
             Rectangle().fill(Color.Bandito.text.opacity(0.05)).frame(height: 1)
         }

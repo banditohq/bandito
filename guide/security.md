@@ -80,9 +80,9 @@ Keys and passwords for the agents are kept on the server. An agent gets each one
 
 ## Workplaces: shared, separate user, container
 
-<!-- id: sec-workplaces; covers: settings:workplaces -->
+<!-- id: sec-workplaces; covers: -->
 Where an agent works decides what it can touch. Shared (Общее) is the only choice in this build: the agent works as the server user, with the same files and browser as you. Separate user (Отдельный пользователь) and Container (Контейнер) are planned.
-Где: Server → Workplaces (Рабочие места) → How to choose (Как выбрать); Settings (⌘,) → Workplaces (Рабочие места)
+Где: Server → Workplaces (Рабочие места) → How to choose (Как выбрать)
 1. Shared: quick and simple. Fine when you trust the agent and the team.
 2. Separate user: the agent gets its own files, browser and screen, and the server itself is shared. Not in this build.
 3. Container: full isolation with its own disk, network, and CPU and memory limits, in Docker or Podman. For experiments and code you do not trust. Not in this build; Containers (Контейнеры) on the Server shows whether Docker or Podman is installed.

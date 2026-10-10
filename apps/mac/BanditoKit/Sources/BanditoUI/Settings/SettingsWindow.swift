@@ -23,7 +23,7 @@ enum SettingsHandoff {
     }
 }
 
-/// The Settings window (⌘,): 13 sections in a left navigation. Opens at 980 × 680 pt, never smaller than 860 × 560.
+/// The Settings window (⌘,): 12 sections in a left navigation. Opens at 900 × 640 pt, never smaller than 760 × 520.
 public struct SettingsWindow: View {
     @State private var section: SettingsSection = .general
 
@@ -43,7 +43,7 @@ public struct SettingsWindow: View {
             .clipped()
             .background(Color.Bandito.surface1)
         }
-        .frame(minWidth: 860, idealWidth: 980, maxWidth: .infinity, minHeight: 560, idealHeight: 680, maxHeight: .infinity)
+        .frame(minWidth: 760, idealWidth: 900, maxWidth: .infinity, minHeight: 520, idealHeight: 640, maxHeight: .infinity)
         .preferredColorScheme(.dark)
         .onAppear(perform: takeRequest)
         .onChange(of: SettingsNavigation.shared.requested) { _, _ in takeRequest() }
@@ -103,7 +103,6 @@ public struct SettingsWindow: View {
         case .servers: ServersSection()
         case .approvals: ApprovalsSection()
         case .usage: UsageSection()
-        case .workplaces: WorkplacesSection()
         case .terminalFiles: TerminalFilesSection()
         case .browserScreen: BrowserScreenSection()
         case .keysGestures: KeysAndGesturesSection()

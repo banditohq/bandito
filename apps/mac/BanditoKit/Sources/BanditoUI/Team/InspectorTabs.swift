@@ -22,6 +22,8 @@ struct DetailsTab: View {
     /// Values the daemon changed on its own after the last change (for example an effort the runtime lacks).
     @State private var notes: [String] = []
     @State private var modelDraft = ""
+    /// The folded "Advanced" row of the model section (the fallback runtime).
+    @State private var advancedOpen = false
     @FocusState private var folderFocused: Bool
     /// The chips on screen, and the sends that have not been answered yet.
     @State private var chips = AgentCapability.allOn
@@ -62,36 +64,70 @@ struct DetailsTab: View {
             modelID: agent.model ?? "", runtime: agent.runtime, lists: server.runtimeModels)
     }
 
-    /// The effort control with its caption, one block under the model row. A model that takes no effort says so.
+    /// Effort as one compact row under the model it belongs to: the levels are the model's own. A model that takes
+    /// no effort says so in the row's value; the caption about what effort means is the row's tooltip.
     @ViewBuilder
-    private var effortBlock: some View {
-        VStack(alignment: .leading, spacing: 8) {
+    private var effortRow: some View {
+        InspectorRow(label: L10n.Effort.title, compact: true) {
             if effortLevels.isEmpty {
                 Text(L10n.ModelPicker.noEffort)
                     .font(BanditoFont.font(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.trailing)
             } else {
-                SegmentedPicker(
+                BanditoSelect(
                     selection: effort,
-                    options: effortLevels.map { ($0, $0.title) })
-                Text(L10n.AgentSheet.effortCaption)
-                    .font(BanditoFont.font(size: 12, weight: 400))
-                    .foregroundStyle(Color.Bandito.text3)
-                    .fixedSize(horizontal: false, vertical: true)
+                    sections: [SelectSection(options: effortLevels.map { SelectOption(value: $0, title: $0.title) })],
+                    label: L10n.Effort.title, placeholder: effort.wrappedValue.title)
+                    .frame(maxWidth: 260)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(Color.Bandito.text.opacity(0.05)).frame(height: 1)
+        .help(L10n.AgentSheet.effortCaption)
+    }
+
+    /// The folded "Advanced" row of the model section: its summary shows what differs from the default.
+    private var advancedRow: some View {
+        Button {
+            advancedOpen.toggle()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Color.Bandito.text3)
+                    .rotationEffect(.degrees(advancedOpen ? 90 : 0))
+                    .frame(width: 12)
+                Text(L10n.AgentSheet.advanced)
+                    .font(BanditoFont.font(size: 12.5, weight: 400))
+                    .foregroundStyle(Color.Bandito.text3)
+                Spacer(minLength: 10)
+                if !advancedOpen, let fallback = agent.fallbackRuntime {
+                    Text(L10n.AgentSheet.advancedFallback(runtime: fallback.title))
+                        .font(BanditoFont.font(size: 12.5, weight: 400))
+                        .foregroundStyle(Color.Bandito.text3)
+                        .lineLimit(1)
+                }
+            }
+            .padding(.horizontal, 16)
+            .frame(minHeight: 32)
+            .contentShape(Rectangle())
+        }
+        .banditoButton(.row(cornerRadius: 8))
+        .accessibilityValue(advancedOpen ? L10n.AgentSheet.advancedExpanded : L10n.AgentSheet.advancedCollapsed)
+    }
+
+    /// One of the three calm sections of the card: a small heading over a card of rows.
+    private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionLabel(title)
+            InspectorCard { content() }
         }
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            InspectorCard {
-                InspectorRow(label: L10n.Inspector.state) {
+        VStack(alignment: .leading, spacing: 20) {
+            section(L10n.Inspector.sectionWork) {
+                InspectorRow(label: L10n.Inspector.state, compact: true) {
                     HStack(spacing: 10) {
                         Text(agent.paused ? L10n.Inspector.statePaused : L10n.Inspector.stateRunning)
                             .font(BanditoFont.font(size: 12.5, weight: 500))
@@ -106,35 +142,7 @@ struct DetailsTab: View {
                         .help(PauseActions.available(on: server) ? "" : L10n.Team.pauseUnavailable)
                     }
                 }
-                InspectorRow(label: L10n.Inspector.runsOn) {
-                    BanditoSelect(
-                        selection: runtimeBinding, sections: [SelectSection(options: runtimeChoices)],
-                        label: L10n.Inspector.runsOn, placeholder: agent.runtime.title)
-                        .frame(maxWidth: 260)
-                }
-                InspectorRow(label: L10n.Inspector.model) {
-                    ModelPicker(
-                        runtime: agent.runtime, selection: $modelDraft,
-                        models: server.runtimeModels[agent.runtime.rawValue],
-                        status: server.runtimeModelsStatus, onCommit: saveModel)
-                        .frame(maxWidth: 260)
-                }
-                // Effort sits right under the model it belongs to: the levels are the model's own.
-                effortBlock
-                InspectorRow(label: L10n.AgentSheet.fallbackLabel) {
-                    BanditoSelect(
-                        selection: fallbackBinding, sections: [SelectSection(options: fallbackChoices)],
-                        label: L10n.AgentSheet.fallbackLabel, placeholder: L10n.AgentSheet.fallbackNone)
-                        .frame(maxWidth: 260)
-                }
-                InspectorRow(label: L10n.Inspector.approvals) {
-                    BanditoSelect(
-                        selection: approvalBinding,
-                        sections: [SelectSection(options: ApprovalMode.allCases.map { SelectOption(value: $0, title: $0.title) })],
-                        label: L10n.Inspector.approvals, placeholder: agent.approvalMode.title)
-                        .frame(maxWidth: 260)
-                }
-                InspectorRow(label: L10n.Inspector.project) {
+                InspectorRow(label: L10n.Inspector.project, compact: true) {
                     // A long path is cut at its start ("…/projects/app") and the full path is in the tooltip. Clicking
                     // it turns into the field for editing.
                     if folderFocused {
@@ -158,9 +166,51 @@ struct DetailsTab: View {
                 }
             }
 
-            VStack(alignment: .leading, spacing: 8) {
-                SectionLabel(L10n.Capability.title)
-                CapabilityChips(enabled: capabilities)
+            section(L10n.Inspector.model) {
+                InspectorRow(label: L10n.Inspector.runsOn, compact: true) {
+                    BanditoSelect(
+                        selection: runtimeBinding, sections: [SelectSection(options: runtimeChoices)],
+                        label: L10n.Inspector.runsOn, placeholder: agent.runtime.title)
+                        .frame(maxWidth: 260)
+                }
+                InspectorRow(label: L10n.Inspector.model, compact: true) {
+                    ModelPicker(
+                        runtime: agent.runtime, selection: $modelDraft,
+                        models: server.runtimeModels[agent.runtime.rawValue],
+                        status: server.runtimeModelsStatus, onCommit: saveModel)
+                        .frame(maxWidth: 260)
+                }
+                effortRow
+                advancedRow
+                if advancedOpen {
+                    InspectorRow(label: L10n.AgentSheet.fallbackLabel, compact: true) {
+                        BanditoSelect(
+                            selection: fallbackBinding, sections: [SelectSection(options: fallbackChoices)],
+                            label: L10n.AgentSheet.fallbackLabel, placeholder: L10n.AgentSheet.fallbackNone)
+                            .frame(maxWidth: 260)
+                    }
+                    .transition(.opacity)
+                }
+            }
+            .banditoAnimation(BanditoMotion.ease, value: advancedOpen)
+
+            section(L10n.Inspector.sectionAccess) {
+                InspectorRow(label: L10n.Inspector.approvals, compact: true) {
+                    BanditoSelect(
+                        selection: approvalBinding,
+                        sections: [SelectSection(options: ApprovalMode.allCases.map { SelectOption(value: $0, title: $0.title) })],
+                        label: L10n.Inspector.approvals, placeholder: agent.approvalMode.title)
+                        .frame(maxWidth: 260)
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(L10n.Capability.title)
+                        .font(BanditoFont.font(size: 12.5, weight: 400))
+                        .foregroundStyle(Color.Bandito.text3)
+                    CapabilityChips(enabled: capabilities)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
             }
 
             if !integrations.isEmpty {

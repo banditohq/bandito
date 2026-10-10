@@ -43,9 +43,6 @@ struct ServersSection: View {
                 .banditoButton(.signal())
             }
             .padding(.top, 16)
-            if app.currentServer?.supports("integrations") == true {
-                integrationsCard
-            }
         }
         .confirmationDialog(
             L10n.Settings.Servers.deleteTitle(name: removing?.config.name ?? ""),
@@ -60,29 +57,6 @@ struct ServersSection: View {
         } message: { _ in
             Text(L10n.Settings.Servers.deleteMessage)
         }
-    }
-
-    /// Where the Integrations page of the Server mode is opened from here.
-    private var integrationsCard: some View {
-        HStack(spacing: 16) {
-            Text(L10n.Integrations.Settings.hint)
-                .font(.system(size: 13))
-                .foregroundStyle(Color.Bandito.text2)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 12)
-            Button(L10n.Integrations.Settings.open) {
-                // The Server page is in the main window: Settings closes, and the integrations page opens there.
-                SettingsHandoff.openMainWindow(router: router) { router in
-                    router.select(mode: .server)
-                    router.serverSection = .integrations
-                }
-            }
-            .banditoButton(.quiet())
-            .fixedSize()
-        }
-        .padding(16)
-        .banditoCard()
-        .padding(.top, 16)
     }
 
     /// The human address under the name: `user@host`, `host:port`, or "This Mac". Never the id or the token.

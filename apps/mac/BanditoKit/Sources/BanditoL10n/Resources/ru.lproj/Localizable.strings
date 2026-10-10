@@ -50,6 +50,11 @@
 "agent.menu.resume" = "Продолжить";
 "agent.menu.schedules" = "Расписания…";
 "agent.menu.unpin" = "Открепить";
+"agentSheet.advanced" = "Дополнительно";
+"agentSheet.advancedCollapsed" = "Свёрнуто";
+"agentSheet.advancedEffort" = "Усилие: %1$@";
+"agentSheet.advancedExpanded" = "Развёрнуто";
+"agentSheet.advancedFallback" = "Запасной: %1$@";
 "agentSheet.apiKey" = "API-ключ";
 "agentSheet.apiKeyHint" = "Любая модель, оплата за токены. Скоро.";
 "agentSheet.approvals" = "Одобрения";
@@ -508,8 +513,6 @@
 "files.showHiddenPlaces" = "Вернуть скрытые места";
 "files.showInFinder" = "Показать в Finder";
 "files.skipped" = "Пропущено имён: %1$lld (не UTF-8)";
-"files.terminalHere" = "Терминал";
-"files.terminalHint" = "Открыть терминал в этой папке";
 "files.time.justNow" = "только что";
 "files.time.minutes" = "%1$lld мин назад";
 "files.time.today" = "сегодня, %1$@";
@@ -621,6 +624,8 @@
 "inspector.runsOn" = "Работает на";
 "inspector.scheduleHeader" = "РАСПИСАНИЕ";
 "inspector.schedules" = "Расписания";
+"inspector.sectionAccess" = "Права";
+"inspector.sectionWork" = "Работа";
 "inspector.server" = "Сервер";
 "inspector.serverInfo" = "%1$@ · Bandito %2$@ · %3$@";
 "inspector.state" = "Состояние";
@@ -665,8 +670,6 @@
 "integrations.remove" = "Удалить";
 "integrations.removeMessage" = "Агенты потеряют её инструменты. Её секреты останутся на сервере.";
 "integrations.removeTitle" = "Удалить %1$@?";
-"integrations.settings.hint" = "Подключайте MCP-серверы для агентов и проверяйте, что они отвечают.";
-"integrations.settings.open" = "Открыть";
 "integrations.sheet.addLine" = "Добавить строку";
 "integrations.sheet.addTitle" = "Новая интеграция";
 "integrations.sheet.args" = "Аргументы";
@@ -1546,7 +1549,6 @@
 "settings.nav.terminalFiles" = "Терминал и файлы";
 "settings.nav.updates" = "Обновления";
 "settings.nav.usage" = "Подписки и лимиты";
-"settings.nav.workplaces" = "Рабочие места";
 "settings.notifications" = "Уведомления";
 "settings.notifications.allow" = "Разрешить";
 "settings.notifications.failed" = "Ошибка";
@@ -1618,9 +1620,6 @@
 "settings.updates.stableDesc" = "Проверенные сборки";
 "settings.usage" = "Использование";
 "settings.usage.intro" = "Подписки и бюджеты API ваших агентов. Полоса показывает, сколько осталось в каждом окне.";
-"settings.workplaces.body" = "Рабочие места настраиваются в режиме «Сервер». Каждое — общее с сервером, контейнер или отдельный пользователь.";
-"settings.workplaces.intro" = "Где работает каждый агент: его файлы, браузер, экран и терминалы.";
-"settings.workplaces.open" = "Открыть «Сервер» → «Рабочие места»";
 "setup.collapseLog" = "Свернуть журнал";
 "setup.failed" = "Не удалось установить: %1$@. Подробности в журнале выше.";
 "setup.feature.browser" = "Браузер";

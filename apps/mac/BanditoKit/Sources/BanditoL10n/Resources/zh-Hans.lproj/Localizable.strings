@@ -50,6 +50,11 @@
 "agent.menu.resume" = "继续";
 "agent.menu.schedules" = "定时任务…";
 "agent.menu.unpin" = "取消置顶";
+"agentSheet.advanced" = "高级";
+"agentSheet.advancedCollapsed" = "已折叠";
+"agentSheet.advancedEffort" = "投入度：%1$@";
+"agentSheet.advancedExpanded" = "已展开";
+"agentSheet.advancedFallback" = "备用：%1$@";
 "agentSheet.apiKey" = "API 密钥";
 "agentSheet.apiKeyHint" = "任意模型，按令牌付费。即将推出。";
 "agentSheet.approvals" = "审批";
@@ -508,8 +513,6 @@
 "files.showHiddenPlaces" = "显示隐藏的位置";
 "files.showInFinder" = "在访达中显示";
 "files.skipped" = "已跳过 %1$lld 个名称（非 UTF-8）";
-"files.terminalHere" = "终端";
-"files.terminalHint" = "在此文件夹中打开终端";
 "files.time.justNow" = "刚刚";
 "files.time.minutes" = "%1$lld 分钟前";
 "files.time.today" = "今天 %1$@";
@@ -621,6 +624,8 @@
 "inspector.runsOn" = "运行于";
 "inspector.scheduleHeader" = "计划";
 "inspector.schedules" = "计划任务";
+"inspector.sectionAccess" = "权限";
+"inspector.sectionWork" = "工作";
 "inspector.server" = "服务器";
 "inspector.serverInfo" = "%1$@ · Bandito %2$@ · %3$@";
 "inspector.state" = "状态";
@@ -665,8 +670,6 @@
 "integrations.remove" = "移除";
 "integrations.removeMessage" = "智能体将无法再使用其工具。密钥保留在服务器上。";
 "integrations.removeTitle" = "移除 %1$@？";
-"integrations.settings.hint" = "为智能体连接 MCP 服务器，并检查它们是否正常响应。";
-"integrations.settings.open" = "打开";
 "integrations.sheet.addLine" = "添加一行";
 "integrations.sheet.addTitle" = "新建集成";
 "integrations.sheet.args" = "参数";
@@ -1546,7 +1549,6 @@
 "settings.nav.terminalFiles" = "终端与文件";
 "settings.nav.updates" = "更新";
 "settings.nav.usage" = "订阅与限额";
-"settings.nav.workplaces" = "工作区";
 "settings.notifications" = "通知";
 "settings.notifications.allow" = "允许";
 "settings.notifications.failed" = "错误";
@@ -1618,9 +1620,6 @@
 "settings.updates.stableDesc" = "经过测试的版本";
 "settings.usage" = "用量";
 "settings.usage.intro" = "代理的订阅和 API 预算。每个进度条显示其时间窗口内的剩余量。";
-"settings.workplaces.body" = "工作区在“服务器”页面中设置。每个工作区都与服务器共享、位于容器中，或属于独立用户。";
-"settings.workplaces.intro" = "每个代理的工作位置：它的文件、浏览器、屏幕和终端。";
-"settings.workplaces.open" = "打开“服务器 → 工作区”";
 "setup.collapseLog" = "收起日志";
 "setup.failed" = "无法安装 %1$@。请查看上方日志。";
 "setup.feature.browser" = "浏览器";

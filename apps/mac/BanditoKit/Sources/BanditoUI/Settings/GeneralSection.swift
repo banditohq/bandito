@@ -3,15 +3,12 @@ import BanditoKit
 import BanditoL10n
 import SwiftUI
 
-/// Settings → General: interface language, sample data, launch at login, and how the app updates itself.
+/// Settings → General: interface language, sample data, and launch at login.
 struct GeneralSection: View {
     @Environment(DemoStore.self) private var demo
     @State private var language = Self.storedLanguage()
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
     @State private var launchError: String?
-    // The app target reads these keys and configures Sparkle (AppUpdater).
-    @AppStorage(AppUpdatePreferences.automaticChecksKey) private var autoCheckUpdates = true
-    @AppStorage(AppUpdatePreferences.channelKey) private var updateChannel = AppUpdatePreferences.Channel.stable.rawValue
 
     private static let systemLanguage = InterfaceLanguageChoice.systemTag
 
@@ -50,39 +47,6 @@ struct GeneralSection: View {
                     Toggle("", isOn: $launchAtLogin)
                         .labelsHidden()
                         .toggleStyle(BanditoToggleStyle())
-                }
-            }
-            SettingsGroup(title: L10n.Settings.Nav.updates) {
-                SettingsRow(
-                    title: L10n.Settings.autoCheckUpdates, hint: L10n.Settings.autoCheckUpdatesHint,
-                    icon: SettingsIcon(symbol: "arrow.down.circle", tint: BanditoPalette.badgeSlate),
-                    keepsControlBeside: true
-                ) {
-                    Toggle("", isOn: $autoCheckUpdates)
-                        .labelsHidden()
-                        .toggleStyle(BanditoToggleStyle())
-                }
-                Divider().padding(.horizontal, 16)
-                SettingsRow(
-                    title: L10n.Settings.Updates.channel, hint: L10n.Settings.channelHint,
-                    icon: SettingsIcon(symbol: "antenna.radiowaves.left.and.right", tint: BanditoPalette.badgePurple)
-                ) {
-                    BanditoSelect(
-                        selection: $updateChannel,
-                        sections: [
-                            SelectSection(options: [
-                                SelectOption(
-                                    value: AppUpdatePreferences.Channel.stable.rawValue,
-                                    title: L10n.Settings.Updates.stable, subtitle: L10n.Settings.Updates.stableDesc),
-                                SelectOption(
-                                    value: AppUpdatePreferences.Channel.beta.rawValue,
-                                    title: L10n.Settings.Updates.beta, subtitle: L10n.Settings.Updates.betaDesc),
-                            ])
-                        ],
-                        label: L10n.Settings.Updates.channel, placeholder: L10n.Settings.Updates.stable,
-                        field: { SelectFieldView(option: $0?.titleOnly, placeholder: L10n.Settings.Updates.stable) },
-                        footer: { _ in EmptyView() })
-                        .frame(width: 220)
                 }
             }
         }

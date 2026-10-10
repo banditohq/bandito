@@ -45,8 +45,8 @@ A folder opens in the list. A file opens in the viewer, or in the app that shows
 
 <!-- id: files-new; covers: -->
 Creates an empty folder or an empty file in the current folder.
-Где: Files → toolbar → New (Создать) → Folder (Папка) or File (Файл); shortcuts ⌘⇧N (New folder) and ⌥⌘N (New file)
-1. Click New (Создать), choose Folder (Папка) or File (Файл), or press the shortcut.
+Где: Files → toolbar → + (Создать) → Folder (Папка) or File (Файл); shortcuts ⌘⇧N (New folder) and ⌥⌘N (New file)
+1. Click + (Создать), choose Folder (Папка) or File (Файл), or press the shortcut.
 2. Type the name in the dialog and click Create (Создать). If the name is taken, see the conflict below.
 
 ## Rename, duplicate, copy path
@@ -119,7 +119,7 @@ Starts a New agent with this folder as its project folder.
 
 <!-- id: files-terminal-here; covers: -->
 Opens a new terminal in the folder, see [terminals.md](terminals.md).
-Где: Files → select a folder → right-click → Open terminal here (Открыть терминал здесь); or the toolbar → Terminal here (Терминал здесь)
+Где: Files → select a folder → right-click → Open terminal here (Открыть терминал здесь); or the toolbar → … → Open terminal here (Открыть терминал здесь)
 1. Choose Open terminal here (Открыть терминал здесь). The Terminals mode opens with a terminal in that folder.
 
 ## Details panel (Preview)

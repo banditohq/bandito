@@ -50,6 +50,11 @@
 "agent.menu.resume" = "再開";
 "agent.menu.schedules" = "スケジュール…";
 "agent.menu.unpin" = "ピン留めを解除";
+"agentSheet.advanced" = "詳細設定";
+"agentSheet.advancedCollapsed" = "折りたたみ中";
+"agentSheet.advancedEffort" = "作業量: %1$@";
+"agentSheet.advancedExpanded" = "展開中";
+"agentSheet.advancedFallback" = "代替: %1$@";
 "agentSheet.apiKey" = "API キー";
 "agentSheet.apiKeyHint" = "どのモデルでも、トークン単位の従量課金。近日公開。";
 "agentSheet.approvals" = "承認";
@@ -508,8 +513,6 @@
 "files.showHiddenPlaces" = "非表示の場所を表示";
 "files.showInFinder" = "Finder で表示";
 "files.skipped" = "%1$lld 件の名前をスキップしました（UTF-8 ではありません）";
-"files.terminalHere" = "ターミナル";
-"files.terminalHint" = "このフォルダでターミナルを開く";
 "files.time.justNow" = "たった今";
 "files.time.minutes" = "%1$lld 分前";
 "files.time.today" = "今日 %1$@";
@@ -621,6 +624,8 @@
 "inspector.runsOn" = "実行環境";
 "inspector.scheduleHeader" = "スケジュール";
 "inspector.schedules" = "スケジュール";
+"inspector.sectionAccess" = "権限";
+"inspector.sectionWork" = "作業";
 "inspector.server" = "サーバー";
 "inspector.serverInfo" = "%1$@ · Bandito %2$@ · %3$@";
 "inspector.state" = "状態";
@@ -665,8 +670,6 @@
 "integrations.remove" = "削除";
 "integrations.removeMessage" = "エージェントはそのツールを使えなくなります。シークレットはサーバーに残ります。";
 "integrations.removeTitle" = "%1$@ を削除しますか？";
-"integrations.settings.hint" = "エージェント用の MCP サーバーを接続し、応答するか確認します。";
-"integrations.settings.open" = "開く";
 "integrations.sheet.addLine" = "行を追加";
 "integrations.sheet.addTitle" = "新しい連携";
 "integrations.sheet.args" = "引数";
@@ -1546,7 +1549,6 @@
 "settings.nav.terminalFiles" = "ターミナルとファイル";
 "settings.nav.updates" = "アップデート";
 "settings.nav.usage" = "サブスクリプションと上限";
-"settings.nav.workplaces" = "作業場所";
 "settings.notifications" = "通知";
 "settings.notifications.allow" = "許可";
 "settings.notifications.failed" = "エラー";
@@ -1618,9 +1620,6 @@
 "settings.updates.stableDesc" = "動作確認済みのビルド";
 "settings.usage" = "使用状況";
 "settings.usage.intro" = "エージェントのサブスクリプションと API の予算です。各バーは、その期間で残っている量を示します。";
-"settings.workplaces.body" = "作業場所は「サーバー」画面で設定します。それぞれ、サーバーと共有、コンテナ、または別ユーザーのいずれかです。";
-"settings.workplaces.intro" = "各エージェントの作業場所: ファイル、ブラウザ、画面、ターミナルです。";
-"settings.workplaces.open" = "サーバー → 作業場所 を開く";
 "setup.collapseLog" = "ログを折りたたむ";
 "setup.failed" = "%1$@ をインストールできませんでした。上のログを確認してください。";
 "setup.feature.browser" = "ブラウザ";

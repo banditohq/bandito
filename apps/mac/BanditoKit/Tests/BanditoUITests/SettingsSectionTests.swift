@@ -73,7 +73,7 @@ import Testing
 
 @Suite struct SettingsSectionTests {
     @Test func navigationHasTwelveSectionsAndNoSeparateLanguage() {
-        #expect(SettingsSection.allCases.count == 13)
+        #expect(SettingsSection.allCases.count == 12)
         #expect(!SettingsSection.allCases.map(\.rawValue).contains("language"))
     }
 

@@ -3,11 +3,14 @@ import BanditoKit
 import BanditoL10n
 import SwiftUI
 
-/// Settings → Updates: the versions of this app and of the server's daemon, and the newest release.
+/// Settings → Updates: how the app updates itself, the versions of the app and the daemon, and the newest release.
 struct UpdatesSection: View {
     @Environment(AppModel.self) private var app
     @Environment(Router.self) private var router
     @State private var release = ReleaseStatus()
+    // The app target reads these keys and configures Sparkle (AppUpdater).
+    @AppStorage(AppUpdatePreferences.automaticChecksKey) private var autoCheckUpdates = true
+    @AppStorage(AppUpdatePreferences.channelKey) private var updateChannel = AppUpdatePreferences.Channel.stable.rawValue
 
     private var installedAppVersion: String? {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
@@ -27,6 +30,40 @@ struct UpdatesSection: View {
     var body: some View {
         let daemon = app.currentServer?.info?.version ?? "—"
         SettingsPage(title: SettingsSection.updates.title, intro: L10n.Settings.Updates.intro) {
+            // No label: the page title already says "Updates". The group title "Как обновляться" needs a new string.
+            SettingsGroup(title: nil) {
+                SettingsRow(
+                    title: L10n.Settings.autoCheckUpdates, hint: L10n.Settings.autoCheckUpdatesHint,
+                    icon: SettingsIcon(symbol: "arrow.down.circle", tint: BanditoPalette.badgeSlate),
+                    keepsControlBeside: true
+                ) {
+                    Toggle("", isOn: $autoCheckUpdates)
+                        .labelsHidden()
+                        .toggleStyle(BanditoToggleStyle())
+                }
+                Divider().padding(.horizontal, 16)
+                SettingsRow(
+                    title: L10n.Settings.Updates.channel, hint: L10n.Settings.channelHint,
+                    icon: SettingsIcon(symbol: "antenna.radiowaves.left.and.right", tint: BanditoPalette.badgePurple)
+                ) {
+                    BanditoSelect(
+                        selection: $updateChannel,
+                        sections: [
+                            SelectSection(options: [
+                                SelectOption(
+                                    value: AppUpdatePreferences.Channel.stable.rawValue,
+                                    title: L10n.Settings.Updates.stable, subtitle: L10n.Settings.Updates.stableDesc),
+                                SelectOption(
+                                    value: AppUpdatePreferences.Channel.beta.rawValue,
+                                    title: L10n.Settings.Updates.beta, subtitle: L10n.Settings.Updates.betaDesc),
+                            ])
+                        ],
+                        label: L10n.Settings.Updates.channel, placeholder: L10n.Settings.Updates.stable,
+                        field: { SelectFieldView(option: $0?.titleOnly, placeholder: L10n.Settings.Updates.stable) },
+                        footer: { _ in EmptyView() })
+                        .frame(width: 220)
+                }
+            }
             SettingsGroup(title: L10n.Settings.Group.versions) {
                 SettingsRow(
                     title: L10n.Settings.Updates.app, hint: nil,

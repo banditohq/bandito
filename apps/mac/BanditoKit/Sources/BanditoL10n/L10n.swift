@@ -143,6 +143,11 @@ public enum L10n {
     }
 
     public enum AgentSheet {
+        public static var advanced: String { L10n.tr("agentSheet.advanced") }
+        public static var advancedCollapsed: String { L10n.tr("agentSheet.advancedCollapsed") }
+        public static func advancedEffort(level: String) -> String { L10n.tr("agentSheet.advancedEffort", level) }
+        public static var advancedExpanded: String { L10n.tr("agentSheet.advancedExpanded") }
+        public static func advancedFallback(runtime: String) -> String { L10n.tr("agentSheet.advancedFallback", runtime) }
         public static var apiKey: String { L10n.tr("agentSheet.apiKey") }
         public static var apiKeyHint: String { L10n.tr("agentSheet.apiKeyHint") }
         public static var approvals: String { L10n.tr("agentSheet.approvals") }
@@ -644,8 +649,6 @@ public enum L10n {
         public static var showHiddenPlaces: String { L10n.tr("files.showHiddenPlaces") }
         public static var showInFinder: String { L10n.tr("files.showInFinder") }
         public static func skipped(count: Int) -> String { L10n.tr("files.skipped", count) }
-        public static var terminalHere: String { L10n.tr("files.terminalHere") }
-        public static var terminalHint: String { L10n.tr("files.terminalHint") }
         public static var trash: String { L10n.tr("files.trash") }
         public static func truncated(count: Int) -> String { L10n.tr("files.truncated", count) }
         public static var unsupported: String { L10n.tr("files.unsupported") }
@@ -911,6 +914,8 @@ public enum L10n {
         public static var runsOn: String { L10n.tr("inspector.runsOn") }
         public static var scheduleHeader: String { L10n.tr("inspector.scheduleHeader") }
         public static var schedules: String { L10n.tr("inspector.schedules") }
+        public static var sectionAccess: String { L10n.tr("inspector.sectionAccess") }
+        public static var sectionWork: String { L10n.tr("inspector.sectionWork") }
         public static var server: String { L10n.tr("inspector.server") }
         public static func serverInfo(os: String, version: String, uptime: String) -> String { L10n.tr("inspector.serverInfo", os, version, uptime) }
         public static var state: String { L10n.tr("inspector.state") }
@@ -980,11 +985,6 @@ public enum L10n {
             public static func secretNameInvalid(name: String) -> String { L10n.tr("integrations.problem.secretNameInvalid", name) }
             public static var urlInvalid: String { L10n.tr("integrations.problem.urlInvalid") }
             public static func valueMissing(key: String) -> String { L10n.tr("integrations.problem.valueMissing", key) }
-        }
-
-        public enum Settings {
-            public static var hint: String { L10n.tr("integrations.settings.hint") }
-            public static var `open`: String { L10n.tr("integrations.settings.open") }
         }
 
         public enum Sheet {
@@ -2102,7 +2102,6 @@ public enum L10n {
             public static var terminalFiles: String { L10n.tr("settings.nav.terminalFiles") }
             public static var updates: String { L10n.tr("settings.nav.updates") }
             public static var usage: String { L10n.tr("settings.nav.usage") }
-            public static var workplaces: String { L10n.tr("settings.nav.workplaces") }
         }
 
         public enum Notifications {
@@ -2191,12 +2190,6 @@ public enum L10n {
 
         public enum Usage {
             public static var intro: String { L10n.tr("settings.usage.intro") }
-        }
-
-        public enum Workplaces {
-            public static var body: String { L10n.tr("settings.workplaces.body") }
-            public static var intro: String { L10n.tr("settings.workplaces.intro") }
-            public static var `open`: String { L10n.tr("settings.workplaces.open") }
         }
     }
 

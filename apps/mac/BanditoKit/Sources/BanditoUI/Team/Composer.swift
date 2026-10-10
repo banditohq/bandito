@@ -30,6 +30,8 @@ struct Composer: View {
     var onStop: () -> Void
     /// Starts the agent's next chapter now (see `ServerModel.startNewChapter`). Shown only when the server supports it.
     var onNewChapter: () -> Void = {}
+    /// The key hints under the field. The thread passes `false` once it has messages: the hints are for the empty thread.
+    var showsHints: Bool = true
 
     @Environment(Router.self) private var router
     @Environment(AppModel.self) private var app
@@ -148,14 +150,16 @@ struct Composer: View {
             .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(Color.Bandito.line, lineWidth: 1))
             .shadow(color: .black.opacity(0.35), radius: 18, x: 0, y: 10)
 
-            HStack(spacing: 14) {
-                Text(L10n.Thread.hintSend)
-                Text(L10n.Thread.hintNewLine)
-                Text(L10n.Thread.hintStop)
-                Text(L10n.Thread.hintSearch)
+            if showsHints {
+                HStack(spacing: 14) {
+                    Text(L10n.Thread.hintSend)
+                    Text(L10n.Thread.hintNewLine)
+                    Text(L10n.Thread.hintStop)
+                    Text(L10n.Thread.hintSearch)
+                }
+                .font(BanditoFont.font(size: 11, weight: 400))
+                .foregroundStyle(Color.Bandito.text3.opacity(0.7))
             }
-            .font(BanditoFont.font(size: 11, weight: 400))
-            .foregroundStyle(Color.Bandito.text3.opacity(0.7))
         }
         .animation(.easeOut(duration: BanditoMotion.fast), value: query != nil)
         .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: reply)

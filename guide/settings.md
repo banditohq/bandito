@@ -1,6 +1,6 @@
 # Settings (Настройки)
 
-The Settings window has a list of 13 sections on the left and the section on the right. Open it with ⌘, or from the menu
+The Settings window has a list of 12 sections on the left and the section on the right. Open it with ⌘, or from the menu
 Bandito → Settings (Настройки). Each entry below gives the path to the setting. Settings are stored on this Mac, except
 the approval rules and the server list, which live on the server and in your account.
 
@@ -15,9 +15,9 @@ Opens the Settings window. It is a separate window, not a sheet over the main wi
 ## General (Общие)
 
 <!-- id: set-general; covers: settings:general -->
-The first section. It holds the interface language, the sample data switch, launch at login, and how Bandito updates itself.
+The first section. It holds the interface language, the sample data switch, and launch at login. How Bandito updates itself is in Updates (Обновления).
 Где: Settings (⌘,) → General (Общие)
-1. Language (Язык) and Show examples (Показывать примеры) and Launch at login (Запускать при входе в систему) are described below. Check for updates automatically (Проверять обновления автоматически) and Update channel (Канал обновлений) are described at the end of this section.
+1. Language (Язык), Show examples (Показывать примеры) and Launch at login (Запускать при входе в систему) are described below. Check for updates automatically (Проверять обновления автоматически) and Update channel (Канал обновлений) are in Updates (Обновления), see below.
 
 ## Language in General (Language)
 
@@ -47,7 +47,7 @@ Starts Bandito when you sign in to this Mac. It uses the macOS login items; the 
 
 <!-- id: set-auto-update; covers: setting:SUEnableAutomaticChecks -->
 Bandito checks for a new version once a day and tells you when one is out. It never installs anything without your OK. The switch is on by default.
-Где: Settings (⌘,) → General (Общие) → Check for updates automatically (Проверять обновления автоматически)
+Где: Settings (⌘,) → Updates (Обновления) → Check for updates automatically (Проверять обновления автоматически)
 1. Turn the switch off to stop the daily check. Check for Updates… (Проверить обновления…) in the Bandito menu still works.
 2. When a new version is found, the update window shows it. Click Install Update (Установить обновление), or pick Remind Me Later (Напоминать позже) or Skip This Version (Пропустить эту версию).
 
@@ -55,7 +55,7 @@ Bandito checks for a new version once a day and tells you when one is out. It ne
 
 <!-- id: set-update-channel; covers: setting:updates.channel -->
 Stable (Стабильный) gets the released versions. Beta (Бета) also gets preview builds, which come earlier and may have rough edges.
-Где: Settings (⌘,) → General (Общие) → Update channel (Канал обновлений)
+Где: Settings (⌘,) → Updates (Обновления) → Update channel (Канал обновлений)
 1. Pick Stable (Стабильный) for the released versions only, or Beta (Бета) for the preview builds too.
 2. Check for Updates… (Проверить обновления…) uses the channel that is picked now.
 
@@ -108,13 +108,6 @@ Shows the subscription limits of each runtime: the 5-hour and weekly windows, an
 1. Read the bars: each shows what is left in its window (5 hours (5 hours), Week (Неделя)). The reset time is shown under the bar.
 2. Click Refresh (Обновить) to get the latest limits. If none were received yet, the section says No limits received yet.
 3. The fallback note explains that if a limit runs out, the agent switches to its backup subscription and returns after the reset.
-
-## Workplaces (Рабочие места)
-
-<!-- id: set-workplaces; covers: settings:workplaces -->
-Workplaces are set up on the Server screen, not here. This section points there.
-Где: Settings (⌘,) → Workplaces (Рабочие места) → Open Server → Workplaces (Рабочие места)
-1. Click Open Server → Workplaces. The Server mode opens on Workplaces (see [server.md](server.md)).
 
 ## Terminal and files (Терминал и файлы)
 

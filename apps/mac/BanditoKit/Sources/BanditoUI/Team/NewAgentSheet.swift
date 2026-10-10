@@ -12,6 +12,8 @@ struct NewAgentSheet: View {
 
     @State private var draft = NewAgentDraft()
     @State private var pickerOpen = false
+    /// The "Advanced" block (effort, fallback) is folded until the person opens it.
+    @State private var advancedOpen = false
     @State private var creating = false
     @State private var error: UserFacingMessage?
     /// The agent made by a create that then failed on its picture; the next press only saves the picture.
@@ -237,42 +239,7 @@ struct NewAgentSheet: View {
                     status: server?.runtimeModelsStatus ?? .unknown,
                     onRetry: retryModels, onUpdate: updateThisMac)
             }
-            if effortLevels.isEmpty {
-                Text(L10n.ModelPicker.noEffort)
-                    .font(BanditoFont.font(size: 12, weight: 400))
-                    .foregroundStyle(Color.Bandito.text3)
-                    .offset(y: -6)
-            } else {
-                labeled(L10n.Effort.title) {
-                    SegmentedPicker(
-                        selection: $draft.effort,
-                        options: effortLevels.map { ($0, effortName($0)) })
-                        .frame(maxWidth: .infinity)
-                }
-                Text(L10n.AgentSheet.effortCaption)
-                    .font(BanditoFont.font(size: 12, weight: 400))
-                    .foregroundStyle(Color.Bandito.text3)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .offset(y: -6)
-            }
-
-            labeled(L10n.AgentSheet.fallbackLabel) {
-                fallbackPicker
-            }
-            if let fallback = draft.fallbackRuntime {
-                labeled(L10n.AgentSheet.model) {
-                    ModelPicker(
-                        runtime: fallback, selection: $draft.fallbackModel,
-                        models: server?.runtimeModels[fallback.rawValue],
-                        status: server?.runtimeModelsStatus ?? .unknown,
-                        onRetry: retryModels, onUpdate: updateThisMac)
-                }
-            }
-            Text(L10n.AgentSheet.fallbackHint)
-                .font(BanditoFont.font(size: 12, weight: 400))
-                .foregroundStyle(Color.Bandito.text3)
-                .offset(y: -8)
+            advancedSection
 
             labeled(L10n.AgentSheet.instructions, hint: L10n.AgentSheet.instructionsHint) {
                 // A vertical TextField, not TextEditor: a TextEditor is a scroll view of its own, so the wheel over it
@@ -304,6 +271,97 @@ struct NewAgentSheet: View {
                 draft.effort = nearest
             }
         }
+    }
+
+    // MARK: Advanced
+
+    /// "Effort" and "If the limit runs out" live under one folded block; the model above is what most people change.
+    private var advancedSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Button {
+                advancedOpen.toggle()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Color.Bandito.text3)
+                        .rotationEffect(.degrees(advancedOpen ? 90 : 0))
+                        .frame(width: 12)
+                    Text(L10n.AgentSheet.advanced)
+                        .font(BanditoFont.font(size: 12.5, weight: 500))
+                        .foregroundStyle(Color.Bandito.text2)
+                    Spacer(minLength: 8)
+                    if !advancedOpen, let summary = advancedSummary {
+                        Text(summary)
+                            .font(BanditoFont.font(size: 12, weight: 400))
+                            .foregroundStyle(Color.Bandito.text3)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                }
+                .frame(minHeight: 28)
+                .contentShape(Rectangle())
+            }
+            .banditoButton(.row(cornerRadius: 8))
+            .accessibilityValue(advancedOpen ? L10n.AgentSheet.advancedExpanded : L10n.AgentSheet.advancedCollapsed)
+
+            if advancedOpen {
+                VStack(alignment: .leading, spacing: 14) {
+                    if effortLevels.isEmpty {
+                        Text(L10n.ModelPicker.noEffort)
+                            .font(BanditoFont.font(size: 12, weight: 400))
+                            .foregroundStyle(Color.Bandito.text3)
+                    } else {
+                        labeled(L10n.Effort.title) {
+                            SegmentedPicker(
+                                selection: $draft.effort,
+                                options: effortLevels.map { ($0, effortName($0)) })
+                                .frame(maxWidth: .infinity)
+                        }
+                        Text(L10n.AgentSheet.effortCaption)
+                            .font(BanditoFont.font(size: 12, weight: 400))
+                            .foregroundStyle(Color.Bandito.text3)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .offset(y: -6)
+                    }
+
+                    labeled(L10n.AgentSheet.fallbackLabel) {
+                        fallbackPicker
+                    }
+                    if let fallback = draft.fallbackRuntime {
+                        labeled(L10n.AgentSheet.model) {
+                            ModelPicker(
+                                runtime: fallback, selection: $draft.fallbackModel,
+                                models: server?.runtimeModels[fallback.rawValue],
+                                status: server?.runtimeModelsStatus ?? .unknown,
+                                onRetry: retryModels, onUpdate: updateThisMac)
+                        }
+                    }
+                    Text(L10n.AgentSheet.fallbackHint)
+                        .font(BanditoFont.font(size: 12, weight: 400))
+                        .foregroundStyle(Color.Bandito.text3)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .offset(y: -8)
+                }
+                .padding(.leading, 20)
+                .transition(.opacity)
+            }
+        }
+        .banditoAnimation(BanditoMotion.ease, value: advancedOpen)
+        .banditoAnimation(BanditoMotion.ease, value: draft.fallbackRuntime)
+    }
+
+    /// What was changed from the defaults, for the folded block: "Effort: High · Fallback: Codex". Nil when nothing was.
+    private var advancedSummary: String? {
+        var parts: [String] = []
+        if !effortLevels.isEmpty, draft.effort != NewAgentDraft().effort {
+            parts.append(L10n.AgentSheet.advancedEffort(level: effortName(draft.effort)))
+        }
+        if let fallback = draft.fallbackRuntime {
+            parts.append(L10n.AgentSheet.advancedFallback(runtime: runtimeName(fallback)))
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     /// The levels the effort control offers: those of the chosen model when its list says, else the runtime's. Empty
@@ -378,7 +436,7 @@ struct NewAgentSheet: View {
             Button {
                 draft.setRuntime(kind, lists: lists)
             } label: {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 5) {
                     HStack(spacing: 7) {
                         Text(runtimeName(kind))
                             .font(BanditoFont.font(size: 13.5, weight: 600))
@@ -416,8 +474,19 @@ struct NewAgentSheet: View {
                             .lineLimit(1)
                             .minimumScaleFactor(0.85)
                     }
-                    if state.showsLimit, let windows = card?.windows {
-                        limitWindows(windows, now: now)
+                    if state.showsLimit, let nearest = card?.windows.max(by: { $0.used < $1.used }) {
+                        // One thin bar for the limit that runs out first; every window is in the tooltip.
+                        let used = Int((nearest.used * 100).rounded())
+                        UsageBar(fraction: nearest.used, tint: UsageLevel(usedPercent: used).color, height: 3)
+                        Text(
+                            [L10n.Usage.used(percent: "\(used)%"), resetCaption(nearest, now: now)]
+                                .compactMap { $0 }.joined(separator: " · ")
+                        )
+                        .font(BanditoFont.font(size: 11, weight: 400))
+                        .monospacedDigit()
+                        .foregroundStyle(Color.Bandito.text3)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                     }
                     if let command = state.command {
                         Text(L10n.AgentSheet.statusNeedsLoginHint)
@@ -432,7 +501,7 @@ struct NewAgentSheet: View {
                     }
                 }
                 .padding(.horizontal, 12)
-                .padding(.vertical, 10)
+                .padding(.vertical, 8)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .frame(maxHeight: .infinity, alignment: .topLeading)
                 .background(
@@ -444,6 +513,7 @@ struct NewAgentSheet: View {
                 .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
             .banditoButton(.row(cornerRadius: 14))
+            .help(limitTooltip(card?.windows ?? [], state: state, now: now))
             .accessibilityAddTraits(selected ? .isSelected : [])
 
             // Outside the card's button: a link inside a button would not be clickable on its own.
@@ -457,43 +527,15 @@ struct NewAgentSheet: View {
         .frame(maxHeight: .infinity, alignment: .top)
     }
 
-    /// Every limit window of the runtime, shortest first: its label, how much is used, a bar and when it resets.
-    private func limitWindows(_ windows: [UsageWindowLine], now: Date) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ForEach(windows) { line in
-                limitWindowRow(line, now: now)
-            }
+    /// The card's tooltip: the status, then every limit window with how much is used and when it resets.
+    private func limitTooltip(_ windows: [UsageWindowLine], state: RuntimeCardState, now: Date) -> String {
+        var lines = [state.text]
+        for line in windows {
+            var text = "\(line.label): \(L10n.Usage.used(percent: "\(Int((line.used * 100).rounded()))%"))"
+            if let caption = resetCaption(line, now: now) { text += " · " + caption }
+            lines.append(text)
         }
-        .padding(.top, 2)
-    }
-
-    private func limitWindowRow(_ line: UsageWindowLine, now: Date) -> some View {
-        let used = Int((line.used * 100).rounded())
-        let tint = UsageLevel(usedPercent: used).color
-        return VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 6) {
-                Text(line.label)
-                    .font(BanditoFont.font(size: 11, weight: 400))
-                    .foregroundStyle(Color.Bandito.text3)
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
-                Spacer(minLength: 4)
-                Text(L10n.Usage.used(percent: "\(used)%"))
-                    .font(BanditoFont.font(size: 11, weight: 600))
-                    .foregroundStyle(tint)
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
-            }
-            UsageBar(fraction: line.used, tint: tint, height: 3)
-            if let caption = resetCaption(line, now: now) {
-                Text(caption)
-                    .font(BanditoFont.font(size: 10.5, weight: 400))
-                    .monospacedDigit()
-                    .foregroundStyle(Color.Bandito.text3)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-            }
-        }
+        return lines.joined(separator: "\n")
     }
 
     /// "Resets in 2 h 48 min", or "again in 5:48:12" while the window is used up. `nil` without a reset time.

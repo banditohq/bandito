@@ -50,6 +50,11 @@
 "agent.menu.resume" = "Resume";
 "agent.menu.schedules" = "Schedules…";
 "agent.menu.unpin" = "Unpin";
+"agentSheet.advanced" = "Advanced";
+"agentSheet.advancedCollapsed" = "Collapsed";
+"agentSheet.advancedEffort" = "Effort: %1$@";
+"agentSheet.advancedExpanded" = "Expanded";
+"agentSheet.advancedFallback" = "Fallback: %1$@";
 "agentSheet.apiKey" = "API key";
 "agentSheet.apiKeyHint" = "Any model, pay per token. Coming soon.";
 "agentSheet.approvals" = "Approvals";
@@ -508,8 +513,6 @@
 "files.showHiddenPlaces" = "Show hidden places";
 "files.showInFinder" = "Show in Finder";
 "files.skipped" = "%1$lld names skipped (not UTF-8)";
-"files.terminalHere" = "Terminal";
-"files.terminalHint" = "Open a terminal in this folder";
 "files.time.justNow" = "just now";
 "files.time.minutes" = "%1$lld min ago";
 "files.time.today" = "today, %1$@";
@@ -621,6 +624,8 @@
 "inspector.runsOn" = "Runs on";
 "inspector.scheduleHeader" = "SCHEDULE";
 "inspector.schedules" = "Schedules";
+"inspector.sectionAccess" = "Access";
+"inspector.sectionWork" = "Work";
 "inspector.server" = "Server";
 "inspector.serverInfo" = "%1$@ · Bandito %2$@ · %3$@";
 "inspector.state" = "State";
@@ -665,8 +670,6 @@
 "integrations.remove" = "Remove";
 "integrations.removeMessage" = "The agents lose its tools. Its secrets stay on the server.";
 "integrations.removeTitle" = "Remove %1$@?";
-"integrations.settings.hint" = "Connect MCP servers for the agents, and check that they answer.";
-"integrations.settings.open" = "Open";
 "integrations.sheet.addLine" = "Add line";
 "integrations.sheet.addTitle" = "New integration";
 "integrations.sheet.args" = "Arguments";
@@ -1546,7 +1549,6 @@
 "settings.nav.terminalFiles" = "Terminal and files";
 "settings.nav.updates" = "Updates";
 "settings.nav.usage" = "Subscriptions and limits";
-"settings.nav.workplaces" = "Workplaces";
 "settings.notifications" = "Notifications";
 "settings.notifications.allow" = "Allow";
 "settings.notifications.failed" = "Error";
@@ -1618,9 +1620,6 @@
 "settings.updates.stableDesc" = "Tested builds";
 "settings.usage" = "Usage";
 "settings.usage.intro" = "Subscriptions and API budgets of your agents. Each bar shows what is left in its window.";
-"settings.workplaces.body" = "Workplaces are set up on the Server screen. Each one is shared with the server, a container, or a separate user.";
-"settings.workplaces.intro" = "Where each agent works: its files, browser, screen and terminals.";
-"settings.workplaces.open" = "Open Server → Workplaces";
 "setup.collapseLog" = "Show only the last lines";
 "setup.failed" = "Could not install %1$@. See the log above.";
 "setup.feature.browser" = "Browser";

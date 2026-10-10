@@ -419,7 +419,8 @@ struct ThreadView: View {
                 onGoToForm: { scrollTo(id: "form-\($0)") },
                 onSend: send,
                 onStop: stop,
-                onNewChapter: startNewChapter)
+                onNewChapter: startNewChapter,
+                showsHints: thread.items.isEmpty)
                 .frame(maxWidth: 780)
                 .padding(.horizontal, 20)
                 .padding(.bottom, 14)

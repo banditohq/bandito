@@ -42,7 +42,7 @@ The CLI that runs the agent. Claude Code, Codex and Grok run on the server with 
 
 <!-- id: na-model-effort; covers: -->
 The model is the one the CLI runs; the default is the runtime's own. Effort sets how long the agent thinks.
-Где: New agent sheet → Model (Модель), Effort (Усилие)
+Где: New agent sheet → Model (Модель); Effort (Усилие) is under Advanced (Дополнительно)
 1. Leave Default (По умолчанию) to use the runtime's default model, or type any model name the CLI accepts.
 2. Choose the effort: Low (Низкое) is fast and cheap for small edits; Medium (Среднее) is enough for everyday work; High (Высокое) for hard tasks; Very high (Очень) for big rewrites; Max (Максимум) only when nothing else worked. The levels offered depend on the runtime.
 
@@ -50,7 +50,7 @@ The model is the one the CLI runs; the default is the runtime's own. Effort sets
 
 <!-- id: na-fallback; covers: -->
 Sets a second runtime that takes over when the subscription limit of the first one is used up. The agent comes back to the first one when the limit resets. Memory and tasks move with the agent.
-Где: New agent sheet → If the limit runs out (Если лимит кончится)
+Где: New agent sheet → Advanced (Дополнительно) → If the limit runs out (Если лимит кончится)
 1. Keep Don't switch (Не переключаться), or pick another runtime from the list.
 2. If you pick one, type a model in the field that shows Default (По умолчанию), or leave it empty to use the runtime's default.
 3. The same setting is in Agent details → Details (see [team.md](team.md)).

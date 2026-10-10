@@ -3,7 +3,7 @@ import SwiftUI
 
 /// The sections of the Settings window, in the order of the left navigation. The interface language lives in General.
 public enum SettingsSection: String, CaseIterable, Identifiable, Hashable, Sendable {
-    case general, account, servers, approvals, usage, workplaces, terminalFiles, browserScreen
+    case general, account, servers, approvals, usage, terminalFiles, browserScreen
     case keysGestures, notifications, sounds, appearance, updates
 
     public var id: String { rawValue }
@@ -15,7 +15,6 @@ public enum SettingsSection: String, CaseIterable, Identifiable, Hashable, Senda
         case .servers: L10n.Settings.Nav.servers
         case .approvals: L10n.Settings.Nav.approvals
         case .usage: L10n.Settings.Nav.usage
-        case .workplaces: L10n.Settings.Nav.workplaces
         case .terminalFiles: L10n.Settings.Nav.terminalFiles
         case .browserScreen: L10n.Settings.Nav.browserScreen
         case .keysGestures: L10n.Settings.Nav.keysGestures
@@ -34,7 +33,6 @@ public enum SettingsSection: String, CaseIterable, Identifiable, Hashable, Senda
         case .servers: "server.rack"
         case .approvals: "checkmark.shield"
         case .usage: "gauge.medium"
-        case .workplaces: "square.stack.3d.up"
         case .terminalFiles: "terminal"
         case .browserScreen: "globe"
         case .keysGestures: "keyboard"
@@ -53,7 +51,6 @@ public enum SettingsSection: String, CaseIterable, Identifiable, Hashable, Senda
         case .servers: BanditoPalette.badgeGreen
         case .approvals: BanditoPalette.badgeOrange
         case .usage: BanditoPalette.badgePurple
-        case .workplaces: BanditoPalette.badgeTeal
         case .terminalFiles: BanditoPalette.badgeDarkGray
         case .browserScreen: BanditoPalette.badgeLightBlue
         case .keysGestures: BanditoPalette.badgePink

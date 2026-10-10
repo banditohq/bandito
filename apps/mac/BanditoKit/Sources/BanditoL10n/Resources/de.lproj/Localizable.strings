@@ -50,6 +50,11 @@
 "agent.menu.resume" = "Fortsetzen";
 "agent.menu.schedules" = "Zeitpläne…";
 "agent.menu.unpin" = "Loslösen";
+"agentSheet.advanced" = "Erweitert";
+"agentSheet.advancedCollapsed" = "Zugeklappt";
+"agentSheet.advancedEffort" = "Aufwand: %1$@";
+"agentSheet.advancedExpanded" = "Aufgeklappt";
+"agentSheet.advancedFallback" = "Ersatz: %1$@";
 "agentSheet.apiKey" = "API-Schlüssel";
 "agentSheet.apiKeyHint" = "Beliebiges Modell, Bezahlung pro Token. Kommt bald.";
 "agentSheet.approvals" = "Freigaben";
@@ -508,8 +513,6 @@
 "files.showHiddenPlaces" = "Ausgeblendete Orte anzeigen";
 "files.showInFinder" = "Im Finder zeigen";
 "files.skipped" = "%1$lld Namen übersprungen (nicht UTF-8)";
-"files.terminalHere" = "Terminal";
-"files.terminalHint" = "Terminal in diesem Ordner öffnen";
 "files.time.justNow" = "gerade eben";
 "files.time.minutes" = "vor %1$lld Min.";
 "files.time.today" = "heute, %1$@";
@@ -621,6 +624,8 @@
 "inspector.runsOn" = "Läuft auf";
 "inspector.scheduleHeader" = "ZEITPLAN";
 "inspector.schedules" = "Zeitpläne";
+"inspector.sectionAccess" = "Rechte";
+"inspector.sectionWork" = "Arbeit";
 "inspector.server" = "Server";
 "inspector.serverInfo" = "%1$@ · Bandito %2$@ · %3$@";
 "inspector.state" = "Status";
@@ -665,8 +670,6 @@
 "integrations.remove" = "Entfernen";
 "integrations.removeMessage" = "Die Agenten verlieren seine Werkzeuge. Seine Geheimnisse bleiben auf dem Server.";
 "integrations.removeTitle" = "%1$@ entfernen?";
-"integrations.settings.hint" = "MCP-Server für Agenten verbinden und prüfen, ob sie antworten.";
-"integrations.settings.open" = "Öffnen";
 "integrations.sheet.addLine" = "Zeile hinzufügen";
 "integrations.sheet.addTitle" = "Neue Integration";
 "integrations.sheet.args" = "Argumente";
@@ -1546,7 +1549,6 @@
 "settings.nav.terminalFiles" = "Terminal und Dateien";
 "settings.nav.updates" = "Updates";
 "settings.nav.usage" = "Abos und Limits";
-"settings.nav.workplaces" = "Arbeitsplätze";
 "settings.notifications" = "Mitteilungen";
 "settings.notifications.allow" = "Erlauben";
 "settings.notifications.failed" = "Fehler";
@@ -1618,9 +1620,6 @@
 "settings.updates.stableDesc" = "Geprüfte Builds";
 "settings.usage" = "Nutzung";
 "settings.usage.intro" = "Abos und API-Budgets Ihrer Agenten. Jeder Balken zeigt, was im jeweiligen Zeitraum noch übrig ist.";
-"settings.workplaces.body" = "Arbeitsplätze richten Sie im Bereich „Server“ ein. Jeder ist entweder mit dem Server geteilt, ein Container oder ein eigener Benutzer.";
-"settings.workplaces.intro" = "Wo jeder Agent arbeitet: seine Dateien, sein Browser, sein Bildschirm und seine Terminals.";
-"settings.workplaces.open" = "Server → Arbeitsplätze öffnen";
 "setup.collapseLog" = "Protokoll einklappen";
 "setup.failed" = "%1$@ konnte nicht installiert werden. Details finden Sie im Protokoll oben.";
 "setup.feature.browser" = "Browser";
