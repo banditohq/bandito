@@ -41,6 +41,25 @@ import Testing
         #expect(BrowserAddressRule.currentEntryURL(.null) == nil)
     }
 
+    @Test func aFocusedButUntouchedFieldStillFollowsThePage() {
+        // The panel's field may hold the focus without the person typing: it must not stay empty.
+        let next = BrowserAddressRule.afterPageMoved(
+            to: "https://example.com/", currentURL: "about:blank", typed: "", editing: true)
+        #expect(next == .init(currentURL: "https://example.com/", typed: "https://example.com/"))
+    }
+
+    @Test func anEmptyFieldIsRepairedBySameAddress() {
+        let next = BrowserAddressRule.afterPageMoved(
+            to: "https://example.com/", currentURL: "https://example.com/", typed: "", editing: false)
+        #expect(next.typed == "https://example.com/")
+    }
+
+    @Test func aClearedFieldBeingTypedInIsKept() {
+        let next = BrowserAddressRule.afterPageMoved(
+            to: "https://b.example/", currentURL: "https://a.example/", typed: "", editing: true)
+        #expect(next.typed == "")
+    }
+
     @Test func theTypedTextSurvivesAPageMoveWhileEditing() {
         let next = BrowserAddressRule.afterPageMoved(
             to: "https://b.example/", currentURL: "https://a.example/", typed: "my sear", editing: true)

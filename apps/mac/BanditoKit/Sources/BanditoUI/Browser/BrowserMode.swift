@@ -184,7 +184,7 @@ private struct BrowserToolbar: View {
             .help(L10n.Browser.reload)
 
             // The address field gives way first: the buttons keep their size and stay on screen.
-            addressBar
+            addressBar(compact: compact)
                 .layoutPriority(-1)
 
             if let external = model.externalURL {
@@ -230,7 +230,7 @@ private struct BrowserToolbar: View {
         .keymapShortcut("browser.address", keymap: keymap) { addressFocused = true }
     }
 
-    private var addressBar: some View {
+    private func addressBar(compact: Bool) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "lock")
                 .font(.system(size: 11))
@@ -253,7 +253,8 @@ private struct BrowserToolbar: View {
                 .onChange(of: model.addressText) { _, _ in
                     model.addressTextEdited()
                 }
-            if model.status?.running == true {
+            // In a narrow panel the note would squeeze the address out: only the field is kept there.
+            if model.status?.running == true, !compact {
                 Text(L10n.Browser.onServer)
                     .font(.system(size: 11.5))
                     .foregroundStyle(Color.Bandito.text3)

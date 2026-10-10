@@ -279,6 +279,8 @@ final class BrowserModel {
             if pollTick % 5 == 1 {
                 tabs = try await server.browserTabs()
                 fillAddressFromTabs()
+                // The page's own history is the truth for the address: it repairs one the events missed.
+                if let client, !isEditingAddress { await readCurrentAddress(client: client) }
             }
             // The page connection follows the page tabs; a preview needs none.
             if client == nil, !isPreviewSelected {
@@ -625,7 +627,14 @@ final class BrowserModel {
             // page opened before this connection sends no event for it. Not awaited: a page that does not answer must
             // not hold the connection.
             Task { [weak self] in
-                _ = try? await client.send(.enablePage)
+                // Without `Page.enable` no navigation event comes, so the address would never follow the page: a
+                // refused or lost call is tried again, twice at most.
+                for attempt in 0..<3 {
+                    if (try? await client.send(.enablePage)) != nil { break }
+                    guard attempt < 2 else { break }
+                    try? await Task.sleep(for: .milliseconds(500))
+                    guard self?.client === client else { return }
+                }
                 await self?.readCurrentAddress(client: client)
                 self?.requestTitle(client: client)
             }
@@ -918,10 +927,14 @@ enum BrowserAddressRule {
         BrowserTabLabel.isBlank(url) ? "" : url
     }
 
-    /// The page moved to `url`. The field shows the new address, unless the person is typing in it.
+    /// The page moved to `url`. The field shows the address, unless the person is typing in it. Typing means the text
+    /// differs from the address shown before: a field that has the focus but was never touched (a panel's field may get
+    /// the focus on its own) keeps following the page, so it is never left empty. The same address repairs an empty
+    /// field too.
     static func afterPageMoved(to url: String, currentURL: String, typed: String, editing: Bool) -> Fields {
-        guard url != currentURL else { return Fields(currentURL: currentURL, typed: typed) }
-        return Fields(currentURL: url, typed: editing ? typed : shownAddress(url))
+        let untouched = typed == shownAddress(currentURL)
+        let follows = !editing || untouched
+        return Fields(currentURL: url, typed: follows ? shownAddress(url) : typed)
     }
 
     /// The address of a tab fills the field's page address only while that is empty or a blank page. Nil: nothing to change.
