@@ -10,8 +10,9 @@ here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../.." && pwd)
 . "$here/lib.sh"
 
-derived="$HOME/.cache/bandito-build/qa-xcode"
-cargo_target="$HOME/.cache/bandito-build/qa-target"
+# CI (gallery.yml) points both at folders it caches; QA_DERIVED_DATA and QA_CARGO_TARGET replace the defaults.
+derived="${QA_DERIVED_DATA:-$HOME/.cache/bandito-build/qa-xcode}"
+cargo_target="${QA_CARGO_TARGET:-$HOME/.cache/bandito-build/qa-target}"
 plistbuddy=/usr/libexec/PlistBuddy
 
 cmd=${1:-}
