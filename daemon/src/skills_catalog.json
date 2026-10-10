@@ -1,0 +1,769 @@
+[
+  {
+    "id": "systematic-debugging",
+    "name": "systematic-debugging",
+    "publisher": "obra",
+    "source": {
+      "repo": "obra/superpowers",
+      "path": "skills/systematic-debugging",
+      "commit": "bb92a77741419a4ab5f06e711a283343f1ada0c3",
+      "license": "MIT"
+    },
+    "category": "dev",
+    "description_en": "Find the root cause before you change code.",
+    "description_ru": "Сначала найти причину, потом чинить: без правок наугад.",
+    "long_en": "Gives the agent a fixed debugging order for any bug, failing test or unexpected behavior: reproduce, trace the root cause, test one hypothesis, then fix. Use it when a fix attempt has already failed or the cause is unclear.",
+    "long_ru": "Задаёт агенту фиксированный порядок отладки для любого бага, упавшего теста или странного поведения: воспроизвести, найти первопричину, проверить одну гипотезу, потом чинить. Полезен, когда первая попытка уже не сработала или причина неясна.",
+    "l10n": {
+      "de": { "description": "Ursache finden, bevor Code geändert wird.", "long": "Gibt dem Agenten eine feste Reihenfolge für die Fehlersuche bei Bugs, fehlschlagenden Tests und unerwartetem Verhalten: reproduzieren, Ursache eingrenzen, eine Hypothese prüfen, dann beheben. Nützlich, wenn ein Fix schon gescheitert ist oder die Ursache unklar bleibt." },
+      "es": { "description": "Encontrar la causa raíz antes de cambiar el código.", "long": "Da al agente un orden fijo de depuración para cualquier error, prueba fallida o comportamiento inesperado: reproducir, rastrear la causa raíz, probar una hipótesis y solo entonces corregir. Sirve cuando un intento de arreglo ya falló o la causa no está clara." },
+      "fr": { "description": "Trouver la cause racine avant de modifier le code.", "long": "Donne à l'agent un ordre de débogage fixe pour tout bug, test en échec ou comportement inattendu : reproduire, remonter à la cause racine, tester une hypothèse, puis corriger. Utile quand une tentative de correctif a déjà échoué ou que la cause reste floue." },
+      "ja": { "description": "コードを変更する前に根本原因を特定する。", "long": "バグ、失敗したテスト、想定外の動作に対して、エージェントに一定の調査手順を与えます。再現、根本原因の追跡、仮説の検証、そのうえで修正という順序です。修正を一度試して失敗した場合や原因が不明な場合に役立ちます。" },
+      "ko": { "description": "코드를 바꾸기 전에 근본 원인부터 찾습니다.", "long": "버그, 실패한 테스트, 예상과 다른 동작에 대해 에이전트에게 고정된 디버깅 순서를 제공합니다. 재현, 근본 원인 추적, 가설 하나 검증, 그다음 수정 순입니다. 수정 시도가 이미 실패했거나 원인이 불분명할 때 유용합니다." },
+      "pt-BR": { "description": "Encontrar a causa raiz antes de mudar o código.", "long": "Dá ao agente uma ordem fixa de depuração para qualquer bug, teste que falha ou comportamento inesperado: reproduzir, rastrear a causa raiz, testar uma hipótese e só então corrigir. Útil quando uma tentativa de correção já falhou ou a causa não está clara." },
+      "zh-Hans": { "description": "修改代码前先找到根本原因。", "long": "为任何 bug、失败的测试或异常行为提供固定的排查顺序：复现、追踪根本原因、验证一个假设，然后再修复。适用于修复已经失败或原因不明的情况。" }
+    },
+    "runtimes": ["claude"],
+    "scripts": true,
+    "warning_en": "find-polluter.sh is written for npm test runs; adapt it for cargo or swift before use.",
+    "warning_ru": "find-polluter.sh рассчитан на npm test; для cargo или swift его надо адаптировать перед запуском.",
+    "files": [
+      "CREATION-LOG.md",
+      "SKILL.md",
+      "condition-based-waiting-example.ts",
+      "condition-based-waiting.md",
+      "defense-in-depth.md",
+      "find-polluter.sh",
+      "root-cause-tracing.md",
+      "test-academic.md",
+      "test-pressure-1.md",
+      "test-pressure-2.md",
+      "test-pressure-3.md"
+    ]
+  },
+  {
+    "id": "verification-before-completion",
+    "name": "verification-before-completion",
+    "publisher": "obra",
+    "source": {
+      "repo": "obra/superpowers",
+      "path": "skills/verification-before-completion",
+      "commit": "bb92a77741419a4ab5f06e711a283343f1ada0c3",
+      "license": "MIT"
+    },
+    "category": "dev",
+    "description_en": "No success claims without running the checks and showing the output.",
+    "description_ru": "Не говорить «готово» без запуска проверок и показа вывода.",
+    "long_en": "Stops the agent from claiming work is done, fixed or passing before it has run the verification commands and read their output. Use it before any commit, PR or report that says something works.",
+    "long_ru": "Не даёт агенту заявить, что работа сделана, исправлена или проходит, пока он не запустил проверки и не прочитал их вывод. Применяйте перед каждым коммитом, PR или отчётом, в котором говорится, что что-то работает.",
+    "l10n": {
+      "de": { "description": "Keine Erfolgsmeldung ohne ausgeführte Prüfungen und gezeigte Ausgabe.", "long": "Verhindert, dass der Agent Arbeit als fertig, behoben oder bestanden meldet, bevor er die Prüfbefehle ausgeführt und ihre Ausgabe gelesen hat. Vor jedem Commit, PR oder Bericht über funktionierenden Code anwenden." },
+      "es": { "description": "Sin afirmar éxito sin ejecutar las comprobaciones y mostrar la salida.", "long": "Impide que el agente dé por hecho, corregido o aprobado un trabajo antes de ejecutar los comandos de verificación y leer su salida. Úsalo antes de cualquier commit, PR o informe que afirme que algo funciona." },
+      "fr": { "description": "Pas de succès déclaré sans lancer les vérifications et montrer leur sortie.", "long": "Empêche l'agent d'affirmer qu'un travail est terminé, corrigé ou réussi avant d'avoir lancé les commandes de vérification et lu leur sortie. À utiliser avant tout commit, PR ou rapport affirmant qu'un élément fonctionne." },
+      "ja": { "description": "検証コマンドを実行して出力を確認するまで、完了や成功を宣言しない。", "long": "検証コマンドを実行して出力を読むまで、エージェントが作業の完了、修正済み、合格を主張することを防ぎます。動作を主張するコミット、PR、報告の前に使ってください。" },
+      "ko": { "description": "검증 명령을 실행하고 출력을 확인하기 전에는 성공을 주장하지 않습니다.", "long": "검증 명령을 실행하고 출력을 읽기 전에 에이전트가 작업이 끝났다, 고쳐졌다, 통과한다고 주장하지 못하게 합니다. 무언가 동작한다고 말하는 커밋, PR, 보고 전에 사용하세요." },
+      "pt-BR": { "description": "Sem declarar sucesso sem rodar as verificações e mostrar a saída.", "long": "Impede o agente de afirmar que o trabalho está pronto, corrigido ou passando antes de executar os comandos de verificação e ler a saída. Use antes de qualquer commit, PR ou relatório que diga que algo funciona." },
+      "zh-Hans": { "description": "没有运行验证并展示输出之前，不宣称成功。", "long": "在运行验证命令并读取输出之前，阻止智能体宣称工作已完成、已修复或已通过。在任何提交、PR 或声称某功能可用的报告之前使用。" }
+    },
+    "runtimes": ["claude", "codex", "grok"],
+    "scripts": false,
+    "files": ["SKILL.md"]
+  },
+  {
+    "id": "test-driven-development",
+    "name": "test-driven-development",
+    "publisher": "obra",
+    "source": {
+      "repo": "obra/superpowers",
+      "path": "skills/test-driven-development",
+      "commit": "bb92a77741419a4ab5f06e711a283343f1ada0c3",
+      "license": "MIT"
+    },
+    "category": "dev",
+    "description_en": "Write the failing test first, then the code that makes it pass.",
+    "description_ru": "Сначала падающий тест, потом код, который его проходит.",
+    "long_en": "Enforces red-green-refactor for any feature or bug fix: write a test that fails for the right reason, make it pass with the smallest change, then clean up. Includes a guide on writing good tests. Use it before writing implementation code.",
+    "long_ru": "Задаёт цикл «красный — зелёный — рефакторинг» для фичи или фикса: сначала тест, который падает по правильной причине, затем минимальный код, чтобы он прошёл, затем чистка. Есть отдельное руководство по хорошим тестам. Применяйте до написания кода реализации.",
+    "l10n": {
+      "de": { "description": "Erst den fehlschlagenden Test schreiben, dann den Code, der ihn besteht.", "long": "Erzwingt Rot-Grün-Refaktor für jede Funktion und jeden Bugfix: zuerst ein Test, der aus dem richtigen Grund fehlschlägt, dann die kleinste Änderung, die ihn besteht, danach aufräumen. Enthält einen Leitfaden für gute Tests. Vor dem Schreiben des Implementierungscodes anwenden." },
+      "es": { "description": "Primero la prueba que falla y luego el código que la hace pasar.", "long": "Obliga al ciclo rojo-verde-refactorizar en cualquier funcionalidad o corrección: escribe una prueba que falle por la razón correcta, haz que pase con el cambio más pequeño y limpia después. Incluye una guía para escribir buenas pruebas. Úsalo antes de escribir el código de implementación." },
+      "fr": { "description": "Écrire d'abord le test qui échoue, puis le code qui le fait passer.", "long": "Impose le cycle rouge-vert-refactorisation pour toute fonctionnalité ou correction : un test qui échoue pour la bonne raison, le plus petit changement qui le fait passer, puis le nettoyage. Inclut un guide d'écriture de bons tests. À utiliser avant d'écrire le code d'implémentation." },
+      "ja": { "description": "失敗するテストを先に書き、それを通すコードを後から書く。", "long": "機能追加やバグ修正で赤→緑→リファクタリングの順を守らせます。正しい理由で失敗するテストを書き、最小の変更で通し、そのあと整えます。良いテストの書き方のガイドも含みます。実装コードを書く前に使ってください。" },
+      "ko": { "description": "실패하는 테스트를 먼저 쓰고, 그다음 통과시키는 코드를 씁니다.", "long": "기능이나 버그 수정마다 레드-그린-리팩터 순서를 지키게 합니다. 올바른 이유로 실패하는 테스트를 쓰고, 최소한의 변경으로 통과시킨 뒤 정리합니다. 좋은 테스트 작성 가이드도 포함합니다. 구현 코드를 쓰기 전에 사용하세요." },
+      "pt-BR": { "description": "Primeiro o teste que falha, depois o código que o faz passar.", "long": "Obriga o ciclo vermelho-verde-refatorar em qualquer funcionalidade ou correção: escrever um teste que falha pelo motivo certo, fazê-lo passar com a menor mudança e depois limpar. Inclui um guia para escrever bons testes. Use antes de escrever o código de implementação." },
+      "zh-Hans": { "description": "先写失败的测试，再写让它通过的代码。", "long": "对任何功能或缺陷修复强制执行红-绿-重构：先写因正确原因而失败的测试，用最小改动让它通过，再整理代码。附带编写好测试的指南。在编写实现代码之前使用。" }
+    },
+    "runtimes": ["claude", "codex", "grok"],
+    "scripts": false,
+    "files": ["SKILL.md", "writing-good-tests.md"]
+  },
+  {
+    "id": "code-review",
+    "name": "code-review",
+    "publisher": "Sentry",
+    "source": {
+      "repo": "getsentry/skills",
+      "path": "skills/code-review",
+      "commit": "d18b7aa8ba878354e5c348310230e652f7690f9c",
+      "license": "Apache-2.0"
+    },
+    "category": "dev",
+    "description_en": "Reviews a PR or diff for correctness, security, performance and tests.",
+    "description_ru": "Ревью PR и изменений: корректность, безопасность, производительность, тесты.",
+    "long_en": "Walks the agent through a review of a pull request or code change: correctness, security, performance, testing and design, with feedback on code quality. Useful before a merge, when the diff needs a second look.",
+    "long_ru": "Ведёт агента по ревью pull request или изменения кода: корректность, безопасность, производительность, тесты и дизайн, с замечаниями по качеству кода. Полезен перед слиянием, когда диф нужно посмотреть ещё раз.",
+    "l10n": {
+      "de": { "description": "Review von PRs und Änderungen: Korrektheit, Sicherheit, Performance, Tests.", "long": "Führt den Agenten durch das Review eines Pull Requests oder einer Codeänderung: Korrektheit, Sicherheit, Performance, Tests und Design, mit Hinweisen zur Codequalität. Nützlich vor dem Merge, wenn ein zweiter Blick auf den Diff gebraucht wird." },
+      "es": { "description": "Revisión de PR y cambios: corrección, seguridad, rendimiento y pruebas.", "long": "Guía al agente en la revisión de un pull request o un cambio de código: corrección, seguridad, rendimiento, pruebas y diseño, con comentarios sobre la calidad del código. Sirve antes de fusionar cuando hace falta una segunda mirada al diff." },
+      "fr": { "description": "Revue de PR et de modifications : justesse, sécurité, performance, tests.", "long": "Guide l'agent dans la revue d'une pull request ou d'un changement de code : justesse, sécurité, performance, tests et conception, avec des retours sur la qualité du code. Utile avant la fusion quand il faut un second regard sur le diff." },
+      "ja": { "description": "PR と変更のレビュー: 正しさ、セキュリティ、性能、テスト。", "long": "プルリクエストやコード変更のレビューをエージェントに進めさせます。正しさ、セキュリティ、性能、テスト、設計を確認し、コード品質についてフィードバックします。マージ前に差分をもう一度見てもらいたいときに役立ちます。" },
+      "ko": { "description": "PR과 변경 사항 리뷰: 정확성, 보안, 성능, 테스트.", "long": "풀 리퀘스트나 코드 변경의 리뷰를 에이전트가 진행하도록 돕습니다. 정확성, 보안, 성능, 테스트, 설계를 확인하고 코드 품질에 대한 피드백을 줍니다. 병합 전에 diff를 한 번 더 봐야 할 때 유용합니다." },
+      "pt-BR": { "description": "Revisão de PRs e mudanças: corretude, segurança, desempenho, testes.", "long": "Conduz o agente na revisão de um pull request ou de uma mudança de código: corretude, segurança, desempenho, testes e design, com feedback sobre a qualidade do código. Útil antes do merge, quando é preciso um segundo olhar sobre o diff." },
+      "zh-Hans": { "description": "审查 PR 和代码改动：正确性、安全、性能、测试。", "long": "引导智能体审查拉取请求或代码改动：正确性、安全、性能、测试和设计，并给出代码质量方面的反馈。合并前需要再看一眼差异时很有用。" }
+    },
+    "runtimes": ["claude", "codex", "grok"],
+    "scripts": false,
+    "warning_en": "Written for Sentry's engineering practices; adapt the checklist to Bandito before relying on it.",
+    "warning_ru": "Написано под практики Sentry; перед использованием адаптируйте чек-лист под Bandito.",
+    "files": ["SKILL.md"]
+  },
+  {
+    "id": "requesting-code-review",
+    "name": "requesting-code-review",
+    "publisher": "obra",
+    "source": {
+      "repo": "obra/superpowers",
+      "path": "skills/requesting-code-review",
+      "commit": "bb92a77741419a4ab5f06e711a283343f1ada0c3",
+      "license": "MIT"
+    },
+    "category": "dev",
+    "description_en": "Ask for a review when a task is done, before merging.",
+    "description_ru": "Просить ревью, когда задача готова, до слияния.",
+    "long_en": "Shows how to ask for a code review once a task or major feature is finished: which diff to review, what the reviewer needs to know, and the template for the request. Use it before merging to check the work against the requirements.",
+    "long_ru": "Показывает, как запросить ревью кода после завершения задачи или крупной фичи: какой диф смотреть, что нужно знать ревьюеру и шаблон запроса. Используйте перед слиянием, чтобы сверить работу с требованиями.",
+    "l10n": {
+      "de": { "description": "Review anfordern, wenn eine Aufgabe fertig ist, vor dem Merge.", "long": "Zeigt, wie man nach Abschluss einer Aufgabe oder eines größeren Features ein Code-Review anfordert: welcher Diff geprüft werden soll, was der Reviewer wissen muss und die Vorlage für die Anfrage. Vor dem Merge verwenden, um die Arbeit gegen die Anforderungen zu prüfen." },
+      "es": { "description": "Pide revisión cuando una tarea esté lista, antes de fusionar.", "long": "Explica cómo pedir revisión de código al terminar una tarea o una funcionalidad grande: qué diff revisar, qué debe saber el revisor y la plantilla de la solicitud. Úsalo antes de fusionar para contrastar el trabajo con los requisitos." },
+      "fr": { "description": "Demander une revue quand une tâche est finie, avant la fusion.", "long": "Montre comment demander une revue de code à la fin d'une tâche ou d'une fonctionnalité majeure : quel diff relire, ce que le relecteur doit savoir et le modèle de demande. À utiliser avant la fusion pour vérifier le travail par rapport aux exigences." },
+      "ja": { "description": "タスク完了後、マージ前にレビューを依頼する。", "long": "タスクや大きな機能が完成したときにコードレビューを依頼する方法を示します。どの差分を見てもらうか、レビュアーに伝えるべきこと、依頼用テンプレートを含みます。マージ前に要件と照らして作業を確認するために使います。" },
+      "ko": { "description": "작업이 끝나면 병합 전에 리뷰를 요청합니다.", "long": "작업이나 큰 기능이 끝났을 때 코드 리뷰를 요청하는 방법을 보여 줍니다. 어떤 diff를 봐야 하는지, 리뷰어에게 무엇을 알려야 하는지, 요청 템플릿을 포함합니다. 병합 전에 요구사항에 맞는지 확인할 때 쓰세요." },
+      "pt-BR": { "description": "Pedir revisão quando a tarefa estiver pronta, antes do merge.", "long": "Mostra como pedir revisão de código ao terminar uma tarefa ou funcionalidade grande: qual diff revisar, o que o revisor precisa saber e o modelo do pedido. Use antes do merge para conferir o trabalho contra os requisitos." },
+      "zh-Hans": { "description": "任务完成后、合并前请求审查。", "long": "说明在完成任务或大功能后如何请求代码审查：应审查哪个差异、审查者需要知道什么，以及审查请求模板。合并前用来对照需求检查工作。" }
+    },
+    "runtimes": ["claude", "codex", "grok"],
+    "scripts": false,
+    "files": ["SKILL.md", "code-reviewer.md"]
+  },
+  {
+    "id": "pr-writer",
+    "name": "pr-writer",
+    "publisher": "Sentry",
+    "source": {
+      "repo": "getsentry/skills",
+      "path": "skills/pr-writer",
+      "commit": "d18b7aa8ba878354e5c348310230e652f7690f9c",
+      "license": "Apache-2.0"
+    },
+    "category": "dev",
+    "description_en": "Writes a reviewer-facing PR title and description.",
+    "description_ru": "Заголовок и описание PR для ревьюера.",
+    "long_en": "Produces a PR title and body written for the reviewer: what changed, why, how it was tested and what to look at first. Use it when opening a PR or updating its text. Includes evaluation scenarios for checking the output.",
+    "long_ru": "Пишет заголовок и текст PR для ревьюера: что изменилось, зачем, как проверено и на что смотреть в первую очередь. Используйте при открытии PR или правке его текста. В комплекте есть сценарии оценки качества вывода.",
+    "l10n": {
+      "de": { "description": "Titel und Beschreibung für PRs, geschrieben für Reviewer.", "long": "Erstellt Titel und Text eines PRs für den Reviewer: was sich geändert hat, warum, wie getestet wurde und worauf zuerst zu achten ist. Verwenden beim Öffnen eines PRs oder beim Aktualisieren des Textes. Enthält Testszenarien zur Prüfung der Ausgabe." },
+      "es": { "description": "Título y descripción de PR pensados para quien revisa.", "long": "Redacta el título y el texto de un PR para el revisor: qué cambió, por qué, cómo se probó y qué mirar primero. Úsalo al abrir un PR o actualizar su texto. Incluye escenarios de evaluación para comprobar la salida." },
+      "fr": { "description": "Titre et description de PR rédigés pour le relecteur.", "long": "Rédige le titre et le texte d'une PR pour le relecteur : ce qui a changé, pourquoi, comment c'est testé et par quoi commencer. À utiliser à l'ouverture d'une PR ou lors de sa mise à jour. Des scénarios d'évaluation sont inclus pour vérifier le résultat." },
+      "ja": { "description": "レビュアー向けの PR タイトルと説明文を書く。", "long": "レビュアーに向けて PR のタイトルと本文を作成します。何が変わったか、なぜか、どう検証したか、最初に見るべき点を含みます。PR を開くときや本文を更新するときに使います。出力を確認するための評価シナリオも含みます。" },
+      "ko": { "description": "리뷰어를 위한 PR 제목과 설명을 작성합니다.", "long": "리뷰어를 위해 PR 제목과 본문을 작성합니다. 무엇이 바뀌었는지, 왜 바뀌었는지, 어떻게 검증했는지, 무엇을 먼저 볼지 담습니다. PR을 열거나 본문을 고칠 때 사용하세요. 결과를 점검하는 평가 시나리오도 포함합니다." },
+      "pt-BR": { "description": "Título e descrição de PR escritos para quem revisa.", "long": "Produz o título e o texto de um PR para o revisor: o que mudou, por quê, como foi testado e o que olhar primeiro. Use ao abrir um PR ou atualizar o texto. Inclui cenários de avaliação para conferir a saída." },
+      "zh-Hans": { "description": "为审查者撰写 PR 标题和描述。", "long": "为审查者编写 PR 的标题和正文：改了什么、为什么改、如何验证、先看哪里。在开 PR 或更新正文时使用。附带用于检查输出的评估场景。" }
+    },
+    "runtimes": ["claude", "codex", "grok"],
+    "scripts": false,
+    "files": [
+      "EVAL.md",
+      "SKILL.md",
+      "SPEC.md",
+      "evals/axis.config.json",
+      "evals/scenarios/concise-docs-pr.json"
+    ]
+  },
+  {
+    "id": "commit",
+    "name": "commit",
+    "publisher": "Sentry",
+    "source": {
+      "repo": "getsentry/skills",
+      "path": "skills/commit",
+      "commit": "d18b7aa8ba878354e5c348310230e652f7690f9c",
+      "license": "Apache-2.0"
+    },
+    "category": "dev",
+    "description_en": "Drafts a conventional commit message with issue references.",
+    "description_ru": "Сообщение коммита в стиле conventional commits со ссылками на issue.",
+    "long_en": "Drafts a commit message in the conventional-commit style with issue references, for every commit request. Useful when you want one consistent message format. The format is Sentry's, so use it as a starting point for the Bandito style.",
+    "long_ru": "Составляет сообщение коммита в стиле conventional commits со ссылками на issue при каждом запросе коммита. Полезен, когда нужен единый формат сообщений. Формат взят у Sentry, поэтому используйте его как основу для формата Bandito.",
+    "l10n": {
+      "de": { "description": "Commit-Nachricht im Conventional-Commits-Stil mit Issue-Verweisen.", "long": "Formuliert bei jedem Commit-Auftrag eine Commit-Nachricht im Conventional-Commits-Stil mit Verweisen auf Issues. Nützlich, wenn einheitliche Nachrichten gewünscht sind. Das Format stammt von Sentry und dient als Vorlage für das Bandito-Format." },
+      "es": { "description": "Mensaje de commit estilo conventional commits con referencias a issues.", "long": "Redacta un mensaje de commit en estilo conventional commits, con referencias a issues, en cada petición de commit. Sirve cuando se quiere un formato uniforme. El formato es el de Sentry, así que úsalo como base para el formato de Bandito." },
+      "fr": { "description": "Message de commit au style conventional commits avec références aux issues.", "long": "Rédige un message de commit au style conventional commits, avec des références aux issues, pour chaque demande de commit. Utile pour garder un format uniforme. Le format vient de Sentry : servez-vous-en comme base pour le format Bandito." },
+      "ja": { "description": "issue 参照付きの Conventional Commits 形式でコミットメッセージを作る。", "long": "コミットを依頼されるたびに、issue 参照付きの Conventional Commits 形式でコミットメッセージを作成します。統一した形式が欲しいときに使います。形式は Sentry のものなので、Bandito 向けの雛形として使ってください。" },
+      "ko": { "description": "issue 참조를 포함한 Conventional Commits 형식의 커밋 메시지를 씁니다.", "long": "커밋을 요청할 때마다 issue 참조를 포함한 Conventional Commits 형식의 커밋 메시지를 작성합니다. 일관된 메시지가 필요할 때 쓰세요. 형식은 Sentry의 것이므로 Bandito 형식의 기준으로 삼으세요." },
+      "pt-BR": { "description": "Mensagem de commit no estilo conventional commits com referências a issues.", "long": "Redige uma mensagem de commit no estilo conventional commits, com referências a issues, em cada pedido de commit. Útil quando se quer um formato uniforme. O formato é o da Sentry, então use-o como base para o formato da Bandito." },
+      "zh-Hans": { "description": "按约定式提交风格撰写提交信息，附带 issue 引用。", "long": "每次请求提交时，按约定式提交（conventional commits）风格撰写提交信息并附带 issue 引用。需要统一格式时使用。格式来自 Sentry，可作为 Bandito 格式的模板。" }
+    },
+    "runtimes": ["claude", "codex", "grok"],
+    "scripts": false,
+    "warning_en": "Uses Sentry's commit format; rewrite its rules for Bandito's commit style before relying on it.",
+    "warning_ru": "Формат Sentry; перед использованием перепишите правила сообщения под стиль коммитов Bandito.",
+    "files": ["SKILL.md"]
+  },
+  {
+    "id": "skill-creator",
+    "name": "skill-creator",
+    "publisher": "Anthropic",
+    "source": {
+      "repo": "anthropics/skills",
+      "path": "skills/skill-creator",
+      "commit": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+      "license": "Apache-2.0"
+    },
+    "category": "dev",
+    "description_en": "Create, edit and measure skills: evals, benchmarks, description tuning.",
+    "description_ru": "Создание и правка скиллов: evals, бенчмарки, настройка описания.",
+    "long_en": "Guides writing a new skill or improving an existing one, then tests it with eval runs, benchmarks with variance analysis and tuning of the description so it triggers correctly. Use it when you build or fix a skill and want evidence that it works.",
+    "long_ru": "Помогает написать новый скилл или улучшить существующий, затем проверить его прогонами evals, бенчмарками с анализом разброса и подгонкой описания, чтобы скилл срабатывал правильно. Используйте, когда создаёте или чините скилл и нужны доказательства, что он работает.",
+    "l10n": {
+      "de": { "description": "Skills erstellen, bearbeiten und messen: Evals, Benchmarks, Beschreibung optimieren.", "long": "Hilft beim Schreiben eines neuen Skills oder bei der Verbesserung eines bestehenden und prüft ihn dann mit Eval-Läufen, Benchmarks mit Streuungsanalyse und einer Feinabstimmung der Beschreibung, damit der Skill richtig auslöst. Nützlich, wenn man einen Skill baut oder korrigiert und Belege braucht." },
+      "es": { "description": "Crear, editar y medir skills: evals, benchmarks y ajuste de la descripción.", "long": "Guía la creación de un skill nuevo o la mejora de uno existente y luego lo prueba con ejecuciones de evals, benchmarks con análisis de varianza y ajuste de la descripción para que se active bien. Úsalo cuando construyas o corrijas un skill y necesites pruebas de que funciona." },
+      "fr": { "description": "Créer, modifier et mesurer des skills : evals, benchmarks, réglage de la description.", "long": "Aide à écrire un nouveau skill ou à améliorer un skill existant, puis le teste avec des évaluations, des benchmarks avec analyse de variance et un réglage de la description pour qu'il se déclenche correctement. À utiliser quand on crée ou corrige un skill et qu'on veut des preuves qu'il fonctionne." },
+      "ja": { "description": "スキルの作成・編集・計測: evals、ベンチマーク、説明文の調整。", "long": "新しいスキルの作成や既存スキルの改善を手伝い、評価実行、分散分析つきのベンチマーク、正しく呼び出されるための説明文の調整で検証します。スキルを作成・修正し、動作の根拠が欲しいときに使ってください。" },
+      "ko": { "description": "스킬 작성, 수정, 측정: evals, 벤치마크, 설명 조정.", "long": "새 스킬을 쓰거나 기존 스킬을 개선하는 과정을 돕고, 평가 실행, 분산 분석을 포함한 벤치마크, 올바르게 호출되도록 설명을 다듬는 방식으로 검증합니다. 스킬을 만들거나 고치고 동작 근거가 필요할 때 사용하세요." },
+      "pt-BR": { "description": "Criar, editar e medir skills: evals, benchmarks, ajuste da descrição.", "long": "Ajuda a escrever um skill novo ou melhorar um existente e depois o testa com execuções de evals, benchmarks com análise de variância e ajuste da descrição para que ele seja acionado corretamente. Use ao criar ou corrigir um skill e precisar de evidências de que funciona." },
+      "zh-Hans": { "description": "创建、修改和评测技能：评估运行、基准测试、描述调优。", "long": "帮助编写新技能或改进现有技能，然后通过评估运行、带方差分析的基准测试以及描述调优来验证，确保技能能被正确触发。在创建或修复技能、需要证明其有效时使用。" }
+    },
+    "runtimes": ["claude"],
+    "scripts": true,
+    "warning_en": "run_eval and run_loop call `claude -p` many times, which spends tokens; run_loop and generate_review open a browser.",
+    "warning_ru": "run_eval и run_loop много раз вызывают `claude -p` и тратят токены; run_loop и generate_review открывают браузер.",
+    "files": [
+      "SKILL.md",
+      "agents/analyzer.md",
+      "agents/comparator.md",
+      "agents/grader.md",
+      "assets/eval_review.html",
+      "eval-viewer/generate_review.py",
+      "eval-viewer/viewer.html",
+      "references/schemas.md",
+      "scripts/__init__.py",
+      "scripts/aggregate_benchmark.py",
+      "scripts/generate_report.py",
+      "scripts/improve_description.py",
+      "scripts/package_skill.py",
+      "scripts/quick_validate.py",
+      "scripts/run_eval.py",
+      "scripts/run_loop.py",
+      "scripts/utils.py"
+    ]
+  },
+  {
+    "id": "writing-plans",
+    "name": "writing-plans",
+    "publisher": "obra",
+    "source": {
+      "repo": "obra/superpowers",
+      "path": "skills/writing-plans",
+      "commit": "bb92a77741419a4ab5f06e711a283343f1ada0c3",
+      "license": "MIT"
+    },
+    "category": "productivity",
+    "description_en": "Turns a spec or requirements into a step-by-step plan with files and checks.",
+    "description_ru": "Превращает спеку в пошаговый план с файлами и проверками.",
+    "long_en": "Breaks a multi-step spec into a plan: each step names its files and the check that proves it works. Use it after a spec is agreed and before any code is touched, so the work can be split into small verifiable steps.",
+    "long_ru": "Разбивает спеку многошаговой задачи на план: каждый шаг называет свои файлы и проверку, которая докажет, что он работает. Используйте после согласования спеки и до правок кода, чтобы работу можно было разрезать на маленькие проверяемые шаги.",
+    "l10n": {
+      "de": { "description": "Macht aus einer Spezifikation einen Schritt-für-Schritt-Plan mit Dateien und Prüfungen.", "long": "Zerlegt eine Spezifikation mit mehreren Schritten in einen Plan: Jeder Schritt nennt seine Dateien und die Prüfung, die belegt, dass er funktioniert. Verwenden, wenn eine Spezifikation abgestimmt ist und bevor Code angefasst wird." },
+      "es": { "description": "Convierte una especificación en un plan paso a paso con archivos y comprobaciones.", "long": "Divide una especificación de varios pasos en un plan: cada paso indica sus archivos y la comprobación que demuestra que funciona. Úsalo cuando la especificación esté acordada y antes de tocar código, para dividir el trabajo en pasos pequeños y verificables." },
+      "fr": { "description": "Transforme une spec en plan pas à pas avec fichiers et vérifications.", "long": "Découpe une spec en plusieurs étapes en un plan : chaque étape indique ses fichiers et la vérification qui prouve qu'elle fonctionne. À utiliser une fois la spec validée et avant de toucher au code, pour découper le travail en petites étapes vérifiables." },
+      "ja": { "description": "仕様を、ファイルと検証つきの手順ごとの計画に変える。", "long": "複数ステップの仕様を計画に分解します。各ステップで対象ファイルと、動作を証明する検証を明記します。仕様が合意された後、コードに触る前に使い、作業を小さく検証可能な手順に分けてください。" },
+      "ko": { "description": "스펙을 파일과 검증이 포함된 단계별 계획으로 바꿉니다.", "long": "여러 단계로 된 스펙을 계획으로 나눕니다. 각 단계는 대상 파일과 그 단계가 동작함을 증명하는 검증을 적습니다. 스펙이 합의된 뒤 코드를 건드리기 전에 사용해 작업을 작고 검증 가능한 단계로 나누세요." },
+      "pt-BR": { "description": "Transforma uma especificação em um plano passo a passo com arquivos e verificações.", "long": "Divide uma especificação de várias etapas em um plano: cada passo indica seus arquivos e a verificação que prova que funciona. Use depois que a especificação for acordada e antes de mexer no código, para quebrar o trabalho em passos pequenos e verificáveis." },
+      "zh-Hans": { "description": "把规格转成逐步计划，包含文件和检查项。", "long": "把多步规格拆成计划：每一步写明涉及的文件以及证明其可用的检查。在规格确认之后、改代码之前使用，把工作拆成小而可验证的步骤。" }
+    },
+    "runtimes": ["claude", "codex", "grok"],
+    "scripts": false,
+    "files": ["SKILL.md"]
+  },
+  {
+    "id": "subagent-driven-development",
+    "name": "subagent-driven-development",
+    "publisher": "obra",
+    "source": {
+      "repo": "obra/superpowers",
+      "path": "skills/subagent-driven-development",
+      "commit": "bb92a77741419a4ab5f06e711a283343f1ada0c3",
+      "license": "MIT"
+    },
+    "category": "productivity",
+    "description_en": "Runs a plan task by task, with a separate subagent per task and a review after each.",
+    "description_ru": "Ведёт план задача за задачей: отдельный субагент на каждую задачу и ревью после неё.",
+    "long_en": "Runs an implementation plan where each independent task goes to its own subagent, with a review after each one. Use it when the plan has several independent tasks and the current session can spawn subagents.",
+    "long_ru": "Исполняет план реализации, где каждая независимая задача идёт своему субагенту, и после каждой проводится ревью. Используйте, когда в плане несколько независимых задач и текущая сессия может запускать субагентов.",
+    "l10n": {
+      "de": { "description": "Führt einen Plan Aufgabe für Aufgabe aus, mit einem eigenen Subagenten je Aufgabe und einem Review danach.", "long": "Arbeitet einen Umsetzungsplan ab, in dem jede unabhängige Aufgabe an einen eigenen Subagenten geht und nach jeder ein Review folgt. Verwenden, wenn der Plan mehrere unabhängige Aufgaben hat und die aktuelle Sitzung Subagenten starten kann." },
+      "es": { "description": "Ejecuta un plan tarea por tarea, con un subagente por tarea y una revisión después de cada una.", "long": "Ejecuta un plan de implementación en el que cada tarea independiente va a su propio subagente, con una revisión tras cada una. Úsalo cuando el plan tenga varias tareas independientes y la sesión actual pueda lanzar subagentes." },
+      "fr": { "description": "Exécute un plan tâche par tâche, avec un sous-agent par tâche et une revue après chacune.", "long": "Exécute un plan d'implémentation où chaque tâche indépendante est confiée à son propre sous-agent, avec une revue après chacune. À utiliser quand le plan comporte plusieurs tâches indépendantes et que la session peut lancer des sous-agents." },
+      "ja": { "description": "計画をタスクごとに実行。タスクごとに別のサブエージェントを使い、その都度レビューする。", "long": "実装計画を実行します。独立したタスクはそれぞれ専用のサブエージェントに渡し、タスクごとにレビューします。計画に独立したタスクが複数あり、現在のセッションがサブエージェントを起動できるときに使ってください。" },
+      "ko": { "description": "계획을 작업 단위로 실행합니다. 작업마다 별도 서브에이전트를 쓰고 끝날 때마다 리뷰합니다.", "long": "구현 계획을 실행하며, 독립적인 각 작업을 자체 서브에이전트에 맡기고 작업마다 리뷰합니다. 계획에 독립 작업이 여러 개 있고 현재 세션이 서브에이전트를 띄울 수 있을 때 사용하세요." },
+      "pt-BR": { "description": "Executa um plano tarefa por tarefa, com um subagente por tarefa e revisão após cada uma.", "long": "Executa um plano de implementação em que cada tarefa independente vai para o seu próprio subagente, com revisão após cada uma. Use quando o plano tiver várias tarefas independentes e a sessão atual puder iniciar subagentes." },
+      "zh-Hans": { "description": "按任务执行计划：每个任务交给独立的子代理，完成后审查。", "long": "执行实现计划：每个独立任务交给各自的子代理，每个任务完成后进行审查。适用于计划中有多个独立任务、且当前会话能启动子代理的情况。" }
+    },
+    "runtimes": ["claude"],
+    "scripts": true,
+    "warning_en": "Assumes subagent support. The scripts in scripts/ were checked only for network and destructive calls, not read line by line; read them before running.",
+    "warning_ru": "Рассчитан на поддержку субагентов. Скрипты в scripts/ проверены только на сетевые и деструктивные вызовы, построчно не читались; перед запуском прочитайте их.",
+    "files": [
+      "SKILL.md",
+      "implementer-prompt.md",
+      "re-review-prompt.md",
+      "scripts/review-package",
+      "scripts/sdd-workspace",
+      "scripts/task-brief",
+      "task-reviewer-prompt.md"
+    ]
+  },
+  {
+    "id": "webapp-testing",
+    "name": "webapp-testing",
+    "publisher": "Anthropic",
+    "source": {
+      "repo": "anthropics/skills",
+      "path": "skills/webapp-testing",
+      "commit": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+      "license": "Apache-2.0"
+    },
+    "category": "dev",
+    "description_en": "Playwright checks for local web apps: behavior, screenshots, console logs.",
+    "description_ru": "Проверки локального веба через Playwright: поведение, скриншоты, логи консоли.",
+    "long_en": "Lets the agent drive a local web app with Playwright: check that the front end works, debug UI behavior, take screenshots and read browser console logs. Use it when a change must be seen working in a real browser, not only in unit tests.",
+    "long_ru": "Позволяет агенту управлять локальным веб-приложением через Playwright: проверить работу интерфейса, разобрать поведение UI, сделать скриншоты и прочитать логи консоли браузера. Используйте, когда изменение нужно увидеть работающим в настоящем браузере, а не только в юнит-тестах.",
+    "l10n": {
+      "de": { "description": "Playwright-Prüfungen für lokale Web-Apps: Verhalten, Screenshots, Konsolenlogs.", "long": "Lässt den Agenten eine lokale Web-App mit Playwright steuern: Funktion der Oberfläche prüfen, UI-Verhalten untersuchen, Screenshots machen und Browser-Konsolenlogs lesen. Verwenden, wenn eine Änderung im echten Browser sichtbar funktionieren muss, nicht nur in Unit-Tests." },
+      "es": { "description": "Comprobaciones con Playwright de apps web locales: comportamiento, capturas, logs de consola.", "long": "Permite al agente manejar una app web local con Playwright: comprobar que la interfaz funciona, depurar el comportamiento de la UI, hacer capturas y leer los logs de la consola del navegador. Úsalo cuando un cambio debe verse funcionando en un navegador real, no solo en pruebas unitarias." },
+      "fr": { "description": "Tests Playwright d'applications web locales : comportement, captures d'écran, logs console.", "long": "Permet à l'agent de piloter une application web locale avec Playwright : vérifier le fonctionnement de l'interface, déboguer le comportement de l'UI, faire des captures d'écran et lire les logs de la console du navigateur. À utiliser quand un changement doit être vu fonctionnel dans un vrai navigateur, pas seulement dans les tests unitaires." },
+      "ja": { "description": "ローカル Web アプリを Playwright で検証: 動作、スクリーンショット、コンソールログ。", "long": "Playwright でローカルの Web アプリを操作させます。フロントエンドの動作確認、UI の挙動の調査、スクリーンショット取得、ブラウザのコンソールログ確認ができます。単体テストだけでなく、実際のブラウザで変更が動くことを確かめたいときに使ってください。" },
+      "ko": { "description": "로컬 웹 앱을 Playwright로 검증합니다: 동작, 스크린샷, 콘솔 로그.", "long": "에이전트가 Playwright로 로컬 웹 앱을 조작하게 합니다. 프론트엔드 동작 확인, UI 동작 디버깅, 스크린샷 촬영, 브라우저 콘솔 로그 확인이 가능합니다. 단위 테스트가 아니라 실제 브라우저에서 변경이 동작하는지 봐야 할 때 쓰세요." },
+      "pt-BR": { "description": "Testes com Playwright para apps web locais: comportamento, capturas, logs do console.", "long": "Permite ao agente controlar um app web local com Playwright: verificar o funcionamento da interface, depurar o comportamento da UI, tirar capturas de tela e ler os logs do console do navegador. Use quando uma mudança precisar ser vista funcionando em um navegador real, não só em testes unitários." },
+      "zh-Hans": { "description": "用 Playwright 检查本地网页应用：行为、截图、控制台日志。", "long": "让智能体用 Playwright 操作本地网页应用：检查前端功能、调试界面行为、截取屏幕截图并读取浏览器控制台日志。需要在真实浏览器中看到改动生效、而不只是单元测试通过时使用。" }
+    },
+    "runtimes": ["claude"],
+    "scripts": true,
+    "warning_en": "Needs Python, Playwright and a browser. with_server.py runs the command you pass, so give it only your own dev server.",
+    "warning_ru": "Нужны Python, Playwright и браузер. with_server.py запускает переданную команду, поэтому передавайте только свой dev-сервер.",
+    "files": [
+      "SKILL.md",
+      "examples/console_logging.py",
+      "examples/element_discovery.py",
+      "examples/static_html_automation.py",
+      "scripts/with_server.py"
+    ]
+  },
+  {
+    "id": "iterate-pr",
+    "name": "iterate-pr",
+    "publisher": "Sentry",
+    "source": {
+      "repo": "getsentry/skills",
+      "path": "skills/iterate-pr",
+      "commit": "d18b7aa8ba878354e5c348310230e652f7690f9c",
+      "license": "Apache-2.0"
+    },
+    "category": "dev",
+    "description_en": "Loops on a PR until CI is green and review feedback is handled.",
+    "description_ru": "Цикл по PR до зелёного CI и разобранных замечаний ревью.",
+    "long_en": "Runs the loop of fixing a PR until its actionable CI checks pass and high- and medium-priority review comments are addressed. Use it for failing CI or review feedback on an open PR. It does not wait for approval or merge.",
+    "long_ru": "Ведёт цикл правок PR, пока не пройдут выполнимые проверки CI и не будут закрыты замечания ревью высокого и среднего приоритета. Используйте при падающем CI или замечаниях ревью в открытом PR. Не ждёт одобрения и слияния.",
+    "l10n": {
+      "de": { "description": "Schleife am PR, bis CI grün ist und Review-Feedback abgearbeitet wurde.", "long": "Führt die Schleife aus, einen PR zu überarbeiten, bis die umsetzbaren CI-Prüfungen bestehen und Review-Hinweise mit hoher und mittlerer Priorität erledigt sind. Verwenden bei fehlschlagendem CI oder Review-Feedback an einem offenen PR. Wartet nicht auf Genehmigung oder Merge." },
+      "es": { "description": "Itera sobre un PR hasta que el CI esté en verde y se atiendan los comentarios de revisión.", "long": "Ejecuta el bucle de corregir un PR hasta que pasen las comprobaciones de CI accionables y se atiendan los comentarios de revisión de prioridad alta y media. Úsalo con CI fallido o comentarios de revisión en un PR abierto. No espera aprobación ni fusión." },
+      "fr": { "description": "Boucle sur une PR jusqu'à ce que la CI soit verte et que les retours de revue soient traités.", "long": "Enchaîne les corrections d'une PR jusqu'à ce que les vérifications CI exploitables passent et que les remarques de revue de priorité haute et moyenne soient traitées. À utiliser pour une CI en échec ou des retours de revue sur une PR ouverte. N'attend ni approbation ni fusion." },
+      "ja": { "description": "CI が通り、レビュー指摘が解消されるまで PR を繰り返し修正する。", "long": "対応可能な CI チェックが通り、優先度の高い指摘と中程度の指摘が処理されるまで、PR の修正を繰り返します。開いている PR の CI 失敗やレビュー指摘に使ってください。承認やマージは待ちません。" },
+      "ko": { "description": "CI가 통과하고 리뷰 지적이 처리될 때까지 PR을 반복해서 고칩니다.", "long": "조치 가능한 CI 검사가 통과하고 높음·중간 우선순위 리뷰 지적이 처리될 때까지 PR 수정 루프를 돕니다. 열린 PR의 CI 실패나 리뷰 피드백에 사용하세요. 승인이나 병합을 기다리지 않습니다." },
+      "pt-BR": { "description": "Itera sobre um PR até o CI passar e os comentários de revisão serem tratados.", "long": "Executa o ciclo de corrigir um PR até que as verificações de CI acionáveis passem e os comentários de revisão de prioridade alta e média sejam tratados. Use para CI com falha ou comentários de revisão em um PR aberto. Não espera aprovação nem merge." },
+      "zh-Hans": { "description": "反复修改 PR，直到 CI 通过且审查意见处理完毕。", "long": "循环修改 PR，直到可处理的 CI 检查通过、高和中优先级的审查意见都已处理。用于开放 PR 的 CI 失败或审查反馈。不等待批准或合并。" }
+    },
+    "runtimes": ["claude"],
+    "scripts": true,
+    "warning_en": "Needs gh and network access. reply_to_thread posts replies to the PR: confirm each one.",
+    "warning_ru": "Нужны gh и сеть. reply_to_thread публикует ответы в PR: подтверждайте каждый ответ.",
+    "files": [
+      "SKILL.md",
+      "SPEC.md",
+      "agents/openai.yaml",
+      "scripts/fetch_pr_checks.py",
+      "scripts/fetch_pr_feedback.py",
+      "scripts/monitor_pr_checks.py",
+      "scripts/reply_to_thread.py"
+    ]
+  },
+  {
+    "id": "obsidian-markdown",
+    "name": "obsidian-markdown",
+    "publisher": "kepano",
+    "source": {
+      "repo": "kepano/obsidian-skills",
+      "path": "skills/obsidian-markdown",
+      "commit": "3ccff5338ea700537839b21900aa5358a0402c98",
+      "license": "MIT"
+    },
+    "category": "writing",
+    "description_en": "Obsidian Flavored Markdown: wikilinks, embeds, callouts, properties.",
+    "description_ru": "Markdown Obsidian: вики-ссылки, встраивания, callout-блоки, свойства.",
+    "long_en": "Teaches the agent Obsidian's markdown: wikilinks, embeds, callouts, frontmatter properties and tags, so notes in an Obsidian vault render and link correctly. Use it when writing or editing .md notes meant for Obsidian.",
+    "long_ru": "Учит агента разметке Obsidian: вики-ссылкам, встраиваниям, callout-блокам, свойствам frontmatter и тегам, чтобы заметки в хранилище Obsidian открывались и связывались правильно. Используйте при написании или правке .md-заметок для Obsidian.",
+    "l10n": {
+      "de": { "description": "Obsidian-Markdown: Wikilinks, Einbettungen, Callouts, Eigenschaften.", "long": "Bringt dem Agenten die Markdown-Syntax von Obsidian bei: Wikilinks, Einbettungen, Callouts, Frontmatter-Eigenschaften und Tags, damit Notizen im Obsidian-Vault richtig dargestellt und verlinkt werden. Verwenden beim Schreiben oder Bearbeiten von .md-Notizen für Obsidian." },
+      "es": { "description": "Markdown de Obsidian: wikienlaces, incrustaciones, callouts, propiedades.", "long": "Enseña al agente el markdown de Obsidian: wikienlaces, incrustaciones, callouts, propiedades del frontmatter y etiquetas, para que las notas de un vault se muestren y enlacen bien. Úsalo al escribir o editar notas .md destinadas a Obsidian." },
+      "fr": { "description": "Markdown Obsidian : wikiliens, intégrations, callouts, propriétés.", "long": "Apprend à l'agent la syntaxe markdown d'Obsidian : wikiliens, intégrations, callouts, propriétés du frontmatter et étiquettes, pour que les notes d'un coffre s'affichent et se relient correctement. À utiliser pour écrire ou modifier des notes .md destinées à Obsidian." },
+      "ja": { "description": "Obsidian の Markdown: ウィキリンク、埋め込み、コールアウト、プロパティ。", "long": "Obsidian 独自の Markdown をエージェントに教えます。ウィキリンク、埋め込み、コールアウト、フロントマターのプロパティとタグを扱えるので、Vault のノートが正しく表示・リンクされます。Obsidian 向けの .md ノートを書く・編集するときに使ってください。" },
+      "ko": { "description": "Obsidian 마크다운: 위키링크, 임베드, 콜아웃, 속성.", "long": "Obsidian 전용 마크다운을 에이전트에게 알려 줍니다. 위키링크, 임베드, 콜아웃, 프론트매터 속성과 태그를 다뤄서 볼트의 노트가 올바르게 표시되고 연결되도록 합니다. Obsidian용 .md 노트를 쓰거나 고칠 때 사용하세요." },
+      "pt-BR": { "description": "Markdown do Obsidian: wikilinks, embeds, callouts, propriedades.", "long": "Ensina ao agente a sintaxe de markdown do Obsidian: wikilinks, embeds, callouts, propriedades do frontmatter e tags, para que as notas do vault sejam exibidas e linkadas corretamente. Use ao escrever ou editar notas .md feitas para o Obsidian." },
+      "zh-Hans": { "description": "Obsidian 风味 Markdown：维基链接、嵌入、标注框、属性。", "long": "教智能体使用 Obsidian 的 Markdown 语法：维基链接、嵌入、标注框（callout）、前置属性和标签，使库中的笔记能正确显示和互相链接。编写或修改面向 Obsidian 的 .md 笔记时使用。" }
+    },
+    "runtimes": ["claude", "codex", "grok"],
+    "scripts": false,
+    "files": [
+      "SKILL.md",
+      "references/CALLOUTS.md",
+      "references/EMBEDS.md",
+      "references/PROPERTIES.md"
+    ]
+  },
+  {
+    "id": "defuddle",
+    "name": "defuddle",
+    "publisher": "kepano",
+    "source": {
+      "repo": "kepano/obsidian-skills",
+      "path": "skills/defuddle",
+      "commit": "3ccff5338ea700537839b21900aa5358a0402c98",
+      "license": "MIT"
+    },
+    "category": "research",
+    "description_en": "Extracts clean Markdown from HTML pages with the Defuddle CLI.",
+    "description_ru": "Чистый Markdown из веб-страниц через Defuddle CLI: меньше токенов, чем HTML.",
+    "long_en": "Extracts the readable content of an HTML page as clean Markdown with the Defuddle CLI. Use it when the agent must read a web page: the Markdown is much shorter than raw HTML, so it costs fewer tokens.",
+    "long_ru": "Извлекает читаемое содержимое HTML-страницы в виде чистого Markdown с помощью Defuddle CLI. Используйте, когда агенту нужно прочитать веб-страницу: Markdown заметно короче сырого HTML и стоит меньше токенов.",
+    "l10n": {
+      "de": { "description": "Saubere Markdown-Texte aus HTML-Seiten mit dem Defuddle CLI.", "long": "Extrahiert den lesbaren Inhalt einer HTML-Seite als sauberes Markdown mit dem Defuddle CLI. Verwenden, wenn der Agent eine Webseite lesen muss: Markdown ist deutlich kürzer als rohes HTML und kostet weniger Tokens." },
+      "es": { "description": "Extrae Markdown limpio de páginas HTML con la CLI de Defuddle.", "long": "Extrae el contenido legible de una página HTML como Markdown limpio con la CLI de Defuddle. Úsalo cuando el agente deba leer una página web: el Markdown es mucho más corto que el HTML y gasta menos tokens." },
+      "fr": { "description": "Extrait un Markdown propre des pages HTML avec la CLI Defuddle.", "long": "Extrait le contenu lisible d'une page HTML en Markdown propre avec la CLI Defuddle. À utiliser quand l'agent doit lire une page web : le Markdown est nettement plus court que le HTML brut et coûte moins de tokens." },
+      "ja": { "description": "Defuddle CLI で HTML ページからきれいな Markdown を抽出する。", "long": "Defuddle CLI で HTML ページの本文を、きれいな Markdown として取り出します。エージェントが Web ページを読む必要があるときに使ってください。Markdown は生の HTML よりずっと短く、トークンを節約できます。" },
+      "ko": { "description": "Defuddle CLI로 HTML 페이지에서 깨끗한 마크다운을 추출합니다.", "long": "Defuddle CLI로 HTML 페이지의 읽을 수 있는 본문을 깨끗한 마크다운으로 추출합니다. 에이전트가 웹 페이지를 읽어야 할 때 사용하세요. 마크다운은 원본 HTML보다 훨씬 짧아 토큰을 덜 씁니다." },
+      "pt-BR": { "description": "Extrai Markdown limpo de páginas HTML com a CLI do Defuddle.", "long": "Extrai o conteúdo legível de uma página HTML como Markdown limpo com a CLI do Defuddle. Use quando o agente precisar ler uma página web: o Markdown é bem mais curto que o HTML bruto e gasta menos tokens." },
+      "zh-Hans": { "description": "用 Defuddle CLI 从 HTML 页面提取干净的 Markdown。", "long": "用 Defuddle CLI 把 HTML 页面的可读内容提取为干净的 Markdown。智能体需要读取网页时使用：Markdown 比原始 HTML 短得多，消耗的 token 更少。" }
+    },
+    "runtimes": ["claude", "codex", "grok"],
+    "scripts": false,
+    "warning_en": "The skill suggests `npm install -g defuddle`; install the CLI yourself rather than letting the skill install it.",
+    "warning_ru": "Скилл предлагает `npm install -g defuddle`; ставьте CLI сами, а не через скилл.",
+    "files": ["SKILL.md"]
+  },
+  {
+    "id": "supabase-postgres-best-practices",
+    "name": "supabase-postgres-best-practices",
+    "publisher": "Supabase",
+    "source": {
+      "repo": "supabase/agent-skills",
+      "path": "skills/supabase-postgres-best-practices",
+      "commit": "c9be0e931b7930f7d02126d04774d904c381e7d7",
+      "license": "MIT"
+    },
+    "category": "data",
+    "description_en": "Postgres rules by Supabase: schema, indexes, queries, RLS, connections, locks.",
+    "description_ru": "Правила Postgres от Supabase: схема, индексы, запросы, RLS, соединения, блокировки.",
+    "long_en": "Gives the agent reference rules for Postgres: schema and types, indexes, queries, RLS and security, connection pooling, locks and monitoring. Load it before changing tables, indexes, policies or slow queries.",
+    "long_ru": "Даёт агенту справочные правила по Postgres: схема и типы, индексы, запросы, RLS и безопасность, пулинг соединений, блокировки и мониторинг. Загружайте перед изменением таблиц, индексов, политик или медленных запросов.",
+    "l10n": {
+      "de": { "description": "Postgres-Regeln von Supabase: Schema, Indizes, Abfragen, RLS, Verbindungen, Sperren.", "long": "Gibt dem Agenten Referenzregeln für Postgres: Schema und Datentypen, Indizes, Abfragen, RLS und Sicherheit, Verbindungspooling, Sperren und Monitoring. Vor Änderungen an Tabellen, Indizes, Policies oder langsamen Abfragen laden." },
+      "es": { "description": "Reglas de Postgres de Supabase: esquema, índices, consultas, RLS, conexiones, bloqueos.", "long": "Da al agente reglas de referencia para Postgres: esquema y tipos, índices, consultas, RLS y seguridad, pooling de conexiones, bloqueos y monitorización. Cárgalo antes de cambiar tablas, índices, políticas o consultas lentas." },
+      "fr": { "description": "Règles Postgres de Supabase : schéma, index, requêtes, RLS, connexions, verrous.", "long": "Fournit à l'agent des règles de référence pour Postgres : schéma et types, index, requêtes, RLS et sécurité, pooling de connexions, verrous et supervision. À charger avant de modifier des tables, des index, des politiques ou des requêtes lentes." },
+      "ja": { "description": "Supabase による Postgres のベストプラクティス: スキーマ、インデックス、クエリ、RLS、接続、ロック。", "long": "Postgres の参考ルールをエージェントに与えます。スキーマと型、インデックス、クエリ、RLS とセキュリティ、コネクションプーリング、ロック、監視を扱います。テーブル、インデックス、ポリシー、遅いクエリを変更する前に読み込んでください。" },
+      "ko": { "description": "Supabase의 Postgres 모범 사례: 스키마, 인덱스, 쿼리, RLS, 연결, 락.", "long": "Postgres 참고 규칙을 에이전트에게 제공합니다. 스키마와 타입, 인덱스, 쿼리, RLS와 보안, 커넥션 풀링, 락, 모니터링을 다룹니다. 테이블, 인덱스, 정책, 느린 쿼리를 바꾸기 전에 불러오세요." },
+      "pt-BR": { "description": "Regras de Postgres da Supabase: esquema, índices, consultas, RLS, conexões, locks.", "long": "Dá ao agente regras de referência para Postgres: esquema e tipos, índices, consultas, RLS e segurança, pooling de conexões, locks e monitoramento. Carregue antes de alterar tabelas, índices, políticas ou consultas lentas." },
+      "zh-Hans": { "description": "Supabase 出品的 Postgres 最佳实践：模式、索引、查询、RLS、连接、锁。", "long": "为智能体提供 Postgres 参考规则：模式与数据类型、索引、查询、RLS 与安全、连接池、锁和监控。在修改表、索引、策略或慢查询之前加载。" }
+    },
+    "runtimes": ["claude", "codex", "grok"],
+    "scripts": false,
+    "files": [
+      "CHANGELOG.md",
+      "SKILL.md",
+      "references/_contributing.md",
+      "references/_sections.md",
+      "references/_template.md",
+      "references/advanced-full-text-search.md",
+      "references/advanced-jsonb-indexing.md",
+      "references/conn-idle-timeout.md",
+      "references/conn-limits.md",
+      "references/conn-pooling.md",
+      "references/conn-prepared-statements.md",
+      "references/data-batch-inserts.md",
+      "references/data-n-plus-one.md",
+      "references/data-pagination.md",
+      "references/data-upsert.md",
+      "references/lock-advisory.md",
+      "references/lock-deadlock-prevention.md",
+      "references/lock-short-transactions.md",
+      "references/lock-skip-locked.md",
+      "references/monitor-explain-analyze.md",
+      "references/monitor-pg-stat-statements.md",
+      "references/monitor-vacuum-analyze.md",
+      "references/query-composite-indexes.md",
+      "references/query-covering-indexes.md",
+      "references/query-index-types.md",
+      "references/query-missing-indexes.md",
+      "references/query-partial-indexes.md",
+      "references/schema-constraints.md",
+      "references/schema-data-types.md",
+      "references/schema-foreign-key-indexes.md",
+      "references/schema-lowercase-identifiers.md",
+      "references/schema-partitioning.md",
+      "references/schema-primary-keys.md",
+      "references/security-privileges.md",
+      "references/security-rls-basics.md",
+      "references/security-rls-performance.md"
+    ]
+  },
+  {
+    "id": "supabase",
+    "name": "supabase",
+    "publisher": "Supabase",
+    "source": {
+      "repo": "supabase/agent-skills",
+      "path": "skills/supabase",
+      "commit": "c9be0e931b7930f7d02126d04774d904c381e7d7",
+      "license": "MIT"
+    },
+    "category": "data",
+    "description_en": "Working with Supabase: database, auth, edge functions, storage, CLI and migrations.",
+    "description_ru": "Работа с Supabase: база, auth, edge functions, storage, CLI и миграции.",
+    "long_en": "Guides the agent through Supabase tasks: database and migrations, auth and sessions, edge functions, storage, realtime and the CLI. Use it when a Supabase project is involved, including login and RLS issues.",
+    "long_ru": "Ведёт агента по задачам Supabase: база и миграции, auth и сессии, edge functions, storage, realtime и CLI. Используйте, когда в работе есть проект Supabase, включая проблемы входа и RLS.",
+    "l10n": {
+      "de": { "description": "Arbeit mit Supabase: Datenbank, Auth, Edge Functions, Storage, CLI und Migrationen.", "long": "Führt den Agenten durch Supabase-Aufgaben: Datenbank und Migrationen, Auth und Sitzungen, Edge Functions, Storage, Realtime und CLI. Verwenden, wenn ein Supabase-Projekt betroffen ist, auch bei Login- und RLS-Problemen." },
+      "es": { "description": "Trabajo con Supabase: base de datos, auth, edge functions, storage, CLI y migraciones.", "long": "Guía al agente en tareas de Supabase: base de datos y migraciones, auth y sesiones, edge functions, storage, realtime y CLI. Úsalo cuando intervenga un proyecto de Supabase, incluidos los problemas de inicio de sesión y RLS." },
+      "fr": { "description": "Travail avec Supabase : base, auth, edge functions, storage, CLI et migrations.", "long": "Guide l'agent dans les tâches Supabase : base de données et migrations, auth et sessions, edge functions, storage, realtime et CLI. À utiliser dès qu'un projet Supabase est concerné, y compris pour les problèmes de connexion et de RLS." },
+      "ja": { "description": "Supabase の作業: データベース、認証、Edge Functions、ストレージ、CLI、マイグレーション。", "long": "Supabase のタスクをエージェントに進めさせます。データベースとマイグレーション、認証とセッション、Edge Functions、ストレージ、リアルタイム、CLI を扱います。ログインや RLS の問題を含め、Supabase プロジェクトが関係する作業に使ってください。" },
+      "ko": { "description": "Supabase 작업: 데이터베이스, 인증, 엣지 함수, 스토리지, CLI, 마이그레이션.", "long": "Supabase 작업을 에이전트가 진행하도록 돕습니다. 데이터베이스와 마이그레이션, 인증과 세션, 엣지 함수, 스토리지, 리얼타임, CLI를 다룹니다. 로그인이나 RLS 문제를 포함해 Supabase 프로젝트가 관련된 작업에 사용하세요." },
+      "pt-BR": { "description": "Trabalho com Supabase: banco, auth, edge functions, storage, CLI e migrações.", "long": "Guia o agente em tarefas de Supabase: banco de dados e migrações, auth e sessões, edge functions, storage, realtime e CLI. Use quando houver um projeto Supabase envolvido, inclusive em problemas de login e RLS." },
+      "zh-Hans": { "description": "Supabase 相关工作：数据库、认证、边缘函数、存储、CLI 与迁移。", "long": "指导智能体完成 Supabase 任务：数据库与迁移、认证与会话、边缘函数、存储、实时功能和 CLI。涉及 Supabase 项目时使用，包括登录和 RLS 问题。" }
+    },
+    "runtimes": ["claude", "codex", "grok"],
+    "scripts": false,
+    "warning_en": "CLI migrations and project commands can change a production database; follow the prod-stop rule and confirm each one.",
+    "warning_ru": "Миграции и команды CLI могут изменить продовую базу; действуйте по правилу prod-stop и подтверждайте каждое действие.",
+    "files": [
+      "CHANGELOG.md",
+      "SKILL.md",
+      "assets/feedback-issue-template.md",
+      "references/skill-feedback.md"
+    ]
+  },
+  {
+    "id": "stripe-best-practices",
+    "name": "stripe-best-practices",
+    "publisher": "Stripe",
+    "source": {
+      "repo": "stripe/ai",
+      "path": "skills/stripe-best-practices",
+      "commit": "e9deec62821ca59aa6ca18b4d243c9ced389cd54",
+      "license": "MIT"
+    },
+    "category": "ops",
+    "description_en": "Stripe integration decisions: API choice, Connect, billing, tax, webhooks, security.",
+    "description_ru": "Решения по интеграции Stripe: выбор API, Connect, подписки, налоги, вебхуки, безопасность.",
+    "long_en": "Helps the agent choose and check a Stripe integration: API choice, test-mode setup, Connect, billing, tax, webhooks and API-key security. Use it when planning or reviewing any Stripe code; payment code still needs a human review.",
+    "long_ru": "Помогает агенту выбрать и проверить интеграцию Stripe: выбор API, настройку тестового режима, Connect, подписки, налоги, вебхуки и безопасность ключей API. Используйте при планировании или ревью любого кода Stripe. Код платежей всё равно должен проверить человек.",
+    "l10n": {
+      "de": { "description": "Entscheidungen zur Stripe-Integration: API-Wahl, Connect, Billing, Steuern, Webhooks, Sicherheit.", "long": "Hilft dem Agenten, eine Stripe-Integration zu wählen und zu prüfen: API-Wahl, Testmodus-Einrichtung, Connect, Billing, Steuern, Webhooks und Sicherheit der API-Schlüssel. Verwenden bei Planung oder Review von Stripe-Code; Zahlungscode braucht trotzdem eine menschliche Prüfung." },
+      "es": { "description": "Decisiones de integración con Stripe: elección de API, Connect, facturación, impuestos, webhooks, seguridad.", "long": "Ayuda al agente a elegir y revisar una integración de Stripe: elección de API, configuración del modo de prueba, Connect, facturación, impuestos, webhooks y seguridad de las claves de API. Úsalo al planificar o revisar código de Stripe; el código de pagos aun así requiere revisión humana." },
+      "fr": { "description": "Décisions d'intégration Stripe : choix d'API, Connect, facturation, taxes, webhooks, sécurité.", "long": "Aide l'agent à choisir et vérifier une intégration Stripe : choix de l'API, configuration du mode test, Connect, facturation, taxes, webhooks et sécurité des clés d'API. À utiliser pour planifier ou relire du code Stripe ; le code de paiement reste soumis à une revue humaine." },
+      "ja": { "description": "Stripe 連携の判断: API の選択、Connect、請求、税、Webhook、セキュリティ。", "long": "Stripe 連携の選定と確認をエージェントが助けます。API の選択、テストモードの構成、Connect、請求、税、Webhook、API キーの安全な扱いを扱います。Stripe のコードを計画・レビューするときに使ってください。支払いのコードは人間のレビューが必要です。" },
+      "ko": { "description": "Stripe 연동 결정: API 선택, Connect, 결제, 세금, 웹훅, 보안.", "long": "Stripe 연동을 고르고 점검하는 일을 에이전트가 돕습니다. API 선택, 테스트 모드 설정, Connect, 구독 결제, 세금, 웹훅, API 키 보안을 다룹니다. Stripe 코드를 계획하거나 리뷰할 때 쓰세요. 결제 코드는 여전히 사람이 검토해야 합니다." },
+      "pt-BR": { "description": "Decisões de integração com Stripe: escolha de API, Connect, cobrança, impostos, webhooks, segurança.", "long": "Ajuda o agente a escolher e revisar uma integração com Stripe: escolha de API, configuração do modo de teste, Connect, cobrança, impostos, webhooks e segurança das chaves de API. Use ao planejar ou revisar qualquer código Stripe; código de pagamento ainda precisa de revisão humana." },
+      "zh-Hans": { "description": "Stripe 集成决策：API 选择、Connect、订阅计费、税务、Webhook、安全。", "long": "帮助智能体选择并检查 Stripe 集成：API 选择、测试模式配置、Connect、订阅计费、税务、Webhook 以及 API 密钥安全。规划或审查任何 Stripe 代码时使用；支付相关代码仍需人工复核。" }
+    },
+    "runtimes": ["claude", "codex", "grok"],
+    "scripts": false,
+    "warning_en": "Handles money: code that charges, refunds or processes webhooks needs a human review before release.",
+    "warning_ru": "Работает с деньгами: код списаний, возвратов и вебхуков перед релизом требует проверки человеком.",
+    "files": [
+      "SKILL.md",
+      "references/billing.md",
+      "references/connect.md",
+      "references/payments.md",
+      "references/security.md",
+      "references/tax.md",
+      "references/treasury.md"
+    ]
+  },
+  {
+    "id": "wrangler",
+    "name": "wrangler",
+    "publisher": "Cloudflare",
+    "source": {
+      "repo": "cloudflare/skills",
+      "path": "skills/wrangler",
+      "commit": "0871daceb347e3c51693fbe9c77555468df7e410",
+      "license": "Apache-2.0"
+    },
+    "category": "ops",
+    "description_en": "Wrangler CLI commands: local dev, previews, deploys, Cloudflare resources.",
+    "description_ru": "Команды Wrangler CLI: локальная разработка, превью, деплой, ресурсы Cloudflare.",
+    "long_en": "Gives the agent the Wrangler CLI commands and config for Worker projects: local development, previews, deployment and managing Cloudflare resources. Use it when running or fixing a Wrangler command in a Worker project.",
+    "long_ru": "Даёт агенту команды и конфиг Wrangler CLI для проектов Workers: локальная разработка, превью, деплой и управление ресурсами Cloudflare. Используйте, когда нужно выполнить или починить команду Wrangler в проекте Worker.",
+    "l10n": {
+      "de": { "description": "Wrangler-CLI-Befehle: lokale Entwicklung, Previews, Deployment, Cloudflare-Ressourcen.", "long": "Gibt dem Agenten die Befehle und die Konfiguration der Wrangler-CLI für Worker-Projekte: lokale Entwicklung, Previews, Deployment und die Verwaltung von Cloudflare-Ressourcen. Verwenden, wenn ein Wrangler-Befehl in einem Worker-Projekt ausgeführt oder repariert werden muss." },
+      "es": { "description": "Comandos de Wrangler CLI: desarrollo local, previews, despliegue, recursos de Cloudflare.", "long": "Da al agente los comandos y la configuración de Wrangler CLI para proyectos Workers: desarrollo local, previews, despliegue y gestión de recursos de Cloudflare. Úsalo al ejecutar o corregir un comando de Wrangler en un proyecto Worker." },
+      "fr": { "description": "Commandes de la CLI Wrangler : dev locale, previews, déploiement, ressources Cloudflare.", "long": "Fournit à l'agent les commandes et la configuration de la CLI Wrangler pour les projets Workers : développement local, previews, déploiement et gestion des ressources Cloudflare. À utiliser pour lancer ou corriger une commande Wrangler dans un projet Worker." },
+      "ja": { "description": "Wrangler CLI のコマンド: ローカル開発、プレビュー、デプロイ、Cloudflare リソース。", "long": "Worker プロジェクト向けの Wrangler CLI のコマンドと設定をエージェントに与えます。ローカル開発、プレビュー、デプロイ、Cloudflare リソースの管理を扱います。Worker プロジェクトで Wrangler のコマンドを実行・修正するときに使ってください。" },
+      "ko": { "description": "Wrangler CLI 명령: 로컬 개발, 프리뷰, 배포, Cloudflare 리소스.", "long": "Worker 프로젝트를 위한 Wrangler CLI 명령과 설정을 에이전트에게 제공합니다. 로컬 개발, 프리뷰, 배포, Cloudflare 리소스 관리를 다룹니다. Worker 프로젝트에서 Wrangler 명령을 실행하거나 고칠 때 사용하세요." },
+      "pt-BR": { "description": "Comandos da Wrangler CLI: dev local, previews, deploy, recursos da Cloudflare.", "long": "Dá ao agente os comandos e a configuração da Wrangler CLI para projetos Workers: desenvolvimento local, previews, deploy e gestão de recursos da Cloudflare. Use ao executar ou corrigir um comando do Wrangler em um projeto Worker." },
+      "zh-Hans": { "description": "Wrangler CLI 命令：本地开发、预览、部署、Cloudflare 资源。", "long": "为智能体提供 Worker 项目的 Wrangler CLI 命令和配置：本地开发、预览、部署以及 Cloudflare 资源管理。在 Worker 项目中运行或修复 Wrangler 命令时使用。" }
+    },
+    "runtimes": ["claude", "codex", "grok"],
+    "scripts": false,
+    "warning_en": "Deploys to a Cloudflare account: confirm each deploy and resource change first.",
+    "warning_ru": "Деплоит в аккаунт Cloudflare: каждый деплой и изменение ресурсов сначала подтверждайте.",
+    "files": ["SKILL.md"]
+  },
+  {
+    "id": "workers-best-practices",
+    "name": "workers-best-practices",
+    "publisher": "Cloudflare",
+    "source": {
+      "repo": "cloudflare/skills",
+      "path": "skills/workers-best-practices",
+      "commit": "0871daceb347e3c51693fbe9c77555468df7e410",
+      "license": "Apache-2.0"
+    },
+    "category": "dev",
+    "description_en": "Production practices for Cloudflare Workers: configuration, runtime, platform APIs.",
+    "description_ru": "Практики production для Cloudflare Workers: конфиг, рантайм, API платформы.",
+    "long_en": "Gives the agent production practices for Cloudflare Workers: configuration, runtime patterns and platform APIs. Use it when writing, reviewing or configuring a Worker. It applies only to Workers projects.",
+    "long_ru": "Даёт агенту практики production для Cloudflare Workers: конфигурацию, паттерны рантайма и API платформы. Используйте при написании, ревью или настройке Worker. Применимо только к проектам Workers.",
+    "l10n": {
+      "de": { "description": "Produktionspraktiken für Cloudflare Workers: Konfiguration, Laufzeit, Plattform-APIs.", "long": "Gibt dem Agenten Produktionspraktiken für Cloudflare Workers: Konfiguration, Laufzeitmuster und Plattform-APIs. Verwenden beim Schreiben, Prüfen oder Konfigurieren eines Workers. Gilt nur für Worker-Projekte." },
+      "es": { "description": "Buenas prácticas de producción para Cloudflare Workers: configuración, runtime, APIs de plataforma.", "long": "Da al agente buenas prácticas de producción para Cloudflare Workers: configuración, patrones de runtime y APIs de la plataforma. Úsalo al escribir, revisar o configurar un Worker. Solo aplica a proyectos Workers." },
+      "fr": { "description": "Bonnes pratiques de production pour Cloudflare Workers : configuration, runtime, API de plateforme.", "long": "Fournit à l'agent les bonnes pratiques de production pour Cloudflare Workers : configuration, modèles de runtime et API de plateforme. À utiliser pour écrire, relire ou configurer un Worker. Ne s'applique qu'aux projets Workers." },
+      "ja": { "description": "Cloudflare Workers の本番向けベストプラクティス: 設定、ランタイム、プラットフォーム API。", "long": "Cloudflare Workers の本番向けの実践をエージェントに与えます。設定、ランタイムのパターン、プラットフォーム API を扱います。Worker を書く・レビューする・設定するときに使ってください。Workers プロジェクトにのみ当てはまります。" },
+      "ko": { "description": "Cloudflare Workers 운영 모범 사례: 구성, 런타임, 플랫폼 API.", "long": "Cloudflare Workers를 운영 환경에서 쓰기 위한 모범 사례를 에이전트에게 제공합니다. 구성, 런타임 패턴, 플랫폼 API를 다룹니다. Worker를 작성, 리뷰, 구성할 때 사용하세요. Workers 프로젝트에만 해당합니다." },
+      "pt-BR": { "description": "Boas práticas de produção para Cloudflare Workers: configuração, runtime, APIs da plataforma.", "long": "Dá ao agente boas práticas de produção para Cloudflare Workers: configuração, padrões de runtime e APIs da plataforma. Use ao escrever, revisar ou configurar um Worker. Vale apenas para projetos Workers." },
+      "zh-Hans": { "description": "Cloudflare Workers 生产环境最佳实践：配置、运行时、平台 API。", "long": "为智能体提供 Cloudflare Workers 的生产环境实践：配置、运行时模式和平台 API。编写、审查或配置 Worker 时使用。仅适用于 Workers 项目。" }
+    },
+    "runtimes": ["claude", "codex", "grok"],
+    "scripts": false,
+    "files": [
+      "SKILL.md",
+      "references/configuration.md",
+      "references/platform-apis.md",
+      "references/runtime-patterns.md"
+    ]
+  },
+  {
+    "id": "gha-security-review",
+    "name": "gha-security-review",
+    "publisher": "Sentry",
+    "source": {
+      "repo": "getsentry/skills",
+      "path": "skills/gha-security-review",
+      "commit": "d18b7aa8ba878354e5c348310230e652f7690f9c",
+      "license": "Apache-2.0"
+    },
+    "category": "ops",
+    "description_en": "Security review of GitHub Actions workflows: pwn requests, injection, secrets.",
+    "description_ru": "Аудит GitHub Actions: pwn-запросы, инъекции, секреты, цепочка поставок.",
+    "long_en": "Audits .github/workflows for exploitable flaws: pwn requests, expression injection, credential theft and supply-chain risks, with concrete attack scenarios. Use it when reviewing CI workflows for security.",
+    "long_ru": "Проверяет .github/workflows на эксплуатируемые уязвимости: pwn-запросы, инъекции в выражения, кражу учётных данных и риски цепочки поставок, с конкретными сценариями атак. Используйте при проверке безопасности CI-воркфлоу.",
+    "l10n": {
+      "de": { "description": "Sicherheitsprüfung von GitHub-Actions-Workflows: Pwn-Requests, Injection, Secrets.", "long": "Prüft .github/workflows auf ausnutzbare Schwachstellen: Pwn-Requests, Expression-Injection, Diebstahl von Zugangsdaten und Risiken der Lieferkette, mit konkreten Angriffsszenarien. Verwenden, wenn CI-Workflows auf Sicherheit geprüft werden." },
+      "es": { "description": "Revisión de seguridad de workflows de GitHub Actions: pwn requests, inyección, secretos.", "long": "Audita .github/workflows en busca de fallos explotables: pwn requests, inyección en expresiones, robo de credenciales y riesgos de cadena de suministro, con escenarios de ataque concretos. Úsalo al revisar la seguridad de workflows de CI." },
+      "fr": { "description": "Revue de sécurité des workflows GitHub Actions : pwn requests, injections, secrets.", "long": "Audite .github/workflows à la recherche de failles exploitables : pwn requests, injections dans les expressions, vol d'identifiants et risques de chaîne d'approvisionnement, avec des scénarios d'attaque concrets. À utiliser pour relire la sécurité des workflows CI." },
+      "ja": { "description": "GitHub Actions ワークフローのセキュリティレビュー: pwn request、インジェクション、シークレット。", "long": "悪用可能な欠陥を .github/workflows で調べます。pwn request、式へのインジェクション、認証情報の窃取、サプライチェーンのリスクを、具体的な攻撃シナリオとともに扱います。CI ワークフローのセキュリティを確認するときに使ってください。" },
+      "ko": { "description": "GitHub Actions 워크플로 보안 리뷰: pwn 요청, 인젝션, 시크릿.", "long": ".github/workflows에서 악용 가능한 취약점을 점검합니다. pwn 요청, 표현식 인젝션, 자격 증명 탈취, 공급망 위험을 구체적인 공격 시나리오와 함께 다룹니다. CI 워크플로의 보안을 점검할 때 사용하세요." },
+      "pt-BR": { "description": "Revisão de segurança de workflows do GitHub Actions: pwn requests, injeção, segredos.", "long": "Audita .github/workflows em busca de falhas exploráveis: pwn requests, injeção em expressões, roubo de credenciais e riscos de cadeia de suprimentos, com cenários de ataque concretos. Use ao revisar a segurança de workflows de CI." },
+      "zh-Hans": { "description": "GitHub Actions 工作流安全审查：pwn 请求、表达式注入、密钥、供应链。", "long": "在 .github/workflows 中查找可被利用的漏洞：pwn 请求、表达式注入、凭据窃取和供应链风险，并给出具体攻击场景。审查 CI 工作流安全时使用。" }
+    },
+    "runtimes": ["claude", "codex", "grok"],
+    "scripts": false,
+    "files": [
+      "SKILL.md",
+      "references/ai-prompt-injection-via-ci.md",
+      "references/comment-triggered-commands.md",
+      "references/credential-escalation.md",
+      "references/expression-injection.md",
+      "references/permissions-and-secrets.md",
+      "references/pwn-request.md",
+      "references/real-world-attacks.md",
+      "references/runner-infrastructure.md",
+      "references/supply-chain.md"
+    ]
+  },
+  {
+    "id": "frontend-design",
+    "name": "frontend-design",
+    "publisher": "Anthropic",
+    "source": {
+      "repo": "anthropics/skills",
+      "path": "skills/frontend-design",
+      "commit": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+      "license": "Apache-2.0"
+    },
+    "category": "design",
+    "description_en": "Distinctive visual design for new or reshaped UI, without template defaults.",
+    "description_ru": "Выразительный визуальный дизайн интерфейсов без шаблонных решений.",
+    "long_en": "Guides aesthetic choices for a new UI or a redesign: direction, typography and details that do not read as a generic template. Use it when the task is how an interface looks, not only how it works.",
+    "long_ru": "Помогает с эстетическими решениями для нового интерфейса или переделки: направление, типографика и детали, которые не выглядят как типовой шаблон. Используйте, когда задача — как выглядит интерфейс, а не только как он работает.",
+    "l10n": {
+      "de": { "description": "Eigenständiges visuelles Design für neue oder überarbeitete Oberflächen, ohne Vorlagen-Standards.", "long": "Hilft bei gestalterischen Entscheidungen für eine neue Oberfläche oder ein Redesign: Richtung, Typografie und Details, die nicht nach Standardvorlage aussehen. Verwenden, wenn es darum geht, wie eine Oberfläche aussieht, nicht nur wie sie funktioniert." },
+      "es": { "description": "Diseño visual con personalidad para interfaces nuevas o rediseñadas, sin valores por defecto de plantilla.", "long": "Ayuda con las decisiones estéticas de una interfaz nueva o un rediseño: dirección, tipografía y detalles que no parezcan una plantilla genérica. Úsalo cuando la tarea trate de cómo se ve una interfaz, no solo de cómo funciona." },
+      "fr": { "description": "Design visuel singulier pour des interfaces neuves ou refondues, sans réflexes de template.", "long": "Guide les choix esthétiques d'une interface nouvelle ou refondue : direction artistique, typographie et détails qui ne ressemblent pas à un modèle générique. À utiliser quand la tâche porte sur l'apparence d'une interface, pas seulement sur son fonctionnement." },
+      "ja": { "description": "新規・刷新する UI の、テンプレートらしくない視覚デザイン。", "long": "新しい UI やリデザインの美的判断を助けます。方向性、タイポグラフィ、汎用テンプレートに見えない細部を扱います。作業の対象が、動作ではなく見た目である場合に使ってください。" },
+      "ko": { "description": "새 UI나 리디자인을 위한, 템플릿 티가 나지 않는 시각 디자인.", "long": "새 인터페이스나 리디자인의 미적 선택을 돕습니다. 방향, 타이포그래피, 흔한 템플릿처럼 보이지 않는 세부를 다룹니다. 작업이 동작이 아니라 화면 모양에 관한 것일 때 사용하세요." },
+      "pt-BR": { "description": "Design visual com personalidade para interfaces novas ou refeitas, sem padrões de template.", "long": "Ajuda nas escolhas estéticas de uma interface nova ou redesenhada: direção, tipografia e detalhes que não parecem um template genérico. Use quando a tarefa for sobre como a interface parece, e não só como ela funciona." },
+      "zh-Hans": { "description": "为新建或重做的界面提供有辨识度的视觉设计，避免模板式默认。", "long": "为新界面或重新设计提供审美决策：风格方向、字体排版以及不显得千篇一律的细节。当任务关乎界面的外观而不只是功能时使用。" }
+    },
+    "runtimes": ["claude", "codex", "grok"],
+    "scripts": false,
+    "files": ["SKILL.md"]
+  },
+  {
+    "id": "using-git-worktrees",
+    "name": "using-git-worktrees",
+    "publisher": "obra",
+    "source": {
+      "repo": "obra/superpowers",
+      "path": "skills/using-git-worktrees",
+      "commit": "bb92a77741419a4ab5f06e711a283343f1ada0c3",
+      "license": "MIT"
+    },
+    "category": "dev",
+    "description_en": "Sets up an isolated git worktree for feature work before a plan runs.",
+    "description_ru": "Изолированный git worktree под фичу перед выполнением плана.",
+    "long_en": "Creates an isolated workspace for feature work, with a native tool or a git worktree, before an implementation plan runs. Use it when the work must not touch the current checkout. It creates worktrees and branches in the repo.",
+    "long_ru": "Создаёт изолированное рабочее пространство под фичу, нативным инструментом или через git worktree, до запуска плана реализации. Используйте, когда работа не должна трогать текущую рабочую копию. Создаёт worktree и ветки в репозитории.",
+    "l10n": {
+      "de": { "description": "Isolierter Git-Worktree für Feature-Arbeit, bevor ein Plan startet.", "long": "Legt einen isolierten Arbeitsbereich für Feature-Arbeit an, mit einem nativen Werkzeug oder einem Git-Worktree, bevor ein Umsetzungsplan läuft. Verwenden, wenn die Arbeit die aktuelle Arbeitskopie nicht berühren darf. Erstellt Worktrees und Branches im Repository." },
+      "es": { "description": "Crea un git worktree aislado para una funcionalidad antes de ejecutar un plan.", "long": "Crea un espacio de trabajo aislado para una funcionalidad, con una herramienta nativa o un git worktree, antes de ejecutar un plan de implementación. Úsalo cuando el trabajo no deba tocar la copia de trabajo actual. Crea worktrees y ramas en el repositorio." },
+      "fr": { "description": "Worktree git isolé pour une fonctionnalité, avant l'exécution d'un plan.", "long": "Crée un espace de travail isolé pour une fonctionnalité, avec un outil natif ou un git worktree, avant l'exécution d'un plan d'implémentation. À utiliser quand le travail ne doit pas toucher la copie de travail actuelle. Crée des worktrees et des branches dans le dépôt." },
+      "ja": { "description": "計画を実行する前に、機能作業用の隔離された git worktree を用意する。", "long": "実装計画を実行する前に、ネイティブツールか git worktree で機能作業用の隔離された作業領域を作ります。作業が現在のチェックアウトに触れてはいけないときに使ってください。リポジトリ内に worktree とブランチを作成します。" },
+      "ko": { "description": "계획을 실행하기 전에 기능 작업용 격리된 git 워크트리를 만듭니다.", "long": "구현 계획을 실행하기 전에 네이티브 도구나 git 워크트리로 기능 작업용 격리된 작업 공간을 만듭니다. 작업이 현재 체크아웃을 건드리면 안 될 때 사용하세요. 저장소에 워크트리와 브랜치를 만듭니다." },
+      "pt-BR": { "description": "Worktree git isolado para uma funcionalidade antes de executar um plano.", "long": "Cria um espaço de trabalho isolado para uma funcionalidade, com uma ferramenta nativa ou um git worktree, antes de executar um plano de implementação. Use quando o trabalho não puder mexer no checkout atual. Cria worktrees e branches no repositório." },
+      "zh-Hans": { "description": "执行计划前为功能开发创建隔离的 git 工作树。", "long": "在执行实现计划之前，用原生工具或 git 工作树为功能开发创建隔离的工作区。工作不得影响当前检出目录时使用。会在仓库中创建工作树和分支。" }
+    },
+    "runtimes": ["claude", "codex", "grok"],
+    "scripts": false,
+    "files": ["SKILL.md"]
+  }
+]
