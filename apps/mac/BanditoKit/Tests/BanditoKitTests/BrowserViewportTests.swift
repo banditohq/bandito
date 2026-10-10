@@ -65,4 +65,23 @@ import Testing
         #expect(BrowserViewport.defaultScreencast.width == 1280)
         #expect(BrowserViewport.defaultScreencast.height == 800)
     }
+
+    @Test func aFrameAtTheViewportSizeMatches() {
+        let viewport = BrowserViewport(width: 1000, height: 700, scale: 2)
+        #expect(viewport.matches(frameWidth: 1000, frameHeight: 700))
+        #expect(viewport.matches(frameWidth: 1000.4, frameHeight: 699.6))
+    }
+
+    @Test func aFrameAtAnotherSizeDoesNotMatch() {
+        // The page lost its size (it shows at the window's own): the picture would be scaled up or down.
+        let viewport = BrowserViewport(width: 1700, height: 1000, scale: 2)
+        #expect(!viewport.matches(frameWidth: 1440, frameHeight: 813))
+        #expect(!viewport.matches(frameWidth: 1700, frameHeight: 900))
+        #expect(!viewport.matches(frameWidth: 0, frameHeight: 0))
+    }
+
+    @Test func pageEventsNeedPageEnable() {
+        #expect(CDPCommand.enablePage.method == "Page.enable")
+        #expect(CDPCommand.enablePage.params == .object([:]))
+    }
 }

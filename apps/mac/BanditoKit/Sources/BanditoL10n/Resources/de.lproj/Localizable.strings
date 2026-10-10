@@ -237,6 +237,7 @@
 "browser.newTabHelp" = "Neuer Tab (⌘T)";
 "browser.onServer" = "auf dem Server geöffnet";
 "browser.onServerHelp" = "Die Seite ist im Browser auf dem Server geöffnet, nicht auf diesem Mac";
+"browser.openFullscreen" = "Im Vollbild öffnen";
 "browser.openOnMac" = "Auf dem Mac öffnen";
 "browser.openPreview" = "Öffnen";
 "browser.openServer" = "„Server“ öffnen";
@@ -1797,10 +1798,9 @@
 "terminals.updateServer" = "Aktualisieren Sie den Server, um Terminals zu nutzen.";
 "thread.aTeammate" = "einem Teammitglied";
 "thread.attach" = "Dateien anhängen";
+"thread.browserRun.fullscreen" = "Vollbild";
 "thread.browserRun.noPicture" = "Hier erscheint das Bild der Seite";
-"thread.browserRun.openBrowser" = "Browser öffnen";
 "thread.browserRun.title" = "Agent im Browser";
-"thread.browserRun.titleDomain" = "Agent im Browser · %1$@";
 "thread.browserRun.watchBeside" = "Daneben ansehen";
 "thread.chapterNotSaved" = "Kapitel %1$@ · Gedächtnis nicht gespeichert";
 "thread.chapterNotSavedHelp" = "Der Agent konnte sein Gedächtnis vor diesem Kapitel nicht speichern. Fakten aus dem vorherigen Kapitel können fehlen.";

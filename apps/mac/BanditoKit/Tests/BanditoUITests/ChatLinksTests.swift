@@ -141,6 +141,12 @@ import Testing
         #expect(BrowserRunDomain.host(of: "") == nil)
     }
 
+    @Test func aNewTabPageIsNotADomain() {
+        // `chrome://newtab/` has the host "newtab": the card must not call it a site.
+        #expect(BrowserRunDomain.host(of: "chrome://newtab/") == nil)
+        #expect(BrowserRunDomain.host(of: "chrome-search://local-ntp/local-ntp.html") == nil)
+    }
+
     @Test func fileLinkURLRoundTrips() {
         let url = ChatLinkText.fileURL(path: "/Users/me/my file.png")
         #expect(url != nil)

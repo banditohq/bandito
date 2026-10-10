@@ -237,6 +237,7 @@
 "browser.newTabHelp" = "Nouvel onglet (⌘T)";
 "browser.onServer" = "ouvert sur le serveur";
 "browser.onServerHelp" = "La page est ouverte dans le navigateur du serveur, pas sur ce Mac";
+"browser.openFullscreen" = "Ouvrir en plein écran";
 "browser.openOnMac" = "Ouvrir sur le Mac";
 "browser.openPreview" = "Ouvrir";
 "browser.openServer" = "Ouvrir Serveur";
@@ -1797,10 +1798,9 @@
 "terminals.updateServer" = "Mettez à jour le serveur pour utiliser les terminaux.";
 "thread.aTeammate" = "un coéquipier";
 "thread.attach" = "Joindre des fichiers";
+"thread.browserRun.fullscreen" = "Plein écran";
 "thread.browserRun.noPicture" = "L'image de la page apparaîtra ici";
-"thread.browserRun.openBrowser" = "Ouvrir le navigateur";
 "thread.browserRun.title" = "Agent dans le navigateur";
-"thread.browserRun.titleDomain" = "Agent dans le navigateur · %1$@";
 "thread.browserRun.watchBeside" = "Voir à côté";
 "thread.chapterNotSaved" = "Chapitre %1$@ · mémoire non enregistrée";
 "thread.chapterNotSavedHelp" = "L'agent n'a pas pu enregistrer sa mémoire avant ce chapitre. Des informations du chapitre précédent peuvent manquer.";

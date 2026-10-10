@@ -351,6 +351,7 @@ public enum L10n {
         public static var newTabHelp: String { L10n.tr("browser.newTabHelp") }
         public static var onServer: String { L10n.tr("browser.onServer") }
         public static var onServerHelp: String { L10n.tr("browser.onServerHelp") }
+        public static var openFullscreen: String { L10n.tr("browser.openFullscreen") }
         public static var openOnMac: String { L10n.tr("browser.openOnMac") }
         public static var openPreview: String { L10n.tr("browser.openPreview") }
         public static var openServer: String { L10n.tr("browser.openServer") }
@@ -2483,10 +2484,9 @@ public enum L10n {
         public static var yesterday: String { L10n.tr("thread.yesterday") }
 
         public enum BrowserRun {
+            public static var fullscreen: String { L10n.tr("thread.browserRun.fullscreen") }
             public static var noPicture: String { L10n.tr("thread.browserRun.noPicture") }
-            public static var openBrowser: String { L10n.tr("thread.browserRun.openBrowser") }
             public static var title: String { L10n.tr("thread.browserRun.title") }
-            public static func titleDomain(domain: String) -> String { L10n.tr("thread.browserRun.titleDomain", domain) }
             public static var watchBeside: String { L10n.tr("thread.browserRun.watchBeside") }
         }
 
