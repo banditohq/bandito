@@ -97,7 +97,7 @@
     "auth": "oauth",
     "docs_url": "https://developers.notion.com/guides/mcp/get-started-with-mcp",
     "icon": "notion",
-    "accent": "#000000"
+    "accent": "#2F3437"
   },
   {
     "id": "atlassian",
