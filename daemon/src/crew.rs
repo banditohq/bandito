@@ -63,6 +63,11 @@ pub trait CrewBackend: Send + Sync {
     }
     /// One `schedules.agent.*` RPC method with its parameters. Returns the daemon's result.
     async fn schedules(&self, method: &str, params: Value) -> Result<Value>;
+    /// One `team.*` RPC method (the main agent's tools) with its parameters. Returns the daemon's result.
+    async fn team(&self, method: &str, params: Value) -> Result<Value> {
+        let _ = (method, params);
+        bail!("the team tools are not available here")
+    }
 }
 
 /// Backend that asks the daemon over `agent.sock`, as the agent whose session token it holds.
@@ -139,6 +144,15 @@ impl CrewBackend for DaemonBackend {
     async fn schedules(&self, method: &str, params: Value) -> Result<Value> {
         call_agent(&self.sock, &self.token, method, params).await
     }
+
+    async fn team(&self, method: &str, params: Value) -> Result<Value> {
+        // An assignment that waits lasts as long as the other agent's turn does, with a margin.
+        if method == "team.assign" && params.get("wait").and_then(Value::as_bool) == Some(true) {
+            let limit = crate::team::WAIT_LIMIT + Duration::from_secs(60);
+            return call_agent_waiting(&self.sock, &self.token, method, params, limit).await;
+        }
+        call_agent(&self.sock, &self.token, method, params).await
+    }
 }
 
 /// How long a browser call may wait for the daemon: a click waits for the person's approval (see
@@ -157,7 +171,22 @@ fn text_of(v: Value, method: &str) -> Result<String> {
 
 /// Serve MCP until the reader reaches EOF. Every request gets one reply line;
 /// notifications (no `id`) get none. `on` are the agent's capabilities: only their tools are served.
-pub async fn serve<R, W>(mut reader: R, mut writer: W, backend: &dyn CrewBackend, on: &[Capability]) -> Result<()>
+pub async fn serve<R, W>(reader: R, writer: W, backend: &dyn CrewBackend, on: &[Capability]) -> Result<()>
+where
+    R: AsyncBufRead + Unpin,
+    W: AsyncWrite + Unpin,
+{
+    serve_as(reader, writer, backend, on, false).await
+}
+
+/// [`serve`] for an agent that may be the main one of the crew (`lead`): only it is served the team tools.
+pub async fn serve_as<R, W>(
+    mut reader: R,
+    mut writer: W,
+    backend: &dyn CrewBackend,
+    on: &[Capability],
+    lead: bool,
+) -> Result<()>
 where
     R: AsyncBufRead + Unpin,
     W: AsyncWrite + Unpin,
@@ -175,7 +204,7 @@ where
                 if line.trim().is_empty() {
                     continue;
                 }
-                if let Some(reply) = handle_line(&line, backend, on).await {
+                if let Some(reply) = handle_line(&line, backend, on, lead).await {
                     write_reply(&mut writer, &reply).await?;
                 }
             }
@@ -235,7 +264,7 @@ async fn write_reply<W: AsyncWrite + Unpin>(writer: &mut W, reply: &Value) -> Re
 }
 
 /// Reply to one incoming line, or `None` when no reply is due.
-async fn handle_line(line: &str, backend: &dyn CrewBackend, on: &[Capability]) -> Option<Value> {
+async fn handle_line(line: &str, backend: &dyn CrewBackend, on: &[Capability], lead: bool) -> Option<Value> {
     let Ok(msg) = serde_json::from_str::<Value>(line) else {
         return Some(error_reply(Value::Null, PARSE_ERROR, "parse error"));
     };
@@ -245,8 +274,8 @@ async fn handle_line(line: &str, backend: &dyn CrewBackend, on: &[Capability]) -
     let outcome: Result<Value, Fault> = match method {
         "initialize" => Ok(initialize(&params)),
         "ping" => Ok(json!({})),
-        "tools/list" => Ok(json!({ "tools": tools_list(on) })),
-        "tools/call" => call_tool(&params, backend, on).await,
+        "tools/list" => Ok(json!({ "tools": tools_list(on, lead) })),
+        "tools/call" => call_tool(&params, backend, on, lead).await,
         "" => Err((INVALID_REQUEST, "invalid request: no method".into())),
         other => Err((METHOD_NOT_FOUND, format!("Method not found: {other}"))),
     };
@@ -275,7 +304,7 @@ fn initialize(params: &Value) -> Value {
 }
 
 /// The tools served to an agent with these capabilities. A tool of a capability the agent lacks is not listed.
-fn tools_list(on: &[Capability]) -> Vec<Value> {
+fn tools_list(on: &[Capability], lead: bool) -> Vec<Value> {
     let mut tools = vec![
         crew_list_tool(),
         crew_send_tool(),
@@ -287,14 +316,27 @@ fn tools_list(on: &[Capability]) -> Vec<Value> {
     tools.extend(screen_tools());
     tools.extend(browser_tool_defs());
     tools.extend(crate::crew_schedule::tool_defs());
-    tools.retain(|t| capability_of(t["name"].as_str().unwrap_or_default()).is_none_or(|c| on.contains(&c)));
+    tools.extend(team_tool_defs());
+    tools.retain(|t| allowed_tool(t["name"].as_str().unwrap_or_default(), on, lead));
     tools
+}
+
+/// The tools of the main agent: they need the crew capability, and being the main agent.
+const TEAM_TOOLS: [&str; 3] = ["team_list", "team_assign", "team_status"];
+
+/// Whether an agent with these capabilities (and the main-agent role, or not) is served the tool.
+fn allowed_tool(tool: &str, on: &[Capability], lead: bool) -> bool {
+    if TEAM_TOOLS.contains(&tool) && !lead {
+        return false;
+    }
+    capability_of(tool).is_none_or(|c| on.contains(&c))
 }
 
 /// The capability a tool needs; `None` for the tools every agent has (the history tools).
 fn capability_of(tool: &str) -> Option<Capability> {
     match tool {
         "crew_list" | "crew_send" => Some(Capability::Team),
+        t if TEAM_TOOLS.contains(&t) => Some(Capability::Team),
         t if BROWSER_TOOLS.contains(&t) => Some(Capability::Browser),
         t if SCREEN_TOOLS.iter().any(|(name, _)| *name == t) => Some(Capability::Screen),
         _ => None,
@@ -409,11 +451,11 @@ fn history_day_tool() -> Value {
     })
 }
 
-async fn call_tool(params: &Value, backend: &dyn CrewBackend, on: &[Capability]) -> Result<Value, Fault> {
+async fn call_tool(params: &Value, backend: &dyn CrewBackend, on: &[Capability], lead: bool) -> Result<Value, Fault> {
     let name = params.get("name").and_then(Value::as_str).unwrap_or_default();
     let args = params.get("arguments").cloned().unwrap_or(Value::Null);
     // A tool of a capability the agent lacks is unknown to it, as if it were never registered.
-    if capability_of(name).is_some_and(|c| !on.contains(&c)) {
+    if !allowed_tool(name, on, lead) {
         return Err((INVALID_PARAMS, format!("Unknown tool: {name}")));
     }
     match name {
@@ -423,6 +465,9 @@ async fn call_tool(params: &Value, backend: &dyn CrewBackend, on: &[Capability])
         "history_day" => Ok(tool_result(history_day(&args, backend).await)),
         "ask_form" => Ok(tool_result(ask_form(&args, backend).await)),
         "react" => Ok(tool_result(react(&args, backend).await)),
+        "team_list" => Ok(tool_result(team_list(backend).await)),
+        "team_assign" => Ok(tool_result(team_assign(&args, backend).await)),
+        "team_status" => Ok(tool_result(team_status(&args, backend).await)),
         name if BROWSER_TOOLS.contains(&name) => Ok(blocks_result(browser_tool(name, &args, backend).await)),
         _ if SCREEN_TOOLS.iter().any(|(tool, _)| *tool == name) => Ok(screen_tool(name, &args, backend).await),
         _ if crate::crew_schedule::SCHEDULE_TOOLS.contains(&name) => {
@@ -499,6 +544,134 @@ async fn crew_send(args: &Value, backend: &dyn CrewBackend) -> Result<String, St
 }
 
 /// The browser tools, in the order `tools/list` gives them. Their daemon methods: `browser.agent.*`.
+fn team_tool_defs() -> Vec<Value> {
+    vec![
+        json!({
+            "name": "team_list",
+            "description": "You are the main agent of the crew. List the other agents: id, name, role, model, status and their latest message.",
+            "inputSchema": { "type": "object", "properties": {} },
+        }),
+        json!({
+            "name": "team_assign",
+            "description": "You are the main agent of the crew. Give a task to another agent; it reads it as a message from you. With wait=true the call returns when that agent has finished working on it, with its last answer (it can take minutes); without wait it returns at once and you follow the work with team_status.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "agent": { "type": "string", "description": "Agent id or name" },
+                    "task": { "type": "string", "description": "What to do, with enough context to do it alone" },
+                    "wait": { "type": "boolean", "description": "Wait for the agent to finish and return its answer. Default false." },
+                },
+                "required": ["agent", "task"],
+            },
+        }),
+        json!({
+            "name": "team_status",
+            "description": "You are the main agent of the crew. Where one agent stands (working, idle, waiting for the person) and its latest answer.",
+            "inputSchema": {
+                "type": "object",
+                "properties": { "agent": { "type": "string", "description": "Agent id or name" } },
+                "required": ["agent"],
+            },
+        }),
+    ]
+}
+
+/// Text of a field a team call needs.
+fn text_arg<'a>(args: &'a Value, key: &str) -> Option<&'a str> {
+    args.get(key).and_then(Value::as_str).filter(|s| !s.trim().is_empty())
+}
+
+async fn team_list(backend: &dyn CrewBackend) -> Result<String, String> {
+    let v = backend
+        .team("team.list", json!({}))
+        .await
+        .map_err(|e| format!("{e:#}"))?;
+    let members = v.get("agents").and_then(Value::as_array).cloned().unwrap_or_default();
+    if members.is_empty() {
+        return Ok("No other agents in this crew yet.".into());
+    }
+    let lines: Vec<String> = members.iter().map(team_line).collect();
+    Ok(lines.join("\n"))
+}
+
+/// One line per agent: `- Scout (role) · id <id> · model · status — latest: text`.
+fn team_line(m: &Value) -> String {
+    let text = |key: &str| m.get(key).and_then(Value::as_str).unwrap_or_default();
+    let mut line = format!("- {}", text("name"));
+    if !text("role").trim().is_empty() {
+        line.push_str(&format!(" ({})", text("role").trim()));
+    }
+    line.push_str(&format!(" · id {}", text("id")));
+    let model = m.get("model").and_then(Value::as_str);
+    line.push_str(&format!(" · {}", model.unwrap_or(text("runtime"))));
+    line.push_str(&format!(" · {}", status_text(m)));
+    if let Some(last) = m.get("last_message").filter(|v| !v.is_null()) {
+        let who = if last["role"] == "user" { "got" } else { "said" };
+        let body = last["text"].as_str().unwrap_or_default().replace('\n', " ");
+        line.push_str(&format!(" — {who}: {body}"));
+    }
+    line
+}
+
+fn status_text(m: &Value) -> String {
+    // An agent that has not done anything yet has no status event: it is idle.
+    let status = m.get("status").and_then(Value::as_str).unwrap_or("idle");
+    if m.get("paused").and_then(Value::as_bool) == Some(true) {
+        format!("{status}, paused")
+    } else {
+        status.to_string()
+    }
+}
+
+async fn team_assign(args: &Value, backend: &dyn CrewBackend) -> Result<String, String> {
+    let (Some(agent), Some(task)) = (text_arg(args, "agent"), text_arg(args, "task")) else {
+        return Err("team_assign needs \"agent\" and \"task\"".into());
+    };
+    let wait = match args.get("wait") {
+        None | Some(Value::Null) => false,
+        Some(Value::Bool(b)) => *b,
+        Some(_) => return Err("wait must be true or false".into()),
+    };
+    let params = json!({ "agent": agent, "task": task, "wait": wait });
+    let v = backend
+        .team("team.assign", params)
+        .await
+        .map_err(|e| format!("{e:#}"))?;
+    let to = v["to"].as_str().unwrap_or(agent);
+    let reply = v["reply"].as_str().unwrap_or_default().trim().to_string();
+    let answer = |lead: &str| {
+        if reply.is_empty() {
+            format!("{lead} (no answer text)")
+        } else {
+            format!("{lead}\n{reply}")
+        }
+    };
+    Ok(match v["status"].as_str().unwrap_or("sent") {
+        "completed" => answer(&format!("{to} finished and answered:")),
+        "error" => answer(&format!("{to}'s turn ended with an error. Last answer:")),
+        "interrupted" => answer(&format!("{to}'s turn was interrupted. Last answer:")),
+        "running" => format!("{to} is still working on it after 5 minutes. Check with team_status later."),
+        "paused" => format!("Sent to {to}, but {to} is paused: the task waits until the pause ends."),
+        _ => format!("Sent to {to}. Follow the work with team_status."),
+    })
+}
+
+async fn team_status(args: &Value, backend: &dyn CrewBackend) -> Result<String, String> {
+    let Some(agent) = text_arg(args, "agent") else {
+        return Err("team_status needs \"agent\"".into());
+    };
+    let v = backend
+        .team("team.status", json!({ "agent": agent }))
+        .await
+        .map_err(|e| format!("{e:#}"))?;
+    let mut out = format!("{}: {}", v["name"].as_str().unwrap_or(agent), status_text(&v));
+    match v["last_reply"]["text"].as_str() {
+        Some(text) => out.push_str(&format!("\nLatest answer:\n{text}")),
+        None => out.push_str("\nNo answer yet."),
+    }
+    Ok(out)
+}
+
 const BROWSER_TOOLS: [&str; 9] = [
     "browser_open",
     "browser_snapshot",
@@ -831,7 +1004,12 @@ async fn history_day(args: &Value, backend: &dyn CrewBackend) -> Result<String, 
 
 /// Run the crew MCP server on stdin/stdout, for the agent whose session token it is given: from
 /// `token_file` when one is named (the daemon's way), else from `BANDITO_AGENT_TOKEN`.
-pub async fn serve_stdio(sock: PathBuf, token_file: Option<PathBuf>, capabilities: Option<String>) -> Result<()> {
+pub async fn serve_stdio(
+    sock: PathBuf,
+    token_file: Option<PathBuf>,
+    capabilities: Option<String>,
+    lead: bool,
+) -> Result<()> {
     let from_file = match &token_file {
         Some(path) => Some(
             std::fs::read_to_string(path).with_context(|| format!("read the agent token file {}", path.display()))?,
@@ -841,7 +1019,14 @@ pub async fn serve_stdio(sock: PathBuf, token_file: Option<PathBuf>, capabilitie
     let token = token_from(from_file.as_deref(), std::env::var("BANDITO_AGENT_TOKEN").ok())?;
     let on = parse_capabilities(capabilities.as_deref())?;
     let backend = DaemonBackend { sock, token };
-    serve(BufReader::new(tokio::io::stdin()), tokio::io::stdout(), &backend, &on).await
+    serve_as(
+        BufReader::new(tokio::io::stdin()),
+        tokio::io::stdout(),
+        &backend,
+        &on,
+        lead,
+    )
+    .await
 }
 
 /// The `--capabilities` list of `bandito mcp`: comma-separated names. Missing means all of them; empty means none.
@@ -915,6 +1100,10 @@ mod tests {
         schedule_calls: Mutex<Vec<(String, Value)>>,
         /// What schedules calls answer; `{}` when unset.
         schedule_reply: Option<Value>,
+        /// Method and parameters of every team call.
+        team_calls: Mutex<Vec<(String, Value)>>,
+        /// What team calls answer; `{}` when unset.
+        team_reply: Option<Value>,
         /// When set, every backend call fails with this message.
         fail: Option<String>,
     }
@@ -986,6 +1175,14 @@ mod tests {
             }
             self.schedule_calls.lock().unwrap().push((method.to_string(), params));
             Ok(self.schedule_reply.clone().unwrap_or_else(|| json!({})))
+        }
+
+        async fn team(&self, method: &str, params: Value) -> Result<Value> {
+            if let Some(e) = &self.fail {
+                anyhow::bail!("{e}");
+            }
+            self.team_calls.lock().unwrap().push((method.to_string(), params));
+            Ok(self.team_reply.clone().unwrap_or_else(|| json!({})))
         }
     }
 
@@ -1695,6 +1892,183 @@ mod tests {
         let history = format!("{}\n", tool_call("history_search", json!({ "query": "x" })));
         let r = replies_with(&history, &backend, &[]).await.remove(0);
         assert_eq!(r["result"]["isError"], json!(false));
+    }
+
+    async fn lead_replies(input: &str, backend: &MockBackend, on: &[Capability]) -> Vec<Value> {
+        let mut out = Vec::new();
+        serve_as(input.as_bytes(), &mut out, backend, on, true).await.unwrap();
+        String::from_utf8(out)
+            .unwrap()
+            .lines()
+            .map(|l| serde_json::from_str(l).unwrap())
+            .collect()
+    }
+
+    async fn lead_listed(on: &[Capability]) -> Vec<String> {
+        let request = json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/list" });
+        let r = lead_replies(&format!("{request}\n"), &MockBackend::default(), on)
+            .await
+            .remove(0);
+        r["result"]["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t["name"].as_str().unwrap().to_string())
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn the_team_tools_are_only_for_the_main_agent() {
+        let team = ["team_list", "team_assign", "team_status"];
+        // Everyone else, with every capability: no team tools.
+        let plain = listed(&ALL_CAPABILITIES).await;
+        assert!(team.iter().all(|t| !plain.iter().any(|n| n == t)), "{plain:?}");
+        // The main agent has them, next to the crew tools.
+        let lead = lead_listed(&ALL_CAPABILITIES).await;
+        assert!(team.iter().all(|t| lead.iter().any(|n| n == t)), "{lead:?}");
+        assert!(lead.iter().any(|n| n == "crew_send"));
+        // They are part of the crew capability: without it they go too.
+        let no_team = lead_listed(&[Capability::Browser]).await;
+        assert!(team.iter().all(|t| !no_team.iter().any(|n| n == t)), "{no_team:?}");
+    }
+
+    #[tokio::test]
+    async fn a_team_call_from_a_plain_agent_is_unknown_and_never_reaches_the_daemon() {
+        let backend = MockBackend::default();
+        let call = format!(
+            "{}\n",
+            tool_call("team_assign", json!({ "agent": "Scout", "task": "count" }))
+        );
+        let r = replies(&call, &backend).await.remove(0);
+        assert_eq!(r["error"]["code"], json!(INVALID_PARAMS));
+        assert!(
+            r["error"]["message"]
+                .as_str()
+                .unwrap()
+                .contains("Unknown tool: team_assign")
+        );
+        assert!(backend.team_calls.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn team_list_shows_one_line_per_agent() {
+        let backend = MockBackend {
+            team_reply: Some(json!({ "agents": [
+                { "id": "a1", "name": "Scout", "role": "analyst", "runtime": "claude", "model": "haiku",
+                  "status": "idle", "paused": false,
+                  "last_message": { "role": "assistant", "text": "done\nall", "ts": 1 } },
+                { "id": "a2", "name": "Mule", "role": "", "runtime": "codex", "model": null,
+                  "status": "working", "paused": true, "last_message": null },
+            ] })),
+            ..Default::default()
+        };
+        let r = lead_replies(
+            &format!("{}\n", tool_call("team_list", json!({}))),
+            &backend,
+            &ALL_CAPABILITIES,
+        )
+        .await
+        .remove(0);
+        assert_eq!(
+            tool_text(&r),
+            "- Scout (analyst) · id a1 · haiku · idle — said: done all\n- Mule · id a2 · codex · working, paused"
+        );
+        assert_eq!(backend.team_calls.lock().unwrap()[0].0, "team.list");
+    }
+
+    #[tokio::test]
+    async fn team_assign_forwards_the_task_and_reports_the_answer() {
+        let backend = MockBackend {
+            team_reply: Some(json!({ "to": "Scout", "to_id": "a1", "status": "completed", "reply": "391" })),
+            ..Default::default()
+        };
+        let call = tool_call(
+            "team_assign",
+            json!({ "agent": "Scout", "task": "17*23", "wait": true }),
+        );
+        let r = lead_replies(&format!("{call}\n"), &backend, &ALL_CAPABILITIES)
+            .await
+            .remove(0);
+        assert_eq!(tool_text(&r), "Scout finished and answered:\n391");
+        let calls = backend.team_calls.lock().unwrap();
+        assert_eq!(calls[0].0, "team.assign");
+        assert_eq!(calls[0].1, json!({ "agent": "Scout", "task": "17*23", "wait": true }));
+    }
+
+    #[tokio::test]
+    async fn team_assign_that_is_still_running_points_to_team_status() {
+        let backend = MockBackend {
+            team_reply: Some(json!({ "to": "Scout", "status": "running", "hint": "вызовите team_status позже" })),
+            ..Default::default()
+        };
+        let call = tool_call("team_assign", json!({ "agent": "Scout", "task": "big", "wait": true }));
+        let r = lead_replies(&format!("{call}\n"), &backend, &ALL_CAPABILITIES)
+            .await
+            .remove(0);
+        assert_eq!(r["result"]["isError"], json!(false));
+        assert!(
+            tool_text(&r).contains("still working") && tool_text(&r).contains("team_status"),
+            "{}",
+            tool_text(&r)
+        );
+    }
+
+    #[tokio::test]
+    async fn team_assign_without_wait_says_it_was_sent() {
+        let backend = MockBackend {
+            team_reply: Some(json!({ "to": "Scout", "to_id": "a1", "status": "sent" })),
+            ..Default::default()
+        };
+        let call = tool_call("team_assign", json!({ "agent": "a1", "task": "go" }));
+        let r = lead_replies(&format!("{call}\n"), &backend, &ALL_CAPABILITIES)
+            .await
+            .remove(0);
+        assert_eq!(tool_text(&r), "Sent to Scout. Follow the work with team_status.");
+        assert_eq!(backend.team_calls.lock().unwrap()[0].1["wait"], json!(false));
+    }
+
+    #[tokio::test]
+    async fn team_tools_with_bad_arguments_are_tool_errors() {
+        let backend = MockBackend::default();
+        for (tool, args) in [
+            ("team_assign", json!({ "agent": "Scout" })),
+            ("team_assign", json!({ "task": "x" })),
+            ("team_assign", json!({ "agent": "Scout", "task": "x", "wait": "yes" })),
+            ("team_status", json!({})),
+        ] {
+            let r = lead_replies(&format!("{}\n", tool_call(tool, args)), &backend, &ALL_CAPABILITIES)
+                .await
+                .remove(0);
+            assert_eq!(r["result"]["isError"], json!(true), "{tool}");
+        }
+        assert!(backend.team_calls.lock().unwrap().is_empty());
+        let failing = MockBackend {
+            fail: Some("only the main agent of the crew can use the team tools".into()),
+            ..Default::default()
+        };
+        let r = lead_replies(
+            &format!("{}\n", tool_call("team_list", json!({}))),
+            &failing,
+            &ALL_CAPABILITIES,
+        )
+        .await
+        .remove(0);
+        assert_eq!(r["result"]["isError"], json!(true));
+        assert!(tool_text(&r).contains("only the main agent"));
+    }
+
+    #[tokio::test]
+    async fn team_status_shows_the_state_and_the_latest_answer() {
+        let backend = MockBackend {
+            team_reply: Some(json!({ "name": "Scout", "status": "working", "paused": false,
+                "last_reply": { "text": "half way", "ts": 5 } })),
+            ..Default::default()
+        };
+        let call = tool_call("team_status", json!({ "agent": "Scout" }));
+        let r = lead_replies(&format!("{call}\n"), &backend, &ALL_CAPABILITIES)
+            .await
+            .remove(0);
+        assert_eq!(tool_text(&r), "Scout: working\nLatest answer:\nhalf way");
     }
 
     #[test]

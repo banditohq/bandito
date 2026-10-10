@@ -184,14 +184,26 @@ pub async fn agent_dispatch(app: &App, me: &str, method: &str, p: Value) -> RpcR
     }
 }
 
-/// Refuses a cron whose runs come closer than [`AGENT_MIN_GAP_MS`]. Two consecutive firings are compared,
-/// which covers every form (`every`, `at`, `cron`) and the zone's own rules.
+/// Firings compared by [`check_interval_at`]: enough to see the shortest gap of a pattern like `0,2 * * * *`, whose
+/// gaps alternate (2 and 58 minutes) and so depend on where `now` falls.
+const GAP_CHECK_FIRINGS: usize = 6;
+
+/// Refuses a cron whose runs come closer than [`AGENT_MIN_GAP_MS`]. The next few firings are compared, which covers
+/// every form (`every`, `at`, `cron`) and the zone's own rules.
 fn check_agent_interval(cron: &str, tz: &str) -> Result<(), RpcError> {
-    let now = crate::store::now_ms();
+    check_interval_at(cron, tz, crate::store::now_ms())
+}
+
+/// [`check_agent_interval`] as of `now` (Unix milliseconds).
+fn check_interval_at(cron: &str, tz: &str, now: i64) -> Result<(), RpcError> {
     let invalid = |e: anyhow::Error| RpcError::new(INVALID_PARAMS, format!("{e:#}"));
-    let first = scheduler::next_run(cron, tz, now).map_err(invalid)?;
-    let second = scheduler::next_run(cron, tz, first).map_err(invalid)?;
-    let gap = second - first;
+    let mut at = scheduler::next_run(cron, tz, now).map_err(invalid)?;
+    let mut gap = i64::MAX;
+    for _ in 1..GAP_CHECK_FIRINGS {
+        let next = scheduler::next_run(cron, tz, at).map_err(invalid)?;
+        gap = gap.min(next - at);
+        at = next;
+    }
     if gap < AGENT_MIN_GAP_MS {
         let shown = if gap < 60_000 {
             format!("{} seconds", (gap / 1000).max(1))
@@ -490,6 +502,23 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(kept[0]["cron"], "*/5 * * * *", "a refused update changes nothing");
+    }
+
+    #[tokio::test]
+    async fn the_interval_check_does_not_depend_on_the_minute_it_runs_in() {
+        // 2026-10-10 00:00:00 UTC, then every second minute of an hour: the gaps 2 and 58 alternate.
+        let base = 1_791_590_400_000_i64;
+        for minute in 0..60 {
+            let now = base + minute * 60_000 + 17_000;
+            for cron in ["* * * * *", "*/2 * * * *", "0,2 * * * *", "10,13 * * * *"] {
+                assert!(
+                    check_interval_at(cron, "UTC", now).is_err(),
+                    "{cron} at minute {minute}"
+                );
+            }
+            assert!(check_interval_at("*/5 * * * *", "UTC", now).is_ok());
+            assert!(check_interval_at("0 * * * *", "UTC", now).is_ok());
+        }
     }
 
     #[tokio::test]

@@ -18,6 +18,7 @@ use crate::store::{
     SHARED_WORKSPACE, SchedulePatch, Store,
 };
 use crate::supervisor::Supervisor;
+use crate::team;
 use crate::terminal::{Limits, TerminalManager};
 use crate::update;
 use chrono::{Local, NaiveDate, NaiveTime, TimeZone};
@@ -84,6 +85,7 @@ pub fn features() -> Vec<&'static str> {
         "attachments",
         "integrations",
         "avatar_pictures",
+        "lead",
     ];
     if cfg!(target_os = "linux") {
         list.push("screen");
@@ -200,6 +202,9 @@ const AGENT_METHODS: &[&str] = &[
     "daemon.hello",
     "crew.list",
     "crew.send",
+    "team.list",
+    "team.assign",
+    "team.status",
     "forms.agent.ask",
     "messages.agent.react",
     "history.day",
@@ -230,6 +235,7 @@ const AGENT_METHODS: &[&str] = &[
 /// so that nothing that speaks as the owner can pass for an agent.
 pub fn is_agent_only(method: &str) -> bool {
     method == "crew.send"
+        || method.starts_with("team.")
         || method.starts_with("forms.agent.")
         || method.starts_with("messages.agent.")
         || method.starts_with("history.")
@@ -451,6 +457,9 @@ struct AgentPatchParams {
     fallback_model: Option<Option<String>>,
     /// Pauses or resumes the agent (see docs/ARCHITECTURE.md#pause). Not stored with the other fields.
     paused: Option<bool>,
+    /// Makes the agent the main one of the crew, or takes the role away (see docs/ARCHITECTURE.md#lead-agent).
+    /// Not stored with the other fields: the old main agent loses it in the same step.
+    lead: Option<bool>,
     use_personal_settings: Option<bool>,
     /// `null` derives the avatar from the name again (see docs/ARCHITECTURE.md#capabilities).
     #[serde(default, deserialize_with = "double_option")]
@@ -468,6 +477,7 @@ impl AgentPatchParams {
     fn changes_record(&self) -> bool {
         let Self {
             paused: _,
+            lead: _,
             name,
             role,
             model,
@@ -527,6 +537,8 @@ impl AgentPatchParams {
             workspace_id,
             // Applied by `Supervisor::set_paused`: a pause starts no new session.
             paused: _,
+            // Applied by `Supervisor::set_lead`, which renews the sessions itself.
+            lead: _,
             use_personal_settings,
             // The app draws it: nothing a running session was started with.
             avatar: _,
@@ -615,6 +627,23 @@ struct ScheduleUpdate {
 struct RedeemParams {
     code: String,
     device_name: String,
+}
+#[derive(Deserialize)]
+struct TeamAgentParams {
+    agent_id: String,
+    agent: String,
+}
+#[derive(Deserialize)]
+struct TeamAssignParams {
+    agent_id: String,
+    agent: String,
+    task: String,
+    #[serde(default)]
+    wait: bool,
+}
+/// A failed team call reaches the main agent as a plain message it can act on.
+fn team_error(e: anyhow::Error) -> RpcError {
+    RpcError::new(SERVER_ERROR, format!("{e:#}"))
 }
 #[derive(Deserialize)]
 struct CrewSendParams {
@@ -1139,6 +1168,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                 other => other,
             };
             let paused = patch.paused;
+            let lead = patch.lead;
             if let Some(cwd) = &patch.cwd {
                 check_cwd(cwd)?;
             }
@@ -1199,6 +1229,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             let fallback_after = patch.fallback_runtime.unwrap_or(current.fallback_runtime);
             check_fallback(runtime, fallback_after)?;
             let reload = patch.changes_session(&current);
+            let patch_renamed = patch.name.as_ref().is_some_and(|n| n.trim() != current.name);
             // A session is tied to its folder, its runtime and its workspace: any of them changing starts a new chapter.
             let moved = patch.workspace_id.as_ref().is_some_and(|w| *w != current.workspace_id);
             let new_chapter = if patch.cwd.as_ref().is_some_and(|cwd| *cwd != current.cwd) {
@@ -1209,6 +1240,17 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                 Some("workspace changed")
             } else {
                 None
+            };
+            // Who gains or loses the role, read before the write: the old main agent loses it when another gains it.
+            let lead_changed: Vec<String> = match lead {
+                Some(true) if !current.lead => store
+                    .agent_lead()?
+                    .map(|old| old.id)
+                    .into_iter()
+                    .chain([id.clone()])
+                    .collect(),
+                Some(false) if current.lead => vec![id.clone()],
+                _ => Vec::new(),
             };
             let mut a = store.agent_update(
                 &id,
@@ -1230,6 +1272,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                     avatar: patch.avatar,
                     capabilities: patch.capabilities,
                     integrations: patch.integrations,
+                    lead,
                 },
             )?;
             // New config takes effect with the next session: the running one is
@@ -1241,6 +1284,14 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             if let Some(paused) = paused {
                 app.sup.set_paused(&id, paused).await?;
                 a.paused = paused;
+            }
+            // A new name is in the prompts of the others, who hear who the main agent is.
+            if current.lead && patch_renamed {
+                app.sup.reload_all().await;
+            }
+            // The role was written with the rest of the patch; now both agents are announced and every session renewed.
+            if !lead_changed.is_empty() {
+                app.sup.lead_changed(&lead_changed).await;
             }
             // The wire-only fields come from the view read, as in agents.get.
             let view = store
@@ -1376,6 +1427,25 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             let CrewSendParams { from, to, message } = params(p)?;
             let to_id = app.sup.crew_send(&from, &to, &message).await?;
             ok(json!({ "to_id": to_id }))
+        }
+        "team.list" => {
+            let AgentRef { agent_id } = params(p)?;
+            ok(team::list(store, &agent_id).map_err(team_error)?)
+        }
+        "team.status" => {
+            let TeamAgentParams { agent_id, agent } = params(p)?;
+            ok(team::status(store, &agent_id, &agent).map_err(team_error)?)
+        }
+        "team.assign" => {
+            let TeamAssignParams {
+                agent_id,
+                agent,
+                task,
+                wait,
+            } = params(p)?;
+            ok(team::assign(&app.sup, &agent_id, &agent, &task, wait)
+                .await
+                .map_err(team_error)?)
         }
 
         "history.search" => {
@@ -1599,9 +1669,60 @@ mod crew_tests {
     /// An app with a crew of two agents: Forge (builder) and Scout (reviewer).
     /// Returns the app and the ids of Forge and Scout.
     fn app_with_crew() -> (Arc<App>, String, String) {
+        crew_app(crate::supervisor::Runtimes::default())
+    }
+
+    /// A Claude runtime whose sessions take messages and never answer.
+    #[derive(Default)]
+    struct Silent {
+        /// Keeps the sessions' output channels open, so they do not look like exited processes.
+        outputs: Mutex<Vec<mpsc::Sender<crate::runtime::RuntimeOutput>>>,
+    }
+
+    struct SilentSession;
+
+    #[async_trait::async_trait]
+    impl crate::runtime::Session for SilentSession {
+        async fn send(&mut self, _text: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn interrupt(&mut self) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn resolve(&mut self, _key: &str, _decision: Decision) -> anyhow::Result<()> {
+            Ok(())
+        }
+        async fn shutdown(self: Box<Self>) {}
+    }
+
+    #[async_trait::async_trait]
+    impl crate::runtime::Runtime for Silent {
+        fn kind(&self) -> RuntimeKind {
+            RuntimeKind::Claude
+        }
+        async fn status(&self) -> crate::runtime::RuntimeStatus {
+            crate::runtime::RuntimeStatus {
+                kind: RuntimeKind::Claude,
+                installed: true,
+                version: None,
+                logged_in: None,
+                detail: None,
+            }
+        }
+        async fn spawn(&self, _cfg: crate::runtime::SpawnConfig) -> anyhow::Result<crate::runtime::Spawned> {
+            let (tx, rx) = mpsc::channel(8);
+            self.outputs.lock().unwrap().push(tx);
+            Ok(crate::runtime::Spawned {
+                session: Box::new(SilentSession),
+                output: rx,
+            })
+        }
+    }
+
+    fn crew_app(runtimes: crate::supervisor::Runtimes) -> (Arc<App>, String, String) {
         let store = Arc::new(Store::open_in_memory().unwrap());
         let hub = crate::hub::Hub::new(store.clone());
-        let sup = Supervisor::new(hub, crate::supervisor::Runtimes::default(), None);
+        let sup = Supervisor::new(hub, runtimes, None);
         let add = |name: &str, role: &str| {
             store
                 .agent_create(NewAgent {
@@ -1700,6 +1821,256 @@ mod crew_tests {
         .await
         .unwrap_err();
         assert_eq!(err.code, UNAUTHORIZED);
+    }
+
+    /// The `agent_changed` actions stored for one agent.
+    fn changes_of(app: &App, id: &str) -> usize {
+        app.sup
+            .hub()
+            .store
+            .events_since(0, 1000, Some(id))
+            .unwrap()
+            .into_iter()
+            .filter(|e| matches!(e.body, EventBody::AgentChanged { .. }))
+            .count()
+    }
+
+    #[tokio::test]
+    async fn there_is_one_main_agent_and_both_changes_are_announced() {
+        let (app, forge, scout) = app_with_crew();
+        assert!(features().contains(&"lead"));
+        let listed = dispatch(&app, &Peer::Local, "agents.list", json!({})).await.unwrap();
+        assert!(listed.as_array().unwrap().iter().all(|a| a["lead"] == json!(false)));
+
+        let v = dispatch(
+            &app,
+            &Peer::Local,
+            "agents.update",
+            json!({ "id": forge, "lead": true }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(v["lead"], json!(true));
+        assert_eq!(changes_of(&app, &forge), 1);
+        assert_eq!(changes_of(&app, &scout), 0);
+
+        // Another agent takes it over: Forge loses it in the same step, and both are announced.
+        let v = dispatch(
+            &app,
+            &Peer::Local,
+            "agents.update",
+            json!({ "id": scout, "lead": true }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(v["lead"], json!(true));
+        let get = |id: &str| dispatch(&app, &Peer::Local, "agents.get", json!({ "id": id }));
+        assert_eq!(get(&forge).await.unwrap()["lead"], json!(false));
+        assert_eq!(get(&scout).await.unwrap()["lead"], json!(true));
+        assert_eq!(changes_of(&app, &forge), 2);
+        assert_eq!(changes_of(&app, &scout), 1);
+
+        // Setting it again changes nothing and says nothing.
+        dispatch(
+            &app,
+            &Peer::Local,
+            "agents.update",
+            json!({ "id": scout, "lead": true }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(changes_of(&app, &scout), 1);
+
+        // Taking it away leaves the crew without one.
+        let v = dispatch(
+            &app,
+            &Peer::Local,
+            "agents.update",
+            json!({ "id": scout, "lead": false }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(v["lead"], json!(false));
+        let listed = dispatch(&app, &Peer::Local, "agents.list", json!({})).await.unwrap();
+        assert!(listed.as_array().unwrap().iter().all(|a| a["lead"] == json!(false)));
+        assert_eq!(changes_of(&app, &scout), 2);
+
+        // A rename or a plain edit does not move the role.
+        dispatch(
+            &app,
+            &Peer::Local,
+            "agents.update",
+            json!({ "id": forge, "lead": true }),
+        )
+        .await
+        .unwrap();
+        dispatch(
+            &app,
+            &Peer::Local,
+            "agents.update",
+            json!({ "id": forge, "role": "boss" }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(get(&forge).await.unwrap()["lead"], json!(true));
+    }
+
+    #[tokio::test]
+    async fn a_team_assign_that_waits_is_dropped_when_the_connection_closes() {
+        let (app, forge, scout) = {
+            let mut runtimes = crate::supervisor::Runtimes::default();
+            runtimes.insert(Arc::new(Silent::default()));
+            crew_app(runtimes)
+        };
+        dispatch(
+            &app,
+            &Peer::Local,
+            "agents.update",
+            json!({ "id": forge, "lead": true }),
+        )
+        .await
+        .unwrap();
+        let (to_serve, inbox) = mpsc::channel::<String>(8);
+        let (outbox, mut replies) = mpsc::channel::<String>(8);
+        let serving = tokio::spawn(serve(app.clone(), Peer::Agent(forge.clone()), inbox, outbox));
+        let request = json!({
+            "jsonrpc": "2.0", "id": 1, "method": "team.assign",
+            "params": { "agent": "Scout", "task": "slow", "wait": true },
+        });
+        to_serve.send(request.to_string()).await.unwrap();
+        // The task is delivered (the wait has begun) once the scout's thread holds it.
+        let delivered = async {
+            loop {
+                let events = app.sup.hub().store.events_since(0, 100, Some(&scout)).unwrap();
+                if events.iter().any(|e| {
+                    matches!(
+                        e.body,
+                        EventBody::MessageUser {
+                            source: Source::Crew,
+                            ..
+                        }
+                    )
+                }) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        };
+        tokio::time::timeout(Duration::from_secs(10), delivered)
+            .await
+            .expect("the task was delivered");
+        // Another request meanwhile is refused as busy; the wait goes on.
+        let ping = json!({ "jsonrpc": "2.0", "id": 2, "method": "daemon.hello", "params": {} });
+        to_serve.send(ping.to_string()).await.unwrap();
+        let busy = tokio::time::timeout(Duration::from_secs(10), replies.recv())
+            .await
+            .expect("an answer")
+            .unwrap();
+        assert!(busy.contains("busy"), "{busy}");
+        assert!(!serving.is_finished());
+        // The agent goes away: the connection ends and the dropped call leaves no reply behind.
+        drop(to_serve);
+        tokio::time::timeout(Duration::from_secs(10), serving)
+            .await
+            .expect("serve ended with the connection")
+            .unwrap();
+        assert!(replies.recv().await.is_none());
+    }
+
+    #[test]
+    fn only_a_waiting_team_assign_and_a_form_hold_the_connection() {
+        assert!(waits_long("forms.agent.ask", &json!({})));
+        assert!(waits_long("team.assign", &json!({ "wait": true })));
+        assert!(!waits_long("team.assign", &json!({ "wait": false })));
+        assert!(!waits_long("team.assign", &json!({})));
+        assert!(!waits_long("team.list", &json!({ "wait": true })));
+    }
+
+    #[tokio::test]
+    async fn a_refused_patch_does_not_move_the_main_role() {
+        let (app, forge, scout) = app_with_crew();
+        dispatch(
+            &app,
+            &Peer::Local,
+            "agents.update",
+            json!({ "id": forge, "lead": true }),
+        )
+        .await
+        .unwrap();
+        let (before_forge, before_scout) = (changes_of(&app, &forge), changes_of(&app, &scout));
+        // The name is taken: the whole patch is refused, the role included, and nobody is told anything.
+        let err = dispatch(
+            &app,
+            &Peer::Local,
+            "agents.update",
+            json!({ "id": scout, "lead": true, "name": "Forge" }),
+        )
+        .await
+        .unwrap_err();
+        assert!(err.message.contains("already exists"), "{}", err.message);
+        let get = |id: &str| dispatch(&app, &Peer::Local, "agents.get", json!({ "id": id }));
+        assert_eq!(get(&forge).await.unwrap()["lead"], json!(true));
+        assert_eq!(get(&scout).await.unwrap()["lead"], json!(false));
+        assert_eq!(changes_of(&app, &forge), before_forge);
+        assert_eq!(changes_of(&app, &scout), before_scout);
+        // Role and field together succeed in one step and are announced.
+        let v = dispatch(
+            &app,
+            &Peer::Local,
+            "agents.update",
+            json!({ "id": scout, "lead": true, "role": "boss" }),
+        )
+        .await
+        .unwrap();
+        assert_eq!((v["lead"].clone(), v["role"].clone()), (json!(true), json!("boss")));
+        assert_eq!(get(&forge).await.unwrap()["lead"], json!(false));
+        assert!(changes_of(&app, &forge) > before_forge && changes_of(&app, &scout) > before_scout);
+    }
+
+    #[tokio::test]
+    async fn the_team_methods_are_for_the_main_agent_alone() {
+        let (app, forge, scout) = app_with_crew();
+        dispatch(
+            &app,
+            &Peer::Local,
+            "agents.update",
+            json!({ "id": forge, "lead": true }),
+        )
+        .await
+        .unwrap();
+        let device = Peer::Device(Device {
+            id: "dev-1".into(),
+            name: "Mac".into(),
+            created_at: 0,
+            last_seen_at: None,
+        });
+        for method in ["team.list", "team.status", "team.assign"] {
+            for peer in [&Peer::Local, &device] {
+                let err = dispatch(&app, peer, method, json!({ "agent_id": forge }))
+                    .await
+                    .unwrap_err();
+                assert_eq!(err, RpcError::new(UNAUTHORIZED, format!("{method} is only for agents")));
+            }
+        }
+        // A plain agent is refused, and the main agent's id in its params does not help.
+        let err = dispatch(&app, &Peer::Agent(scout.clone()), "team.list", json!({}))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, SERVER_ERROR);
+        assert!(err.message.contains("only the main agent"), "{}", err.message);
+        let err = dispatch(&app, &Peer::Agent(scout), "team.list", json!({ "agent_id": forge }))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, UNAUTHORIZED);
+
+        let v = dispatch(&app, &Peer::Agent(forge.clone()), "team.list", json!({}))
+            .await
+            .unwrap();
+        assert_eq!(v["agents"][0]["name"], json!("Scout"));
+        let v = dispatch(&app, &Peer::Agent(forge), "team.status", json!({ "agent": "scout" }))
+            .await
+            .unwrap();
+        assert_eq!(v["name"], json!("Scout"));
     }
 }
 
@@ -2041,6 +2412,13 @@ async fn recv_event(rx: &mut Option<broadcast::Receiver<Event>>) -> Result<Event
     }
 }
 
+/// Whether a call of an agent may last long, so that `serve` must watch the connection while it runs: a form waits
+/// for the person, and `team.assign` with `wait` for the other agent's turn.
+fn waits_long(method: &str, params: &Value) -> bool {
+    method == "forms.agent.ask"
+        || (method == "team.assign" && params.get("wait").and_then(Value::as_bool) == Some(true))
+}
+
 /// Serve one connection: text messages in, text messages out. Returns when
 /// the inbox closes or the client goes away.
 pub async fn serve(app: Arc<App>, peer: Peer, mut inbox: mpsc::Receiver<String>, outbox: mpsc::Sender<String>) {
@@ -2083,9 +2461,10 @@ pub async fn serve(app: Arc<App>, peer: Peer, mut inbox: mpsc::Receiver<String>,
                     terms.attach(&app, &peer, req.params)
                 } else if req.method == "term.detach" {
                     terms.detach(&peer, req.params)
-                } else if matches!(peer, Peer::Agent(_)) && req.method == "forms.agent.ask" {
-                    // The call waits for the person. The connection is watched meanwhile: when the agent goes away,
-                    // the call is dropped and its form expires (see `Supervisor::ask_form`).
+                } else if matches!(peer, Peer::Agent(_)) && waits_long(&req.method, &req.params) {
+                    // The call waits for the person, or for another agent. The connection is watched meanwhile: when
+                    // the agent goes away, the call is dropped and its form expires (see `Supervisor::ask_form`),
+                    // or its wait for the other agent ends (see `team::assign`).
                     let call = dispatch(&app, &peer, &req.method, req.params);
                     tokio::pin!(call);
                     let answered = loop {
@@ -2096,7 +2475,7 @@ pub async fn serve(app: Arc<App>, peer: Peer, mut inbox: mpsc::Receiver<String>,
                                 Some(other) => {
                                     // One request at a time while a form waits: any other is refused for now.
                                     if let Some(id) = serde_json::from_str::<Value>(&other).ok().and_then(|v| v.get("id").cloned()) {
-                                        let busy = RpcError::new(SERVER_ERROR, "busy: a form is waiting for the person's answer");
+                                        let busy = RpcError::new(SERVER_ERROR, "busy: another call is still waiting for its answer");
                                         let _ = outbox.send(response(id, Err(busy))).await;
                                     }
                                 }

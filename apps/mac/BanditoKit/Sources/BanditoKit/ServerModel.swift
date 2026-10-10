@@ -748,6 +748,23 @@ public final class ServerModel: Identifiable {
         try await updateAgent(agentID, patch: AgentPatch(paused: paused)).agent
     }
 
+    /// Makes the agent the main one of the server, or takes the role away (`agents.update {lead}`). The daemon takes
+    /// the role from the old main agent in the same step; the list here follows at once, and the `agent_changed`
+    /// events read it again.
+    @discardableResult
+    public func setLead(agentID: String, _ lead: Bool) async throws -> Agent {
+        let agent = try await updateAgent(agentID, patch: AgentPatch(lead: lead)).agent
+        if lead {
+            for i in agents.indices where agents[i].id != agentID && agents[i].lead { agents[i].lead = false }
+        }
+        return agent
+    }
+
+    /// The id of the main agent of this server, or `nil` when there is none (or the daemon has no such thing).
+    public var leadAgentID: String? {
+        supports("lead") ? agents.first(where: \.lead)?.id : nil
+    }
+
     /// Stores the agent's picture (`agents.avatar_image_set`): a PNG or JPEG of at most 1 MB. The daemon needs the
     /// avatar set first. Returns the agent, with its new `image_rev`.
     @discardableResult

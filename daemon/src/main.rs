@@ -65,6 +65,9 @@ enum Cmd {
         /// Missing: all of them. Empty: none.
         #[arg(long)]
         capabilities: Option<String>,
+        /// The agent is the main one of the crew: serve the team tools too (the daemon checks it again).
+        #[arg(long)]
+        lead: bool,
     },
     /// Check for a newer signed release, or install one (and restart the daemon when a service runs it).
     Update {
@@ -181,8 +184,9 @@ async fn run_command(cmd: Cmd, home: PathBuf, home_given: bool) -> Result<()> {
         Cmd::Mcp {
             token_file,
             capabilities,
+            lead,
             ..
-        } => bandito::crew::serve_stdio(home.join("agent.sock"), token_file, capabilities).await,
+        } => bandito::crew::serve_stdio(home.join("agent.sock"), token_file, capabilities, lead).await,
         Cmd::Update {
             check,
             json,

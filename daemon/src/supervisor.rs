@@ -107,6 +107,8 @@ impl Inbound {
 pub const MAX_CREW_HOPS: u8 = 8;
 /// Crew messages one turn may send.
 pub const MAX_CREW_SENDS_PER_TURN: u8 = 3;
+/// Tasks the main agent may hand out in one turn with `team_assign`: it splits work among many agents.
+pub const MAX_TEAM_ASSIGNS_PER_TURN: u8 = 12;
 /// Crew messages one chain may carry in total, across all its turns.
 pub const MAX_CREW_MESSAGES_PER_CHAIN: u32 = 20;
 /// Chain counters are dropped all at once when there are more than this many.
@@ -192,7 +194,8 @@ enum Cmd {
     /// message against the running turn. Done in the actor so the check and the
     /// count are one step.
     /// Also redacts the message text with the sender's session secrets, before it is delivered.
-    ReserveCrewSend(String, oneshot::Sender<Result<(CrewContext, String)>>),
+    /// The text and the most crew messages the turn may send, in all.
+    ReserveCrewSend(String, u8, oneshot::Sender<Result<(CrewContext, String)>>),
 }
 
 pub struct Supervisor {
@@ -248,6 +251,16 @@ const PRIVATE_DRAFTS: &str = " files/ in your memory folder is only for your pri
 /// Put in the system prompt of every agent: when to ask with a form, and how to react to messages.
 const CHAT_GUIDE: &str = "Когда вам нужно несколько ответов от человека или подтверждение действия наружу (письмо, публикация, оплата, удаление), используйте инструмент ask_form вместо вопросов текстом. В форме — короткий заголовок и понятные подписи полей.
 Можно ставить реакции на сообщения человека инструментом react (например 👍 — принял, 👀 — смотрю), вместо коротких ответов.";
+
+/// Put in the system prompt of the main agent of the crew (see docs/ARCHITECTURE.md#lead-agent).
+const LEAD_BRIEFING: &str = "Вы главный в команде. Делите большие задачи между агентами (team_list, team_assign), следите за ходом (team_status), собирайте итог и отвечайте человеку. Сами делайте только то, что никому не подходит. Агенты команды — это не встроенный инструмент Agent (субагенты): задачи им отправляйте только через team_assign.";
+
+/// Put in the system prompt of every other agent when the crew has a main one. `{name}` is replaced by its name.
+const LEAD_NOTICE: &str =
+    "Главный в команде — {name}. Задачи от него выполняйте как от человека и отвечайте ему кратко итогом.";
+
+/// Put before a message from the main agent, so the runtime knows who wrote it. `{name}` is replaced by its name.
+const FROM_LEAD: &str = "Сообщение от главного в команде ({name}):";
 
 /// Turn sent before a chapter closes, so the agent saves what matters.
 const WRAP_UP: &str = "Before we continue: Bandito is about to start a fresh session to keep this conversation fast and cheap. Update your memory now — MEMORY.md (short: user, current work, open tasks, decisions, links), notes/<topic>.md for details, and today's journal. Then reply with one short line saying what you saved.";
@@ -525,9 +538,54 @@ impl Supervisor {
         Ok(true)
     }
 
+    /// Makes the agent the main one of the crew, or takes the role away. The old main agent loses it in the same
+    /// step, and both are announced with `agent_changed`. Every session is renewed, since the prompts and the tools
+    /// differ. Returns `false` when nothing changed or the agent does not exist.
+    pub async fn set_lead(&self, agent_id: &str, lead: bool) -> Result<bool> {
+        let changed = self.hub.store.agent_set_lead(agent_id, lead)?;
+        if changed.is_empty() {
+            return Ok(false);
+        }
+        self.lead_changed(&changed).await;
+        Ok(true)
+    }
+
+    /// Announces that these agents gained or lost the main role (already stored) and renews every session.
+    pub async fn lead_changed(&self, changed: &[String]) {
+        for id in changed {
+            self.hub.emit(
+                id,
+                EventBody::AgentChanged {
+                    action: AgentChange::Updated,
+                },
+            );
+        }
+        self.reload_all().await;
+    }
+
+    /// Renews the session of every agent (see [`Supervisor::reload`]).
+    pub async fn reload_all(&self) {
+        let ids: Vec<String> = match self.hub.store.agent_list() {
+            Ok(list) => list.into_iter().map(|a| a.id).collect(),
+            Err(e) => {
+                tracing::warn!("reload the sessions: {e:#}");
+                return;
+            }
+        };
+        for id in ids {
+            self.reload(&id, None).await;
+        }
+    }
+
     /// One agent messages another by name (the crew MCP tool `crew_send`).
     /// Returns the target agent's id.
     pub async fn crew_send(&self, from_id: &str, to_name: &str, text: &str) -> Result<String> {
+        self.crew_send_limited(from_id, to_name, text, MAX_CREW_SENDS_PER_TURN)
+            .await
+    }
+
+    /// [`Supervisor::crew_send`] with its own cap on the messages one turn may send (`team_assign` of the main agent).
+    pub async fn crew_send_limited(&self, from_id: &str, to_name: &str, text: &str, per_turn: u8) -> Result<String> {
         let store = &self.hub.store;
         let from = store.agent_get(from_id)?.ok_or_else(|| anyhow!("no agent {from_id}"))?;
         let to = store
@@ -546,7 +604,7 @@ impl Supervisor {
         let text = current.redact(text).into_owned();
         // Depth and per-turn limits are checked and counted by the sender's actor.
         let (ctx, text) = self
-            .call(from_id, move |reply| Cmd::ReserveCrewSend(text, reply))
+            .call(from_id, move |reply| Cmd::ReserveCrewSend(text, per_turn, reply))
             .await?;
         let chain = ctx.chain.unwrap_or_else(new_id);
         self.reserve_chain_message(&chain)?;
@@ -961,9 +1019,9 @@ impl Actor {
                 self.expire_one_form(&form_id);
                 let _ = reply.send(Ok(()));
             }
-            Cmd::ReserveCrewSend(text, reply) => {
+            Cmd::ReserveCrewSend(text, per_turn, reply) => {
                 let result = self
-                    .reserve_crew_send()
+                    .reserve_crew_send(per_turn)
                     .map(|ctx| (ctx, self.redactor.redact(&text).into_owned()));
                 let _ = reply.send(result);
             }
@@ -1007,9 +1065,16 @@ impl Actor {
         );
     }
 
+    /// The sender's name when `msg` is a crew message from the main agent of the crew.
+    fn lead_sender(&self, msg: &Inbound) -> Option<String> {
+        let from = msg.from_agent.as_deref().filter(|_| msg.source == Source::Crew)?;
+        let lead = self.hub.store.agent_lead().ok().flatten()?;
+        lead.name.eq_ignore_ascii_case(from).then_some(lead.name)
+    }
+
     /// Check the hop and per-turn limits, then count one crew message for the
     /// running turn. Without a running turn there is nothing to count against.
-    fn reserve_crew_send(&mut self) -> Result<CrewContext> {
+    fn reserve_crew_send(&mut self, per_turn: u8) -> Result<CrewContext> {
         if self.turn.is_none() {
             return Ok(CrewContext {
                 hops: 0,
@@ -1022,10 +1087,8 @@ impl Actor {
                 "crew chain limit reached ({MAX_CREW_HOPS} messages between agents without a human); report back to the user instead"
             );
         }
-        if self.turn_crew_sends >= MAX_CREW_SENDS_PER_TURN {
-            bail!(
-                "crew message limit reached for this turn ({MAX_CREW_SENDS_PER_TURN}); finish the turn and report back to the user"
-            );
+        if self.turn_crew_sends >= per_turn {
+            bail!("crew message limit reached for this turn ({per_turn}); finish the turn and report back to the user");
         }
         self.turn_crew_sends += 1;
         Ok(CrewContext {
@@ -1138,6 +1201,11 @@ impl Actor {
         }
         blocks.push(CHAT_GUIDE.to_string());
         blocks.push(SCHEDULE_BRIEFING.to_string());
+        if agent.lead {
+            blocks.push(LEAD_BRIEFING.to_string());
+        } else if let Some(lead) = self.hub.store.agent_lead()? {
+            blocks.push(LEAD_NOTICE.replace("{name}", &lead.name));
+        }
         let names: Vec<&str> = mcp_servers.iter().map(|s| s.name.as_str()).collect();
         if let Some(line) = crate::integrations::prompt_line(&names) {
             blocks.push(line);
@@ -1205,6 +1273,10 @@ impl Actor {
                     // The crew server registers only the tools of these capabilities. Missing = all of them.
                     if let Some(list) = &agent.capabilities {
                         args.extend(["--capabilities".to_string(), capabilities_csv(list)]);
+                    }
+                    // Only the main agent gets the team tools (the daemon checks it again on every call).
+                    if agent.lead {
+                        args.push("--lead".to_string());
                     }
                     // The bridge reads the token from this file, so the token stays out of argument lists.
                     if let Some(file) = &token_file_arg {
@@ -1429,7 +1501,10 @@ impl Actor {
         self.turn_note = note.clone();
         self.turn_until = until;
         let quote = self.reply_quote(&msg);
-        let prompt = chat::runtime_text(&msg.text, note.as_deref(), quote.as_deref(), &msg.attachments);
+        let mut prompt = chat::runtime_text(&msg.text, note.as_deref(), quote.as_deref(), &msg.attachments);
+        if let Some(name) = self.lead_sender(&msg) {
+            prompt = format!("{}\n\n{prompt}", FROM_LEAD.replace("{name}", &name));
+        }
         let turn_id = new_id();
         self.turn = Some(turn_id.clone());
         self.turn_hops = msg.hops;
@@ -3012,6 +3087,31 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn the_main_agent_may_assign_twelve_tasks_in_a_turn_while_crew_send_stays_at_three() {
+        let w = world(ApprovalMode::Risky);
+        add_agent(&w.store, "Scout");
+        w.sup.set_lead(&w.agent, true).await.unwrap();
+        w.sup.send(&w.agent, Inbound::user("split it")).await.unwrap();
+        w.wait_log("send split it").await;
+        for i in 0..MAX_TEAM_ASSIGNS_PER_TURN {
+            let out = crate::team::assign(&w.sup, &w.agent, "Scout", &format!("task {i}"), false)
+                .await
+                .unwrap_or_else(|e| panic!("assign {i}: {e}"));
+            assert_eq!(out["status"], "sent");
+        }
+        let err = crate::team::assign(&w.sup, &w.agent, "Scout", "one more", false)
+            .await
+            .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "crew message limit reached for this turn (12); finish the turn and report back to the user"
+        );
+        // The same turn has used up crew_send's own cap of 3 long ago.
+        let err = w.sup.crew_send(&w.agent, "Scout", "plain").await.unwrap_err();
+        assert!(err.to_string().contains("(3)"), "{err}");
+    }
+
+    #[tokio::test]
     async fn crew_chain_stops_at_the_chain_limit() {
         let mut w = world(ApprovalMode::Risky);
         let forge = w.agent.clone();
@@ -3138,6 +3238,169 @@ mod tests {
             ]
         );
         assert_eq!(spawn.capabilities, Some(vec![Capability::Team, Capability::Browser]));
+    }
+
+    #[tokio::test]
+    async fn the_main_agent_is_told_so_and_the_others_are_told_who_it_is() {
+        let mut w = world(ApprovalMode::Risky);
+        let scout = add_agent(&w.store, "Scout");
+        let prompts = |w: &World| -> Vec<String> {
+            w.spawns
+                .lock()
+                .unwrap()
+                .iter()
+                .map(|c| c.system_prompt.clone().unwrap_or_default())
+                .collect()
+        };
+        // No main agent: neither line.
+        w.sup.send(&scout, Inbound::user("hi")).await.unwrap();
+        w.wait_log("send hi").await;
+        assert!(!prompts(&w)[0].contains("главный"), "{}", prompts(&w)[0]);
+        w.push_as(&scout, done()).await;
+        w.wait(|b| matches!(b, EventBody::TurnCompleted { .. })).await;
+
+        assert!(w.sup.set_lead(&w.agent, true).await.unwrap());
+        // The sessions were closed by the change: the next messages start new ones with the new prompts.
+        w.sup.send(&scout, Inbound::user("again")).await.unwrap();
+        w.sup.send(&w.agent, Inbound::user("boss")).await.unwrap();
+        w.wait_log("send boss").await;
+        w.wait_log("send again").await;
+        let all = prompts(&w);
+        let lead_prompt = all
+            .iter()
+            .find(|p| p.contains("Вы главный в команде"))
+            .expect("lead prompt");
+        assert!(lead_prompt.contains("team_assign"));
+        assert!(!lead_prompt.contains("Главный в команде — "));
+        let plain = all
+            .iter()
+            .find(|p| p.contains("Главный в команде — Forge. Задачи от него выполняйте как от человека"))
+            .expect("plain agent prompt");
+        assert!(!plain.contains("Вы главный"));
+    }
+
+    #[tokio::test]
+    async fn only_the_main_agents_crew_server_gets_the_lead_flag() {
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let hub = Hub::new(store.clone());
+        let spawns = Arc::new(Mutex::new(Vec::new()));
+        let mut rts = Runtimes::default();
+        rts.insert(Arc::new(MockRuntime {
+            log: Arc::default(),
+            out: Arc::default(),
+            spawns: spawns.clone(),
+        }));
+        let boss = add_agent(&store, "Boss");
+        let scout = add_agent(&store, "Scout");
+        store.agent_set_lead(&boss, true).unwrap();
+        let sup = Supervisor::new(hub, rts, Some((PathBuf::from("/bin/bandito"), vec!["mcp".into()])));
+        sup.send(&boss, Inbound::user("go")).await.unwrap();
+        sup.send(&scout, Inbound::user("go")).await.unwrap();
+        let spawns = spawns.lock().unwrap();
+        let args_of = |id: &str| spawns.iter().find(|c| c.agent_id == id).unwrap().mcp.clone().unwrap().1;
+        assert!(args_of(&boss).contains(&"--lead".to_string()));
+        assert!(!args_of(&scout).contains(&"--lead".to_string()));
+    }
+
+    #[tokio::test]
+    async fn assign_delivers_the_task_as_a_message_from_the_main_agent() {
+        let mut w = world(ApprovalMode::Risky);
+        let scout = add_agent(&w.store, "Scout");
+        w.sup.set_lead(&w.agent, true).await.unwrap();
+        let out = crate::team::assign(&w.sup, &w.agent, "scout", "count the files", false)
+            .await
+            .unwrap();
+        assert_eq!(out["status"], "sent");
+        assert_eq!(out["to_id"], json!(scout));
+        let e = w
+            .wait(|b| {
+                matches!(
+                    b,
+                    EventBody::MessageUser {
+                        source: Source::Crew,
+                        ..
+                    }
+                )
+            })
+            .await;
+        assert_eq!(e.agent_id, scout);
+        let EventBody::MessageUser { text, from_agent, .. } = e.body else {
+            unreachable!()
+        };
+        // The thread shows the plain task with the sender mark; the runtime also hears who wrote it.
+        assert_eq!(text, "count the files");
+        assert_eq!(from_agent.as_deref(), Some("Forge"));
+        w.wait_log("send Сообщение от главного в команде (Forge):\n\ncount the files")
+            .await;
+        // A plain agent cannot assign: nothing reaches the main agent.
+        let err = crate::team::assign(&w.sup, &scout, "Forge", "no", false)
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("only the main agent"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn assign_with_wait_returns_the_answer_of_the_other_agent() {
+        let w = world(ApprovalMode::Risky);
+        let scout = add_agent(&w.store, "Scout");
+        w.sup.set_lead(&w.agent, true).await.unwrap();
+        let sup = w.sup.clone();
+        let lead = w.agent.clone();
+        let call = tokio::spawn(async move { crate::team::assign(&sup, &lead, "Scout", "17*23?", true).await });
+        w.wait_log("send Сообщение от главного в команде (Forge):\n\n17*23?")
+            .await;
+        w.push_as(
+            &scout,
+            RuntimeOutput::Event(EventBody::MessageAssistant { text: "391".into() }),
+        )
+        .await;
+        w.push_as(&scout, done()).await;
+        let out = tokio::time::timeout(Duration::from_secs(5), call)
+            .await
+            .expect("the call ended")
+            .unwrap()
+            .unwrap();
+        assert_eq!(out["status"], "completed");
+        assert_eq!(out["reply"], "391");
+    }
+
+    #[tokio::test]
+    async fn a_long_task_ends_the_wait_with_running_and_a_hint() {
+        let w = world(ApprovalMode::Risky);
+        add_agent(&w.store, "Scout");
+        w.sup.set_lead(&w.agent, true).await.unwrap();
+        // The scout never answers; the wait is cut at its limit.
+        let out = crate::team::assign_within(&w.sup, &w.agent, "Scout", "slow", Some(Duration::from_millis(50)))
+            .await
+            .unwrap();
+        assert_eq!(out["status"], "running");
+        assert_eq!(out["hint"], "вызовите team_status позже");
+        assert!(out.get("reply").is_none(), "{out}");
+    }
+
+    #[tokio::test]
+    async fn assign_to_a_paused_agent_does_not_wait() {
+        let w = world(ApprovalMode::Risky);
+        let scout = add_agent(&w.store, "Scout");
+        w.sup.set_lead(&w.agent, true).await.unwrap();
+        w.sup.set_paused(&scout, true).await.unwrap();
+        let out = tokio::time::timeout(
+            Duration::from_secs(5),
+            crate::team::assign(&w.sup, &w.agent, "Scout", "later", true),
+        )
+        .await
+        .expect("no wait")
+        .unwrap();
+        assert_eq!(out["status"], "paused");
+    }
+
+    #[tokio::test]
+    async fn a_message_from_someone_else_has_no_main_agent_mark() {
+        let w = world(ApprovalMode::Risky);
+        add_agent(&w.store, "Scout");
+        w.sup.crew_send(&w.agent, "Scout", "plain hello").await.unwrap();
+        // Exactly the text: no mark, since Forge is not the main agent.
+        w.wait_log("send plain hello").await;
     }
 
     #[tokio::test]

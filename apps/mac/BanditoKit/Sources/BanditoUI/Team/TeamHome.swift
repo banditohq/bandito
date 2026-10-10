@@ -26,7 +26,7 @@ struct TeamHome: View {
     private static let ideaColumns = [GridItem(.adaptive(minimum: 260, maximum: 520), spacing: 12, alignment: .top)]
 
     var body: some View {
-        let lead = LeadAgentStore.shared.id(server: server.id.uuidString)
+        let lead = server.leadAgentID
         let recent = TeamHomeLogic.recent(server.agents) { agent in
             AgentPreview.timestamp(thread: server.thread(for: agent.id), agent: agent)
         }

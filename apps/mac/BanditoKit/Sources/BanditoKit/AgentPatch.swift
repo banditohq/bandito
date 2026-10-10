@@ -33,6 +33,9 @@ public struct AgentPatch: Sendable {
     public var capabilities: [String]?
     /// The integration ids. `.clear` sends `null`: every enabled integration. Nil leaves the list as it is.
     public var integrations: FieldChange<[String]>?
+    /// Makes the agent the main one of the server (`true`; the old one loses it) or takes the role away (`false`).
+    /// A daemon without the feature `lead` ignores it.
+    public var lead: Bool?
 
     public init(
         name: String? = nil, role: String? = nil, cwd: String? = nil, approvalMode: ApprovalMode? = nil,
@@ -43,8 +46,10 @@ public struct AgentPatch: Sendable {
         paused: Bool? = nil,
         avatar: AvatarSpec? = nil,
         capabilities: [String]? = nil,
-        integrations: FieldChange<[String]>? = nil
+        integrations: FieldChange<[String]>? = nil,
+        lead: Bool? = nil
     ) {
+        self.lead = lead
         self.integrations = integrations
         self.avatar = avatar
         self.capabilities = capabilities
@@ -68,7 +73,7 @@ public struct AgentPatch: Sendable {
     /// field: the request that carries a patch adds it.
     public enum Key: String, CodingKey {
         case id, name, role, cwd, approvalMode, effort, memoryMode, contextBudget, systemPrompt, model, runtime
-        case fallbackRuntime, fallbackModel, workspaceId, paused, avatar, capabilities, integrations
+        case fallbackRuntime, fallbackModel, workspaceId, paused, avatar, capabilities, integrations, lead
     }
 
     /// Writes the set fields into an object that may also hold other keys (such as `id`).
@@ -90,6 +95,7 @@ public struct AgentPatch: Sendable {
         try c.encodeIfPresent(avatar, forKey: .avatar)
         try c.encodeIfPresent(capabilities, forKey: .capabilities)
         try Self.encodeChange(integrations, forKey: .integrations, into: &c)
+        try c.encodeIfPresent(lead, forKey: .lead)
     }
 
     private static func encodeChange<T: Encodable & Sendable>(

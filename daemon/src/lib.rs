@@ -36,6 +36,7 @@ pub mod setup;
 pub mod shell;
 pub mod store;
 pub mod supervisor;
+pub mod team;
 pub mod terminal;
 pub mod update;
 pub mod workspace;

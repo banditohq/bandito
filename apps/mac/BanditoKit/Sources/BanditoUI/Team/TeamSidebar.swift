@@ -22,7 +22,7 @@ struct TeamSidebar: View {
     @ViewBuilder
     private func content(_ server: ServerModel) -> some View {
         // The main agent goes first in the whole list, before the list is split into its groups.
-        let lead = LeadAgentStore.shared.id(server: server.id.uuidString)
+        let lead = server.leadAgentID
         let agents = LeadAgent.leadFirst(server.sortedAgents, id: \.id, lead: lead)
         // On the team home no chat is on screen, so no row is marked.
         let shown = router.showsTeamHome
@@ -219,11 +219,19 @@ struct TeamSidebar: View {
         }
         .disabled(!PauseActions.available(on: server))
         .help(PauseActions.available(on: server) ? "" : L10n.Team.pauseUnavailable)
-        let serverKey = server.id.uuidString
-        let isLead = LeadAgentStore.shared.id(server: serverKey) == agent.id
-        Button(isLead ? L10n.Agent.Menu.removeLead : L10n.Agent.Menu.makeLead) {
-            // One main agent per server: making another one main replaces the old choice.
-            LeadAgentStore.shared.set(isLead ? nil : agent.id, server: serverKey)
+        // The main agent lives on the server. A daemon without the feature has no such thing: no item.
+        if server.supports("lead") {
+            let isLead = server.leadAgentID == agent.id
+            Button(isLead ? L10n.Agent.Menu.removeLead : L10n.Agent.Menu.makeLead) {
+                // One main agent per server: the daemon takes the role from the old one.
+                Task {
+                    do {
+                        try await server.setLead(agentID: agent.id, !isLead)
+                    } catch {
+                        actionError = UserFacingError.message(for: error)
+                    }
+                }
+            }
         }
         Button(L10n.Agent.Menu.schedules) {
             // The schedules are a section of the details tab: the agent is chosen and its details are shown.
@@ -242,7 +250,6 @@ struct TeamSidebar: View {
         Task {
             do {
                 try await server.deleteAgent(agent.id)
-                LeadAgentStore.shared.forget(agentID: agent.id, server: server.id.uuidString)
                 router.drafts[agent.id] = nil
                 router.forgetWorkbench(agentID: agent.id)
                 if router.selectedAgentID == agent.id { router.selectedAgentID = nil }

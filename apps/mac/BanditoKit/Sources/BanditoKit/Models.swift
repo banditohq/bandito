@@ -150,6 +150,9 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
     public var capabilities: [String]?
     /// The integrations (ids) the agent may use; `nil` = every enabled one (see `Integration`).
     public var integrations: [String]?
+    /// The main agent of the server: the one that hands out work to the others (`lead`, feature `lead`). One per
+    /// server. A daemon without the feature sends none, and the agent is then not main.
+    public var lead: Bool
     /// The newest user or assistant message; `nil` when there is none, or when the daemon predates the field.
     public var lastMessage: LastMessage?
     /// The status from the agent's newest `agent.status` event; `nil` before any, or when the daemon predates the field.
@@ -184,8 +187,10 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
         reportsLastMessage: Bool = true,
         avatar: AvatarSpec? = nil,
         capabilities: [String]? = nil,
-        integrations: [String]? = nil
+        integrations: [String]? = nil,
+        lead: Bool = false
     ) {
+        self.lead = lead
         self.avatar = avatar
         self.capabilities = capabilities
         self.integrations = integrations
@@ -251,6 +256,7 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
         avatar = try c.decodeIfPresent(AvatarSpec.self, forKey: .avatar)
         capabilities = try c.decodeIfPresent([String].self, forKey: .capabilities)
         integrations = try c.decodeIfPresent([String].self, forKey: .integrations)
+        lead = try c.decodeIfPresent(Bool.self, forKey: .lead) ?? false
         status = try c.decodeIfPresent(AgentStatus.self, forKey: .status)
         pendingApprovals = try c.decodeIfPresent(Int.self, forKey: .pendingApprovals) ?? 0
         pendingApprovalIds = Set(try c.decodeIfPresent([String].self, forKey: .pendingApprovalIds) ?? [])

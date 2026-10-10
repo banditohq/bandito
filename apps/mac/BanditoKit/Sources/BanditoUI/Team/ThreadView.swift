@@ -180,7 +180,7 @@ struct ThreadView: View {
                 showsTerminal: server.supports("terminals"),
                 models: server.runtimeModels,
                 onInspect: { showDetails() },
-                isLead: LeadAgentStore.shared.id(server: server.id.uuidString) == agent.id,
+                isLead: server.leadAgentID == agent.id,
                 onChanges: { router.showInWorkbench(.changes, agentID: agent.id) },
                 onTerminal: { showAgentTerminal() },
                 onTogglePanel: { router.toggleWorkbench() },
