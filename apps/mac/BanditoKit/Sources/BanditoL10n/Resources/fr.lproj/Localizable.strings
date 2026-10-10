@@ -261,7 +261,8 @@
 "changes.askAgent" = "Demander à %1$@ à propos de cet emplacement";
 "changes.askPlace" = "Regardez %1$@:%2$@ — qu’est-ce qui a changé ici et pourquoi ?";
 "changes.binary" = "Fichier binaire modifié";
-"changes.empty" = "Rien n’a encore changé";
+"changes.emptyMessage" = "Ici apparaîtront les fichiers que l’agent modifie dans le projet.";
+"changes.emptyTitle" = "Rien n’a encore changé";
 "changes.inline" = "En ligne";
 "changes.keepAria" = "Garder %1$@";
 "changes.keepHint" = "Décochez un fichier pour le remettre tel qu’il était avant la tâche. Le reste est conservé.";
@@ -283,7 +284,7 @@
 "changes.status.renamed" = "renommé";
 "changes.task" = "Tâche « %1$@ »";
 "changes.timeline" = "Points de restauration";
-"changes.title" = "Ce que %1$@ a modifié";
+"changes.title" = "Modifications : %1$@";
 "changes.truncated" = "La différence est tronquée à 512 Kio";
 "changes.undo" = "Annuler";
 "changes.updateServer" = "Mettez à jour le serveur";
@@ -1763,6 +1764,7 @@
 "team.header.browser" = "Ouvrir le navigateur de l'agent dans le panneau";
 "team.header.openInspector" = "Ouvrir les détails de l'agent";
 "team.header.terminal" = "Ouvrir un terminal dans le dossier de l'agent";
+"team.home.asleep" = "en veille";
 "team.home.idea1" = "Passe en revue les changements d'hier et liste ce qui paraît risqué.";
 "team.home.idea2" = "Trouve pourquoi les tests échouent sur la branche principale et corrige-le.";
 "team.home.idea3" = "Surveille les journaux du serveur et préviens-moi si quelque chose casse.";

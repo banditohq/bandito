@@ -1073,7 +1073,7 @@
   "menubar.resolveFailed": "답변을 보내지 못했어요: {error}",
   "team.delete.action": "삭제",
   "team.changes": "변경",
-  "changes.title": "{name}이(가) 바꾼 내용",
+  "changes.title": "{name}의 변경 사항",
   "changes.task": "작업 “{task}”",
   "changes.fileCount": {
     "other": "파일 {count}개"
@@ -1111,7 +1111,8 @@
     "other": "파일 {count}개를 되돌렸어요"
   },
   "changes.undo": "실행 취소",
-  "changes.empty": "아직 변경된 내용이 없어요",
+  "changes.emptyTitle": "아직 변경된 내용이 없어요",
+  "changes.emptyMessage": "에이전트가 프로젝트에서 바꾼 파일이 여기에 표시됩니다.",
   "changes.updateServer": "서버를 업데이트해 주세요",
   "changes.binary": "바이너리 파일이 변경됐어요",
   "changes.noTextChanges": "텍스트 변경이 없어요",
@@ -1903,6 +1904,7 @@
   "team.home.subtitle": "하던 에이전트와 이어서 하거나, 새 에이전트에게 다음 일을 맡겨 보세요.",
   "team.home.templates": "템플릿으로 시작",
   "team.home.recent": "최근 에이전트",
+  "team.home.asleep": "잠듦",
   "team.home.ideas": "맡길 만한 일",
   "team.home.idea1": "어제 바뀐 내용을 살펴보고 위험해 보이는 부분을 정리해 줘.",
   "team.home.idea2": "메인 브랜치에서 테스트가 실패하는 이유를 찾아 고쳐 줘.",

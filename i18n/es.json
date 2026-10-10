@@ -1090,7 +1090,7 @@
   "menubar.resolveFailed": "No se pudo enviar tu respuesta: {error}",
   "team.delete.action": "Borrar",
   "team.changes": "Cambios",
-  "changes.title": "Qué cambió {name}",
+  "changes.title": "Cambios: {name}",
   "changes.task": "Tarea «{task}»",
   "changes.fileCount": {
     "one": "{count} archivo",
@@ -1133,7 +1133,8 @@
     "other": "Revertidos {count} archivos"
   },
   "changes.undo": "Deshacer",
-  "changes.empty": "Todavía no hay cambios",
+  "changes.emptyTitle": "Todavía no hay cambios",
+  "changes.emptyMessage": "Aquí aparecerán los archivos que el agente cambie en el proyecto.",
   "changes.updateServer": "Actualiza el servidor",
   "changes.binary": "Archivo binario modificado",
   "changes.noTextChanges": "Sin cambios de texto",
@@ -1929,6 +1930,7 @@
   "team.home.subtitle": "Retoma un agente donde lo dejaste o encarga la siguiente tarea a uno nuevo.",
   "team.home.templates": "Empezar con una plantilla",
   "team.home.recent": "Agentes recientes",
+  "team.home.asleep": "duerme",
   "team.home.ideas": "Qué puedes encargar",
   "team.home.idea1": "Revisa los cambios de ayer y enumera lo que parezca arriesgado.",
   "team.home.idea2": "Averigua por qué fallan las pruebas en la rama principal y corrígelo.",

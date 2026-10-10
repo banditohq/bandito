@@ -261,7 +261,8 @@
 "changes.askAgent" = "就此处询问 %1$@";
 "changes.askPlace" = "请查看 %1$@:%2$@ — 这里改了什么，为什么要改？";
 "changes.binary" = "二进制文件已更改";
-"changes.empty" = "尚无更改";
+"changes.emptyMessage" = "智能体在项目中更改的文件会显示在这里。";
+"changes.emptyTitle" = "尚无更改";
 "changes.inline" = "内联";
 "changes.keepAria" = "保留 %1$@";
 "changes.keepHint" = "取消勾选某个文件，即可将其恢复为任务开始前的样子。其余内容保持不变。";
@@ -283,7 +284,7 @@
 "changes.status.renamed" = "已重命名";
 "changes.task" = "任务“%1$@”";
 "changes.timeline" = "恢复点";
-"changes.title" = "%1$@ 的更改";
+"changes.title" = "变更：%1$@";
 "changes.truncated" = "差异内容已在 512 KiB 处截断";
 "changes.undo" = "撤销";
 "changes.updateServer" = "请更新服务器";
@@ -1763,6 +1764,7 @@
 "team.header.browser" = "在面板中打开智能体的浏览器";
 "team.header.openInspector" = "打开智能体详情";
 "team.header.terminal" = "在代理的文件夹中打开终端";
+"team.home.asleep" = "休眠中";
 "team.home.idea1" = "看看昨天的改动，列出看起来有风险的地方。";
 "team.home.idea2" = "查明主分支上测试失败的原因并修复。";
 "team.home.idea3" = "盯着服务器日志，出问题时告诉我。";

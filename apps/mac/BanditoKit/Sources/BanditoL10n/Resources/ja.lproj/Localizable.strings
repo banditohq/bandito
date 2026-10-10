@@ -261,7 +261,8 @@
 "changes.askAgent" = "この箇所について %1$@ に質問";
 "changes.askPlace" = "%1$@:%2$@ を見てください。ここで何が変わり、なぜ変わったのか教えてください。";
 "changes.binary" = "バイナリファイルが変更されました";
-"changes.empty" = "まだ変更はありません";
+"changes.emptyMessage" = "エージェントがプロジェクト内で変更したファイルがここに表示されます。";
+"changes.emptyTitle" = "まだ変更はありません";
 "changes.inline" = "インライン";
 "changes.keepAria" = "%1$@ を残す";
 "changes.keepHint" = "チェックを外すと、そのファイルはタスク開始前の状態に戻ります。それ以外はそのままです。";
@@ -283,7 +284,7 @@
 "changes.status.renamed" = "名前変更";
 "changes.task" = "タスク「%1$@」";
 "changes.timeline" = "復元ポイント";
-"changes.title" = "%1$@ が変更した内容";
+"changes.title" = "変更: %1$@";
 "changes.truncated" = "差分は 512 KiB で切り詰められています";
 "changes.undo" = "取り消す";
 "changes.updateServer" = "サーバーを更新してください";
@@ -1763,6 +1764,7 @@
 "team.header.browser" = "パネルでエージェントのブラウザを開く";
 "team.header.openInspector" = "エージェントの詳細を開く";
 "team.header.terminal" = "エージェントのフォルダでターミナルを開く";
+"team.home.asleep" = "休止中";
 "team.home.idea1" = "昨日の変更を確認して、危なそうな点を挙げて。";
 "team.home.idea2" = "メインブランチでテストが失敗する理由を調べて直して。";
 "team.home.idea3" = "サーバーのログを見張って、何か壊れたら知らせて。";

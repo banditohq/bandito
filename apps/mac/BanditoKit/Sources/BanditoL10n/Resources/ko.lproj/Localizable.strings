@@ -261,7 +261,8 @@
 "changes.askAgent" = "이 부분에 대해 %1$@에게 묻기";
 "changes.askPlace" = "%1$@:%2$@을 봐 주세요. 여기서 무엇이 바뀌었고 왜 바뀌었나요?";
 "changes.binary" = "바이너리 파일이 변경됐어요";
-"changes.empty" = "아직 변경된 내용이 없어요";
+"changes.emptyMessage" = "에이전트가 프로젝트에서 바꾼 파일이 여기에 표시됩니다.";
+"changes.emptyTitle" = "아직 변경된 내용이 없어요";
 "changes.inline" = "인라인";
 "changes.keepAria" = "%1$@ 유지";
 "changes.keepHint" = "체크를 해제하면 해당 파일이 작업 전 상태로 돌아가요. 나머지는 그대로 유지돼요.";
@@ -283,7 +284,7 @@
 "changes.status.renamed" = "이름 변경됨";
 "changes.task" = "작업 “%1$@”";
 "changes.timeline" = "복원 지점";
-"changes.title" = "%1$@이(가) 바꾼 내용";
+"changes.title" = "%1$@의 변경 사항";
 "changes.truncated" = "차이가 512 KiB에서 잘렸어요";
 "changes.undo" = "실행 취소";
 "changes.updateServer" = "서버를 업데이트해 주세요";
@@ -1763,6 +1764,7 @@
 "team.header.browser" = "패널에서 에이전트의 브라우저 열기";
 "team.header.openInspector" = "에이전트 세부 정보 열기";
 "team.header.terminal" = "에이전트 폴더에서 터미널 열기";
+"team.home.asleep" = "잠듦";
 "team.home.idea1" = "어제 바뀐 내용을 살펴보고 위험해 보이는 부분을 정리해 줘.";
 "team.home.idea2" = "메인 브랜치에서 테스트가 실패하는 이유를 찾아 고쳐 줘.";
 "team.home.idea3" = "서버 로그를 지켜보다가 문제가 생기면 알려 줘.";

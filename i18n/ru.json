@@ -941,7 +941,7 @@
   "team.activity.browsing": "Открывает сайт…",
   "team.activity.searching": "Ищет в интернете…",
   "team.header.openInspector": "Открыть сведения агента",
-  "changes.title": "Что изменил {name}",
+  "changes.title": "Изменения: {name}",
   "changes.task": "Задача «{task}»",
   "changes.fileCount": {
     "one": "{count} файл",
@@ -994,7 +994,8 @@
     "other": "Откатил {count} файла"
   },
   "changes.undo": "Отменить",
-  "changes.empty": "Пока ничего не изменено",
+  "changes.emptyTitle": "Пока ничего не изменено",
+  "changes.emptyMessage": "Здесь появятся файлы, которые агент поменял в проекте",
   "changes.updateServer": "Обновите сервер",
   "changes.binary": "Бинарный файл изменён",
   "changes.noTextChanges": "Текст не менялся",
@@ -1984,6 +1985,7 @@
   "team.home.subtitle": "Продолжите с агентом, на котором остановились, или поручите новое дело новому.",
   "team.home.templates": "Начать с шаблона",
   "team.home.recent": "Недавние агенты",
+  "team.home.asleep": "спит",
   "team.home.ideas": "Что можно поручить",
   "team.home.idea1": "Просмотри вчерашние изменения и перечисли, что выглядит рискованно.",
   "team.home.idea2": "Выясни, почему падают тесты в основной ветке, и исправь.",

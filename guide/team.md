@@ -57,7 +57,7 @@ Pause all agents (Пауза для всех агентов) pauses every agent 
 ## Team home (⌘0)
 
 <!-- id: team-home; covers: -->
-The screen shown in the Team mode when no chat is open: a greeting, the New agent (Новый агент) button, the templates, the six agents used last and a few ideas for what to hand off.
+The screen shown in the Team mode when no chat is open: a greeting with the raccoon, the New agent (Новый агент) button, the six agents used last (each with its status: working, waiting or asleep, and the time of its last event), the templates and a few ideas for what to hand off.
 Где: Sidebar → TEAM (КОМАНДА) label; ⌘0; swipe right with two fingers in a chat
 1. Click the TEAM label above the agents, press ⌘0, or swipe right with two fingers in a chat.
 2. Click New agent, or a template, to open the New agent sheet; click an agent to open its chat.
@@ -225,7 +225,7 @@ The agent keeps its memory in plain Markdown files on the server. Long chats are
 ## What changed (Что изменил агент)
 
 <!-- id: team-changes; covers: -->
-A tab of the workbench panel that lists the files the agent changed, task by task, with a diff for each file. You can keep a file back to its state before the task, or roll back the whole task. In a narrow panel the file list is on top of the diff.
+A tab of the workbench panel that lists the files the agent changed, task by task, with a diff for each file. The header shows the agent's name, the number of files, the lines added and removed, and the task. You can keep a file back to its state before the task, or roll back the whole task. In a narrow panel the file list is on top of the diff. Until the agent changes a file, the tab says Nothing changed yet (Пока ничего не изменено).
 Где: Team → agent thread → Changes (Изменения) button in the header; Menu Agent → What changed (Что изменил агент); ⌘⇧D; /changes
 1. Open the changes tab. The tasks are listed with their restore points: Before the task (До задачи), End of turn (Конец хода), and Before restore (Перед откатом).
 2. Click a file to see its diff. Switch between Inline (Построчно) and Side by side (Рядом). Binary files show Binary file changed.

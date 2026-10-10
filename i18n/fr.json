@@ -1090,7 +1090,7 @@
   "menubar.resolveFailed": "Impossible d’envoyer votre réponse : {error}",
   "team.delete.action": "Supprimer",
   "team.changes": "Modifications",
-  "changes.title": "Ce que {name} a modifié",
+  "changes.title": "Modifications : {name}",
   "changes.task": "Tâche « {task} »",
   "changes.fileCount": {
     "one": "{count} fichier",
@@ -1133,7 +1133,8 @@
     "other": "{count} fichiers annulés"
   },
   "changes.undo": "Annuler",
-  "changes.empty": "Rien n’a encore changé",
+  "changes.emptyTitle": "Rien n’a encore changé",
+  "changes.emptyMessage": "Ici apparaîtront les fichiers que l’agent modifie dans le projet.",
   "changes.updateServer": "Mettez à jour le serveur",
   "changes.binary": "Fichier binaire modifié",
   "changes.noTextChanges": "Aucune modification de texte",
@@ -1929,6 +1930,7 @@
   "team.home.subtitle": "Reprenez un agent là où vous l'aviez laissé, ou confiez la tâche suivante à un nouveau.",
   "team.home.templates": "Partir d'un modèle",
   "team.home.recent": "Agents récents",
+  "team.home.asleep": "en veille",
   "team.home.ideas": "Quoi confier",
   "team.home.idea1": "Passe en revue les changements d'hier et liste ce qui paraît risqué.",
   "team.home.idea2": "Trouve pourquoi les tests échouent sur la branche principale et corrige-le.",

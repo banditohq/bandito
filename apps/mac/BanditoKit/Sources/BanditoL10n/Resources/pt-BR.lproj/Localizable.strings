@@ -261,7 +261,8 @@
 "changes.askAgent" = "Perguntar a %1$@ sobre este trecho";
 "changes.askPlace" = "Olhe %1$@:%2$@ — o que mudou aqui e por quê?";
 "changes.binary" = "Arquivo binário alterado";
-"changes.empty" = "Nada foi alterado ainda";
+"changes.emptyMessage" = "Os arquivos que o agente alterar no projeto aparecerão aqui.";
+"changes.emptyTitle" = "Nada foi alterado ainda";
 "changes.inline" = "Em linha";
 "changes.keepAria" = "Manter %1$@";
 "changes.keepHint" = "Desmarque um arquivo para devolvê-lo ao estado anterior à tarefa. O resto permanece.";
@@ -283,7 +284,7 @@
 "changes.status.renamed" = "renomeado";
 "changes.task" = "Tarefa «%1$@»";
 "changes.timeline" = "Pontos de restauração";
-"changes.title" = "O que %1$@ alterou";
+"changes.title" = "Alterações: %1$@";
 "changes.truncated" = "A diferença foi cortada em 512 KiB";
 "changes.undo" = "Desfazer";
 "changes.updateServer" = "Atualize o servidor";
@@ -1763,6 +1764,7 @@
 "team.header.browser" = "Abrir o navegador do agente no painel";
 "team.header.openInspector" = "Abrir detalhes do agente";
 "team.header.terminal" = "Abrir um terminal na pasta do agente";
+"team.home.asleep" = "dormindo";
 "team.home.idea1" = "Revise as mudanças de ontem e liste o que parecer arriscado.";
 "team.home.idea2" = "Descubra por que os testes falham na branch principal e corrija.";
 "team.home.idea3" = "Acompanhe os logs do servidor e me avise se algo quebrar.";

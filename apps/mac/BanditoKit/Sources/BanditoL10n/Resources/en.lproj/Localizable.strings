@@ -261,7 +261,8 @@
 "changes.askAgent" = "Ask %1$@ about this place";
 "changes.askPlace" = "Look at %1$@:%2$@ — what changed here and why?";
 "changes.binary" = "Binary file changed";
-"changes.empty" = "Nothing changed yet";
+"changes.emptyMessage" = "Files the agent changes in the project will appear here.";
+"changes.emptyTitle" = "Nothing changed yet";
 "changes.inline" = "Inline";
 "changes.keepAria" = "Keep %1$@";
 "changes.keepHint" = "Untick a file to put it back as it was before the task. The rest stays.";
@@ -283,7 +284,7 @@
 "changes.status.renamed" = "renamed";
 "changes.task" = "Task «%1$@»";
 "changes.timeline" = "Restore points";
-"changes.title" = "What %1$@ changed";
+"changes.title" = "Changes: %1$@";
 "changes.truncated" = "The diff is cut at 512 KiB";
 "changes.undo" = "Undo";
 "changes.updateServer" = "Update the server";
@@ -1763,6 +1764,7 @@
 "team.header.browser" = "Open the agent's browser in the panel";
 "team.header.openInspector" = "Open the agent's details";
 "team.header.terminal" = "Open a terminal in the agent's folder";
+"team.home.asleep" = "Asleep";
 "team.home.idea1" = "Review yesterday's changes and list what looks risky.";
 "team.home.idea2" = "Find out why the tests fail on the main branch and fix it.";
 "team.home.idea3" = "Watch the server logs and tell me when something breaks.";

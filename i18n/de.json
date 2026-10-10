@@ -1089,7 +1089,7 @@
   "menubar.resolveFailed": "Ihre Antwort konnte nicht gesendet werden: {error}",
   "team.delete.action": "Löschen",
   "team.changes": "Änderungen",
-  "changes.title": "Was {name} geändert hat",
+  "changes.title": "Änderungen: {name}",
   "changes.task": "Aufgabe «{task}»",
   "changes.fileCount": {
     "one": "{count} Datei",
@@ -1132,7 +1132,8 @@
     "other": "{count} Dateien zurückgesetzt"
   },
   "changes.undo": "Rückgängig",
-  "changes.empty": "Noch nichts geändert",
+  "changes.emptyTitle": "Noch nichts geändert",
+  "changes.emptyMessage": "Hier erscheinen die Dateien, die der Agent im Projekt ändert.",
   "changes.updateServer": "Aktualisieren Sie den Server",
   "changes.binary": "Binärdatei geändert",
   "changes.noTextChanges": "Keine Textänderungen",
@@ -1928,6 +1929,7 @@
   "team.home.subtitle": "Machen Sie mit einem Agenten dort weiter, wo Sie aufgehört haben, oder geben Sie die nächste Aufgabe einem neuen.",
   "team.home.templates": "Mit einer Vorlage beginnen",
   "team.home.recent": "Zuletzt genutzte Agenten",
+  "team.home.asleep": "schläft",
   "team.home.ideas": "Das können Sie übergeben",
   "team.home.idea1": "Prüfe die gestrigen Änderungen und liste auf, was riskant aussieht.",
   "team.home.idea2": "Finde heraus, warum die Tests im Hauptzweig fehlschlagen, und behebe es.",

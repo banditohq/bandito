@@ -255,6 +255,20 @@ enum CheckpointLabel {
     }
 }
 
+/// The text of the summary chips in the changes header ("+412", "−18").
+enum ChangesChips {
+    static func additions(_ count: Int) -> String { "+\(count)" }
+    static func deletions(_ count: Int) -> String { "−\(count)" }
+}
+
+/// The icon of a changed file: the kind of the file, from its name, as the Files mode draws it.
+enum ChangedFileKind {
+    static func category(path: String) -> FileCategory {
+        let name = path.split(separator: "/").last.map(String.init) ?? path
+        return FileTypes.category(name: name, ext: URL(fileURLWithPath: name).pathExtension, kind: .file)
+    }
+}
+
 /// What the window shows after a rollback: how many files came back, and the checkpoint that undoes it.
 struct RollbackNotice: Identifiable {
     let id = UUID()

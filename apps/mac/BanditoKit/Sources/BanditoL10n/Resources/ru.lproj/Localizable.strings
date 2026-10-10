@@ -261,7 +261,8 @@
 "changes.askAgent" = "Спросить %1$@ об этом месте";
 "changes.askPlace" = "Посмотри %1$@:%2$@ — что здесь изменилось и почему?";
 "changes.binary" = "Бинарный файл изменён";
-"changes.empty" = "Пока ничего не изменено";
+"changes.emptyMessage" = "Здесь появятся файлы, которые агент поменял в проекте";
+"changes.emptyTitle" = "Пока ничего не изменено";
 "changes.inline" = "Построчно";
 "changes.keepAria" = "Оставить %1$@";
 "changes.keepHint" = "Снимите галочку — файл вернётся к виду до задачи. Остальное останется.";
@@ -283,7 +284,7 @@
 "changes.status.renamed" = "переименован";
 "changes.task" = "Задача «%1$@»";
 "changes.timeline" = "Точки возврата";
-"changes.title" = "Что изменил %1$@";
+"changes.title" = "Изменения: %1$@";
 "changes.truncated" = "Разница обрезана на 512 КиБ";
 "changes.undo" = "Отменить";
 "changes.updateServer" = "Обновите сервер";
@@ -1763,6 +1764,7 @@
 "team.header.browser" = "Браузер агента в панели";
 "team.header.openInspector" = "Открыть сведения агента";
 "team.header.terminal" = "Открыть терминал в папке агента";
+"team.home.asleep" = "спит";
 "team.home.idea1" = "Просмотри вчерашние изменения и перечисли, что выглядит рискованно.";
 "team.home.idea2" = "Выясни, почему падают тесты в основной ветке, и исправь.";
 "team.home.idea3" = "Следи за логами сервера и скажи, если что-то сломается.";

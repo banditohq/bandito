@@ -1073,7 +1073,7 @@
   "menubar.resolveFailed": "无法发送回复：{error}",
   "team.delete.action": "删除",
   "team.changes": "更改",
-  "changes.title": "{name} 的更改",
+  "changes.title": "变更：{name}",
   "changes.task": "任务“{task}”",
   "changes.fileCount": {
     "other": "{count} 个文件"
@@ -1111,7 +1111,8 @@
     "other": "已回滚 {count} 个文件"
   },
   "changes.undo": "撤销",
-  "changes.empty": "尚无更改",
+  "changes.emptyTitle": "尚无更改",
+  "changes.emptyMessage": "智能体在项目中更改的文件会显示在这里。",
   "changes.updateServer": "请更新服务器",
   "changes.binary": "二进制文件已更改",
   "changes.noTextChanges": "没有文本更改",
@@ -1903,6 +1904,7 @@
   "team.home.subtitle": "从上次停下的地方继续，或把下一项工作交给新的智能体。",
   "team.home.templates": "从模板开始",
   "team.home.recent": "最近的智能体",
+  "team.home.asleep": "休眠中",
   "team.home.ideas": "可以交给它们的事",
   "team.home.idea1": "看看昨天的改动，列出看起来有风险的地方。",
   "team.home.idea2": "查明主分支上测试失败的原因并修复。",
