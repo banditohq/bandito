@@ -658,7 +658,7 @@
 "integrations.custom.kindWebHint" = "HTTP / SSE";
 "integrations.custom.manual" = "또는 직접 입력";
 "integrations.custom.paste" = "문서에 있는 설정을 붙여넣으세요";
-"integrations.custom.pastePlaceholder" = "mcpServers JSON  ·  npx -y @scope/package  ·  https://…";
+"integrations.custom.pastePlaceholder" = "{\"mcpServers\": {…}}\nnpx -y @scope/package · https://…";
 "integrations.custom.reason.command" = "“%1$@”은(는) 알 수 없는 프로그램이에요. npx, uvx, docker 또는 경로로 시작해 주세요.";
 "integrations.custom.reason.json" = "JSON 형식이 올바르지 않아요.";
 "integrations.custom.reason.noServers" = "명령이나 주소가 있는 서버가 없어요.";

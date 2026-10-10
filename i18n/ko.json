@@ -2147,7 +2147,7 @@
   "market.step.fillPath": "명령의 예시 폴더나 경로를 본인의 것으로 바꾸세요.",
   "market.step.connect": "“연결”을 누르고 항목을 채운 뒤 연결을 확인하세요.",
   "integrations.custom.paste": "문서에 있는 설정을 붙여넣으세요",
-  "integrations.custom.pastePlaceholder": "mcpServers JSON  ·  npx -y @scope/package  ·  https://…",
+  "integrations.custom.pastePlaceholder": "{\"mcpServers\": {…}}\nnpx -y @scope/package · https://…",
   "integrations.custom.recognizedProgram": "인식함: 프로그램 {command}",
   "integrations.custom.recognizedWeb": "인식함: 웹 주소 {url}",
   "integrations.custom.recognizedMany": "찾은 서버: {count}개. 추가할 항목을 선택해 주세요.",

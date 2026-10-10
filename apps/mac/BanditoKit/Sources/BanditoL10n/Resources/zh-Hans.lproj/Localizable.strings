@@ -658,7 +658,7 @@
 "integrations.custom.kindWebHint" = "HTTP / SSE";
 "integrations.custom.manual" = "或手动填写";
 "integrations.custom.paste" = "粘贴文档中的配置";
-"integrations.custom.pastePlaceholder" = "mcpServers JSON  ·  npx -y @scope/package  ·  https://…";
+"integrations.custom.pastePlaceholder" = "{\"mcpServers\": {…}}\nnpx -y @scope/package · https://…";
 "integrations.custom.reason.command" = "“%1$@”不是已知的程序。请以 npx、uvx、docker 或路径开头。";
 "integrations.custom.reason.json" = "JSON 格式不正确。";
 "integrations.custom.reason.noServers" = "其中没有带命令或地址的服务器。";

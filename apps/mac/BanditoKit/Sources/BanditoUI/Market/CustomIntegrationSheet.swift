@@ -32,6 +32,8 @@ struct CustomIntegrationSheet: View {
     @State private var writtenSecrets: [String] = []
     /// "Add" went through: the integration stays when the sheet closes.
     @State private var finished = false
+    /// "Check" was pressed: the note about the trial shows under the buttons from then on.
+    @State private var checkAsked = false
 
     /// What the paste field made of its text.
     enum Recognition: Equatable {
@@ -43,9 +45,9 @@ struct CustomIntegrationSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 18) {
             Text(L10n.Integrations.addOwn)
-                .font(.system(size: 17, weight: .semibold))
+                .font(.system(size: 20, weight: .semibold))
                 .foregroundStyle(Color.Bandito.text)
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
@@ -63,6 +65,12 @@ struct CustomIntegrationSheet: View {
 
             feedback
             buttons
+            if checkAsked {
+                Text(L10n.Integrations.Custom.trialNote)
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Color.Bandito.text3)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
         }
         .padding(24)
         .frame(width: 520)
@@ -80,21 +88,20 @@ struct CustomIntegrationSheet: View {
             ZStack(alignment: .topLeading) {
                 TextEditor(text: $pasted)
                     .font(BanditoFont.font(size: 12.5, weight: 400, mono: true))
-                    .foregroundStyle(Color.Bandito.text)
-                    .scrollContentBackground(.hidden)
-                    .padding(6)
+                    .banditoEditor()
                 if pasted.isEmpty {
+                    // Two lines, both in the monospaced face. The padding is the field's own plus the editor's inset.
                     Text(L10n.Integrations.Custom.pastePlaceholder)
                         .font(BanditoFont.font(size: 12.5, weight: 400, mono: true))
                         .foregroundStyle(Color.Bandito.text3)
-                        .padding(.horizontal, 11)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 17)
                         .padding(.vertical, 14)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                         .allowsHitTesting(false)
                 }
             }
             .frame(height: 108)
-            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.Bandito.text.opacity(0.05)))
-            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.Bandito.line))
             .onChange(of: pasted) { _, text in read(text) }
             recognitionLine
             if found.count > 1 {
@@ -196,14 +203,14 @@ struct CustomIntegrationSheet: View {
                 text: Binding(
                     get: { draft.title },
                     set: { draft.setTitle($0, existingNames: existingNames) }))
-                .textFieldStyle(.roundedBorder)
+                .banditoField()
                 .font(.system(size: 13))
             if editingName {
                 TextField(
                     L10n.Integrations.Sheet.name,
                     text: Binding(get: { draft.name }, set: { draft.setName($0) })
                 )
-                .textFieldStyle(.roundedBorder)
+                .banditoField()
                 .font(BanditoFont.font(size: 12.5, weight: 400, mono: true))
                 .onSubmit { editingName = false }
                 Text(L10n.Integrations.Sheet.nameHint)
@@ -241,11 +248,11 @@ struct CustomIntegrationSheet: View {
             HStack(spacing: 10) {
                 Image(systemName: symbol)
                     .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(selected ? Color.Bandito.info : Color.Bandito.text2)
+                    .foregroundStyle(selected ? Color.Bandito.text : Color.Bandito.text2)
                     .frame(width: 30, height: 30)
                     .background(
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill((selected ? Color.Bandito.info : Color.Bandito.text).opacity(0.1)))
+                            .fill(Color.Bandito.text.opacity(0.1)))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .font(.system(size: 13, weight: .semibold))
@@ -260,8 +267,11 @@ struct CustomIntegrationSheet: View {
             }
             .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(shape.fill(selected ? Color.Bandito.info.opacity(0.07) : Color.Bandito.surface1))
-            .overlay(shape.strokeBorder(selected ? Color.Bandito.info.opacity(0.7) : Color.Bandito.line, lineWidth: 1))
+            .background(shape.fill(selected ? Color.Bandito.surface2 : Color.Bandito.surface1))
+            .overlay(
+                shape.strokeBorder(
+                    selected ? Color.Bandito.text : Color.Bandito.text.opacity(0.06),
+                    lineWidth: selected ? 1.5 : 1))
             .contentShape(shape)
         }
         .banditoButton(.row(cornerRadius: 12))
@@ -276,7 +286,7 @@ struct CustomIntegrationSheet: View {
                 label(L10n.Integrations.Custom.commandLine)
                 TextField("npx -y @scope/package", text: $draft.commandLine, axis: .vertical)
                     .lineLimit(1...4)
-                    .textFieldStyle(.roundedBorder)
+                    .banditoField()
                     .font(BanditoFont.font(size: 12.5, weight: 400, mono: true))
                 Text(L10n.Integrations.Custom.commandHint)
                     .font(.system(size: 11.5))
@@ -287,7 +297,7 @@ struct CustomIntegrationSheet: View {
             VStack(alignment: .leading, spacing: 6) {
                 label(L10n.Integrations.Sheet.url)
                 TextField("https://…", text: $draft.url)
-                    .textFieldStyle(.roundedBorder)
+                    .banditoField()
                     .font(BanditoFont.font(size: 12.5, weight: 400, mono: true))
                 Text(L10n.Integrations.Sheet.urlHint)
                     .font(.system(size: 11.5))
@@ -338,10 +348,6 @@ struct CustomIntegrationSheet: View {
         if let error {
             UserFacingErrorView(message: error, onRetry: { add() })
         }
-        Text(L10n.Integrations.Custom.trialNote)
-            .font(.system(size: 11.5))
-            .foregroundStyle(Color.Bandito.text3)
-            .fixedSize(horizontal: false, vertical: true)
     }
 
     private var buttons: some View {
@@ -440,6 +446,7 @@ struct CustomIntegrationSheet: View {
     /// "Check": adds the server turned off (once), then tries it.
     private func check() {
         attempted = true
+        checkAsked = true
         error = nil
         guard currentProblem == nil else { return }
         busy = true

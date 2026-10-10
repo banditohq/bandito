@@ -2174,7 +2174,7 @@
   "market.step.fillPath": "Troque no comando a pasta ou o caminho de exemplo pelo seu.",
   "market.step.connect": "Clique em Conectar, preencha os campos e verifique a conexão.",
   "integrations.custom.paste": "Cole a configuração da documentação",
-  "integrations.custom.pastePlaceholder": "mcpServers JSON  ·  npx -y @scope/package  ·  https://…",
+  "integrations.custom.pastePlaceholder": "{\"mcpServers\": {…}}\nnpx -y @scope/package · https://…",
   "integrations.custom.recognizedProgram": "Reconhecido: programa {command}",
   "integrations.custom.recognizedWeb": "Reconhecido: endereço web {url}",
   "integrations.custom.recognizedMany": "Servidores encontrados: {count}. Marque os que deseja adicionar.",
