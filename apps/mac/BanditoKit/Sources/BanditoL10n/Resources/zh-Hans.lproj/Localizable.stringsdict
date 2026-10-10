@@ -86,7 +86,7 @@
 			<string>已用 %1$lld 个词元</string>
 		</dict>
 	</dict>
-	<key>claudeImport.warning.nonText</key>
+	<key>claudeImport.warning.leftOut</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
 		<string>%1$#@value@</string>
@@ -97,7 +97,7 @@
 			<key>NSStringFormatValueTypeKey</key>
 			<string>lld</string>
 			<key>other</key>
-			<string>文件夹中有 %1$lld 个文件不是文本，将原样复制。</string>
+			<string>文件夹中有 %1$lld 个文件被排除（不是文本，或名称像密钥）；技能将不含它们安装。</string>
 		</dict>
 	</dict>
 	<key>common.agentCount</key>

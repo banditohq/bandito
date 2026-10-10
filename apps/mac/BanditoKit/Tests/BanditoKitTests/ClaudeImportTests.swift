@@ -139,6 +139,35 @@ import Testing
         #expect(!ImportSecretCheck.looksLikeSecret("api_key: short"))
     }
 
+    @Test func aBigFileOfLettersIsCheckedQuickly() {
+        let big = String(repeating: "a", count: 300_000) + String(repeating: "key", count: 20_000)
+        let started = Date()
+        #expect(!ImportSecretCheck.looksLikeSecret(big))
+        #expect(Date().timeIntervalSince(started) < 5, "a pattern that backtracks without limit would take minutes")
+    }
+
+    @Test func variableAssignmentsAndKeyFormatsAreNoticedWithoutWordBoundaries() {
+        let secrets: [String] = [
+            "DB_PASSWORD=hunter2hunter2", "MY_SECRET_X=abcdefgh1234", "STRIPE_TOKEN=abcd1234efgh", "OPENAI_API_KEY=abcdef123456",
+            "export GITHUB_TOKEN=\"ghp_x1234567890abcdef\"", "client_secret: 'zzzzzzzzzzzz'", "xoxb-123456789012-abcdefghijkl",
+            "AKIAIOSFODNN7EXAMPLE", "prefix_sk-abcdefghijklmnopqrstuv", "-----BEGIN RSA PRIVATE KEY-----",
+        ]
+        let more: [String] = [
+            "-----BEGIN PRIVATE KEY-----", "xoxp-1234567890-abcdefgh", "Authorization: Bearer abcdefghijklmnopqrstuvwxyz012345",
+            "passwd = longvalue12345",
+        ]
+        for text in secrets + more {
+            #expect(ImportSecretCheck.looksLikeSecret(text), Comment(rawValue: text))
+        }
+        let harmless: [String] = [
+            "API_KEY=$API_KEY", "TOKEN=<your token here>", "SECRET={{secret}}", "KEY=short",
+            "Set the password in the settings screen.", "keyboard shortcuts: use the arrows to move around",
+        ]
+        for text in harmless {
+            #expect(!ImportSecretCheck.looksLikeSecret(text), Comment(rawValue: text))
+        }
+    }
+
     // MARK: the scan
 
     /// A folder tree for a test; removed with it.
@@ -267,15 +296,112 @@ import Testing
         #expect(!scan.skipped.contains { $0.path.contains(".hidden") })
     }
 
-    @Test func aSkillWithPicturesIsTakenWithAWarning() {
+    @Test func aSkillThatPointsAtPicturesIsTakenWithoutThemAndWithAWarning() {
         let t = Tree()
-        t.put(".claude/skills/art/SKILL.md", "---\ndescription: d\n---\nUse the pictures")
+        t.put(".claude/skills/art/SKILL.md", "---\ndescription: d\n---\nUse the pictures in a.png")
+        t.put(".claude/skills/art/notes.txt", "text stays")
         t.put(".claude/skills/art/a.png", Data([0x89, 0x50, 0x00, 0x47]))
         t.put(".claude/skills/art/b.png", Data([0x00, 0x01]))
         t.put(".claude/skills/binmain/SKILL.md", Data([0x00, 0x01]))
         let scan = ImportScanner.scan(home: t.root)
-        #expect(scan.items(of: .skill).first?.warnings == [.nonTextFiles(2)])
+        let art = scan.items(of: .skill).first
+        #expect(art?.warnings == [.leftOutFiles(2)])
+        guard case .command(let made)? = art?.payload else {
+            Issue.record("no skill")
+            return
+        }
+        #expect(made.files.map(\.path) == ["SKILL.md", "notes.txt"], "the files that are not text are not sent")
+        #expect(scan.skipped.filter { $0.reason == .notText && $0.path.hasSuffix(".png") }.count == 2)
         #expect(scan.skipped.first { $0.path.hasSuffix("skills/binmain") }?.reason == .notText)
+    }
+
+    @Test func filesNamedLikeKeysAreNeverSentWhateverTheyHold() {
+        let t = Tree()
+        t.put(".claude/skills/deploy/SKILL.md", "---\ndescription: d\n---\nDeploy")
+        t.put(".claude/skills/deploy/run.sh", "echo hi")
+        let names: [String] = [
+            "deploy.pem", "server.key", "id_rsa", "id_rsa.pub", "id_ed25519", "credentials.json", "cert.p12", "env.production",
+        ]
+        for name in names {
+            t.put(".claude/skills/deploy/" + name, "harmless text")
+        }
+        let scan = ImportScanner.scan(home: t.root)
+        guard case .command(let made)? = scan.items(of: .skill).first?.payload else {
+            Issue.record("no skill")
+            return
+        }
+        let sent: [String] = made.files.map(\.path)
+        #expect(sent == ["SKILL.md", "run.sh"])
+        let flagged = scan.skipped.filter { $0.reason == .sensitiveFile }
+        let left: Set<String> = Set(flagged.map { String($0.path.split(separator: "/").last ?? "") })
+        #expect(left == Set(names))
+        #expect(scan.items(of: .skill).first?.warnings == [.leftOutFiles(8)])
+    }
+
+    @Test func theNamesOfKeyFilesAreRecognised() {
+        let keys: [String] = [
+            ".env", ".env.local", "x.pem", "x.KEY", "id_rsa", "id_rsa.pub", "id_ed25519", "id_ed25519.pub", "credentials",
+            "credentials.json", "a.p12", "a.pfx", "store.jks",
+        ]
+        for name in keys {
+            #expect(ImportSensitiveName.matches(name), Comment(rawValue: name))
+        }
+        let plain: [String] = [
+            "SKILL.md", "run.sh", "keyboard.md", "monkey.txt", "environment.md", "credits.md", "notes.pem.txt", "idea.md",
+        ]
+        for name in plain {
+            #expect(!ImportSensitiveName.matches(name), Comment(rawValue: name))
+        }
+    }
+
+    @Test func aLinkAnywhereOnTheWayIsNotFollowed() {
+        let t = Tree()
+        t.put("real/.claude/agents/a.md", "---\nname: a\n---\nbody")
+        t.put("real/.claude/commands/c.md", "x")
+        // `.claude` itself is a link.
+        t.link("home/.claude", to: t.root.appendingPathComponent("real/.claude").path)
+        let scan = ImportScanner.scan(home: t.root.appendingPathComponent("home"))
+        #expect(scan.items.isEmpty)
+        #expect(scan.skipped.contains { $0.path.hasSuffix(".claude") && $0.reason == .link })
+    }
+
+    @Test func aLinkedFolderInTheMiddleOfThePathIsNotFollowed() {
+        let t = Tree()
+        t.put("elsewhere/agents/a.md", "---\nname: a\n---\nbody")
+        t.put("home/.claude/commands/ok.md", "x")
+        t.link("home/.claude/agents", to: t.root.appendingPathComponent("elsewhere/agents").path)
+        t.put("proj/AGENTS.md", "rules")
+        t.link("proj/.claude", to: t.root.appendingPathComponent("home/.claude").path)
+        let scan = ImportScanner.scan(
+            home: t.root.appendingPathComponent("home"), project: t.root.appendingPathComponent("proj"))
+        #expect(scan.items(of: .agent).map(\.name) == ["proj"], "only AGENTS.md of the project")
+        #expect(scan.items(of: .command).map(\.name) == ["ok"], "the user's own commands are still read")
+        #expect(scan.skipped.filter { $0.reason == .link }.count >= 2)
+    }
+
+    @Test func theHomeFolderItselfMayBeBehindALink() {
+        let t = Tree()
+        t.put("real/.claude/agents/a.md", "---\nname: a\n---\nbody")
+        t.link("alias", to: t.root.appendingPathComponent("real").path)
+        let scan = ImportScanner.scan(home: t.root.appendingPathComponent("alias"))
+        #expect(scan.items(of: .agent).map(\.name) == ["a"], "only what is below the home folder counts")
+    }
+
+    @Test func aCutShortFolderIsNamedAndASkillThatWasCutIsNotTaken() {
+        let t = Tree()
+        t.put(".claude/skills/deep/SKILL.md", "x")
+        t.put(".claude/skills/deep/a/b/c/d/e/f/too-deep.txt", "x")
+        t.put(".claude/skills/wide/SKILL.md", "x")
+        for i in 0..<20 { t.put(".claude/skills/wide/f\(i).txt", "x") }
+        t.put(".claude/skills/small/SKILL.md", "x")
+        for i in 0..<30 { t.put(".claude/commands/c\(i).md", "x") }
+        let scan = ImportScanner.scan(home: t.root, maxVisited: 10)
+        func reason(_ suffix: String) -> ImportSkipReason? { scan.skipped.first { $0.path.hasSuffix(suffix) }?.reason }
+        #expect(reason("skills/deep") == .truncated, "deeper than the limit")
+        #expect(reason("skills/wide") == .truncated, "more files than the limit")
+        #expect(scan.items(of: .skill).map(\.name) == ["small"])
+        #expect(reason("commands") == .truncated, "the folder is named, so the list is not taken for complete")
+        #expect(scan.items(of: .command).count <= 10)
     }
 
     @Test func aFileThatLooksLikeItHoldsAKeyCarriesAWarning() {

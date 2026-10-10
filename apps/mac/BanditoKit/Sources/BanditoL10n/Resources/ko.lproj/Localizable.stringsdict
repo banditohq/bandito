@@ -86,7 +86,7 @@
 			<string>%1$lld 토큰 사용</string>
 		</dict>
 	</dict>
-	<key>claudeImport.warning.nonText</key>
+	<key>claudeImport.warning.leftOut</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
 		<string>%1$#@value@</string>
@@ -97,7 +97,7 @@
 			<key>NSStringFormatValueTypeKey</key>
 			<string>lld</string>
 			<key>other</key>
-			<string>폴더 안의 파일 %1$lld개는 텍스트가 아니에요. 그대로 복사돼요.</string>
+			<string>폴더 안의 파일 %1$lld개는 제외됐어요(텍스트가 아니거나 키 같은 이름). 스킬은 그 파일 없이 설치돼요.</string>
 		</dict>
 	</dict>
 	<key>common.agentCount</key>

@@ -2470,11 +2470,7 @@
   "claudeImport.problem.badAgentName": "Use letras, dígitos, espaços, hifens e sublinhados.",
   "claudeImport.problem.badName": "Use letras, dígitos, pontos, hifens e sublinhados; comece com letra, dígito ou sublinhado.",
   "claudeImport.problem.taken": "Este nome também está em uso.",
-  "claudeImport.warning.nonText": {
-    "one": "{count} arquivo da pasta não é texto; ele é copiado como está.",
-    "other": "{count} arquivos da pasta não são texto; eles são copiados como estão."
-  },
-  "claudeImport.warning.secret": "Parece conter uma chave ou uma senha. Confira antes de importar.",
+  "claudeImport.warning.secret": "Parece conter uma chave ou uma senha, por isso não está marcado. Leia e marque só se tiver certeza.",
   "claudeImport.warning.model": "O modelo {model} não existe em {runtime}; o agente usará o padrão.",
   "claudeImport.empty": "Nada para importar foi encontrado. Adicione uma pasta de projeto para procurar nela.",
   "claudeImport.scanning": "Procurando…",
@@ -2498,5 +2494,13 @@
   "claudeImport.report.skipped": "Pulado",
   "claudeImport.report.failed": "Com erro",
   "claudeImport.reason.byYou": "Você deixou de fora.",
-  "claudeImport.reason.exists": "O servidor já tem um com este nome, e o Bandito nunca o substitui."
+  "claudeImport.reason.exists": "O servidor já tem um com este nome, e o Bandito nunca o substitui.",
+  "claudeImport.skip.sensitive": "{path} tem nome de arquivo de chaves ou credenciais, por isso não é copiado",
+  "claudeImport.skip.truncated": "{path} foi lido só em parte (arquivos demais ou fundo demais), por isso não é importado",
+  "claudeImport.reason.cancelled": "Não feito: a importação foi interrompida.",
+  "claudeImport.stop": "Parar",
+  "claudeImport.warning.leftOut": {
+    "one": "{count} arquivo da pasta ficou de fora (não é texto ou tem nome de chave); a skill é instalada sem ele.",
+    "other": "{count} arquivos da pasta ficaram de fora (não são texto ou têm nome de chave); a skill é instalada sem eles."
+  }
 }

@@ -486,6 +486,7 @@ public enum L10n {
         public static var selectAll: String { L10n.tr("claudeImport.selectAll") }
         public static var skip: String { L10n.tr("claudeImport.skip") }
         public static func start(count: Int) -> String { L10n.tr("claudeImport.start", count) }
+        public static var stop: String { L10n.tr("claudeImport.stop") }
         public static var subtitle: String { L10n.tr("claudeImport.subtitle") }
         public static var title: String { L10n.tr("claudeImport.title") }
 
@@ -518,6 +519,7 @@ public enum L10n {
 
         public enum Reason {
             public static var byYou: String { L10n.tr("claudeImport.reason.byYou") }
+            public static var cancelled: String { L10n.tr("claudeImport.reason.cancelled") }
             public static var exists: String { L10n.tr("claudeImport.reason.exists") }
         }
 
@@ -533,15 +535,17 @@ public enum L10n {
             public static func link(path: String) -> String { L10n.tr("claudeImport.skip.link", path) }
             public static func noSkillFile(path: String) -> String { L10n.tr("claudeImport.skip.noSkillFile", path) }
             public static func notText(path: String) -> String { L10n.tr("claudeImport.skip.notText", path) }
+            public static func sensitive(path: String) -> String { L10n.tr("claudeImport.skip.sensitive", path) }
             public static func tooBig(path: String) -> String { L10n.tr("claudeImport.skip.tooBig", path) }
             public static func tooLarge(path: String) -> String { L10n.tr("claudeImport.skip.tooLarge", path) }
             public static func tooManyFiles(path: String) -> String { L10n.tr("claudeImport.skip.tooManyFiles", path) }
+            public static func truncated(path: String) -> String { L10n.tr("claudeImport.skip.truncated", path) }
             public static func unreadable(path: String) -> String { L10n.tr("claudeImport.skip.unreadable", path) }
         }
 
         public enum Warning {
+            public static func leftOut(count: Int) -> String { L10n.tr("claudeImport.warning.leftOut", count) }
             public static func model(model: String, runtime: String) -> String { L10n.tr("claudeImport.warning.model", model, runtime) }
-            public static func nonText(count: Int) -> String { L10n.tr("claudeImport.warning.nonText", count) }
             public static var secret: String { L10n.tr("claudeImport.warning.secret") }
         }
     }

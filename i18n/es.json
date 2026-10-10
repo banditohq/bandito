@@ -2470,11 +2470,7 @@
   "claudeImport.problem.badAgentName": "Usa letras, dígitos, espacios, guiones y guiones bajos.",
   "claudeImport.problem.badName": "Usa letras, dígitos, puntos, guiones y guiones bajos; empieza con una letra, un dígito o un guion bajo.",
   "claudeImport.problem.taken": "Este nombre también está ocupado.",
-  "claudeImport.warning.nonText": {
-    "one": "{count} archivo de la carpeta no es texto; se copia tal cual.",
-    "other": "{count} archivos de la carpeta no son texto; se copian tal cual."
-  },
-  "claudeImport.warning.secret": "Parece contener una clave o una contraseña. Revísalo antes de importar.",
+  "claudeImport.warning.secret": "Parece contener una clave o una contraseña, así que no está marcado. Léelo y márcalo solo si estás seguro.",
   "claudeImport.warning.model": "El modelo {model} no está en {runtime}; el agente usará el predeterminado.",
   "claudeImport.empty": "No se encontró nada que importar. Añade una carpeta de proyecto para buscar ahí.",
   "claudeImport.scanning": "Buscando…",
@@ -2498,5 +2494,13 @@
   "claudeImport.report.skipped": "Omitido",
   "claudeImport.report.failed": "Con error",
   "claudeImport.reason.byYou": "Lo dejaste fuera.",
-  "claudeImport.reason.exists": "El servidor ya tiene uno con este nombre, y Bandito nunca lo reemplaza."
+  "claudeImport.reason.exists": "El servidor ya tiene uno con este nombre, y Bandito nunca lo reemplaza.",
+  "claudeImport.skip.sensitive": "{path} tiene nombre de archivo de claves o credenciales, así que no se copia",
+  "claudeImport.skip.truncated": "{path} solo se leyó en parte (demasiados archivos o demasiado profundo), así que no se toma",
+  "claudeImport.reason.cancelled": "No se hizo: la importación se detuvo.",
+  "claudeImport.stop": "Detener",
+  "claudeImport.warning.leftOut": {
+    "one": "Se dejó fuera {count} archivo de la carpeta (no es texto o se llama como una clave); el skill se instala sin él.",
+    "other": "Se dejaron fuera {count} archivos de la carpeta (no son texto o se llaman como una clave); el skill se instala sin ellos."
+  }
 }

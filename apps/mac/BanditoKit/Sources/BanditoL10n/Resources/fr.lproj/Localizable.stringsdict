@@ -98,7 +98,7 @@
 			<string>%1$lld tokens utilisés</string>
 		</dict>
 	</dict>
-	<key>claudeImport.warning.nonText</key>
+	<key>claudeImport.warning.leftOut</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
 		<string>%1$#@value@</string>
@@ -109,9 +109,9 @@
 			<key>NSStringFormatValueTypeKey</key>
 			<string>lld</string>
 			<key>one</key>
-			<string>%1$lld fichier du dossier n'est pas du texte ; il est copié tel quel.</string>
+			<string>%1$lld fichier du dossier a été laissé de côté (pas du texte, ou nommé comme une clé) ; le skill est installé sans lui.</string>
 			<key>other</key>
-			<string>%1$lld fichiers du dossier ne sont pas du texte ; ils sont copiés tels quels.</string>
+			<string>%1$lld fichiers du dossier ont été laissés de côté (pas du texte, ou nommés comme une clé) ; le skill est installé sans eux.</string>
 		</dict>
 	</dict>
 	<key>common.agentCount</key>

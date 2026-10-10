@@ -2469,11 +2469,7 @@
   "claudeImport.problem.badAgentName": "Nur Buchstaben, Ziffern, Leerzeichen, Bindestriche und Unterstriche.",
   "claudeImport.problem.badName": "Nur Buchstaben, Ziffern, Punkte, Bindestriche und Unterstriche; am Anfang ein Buchstabe, eine Ziffer oder ein Unterstrich.",
   "claudeImport.problem.taken": "Dieser Name ist auch belegt.",
-  "claudeImport.warning.nonText": {
-    "one": "{count} Datei im Ordner ist kein Text; sie wird unverändert kopiert.",
-    "other": "{count} Dateien im Ordner sind kein Text; sie werden unverändert kopiert."
-  },
-  "claudeImport.warning.secret": "Das sieht nach einem Schlüssel oder Passwort aus. Prüfen Sie es vor dem Import.",
+  "claudeImport.warning.secret": "Das sieht nach einem Schlüssel oder Passwort aus, deshalb ist es nicht angehakt. Lesen Sie es und haken Sie es nur an, wenn Sie sicher sind.",
   "claudeImport.warning.model": "Das Modell {model} gibt es bei {runtime} nicht; der Agent nutzt das Standardmodell.",
   "claudeImport.empty": "Nichts zum Importieren gefunden. Fügen Sie einen Projektordner hinzu, um dort zu suchen.",
   "claudeImport.scanning": "Suche läuft …",
@@ -2497,5 +2493,13 @@
   "claudeImport.report.skipped": "Übersprungen",
   "claudeImport.report.failed": "Fehlgeschlagen",
   "claudeImport.reason.byYou": "Sie haben es weggelassen.",
-  "claudeImport.reason.exists": "Der Server hat schon eines mit diesem Namen, und Bandito ersetzt nie etwas."
+  "claudeImport.reason.exists": "Der Server hat schon eines mit diesem Namen, und Bandito ersetzt nie etwas.",
+  "claudeImport.skip.sensitive": "{path} heißt wie eine Schlüssel- oder Zugangsdatei und wird deshalb nicht kopiert",
+  "claudeImport.skip.truncated": "{path} wurde nur teilweise gelesen (zu viele Dateien oder zu tief) und wird deshalb nicht übernommen",
+  "claudeImport.reason.cancelled": "Nicht erledigt: Der Import wurde gestoppt.",
+  "claudeImport.stop": "Stoppen",
+  "claudeImport.warning.leftOut": {
+    "one": "{count} Datei des Ordners wurde weggelassen (kein Text oder wie ein Schlüssel benannt); der Skill wird ohne sie installiert.",
+    "other": "{count} Dateien des Ordners wurden weggelassen (kein Text oder wie ein Schlüssel benannt); der Skill wird ohne sie installiert."
+  }
 }

@@ -2439,10 +2439,7 @@
   "claudeImport.problem.badAgentName": "只能使用字母、数字、空格、连字符和下划线。",
   "claudeImport.problem.badName": "只能使用字母、数字、点、连字符和下划线，并以字母、数字或下划线开头。",
   "claudeImport.problem.taken": "这个名称也被占用了。",
-  "claudeImport.warning.nonText": {
-    "other": "文件夹中有 {count} 个文件不是文本，将原样复制。"
-  },
-  "claudeImport.warning.secret": "看起来包含密钥或密码，请在导入前检查。",
+  "claudeImport.warning.secret": "看起来包含密钥或密码，所以没有勾选。请先阅读，确认无误再勾选。",
   "claudeImport.warning.model": "{runtime} 没有 {model} 模型，智能体将使用默认模型。",
   "claudeImport.empty": "没有找到可导入的内容。可添加项目文件夹到那里查找。",
   "claudeImport.scanning": "正在查找…",
@@ -2466,5 +2463,12 @@
   "claudeImport.report.skipped": "已跳过",
   "claudeImport.report.failed": "失败",
   "claudeImport.reason.byYou": "你选择不导入。",
-  "claudeImport.reason.exists": "服务器上已有同名项，Bandito 绝不会替换它。"
+  "claudeImport.reason.exists": "服务器上已有同名项，Bandito 绝不会替换它。",
+  "claudeImport.skip.sensitive": "{path} 的文件名像密钥或凭据文件，因此不会复制",
+  "claudeImport.skip.truncated": "{path} 只读取了一部分（文件太多或层级太深），因此不导入",
+  "claudeImport.reason.cancelled": "未完成：导入已停止。",
+  "claudeImport.stop": "停止",
+  "claudeImport.warning.leftOut": {
+    "other": "文件夹中有 {count} 个文件被排除（不是文本，或名称像密钥）；技能将不含它们安装。"
+  }
 }

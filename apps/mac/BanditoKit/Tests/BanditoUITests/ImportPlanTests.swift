@@ -6,10 +6,12 @@ import Testing
 
 /// The import screen's rules: conflicts, renames, and what is sent for each kind of thing.
 @Suite struct ImportPlanTests {
-    private func agent(_ name: String, path: String? = nil, tools: [String]? = nil, model: String? = nil) -> ImportItem {
+    private func agent(
+        _ name: String, path: String? = nil, tools: [String]? = nil, model: String? = nil, warnings: [ImportWarning] = []
+    ) -> ImportItem {
         ImportItem(
             kind: .agent, origin: .claudeUser, name: name, summary: nil, path: path ?? "~/.claude/agents/\(name).md",
-            frontMatter: [], bodyPreview: "", warnings: [],
+            frontMatter: [], bodyPreview: "", warnings: warnings,
             payload: .agent(ImportedAgent(name: name, role: "role", instructions: "Do it.", tools: tools, model: model)))
     }
 
@@ -77,6 +79,60 @@ import Testing
         plan.setSelected(plan.rows[0].id, false)
         #expect(plan.states() == [.notSelected, .ready("x-imported")])
         #expect(plan.steps.map(\.name) == ["x-imported"])
+    }
+
+    // MARK: items that look like they hold a secret
+
+    @Test func anItemThatLooksLikeItHoldsASecretStartsUnchecked() {
+        let plan = ImportPlan(items: [agent("fine"), agent("risky", warnings: [.looksLikeSecret]), command("c")])
+        #expect(plan.rows.map(\.selected) == [true, false, true])
+        #expect(plan.states() == [.ready("fine"), .notSelected, .ready("c")])
+        #expect(plan.steps.map(\.name) == ["fine", "c"])
+        #expect(plan.rows[1].flagged && !plan.rows[0].flagged)
+        // Other warnings do not uncheck.
+        let other = ImportPlan(items: [agent("a", warnings: [.leftOutFiles(2)])])
+        #expect(other.rows[0].selected)
+    }
+
+    @Test func aGroupCheckLeavesWhatLooksLikeASecretAndItCanStillBeCheckedOnItsOwn() {
+        var plan = ImportPlan(items: [agent("fine"), agent("risky", warnings: [.looksLikeSecret])])
+        plan.setSelected(kind: .agent, false)
+        plan.setSelected(kind: .agent, true)
+        #expect(plan.rows.map(\.selected) == [true, false], "select all does not check it")
+        plan.setSelected(plan.rows[1].id, true)
+        #expect(plan.steps.map(\.name) == ["fine", "risky"], "a choice of its own does")
+        plan.setSelected(kind: .agent, false)
+        #expect(plan.rows.map(\.selected) == [false, false], "clearing clears all")
+    }
+
+    @Test func foldersAddedLaterFollowTheSameRule() {
+        var plan = ImportPlan(items: [agent("a")])
+        plan.add([agent("p", path: "proj/p.md", warnings: [.looksLikeSecret]), agent("q", path: "proj/q.md")])
+        #expect(plan.rows.map(\.selected) == [true, false, true])
+    }
+
+    // MARK: stopping
+
+    @Test func stepsNotReachedAreReportedAsNotDone() {
+        let plan = ImportPlan(items: [agent("a"), agent("b"), command("c")])
+        let lines = ImportRunner.cancelledLines(steps: plan.steps, after: 1)
+        #expect(lines.map(\.name) == ["b", "c"])
+        #expect(lines.allSatisfy { $0.outcome == .skipped(.cancelled) })
+        #expect(ImportRunner.cancelledLines(steps: plan.steps, after: 3).isEmpty)
+        #expect(ImportRunner.cancelledLines(steps: plan.steps, after: 0).count == 3)
+    }
+
+    @MainActor
+    @Test func aStoppedImportReportsEverythingItDidNotDo() async throws {
+        let server = ServerModel(config: ServerConfig(name: "offline", endpoint: .defaultLocal))
+        let plan = ImportPlan(items: [agent("a"), agent("b")])
+        let runner = ImportRunner()
+        runner.start(plan: plan, scanSkips: [], server: server, runtime: .claude)
+        runner.cancel()
+        for _ in 0..<200 where !runner.finished { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(runner.finished && !runner.running)
+        #expect(runner.lines.map(\.name) == ["a", "b"])
+        #expect(runner.lines.allSatisfy { $0.outcome == .skipped(.cancelled) })
     }
 
     // MARK: selecting

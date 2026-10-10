@@ -62,6 +62,10 @@ public enum ImportSkipReason: Error, Equatable, Sendable {
     case unreadable
     /// A subagent with no instructions.
     case empty
+    /// A file whose name says it holds a key or credentials (`.env`, `*.pem`, `id_rsa`, …): never copied.
+    case sensitiveFile
+    /// The folder was cut short (too many files, or deeper than the limit), so what was read may be incomplete.
+    case truncated
 }
 
 public struct ImportSkip: Equatable, Sendable, Identifiable {
@@ -73,8 +77,8 @@ public struct ImportSkip: Equatable, Sendable, Identifiable {
 
 /// Something about an item the person should know before importing it.
 public enum ImportWarning: Equatable, Sendable {
-    /// Files of a skill folder that are not text; they are copied as they are.
-    case nonTextFiles(Int)
+    /// Files of a skill folder that were not copied (not text, or named like a key): the skill is installed without them.
+    case leftOutFiles(Int)
     /// The text looks like it holds a key or a password.
     case looksLikeSecret
 }
@@ -204,21 +208,37 @@ public enum ImportAgentParser {
     }
 }
 
-/// Finds a key or a password in text, for a warning. A guess: it names only what is plainly one.
+/// Finds a key or a password in text, for a warning. A guess, made to catch more than to be sure: a line that sets a
+/// variable named like a password, a secret, a token or a key to a value; the usual key formats; a private key block.
 public enum ImportSecretCheck {
     private static let patterns: [NSRegularExpression] = [
         #"-----BEGIN [A-Z ]*PRIVATE KEY-----"#,
-        #"\bsk-[A-Za-z0-9_-]{20,}"#,
-        #"\bgh[pousr]_[A-Za-z0-9]{30,}"#,
-        #"\bgithub_pat_[A-Za-z0-9_]{20,}"#,
-        #"\bAKIA[0-9A-Z]{16}\b"#,
-        #"\bxox[baprs]-[A-Za-z0-9-]{10,}"#,
-        #"(?i)\b(api[_-]?key|secret|token|passw(or)?d)\b\s*[:=]\s*["']?[A-Za-z0-9/+_=.-]{16,}"#,
+        #"sk-[A-Za-z0-9_-]{16,}"#,
+        #"gh[pousr]_[A-Za-z0-9]{20,}"#,
+        #"github_pat_[A-Za-z0-9_]{20,}"#,
+        #"AKIA[0-9A-Z]{16}"#,
+        #"xox[baprs]-[A-Za-z0-9-]{8,}"#,
+        #"AIza[0-9A-Za-z_-]{30,}"#,
+        #"(?i)bearer\s+[A-Za-z0-9._~+/=-]{20,}"#,
+        // NAME_PASSWORD=value, API_KEY: "value", MY_SECRET_X=value; a value that is a reference ($X, <x>, {x}) is not one.
+        // No unbounded run in front of the word: on a big file of letters that would take forever.
+        #"(?i)(passw(or)?d|secret|token|key)[A-Z0-9_]{0,64}\s*[:=]\s*["']?[^\s"'$<{%]{8,}"#,
     ].compactMap { try? NSRegularExpression(pattern: $0) }
 
     public static func looksLikeSecret(_ text: String) -> Bool {
         let range = NSRange(text.startIndex..., in: text)
         return patterns.contains { $0.firstMatch(in: text, range: range) != nil }
+    }
+}
+
+/// File names that hold keys or credentials. Such a file inside a skill is not sent to the server at all.
+public enum ImportSensitiveName {
+    public static func matches(_ fileName: String) -> Bool {
+        let name = fileName.lowercased()
+        if name.hasPrefix(".env") || name == "env" || name.hasPrefix("env.") { return true }
+        for prefix in ["id_rsa", "id_ed25519", "id_ecdsa", "id_dsa", "credentials"] where name.hasPrefix(prefix) { return true }
+        for suffix in [".pem", ".key", ".p12", ".pfx", ".keystore", ".jks"] where name.hasSuffix(suffix) { return true }
+        return false
     }
 }
 
@@ -228,22 +248,26 @@ public enum ImportScanner {
     public static let maxSkillFiles = MacCommandScanner.maxSkillFiles
     public static let maxSkillBytes = MacCommandScanner.maxSkillBytes
     /// Files looked at in one folder tree, so a huge tree cannot hold the screen.
-    static let maxVisited = 5000
+    public static let defaultMaxVisited = 5000
     /// Path components below `commands/`, the file included.
     static let maxDepth = 5
     static let previewLines = 12
     static let previewCharacters = 700
 
     /// `home` is the person's home folder; `project` a folder they chose, if any.
-    public static func scan(home: URL, project: URL? = nil, fileManager: FileManager = .default) -> ImportScan {
+    public static func scan(
+        home: URL, project: URL? = nil, fileManager: FileManager = .default, maxVisited: Int = defaultMaxVisited
+    ) -> ImportScan {
         var result = ImportScan()
-        let reader = Reader(home: home, fileManager: fileManager)
+        let reader = Reader(home: home, base: home, fileManager: fileManager, limit: maxVisited)
         let claude = home.appendingPathComponent(".claude", isDirectory: true)
         reader.agents(in: claude.appendingPathComponent("agents", isDirectory: true), origin: .claudeUser, into: &result)
         reader.skills(in: claude.appendingPathComponent("skills", isDirectory: true), origin: .claudeUser, into: &result)
         reader.commands(in: claude.appendingPathComponent("commands", isDirectory: true), origin: .claudeUser, into: &result)
         reader.prompts(in: home.appendingPathComponent(".codex/prompts", isDirectory: true), into: &result)
         if let project {
+            // A link above the folder the person chose is their own doing; below it none is followed.
+            let reader = Reader(home: home, base: project, fileManager: fileManager, limit: maxVisited)
             let name = project.lastPathComponent
             let dot = project.appendingPathComponent(".claude", isDirectory: true)
             reader.agents(in: dot.appendingPathComponent("agents", isDirectory: true), origin: .claudeProject(name), into: &result)
@@ -262,7 +286,33 @@ public enum ImportScanner {
 
     private struct Reader {
         let home: URL
+        /// The folder the sources are below: no component of a path below it may be a link.
+        let base: URL
         let fileManager: FileManager
+        /// Files looked at in one tree.
+        let limit: Int
+
+        /// The first component of `url` below `base` that is a symbolic link, if any.
+        func linkComponent(of url: URL) -> URL? {
+            let baseCount = base.standardizedFileURL.pathComponents.count
+            let parts = url.standardizedFileURL.pathComponents
+            guard parts.count > baseCount else { return nil }
+            var current = base.standardizedFileURL
+            for part in parts[baseCount...] {
+                current = current.appendingPathComponent(part)
+                if isLink(current) { return current }
+            }
+            return nil
+        }
+
+        /// A folder to read: a real folder with no link on the way to it. A link is reported and not followed.
+        func readable(_ folder: URL, into result: inout ImportScan) -> Bool {
+            if let link = linkComponent(of: folder) {
+                skip(link, .link, into: &result)
+                return false
+            }
+            return isRealDirectory(folder)
+        }
 
         // MARK: pieces
 
@@ -297,19 +347,24 @@ public enum ImportScanner {
             data.contains(0) ? nil : String(data: data, encoding: .utf8)
         }
 
-        /// The regular files below `root` (relative paths), the links among them counted apart, within the limits.
-        func walk(_ root: URL, maxDepth: Int) -> (files: [URL], links: [URL]) {
+        /// The regular files below `root`, the links among them apart, and whether the walk was cut short (more files than
+        /// the limit, or something deeper than `maxDepth`).
+        func walk(_ root: URL, maxDepth: Int) -> (files: [URL], links: [URL], truncated: Bool) {
             guard isRealDirectory(root),
                 let walker = fileManager.enumerator(
                     at: root, includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey],
                     options: [.skipsHiddenFiles])
-            else { return ([], []) }
+            else { return ([], [], false) }
             var files: [URL] = []
             var links: [URL] = []
             var visited = 0
+            var truncated = false
             for case let url as URL in walker {
                 visited += 1
-                if visited > ImportScanner.maxVisited { break }
+                if visited > limit {
+                    truncated = true
+                    break
+                }
                 let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
                 if values?.isSymbolicLink == true {
                     links.append(url)
@@ -317,12 +372,13 @@ public enum ImportScanner {
                     continue
                 }
                 if relative(url, to: root).split(separator: "/").count > maxDepth {
+                    truncated = true
                     walker.skipDescendants()
                     continue
                 }
                 if values?.isRegularFile == true { files.append(url) }
             }
-            return (files.sorted { $0.path < $1.path }, links)
+            return (files.sorted { $0.path < $1.path }, links, truncated)
         }
 
         func relative(_ url: URL, to root: URL) -> String {
@@ -354,7 +410,7 @@ public enum ImportScanner {
         // MARK: agents
 
         func agents(in folder: URL, origin: ImportOrigin, into result: inout ImportScan) {
-            guard isRealDirectory(folder) else { return }
+            guard readable(folder, into: &result) else { return }
             let names = (try? fileManager.contentsOfDirectory(atPath: folder.path)) ?? []
             for file in names.sorted() where file.hasSuffix(".md") && !file.hasPrefix(".") {
                 let url = folder.appendingPathComponent(file)
@@ -402,8 +458,11 @@ public enum ImportScanner {
         // MARK: commands
 
         func commands(in root: URL, origin: ImportOrigin, into result: inout ImportScan) {
+            guard readable(root, into: &result) else { return }
             let found = walk(root, maxDepth: ImportScanner.maxDepth)
             for link in found.links { skip(link, .link, into: &result) }
+            // What lies beyond the limits was not looked at: the folder is named, so the list is not taken for complete.
+            if found.truncated { skip(root, .truncated, into: &result) }
             for url in found.files where url.pathExtension == "md" {
                 switch read(url) {
                 case .failure(let reason): skip(url, reason, into: &result)
@@ -420,7 +479,7 @@ public enum ImportScanner {
 
         /// `~/.codex/prompts/*.md`: each file is a command.
         func prompts(in folder: URL, into result: inout ImportScan) {
-            guard isRealDirectory(folder) else { return }
+            guard readable(folder, into: &result) else { return }
             let names = (try? fileManager.contentsOfDirectory(atPath: folder.path)) ?? []
             for file in names.sorted() where file.hasSuffix(".md") && !file.hasPrefix(".") {
                 let url = folder.appendingPathComponent(file)
@@ -449,7 +508,7 @@ public enum ImportScanner {
         // MARK: skills
 
         func skills(in root: URL, origin: ImportOrigin, into result: inout ImportScan) {
-            guard isRealDirectory(root) else { return }
+            guard readable(root, into: &result) else { return }
             let folders = ((try? fileManager.contentsOfDirectory(atPath: root.path)) ?? []).sorted()
             for folderName in folders where !folderName.hasPrefix(".") {
                 let folder = root.appendingPathComponent(folderName, isDirectory: true)
@@ -466,28 +525,39 @@ public enum ImportScanner {
             }
             let found = walk(folder, maxDepth: ImportScanner.maxDepth)
             if !found.links.isEmpty { skip(folder, .link, into: &result); return nil }
+            // A skill that was not read to the end is never sent incomplete.
+            if found.truncated { skip(folder, .truncated, into: &result); return nil }
             guard found.files.contains(where: { relative($0, to: folder) == "SKILL.md" }) else {
                 skip(folder, .noSkillFile, into: &result)
                 return nil
             }
-            if found.files.count > maxSkillFiles { skip(folder, .tooManyFiles, into: &result); return nil }
             var files: [MacCommandFile] = []
             var total = 0
-            var nonText = 0
+            var leftOut = 0
             for url in found.files {
+                let path = relative(url, to: folder)
+                // A file named like a key or credentials is not sent, whatever it holds.
+                if path != "SKILL.md", ImportSensitiveName.matches(url.lastPathComponent) {
+                    skip(url, .sensitiveFile, into: &result)
+                    leftOut += 1
+                    continue
+                }
                 switch read(url) {
                 case .failure(let reason): skip(folder, reason, into: &result); return nil
                 case .success(let data):
-                    total += data.count
-                    let path = relative(url, to: folder)
                     if text(data) == nil {
-                        // `SKILL.md` has to be text; other files may be pictures or data and travel as they are.
+                        // `SKILL.md` has to be text. Any other file that is not text is left out; the skill still goes
+                        // in, and the person is told.
                         if path == "SKILL.md" { skip(folder, .notText, into: &result); return nil }
-                        nonText += 1
+                        skip(url, .notText, into: &result)
+                        leftOut += 1
+                        continue
                     }
+                    total += data.count
                     files.append(MacCommandFile(path: path, data: data))
                 }
             }
+            if files.count > maxSkillFiles { skip(folder, .tooManyFiles, into: &result); return nil }
             if total > maxSkillBytes { skip(folder, .tooLarge, into: &result); return nil }
             guard let skill = MacCommandParser.skill(folder: folder.lastPathComponent, files: files),
                 let main = files.first(where: { $0.path == "SKILL.md" })
@@ -496,7 +566,7 @@ public enum ImportScanner {
             let matter = ImportFrontMatter.parse(content)
             let preview = previewOf(matter)
             var warnings: [ImportWarning] = []
-            if nonText > 0 { warnings.append(.nonTextFiles(nonText)) }
+            if leftOut > 0 { warnings.append(.leftOutFiles(leftOut)) }
             let secret = files.contains { file in text(file.data).map(ImportSecretCheck.looksLikeSecret) == true }
             if secret { warnings.append(.looksLikeSecret) }
             return ImportItem(

@@ -351,6 +351,7 @@
 "claudeImport.problem.taken" = "Este nombre también está ocupado.";
 "claudeImport.problem.tooLong" = "Como máximo 32 caracteres.";
 "claudeImport.reason.byYou" = "Lo dejaste fuera.";
+"claudeImport.reason.cancelled" = "No se hizo: la importación se detuvo.";
 "claudeImport.reason.exists" = "El servidor ya tiene uno con este nombre, y Bandito nunca lo reemplaza.";
 "claudeImport.rename" = "Renombrar";
 "claudeImport.report.created" = "Creado";
@@ -366,15 +367,18 @@
 "claudeImport.skip.link" = "%1$@ es un enlace, y los enlaces no se siguen";
 "claudeImport.skip.noSkillFile" = "%1$@ no tiene SKILL.md";
 "claudeImport.skip.notText" = "%1$@ no es texto";
+"claudeImport.skip.sensitive" = "%1$@ tiene nombre de archivo de claves o credenciales, así que no se copia";
 "claudeImport.skip.tooBig" = "%1$@ pesa más de 256 KB";
 "claudeImport.skip.tooLarge" = "%1$@ pesa más de 2 MB en total";
 "claudeImport.skip.tooManyFiles" = "%1$@ tiene más de 50 archivos";
+"claudeImport.skip.truncated" = "%1$@ solo se leyó en parte (demasiados archivos o demasiado profundo), así que no se toma";
 "claudeImport.skip.unreadable" = "No se pudo leer %1$@";
 "claudeImport.start" = "Importar (%1$lld)";
+"claudeImport.stop" = "Detener";
 "claudeImport.subtitle" = "Agentes, skills y comandos de este Mac y de Codex. En el Mac no se cambia ni se borra nada.";
 "claudeImport.title" = "Importar desde Claude Code";
 "claudeImport.warning.model" = "El modelo %1$@ no está en %2$@; el agente usará el predeterminado.";
-"claudeImport.warning.secret" = "Parece contener una clave o una contraseña. Revísalo antes de importar.";
+"claudeImport.warning.secret" = "Parece contener una clave o una contraseña, así que no está marcado. Léelo y márcalo solo si estás seguro.";
 "common.agents" = "AGENTES";
 "common.back" = "Atrás";
 "common.cancel" = "Cancelar";

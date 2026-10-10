@@ -2470,11 +2470,7 @@
   "claudeImport.problem.badAgentName": "Use letters, digits, spaces, dashes and underscores.",
   "claudeImport.problem.badName": "Use letters, digits, dots, dashes and underscores; start with a letter, a digit or an underscore.",
   "claudeImport.problem.taken": "This name is taken too.",
-  "claudeImport.warning.nonText": {
-    "one": "{count} file in the folder is not text; it is copied as it is.",
-    "other": "{count} files in the folder are not text; they are copied as they are."
-  },
-  "claudeImport.warning.secret": "This looks like it holds a key or a password. Check it before you import.",
+  "claudeImport.warning.secret": "This looks like it holds a key or a password, so it is not checked. Read it, and check it only if you are sure.",
   "claudeImport.warning.model": "The model {model} is not offered on {runtime}, so the agent will use the default one.",
   "claudeImport.empty": "Nothing to import was found. Add a project folder to look there.",
   "claudeImport.scanning": "Looking…",
@@ -2498,5 +2494,13 @@
   "claudeImport.report.skipped": "Skipped",
   "claudeImport.report.failed": "Failed",
   "claudeImport.reason.byYou": "You left it out.",
-  "claudeImport.reason.exists": "The server already has one with this name, and Bandito never replaces it."
+  "claudeImport.reason.exists": "The server already has one with this name, and Bandito never replaces it.",
+  "claudeImport.skip.sensitive": "{path} is named like a key or credentials file, so it is not copied",
+  "claudeImport.skip.truncated": "{path} was only read in part (too many files, or too deep), so it is not taken",
+  "claudeImport.reason.cancelled": "Not done: the import was stopped.",
+  "claudeImport.stop": "Stop",
+  "claudeImport.warning.leftOut": {
+    "one": "{count} file of the folder was left out (not text, or named like a key); the skill is installed without it.",
+    "other": "{count} files of the folder were left out (not text, or named like a key); the skill is installed without them."
+  }
 }

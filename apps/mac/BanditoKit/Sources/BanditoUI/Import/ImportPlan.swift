@@ -19,6 +19,14 @@ struct ImportPlan: Equatable {
         var selected: Bool
         var resolution: Resolution = .keep
         var id: String { item.id }
+
+        /// The text looks like it holds a key or a password: the item starts unchecked, and a group's "select all" leaves it.
+        var flagged: Bool { item.warnings.contains(.looksLikeSecret) }
+
+        init(item: ImportItem, selected: Bool? = nil) {
+            self.item = item
+            self.selected = selected ?? !item.warnings.contains(.looksLikeSecret)
+        }
     }
 
     /// Why a typed name cannot be used.
@@ -51,9 +59,10 @@ struct ImportPlan: Equatable {
     var rows: [Row]
     var existing: Existing
 
-    /// All found items selected, and the conflicts settled with a suggested new name.
+    /// The found items selected, except those that look like they hold a secret, and the conflicts settled with a
+    /// suggested new name.
     init(items: [ImportItem], existing: Existing = Existing()) {
-        rows = items.map { Row(item: $0, selected: true) }
+        rows = items.map { Row(item: $0) }
         self.existing = existing
         settle()
     }
@@ -67,7 +76,11 @@ struct ImportPlan: Equatable {
     }
 
     mutating func setSelected(kind: ImportKind, _ on: Bool) {
-        for index in rows.indices where rows[index].item.kind == kind { rows[index].selected = on }
+        for index in rows.indices where rows[index].item.kind == kind {
+            // Checking a whole group does not check what looks like a secret: each of those is a choice of its own.
+            if on && rows[index].flagged { continue }
+            rows[index].selected = on
+        }
         settle()
     }
 
@@ -86,7 +99,7 @@ struct ImportPlan: Equatable {
     /// Adds the items of another folder; those already there (the same file) are not added twice.
     mutating func add(_ items: [ImportItem]) {
         let known = Set(rows.map(\.id))
-        rows += items.filter { !known.contains($0.id) }.map { Row(item: $0, selected: true) }
+        rows += items.filter { !known.contains($0.id) }.map { Row(item: $0) }
         settle()
     }
 

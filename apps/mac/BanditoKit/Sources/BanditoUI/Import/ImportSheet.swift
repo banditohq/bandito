@@ -91,9 +91,15 @@ struct ImportSheet: View {
                     .banditoButton(.signal())
                     .fixedSize()
             } else {
-                Button(L10n.Common.cancel) { dismiss() }
-                    .banditoButton(.quiet())
-                    .fixedSize()
+                if runner.running {
+                    Button(L10n.ClaudeImport.stop) { runner.cancel() }
+                        .banditoButton(.quiet())
+                        .fixedSize()
+                } else {
+                    Button(L10n.Common.cancel) { dismiss() }
+                        .banditoButton(.quiet())
+                        .fixedSize()
+                }
                 Button(runner.running ? L10n.ClaudeImport.running(done: String(runner.done), total: String(plan.count)) : L10n.ClaudeImport.start(count: plan.count)) {
                     start()
                 }
@@ -142,7 +148,7 @@ struct ImportSheet: View {
                     SectionLabel("\(Self.title(kind)) · \(rows.count)")
                     Spacer(minLength: 8)
                     if enabled {
-                        let all = rows.allSatisfy(\.selected)
+                        let all = rows.filter { !$0.flagged }.allSatisfy(\.selected)
                         Button(all ? L10n.ClaudeImport.clearAll : L10n.ClaudeImport.selectAll) {
                             plan.setSelected(kind: kind, !all)
                         }
@@ -323,6 +329,8 @@ enum ImportText {
         case .tooBig: L10n.ClaudeImport.Skip.tooBig(path: path)
         case .notText: L10n.ClaudeImport.Skip.notText(path: path)
         case .link: L10n.ClaudeImport.Skip.link(path: path)
+        case .sensitiveFile: L10n.ClaudeImport.Skip.sensitive(path: path)
+        case .truncated: L10n.ClaudeImport.Skip.truncated(path: path)
         case .tooManyFiles: L10n.ClaudeImport.Skip.tooManyFiles(path: path)
         case .tooLarge: L10n.ClaudeImport.Skip.tooLarge(path: path)
         case .badName: L10n.ClaudeImport.Skip.badName(path: path)
@@ -341,6 +349,7 @@ enum ImportText {
             switch why {
             case .byYou: L10n.ClaudeImport.Reason.byYou
             case .exists: L10n.ClaudeImport.Reason.exists
+            case .cancelled: L10n.ClaudeImport.Reason.cancelled
             case .notRead(let skip): Self.reason(skip, path: line.name)
             }
         }
@@ -466,7 +475,7 @@ private struct ImportRowView: View {
         var out: [String] = []
         for warning in row.item.warnings {
             switch warning {
-            case .nonTextFiles(let count): out.append(L10n.ClaudeImport.Warning.nonText(count: count))
+            case .leftOutFiles(let count): out.append(L10n.ClaudeImport.Warning.leftOut(count: count))
             case .looksLikeSecret: out.append(L10n.ClaudeImport.Warning.secret)
             }
         }

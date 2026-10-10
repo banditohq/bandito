@@ -2470,11 +2470,7 @@
   "claudeImport.problem.badAgentName": "Utilisez des lettres, chiffres, espaces, tirets et tirets bas.",
   "claudeImport.problem.badName": "Utilisez des lettres, chiffres, points, tirets et tirets bas ; commencez par une lettre, un chiffre ou un tiret bas.",
   "claudeImport.problem.taken": "Ce nom est lui aussi déjà pris.",
-  "claudeImport.warning.nonText": {
-    "one": "{count} fichier du dossier n'est pas du texte ; il est copié tel quel.",
-    "other": "{count} fichiers du dossier ne sont pas du texte ; ils sont copiés tels quels."
-  },
-  "claudeImport.warning.secret": "On dirait qu'il contient une clé ou un mot de passe. Vérifiez-le avant d'importer.",
+  "claudeImport.warning.secret": "On dirait qu'il contient une clé ou un mot de passe : il n'est donc pas coché. Lisez-le et cochez-le seulement si vous êtes sûr.",
   "claudeImport.warning.model": "Le modèle {model} n'existe pas sous {runtime} ; l'agent utilisera celui par défaut.",
   "claudeImport.empty": "Rien à importer n'a été trouvé. Ajoutez un dossier de projet pour y chercher.",
   "claudeImport.scanning": "Recherche…",
@@ -2498,5 +2494,13 @@
   "claudeImport.report.skipped": "Ignoré",
   "claudeImport.report.failed": "Échec",
   "claudeImport.reason.byYou": "Vous l'avez laissé de côté.",
-  "claudeImport.reason.exists": "Le serveur en a déjà un de ce nom, et Bandito ne le remplace jamais."
+  "claudeImport.reason.exists": "Le serveur en a déjà un de ce nom, et Bandito ne le remplace jamais.",
+  "claudeImport.skip.sensitive": "{path} porte un nom de fichier de clés ou d'identifiants : il n'est donc pas copié",
+  "claudeImport.skip.truncated": "{path} n'a été lu qu'en partie (trop de fichiers ou trop profond) : il n'est donc pas pris",
+  "claudeImport.reason.cancelled": "Non fait : l'import a été arrêté.",
+  "claudeImport.stop": "Arrêter",
+  "claudeImport.warning.leftOut": {
+    "one": "{count} fichier du dossier a été laissé de côté (pas du texte, ou nommé comme une clé) ; le skill est installé sans lui.",
+    "other": "{count} fichiers du dossier ont été laissés de côté (pas du texte, ou nommés comme une clé) ; le skill est installé sans eux."
+  }
 }

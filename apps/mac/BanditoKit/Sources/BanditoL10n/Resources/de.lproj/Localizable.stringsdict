@@ -98,7 +98,7 @@
 			<string>%1$lld Tokens verbraucht</string>
 		</dict>
 	</dict>
-	<key>claudeImport.warning.nonText</key>
+	<key>claudeImport.warning.leftOut</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
 		<string>%1$#@value@</string>
@@ -109,9 +109,9 @@
 			<key>NSStringFormatValueTypeKey</key>
 			<string>lld</string>
 			<key>one</key>
-			<string>%1$lld Datei im Ordner ist kein Text; sie wird unverändert kopiert.</string>
+			<string>%1$lld Datei des Ordners wurde weggelassen (kein Text oder wie ein Schlüssel benannt); der Skill wird ohne sie installiert.</string>
 			<key>other</key>
-			<string>%1$lld Dateien im Ordner sind kein Text; sie werden unverändert kopiert.</string>
+			<string>%1$lld Dateien des Ordners wurden weggelassen (kein Text oder wie ein Schlüssel benannt); der Skill wird ohne sie installiert.</string>
 		</dict>
 	</dict>
 	<key>common.agentCount</key>

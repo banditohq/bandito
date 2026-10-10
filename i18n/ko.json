@@ -2439,10 +2439,7 @@
   "claudeImport.problem.badAgentName": "글자, 숫자, 공백, 대시, 밑줄만 쓸 수 있어요.",
   "claudeImport.problem.badName": "글자, 숫자, 점, 대시, 밑줄만 쓸 수 있고, 글자·숫자·밑줄로 시작해야 해요.",
   "claudeImport.problem.taken": "이 이름도 사용 중이에요.",
-  "claudeImport.warning.nonText": {
-    "other": "폴더 안의 파일 {count}개는 텍스트가 아니에요. 그대로 복사돼요."
-  },
-  "claudeImport.warning.secret": "키나 비밀번호가 들어 있는 것 같아요. 가져오기 전에 확인하세요.",
+  "claudeImport.warning.secret": "키나 비밀번호가 들어 있는 것 같아서 선택하지 않았어요. 읽어 보고 확실할 때만 선택하세요.",
   "claudeImport.warning.model": "{runtime}에 {model} 모델이 없어서 에이전트는 기본 모델을 써요.",
   "claudeImport.empty": "가져올 항목이 없어요. 프로젝트 폴더를 추가해 그곳을 찾아보세요.",
   "claudeImport.scanning": "찾는 중…",
@@ -2466,5 +2463,12 @@
   "claudeImport.report.skipped": "건너뜀",
   "claudeImport.report.failed": "실패",
   "claudeImport.reason.byYou": "직접 제외했어요.",
-  "claudeImport.reason.exists": "서버에 같은 이름이 이미 있고, Bandito는 덮어쓰지 않아요."
+  "claudeImport.reason.exists": "서버에 같은 이름이 이미 있고, Bandito는 덮어쓰지 않아요.",
+  "claudeImport.skip.sensitive": "{path}은(는) 키나 자격 증명 파일 이름이라 복사하지 않아요",
+  "claudeImport.skip.truncated": "{path}은(는) 일부만 읽혀서(파일이 너무 많거나 너무 깊음) 가져오지 않아요",
+  "claudeImport.reason.cancelled": "하지 않음: 가져오기가 중단됐어요.",
+  "claudeImport.stop": "중단",
+  "claudeImport.warning.leftOut": {
+    "other": "폴더 안의 파일 {count}개는 제외됐어요(텍스트가 아니거나 키 같은 이름). 스킬은 그 파일 없이 설치돼요."
+  }
 }

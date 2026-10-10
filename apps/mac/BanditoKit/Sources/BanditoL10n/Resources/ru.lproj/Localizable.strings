@@ -351,6 +351,7 @@
 "claudeImport.problem.taken" = "Это имя тоже занято.";
 "claudeImport.problem.tooLong" = "Не больше 32 символов.";
 "claudeImport.reason.byYou" = "Вы решили не брать.";
+"claudeImport.reason.cancelled" = "Не сделано: импорт остановили.";
 "claudeImport.reason.exists" = "На сервере уже есть такое имя, и Bandito его никогда не заменяет.";
 "claudeImport.rename" = "Переименовать";
 "claudeImport.report.created" = "Создано";
@@ -366,15 +367,18 @@
 "claudeImport.skip.link" = "%1$@ — ссылка, а по ссылкам Bandito не ходит";
 "claudeImport.skip.noSkillFile" = "В %1$@ нет SKILL.md";
 "claudeImport.skip.notText" = "%1$@ не текстовый файл";
+"claudeImport.skip.sensitive" = "%1$@ назван как файл с ключом или доступами, поэтому не копируется";
 "claudeImport.skip.tooBig" = "%1$@ больше 256 КБ";
 "claudeImport.skip.tooLarge" = "%1$@ занимает больше 2 МБ";
 "claudeImport.skip.tooManyFiles" = "В %1$@ больше 50 файлов";
+"claudeImport.skip.truncated" = "%1$@ прочитан только частично (слишком много файлов или слишком глубоко), поэтому не берём";
 "claudeImport.skip.unreadable" = "%1$@ не удалось прочитать";
 "claudeImport.start" = "Импортировать (%1$lld)";
+"claudeImport.stop" = "Остановить";
 "claudeImport.subtitle" = "Агенты, скиллы и команды с этого Mac и из Codex. На Mac ничего не меняется и не удаляется.";
 "claudeImport.title" = "Импорт из Claude Code";
 "claudeImport.warning.model" = "Модели %1$@ нет в %2$@, агент будет работать на модели по умолчанию.";
-"claudeImport.warning.secret" = "Похоже, здесь есть ключ или пароль. Проверьте перед импортом.";
+"claudeImport.warning.secret" = "Похоже, здесь есть ключ или пароль, поэтому галочка не стоит. Прочитайте и отметьте, только если уверены.";
 "common.agents" = "АГЕНТЫ";
 "common.back" = "Назад";
 "common.cancel" = "Отмена";

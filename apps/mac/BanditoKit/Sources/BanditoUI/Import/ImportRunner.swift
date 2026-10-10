@@ -18,6 +18,8 @@ struct ImportLine: Identifiable, Equatable {
         case exists
         /// The file or folder was not taken when it was read.
         case notRead(ImportSkipReason)
+        /// The import was stopped before this one.
+        case cancelled
     }
 
     var id: String
@@ -53,19 +55,31 @@ final class ImportRunner {
         }
         lines = report
         task = Task { [weak self] in
+            var made = 0
             for step in steps {
                 if Task.isCancelled { break }
                 let outcome = await Self.make(step, server: server, runtime: runtime)
                 guard let self else { return }
                 self.lines.append(ImportLine(id: step.id, kind: step.item.kind, name: step.name, outcome: outcome))
                 self.done += 1
+                made += 1
             }
-            self?.running = false
-            self?.finished = true
+            guard let self else { return }
+            // What was not reached is in the report, so nothing is left unaccounted for.
+            self.lines += Self.cancelledLines(steps: steps, after: made)
+            self.running = false
+            self.finished = true
         }
     }
 
-    /// Stops after the thing being made; what was made stays.
+    /// The report lines of the steps after the first `made` ones, when the import was stopped.
+    nonisolated static func cancelledLines(steps: [ImportPlan.Step], after made: Int) -> [ImportLine] {
+        steps.dropFirst(made).map {
+            ImportLine(id: $0.id, kind: $0.item.kind, name: $0.name, outcome: .skipped(.cancelled))
+        }
+    }
+
+    /// Stops after the thing being made; what was made stays, and the rest is reported as not done.
     func cancel() {
         task?.cancel()
     }

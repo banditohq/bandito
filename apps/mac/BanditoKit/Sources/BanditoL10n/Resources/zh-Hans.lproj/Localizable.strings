@@ -351,6 +351,7 @@
 "claudeImport.problem.taken" = "这个名称也被占用了。";
 "claudeImport.problem.tooLong" = "最多 32 个字符。";
 "claudeImport.reason.byYou" = "你选择不导入。";
+"claudeImport.reason.cancelled" = "未完成：导入已停止。";
 "claudeImport.reason.exists" = "服务器上已有同名项，Bandito 绝不会替换它。";
 "claudeImport.rename" = "重命名";
 "claudeImport.report.created" = "已创建";
@@ -366,15 +367,18 @@
 "claudeImport.skip.link" = "%1$@ 是链接，不会跟随链接";
 "claudeImport.skip.noSkillFile" = "%1$@ 中没有 SKILL.md";
 "claudeImport.skip.notText" = "%1$@ 不是文本";
+"claudeImport.skip.sensitive" = "%1$@ 的文件名像密钥或凭据文件，因此不会复制";
 "claudeImport.skip.tooBig" = "%1$@ 超过 256 KB";
 "claudeImport.skip.tooLarge" = "%1$@ 总共超过 2 MB";
 "claudeImport.skip.tooManyFiles" = "%1$@ 中有超过 50 个文件";
+"claudeImport.skip.truncated" = "%1$@ 只读取了一部分（文件太多或层级太深），因此不导入";
 "claudeImport.skip.unreadable" = "无法读取 %1$@";
 "claudeImport.start" = "导入（%1$lld）";
+"claudeImport.stop" = "停止";
 "claudeImport.subtitle" = "导入此 Mac 和 Codex 上的智能体、技能和命令。Mac 上的内容不会被更改或删除。";
 "claudeImport.title" = "从 Claude Code 导入";
 "claudeImport.warning.model" = "%2$@ 没有 %1$@ 模型，智能体将使用默认模型。";
-"claudeImport.warning.secret" = "看起来包含密钥或密码，请在导入前检查。";
+"claudeImport.warning.secret" = "看起来包含密钥或密码，所以没有勾选。请先阅读，确认无误再勾选。";
 "common.agents" = "代理";
 "common.back" = "返回";
 "common.cancel" = "取消";

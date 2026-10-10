@@ -2439,10 +2439,7 @@
   "claudeImport.problem.badAgentName": "文字、数字、スペース、ハイフン、アンダースコアが使えます。",
   "claudeImport.problem.badName": "文字、数字、ドット、ハイフン、アンダースコアが使えます。先頭は文字、数字、アンダースコアにしてください。",
   "claudeImport.problem.taken": "この名前も使われています。",
-  "claudeImport.warning.nonText": {
-    "other": "フォルダ内の {count} 個のファイルはテキストではありません。そのままコピーされます。"
-  },
-  "claudeImport.warning.secret": "キーまたはパスワードが含まれているようです。取り込む前に確認してください。",
+  "claudeImport.warning.secret": "キーまたはパスワードが含まれているようなので、チェックは外してあります。内容を読み、問題ない場合だけチェックしてください。",
   "claudeImport.warning.model": "モデル {model} は {runtime} にないため、エージェントは既定のモデルを使います。",
   "claudeImport.empty": "取り込めるものは見つかりませんでした。プロジェクトのフォルダを追加して探してみましょう。",
   "claudeImport.scanning": "探しています…",
@@ -2466,5 +2463,12 @@
   "claudeImport.report.skipped": "スキップ",
   "claudeImport.report.failed": "失敗",
   "claudeImport.reason.byYou": "あなたが除外しました。",
-  "claudeImport.reason.exists": "サーバーに同じ名前のものがすでにあり、Bandito は置き換えません。"
+  "claudeImport.reason.exists": "サーバーに同じ名前のものがすでにあり、Bandito は置き換えません。",
+  "claudeImport.skip.sensitive": "{path} はキーや認証情報のファイル名のため、コピーしません",
+  "claudeImport.skip.truncated": "{path} は一部しか読めなかった（ファイルが多すぎるか深すぎる）ため、取り込みません",
+  "claudeImport.reason.cancelled": "未実行：取り込みが中止されました。",
+  "claudeImport.stop": "中止",
+  "claudeImport.warning.leftOut": {
+    "other": "フォルダ内の {count} 個のファイルは除外されました（テキストでない、またはキーのような名前）。スキルはそれらなしで導入されます。"
+  }
 }

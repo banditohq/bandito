@@ -351,6 +351,7 @@
 "claudeImport.problem.taken" = "この名前も使われています。";
 "claudeImport.problem.tooLong" = "32 文字までです。";
 "claudeImport.reason.byYou" = "あなたが除外しました。";
+"claudeImport.reason.cancelled" = "未実行：取り込みが中止されました。";
 "claudeImport.reason.exists" = "サーバーに同じ名前のものがすでにあり、Bandito は置き換えません。";
 "claudeImport.rename" = "名前を変える";
 "claudeImport.report.created" = "作成";
@@ -366,15 +367,18 @@
 "claudeImport.skip.link" = "%1$@ はリンクです。リンクはたどりません";
 "claudeImport.skip.noSkillFile" = "%1$@ に SKILL.md がありません";
 "claudeImport.skip.notText" = "%1$@ はテキストではありません";
+"claudeImport.skip.sensitive" = "%1$@ はキーや認証情報のファイル名のため、コピーしません";
 "claudeImport.skip.tooBig" = "%1$@ は 256 KB を超えています";
 "claudeImport.skip.tooLarge" = "%1$@ は合計で 2 MB を超えています";
 "claudeImport.skip.tooManyFiles" = "%1$@ には 50 個を超えるファイルがあります";
+"claudeImport.skip.truncated" = "%1$@ は一部しか読めなかった（ファイルが多すぎるか深すぎる）ため、取り込みません";
 "claudeImport.skip.unreadable" = "%1$@ を読み込めませんでした";
 "claudeImport.start" = "取り込む（%1$lld）";
+"claudeImport.stop" = "中止";
 "claudeImport.subtitle" = "この Mac と Codex にあるエージェント、スキル、コマンドを取り込みます。Mac 上のものは変更も削除もされません。";
 "claudeImport.title" = "Claude Code から取り込む";
 "claudeImport.warning.model" = "モデル %1$@ は %2$@ にないため、エージェントは既定のモデルを使います。";
-"claudeImport.warning.secret" = "キーまたはパスワードが含まれているようです。取り込む前に確認してください。";
+"claudeImport.warning.secret" = "キーまたはパスワードが含まれているようなので、チェックは外してあります。内容を読み、問題ない場合だけチェックしてください。";
 "common.agents" = "エージェント";
 "common.back" = "戻る";
 "common.cancel" = "キャンセル";
