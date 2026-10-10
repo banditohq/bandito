@@ -14,6 +14,7 @@ pub use crate::event::Plan;
 pub mod claude;
 pub mod codex;
 pub mod grok;
+pub mod models;
 pub mod process;
 pub mod sandbox;
 

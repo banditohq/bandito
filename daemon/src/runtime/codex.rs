@@ -233,7 +233,7 @@ pub fn login_from_status(probe: Option<&ProbeOutput>) -> Option<bool> {
 }
 
 /// `clientInfo` of the `initialize` request.
-fn client_info() -> Value {
+pub(crate) fn client_info() -> Value {
     json!({"clientInfo": {"name": "bandito", "title": "Bandito", "version": env!("CARGO_PKG_VERSION")}})
 }
 
@@ -1059,6 +1059,7 @@ pub fn rate_limit_windows(rate_limits: &Value) -> Vec<LimitWindow> {
             let used = window.get("usedPercent").and_then(Value::as_f64)?;
             let name = match window.get("windowDurationMins").and_then(Value::as_i64) {
                 Some(300) => "five_hour".to_string(),
+                Some(1440) => "one_day".to_string(),
                 Some(10080) => "seven_day".to_string(),
                 Some(minutes) => format!("{minutes}m"),
                 None => key.to_string(),
@@ -1186,11 +1187,24 @@ mod tests {
 
     #[test]
     fn rate_limit_window_of_other_length_is_named_in_minutes() {
+        let limits = json!({"primary": {"usedPercent": 5, "windowDurationMins": 60}});
+        assert_eq!(
+            rate_limit_windows(&limits),
+            vec![LimitWindow {
+                name: "60m".into(),
+                utilization: 0.05,
+                resets_at: None,
+            }]
+        );
+    }
+
+    #[test]
+    fn rate_limit_window_of_one_day_is_named_one_day() {
         let limits = json!({"primary": {"usedPercent": 5, "windowDurationMins": 1440}});
         assert_eq!(
             rate_limit_windows(&limits),
             vec![LimitWindow {
-                name: "1440m".into(),
+                name: "one_day".into(),
                 utilization: 0.05,
                 resets_at: None,
             }]

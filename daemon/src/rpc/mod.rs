@@ -73,6 +73,7 @@ pub fn features() -> Vec<&'static str> {
         "pause",
         "logs",
         "agent_own_folder",
+        "runtime_models",
     ];
     if cfg!(target_os = "linux") {
         list.push("screen");
@@ -110,6 +111,8 @@ pub struct App {
     pub screens: Arc<crate::screen::ScreenManager>,
     /// The daemon's data folder (`--home`, `BANDITO_HOME` or `~/.bandito`): where its log file is.
     pub data_home: PathBuf,
+    /// The models each agent CLI offers, as last read (see docs/ARCHITECTURE.md#runtime-models).
+    pub models: crate::runtime::models::ModelCache,
 }
 
 impl App {
@@ -148,6 +151,7 @@ impl App {
             browser: BrowserManager::system(),
             screens: Arc::new(crate::screen::ScreenManager::new(screens_dir())),
             data_home,
+            models: crate::runtime::models::ModelCache::default(),
         })
     }
 }
@@ -375,6 +379,11 @@ fn prune(failures: &mut VecDeque<i64>, now: i64) {
 #[derive(Deserialize)]
 struct Id {
     id: String,
+}
+#[derive(Deserialize)]
+struct ModelsParams {
+    runtime: Option<String>,
+    refresh: Option<bool>,
 }
 #[derive(Deserialize)]
 struct AgentRef {
@@ -813,6 +822,33 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             }
             out.sort_by_key(|s| s.kind.as_str());
             ok(out)
+        }
+
+        "runtimes.models" => {
+            let ModelsParams { runtime, refresh } = params(p)?;
+            let kinds = match runtime.as_deref() {
+                None => vec![RuntimeKind::Claude, RuntimeKind::Codex, RuntimeKind::Grok],
+                Some(name) => match RuntimeKind::parse(name) {
+                    Some(kind @ (RuntimeKind::Claude | RuntimeKind::Codex | RuntimeKind::Grok)) => vec![kind],
+                    _ => return Err(RpcError::new(INVALID_PARAMS, format!("no model list for {name}"))),
+                },
+            };
+            // The CLIs start in a folder of the daemon's own, so they find nothing of the user's project.
+            let cwd = app.data_home.join("models-probe");
+            let cwd = if tokio::fs::create_dir_all(&cwd).await.is_ok() {
+                cwd
+            } else {
+                app.data_home.clone()
+            };
+            let refresh = refresh.unwrap_or(false);
+            let path = std::env::var_os("PATH").unwrap_or_default();
+            let answers = futures_util::future::join_all(
+                kinds
+                    .into_iter()
+                    .map(|kind| app.models.answer(kind, &cwd, &path, refresh)),
+            )
+            .await;
+            ok(answers)
         }
 
         "agents.list" => ok(store.agent_list_view()?),
@@ -3106,6 +3142,22 @@ mod pause_and_logs_tests {
     fn logs_and_pause_are_advertised() {
         let f = features();
         assert!(f.contains(&"pause") && f.contains(&"logs"));
+    }
+
+    #[tokio::test]
+    async fn runtimes_models_takes_only_the_three_agent_runtimes() {
+        let store = Arc::new(crate::store::Store::open_in_memory().unwrap());
+        let sup = crate::supervisor::Supervisor::new(
+            crate::hub::Hub::new(store),
+            crate::supervisor::Runtimes::default(),
+            None,
+        );
+        let app = App::new(sup, std::env::temp_dir());
+        let err = dispatch(&app, &Peer::Local, "runtimes.models", json!({"runtime": "api"}))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, INVALID_PARAMS);
+        assert!(features().contains(&"runtime_models"));
     }
 }
 

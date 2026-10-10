@@ -233,11 +233,61 @@ pub fn prepend_tools_to_path() {
         dirs.extend(std::env::split_paths(&old));
     }
     match std::env::join_paths(dirs) {
-        // SAFETY: called from `main` before the tokio runtime or any other thread starts, so no
-        // other thread reads the environment at the same time.
-        Ok(path) => unsafe { std::env::set_var("PATH", path) },
+        Ok(path) => {
+            // The service starts with a short PATH: the folders where a user's agent CLIs live are added at the end.
+            let path = match dirs::home_dir() {
+                Some(home) => with_user_bins(&path, &home, |dir| dir.is_dir()),
+                None => path,
+            };
+            // SAFETY: called from `main` before the tokio runtime or any other thread starts, so no
+            // other thread reads the environment at the same time.
+            unsafe { std::env::set_var("PATH", path) }
+        }
         Err(e) => tracing::warn!("could not add the tools folder to PATH: {e}"),
     }
+}
+
+/// Folders under the user's home where agent CLIs are usually installed, in the order they are added.
+const USER_BIN_DIRS: [&str; 8] = [
+    ".local/bin",
+    ".grok/bin",
+    ".claude/local",
+    ".npm-global/bin",
+    ".bun/bin",
+    ".volta/bin",
+    ".cargo/bin",
+    ".deno/bin",
+];
+/// Package-manager folders outside the home, added after [`USER_BIN_DIRS`].
+const SYSTEM_BIN_DIRS: [&str; 3] = ["/opt/homebrew/bin", "/usr/local/bin", "/home/linuxbrew/.linuxbrew/bin"];
+
+/// `path` with the folders in [`USER_BIN_DIRS`] and [`SYSTEM_BIN_DIRS`] that `exists` reports and that are not in
+/// `path` yet, appended at the end in that order. Existing entries keep their place; an empty `path` gives only the additions.
+/// A folder whose name holds the list separator cannot go on `PATH`: it is skipped with a warning.
+pub fn with_user_bins(path: &OsStr, home: &Path, exists: impl Fn(&Path) -> bool) -> OsString {
+    let mut dirs: Vec<PathBuf> = if path.is_empty() {
+        Vec::new()
+    } else {
+        std::env::split_paths(path).collect()
+    };
+    let candidates = USER_BIN_DIRS
+        .iter()
+        .map(|rel| home.join(rel))
+        .chain(SYSTEM_BIN_DIRS.iter().map(PathBuf::from));
+    for dir in candidates {
+        if !exists(&dir) || dirs.contains(&dir) {
+            continue;
+        }
+        if std::env::join_paths([&dir]).is_err() {
+            tracing::warn!(
+                "not adding {} to PATH: its name holds the list separator",
+                dir.display()
+            );
+            continue;
+        }
+        dirs.push(dir);
+    }
+    std::env::join_paths(dirs).unwrap_or_else(|_| path.to_os_string())
 }
 
 /// The first executable called `name` in `path`.
@@ -2167,5 +2217,56 @@ fff666  node-v22.11.0.pkg
         assert_eq!(status.components.len(), COMPONENTS.len());
         #[cfg(target_os = "macos")]
         assert_eq!(status.features.screen, Ready::Unsupported);
+    }
+
+    #[test]
+    fn user_bins_are_appended_only_when_they_exist_in_order() {
+        let home = Path::new("/home/owner");
+        let existing = ["/home/owner/.grok/bin", "/home/owner/.local/bin", "/opt/homebrew/bin"];
+        let path = with_user_bins(OsStr::new("/usr/bin:/bin"), home, |dir| {
+            existing.iter().any(|e| dir == Path::new(e))
+        });
+        // Order follows the candidate list (`.local/bin` before `.grok/bin`), not the order of the check.
+        assert_eq!(
+            path,
+            OsString::from("/usr/bin:/bin:/home/owner/.local/bin:/home/owner/.grok/bin:/opt/homebrew/bin")
+        );
+    }
+
+    #[test]
+    fn user_bins_already_on_path_are_not_added_again_and_keep_their_place() {
+        let home = Path::new("/home/owner");
+        let path = with_user_bins(OsStr::new("/home/owner/.local/bin:/usr/bin"), home, |_| true);
+        let text = path.to_string_lossy().into_owned();
+        assert_eq!(text.matches("/home/owner/.local/bin").count(), 1, "{text}");
+        assert!(text.starts_with("/home/owner/.local/bin:/usr/bin:"), "{text}");
+        assert!(text.ends_with("/home/linuxbrew/.linuxbrew/bin"), "{text}");
+    }
+
+    #[test]
+    fn an_empty_path_gives_only_the_existing_folders() {
+        let home = Path::new("/home/owner");
+        let path = with_user_bins(OsStr::new(""), home, |dir| dir == Path::new("/usr/local/bin"));
+        assert_eq!(path, OsString::from("/usr/local/bin"));
+        assert_eq!(with_user_bins(OsStr::new(""), home, |_| false), OsString::new());
+    }
+
+    #[test]
+    fn a_folder_with_the_list_separator_is_skipped_and_the_others_are_added() {
+        let home = Path::new("/home/a:b");
+        let path = with_user_bins(OsStr::new("/usr/bin"), home, |_| true);
+        let text = path.to_string_lossy().into_owned();
+        assert!(text.starts_with("/usr/bin:"), "{text}");
+        assert!(!text.contains("/home/a:b"), "{text}");
+        assert!(text.ends_with("/home/linuxbrew/.linuxbrew/bin"), "{text}");
+    }
+
+    #[test]
+    fn nothing_found_leaves_the_path_as_it_was() {
+        let home = Path::new("/home/owner");
+        assert_eq!(
+            with_user_bins(OsStr::new("/usr/bin:/bin"), home, |_| false),
+            OsString::from("/usr/bin:/bin")
+        );
     }
 }
