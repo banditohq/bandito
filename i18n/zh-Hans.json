@@ -527,6 +527,11 @@
   "server.detail.stopAria": "结束 {name}",
   "server.detail.agentMark": "Bandito 智能体",
   "server.detail.stillRunning": "进程没有结束。请几秒后再试。",
+  "server.detail.processCount": {
+    "other": "{count} 个进程"
+  },
+  "server.detail.showAll": "显示全部（{count}）",
+  "server.detail.showLess": "收起",
   "setup.screenLinuxOnly": "屏幕功能只在 Linux 服务器上可用",
   "devices.thisDeviceHint": "无法撤销当前正在使用的设备。",
   "devices.add": "添加",

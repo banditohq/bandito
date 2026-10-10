@@ -1370,6 +1370,8 @@
 "server.detail.hint" = "Hover over the chart to see the value at a point in time.";
 "server.detail.now" = "Now";
 "server.detail.peak" = "Peak";
+"server.detail.showAll" = "Show all (%1$lld)";
+"server.detail.showLess" = "Collapse";
 "server.detail.stillRunning" = "The process did not stop. Try again in a few seconds.";
 "server.detail.stopAria" = "Stop %1$@";
 "server.detail.stopConfirm" = "Stop";

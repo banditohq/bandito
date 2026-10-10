@@ -268,6 +268,20 @@
 			<string>%1$lld 个核心</string>
 		</dict>
 	</dict>
+	<key>server.detail.processCount</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>other</key>
+			<string>%1$lld 个进程</string>
+		</dict>
+	</dict>
 	<key>setup.showFullLog</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>

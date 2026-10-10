@@ -1844,6 +1844,9 @@ public enum L10n {
             public static var hint: String { L10n.tr("server.detail.hint") }
             public static var now: String { L10n.tr("server.detail.now") }
             public static var peak: String { L10n.tr("server.detail.peak") }
+            public static func processCount(count: Int) -> String { L10n.tr("server.detail.processCount", count) }
+            public static func showAll(count: Int) -> String { L10n.tr("server.detail.showAll", count) }
+            public static var showLess: String { L10n.tr("server.detail.showLess") }
             public static var stillRunning: String { L10n.tr("server.detail.stillRunning") }
             public static func stopAria(name: String) -> String { L10n.tr("server.detail.stopAria", name) }
             public static var stopConfirm: String { L10n.tr("server.detail.stopConfirm") }

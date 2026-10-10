@@ -115,6 +115,53 @@ public enum HostProcessList {
         return Array(sorted.prefix(limit))
     }
 
+    /// The app a process belongs to, for grouping: the helper suffixes of a browser or an Electron app are cut, so
+    /// "Google Chrome Helper (Renderer)" and "Google Chrome Helper" are both "Google Chrome". A name that is nothing but
+    /// a suffix stays as it is.
+    public static func appName(_ raw: String) -> String {
+        var name = raw.trimmingCharacters(in: .whitespaces)
+        for tag in ["Renderer", "GPU", "Plugin", "Alerts"] {
+            let suffix = " (\(tag))"
+            if name.hasSuffix(suffix) { name = String(name.dropLast(suffix.count)).trimmingCharacters(in: .whitespaces) }
+        }
+        if name.hasSuffix(" Helper") { name = String(name.dropLast(" Helper".count)).trimmingCharacters(in: .whitespaces) }
+        return name.isEmpty ? raw : name
+    }
+
+    /// Merges the rows of one app into a group with the summed load, biggest first for `sort`. A process of an agent,
+    /// a terminal or the daemon is grouped only with the processes of the same owner and app, never with others'.
+    /// Members of a group keep the order of `sort`.
+    public static func groups(_ rows: [HostProcessEntry], sort: Sort) -> [HostProcessGroup] {
+        var order: [String] = []
+        var members: [String: [HostProcessEntry]] = [:]
+        for row in rows {
+            let app = appName(row.name)
+            let key = row.owner.map { "\($0.kind.rawValue):\($0.id ?? "")|\(app)" } ?? "|\(app)"
+            if members[key] == nil { order.append(key) }
+            members[key, default: []].append(row)
+        }
+        func before(_ a: HostProcessEntry, _ b: HostProcessEntry) -> Bool {
+            switch sort {
+            case .memory: a.rssBytes != b.rssBytes ? a.rssBytes > b.rssBytes : a.pid < b.pid
+            case .cpu: a.cpuPercent != b.cpuPercent ? a.cpuPercent > b.cpuPercent : a.pid < b.pid
+            }
+        }
+        let groups = order.map { key -> HostProcessGroup in
+            let list = members[key, default: []].sorted(by: before)
+            return HostProcessGroup(
+                id: key, appName: appName(list[0].name), owner: list[0].owner, members: list,
+                rssBytes: list.reduce(0) { $0 + $1.rssBytes }, cpuPercent: list.reduce(0) { $0 + $1.cpuPercent })
+        }
+        return groups.sorted { a, b in
+            let pa: Double, pb: Double
+            switch sort {
+            case .memory: (pa, pb) = (Double(a.rssBytes), Double(b.rssBytes))
+            case .cpu: (pa, pb) = (a.cpuPercent, b.cpuPercent)
+            }
+            return pa != pb ? pa > pb : a.members[0].pid < b.members[0].pid
+        }
+    }
+
     /// Whether the app offers to stop a process: the daemon says it is safe to stop, it has no agent, terminal or
     /// daemon owner, and it is not pid 1.
     public static func canStop(pid: Int, ownSafe: Bool, owner: ProcessOwnerRef?) -> Bool {
@@ -136,6 +183,20 @@ public struct HostProcessEntry: Identifiable, Hashable, Sendable {
 
     /// A process of a Bandito agent: it gets the agent's mark.
     public var isAgent: Bool { owner?.kind == .agent }
+}
+
+/// The processes of one app in a detail list, with their summed load.
+public struct HostProcessGroup: Identifiable, Hashable, Sendable {
+    public var id: String
+    public var appName: String
+    /// The agent, terminal or daemon the processes belong to; nil for ordinary ones.
+    public var owner: ProcessOwnerRef?
+    public var members: [HostProcessEntry]
+    public var rssBytes: Int64
+    public var cpuPercent: Double
+
+    /// More than one process: the row expands and has no stop action of its own.
+    public var isGroup: Bool { members.count > 1 }
 }
 
 extension HostStats {

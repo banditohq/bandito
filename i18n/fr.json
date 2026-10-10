@@ -537,6 +537,12 @@
   "server.detail.stopAria": "Terminer {name}",
   "server.detail.agentMark": "Agent Bandito",
   "server.detail.stillRunning": "Le processus ne s'est pas arrêté. Réessayez dans quelques secondes.",
+  "server.detail.processCount": {
+    "one": "{count} processus",
+    "other": "{count} processus"
+  },
+  "server.detail.showAll": "Tout afficher ({count})",
+  "server.detail.showLess": "Réduire",
   "setup.screenLinuxOnly": "L'écran ne fonctionne que sur un serveur Linux",
   "devices.thisDeviceHint": "Vous ne pouvez pas révoquer l'appareil que vous utilisez actuellement.",
   "devices.add": "Ajouter",

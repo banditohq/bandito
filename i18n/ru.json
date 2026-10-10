@@ -1801,6 +1801,14 @@
   "server.detail.stopAria": "Завершить {name}",
   "server.detail.agentMark": "Агент Bandito",
   "server.detail.stillRunning": "Процесс не завершился. Повторите через несколько секунд.",
+  "server.detail.processCount": {
+    "one": "{count} процесс",
+    "few": "{count} процесса",
+    "many": "{count} процессов",
+    "other": "{count} процесса"
+  },
+  "server.detail.showAll": "Показать все ({count})",
+  "server.detail.showLess": "Свернуть",
   "setup.screenLinuxOnly": "Экран работает только на Linux-сервере",
   "devices.thisDeviceHint": "Нельзя отозвать устройство, с которого вы сейчас работаете.",
   "server.picker.connect": "Подключить сервер…",

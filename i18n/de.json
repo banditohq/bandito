@@ -536,6 +536,12 @@
   "server.detail.stopAria": "{name} beenden",
   "server.detail.agentMark": "Bandito-Agent",
   "server.detail.stillRunning": "Der Prozess wurde nicht beendet. Versuchen Sie es in ein paar Sekunden erneut.",
+  "server.detail.processCount": {
+    "one": "{count} Prozess",
+    "other": "{count} Prozesse"
+  },
+  "server.detail.showAll": "Alle anzeigen ({count})",
+  "server.detail.showLess": "Einklappen",
   "setup.screenLinuxOnly": "Der Bildschirm funktioniert nur auf einem Linux-Server",
   "devices.thisDeviceHint": "Das Gerät, mit dem Sie gerade arbeiten, kann nicht widerrufen werden.",
   "devices.add": "Hinzufügen",

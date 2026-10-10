@@ -1370,6 +1370,8 @@
 "server.detail.hint" = "将鼠标移到图表上，可查看该时间点的数值。";
 "server.detail.now" = "当前";
 "server.detail.peak" = "最高";
+"server.detail.showAll" = "显示全部（%1$lld）";
+"server.detail.showLess" = "收起";
 "server.detail.stillRunning" = "进程没有结束。请几秒后再试。";
 "server.detail.stopAria" = "结束 %1$@";
 "server.detail.stopConfirm" = "结束";

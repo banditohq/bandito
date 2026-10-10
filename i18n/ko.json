@@ -527,6 +527,11 @@
   "server.detail.stopAria": "{name} 종료",
   "server.detail.agentMark": "Bandito 에이전트",
   "server.detail.stillRunning": "프로세스가 종료되지 않았어요. 몇 초 후에 다시 시도해 주세요.",
+  "server.detail.processCount": {
+    "other": "프로세스 {count}개"
+  },
+  "server.detail.showAll": "모두 보기 ({count})",
+  "server.detail.showLess": "접기",
   "setup.screenLinuxOnly": "화면 기능은 Linux 서버에서만 작동해요",
   "devices.thisDeviceHint": "지금 사용 중인 기기는 취소할 수 없어요.",
   "devices.add": "추가",

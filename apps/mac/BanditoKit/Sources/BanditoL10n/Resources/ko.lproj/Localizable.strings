@@ -1370,6 +1370,8 @@
 "server.detail.hint" = "그래프에 마우스를 올리면 해당 시점의 값을 볼 수 있어요.";
 "server.detail.now" = "현재";
 "server.detail.peak" = "최대";
+"server.detail.showAll" = "모두 보기 (%1$lld)";
+"server.detail.showLess" = "접기";
 "server.detail.stillRunning" = "프로세스가 종료되지 않았어요. 몇 초 후에 다시 시도해 주세요.";
 "server.detail.stopAria" = "%1$@ 종료";
 "server.detail.stopConfirm" = "종료";

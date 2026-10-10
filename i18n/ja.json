@@ -527,6 +527,11 @@
   "server.detail.stopAria": "{name} を終了",
   "server.detail.agentMark": "Bandito のエージェント",
   "server.detail.stillRunning": "プロセスは終了しませんでした。数秒後にもう一度お試しください。",
+  "server.detail.processCount": {
+    "other": "{count} 個のプロセス"
+  },
+  "server.detail.showAll": "すべて表示 ({count})",
+  "server.detail.showLess": "折りたたむ",
   "setup.screenLinuxOnly": "画面共有はLinuxサーバーでのみ使えます",
   "devices.thisDeviceHint": "いま作業中のデバイスは取り消せません。",
   "devices.add": "追加",

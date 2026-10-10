@@ -1754,6 +1754,12 @@
   "server.detail.stopAria": "Stop {name}",
   "server.detail.agentMark": "Bandito agent",
   "server.detail.stillRunning": "The process did not stop. Try again in a few seconds.",
+  "server.detail.processCount": {
+    "one": "{count} process",
+    "other": "{count} processes"
+  },
+  "server.detail.showAll": "Show all ({count})",
+  "server.detail.showLess": "Collapse",
   "setup.screenLinuxOnly": "Screen works only on a Linux server",
   "devices.thisDeviceHint": "You can't revoke the device you are working on now.",
   "server.picker.connect": "Connect server…",

@@ -304,6 +304,22 @@
 			<string>%1$lld núcleos</string>
 		</dict>
 	</dict>
+	<key>server.detail.processCount</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%1$lld processo</string>
+			<key>other</key>
+			<string>%1$lld processos</string>
+		</dict>
+	</dict>
 	<key>setup.showFullLog</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>

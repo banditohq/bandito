@@ -537,6 +537,12 @@
   "server.detail.stopAria": "Encerrar {name}",
   "server.detail.agentMark": "Agente do Bandito",
   "server.detail.stillRunning": "O processo não foi encerrado. Tente novamente em alguns segundos.",
+  "server.detail.processCount": {
+    "one": "{count} processo",
+    "other": "{count} processos"
+  },
+  "server.detail.showAll": "Mostrar todos ({count})",
+  "server.detail.showLess": "Recolher",
   "setup.screenLinuxOnly": "A tela funciona só em um servidor Linux",
   "devices.thisDeviceHint": "Não é possível revogar o dispositivo que você está usando agora.",
   "devices.add": "Adicionar",

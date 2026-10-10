@@ -382,6 +382,26 @@
 			<string>%1$lld ядра</string>
 		</dict>
 	</dict>
+	<key>server.detail.processCount</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%1$lld процесса</string>
+			<key>many</key>
+			<string>%1$lld процессов</string>
+			<key>one</key>
+			<string>%1$lld процесс</string>
+			<key>other</key>
+			<string>%1$lld процесса</string>
+		</dict>
+	</dict>
 	<key>setup.showFullLog</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>

@@ -1370,6 +1370,8 @@
 "server.detail.hint" = "Наведите на график, чтобы увидеть значение в этот момент.";
 "server.detail.now" = "Сейчас";
 "server.detail.peak" = "Максимум";
+"server.detail.showAll" = "Показать все (%1$lld)";
+"server.detail.showLess" = "Свернуть";
 "server.detail.stillRunning" = "Процесс не завершился. Повторите через несколько секунд.";
 "server.detail.stopAria" = "Завершить %1$@";
 "server.detail.stopConfirm" = "Завершить";
