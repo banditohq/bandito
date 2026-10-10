@@ -69,7 +69,7 @@ public struct LastMessage: Codable, Sendable, Hashable {
     /// and nothing but user and assistant messages counts. Nil for any other event.
     init?(event e: Event) {
         switch e.body {
-        case .messageUser(let text, let source, _) where source != .system:
+        case .messageUser(let text, let source, _, _) where source != .system:
             self.init(role: "user", text: Self.cut(text), ts: e.ts)
         case .messageAssistant(let text):
             self.init(role: "assistant", text: Self.cut(text), ts: e.ts)
@@ -376,7 +376,8 @@ public enum AgentChange: String, Codable, Sendable, Hashable {
 /// The typed body of an event (`kind` + `payload` on the wire).
 public enum EventBody: Sendable, Hashable {
     case turnStarted(turnId: String, source: MessageSource)
-    case messageUser(text: String, source: MessageSource, fromAgent: String?)
+    /// `attachments` are the files the message carries (see `AgentAttachment`), empty for a plain message.
+    case messageUser(text: String, source: MessageSource, fromAgent: String?, attachments: [AgentAttachment] = [])
     case messageAssistant(text: String)
     case messageDelta(text: String)
     case toolCall(callId: String, tool: String, title: String, input: JSONValue)
@@ -424,7 +425,9 @@ extension Event: Decodable {
     private enum Keys: String, CodingKey { case seq, agentId, ts, kind, payload }
 
     private struct TurnStartedP: Decodable { var turnId: String; var source: MessageSource }
-    private struct MessageUserP: Decodable { var text: String; var source: MessageSource; var fromAgent: String? }
+    private struct MessageUserP: Decodable {
+        var text: String; var source: MessageSource; var fromAgent: String?; var attachments: [AgentAttachment]?
+    }
     private struct TextP: Decodable { var text: String }
     private struct ToolCallP: Decodable { var callId: String; var tool: String; var title: String; var input: JSONValue? }
     private struct ToolResultP: Decodable { var callId: String; var ok: Bool; var output: String }
@@ -457,7 +460,8 @@ extension Event: Decodable {
         case "turn.started":
             let x = try p(TurnStartedP.self); body = .turnStarted(turnId: x.turnId, source: x.source)
         case "message.user":
-            let x = try p(MessageUserP.self); body = .messageUser(text: x.text, source: x.source, fromAgent: x.fromAgent)
+            let x = try p(MessageUserP.self)
+            body = .messageUser(text: x.text, source: x.source, fromAgent: x.fromAgent, attachments: x.attachments ?? [])
         case "message.assistant": body = .messageAssistant(text: try p(TextP.self).text)
         case "message.delta": body = .messageDelta(text: try p(TextP.self).text)
         case "tool.call":

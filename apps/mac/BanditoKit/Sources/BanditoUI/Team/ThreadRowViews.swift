@@ -36,7 +36,7 @@ private struct ItemView: View {
 
     var body: some View {
         switch item {
-        case .user(_, let text, let source, let from, _):
+        case .user(_, let text, let source, let from, _, _):
             if source == .user {
                 UserBubble(text: text)
             } else {

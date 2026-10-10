@@ -639,9 +639,20 @@ public final class ServerModel: Identifiable {
 
     // MARK: actions
 
-    public func send(_ text: String, to agentId: String) async throws {
-        struct P: Encodable { var agentId: String; var text: String }
-        try await rpc().call("agents.send", P(agentId: agentId, text: text))
+    /// Sends a message to an agent. `attachments` are files from `uploadAttachment`; they go by path.
+    public func send(_ text: String, to agentId: String, attachments: [AgentAttachment] = []) async throws {
+        let request = AgentSendRequest(
+            agentId: agentId, text: text, attachments: attachments.isEmpty ? nil : attachments.map(\.path))
+        try await rpc().call("agents.send", request)
+    }
+
+    /// Saves one file in the agent's attachment folder (`attachments.upload`). The daemon refuses more than 20 MB.
+    public func uploadAttachment(_ data: Data, name: String, agentId: String) async throws -> AgentAttachment {
+        struct P: Encodable { var agentId: String; var name: String; var dataBase64: String }
+        return try await rpc().call(
+            "attachments.upload",
+            P(agentId: agentId, name: name, dataBase64: data.base64EncodedString()),
+            as: AgentAttachment.self)
     }
 
     public func interrupt(_ agentId: String) async throws {
