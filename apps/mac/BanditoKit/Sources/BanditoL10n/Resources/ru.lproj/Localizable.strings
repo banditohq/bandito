@@ -1441,6 +1441,7 @@
 "server.features.installed" = "Установлен";
 "server.features.loginHelp" = "Войдите на сервере: %1$@";
 "server.features.notInstalled" = "Не установлен";
+"server.features.signIn" = "Войти";
 "server.features.title" = "Возможности";
 "server.health.bothFull" = "Диск и память почти заполнены";
 "server.health.diskFull" = "Диск почти полон";
@@ -1460,6 +1461,7 @@
 "server.owner.agent" = "Агент";
 "server.owner.daemon" = "Демон Bandito";
 "server.owner.terminal" = "Терминал";
+"server.passport.uptimeLessHour" = "работает меньше часа";
 "server.picker.connect" = "Подключить сервер…";
 "server.picker.kindRemote" = "Сервер";
 "server.picker.manage" = "Управлять серверами…";

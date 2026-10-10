@@ -663,6 +663,11 @@
   "server.features.notInstalled": "未安装",
   "server.features.installed": "已安装",
   "server.features.loginHelp": "在服务器上登录：{command}",
+  "server.features.signIn": "登录",
+  "server.passport.uptimeHours": {
+    "other": "已运行 {count} 小时"
+  },
+  "server.passport.uptimeLessHour": "已运行不到 1 小时",
   "modelPicker.defaultLabel": "默认 · {name}",
   "modelPicker.defaultMenu": "默认（{name}）",
   "modelPicker.defaultPlain": "默认",

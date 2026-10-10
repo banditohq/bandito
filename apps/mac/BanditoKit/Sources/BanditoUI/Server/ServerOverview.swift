@@ -24,6 +24,7 @@ struct ServerOverview: View {
     var body: some View {
         ServerPage(title: L10n.Mode.serverOverview, trailing: { trailing }) {
             if let server, server.supports("host") {
+                ServerPassport(server: server, stats: monitor.stats, health: monitor.stats.map(HostHealth.evaluate))
                 LocalDaemonUpgradeBanner(server: server, model: app.localUpgrade)
                 // This Mac's daemon is replaced by the bundled one: the release offers would be the same update, shown twice.
                 if !app.localUpgrade.replacesOffer(for: server) {
@@ -103,10 +104,7 @@ struct ServerOverview: View {
 
     private var trailing: some View {
         HStack(spacing: 10) {
-            if let stats = monitor.stats {
-                let health = HostHealth.evaluate(stats)
-                Chip(text: Self.healthText(health), tone: health.isOK ? .ok : .signal)
-            }
+            // The health shows once, in the server's passport below.
             SegmentedPicker(
                 selection: Binding(
                     get: { monitor.range },
@@ -157,7 +155,7 @@ struct ServerOverview: View {
                     value: HostFormat.percent(stats?.cpuPercent ?? 0),
                     note: L10n.Server.cores(count: stats?.cpus ?? 0),
                     series: HostFormat.downsample(points.map(\.cpu), to: 120),
-                    tint: Color.Bandito.ok)
+                    tint: Color.Bandito.signalGlow)
             }
             openable(.memory) {
                 MetricTile(
@@ -166,7 +164,7 @@ struct ServerOverview: View {
                     note: L10n.Server.Tile.memoryOf(total: HostFormat.bytes(stats?.memTotal ?? 0)),
                     series: HostFormat.downsample(
                         points.map { HostHealth.fraction(used: $0.memUsed, total: stats?.memTotal ?? 0) * 100 }, to: 120),
-                    tint: Color.Bandito.signal)
+                    tint: Color.Bandito.info)
             }
             openable(.disk) {
                 let usage = HostFormat.diskUsage(used: diskUsed, total: diskTotal)
@@ -175,7 +173,7 @@ struct ServerOverview: View {
                     value: HostFormat.diskBytes(max(0, diskTotal - diskUsed)),
                     note: "",
                     series: [],
-                    tint: Color.Bandito.text,
+                    tint: Color.Bandito.ok,
                     valueNote: L10n.Server.Tile.freeWord,
                     fill: diskTotal > 0 ? Double(diskUsed) / Double(diskTotal) : nil,
                     caption: L10n.Server.Tile.diskUsed(used: usage.used, total: usage.total))
@@ -186,7 +184,7 @@ struct ServerOverview: View {
                     value: HostFormat.rate(rx + tx),
                     note: L10n.Server.Tile.netSplit(down: HostFormat.rate(rx), up: HostFormat.rate(tx)),
                     series: HostFormat.downsample(points.map { Double($0.netRxBps + $0.netTxBps) }, to: 120),
-                    tint: Color.Bandito.info)
+                    tint: BanditoPalette.avatarLilac)
             }
         }
     }
@@ -241,7 +239,9 @@ struct ServerOverview: View {
     private func processRow(_ row: ProcessRow, server: ServerModel) -> some View {
         let name = ownerName(row, server: server)
         let cpus = Double(max(1, monitor.stats?.cpus ?? 1))
-        let fraction = min(1, row.cpuPercent / (100 * cpus))
+        let cpuFraction = min(1, row.cpuPercent / (100 * cpus))
+        let memTotal = monitor.stats?.memTotal ?? 0
+        let memFraction = memTotal > 0 ? min(1, Double(row.rssBytes) / Double(memTotal)) : 0
         return HStack(alignment: .center, spacing: 10) {
             ownerAvatar(row, name: name)
             VStack(alignment: .leading, spacing: 2) {
@@ -255,23 +255,14 @@ struct ServerOverview: View {
                     .truncationMode(.tail)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(L10n.Server.Processes.cpu(percent: HostFormat.percent(row.cpuPercent)))
-                    .font(BanditoFont.text(size: 11.5, weight: 400))
-                    .foregroundStyle(Color.Bandito.text2)
-                GeometryReader { proxy in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(Color.Bandito.text.opacity(0.08))
-                        Capsule().fill(Color.Bandito.text2).frame(width: proxy.size.width * fraction)
-                    }
-                }
-                .frame(height: 4)
+            // Two thin bars, CPU and memory, in the tile colours, with the numbers in mono on the right.
+            VStack(alignment: .leading, spacing: 6) {
+                usageBar(fraction: cpuFraction, tint: Color.Bandito.signalGlow,
+                         value: HostFormat.percent(row.cpuPercent))
+                usageBar(fraction: memFraction, tint: Color.Bandito.info,
+                         value: HostFormat.bytes(row.rssBytes))
             }
-            .frame(width: 120)
-            Text(HostFormat.bytes(row.rssBytes))
-                .font(BanditoFont.text(size: 12, weight: 400))
-                .foregroundStyle(Color.Bandito.text2)
-                .frame(width: 70, alignment: .trailing)
+            .frame(width: 210)
             if row.canStop {
                 Button {
                     stopping = row
@@ -286,15 +277,33 @@ struct ServerOverview: View {
         .padding(.vertical, 6)
     }
 
+    /// A thin capsule bar with its value in mono at the right. The bar takes the rest of the width.
+    private func usageBar(fraction: Double, tint: Color, value: String) -> some View {
+        HStack(spacing: 8) {
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.Bandito.text.opacity(0.08))
+                    Capsule().fill(tint).frame(width: proxy.size.width * fraction)
+                }
+            }
+            .frame(height: 3)
+            Text(value)
+                .font(BanditoFont.mono(size: 11.5, weight: 400))
+                .foregroundStyle(Color.Bandito.text2)
+                .lineLimit(1)
+                .frame(width: 64, alignment: .trailing)
+        }
+    }
+
     @ViewBuilder
     private func ownerAvatar(_ row: ProcessRow, name: String) -> some View {
         switch row.owner.kind {
         case .agent:
-            AgentAvatar(name: name, size: 26)
+            AgentAvatar(name: name, size: 24)
         case .terminal, .daemon:
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(Color.Bandito.text.opacity(0.07))
-                .frame(width: 26, height: 26)
+                .frame(width: 24, height: 24)
                 .overlay {
                     Image(systemName: row.owner.kind == .terminal ? "terminal" : "waveform.path.ecg")
                         .font(.system(size: 12))
@@ -467,8 +476,8 @@ struct ServerOverview: View {
 private enum TileHeight {
     /// The label line.
     static let header: CGFloat = 18
-    /// The big number (26 pt type).
-    static let value: CGFloat = 32
+    /// The big number (28 pt type).
+    static let value: CGFloat = 36
     /// The chart, or the fill bar and its caption.
     static let chart: CGFloat = 44
 }
@@ -499,9 +508,7 @@ private struct MetricTile: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline) {
-                Text(label)
-                    .font(BanditoFont.text(size: 12.5, weight: 400))
-                    .foregroundStyle(Color.Bandito.text3)
+                SectionLabel(label)
                 Spacer(minLength: 6)
                 Text(note)
                     .font(BanditoFont.text(size: 11.5, weight: 400))
@@ -509,12 +516,19 @@ private struct MetricTile: View {
                     .lineLimit(1)
             }
             .frame(height: TileHeight.header)
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(value)
-                    .font(BanditoFont.display(size: 24, weight: 600))
+            HStack(alignment: .firstTextBaseline, spacing: 5) {
+                let parts = OverviewTileText.split(value)
+                Text(parts.number)
+                    .font(BanditoFont.display(size: 28, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
+                if let unit = parts.unit {
+                    Text(unit)
+                        .font(BanditoFont.text(size: 14, weight: 400))
+                        .foregroundStyle(Color.Bandito.text2)
+                        .lineLimit(1)
+                }
                 if let valueNote {
                     Text(valueNote)
                         .font(BanditoFont.text(size: 12.5, weight: 400))
@@ -541,7 +555,7 @@ private struct MetricTile: View {
                 .frame(height: TileHeight.chart, alignment: .top)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
             } else {
-                Sparkline(values: series, tint: tint)
+                Sparkline(values: series, tint: tint, fillOpacity: 0.35, lineWidth: 1.5)
                     .frame(height: TileHeight.chart)
             }
         }
@@ -557,6 +571,9 @@ private struct MetricTile: View {
 struct Sparkline: View {
     let values: [Double]
     let tint: Color
+    /// Opacity of the fill at the top; it fades to 0 at the bottom.
+    var fillOpacity = 0.22
+    var lineWidth: CGFloat = 2
 
     var body: some View {
         if values.count < 2 {
@@ -568,10 +585,10 @@ struct Sparkline: View {
                         .interpolationMethod(.monotone)
                         .foregroundStyle(
                             LinearGradient(
-                                colors: [tint.opacity(0.22), tint.opacity(0)], startPoint: .top, endPoint: .bottom))
+                                colors: [tint.opacity(fillOpacity), tint.opacity(0)], startPoint: .top, endPoint: .bottom))
                     LineMark(x: .value("Sample", index), y: .value("Value", value))
                         .interpolationMethod(.monotone)
-                        .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                        .lineStyle(StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round))
                         .foregroundStyle(tint)
                 }
             }

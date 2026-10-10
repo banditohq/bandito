@@ -1441,6 +1441,7 @@
 "server.features.installed" = "Instalado";
 "server.features.loginHelp" = "Inicia sesión en el servidor: %1$@";
 "server.features.notInstalled" = "No instalado";
+"server.features.signIn" = "Iniciar sesión";
 "server.features.title" = "Capacidades";
 "server.health.bothFull" = "Disco y memoria casi llenos";
 "server.health.diskFull" = "Disco casi lleno";
@@ -1460,6 +1461,7 @@
 "server.owner.agent" = "Agente";
 "server.owner.daemon" = "Demonio de Bandito";
 "server.owner.terminal" = "Terminal";
+"server.passport.uptimeLessHour" = "activo menos de una hora";
 "server.picker.connect" = "Conectar servidor…";
 "server.picker.kindRemote" = "Servidor";
 "server.picker.manage" = "Administrar servidores…";

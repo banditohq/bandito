@@ -1441,6 +1441,7 @@
 "server.features.installed" = "설치됨";
 "server.features.loginHelp" = "서버에서 로그인: %1$@";
 "server.features.notInstalled" = "설치되지 않음";
+"server.features.signIn" = "로그인";
 "server.features.title" = "기능";
 "server.health.bothFull" = "디스크와 메모리가 거의 찼어요";
 "server.health.diskFull" = "디스크가 거의 찼어요";
@@ -1460,6 +1461,7 @@
 "server.owner.agent" = "에이전트";
 "server.owner.daemon" = "Bandito 데몬";
 "server.owner.terminal" = "터미널";
+"server.passport.uptimeLessHour" = "가동 중 1시간 미만";
 "server.picker.connect" = "서버 연결…";
 "server.picker.kindRemote" = "서버";
 "server.picker.manage" = "서버 관리…";

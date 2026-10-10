@@ -217,11 +217,11 @@ struct MetricDetailView: View {
 
     @ViewBuilder
     private func groupRows(_ group: HostProcessGroup) -> some View {
-        if group.isGroup {
+        if group.isGroup, !group.members.isEmpty {
             let open = expanded.contains(group.id)
             ProcessRowView(
                 owner: group.owner, ownerName: ownerName, title: group.appName,
-                subtitle: L10n.Server.Detail.processCount(count: group.members.count),
+                subtitle: L10n.Server.Detail.processCount(count: group.processCount),
                 value: groupValue(group), indent: false, trailing: .chevron(open: open), stopName: nil,
                 onTap: {
                     if open { expanded.remove(group.id) } else { expanded.insert(group.id) }
@@ -232,8 +232,15 @@ struct MetricDetailView: View {
                     memberRow(row, indent: true)
                 }
             }
-        } else if let row = group.members.first {
+        } else if !group.isGroup, let row = group.members.first {
             memberRow(row, indent: false)
+        } else {
+            // The sums of an app whose processes this list does not name: a plain row, nothing to stop or expand.
+            ProcessRowView(
+                owner: group.owner, ownerName: ownerName, title: group.appName,
+                subtitle: group.isGroup ? L10n.Server.Detail.processCount(count: group.processCount) : nil,
+                value: groupValue(group), indent: false, trailing: .none, stopName: nil,
+                onTap: nil, onStop: nil)
         }
     }
 
@@ -396,7 +403,9 @@ struct MetricDetailView: View {
         metric == .memory ? HostFormat.bytes(group.rssBytes) : HostFormat.percent(group.cpuPercent)
     }
 
-    /// The CPU list is sorted by CPU among the biggest processes by memory, which is all the daemon sends.
+    /// The CPU list is sorted by CPU among the biggest processes by memory, which is all the daemon sends. With the
+    /// daemon's app groups each app's sums are exact; agents', terminals' and the daemon's processes stay in their own
+    /// owner groups, built from the list.
     private var topGroups: [HostProcessGroup] {
         let top = monitor.stats?.topProcesses ?? []
         let sort: HostProcessList.Sort
@@ -407,7 +416,7 @@ struct MetricDetailView: View {
         }
         // No cut before grouping: the helpers of one app must all land in its group.
         let rows = HostProcessList.rows(top: top, owners: monitor.ownerGroups, sort: sort, limit: .max)
-        return HostProcessList.groups(rows, sort: sort)
+        return HostProcessList.listGroups(rows, apps: monitor.stats?.appGroups, sort: sort)
     }
 
     private func processValue(_ row: HostProcessEntry) -> String {

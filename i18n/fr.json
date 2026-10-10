@@ -677,6 +677,12 @@
   "server.features.notInstalled": "Non installé",
   "server.features.installed": "Installé",
   "server.features.loginHelp": "Connexion sur le serveur : {command}",
+  "server.features.signIn": "Se connecter",
+  "server.passport.uptimeHours": {
+    "one": "actif depuis {count} heure",
+    "other": "actif depuis {count} heures"
+  },
+  "server.passport.uptimeLessHour": "actif depuis moins d'une heure",
   "modelPicker.defaultLabel": "Par défaut · {name}",
   "modelPicker.defaultMenu": "Par défaut ({name})",
   "modelPicker.defaultPlain": "Par défaut",

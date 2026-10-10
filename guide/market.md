@@ -30,7 +30,7 @@ services whether or not they are connected. Only the categories the catalog has 
 ## Search
 
 <!-- id: market-search; covers: -->
-The search field at the top right finds services by name and by description. It ignores case and spaces at the ends.
+The search field at the top right finds services by name and by description. It ignores case and spaces at the ends. Its focus shows as a cream ring around the field. Catalog services show their logo on the brand-colour tile.
 Где: Marketplace → search field (Поиск)
 1. Type part of the name or the description. A search with no match says Nothing found (Ничего не нашлось).
 
