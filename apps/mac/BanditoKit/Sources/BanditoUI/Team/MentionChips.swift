@@ -138,21 +138,38 @@ struct TrailingChips: Layout {
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let width = proposal.width ?? .infinity
         let laid = rows(subviews, width: width)
-        let height = laid.reduce(CGFloat(0)) { $0 + ($1.map(\.size.height).max() ?? 0) } + spacing * CGFloat(max(laid.count - 1, 0))
-        let widest = laid.map { row in row.reduce(CGFloat(0)) { $0 + $1.size.width } + spacing * CGFloat(max(row.count - 1, 0)) }.max() ?? 0
+        var height: CGFloat = 0
+        var widest: CGFloat = 0
+        for row in laid {
+            height += rowHeight(row)
+            widest = max(widest, rowWidth(row))
+        }
+        height += spacing * CGFloat(max(laid.count - 1, 0))
         return CGSize(width: proposal.width ?? widest, height: height)
+    }
+
+    // Spelled out with explicit types: the one-line version took the type checker too long on CI.
+    private func rowWidth(_ row: [(index: Int, size: CGSize)]) -> CGFloat {
+        var total: CGFloat = 0
+        for item in row { total += item.size.width }
+        return total + spacing * CGFloat(max(row.count - 1, 0))
+    }
+
+    private func rowHeight(_ row: [(index: Int, size: CGSize)]) -> CGFloat {
+        var tallest: CGFloat = 0
+        for item in row { tallest = max(tallest, item.size.height) }
+        return tallest
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         var y = bounds.minY
         for row in rows(subviews, width: bounds.width) {
-            let rowWidth = row.reduce(CGFloat(0)) { $0 + $1.size.width } + spacing * CGFloat(max(row.count - 1, 0))
-            var x = bounds.maxX - rowWidth
+            var x = bounds.maxX - rowWidth(row)
             for item in row {
                 subviews[item.index].place(at: CGPoint(x: x, y: y), anchor: .topLeading, proposal: ProposedViewSize(item.size))
                 x += item.size.width + spacing
             }
-            y += (row.map(\.size.height).max() ?? 0) + spacing
+            y += rowHeight(row) + spacing
         }
     }
 }
