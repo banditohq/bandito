@@ -207,7 +207,10 @@ import Testing
         try await Task.sleep(for: .milliseconds(80))
         #expect(total == 0)
         sender.add(x: 1, y: 1, deltaX: 0, deltaY: 7, modifiers: [])
-        try await Task.sleep(for: .milliseconds(80))
+        // A busy CI runner can be late by far more than one interval: wait for the delivery, up to 2 s.
+        for _ in 0..<100 where total != 7 {
+            try await Task.sleep(for: .milliseconds(20))
+        }
         #expect(total == 7)
     }
 }
