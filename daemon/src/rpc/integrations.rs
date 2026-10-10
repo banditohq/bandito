@@ -185,14 +185,15 @@ impl Drop for Group {
     }
 }
 
-/// Reads a child's stderr in the background, keeping its last bytes.
-fn collect_stderr<R>(mut stderr: R) -> std::sync::Arc<std::sync::Mutex<Vec<u8>>>
+/// Reads a child's stderr in the background, keeping its last bytes. The reader ends at the end of stderr; the
+/// handle is for waiting on that (see `tail_after_exit`).
+fn collect_stderr<R>(mut stderr: R) -> (std::sync::Arc<std::sync::Mutex<Vec<u8>>>, tokio::task::JoinHandle<()>)
 where
     R: tokio::io::AsyncRead + Unpin + Send + 'static,
 {
     let buf = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let sink = std::sync::Arc::clone(&buf);
-    tokio::spawn(async move {
+    let reader = tokio::spawn(async move {
         let mut chunk = [0u8; 4096];
         loop {
             match stderr.read(&mut chunk).await {
@@ -208,7 +209,18 @@ where
             }
         }
     });
-    buf
+    (buf, reader)
+}
+
+/// The stderr tail of a process that has ended. Waits, for at most two seconds, for the reader to reach the end of
+/// stderr: the bytes the process wrote just before it exited are then all in the tail, not a race with the reader.
+async fn tail_after_exit(
+    reader: tokio::task::JoinHandle<()>,
+    buf: &std::sync::Mutex<Vec<u8>>,
+    secrets: &[(String, String)],
+) -> String {
+    let _ = tokio::time::timeout(Duration::from_secs(2), reader).await;
+    stderr_tail(buf, secrets)
 }
 
 /// The last characters of the collected stderr, with every secret value replaced by its `••••NAME`.
@@ -253,7 +265,7 @@ async fn probe_stdio(command: &str, args: &[String], env: &[Pair], limit: Durati
         .spawn()
         .map_err(|e| anyhow::anyhow!("cannot start {command}: {e}"))?;
     let _group = Group(child.id().unwrap_or(0) as i32);
-    let stderr = collect_stderr(child.stderr.take().ok_or_else(|| anyhow::anyhow!("no stderr"))?);
+    let (stderr, reader) = collect_stderr(child.stderr.take().ok_or_else(|| anyhow::anyhow!("no stderr"))?);
     let secrets = secret_pairs(env);
     let exchange = async {
         let mut stdin = child.stdin.take().ok_or_else(|| anyhow::anyhow!("no stdin"))?;
@@ -271,7 +283,12 @@ async fn probe_stdio(command: &str, args: &[String], env: &[Pair], limit: Durati
     };
     match tokio::time::timeout(limit, exchange).await {
         Ok(Ok(tools)) => Ok(tools),
-        Ok(Err(e)) => anyhow::bail!("{}", with_stderr(format!("{e:#}"), stderr_tail(&stderr, &secrets))),
+        Ok(Err(e)) => {
+            // The exchange failed because the process went away: wait for its exit, then for its whole stderr.
+            let _ = tokio::time::timeout(Duration::from_secs(2), child.wait()).await;
+            let tail = tail_after_exit(reader, &stderr, &secrets).await;
+            anyhow::bail!("{}", with_stderr(format!("{e:#}"), tail))
+        }
         Err(_) => anyhow::bail!(
             "{}",
             with_stderr(
@@ -387,7 +404,7 @@ async fn http_post(url: &str, headers: &[Pair], msg: &Value, session: Option<&st
     let mut child = cmd.spawn().map_err(|e| anyhow::anyhow!("cannot run curl: {e}"))?;
     // Killed with the group when this call ends, however it ends.
     let _group = Group(child.id().unwrap_or(0) as i32);
-    let stderr = collect_stderr(child.stderr.take().ok_or_else(|| anyhow::anyhow!("no stderr"))?);
+    let (stderr, reader) = collect_stderr(child.stderr.take().ok_or_else(|| anyhow::anyhow!("no stderr"))?);
     if let Some(mut stdin) = child.stdin.take() {
         stdin.write_all(config.as_bytes()).await?;
     }
@@ -396,7 +413,7 @@ async fn http_post(url: &str, headers: &[Pair], msg: &Value, session: Option<&st
     if !out.status.success() {
         // The headers are in the config, not in curl's own messages; the tail is redacted with the secrets anyway.
         let secrets = secret_pairs(headers);
-        let tail = stderr_tail(&stderr, &secrets);
+        let tail = tail_after_exit(reader, &stderr, &secrets).await;
         anyhow::bail!(
             "{}",
             with_stderr(
