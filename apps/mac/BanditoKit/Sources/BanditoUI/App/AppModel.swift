@@ -93,8 +93,22 @@ public final class AppModel {
             if case .approvalResolved(let approvalID, _, _, _) = event.body {
                 self.notifications?.approvalSettled(approvalID)
             }
+            // The sound follows the event whether or not a notification is shown (see `SoundRules`).
+            if let sound = Self.soundEvent(for: event.body) {
+                SoundPlayer.play(sound)
+            }
             guard let notice = Self.notice(for: event, in: server) else { return }
             self.notifications?.handle(notice)
+        }
+    }
+
+    /// The sound an agent event makes: an approval or question waiting, a finished turn, or an error.
+    static func soundEvent(for body: EventBody) -> SoundEvent? {
+        switch body {
+        case .approvalRequested: .needsYou
+        case .turnCompleted(_, .ok, _, _): .done
+        case .error: .error
+        default: nil
         }
     }
 

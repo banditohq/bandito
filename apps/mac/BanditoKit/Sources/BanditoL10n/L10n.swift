@@ -1921,6 +1921,7 @@ public enum L10n {
             public static var keysGestures: String { L10n.tr("settings.nav.keysGestures") }
             public static var notifications: String { L10n.tr("settings.nav.notifications") }
             public static var servers: String { L10n.tr("settings.nav.servers") }
+            public static var sounds: String { L10n.tr("settings.nav.sounds") }
             public static var terminalFiles: String { L10n.tr("settings.nav.terminalFiles") }
             public static var updates: String { L10n.tr("settings.nav.updates") }
             public static var usage: String { L10n.tr("settings.nav.usage") }
@@ -1949,6 +1950,35 @@ public enum L10n {
             public static var deleteMessage: String { L10n.tr("settings.servers.deleteMessage") }
             public static func deleteTitle(name: String) -> String { L10n.tr("settings.servers.deleteTitle", name) }
             public static var intro: String { L10n.tr("settings.servers.intro") }
+        }
+
+        public enum Sounds {
+            public static var background: String { L10n.tr("settings.sounds.background") }
+            public static var backgroundHint: String { L10n.tr("settings.sounds.backgroundHint") }
+            public static var enabled: String { L10n.tr("settings.sounds.enabled") }
+            public static var enabledHint: String { L10n.tr("settings.sounds.enabledHint") }
+            public static var events: String { L10n.tr("settings.sounds.events") }
+            public static var intro: String { L10n.tr("settings.sounds.intro") }
+            public static var listen: String { L10n.tr("settings.sounds.listen") }
+            public static var set: String { L10n.tr("settings.sounds.set") }
+            public static var volume: String { L10n.tr("settings.sounds.volume") }
+
+            public enum Event {
+                public static var click: String { L10n.tr("settings.sounds.event.click") }
+                public static var done: String { L10n.tr("settings.sounds.event.done") }
+                public static var error: String { L10n.tr("settings.sounds.event.error") }
+                public static var needsYou: String { L10n.tr("settings.sounds.event.needsYou") }
+                public static var send: String { L10n.tr("settings.sounds.event.send") }
+                public static var tab: String { L10n.tr("settings.sounds.event.tab") }
+                public static var type: String { L10n.tr("settings.sounds.event.type") }
+            }
+
+            public enum Sets {
+                public static var glass: String { L10n.tr("settings.sounds.sets.glass") }
+                public static var mechanics: String { L10n.tr("settings.sounds.sets.mechanics") }
+                public static var retro: String { L10n.tr("settings.sounds.sets.retro") }
+                public static var soft: String { L10n.tr("settings.sounds.sets.soft") }
+            }
         }
 
         public enum TerminalFiles {

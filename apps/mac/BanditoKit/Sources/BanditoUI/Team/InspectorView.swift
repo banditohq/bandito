@@ -43,6 +43,8 @@ struct InspectorView: View {
         .overlay(alignment: .leading) {
             Rectangle().fill(Color.Bandito.line).frame(width: 1)
         }
+        // Every inspector tab change (picker, or opened on a tab by the app) makes the tab sound.
+        .onChange(of: tab) { _, _ in SoundPlayer.play(.tab) }
     }
 
     private var header: some View {

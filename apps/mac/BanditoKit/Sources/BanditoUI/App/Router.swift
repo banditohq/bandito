@@ -429,17 +429,23 @@ public final class Router {
 
     /// Shows `tab` in the workbench of `agentID` and opens the panel (buttons, menus, the memory viewer).
     func showInWorkbench(_ tab: WorkbenchTab, agentID: String) {
+        let before = workbenchState(for: agentID)
         updateWorkbench(for: agentID) { WorkbenchRules.open(tab, in: $0) }
+        if workbenchState(for: agentID) != before { SoundPlayer.play(.tab) }
     }
 
     /// Shows `tab` in pane `index` of the workbench of `agentID`: the pane the person pressed in.
     func showInWorkbench(_ tab: WorkbenchTab, agentID: String, pane index: Int) {
+        let before = workbenchState(for: agentID)
         updateWorkbench(for: agentID) { WorkbenchRules.open(tab, inPane: index, in: $0) }
+        if workbenchState(for: agentID) != before { SoundPlayer.play(.tab) }
     }
 
     /// Selects a tab that is already open in the workbench of `agentID`.
     func selectWorkbenchTab(_ tab: WorkbenchTab, agentID: String) {
+        let before = workbenchState(for: agentID)
         updateWorkbench(for: agentID) { WorkbenchRules.select(tab, in: $0) }
+        if workbenchState(for: agentID) != before { SoundPlayer.play(.tab) }
     }
 
     /// Closes a tab of the workbench of `agentID`.

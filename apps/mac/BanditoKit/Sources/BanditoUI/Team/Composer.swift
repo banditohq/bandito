@@ -135,10 +135,11 @@ struct Composer: View {
             guard let agentID = agent?.id else { return }
             if router.takeComposerFocus(agentID: agentID) { focused = true }
         }
-        .onChange(of: draft) { _, _ in
+        .onChange(of: draft) { old, new in
             slash.suppressed = false
             slash.notice = nil
             slash.index = 0
+            if SoundRules.isTypedCharacter(old: old, new: new) { SoundPlayer.play(.type) }
         }
         .task(id: agent?.id) {
             guard let agent, let server else { return }
@@ -333,6 +334,7 @@ struct Composer: View {
     /// the install prompt; everything else is sent as typed.
     private func submit() {
         guard let agent, let server else {
+            SoundPlayer.play(.send)
             onSend()
             return
         }
@@ -346,6 +348,7 @@ struct Composer: View {
                 return
             }
         }
+        SoundPlayer.play(.send)
         onSend()
     }
 

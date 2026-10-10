@@ -23,7 +23,7 @@ enum SettingsHandoff {
     }
 }
 
-/// The Settings window (⌘,): 12 sections in a left navigation. Opens at 980 × 680 pt, never smaller than 860 × 560.
+/// The Settings window (⌘,): 13 sections in a left navigation. Opens at 980 × 680 pt, never smaller than 860 × 560.
 public struct SettingsWindow: View {
     @State private var section: SettingsSection = .general
 
@@ -113,6 +113,7 @@ public struct SettingsWindow: View {
         case .browserScreen: BrowserScreenSection()
         case .keysGestures: KeysAndGesturesSection()
         case .notifications: NotificationsSection()
+        case .sounds: SoundsSection()
         case .appearance: AppearanceSection()
         case .updates: UpdatesSection()
         }
