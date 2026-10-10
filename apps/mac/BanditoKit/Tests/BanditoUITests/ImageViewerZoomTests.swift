@@ -96,12 +96,43 @@ import Testing
     }
 
     @Test func panMovesOnlyWhenZoomed() {
+        let image = CGSize(width: 1200, height: 600)
         var zoom = ImageViewerZoom()
-        zoom.pan(to: CGSize(width: 30, height: 10))
+        zoom.pan(to: CGSize(width: 30, height: 10), image: image, container: window)
         #expect(zoom.offset == .zero)
         zoom.set(scale: 2, fit: 1)
-        zoom.pan(to: CGSize(width: 30, height: 10))
+        zoom.pan(to: CGSize(width: 30, height: 10), image: image, container: window)
         #expect(zoom.offset == CGSize(width: 30, height: 10))
+    }
+
+    @Test func panStopsWhenTheEdgeReachesTheCentre() {
+        // 1200 x 600 at 200%: 2400 x 1200. An edge may come to the centre: the offset is at most half the width.
+        let image = CGSize(width: 1200, height: 600)
+        var zoom = ImageViewerZoom()
+        zoom.set(scale: 2, fit: 1)
+        zoom.pan(to: CGSize(width: 5000, height: -5000), image: image, container: window)
+        #expect(zoom.offset == CGSize(width: 1200, height: -600))
+        zoom.pan(to: CGSize(width: -5000, height: 5000), image: image, container: window)
+        #expect(zoom.offset == CGSize(width: -1200, height: 600))
+    }
+
+    @Test func anAxisThatFitsStaysCentred() {
+        // Wider than the window, but short enough to fit vertically: only the horizontal axis moves.
+        let image = CGSize(width: 1200, height: 100)
+        #expect(ImageViewerZoom.clampedOffset(CGSize(width: 900, height: 300), image: image, scale: 1, container: window)
+            == CGSize(width: 600, height: 0))
+    }
+
+    @Test func settleBringsAnOffsetBackAfterZoomingOut() {
+        let image = CGSize(width: 1200, height: 600)
+        var zoom = ImageViewerZoom()
+        zoom.set(scale: 4, fit: 1, anchor: CGPoint(x: 400, y: 0))
+        zoom.pan(to: CGSize(width: -2000, height: 0), image: image, container: window)
+        // Zooming out around a point to the left pushes the offset past the limit (600 at 100%).
+        zoom.set(scale: 1, fit: 1, anchor: CGPoint(x: -1000, y: 0))
+        #expect(zoom.offset.width == -1250)
+        zoom.settle(image: image, container: window)
+        #expect(zoom.offset.width == -600)
     }
 
     @Test func panNeedsAPictureBiggerThanTheWindow() {

@@ -26,6 +26,8 @@ struct ImageViewerItem {
 struct ImageViewerRequest {
     var items: [ImageViewerItem]
     var index: Int
+    /// The agent whose composer the viewer was opened from. Closing the viewer gives that composer the focus back.
+    var returnFocusAgentID: String?
 }
 
 /// Reads the bytes of a picture. The server's file is the full one, not a miniature.
@@ -61,6 +63,10 @@ struct ImageViewer: View {
     @State private var panStart: CGSize?
     @State private var pinchStart: CGFloat?
     @State private var scrollMonitor: Any?
+    /// The window the viewer is shown in: only its wheel events zoom.
+    @State private var hostWindow: NSWindow?
+    /// Why the last "Save as" failed, shown under the toolbar. `nil` when it did not fail.
+    @State private var saveError: UserFacingMessage?
     @FocusState private var focused: Bool
 
     private enum Loaded {
@@ -132,6 +138,7 @@ struct ImageViewer: View {
         .task(id: index) { await load() }
         .onAppear {
             focused = true
+            hostWindow = NSApp.keyWindow
             installScrollMonitor()
         }
         .onDisappear { removeScrollMonitor() }
@@ -177,6 +184,7 @@ struct ImageViewer: View {
                         x: value.location.x - size.width / 2 + zoom.offset.width,
                         y: value.location.y - size.height / 2 + zoom.offset.height)
                     zoom.toggle(at: anchor, fit: fit)
+                    settle()
                 }
             )
             .simultaneousGesture(dragGesture(image: image, scale: scale))
@@ -191,7 +199,9 @@ struct ImageViewer: View {
                 guard ImageViewerZoom.canPan(image: image.size, scale: scale, container: box) else { return }
                 if panStart == nil { panStart = zoom.offset }
                 let start = panStart ?? .zero
-                zoom.pan(to: CGSize(width: start.width + value.translation.width, height: start.height + value.translation.height))
+                zoom.pan(
+                    to: CGSize(width: start.width + value.translation.width, height: start.height + value.translation.height),
+                    image: image.size, container: box)
             }
             .onEnded { _ in panStart = nil }
     }
@@ -201,6 +211,7 @@ struct ImageViewer: View {
             .onChanged { value in
                 if pinchStart == nil { pinchStart = zoom.effectiveScale(fit: fit) }
                 zoom.set(scale: (pinchStart ?? 1) * value.magnification, fit: fit)
+                settle()
             }
             .onEnded { _ in pinchStart = nil }
     }
@@ -217,6 +228,18 @@ struct ImageViewer: View {
     // MARK: Toolbar and navigation
 
     private var toolbar: some View {
+        VStack(alignment: .trailing, spacing: 8) {
+            buttons
+            if let saveError {
+                UserFacingErrorView(message: saveError)
+                    .padding(.trailing, 4)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 14)
+    }
+
+    private var buttons: some View {
         HStack(spacing: 8) {
             Spacer()
             if image != nil {
@@ -243,8 +266,6 @@ struct ImageViewer: View {
             }
             .banditoButton(.icon(size: 30, label: L10n.Viewer.close))
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 14)
     }
 
     private var counter: some View {
@@ -298,10 +319,20 @@ struct ImageViewer: View {
     private func zoomBy(_ factor: CGFloat) {
         guard image != nil else { return }
         zoom.zoom(by: factor, fit: fit)
+        settle()
+    }
+
+    /// Keeps the offset inside the pan limits after the picture's size changed.
+    private func settle() {
+        guard let image else { return }
+        zoom.settle(image: image.size, container: box)
     }
 
     private func close() {
         router.imageViewer = nil
+        if let agentID = request.returnFocusAgentID {
+            router.requestComposerFocus(agentID: agentID)
+        }
     }
 
     private func openInFiles() {
@@ -312,13 +343,19 @@ struct ImageViewer: View {
 
     private func saveAs() {
         guard case .ready(_, let data) = loaded, let url = FileBridge.saveURL(suggestedName: item.name) else { return }
-        try? data.write(to: url)
+        do {
+            try data.write(to: url)
+            saveError = nil
+        } catch {
+            saveError = UserFacingError.message(for: error)
+        }
     }
 
     /// Reads the picture of the current index. A new picture starts at fit.
     private func load() async {
         loaded = .loading
         zoom = ImageViewerZoom()
+        saveError = nil
         do {
             let data = try await ImageViewerLoader.data(for: item.source)
             guard !Task.isCancelled else { return }
@@ -334,10 +371,13 @@ struct ImageViewer: View {
     }
 
     /// ⌘ with the wheel zooms around the centre. A local monitor, because SwiftUI has no scroll-wheel modifier on macOS.
+    /// Only the events of the viewer's own window count; the monitor is removed when the viewer closes.
     private func installScrollMonitor() {
-        guard scrollMonitor == nil else { return }
+        guard scrollMonitor == nil, let host = hostWindow else { return }
         scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
-            guard event.modifierFlags.contains(.command), event.scrollingDeltaY != 0 else { return event }
+            guard event.window === host, event.modifierFlags.contains(.command), event.scrollingDeltaY != 0 else {
+                return event
+            }
             zoomBy(ImageViewerZoom.scrollFactor(deltaY: event.scrollingDeltaY))
             return nil
         }
@@ -346,5 +386,6 @@ struct ImageViewer: View {
     private func removeScrollMonitor() {
         if let scrollMonitor { NSEvent.removeMonitor(scrollMonitor) }
         scrollMonitor = nil
+        hostWindow = nil
     }
 }

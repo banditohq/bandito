@@ -603,7 +603,7 @@ struct Composer: View {
         guard pictures.contains(where: { $0.id == file.id }) else { return }
         let items = pictures.map { ImageViewerItem(name: $0.name, source: $0.source, openInFiles: nil) }
         let index = pictures.firstIndex { $0.id == file.id } ?? 0
-        router.imageViewer = ImageViewerRequest(items: items, index: index)
+        router.imageViewer = ImageViewerRequest(items: items, index: index, returnFocusAgentID: agent?.id)
     }
 
     /// A file that is not a picture: its icon, name and size, or what is wrong with it.

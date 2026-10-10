@@ -90,9 +90,26 @@ struct ImageViewerZoom: Equatable {
         }
     }
 
-    /// Moves the picture to `offset`. Ignored in fit mode, where the picture is centred.
-    mutating func pan(to offset: CGSize) {
+    /// The offset kept inside the pan limits for a picture of `image` size at the manual scale in a window of
+    /// `container` size. An axis where the picture fits the window stays centred. On an axis where it overflows, the
+    /// picture's edge may come as far as the centre of the window, and no further.
+    static func clampedOffset(_ offset: CGSize, image: CGSize, scale: CGFloat, container: CGSize) -> CGSize {
+        let width = image.width * scale
+        let height = image.height * scale
+        let x = width > container.width ? min(max(offset.width, -width / 2), width / 2) : 0
+        let y = height > container.height ? min(max(offset.height, -height / 2), height / 2) : 0
+        return CGSize(width: x, height: y)
+    }
+
+    /// Moves the picture to `offset`, within the pan limits. Ignored in fit mode, where the picture is centred.
+    mutating func pan(to offset: CGSize, image: CGSize, container: CGSize) {
         guard mode == .manual else { return }
-        self.offset = offset
+        self.offset = Self.clampedOffset(offset, image: image, scale: scale, container: container)
+    }
+
+    /// Brings the offset back within the pan limits, after a zoom changed the picture's size. Ignored in fit mode.
+    mutating func settle(image: CGSize, container: CGSize) {
+        guard mode == .manual else { return }
+        offset = Self.clampedOffset(offset, image: image, scale: scale, container: container)
     }
 }
