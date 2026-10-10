@@ -179,6 +179,12 @@
   "memory.dailyDesc": "Una página limpia cada mañana. Ideal para asistentes con tareas diarias.",
   "memory.full": "Un solo capítulo largo",
   "memory.fullDesc": "El agente comprime los mensajes antiguos por sí mismo. Útil para una tarea grande, pero cuesta más.",
+  "memory.chapterLength": "Longitud del capítulo",
+  "memory.chapterLengthDefault": "predeterminado",
+  "memory.chapterLengthCustom": "Personalizado…",
+  "memory.chapterLengthModelMax": "El modelo admite hasta {max}",
+  "memory.chapterLengthInvalid": "De 20K a 1M",
+  "memory.chapterLengthHint": "Cuanto más largo el capítulo, más recuerda el agente sin releer su memoria, pero más cuesta cada respuesta.",
   "memory.searched": "Buscó en la conversación",
   "memory.searchResult": {
     "one": "“{query}” · {count} coincidencia, {time}",

@@ -179,6 +179,12 @@
   "memory.dailyDesc": "Jeden Morgen eine leere Seite. Gut für Assistenten mit täglichen Aufgaben.",
   "memory.full": "Ein langes Kapitel",
   "memory.fullDesc": "Der Agent komprimiert alte Nachrichten selbst. Praktisch für eine große Aufgabe, aber teurer.",
+  "memory.chapterLength": "Kapitellänge",
+  "memory.chapterLengthDefault": "Standard",
+  "memory.chapterLengthCustom": "Eigene…",
+  "memory.chapterLengthModelMax": "Modell fasst bis zu {max}",
+  "memory.chapterLengthInvalid": "Von 20K bis 1M",
+  "memory.chapterLengthHint": "Je länger ein Kapitel, desto mehr erinnert sich der Agent ohne erneutes Lesen seines Gedächtnisses, aber desto teurer wird jede Antwort.",
   "memory.searched": "Gespräch durchsucht",
   "memory.searchResult": {
     "other": "„{query}“ · {count} Treffer, {time}"

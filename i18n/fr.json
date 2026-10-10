@@ -179,6 +179,12 @@
   "memory.dailyDesc": "Une page blanche chaque matin. Idéal pour les assistants avec des tâches quotidiennes.",
   "memory.full": "Un seul long chapitre",
   "memory.fullDesc": "L'agent compresse lui-même les anciens messages. Pratique pour une grosse tâche, mais plus coûteux.",
+  "memory.chapterLength": "Longueur du chapitre",
+  "memory.chapterLengthDefault": "par défaut",
+  "memory.chapterLengthCustom": "Personnalisé…",
+  "memory.chapterLengthModelMax": "Le modèle tient jusqu’à {max}",
+  "memory.chapterLengthInvalid": "De 20K à 1M",
+  "memory.chapterLengthHint": "Plus le chapitre est long, plus l’agent se souvient sans relire sa mémoire, mais plus chaque réponse coûte cher.",
   "memory.searched": "Recherche dans la conversation",
   "memory.searchResult": {
     "one": "« {query} » · {count} résultat, {time}",

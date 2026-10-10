@@ -98,6 +98,37 @@ public enum ContextUsage {
     }
 }
 
+/// The chapter length (context budget) a person can pick, in tokens.
+public enum ChapterLength {
+    /// The sizes offered in the menu. The default (`ContextUsage.defaultBudget`) is one of them.
+    public static let presets = [60_000, 120_000, 200_000, 500_000, 1_000_000]
+    /// The smallest and the largest budget the daemon accepts (`check_context_budget`).
+    public static let allowedRange = 20_000...1_000_000
+
+    /// `60K`, `120K`, `250K`, `1M`; a value with a tenth gets a decimal comma: `1,5M`.
+    public static func label(_ tokens: Int) -> String {
+        if tokens >= 1_000_000 {
+            return unit(tokens, scale: 1_000_000) + "M"
+        }
+        return unit(tokens, scale: 1_000) + "K"
+    }
+
+    /// True when the daemon accepts the budget and the model can hold it. An unknown window (`nil`) only
+    /// leaves the daemon's range to check.
+    public static func isAllowed(_ tokens: Int, window: Int?) -> Bool {
+        guard allowedRange.contains(tokens) else { return false }
+        guard let window else { return true }
+        return tokens <= window
+    }
+
+    /// The whole part and, when there is one, the first decimal of `tokens / scale`, truncated.
+    private static func unit(_ tokens: Int, scale: Int) -> String {
+        let whole = tokens / scale
+        let tenth = (tokens % scale) * 10 / scale
+        return tenth == 0 ? "\(whole)" : "\(whole),\(tenth)"
+    }
+}
+
 // MARK: - Effort
 
 public enum EffortLevels {

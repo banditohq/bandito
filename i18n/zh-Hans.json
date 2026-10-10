@@ -175,6 +175,12 @@
   "memory.dailyDesc": "每天早上都是空白页。适合有日常任务的助手。",
   "memory.full": "一个长章节",
   "memory.fullDesc": "代理会自行压缩旧消息。适合一个大任务，但成本更高。",
+  "memory.chapterLength": "章节长度",
+  "memory.chapterLengthDefault": "默认",
+  "memory.chapterLengthCustom": "自定义…",
+  "memory.chapterLengthModelMax": "模型最多支持 {max}",
+  "memory.chapterLengthInvalid": "20K 到 1M 之间",
+  "memory.chapterLengthHint": "章节越长，代理无需重读记忆就能记住越多，但每次回复的费用也越高。",
   "memory.searched": "搜索了对话",
   "memory.searchResult": {
     "other": "“{query}” · {count} 处匹配，{time}"

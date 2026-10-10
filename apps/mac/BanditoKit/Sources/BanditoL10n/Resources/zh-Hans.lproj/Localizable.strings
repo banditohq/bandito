@@ -791,6 +791,12 @@
 "keys.workbenchSplit" = "拆分或合并面板";
 "keys.workbenchTab" = "面板标签页 %1$@";
 "keys.workbenchToggle" = "显示或隐藏面板";
+"memory.chapterLength" = "章节长度";
+"memory.chapterLengthCustom" = "自定义…";
+"memory.chapterLengthDefault" = "默认";
+"memory.chapterLengthHint" = "章节越长，代理无需重读记忆就能记住越多，但每次回复的费用也越高。";
+"memory.chapterLengthInvalid" = "20K 到 1M 之间";
+"memory.chapterLengthModelMax" = "模型最多支持 %1$@";
 "memory.daily" = "每天";
 "memory.dailyDesc" = "每天早上都是空白页。适合有日常任务的助手。";
 "memory.files" = "文件";

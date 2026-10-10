@@ -55,6 +55,14 @@ import Testing
         #expect(model.efforts.isEmpty)
     }
 
+    @Test func contextWindowIsReadWhenTheDaemonKnowsIt() throws {
+        let lists = try decodeLists(
+            #"[{"runtime":"claude","models":[{"id":"opus","context_window":200000},{"id":"haiku"}],"fetched_at":1}]"#)
+        let models = try #require(lists.first?.models)
+        #expect(models[0].contextWindow == 200_000)
+        #expect(models[1].contextWindow == nil)
+    }
+
     @Test func nearestKeepsALevelTheModelOffers() {
         #expect(Effort.medium.nearest(in: [.low, .medium, .high]) == .medium)
     }
