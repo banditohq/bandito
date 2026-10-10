@@ -83,10 +83,24 @@ struct SilenceWatch {
     }
 }
 
-/// Esc belongs to the dictation while it records: it stops the dictation and the app's Esc commands (deny an approval)
-/// leave it alone. Pure.
+/// Esc belongs to the dictation while it records and the composer's field has the focus: it stops the dictation, and the
+/// app's Esc command (deny an approval) steps aside. Pure.
 enum DictationEscape {
-    static func takesEscape(_ phase: DictationPhase) -> Bool {
-        phase == .recording
+    static func takesEscape(_ phase: DictationPhase, fieldFocused: Bool) -> Bool {
+        phase == .recording && fieldFocused
+    }
+}
+
+/// The field of the composer is read-only while a dictation runs (from the start until the last words are in), so
+/// typing and paste cannot be eaten by the dictated text. Pure.
+enum DictationFreeze {
+    static func isFrozen(_ phase: DictationPhase) -> Bool {
+        phase != .idle
+    }
+
+    /// The text the field must show: the dictated text when the person changed it during a dictation, else nil.
+    static func restored(current: String, dictated: String?, phase: DictationPhase) -> String? {
+        guard isFrozen(phase), let dictated, current != dictated else { return nil }
+        return dictated
     }
 }

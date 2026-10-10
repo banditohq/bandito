@@ -12,6 +12,8 @@ final class DictationController {
     private(set) var phase: DictationPhase = .idle
     /// Why the last dictation did not run; the composer shows it above the field until the next start.
     private(set) var failure: DictationFailure?
+    /// The draft as the dictation last wrote it. The composer shows this text, not an edit, while the dictation runs.
+    private(set) var dictatedText: String?
 
     @ObservationIgnored private let engine = DictationEngine()
     @ObservationIgnored private var span: DictationSpan?
@@ -33,6 +35,7 @@ final class DictationController {
         self.text = text
         self.placeCaret = placeCaret
         span = DictationInsertion.start(in: text.wrappedValue, caret: caret)
+        dictatedText = text.wrappedValue
         Task { await begin() }
     }
 
@@ -90,6 +93,7 @@ final class DictationController {
     private func received(_ partial: String) {
         guard let current = span, let text else { return }
         let result = DictationInsertion.update(text.wrappedValue, span: current, partial: partial)
+        dictatedText = result.draft
         if result.draft != text.wrappedValue { text.wrappedValue = result.draft }
         span = result.span
         placeCaret?(result.span.end)
@@ -124,6 +128,7 @@ final class DictationController {
         watchdog = nil
         silence = nil
         span = nil
+        dictatedText = nil
         text = nil
         placeCaret = nil
     }

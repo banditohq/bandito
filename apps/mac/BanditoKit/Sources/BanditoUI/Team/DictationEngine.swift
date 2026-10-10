@@ -38,6 +38,8 @@ final class DictationEngine {
         request.requiresOnDeviceRecognition = true
         request.shouldReportPartialResults = true
         let input = audio.inputNode
+        // A tap left from an earlier run would make installTap raise; remove it before installing ours.
+        input.removeTap(onBus: 0)
         input.installTap(onBus: 0, bufferSize: 1024, format: input.outputFormat(forBus: 0)) { buffer, _ in
             request.append(buffer)
         }
@@ -45,7 +47,7 @@ final class DictationEngine {
             audio.prepare()
             try audio.start()
         } catch {
-            input.removeTap(onBus: 0)
+            tearDown()
             return .engine
         }
         self.request = request
@@ -74,7 +76,10 @@ final class DictationEngine {
         request?.endAudio()
     }
 
+    /// Every path ends here, so the tap is always removed: removing one that is not there does nothing, and a dictation
+    /// that fails and is started again finds the bus free.
     private func tearDown() {
+        audio.inputNode.removeTap(onBus: 0)
         if audio.isRunning { audio.stop() }
         task = nil
         request = nil

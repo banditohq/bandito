@@ -137,6 +137,18 @@ import Testing
         #expect(DictationState.next(.requesting, .failed(.denied(.speech))) == .idle)
     }
 
+    @Test func aFailedDictationCanBeStartedAgain() {
+        // An engine error while recording ends idle; the next press starts a fresh dictation without residue.
+        var phase = DictationState.next(.idle, .start)
+        phase = DictationState.next(phase, .granted)
+        phase = DictationState.next(phase, .failed(.engine))
+        #expect(phase == .idle)
+        phase = DictationState.next(phase, .start)
+        #expect(phase == .requesting)
+        phase = DictationState.next(phase, .granted)
+        #expect(phase == .recording)
+    }
+
     @Test func offlineModelMissingEndsIdle() {
         #expect(DictationState.next(.requesting, .failed(.onDeviceUnavailable(language: "Russian"))) == .idle)
     }
@@ -176,11 +188,28 @@ import Testing
         #expect(watch.isSilent(at: start.addingTimeInterval(8)))
     }
 
-    @Test func escBelongsToTheDictationOnlyWhileItRecords() {
-        #expect(DictationEscape.takesEscape(.recording))
-        #expect(!DictationEscape.takesEscape(.idle))
-        #expect(!DictationEscape.takesEscape(.requesting))
-        #expect(!DictationEscape.takesEscape(.stopping))
+    @Test func escBelongsToTheDictationOnlyWhileItRecordsInTheField() {
+        #expect(DictationEscape.takesEscape(.recording, fieldFocused: true))
+        #expect(!DictationEscape.takesEscape(.recording, fieldFocused: false))
+        #expect(!DictationEscape.takesEscape(.idle, fieldFocused: true))
+        #expect(!DictationEscape.takesEscape(.requesting, fieldFocused: true))
+        #expect(!DictationEscape.takesEscape(.stopping, fieldFocused: true))
+    }
+
+    @Test func theFieldIsFrozenFromTheStartUntilTheLastWordsAreIn() {
+        #expect(!DictationFreeze.isFrozen(.idle))
+        #expect(DictationFreeze.isFrozen(.requesting))
+        #expect(DictationFreeze.isFrozen(.recording))
+        #expect(DictationFreeze.isFrozen(.stopping))
+    }
+
+    @Test func aTypedEditDuringADictationIsTakenBack() {
+        #expect(DictationFreeze.restored(current: "hi therex", dictated: "hi there", phase: .recording) == "hi there")
+        // What the dictation wrote itself is not an edit.
+        #expect(DictationFreeze.restored(current: "hi there", dictated: "hi there", phase: .recording) == nil)
+        // Nothing is taken back once the dictation is over, or when nothing was dictated.
+        #expect(DictationFreeze.restored(current: "typed", dictated: "hi", phase: .idle) == nil)
+        #expect(DictationFreeze.restored(current: "typed", dictated: nil, phase: .recording) == nil)
     }
 }
 

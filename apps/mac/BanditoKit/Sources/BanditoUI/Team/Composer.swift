@@ -173,6 +173,8 @@ struct Composer: View {
                         .lineLimit(1...8)
                         .focused($focused)
                         .padding(.vertical, 8)
+                        // Read-only while a dictation runs: no clicks move the caret or the selection.
+                        .allowsHitTesting(!DictationFreeze.isFrozen(dictation.phase))
                         .onKeyPress(keys: [.upArrow, .downArrow, .tab, .escape]) { press in
                             handleMenuKey(press.key)
                         }
@@ -188,6 +190,8 @@ struct Composer: View {
                             return .handled
                         }
                         .onKeyPress(keys: [.return]) { press in
+                            // Frozen while a dictation runs: Return neither sends nor breaks the line.
+                            if DictationFreeze.isFrozen(dictation.phase) { return .handled }
                             // Shift or Option with Return: a line break at the caret. Plain Return sends.
                             let newLine = ComposerReturn.action(
                                 shift: press.modifiers.contains(.shift), option: press.modifiers.contains(.option))
@@ -246,10 +250,8 @@ struct Composer: View {
             dictation.cancel()
             router.dictationRecording = false
         }
-        .onChange(of: dictation.phase) { _, phase in
-            let recording = DictationEscape.takesEscape(phase)
-            if router.dictationRecording != recording { router.dictationRecording = recording }
-        }
+        .onChange(of: dictation.phase) { _, _ in syncEscape() }
+        .onChange(of: focused) { _, _ in syncEscape() }
         .onChange(of: router.dictationRequest) { _, _ in toggleDictation() }
         .tourAnchor(.composer)
         .onChange(of: router.composerFocusAgentID, initial: true) { _, _ in
@@ -287,6 +289,11 @@ struct Composer: View {
             }
         }
         .onChange(of: draft) { old, new in
+            // A typed change during a dictation is taken back: the dictated text is what the field shows.
+            if let restored = DictationFreeze.restored(current: new, dictated: dictation.dictatedText, phase: dictation.phase) {
+                draft = restored
+                return
+            }
             slash.suppressed = false
             slash.notice = nil
             slash.index = 0
@@ -526,8 +533,16 @@ struct Composer: View {
     /// Starts the dictation into this field at the caret, or stops it. ⌥⌘D and the button both come here.
     private func toggleDictation() {
         guard agent != nil else { return }
-        dictation.toggle(text: $draft, caret: FieldCaret.location, placeCaret: FieldCaret.place)
+        // The caret is taken only from the field itself; with the focus elsewhere the text goes to the end.
+        let caret = focused ? FieldCaret.location : nil
+        dictation.toggle(text: $draft, caret: caret, placeCaret: FieldCaret.place)
         focused = true
+    }
+
+    /// The app's Esc command steps aside only while the dictation records in this field (see `DictationEscape`).
+    private func syncEscape() {
+        let takes = DictationEscape.takesEscape(dictation.phase, fieldFocused: focused)
+        if router.dictationRecording != takes { router.dictationRecording = takes }
     }
 
     /// Why the dictation did not run. A refused permission links to its page in System Settings.
@@ -572,11 +587,14 @@ struct Composer: View {
     // MARK: Keys and menu actions
 
     private func handleMenuKey(_ key: KeyEquivalent) -> KeyPress.Result {
-        // Esc while the dictation records ends it, before any menu or the reply (the menu's deny item steps aside).
-        if DictationEscape.takesEscape(dictation.phase), key == .escape {
+        // Esc while the dictation records and the field has the focus ends it, before any menu or the reply (the menu's
+        // deny item steps aside, see `syncEscape`).
+        if DictationEscape.takesEscape(dictation.phase, fieldFocused: focused), key == .escape {
             dictation.stop()
             return .handled
         }
+        // Frozen field: the arrows and Tab move nothing.
+        if DictationFreeze.isFrozen(dictation.phase), key != .escape { return .handled }
         // Esc with no menu open takes the reply away.
         if query == nil, key == .escape, reply != nil, mentionRows(mentionSections).isEmpty {
             onCancelReply()
@@ -779,6 +797,7 @@ struct Composer: View {
 
     /// Backspace with the caret at the end of the text, right after a chip: the whole chip goes.
     private func handleBackspace(_ press: KeyPress) -> KeyPress.Result {
+        if DictationFreeze.isFrozen(dictation.phase) { return .handled }
         guard press.modifiers.isEmpty, !draftMentions.isEmpty, FieldCaret.isAtEnd,
             let result = MentionDraft.removeTrailingChip(draft: draft, list: draftMentions)
         else { return .ignored }
