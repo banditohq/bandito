@@ -8,6 +8,7 @@ Public repo (FSL-1.1-ALv2). Everything here is visible to the world: no secrets,
 - `apps/mac/` — SwiftUI app; code in `apps/mac/BanditoKit` (SwiftPM). Rules: `apps/mac/CLAUDE.md`.
 - `docs/ARCHITECTURE.md` — design source of truth (protocol, store, features). Change it in the same PR as the code.
 - `docs/DESIGN_LANGUAGE.md` — how the app looks and moves: tokens, components, motion, the quality bar.
+- Before any UI work read `docs/DESIGN_LANGUAGE.md`; when a design change is approved, update it and the Design System artifact in the same change.
 - `docs/APP_SPEC.md`, `docs/MAC_APP_UX.md` — what the app does and how it feels.
 - `docs/qa/RUNBOOK.md` — isolated QA copies (QA daemon + QA app). Never QA against the installed Bandito.
 - `i18n/*.json` — every UI string, 9 languages; `python3 i18n/build.py` generates the Swift side.
