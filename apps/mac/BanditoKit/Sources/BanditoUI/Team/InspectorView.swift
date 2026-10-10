@@ -100,8 +100,9 @@ private struct IdentityCard: View {
         HStack(spacing: 14) {
             avatarButton
             VStack(alignment: .leading, spacing: 3) {
+                // Edited in place: plain text that becomes a field on click, not a boxed form input.
                 TextField(L10n.AgentSheet.name, text: $name)
-                    .banditoField()
+                    .textFieldStyle(.plain)
                     .font(BanditoFont.display(size: 17.5, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1)
@@ -113,7 +114,7 @@ private struct IdentityCard: View {
                         .font(.system(size: 10.5, weight: .medium))
                         .foregroundStyle(Color.Bandito.text3)
                     TextField(L10n.Inspector.addRole, text: $role)
-                        .banditoField()
+                        .textFieldStyle(.plain)
                         .font(BanditoFont.text(size: 12.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .lineLimit(1)
