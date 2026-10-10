@@ -1218,18 +1218,64 @@ public enum L10n {
         public static var view: String { L10n.tr("market.view") }
         public static var website: String { L10n.tr("market.website") }
 
+        public enum Bot {
+            public static var createTitle: String { L10n.tr("market.bot.createTitle") }
+            public static var creating: String { L10n.tr("market.bot.creating") }
+            public static func missingOptional(names: String) -> String { L10n.tr("market.bot.missingOptional", names) }
+            public static func missingRequired(names: String) -> String { L10n.tr("market.bot.missingRequired", names) }
+            public static var nameTooLong: String { L10n.tr("market.bot.nameTooLong") }
+            public static var noRuntime: String { L10n.tr("market.bot.noRuntime") }
+            public static var noSchedule: String { L10n.tr("market.bot.noSchedule") }
+            public static func noticeTitle(name: String) -> String { L10n.tr("market.bot.noticeTitle", name) }
+            public static var optional: String { L10n.tr("market.bot.optional") }
+            public static var required: String { L10n.tr("market.bot.required") }
+            public static var serviceOff: String { L10n.tr("market.bot.serviceOff") }
+            public static var starterNote: String { L10n.tr("market.bot.starterNote") }
+
+            public enum Error {
+                public static func schedule(number: String, message: String) -> String { L10n.tr("market.bot.error.schedule", number, message) }
+                public static func skill(id: String, message: String) -> String { L10n.tr("market.bot.error.skill", id, message) }
+                public static var unreadable: String { L10n.tr("market.bot.error.unreadable") }
+            }
+
+            public enum Section {
+                public static var schedule: String { L10n.tr("market.bot.section.schedule") }
+                public static var services: String { L10n.tr("market.bot.section.services") }
+                public static var skills: String { L10n.tr("market.bot.section.skills") }
+            }
+
+            public enum When {
+                public static func daily(time: String) -> String { L10n.tr("market.bot.when.daily", time) }
+                public static func days(days: String, time: String) -> String { L10n.tr("market.bot.when.days", days, time) }
+                public static func weekdays(time: String) -> String { L10n.tr("market.bot.when.weekdays", time) }
+            }
+        }
+
+        public enum Bots {
+            public static var catalog: String { L10n.tr("market.bots.catalog") }
+            public static var create: String { L10n.tr("market.bots.create") }
+            public static var empty: String { L10n.tr("market.bots.empty") }
+            public static var subtitle: String { L10n.tr("market.bots.subtitle") }
+        }
+
         public enum Category {
+            public static var business: String { L10n.tr("market.category.business") }
             public static var data: String { L10n.tr("market.category.data") }
             public static var design: String { L10n.tr("market.category.design") }
             public static var dev: String { L10n.tr("market.category.dev") }
+            public static var ops: String { L10n.tr("market.category.ops") }
             public static var other: String { L10n.tr("market.category.other") }
+            public static var personal: String { L10n.tr("market.category.personal") }
             public static var productivity: String { L10n.tr("market.category.productivity") }
+            public static var research: String { L10n.tr("market.category.research") }
             public static var web: String { L10n.tr("market.category.web") }
+            public static var writing: String { L10n.tr("market.category.writing") }
         }
 
         public enum Filter {
             public static var all: String { L10n.tr("market.filter.all") }
             public static var connected: String { L10n.tr("market.filter.connected") }
+            public static var installed: String { L10n.tr("market.filter.installed") }
         }
 
         public enum Section {
@@ -1242,12 +1288,60 @@ public enum L10n {
             public static var tools: String { L10n.tr("market.section.tools") }
         }
 
+        public enum Skill {
+            public static func by(publisher: String) -> String { L10n.tr("market.skill.by", publisher) }
+            public static var claudeOnly: String { L10n.tr("market.skill.claudeOnly") }
+            public static func conflictAgent(agent: String) -> String { L10n.tr("market.skill.conflictAgent", agent) }
+            public static var conflictEveryone: String { L10n.tr("market.skill.conflictEveryone") }
+            public static var everyone: String { L10n.tr("market.skill.everyone") }
+            public static var everyoneHint: String { L10n.tr("market.skill.everyoneHint") }
+            public static var install: String { L10n.tr("market.skill.install") }
+            public static func installTitle(name: String) -> String { L10n.tr("market.skill.installTitle", name) }
+            public static var installed: String { L10n.tr("market.skill.installed") }
+            public static var installing: String { L10n.tr("market.skill.installing") }
+            public static var nameTaken: String { L10n.tr("market.skill.nameTaken") }
+            public static var noAgents: String { L10n.tr("market.skill.noAgents") }
+            public static func onAgents(count: Int) -> String { L10n.tr("market.skill.onAgents", count) }
+            public static var oneAgent: String { L10n.tr("market.skill.oneAgent") }
+            public static var oneAgentHint: String { L10n.tr("market.skill.oneAgentHint") }
+            public static var pickAgent: String { L10n.tr("market.skill.pickAgent") }
+            public static var remove: String { L10n.tr("market.skill.remove") }
+            public static func removeMessageAgent(agent: String) -> String { L10n.tr("market.skill.removeMessageAgent", agent) }
+            public static var removeMessageEveryone: String { L10n.tr("market.skill.removeMessageEveryone") }
+            public static func removeTitle(name: String) -> String { L10n.tr("market.skill.removeTitle", name) }
+
+            public enum Error {
+                public static var notInstalled: String { L10n.tr("market.skill.error.notInstalled") }
+                public static var notOurs: String { L10n.tr("market.skill.error.notOurs") }
+                public static var unsafePath: String { L10n.tr("market.skill.error.unsafePath") }
+            }
+
+            public enum Section {
+                public static var files: String { L10n.tr("market.skill.section.files") }
+                public static var places: String { L10n.tr("market.skill.section.places") }
+                public static var source: String { L10n.tr("market.skill.section.source") }
+            }
+        }
+
+        public enum Skills {
+            public static var catalog: String { L10n.tr("market.skills.catalog") }
+            public static var empty: String { L10n.tr("market.skills.empty") }
+            public static var noneInstalled: String { L10n.tr("market.skills.noneInstalled") }
+            public static var subtitle: String { L10n.tr("market.skills.subtitle") }
+        }
+
         public enum Step {
             public static var connect: String { L10n.tr("market.step.connect") }
             public static var fillAddress: String { L10n.tr("market.step.fillAddress") }
             public static var fillPath: String { L10n.tr("market.step.fillPath") }
             public static var getKey: String { L10n.tr("market.step.getKey") }
             public static var signIn: String { L10n.tr("market.step.signIn") }
+        }
+
+        public enum Tab {
+            public static var bots: String { L10n.tr("market.tab.bots") }
+            public static var services: String { L10n.tr("market.tab.services") }
+            public static var skills: String { L10n.tr("market.tab.skills") }
         }
     }
 
