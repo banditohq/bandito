@@ -2469,7 +2469,7 @@ mod tests {
                 role: "builder".into(),
                 runtime: RuntimeKind::Claude,
                 model: Some("opus".into()),
-                cwd: "/home/u/app".into(),
+                cwd: "/bandito-probe/u/app".into(),
                 approval_mode: mode,
                 system_prompt: Some("Keep PRs small.".into()),
                 effort: None,
@@ -2587,7 +2587,7 @@ mod tests {
             let spawns = w.spawns.lock().unwrap();
             assert_eq!(spawns.len(), 1);
             assert_eq!(spawns[0].model.as_deref(), Some("opus"));
-            assert_eq!(spawns[0].cwd, PathBuf::from("/home/u/app"));
+            assert_eq!(spawns[0].cwd, PathBuf::from("/bandito-probe/u/app"));
             let sp = spawns[0].system_prompt.as_deref().unwrap();
             assert!(sp.contains("You are Forge, the builder"));
             assert!(sp.ends_with("Keep PRs small."));
@@ -2928,7 +2928,7 @@ mod tests {
         // `cd ~` is routine and allowed; the shell is then in home.
         w.push(approval("k1", "cd ~")).await;
         w.wait_log("resolve k1 Allow").await;
-        // The relative path is in home's `.ssh` only because of that cd: the agent's folder is /home/u/app.
+        // The relative path is in home's `.ssh` only because of that cd: the agent's folder is /bandito-probe/u/app.
         w.push(approval("k2", "cat .ssh/id_rsa")).await;
         let e = w.wait(|b| matches!(b, EventBody::ApprovalRequested { .. })).await;
         let EventBody::ApprovalRequested { reason, .. } = e.body else {
@@ -3648,7 +3648,7 @@ mod tests {
     }
 
     const DAY_MS: i64 = 24 * 60 * 60 * 1000;
-    const HOME: &str = "/home/u/bandito/agents/forge";
+    const HOME: &str = "/bandito-probe/u/bandito/agents/forge";
 
     fn done_with_usage(input_tokens: u64, output_tokens: u64) -> RuntimeOutput {
         RuntimeOutput::Event(EventBody::TurnCompleted {
@@ -3701,7 +3701,10 @@ mod tests {
         let sp = cfg.system_prompt.as_deref().unwrap();
         let briefing = MEMORY_BRIEFING.replace("{home}", HOME);
         // The project folder is the first line of the briefing, and the briefing comes first of the blocks.
-        let project = format!("{}{PRIVATE_DRAFTS}", PROJECT_FOLDER.replace("{cwd}", "/home/u/app"));
+        let project = format!(
+            "{}{PRIVATE_DRAFTS}",
+            PROJECT_FOLDER.replace("{cwd}", "/bandito-probe/u/app")
+        );
         assert!(
             sp.starts_with(&format!("{project}\n\n{briefing}")),
             "project folder, then briefing: {sp}"
@@ -3732,7 +3735,7 @@ mod tests {
         assert_eq!(spawns[0].effort, None);
         // Without a memory folder there is no `files/` to speak of: the project line alone.
         let prompt = spawns[0].system_prompt.as_deref().unwrap();
-        assert!(prompt.starts_with("Your project folder is /home/u/app: create and change work files there unless the user names another place.\n\n"), "{prompt}");
+        assert!(prompt.starts_with("Your project folder is /bandito-probe/u/app: create and change work files there unless the user names another place.\n\n"), "{prompt}");
         assert!(!prompt.contains("private drafts"), "{prompt}");
     }
 
@@ -4578,7 +4581,7 @@ mod tests {
                 role: "builder".into(),
                 runtime: RuntimeKind::Claude,
                 model: None,
-                cwd: "/home/u/app".into(),
+                cwd: "/bandito-probe/u/app".into(),
                 approval_mode: ApprovalMode::Never,
                 system_prompt: None,
                 effort: None,
