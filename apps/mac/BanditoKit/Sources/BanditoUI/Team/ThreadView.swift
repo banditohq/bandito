@@ -224,7 +224,8 @@ struct ThreadView: View {
         }
     }
 
-    /// The round "down" button over the thread's bottom right: the number of messages that came in above, if any.
+    /// The round "down" button, centred over the bottom of the thread (clear of the bubbles on either side), with the
+    /// number of messages that came in meanwhile, if any.
     private func jumpButton(action: @escaping () -> Void) -> some View {
         Button(action: action) {
             ZStack(alignment: .topTrailing) {
@@ -249,8 +250,7 @@ struct ThreadView: View {
         }
         .banditoButton(.icon(size: 34, label: L10n.Thread.jumpToLatest))
         .help(L10n.Thread.jumpToLatest)
-        .padding(.trailing, 22)
-        .padding(.bottom, 12)
+        .padding(.bottom, 10)
     }
 
     /// Shows the thread where it was left: the row that was on top, or the newest message.
@@ -350,7 +350,7 @@ struct ThreadView: View {
                         }
                     }
                     .onChange(of: bottomRequest) { _, _ in goToBottom(proxy) }
-                    .overlay(alignment: .bottomTrailing) {
+                    .overlay(alignment: .bottom) {
                         jumpOverlay(proxy)
                     }
                     .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: jumpVisible)
