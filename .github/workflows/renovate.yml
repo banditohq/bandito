@@ -1,0 +1,35 @@
+name: renovate
+
+# Dependency updates as pull requests, opened by the project's own bot (Bandito Bot) through Renovate.
+on:
+  schedule:
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: renovate
+  cancel-in-progress: false
+
+jobs:
+  renovate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Token for Bandito Bot
+        id: bot
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.BANDITO_BOT_APP_ID }}
+          private-key: ${{ secrets.BANDITO_BOT_PRIVATE_KEY }}
+      - uses: actions/checkout@v5
+      - name: Renovate
+        uses: renovatebot/github-action@f3a31a786096ba6b40d0f0ffe11a494ef73bfa7c # v46.3.4
+        env:
+          RENOVATE_REPOSITORIES: ${{ github.repository }}
+          RENOVATE_GIT_AUTHOR: "Bandito Bot <5264251+bandito-bot[bot]@users.noreply.github.com>"
+        with:
+          token: ${{ steps.bot.outputs.token }}
+          configurationFile: renovate.json
