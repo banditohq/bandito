@@ -409,7 +409,7 @@ The methods that serve the catalog above and make a bot from one. Code: `daemon/
 
 **`agents.templates`** answers the catalog as written in `agent_templates.json`: an array of the 16 entries. The file is built into the binary.
 
-**`agents.create_from_template`** takes `template_id`, `name`, `runtime?` (default: the template's), `model?` (default: none), `language` (the owner's language tag, required), `schedules?` (indexes into the template's `schedules` that the owner kept; default none) and `workspace_id?`. It answers:
+**`agents.create_from_template`** takes `template_id`, `name`, `runtime?` (default: the template's), `model?` (default: none), `language` (the owner's language tag, required), `schedules?` (indexes into the template's `schedules`: absent means the ones with `enabled_by_default`; given, even empty, means exactly these) and `workspace_id?`. It answers:
 
 | field | value |
 |---|---|
@@ -419,13 +419,13 @@ The methods that serve the catalog above and make a bot from one. Code: `daemon/
 | `missing_integrations` | `[{id, required}]`: the integrations the template lists that no enabled integration matches (see below) |
 | `errors` | what did not work after the agent was created: `{step: "skill", id, message}`, `{step: "schedule", index, message}`, `{step: "agent" \| "integrations", message}` |
 
-Checks, all before anything is written (`INVALID_PARAMS`, nothing created): an unknown `template_id`; a `name` that is empty or not valid as an agent name (1–32 characters: letters, digits, spaces, `-`, `_`); an unknown `runtime`; an empty `language`; an index outside the template's schedules, or one listed twice.
+Checks, all before anything is written (`INVALID_PARAMS`, nothing created): an unknown `template_id`; a `name` that is empty or not valid as an agent name (1–32 characters: letters, digits, spaces, `-`, `_`); an unknown `runtime`; an empty `language`; an index outside the template's schedules, or one listed twice; a schedule whose cron the agent rules refuse (an invalid cron, or runs closer than 5 minutes).
 
 Then the agent is created by the code of `agents.create`: the same checks, the same folder, one `agent_changed(created)` event. Its `role` is `role_en`, its `system_prompt`, `effort` and `capabilities` are the template's, its avatar is derived from the name (templates have none), and its integrations are every enabled one (the template's list is not copied).
 
 Then, in this order:
 - **Skills.** Each id in `skills` is installed in the agent's folder, as `skills.install` does with scope `project`. A failure goes to `errors` and the rest still runs.
-- **Schedules.** Each kept schedule is created enabled, with the template's `cron`, in the server's time zone (as for the schedules an agent makes itself). Its prompt comes from `language`: `ru` takes `prompt_ru`, `en` takes `prompt_en`; any other tag takes `l10n[tag].schedule_prompts[index]`, and `prompt_en` when that is missing.
+- **Schedules.** Each kept schedule is created enabled, with the template's `cron`, in the server's time zone (as for the schedules an agent makes itself). Its prompt comes from `language`, matched without case (`pt-br` is `pt-BR`); a tag that matches nothing falls back to its primary subtag (`ru-RU` is `ru`), then to English. `ru` and `en` take `prompt_ru` and `prompt_en`; another language takes `l10n[tag].schedule_prompts[index]`, and `prompt_en` when that is missing.
 - **Missing integrations.** A template integration is present when an enabled integration has the same `name` as its id, or the same `url` as its catalog entry (a stdio entry has no url, so only the name matches it). A disabled integration does not count. The reply lists the others, with `required` as the template has it.
 
 Nothing is rolled back once the agent exists: a failed step is listed in `errors` and the agent stays. Only a failed agent folder undoes the agent, as in `agents.create`.

@@ -8,15 +8,15 @@ use std::collections::BTreeMap;
 /// The catalog as written, embedded in the binary. `agents.templates` serves it as it is.
 pub const CATALOG_JSON: &str = include_str!("agent_templates.json");
 
-/// Every template, parsed with the strict type. The test `the_catalog_has_the_sixteen_templates_and_parses_strictly`
-/// and the other catalog tests guarantee that this cannot fail at run time.
-pub fn catalog() -> Vec<AgentTemplate> {
-    serde_json::from_str(CATALOG_JSON).expect("agent_templates.json matches the strict AgentTemplate type")
+/// Every template, parsed with the strict type. A parse error is an error for the caller (a request answers it as a
+/// server error); the catalog tests keep the shipped file valid.
+pub fn catalog() -> Result<Vec<AgentTemplate>, serde_json::Error> {
+    serde_json::from_str(CATALOG_JSON)
 }
 
 /// The template with this id, if there is one.
-pub fn find(id: &str) -> Option<AgentTemplate> {
-    catalog().into_iter().find(|t| t.id == id)
+pub fn find(id: &str) -> Result<Option<AgentTemplate>, serde_json::Error> {
+    Ok(catalog()?.into_iter().find(|t| t.id == id))
 }
 
 /// One template as written in `agent_templates.json`. Unknown fields are an error, so a typo cannot pass silently.
@@ -124,6 +124,11 @@ mod tests {
 
     fn is_hex_color(s: &str) -> bool {
         s.len() == 7 && s.starts_with('#') && s[1..].chars().all(|c| c.is_ascii_hexdigit())
+    }
+
+    /// The shipped catalog, which the tests hold to the rules. Failing to parse it is a test failure.
+    fn catalog() -> Vec<AgentTemplate> {
+        super::catalog().expect("agent_templates.json matches the strict AgentTemplate type")
     }
 
     #[test]

@@ -26,9 +26,10 @@ struct CreateFromTemplate {
     #[serde(default)]
     model: Option<String>,
     language: String,
-    /// Indexes into the template's `schedules`: the ones the owner kept.
+    /// Indexes into the template's `schedules`. Absent: the ones with `enabled_by_default`. Present, even empty: exactly
+    /// these.
     #[serde(default)]
-    schedules: Vec<usize>,
+    schedules: Option<Vec<usize>>,
     #[serde(default)]
     workspace_id: Option<String>,
 }
@@ -45,6 +46,7 @@ pub(super) async fn dispatch(app: &App, method: &str, p: Value) -> RpcResult {
         "agents.create_from_template" => {
             let req: CreateFromTemplate = params(p)?;
             let template = agent_templates::find(&req.template_id)
+                .map_err(|e| RpcError::new(SERVER_ERROR, format!("agent templates: {e}")))?
                 .ok_or_else(|| RpcError::new(INVALID_PARAMS, format!("no template {}", req.template_id)))?;
             create_from(app, &template, req).await
         }
@@ -61,11 +63,25 @@ async fn create_from(app: &App, t: &AgentTemplate, req: CreateFromTemplate) -> R
     let runtime_name = req.runtime.as_deref().unwrap_or(&t.runtime);
     let runtime = RuntimeKind::parse(runtime_name)
         .ok_or_else(|| RpcError::new(INVALID_PARAMS, format!("unknown runtime {runtime_name}")))?;
-    let language = req.language.trim().to_string();
-    if language.is_empty() {
+    if req.language.trim().is_empty() {
         return Err(RpcError::new(INVALID_PARAMS, "language is empty"));
     }
-    check_schedule_indexes(t, &req.schedules)?;
+    let language = resolve_language(t, &req.language);
+    // Every schedule is checked before the agent exists: one bad schedule refuses the whole request.
+    let tz = schedule_text::local_zone();
+    let indexes = match &req.schedules {
+        Some(list) => list.clone(),
+        None => (0..t.schedules.len())
+            .filter(|&i| t.schedules[i].enabled_by_default)
+            .collect(),
+    };
+    check_schedule_indexes(t, &indexes)?;
+    let mut planned = Vec::with_capacity(indexes.len());
+    for &index in &indexes {
+        let s = &t.schedules[index];
+        schedules::check_agent_interval(&s.cron, &tz)?;
+        planned.push((index, schedule_prompt(t, index, s, &language)));
+    }
     let capabilities = t
         .capabilities
         .iter()
@@ -116,16 +132,14 @@ async fn create_from(app: &App, t: &AgentTemplate, req: CreateFromTemplate) -> R
         }
     }
 
-    // The schedules are the owner's own choice, so they start enabled. Their time zone is the server's, as for the
-    // schedules an agent makes itself.
+    // Enabled, in the server's time zone, as for the schedules an agent makes itself.
     let mut schedule_ids = Vec::new();
-    for &index in &req.schedules {
-        let s = &t.schedules[index];
+    for (index, prompt) in planned {
         let new = NewSchedule {
             agent_id: id.clone(),
-            cron: s.cron.clone(),
-            tz: schedule_text::local_zone(),
-            prompt: schedule_prompt(t, index, s, &language),
+            cron: t.schedules[index].cron.clone(),
+            tz: tz.clone(),
+            prompt,
             enabled: true,
             title: None,
         };
@@ -196,6 +210,22 @@ fn schedule_prompt(t: &AgentTemplate, index: usize, s: &TemplateSchedule, langua
     }
 }
 
+/// The language a request names, as the template's schedule prompts know it: `ru`, `en` or a key of `l10n`. Matching
+/// ignores case (`pt-br` is `pt-BR`). A tag that matches nothing falls back to its primary subtag (`ru-RU` is `ru`),
+/// then to `en`.
+fn resolve_language(t: &AgentTemplate, tag: &str) -> String {
+    let known = |code: &str| -> Option<String> {
+        if code == "ru" || code == "en" {
+            return Some(code.to_string());
+        }
+        t.l10n.keys().find(|k| k.to_lowercase() == code).cloned()
+    };
+    let lower = tag.trim().to_lowercase();
+    known(&lower)
+        .or_else(|| known(lower.split(['-', '_']).next().unwrap_or("")))
+        .unwrap_or_else(|| "en".to_string())
+}
+
 fn store_effort(e: TemplateEffort) -> Effort {
     match e {
         TemplateEffort::Medium => Effort::Medium,
@@ -233,8 +263,28 @@ mod tests {
         dispatch(app, &Peer::Local, method, p).await
     }
 
+    fn template(id: &str) -> AgentTemplate {
+        agent_templates::find(id).unwrap().expect("a shipped template")
+    }
+
     fn request(template: &str, name: &str, language: &str, schedules: Value) -> Value {
         json!({ "template_id": template, "name": name, "language": language, "schedules": schedules })
+    }
+
+    /// The `agents.create_from_template` request without the `schedules` key at all.
+    fn request_without_schedules(template: &str, name: &str, language: &str) -> Value {
+        json!({ "template_id": template, "name": name, "language": language })
+    }
+
+    /// The prompts of the schedules the reply's agent holds, in creation order.
+    fn scheduled_prompts(store: &Store, reply: &Value) -> Vec<String> {
+        let id = reply["agent"]["id"].as_str().unwrap();
+        store
+            .schedule_list(Some(id))
+            .unwrap()
+            .into_iter()
+            .map(|s| s.prompt)
+            .collect()
     }
 
     fn connect(store: &Store, value: Value) -> Integration {
@@ -257,7 +307,7 @@ mod tests {
     async fn create_from_template_makes_the_agent_the_template_describes() {
         let dir = tempfile::tempdir().unwrap();
         let (app, store) = app(dir.path());
-        let t = agent_templates::find("code-reviewer").unwrap();
+        let t = template("code-reviewer");
         let reply = call(
             &app,
             "agents.create_from_template",
@@ -288,7 +338,7 @@ mod tests {
     async fn schedules_follow_the_language_ru_de_and_unknown_falls_back_to_english() {
         let dir = tempfile::tempdir().unwrap();
         let (app, store) = app(dir.path());
-        let t = agent_templates::find("morning-digest").unwrap();
+        let t = template("morning-digest");
         let cases = [
             ("ru", t.schedules[0].prompt_ru.clone()),
             ("de", t.l10n["de"].schedule_prompts[0].clone()),
@@ -313,7 +363,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let (app, store) = app(dir.path());
         // The shipped templates list no skills yet, so the test gives one in code.
-        let mut t = agent_templates::find("code-reviewer").unwrap();
+        let mut t = template("code-reviewer");
         t.skills = vec!["systematic-debugging".into(), "no-such-skill".into()];
         let req: CreateFromTemplate =
             serde_json::from_value(request("code-reviewer", "Skilled", "en", json!([]))).unwrap();
@@ -423,6 +473,126 @@ mod tests {
             assert_eq!(err.code, INVALID_PARAMS, "{why}");
         }
         assert!(store.agent_list().unwrap().is_empty(), "nothing was created");
+    }
+
+    #[test]
+    fn resolve_language_matches_case_then_primary_subtag_then_english() {
+        let t = template("morning-digest");
+        for (tag, want) in [
+            ("zh-hans", "zh-Hans"),
+            ("pt-br", "pt-BR"),
+            ("ja-JP", "ja"),
+            ("en-GB", "en"),
+            ("RU", "ru"),
+            ("xx", "en"),
+            ("", "en"),
+        ] {
+            assert_eq!(resolve_language(&t, tag), want, "{tag}");
+        }
+    }
+
+    #[tokio::test]
+    async fn language_tags_pick_the_prompt_they_name() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, store) = app(dir.path());
+        let t = template("morning-digest");
+        let cases = [
+            ("ru-RU", t.schedules[0].prompt_ru.clone()),
+            ("RU", t.schedules[0].prompt_ru.clone()),
+            ("pt-br", t.l10n["pt-BR"].schedule_prompts[0].clone()),
+            ("de-DE", t.l10n["de"].schedule_prompts[0].clone()),
+            ("xx", t.schedules[0].prompt_en.clone()),
+        ];
+        for (i, (language, expected)) in cases.into_iter().enumerate() {
+            let name = format!("Lang {i}");
+            let reply = call(
+                &app,
+                "agents.create_from_template",
+                request("morning-digest", &name, language, json!([0])),
+            )
+            .await
+            .unwrap();
+            assert_eq!(scheduled_prompts(&store, &reply), vec![expected], "{language}");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_bad_schedule_refuses_the_request_before_the_agent_exists() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, store) = app(dir.path());
+        let mut t = template("code-reviewer");
+        let mut every_minute = t.schedules[0].clone();
+        every_minute.cron = "* * * * *".into();
+        let mut broken = t.schedules[0].clone();
+        broken.cron = "61 * * * *".into();
+        t.schedules.push(every_minute); // index 1: runs closer than the 5-minute gap
+        t.schedules.push(broken); // index 2: not a cron
+        for indexes in [json!([1]), json!([0, 1]), json!([2])] {
+            let req: CreateFromTemplate =
+                serde_json::from_value(request("code-reviewer", "Checked", "en", indexes.clone())).unwrap();
+            let err = create_from(&app, &t, req).await.unwrap_err();
+            assert_eq!(err.code, INVALID_PARAMS, "{indexes}");
+        }
+        assert!(store.agent_list().unwrap().is_empty(), "no agent was created");
+    }
+
+    #[tokio::test]
+    async fn schedules_default_to_the_enabled_ones_and_a_given_list_is_exact() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, store) = app(dir.path());
+        // The shipped catalog: morning-digest's schedule is on by default, code-reviewer's is not.
+        let digest = call(
+            &app,
+            "agents.create_from_template",
+            request_without_schedules("morning-digest", "Default digest", "en"),
+        )
+        .await
+        .unwrap();
+        assert_eq!(scheduled_prompts(&store, &digest).len(), 1);
+        let review = call(
+            &app,
+            "agents.create_from_template",
+            request_without_schedules("code-reviewer", "Default review", "en"),
+        )
+        .await
+        .unwrap();
+        assert!(scheduled_prompts(&store, &review).is_empty());
+        let empty = call(
+            &app,
+            "agents.create_from_template",
+            request("morning-digest", "Empty digest", "en", json!([])),
+        )
+        .await
+        .unwrap();
+        assert!(scheduled_prompts(&store, &empty).is_empty(), "an empty list means none");
+
+        // A template in code with one schedule off (index 0) and one on (index 1).
+        let mut t = template("code-reviewer");
+        let mut off = t.schedules[0].clone();
+        off.enabled_by_default = false;
+        off.cron = "0 10 * * *".into();
+        off.prompt_en = "Off by default".into();
+        let mut on = t.schedules[0].clone();
+        on.enabled_by_default = true;
+        on.prompt_en = "On by default".into();
+        t.schedules = vec![off, on];
+        let cases = [
+            (
+                request_without_schedules("code-reviewer", "Pick on", "en"),
+                vec!["On by default"],
+            ),
+            (
+                request("code-reviewer", "Pick off", "en", json!([0])),
+                vec!["Off by default"],
+            ),
+        ];
+        for (i, (p, want)) in cases.into_iter().enumerate() {
+            let mut p = p;
+            p["name"] = json!(format!("Pick {i}"));
+            let req: CreateFromTemplate = serde_json::from_value(p).unwrap();
+            let reply = create_from(&app, &t, req).await.unwrap();
+            assert_eq!(scheduled_prompts(&store, &reply), want);
+        }
     }
 
     #[tokio::test]
