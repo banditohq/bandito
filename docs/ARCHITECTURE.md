@@ -192,6 +192,14 @@ A pending approval blocks only that agent. Approvals time out after 24 h → den
 
 Migrations: numbered SQL files embedded in the binary, applied by `PRAGMA user_version`.
 
+## Backups
+
+- Where: `<home>/backups/`, folder mode 0700, files 0600. Copies are `bandito-<UTC time>-<reason>.db`, made with `VACUUM INTO` over a read-only connection, so rows still in the WAL are included. Code: `daemon/src/backup.rs`.
+- When: at each daemon start before the store opens, if there is no copy, the newest is older than 20 h, or the version in `backups/last-version` differs (reason `start`, or `upgrade` when the version changed). While the daemon runs, once an hour it checks and makes a `daily` copy if the newest is older than 24 h. Before `bandito backup restore`, a `before-restore` copy of the current database.
+- How many: the 14 newest `bandito-*.db` copies are kept (pruned after each new copy). Other files in the folder are not touched.
+- A failed copy is logged as a warning and does not stop the daemon.
+- List: `bandito backup list` (name and size, newest first). Restore: stop the daemon first (the command refuses while `bandito.sock` answers), then `bandito backup restore <name>`. The current database is copied to `before-restore` first; the old `-wal`/`-shm` files are removed and the copy replaces `bandito.db`.
+
 ## RPC
 
 JSON-RPC 2.0. Same methods on every transport.
@@ -825,6 +833,7 @@ daemon/            Rust crate `bandito`
   src/service.rs   user service: systemd unit, launchd plist, background fallback
   src/rpc/         JSON-RPC, transports, auth, pairing
   src/store/       SQLite + migrations
+  src/backup.rs    database copies: at start, daily, before restore (see Backups)
   src/runtime/     process.rs (shared child-process plumbing), claude.rs, codex.rs, grok.rs, api/
   src/policy.rs    approval rules: protected paths, risky checks (see Approvals)
   src/shell.rs     reads a command line for the policy: simple commands, wrappers, redirections

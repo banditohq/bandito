@@ -52,6 +52,11 @@ enum Cmd {
         #[command(subcommand)]
         cmd: ServiceCmd,
     },
+    /// List the database copies, or restore one (see docs/ARCHITECTURE.md#backups).
+    Backup {
+        #[command(subcommand)]
+        cmd: BackupCmd,
+    },
     /// Crew MCP server of an agent (started by the daemon; speaks MCP on stdio). The agent comes
     /// from its session token: read from `--token-file`, else from `BANDITO_AGENT_TOKEN`. `--agent`
     /// is accepted for older configs and changes nothing.
@@ -83,6 +88,17 @@ enum Cmd {
         /// Allow installing a release older than the running one.
         #[arg(long)]
         allow_downgrade: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum BackupCmd {
+    /// List the copies in `<home>/backups`, newest first.
+    List,
+    /// Replace the database with a copy. The daemon must be stopped; the current database is copied first.
+    Restore {
+        /// A file name from `bandito backup list`.
+        name: String,
     },
 }
 
@@ -181,6 +197,7 @@ async fn run_command(cmd: Cmd, home: PathBuf, home_given: bool) -> Result<()> {
         Cmd::Pair { json } => pair(&sock, json).await,
         Cmd::Info { json } => info(&home, &sock, json).await,
         Cmd::Service { cmd } => service_cmd(cmd, &home).await,
+        Cmd::Backup { cmd } => backup_cmd(cmd, &home),
         Cmd::Mcp {
             token_file,
             capabilities,
@@ -377,6 +394,39 @@ async fn service_cmd(cmd: ServiceCmd, home: &Path) -> Result<()> {
     }
 }
 
+/// `bandito backup list` and `bandito backup restore <name>`.
+fn backup_cmd(cmd: BackupCmd, home: &Path) -> Result<()> {
+    match cmd {
+        BackupCmd::List => {
+            let rows = bandito::backup::list(home)?;
+            if rows.is_empty() {
+                println!("No backups in {}", bandito::backup::backups_dir(home).display());
+            }
+            for (name, size) in rows {
+                println!("{name:<48} {}", human_size(size));
+            }
+            Ok(())
+        }
+        BackupCmd::Restore { name } => {
+            // A running daemon holds the database open and would write over the restored file.
+            if std::os::unix::net::UnixStream::connect(home.join("bandito.sock")).is_ok() {
+                bail!("Stop the daemon first: bandito service stop");
+            }
+            bandito::backup::restore(home, &name, bandito::store::now_ms())?;
+            println!("Restored {name}. The database before the restore is in the backups list (before-restore).");
+            Ok(())
+        }
+    }
+}
+
+fn human_size(bytes: u64) -> String {
+    if bytes >= 1024 * 1024 {
+        format!("{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
+    } else {
+        format!("{:.0} KB", bytes as f64 / 1024.0)
+    }
+}
+
 async fn status(sock: &Path) -> Result<()> {
     let info = rpc::unix::call(sock, "daemon.info", json!({})).await?;
     let s = |k: &str| info[k].as_str().unwrap_or("?").to_string();
@@ -403,6 +453,12 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr, home_given: bool) 
     // Before anything starts: sessions recovered below are children too.
     rpc::unix::become_subreaper();
     bandito::update::set_data_home(home);
+    // Before the store opens: migrations change the file, so the copy must come first. A failed copy does not stop the start.
+    match bandito::backup::on_start(home, rpc::VERSION, bandito::store::now_ms()) {
+        Ok(Some(path)) => tracing::info!(path = %path.display(), "database copied before start"),
+        Ok(None) => {}
+        Err(e) => tracing::warn!("database backup before start failed: {e:#}"),
+    }
     let store = Arc::new(Store::open(&home.join("bandito.db"))?);
     let agents_root = home::default_agents_root(home, home_given);
     let created = home::backfill(&store, &agents_root);
@@ -505,6 +561,28 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr, home_given: bool) 
                 let sampler = sampler.clone();
                 if let Err(e) = tokio::task::spawn_blocking(move || sampler.sample_now()).await {
                     tracing::warn!("host sample failed: {e}");
+                }
+            }
+        });
+    }
+
+    {
+        // A database copy once a day while the daemon runs (see docs/ARCHITECTURE.md#backups).
+        let home = home.to_path_buf();
+        tokio::spawn(async move {
+            let mut tick = tokio::time::interval(Duration::from_secs(3600));
+            loop {
+                tick.tick().await;
+                let home = home.clone();
+                let due = tokio::task::spawn_blocking(move || {
+                    bandito::backup::snapshot_if_due(&home, bandito::store::now_ms())
+                })
+                .await;
+                match due {
+                    Ok(Ok(Some(path))) => tracing::info!(path = %path.display(), "daily database copy made"),
+                    Ok(Ok(None)) => {}
+                    Ok(Err(e)) => tracing::warn!("daily database backup failed: {e:#}"),
+                    Err(e) => tracing::warn!("daily database backup task failed: {e}"),
                 }
             }
         });
