@@ -176,7 +176,8 @@ private struct BrowserToolbar: View {
                 .foregroundStyle(Color.Bandito.ok)
             TextField(L10n.Browser.addressPlaceholder, text: $model.addressText)
                 .textFieldStyle(.plain)
-                .font(.system(size: 13, design: .monospaced))
+                // Regular text, as in Safari: a monospaced placeholder looked spaced out.
+                .font(BanditoFont.font(size: 13, weight: 400))
                 .foregroundStyle(Color.Bandito.text)
                 .accessibilityLabel(L10n.Browser.address)
                 .focused($addressFocused)

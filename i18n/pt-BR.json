@@ -1,5 +1,4 @@
 {
-  "thread.chapterSaved": "Capítulo {chapter} · memória salva",
   "thread.savingMemory": "Salvando memória antes de um novo capítulo",
   "thread.aTeammate": "um colega",
   "onboarding.server.newHostTitle": "Servidor novo — confirme",
@@ -580,5 +579,14 @@
   "server.localUpgrade.updateNow": "Atualizar agora",
   "server.localUpgrade.confirmTitle": "Os agentes serão interrompidos. Atualizar?",
   "server.localUpgrade.confirm": "Atualizar",
-  "server.localUpgrade.notConnected": "O servidor deste Mac não está conectado"
+  "server.localUpgrade.notConnected": "O servidor deste Mac não está conectado",
+  "thread.chapterNotSaved": "Capítulo {chapter} · memória não salva",
+  "thread.chapterNotSavedHelp": "O agente não conseguiu salvar a memória antes deste capítulo. Fatos do capítulo anterior podem estar faltando.",
+  "keys.presetMenu": "Conjunto: {name}",
+  "keys.moreActions": "Mais ações",
+  "settings.notifications.openSystem": "Abrir Ajustes do Sistema",
+  "settings.approvals.then": "O que fazer",
+  "server.features.notInstalled": "Não instalado",
+  "server.features.installed": "Instalado",
+  "server.features.loginHelp": "Entre no servidor: {command}"
 }

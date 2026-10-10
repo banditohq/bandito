@@ -49,8 +49,15 @@ public struct ServerConfig: Codable, Sendable, Hashable, Identifiable, CustomStr
         isThisMac = try container.decodeIfPresent(Bool.self, forKey: .isThisMac) ?? false
     }
 
+    /// For logs and debugging: the name and the kind of connection only. The id, the address and the token
+    /// stay out, so a printed config cannot leak them.
     public var description: String {
-        "ServerConfig(id: \(id), name: \(name), endpoint: \(endpoint), token: \(token == nil ? "nil" : "<redacted>"))"
+        let kind = switch endpoint {
+        case .local: "local"
+        case .webSocket: "WebSocket"
+        case .ssh: "ssh"
+        }
+        return "ServerConfig(name: \(name), connection: \(kind))"
     }
 }
 

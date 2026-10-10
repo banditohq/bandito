@@ -588,6 +588,7 @@
 "keys.goTo" = "Перейти: %1$@";
 "keys.importButton" = "Импорт";
 "keys.importFailed" = "Этот файл не похож на набор клавиш Bandito.";
+"keys.moreActions" = "Ещё действия";
 "keys.needsYou" = "К тому, кто ждёт вас";
 "keys.newAgent" = "Новый агент";
 "keys.newFile" = "Новый файл";
@@ -606,6 +607,7 @@
 "keys.preset.iterm" = "Как в iTerm";
 "keys.preset.slack" = "Как в Slack";
 "keys.preset.vscode" = "Как в VS Code";
+"keys.presetMenu" = "Набор: %1$@";
 "keys.previousAgent" = "Предыдущий агент";
 "keys.previousTab" = "Предыдущая вкладка";
 "keys.quickLook" = "Быстрый просмотр";
@@ -1141,6 +1143,9 @@
 "server.detail.peak" = "Максимум";
 "server.detail.topProcesses" = "Больше всего ресурсов";
 "server.detail.upload" = "Отправка";
+"server.features.installed" = "Установлен";
+"server.features.loginHelp" = "Войдите на сервере: %1$@";
+"server.features.notInstalled" = "Не установлен";
 "server.features.title" = "Возможности";
 "server.health.bothFull" = "Диск и память почти заполнены";
 "server.health.diskFull" = "Диск почти полон";
@@ -1260,7 +1265,7 @@
 "settings.approvals.newRule" = "Новое правило";
 "settings.approvals.outsideProject" = "запись вне папки проекта";
 "settings.approvals.patternPlaceholder" = "например, terraform plan*";
-"settings.approvals.then" = "То";
+"settings.approvals.then" = "Что делать";
 "settings.approvals.touchID" = "Опасное — через Touch ID";
 "settings.approvals.touchIDHint" = "Пуш в main, деплой и удаление подтверждаются отпечатком на Mac или Face ID на iPhone.";
 "settings.approvals.when" = "Когда агент хочет выполнить";
@@ -1308,6 +1313,7 @@
 "settings.notifications.intro" = "Bandito сообщает, когда агенту нужны вы. Выберите, о чём стоит уведомлять.";
 "settings.notifications.needsYou" = "Ждёт вас";
 "settings.notifications.needsYouHint" = "Согласование или вопрос.";
+"settings.notifications.openSystem" = "Открыть Системные настройки";
 "settings.notifications.statusAllowed" = "Разрешено";
 "settings.notifications.statusAsk" = "Ещё не спрашивали";
 "settings.notifications.statusDenied" = "Выключено в Системных настройках";
@@ -1498,7 +1504,8 @@
 "terminals.updateServer" = "Обновите сервер, чтобы пользоваться терминалами.";
 "thread.aTeammate" = "коллеги";
 "thread.attach" = "Прикрепить файлы";
-"thread.chapterSaved" = "Глава %1$@ · память сохранена";
+"thread.chapterNotSaved" = "Глава %1$@ · память не сохранена";
+"thread.chapterNotSavedHelp" = "Агент не смог сохранить память перед этой главой. Факты из прошлой главы могут отсутствовать.";
 "thread.copy" = "Копировать";
 "thread.copyMarkdown" = "Копировать как Markdown";
 "thread.dictate" = "Диктовка";

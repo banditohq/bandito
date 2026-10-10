@@ -75,14 +75,18 @@ public enum HostFormat {
         return (scaled, names[index])
     }
 
-    /// Used and total space of a disk in one unit, such as ("692", "994 ГБ"): the number of the used part is
-    /// scaled to the unit of the total, so the two read as one sentence.
-    public static func diskUsage(
-        used: Int64, total: Int64, locale: Locale = .current, units: Units = .app
-    ) -> (used: String, total: String) {
-        let (totalValue, unit) = scale(Double(total), units)
-        let factor = total > 0 ? totalValue / Double(total) : 0
-        return (number(Double(used) * factor, locale: locale), "\(number(totalValue, locale: locale)) \(unit)")
+    /// Disk space the way Finder writes it: decimal units (1 GB = 1000 MB), from ByteCountFormatter like file
+    /// sizes. Every disk figure in the app goes through here, so the same space reads the same everywhere.
+    public static func diskBytes(_ count: Int64) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        formatter.allowsNonnumericFormatting = false
+        return formatter.string(fromByteCount: count)
+    }
+
+    /// Used and total space of a disk, such as ("692 ГБ", "994 ГБ"), both in decimal units (see `diskBytes`).
+    public static func diskUsage(used: Int64, total: Int64) -> (used: String, total: String) {
+        (diskBytes(used), diskBytes(total))
     }
 
     static func number(_ value: Double, locale: Locale) -> String {

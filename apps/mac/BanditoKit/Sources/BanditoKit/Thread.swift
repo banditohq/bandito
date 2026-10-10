@@ -13,11 +13,15 @@ public enum ThreadItem: Sendable, Hashable, Identifiable {
     case note(id: String, text: String, kind: NoteKind, ts: Int64)
     /// The agent moved between runtimes. The app words it (it knows the agent's primary runtime).
     case runtimeSwitch(id: String, from: String, to: String, until: Int64?, ts: Int64)
+    /// A new memory chapter began. `saved` is false when its memory could not be saved before it closed.
+    /// The number comes from the event, not from any text.
+    case chapter(id: String, number: Int, saved: Bool, ts: Int64)
 
     public var id: String {
         switch self {
         case .user(let id, _, _, _, _), .assistant(let id, _, _), .note(let id, _, _, _): return id
         case .runtimeSwitch(let id, _, _, _, _): return id
+        case .chapter(let id, _, _, _): return id
         case .streaming: return "streaming"
         case .tool(let t): return "tool-\(t.callId)"
         case .approval(let a): return "approval-\(a.approvalId)"
@@ -64,8 +68,18 @@ public struct AgentThread: Sendable, Hashable {
     /// Last persisted event applied (deltas don't count).
     public var lastSeq: Int64 = 0
     public var turnRunning = false
+    /// Between the hidden memory-save turn and the chapter rotation that ends it.
+    private var memorySaveRunning = false
+    /// The memory-save turn ended with an error, so the chapter closes with its memory unsaved.
+    private var memorySaveFailed = false
 
     public init() {}
+
+    /// The daemon closes a chapter with "… memory not saved" when it could not run the memory-save turn at all
+    /// (see `unsaved` in daemon/src/supervisor.rs).
+    static func closedUnsaved(reason: String) -> Bool {
+        reason.hasSuffix("memory not saved")
+    }
 
     public var pendingApprovals: [ApprovalRow] {
         items.compactMap {
@@ -124,6 +138,8 @@ public struct AgentThread: Sendable, Hashable {
             case .system:
                 // Hidden wrap-up turn before a new chapter: no bubble, just a quiet line.
                 finalizeStreaming(e)
+                memorySaveRunning = true
+                memorySaveFailed = false
                 items.append(.note(id: e.id, text: L10n.Thread.savingMemory, kind: .info, ts: e.ts))
             }
         case .messageDelta(let text):
@@ -172,6 +188,11 @@ public struct AgentThread: Sendable, Hashable {
             }
         case .turnCompleted(_, let status, _, _):
             turnRunning = false
+            if memorySaveRunning {
+                memorySaveRunning = false
+                // An interrupted wrap-up did not save the memory either.
+                memorySaveFailed = status != .ok
+            }
             // A turn that ended without a final message leaves no half-streamed text behind.
             if case .streaming(let t)? = items.last {
                 items[items.count - 1] = .assistant(id: e.id + "-s", text: t, ts: e.ts)
@@ -184,8 +205,11 @@ public struct AgentThread: Sendable, Hashable {
             statusDetail = detail
         case .error(let message):
             items.append(.note(id: e.id, text: message, kind: .error, ts: e.ts))
-        case .sessionRotated(let chapter, _, _):
-            items.append(.note(id: e.id, text: L10n.Thread.chapterSaved(chapter: "\(chapter)"), kind: .info, ts: e.ts))
+        case .sessionRotated(let chapter, let reason, _):
+            let unsaved = memorySaveFailed || Self.closedUnsaved(reason: reason)
+            memorySaveRunning = false
+            memorySaveFailed = false
+            items.append(.chapter(id: e.id, number: chapter, saved: !unsaved, ts: e.ts))
         case .runtimeSwitched(let from, let to, let until):
             items.append(.runtimeSwitch(id: e.id, from: from, to: to, until: until, ts: e.ts))
         case .usageLimits, .unknown:

@@ -215,6 +215,8 @@
 "journal.sourceFile" = "Archivo de registro en el servidor";
 "journal.sourceJournald" = "Diario del sistema del servidor";
 "keys.closeTab" = "Cerrar pestaña";
+"keys.moreActions" = "Más acciones";
+"keys.presetMenu" = "Conjunto: %1$@";
 "memory.daily" = "Cada día";
 "memory.dailyDesc" = "Una página limpia cada mañana. Ideal para asistentes con tareas diarias.";
 "memory.files" = "Archivos";
@@ -418,6 +420,9 @@
 "server.detail.peak" = "Máximo";
 "server.detail.topProcesses" = "Procesos principales";
 "server.detail.upload" = "Envío";
+"server.features.installed" = "Instalado";
+"server.features.loginHelp" = "Inicia sesión en el servidor: %1$@";
+"server.features.notInstalled" = "No instalado";
 "server.localUpgrade.confirm" = "Actualizar";
 "server.localUpgrade.confirmTitle" = "Los agentes se interrumpirán. ¿Actualizar?";
 "server.localUpgrade.failed" = "No se pudo actualizar el servidor de este Mac: %1$@";
@@ -435,6 +440,7 @@
 "server.tile.diskUsed" = "%1$@ usados de %2$@";
 "server.tile.freeWord" = "libres";
 "settings.approvals" = "Aprobaciones";
+"settings.approvals.then" = "Qué hacer";
 "settings.approvalsIntro" = "Bandito revisa cada acción del agente. El trabajo rutinario avanza solo, mientras que lo que coincida con una regla de abajo o con una comprobación integrada espera tu decisión.";
 "settings.close" = "Cerrar ajustes";
 "settings.general" = "General";
@@ -446,6 +452,7 @@
 "settings.nav.account" = "Cuenta";
 "settings.nav.appearance" = "Apariencia";
 "settings.notifications" = "Notificaciones";
+"settings.notifications.openSystem" = "Abrir Ajustes del Sistema";
 "settings.sectionsAria" = "Secciones de ajustes";
 "settings.servers" = "Servidores";
 "settings.theme" = "Tema";
@@ -508,7 +515,8 @@
 "template.scratch.title" = "Desde cero";
 "thread.aTeammate" = "un compañero";
 "thread.attach" = "Adjuntar archivos";
-"thread.chapterSaved" = "Capítulo %1$@ · memoria guardada";
+"thread.chapterNotSaved" = "Capítulo %1$@ · memoria no guardada";
+"thread.chapterNotSavedHelp" = "El agente no pudo guardar su memoria antes de este capítulo. Pueden faltar datos del capítulo anterior.";
 "thread.copy" = "Copiar";
 "thread.copyMarkdown" = "Copiar como Markdown";
 "thread.dictate" = "Dictar";

@@ -141,7 +141,7 @@ struct ServerOverview: View {
     private var tiles: some View {
         let stats = monitor.stats
         let points = monitor.history
-        let root = stats?.disks.first { $0.mount == "/" } ?? stats?.disks.first
+        let root = stats?.primaryDisk
         let rx = stats?.netRxBps ?? 0
         let tx = stats?.netTxBps ?? 0
         let diskTotal = root?.total ?? 0
@@ -172,7 +172,7 @@ struct ServerOverview: View {
                 let usage = HostFormat.diskUsage(used: diskUsed, total: diskTotal)
                 MetricTile(
                     label: L10n.Server.Tile.disk,
-                    value: HostFormat.bytes(max(0, diskTotal - diskUsed)),
+                    value: HostFormat.diskBytes(max(0, diskTotal - diskUsed)),
                     note: "",
                     series: [],
                     tint: Color.Bandito.text,

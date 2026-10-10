@@ -102,6 +102,6 @@ import Testing
         #expect(!json.contains("very-secret"))
         #expect(!json.contains("token"))
         #expect(!config.description.contains("very-secret"))
-        #expect(config.description.contains("<redacted>"))
+        #expect(config.description == "ServerConfig(name: vps, connection: local)")
     }
 }

@@ -588,6 +588,7 @@
 "keys.goTo" = "Go to %1$@";
 "keys.importButton" = "Import";
 "keys.importFailed" = "This file is not a keymap Bandito can read.";
+"keys.moreActions" = "More actions";
 "keys.needsYou" = "Go to who needs you";
 "keys.newAgent" = "New agent";
 "keys.newFile" = "New file";
@@ -606,6 +607,7 @@
 "keys.preset.iterm" = "Like iTerm";
 "keys.preset.slack" = "Like Slack";
 "keys.preset.vscode" = "Like VS Code";
+"keys.presetMenu" = "Set: %1$@";
 "keys.previousAgent" = "Previous agent";
 "keys.previousTab" = "Previous tab";
 "keys.quickLook" = "Quick look";
@@ -1141,6 +1143,9 @@
 "server.detail.peak" = "Peak";
 "server.detail.topProcesses" = "Top processes";
 "server.detail.upload" = "Upload";
+"server.features.installed" = "Installed";
+"server.features.loginHelp" = "Sign in on the server: %1$@";
+"server.features.notInstalled" = "Not installed";
 "server.features.title" = "Capabilities";
 "server.health.bothFull" = "Disk and memory almost full";
 "server.health.diskFull" = "Disk almost full";
@@ -1260,7 +1265,7 @@
 "settings.approvals.newRule" = "New rule";
 "settings.approvals.outsideProject" = "writes outside the project folder";
 "settings.approvals.patternPlaceholder" = "for example, terraform plan*";
-"settings.approvals.then" = "Then";
+"settings.approvals.then" = "What to do";
 "settings.approvals.touchID" = "Dangerous steps need Touch ID";
 "settings.approvals.touchIDHint" = "Pushing to main, deploys and deletions wait for a fingerprint on the Mac or Face ID on the iPhone.";
 "settings.approvals.when" = "When the agent wants to run";
@@ -1308,6 +1313,7 @@
 "settings.notifications.intro" = "Bandito tells you when an agent needs you. Choose what is worth a notification.";
 "settings.notifications.needsYou" = "Waiting for you";
 "settings.notifications.needsYouHint" = "An approval or a question.";
+"settings.notifications.openSystem" = "Open System Settings";
 "settings.notifications.statusAllowed" = "Allowed";
 "settings.notifications.statusAsk" = "Not asked yet";
 "settings.notifications.statusDenied" = "Off in System Settings";
@@ -1498,7 +1504,8 @@
 "terminals.updateServer" = "Update the server to use terminals.";
 "thread.aTeammate" = "a teammate";
 "thread.attach" = "Attach files";
-"thread.chapterSaved" = "Chapter %1$@ · memory saved";
+"thread.chapterNotSaved" = "Chapter %1$@ · memory not saved";
+"thread.chapterNotSavedHelp" = "The agent could not save its memory before this chapter. Facts from the previous chapter may be missing.";
 "thread.copy" = "Copy";
 "thread.copyMarkdown" = "Copy as Markdown";
 "thread.dictate" = "Dictate";

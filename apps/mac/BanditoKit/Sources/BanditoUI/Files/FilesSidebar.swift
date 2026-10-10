@@ -219,7 +219,7 @@ private struct FilesSidebarContent: View {
             projectsRoot = ProjectsRoot.pick(projects)
         }
         if server.supports("host"), let stats = try? await server.hostStats() {
-            disk = stats.disks.first
+            disk = stats.primaryDisk
         }
     }
 }
@@ -301,7 +301,7 @@ private struct DiskBlock: View {
                     .font(.system(size: 12))
                     .foregroundStyle(Color.Bandito.text2)
                 Spacer()
-                Text(L10n.Files.Disk.free(size: ByteCountFormatter.string(fromByteCount: free, countStyle: .file)))
+                Text(L10n.Files.Disk.free(size: HostFormat.diskBytes(free)))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1)

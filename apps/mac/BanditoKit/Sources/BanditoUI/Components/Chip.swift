@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Color role of a chip.
 public enum ChipTone: CaseIterable, Sendable {
-    case neutral, signal, ok, info, danger
+    case neutral, signal, ok, info, danger, warning
 }
 
 /// Small rounded label, e.g. an agent role or a status word. Always pair the color with the text.
@@ -36,13 +36,14 @@ extension ChipTone {
         case .ok: Color.Bandito.ok
         case .info: Color.Bandito.info
         case .danger: Color.Bandito.danger
+        case .warning: BanditoPalette.peach
         }
     }
 
     var background: Color {
         switch self {
         case .neutral: Color.Bandito.text.opacity(0.07)
-        case .signal, .ok, .info, .danger: foreground.opacity(0.12)
+        case .signal, .ok, .info, .danger, .warning: foreground.opacity(0.12)
         }
     }
 }

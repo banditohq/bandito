@@ -33,6 +33,14 @@ public struct HostStats: Codable, Sendable, Hashable {
     public var uptimeS: Int64
 }
 
+extension HostStats {
+    /// The disk the app shows as the server's disk: `/`, or the first entry when `/` is not listed. The overview,
+    /// the disk detail and the Files sidebar all read this one, so they show the same free space.
+    public var primaryDisk: HostDisk? {
+        disks.first { $0.mount == "/" } ?? disks.first
+    }
+}
+
 /// Range of `host.history`. The daemon keeps 24 hours of samples.
 public enum HostHistoryRange: String, Sendable, CaseIterable {
     case hour = "1h"

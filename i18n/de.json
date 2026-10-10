@@ -1,5 +1,4 @@
 {
-  "thread.chapterSaved": "Kapitel {chapter} · Gedächtnis gespeichert",
   "thread.savingMemory": "Speichert das Gedächtnis vor einem neuen Kapitel",
   "thread.aTeammate": "einem Teammitglied",
   "onboarding.server.newHostTitle": "Neuer Server — bitte bestätigen",
@@ -580,5 +579,14 @@
   "server.localUpgrade.updateNow": "Jetzt aktualisieren",
   "server.localUpgrade.confirmTitle": "Die Agenten werden unterbrochen. Aktualisieren?",
   "server.localUpgrade.confirm": "Aktualisieren",
-  "server.localUpgrade.notConnected": "Der Server auf diesem Mac ist nicht verbunden"
+  "server.localUpgrade.notConnected": "Der Server auf diesem Mac ist nicht verbunden",
+  "thread.chapterNotSaved": "Kapitel {chapter} · Gedächtnis nicht gespeichert",
+  "thread.chapterNotSavedHelp": "Der Agent konnte sein Gedächtnis vor diesem Kapitel nicht speichern. Fakten aus dem vorherigen Kapitel können fehlen.",
+  "keys.presetMenu": "Satz: {name}",
+  "keys.moreActions": "Weitere Aktionen",
+  "settings.notifications.openSystem": "Systemeinstellungen öffnen",
+  "settings.approvals.then": "Was tun",
+  "server.features.notInstalled": "Nicht installiert",
+  "server.features.installed": "Installiert",
+  "server.features.loginHelp": "Auf dem Server anmelden: {command}"
 }

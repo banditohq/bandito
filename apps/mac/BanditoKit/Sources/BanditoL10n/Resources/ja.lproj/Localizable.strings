@@ -215,6 +215,8 @@
 "journal.sourceFile" = "サーバー上のログファイル";
 "journal.sourceJournald" = "サーバーのシステムジャーナル";
 "keys.closeTab" = "タブを閉じる";
+"keys.moreActions" = "その他の操作";
+"keys.presetMenu" = "セット：%1$@";
 "memory.daily" = "毎日";
 "memory.dailyDesc" = "毎朝まっさらな状態から始めます。毎日のタスクを持つアシスタント向けです。";
 "memory.files" = "ファイル";
@@ -418,6 +420,9 @@
 "server.detail.peak" = "最大";
 "server.detail.topProcesses" = "主なプロセス";
 "server.detail.upload" = "送信";
+"server.features.installed" = "インストール済み";
+"server.features.loginHelp" = "サーバーでサインイン：%1$@";
+"server.features.notInstalled" = "未インストール";
 "server.localUpgrade.confirm" = "更新";
 "server.localUpgrade.confirmTitle" = "エージェントが中断されます。更新しますか？";
 "server.localUpgrade.failed" = "このMacのサーバーを更新できませんでした: %1$@";
@@ -435,6 +440,7 @@
 "server.tile.diskUsed" = "%1$@ 使用中 / 全体 %2$@";
 "server.tile.freeWord" = "空き";
 "settings.approvals" = "承認";
+"settings.approvals.then" = "実行する操作";
 "settings.approvalsIntro" = "Bandito はエージェントのすべての操作を確認します。通常の作業は自動で進み、下のルールや組み込みチェックに当たるものはあなたの判断を待ちます。";
 "settings.close" = "設定を閉じる";
 "settings.general" = "一般";
@@ -446,6 +452,7 @@
 "settings.nav.account" = "アカウント";
 "settings.nav.appearance" = "外観";
 "settings.notifications" = "通知";
+"settings.notifications.openSystem" = "システム設定を開く";
 "settings.sectionsAria" = "設定のセクション";
 "settings.servers" = "サーバー";
 "settings.theme" = "テーマ";
@@ -508,7 +515,8 @@
 "template.scratch.title" = "ゼロから";
 "thread.aTeammate" = "チームメイト";
 "thread.attach" = "ファイルを添付";
-"thread.chapterSaved" = "第%1$@章 · メモリを保存しました";
+"thread.chapterNotSaved" = "章 %1$@ · メモリは保存されていません";
+"thread.chapterNotSavedHelp" = "エージェントはこの章の前にメモリを保存できませんでした。前の章の内容が欠けている可能性があります。";
 "thread.copy" = "コピー";
 "thread.copyMarkdown" = "Markdownとしてコピー";
 "thread.dictate" = "音声入力";

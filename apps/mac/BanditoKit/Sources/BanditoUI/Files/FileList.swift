@@ -71,9 +71,10 @@ struct FileRow: View {
                 .fixedSize()
                 .frame(minWidth: FileColumns.changedMinWidth, alignment: .leading)
             if showsSize {
-                Text(FileFormat.size(of: entry))
+                // Folders have no size: a dash in the quiet color, as Finder shows it.
+                Text(FileFormat.sizeCell(of: entry))
                     .font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(Color.Bandito.text2)
+                    .foregroundStyle(entry.kind == .dir ? Color.Bandito.text3 : Color.Bandito.text2)
                     .lineLimit(1)
                     .fixedSize()
                     .frame(minWidth: FileColumns.sizeMinWidth, alignment: .trailing)

@@ -215,6 +215,8 @@
 "journal.sourceFile" = "服务器上的日志文件";
 "journal.sourceJournald" = "服务器的系统日志";
 "keys.closeTab" = "关闭标签页";
+"keys.moreActions" = "更多操作";
+"keys.presetMenu" = "方案：%1$@";
 "memory.daily" = "每天";
 "memory.dailyDesc" = "每天早上都是空白页。适合有日常任务的助手。";
 "memory.files" = "文件";
@@ -418,6 +420,9 @@
 "server.detail.peak" = "最高";
 "server.detail.topProcesses" = "主要进程";
 "server.detail.upload" = "发送";
+"server.features.installed" = "已安装";
+"server.features.loginHelp" = "在服务器上登录：%1$@";
+"server.features.notInstalled" = "未安装";
 "server.localUpgrade.confirm" = "更新";
 "server.localUpgrade.confirmTitle" = "代理将被中断。要更新吗？";
 "server.localUpgrade.failed" = "无法更新此 Mac 上的服务器：%1$@";
@@ -435,6 +440,7 @@
 "server.tile.diskUsed" = "已用 %1$@ / 共 %2$@";
 "server.tile.freeWord" = "可用";
 "settings.approvals" = "审批";
+"settings.approvals.then" = "执行什么";
 "settings.approvalsIntro" = "Bandito 会检查代理的每一项操作。日常工作自动进行，而符合下方规则或内置检查的操作会等待你的决定。";
 "settings.close" = "关闭设置";
 "settings.general" = "通用";
@@ -446,6 +452,7 @@
 "settings.nav.account" = "账户";
 "settings.nav.appearance" = "外观";
 "settings.notifications" = "通知";
+"settings.notifications.openSystem" = "打开系统设置";
 "settings.sectionsAria" = "设置分区";
 "settings.servers" = "服务器";
 "settings.theme" = "主题";
@@ -508,7 +515,8 @@
 "template.scratch.title" = "从零开始";
 "thread.aTeammate" = "队友";
 "thread.attach" = "附加文件";
-"thread.chapterSaved" = "第 %1$@ 章 · 记忆已保存";
+"thread.chapterNotSaved" = "第 %1$@ 章 · 记忆未保存";
+"thread.chapterNotSavedHelp" = "智能体在本章之前未能保存记忆。上一章的内容可能缺失。";
 "thread.copy" = "复制";
 "thread.copyMarkdown" = "复制为 Markdown";
 "thread.dictate" = "听写";

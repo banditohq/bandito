@@ -179,14 +179,14 @@ struct MetricDetailView: View {
     /// The disk keeps no history yet: the card shows the fill as it is now.
     private var diskBody: some View {
         let stats = monitor.stats
-        let root = stats?.disks.first { $0.mount == "/" } ?? stats?.disks.first
+        let root = stats?.primaryDisk
         let total = root?.total ?? 0
         let used = root?.used ?? 0
         let fraction = total > 0 ? Double(used) / Double(total) : 0
         let usage = HostFormat.diskUsage(used: used, total: total)
         return VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(HostFormat.bytes(max(0, total - used)))
+                Text(HostFormat.diskBytes(max(0, total - used)))
                     .font(.system(size: 26, weight: .semibold))
                     .foregroundStyle(Color.Bandito.text)
                 Text(L10n.Server.Tile.freeWord)

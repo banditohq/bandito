@@ -867,6 +867,7 @@ public enum L10n {
         public static func goTo(mode: String) -> String { L10n.tr("keys.goTo", mode) }
         public static var importButton: String { L10n.tr("keys.importButton") }
         public static var importFailed: String { L10n.tr("keys.importFailed") }
+        public static var moreActions: String { L10n.tr("keys.moreActions") }
         public static var needsYou: String { L10n.tr("keys.needsYou") }
         public static var newAgent: String { L10n.tr("keys.newAgent") }
         public static var newFile: String { L10n.tr("keys.newFile") }
@@ -877,6 +878,7 @@ public enum L10n {
         public static var nextTab: String { L10n.tr("keys.nextTab") }
         public static var `open`: String { L10n.tr("keys.open") }
         public static var pauseAll: String { L10n.tr("keys.pauseAll") }
+        public static func presetMenu(name: String) -> String { L10n.tr("keys.presetMenu", name) }
         public static var previousAgent: String { L10n.tr("keys.previousAgent") }
         public static var previousTab: String { L10n.tr("keys.previousTab") }
         public static var quickLook: String { L10n.tr("keys.quickLook") }
@@ -1550,6 +1552,9 @@ public enum L10n {
         }
 
         public enum Features {
+            public static var installed: String { L10n.tr("server.features.installed") }
+            public static func loginHelp(command: String) -> String { L10n.tr("server.features.loginHelp", command) }
+            public static var notInstalled: String { L10n.tr("server.features.notInstalled") }
             public static var title: String { L10n.tr("server.features.title") }
         }
 
@@ -1792,6 +1797,7 @@ public enum L10n {
             public static var intro: String { L10n.tr("settings.notifications.intro") }
             public static var needsYou: String { L10n.tr("settings.notifications.needsYou") }
             public static var needsYouHint: String { L10n.tr("settings.notifications.needsYouHint") }
+            public static var openSystem: String { L10n.tr("settings.notifications.openSystem") }
             public static var statusAllowed: String { L10n.tr("settings.notifications.statusAllowed") }
             public static var statusAsk: String { L10n.tr("settings.notifications.statusAsk") }
             public static var statusDenied: String { L10n.tr("settings.notifications.statusDenied") }
@@ -2063,7 +2069,8 @@ public enum L10n {
     public enum Thread {
         public static var aTeammate: String { L10n.tr("thread.aTeammate") }
         public static var attach: String { L10n.tr("thread.attach") }
-        public static func chapterSaved(chapter: String) -> String { L10n.tr("thread.chapterSaved", chapter) }
+        public static func chapterNotSaved(chapter: String) -> String { L10n.tr("thread.chapterNotSaved", chapter) }
+        public static var chapterNotSavedHelp: String { L10n.tr("thread.chapterNotSavedHelp") }
         public static var copy: String { L10n.tr("thread.copy") }
         public static var copyMarkdown: String { L10n.tr("thread.copyMarkdown") }
         public static var dictate: String { L10n.tr("thread.dictate") }

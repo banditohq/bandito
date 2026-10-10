@@ -182,7 +182,7 @@ private struct FileDetails: View {
     }
 
     private var subtitle: String {
-        "\(FileFormat.kind(category)) · \(FileFormat.size(of: entry))"
+        FileFormat.subtitle(kind: FileFormat.kind(category), size: FileFormat.size(of: entry))
     }
 }
 

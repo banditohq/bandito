@@ -215,6 +215,8 @@
 "journal.sourceFile" = "Fichier journal sur le serveur";
 "journal.sourceJournald" = "Journal système du serveur";
 "keys.closeTab" = "Fermer l'onglet";
+"keys.moreActions" = "Plus d'actions";
+"keys.presetMenu" = "Jeu : %1$@";
 "memory.daily" = "Chaque jour";
 "memory.dailyDesc" = "Une page blanche chaque matin. Idéal pour les assistants avec des tâches quotidiennes.";
 "memory.files" = "Fichiers";
@@ -418,6 +420,9 @@
 "server.detail.peak" = "Maximum";
 "server.detail.topProcesses" = "Processus principaux";
 "server.detail.upload" = "Envoi";
+"server.features.installed" = "Installé";
+"server.features.loginHelp" = "Connexion sur le serveur : %1$@";
+"server.features.notInstalled" = "Non installé";
 "server.localUpgrade.confirm" = "Mettre à jour";
 "server.localUpgrade.confirmTitle" = "Les agents seront interrompus. Mettre à jour ?";
 "server.localUpgrade.failed" = "Impossible de mettre à jour le serveur de ce Mac : %1$@";
@@ -435,6 +440,7 @@
 "server.tile.diskUsed" = "%1$@ utilisés sur %2$@";
 "server.tile.freeWord" = "libres";
 "settings.approvals" = "Approbations";
+"settings.approvals.then" = "Que faire";
 "settings.approvalsIntro" = "Bandito vérifie chaque action de l'agent. Le travail courant avance tout seul, tandis que tout ce qui correspond à une règle ci-dessous ou à un contrôle intégré attend votre décision.";
 "settings.close" = "Fermer les réglages";
 "settings.general" = "Général";
@@ -446,6 +452,7 @@
 "settings.nav.account" = "Compte";
 "settings.nav.appearance" = "Apparence";
 "settings.notifications" = "Notifications";
+"settings.notifications.openSystem" = "Ouvrir Réglages Système";
 "settings.sectionsAria" = "Sections des réglages";
 "settings.servers" = "Serveurs";
 "settings.theme" = "Thème";
@@ -508,7 +515,8 @@
 "template.scratch.title" = "À partir de zéro";
 "thread.aTeammate" = "un coéquipier";
 "thread.attach" = "Joindre des fichiers";
-"thread.chapterSaved" = "Chapitre %1$@ · mémoire enregistrée";
+"thread.chapterNotSaved" = "Chapitre %1$@ · mémoire non enregistrée";
+"thread.chapterNotSavedHelp" = "L'agent n'a pas pu enregistrer sa mémoire avant ce chapitre. Des informations du chapitre précédent peuvent manquer.";
 "thread.copy" = "Copier";
 "thread.copyMarkdown" = "Copier en Markdown";
 "thread.dictate" = "Dicter";

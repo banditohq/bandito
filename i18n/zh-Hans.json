@@ -1,5 +1,4 @@
 {
-  "thread.chapterSaved": "第 {chapter} 章 · 记忆已保存",
   "thread.savingMemory": "开始新章节前保存记忆",
   "thread.aTeammate": "队友",
   "onboarding.server.newHostTitle": "新服务器 — 请确认",
@@ -580,5 +579,14 @@
   "server.localUpgrade.updateNow": "立即更新",
   "server.localUpgrade.confirmTitle": "代理将被中断。要更新吗？",
   "server.localUpgrade.confirm": "更新",
-  "server.localUpgrade.notConnected": "此 Mac 上的服务器未连接"
+  "server.localUpgrade.notConnected": "此 Mac 上的服务器未连接",
+  "thread.chapterNotSaved": "第 {chapter} 章 · 记忆未保存",
+  "thread.chapterNotSavedHelp": "智能体在本章之前未能保存记忆。上一章的内容可能缺失。",
+  "keys.presetMenu": "方案：{name}",
+  "keys.moreActions": "更多操作",
+  "settings.notifications.openSystem": "打开系统设置",
+  "settings.approvals.then": "执行什么",
+  "server.features.notInstalled": "未安装",
+  "server.features.installed": "已安装",
+  "server.features.loginHelp": "在服务器上登录：{command}"
 }

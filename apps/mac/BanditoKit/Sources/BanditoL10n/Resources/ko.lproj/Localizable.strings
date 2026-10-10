@@ -215,6 +215,8 @@
 "journal.sourceFile" = "서버의 로그 파일";
 "journal.sourceJournald" = "서버의 시스템 저널";
 "keys.closeTab" = "탭 닫기";
+"keys.moreActions" = "추가 작업";
+"keys.presetMenu" = "세트: %1$@";
 "memory.daily" = "매일";
 "memory.dailyDesc" = "매일 아침 빈 페이지에서 시작합니다. 매일 하는 작업이 있는 어시스턴트에 좋습니다.";
 "memory.files" = "파일";
@@ -418,6 +420,9 @@
 "server.detail.peak" = "최대";
 "server.detail.topProcesses" = "주요 프로세스";
 "server.detail.upload" = "송신";
+"server.features.installed" = "설치됨";
+"server.features.loginHelp" = "서버에서 로그인: %1$@";
+"server.features.notInstalled" = "설치되지 않음";
 "server.localUpgrade.confirm" = "업데이트";
 "server.localUpgrade.confirmTitle" = "에이전트가 중단됩니다. 업데이트할까요?";
 "server.localUpgrade.failed" = "이 Mac의 서버를 업데이트하지 못했습니다: %1$@";
@@ -435,6 +440,7 @@
 "server.tile.diskUsed" = "%1$@ 사용 중 / 전체 %2$@";
 "server.tile.freeWord" = "여유";
 "settings.approvals" = "승인";
+"settings.approvals.then" = "실행할 작업";
 "settings.approvalsIntro" = "Bandito는 에이전트의 모든 작업을 확인합니다. 일상적인 작업은 자동으로 진행되고, 아래 규칙이나 내장 검사에 해당하는 작업은 사용자의 결정을 기다립니다.";
 "settings.close" = "설정 닫기";
 "settings.general" = "일반";
@@ -446,6 +452,7 @@
 "settings.nav.account" = "계정";
 "settings.nav.appearance" = "모양";
 "settings.notifications" = "알림";
+"settings.notifications.openSystem" = "시스템 설정 열기";
 "settings.sectionsAria" = "설정 섹션";
 "settings.servers" = "서버";
 "settings.theme" = "테마";
@@ -508,7 +515,8 @@
 "template.scratch.title" = "처음부터";
 "thread.aTeammate" = "팀원";
 "thread.attach" = "파일 첨부";
-"thread.chapterSaved" = "챕터 %1$@ · 메모리 저장됨";
+"thread.chapterNotSaved" = "%1$@장 · 메모리 저장 안 됨";
+"thread.chapterNotSavedHelp" = "에이전트가 이 장 전에 메모리를 저장하지 못했습니다. 이전 장의 내용이 빠져 있을 수 있습니다.";
 "thread.copy" = "복사";
 "thread.copyMarkdown" = "Markdown으로 복사";
 "thread.dictate" = "받아쓰기";

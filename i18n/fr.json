@@ -1,5 +1,4 @@
 {
-  "thread.chapterSaved": "Chapitre {chapter} · mémoire enregistrée",
   "thread.savingMemory": "Enregistre la mémoire avant un nouveau chapitre",
   "thread.aTeammate": "un coéquipier",
   "onboarding.server.newHostTitle": "Nouveau serveur — confirmez-le",
@@ -580,5 +579,14 @@
   "server.localUpgrade.updateNow": "Mettre à jour maintenant",
   "server.localUpgrade.confirmTitle": "Les agents seront interrompus. Mettre à jour ?",
   "server.localUpgrade.confirm": "Mettre à jour",
-  "server.localUpgrade.notConnected": "Le serveur de ce Mac n'est pas connecté"
+  "server.localUpgrade.notConnected": "Le serveur de ce Mac n'est pas connecté",
+  "thread.chapterNotSaved": "Chapitre {chapter} · mémoire non enregistrée",
+  "thread.chapterNotSavedHelp": "L'agent n'a pas pu enregistrer sa mémoire avant ce chapitre. Des informations du chapitre précédent peuvent manquer.",
+  "keys.presetMenu": "Jeu : {name}",
+  "keys.moreActions": "Plus d'actions",
+  "settings.notifications.openSystem": "Ouvrir Réglages Système",
+  "settings.approvals.then": "Que faire",
+  "server.features.notInstalled": "Non installé",
+  "server.features.installed": "Installé",
+  "server.features.loginHelp": "Connexion sur le serveur : {command}"
 }
