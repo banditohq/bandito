@@ -963,7 +963,7 @@
 "market.tools.mode.readOnly" = "Lecture seule";
 "market.tools.notChecked" = "Aucun outil n'est connu pour l'instant. Vérifiez le service pour les lister. D'ici là, chaque outil compte comme un outil qui modifie quelque chose.";
 "market.tools.title" = "Outils";
-"market.tools.unreached" = "Ces réglages valent pour les agents sous Claude. %1$@ tournent sous Codex ou Grok, dont les appels d'outils ne passent pas encore par Bandito : les réglages ne les atteignent pas.";
+"market.tools.unreached" = "Pour les agents %1$@ (Codex ou Grok), le service est désactivé dans ce mode.";
 "market.tools.word.allow" = "Autoriser";
 "market.tools.word.ask" = "Demander";
 "market.tools.word.deny" = "Refuser";

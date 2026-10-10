@@ -92,9 +92,20 @@ enum ToolPermissionLogic {
         tools.isEmpty ? .notChecked : .tools(sorted(tools))
     }
 
-    /// The agents of this server that the modes do not reach: Codex and Grok do not send the calls of a service's tools
-    /// to the daemon in a form it can decide on. Empty when every agent runs on Claude.
-    static func unreachedAgents(_ agents: [Agent]) -> [String] {
-        agents.filter { $0.runtime == .codex || $0.runtime == .grok }.map(\.name)
+    /// The service is limited: a mode other than all, or a word that denies or asks. Only Claude sends the calls of such
+    /// a service to the daemon, so the daemon does not give it to a session on Codex or Grok.
+    static func isLimited(_ integration: Integration) -> Bool {
+        integration.toolMode != .all || integration.toolOverrides.values.contains { $0 == .deny || $0 == .ask }
+    }
+
+    /// The agents that lose a limited service because they run on Codex or Grok: those that have it (its id is in their
+    /// list, or they have no list and so have every service). Empty when the service is not limited.
+    static func unreachedAgents(_ agents: [Agent], for integration: Integration) -> [String] {
+        guard isLimited(integration) else { return [] }
+        return agents.filter { agent in
+            let runtime = agent.activeRuntime ?? agent.runtime
+            guard runtime == .codex || runtime == .grok else { return false }
+            return agent.integrations?.contains(integration.id) ?? true
+        }.map(\.name)
     }
 }

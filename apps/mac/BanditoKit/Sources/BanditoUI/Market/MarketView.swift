@@ -177,7 +177,7 @@ struct MarketView: View {
             tools: toolLists[integration.id] ?? [],
             saving: toolsSaving.contains(integration.id),
             error: toolsError,
-            unreached: ToolPermissionLogic.unreachedAgents(server?.agents ?? []),
+            unreached: ToolPermissionLogic.unreachedAgents(server?.agents ?? [], for: integration),
             onMode: { mode in
                 guard mode != integration.toolMode else { return }
                 Task { await saveTools(integration, IntegrationPatch(toolMode: mode)) }

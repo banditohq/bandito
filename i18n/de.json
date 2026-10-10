@@ -2388,7 +2388,7 @@
   "market.tools.word.ask": "Fragen",
   "market.tools.word.deny": "Verbieten",
   "market.tools.notChecked": "Noch sind keine Werkzeuge bekannt. Prüfen Sie den Dienst, um sie aufzulisten. Bis dahin gilt jedes Werkzeug als eines, das etwas ändert.",
-  "market.tools.unreached": "Diese Einstellungen gelten für Agenten auf Claude. {agents} laufen auf Codex oder Grok, deren Werkzeugaufrufe noch nicht über Bandito laufen; die Einstellungen erreichen sie daher nicht.",
+  "market.tools.unreached": "Für die Agenten {agents} (Codex oder Grok) ist der Dienst in diesem Modus abgeschaltet.",
   "approval.why.serviceConfirm": "dieser Dienst fragt vor jeder Änderung",
   "approval.why.serviceTool": "Sie wollten dieses Werkzeug bestätigen"
 }

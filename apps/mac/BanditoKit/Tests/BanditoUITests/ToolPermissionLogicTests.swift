@@ -71,10 +71,43 @@ import Testing
         #expect(ToolPermissionLogic.content([write, read]) == .tools([write, read]))
     }
 
-    @Test func codexAndGrokAgentsAreTheOnesTheModesDoNotReach() throws {
-        let agents = [try agent("a", "claude"), try agent("b", "codex"), try agent("c", "grok")]
-        #expect(ToolPermissionLogic.unreachedAgents(agents) == ["Nb", "Nc"])
-        #expect(ToolPermissionLogic.unreachedAgents([try agent("a", "claude")]).isEmpty)
+    private func agent(_ id: String, _ runtime: String, integrations: [String]?) throws -> Agent {
+        var a = try agent(id, runtime)
+        a.integrations = integrations
+        return a
+    }
+
+    @Test func aServiceIsLimitedByAModeOrByAWordThatDeniesOrAsks() {
+        #expect(!ToolPermissionLogic.isLimited(Integration(id: "i", name: "x", kind: .http)))
+        #expect(ToolPermissionLogic.isLimited(Integration(id: "i", name: "x", kind: .http, toolMode: .readOnly)))
+        #expect(ToolPermissionLogic.isLimited(Integration(id: "i", name: "x", kind: .http, toolMode: .confirmWrites)))
+        #expect(ToolPermissionLogic.isLimited(Integration(id: "i", name: "x", kind: .http, toolOverrides: ["a": .deny])))
+        #expect(ToolPermissionLogic.isLimited(Integration(id: "i", name: "x", kind: .http, toolOverrides: ["a": .ask])))
+        // An allow word alone limits nothing.
+        #expect(!ToolPermissionLogic.isLimited(Integration(id: "i", name: "x", kind: .http, toolOverrides: ["a": .allow])))
+    }
+
+    @Test func onlyCodexAndGrokAgentsThatHaveTheServiceLoseIt() throws {
+        let limited = Integration(id: "svc", name: "svc", kind: .http, toolMode: .readOnly)
+        let agents = [
+            try agent("a", "claude"),
+            try agent("b", "codex"),
+            try agent("c", "grok", integrations: ["svc"]),
+            try agent("d", "codex", integrations: ["other"]),
+            try agent("e", "grok", integrations: []),
+        ]
+        #expect(ToolPermissionLogic.unreachedAgents(agents, for: limited) == ["Nb", "Nc"])
+        // A service that is not limited is given to every runtime.
+        let open = Integration(id: "svc", name: "svc", kind: .http)
+        #expect(ToolPermissionLogic.unreachedAgents(agents, for: open).isEmpty)
+        #expect(ToolPermissionLogic.unreachedAgents([try agent("a", "claude")], for: limited).isEmpty)
+    }
+
+    @Test func anAgentRunningOnAFallbackRuntimeCountsByTheRuntimeItRunsOn() throws {
+        var fallback = try agent("a", "claude")
+        fallback.activeRuntime = .codex
+        let limited = Integration(id: "svc", name: "svc", kind: .http, toolMode: .confirmWrites)
+        #expect(ToolPermissionLogic.unreachedAgents([fallback], for: limited) == ["Na"])
     }
 
     @Test func theApprovalReasonsOfAServiceHaveWords() {

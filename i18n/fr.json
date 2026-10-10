@@ -2389,7 +2389,7 @@
   "market.tools.word.ask": "Demander",
   "market.tools.word.deny": "Refuser",
   "market.tools.notChecked": "Aucun outil n'est connu pour l'instant. Vérifiez le service pour les lister. D'ici là, chaque outil compte comme un outil qui modifie quelque chose.",
-  "market.tools.unreached": "Ces réglages valent pour les agents sous Claude. {agents} tournent sous Codex ou Grok, dont les appels d'outils ne passent pas encore par Bandito : les réglages ne les atteignent pas.",
+  "market.tools.unreached": "Pour les agents {agents} (Codex ou Grok), le service est désactivé dans ce mode.",
   "approval.why.serviceConfirm": "ce service demande confirmation avant de modifier",
   "approval.why.serviceTool": "vous avez demandé de confirmer cet outil"
 }

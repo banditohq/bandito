@@ -963,7 +963,7 @@
 "market.tools.mode.readOnly" = "Nur lesen";
 "market.tools.notChecked" = "Noch sind keine Werkzeuge bekannt. Prüfen Sie den Dienst, um sie aufzulisten. Bis dahin gilt jedes Werkzeug als eines, das etwas ändert.";
 "market.tools.title" = "Werkzeuge";
-"market.tools.unreached" = "Diese Einstellungen gelten für Agenten auf Claude. %1$@ laufen auf Codex oder Grok, deren Werkzeugaufrufe noch nicht über Bandito laufen; die Einstellungen erreichen sie daher nicht.";
+"market.tools.unreached" = "Für die Agenten %1$@ (Codex oder Grok) ist der Dienst in diesem Modus abgeschaltet.";
 "market.tools.word.allow" = "Erlauben";
 "market.tools.word.ask" = "Fragen";
 "market.tools.word.deny" = "Verbieten";

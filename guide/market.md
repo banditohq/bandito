@@ -248,8 +248,10 @@ deletes (удаляет), with three words: Allow (Разрешить), Ask (С�
 the mode; a word that equals what the mode does anyway is not kept. A tool the service did not mark as only reading counts
 as one that changes something, and so does every tool of a service that was never checked: use Check (Проверить) to list
 them. The refusal reaches the agent with a sentence that says who forbade it, so it does not retry. A question is an
-ordinary approval card in the chat with the service, the tool and its arguments (long values cut). The settings work for
-agents that run on Claude; the section names the agents on Codex or Grok, whose tool calls do not go through Bandito yet.
+ordinary approval card in the chat with the service, the tool and its arguments (long values cut). The settings are
+kept by Bandito for agents that run on Claude. An agent on Codex or Grok cannot be held to them, so when the mode is not
+Everything (or a tool has Ask or Deny) the service is not given to such an agent at all: its prompt says the owner limited
+it, and the section lists these agents by name.
 Где: Marketplace → Services (Сервисы) → a connected service → View (Посмотреть) → Tools (Инструменты)
 1. Click a segment to set the mode. The line under it says what it does.
 2. Click Allow (Разрешить), Ask (Спрашивать) or Deny (Запретить) on a tool to give it a word of its own.

@@ -963,7 +963,7 @@
 "market.tools.mode.readOnly" = "読み取りのみ";
 "market.tools.notChecked" = "ツールはまだ分かっていません。サービスを確認すると一覧が出ます。それまでは、すべてのツールが何かを変更するものとして扱われます。";
 "market.tools.title" = "ツール";
-"market.tools.unreached" = "この設定は Claude のエージェントに適用されます。%1$@ は Codex または Grok で動いており、ツール呼び出しがまだ Bandito を通らないため、設定は届きません。";
+"market.tools.unreached" = "エージェント %1$@（Codex または Grok）では、このモードのときサービスはオフになります。";
 "market.tools.word.allow" = "許可";
 "market.tools.word.ask" = "確認";
 "market.tools.word.deny" = "拒否";

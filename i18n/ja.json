@@ -2360,7 +2360,7 @@
   "market.tools.word.ask": "確認",
   "market.tools.word.deny": "拒否",
   "market.tools.notChecked": "ツールはまだ分かっていません。サービスを確認すると一覧が出ます。それまでは、すべてのツールが何かを変更するものとして扱われます。",
-  "market.tools.unreached": "この設定は Claude のエージェントに適用されます。{agents} は Codex または Grok で動いており、ツール呼び出しがまだ Bandito を通らないため、設定は届きません。",
+  "market.tools.unreached": "エージェント {agents}（Codex または Grok）では、このモードのときサービスはオフになります。",
   "approval.why.serviceConfirm": "このサービスは変更前に確認を求めます",
   "approval.why.serviceTool": "このツールは確認するよう設定しています"
 }

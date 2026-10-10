@@ -963,7 +963,7 @@
 "market.tools.mode.readOnly" = "只读";
 "market.tools.notChecked" = "目前还不知道有哪些工具。检查一下服务即可列出；在此之前，所有工具都按“会改动内容”处理。";
 "market.tools.title" = "工具";
-"market.tools.unreached" = "这些设置适用于使用 Claude 的智能体。%1$@ 运行在 Codex 或 Grok 上，它们的工具调用暂时不经过 Bandito，所以设置对它们不生效。";
+"market.tools.unreached" = "对于智能体 %1$@（Codex 或 Grok），此模式下该服务已关闭。";
 "market.tools.word.allow" = "允许";
 "market.tools.word.ask" = "询问";
 "market.tools.word.deny" = "禁止";
