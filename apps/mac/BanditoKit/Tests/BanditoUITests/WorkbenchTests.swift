@@ -364,3 +364,12 @@ import Testing
         #expect(WorkbenchLayout.clampSplit(0.5) == 0.5)
     }
 }
+
+@Suite struct WorkbenchPaneLookupTests {
+    @Test func aPanePastTheEndReadsAsEmpty() {
+        let state = WorkbenchRules.open(.details, in: WorkbenchState())
+        #expect(state.panes.count == 1)
+        #expect(WorkbenchRules.pane(1, of: state) == WorkbenchPane())
+        #expect(WorkbenchRules.pane(0, of: state).tabs == [.details])
+    }
+}

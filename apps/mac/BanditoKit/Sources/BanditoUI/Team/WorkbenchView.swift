@@ -80,7 +80,7 @@ struct WorkbenchView: View {
     /// One pane: its tab strip, and the content of its selected tab. A click anywhere in it focuses it. An index the
     /// state does not have (the second pane while not split) shows an empty pane, which is hidden.
     private func pane(_ index: Int, showsPanelActions: Bool, compact: Bool) -> some View {
-        let pane = state.panes.indices.contains(index) ? state.panes[index] : WorkbenchPane()
+        let pane = WorkbenchRules.pane(index, of: state)
         let focused = state.isSplit && state.focusedPane == index
         return VStack(spacing: 0) {
             WorkbenchHeader(
@@ -171,7 +171,9 @@ private struct WorkbenchHeader: View {
     @Environment(Router.self) private var router
 
     private var state: WorkbenchState { router.workbenchState(for: agent.id) }
-    private var paneState: WorkbenchPane { state.panes[pane] }
+    // The second pane stays in the view tree with no height while the panel is not split, so its index can be past
+    // the end: it reads as an empty pane then.
+    private var paneState: WorkbenchPane { WorkbenchRules.pane(pane, of: state) }
 
     var body: some View {
         HStack(spacing: 6) {

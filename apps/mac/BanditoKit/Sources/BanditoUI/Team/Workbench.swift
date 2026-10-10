@@ -184,6 +184,12 @@ enum WorkbenchRules {
         state.panes.indices.contains(state.focusedPane) ? state.panes[state.focusedPane] : nil
     }
 
+    /// The pane at `index`, or an empty pane when there is none: the view keeps a second pane in its tree while the
+    /// panel is not split.
+    static func pane(_ index: Int, of state: WorkbenchState) -> WorkbenchPane {
+        state.panes.indices.contains(index) ? state.panes[index] : WorkbenchPane()
+    }
+
     /// The ⌘J rule: an open panel closes; a closed one opens on its selected tab, or on the details when it has none.
     static func toggle(_ state: WorkbenchState) -> WorkbenchState {
         if state.isOpen {
