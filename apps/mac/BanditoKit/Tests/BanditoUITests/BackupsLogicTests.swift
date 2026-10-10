@@ -1,3 +1,4 @@
+@testable import BanditoKit
 import BanditoL10n
 import Foundation
 import Testing
@@ -87,6 +88,34 @@ import Testing
         #expect(text.contains("14"))
         #expect(text.contains("2027"))
         #expect(text.contains("08:00") || text.contains("8:00"))
+    }
+
+    @Test func aCopyNameGivesItsTimeInUTC() {
+        #expect(BackupName.createdAt("bandito-20270115-080000-start.db") == Date(timeIntervalSince1970: 1_800_000_000))
+        #expect(BackupName.createdAt("notes.txt") == nil)
+        #expect(BackupName.createdAt("bandito-2027") == nil)
+    }
+
+    @Test func aRestoreWithNoNewRecordForThisCopyIsUnknown() {
+        let name = "bandito-20270115-080000-start.db"
+        let old = LastRestore(name: name, ok: true, error: nil, atMs: 1)
+        // No record yet, or only the record the daemon had before the request.
+        #expect(RestoreOutcome.from(requested: name, record: nil, before: nil) == .unknown)
+        #expect(RestoreOutcome.from(requested: name, record: old, before: old) == .unknown)
+        // A record of another copy does not answer this request.
+        let other = LastRestore(name: "bandito-20270114-080000-daily.db", ok: true, error: nil, atMs: 3)
+        #expect(RestoreOutcome.from(requested: name, record: other, before: nil) == .unknown)
+    }
+
+    @Test func aRestoreIsReadFromItsOkFlag() {
+        let name = "bandito-20270115-080000-start.db"
+        let old = LastRestore(name: name, ok: true, error: nil, atMs: 1)
+        let done = LastRestore(name: name, ok: true, error: nil, atMs: 2)
+        #expect(RestoreOutcome.from(requested: name, record: done, before: old)
+            == .restored(copyDate: Date(timeIntervalSince1970: 1_800_000_000)))
+        let failed = LastRestore(name: name, ok: false, error: "the restored database does not open", atMs: 3)
+        #expect(RestoreOutcome.from(requested: name, record: failed, before: old)
+            == .failed("the restored database does not open"))
     }
 
     @Test func backupsIsShownOnlyWhenTheServerHasTheFeature() {

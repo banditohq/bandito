@@ -321,6 +321,9 @@ public enum L10n {
         public static var explain: String { L10n.tr("backups.explain") }
         public static var restarting: String { L10n.tr("backups.restarting") }
         public static var restore: String { L10n.tr("backups.restore") }
+        public static func restoreFailed(error: String) -> String { L10n.tr("backups.restoreFailed", error) }
+        public static var restoreUnknown: String { L10n.tr("backups.restoreUnknown") }
+        public static func restoredFrom(date: String) -> String { L10n.tr("backups.restoredFrom", date) }
         public static var timedOut: String { L10n.tr("backups.timedOut") }
         public static func whenToday(time: String) -> String { L10n.tr("backups.whenToday", time) }
         public static func whenYesterday(time: String) -> String { L10n.tr("backups.whenYesterday", time) }

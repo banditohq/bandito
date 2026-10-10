@@ -17,6 +17,18 @@ public struct DatabaseBackup: Codable, Sendable, Hashable, Identifiable {
     public var createdAt: Date { Date(timeIntervalSince1970: Double(createdAtMs) / 1000) }
 }
 
+/// The result of the last restore the daemon applied at a start (`daemon.info.last_restore`). `ok` says whether the
+/// restore happened, `error` says why not. A new start alone does not prove a restore.
+public struct LastRestore: Codable, Sendable, Hashable {
+    /// The copy the request named.
+    public var name: String
+    public var ok: Bool
+    /// One short sentence, when `ok` is false.
+    public var error: String?
+    /// When the daemon applied it (Unix milliseconds).
+    public var atMs: Int64
+}
+
 /// The reply to `backups.restore`: the daemon answers first, then restarts.
 public struct BackupRestoreReply: Codable, Sendable, Hashable {
     public var restarting: Bool

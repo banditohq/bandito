@@ -216,6 +216,9 @@
 "backups.reason.upgrade" = "Antes da atualização";
 "backups.restarting" = "O servidor está reiniciando…";
 "backups.restore" = "Restaurar";
+"backups.restoreFailed" = "A restauração não foi concluída: %1$@";
+"backups.restoreUnknown" = "O servidor voltou, mas não confirmou a restauração. Confira a lista.";
+"backups.restoredFrom" = "Restaurado a partir da cópia de %1$@.";
 "backups.timedOut" = "O servidor não voltou a tempo. Confira na visão geral.";
 "backups.whenToday" = "Hoje, %1$@";
 "backups.whenYesterday" = "Ontem, %1$@";

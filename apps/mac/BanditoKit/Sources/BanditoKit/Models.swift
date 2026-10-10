@@ -619,6 +619,8 @@ public struct DaemonInfo: Codable, Sendable, Hashable {
     public var features: [String]?
     /// The daemon's last successful check for a newer release. Null until one succeeded; missing on old daemons.
     public var update: DaemonUpdate?
+    /// What the last restore the daemon applied at a start did; nil before any (and on daemons without backups).
+    public var lastRestore: LastRestore?
 
     public func supports(_ feature: String) -> Bool { features?.contains(feature) ?? false }
 

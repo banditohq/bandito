@@ -25,6 +25,9 @@ struct BackupsView: View {
                     if model.isRestarting {
                         restartingBanner
                     }
+                    if let outcome = model.outcome {
+                        outcomeBanner(outcome)
+                    }
                     if model.phase == .timedOut {
                         Text(L10n.Backups.timedOut)
                             .font(BanditoFont.text(size: 13, weight: 400))
@@ -43,14 +46,22 @@ struct BackupsView: View {
             }
         )
         .task(id: server?.id) {
+            // Another server has its own copies: nothing of the old one stays on screen.
+            model.reset()
             if let server { await model.load(server) }
+        }
+        // The list is read again whenever the link comes back, so a restore or a copy made meanwhile shows up.
+        .onChange(of: server?.isConnectedNow ?? false) { _, connected in
+            if connected, let server {
+                Task { await model.load(server) }
+            }
         }
         .confirmationDialog(
             pending.map { L10n.Backups.confirmTitle(date: BackupDateLabel.absolute($0.createdAt)) } ?? "",
             isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } }),
             titleVisibility: .visible
         ) {
-            Button(L10n.Backups.restore) {
+            Button(L10n.Backups.restore, role: .destructive) {
                 if let backup = pending, let server {
                     Task { await model.restore(backup, on: server) }
                 }
@@ -135,6 +146,31 @@ struct BackupsView: View {
         .padding(.vertical, 12)
     }
 
+    /// What the last restore came to, once the server was back: the copy restored, the daemon's error, or that the
+    /// server did not confirm it.
+    private func outcomeBanner(_ outcome: RestoreOutcome) -> some View {
+        let text: String
+        let tone: Color
+        switch outcome {
+        case .restored(let copyDate):
+            text = L10n.Backups.restoredFrom(date: BackupDateLabel.absolute(copyDate))
+            tone = Color.Bandito.text
+        case .failed(let error):
+            text = L10n.Backups.restoreFailed(error: error)
+            tone = Color.Bandito.danger
+        case .unknown:
+            text = L10n.Backups.restoreUnknown
+            tone = Color.Bandito.text2
+        }
+        return Text(text)
+            .font(BanditoFont.text(size: 13, weight: 500))
+            .foregroundStyle(tone)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .banditoCard()
+    }
+
     /// Shown from the moment the restore is asked until the server is back on a new start.
     private var restartingBanner: some View {
         HStack(spacing: 10) {
@@ -170,12 +206,23 @@ final class BackupsModel {
     private(set) var loaded = false
     private(set) var phase: Phase = .idle
     private(set) var failure: UserFacingMessage?
+    /// The outcome of the last restore, read from the daemon's record once the server is back.
+    private(set) var outcome: RestoreOutcome?
 
     /// How long to wait for the server to start again after a restore.
     static let restartTimeout: Duration = .seconds(120)
 
     var isBusy: Bool { phase == .creating || phase == .restoring || phase == .restarting }
     var isRestarting: Bool { phase == .restoring || phase == .restarting }
+
+    /// Forgets what was read from a server: used when the screen moves to another one.
+    func reset() {
+        backups = []
+        loaded = false
+        phase = .idle
+        failure = nil
+        outcome = nil
+    }
 
     /// Reads the list. Does nothing unless the server is connected and has the feature.
     func load(_ server: ServerModel) async {
@@ -209,8 +256,10 @@ final class BackupsModel {
     func restore(_ backup: DatabaseBackup, on server: ServerModel) async {
         guard !isBusy, server.isConnectedNow else { return }
         let startedBefore = server.info?.startedAt
+        let recordBefore = server.info?.lastRestore
         phase = .restoring
         failure = nil
+        outcome = nil
         do {
             _ = try await server.restoreBackup(name: backup.name)
         } catch {
@@ -224,6 +273,8 @@ final class BackupsModel {
             try? await Task.sleep(for: .seconds(1))
             if server.isConnectedNow, let started = server.info?.startedAt, started != startedBefore {
                 phase = .idle
+                // The outcome comes from the daemon's record of this request, not from the restart itself.
+                outcome = RestoreOutcome.from(requested: backup.name, record: server.info?.lastRestore, before: recordBefore)
                 await load(server)
                 return
             }

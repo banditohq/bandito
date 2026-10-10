@@ -1,3 +1,4 @@
+import BanditoKit
 import BanditoL10n
 import Foundation
 
@@ -64,6 +65,45 @@ enum BackupDateLabel {
         formatter.dateStyle = dateStyle
         formatter.timeStyle = .short
         return formatter
+    }
+}
+
+/// The time in a copy's name, `bandito-<YYYYMMDD-HHMMSS>-<reason>.db`. The daemon writes it in UTC.
+enum BackupName {
+    static func createdAt(_ name: String) -> Date? {
+        let prefix = "bandito-"
+        let stampLength = 15
+        guard name.hasPrefix(prefix),
+              let start = name.index(name.startIndex, offsetBy: prefix.count, limitedBy: name.endIndex),
+              let end = name.index(start, offsetBy: stampLength, limitedBy: name.endIndex)
+        else { return nil }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.dateFormat = "yyyyMMdd-HHmmss"
+        return formatter.date(from: String(name[start..<end]))
+    }
+}
+
+/// What the restore the person asked for came to, as the app shows it once the server is back.
+enum RestoreOutcome: Equatable {
+    /// The database was replaced with the copy from `copyDate`.
+    case restored(copyDate: Date)
+    /// The daemon could not restore; `error` is its one-sentence reason.
+    case failed(String)
+    /// The server came back, but its record does not say what happened to this request.
+    case unknown
+
+    /// `record` is the daemon's last restore now, `before` the one it reported before the request. Only a record
+    /// that is new (differs from `before`) and names the requested copy counts. Success is read from `ok`, not
+    /// from the server's start time.
+    static func from(requested name: String, record: LastRestore?, before: LastRestore?) -> RestoreOutcome {
+        guard let record, record.name == name, record != before else { return .unknown }
+        if !record.ok {
+            return .failed(record.error ?? "")
+        }
+        guard let date = BackupName.createdAt(name) else { return .unknown }
+        return .restored(copyDate: date)
     }
 }
 

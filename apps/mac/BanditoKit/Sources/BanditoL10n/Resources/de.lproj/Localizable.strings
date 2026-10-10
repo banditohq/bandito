@@ -216,6 +216,9 @@
 "backups.reason.upgrade" = "Vor dem Update";
 "backups.restarting" = "Der Server startet neu…";
 "backups.restore" = "Wiederherstellen";
+"backups.restoreFailed" = "Die Wiederherstellung ist nicht abgeschlossen: %1$@";
+"backups.restoreUnknown" = "Der Server ist zurück, hat die Wiederherstellung aber nicht bestätigt. Prüfen Sie die Liste.";
+"backups.restoredFrom" = "Aus der Sicherung vom %1$@ wiederhergestellt.";
 "backups.timedOut" = "Der Server ist nicht rechtzeitig zurückgekehrt. Prüfen Sie ihn in der Übersicht.";
 "backups.whenToday" = "Heute, %1$@";
 "backups.whenYesterday" = "Gestern, %1$@";

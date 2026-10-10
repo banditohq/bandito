@@ -23,6 +23,18 @@ import Testing
         #expect(list.isEmpty)
     }
 
+    @Test func daemonInfoReadsTheLastRestore() throws {
+        let raw = #"{"version":"0.1.6","hostname":"h","os":"macos","arch":"arm64","started_at":1,"last_seq":0,"last_restore":{"name":"bandito-20270115-080000-start.db","ok":false,"error":"no backup named x","at_ms":3}}"#
+        let info = try RPCClient.decoder.decode(DaemonInfo.self, from: Data(raw.utf8))
+        #expect(info.lastRestore == LastRestore(name: "bandito-20270115-080000-start.db", ok: false, error: "no backup named x", atMs: 3))
+    }
+
+    @Test func daemonInfoFromAnOlderDaemonHasNoLastRestore() throws {
+        let raw = #"{"version":"0.1.5","hostname":"h","os":"macos","arch":"arm64","started_at":1,"last_seq":0}"#
+        let info = try RPCClient.decoder.decode(DaemonInfo.self, from: Data(raw.utf8))
+        #expect(info.lastRestore == nil)
+    }
+
     @Test func restoreReplySaysTheDaemonRestarts() throws {
         let reply = try RPCClient.decoder.decode(BackupRestoreReply.self, from: Data(#"{"restarting":true}"#.utf8))
         #expect(reply.restarting)

@@ -216,6 +216,9 @@
 "backups.reason.upgrade" = "Перед обновлением";
 "backups.restarting" = "Сервер перезапускается…";
 "backups.restore" = "Восстановить";
+"backups.restoreFailed" = "Восстановить не удалось: %1$@";
+"backups.restoreUnknown" = "Сервер вернулся, но не подтвердил восстановление. Проверьте список.";
+"backups.restoredFrom" = "Восстановлено из копии от %1$@.";
 "backups.timedOut" = "Сервер не вернулся вовремя. Проверьте его в обзоре.";
 "backups.whenToday" = "Сегодня, %1$@";
 "backups.whenYesterday" = "Вчера, %1$@";

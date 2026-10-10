@@ -216,6 +216,9 @@
 "backups.reason.upgrade" = "更新前";
 "backups.restarting" = "服务器正在重启…";
 "backups.restore" = "恢复";
+"backups.restoreFailed" = "恢复未完成：%1$@";
+"backups.restoreUnknown" = "服务器已恢复，但未确认恢复结果。请检查列表。";
+"backups.restoredFrom" = "已从 %1$@ 的副本恢复。";
 "backups.timedOut" = "服务器未能及时恢复。请在概览中检查。";
 "backups.whenToday" = "今天 %1$@";
 "backups.whenYesterday" = "昨天 %1$@";

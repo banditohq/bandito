@@ -216,6 +216,9 @@
 "backups.reason.upgrade" = "更新の前";
 "backups.restarting" = "サーバーを再起動しています…";
 "backups.restore" = "復元";
+"backups.restoreFailed" = "復元できませんでした: %1$@";
+"backups.restoreUnknown" = "サーバーは戻りましたが、復元の結果は確認できませんでした。一覧を確認してください。";
+"backups.restoredFrom" = "%1$@ のコピーから復元しました。";
 "backups.timedOut" = "サーバーが時間内に戻りませんでした。概要で確認してください。";
 "backups.whenToday" = "今日 %1$@";
 "backups.whenYesterday" = "昨日 %1$@";
