@@ -1029,23 +1029,14 @@ mod tests {
     }
 
     #[test]
-    fn bundle_names_fit_the_agent_name_rule_except_two_known_catalog_names() {
-        // Known catalog issue (not fixed here): translator's ja and ko names carry a middle dot, which the agent-name
-        // rule refuses. A bundle in ja or ko reports that one template as an error and makes the rest. When the names
-        // change in agent_templates.json, drop the pair from this list.
-        const REFUSED: [(&str, &str); 2] = [("translator", "ja"), ("translator", "ko")];
+    fn every_bundle_name_is_a_valid_agent_name_in_every_language() {
         const TAGS: [&str; 9] = ["en", "ru", "de", "es", "fr", "ja", "ko", "pt-BR", "zh-Hans"];
         for b in agent_bundles::catalog().unwrap() {
             for id in &b.templates {
                 let t = template(id);
                 for tag in TAGS {
                     let name = template_name(&t, &resolve_language(&t, tag));
-                    let known_refused = REFUSED.iter().any(|(rt, rl)| *rt == id && *rl == tag);
-                    assert_eq!(
-                        crate::store::validate_name(&name).is_ok(),
-                        !known_refused,
-                        "{id} {tag}: {name:?}"
-                    );
+                    assert!(crate::store::validate_name(&name).is_ok(), "{id} {tag}: {name:?}");
                     assert!(
                         name.chars().count() <= 29,
                         "{id} {tag}: {name:?} leaves no room for a number"

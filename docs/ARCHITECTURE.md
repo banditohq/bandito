@@ -555,7 +555,7 @@ The reply is `{agents: [{template_id, agent?, error?}], missing_integrations: [{
 
 Rights: the owner's CLI and paired devices. Agents may not call either method (not in `AGENT_METHODS`; both are in the owner-only list of the trust tests in `rpc/mod.rs`). In safe mode they are refused like every other write.
 
-Known catalog issue: the `translator` names in `ja` and `ko` contain a middle dot, which the agent-name rule refuses. A bundle in those languages reports that template as an error. The test `bundle_names_fit_the_agent_name_rule_except_two_known_catalog_names` lists the pair and must change with the catalog.
+Every bot name of every bundle, in every language, passes the agent-name rule and leaves room for a number suffix (the test `every_bundle_name_is_a_valid_agent_name_in_every_language`).
 
 ## Logs
 
