@@ -86,6 +86,27 @@ pub fn slot(base: &Path, id: &str) -> Slot {
     }
 }
 
+/// The commit a Bandito install under `base` was made from, as its marker says. None when the folder is not Bandito's
+/// (see [`slot`]) or the marker names no commit.
+pub fn installed_commit(base: &Path, id: &str) -> Option<String> {
+    if slot(base, id) != Slot::Ours {
+        return None;
+    }
+    let text = fs::read_to_string(base.join(".claude").join("skills").join(id).join(MARKER)).ok()?;
+    let marker: Value = serde_json::from_str(&text).ok()?;
+    marker.get("commit").and_then(Value::as_str).map(str::to_string)
+}
+
+/// Whether the Bandito install under `base` is older than the catalog: its marker's commit is not the catalog's commit.
+/// False when there is no Bandito install there, and for an id that is not in the catalog.
+pub fn update_available(base: &Path, id: &str) -> bool {
+    let Some(catalog_commit) = catalog_entry(id).and_then(|e| e["source"]["commit"].as_str().map(str::to_string))
+    else {
+        return false;
+    };
+    slot(base, id) == Slot::Ours && installed_commit(base, id).as_deref() != Some(catalog_commit.as_str())
+}
+
 /// Writes skill `id` into `base/.claude/skills/<id>/`: every bundled file (LICENSE included) and the marker. An older
 /// copy that Bandito installed is replaced as a whole (see `commands::install`). A folder the person made is refused
 /// (`exists_not_ours`). `base` is the daemon user's home or an agent's folder.
