@@ -56,8 +56,8 @@ Everything an agent does becomes a row in `events` (append-only, global `seq`). 
 
 | kind | payload |
 |---|---|
-| `turn.started` | `{turn_id, source: "user"\|"schedule"\|"crew"}` |
-| `message.user` | `{text, source, from_agent?, command?, reply_to?, attachments?}` (`text` is what the person typed; `command` names a slash command, see [Commands](#commands); `reply_to` is the seq of the message it answers and `attachments` the files it carries, see [Replies and attachments](#replies-and-attachments)) |
+| `turn.started` | `{turn_id, source: "user"\|"schedule"\|"crew"}`, plus `message_seq?` (the seq of the `message.user` this turn answers, when that message was shown before the turn began; see Queued messages under Chapters) |
+| `message.user` | `{text, source, from_agent?, command?, reply_to?, attachments?, queued?}` (`text` is what the person typed; `command` names a slash command, see [Commands](#commands); `reply_to` is the seq of the message it answers and `attachments` the files it carries, see [Replies and attachments](#replies-and-attachments)) |
 | `message.assistant` | `{text}` (final text of a message) |
 | `message.delta` | `{text}` streaming chunk, **not persisted**, broadcast only |
 | `tool.call` | `{call_id, tool, title, input}` |
@@ -930,6 +930,8 @@ Per agent `memory_mode`:
 | `full` | never; the CLI compacts on its own | short projects, debugging one long task |
 
 Before a chapter closes, the daemon sends a wrap-up turn shown in the thread as a quiet line (`source: "system"`), excluded from history search: *update your memory files with what matters from this chapter*. Then the session is dropped and `session.rotated` is emitted. The check runs when the next message arrives, so an idle agent costs nothing, and that message waits while the wrap-up runs. If the CLI session has gone, Bandito resumes it for the wrap-up. If it cannot resume, the chapter closes without a wrap-up and the thread says `memory not saved`.
+
+**Queued messages.** A message that cannot start at once (a turn is running, the wrap-up runs, other messages wait, the next chapter is due, or the agent is paused) is written to the thread at the moment it arrives, as `message.user` with `queued: true`. It is never written twice: when its turn begins, `turn.started` carries `message_seq` with its seq and no second `message.user` follows. A message that starts at once is written right after its `turn.started`, as before, without `queued`. The queue is in memory: after a daemon restart the held messages stay in the thread and no turn takes them. A client shows a message as waiting while it has `queued` and no `turn.started` has named it by `message_seq` (the app also only while a turn runs). A message that waited through a wrap-up is read by the agent in the new chapter, as the first message of the fresh session; the app therefore moves it below the chapter divider (`session.rotated`) when it folds the events, so the thread shows the order the agent works in. The event log keeps the order of arrival. The counter beside "Thinking…" counts from the `ts` of the running turn's `turn.started` (the wrap-up counts as a turn), never from the last message.
 
 **Agent home.** Every agent gets its own folder on the server, `~/bandito/agents/<slug>/`, next to (not inside) the project it works on. The root is `$BANDITO_AGENTS_DIR` when it is set to an absolute path; otherwise, when the daemon runs with its own `--home` (and not `~/.bandito`), it is `<home>-agents/` next to the data folder (never inside it: agents may not touch Bandito's own files), so a second daemon never writes into the first one's folders. `<slug>` is the agent's name in lowercase ASCII: Cyrillic is transliterated (`Ёж` → `yozh`, `Щи` → `shchi`, `ъ` and `ь` are dropped), other letters are dropped, and any other character becomes `-`. An empty result is `agent`. A name taken by another agent gets `-2`, `-3`, and so on:
 

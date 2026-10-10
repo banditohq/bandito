@@ -644,6 +644,7 @@ mod tests {
                     turn_id: "t".into(),
                     source: Source::User,
                     reactions_until: None,
+                    message_seq: None,
                 },
             )
             .unwrap()
@@ -684,6 +685,7 @@ mod tests {
                     command: None,
                     reply_to: None,
                     attachments: Vec::new(),
+                    queued: false,
                 },
             )
             .unwrap()

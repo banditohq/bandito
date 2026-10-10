@@ -356,6 +356,7 @@ mod tests {
             command: None,
             reply_to: None,
             attachments: Vec::new(),
+            queued: false,
         });
         emit(EventBody::MessageAssistant {
             text: "thinking".into(),
@@ -396,6 +397,7 @@ mod tests {
                             command: None,
                             reply_to: None,
                             attachments: Vec::new(),
+                            queued: false,
                         },
                     )
                     .unwrap();

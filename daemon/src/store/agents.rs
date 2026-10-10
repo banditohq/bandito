@@ -1031,6 +1031,7 @@ mod tests {
             command: None,
             reply_to: None,
             attachments: Vec::new(),
+            queued: false,
         };
         s.append_event(&a.id, user("hi", Source::User)).unwrap();
         let reply = s
