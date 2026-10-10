@@ -69,7 +69,7 @@ struct ApprovalsSection: View {
             // at the smallest window size.
             labeled(L10n.Settings.Approvals.when) {
                 TextField(L10n.Settings.Approvals.patternPlaceholder, text: $pattern)
-                    .textFieldStyle(.roundedBorder)
+                    .banditoField()
                     .font(.system(size: 13, design: .monospaced))
                     .onSubmit { add(server) }
             }

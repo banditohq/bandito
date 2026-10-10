@@ -101,7 +101,7 @@ private struct IdentityCard: View {
             avatarButton
             VStack(alignment: .leading, spacing: 3) {
                 TextField(L10n.AgentSheet.name, text: $name)
-                    .textFieldStyle(.plain)
+                    .banditoField()
                     .font(BanditoFont.font(size: 19, weight: 650))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1)
@@ -113,7 +113,7 @@ private struct IdentityCard: View {
                         .font(.system(size: 10.5, weight: .medium))
                         .foregroundStyle(Color.Bandito.text3)
                     TextField(L10n.Inspector.addRole, text: $role)
-                        .textFieldStyle(.plain)
+                        .banditoField()
                         .font(BanditoFont.font(size: 12.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .lineLimit(1)

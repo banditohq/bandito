@@ -24,12 +24,8 @@ struct FileNameSheet: View {
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(Color.Bandito.text)
             TextField(L10n.Files.Dialog.name, text: $name)
-                .textFieldStyle(.plain)
+                .banditoField()
                 .font(.system(size: 14))
-                .padding(.horizontal, 12)
-                .frame(height: 38)
-                .background(Color.Bandito.text.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
-                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.Bandito.text.opacity(0.1)))
                 .onSubmit(submit)
             if existing.contains(trimmed) {
                 Text(L10n.Files.Error.exists)

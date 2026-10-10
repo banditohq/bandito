@@ -143,7 +143,7 @@ struct IntegrationEditor: View {
     private var fields: some View {
         field(L10n.Integrations.Sheet.name, hint: L10n.Integrations.Sheet.nameHint) {
             TextField(L10n.Integrations.Sheet.name, text: $draft.name)
-                .textFieldStyle(.roundedBorder)
+                .banditoField()
                 .font(BanditoFont.font(size: 13, weight: 400, mono: true))
         }
         switch draft.kind {
@@ -151,13 +151,13 @@ struct IntegrationEditor: View {
             field(L10n.Integrations.Custom.commandLine, hint: L10n.Integrations.Custom.commandHint) {
                 TextField(L10n.Integrations.Custom.commandLine, text: $draft.commandLine, axis: .vertical)
                     .lineLimit(1...4)
-                    .textFieldStyle(.roundedBorder)
+                    .banditoField()
                     .font(BanditoFont.font(size: 13, weight: 400, mono: true))
             }
         case .http:
             field(L10n.Integrations.Sheet.url, hint: L10n.Integrations.Sheet.urlHint) {
                 TextField(catalogEntry?.urlHint ?? L10n.Integrations.Sheet.urlHint, text: $draft.url)
-                    .textFieldStyle(.roundedBorder)
+                    .banditoField()
                     .font(BanditoFont.font(size: 13, weight: 400, mono: true))
             }
         }
@@ -306,16 +306,16 @@ struct IntegrationPairRow: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
                 TextField(L10n.Integrations.Sheet.keyPlaceholder, text: $pair.key)
-                    .textFieldStyle(.roundedBorder)
+                    .banditoField()
                     .font(BanditoFont.font(size: 12.5, weight: 400, mono: true))
                     .frame(width: 130)
                 if pair.isSecret {
                     SecureField(L10n.Integrations.Sheet.valuePlaceholder, text: $pair.value)
-                        .textFieldStyle(.roundedBorder)
+                        .banditoField()
                         .font(BanditoFont.font(size: 12.5, weight: 400, mono: true))
                 } else {
                     TextField(L10n.Integrations.Sheet.valuePlaceholder, text: $pair.value)
-                        .textFieldStyle(.roundedBorder)
+                        .banditoField()
                         .font(BanditoFont.font(size: 12.5, weight: 400, mono: true))
                 }
                 if pair.template == nil {

@@ -372,12 +372,8 @@ struct FirstAgentStep: View {
                     .font(BanditoFont.font(size: 12.5, weight: 500))
                     .foregroundStyle(Color.Bandito.text2)
                 TextField(model.template?.title ?? "", text: Binding(get: { model.name }, set: { model.setName($0) }))
-                    .textFieldStyle(.plain)
+                    .banditoField()
                     .font(BanditoFont.font(size: 14.5, weight: 400))
-                    .padding(.horizontal, 14)
-                    .frame(height: 42)
-                    .background(Color.Bandito.surface1, in: RoundedRectangle(cornerRadius: 12))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.Bandito.text.opacity(0.12)))
                 if !model.name.isEmpty, let problem = model.nameProblem {
                     Text(Self.problemText(problem))
                         .font(BanditoFont.font(size: 12.5, weight: 400))
@@ -460,12 +456,8 @@ struct FirstAgentStep: View {
                             L10n.Workspace.Create.name,
                             text: Binding(get: { model.newWorkplace.name }, set: { model.setNewWorkplaceName($0) })
                         )
-                        .textFieldStyle(.plain)
+                        .banditoField()
                         .font(BanditoFont.font(size: 14, weight: 400))
-                        .padding(.horizontal, 14)
-                        .frame(height: 38)
-                        .background(Color.Bandito.surface1, in: RoundedRectangle(cornerRadius: 12))
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.Bandito.text.opacity(0.12)))
                     }
                     Text(L10n.Workspace.Choice.isolation)
                         .font(BanditoFont.font(size: 12, weight: 400))

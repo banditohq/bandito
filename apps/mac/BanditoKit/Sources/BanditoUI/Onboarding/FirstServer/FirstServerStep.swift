@@ -187,12 +187,8 @@ struct FirstServerStep: View {
             }
             HStack(spacing: 8) {
                 TextField("user@host:22", text: $model.address)
-                    .textFieldStyle(.plain)
+                    .banditoField()
                     .font(BanditoFont.font(size: 14, weight: 400, mono: true))
-                    .padding(.horizontal, 14)
-                    .frame(height: 44)
-                    .background(Color.Bandito.surface1, in: RoundedRectangle(cornerRadius: 12))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.Bandito.text.opacity(0.12)))
                     .onSubmit { model.startOwnServer(app: app) }
                 Button {
                     model.startOwnServer(app: app)

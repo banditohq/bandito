@@ -149,11 +149,8 @@ private struct ProfileEmailFields: View {
             if model.phase == .address {
                 HStack(spacing: 8) {
                     TextField(L10n.Onboarding.Account.emailPlaceholder, text: $model.email)
-                        .textFieldStyle(.plain)
+                        .banditoField()
                         .font(BanditoFont.font(size: 14, weight: 400))
-                        .padding(.horizontal, 12)
-                        .frame(height: 38)
-                        .background(Color.Bandito.surface1, in: RoundedRectangle(cornerRadius: 10))
                         .onSubmit { send() }
                         .accessibilityLabel(L10n.Onboarding.Account.emailLabel)
                     Button(L10n.Onboarding.Account.sendCode) { send() }
@@ -167,11 +164,9 @@ private struct ProfileEmailFields: View {
                     .foregroundStyle(Color.Bandito.text2)
                     .fixedSize(horizontal: false, vertical: true)
                 TextField("000000", text: $codeText)
-                    .textFieldStyle(.plain)
+                    .banditoField()
                     .font(BanditoFont.font(size: 20, weight: 600, mono: true))
-                    .padding(.horizontal, 12)
-                    .frame(width: 180, height: 44)
-                    .background(Color.Bandito.surface1, in: RoundedRectangle(cornerRadius: 12))
+                    .frame(width: 180)
                     .accessibilityLabel(L10n.Onboarding.Account.emailLabel)
                     .onChange(of: codeText) { _, text in
                         let digits = String(text.filter { $0.isASCII && $0.isNumber }.prefix(SixDigitCode.length))

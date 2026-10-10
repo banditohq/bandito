@@ -201,6 +201,7 @@ struct SourceEditor: View {
         TextEditor(text: $text)
             .font(.system(size: 12.5, design: .monospaced))
             .disabled(!isEditable)
+            .banditoEditor()
     }
 }
 #endif

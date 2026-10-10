@@ -127,7 +127,7 @@ struct PaneHeader: View {
                 .frame(width: 7, height: 7)
             if renaming {
                 TextField(L10n.Terminals.rename, text: $draft)
-                    .textFieldStyle(.plain)
+                    .banditoField()
                     .font(.system(size: 12.5, weight: .semibold))
                     .frame(maxWidth: 180)
                     .focused($nameFocused)

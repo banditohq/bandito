@@ -143,14 +143,10 @@ private struct PendingFormCard: View {
             fields
             if isConfirm {
                 TextField(L10n.Form.whyPlaceholder, text: comment, axis: .vertical)
-                    .textFieldStyle(.plain)
+                    .banditoField()
                     .font(BanditoFont.font(size: 13, weight: 400))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1...3)
-                    .padding(.horizontal, 13)
-                    .padding(.vertical, 10)
-                    .background(Color.Bandito.bg, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.Bandito.line))
                     .disabled(locked)
             }
             if let failure {
@@ -425,7 +421,6 @@ private struct FormFieldView: View {
 
     private var lineField: some View {
         TextField(field.placeholder ?? "", text: text)
-            .textFieldStyle(.plain)
             .font(
                 field.type == .number
                     ? BanditoFont.font(size: 13.5, weight: 400).monospacedDigit()
@@ -433,7 +428,7 @@ private struct FormFieldView: View {
             .foregroundStyle(Color.Bandito.text)
             .tint(Color.Bandito.signal)
             .focused($fieldFocused)
-            .modifier(FormFieldBox(plain: summary, failed: problem != nil, height: 40))
+            .modifier(FormFieldBox(plain: summary, failed: problem != nil))
             .contentShape(Rectangle())
             // A click anywhere in the box puts the caret here, and takes the focus from the composer.
             .simultaneousGesture(TapGesture().onEnded { fieldFocused = true })
@@ -442,13 +437,12 @@ private struct FormFieldView: View {
 
     private var areaField: some View {
         TextField(field.placeholder ?? "", text: text, axis: .vertical)
-            .textFieldStyle(.plain)
             .font(BanditoFont.font(size: 13.5, weight: 400))
             .foregroundStyle(Color.Bandito.text)
             .tint(Color.Bandito.signal)
             .lineLimit(summary ? 2...12 : 3...10)
             .focused($fieldFocused)
-            .modifier(FormFieldBox(plain: summary, failed: problem != nil, height: nil))
+            .modifier(FormFieldBox(plain: summary, failed: problem != nil))
             .contentShape(Rectangle())
             .simultaneousGesture(TapGesture().onEnded { fieldFocused = true })
             .accessibilityLabel(field.label)
@@ -599,31 +593,23 @@ private struct FormFieldView: View {
     }
 }
 
-/// The frame of a text field in a form: the filled field of the sheets, or no frame at all in the summary of a
+/// The frame of a text field in a form: the Bandito field of the sheets, or no frame at all in the summary of a
 /// confirmation (a thin underline shows that the line can be edited). A field with a problem has a red edge.
 private struct FormFieldBox: ViewModifier {
     var plain: Bool
     var failed: Bool
-    /// The fixed height of a one-line field; nil lets a multi-line field grow.
-    var height: CGFloat?
 
     func body(content: Content) -> some View {
-        let edge = failed ? Color.Bandito.danger : Color.Bandito.line
         if plain {
             content
+                .textFieldStyle(.plain)
                 .padding(.vertical, 5)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .overlay(alignment: .bottom) {
                     Rectangle().fill(failed ? Color.Bandito.danger : Color.Bandito.text.opacity(0.12)).frame(height: 1)
                 }
         } else {
-            content
-                .padding(.horizontal, 13)
-                .padding(.vertical, height == nil ? 10 : 0)
-                .frame(minHeight: height)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.Bandito.bg, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(edge))
+            content.banditoField(error: failed)
         }
     }
 }

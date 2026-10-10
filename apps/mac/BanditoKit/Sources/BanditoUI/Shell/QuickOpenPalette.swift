@@ -108,7 +108,7 @@ struct QuickOpenPalette: View {
                 .font(.system(size: 17))
                 .foregroundStyle(Color.Bandito.text2)
             TextField(L10n.Palette.search, text: $query)
-                .textFieldStyle(.plain)
+                .banditoField()
                 .font(BanditoFont.font(size: 17, weight: 400))
                 .foregroundStyle(Color.Bandito.text)
                 .focused($focused)

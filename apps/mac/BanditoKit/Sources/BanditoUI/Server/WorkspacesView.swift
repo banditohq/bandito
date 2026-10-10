@@ -420,7 +420,7 @@ struct WorkspaceCreateSheet: View {
                 .foregroundStyle(Color.Bandito.text)
             field(L10n.Workspace.Create.name) {
                 TextField("", text: $draft.name)
-                    .textFieldStyle(.roundedBorder)
+                    .banditoField()
                 Text(L10n.Workspace.Create.nameHint)
                     .font(.system(size: 11.5))
                     .foregroundStyle(Color.Bandito.text3)

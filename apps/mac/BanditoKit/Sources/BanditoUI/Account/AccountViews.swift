@@ -42,11 +42,8 @@ struct ResetConfirmation: View {
                 .lineSpacing(2)
             HStack(spacing: 8) {
                 TextField(L10n.Onboarding.Account.resetWordHint, text: $typed)
-                    .textFieldStyle(.plain)
+                    .banditoField()
                     .font(BanditoFont.font(size: 14, weight: 400, mono: true))
-                    .padding(.horizontal, 12)
-                    .frame(height: 38)
-                    .background(Color.Bandito.surface1, in: RoundedRectangle(cornerRadius: 10))
                     .frame(maxWidth: 200)
                 Button(L10n.Onboarding.Account.resetAction) {
                     Task { await run() }
@@ -412,12 +409,8 @@ private struct CodeEntryRow: View {
                 "XXXX-XXXX-XXXX-XXXX",
                 text: Binding(get: { model.code.value }, set: { model.enter($0) })
             )
-            .textFieldStyle(.plain)
+            .banditoField()
             .font(BanditoFont.font(size: 20, weight: 600, mono: true))
-            .padding(.horizontal, 14)
-            .frame(height: 46)
-            .background(Color.Bandito.surface1, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.Bandito.text.opacity(0.12)))
             .accessibilityLabel(L10n.Onboarding.Account.approveEnterCode)
         }
     }

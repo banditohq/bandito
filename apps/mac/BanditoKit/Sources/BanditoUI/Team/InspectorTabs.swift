@@ -146,7 +146,7 @@ struct DetailsTab: View {
                     // it turns into the field for editing.
                     if folderFocused {
                         TextField("", text: $folder)
-                            .textFieldStyle(.plain)
+                            .banditoField()
                             .font(BanditoFont.font(size: 12.5, weight: 400, mono: true))
                             .multilineTextAlignment(.trailing)
                             .frame(maxWidth: 200)
@@ -268,14 +268,10 @@ struct DetailsTab: View {
                 // A vertical TextField, not TextEditor: this view is inside a ScrollView, and a TextEditor would take
                 // the wheel for its own scrolling. Return adds a line; the field grows from 4 to 12 lines.
                 TextField(L10n.Inspector.instructionsPlaceholder, text: $instructions, axis: .vertical)
-                    .textFieldStyle(.plain)
+                    .banditoField()
                     .font(BanditoFont.font(size: 13, weight: 400))
                     .lineLimit(4...12)
-                    .padding(10)
                     .frame(maxWidth: .infinity, alignment: .topLeading)
-                    .background(Color.Bandito.bg, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.Bandito.line, lineWidth: 1))
                 HStack(spacing: 12) {
                     Text(L10n.Inspector.instructionsHint)
                         .font(BanditoFont.font(size: 12, weight: 400))
@@ -639,7 +635,7 @@ struct MemoryTab: View {
                 .foregroundStyle(Color.Bandito.text)
             HStack(spacing: 6) {
                 TextField("", text: $customDraft)
-                    .textFieldStyle(.roundedBorder)
+                    .banditoField()
                     .frame(width: 110)
                     .onSubmit { saveCustom() }
                 Text("K")

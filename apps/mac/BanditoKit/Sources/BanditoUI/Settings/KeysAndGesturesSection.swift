@@ -123,7 +123,7 @@ struct KeysAndGesturesSection: View {
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Color.Bandito.text3)
                 TextField(L10n.Keys.search, text: $query)
-                    .textFieldStyle(.plain)
+                    .banditoField()
                     .font(.system(size: 13))
                     .foregroundStyle(Color.Bandito.text)
             }
