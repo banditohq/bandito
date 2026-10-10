@@ -430,6 +430,34 @@ How each runtime gets them: Claude, in the same `--mcp-config` file as the crew 
 
 The agent's prompt names its integrations in one line: «Подключённые интеграции: <имена>. Используйте их инструменты, когда задача про эти сервисы.» (after the role, before the owner's own instructions). `daemon.info.features` contains `integrations`, `integrations_probe`, `integrations_oauth`, `template_updates` and `avatar_pictures`.
 
+### Recommendations
+
+`integrations.recommend {agent_id}` (owner and apps; agents are refused; feature `integrations_recommend`) → `[{template_id, reason_key, evidence}]`: at most 6 catalog templates that suit the agent's folder, in the order of the rules below. The folder is the agent's `cwd` when that is an absolute path, else its home folder (`home_dir`). A template is left out when the owner has it connected: an integration named after the template's id, or one at the template's `url` (a trailing `/` and the case of the scheme and host ignored). `reason_key` is a key of the app's text; `evidence` is the file that showed it, relative to the folder. An unknown `agent_id` is `INVALID_PARAMS`. Code: `daemon/src/recommend.rs`.
+
+The scan covers the folder and each real folder directly below it, and nothing deeper. Links are never followed: a link on the way to a file, a link used as a folder, or a link as the folder itself gives no suggestion. A file over 256 KB is skipped, and a file that does not read or parse skips only the rule that needs it; neither is an error of the method. Content is read only from `package.json`, `requirements*.txt`, `pyproject.toml` (the package names: the text at the start of a quoted requirement, `name[extra]>=1`), `.git/config` (`url` lines of `[remote …]` sections), `README*` (the first 64 KB; the name is matched in any case) and `docker-compose*.yml`. Dependency names of `package.json` are the keys of `dependencies` and `devDependencies`, in lower case; `next`, `@sentry/…` and `@supabase/…` match by name or prefix, `posthog` and `stripe` by substring. Python names are normalized (lower case, `_` and `.` as `-`), and `sentry-sdk` and `stripe` match exactly.
+
+| Rule (in this order) | template_id | reason_key | evidence |
+|---|---|---|---|
+| `.git/config` has a remote on github.com | `github` | `recommend.reason.gitRemoteGithub` | `.git/config` |
+| `.git/config` has a remote on gitlab.com | `gitlab` | `recommend.reason.gitRemoteGitlab` | `.git/config` |
+| `package.json` has `next` | `vercel` | `recommend.reason.nextPackage` | `package.json` |
+| `netlify.toml` exists | `netlify` | `recommend.reason.netlifyToml` | `netlify.toml` |
+| `vercel.json` exists | `vercel` | `recommend.reason.vercelJson` | `vercel.json` |
+| `sentry.properties` exists | `sentry` | `recommend.reason.sentryProperties` | `sentry.properties` |
+| `package.json` has an `@sentry/*` package | `sentry` | `recommend.reason.sentryPackage` | `package.json` |
+| requirements or pyproject has `sentry-sdk` | `sentry` | `recommend.reason.sentryPython` | the file |
+| a `supabase/` folder exists | `supabase` | `recommend.reason.supabaseFolder` | `supabase` |
+| `package.json` has an `@supabase/*` package | `supabase` | `recommend.reason.supabasePackage` | `package.json` |
+| `prisma/schema.prisma` exists | `prisma` | `recommend.reason.prismaSchema` | `prisma/schema.prisma` |
+| `wrangler.toml` exists | `cloudflare` | `recommend.reason.wranglerToml` | `wrangler.toml` |
+| a `docker-compose*.yml` mentions `postgres` | `toolbox-postgres` | `recommend.reason.composePostgres` | the compose file |
+| a `.linear` file or folder exists | `linear` | `recommend.reason.linearFolder` | `.linear` |
+| a README mentions `linear.app` | `linear` | `recommend.reason.linearReadme` | the README |
+| `package.json` has `posthog` | `posthog` | `recommend.reason.posthogPackage` | `package.json` |
+| `package.json` or requirements has `stripe` | `stripe` | `recommend.reason.stripePackage` | the file |
+
+A template that several rules suggest appears once, with the reason of its first rule. `toolbox-postgres` is the catalog's id of Google MCP Toolbox for PostgreSQL. The `reason_key` values the app must translate: `recommend.reason.gitRemoteGithub`, `gitRemoteGitlab`, `nextPackage`, `netlifyToml`, `vercelJson`, `sentryProperties`, `sentryPackage`, `sentryPython`, `supabaseFolder`, `supabasePackage`, `prismaSchema`, `wranglerToml`, `composePostgres`, `linearFolder`, `linearReadme`, `posthogPackage`, `stripePackage`.
+
 ## Agent templates (data)
 
 The built-in starting points for a bot: `daemon/src/agent_templates.json`, 16 entries in six categories (`dev`, `ops`, `research`, `writing`, `business`, `personal`). An entry has `id` (kebab-case), `name_*`, `description_*`, `long_*`, `role_en`, `starter_*` (the first message, put in the input field and never sent by itself) and `system_prompt` (English, always with «Reply in the language the owner writes in.»). `l10n` holds the other seven languages (`de`, `es`, `fr`, `ja`, `ko`, `pt-BR`, `zh-Hans`): `name`, `description`, `long`, `starter`, `schedule_prompts`. Also `icon` (an SF Symbol), `accent` (`#RRGGBB`), `runtime` (`claude`), `effort`, `capabilities` (a subset of the capability names), `integrations` (`{id, required}`, ids from `integrations_catalog.json`), `skills` (empty until the skills catalog exists) and `schedules` (`{cron, prompt_en, prompt_ru, enabled_by_default}`; the cron is read by the scheduler, the prompts are the owner's language pair). `agent_templates.rs` parses the file with `deny_unknown_fields`, and its test holds every entry to these rules. The methods that list them and create an agent from one are in [Agent templates](#agent-templates).

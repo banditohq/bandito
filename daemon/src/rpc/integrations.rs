@@ -4,11 +4,13 @@
 use super::{App, INVALID_PARAMS, METHOD_NOT_FOUND, Peer, RpcError, RpcResult, SERVER_ERROR, ok, params};
 use crate::integrations::{self, Pair, Server, Transport};
 use crate::mcp_oauth::{self, Outcome, Target, Why};
+use crate::recommend;
 use crate::store::{Integration, IntegrationAuth, IntegrationPatch, NewIntegration, Store, now_ms};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::os::unix::process::CommandExt;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
@@ -351,6 +353,33 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             check_new(&draft)?;
             // Nothing is saved: the draft runs as a row without an id, and its values stay in memory.
             probe_row(store, &draft_row(&draft), true).await
+        }
+        "integrations.recommend" => {
+            #[derive(Deserialize)]
+            struct RecommendParams {
+                agent_id: String,
+            }
+            let RecommendParams { agent_id } = params(p)?;
+            let agent = store
+                .agent_get(&agent_id)?
+                .ok_or_else(|| RpcError::new(INVALID_PARAMS, format!("no agent {agent_id}")))?;
+            // The agent's folder is its cwd when that is a path, else its home folder.
+            let Some(folder) = [Some(agent.cwd.as_str()), agent.home_dir.as_deref()]
+                .into_iter()
+                .flatten()
+                .find(|d| d.starts_with('/'))
+                .map(PathBuf::from)
+            else {
+                return ok(json!([]));
+            };
+            let catalog: Vec<recommend::Template> =
+                serde_json::from_str(CATALOG_JSON).map_err(|e| RpcError::new(SERVER_ERROR, format!("catalog: {e}")))?;
+            let rows = store.integration_list()?;
+            // The rules read a few small files and list folders: off the event loop.
+            let found = tokio::task::spawn_blocking(move || recommend::for_folder(&folder, &catalog, &rows))
+                .await
+                .map_err(|e| RpcError::new(SERVER_ERROR, format!("recommend: {e}")))?;
+            ok(found)
         }
         _ => Err(RpcError::new(METHOD_NOT_FOUND, format!("unknown method {method}"))),
     }
@@ -1462,6 +1491,67 @@ mod tests {
     #[test]
     fn the_template_updates_feature_is_offered() {
         assert!(crate::rpc::features().contains(&"template_updates"));
+    }
+
+    #[tokio::test]
+    async fn recommend_reads_the_agents_folder_and_leaves_out_connected_templates() {
+        let app = app();
+        let folder = tempfile::tempdir().unwrap();
+        std::fs::write(folder.path().join("netlify.toml"), "[build]\n").unwrap();
+        std::fs::write(folder.path().join("wrangler.toml"), "name = \"x\"\n").unwrap();
+        let agent = owner(
+            &app,
+            "agents.create",
+            json!({ "name": "Forge", "runtime": "claude", "cwd": folder.path().display().to_string() }),
+        )
+        .await
+        .unwrap();
+        let id = agent["id"].as_str().unwrap().to_string();
+        let ids = |v: &Value| -> Vec<String> {
+            v.as_array()
+                .unwrap()
+                .iter()
+                .map(|s| s["template_id"].as_str().unwrap().to_string())
+                .collect()
+        };
+        let got = owner(&app, "integrations.recommend", json!({ "agent_id": id }))
+            .await
+            .unwrap();
+        assert_eq!(ids(&got), ["netlify", "cloudflare"]);
+        assert_eq!(got[0]["reason_key"], "recommend.reason.netlifyToml");
+        assert_eq!(got[0]["evidence"], "netlify.toml");
+        // An integration named after a template, or at its address (a trailing `/` ignored), counts as connected.
+        owner(
+            &app,
+            "integrations.add",
+            json!({ "name": "netlify", "kind": "stdio", "command": "npx" }),
+        )
+        .await
+        .unwrap();
+        owner(
+            &app,
+            "integrations.add",
+            json!({ "name": "cf", "kind": "http", "url": "https://mcp.cloudflare.com/mcp/" }),
+        )
+        .await
+        .unwrap();
+        let got = owner(&app, "integrations.recommend", json!({ "agent_id": id }))
+            .await
+            .unwrap();
+        assert_eq!(got, json!([]));
+        let err = owner(&app, "integrations.recommend", json!({ "agent_id": "nope" }))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, INVALID_PARAMS);
+        let err = super::super::dispatch(
+            &app,
+            &super::super::Peer::Agent(id),
+            "integrations.recommend",
+            json!({ "agent_id": "x" }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, super::super::UNAUTHORIZED);
     }
 
     fn sh_server(script: &str, env: &[(&str, &str, bool)]) -> Server {
