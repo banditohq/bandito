@@ -31,6 +31,7 @@ public struct BanditoFieldStyle: TextFieldStyle {
 
     public func _body(configuration: TextField<Self._Label>) -> some View {
         configuration
+            .textFieldStyle(.plain)
             .modifier(BanditoFieldChrome(focused: focused, error: error, verticalPadding: 9))
     }
 }
@@ -70,10 +71,13 @@ private struct BanditoFieldModifier: ViewModifier {
     @FocusState private var focused: Bool
 
     func body(content: Content) -> some View {
+        // A plain field with the chrome drawn around it: a custom TextFieldStyle on macOS still keeps the system bezel
+        // inside, which showed as a grey field within the warm one.
         content
+            .textFieldStyle(.plain)
             .focused($focused)
             .focusEffectDisabled()
-            .textFieldStyle(BanditoFieldStyle(focused: focused, error: error))
+            .modifier(BanditoFieldChrome(focused: focused, error: error, verticalPadding: 9))
     }
 }
 
