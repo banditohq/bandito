@@ -26,7 +26,7 @@ struct UsageButton: View {
                     .font(.system(size: 14, weight: .medium))
                 if let text {
                     Text(text)
-                        .font(.system(size: 12.5, weight: .semibold))
+                        .font(BanditoFont.text(size: 12.5, weight: 600))
                         .monospacedDigit()
                         .foregroundStyle(level?.color ?? Color.Bandito.text)
                         .lineLimit(1)

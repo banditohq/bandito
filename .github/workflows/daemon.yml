@@ -1,21 +1,17 @@
 name: daemon
 
 on:
-  pull_request:
-    paths: ["daemon/**", ".github/workflows/daemon.yml"]
-  push:
-    branches: [main]
-    paths: ["daemon/**", ".github/workflows/daemon.yml"]
-  # macOS-specific code (the agents' sandbox, "This Mac") runs every night and on main; PRs test on Linux,
-  # where runners are plentiful, and locally on a Mac through .claude/verify.sh before they are sent.
+  # Runs only through ci.yml (one entry point for PRs and pushes, so nothing runs twice).
+  # macOS-specific code (the agents' sandbox, "This Mac") also runs every night.
   schedule:
     - cron: "0 19 * * *"
   workflow_dispatch:
+  workflow_call:
 
 # A newer push to the same PR or branch cancels the run for the older one.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: daemon-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read

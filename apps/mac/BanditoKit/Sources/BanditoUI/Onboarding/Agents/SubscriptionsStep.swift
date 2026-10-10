@@ -198,10 +198,10 @@ struct SubscriptionsStep: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             Text(L10n.Onboarding.Subs.title)
-                .font(BanditoFont.font(size: 38, weight: 600))
+                .font(BanditoFont.display(size: 35, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
             Text(L10n.Onboarding.Subs.subtitle)
-                .font(BanditoFont.font(size: 15, weight: 400))
+                .font(BanditoFont.text(size: 15, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .lineSpacing(2)
             VStack(spacing: 10) {
@@ -230,7 +230,7 @@ struct SubscriptionsStep: View {
                 }
             }
             Text(L10n.Onboarding.Subs.needOne)
-                .font(BanditoFont.font(size: 12.5, weight: 400))
+                .font(BanditoFont.text(size: 12.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
         }
         .frame(maxWidth: 760, alignment: .topLeading)
@@ -245,7 +245,7 @@ struct SubscriptionsStep: View {
             RaccoonAvatar(name: model.title(kind), size: 36)
             VStack(alignment: .leading, spacing: 3) {
                 Text(model.title(kind))
-                    .font(BanditoFont.font(size: 15, weight: 500))
+                    .font(BanditoFont.text(size: 15, weight: 500))
                     .foregroundStyle(Color.Bandito.text)
                 statusLine(kind, action)
             }
@@ -261,18 +261,18 @@ struct SubscriptionsStep: View {
     private func statusLine(_ kind: RuntimeKind, _ action: SubscriptionRowAction) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(statusText(action))
-                .font(BanditoFont.font(size: 12.5, weight: 400))
+                .font(BanditoFont.text(size: 12.5, weight: 400))
                 .foregroundStyle(action == .ready ? AvatarColor.sage.color : Color.Bandito.text3)
             if action == .installing, let line = InstallLog.lastLine(model.setup.log) {
                 Text(line)
-                    .font(BanditoFont.font(size: 11.5, weight: 400, mono: true))
+                    .font(BanditoFont.mono(size: 11.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
             if action == .installByHand, let hint = model.component(kind)?.hint {
                 Text(hint)
-                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -314,7 +314,7 @@ struct SubscriptionsStep: View {
             HStack(spacing: 8) {
                 if let plan = model.state(kind).flatMap(Self.plan) {
                     Text(plan)
-                        .font(BanditoFont.font(size: 12, weight: 500))
+                        .font(BanditoFont.text(size: 12, weight: 500))
                         .foregroundStyle(Color.Bandito.text2)
                         .padding(.horizontal, 10)
                         .frame(height: 24)
@@ -356,13 +356,13 @@ struct SubscriptionsStep: View {
     private func permissionBlock(command: String?) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(L10n.Onboarding.Server.passwordHint)
-                .font(BanditoFont.font(size: 13, weight: 400))
+                .font(BanditoFont.text(size: 13, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .lineSpacing(2)
             if let command {
                 HStack(spacing: 10) {
                     Text(command)
-                        .font(BanditoFont.font(size: 12.5, weight: 400, mono: true))
+                        .font(BanditoFont.mono(size: 12.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text)
                         .textSelection(.enabled)
                         .lineLimit(2)
@@ -380,11 +380,11 @@ struct SubscriptionsStep: View {
     private func failedBlock(_ kind: RuntimeKind) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(L10n.Onboarding.Subs.installFailed(name: model.title(kind)))
-                .font(BanditoFont.font(size: 13, weight: 400))
+                .font(BanditoFont.text(size: 13, weight: 400))
                 .foregroundStyle(Color.Bandito.danger)
             if let line = InstallLog.lastLine(model.setup.log) {
                 Text(line)
-                    .font(BanditoFont.font(size: 11.5, weight: 400, mono: true))
+                    .font(BanditoFont.mono(size: 11.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .lineLimit(2)
             }
@@ -403,12 +403,12 @@ struct SubscriptionsStep: View {
                         PulseDot(t: context.date.timeIntervalSinceReferenceDate, color: Color.Bandito.signal)
                     }
                     Text(model.hint(kind))
-                        .font(BanditoFont.font(size: 13, weight: 400))
+                        .font(BanditoFont.text(size: 13, weight: 400))
                         .foregroundStyle(Color.Bandito.text2)
                         .lineSpacing(2)
                 }
                 Text(L10n.Onboarding.Subs.loginAfter)
-                    .font(BanditoFont.font(size: 12.5, weight: 500))
+                    .font(BanditoFont.text(size: 12.5, weight: 500))
                     .foregroundStyle(Color.Bandito.text2)
             }
             if let session = model.terminal {
@@ -421,7 +421,7 @@ struct SubscriptionsStep: View {
                     Button(L10n.Onboarding.Subs.openLink) { SystemActions.open(link) }
                         .banditoButton(.quiet(size: .regular))
                     Text(L10n.Onboarding.Subs.linkHost(host: link.host ?? ""))
-                        .font(BanditoFont.font(size: 12, weight: 400))
+                        .font(BanditoFont.text(size: 12, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                 }
                 Spacer()
@@ -429,7 +429,7 @@ struct SubscriptionsStep: View {
                     .banditoButton(.quiet(size: .regular))
                 Button(L10n.Onboarding.Server.back) { Task { await model.endLogin() } }
                     .buttonStyle(.plain)
-                    .font(BanditoFont.font(size: 13, weight: 400))
+                    .font(BanditoFont.text(size: 13, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
             }
         }

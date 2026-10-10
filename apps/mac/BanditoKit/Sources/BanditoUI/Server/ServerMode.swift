@@ -5,24 +5,19 @@ import SwiftUI
 
 /// The sections of the Server mode, picked in its sidebar.
 public enum ServerSection: String, CaseIterable, Identifiable, Sendable {
-    case overview, workspaces, secrets, integrations, ports, devices, updates, journal
+    case overview, workspaces, secrets, ports, devices, updates, backups, journal
 
     public var id: String { rawValue }
-
-    /// The sections the sidebar lists. Integrations are listed only when the server has them.
-    public static func visible(integrations: Bool) -> [ServerSection] {
-        allCases.filter { $0 != .integrations || integrations }
-    }
 
     public var title: String {
         switch self {
         case .overview: L10n.Mode.serverOverview
         case .workspaces: L10n.Mode.serverWorkspaces
         case .secrets: L10n.Mode.serverSecrets
-        case .integrations: L10n.Mode.serverIntegrations
         case .ports: L10n.Mode.serverPorts
         case .devices: L10n.Mode.serverDevices
         case .updates: L10n.Mode.serverUpdates
+        case .backups: L10n.Mode.serverBackups
         case .journal: L10n.Mode.serverJournal
         }
     }
@@ -42,10 +37,10 @@ struct ServerMode: View {
                 case .overview: ServerOverview(server: app.currentServer)
                 case .workspaces: WorkspacesView()
                 case .secrets: SecretsView(server: app.currentServer)
-                case .integrations: IntegrationsView(server: app.currentServer)
                 case .ports: PortsView(server: app.currentServer)
                 case .devices: DevicesView(server: app.currentServer)
                 case .updates: UpdatesView(server: app.currentServer)
+                case .backups: BackupsView(server: app.currentServer)
                 case .journal: ServerJournalView(server: app.currentServer)
                 }
             }
@@ -72,7 +67,9 @@ struct ServerPage<Trailing: View, Content: View>: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 14) {
                 Text(title)
-                    .font(.system(size: 26, weight: .semibold))
+                    .font(BanditoFont.display(size: 24, weight: 600))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                     .foregroundStyle(Color.Bandito.text)
                 Spacer(minLength: 12)
                 trailing
@@ -105,7 +102,7 @@ struct ServerUnavailable: View {
 
     var body: some View {
         Text(message)
-            .font(.system(size: 13))
+            .font(BanditoFont.text(size: 13, weight: 400))
             .foregroundStyle(Color.Bandito.text2)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(16)
@@ -118,20 +115,21 @@ struct ServerUnavailable: View {
     }
 }
 
-/// Sidebar of the Server mode: the seven sections. Picking one sets `Router.serverSection`.
+/// Sidebar of the Server mode: its sections, Backups only on a server that has the feature. Picking one sets
+/// `Router.serverSection`.
 struct ServerSidebar: View {
     @Environment(Router.self) private var router
     @Environment(AppModel.self) private var app
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            ForEach(ServerSection.visible(integrations: app.currentServer?.supports("integrations") ?? false)) { section in
+            ForEach(ServerSection.visible(supportsBackups: app.currentServer?.supports("backups") ?? false)) { section in
                 let selected = router.serverSection == section
                 Button {
                     router.serverSection = section
                 } label: {
                     Text(section.title)
-                        .font(.system(size: 13, weight: selected ? .semibold : .regular))
+                        .font(BanditoFont.text(size: 13, weight: selected ? 600 : 400))
                         .foregroundStyle(selected ? Color.Bandito.text : Color.Bandito.text2)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 10)

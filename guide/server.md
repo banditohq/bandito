@@ -1,21 +1,21 @@
 # Server (Сервер)
 
 The health and the setup of the server that runs your agents: its load, what is installed, the workplaces, secrets,
-open ports, paired devices and updates. Open the mode with ⌘6. The sections are switched at the top of the mode.
+open ports, paired devices and updates. Open the mode with ⌘7. The sections are switched at the top of the mode.
 
 ## Server mode
 
 <!-- id: server-mode; covers: mode:server -->
-The Server mode has seven sections: Overview (Обзор), Workplaces (Рабочие места), Secrets (Секреты), Ports (Порты), Devices (Устройства), Updates (Обновления), and Daemon log (Журнал демона). The current server is shown in the top bar.
+The Server mode has seven sections: Overview (Обзор), Workplaces (Рабочие места), Secrets (Секреты), Ports (Порты), Devices (Устройства), Updates (Обновления), and Daemon log (Журнал демона). A server with a recent daemon also has Backups (Резервные копии). The current server is shown in the top bar.
 Где: Mode bar → Server (Сервер), or Menu View → Server (Сервер)
-1. Press ⌘6 or click Server (Сервер) in the mode bar.
+1. Press ⌘7 or click Server (Сервер) in the mode bar.
 2. Choose a section at the top. Each section keeps its own state.
 3. To switch to another server, use the server picker in the top bar. Actions in progress are dropped when the server changes.
 
 ## Overview: load and health (Overview)
 
 <!-- id: server-overview; covers: -->
-The first screen: CPU, Memory, Disk and Network tiles, a health line, and the processes that use the most resources.
+The first screen: a passport card at the top (the device, the name, the system and version line, the uptime, and a status ring with the health words; This Mac (Этот Mac) marks the local server), then CPU, Memory, Disk and Network tiles, and the processes that use the most resources, with their CPU and memory bars.
 Где: Server → Overview (Обзор)
 1. Read the health line: All good (Всё в порядке), Disk almost full (Диск почти полон), Memory almost full (Памяти почти не осталось), or Disk and memory almost full (Диск и память почти заполнены).
 2. Switch the chart range: 1 h (1 h) or 24 h (24 h).
@@ -40,7 +40,7 @@ Stops all processes of one agent that use the server. Use it when an agent runs 
 ## Capabilities: components and install (Capabilities, Install)
 
 <!-- id: server-capabilities; covers: -->
-Shows what the server has: the Screen (Экран), the Browser (Браузер), Containers (Контейнеры), and the runtimes Claude Code, Codex and Grok. Each line has a state: Ready (Готово), Not installed (Не установлен), or Not available (Недоступно).
+Shows what the server has: the Screen (Экран), the Browser (Браузер), Containers (Контейнеры), and the runtimes Claude Code, Codex and Grok. Each line is a tile with a state chip: Ready (Готово), Sign in needed (Нужно войти, with the Sign in (Войти) link), Not installed (Не установлено, with the Install (Установить) link), or Not available (Недоступно).
 Где: Server → Overview → Capabilities (Возможности) → Install (Установить)
 1. Read the states. Click Install (Установить) to install all missing items that can be installed here. The log shows the progress.
 2. If an administrator password is needed, the card asks you to run the command in a Bandito terminal. Click Open terminal (Открыть терминал) and type the password there. See [getting-started.md](getting-started.md).
@@ -142,11 +142,22 @@ Shows the version of the daemon on the server and the latest release, and how to
 1. Read Daemon version (Версия демона) and Latest release (Последний релиз). The badge says Update available (Доступно обновление) or Up to date (Актуально).
 2. Click Open in terminal (Открыть в терминале). The update runs the same install script as the first setup. It replaces the daemon and keeps your data and settings.
 3. Run it in the terminal that opens. The Terminals mode shows the output.
+## Backups (Резервные копии)
+
+<!-- id: server-backups; covers: -->
+Copies of the server's database. The daemon saves one at its start, before an update and once a day, and keeps the newest 14. The section lists them and makes a copy now. It appears only on a server whose daemon has backups.
+Где: Server (⌘7) → Backups (Резервные копии)
+1. Read the list, newest first. Each copy shows its date and time, why it was made (At start, Before update, Daily, Manual, Before restore), and its size.
+2. Click Make a copy now (Сделать копию сейчас) to save the database at once.
+3. To restore a copy, click Restore (Восстановить) in its row and confirm Restore the copy from {date}?. The current database is kept first and never deleted. The server restarts and agents stop for a few seconds; the banner The server is restarting… stays until it is back, then the result of this restore is shown.
+4. A row marked Database saved before a restore (База, сохранённая перед восстановлением), or Damaged database saved before a restore, is the old database that a restore set aside. The daemon never deletes it; you can restore it like a copy.
+5. If a restore leaves the server with no usable database, the server starts in safe mode and stays in it at every start until a restore works: Overview and Backups show why, and only Backups works. Choose a copy in the list and click Restore (Восстановить). A row marked Incomplete saved database (Неполная сохранённая база) has no database file and cannot be restored; it is only shown so that it is not lost. When the database could open again (for example, the disk had no free space and now has), click Check the database and leave safe mode (Проверить базу и выйти из безопасного режима): the server tries a copy of the database first and restarts only if it opens; otherwise it says so and a restore is the way out.
+
 ## Daemon log (Журнал демона)
 
 <!-- id: server-daemon-log; covers: -->
 The daemon's own log on the server: its newest lines, with the level filter. Secrets and Bandito's tokens are masked before they are shown. The view follows the end of the log. On a server with an older Bandito the section says that the log needs an update.
-Где: Server (⌘6) → Daemon log (Журнал демона)
+Где: Server (⌘7) → Daemon log (Журнал демона)
 1. Open Daemon log. The newest 500 lines are shown, the last one at the bottom.
 2. Choose All (Все), Warnings (Предупреждения) or Errors (Ошибки) to filter the lines by level.
 3. Click Refresh (Обновить) to read the log again, or Copy all (Скопировать всё) to copy the lines on screen.

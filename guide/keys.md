@@ -64,13 +64,21 @@ Switches the main window to the Server screen mode.
 1. Press ⌘5, or choose the item in the View menu.
 Хоткей: ⌘5
 
+## Go to Marketplace (Маркетплейс)
+
+<!-- id: key-global-mode-market; covers: command:global.mode.market -->
+Switches the main window to the Marketplace mode (the services the agents can use).
+Где: View → Go to Marketplace (Маркетплейс)
+1. Press ⌘6, or choose the item in the View menu.
+Хоткей: ⌘6
+
 ## Go to Server (Сервер)
 
 <!-- id: key-global-mode-server; covers: command:global.mode.server -->
 Switches the main window to the Server mode (health, workplaces, secrets, ports, devices, updates).
 Где: View → Go to Server (Сервер)
-1. Press ⌘6, or choose the item in the View menu.
-Хоткей: ⌘6
+1. Press ⌘7, or choose the item in the View menu.
+Хоткей: ⌘7
 
 ## Team home (Главная команды)
 
@@ -363,7 +371,7 @@ Resets the text size of the terminals to the default.
 <!-- id: key-files-open; covers: command:files.open -->
 Opens the selected folder, or the selected file in the viewer.
 Где: Files → Open (Открыть), in the context menu of an item
-1. Select an item in Files (⌘1…⌘6 mode Files: ⌘2).
+1. Select an item in Files (⌘1…⌘7 mode Files: ⌘2).
 2. Press ⌘↓. A folder opens; a file opens in the viewer.
 Хоткей: ⌘↓
 

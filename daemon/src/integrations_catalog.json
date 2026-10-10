@@ -1,75 +1,719 @@
 [
   {
-    "id": "composio",
-    "name": "Composio",
-    "description_en": "Hundreds of apps through one MCP server. Replace the server id and user id in the URL with yours.",
-    "description_ru": "Сотни приложений через один MCP-сервер. В адресе замените идентификатор сервера и пользователя на свои.",
-    "kind": "http",
-    "url": null,
-    "url_hint": "https://backend.composio.dev/v3/mcp/<SERVER_ID>?user_id=<USER_ID>",
-    "headers_keys": [
-      { "key": "x-api-key", "label_en": "Composio API key", "label_ru": "Ключ API Composio", "secret": true, "value_template": "{secret}" }
-    ],
-    "docs_url": "https://docs.composio.dev/docs/mcp",
-    "icon": "composio"
-  },
-  {
     "id": "github",
     "name": "GitHub",
+    "category": "dev",
+    "publisher": "GitHub",
+    "official": true,
+    "homepage": "https://github.com",
     "description_en": "Repositories, issues and pull requests, through GitHub's own MCP server.",
     "description_ru": "Репозитории, задачи и pull request через официальный MCP-сервер GitHub.",
+    "long_en": "GitHub's own MCP server lets an agent work with your repositories, issues and pull requests. For example: find the open issues labeled bug and summarize them, or read the changes in a pull request.",
+    "long_ru": "Официальный MCP-сервер GitHub даёт агенту доступ к вашим репозиториям, задачам и pull request. Например: найти открытые задачи с меткой bug и кратко их описать или прочитать изменения в pull request.",
+    "abilities_en": [
+      "Search code and read files in repositories",
+      "Read, create and comment on issues",
+      "Read and open pull requests",
+      "Optional groups of tools: Actions, security alerts, projects, gists"
+    ],
+    "abilities_ru": [
+      "Искать код и читать файлы в репозиториях",
+      "Читать, создавать и комментировать задачи",
+      "Читать и открывать pull request",
+      "Дополнительные группы инструментов: Actions, оповещения безопасности, проекты, gist"
+    ],
+    "needs_en": "A GitHub personal access token with the scopes your tasks need.",
+    "needs_ru": "Персональный токен доступа GitHub с правами, нужными для ваших задач.",
     "kind": "http",
     "url": "https://api.githubcopilot.com/mcp/",
     "headers_keys": [
-      { "key": "Authorization", "label_en": "Personal access token", "label_ru": "Персональный токен доступа", "secret": true, "value_template": "Bearer {secret}" }
+      {
+        "key": "Authorization",
+        "label_en": "Personal access token",
+        "label_ru": "Персональный токен доступа",
+        "secret": true,
+        "value_template": "Bearer {secret}"
+      }
     ],
     "docs_url": "https://github.com/github/github-mcp-server",
-    "icon": "github"
+    "icon": "github",
+    "accent": "#24292F"
   },
   {
     "id": "linear",
     "name": "Linear",
+    "category": "productivity",
+    "publisher": "Linear",
+    "official": true,
+    "homepage": "https://linear.app",
     "description_en": "Issues, projects and cycles in Linear, through Linear's MCP server.",
     "description_ru": "Задачи, проекты и циклы в Linear через MCP-сервер Linear.",
+    "long_en": "Linear's MCP server lets an agent read and update your issues and projects. For example: list the issues assigned to you this cycle, or create an issue from a bug report.",
+    "long_ru": "MCP-сервер Linear позволяет агенту читать и обновлять ваши задачи и проекты. Например: показать задачи, назначенные вам в этом цикле, или создать задачу из описания бага.",
+    "abilities_en": [
+      "Find and read issues and projects",
+      "Create and update issues"
+    ],
+    "abilities_ru": [
+      "Находить и читать задачи и проекты",
+      "Создавать и обновлять задачи"
+    ],
+    "needs_en": "A Linear account. Sign in in the browser after you press Connect.",
+    "needs_ru": "Аккаунт Linear: войдите в браузере после нажатия «Подключить».",
     "kind": "http",
     "url": "https://mcp.linear.app/mcp",
-    "headers_keys": [
-      { "key": "Authorization", "label_en": "Linear API key", "label_ru": "Ключ API Linear", "secret": true, "value_template": "Bearer {secret}" }
-    ],
+    "auth": "oauth",
     "docs_url": "https://linear.app/docs/mcp",
-    "icon": "linear"
+    "icon": "linear",
+    "accent": "#5E6AD2"
+  },
+  {
+    "id": "notion",
+    "name": "Notion",
+    "category": "productivity",
+    "publisher": "Notion",
+    "official": true,
+    "homepage": "https://www.notion.com",
+    "description_en": "Pages, databases and search in your Notion workspace, through Notion's own MCP server.",
+    "description_ru": "Страницы, базы данных и поиск в вашем рабочем пространстве Notion через официальный MCP-сервер Notion.",
+    "long_en": "Notion's MCP server lets an agent search your workspace and read and update pages and databases. It is in beta, and the tools it offers depend on your Notion plan. For example: find last week's meeting notes, or add a row to a task database.",
+    "long_ru": "MCP-сервер Notion позволяет агенту искать в вашем рабочем пространстве и читать и обновлять страницы и базы данных. Сервер в бете, а набор инструментов зависит от вашего тарифа Notion. Например: найти заметки со встречи за прошлую неделю или добавить строку в базу задач.",
+    "abilities_en": [
+      "Search the workspace",
+      "Read pages and databases",
+      "Create and update pages",
+      "The tools you get depend on your Notion plan"
+    ],
+    "abilities_ru": [
+      "Искать по рабочему пространству",
+      "Читать страницы и базы данных",
+      "Создавать и обновлять страницы",
+      "Набор инструментов зависит от вашего тарифа Notion"
+    ],
+    "needs_en": "A Notion account with access to the workspace. Sign in in the browser after you press Connect.",
+    "needs_ru": "Аккаунт Notion с доступом к нужному рабочему пространству. Войдите в браузере после нажатия «Подключить».",
+    "kind": "http",
+    "url": "https://mcp.notion.com/mcp",
+    "auth": "oauth",
+    "docs_url": "https://developers.notion.com/guides/mcp/get-started-with-mcp",
+    "icon": "notion",
+    "accent": "#2F3437"
+  },
+  {
+    "id": "atlassian",
+    "name": "Atlassian",
+    "category": "productivity",
+    "publisher": "Atlassian",
+    "official": true,
+    "homepage": "https://www.atlassian.com",
+    "description_en": "Jira and Confluence through Atlassian's Rovo MCP server, with an API token.",
+    "description_ru": "Jira и Confluence через сервер Atlassian Rovo MCP, по API-токену.",
+    "long_en": "Atlassian's Rovo MCP server connects an agent to your Jira and Confluence. Signing in with an API token works only if your organization's admin has allowed it.",
+    "long_ru": "Сервер Atlassian Rovo MCP подключает агента к вашим Jira и Confluence. Вход по API-токену работает, только если администратор организации его разрешил.",
+    "abilities_en": [
+      "Work with Jira and Confluence content from the agent",
+      "Access limited by the scopes of the token",
+      "Authentication by a personal API token or a service account key"
+    ],
+    "abilities_ru": [
+      "Работать с содержимым Jira и Confluence из агента",
+      "Доступ ограничен правами токена",
+      "Вход по персональному API-токену или ключу сервисного аккаунта"
+    ],
+    "needs_en": "An Atlassian API token, and your organization admin must enable API token authentication. The header value is Base64 of email:token.",
+    "needs_ru": "API-токен Atlassian; администратор организации должен включить вход по токену. Значение заголовка — Base64 от «почта:токен».",
+    "kind": "http",
+    "url": "https://mcp.atlassian.com/v2/mcp",
+    "headers_keys": [
+      {
+        "key": "Authorization",
+        "label_en": "Base64 of email:api_token",
+        "label_ru": "Base64 от «почта:токен»",
+        "secret": true,
+        "value_template": "Basic {secret}"
+      }
+    ],
+    "docs_url": "https://support.atlassian.com/atlassian-rovo-mcp-server/docs/configuring-authentication-via-api-token/",
+    "icon": "atlassian",
+    "accent": "#0052CC"
+  },
+  {
+    "id": "stripe",
+    "name": "Stripe",
+    "category": "data",
+    "publisher": "Stripe",
+    "official": true,
+    "homepage": "https://stripe.com",
+    "description_en": "Stripe's API and documentation search, with an agent API key.",
+    "description_ru": "API Stripe и поиск по документации, с агентским ключом API.",
+    "long_en": "Stripe's MCP server lets an agent read and change data in your Stripe account and search Stripe's documentation. For example: list recent failed payments, or find how to set up a subscription. Use a test-mode key first.",
+    "long_ru": "MCP-сервер Stripe позволяет агенту читать и менять данные вашего аккаунта Stripe и искать по документации. Например: показать последние неудачные платежи или найти, как настроить подписку. Сначала используйте ключ тестового режима.",
+    "abilities_en": [
+      "Read Stripe objects: customers, payments, invoices, subscriptions",
+      "Create and update objects, such as products, prices and payment links",
+      "Search Stripe documentation",
+      "Risky actions such as refunds need your confirmation in Stripe"
+    ],
+    "abilities_ru": [
+      "Читать объекты Stripe: клиентов, платежи, счета, подписки",
+      "Создавать и менять объекты: товары, цены, платёжные ссылки",
+      "Искать по документации Stripe",
+      "Рискованные действия, например возврат, требуют вашего подтверждения в Stripe"
+    ],
+    "needs_en": "A Stripe agent API key with only the permissions the agent needs. Stripe stops accepting full-access secret keys on 31 October 2026.",
+    "needs_ru": "Агентский ключ API Stripe с минимально нужными правами. С 31 октября 2026 Stripe перестаёт принимать ключи с полным доступом.",
+    "kind": "http",
+    "url": "https://mcp.stripe.com",
+    "headers_keys": [
+      {
+        "key": "Authorization",
+        "label_en": "Stripe agent API key",
+        "label_ru": "Агентский ключ API Stripe",
+        "secret": true,
+        "value_template": "Bearer {secret}"
+      }
+    ],
+    "docs_url": "https://docs.stripe.com/mcp",
+    "icon": "stripe",
+    "accent": "#635BFF"
+  },
+  {
+    "id": "supabase",
+    "name": "Supabase",
+    "category": "data",
+    "publisher": "Supabase",
+    "official": true,
+    "homepage": "https://supabase.com",
+    "description_en": "Manage Supabase projects and query their databases, with an access token.",
+    "description_ru": "Управление проектами Supabase и запросы к их базам, по токену доступа.",
+    "long_en": "Supabase's MCP server lets an agent work with your projects: look at tables, run queries and read the docs. Limit it to one project and turn on read-only mode before pointing it at real data.",
+    "long_ru": "MCP-сервер Supabase позволяет агенту работать с вашими проектами: смотреть таблицы, выполнять запросы и читать документацию. Прежде чем подключать реальные данные, ограничьте его одним проектом и включите режим только чтения.",
+    "abilities_en": [
+      "Inspect tables and run SQL",
+      "Work with one project, set by project_ref in the address",
+      "Read-only mode with read_only=true in the address",
+      "Choose tool groups with the features parameter"
+    ],
+    "abilities_ru": [
+      "Смотреть таблицы и выполнять SQL",
+      "Работать с одним проектом: project_ref в адресе",
+      "Режим только чтения: read_only=true в адресе",
+      "Выбирать группы инструментов параметром features"
+    ],
+    "needs_en": "A Supabase personal access token (Dashboard, Account, Access tokens). Edit the address: your project_ref, and read_only=true.",
+    "needs_ru": "Персональный токен доступа Supabase (Dashboard, Account, Access tokens). Допишите в адрес свой project_ref и read_only=true.",
+    "kind": "http",
+    "url": null,
+    "url_hint": "https://mcp.supabase.com/mcp?project_ref=<PROJECT_REF>&read_only=true",
+    "headers_keys": [
+      {
+        "key": "Authorization",
+        "label_en": "Supabase access token",
+        "label_ru": "Токен доступа Supabase",
+        "secret": true,
+        "value_template": "Bearer {secret}"
+      }
+    ],
+    "docs_url": "https://supabase.com/docs/guides/getting-started/mcp",
+    "icon": "database",
+    "accent": "#3ECF8E"
+  },
+  {
+    "id": "cloudflare",
+    "name": "Cloudflare",
+    "category": "dev",
+    "publisher": "Cloudflare",
+    "official": true,
+    "homepage": "https://www.cloudflare.com",
+    "description_en": "The Cloudflare API from an agent, with an API token.",
+    "description_ru": "API Cloudflare из агента, по API-токену.",
+    "long_en": "Cloudflare's API MCP server lets an agent work with your Cloudflare account through the API. Create a token with only the permissions the task needs.",
+    "long_ru": "MCP-сервер Cloudflare API позволяет агенту работать с вашим аккаунтом Cloudflare через API. Создайте токен только с нужными задаче правами.",
+    "abilities_en": [
+      "Call the Cloudflare API on your account",
+      "Access limited by the permissions of the token",
+      "User tokens and account tokens both work"
+    ],
+    "abilities_ru": [
+      "Вызывать API Cloudflare от имени вашего аккаунта",
+      "Доступ ограничен правами токена",
+      "Подходят и пользовательские токены, и токены аккаунта"
+    ],
+    "needs_en": "A Cloudflare API token.",
+    "needs_ru": "API-токен Cloudflare.",
+    "kind": "http",
+    "url": "https://mcp.cloudflare.com/mcp",
+    "headers_keys": [
+      {
+        "key": "Authorization",
+        "label_en": "Cloudflare API token",
+        "label_ru": "API-токен Cloudflare",
+        "secret": true,
+        "value_template": "Bearer {secret}"
+      }
+    ],
+    "docs_url": "https://developers.cloudflare.com/agents/model-context-protocol/mcp-servers-for-cloudflare/",
+    "icon": "cloud",
+    "accent": "#F38020"
+  },
+  {
+    "id": "sentry",
+    "name": "Sentry",
+    "category": "dev",
+    "publisher": "Sentry",
+    "official": true,
+    "homepage": "https://sentry.io",
+    "description_en": "Errors, issues and projects in Sentry, through Sentry's own MCP server.",
+    "description_ru": "Ошибки, проблемы и проекты в Sentry через официальный MCP-сервер Sentry.",
+    "long_en": "Sentry's MCP server lets an agent look at the errors your projects report. For example: find the most frequent issue in production this week, or read the stack trace and the events behind an issue.",
+    "long_ru": "MCP-сервер Sentry позволяет агенту смотреть ошибки, которые пишут ваши проекты. Например: найти самую частую проблему в продакшене за эту неделю или прочитать стек-трейс и события, стоящие за проблемой.",
+    "abilities_en": [
+      "Find issues and read their stack traces",
+      "Look at the projects and teams of an organization",
+      "Change projects, teams and alerts within your permissions"
+    ],
+    "abilities_ru": [
+      "Находить проблемы и читать их стек-трейсы",
+      "Смотреть проекты и команды организации",
+      "Менять проекты, команды и оповещения в пределах ваших прав"
+    ],
+    "needs_en": "A Sentry account with access to the organization. Sign in in the browser after you press Connect.",
+    "needs_ru": "Аккаунт Sentry с доступом к нужной организации. Войдите в браузере после нажатия «Подключить».",
+    "kind": "http",
+    "url": "https://mcp.sentry.dev/mcp",
+    "auth": "oauth",
+    "docs_url": "https://github.com/getsentry/sentry-mcp",
+    "icon": "sentry",
+    "accent": "#362D59"
+  },
+  {
+    "id": "context7",
+    "name": "Context7",
+    "category": "dev",
+    "publisher": "Upstash",
+    "official": true,
+    "homepage": "https://context7.com",
+    "description_en": "Current documentation of libraries and frameworks for the agent.",
+    "description_ru": "Актуальная документация библиотек и фреймворков для агента.",
+    "long_en": "Context7 gives an agent up-to-date documentation for the library you name. For example: ask how to use a new function of a framework, and the agent reads it from the docs instead of guessing.",
+    "long_ru": "Context7 даёт агенту актуальную документацию той библиотеки, которую вы назвали. Например: спросите, как пользоваться новой функцией фреймворка, и агент прочитает её в документации, а не угадает.",
+    "abilities_en": [
+      "Find a library by name (resolve-library-id)",
+      "Query its documentation (query-docs)"
+    ],
+    "abilities_ru": [
+      "Находить библиотеку по названию (resolve-library-id)",
+      "Запрашивать её документацию (query-docs)"
+    ],
+    "needs_en": "A Context7 API key.",
+    "needs_ru": "Ключ API Context7.",
+    "kind": "http",
+    "url": "https://mcp.context7.com/mcp",
+    "headers_keys": [
+      {
+        "key": "Authorization",
+        "label_en": "Context7 API key",
+        "label_ru": "Ключ API Context7",
+        "secret": true,
+        "value_template": "Bearer {secret}"
+      }
+    ],
+    "docs_url": "https://github.com/upstash/context7",
+    "icon": "book",
+    "accent": "#0E7490"
+  },
+  {
+    "id": "brave-search",
+    "name": "Brave Search",
+    "category": "web",
+    "publisher": "Brave",
+    "official": true,
+    "homepage": "https://brave.com/search/api/",
+    "description_en": "Web, news, image and video search through the Brave Search API.",
+    "description_ru": "Поиск по вебу, новостям, картинкам и видео через Brave Search API.",
+    "long_en": "Brave's own MCP server gives an agent web search. For example: find recent news on a topic, or look for images. It runs on your server as a program.",
+    "long_ru": "Официальный MCP-сервер Brave даёт агенту поиск в интернете. Например: найти свежие новости по теме или поискать картинки. Запускается на вашем сервере как программа.",
+    "abilities_en": [
+      "Web search",
+      "News, image and video search",
+      "Local places search",
+      "Summaries of search results"
+    ],
+    "abilities_ru": [
+      "Поиск по вебу",
+      "Поиск новостей, картинок и видео",
+      "Поиск мест рядом",
+      "Краткие сводки по результатам поиска"
+    ],
+    "needs_en": "Node.js (npx) on the server, and a Brave Search API key from the developer dashboard.",
+    "needs_ru": "Node.js (npx) на сервере и ключ Brave Search API из кабинета разработчика.",
+    "kind": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@brave/brave-search-mcp-server"
+    ],
+    "env_keys": [
+      {
+        "key": "BRAVE_API_KEY",
+        "label_en": "Brave Search API key",
+        "label_ru": "Ключ Brave Search API",
+        "secret": true,
+        "value_template": "{secret}"
+      }
+    ],
+    "docs_url": "https://github.com/brave/brave-search-mcp-server",
+    "icon": "search",
+    "accent": "#FB542B"
+  },
+  {
+    "id": "exa",
+    "name": "Exa",
+    "category": "web",
+    "publisher": "Exa",
+    "official": true,
+    "homepage": "https://exa.ai",
+    "description_en": "Web search and page fetching through Exa.",
+    "description_ru": "Поиск по вебу и загрузка страниц через Exa.",
+    "long_en": "Exa's MCP server gives an agent web search and a way to read the pages it finds. For example: find recent articles on a topic and read the best one.",
+    "long_ru": "MCP-сервер Exa даёт агенту поиск в интернете и чтение найденных страниц. Например: найти свежие статьи по теме и прочитать лучшую.",
+    "abilities_en": [
+      "Web search (web_search_exa)",
+      "Fetch a page's content (web_fetch_exa)",
+      "Advanced search and an agent tool, switched on in the address"
+    ],
+    "abilities_ru": [
+      "Поиск по вебу (web_search_exa)",
+      "Загрузка содержимого страницы (web_fetch_exa)",
+      "Расширенный поиск и агентский инструмент включаются в адресе"
+    ],
+    "needs_en": "An Exa API key (dashboard.exa.ai/api-keys).",
+    "needs_ru": "Ключ API Exa (dashboard.exa.ai/api-keys).",
+    "kind": "http",
+    "url": "https://mcp.exa.ai/mcp",
+    "headers_keys": [
+      {
+        "key": "x-api-key",
+        "label_en": "Exa API key",
+        "label_ru": "Ключ API Exa",
+        "secret": true,
+        "value_template": "{secret}"
+      }
+    ],
+    "docs_url": "https://github.com/exa-labs/exa-mcp-server",
+    "icon": "search",
+    "accent": "#4F6BED"
+  },
+  {
+    "id": "firecrawl",
+    "name": "Firecrawl",
+    "category": "web",
+    "publisher": "Firecrawl",
+    "official": true,
+    "homepage": "https://www.firecrawl.dev",
+    "description_en": "Scrape, search and crawl websites with Firecrawl.",
+    "description_ru": "Скрапинг, поиск и обход сайтов через Firecrawl.",
+    "long_en": "Firecrawl's MCP server lets an agent turn web pages into clean text, search the web and crawl whole sites. For example: collect the pricing pages of several competitors.",
+    "long_ru": "MCP-сервер Firecrawl позволяет агенту превращать веб-страницы в чистый текст, искать в интернете и обходить сайты целиком. Например: собрать страницы с ценами нескольких конкурентов.",
+    "abilities_en": [
+      "Scrape a page to text (firecrawl_scrape)",
+      "Search the web (firecrawl_search)",
+      "Map and crawl a site (firecrawl_map, firecrawl_crawl)",
+      "A research agent (firecrawl_agent)"
+    ],
+    "abilities_ru": [
+      "Получить текст страницы (firecrawl_scrape)",
+      "Искать в интернете (firecrawl_search)",
+      "Составить карту и обойти сайт (firecrawl_map, firecrawl_crawl)",
+      "Исследовательский агент (firecrawl_agent)"
+    ],
+    "needs_en": "A Firecrawl API key. Without one, only scrape and search work, with a rate limit.",
+    "needs_ru": "Ключ API Firecrawl. Без ключа работают только scrape и поиск, с ограничением частоты.",
+    "kind": "http",
+    "url": "https://mcp.firecrawl.dev/v2/mcp",
+    "headers_keys": [
+      {
+        "key": "Authorization",
+        "label_en": "Firecrawl API key",
+        "label_ru": "Ключ API Firecrawl",
+        "secret": true,
+        "value_template": "Bearer {secret}"
+      }
+    ],
+    "docs_url": "https://github.com/firecrawl/firecrawl-mcp-server",
+    "icon": "web",
+    "accent": "#F9542E"
   },
   {
     "id": "playwright",
     "name": "Playwright",
+    "category": "dev",
+    "publisher": "Microsoft",
+    "official": true,
+    "homepage": "https://playwright.dev",
     "description_en": "Drives a browser: open pages, click, type, take screenshots.",
     "description_ru": "Управление браузером: открыть страницу, нажать, ввести текст, сделать снимок.",
+    "long_en": "Playwright's MCP server lets an agent use a real browser. For example: open your site, fill in a form and report what the page shows. It runs on your server as a program.",
+    "long_ru": "MCP-сервер Playwright позволяет агенту работать в настоящем браузере. Например: открыть ваш сайт, заполнить форму и рассказать, что показала страница. Запускается на вашем сервере как программа.",
+    "abilities_en": [
+      "Open pages and move between them",
+      "Click, type and fill forms",
+      "Read the page's accessibility snapshot",
+      "Take screenshots, read console and network requests"
+    ],
+    "abilities_ru": [
+      "Открывать страницы и переходить между ними",
+      "Нажимать, вводить текст и заполнять формы",
+      "Читать снимок доступности страницы",
+      "Делать снимки экрана, читать консоль и сетевые запросы"
+    ],
+    "needs_en": "Node.js 18 or newer (npx) on the server.",
+    "needs_ru": "Node.js 18 или новее (npx) на сервере.",
     "kind": "stdio",
     "command": "npx",
-    "args": ["-y", "@playwright/mcp@latest"],
+    "args": [
+      "-y",
+      "@playwright/mcp@latest"
+    ],
     "docs_url": "https://github.com/microsoft/playwright-mcp",
-    "icon": "playwright"
-  },
-  {
-    "id": "filesystem",
-    "name": "Filesystem",
-    "description_en": "Reads and writes files in the folders you allow. Replace the last argument with the folder.",
-    "description_ru": "Чтение и запись файлов в разрешённых папках. Последний аргумент замените на свою папку.",
-    "kind": "stdio",
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/allowed/folder"],
-    "docs_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem",
-    "icon": "folder"
+    "icon": "playwright",
+    "accent": "#2EAD33"
   },
   {
     "id": "fetch",
     "name": "Fetch",
+    "category": "web",
+    "publisher": "Model Context Protocol",
+    "official": true,
+    "homepage": "https://modelcontextprotocol.io",
     "description_en": "Fetches web pages and turns them into text for the model.",
     "description_ru": "Загружает веб-страницы и переводит их в текст для модели.",
+    "long_en": "A reference server of the MCP project. It downloads a page and converts it to Markdown for the agent. For example: read an article by its link. It can reach local and internal addresses, so use it with care.",
+    "long_ru": "Эталонный сервер проекта MCP. Загружает страницу и переводит её в Markdown для агента. Например: прочитать статью по ссылке. Он может обращаться к локальным и внутренним адресам, поэтому используйте его осторожно.",
+    "abilities_en": [
+      "Fetch a URL and extract its content as Markdown (fetch)",
+      "Read long pages in parts",
+      "Obeys robots.txt for the agent's requests"
+    ],
+    "abilities_ru": [
+      "Загрузить адрес и получить содержимое в Markdown (fetch)",
+      "Читать длинные страницы по частям",
+      "Для запросов агента учитывает robots.txt"
+    ],
+    "needs_en": "uv (uvx) on the server.",
+    "needs_ru": "uv (uvx) на сервере.",
     "kind": "stdio",
     "command": "uvx",
-    "args": ["mcp-server-fetch"],
+    "args": [
+      "mcp-server-fetch"
+    ],
     "docs_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/fetch",
-    "icon": "globe"
+    "icon": "globe",
+    "accent": "#0EA5E9"
+  },
+  {
+    "id": "filesystem",
+    "name": "Filesystem",
+    "category": "dev",
+    "publisher": "Model Context Protocol",
+    "official": true,
+    "homepage": "https://modelcontextprotocol.io",
+    "description_en": "Reads and writes files in the folders you allow. Replace the last argument with the folder.",
+    "description_ru": "Чтение и запись файлов в разрешённых папках. Последний аргумент замените на свою папку.",
+    "long_en": "A reference server of the MCP project. It gives an agent file operations in the folders you list, and only there. Replace the last argument with the folder on the server.",
+    "long_ru": "Эталонный сервер проекта MCP. Даёт агенту работу с файлами в перечисленных вами папках и только в них. Замените последний аргумент на папку на сервере.",
+    "abilities_en": [
+      "Read text and media files",
+      "Write and edit files",
+      "List folders, search files, show a directory tree",
+      "Move files and create folders"
+    ],
+    "abilities_ru": [
+      "Читать текстовые и медиафайлы",
+      "Записывать и править файлы",
+      "Показывать папки, искать файлы, строить дерево каталогов",
+      "Перемещать файлы и создавать папки"
+    ],
+    "needs_en": "Node.js (npx) on the server, and the folder to allow.",
+    "needs_ru": "Node.js (npx) на сервере и папка, которую нужно разрешить.",
+    "kind": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@modelcontextprotocol/server-filesystem",
+      "/path/to/allowed/folder"
+    ],
+    "docs_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem",
+    "icon": "folder",
+    "accent": "#D97706"
+  },
+  {
+    "id": "memory",
+    "name": "Memory",
+    "category": "productivity",
+    "publisher": "Model Context Protocol",
+    "official": true,
+    "homepage": "https://modelcontextprotocol.io",
+    "description_en": "Persistent memory for the agent as a knowledge graph.",
+    "description_ru": "Постоянная память агента в виде графа знаний.",
+    "long_en": "A reference server of the MCP project. The agent stores facts as entities, relations and observations, and finds them in later conversations. For example: remember your preferences about a project.",
+    "long_ru": "Эталонный сервер проекта MCP. Агент хранит факты как сущности, связи и наблюдения и находит их в следующих разговорах. Например: запомнить ваши предпочтения по проекту.",
+    "abilities_en": [
+      "Create entities and relations",
+      "Add and remove observations",
+      "Search the graph and open nodes"
+    ],
+    "abilities_ru": [
+      "Создавать сущности и связи",
+      "Добавлять и удалять наблюдения",
+      "Искать по графу и открывать узлы"
+    ],
+    "needs_en": "Node.js (npx) on the server.",
+    "needs_ru": "Node.js (npx) на сервере.",
+    "kind": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@modelcontextprotocol/server-memory"
+    ],
+    "docs_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/memory",
+    "icon": "brain",
+    "accent": "#8B5CF6"
+  },
+  {
+    "id": "sequential-thinking",
+    "name": "Sequential Thinking",
+    "category": "other",
+    "publisher": "Model Context Protocol",
+    "official": true,
+    "homepage": "https://modelcontextprotocol.io",
+    "description_en": "Step-by-step problem solving through a sequence of thoughts.",
+    "description_ru": "Пошаговое решение задач через цепочку мыслей.",
+    "long_en": "A reference server of the MCP project. It gives the agent a tool for working through a hard problem in steps, revising earlier steps and trying other branches.",
+    "long_ru": "Эталонный сервер проекта MCP. Даёт агенту инструмент, чтобы разбирать сложную задачу по шагам, пересматривать прежние шаги и пробовать другие ветви.",
+    "abilities_en": [
+      "Break a problem into thought steps (sequential_thinking)",
+      "Revise earlier steps",
+      "Branch into other lines of reasoning"
+    ],
+    "abilities_ru": [
+      "Разбивать задачу на шаги-мысли (sequential_thinking)",
+      "Пересматривать прежние шаги",
+      "Ветвиться на другие линии рассуждения"
+    ],
+    "needs_en": "Node.js (npx) on the server.",
+    "needs_ru": "Node.js (npx) на сервере.",
+    "kind": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@modelcontextprotocol/server-sequential-thinking"
+    ],
+    "docs_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking",
+    "icon": "steps",
+    "accent": "#14B8A6"
+  },
+  {
+    "id": "git",
+    "name": "Git",
+    "category": "dev",
+    "publisher": "Model Context Protocol",
+    "official": true,
+    "homepage": "https://modelcontextprotocol.io",
+    "description_en": "Reads, searches and changes Git repositories.",
+    "description_ru": "Чтение, поиск и изменение Git-репозиториев.",
+    "long_en": "A reference server of the MCP project. It gives an agent Git commands for a repository on the server. For example: show the log of a branch, or commit staged changes. Replace the last argument with the repository path.",
+    "long_ru": "Эталонный сервер проекта MCP. Даёт агенту команды Git для репозитория на сервере. Например: показать историю ветки или сделать коммит подготовленных изменений. Последний аргумент замените на путь к репозиторию.",
+    "abilities_en": [
+      "Status, diff, log and show",
+      "Add, reset and commit",
+      "Create and switch branches"
+    ],
+    "abilities_ru": [
+      "Статус, diff, журнал и просмотр коммита",
+      "Добавление, сброс и коммит",
+      "Создание и переключение веток"
+    ],
+    "needs_en": "uv (uvx) on the server, and the path of the repository.",
+    "needs_ru": "uv (uvx) на сервере и путь к репозиторию.",
+    "kind": "stdio",
+    "command": "uvx",
+    "args": [
+      "mcp-server-git",
+      "--repository",
+      "/path/to/repo"
+    ],
+    "docs_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/git",
+    "icon": "branch",
+    "accent": "#F05033"
+  },
+  {
+    "id": "time",
+    "name": "Time",
+    "category": "productivity",
+    "publisher": "Model Context Protocol",
+    "official": true,
+    "homepage": "https://modelcontextprotocol.io",
+    "description_en": "Current time and time zone conversion.",
+    "description_ru": "Текущее время и перевод между часовыми поясами.",
+    "long_en": "A reference server of the MCP project. It tells the agent the current time in any time zone and converts a time between zones. For example: what time is 15:00 in Berlin for a colleague in Tokyo.",
+    "long_ru": "Эталонный сервер проекта MCP. Сообщает агенту текущее время в любом часовом поясе и переводит время между поясами. Например: сколько будет в Токио, когда в Берлине 15:00.",
+    "abilities_en": [
+      "Current time in a time zone (get_current_time)",
+      "Convert a time between zones (convert_time)"
+    ],
+    "abilities_ru": [
+      "Текущее время в часовом поясе (get_current_time)",
+      "Перевод времени между поясами (convert_time)"
+    ],
+    "needs_en": "uv (uvx) on the server.",
+    "needs_ru": "uv (uvx) на сервере.",
+    "kind": "stdio",
+    "command": "uvx",
+    "args": [
+      "mcp-server-time"
+    ],
+    "docs_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/time",
+    "icon": "clock",
+    "accent": "#64748B"
+  },
+  {
+    "id": "composio",
+    "name": "Composio",
+    "category": "other",
+    "publisher": "Composio",
+    "official": true,
+    "homepage": "https://composio.dev",
+    "description_en": "Hundreds of apps through one MCP server. Replace the server id and user id in the URL with yours.",
+    "description_ru": "Сотни приложений через один MCP-сервер. В адресе замените идентификатор сервера и пользователя на свои.",
+    "long_en": "Composio gives an agent a set of apps behind one MCP server. You create the server in Composio, choose its apps, and get an address for your user. The apps you choose must be signed in to first.",
+    "long_ru": "Composio даёт агенту набор приложений за одним MCP-сервером. Вы создаёте сервер в Composio, выбираете приложения и получаете адрес для своего пользователя. Сначала нужно войти в выбранные приложения.",
+    "abilities_en": [
+      "Use the apps you add to the Composio server",
+      "Limit the server to chosen tools",
+      "One address and one key for all of them"
+    ],
+    "abilities_ru": [
+      "Работать с приложениями, добавленными на сервер Composio",
+      "Ограничить сервер выбранными инструментами",
+      "Один адрес и один ключ на все приложения"
+    ],
+    "needs_en": "A Composio account, an MCP server created there, and your Composio API key. Edit the address: server id and user id.",
+    "needs_ru": "Аккаунт Composio, созданный там MCP-сервер и ваш ключ API Composio. В адресе замените идентификатор сервера и пользователя.",
+    "kind": "http",
+    "url": null,
+    "url_hint": "https://backend.composio.dev/v3/mcp/<SERVER_ID>?user_id=<USER_ID>",
+    "headers_keys": [
+      {
+        "key": "x-api-key",
+        "label_en": "Composio API key",
+        "label_ru": "Ключ API Composio",
+        "secret": true,
+        "value_template": "{secret}"
+      }
+    ],
+    "docs_url": "https://docs.composio.dev/docs/mcp",
+    "icon": "composio",
+    "accent": "#1F2937"
   }
 ]

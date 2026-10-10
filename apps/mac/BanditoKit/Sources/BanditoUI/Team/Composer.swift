@@ -102,7 +102,7 @@ struct Composer: View {
 
                     TextField(L10n.Thread.placeholder, text: $draft, axis: .vertical)
                         .textFieldStyle(.plain)
-                        .font(BanditoFont.font(size: 14.5, weight: 400))
+                        .font(BanditoFont.text(size: 14.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text)
                         .tint(Color.Bandito.signal)
                         .lineLimit(1...8)
@@ -147,8 +147,13 @@ struct Composer: View {
             .padding(.trailing, 10)
             .padding(.vertical, 10)
             .background(Color.Bandito.surface2, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(Color.Bandito.line, lineWidth: 1))
+            .overlay(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .stroke(focused ? Color.Bandito.text.opacity(0.18) : Color.Bandito.line, lineWidth: 1))
             .shadow(color: .black.opacity(0.35), radius: 18, x: 0, y: 10)
+            // In focus only: a faint signal glow around the whole field.
+            .shadow(color: Color.Bandito.signal.opacity(focused ? 0.10 : 0), radius: 12)
+            .banditoAnimation(.easeOut(duration: 0.18), value: focused)
 
             if showsHints {
                 HStack(spacing: 14) {
@@ -157,7 +162,7 @@ struct Composer: View {
                     Text(L10n.Thread.hintStop)
                     Text(L10n.Thread.hintSearch)
                 }
-                .font(BanditoFont.font(size: 11, weight: 400))
+                .font(BanditoFont.text(size: 11, weight: 400))
                 .foregroundStyle(Color.Bandito.text3.opacity(0.7))
             }
         }
@@ -220,11 +225,11 @@ struct Composer: View {
                 .frame(width: 3, height: 32)
             VStack(alignment: .leading, spacing: 2) {
                 Text(target.fromUser ? L10n.Reply.toSelf : L10n.Reply.toAgent(name: agentName))
-                    .font(BanditoFont.font(size: 12, weight: 600))
+                    .font(BanditoFont.text(size: 12, weight: 600))
                     .foregroundStyle(Color.Bandito.signal)
                     .lineLimit(1)
                 Text(target.excerpt)
-                    .font(BanditoFont.font(size: 12.5, weight: 400))
+                    .font(BanditoFont.text(size: 12.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -250,7 +255,7 @@ struct Composer: View {
         HStack(spacing: 10) {
             StatusDot(status: .needsYou, size: 7, ringColor: Color.Bandito.signal.opacity(0.15))
             Text(L10n.Composer.formWaiting(name: agentName))
-                .font(BanditoFont.font(size: 12.5, weight: 500))
+                .font(BanditoFont.text(size: 12.5, weight: 500))
                 .foregroundStyle(Color.Bandito.text)
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
@@ -279,7 +284,7 @@ struct Composer: View {
             HStack(spacing: 6) {
                 ContextRing(fraction: contextFraction, size: 16)
                 Text("\(percent)%")
-                    .font(BanditoFont.font(size: 11.5, weight: 400))
+                    .font(BanditoFont.text(size: 11.5, weight: 400))
                     .monospacedDigit()
             }
             .foregroundStyle(Color.Bandito.text3)
@@ -299,13 +304,13 @@ struct Composer: View {
     private func contextPopover(percent: Int) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(L10n.Composer.contextPopover(percent: "\(percent)"))
-                .font(BanditoFont.font(size: 12.5, weight: 400))
+                .font(BanditoFont.text(size: 12.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text)
                 .fixedSize(horizontal: false, vertical: true)
             if server?.supportsNewChapter == true {
                 if asksNewChapter {
                     Text(L10n.Composer.NewChapter.confirm)
-                        .font(BanditoFont.font(size: 12.5, weight: 400))
+                        .font(BanditoFont.text(size: 12.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text)
                         .fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: 8) {
@@ -339,7 +344,7 @@ struct Composer: View {
                 }
                 if running {
                     Text(L10n.Composer.NewChapter.afterTurn)
-                        .font(BanditoFont.font(size: 11.5, weight: 400))
+                        .font(BanditoFont.text(size: 11.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -372,6 +377,9 @@ struct Composer: View {
             .banditoButton(.brighten)
             .disabled(!canSend)
             .opacity(canSend ? 1 : 0.4)
+            // The button springs up from 0.9 when text appears, and settles back when the field is empty.
+            .scaleEffect(canSend ? 1 : 0.9)
+            .banditoAnimation(.spring(response: 0.25, dampingFraction: 0.6), value: canSend)
             .help(L10n.Thread.send)
         }
     }
@@ -568,24 +576,42 @@ struct Composer: View {
     /// A picture of 56 pt. A failed one is marked red; an uploading one shows a spinner.
     private func pictureTile(_ file: DraftFile) -> some View {
         ZStack(alignment: .topTrailing) {
-            Group {
-                if let preview = file.preview {
-                    Image(nsImage: preview).resizable().scaledToFill()
-                } else {
-                    Image(systemName: "photo")
-                        .font(.system(size: 18, weight: .regular))
-                        .foregroundStyle(Color.Bandito.text3)
+            Button {
+                openPicture(file)
+            } label: {
+                Group {
+                    if let preview = file.preview {
+                        Image(nsImage: preview).resizable().scaledToFill()
+                    } else {
+                        Image(systemName: "photo")
+                            .font(.system(size: 18, weight: .regular))
+                            .foregroundStyle(Color.Bandito.text3)
+                    }
+                }
+                .frame(width: 56, height: 56)
+                .background(Color.Bandito.surface3)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay {
+                    stateOverlay(file)
                 }
             }
-            .frame(width: 56, height: 56)
-            .background(Color.Bandito.surface3)
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay {
-                stateOverlay(file)
-            }
+            .banditoButton(.row(cornerRadius: 10))
             .help(file.failureText ?? file.name)
             removeButton(file)
         }
+    }
+
+    /// Opens the viewer on a picture of the draft, with the other pictures of the draft to step through. A picture that
+    /// has no source to read (a failed one) does nothing.
+    private func openPicture(_ file: DraftFile) {
+        let pictures = files.compactMap { draft -> (id: UUID, name: String, source: ImageViewerSource)? in
+            guard draft.isImage, let source = draft.original else { return nil }
+            return (draft.id, draft.name, source)
+        }
+        guard pictures.contains(where: { $0.id == file.id }) else { return }
+        let items = pictures.map { ImageViewerItem(name: $0.name, source: $0.source, openInFiles: nil) }
+        let index = pictures.firstIndex { $0.id == file.id } ?? 0
+        router.imageViewer = ImageViewerRequest(items: items, index: index, returnFocusAgentID: agent?.id)
     }
 
     /// A file that is not a picture: its icon, name and size, or what is wrong with it.
@@ -595,13 +621,13 @@ struct Composer: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(Color.Bandito.text3)
             Text(file.name)
-                .font(BanditoFont.font(size: 12.5, weight: 500))
+                .font(BanditoFont.text(size: 12.5, weight: 500))
                 .foregroundStyle(Color.Bandito.text2)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
             if let detail = file.detailText {
                 Text(detail)
-                    .font(BanditoFont.font(size: 11.5, weight: 400))
+                    .font(BanditoFont.text(size: 11.5, weight: 400))
                     .foregroundStyle(file.failureText == nil ? Color.Bandito.text3 : Color.Bandito.danger)
                     .monospacedDigit()
                     .lineLimit(1)

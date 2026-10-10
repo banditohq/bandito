@@ -1,0 +1,232 @@
+name: release-app
+
+# Builds, signs, notarizes and publishes the Mac app of one version. Run it after the server release of the same
+# version (release.yml) is published. The job runs in the environment named after the channel: `stable` needs the
+# owner's approval (set up in the repository settings). See docs/RELEASING.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "App version: X.Y.Z for stable, X.Y.Z-beta.N for beta. The tag is v<version>."
+        required: true
+        type: string
+      channel:
+        description: "stable or beta"
+        required: true
+        type: choice
+        options: [stable, beta]
+        default: beta
+
+permissions:
+  contents: write
+
+# One run per version at a time: a second dispatch waits instead of racing for the same release.
+concurrency:
+  group: release-app-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Bandito ${{ inputs.version }} (${{ inputs.channel }})
+    runs-on: macos-15
+    environment: ${{ inputs.channel }}
+    timeout-minutes: 120
+    env:
+      VERSION: ${{ inputs.version }}
+      CHANNEL: ${{ inputs.channel }}
+      TAG: v${{ inputs.version }}
+      GH_TOKEN: ${{ github.token }}
+      HAS_PLATFORM_TOKEN: ${{ secrets.PLATFORM_TOKEN != '' }}
+    steps:
+      # runner.temp is not available in a job's env, so the folder is set by the first step.
+      - name: Set paths
+        run: echo "PLATFORM_DIR=$RUNNER_TEMP/platform" >> "$GITHUB_ENV"
+
+      - name: Check the inputs, the server release and the secrets
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          SPARKLE_ED_KEY: ${{ secrets.SPARKLE_ED_KEY }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$*"; exit 1; }
+          printf '%s\n' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+)?$' \
+            || fail "version must look like 0.1.6 or 0.2.0-beta.1 (got '$VERSION')"
+          case "$CHANNEL" in
+            stable) case "$VERSION" in *-beta.*) fail "channel stable needs a version without -beta" ;; esac ;;
+            beta) case "$VERSION" in *-beta.*) ;; *) fail "channel beta needs a version like 0.2.0-beta.1" ;; esac ;;
+          esac
+          for name in MACOS_CERT_P12_BASE64 MACOS_CERT_PASSWORD ASC_KEY_P8_BASE64 ASC_KEY_ID ASC_ISSUER_ID SPARKLE_ED_KEY; do
+            [ -n "${!name:-}" ] || fail "repository secret $name is not set (see docs/RELEASING.md)"
+          done
+          gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" > /dev/null 2>&1 \
+            || fail "tag $TAG does not exist: create it on the release commit first (see docs/RELEASING.md)"
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1 \
+            || fail "no GitHub release $TAG: publish the server release first, release.yml builds its binaries"
+          draft="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)"
+          [ "$draft" = "false" ] || fail "release $TAG is still a draft: publish the server release first"
+          assets="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+          for name in bandito-aarch64-apple-darwin.tar.gz bandito-x86_64-apple-darwin.tar.gz \
+              bandito-aarch64-unknown-linux-gnu.tar.gz bandito-x86_64-unknown-linux-gnu.tar.gz SHA256SUMS; do
+            grep -qxF "$name" <<< "$assets" \
+              || fail "release $TAG has no $name: publish the server release first (release.yml)"
+          done
+
+      - name: Check out the release tag
+        uses: actions/checkout@v5
+        with:
+          ref: refs/tags/v${{ inputs.version }}
+          # The build number is the commit count of HEAD: the full history is needed.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Select the newest Xcode
+        run: |
+          xcode="$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -n 1 || true)"
+          if [ -n "$xcode" ]; then sudo xcode-select -s "$xcode"; fi
+          xcodebuild -version
+
+      - name: Install XcodeGen
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: 1
+        run: brew install xcodegen
+
+      - name: Install Rust (the app bundles the bandito daemon)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Sparkle 2.10.0 (sign_update)
+        env:
+          SPARKLE_URL: https://github.com/sparkle-project/Sparkle/releases/download/2.10.0/Sparkle-2.10.0.tar.xz
+          SPARKLE_SHA256: c2bf58aa8387266ac179357b1415d6f2635f044da8be41042af32425dae6da0c
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/sparkle-dl" "$RUNNER_TEMP/sparkle"
+          curl -fsSL -o "$RUNNER_TEMP/sparkle-dl/Sparkle.tar.xz" "$SPARKLE_URL"
+          echo "$SPARKLE_SHA256  $RUNNER_TEMP/sparkle-dl/Sparkle.tar.xz" | shasum -a 256 -c -
+          tar -xJf "$RUNNER_TEMP/sparkle-dl/Sparkle.tar.xz" -C "$RUNNER_TEMP/sparkle" ./bin/sign_update
+          test -x "$RUNNER_TEMP/sparkle/bin/sign_update"
+
+      - name: Get the current appcast (the base the new item is added to)
+        env:
+          PLATFORM_TOKEN: ${{ secrets.PLATFORM_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -n "$PLATFORM_TOKEN" ]; then
+            GH_TOKEN="$PLATFORM_TOKEN" gh repo clone banditohq/platform "$PLATFORM_DIR" -- --depth 1
+          else
+            echo "::warning::PLATFORM_TOKEN is not set: the base is the feed served now (bandito.dev/appcast.xml) and no PR is opened"
+            mkdir -p "$PLATFORM_DIR/public"
+            curl -fsSL -o "$PLATFORM_DIR/public/appcast.xml" https://bandito.dev/appcast.xml
+          fi
+          test -f "$PLATFORM_DIR/public/appcast.xml"
+
+      - name: Create a temporary keychain with the Developer ID certificate
+        env:
+          P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          kc="$RUNNER_TEMP/bandito-signing.keychain-db"
+          kc_password="$(openssl rand -hex 24)"
+          p12="$RUNNER_TEMP/developer-id.p12"
+          printf '%s' "$P12_BASE64" | base64 --decode > "$p12"
+          security create-keychain -p "$kc_password" "$kc"
+          security set-keychain-settings -lut 21600 "$kc"
+          security unlock-keychain -p "$kc_password" "$kc"
+          security import "$p12" -k "$kc" -P "$P12_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          rm -f "$p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$kc_password" "$kc" > /dev/null
+          # The new keychain goes first in the search list, the existing ones stay after it.
+          keychains=("$kc")
+          while IFS= read -r k; do
+            if [ -n "$k" ]; then keychains+=("$k"); fi
+          done <<< "$(security list-keychains -d user | sed -e 's/^[[:space:]]*"//' -e 's/"[[:space:]]*$//')"
+          security list-keychains -d user -s "${keychains[@]}"
+          security find-identity -v -p codesigning
+
+      - name: Write the App Store Connect API key for notarytool
+        env:
+          ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s' "$ASC_KEY_P8_BASE64" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
+          test -s "$RUNNER_TEMP/AuthKey.p8"
+
+      - name: Write the Sparkle EdDSA key for sign_update
+        env:
+          SPARKLE_ED_KEY: ${{ secrets.SPARKLE_ED_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s\n' "$SPARKLE_ED_KEY" > "$RUNNER_TEMP/sparkle_ed_key"
+          test -s "$RUNNER_TEMP/sparkle_ed_key"
+
+      - name: Build, sign, notarize and staple the app, then sign the update
+        env:
+          BANDITO_PLATFORM_DIR: ${{ runner.temp }}/platform
+          BANDITO_DERIVED_DATA: ${{ runner.temp }}/derived-data
+          CARGO_TARGET_DIR: ${{ runner.temp }}/cargo-target
+          SPARKLE_BIN: ${{ runner.temp }}/sparkle/bin
+          SPARKLE_KEY_FILE: ${{ runner.temp }}/sparkle_ed_key
+          NOTARY_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
+          NOTARY_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          apps/mac/scripts/release-app.sh "$VERSION" --appcast-out "$RUNNER_TEMP/release-out/appcast.xml"
+
+      - name: Upload the zip and the disk image to the release
+        run: |
+          set -euo pipefail
+          gh release upload "$TAG" \
+            "apps/mac/build/release/Bandito-$VERSION.zip" \
+            "apps/mac/build/release/Bandito-$VERSION.dmg" \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
+      - name: Keep the new appcast as a run artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: appcast-${{ inputs.version }}
+          path: ${{ runner.temp }}/release-out/appcast.xml
+          if-no-files-found: error
+
+      - name: Open the appcast PR in banditohq/platform
+        if: ${{ env.HAS_PLATFORM_TOKEN == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.PLATFORM_TOKEN }}
+          BRANCH: appcast-${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          cp "$RUNNER_TEMP/release-out/appcast.xml" "$PLATFORM_DIR/public/appcast.xml"
+          cd "$PLATFORM_DIR"
+          git checkout -B "$BRANCH"
+          git add public/appcast.xml
+          if git diff --cached --quiet; then
+            echo "The appcast already has this item; nothing to open."
+            exit 0
+          fi
+          git -c user.name="github-actions[bot]" \
+            -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -m "Add Bandito $VERSION to the appcast"
+          # A new run for the same version replaces the branch of the previous one (it is always cut from the default branch).
+          git -c credential.helper= -c "credential.helper=!gh auth git-credential" push --force origin "$BRANCH"
+          base="$(gh repo view banditohq/platform --json defaultBranchRef --jq .defaultBranchRef.name)"
+          if [ -z "$(gh pr list --repo banditohq/platform --head "$BRANCH" --state open --json number --jq '.[].number')" ]; then
+            gh pr create --repo banditohq/platform --base "$base" --head "$BRANCH" \
+              --title "Add Bandito $VERSION to the appcast" \
+              --body "Appcast item for Bandito $VERSION ($CHANNEL), built by $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. Merge it after the release is checked."
+          fi
+
+      - name: Remove the signing keychain and the keys
+        if: always()
+        run: |
+          kc="$RUNNER_TEMP/bandito-signing.keychain-db"
+          if [ -f "$kc" ]; then security delete-keychain "$kc" || true; fi
+          rm -f "$RUNNER_TEMP/developer-id.p12" "$RUNNER_TEMP/AuthKey.p8" "$RUNNER_TEMP/sparkle_ed_key"
+          rm -rf "$RUNNER_TEMP/sparkle-dl" "$RUNNER_TEMP/platform"

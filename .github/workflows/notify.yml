@@ -1,0 +1,42 @@
+name: notify
+
+# Sends the owner a Telegram message when something needs a look: a failed check on main or a release branch, a
+# release built, a release waiting for approval. Runs on the base repository with metadata only (no checkout of the
+# triggering code), so a pull request from a fork cannot reach the secrets.
+on:
+  workflow_run:
+    workflows: [ci, release, release-app, renovate, audit]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  tell:
+    if: >-
+      ${{ github.event.workflow_run.conclusion == 'failure'
+          && (github.event.workflow_run.head_branch == 'main'
+              || startsWith(github.event.workflow_run.head_branch, 'release/')
+              || github.event.workflow_run.event == 'schedule')
+          || (github.event.workflow_run.name == 'release-app' && github.event.workflow_run.conclusion == 'success') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Send
+        env:
+          TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+          NAME: ${{ github.event.workflow_run.name }}
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+          RESULT: ${{ github.event.workflow_run.conclusion }}
+          URL: ${{ github.event.workflow_run.html_url }}
+          TITLE: ${{ github.event.workflow_run.display_title }}
+        run: |
+          set -euo pipefail
+          if [ "$RESULT" = success ]; then icon="🦝✅"; what="готово"; else icon="🦝❌"; what="упало"; fi
+          text="$icon Bandito · $NAME $what
+          Ветка: $BRANCH
+          $TITLE
+          $URL"
+          curl -fsS -o /dev/null "https://api.telegram.org/bot${TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${CHAT}" --data-urlencode "text=${text}" -d disable_web_page_preview=true

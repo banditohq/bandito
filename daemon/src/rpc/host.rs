@@ -13,8 +13,10 @@ pub async fn dispatch(app: &App, method: &str, p: Value) -> RpcResult {
         "host.stats" => {
             let sampler = app.host.clone();
             // The last sample, and the processes read now: the list is always current.
-            let (mut stats, top) = blocking(move || (sampler.latest_or_sample(), sampler.top_processes())).await?;
+            let (mut stats, (top, apps)) =
+                blocking(move || (sampler.latest_or_sample(), sampler.process_lists())).await?;
             stats.top_processes = top;
+            stats.app_groups = apps;
             ok(stats)
         }
         "host.history" => {
@@ -404,6 +406,25 @@ mod tests {
             assert!(p["own_safe"].is_boolean(), "{p}");
             // Only the daemon's own user's processes can be stopped from the app.
             assert!(!p["own_safe"].as_bool().unwrap() || p["own"] == true, "{p}");
+        }
+    }
+
+    #[tokio::test]
+    async fn host_stats_groups_every_process_by_app() {
+        let v = dispatch(&app(), &Peer::Local, "host.stats", json!({})).await.unwrap();
+        let apps = v["app_groups"].as_array().expect("app_groups");
+        assert!(!apps.is_empty() && apps.len() <= host::APP_GROUPS, "{v}");
+        let mem: Vec<u64> = apps.iter().map(|a| a["memory_bytes"].as_u64().unwrap()).collect();
+        assert!(mem.windows(2).all(|w| w[0] >= w[1]), "biggest first: {mem:?}");
+        for a in apps {
+            assert!(a["name"].is_string() && a["cpu_percent"].is_number(), "{a}");
+            let top = a["top"].as_array().expect("top");
+            assert!(top.len() <= host::APP_TOP + host::APP_TOP_CPU, "{a}");
+            assert!(a["process_count"].as_u64().unwrap() >= top.len() as u64, "{a}");
+            for p in top {
+                assert!(p["pid"].is_i64() && p["name"].is_string(), "{p}");
+                assert!(p["cpu_percent"].is_number() && p["memory_bytes"].is_u64(), "{p}");
+            }
         }
     }
 }

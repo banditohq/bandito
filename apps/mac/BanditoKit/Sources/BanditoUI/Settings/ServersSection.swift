@@ -29,7 +29,7 @@ struct ServersSection: View {
                 }
                 if app.servers.isEmpty {
                     Text(L10n.Server.noServer)
-                        .font(.system(size: 13))
+                        .font(BanditoFont.text(size: 13, weight: 400))
                         .foregroundStyle(Color.Bandito.text2)
                         .padding(16)
                 }

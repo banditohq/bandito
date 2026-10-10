@@ -4,6 +4,7 @@ use super::{Store, new_id, now_ms};
 use anyhow::Result;
 use rusqlite::{OptionalExtension, Row, params};
 use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Device {
@@ -62,6 +63,50 @@ impl Store {
         }
         tx.commit()?;
         Ok(valid)
+    }
+
+    /// A throwaway in-memory store for safe mode (the real database could not be opened). It holds the paired
+    /// devices of `live_db` when those can be read, so the app can still connect; everything else is empty and is
+    /// never written back. The live file is opened read-only and not changed. Failing to read it is not an error.
+    pub fn open_safe_mode(live_db: &Path) -> Result<Self> {
+        let store = Self::open_in_memory()?;
+        if live_db.is_file()
+            && let Err(e) = store.import_devices_from(live_db)
+        {
+            tracing::warn!(
+                "safe mode: could not read the paired devices from {}: {e:#}",
+                live_db.display()
+            );
+        }
+        Ok(store)
+    }
+
+    /// Reads the paired devices from a private copy of `live_db` (the file and its `-wal`, copied to a temporary
+    /// folder), so nothing is opened, created or changed next to the live file: no `-shm`, no checkpoint.
+    fn import_devices_from(&self, live_db: &Path) -> Result<()> {
+        use std::os::unix::fs::DirBuilderExt;
+        let dir = std::env::temp_dir().join(format!("bandito-safe-{}", new_id()));
+        std::fs::DirBuilder::new().mode(0o700).create(&dir)?;
+        let result = (|| -> Result<()> {
+            let copy = dir.join("live.db");
+            std::fs::copy(live_db, &copy)?;
+            let wal = PathBuf::from(format!("{}-wal", live_db.display()));
+            if wal.is_file() {
+                std::fs::copy(&wal, dir.join("live.db-wal"))?;
+            }
+            let conn = self.conn();
+            conn.execute("ATTACH DATABASE ?1 AS live", [copy.to_string_lossy().as_ref()])?;
+            let copied = conn.execute(
+                "INSERT OR IGNORE INTO devices (id, name, token_hash, created_at, last_seen_at)
+                 SELECT id, name, token_hash, created_at, last_seen_at FROM live.devices",
+                [],
+            );
+            let _ = conn.execute("DETACH DATABASE live", []);
+            copied?;
+            Ok(())
+        })();
+        let _ = std::fs::remove_dir_all(&dir);
+        result
     }
 
     /// Insert a device with `token_hash = sha256_hex(token)`.
@@ -130,6 +175,71 @@ pub fn normalize_code(code: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn safe_mode_store_keeps_the_paired_devices_of_the_live_database_and_changes_nothing_there() {
+        let dir = tempfile::tempdir().unwrap();
+        let live = dir.path().join("bandito.db");
+        {
+            let store = Store::open(&live).unwrap();
+            store.device_add("laptop", "token-1").unwrap();
+        }
+        let before = std::fs::read(&live).unwrap();
+        let safe = Store::open_safe_mode(&live).unwrap();
+        assert_eq!(safe.device_auth("token-1").unwrap().unwrap().name, "laptop");
+        assert!(safe.device_auth("other").unwrap().is_none());
+        assert_eq!(
+            std::fs::read(&live).unwrap(),
+            before,
+            "the live file is read, never written"
+        );
+    }
+
+    #[test]
+    fn safe_mode_store_reads_a_copy_and_leaves_the_live_folder_as_it_was() {
+        let dir = tempfile::tempdir().unwrap();
+        let live = dir.path().join("bandito.db");
+        // A device that exists only in the WAL: a connection that never closed.
+        let store = Store::open(&live).unwrap();
+        store.device_add("laptop", "token-1").unwrap();
+        std::mem::forget(store);
+        let listing = || {
+            let mut names: Vec<(String, u64)> = std::fs::read_dir(dir.path())
+                .unwrap()
+                .map(|e| {
+                    let e = e.unwrap();
+                    (
+                        e.file_name().to_string_lossy().into_owned(),
+                        e.metadata().unwrap().len(),
+                    )
+                })
+                .collect();
+            names.sort();
+            names
+        };
+        let before = listing();
+        assert!(before.iter().any(|(n, _)| n.ends_with("-wal")), "{before:?}");
+        let safe = Store::open_safe_mode(&live).unwrap();
+        assert_eq!(safe.device_auth("token-1").unwrap().unwrap().name, "laptop");
+        assert_eq!(listing(), before, "no file appeared, none changed size");
+    }
+
+    #[test]
+    fn safe_mode_store_opens_when_the_live_database_is_missing_or_damaged() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("none.db");
+        assert!(
+            Store::open_safe_mode(&missing)
+                .unwrap()
+                .device_auth("t")
+                .unwrap()
+                .is_none()
+        );
+        let bad = dir.path().join("bad.db");
+        std::fs::write(&bad, vec![9u8; 4096]).unwrap();
+        assert!(Store::open_safe_mode(&bad).unwrap().device_auth("t").unwrap().is_none());
+        assert_eq!(std::fs::read(&bad).unwrap(), vec![9u8; 4096]);
+    }
 
     #[test]
     fn normalize_code_examples() {

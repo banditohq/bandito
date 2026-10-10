@@ -1,0 +1,39 @@
+# cargo-deny policy for the daemon. CI runs `cargo deny check` from this folder (.github/workflows/audit.yml).
+# Advisories and licenses fail the build; duplicate crate versions only warn.
+
+[advisories]
+# Known vulnerabilities (RUSTSEC) always fail. Yanked crates fail too.
+yanked = "deny"
+
+[licenses]
+# Only permissive licenses. Copyleft licenses (GPL, LGPL, AGPL) are not on the list on purpose.
+# A dependency that is "X OR Y" passes when one of its licenses is on the list (r-efi: MIT OR Apache-2.0 OR LGPL).
+allow = [
+    # The crate itself (the repo license).
+    "FSL-1.1-ALv2",
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-1-Clause",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+    "MPL-2.0",
+    "CC0-1.0",
+    "BSL-1.0",
+]
+confidence-threshold = 0.93
+# The list is a policy, not a lockfile report: a permitted license that no crate uses yet is not a finding.
+unused-allowed-license = "allow"
+
+[bans]
+# Two versions of one crate (for example sha2 0.10 and 0.11) are common; report them, do not fail.
+multiple-versions = "warn"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

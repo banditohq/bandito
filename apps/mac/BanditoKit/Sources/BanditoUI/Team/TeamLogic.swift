@@ -18,6 +18,8 @@ public enum ThreadRow: Sendable {
     case browserRun([ToolRow])
 }
 
+extension ThreadRow: Equatable {}
+
 extension ThreadRow: Identifiable {
     /// Stable across updates, so a row keeps its identity (and its entrance animation) when others arrive.
     public var id: String {
@@ -95,6 +97,119 @@ public enum ContextUsage {
         let limit = budget ?? defaultBudget
         guard limit > 0 else { return 0 }
         return min(max(Double(tokens) / Double(limit), 0), 1)
+    }
+}
+
+/// The chapter length (context budget) a person can pick, in tokens.
+public enum ChapterLength {
+    /// The sizes offered in the menu. The default (`ContextUsage.defaultBudget`) is one of them.
+    public static let presets = [60_000, 120_000, 200_000, 500_000, 1_000_000]
+    /// The smallest and the largest budget the daemon accepts (`check_context_budget`).
+    public static let allowedRange = 20_000...1_000_000
+
+    /// `60K`, `120K`, `250K`, `1M`; a value with a tenth gets a decimal comma: `1,5M`.
+    public static func label(_ tokens: Int) -> String {
+        if tokens >= 1_000_000 {
+            return unit(tokens, scale: 1_000_000) + "M"
+        }
+        return unit(tokens, scale: 1_000) + "K"
+    }
+
+    /// True when the daemon accepts the budget and the model can hold it. An unknown window (`nil`) only
+    /// leaves the daemon's range to check.
+    public static func isAllowed(_ tokens: Int, window: Int?) -> Bool {
+        guard allowedRange.contains(tokens) else { return false }
+        guard let window else { return true }
+        return tokens <= window
+    }
+
+    /// The custom field's text for a size: thousands, with a decimal comma when there is a fraction (`250,5`).
+    public static func thousandsText(_ tokens: Int) -> String {
+        let whole = tokens / 1_000
+        let rest = tokens % 1_000
+        guard rest > 0 else { return "\(whole)" }
+        var digits = String(rest)
+        digits = String(repeating: "0", count: 3 - digits.count) + digits
+        while digits.hasSuffix("0") { digits.removeLast() }
+        return "\(whole),\(digits)"
+    }
+
+    /// The text of the custom field as typed: digits and one decimal separator (a dot becomes a comma), at most
+    /// 12 characters.
+    public static func cleanedInput(_ text: String) -> String {
+        var out = ""
+        var separated = false
+        for ch in text {
+            if ch.isASCII && ch.isNumber {
+                out.append(ch)
+            } else if ch == "," || ch == ".", !separated, !out.isEmpty {
+                out.append(",")
+                separated = true
+            }
+        }
+        return String(out.prefix(12))
+    }
+
+    /// The tokens a typed count of thousands stands for: `250,5` and `250.5` give 250 500, and `1,2345` gives 1 235
+    /// (rounded to a whole token). Nil when the text is not a number. The range is not checked here.
+    public static func parseThousands(_ text: String) -> Int? {
+        let parts = text.split(omittingEmptySubsequences: false, whereSeparator: { $0 == "," || $0 == "." })
+        guard parts.count <= 2, let whole = parts.first, !whole.isEmpty, whole.allSatisfy({ isDigit($0) }),
+              let count = Int(whole), count <= 1_000_000
+        else { return nil }
+        var tokens = count * 1_000
+        if parts.count == 2 {
+            let decimals = parts[1]
+            guard decimals.allSatisfy({ isDigit($0) }) else { return nil }
+            if !decimals.isEmpty {
+                let kept = decimals.prefix(15)
+                var scale = 1
+                for _ in kept { scale *= 10 }
+                let numerator = Int(kept) ?? 0
+                // Thousands to tokens, rounded half up.
+                tokens += (numerator * 2_000 + scale) / (2 * scale)
+            }
+        }
+        return tokens
+    }
+
+    /// What the custom field says about a size. Pure, so the rules are tested without the view.
+    public static func customSize(_ text: String, current: Int, window: Int?) -> CustomSize {
+        if text.isEmpty { return .empty }
+        guard let tokens = parseThousands(text), allowedRange.contains(tokens) else { return .invalid }
+        if let window, tokens > window { return .aboveWindow(tokens) }
+        if tokens == current { return .unchanged(tokens) }
+        return .ok(tokens)
+    }
+
+    private static func isDigit(_ ch: Character) -> Bool {
+        ch.isASCII && ch.isNumber
+    }
+
+    /// The whole part and, when there is one, the first decimal of `tokens / scale`, truncated.
+    private static func unit(_ tokens: Int, scale: Int) -> String {
+        let whole = tokens / scale
+        let tenth = (tokens % scale) * 10 / scale
+        return tenth == 0 ? "\(whole)" : "\(whole),\(tenth)"
+    }
+}
+
+/// What the custom chapter length field says about a typed size: why it cannot be saved, or the size when it can.
+public enum CustomSize: Equatable, Sendable {
+    case empty
+    /// Not a number, or outside the daemon's range.
+    case invalid
+    /// In range, but more than the model holds (the size in tokens).
+    case aboveWindow(Int)
+    /// The size the agent already has.
+    case unchanged(Int)
+    /// A new size that can be saved (in tokens).
+    case ok(Int)
+
+    /// The size to save, when the text is a new valid size.
+    public var savable: Int? {
+        guard case .ok(let tokens) = self else { return nil }
+        return tokens
     }
 }
 

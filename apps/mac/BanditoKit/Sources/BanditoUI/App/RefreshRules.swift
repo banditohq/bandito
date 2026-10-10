@@ -16,7 +16,7 @@ enum RefreshRules {
         case .files: [.folder]
         case .terminals: [.terminals]
         case .browser: [.browserPage]
-        case .screen, .server: []
+        case .screen, .market, .server: []
         }
     }
 }

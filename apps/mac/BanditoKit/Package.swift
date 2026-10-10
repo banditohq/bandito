@@ -24,7 +24,7 @@ let package = Package(
     ],
     targets: [
         .target(name: "BanditoKit", dependencies: ["BanditoL10n"]),
-        .target(name: "BanditoDesign", resources: [.process("Colors.xcassets")]),
+        .target(name: "BanditoDesign", resources: [.process("Colors.xcassets"), .copy("Fonts")]),
         .target(name: "BanditoL10n", resources: [.process("Resources")]),
         .target(
             name: "BanditoUI",
@@ -32,8 +32,10 @@ let package = Package(
                 "BanditoKit", "BanditoDesign", "BanditoL10n",
                 .product(name: "SwiftTerm", package: "SwiftTerm", condition: .when(platforms: [.macOS, .iOS])),
                 .product(name: "RoyalVNCKit", package: "royalvnc", condition: .when(platforms: [.macOS])),
-            ]),
+            ],
+            // Service logos (SVG, copied as they are): read with Bundle.module, see Market/ServiceLogo.swift.
+            resources: [.copy("Resources/ServiceLogos")]),
         .testTarget(name: "BanditoKitTests", dependencies: ["BanditoKit", "BanditoL10n"]),
-        .testTarget(name: "BanditoUITests", dependencies: ["BanditoUI", "BanditoKit", "BanditoL10n"]),
+        .testTarget(name: "BanditoUITests", dependencies: ["BanditoUI", "BanditoDesign", "BanditoKit", "BanditoL10n"]),
     ]
 )

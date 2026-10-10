@@ -1,4 +1,5 @@
 import AppKit
+import BanditoDesign
 import BanditoUI
 import SwiftUI
 
@@ -16,6 +17,8 @@ struct BanditoApp: App {
     private let updater = AppUpdater()
 
     init() {
+        // Brand fonts first: the first frame already draws with them.
+        BanditoFont.registerBundledFonts()
         // Saved servers are read synchronously by AppModel, so the first frame already knows the launch state.
         let app = AppModel()
         _model = State(initialValue: app)
@@ -25,6 +28,7 @@ struct BanditoApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                .font(BanditoFont.text(size: 13))
                 .environment(model)
                 .environment(router)
                 .environment(keymap)
@@ -57,7 +61,11 @@ struct BanditoApp: App {
                 }
                 .preferredColorScheme(.dark)
                 .background(WindowChrome())
+                // `bandito://oauth/callback` (the browser's way back after a sign-in) goes to this window's
+                // onOpenURL; with the scene's matching below it does not open a second window.
+                .handlesExternalEvents(preferring: ["main"], allowing: ["*"])
         }
+        .handlesExternalEvents(matching: ["main"])
         .defaultSize(width: 1240, height: 800)
         .windowStyle(.hiddenTitleBar)
         .commands {
@@ -67,6 +75,7 @@ struct BanditoApp: App {
 
         Settings {
             SettingsWindow()
+                .font(BanditoFont.text(size: 13))
                 .environment(model)
                 .environment(router)
                 .environment(keymap)
@@ -78,6 +87,7 @@ struct BanditoApp: App {
 
         MenuBarExtra {
             MenuBarContent()
+                .font(BanditoFont.text(size: 13))
                 .environment(model)
                 .environment(demo)
                 .environment(router)

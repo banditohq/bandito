@@ -20,13 +20,13 @@ struct ToolGroupCard: View {
                 HStack(spacing: 8) {
                     statusIcon
                     Text(ToolGroupTitle.text(oks: tools.map(\.ok)))
-                        .font(BanditoFont.font(size: 12, weight: 500))
+                        .font(BanditoFont.text(size: 12, weight: 500))
                         .foregroundStyle(Color.Bandito.text2)
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
                     if let duration {
                         Text("· " + L10n.Thread.duration(runtime: duration.formatted(.number.precision(.fractionLength(1)))))
-                            .font(BanditoFont.font(size: 12, weight: 400))
+                            .font(BanditoFont.text(size: 12, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                             .lineLimit(1)
                     }
@@ -96,7 +96,7 @@ private struct ToolLine: View {
                     .lineLimit(1)
             }
         }
-        .font(BanditoFont.font(size: 12, weight: 400, mono: true))
+        .font(BanditoFont.mono(size: 12, weight: 400))
     }
 
     /// The first line of the output, in green for success and red for failure. Running calls show nothing.

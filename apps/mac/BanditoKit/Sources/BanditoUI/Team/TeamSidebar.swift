@@ -14,6 +14,8 @@ struct TeamSidebar: View {
     var body: some View {
         if let server = app.currentServer {
             content(server)
+                // Many agents, some asleep: their "z" stands still here.
+                .environment(\.avatarSleepRests, true)
         } else {
             SidebarPlaceholder(mode: .team)
         }
@@ -127,7 +129,7 @@ struct TeamSidebar: View {
                                 StatusDot(status: status, size: 10, ringColor: Color.Bandito.surface1)
                             }
                             Text(agent.name)
-                                .font(BanditoFont.font(size: 11, weight: 500))
+                                .font(BanditoFont.text(size: 11, weight: 500))
                                 .foregroundStyle(shown == agent.id ? Color.Bandito.text : Color.Bandito.text2)
                                 .lineLimit(1)
                                 .frame(width: 60)
@@ -157,16 +159,18 @@ struct TeamSidebar: View {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Text(agent.name)
-                            .font(BanditoFont.font(size: 13, weight: 600))
+                            .font(BanditoFont.display(size: 12.5, weight: 600))
                             .foregroundStyle(Color.Bandito.text)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
                         if !agent.role.isEmpty { Chip(text: agent.role) }
                         Spacer(minLength: 4)
                         Text(lastActivityLabel(agent, thread: thread))
-                            .font(BanditoFont.font(size: 11, weight: 400))
+                            .font(BanditoFont.text(size: 11, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                     }
                     Text(thread.pendingApprovals.first?.title ?? AgentPreview.text(thread: thread, agent: agent) ?? "")
-                        .font(BanditoFont.font(size: 12.5, weight: 400))
+                        .font(BanditoFont.text(size: 12.5, weight: 400))
                         .foregroundStyle(Color.Bandito.signalGlow)
                         .lineLimit(1)
                 }
@@ -262,7 +266,7 @@ struct TeamSidebar: View {
     /// One line only: the way to make an agent is in the main area (`TeamWelcome`).
     private var emptyState: some View {
         Text(L10n.Team.emptyTitle)
-            .font(BanditoFont.font(size: 12.5, weight: 400))
+            .font(BanditoFont.text(size: 12.5, weight: 400))
             .foregroundStyle(Color.Bandito.text3)
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 18)
@@ -302,7 +306,7 @@ struct AgentRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(agent.name)
-                        .font(BanditoFont.font(size: 13, weight: 600))
+                        .font(BanditoFont.display(size: 12.5, weight: 600))
                         .foregroundStyle(Color.Bandito.text)
                         .lineLimit(1)
                     if agent.paused {
@@ -316,12 +320,12 @@ struct AgentRow: View {
                     Spacer(minLength: 4)
                     if !lastActivity.isEmpty {
                         Text(lastActivity)
-                            .font(BanditoFont.font(size: 11, weight: 400))
+                            .font(BanditoFont.text(size: 11, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                     }
                 }
                 Text(AgentPreview.text(thread: thread, agent: agent) ?? L10n.Team.noMessages)
-                    .font(BanditoFont.font(size: 12.5, weight: 400))
+                    .font(BanditoFont.text(size: 12.5, weight: 400))
                     .foregroundStyle(status == .needsYou ? Color.Bandito.signalGlow : Color.Bandito.text3)
                     .lineLimit(1)
             }

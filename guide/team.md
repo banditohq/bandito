@@ -57,7 +57,7 @@ Pause all agents (Пауза для всех агентов) pauses every agent 
 ## Team home (⌘0)
 
 <!-- id: team-home; covers: -->
-The screen shown in the Team mode when no chat is open: a greeting, the New agent (Новый агент) button, the templates, the six agents used last and a few ideas for what to hand off.
+The screen shown in the Team mode when no chat is open: a greeting with the raccoon, the New agent (Новый агент) button, the six agents used last (each with its status: working, waiting or asleep, and the time of its last event), the templates and a few ideas for what to hand off.
 Где: Sidebar → TEAM (КОМАНДА) label; ⌘0; swipe right with two fingers in a chat
 1. Click the TEAM label above the agents, press ⌘0, or swipe right with two fingers in a chat.
 2. Click New agent, or a template, to open the New agent sheet; click an agent to open its chat.
@@ -79,14 +79,16 @@ The composer sits at the bottom of the thread. It sends the message to the selec
 Где: Team → agent thread → composer (Message {name})
 1. Click in the field and type. Press ↵ to send (↵ send). Press ⇧↵ for a new line (⇧↵ new line).
 2. While the agent is working, the send button becomes Stop (Остановить). Press ⌘. to stop the turn (⌘. stop).
+3. A message you send while the agent is busy, or saving its memory before a new chapter, appears in the chat at once with the line Queued (В очереди) below it. The line goes away when the agent takes the message. If the agent stopped or the server restarted before it did, the line reads Not delivered (Не доставлено); right-click the message and choose Send again (Отправить снова). After a new chapter begins, the message sits below the chapter divider, where the agent reads it. The counter beside Thinking… counts from the start of the current turn.
 
 ## Attach a file to a message
 
 <!-- id: team-attach; covers: -->
-The + button opens the macOS file picker and adds the file name to the message as `@name`. The file itself is not uploaded in this build: the agent reads the file from its folder, so put the file into the agent's project folder first (Files → upload, see [files.md](files.md)).
+Attach files, pictures and screenshots to the composer. They upload to the agent's attachment folder and go out with your next message. Drop files anywhere in the chat, or paste a picture with ⌘V when the clipboard holds no text. Folders and web links are not attached. Pictures show in the thread; click one to see it full size: pinch, or ⌘= and ⌘- (⌘ with the scroll wheel too) to zoom, double-click to switch between fit and 100% at the click, drag a zoomed picture to move it, ← and → for the other pictures of the message, Esc to close. The + button is off when the server is too old to take attachments.
 Где: Team → agent thread → composer → +
-1. Click +. Choose the file in the picker and click Open.
-2. Check the text: it now contains `@file-name`. Add your request and press ↵.
+1. Click +. Choose File or picture…, Screenshot or From clipboard.
+2. Wait until the file stops showing Uploading…. A file that cannot be attached shows why (for example, Over 20 MB) and is not sent; remove it with ✕.
+3. Press ↵. The files leave the composer with the message.
 
 ## Slash commands (/)
 
@@ -194,11 +196,11 @@ The main settings of the agent. Each row changes the agent for the next message.
 
 ## Schedules (SCHEDULE)
 
-<!-- id: team-schedules; covers: -->
-Runs a prompt for the agent at a set time, for example every morning. A schedule is a cron expression with a prompt.
+<!-- id: team-schedules; covers: sheet:schedule -->
+Runs a prompt for the agent at a set time, for example every morning. A schedule is a repeat rule with a time and a prompt. The New schedule (Новое расписание) sheet opens over the main window.
 Где: Team → agent → Agent details → Details → SCHEDULE → Add schedule (Добавить)
 1. Click Add schedule (Добавить).
-2. Type the time as a cron expression in Schedule (cron) and the request in Prompt (Запрос).
+2. Choose how often in Repeat (Повтор): Every, Every day, Weekdays, Days of the week, or Other (cron). Set the time in At (В) and the request in Prompt (Запрос). Only Other (cron) takes a cron expression.
 3. Click Add schedule (Добавить) to save. The list shows Next run (Next run …) for each schedule.
 4. Use the switch in a row to pause or resume it.
 
@@ -217,14 +219,14 @@ Shows where the agent works on the server and the state of its runtime: the inst
 The agent keeps its memory in plain Markdown files on the server. Long chats are split into chapters. The Memory tab shows the current chapter, how full it is, and how the chapters are split.
 Где: Team → agent → Agent details → Memory (Память); also /memory
 1. Read Chapter N (Chapter {count}), the line N tokens used (tokens used), and new chapter after N (new chapter after {limit}), which is the limit of the chapter.
-2. Choose how to split the chats under HOW TO SPLIT INTO CHAPTERS (КАК ДЕЛИТЬ НА ГЛАВЫ): Smart (Smart, recommended) starts a new chapter when the conversation grows and a fresh one each morning; Every day (Каждый день) starts a clean page each morning; One long chapter (Одна длинная глава) keeps one chapter, and the agent compresses old messages itself. This costs more.
+2. Choose how to split the chats under HOW TO SPLIT INTO CHAPTERS (КАК ДЕЛИТЬ НА ГЛАВЫ): Smart (Smart, recommended) starts a new chapter when the conversation grows and a fresh one each morning; Every day (Каждый день) starts a clean page each morning; One long chapter (Одна длинная глава) keeps one chapter, and the agent compresses old messages itself. This costs more. Under Smart, Chapter length (Длина главы) sets how many tokens a chapter may hold: 60K, 120K (default), 200K, 500K, 1M, or your own number (Своё…); sizes above the model's window are off.
 3. Open the memory files under MEMORY: MEMORY.md (main points: projects, decisions, open tasks), Notes (notes/), Journal (journal/), Files (files/). Each opens as a tab in the workbench panel. Open in Files (Открыть в Файлах) in the tab moves to the Files mode.
 4. Edit or delete a file in Files. The agent reads the new version next time.
 
 ## What changed (Что изменил агент)
 
 <!-- id: team-changes; covers: -->
-A tab of the workbench panel that lists the files the agent changed, task by task, with a diff for each file. You can keep a file back to its state before the task, or roll back the whole task. In a narrow panel the file list is on top of the diff.
+A tab of the workbench panel that lists the files the agent changed, task by task, with a diff for each file. The header shows the agent's name, the number of files, the lines added and removed, and the task. You can keep a file back to its state before the task, or roll back the whole task. In a narrow panel the file list is on top of the diff. Until the agent changes a file, the tab says Nothing changed yet (Пока ничего не изменено).
 Где: Team → agent thread → Changes (Изменения) button in the header; Menu Agent → What changed (Что изменил агент); ⌘⇧D; /changes
 1. Open the changes tab. The tasks are listed with their restore points: Before the task (До задачи), End of turn (Конец хода), and Before restore (Перед откатом).
 2. Click a file to see its diff. Switch between Inline (Построчно) and Side by side (Рядом). Binary files show Binary file changed.

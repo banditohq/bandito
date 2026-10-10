@@ -8,6 +8,9 @@ public enum FailureKind: Hashable, Sendable {
     case noAnswer
     /// The server no longer accepts this device (`RPCError.unauthorized`).
     case deviceRevoked
+    /// The server answers, and refuses this device's key at the WebSocket handshake (HTTP 401/403): it lost its data,
+    /// was reinstalled, or the device was removed. Not the same as `.noAnswer`: retrying cannot help.
+    case keyRejected
     /// A short reason from the daemon: `data.reason`, or the word before the colon in an RPC message
     /// (`not_found: terminal not found`). Always lower-case snake_case.
     case reason(String)
@@ -21,6 +24,7 @@ public enum FailureKind: Hashable, Sendable {
             switch rpc.code {
             case RPCError.disconnected, RPCError.timedOut: return .noAnswer
             case RPCError.unauthorized: return .deviceRevoked
+            case RPCError.keyRejected: return .keyRejected
             default: break
             }
             if let reason = rpc.reason ?? leadingReason(of: rpc.message) { return .reason(reason) }

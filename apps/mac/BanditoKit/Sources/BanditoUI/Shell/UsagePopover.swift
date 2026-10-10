@@ -43,7 +43,7 @@ struct UsagePopover: View {
             if noneInstalled {
                 VStack(alignment: .leading, spacing: 10) {
                     Text(L10n.Usage.noSubscriptions)
-                        .font(.system(size: 12.5))
+                        .font(BanditoFont.text(size: 12.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text2)
                     Button(L10n.Usage.createAgent) {
                         router.usagePopoverOpen = false
@@ -54,7 +54,7 @@ struct UsagePopover: View {
                 .padding(.vertical, 12)
             } else if rows.isEmpty {
                 Text(L10n.Usage.empty)
-                    .font(.system(size: 12.5))
+                    .font(BanditoFont.text(size: 12.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .padding(.vertical, 12)
             }
@@ -69,7 +69,7 @@ struct UsagePopover: View {
             }
             if !split.others.isEmpty {
                 Text(Self.othersLine(split.others))
-                    .font(.system(size: 11.5))
+                    .font(BanditoFont.text(size: 11.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 2)
@@ -81,7 +81,7 @@ struct UsagePopover: View {
                         .foregroundStyle(Color.Bandito.ok)
                         .padding(.top, 1)
                     Text(L10n.Usage.fallbackNote(time: Self.updatedText(snapshot.updatedAt, now: now)))
-                        .font(.system(size: 11.5))
+                        .font(BanditoFont.text(size: 11.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .lineSpacing(2)
                 }
@@ -122,7 +122,7 @@ struct UsagePopover: View {
                 .font(.system(size: 17))
                 .foregroundStyle(Color.Bandito.text)
             Text(L10n.Usage.limits)
-                .font(.system(size: 15, weight: .semibold))
+                .font(BanditoFont.text(size: 15, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
             if snapshot.isExample {
                 ExampleChip()
@@ -197,10 +197,10 @@ struct UsageWaitingView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(name)
-                .font(.system(size: 13, weight: .semibold))
+                .font(BanditoFont.text(size: 13, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
             Text(text)
-                .font(.system(size: 11.5))
+                .font(BanditoFont.text(size: 11.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
                 .fixedSize(horizontal: false, vertical: true)
             if let problem {
@@ -238,11 +238,11 @@ struct UsageCardView: View {
                     .fill(card.color.color)
                     .frame(width: 8, height: 8)
                 Text(card.name)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(BanditoFont.text(size: 13, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                 if let plan = card.plan {
                     Text(plan)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(BanditoFont.text(size: 11, weight: 600))
                         .foregroundStyle(card.color.color)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 1)
@@ -251,14 +251,14 @@ struct UsageCardView: View {
                 Spacer(minLength: 4)
                 if let who = card.who {
                     Text(who)
-                        .font(.system(size: 11))
+                        .font(BanditoFont.text(size: 11, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .lineLimit(1)
                 }
             }
             if card.windows.isEmpty, updating, !example {
                 Text(L10n.Usage.updating)
-                    .font(.system(size: 11.5))
+                    .font(BanditoFont.text(size: 11.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
             }
             ForEach(card.windows) { line in
@@ -290,11 +290,13 @@ private struct UsageWindowRow: View {
         VStack(alignment: .leading, spacing: 5) {
             HStack {
                 Text(line.label)
-                    .font(.system(size: 12.5))
+                    .font(BanditoFont.text(size: 12.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                 Spacer()
                 Text(L10n.Usage.used(percent: "\(usedPercent)%"))
-                    .font(.system(size: 12.5, weight: .semibold))
+                    .font(BanditoFont.display(size: 11.5, weight: 600))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                     .foregroundStyle(level.color)
             }
             UsageBar(fraction: line.used, tint: level.color, height: 5)
@@ -306,7 +308,7 @@ private struct UsageWindowRow: View {
                         .foregroundStyle(Color.Bandito.text3)
                 }
             }
-            .font(.system(size: 11.5))
+            .font(BanditoFont.text(size: 11.5, weight: 400))
         }
     }
 
@@ -338,7 +340,7 @@ struct UsageProblemDetail: View {
         VStack(alignment: .leading, spacing: 3) {
             if showsTitle {
                 Text(problem.title)
-                    .font(.system(size: 11.5))
+                    .font(BanditoFont.text(size: 11.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -356,7 +358,7 @@ struct UsageCommandLine: View {
 
     var body: some View {
         Text(command)
-            .font(.system(size: 11.5, design: .monospaced))
+            .font(BanditoFont.mono(size: 11.5, weight: 400))
             .foregroundStyle(Color.Bandito.text2)
             .textSelection(.enabled)
     }

@@ -70,7 +70,7 @@ private struct AnsweredFormLine: View {
                                 .textSelection(.enabled)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        .font(BanditoFont.font(size: 12.5, weight: 400))
+                        .font(BanditoFont.text(size: 12.5, weight: 400))
                     }
                 }
                 .padding(12)
@@ -96,7 +96,7 @@ private struct AnsweredFormLine: View {
             }
             Spacer(minLength: 0)
         }
-        .font(BanditoFont.font(size: 12.5, weight: 400))
+        .font(BanditoFont.text(size: 12.5, weight: 400))
         .foregroundStyle(Color.Bandito.text3)
         .padding(.horizontal, 4)
     }
@@ -134,7 +134,7 @@ private struct PendingFormCard: View {
             header
             if let intro = spec.intro, !intro.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Text(intro)
-                    .font(BanditoFont.font(size: 13.5, weight: 400))
+                    .font(BanditoFont.text(size: 13.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                     .lineSpacing(3)
                     .fixedSize(horizontal: false, vertical: true)
@@ -143,14 +143,10 @@ private struct PendingFormCard: View {
             fields
             if isConfirm {
                 TextField(L10n.Form.whyPlaceholder, text: comment, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(BanditoFont.font(size: 13, weight: 400))
+                    .banditoField()
+                    .font(BanditoFont.text(size: 13, weight: 400))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1...3)
-                    .padding(.horizontal, 13)
-                    .padding(.vertical, 10)
-                    .background(Color.Bandito.bg, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.Bandito.line))
                     .disabled(locked)
             }
             if let failure {
@@ -194,7 +190,7 @@ private struct PendingFormCard: View {
                 HStack(spacing: 6) {
                     StatusDot(status: .needsYou, size: 7, ringColor: Color.Bandito.signal.opacity(0.15))
                     Text(L10n.Approval.needsYou)
-                        .font(BanditoFont.font(size: 11.5, weight: 600))
+                        .font(BanditoFont.text(size: 11.5, weight: 600))
                         .foregroundStyle(Color.Bandito.signalGlow)
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
@@ -204,13 +200,13 @@ private struct PendingFormCard: View {
                 .overlay(Capsule().stroke(Color.Bandito.signal.opacity(0.3), lineWidth: 1))
 
                 Text(isConfirm ? L10n.Form.confirms(name: agentName) : L10n.Form.asks(name: agentName))
-                    .font(BanditoFont.font(size: 12, weight: 500))
+                    .font(BanditoFont.text(size: 12, weight: 500))
                     .foregroundStyle(Color.Bandito.text3)
                     .lineLimit(1)
                 Spacer(minLength: 0)
             }
             Text(spec.title)
-                .font(BanditoFont.font(size: 16, weight: 600))
+                .font(BanditoFont.text(size: 16, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
                 .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)
@@ -236,7 +232,7 @@ private struct PendingFormCard: View {
         HStack(spacing: 8) {
             ProgressView().controlSize(.small)
             Text(L10n.Form.sent)
-                .font(BanditoFont.font(size: 12.5, weight: 500))
+                .font(BanditoFont.text(size: 12.5, weight: 500))
                 .foregroundStyle(Color.Bandito.text2)
         }
     }
@@ -361,13 +357,13 @@ private struct FormFieldView: View {
             }
             if let help = field.help, !help.isEmpty {
                 Text(help)
-                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if let problem {
                 Text(FormPresentation.text(for: problem))
-                    .font(BanditoFont.font(size: 12, weight: 500))
+                    .font(BanditoFont.text(size: 12, weight: 500))
                     .foregroundStyle(Color.Bandito.danger)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityLabel(FormPresentation.text(for: problem))
@@ -379,7 +375,7 @@ private struct FormFieldView: View {
     private var label: some View {
         HStack(spacing: 4) {
             Text(field.label)
-                .font(BanditoFont.font(size: summary ? 11.5 : 12.5, weight: 600))
+                .font(BanditoFont.text(size: summary ? 11.5 : 12.5, weight: 600))
                 .foregroundStyle(summary ? Color.Bandito.text3 : Color.Bandito.text2)
                 .fixedSize(horizontal: false, vertical: true)
             requiredMark
@@ -390,7 +386,7 @@ private struct FormFieldView: View {
     private var requiredMark: some View {
         if field.isRequired {
             Text("*")
-                .font(BanditoFont.font(size: 12.5, weight: 600))
+                .font(BanditoFont.text(size: 12.5, weight: 600))
                 .foregroundStyle(Color.Bandito.signal)
                 .help(L10n.Form.requiredHelp)
                 .accessibilityLabel(L10n.Form.requiredHelp)
@@ -425,15 +421,14 @@ private struct FormFieldView: View {
 
     private var lineField: some View {
         TextField(field.placeholder ?? "", text: text)
-            .textFieldStyle(.plain)
             .font(
                 field.type == .number
-                    ? BanditoFont.font(size: 13.5, weight: 400).monospacedDigit()
-                    : BanditoFont.font(size: 13.5, weight: 400))
+                    ? BanditoFont.text(size: 13.5, weight: 400).monospacedDigit()
+                    : BanditoFont.text(size: 13.5, weight: 400))
             .foregroundStyle(Color.Bandito.text)
             .tint(Color.Bandito.signal)
             .focused($fieldFocused)
-            .modifier(FormFieldBox(plain: summary, failed: problem != nil, height: 40))
+            .modifier(FormFieldBox(plain: summary, failed: problem != nil))
             .contentShape(Rectangle())
             // A click anywhere in the box puts the caret here, and takes the focus from the composer.
             .simultaneousGesture(TapGesture().onEnded { fieldFocused = true })
@@ -442,13 +437,12 @@ private struct FormFieldView: View {
 
     private var areaField: some View {
         TextField(field.placeholder ?? "", text: text, axis: .vertical)
-            .textFieldStyle(.plain)
-            .font(BanditoFont.font(size: 13.5, weight: 400))
+            .font(BanditoFont.text(size: 13.5, weight: 400))
             .foregroundStyle(Color.Bandito.text)
             .tint(Color.Bandito.signal)
             .lineLimit(summary ? 2...12 : 3...10)
             .focused($fieldFocused)
-            .modifier(FormFieldBox(plain: summary, failed: problem != nil, height: nil))
+            .modifier(FormFieldBox(plain: summary, failed: problem != nil))
             .contentShape(Rectangle())
             .simultaneousGesture(TapGesture().onEnded { fieldFocused = true })
             .accessibilityLabel(field.label)
@@ -509,7 +503,7 @@ private struct FormFieldView: View {
                                 .font(.system(size: 10, weight: .bold))
                         }
                         Text(option)
-                            .font(BanditoFont.font(size: 13, weight: on ? 600 : 500))
+                            .font(BanditoFont.text(size: 13, weight: on ? 600 : 500))
                             .lineLimit(1)
                             .truncationMode(.tail)
                             .frame(maxWidth: 320, alignment: .leading)
@@ -538,7 +532,7 @@ private struct FormFieldView: View {
         HStack(spacing: 12) {
             HStack(spacing: 4) {
                 Text(field.label)
-                    .font(BanditoFont.font(size: summary ? 13 : 13.5, weight: 500))
+                    .font(BanditoFont.text(size: summary ? 13 : 13.5, weight: 500))
                     .foregroundStyle(Color.Bandito.text)
                     .fixedSize(horizontal: false, vertical: true)
                 requiredMark
@@ -599,31 +593,23 @@ private struct FormFieldView: View {
     }
 }
 
-/// The frame of a text field in a form: the filled field of the sheets, or no frame at all in the summary of a
+/// The frame of a text field in a form: the Bandito field of the sheets, or no frame at all in the summary of a
 /// confirmation (a thin underline shows that the line can be edited). A field with a problem has a red edge.
 private struct FormFieldBox: ViewModifier {
     var plain: Bool
     var failed: Bool
-    /// The fixed height of a one-line field; nil lets a multi-line field grow.
-    var height: CGFloat?
 
     func body(content: Content) -> some View {
-        let edge = failed ? Color.Bandito.danger : Color.Bandito.line
         if plain {
             content
+                .textFieldStyle(.plain)
                 .padding(.vertical, 5)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .overlay(alignment: .bottom) {
                     Rectangle().fill(failed ? Color.Bandito.danger : Color.Bandito.text.opacity(0.12)).frame(height: 1)
                 }
         } else {
-            content
-                .padding(.horizontal, 13)
-                .padding(.vertical, height == nil ? 10 : 0)
-                .frame(minHeight: height)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.Bandito.bg, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(edge))
+            content.banditoField(error: failed)
         }
     }
 }

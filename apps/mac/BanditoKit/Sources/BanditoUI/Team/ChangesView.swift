@@ -81,14 +81,14 @@ struct ChangesContent: View {
 
     private func sheetBody(_ agent: Agent) -> some View {
         GeometryReader { outer in
-            sheetContent(agent, width: Double(outer.size.width))
+            sheetContent(agent)
                 .frame(width: outer.size.width, height: outer.size.height)
         }
     }
 
-    private func sheetContent(_ agent: Agent, width: Double) -> some View {
+    private func sheetContent(_ agent: Agent) -> some View {
         VStack(spacing: 0) {
-            header(agent, panelWidth: width)
+            header(agent)
             if !timeline.isEmpty {
                 RestorePointStrip(
                     points: timeline, baseID: base?.id, nowTitle: L10n.Changes.now, onSelect: choose)
@@ -104,7 +104,11 @@ struct ChangesContent: View {
                     .controlSize(.small)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if files.isEmpty {
-                message(L10n.Changes.empty)
+                EmptyState(
+                    symbol: "doc.text.magnifyingglass",
+                    title: L10n.Changes.emptyTitle,
+                    message: L10n.Changes.emptyMessage,
+                    mascot: nil)
             } else {
                 // Wide: the list beside the diff. Narrow (the workbench panel): the list on top, at most 40 % of the
                 // height, and the diff below it.
@@ -128,40 +132,36 @@ struct ChangesContent: View {
         }
     }
 
-    /// The compact header of the workbench tab: avatar, one-line title, the diff layout. The tab closes the view, so
-    /// there is no close button here. Narrow, the title leaves the header (the avatar's tooltip has it) and the layout
-    /// switch shows icons instead of words.
-    private func header(_ agent: Agent, panelWidth: Double) -> some View {
-        HStack(spacing: 10) {
-            AgentAvatarView(agent: agent, server: server, size: 24)
-                .help(L10n.Changes.title(name: agent.name))
-            VStack(alignment: .leading, spacing: 2) {
-                if WorkbenchLayout.showsAgentTitle(panelWidth: panelWidth) {
-                    Text(L10n.Changes.title(name: agent.name))
-                        .font(BanditoFont.font(size: 14, weight: 650))
-                        .foregroundStyle(Color.Bandito.text)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
-                summaryLine
-                    .font(BanditoFont.font(size: 12, weight: 400))
-                    .foregroundStyle(Color.Bandito.text3)
+    /// The compact header of the workbench tab, in two lines. The first: avatar, "Changes: <name>" in one line, the
+    /// diff layout. The second: the summary chips (files, added, removed) and the task. The tab closes the view, so
+    /// there is no close button here. Narrow, the layout switch shows icons instead of words.
+    private func header(_ agent: Agent) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                AgentAvatarView(agent: agent, server: server, size: 20)
+                    .help(L10n.Changes.title(name: agent.name))
+                Text(L10n.Changes.title(name: agent.name))
+                    .font(BanditoFont.display(size: 15, weight: 600))
+                    .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1)
+                    .truncationMode(.tail)
+                    .layoutPriority(0)
+                Spacer(minLength: 8)
+                ViewThatFits(in: .horizontal) {
+                    SegmentedPicker(
+                        selection: $viewMode,
+                        options: [(.inline, L10n.Changes.inline), (.sideBySide, L10n.Changes.sideBySide)]
+                    )
+                    .fixedSize()
+                    viewModeIcons
+                }
+                .layoutPriority(1)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .layoutPriority(0)
-            ViewThatFits(in: .horizontal) {
-                SegmentedPicker(
-                    selection: $viewMode,
-                    options: [(.inline, L10n.Changes.inline), (.sideBySide, L10n.Changes.sideBySide)]
-                )
-                .frame(width: 210)
-                viewModeIcons
-            }
-            .layoutPriority(1)
+            summaryChips
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .overlay(alignment: .bottom) {
             Rectangle().fill(Color.Bandito.text.opacity(0.06)).frame(height: 1)
         }
@@ -191,20 +191,24 @@ struct ChangesContent: View {
         .help(label)
     }
 
-    /// "Task «…» · 6 files · +412 −18" (the parts appear once they are known).
-    @ViewBuilder private var summaryLine: some View {
+    /// Chips "6 files", "+412" (ok), "−18" (danger), then the task in secondary text. The parts appear once known.
+    @ViewBuilder private var summaryChips: some View {
         HStack(spacing: 6) {
-            if let task = base.flatMap(CheckpointLabel.task(for:)) {
-                Text(L10n.Changes.task(task: task)).lineLimit(1)
-                Text("·")
-            }
             if let diff {
-                Text(L10n.Changes.fileCount(count: diff.files.count))
-                Text("·")
-                Text("+\(diff.additions)").foregroundStyle(Color.Bandito.ok)
-                Text("−\(diff.deletions)").foregroundStyle(Color.Bandito.danger)
+                Chip(text: L10n.Changes.fileCount(count: diff.files.count))
+                Chip(text: ChangesChips.additions(diff.additions), tone: .ok)
+                Chip(text: ChangesChips.deletions(diff.deletions), tone: .danger)
+            }
+            if let task = base.flatMap(CheckpointLabel.task(for:)) {
+                Text(L10n.Changes.task(task: task))
+                    .font(BanditoFont.text(size: 12, weight: 400))
+                    .foregroundStyle(Color.Bandito.text2)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func fileList(compact: Bool) -> some View {
@@ -218,7 +222,7 @@ struct ChangesContent: View {
                 .padding(10)
             }
             Text(L10n.Changes.keepHint)
-                .font(BanditoFont.font(size: 12, weight: 400))
+                .font(BanditoFont.text(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
                 .lineSpacing(2)
                 .padding(10)
@@ -246,31 +250,29 @@ struct ChangesContent: View {
                 .accessibilityLabel(L10n.Changes.keepAria(name: Self.fileName(change.path)))
             Button { select(change.path) } label: {
                 HStack(spacing: 9) {
-                    StatusTag(status: change.status)
+                    FileGlyph(category: ChangedFileKind.category(path: change.path), size: 24)
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(Self.fileName(change.path))
-                            .font(BanditoFont.font(size: 13, weight: 400))
+                        Text(change.path)
+                            .font(BanditoFont.mono(size: 12, weight: 400))
                             .foregroundStyle(Color.Bandito.text)
                             .lineLimit(1)
                             .truncationMode(.middle)
-                        if let caption = fileCaption(change) {
-                            Text(caption)
-                                .font(BanditoFont.font(size: 11.5, weight: 400, mono: change.status != .renamed))
-                                .foregroundStyle(Color.Bandito.text3)
-                                .lineLimit(1)
-                                .truncationMode(.head)
-                        }
+                        Text(fileCaption(change))
+                            .font(BanditoFont.text(size: 11.5, weight: 400))
+                            .foregroundStyle(Color.Bandito.text3)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     HStack(spacing: 5) {
                         if let additions = change.additions {
-                            Text("+\(additions)").foregroundStyle(Color.Bandito.ok)
+                            Text(ChangesChips.additions(additions)).foregroundStyle(Color.Bandito.ok)
                         }
                         if let deletions = change.deletions {
-                            Text("−\(deletions)").foregroundStyle(Color.Bandito.danger)
+                            Text(ChangesChips.deletions(deletions)).foregroundStyle(Color.Bandito.danger)
                         }
                     }
-                    .font(BanditoFont.font(size: 11.5, weight: 400))
+                    .font(BanditoFont.text(size: 11.5, weight: 400))
                     .monospacedDigit()
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -282,11 +284,7 @@ struct ChangesContent: View {
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(selected ? Color.Bandito.signal.opacity(0.09) : Color.clear)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(selected ? Color.Bandito.signal.opacity(0.3) : Color.clear, lineWidth: 1)
+                .fill(selected ? Color.Bandito.text.opacity(0.06) : Color.clear)
         )
         .opacity(keep.contains(change.path) ? 1 : 0.55)
     }
@@ -296,12 +294,12 @@ struct ChangesContent: View {
             if let change = selectedChange {
                 HStack(spacing: 10) {
                     Text(change.path)
-                        .font(BanditoFont.font(size: 13, weight: 400, mono: true))
+                        .font(BanditoFont.mono(size: 13, weight: 400))
                         .foregroundStyle(Color.Bandito.text)
                         .lineLimit(1)
                         .truncationMode(.head)
                     Text(change.status.title)
-                        .font(BanditoFont.font(size: 11.5, weight: 600))
+                        .font(BanditoFont.text(size: 11.5, weight: 600))
                         .foregroundStyle(change.status.tint)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 1)
@@ -309,7 +307,7 @@ struct ChangesContent: View {
                     Spacer(minLength: 8)
                     if case .text(let hunks, _) = file, !hunks.isEmpty {
                         Text(L10n.Changes.placeCount(count: hunks.count))
-                            .font(BanditoFont.font(size: 12, weight: 400))
+                            .font(BanditoFont.text(size: 12, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                     }
                 }
@@ -351,7 +349,7 @@ struct ChangesContent: View {
                     }
                     if truncated {
                         Text(L10n.Changes.truncated)
-                            .font(BanditoFont.font(size: 12, weight: 400))
+                            .font(BanditoFont.text(size: 12, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(10)
@@ -394,7 +392,7 @@ struct ChangesContent: View {
             Spacer(minLength: 12)
             if !unticked.isEmpty {
                 Text(L10n.Changes.unticked(count: unticked.count))
-                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
             }
             Button(L10n.Changes.keepFiles(count: keptCount)) { keepFiles() }
@@ -411,7 +409,7 @@ struct ChangesContent: View {
 
     private func message(_ text: String, tint: Color = Color.Bandito.text2) -> some View {
         Text(text)
-            .font(BanditoFont.font(size: 13, weight: 500))
+            .font(BanditoFont.text(size: 13, weight: 500))
             .foregroundStyle(tint)
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -562,13 +560,12 @@ struct ChangesContent: View {
         String(path.split(separator: "/").last ?? Substring(path))
     }
 
-    /// Folder of the file (with a trailing slash), or "renamed from …" for a rename.
-    private func fileCaption(_ change: FileChange) -> String? {
+    /// The status in words under the path, or "renamed from …" for a rename.
+    private func fileCaption(_ change: FileChange) -> String {
         if change.status == .renamed, let from = change.from {
             return L10n.Changes.renamedFrom(path: from)
         }
-        let folder = change.path.split(separator: "/").dropLast().joined(separator: "/")
-        return folder.isEmpty ? nil : folder + "/"
+        return change.status.title
     }
 }
 
@@ -587,15 +584,6 @@ private struct FileLoadKey: Hashable {
 }
 
 private extension ChangeStatus {
-    var letter: String {
-        switch self {
-        case .added: "A"
-        case .modified: "M"
-        case .deleted: "D"
-        case .renamed: "R"
-        }
-    }
-
     var tint: Color {
         switch self {
         case .added: Color.Bandito.ok
@@ -634,8 +622,8 @@ private extension ChangeLineKind {
 
     var rowTint: Color {
         switch self {
-        case .added: Color.Bandito.ok.opacity(0.08)
-        case .removed: Color.Bandito.danger.opacity(0.08)
+        case .added: Color.Bandito.ok.opacity(0.10)
+        case .removed: Color.Bandito.danger.opacity(0.10)
         case .context: Color.clear
         }
     }
@@ -650,111 +638,126 @@ private extension ChangeLineKind {
 
 // MARK: - Subviews
 
-/// Restore points as a row of dots on one line. Filled when it appears; the chosen base has a ring.
+/// Restore points as a row of dots, joined by a hairline. A point is a small cream dot; the current one is a larger
+/// filled dot with a ring; the chosen base has a ring. Labels are cut with an ellipsis and show in full on hover. When
+/// the points do not fit, the row scrolls sideways.
 private struct RestorePointStrip: View {
     let points: [Checkpoint]
     let baseID: String?
     let nowTitle: String
     let onSelect: (Checkpoint) -> Void
 
-    @State private var filled = false
-    private let dotSize: CGFloat = 22
+    /// Width of one point's column. Past the width the row scrolls.
+    private static let columnWidth: CGFloat = 128
+    private static let dotSize: CGFloat = 16
 
     var body: some View {
-        HStack(spacing: 0) {
-            ForEach(Array(points.enumerated()), id: \.element.id) { index, point in
-                Button { onSelect(point) } label: {
-                    column(point, first: index == 0, selected: point.id == baseID)
-                }
-                .banditoButton(.row(cornerRadius: 8))
-                .frame(maxWidth: .infinity)
-            }
-            VStack(spacing: 6) {
-                Circle()
-                    .fill(Color.Bandito.signal)
-                    .frame(width: 14, height: 14)
-                    .overlay(Circle().stroke(Color.Bandito.surface2, lineWidth: 3))
-                    .frame(width: dotSize, height: dotSize)
-                Text(nowTitle)
-                    .font(BanditoFont.font(size: 12.5, weight: 600))
-                    .foregroundStyle(Color.Bandito.signal)
-            }
-            .frame(maxWidth: .infinity)
-        }
-        .padding(.vertical, 16)
-        .background(alignment: .topLeading) {
-            GeometryReader { proxy in
-                line(width: proxy.size.width)
+        ViewThatFits(in: .horizontal) {
+            strip(scrolls: false)
+            ScrollView(.horizontal, showsIndicators: false) {
+                strip(scrolls: true)
             }
         }
-        .padding(.horizontal, 30)
-        .banditoAnimation(.easeOut(duration: 1.2).delay(0.4), value: filled)
-        .onAppear { filled = true }
+        .padding(.vertical, 14)
+        .padding(.horizontal, 22)
         .overlay(alignment: .bottom) {
             Rectangle().fill(Color.Bandito.text.opacity(0.06)).frame(height: 1)
         }
     }
 
-    /// Grey track between the dots, with a green-to-orange fill that grows from the left.
-    private func line(width: CGFloat) -> some View {
-        let step = width / CGFloat(points.count + 1)
-        let span = width - step
-        let y = 16 + dotSize / 2 - 1
-        return ZStack(alignment: .topLeading) {
-            Rectangle()
-                .fill(Color.Bandito.text.opacity(0.08))
-                .frame(width: span, height: 2)
-                .offset(x: step / 2, y: y)
-            Rectangle()
-                .fill(LinearGradient(colors: [Color.Bandito.ok, Color.Bandito.signal], startPoint: .leading, endPoint: .trailing))
-                .frame(width: span, height: 2)
-                .scaleEffect(x: filled ? 1 : 0, anchor: .leading)
-                .offset(x: step / 2, y: y)
+    private func strip(scrolls: Bool) -> some View {
+        let maxWidth: CGFloat = scrolls ? Self.columnWidth : .infinity
+        return HStack(alignment: .top, spacing: 0) {
+            ForEach(Array(points.enumerated()), id: \.element.id) { index, point in
+                Button { onSelect(point) } label: {
+                    pointColumn(point, selected: point.id == baseID, leadingTrack: index > 0)
+                }
+                .banditoButton(.row(cornerRadius: 8))
+                .frame(minWidth: Self.columnWidth, maxWidth: maxWidth)
+            }
+            nowColumn
+                .frame(minWidth: Self.columnWidth, maxWidth: maxWidth)
         }
     }
 
-    private func column(_ point: Checkpoint, first: Bool, selected: Bool) -> some View {
-        VStack(spacing: 6) {
-            ZStack {
-                if selected {
-                    Circle()
-                        .stroke(Color.Bandito.signal, lineWidth: 2)
-                        .frame(width: dotSize, height: dotSize)
-                }
-                Circle()
-                    .fill(first ? Color.Bandito.surface2 : Color.Bandito.ok)
-                    .frame(width: 14, height: 14)
-                    .overlay(Circle().stroke(first ? Color.Bandito.ok : Color.Bandito.surface2, lineWidth: first ? 2 : 3))
+    /// A hairline piece beside a dot. Hidden where a point has no neighbour, so the line joins the points only.
+    private func track(_ visible: Bool) -> some View {
+        Rectangle()
+            .fill(visible ? Color.Bandito.text.opacity(0.08) : Color.clear)
+            .frame(height: 2)
+            .frame(maxWidth: .infinity)
+    }
+
+    private func pointColumn(_ point: Checkpoint, selected: Bool, leadingTrack: Bool) -> some View {
+        let label = CheckpointLabel.text(for: point)
+        return VStack(spacing: 6) {
+            HStack(spacing: 0) {
+                track(leadingTrack)
+                pointDot(selected: selected)
+                track(true)
             }
-            .frame(width: dotSize, height: dotSize)
             Text(Self.time(point))
-                .font(BanditoFont.font(size: 12.5, weight: 600))
-                .foregroundStyle(selected ? Color.Bandito.signal : Color.Bandito.text)
-            Text(CheckpointLabel.text(for: point))
-                .font(BanditoFont.font(size: 12, weight: 400))
-                .foregroundStyle(Color.Bandito.text3)
+                .font(BanditoFont.text(size: 12.5, weight: 600))
+                .foregroundStyle(Color.Bandito.text)
                 .lineLimit(1)
-                .frame(maxWidth: 160)
+                .truncationMode(.tail)
+            Text(label)
+                .font(BanditoFont.text(size: 12, weight: 400))
+                .foregroundStyle(Color.Bandito.text3)
+                .multilineTextAlignment(.center)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .help(label)
         }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 6)
         .contentShape(Rectangle())
+    }
+
+    /// A small cream dot; the chosen base gets a ring around it.
+    private func pointDot(selected: Bool) -> some View {
+        ZStack {
+            if selected {
+                Circle()
+                    .stroke(Color.Bandito.text, lineWidth: 2)
+                    .frame(width: Self.dotSize, height: Self.dotSize)
+            }
+            Circle()
+                .fill(Color.Bandito.text)
+                .frame(width: 7, height: 7)
+        }
+        .frame(width: Self.dotSize, height: Self.dotSize)
+    }
+
+    /// The current state: a filled cream dot with a ring, and its name.
+    private var nowColumn: some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 0) {
+                track(true)
+                ZStack {
+                    Circle()
+                        .stroke(Color.Bandito.text, lineWidth: 1.5)
+                        .frame(width: Self.dotSize, height: Self.dotSize)
+                    Circle()
+                        .fill(Color.Bandito.text)
+                        .frame(width: 9, height: 9)
+                }
+                .frame(width: Self.dotSize, height: Self.dotSize)
+                track(false)
+            }
+            Text(nowTitle)
+                .font(BanditoFont.text(size: 12.5, weight: 600))
+                .foregroundStyle(Color.Bandito.text)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 6)
     }
 
     private static func time(_ point: Checkpoint) -> String {
         Date(timeIntervalSince1970: TimeInterval(point.createdAt) / 1000)
             .formatted(date: .omitted, time: .shortened)
-    }
-}
-
-private struct StatusTag: View {
-    let status: ChangeStatus
-
-    var body: some View {
-        Text(status.letter)
-            .font(BanditoFont.font(size: 11, weight: 700))
-            .foregroundStyle(status.tint)
-            .frame(width: 20, height: 20)
-            .background(status.tint.opacity(0.13), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-            .accessibilityLabel(status.title)
     }
 }
 
@@ -781,7 +784,7 @@ private struct HunkHeaderRow: View {
 
     var body: some View {
         Text(text)
-            .font(BanditoFont.font(size: 11.5, weight: 400, mono: true))
+            .font(BanditoFont.mono(size: 11.5, weight: 400))
             .foregroundStyle(Color.Bandito.text3)
             .lineLimit(1)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -813,7 +816,7 @@ private struct InlineLineRow: View {
                     .strikethrough(line.kind == .removed, color: Color.Bandito.danger.opacity(0.4))
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .font(BanditoFont.font(size: 12.5, weight: 400, mono: true))
+            .font(BanditoFont.mono(size: 12.5, weight: 400))
             .padding(.trailing, 16)
             .background(line.kind.rowTint)
             .contentShape(Rectangle())
@@ -862,7 +865,7 @@ private struct SideCellView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.leading, 8)
         }
-        .font(BanditoFont.font(size: 12.5, weight: 400, mono: true))
+        .font(BanditoFont.mono(size: 12.5, weight: 400))
         .padding(.trailing, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(cell?.kind.rowTint ?? Color.clear)
@@ -875,7 +878,7 @@ private struct PillButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         InteractiveBody(isPressed: configuration.isPressed) { hovered in
             configuration.label
-                .font(BanditoFont.font(size: 13, weight: 500))
+                .font(BanditoFont.text(size: 13, weight: 500))
                 .foregroundStyle(tint)
                 .padding(.horizontal, 14)
                 .frame(height: 36)
@@ -897,14 +900,14 @@ struct RollbackToast: View {
     var body: some View {
         HStack(spacing: 12) {
             Text(L10n.Changes.rolledBack(count: notice.count))
-                .font(BanditoFont.font(size: 13, weight: 500))
+                .font(BanditoFont.text(size: 13, weight: 500))
                 .foregroundStyle(Color.Bandito.text)
             if let failure {
                 UserFacingErrorView(message: failure)
             }
             Button(L10n.Changes.undo) { undo() }
                 .banditoButton(.link)
-                .font(BanditoFont.font(size: 13, weight: 600))
+                .font(BanditoFont.text(size: 13, weight: 600))
                 .foregroundStyle(Color.Bandito.signal)
                 .disabled(undoing)
         }

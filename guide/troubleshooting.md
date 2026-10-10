@@ -45,6 +45,15 @@ The server no longer accepts this Mac. Usually the device was removed on the ser
 1. Connect the device again: Settings (⌘,) → Servers (Серверы) → Add server (Добавить сервер).
 2. The list of devices on the server is in Server → Devices (Устройства).
 
+## The server did not accept this Mac's key. (Сервер не принял ключ этого Mac.)
+
+<!-- id: ts-key-rejected; covers: -->
+The server answers, but it does not know this Mac's key: it was reinstalled, lost its data, or the device was removed. The app says this instead of "the server does not answer", because turning the server on or waiting will not help.
+Где: Team (the empty chat of that server); any message about the connection
+1. On This Mac the app pairs with the server again by itself, once, and connects. If that works you see nothing.
+2. If it did not work, click Connect again (Подключить заново) under the message. The app pairs with this Mac's server again; the details of a failure are under Details (Подробнее).
+3. On another server, click Connect again (Подключить заново): the add-server sheet opens with the server's address. Connect it the same way as the first time. If it is the same server, the old entry is replaced; with a different address a second entry appears, and you can remove the old one in Settings (⌘,) → Servers (Серверы).
+
 ## Something went wrong. (Что-то пошло не так.)
 
 <!-- id: ts-generic; covers: -->

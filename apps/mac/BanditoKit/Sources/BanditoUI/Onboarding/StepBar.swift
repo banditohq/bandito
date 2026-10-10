@@ -26,14 +26,14 @@ struct OnboardingStepBar: View {
             ForEach(Array(labels.enumerated()), id: \.offset) { k, label in
                 let isCurrent = k == current
                 Text("\(k + 1)")
-                    .font(BanditoFont.font(size: 12, weight: 600))
+                    .font(BanditoFont.text(size: 12, weight: 600))
                     .foregroundStyle(isCurrent ? Color.Bandito.onSignal : Color.Bandito.text3)
                     .frame(width: 24, height: 24)
                     .background(isCurrent ? Color.Bandito.signalFill : Color.Bandito.text.opacity(0.06), in: Circle())
                     .overlay(Circle().stroke(Color.Bandito.text.opacity(isCurrent ? 0 : 0.1)))
                 if showsAllLabels || isCurrent {
                     Text(label)
-                        .font(BanditoFont.font(size: 13, weight: isCurrent ? 600 : 400))
+                        .font(BanditoFont.text(size: 13, weight: isCurrent ? 600 : 400))
                         .foregroundStyle(isCurrent ? Color.Bandito.text : Color.Bandito.text3)
                         .lineLimit(1)
                         .fixedSize()

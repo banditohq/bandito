@@ -16,7 +16,7 @@ struct TerminalsSidebar: View {
             TerminalsSidebarList(controller: app.terminalController(for: server))
         } else {
             Text(L10n.Terminals.updateServer)
-                .font(.system(size: 12))
+                .font(BanditoFont.text(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
                 .multilineTextAlignment(.center)
                 .padding(16)
@@ -70,7 +70,7 @@ private struct TerminalsSidebarList: View {
                                 SectionLabel(L10n.Terminals.Sidebar.collapsed)
                                 Spacer(minLength: 6)
                                 Text(L10n.Terminals.Sidebar.collapsedHint)
-                                    .font(.system(size: 11))
+                                    .font(BanditoFont.text(size: 11, weight: 400))
                                     .foregroundStyle(Color.Bandito.text3)
                             }
                             .padding(.horizontal, 10)
@@ -92,10 +92,10 @@ private struct TerminalsSidebarList: View {
                 HStack(alignment: .top, spacing: 8) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(L10n.Terminals.Sidebar.noteTitle)
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(BanditoFont.text(size: 12, weight: 600))
                             .foregroundStyle(Color.Bandito.text)
                         Text(L10n.Terminals.Sidebar.noteBody)
-                            .font(.system(size: 12))
+                            .font(BanditoFont.text(size: 12, weight: 400))
                             .foregroundStyle(Color.Bandito.text2)
                             .lineSpacing(2)
                     }
@@ -145,11 +145,11 @@ private struct TerminalsSidebarList: View {
                 }
                 VStack(alignment: .leading, spacing: 1) {
                     Text(controller.displayTitle(id) ?? id)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(BanditoFont.text(size: 13, weight: 500))
                         .foregroundStyle(Color.Bandito.text)
                         .lineLimit(1)
                     Text(session?.info.cwd ?? "")
-                        .font(.system(size: 11.5, design: .monospaced))
+                        .font(BanditoFont.mono(size: 11.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .lineLimit(1)
                         .truncationMode(.head)
@@ -174,14 +174,14 @@ private struct TerminalsSidebarList: View {
     private func badge(waiting: Bool, entry: TerminalWorkspace.Collapsed?, session: TerminalSession?) -> some View {
         if waiting {
             Text(L10n.Terminals.Dock.waiting)
-                .font(.system(size: 10.5, weight: .semibold))
+                .font(BanditoFont.text(size: 10.5, weight: 600))
                 .foregroundStyle(BanditoPalette.peach)
                 .padding(.horizontal, 7)
                 .padding(.vertical, 2)
                 .background(Color.Bandito.signal.opacity(0.13), in: Capsule())
         } else if let base = entry?.lines, let activity = session?.activity, activity.lines > base {
             Text(L10n.Terminals.Dock.lines(count: activity.lines - base))
-                .font(.system(size: 10.5, weight: .semibold))
+                .font(BanditoFont.text(size: 10.5, weight: 600))
                 .foregroundStyle(Color.Bandito.text2)
                 .padding(.horizontal, 7)
                 .padding(.vertical, 2)

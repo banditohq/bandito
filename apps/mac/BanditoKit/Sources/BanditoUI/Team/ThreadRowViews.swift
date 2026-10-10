@@ -34,6 +34,78 @@ struct ThreadRowView: View {
     }
 }
 
+/// What decides how a row looks, as plain values. Two rows with equal keys draw the same, so a row whose key did not
+/// change is not built again when the thread is (a scroll across a threshold, a new message at the end, a stream).
+/// The closures of `ThreadChat` are left out on purpose: they act on the thread through references and ids, so an old
+/// copy of one still does the right thing.
+struct ThreadRowKey: Equatable {
+    var row: ThreadRow
+    var agentName: String
+    var primaryRuntime: String
+    var agentID: String
+    var folder: String?
+    var reactionsOn: Bool
+    var repliesOn: Bool
+    var formsOn: Bool
+    var accent: Color
+    /// The parts of the chat state that belong to this row only.
+    var reactions: MessageReactions?
+    var quoted: ReplyTarget?
+    var flashing: Bool
+    var isLastAgent: Bool
+    /// 0 for a message that is not waiting, 1 while it is queued, 2 when it was not delivered.
+    var waiting: Int
+
+    init(
+        row: ThreadRow, agentName: String, primaryRuntime: String, agentID: String, folder: String?, chat: ThreadChat
+    ) {
+        self.row = row
+        self.agentName = agentName
+        self.primaryRuntime = primaryRuntime
+        self.agentID = agentID
+        self.folder = folder
+        reactionsOn = chat.reactionsOn
+        repliesOn = chat.repliesOn
+        formsOn = chat.formsOn
+        accent = chat.accent
+        if case .item(let item) = row {
+            let seq = item.messageSeq
+            reactions = seq.flatMap { chat.reactions[$0] }
+            quoted = (chat.repliesOn ? seq.flatMap { chat.replies[$0] } : nil).flatMap { chat.original($0) }
+            flashing = chat.highlightedID == item.id
+            isLastAgent = chat.lastAgentID == item.id
+            waiting = seq.map { chat.waiting.contains($0) ? 1 : chat.undelivered.contains($0) ? 2 : 0 } ?? 0
+        } else {
+            waiting = 0
+            reactions = nil
+            quoted = nil
+            flashing = false
+            isLastAgent = false
+        }
+    }
+}
+
+/// A row of the thread that is built again only when its key changes (see `ThreadRowKey`). The server and the
+/// closures are not part of the comparison: the server is one object for the whole thread, and the cards that follow it
+/// observe it themselves.
+struct EquatableThreadRow: View, Equatable {
+    var key: ThreadRowKey
+    var server: ServerModel
+    var chat: ThreadChat
+    var onError: (UserFacingMessage) -> Void
+    private nonisolated var serverID: AnyObject { server }
+
+    nonisolated static func == (lhs: EquatableThreadRow, rhs: EquatableThreadRow) -> Bool {
+        lhs.key == rhs.key && ObjectIdentifier(lhs.serverID) == ObjectIdentifier(rhs.serverID)
+    }
+
+    var body: some View {
+        ThreadRowView(
+            row: key.row, agentName: key.agentName, primaryRuntime: key.primaryRuntime, server: server, chat: chat,
+            agentID: key.agentID, folder: key.folder, onError: onError)
+    }
+}
+
 /// A single thread item that is not a tool call.
 private struct ItemView: View {
     var item: ThreadItem
@@ -88,7 +160,15 @@ private struct ItemView: View {
                         itemID: id, seq: seq, text: text, fromUser: true, chat: chat, files: files, agentID: agentID,
                         server: server
                     ) {
-                        UserBubble(text: text) { quote(forSeq: seq) }
+                        VStack(alignment: .trailing, spacing: 4) {
+                            UserBubble(text: text) { quote(forSeq: seq) }
+                            if let seq, chat.waiting.contains(seq) || chat.undelivered.contains(seq) {
+                                Text(chat.undelivered.contains(seq) ? L10n.Thread.notDelivered : L10n.Thread.queued)
+                                    .font(BanditoFont.text(size: 11.5, weight: 400))
+                                    .foregroundStyle(Color.Bandito.text3)
+                                    .padding(.trailing, 4)
+                            }
+                        }
                     }
                 }
             } else {
@@ -96,7 +176,7 @@ private struct ItemView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     if let from {
                         Text(L10n.Thread.messageFrom(name: from))
-                            .font(BanditoFont.font(size: 11.5, weight: 500))
+                            .font(BanditoFont.text(size: 11.5, weight: 500))
                             .foregroundStyle(Color.Bandito.text3)
                     }
                     HStack {
@@ -112,7 +192,7 @@ private struct ItemView: View {
             }
         case .streaming(let text):
             HStack {
-                AgentBubble(text: text)
+                AgentBubble(text: text, streaming: true)
                 Spacer(minLength: 120)
             }
         case .tool(let row):
@@ -149,7 +229,31 @@ private struct ItemView: View {
 
 // MARK: - Bubbles
 
-/// The user's message: on the raised surface. `ThreadItemsView` places it at the right (see `MessageContainer`).
+/// The look of the two bubbles: 16 pt corners, and a 6 pt tail corner on the speaker's side (bottom right for the
+/// person, bottom left for the agent). Fills and borders only: no shadows, one per bubble is too many to draw.
+enum BubbleLook {
+    static func shape(fromUser: Bool) -> UnevenRoundedRectangle {
+        UnevenRoundedRectangle(
+            topLeadingRadius: 16,
+            bottomLeadingRadius: fromUser ? 16 : 6,
+            bottomTrailingRadius: fromUser ? 6 : 16,
+            topTrailingRadius: 16,
+            style: .continuous)
+    }
+
+    /// The person's bubble: a warm film of the text colour over the raised surface, with a faint edge.
+    static var userTint: Color { Color.Bandito.text.opacity(0.13) }
+    static var userBorder: Color { Color.Bandito.text.opacity(0.08) }
+
+    /// The agent's bubble: the surface, with an edge that fades from top to bottom.
+    static var agentBorder: LinearGradient {
+        LinearGradient(
+            colors: [Color.Bandito.text.opacity(0.08), Color.Bandito.text.opacity(0.03)],
+            startPoint: .top, endPoint: .bottom)
+    }
+}
+
+/// The user's message: a warm bubble. `ThreadItemsView` places it at the right (see `MessageContainer`).
 /// `header` goes above the text inside the bubble: the quote of a reply.
 struct UserBubble<Header: View>: View {
     var text: String
@@ -161,16 +265,25 @@ struct UserBubble<Header: View>: View {
     }
 
     var body: some View {
+        let shape = BubbleLook.shape(fromUser: true)
         VStack(alignment: .leading, spacing: 8) {
             header
             MessageBodyView(text: text, markdown: false)
         }
-        .padding(.horizontal, 15)
-        .padding(.vertical, 11)
-        .background(
-            Color.Bandito.surface3,
-            in: UnevenRoundedRectangle(
-                topLeadingRadius: 18, bottomLeadingRadius: 18, bottomTrailingRadius: 6, topTrailingRadius: 18))
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background {
+            shape.fill(Color.Bandito.surface2)
+            shape.fill(BubbleLook.userTint)
+            shape.stroke(BubbleLook.userBorder, lineWidth: 1)
+        }
+    }
+}
+
+extension AgentBubble where Header == EmptyView {
+    init(text: String, streaming: Bool = false) {
+        self.init(text: text) { EmptyView() }
+        self.streaming = streaming
     }
 }
 
@@ -185,6 +298,8 @@ extension UserBubble where Header == EmptyView {
 struct AgentBubble<Header: View>: View {
     var text: String
     var header: Header
+    /// The text is still streaming in: it is not kept in the render cache.
+    var streaming = false
 
     init(text: String, @ViewBuilder header: () -> Header) {
         self.text = text
@@ -192,20 +307,15 @@ struct AgentBubble<Header: View>: View {
     }
 
     var body: some View {
+        let shape = BubbleLook.shape(fromUser: false)
         VStack(alignment: .leading, spacing: 8) {
             header
-            MessageBodyView(text: text, markdown: true)
+            MessageBodyView(text: text, markdown: true, streaming: streaming)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(
-            Color.Bandito.surface1,
-            in: UnevenRoundedRectangle(
-                topLeadingRadius: 18, bottomLeadingRadius: 6, bottomTrailingRadius: 18, topTrailingRadius: 18))
-        .overlay(
-            UnevenRoundedRectangle(
-                topLeadingRadius: 18, bottomLeadingRadius: 6, bottomTrailingRadius: 18, topTrailingRadius: 18)
-                .stroke(Color.Bandito.line, lineWidth: 1))
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(Color.Bandito.surface1, in: shape)
+        .overlay(shape.stroke(BubbleLook.agentBorder, lineWidth: 1))
     }
 }
 
@@ -229,7 +339,7 @@ enum InlineMarkdown {
             run.inlinePresentationIntent?.contains(.code) == true ? run.range : nil
         }
         for range in codeRanges {
-            rendered[range].font = .system(size: 12.5, design: .monospaced)
+            rendered[range].font = BanditoFont.mono(size: 12.5)
             rendered[range].foregroundColor = BanditoPalette.peach
         }
         return rendered
@@ -245,12 +355,14 @@ struct TypingIndicator: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(MotionLevel.storageKey) private var motionLevel = MotionLevel.full.rawValue
+    /// The row is on screen: the wave stops when it scrolls away (the timeline is not driven off screen).
+    @State private var onScreen = false
     /// Repeating motion stands still: Reduce Motion, or "Less" / "Off" in settings.
     private var still: Bool { reduceMotion || !MotionLevel(stored: motionLevel).allowsRepeatingMotion }
 
     var body: some View {
         HStack(spacing: 9) {
-            TimelineView(.animation(minimumInterval: 1.0 / 20, paused: still)) { context in
+            TimelineView(.animation(minimumInterval: 1.0 / 30, paused: still || !onScreen)) { context in
                 let time = context.date.timeIntervalSinceReferenceDate
                 HStack(spacing: 4) {
                     ForEach(0..<3, id: \.self) { index in
@@ -263,7 +375,7 @@ struct TypingIndicator: View {
                 }
             }
             Text(activity.title)
-                .font(BanditoFont.font(size: 12.5, weight: 400))
+                .font(BanditoFont.text(size: 12.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
@@ -271,7 +383,7 @@ struct TypingIndicator: View {
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     if let seconds = AgentActivity.elapsedSeconds(since: since, now: context.date) {
                         Text("· \(AgentActivity.elapsedText(seconds: seconds))")
-                            .font(BanditoFont.font(size: 12, weight: 400))
+                            .font(BanditoFont.text(size: 12, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                             .monospacedDigit()
                             .lineLimit(1)
@@ -280,17 +392,13 @@ struct TypingIndicator: View {
                 }
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 11)
-        .background(
-            Color.Bandito.surface1,
-            in: UnevenRoundedRectangle(
-                topLeadingRadius: 18, bottomLeadingRadius: 6, bottomTrailingRadius: 18, topTrailingRadius: 18))
-        .overlay(
-            UnevenRoundedRectangle(
-                topLeadingRadius: 18, bottomLeadingRadius: 6, bottomTrailingRadius: 18, topTrailingRadius: 18)
-                .stroke(Color.Bandito.line, lineWidth: 1))
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(Color.Bandito.surface1, in: BubbleLook.shape(fromUser: false))
+        .overlay(BubbleLook.shape(fromUser: false).stroke(BubbleLook.agentBorder, lineWidth: 1))
         .frame(maxWidth: .infinity, alignment: .leading)
+        .onAppear { onScreen = true }
+        .onDisappear { onScreen = false }
     }
 
     /// Each dot brightens in turn, 0.2 s apart, over a 1.2 s cycle. Still dots stay at a middle level.
@@ -299,10 +407,10 @@ struct TypingIndicator: View {
         return 0.25 + 0.75 * peak(time: time, index: index)
     }
 
-    /// The same wave as the brightness, lifting each dot by up to 3 pt. Still dots do not move.
+    /// The same wave as the brightness, lifting each dot by up to 2 pt. Still dots do not move.
     static func lift(time: Double, index: Int, still: Bool) -> Double {
         if still { return 0 }
-        return -3 * peak(time: time, index: index)
+        return -2 * peak(time: time, index: index)
     }
 
     /// 0...1 where a dot is at the top of its beat.
@@ -321,7 +429,7 @@ private struct NoteLine: View {
 
     var body: some View {
         Text(text)
-            .font(BanditoFont.font(size: 12, weight: 400))
+            .font(BanditoFont.text(size: 12, weight: 400))
             .foregroundStyle(isError ? Color.Bandito.danger : Color.Bandito.text3)
             .multilineTextAlignment(.center)
             .textSelection(.enabled)
@@ -342,7 +450,7 @@ private struct ChapterDivider: View {
             Image(systemName: "book.closed")
                 .font(.system(size: 12))
             Text(saved ? L10n.Chapter.resumed(count: number, name: agentName) : L10n.Thread.chapterNotSaved(chapter: "\(number)"))
-                .font(BanditoFont.font(size: 12, weight: 400))
+                .font(BanditoFont.text(size: 12, weight: 400))
                 .foregroundStyle(saved ? Color.Bandito.text3 : BanditoPalette.peach)
                 .lineLimit(1)
                 .optionalHelp(saved ? nil : L10n.Thread.chapterNotSavedHelp)
@@ -360,7 +468,7 @@ private struct DayDivider: View {
 
     var body: some View {
         Text(caption)
-            .font(BanditoFont.font(size: 11.5, weight: 500))
+            .font(BanditoFont.text(size: 11.5, weight: 500))
             .foregroundStyle(Color.Bandito.text3)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 6)

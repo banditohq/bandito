@@ -81,7 +81,7 @@ struct FileViewer: View {
                 .id(document.path)
             } else {
                 Text(L10n.Viewer.empty)
-                    .font(.system(size: 13))
+                    .font(BanditoFont.text(size: 13, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -251,7 +251,7 @@ private struct TabButton: View {
                     FileGlyph(category: document.category, size: 14)
                         .frame(width: 14)
                     Text(document.name)
-                        .font(.system(size: 12.5))
+                        .font(BanditoFont.text(size: 12.5, weight: 400))
                         .lineLimit(1)
                     if document.needsAttention {
                         Image(systemName: "exclamationmark.triangle.fill")
@@ -349,7 +349,7 @@ struct ViewerCrumb: View {
     var body: some View {
         Button(action: action) {
             Text(name)
-                .font(BanditoFont.font(size: 12.5, weight: 400))
+                .font(BanditoFont.text(size: 12.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
                 .lineLimit(1)
                 .truncationMode(.middle)
@@ -425,7 +425,7 @@ private struct ViewerHeader: View {
                 ViewerCrumbSeparator()
             }
             Text(document.name)
-                .font(BanditoFont.font(size: 13, weight: 600))
+                .font(BanditoFont.text(size: 13, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
                 .lineLimit(1)
                 .truncationMode(.middle)
@@ -515,7 +515,7 @@ private struct ConflictBanner: View {
             Image(systemName: "exclamationmark.triangle")
                 .foregroundStyle(Color.Bandito.signal)
             Text(L10n.Viewer.Conflict.title)
-                .font(.system(size: 13))
+                .font(BanditoFont.text(size: 13, weight: 400))
                 .foregroundStyle(Color.Bandito.text)
                 .lineLimit(2)
             Spacer(minLength: 8)
@@ -615,7 +615,7 @@ private struct ViewerBody: View {
             .overlay(alignment: .topLeading) {
                 if FileViewerRules.showsEmptyHint(text: document.text) {
                     Text(L10n.Viewer.emptyFile)
-                        .font(.system(size: 13))
+                        .font(BanditoFont.text(size: 13, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .padding(.top, 16)
                         .padding(.leading, 52)
@@ -651,7 +651,7 @@ private struct CardNote: View {
         VStack(spacing: 14) {
             FileGlyph(category: document.category, size: 56)
             Text(text)
-                .font(.system(size: 14, weight: .semibold))
+                .font(BanditoFont.text(size: 14, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
                 .multilineTextAlignment(.center)
             Button(L10n.Files.Preview.download) {
@@ -737,7 +737,9 @@ private struct ConflictDiffSheet: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text(L10n.Viewer.Diff.title)
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(BanditoFont.display(size: 15.5, weight: 600))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                     .foregroundStyle(Color.Bandito.text)
                 Spacer()
                 HStack(spacing: 14) {
@@ -746,13 +748,13 @@ private struct ConflictDiffSheet: View {
                     Label(L10n.Viewer.Diff.mine, systemImage: "plus.circle")
                         .foregroundStyle(Color.Bandito.ok)
                 }
-                .font(.system(size: 12))
+                .font(BanditoFont.text(size: 12, weight: 400))
             }
             ScrollView([.vertical, .horizontal]) {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
                         Text(verbatim: prefix(line.kind) + line.text)
-                            .font(.system(size: 12, design: .monospaced))
+                            .font(BanditoFont.mono(size: 12, weight: 400))
                             .foregroundStyle(color(line.kind))
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 10)

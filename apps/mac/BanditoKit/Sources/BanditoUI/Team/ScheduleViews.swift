@@ -3,13 +3,6 @@ import BanditoKit
 import BanditoL10n
 import SwiftUI
 
-/// What the schedule sheet was opened for: a new schedule, or an existing one.
-struct ScheduleTarget: Identifiable {
-    var schedule: Schedule?
-
-    var id: String { schedule.map { "edit-\($0.id)" } ?? "new" }
-}
-
 /// One schedule in the details tab: its name and when it runs next, the switch, run now, and edit or delete.
 struct ScheduleRow: View {
     var schedule: Schedule
@@ -42,12 +35,12 @@ struct ScheduleRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 if let title = schedule.title {
                     Text(title)
-                        .font(BanditoFont.font(size: 12.5, weight: 500))
+                        .font(BanditoFont.text(size: 12.5, weight: 500))
                         .foregroundStyle(Color.Bandito.text)
                         .lineLimit(1)
                     if let words {
                         Text(words)
-                            .font(BanditoFont.font(size: 11.5, weight: 400))
+                            .font(BanditoFont.text(size: 11.5, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                             .lineLimit(1)
                     }
@@ -58,12 +51,12 @@ struct ScheduleRow: View {
                         .lineLimit(1)
                 }
                 Text(schedule.prompt)
-                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .lineLimit(1)
                 if let next = schedule.nextRunAt {
                     Text(Self.nextText(ms: next))
-                        .font(BanditoFont.font(size: 11, weight: 400))
+                        .font(BanditoFont.text(size: 11, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                 }
             }
@@ -128,57 +121,74 @@ struct ScheduleEditor: View {
         _form = State(initialValue: start)
     }
 
+    /// Whether «Добавить» / «Сохранить» may run: the form is complete and not too often, and nothing is saving.
+    private var canSubmit: Bool {
+        !busy && form.canSave && !form.tooOften(now: Date())
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 16) {
             Text(existing == nil ? L10n.Schedule.newTitle : L10n.Schedule.editTitle)
-                .font(BanditoFont.font(size: 16, weight: 650))
+                .font(BanditoFont.display(size: 18.5, weight: 600))
+                .lineLimit(1)
+                .truncationMode(.tail)
                 .foregroundStyle(Color.Bandito.text)
             field(L10n.Schedule.name, hint: L10n.Schedule.titleHint) {
                 TextField(L10n.Schedule.namePlaceholder, text: $form.title)
-                    .textFieldStyle(.roundedBorder)
+                    .banditoField()
+                    // Return in the name adds the schedule, when it can be added.
+                    .onSubmit { if canSubmit { save() } }
             }
             field(L10n.Schedule.repeat) {
-                SegmentedPicker(
+                // One menu for the five choices: a row of segments does not fit 432 pt.
+                BanditoSelect(
                     selection: $form.rhythm,
-                    options: ScheduleForm.Rhythm.allCases.map { ($0, Self.rhythmTitle($0)) })
+                    sections: [
+                        SelectSection(options: ScheduleForm.Rhythm.allCases.map { rhythm in
+                            SelectOption(value: rhythm, title: Self.rhythmTitle(rhythm))
+                        })
+                    ],
+                    label: L10n.Schedule.repeat, placeholder: Self.rhythmTitle(form.rhythm))
             }
             rhythmDetails
             field(L10n.Inspector.promptLabel) {
                 // Vertical TextField: Return adds a line, the field grows with the text.
                 TextField(L10n.Inspector.promptPlaceholder, text: $form.prompt, axis: .vertical)
                     .accessibilityLabel(L10n.Inspector.promptLabel)
-                    .textFieldStyle(.plain)
-                    .font(BanditoFont.font(size: 13, weight: 400))
+                    .banditoField()
+                    .font(BanditoFont.text(size: 13, weight: 400))
                     .lineLimit(3...10)
-                    .padding(8)
                     .frame(maxWidth: .infinity, alignment: .topLeading)
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.Bandito.line, lineWidth: 1))
             }
             if form.cron == nil {
                 Text(L10n.Schedule.incomplete)
-                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
             } else if form.tooOften(now: Date()) {
                 Text(L10n.Schedule.tooOften)
-                    .font(BanditoFont.font(size: 12, weight: 500))
+                    .font(BanditoFont.text(size: 12, weight: 500))
                     .foregroundStyle(Color.Bandito.danger)
             }
             if let error {
                 UserFacingErrorView(message: error)
             }
-            HStack {
+            HStack(spacing: 10) {
                 Spacer()
                 Button(L10n.Common.cancel) { dismiss() }
                     .banditoButton(.quiet())
                     .fixedSize()
+                // Enter adds it, when the form is valid (a disabled button takes no Return).
                 Button(existing == nil ? L10n.Inspector.addSchedule : L10n.Common.save) { save() }
                     .banditoButton(.signal())
-                    .disabled(busy || !form.canSave || form.tooOften(now: Date()))
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(!canSubmit)
                     .fixedSize()
             }
+            .padding(.top, 4)
         }
-        .padding(20)
-        .frame(width: 460)
+        .padding(24)
+        .frame(width: 480)
+        .background(Color.Bandito.surface2)
     }
 
     @ViewBuilder
@@ -214,8 +224,8 @@ struct ScheduleEditor: View {
         case .custom:
             field(L10n.Inspector.cronLabel, hint: L10n.Schedule.cronHint) {
                 TextField("0 9 * * 1-5", text: $form.customCron)
-                    .textFieldStyle(.roundedBorder)
-                    .font(BanditoFont.font(size: 13, weight: 400, mono: true))
+                    .banditoField()
+                    .font(BanditoFont.mono(size: 13, weight: 400))
             }
         }
     }
@@ -223,7 +233,8 @@ struct ScheduleEditor: View {
     private var timePicker: some View {
         DatePicker("", selection: timeBinding, displayedComponents: .hourAndMinute)
             .labelsHidden()
-            .frame(maxWidth: 140, alignment: .leading)
+            .fixedSize()
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// The hour and minute of the form, as a date for the picker.
@@ -244,12 +255,12 @@ struct ScheduleEditor: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label)
-                .font(.system(size: 12))
+                .font(BanditoFont.text(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
             content()
             if let hint {
                 Text(hint)
-                    .font(.system(size: 11.5))
+                    .font(BanditoFont.text(size: 11.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
             }
         }
@@ -314,7 +325,7 @@ private struct DayChip: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(BanditoFont.font(size: 12.5, weight: 500))
+                .font(BanditoFont.text(size: 12.5, weight: 500))
                 .foregroundStyle(on ? Color.Bandito.text : Color.Bandito.text3)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)

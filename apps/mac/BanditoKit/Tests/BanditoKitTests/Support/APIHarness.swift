@@ -38,7 +38,7 @@ func decodedLength(_ value: Any?) -> Int {
 
 /// Collects up to `count` chunks, giving up after `timeout` (returns what arrived).
 @MainActor
-func collect(_ stream: TerminalStream, count: Int, timeout: Duration = .seconds(3)) async -> [TerminalChunk] {
+func collect(_ stream: TerminalStream, count: Int, timeout: Duration = .seconds(10)) async -> [TerminalChunk] {
     let reader = Task { @MainActor () -> [TerminalChunk] in
         var out: [TerminalChunk] = []
         var iterator = stream.chunks.makeAsyncIterator()

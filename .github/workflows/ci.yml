@@ -1,0 +1,124 @@
+name: ci
+
+# The one check to require on main is `ci-ok`. This workflow runs on every pull request and on every push to main and
+# release branches, so the required check never waits for a path filter. The jobs below run the existing workflows
+# only for the parts of the repo a change touched. A skipped job counts as passed; a failed or cancelled one fails ci-ok.
+on:
+  pull_request:
+  push:
+    branches: [main, "release/**", "wt*/**"]
+
+# A newer push to the same PR or branch cancels the run for the older one. The group name differs from the called
+# workflows' groups, so the caller never waits for its own children.
+concurrency:
+  group: ci-checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    outputs:
+      app: ${{ steps.filter.outputs.app }}
+      daemon: ${{ steps.filter.outputs.daemon }}
+      deps: ${{ steps.filter.outputs.deps }}
+      workflows: ${{ steps.filter.outputs.workflows }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: filter
+        uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3
+        with:
+          filters: |
+            app:
+              - 'apps/**'
+              - 'i18n/**'
+              - 'brand/tokens/**'
+              - 'guide/**'
+              - 'scripts/check_guide.py'
+            daemon:
+              - 'daemon/**'
+            deps:
+              - 'daemon/Cargo.lock'
+              - 'daemon/Cargo.toml'
+              - 'daemon/deny.toml'
+            workflows:
+              - '.github/workflows/**'
+
+  apple:
+    name: apple
+    needs: changes
+    if: needs.changes.outputs.app == 'true' || needs.changes.outputs.workflows == 'true'
+    uses: ./.github/workflows/apple.yml
+
+  i18n:
+    name: i18n
+    needs: changes
+    if: needs.changes.outputs.app == 'true' || needs.changes.outputs.workflows == 'true'
+    uses: ./.github/workflows/i18n.yml
+
+  daemon:
+    name: daemon
+    needs: changes
+    if: needs.changes.outputs.daemon == 'true' || needs.changes.outputs.workflows == 'true'
+    uses: ./.github/workflows/daemon.yml
+
+  audit:
+    name: audit
+    needs: changes
+    if: needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true'
+    uses: ./.github/workflows/audit.yml
+    # audit.yml's rustsec step creates checks and may open issues; a called workflow cannot ask for more than this.
+    permissions:
+      contents: read
+      checks: write
+      issues: write
+
+  # Informational, not part of ci-ok: builds the app and takes pictures of every screen (see gallery.yml).
+  gallery:
+    name: gallery
+    needs: changes
+    if: needs.changes.outputs.app == 'true' || needs.changes.outputs.workflows == 'true'
+    uses: ./.github/workflows/gallery.yml
+    secrets: inherit
+
+  ci-ok:
+    name: ci-ok
+    if: always()
+    needs: [changes, apple, i18n, daemon, audit]
+    runs-on: ubuntu-latest
+    env:
+      CHANGES: ${{ needs.changes.result }}
+      APPLE: ${{ needs.apple.result }}
+      I18N: ${{ needs.i18n.result }}
+      DAEMON: ${{ needs.daemon.result }}
+      AUDIT: ${{ needs.audit.result }}
+      APPLE_NEEDED: ${{ needs.changes.outputs.app == 'true' || needs.changes.outputs.workflows == 'true' }}
+      DAEMON_NEEDED: ${{ needs.changes.outputs.daemon == 'true' || needs.changes.outputs.workflows == 'true' }}
+      AUDIT_NEEDED: ${{ needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true' }}
+    steps:
+      - name: Every job that applies to this change passed
+        run: |
+          status=0
+          check() {
+            # $1 job name, $2 its result, $3 whether this change needs it ("true" or "false")
+            case "$2" in
+              success) ;;
+              skipped)
+                if [ "$3" = "true" ]; then
+                  echo "::error::$1 was skipped, but this change needs it"
+                  status=1
+                fi ;;
+              *)
+                echo "::error::$1 finished with '$2'"
+                status=1 ;;
+            esac
+          }
+          check changes "$CHANGES" true
+          check apple "$APPLE" "$APPLE_NEEDED"
+          check i18n "$I18N" "$APPLE_NEEDED"
+          check daemon "$DAEMON" "$DAEMON_NEEDED"
+          check audit "$AUDIT" "$AUDIT_NEEDED"
+          exit "$status"

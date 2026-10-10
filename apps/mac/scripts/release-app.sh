@@ -3,16 +3,23 @@
 # the Sparkle signature of the zip, and an item in the appcast of the platform checkout.
 # It uploads nothing and deploys nothing: the printed next steps are for the owner.
 #
-#   apps/mac/scripts/release-app.sh <version> [--dry-run]
+#   apps/mac/scripts/release-app.sh <version> [--dry-run] [--appcast-out <file>]
 #
 # <version> is X.Y.Z, or X.Y.Z-beta.N for the beta channel. The build number is the commit count of HEAD.
 # --dry-run does everything up to Apple's notary service: no submission, no stapling, no Gatekeeper check.
+# --appcast-out writes the updated appcast to <file> instead of the platform checkout (CI). The existing items are
+# still read from the platform checkout's public/appcast.xml, so that checkout must hold the current feed.
 #
 # Environment:
-#   BANDITO_PLATFORM_DIR   platform checkout that gets public/appcast.xml (default: ../platform next to this repo)
+#   BANDITO_PLATFORM_DIR   platform checkout: public/appcast.xml is read (and written unless --appcast-out is given)
+#                          (default: ../platform next to this repo)
 #   BANDITO_DERIVED_DATA   Xcode derived data (default: ~/.cache/bandito-xcode/release, off the repo disk)
 #   CARGO_TARGET_DIR       Rust target of the daemon build (default: ~/.cache/bandito-target-app)
 #   SPARKLE_BIN            Sparkle's bin directory with sign_update (default: ~/.cache/sparkle/2.10.0/extracted/bin)
+#   SPARKLE_KEY_FILE       EdDSA private key file for sign_update --ed-key-file (default: the key in the login Keychain)
+#   NOTARY_KEY_PATH, NOTARY_KEY_ID, NOTARY_ISSUER_ID
+#                          App Store Connect API key for notarytool (CI). All three or none; none means the
+#                          keychain profile bandito-notary.
 set -euo pipefail
 
 TEAM_ID="74Q24ZMD7A"
@@ -30,11 +37,19 @@ usage() {
 version="$1"
 shift
 dry_run=0
-for arg in "$@"; do
-    case "$arg" in
+appcast_out=""
+while [ $# -gt 0 ]; do
+    case "$1" in
         --dry-run) dry_run=1 ;;
+        --appcast-out)
+            [ $# -ge 2 ] || usage
+            mkdir -p "$(dirname "$2")"
+            appcast_out="$(cd "$(dirname "$2")" && pwd)/$(basename "$2")"
+            shift
+            ;;
         *) usage ;;
     esac
+    shift
 done
 if ! printf '%s\n' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+)?$'; then
     echo "error: version must look like 0.1.0 or 0.2.0-beta.1 (got '$version')" >&2
@@ -65,6 +80,20 @@ security find-identity -v -p codesigning | grep -Fq "\"$IDENTITY\"" || {
     echo "error: signing identity not in the Keychain: $IDENTITY" >&2
     exit 1
 }
+# Notary credentials: an App Store Connect API key (CI) or the keychain profile (the release Mac). Never a mix.
+if [ -n "${NOTARY_KEY_PATH:-}${NOTARY_KEY_ID:-}${NOTARY_ISSUER_ID:-}" ]; then
+    for var in NOTARY_KEY_PATH NOTARY_KEY_ID NOTARY_ISSUER_ID; do
+        [ -n "${!var:-}" ] || { echo "error: $var is required when the other notary API key variables are set" >&2; exit 1; }
+    done
+    [ -f "$NOTARY_KEY_PATH" ] || { echo "error: NOTARY_KEY_PATH is not a file" >&2; exit 1; }
+    notary_auth=(--key "$NOTARY_KEY_PATH" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID")
+else
+    notary_auth=(--keychain-profile "$NOTARY_PROFILE")
+fi
+if [ -n "${SPARKLE_KEY_FILE:-}" ] && [ ! -f "$SPARKLE_KEY_FILE" ]; then
+    echo "error: SPARKLE_KEY_FILE is not a file" >&2
+    exit 1
+fi
 # A release is built from committed code. project.yml (the version) and Config/Info.plist (generated) may differ.
 dirty="$(git -C "$repo" status --porcelain | grep -v -e '^ M apps/mac/project.yml$' -e '^ M apps/mac/Config/Info.plist$' || true)"
 if [ -n "$dirty" ]; then
@@ -160,12 +189,12 @@ notarize() {
     local file="$1" out status id
     out="$work/notary-$(basename "$file").json"
     echo "submitting $(basename "$file") to the notary service (this can take a few minutes)"
-    xcrun notarytool submit "$file" --keychain-profile "$NOTARY_PROFILE" --wait --output-format json > "$out" || true
+    xcrun notarytool submit "$file" "${notary_auth[@]}" --wait --output-format json > "$out" || true
     status="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("status", ""))' < "$out" 2>/dev/null || true)"
     id="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("id", ""))' < "$out" 2>/dev/null || true)"
     if [ "$status" != "Accepted" ]; then
         echo "error: notarization of $(basename "$file") ended with status '${status:-unknown}' (submission ${id:-none})" >&2
-        [ -n "$id" ] && xcrun notarytool log "$id" --keychain-profile "$NOTARY_PROFILE" >&2 || true
+        [ -n "$id" ] && xcrun notarytool log "$id" "${notary_auth[@]}" >&2 || true
         exit 1
     fi
     echo "notarized $(basename "$file"): Accepted (submission $id)"
@@ -210,17 +239,22 @@ fi
 
 # --- (e) Sparkle signature of the final zip ---------------------------------------------------------------------------
 step "Sparkle signature of $zip_name"
-sig_line="$("$sparkle_bin/sign_update" "$zip_path")"
+if [ -n "${SPARKLE_KEY_FILE:-}" ]; then
+    sig_line="$("$sparkle_bin/sign_update" --ed-key-file "$SPARKLE_KEY_FILE" "$zip_path")"
+else
+    sig_line="$("$sparkle_bin/sign_update" "$zip_path")"
+fi
 signature="$(sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p' <<< "$sig_line")"
 length="$(sed -n 's/.*length="\([0-9]*\)".*/\1/p' <<< "$sig_line")"
 [ -n "$signature" ] && [ -n "$length" ] || { echo "error: sign_update printed no signature or length" >&2; exit 1; }
 echo "length $length, signature $(printf '%s' "$signature" | cut -c1-12)…"
 
 # --- (f) appcast item -------------------------------------------------------------------------------------------------
-appcast="$platform/public/appcast.xml"
+appcast_base="$platform/public/appcast.xml"
+appcast="${appcast_out:-$appcast_base}"
 url="https://github.com/$REPO_SLUG/releases/download/v$version/$zip_name"
 step "Add the item to $appcast"
-python3 - "$appcast" "$version" "$build_number" "$length" "$signature" "$url" "$MIN_SYSTEM" <<'PY'
+python3 - "$appcast_base" "$appcast" "$version" "$build_number" "$length" "$signature" "$url" "$MIN_SYSTEM" <<'PY'
 import email.utils
 import os
 import re
@@ -228,7 +262,7 @@ import sys
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 
-path, version, build, length, signature, url, min_system = sys.argv[1:8]
+path, out, version, build, length, signature, url, min_system = sys.argv[1:9]
 SPARKLE_NS = "http://www.andymatuschak.org/xml-namespaces/sparkle"
 EMPTY_FEED = f"""<?xml version="1.0" encoding="utf-8"?>
 <rss xmlns:sparkle="{SPARKLE_NS}" version="2.0">
@@ -278,10 +312,10 @@ if root.tag != "rss":
 versions = [el.text for el in root.iter(f"{{{SPARKLE_NS}}}shortVersionString")]
 if versions.count(version) != 1:
     sys.exit(f"error: expected one item for {version}, found {versions.count(version)}")
-tmp = path + ".tmp"
+tmp = out + ".tmp"
 with open(tmp, "w", encoding="utf-8") as fh:
     fh.write(text)
-os.replace(tmp, path)
+os.replace(tmp, out)
 print(f"appcast: {len(versions)} item(s), {version} on top")
 PY
 xmllint --noout "$appcast"
@@ -292,7 +326,11 @@ sha() { shasum -a 256 "$1" | cut -d' ' -f1; }
 echo "app      $app"
 echo "zip      $zip_path ($(sha "$zip_path"))"
 echo "dmg      $dmg_path ($(sha "$dmg_path"))"
-echo "appcast  $appcast (uncommitted)"
+if [ -n "$appcast_out" ]; then
+    echo "appcast  $appcast (written to --appcast-out; the platform checkout is untouched)"
+else
+    echo "appcast  $appcast (uncommitted)"
+fi
 echo
 echo "Not done by this script:"
 if [ "$dry_run" -eq 1 ]; then
@@ -300,4 +338,14 @@ if [ "$dry_run" -eq 1 ]; then
 fi
 echo "  - commit apps/mac/project.yml and apps/mac/Config/Info.plist on the app branch"
 echo "  - upload the release:  gh release upload v$version $zip_path $dmg_path --repo $REPO_SLUG"
-echo "  - commit public/appcast.xml on the platform appcast branch; deploying the site is a separate decision"
+# The app installs the daemon of its own version on servers: without the server release, "add a server" fails.
+if ! gh release view "v$version" --repo "$REPO_SLUG" --json assets -q '.assets[].name' 2>/dev/null \
+    | grep -q '^bandito-x86_64-unknown-linux-gnu.tar.gz$'; then
+    echo
+    echo "WARNING: release v$version has no server binaries. Servers cannot install $version until the GitHub"
+    echo "         release v$version is published (the release workflow builds and signs them). Do not ship the"
+    echo "         app before that."
+fi
+if [ -z "$appcast_out" ]; then
+    echo "  - commit public/appcast.xml on the platform appcast branch; deploying the site is a separate decision"
+fi

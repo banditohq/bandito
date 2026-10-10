@@ -2,9 +2,9 @@ import BanditoKit
 import BanditoL10n
 import Observation
 
-/// The six sections of the main window. The mode bar and ⌘1…⌘6 switch between them.
+/// The seven sections of the main window. The mode bar and ⌘1…⌘7 switch between them.
 public enum AppMode: String, CaseIterable, Identifiable, Sendable {
-    case team, files, terminals, browser, screen, server
+    case team, files, terminals, browser, screen, market, server
 
     public var id: String { rawValue }
 
@@ -16,6 +16,7 @@ public enum AppMode: String, CaseIterable, Identifiable, Sendable {
         case .terminals: L10n.Mode.terminals
         case .browser: L10n.Mode.browser
         case .screen: L10n.Mode.screen
+        case .market: L10n.Mode.market
         case .server: L10n.Mode.server
         }
     }
@@ -28,7 +29,60 @@ public enum AppMode: String, CaseIterable, Identifiable, Sendable {
         case .terminals: "terminal"
         case .browser: "globe"
         case .screen: "display"
+        case .market: "puzzlepiece.extension"
         case .server: "waveform.path.ecg"
+        }
+    }
+}
+
+/// The filter of the Marketplace sidebar: every service, only the connected ones, or one category of the catalog.
+public enum MarketFilter: Hashable, Identifiable, Sendable {
+    case all, connected
+    /// A catalog category: `dev`, `productivity`, `data`, `web`, `design`, `other`.
+    case category(String)
+
+    public var id: String {
+        switch self {
+        case .all: "all"
+        case .connected: "connected"
+        case .category(let name): "category:\(name)"
+        }
+    }
+
+    public var title: String {
+        switch self {
+        case .all: L10n.Market.Filter.all
+        case .connected: L10n.Market.Filter.connected
+        case .category(let name): MarketCategory.title(name)
+        }
+    }
+
+    /// The sidebar rows: All, Connected, then the categories the catalog has.
+    public static func rows(categories: [String]) -> [MarketFilter] {
+        [.all, .connected] + categories.map { .category($0) }
+    }
+}
+
+/// The categories of the catalog and their words.
+public enum MarketCategory {
+    /// The order of the sidebar. A category the daemon adds later comes after these.
+    static let order = ["dev", "productivity", "data", "web", "design", "other"]
+
+    /// The categories the catalog uses, in the sidebar order.
+    public static func present(in catalog: [IntegrationCatalogEntry]) -> [String] {
+        let used = Set(catalog.compactMap(\.category))
+        return order.filter { used.contains($0) } + used.subtracting(order).sorted()
+    }
+
+    public static func title(_ name: String) -> String {
+        switch name {
+        case "dev": L10n.Market.Category.dev
+        case "productivity": L10n.Market.Category.productivity
+        case "data": L10n.Market.Category.data
+        case "web": L10n.Market.Category.web
+        case "design": L10n.Market.Category.design
+        case "other": L10n.Market.Category.other
+        default: name.prefix(1).uppercased() + name.dropFirst()
         }
     }
 }
@@ -39,12 +93,16 @@ public enum Sheet: Identifiable, Hashable, Sendable {
     case addServer
     /// Sign in or create an account (Onboarding's account step, reused from Settings).
     case account
+    /// A new schedule of the agent (`existing` nil), or the change of an existing one. Shown on the main window,
+    /// not on the inspector, which is too narrow for it.
+    case schedule(agentID: String, existing: Schedule?)
 
     public var id: String {
         switch self {
         case .newAgent: "newAgent"
         case .addServer: "addServer"
         case .account: "account"
+        case .schedule(let agentID, let existing): "schedule-\(agentID)-\(existing?.id ?? "new")"
         }
     }
 }
@@ -75,6 +133,8 @@ public final class Router {
     public var selectedAgentID: String? {
         didSet {
             if selectedAgentID != nil { showsTeamHome = false }
+            // The picture viewer belongs to the chat it was opened in: another agent closes it.
+            if selectedAgentID != oldValue { imageViewer = nil }
         }
     }
     /// Team: the home screen (greeting, templates, recent agents) is shown instead of a chat.
@@ -112,6 +172,12 @@ public final class Router {
     public var screenID: String?
     /// Server: the section in view.
     public var serverSection: ServerSection = .overview
+    /// Marketplace: the filter the sidebar picked (all services, the connected ones, or a category).
+    public var marketFilter: MarketFilter = .all
+    /// Marketplace: the entry whose page is open (`catalog:<id>` or `own:<integration id>`); nil shows the list.
+    public var marketDetail: String?
+    /// Marketplace: the categories of the loaded catalog, for the sidebar. Set by the Marketplace page.
+    public var marketCategories: [String] = []
     /// Terminals: a command to type into a new terminal (Server → Install, Update). Taken once by the terminals.
     public var pendingTerminalCommand: String?
 
@@ -180,6 +246,10 @@ public final class Router {
     }
 
     public var sheet: Sheet?
+    /// The address the add-server sheet starts with: set by "Connect again" on a server that refused this Mac's key.
+    public var addServerAddress: String?
+    /// The picture viewer: the pictures to show, and the first one. Set to show it over the main window; `nil` closes it.
+    var imageViewer: ImageViewerRequest?
     /// The quick-open palette (⌘K).
     public var paletteOpen = false
     /// The subscription limits popover, opened from the sidebar footer (⌥⌘U).

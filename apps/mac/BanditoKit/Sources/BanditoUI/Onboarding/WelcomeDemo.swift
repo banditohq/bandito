@@ -48,7 +48,7 @@ struct WelcomeDemoCard: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text(L10n.Onboarding.Demo.header)
-                    .font(BanditoFont.font(size: 12.5, weight: 400))
+                    .font(BanditoFont.text(size: 12.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                 Spacer()
                 Button(L10n.Onboarding.Demo.replay, action: onReplay)
@@ -88,7 +88,7 @@ struct WelcomeDemoCard: View {
         HStack {
             if mine { Spacer(minLength: 60) }
             Text(text)
-                .font(BanditoFont.font(size: 13.5, weight: 400))
+                .font(BanditoFont.text(size: 13.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text)
                 .padding(.horizontal, 13)
                 .padding(.vertical, 9)
@@ -112,7 +112,7 @@ struct WelcomeDemoCard: View {
                     Text(lines[k].command).frame(maxWidth: .infinity, alignment: .leading)
                     Text(lines[k].note).foregroundStyle(Color.Bandito.text3)
                 }
-                .font(BanditoFont.font(size: 12, weight: 400, mono: true))
+                .font(BanditoFont.mono(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .opacity(WelcomeTimeline.entrance(at: t, start: WelcomeTimeline.commandsAt[k], duration: 0.3))
             }
@@ -129,14 +129,14 @@ struct WelcomeDemoCard: View {
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 PulseDot(t: t, color: Color.Bandito.signal)
-                Text(L10n.Onboarding.Demo.askPush).font(BanditoFont.font(size: 13, weight: 600))
+                Text(L10n.Onboarding.Demo.askPush).font(BanditoFont.text(size: 13, weight: 600))
             }
             HStack(spacing: 0) {
                 Text("git push").foregroundStyle(Color.Bandito.signal)
                 Text(" origin ")
                 Text("chore/deps-oct").foregroundStyle(AvatarColor.sky.color)
             }
-            .font(BanditoFont.font(size: 12, weight: 400, mono: true))
+            .font(BanditoFont.mono(size: 12, weight: 400))
             .foregroundStyle(Color.Bandito.text2)
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
@@ -145,7 +145,7 @@ struct WelcomeDemoCard: View {
             HStack(spacing: 8) {
                 // Decorative: the demo's "Deny" is not a control, so it is neither focusable nor read out.
                 Text(L10n.Approval.deny)
-                    .font(BanditoFont.font(size: 12.5, weight: 500))
+                    .font(BanditoFont.text(size: 12.5, weight: 500))
                     .foregroundStyle(Color.Bandito.text)
                     .padding(.horizontal, 14)
                     .frame(height: 32)
@@ -154,7 +154,7 @@ struct WelcomeDemoCard: View {
                     .focusable(false)
                     .accessibilityHidden(true)
                 Text(L10n.Onboarding.Demo.allow)
-                    .font(BanditoFont.font(size: 12.5, weight: 600))
+                    .font(BanditoFont.text(size: 12.5, weight: 600))
                     .foregroundStyle(Color.Bandito.onSignal)
                     .padding(.horizontal, 16)
                     .frame(height: 32)

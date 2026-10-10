@@ -73,6 +73,8 @@ private struct IdentityCard: View {
     @State private var role = ""
     @State private var error: UserFacingMessage?
     @State private var pickingAvatar = false
+    /// What the avatar editor keeps while its popover is closed (a picture read from disk): choosing a file closes it.
+    @State private var avatarEditor = AvatarEditorModel()
     /// The avatar as the editor shows it. Changes stay local while the editor is open and are sent when it closes.
     @State private var look = AvatarLook(palette: .peach, customHex: nil, face: .chevronDash, emoji: nil)
     @State private var avatarSync = InFlightCounter()
@@ -98,9 +100,10 @@ private struct IdentityCard: View {
         HStack(spacing: 14) {
             avatarButton
             VStack(alignment: .leading, spacing: 3) {
+                // Edited in place: plain text that becomes a field on click, not a boxed form input.
                 TextField(L10n.AgentSheet.name, text: $name)
                     .textFieldStyle(.plain)
-                    .font(BanditoFont.font(size: 19, weight: 650))
+                    .font(BanditoFont.display(size: 17.5, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1)
                     .focused($focused, equals: .name)
@@ -112,7 +115,7 @@ private struct IdentityCard: View {
                         .foregroundStyle(Color.Bandito.text3)
                     TextField(L10n.Inspector.addRole, text: $role)
                         .textFieldStyle(.plain)
-                        .font(BanditoFont.font(size: 12.5, weight: 400))
+                        .font(BanditoFont.text(size: 12.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .lineLimit(1)
                         .focused($focused, equals: .role)
@@ -140,6 +143,8 @@ private struct IdentityCard: View {
         .onChange(of: pickingAvatar) { _, open in
             if !open { sendLookIfChanged() }
         }
+        // The file panel closed the popover; the picture it gave is framed in the editor shown again.
+        .onChange(of: avatarEditor.loadedCount) { _, _ in pickingAvatar = true }
         .onChange(of: agent.name, initial: true) { _, value in
             name = IdentityField.text(current: name, saved: value, editing: focused == .name)
         }
@@ -185,9 +190,14 @@ private struct IdentityCard: View {
         }
         .popover(isPresented: $pickingAvatar, arrowEdge: .bottom) {
             AvatarEditor(
-                name: agent.name, look: $look, picture: picture,
+                name: agent.name, look: $look, model: avatarEditor, picture: picture,
                 pictureSupported: server.supports("avatar_pictures"),
                 onSetPicture: { data in
+                    // The daemon keeps a picture only on an avatar that is saved: an agent still on the automatic look
+                    // gets the look shown now first.
+                    if agent.avatar == nil {
+                        _ = try await server.updateAgent(agent.id, patch: AgentPatch(avatar: look.spec))
+                    }
                     try await server.setAgentAvatarImage(agent.id, data)
                 },
                 onRemovePicture: {
@@ -258,8 +268,7 @@ struct InspectorCard<Content: View>: View {
         VStack(spacing: 0) {
             content
         }
-        .background(Color.Bandito.text.opacity(0.025), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.Bandito.line, lineWidth: 1))
+        .banditoCard()
     }
 }
 
@@ -273,11 +282,11 @@ struct InspectorRow<Value: View>: View {
     var body: some View {
         HStack(spacing: 10) {
             Text(label)
-                .font(BanditoFont.font(size: 12.5, weight: 400))
+                .font(BanditoFont.text(size: 12.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
             Spacer(minLength: 10)
             value
-                .font(BanditoFont.font(size: 13, weight: 500))
+                .font(BanditoFont.text(size: 13, weight: 500))
                 .foregroundStyle(Color.Bandito.text)
         }
         .padding(.horizontal, compact ? 16 : 14)

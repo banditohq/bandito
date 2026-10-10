@@ -56,7 +56,7 @@ struct QuickOpenPalette: View {
                 VStack(alignment: .leading, spacing: 2) {
                     ForEach(sections, id: \.title) { section in
                         Text(section.title)
-                            .font(BanditoFont.font(size: 10.5, weight: 600))
+                            .font(BanditoFont.text(size: 10.5, weight: 600))
                             .tracking(0.8)
                             .foregroundStyle(Color.Bandito.text3)
                             .padding(.horizontal, 10)
@@ -68,7 +68,7 @@ struct QuickOpenPalette: View {
                     }
                     if rows.isEmpty {
                         Text(L10n.Palette.noResults)
-                            .font(BanditoFont.font(size: 13, weight: 400))
+                            .font(BanditoFont.text(size: 13, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 24)
@@ -109,15 +109,17 @@ struct QuickOpenPalette: View {
                 .foregroundStyle(Color.Bandito.text2)
             TextField(L10n.Palette.search, text: $query)
                 .textFieldStyle(.plain)
-                .font(BanditoFont.font(size: 17, weight: 400))
+                .font(BanditoFont.text(size: 17, weight: 400))
                 .foregroundStyle(Color.Bandito.text)
                 .focused($focused)
+                // A focused text field turns Esc into cancelOperation and keeps it from onKeyPress above.
+                .onExitCommand { close() }
             Spacer(minLength: 8)
             Text(L10n.Palette.fieldHint)
-                .font(BanditoFont.font(size: 12, weight: 400))
+                .font(BanditoFont.text(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
             Text("esc")
-                .font(BanditoFont.font(size: 11, weight: 400, mono: true))
+                .font(BanditoFont.mono(size: 11, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
@@ -137,7 +139,7 @@ struct QuickOpenPalette: View {
                 servers: L10n.Common.serverCount(count: app.servers.count),
                 agents: L10n.Common.agentCount(count: allAgents.count)))
         }
-        .font(BanditoFont.font(size: 11.5, weight: 400))
+        .font(BanditoFont.text(size: 11.5, weight: 400))
         .monospacedDigit()
         .foregroundStyle(Color.Bandito.text3)
         .padding(.horizontal, 18)
@@ -157,7 +159,7 @@ struct QuickOpenPalette: View {
                     .frame(width: 32, height: 32)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(highlighted(row.title, row.ranges))
-                        .font(BanditoFont.font(size: 13.5, weight: 600))
+                        .font(BanditoFont.text(size: 13.5, weight: 600))
                         .foregroundStyle(row.enabled ? Color.Bandito.text : Color.Bandito.text3)
                         .lineLimit(1)
                     if let subtitle = row.subtitle {
@@ -171,7 +173,7 @@ struct QuickOpenPalette: View {
                 Spacer(minLength: 8)
                 if let trailing = row.trailing {
                     Text(trailing)
-                        .font(BanditoFont.font(size: 11.5, weight: 400))
+                        .font(BanditoFont.text(size: 11.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                 }
             }

@@ -1,0 +1,62 @@
+name: Bug
+description: Something does not work as it should
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you saw. Keep it to a few sentences.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: What you clicked or ran, in order.
+      placeholder: |
+        1. Open …
+        2. Click …
+        3. See …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: input
+    id: app_version
+    attributes:
+      label: Mac app version
+      description: Bandito menu → About Bandito.
+      placeholder: "0.1.6"
+  - type: input
+    id: daemon_version
+    attributes:
+      label: Daemon version
+      description: Run `bandito --version` in the terminal.
+      placeholder: "bandito 0.1.6"
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where did it happen?
+      options:
+        - Mac app
+        - Daemon on a server
+        - Both
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: macOS or server OS
+      description: The version, and the chip or the distribution if you know it.
+    validations:
+      required: true
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Screenshot
+      description: Drag the image into this box. Hide anything private first (paths, names, tokens).

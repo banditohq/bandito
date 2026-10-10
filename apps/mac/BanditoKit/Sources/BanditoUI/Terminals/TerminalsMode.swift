@@ -197,12 +197,12 @@ struct TerminalToolbar: View {
         let workspace = controller.workspace
         HStack(spacing: 10) {
             Text(L10n.Mode.terminals)
-                .font(.system(size: 14, weight: .semibold))
+                .font(BanditoFont.text(size: 14, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
                 .lineLimit(1)
                 .fixedSize()
             Text(L10n.Terminals.windowCount(count: workspace.onScreen.count))
-                .font(.system(size: 12))
+                .font(BanditoFont.text(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
                 .lineLimit(1)
                 .fixedSize()
@@ -288,12 +288,12 @@ struct TerminalInputToAllStrip: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(BanditoPalette.peach)
             Text(L10n.Terminals.inputToAll)
-                .font(.system(size: 12.5))
+                .font(BanditoFont.text(size: 12.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text)
             Spacer(minLength: 8)
             Button(action: turnOff) {
                 Text(L10n.Terminals.inputToAllOff)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(BanditoFont.text(size: 12, weight: 600))
                     .padding(.horizontal, 8)
                     .frame(height: 24)
             }
@@ -314,31 +314,9 @@ struct TerminalsPlaceholder: View {
     let action: (() -> Void)?
 
     var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: symbol)
-                .font(.system(size: 34))
-                .foregroundStyle(Color.Bandito.text3)
-            Text(title)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(Color.Bandito.text)
-                .multilineTextAlignment(.center)
-            if let detail {
-                Text(detail)
-                    .font(.system(size: 13))
-                    .foregroundStyle(Color.Bandito.text2)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 360)
-            }
-            if let action {
-                Button(action: action) {
-                    Text(L10n.Keys.newTerminal)
-                }
-                .banditoButton(.signal())
-                .padding(.top, 4)
-            }
-        }
-        .padding(28)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        EmptyState(
+            symbol: symbol, title: title, message: detail,
+            action: action.map { EmptyStateAction(L10n.Keys.newTerminal, perform: $0) })
     }
 }
 
@@ -380,7 +358,7 @@ struct TerminalsLoading: View {
                     VStack(spacing: 12) {
                         ProgressView().controlSize(.small)
                         Text(L10n.Terminals.connecting(server: server.config.name))
-                            .font(.system(size: 13))
+                            .font(BanditoFont.text(size: 13, weight: 400))
                             .foregroundStyle(Color.Bandito.text2)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)

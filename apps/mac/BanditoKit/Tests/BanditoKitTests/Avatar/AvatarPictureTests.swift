@@ -139,7 +139,7 @@ import Testing
 @Suite struct AvatarWireTests {
     @Test func avatarDecodesPictureFields() throws {
         let json = #"{"color":"sky","face":"wink","emoji":"🦝","image":true,"image_rev":1700000000123}"#
-        let spec = try JSONDecoder().decode(AvatarSpec.self, from: Data(json.utf8))
+        let spec = try RPCClient.decoder.decode(AvatarSpec.self, from: Data(json.utf8))
         #expect(spec.emoji == "🦝")
         #expect(spec.image == true)
         #expect(spec.imageRev == 1_700_000_000_123)
@@ -153,14 +153,24 @@ import Testing
 
     @Test func pictureReplyDecodesBase64() throws {
         let json = #"{"data_base64":"AAEC","mime":"image/png"}"#
-        let image = try JSONDecoder().decode(AvatarImage.self, from: Data(json.utf8))
+        let image = try RPCClient.decoder.decode(AvatarImage.self, from: Data(json.utf8))
         #expect(image == AvatarImage(data: Data([0, 1, 2]), mime: "image/png"))
+    }
+
+    @Test func theAgentAvatarKeepsItsPictureRevision() throws {
+        // Read the way the app reads every reply: snake_case keys become camelCase.
+        let json = #"{"color":"rose","face":"dots","image":true,"image_rev":1791641189565}"#
+        let spec = try RPCClient.decoder.decode(AvatarSpec.self, from: Data(json.utf8))
+        #expect(spec.image == true)
+        #expect(spec.imageRev == 1_791_641_189_565)
+        let back = try JSONSerialization.jsonObject(with: RPCClient.encoder.encode(spec)) as? [String: Any]
+        #expect(back?["image_rev"] as? Int64 == 1_791_641_189_565)
     }
 
     @Test func pictureReplyRejectsBrokenBase64() {
         let json = #"{"data_base64":"not base64!","mime":"image/png"}"#
         #expect(throws: DecodingError.self) {
-            try JSONDecoder().decode(AvatarImage.self, from: Data(json.utf8))
+            try RPCClient.decoder.decode(AvatarImage.self, from: Data(json.utf8))
         }
     }
 }

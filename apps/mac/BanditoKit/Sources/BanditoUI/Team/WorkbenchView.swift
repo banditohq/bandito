@@ -401,11 +401,9 @@ private struct WorkbenchTabButton: View {
         HStack(spacing: 2) {
             if renaming, let terminalID {
                 TextField(L10n.Terminals.rename, text: $draft)
-                    .textFieldStyle(.plain)
-                    .font(BanditoFont.font(size: 12.5, weight: 500))
+                    .banditoField()
+                    .font(BanditoFont.text(size: 12.5, weight: 500))
                     .frame(width: 170)
-                    .padding(.horizontal, 9)
-                    .frame(height: 30)
                     .focused($nameFocused)
                     .onSubmit { commitRename(terminalID) }
                     .onExitCommand { renaming = false }
@@ -419,7 +417,7 @@ private struct WorkbenchTabButton: View {
                         if showsTitle {
                             // A long name is cut at the end; the whole name is the tooltip.
                             Text(title)
-                                .font(BanditoFont.font(size: 12.5, weight: 500))
+                                .font(BanditoFont.text(size: 12.5, weight: 500))
                                 .lineLimit(1)
                                 .truncationMode(.tail)
                                 .frame(maxWidth: 180, alignment: .leading)
@@ -523,11 +521,11 @@ private struct WorkbenchEmpty: View {
                 .font(.system(size: 26, weight: .light))
                 .foregroundStyle(Color.Bandito.text3)
             Text(L10n.Workbench.emptyTitle)
-                .font(BanditoFont.font(size: 14, weight: 600))
+                .font(BanditoFont.text(size: 14, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
                 .lineLimit(1)
             Text(L10n.Workbench.emptyHint)
-                .font(BanditoFont.font(size: 12.5, weight: 400))
+                .font(BanditoFont.text(size: 12.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -648,7 +646,7 @@ private struct WorkbenchTerminal: View {
                         .foregroundStyle(Color.Bandito.text3)
                     Text(controller.display.isOwner(TerminalDisplayOwner.terminals)
                         ? L10n.Workbench.terminalElsewhere : L10n.Workbench.terminalInOtherPane)
-                        .font(BanditoFont.font(size: 13, weight: 400))
+                        .font(BanditoFont.text(size: 13, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .multilineTextAlignment(.center)
                     Button(L10n.Workbench.showHere) {
@@ -663,7 +661,7 @@ private struct WorkbenchTerminal: View {
             } else {
                 VStack(spacing: 12) {
                     Text(L10n.Workbench.terminalEnded)
-                        .font(BanditoFont.font(size: 13, weight: 400))
+                        .font(BanditoFont.text(size: 13, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                     // The closed tab is replaced by a new terminal in the agent's folder (or the running one there).
                     Button(L10n.Workbench.openNewTerminal) {
@@ -711,10 +709,12 @@ private struct WorkbenchTerminal: View {
 /// The browser of the server in a workbench tab: the same model as in Browser mode.
 private struct WorkbenchBrowser: View {
     var server: ServerModel
+    @Environment(Router.self) private var router
 
     var body: some View {
         let model = BrowserStore.shared.model(for: server)
-        BrowserMainArea(model: model)
+        // The same page, the same tab: Browser mode shows the model the panel shows.
+        BrowserMainArea(model: model, onOpenFullscreen: { router.select(mode: .browser) })
             .task(id: server.id) {
                 model.attach()
             }

@@ -28,6 +28,11 @@ struct DraftFile: Identifiable {
     /// A local picture for the miniature. `nil` for files that are not pictures, or when the picture cannot be read.
     var preview: NSImage?
     var state: State
+    /// Where the whole picture is, for the viewer: the file on this Mac, or the bytes of a screenshot or the clipboard.
+    /// `nil` for files that are not pictures.
+    var original: ImageViewerSource?
+    /// A copy this Mac wrote for a pasted picture (in the temporary folder). It is deleted when the file leaves the tray.
+    var temporary: URL?
 
     var isImage: Bool { AttachmentRules.isImage(name: name) }
 
@@ -163,9 +168,10 @@ final class AttachmentTrays {
                 append(DraftFile(name: name, size: size, preview: nil, state: .failed(failure)), agentID: agentID)
                 continue
             }
-            let file = DraftFile(name: name, size: size, preview: nil, state: .uploading)
+            let picture = AttachmentRules.isImage(name: name)
+            let file = DraftFile(name: name, size: size, preview: nil, state: .uploading, original: picture ? .file(url) : nil)
             append(file, agentID: agentID)
-            enqueue(file.id, name: name, agentID: agentID, upload: upload, source: .file(url, picture: AttachmentRules.isImage(name: name)))
+            enqueue(file.id, name: name, agentID: agentID, upload: upload, source: .file(url, picture: picture))
         }
     }
 
@@ -174,14 +180,18 @@ final class AttachmentTrays {
         addPicture(data, name: name, agentID: agentID, upload: Self.uploader(server))
     }
 
-    /// `addPicture` with the upload given. Tests use it; the app passes the server's upload.
+    /// `addPicture` with the upload given. Tests use it; the app passes the server's upload. The picture is also
+    /// written to a temporary file, so the viewer can show it at full size; the file goes when the draft file does.
     func addPicture(_ data: Data, name: String, agentID: String, upload: @escaping Uploader) {
         let size = Int64(data.count)
         if let failure = AttachmentTray.failure(name: name, size: size) {
             append(DraftFile(name: name, size: size, preview: nil, state: .failed(failure)), agentID: agentID)
             return
         }
-        let file = DraftFile(name: name, size: size, preview: nil, state: .uploading)
+        let copy = try? Self.writeTemporaryPicture(data, name: name)
+        let file = DraftFile(
+            name: name, size: size, preview: nil, state: .uploading,
+            original: copy.map { .file($0) }, temporary: copy)
         append(file, agentID: agentID)
         enqueue(file.id, name: name, agentID: agentID, upload: upload, source: .picture(data))
     }
@@ -190,16 +200,37 @@ final class AttachmentTrays {
     func remove(_ id: UUID, agentID: String) {
         tasks[id]?.cancel()
         tasks[id] = nil
+        trays[agentID]?.filter { $0.id == id }.forEach(Self.discard)
         trays[agentID]?.removeAll { $0.id == id }
     }
 
     /// Takes the sent files out of the tray. Files still uploading, and failed ones, stay.
     func removeSent(_ sent: [AgentAttachment], agentID: String) {
         let paths = Set(sent.map(\.path))
-        trays[agentID]?.removeAll { file in
+        let gone = (trays[agentID] ?? []).filter { file in
             if case .ready(let attachment) = file.state { return paths.contains(attachment.path) }
             return false
         }
+        gone.forEach(Self.discard)
+        trays[agentID]?.removeAll { file in gone.contains { $0.id == file.id } }
+    }
+
+    /// The temporary copy of a pasted picture, if it has one. Deleting it is best effort: a copy left behind is in the
+    /// temporary folder and is removed by the system.
+    private static func discard(_ file: DraftFile) {
+        if let url = file.temporary { try? FileManager.default.removeItem(at: url) }
+    }
+
+    /// Writes a pasted picture to `temporaryDirectory/bandito-drafts/<uuid>.<ext>`. The extension is kept when it is a
+    /// plain one (`png`, `jpg`), and is `png` otherwise.
+    static func writeTemporaryPicture(_ data: Data, name: String) throws -> URL {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("bandito-drafts", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let given = (name as NSString).pathExtension.lowercased()
+        let ext = !given.isEmpty && given.count <= 8 && given.allSatisfy(\.isLetter) ? given : "png"
+        let url = folder.appendingPathComponent("\(UUID().uuidString).\(ext)")
+        try data.write(to: url)
+        return url
     }
 
     // MARK: - Private
@@ -316,7 +347,7 @@ struct FileDropHighlight: View {
                     .strokeBorder(Color.Bandito.signal, style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])))
             .overlay {
                 Text(L10n.Composer.Attach.dropHint)
-                    .font(BanditoFont.font(size: 14, weight: 500))
+                    .font(BanditoFont.text(size: 14, weight: 500))
                     .foregroundStyle(Color.Bandito.text)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)

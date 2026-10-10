@@ -35,7 +35,7 @@ private struct SidebarTopRow: View {
             HStack(spacing: 7) {
                 RaccoonAvatar(name: "Bandito", color: .peach, face: .chevronDash, size: 22)
                 Text(L10n.App.name)
-                    .font(BanditoFont.font(size: 16, weight: 650))
+                    .font(BanditoFont.text(size: 16, weight: 650))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1)
                     .fixedSize()
@@ -90,6 +90,7 @@ private struct ModeSidebarContent: View {
         case .terminals: TerminalsSidebar()
         case .browser: BrowserSidebar()
         case .screen: ScreenSidebar()
+        case .market: MarketSidebar()
         case .server: ServerSidebar()
         }
     }

@@ -52,6 +52,14 @@ struct MainWindow: View {
                     .transition(.opacity)
             }
         }
+        .overlay {
+            if let viewer = router.imageViewer {
+                ImageViewer(request: viewer)
+                    .id(viewer.id)
+                    .transition(.opacity)
+            }
+        }
+        .banditoAnimation(.easeOut(duration: BanditoMotion.base), value: router.imageViewer != nil)
         .overlay(alignment: .bottom) {
             if let notice = router.rollbackNotice {
                 RollbackToast(notice: notice) { router.rollbackNotice = nil }
@@ -134,6 +142,10 @@ struct MainWindow: View {
         case .newAgent: NewAgentSheet()
         case .account: AccountSheet()
         case .addServer: AddServerSheet()
+        case .schedule(let agentID, let existing):
+            if let server = app.currentServer {
+                ScheduleEditor(server: server, agentID: agentID, existing: existing)
+            }
         }
     }
 }
@@ -149,7 +161,7 @@ private struct ModeArea: View {
                 .transition(.opacity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.Bandito.bg)
+        .background { ContentBackdrop().ignoresSafeArea() }
         .banditoAnimation(.easeInOut(duration: BanditoMotion.base), value: router.mode)
     }
 
@@ -161,7 +173,27 @@ private struct ModeArea: View {
         case .terminals: TerminalsMode()
         case .browser: BrowserMode()
         case .screen: ScreenMode()
+        case .market: MarketView()
         case .server: ServerMode()
+        }
+    }
+}
+
+/// The main area's backdrop: the warm background, a faint signal glow hanging over the top edge, and a slight
+/// darkening toward the bottom. Static: nothing here animates or redraws per frame.
+private struct ContentBackdrop: View {
+    var body: some View {
+        ZStack {
+            Color.Bandito.bg
+            RadialGradient(
+                colors: [Color.Bandito.signal.opacity(0.09), Color.Bandito.signal.opacity(0)],
+                center: UnitPoint(x: 0.5, y: -0.05),
+                startRadius: 0,
+                endRadius: 700)
+            LinearGradient(
+                colors: [Color.black.opacity(0), Color.black.opacity(0.18)],
+                startPoint: .top,
+                endPoint: .bottom)
         }
     }
 }

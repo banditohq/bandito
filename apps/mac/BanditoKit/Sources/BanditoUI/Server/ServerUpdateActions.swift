@@ -71,11 +71,11 @@ struct ServerUpdateActions: View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(BanditoFont.text(size: 13, weight: 500))
                     .foregroundStyle(Color.Bandito.text)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(L10n.Updates.thisMacNote)
-                    .font(.system(size: 12))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -93,7 +93,7 @@ struct ServerUpdateActions: View {
         HStack(spacing: 8) {
             ProgressView().controlSize(.small)
             Text(L10n.Updates.checking)
-                .font(.system(size: 13))
+                .font(BanditoFont.text(size: 13, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
         }
     }
@@ -102,7 +102,7 @@ struct ServerUpdateActions: View {
     private func failedLine(retry: @escaping () -> Void) -> some View {
         HStack(alignment: .center, spacing: 12) {
             Text(L10n.Updates.checkFailed)
-                .font(.system(size: 13, weight: .medium))
+                .font(BanditoFont.text(size: 13, weight: 500))
                 .foregroundStyle(Color.Bandito.text)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 8)
@@ -129,7 +129,7 @@ struct ServerUpdateActions: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .center, spacing: 12) {
                     Text(L10n.Server.DaemonUpdate.title(latest: offer.latest, current: offer.current))
-                        .font(.system(size: 13, weight: .medium))
+                        .font(BanditoFont.text(size: 13, weight: 500))
                         .foregroundStyle(Color.Bandito.text)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 8)
@@ -141,7 +141,7 @@ struct ServerUpdateActions: View {
                 }
                 if let status = DaemonUpdateModel.statusText(for: daemonUpdate.phase) {
                     Text(status)
-                        .font(.system(size: 12))
+                        .font(BanditoFont.text(size: 12, weight: 400))
                         .foregroundStyle(Color.Bandito.text2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -163,19 +163,19 @@ struct ServerUpdateActions: View {
             }
         } else if server.info == nil {
             Text(L10n.Server.notConnected)
-                .font(.system(size: 13))
+                .font(BanditoFont.text(size: 13, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
         } else {
             switch ReleaseFeed.standing(installed: server.info?.version, latest: release.latest) {
             case .available(let latest):
                 // The server's daemon reports no release of its own: the newest one is only known from GitHub.
                 Text(L10n.Server.Update.available(version: latest.description))
-                    .font(.system(size: 13, weight: .medium))
+                    .font(BanditoFont.text(size: 13, weight: 500))
                     .foregroundStyle(Color.Bandito.text)
                     .fixedSize(horizontal: false, vertical: true)
             case .upToDate:
                 Text(L10n.Updates.upToDate)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(BanditoFont.text(size: 13, weight: 500))
                     .foregroundStyle(Color.Bandito.text)
             case .unknown:
                 if release.checked {
@@ -204,11 +204,11 @@ struct ServerUpdateActions: View {
             .banditoButton(.link)
             if manualOpen {
                 Text(L10n.Updates.howText)
-                    .font(.system(size: 13))
+                    .font(BanditoFont.text(size: 13, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(ReleaseFeed.installCommand)
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(BanditoFont.mono(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text)
                     .textSelection(.enabled)
                     .padding(10)
@@ -228,7 +228,7 @@ struct ServerUpdateActions: View {
                     }
                     if copied {
                         Text(L10n.Updates.copied)
-                            .font(.system(size: 12))
+                            .font(BanditoFont.text(size: 12, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                     }
                 }

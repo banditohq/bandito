@@ -5,13 +5,17 @@ and conversations stay on your servers. Everything works on one Mac without an a
 ## Account sheet
 
 <!-- id: acc-sheet; covers: sheet:account -->
-The sheet that the profile button at the bottom of the sidebar opens, and that Settings → Account (Аккаунт) opens too. Without an account it offers the sign-in, the same as the account step of the introduction. With an account it shows who is signed in, the devices of the account and the actions for them.
+The sheet that the profile button at the bottom of the sidebar opens, and that Settings → Account (Аккаунт) opens too. Without an account it offers the sign-in, the same as the account step of the introduction. With an account it shows, from the top: your photo with a small camera button, your name, your email and how you sign in; then one card with This Mac (Этот Mac), Devices (Устройства) and Sync (Синхронизация); then App settings (Настройки приложения) and Help and feedback (Помощь и обратная связь); and at the bottom Sign out (Выйти из аккаунта) and Reset account (Сбросить аккаунт).
 Где: Sidebar → bottom left, the profile button (person icon); or Settings (⌘,) → Account (Аккаунт) → Sign in (Войти)
 1. Click the profile button at the bottom left of the sidebar. The sheet opens on the account, or on the sign-in when nobody is signed in.
 2. Click Sign in (Войти) to sign in with GitHub or by an email code, as in the introduction.
-2. With an account, read the devices. To drop a device from the list, click Remove device (Remove device) on its row.
-3. Reset account (Reset account) signs the other devices out and erases the sync settings. Your servers and the agents on them stay as they are.
-4. Close the sheet with Close (Закрыть).
+3. To change your photo, click the camera button on it and choose a picture. It is framed right in the sheet: drag the picture, set the zoom with the slider and click Save (Сохранить). Without a photo, the letter on the avatar takes the color you pick in the row of circles; Remove photo (Убрать фото) brings the letter back. The photo is kept on this Mac and in your encrypted sync, so it shows after a restart, even without the network. The photo and the name are removed from this Mac by Sign out (Выйти из аккаунта) or Reset account (Сбросить аккаунт).
+4. To change your name, click it (or the pencil), type a new one and press Return or click the check; Escape or the cross keeps the old one.
+5. In This Mac, the code is the one to compare when you approve a new device; the icon next to it copies it.
+6. In Devices, to drop a device from the list, click Disconnect (Отключить) on its row.
+7. In Sync, Sync (Синхронизировать) sends your server list and photo now.
+8. Reset account (Reset account) signs the other devices out and erases the sync settings. Your servers and the agents on them stay as they are.
+9. Close the sheet with Close (Закрыть).
 
 ## Sign in with GitHub
 
@@ -65,7 +69,7 @@ A new device must be approved before it gets your servers. After the sign-in, a 
 
 <!-- id: acc-devices; covers: -->
 The phones and Macs that connect to a server. Adding and revoking are on the server, not in the account screen. See [server.md](server.md).
-Где: Server (⌘6) → Devices (Устройства)
+Где: Server (⌘7) → Devices (Устройства)
 1. To pair a new device, click Add device (Добавить устройство) and enter the code on the device.
 2. To cut one device off, click Revoke (Отозвать) in its row.
 ## Sign out

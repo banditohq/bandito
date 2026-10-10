@@ -26,8 +26,17 @@ final class BrowserModel {
     /// Preview tabs, in the order they were opened.
     private(set) var previewPorts: [Int] = []
     var selection: BrowserSelection?
-    /// The last picture of the page, decoded.
-    private(set) var frame: CGImage?
+    /// The last picture of the page, decoded. Not observed: a frame comes many times a second, and a view that read it
+    /// through the model would redraw the whole tree each time. The picture views listen to `frames` instead (see
+    /// `BrowserFrameLayer`); a view that needs only to know whether a picture exists reads `hasFrame`.
+    @ObservationIgnored let frames = BrowserFrameStore()
+    /// Whether a picture of the page exists. Written only when it changes.
+    private(set) var hasFrame = false
+    /// The last picture the page showed. It stays when the page connection ends, so a card for a closed browser can
+    /// still show it (`BrowserRunPreview.picture`). Not observed, like `frames`.
+    @ObservationIgnored let lastFrames = BrowserFrameStore()
+    /// Whether `lastFrames` holds a picture. Written only when it changes.
+    private(set) var hasLastFrame = false
     /// The page size in CSS pixels, from the last frame (what clicks are scaled from).
     private(set) var pageSize: CGSize = .zero
     private(set) var currentURL: String = ""
@@ -63,6 +72,10 @@ final class BrowserModel {
     private var pollTick = 0
     /// The size the shown page is set to: the picture area on screen. Nil while no page is on screen.
     private var viewport: BrowserViewport?
+    /// When the viewport was last sent to the page, and how many times in a row a frame showed the page at another
+    /// size anyway (see `resyncViewportIfNeeded`).
+    private var viewportSentAt: Date = .distantPast
+    private var resyncAttempts = 0
     /// The wait for the picture area to settle before the page is resized.
     static let viewportDelay: Duration = .milliseconds(150)
     /// The task of that wait.
@@ -270,6 +283,9 @@ final class BrowserModel {
             pollTick += 1
             if pollTick % 5 == 1 {
                 tabs = try await server.browserTabs()
+                fillAddressFromTabs()
+                // The page's own history is the truth for the address: it repairs one the events missed.
+                if let client, !isEditingAddress { await readCurrentAddress(client: client) }
             }
             // The page connection follows the page tabs; a preview needs none.
             if client == nil, !isPreviewSelected {
@@ -282,6 +298,16 @@ final class BrowserModel {
         } catch {
             errorText = Self.describe(error)
         }
+    }
+
+    /// The address is still empty although the tab has one (the page opened before the connection, or its events were
+    /// missed): the tab's own address fills it. A later address is never replaced by the list's, which may be older.
+    private func fillAddressFromTabs() {
+        guard let clientTabID, let tab = tabs.first(where: { $0.id == clientTabID }),
+              let url = BrowserAddressRule.fillFromTab(currentURL: currentURL, tabURL: tab.url)
+        else { return }
+        movePage(to: url)
+        if !tab.title.isEmpty { setPageTitle(tab.title) }
     }
 
     /// Opens the page connection again if the policy allows it now. After five failures in a row the browser
@@ -532,6 +558,8 @@ final class BrowserModel {
     private func applyViewport(_ next: BrowserViewport?) {
         guard let next, next != viewport else { return }
         viewport = next
+        resyncAttempts = 0
+        viewportSentAt = Date()
         guard let client else { return }
         queueViewport(.setViewport(next), on: client)
         // Restarted rather than re-asked: a running screencast may keep its first frame size.
@@ -596,9 +624,25 @@ final class BrowserModel {
             }
             // The page takes the size of the picture area (queued: a page that does not answer must not hold the
             // connection), and the screencast asks for frames of that size.
+            viewportSentAt = Date()
             if let viewport { queueViewport(.setViewport(viewport), on: client) }
             let box = viewport?.screencastBox ?? BrowserViewport.defaultScreencast
             _ = try await client.send(.startScreencast(maxWidth: box.width, maxHeight: box.height, quality: 70))
+            // The page's events (navigation, load) come only after `Page.enable`. The address is read once now, because a
+            // page opened before this connection sends no event for it. Not awaited: a page that does not answer must
+            // not hold the connection.
+            Task { [weak self] in
+                // Without `Page.enable` no navigation event comes, so the address would never follow the page: a
+                // refused or lost call is tried again, twice at most.
+                for attempt in 0..<3 {
+                    if (try? await client.send(.enablePage)) != nil { break }
+                    guard attempt < 2 else { break }
+                    try? await Task.sleep(for: .milliseconds(500))
+                    guard self?.client === client else { return }
+                }
+                await self?.readCurrentAddress(client: client)
+                self?.requestTitle(client: client)
+            }
         } catch {
             isLoading = false
             throw error
@@ -613,9 +657,17 @@ final class BrowserModel {
             guard let frame = CDP.screencastFrame(from: event.params) else { return }
             // Acknowledge first: the page sends the next frame only after the ack.
             _ = try? await client.send(.ackScreencastFrame(sessionId: frame.sessionId))
-            self.frame = Self.decodeJPEG(frame.jpeg) ?? self.frame
-            pageSize = CGSize(width: frame.deviceWidth, height: frame.deviceHeight)
-            isLoading = false
+            // The decode runs off the main thread; frames are handled one after another, so they stay in order.
+            let jpeg = frame.jpeg
+            let image = await Task.detached(priority: .userInitiated) { Self.decodeJPEG(jpeg) }.value
+            // The page may have changed while the picture was decoded.
+            guard self.client === client else { return }
+            if let image { setFrame(image) }
+            // Written only when the value changes: every write wakes the views that read it.
+            let size = CGSize(width: frame.deviceWidth, height: frame.deviceHeight)
+            if pageSize != size { pageSize = size }
+            if isLoading { isLoading = false }
+            resyncViewportIfNeeded(frameSize: size, client: client)
         case "Page.frameNavigated":
             if let frame = event.params["frame"], frame["parentId"] == nil {
                 mainFrameID = frame["id"]?.string
@@ -638,6 +690,43 @@ final class BrowserModel {
         default:
             break
         }
+    }
+
+    /// Keeps the picture and `hasFrame` in step. The picture goes to the views that listen to `frames`.
+    private func setFrame(_ image: CGImage?) {
+        frames.set(image)
+        let has = image != nil
+        if hasFrame != has { hasFrame = has }
+        // A nil picture (the page went away) keeps the last one.
+        if let image {
+            lastFrames.set(image)
+            if !hasLastFrame { hasLastFrame = true }
+        }
+    }
+
+    /// The page shows another size than the viewport it was given (the override was lost): sends it again, at most
+    /// once a second and three times in a row, so a page that cannot take the size does not get a flood.
+    private func resyncViewportIfNeeded(frameSize: CGSize, client: CDPClient) {
+        guard let viewport else {
+            resyncAttempts = 0
+            return
+        }
+        if viewport.matches(frameWidth: Double(frameSize.width), frameHeight: Double(frameSize.height)) {
+            resyncAttempts = 0
+            return
+        }
+        guard resyncAttempts < 3, Date().timeIntervalSince(viewportSentAt) > 1 else { return }
+        resyncAttempts += 1
+        viewportSentAt = Date()
+        queueViewport(.setViewport(viewport), on: client)
+    }
+
+    /// Reads the address of the current history entry, the page's own truth, and shows it unless it is being typed.
+    private func readCurrentAddress(client: CDPClient) async {
+        guard let history = try? await client.send(.navigationHistory), self.client === client,
+              let url = BrowserAddressRule.currentEntryURL(history)
+        else { return }
+        movePage(to: url)
     }
 
     /// The back and forward flags. The address is not read here: the page's own events move it (`movePage`).
@@ -707,7 +796,7 @@ final class BrowserModel {
         addressText = BrowserAddressRule.afterEditingEnded(currentURL: currentURL, typed: addressText, editing: editing)
     }
 
-    static func historyEntries(_ history: JSONValue) -> [JSONValue] {
+    nonisolated static func historyEntries(_ history: JSONValue) -> [JSONValue] {
         if case .array(let items) = history["entries"] ?? .null { return items }
         return []
     }
@@ -719,7 +808,7 @@ final class BrowserModel {
         client = nil
         clientTabID = nil
         mainFrameID = nil
-        frame = nil
+        setFrame(nil)
         isLoading = false
     }
 
@@ -731,7 +820,7 @@ final class BrowserModel {
         client = nil
         clientTabID = nil
         mainFrameID = nil
-        frame = nil
+        setFrame(nil)
         guard let old else { return }
         // The page gets its own size back before its socket closes. A page that does not answer waits one second at most.
         if viewport != nil { queueViewport(.clearViewport, on: old) }
@@ -742,9 +831,11 @@ final class BrowserModel {
     // MARK: Helpers
 
     /// Decodes a screencast JPEG. Nil when the bytes are not an image.
-    static func decodeJPEG(_ data: Data) -> CGImage? {
+    /// Decoded at once (`ShouldCacheImmediately`), so the drawing later does no decoding. Callable from any thread.
+    nonisolated static func decodeJPEG(_ data: Data) -> CGImage? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
-        return CGImageSourceCreateImageAtIndex(source, 0, nil)
+        let options = [kCGImageSourceShouldCacheImmediately: true] as CFDictionary
+        return CGImageSourceCreateImageAtIndex(source, 0, options)
     }
 
     static func describe(_ error: Error) -> UserFacingMessage {
@@ -846,10 +937,28 @@ enum BrowserAddressRule {
         BrowserTabLabel.isBlank(url) ? "" : url
     }
 
-    /// The page moved to `url`. The field shows the new address, unless the person is typing in it.
+    /// The page moved to `url`. The field shows the address, unless the person is typing in it. Typing means the text
+    /// differs from the address shown before: a field that has the focus but was never touched (a panel's field may get
+    /// the focus on its own) keeps following the page, so it is never left empty. The same address repairs an empty
+    /// field too.
     static func afterPageMoved(to url: String, currentURL: String, typed: String, editing: Bool) -> Fields {
-        guard url != currentURL else { return Fields(currentURL: currentURL, typed: typed) }
-        return Fields(currentURL: url, typed: editing ? typed : shownAddress(url))
+        let untouched = typed == shownAddress(currentURL)
+        let follows = !editing || untouched
+        return Fields(currentURL: url, typed: follows ? shownAddress(url) : typed)
+    }
+
+    /// The address of a tab fills the field's page address only while that is empty or a blank page. Nil: nothing to change.
+    static func fillFromTab(currentURL: String, tabURL: String?) -> String? {
+        guard BrowserTabLabel.isBlank(currentURL), let tabURL, !BrowserTabLabel.isBlank(tabURL) else { return nil }
+        return tabURL
+    }
+
+    /// The address of the current entry of `Page.getNavigationHistory`'s answer. Nil for an empty or odd answer.
+    static func currentEntryURL(_ history: JSONValue) -> String? {
+        let entries = BrowserModel.historyEntries(history)
+        let index = Int(history["currentIndex"]?.numberValue ?? -1)
+        guard entries.indices.contains(index), let url = entries[index]["url"]?.string, !url.isEmpty else { return nil }
+        return url
     }
 
     /// Focus left or came to the address field. When it leaves, the field shows the page's address again.

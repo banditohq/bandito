@@ -19,7 +19,8 @@ import Testing
     @Test func defaultsFollowTheSpecTable() {
         let keymap = Keymap(defaults: isolatedDefaults())
         #expect(keymap.binding(for: "global.quickOpen") == binding("k", .command))
-        #expect(keymap.binding(for: "global.mode.server") == binding("6", .command))
+        #expect(keymap.binding(for: "global.mode.market") == binding("6", .command))
+        #expect(keymap.binding(for: "global.mode.server") == binding("7", .command))
         #expect(keymap.binding(for: "global.newAgent") == binding("n", .command))
         #expect(keymap.binding(for: "global.back") == binding("[", .command))
         #expect(keymap.binding(for: "global.forward") == binding("]", .command))

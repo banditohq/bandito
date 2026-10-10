@@ -24,6 +24,12 @@ struct ThreadChat {
     /// The message each reply answers, by the reply's `seq`.
     var replies: [Int64: Int64] = [:]
     var attachments: [Int64: [MessageAttachment]] = [:]
+    /// Messages shown while they wait for their turn, by `seq`: they carry a quiet "Queued" line.
+    var waiting: Set<Int64> = []
+    /// Messages the daemon gave up on (no turn will take them), by `seq`: a quiet "Not delivered" line, and Send again.
+    var undelivered: Set<Int64> = []
+    /// Sends the text of an undelivered message again.
+    var onResend: (Int64) -> Void = { _ in }
     /// The id of the row that flashes after a jump to it.
     var highlightedID: String?
     /// The row id of the agent's last message. Its action row stays faintly visible (see `MessageActionsPlacement`).
@@ -61,6 +67,9 @@ struct MessageContainer<Bubble: View>: View {
     /// The mouse is down and moving over the bubble: a text selection is under way, so the row stays away.
     @State private var dragging = false
     @State private var copied = false
+    /// Keyboard focus in the row: on the bubble or on one of the action buttons. The action row shows while it is there.
+    private enum Part { case bubble, actions }
+    @FocusState private var focus: Part?
     @State private var copyReset: Task<Void, Never>?
 
     private var canReact: Bool { chat.reactionsOn && seq != nil }
@@ -70,7 +79,7 @@ struct MessageContainer<Bubble: View>: View {
     private var flashing: Bool { chat.highlightedID == itemID }
     private var rowOpacity: Double {
         MessageActionsPlacement.opacity(
-            hovering: hovering, open: reactOpen || selecting, selectingText: dragging, isUser: fromUser,
+            hovering: hovering, open: reactOpen || selecting || focus != nil, selectingText: dragging, isUser: fromUser,
             isLastAgent: itemID == chat.lastAgentID)
     }
 
@@ -87,6 +96,19 @@ struct MessageContainer<Bubble: View>: View {
                         }
                     }
                     .onHover(perform: setHover)
+                    .focusable()
+                    .focused($focus, equals: .bubble)
+                    .accessibilityActions {
+                        Button(L10n.Thread.copy, action: copyRaw)
+                        if canReply { Button(L10n.Thread.reply, action: reply) }
+                        if canReact, let seq {
+                            ForEach(ReactionRules.common, id: \.self) { emoji in
+                                Button("\(L10n.Message.react) \(emoji)") {
+                                    chat.onReact(seq, emoji == mine ? nil : emoji)
+                                }
+                            }
+                        }
+                    }
                     .simultaneousGesture(
                         DragGesture(minimumDistance: 4)
                             .onChanged { _ in if !dragging { dragging = true } }
@@ -112,9 +134,15 @@ struct MessageContainer<Bubble: View>: View {
             .padding(-6)
             .banditoAnimation(.easeOut(duration: 0.3), value: flashing)
             // The row hangs under the bubble, from its edge, and is drawn over the reserved space below it.
+            // It exists only while it is drawn: a thread of hundreds of messages would otherwise hold hundreds of
+            // hidden buttons, menus and hover areas, and update them all on every scroll.
             .overlay(alignment: Alignment(horizontal: MessageActionsPlacement.edge(isUser: fromUser), vertical: .bottom)) {
-                actionRow.offset(y: MessageActionsPlacement.rowHeight)
+                if rowOpacity > 0 {
+                    actionRow.offset(y: MessageActionsPlacement.rowHeight)
+                        .transition(.opacity)
+                }
             }
+            .banditoAnimation(.easeOut(duration: 0.12), value: rowOpacity > 0)
             if !fromUser { Spacer(minLength: 120) }
         }
         .padding(.bottom, MessageActionsPlacement.reservedBelow)
@@ -134,6 +162,9 @@ struct MessageContainer<Bubble: View>: View {
         hideTask?.cancel()
         hideTask = nil
         if on {
+            // Content moving under a still pointer reports hover again and again: while the thread scrolls, rows do
+            // not light up (each would be built for a fraction of a second). They do at the next move of the pointer.
+            if ThreadScrollActivity.isScrolling() { return }
             // A hover event repeats while the content moves under a still pointer: write only a real change.
             if !hovering { hovering = true }
         } else if hovering {
@@ -196,6 +227,7 @@ struct MessageContainer<Bubble: View>: View {
                 .font(.system(size: 13, weight: .medium))
         }
         .buttonStyle(MessageActionStyle(label: label))
+        .focused($focus, equals: .actions)
         .help(label)
     }
 
@@ -210,6 +242,7 @@ struct MessageContainer<Bubble: View>: View {
         .menuStyle(.button)
         .menuIndicator(.hidden)
         .buttonStyle(MessageActionStyle(label: L10n.Message.more))
+        .focused($focus, equals: .actions)
         .help(L10n.Message.more)
         .fixedSize()
     }
@@ -233,7 +266,10 @@ struct MessageContainer<Bubble: View>: View {
                 }
             }
         }
-        if canReply || canReact { Divider() }
+        if fromUser, let seq, chat.undelivered.contains(seq) {
+            Button(L10n.Message.resend) { chat.onResend(seq) }
+        }
+        if canReply || canReact || (seq.map { chat.undelivered.contains($0) } ?? false) { Divider() }
         Button(L10n.Thread.copy, action: copyRaw)
         Button(L10n.Message.copyAsText, action: copyPlain)
         Button(L10n.Message.selectText) { selecting = true }
@@ -300,7 +336,7 @@ private struct QuickReaction: View {
     var body: some View {
         Button(action: onPick) {
             Text(emoji)
-                .font(.system(size: 22))
+                .font(BanditoFont.text(size: 22, weight: 400))
                 .scaleEffect(hovered ? 1.2 : 1)
                 .banditoAnimation(.spring(response: 0.3, dampingFraction: 0.5), value: hovered)
                 .frame(width: 34, height: 34)
@@ -329,7 +365,7 @@ struct ReactionChipsRow: View {
                 } label: {
                     HStack(spacing: 4) {
                         Text(chip.emoji)
-                            .font(.system(size: 14))
+                            .font(BanditoFont.text(size: 14, weight: 400))
                         if chip.byUser && chip.byAgent {
                             Image(systemName: "person.2.fill")
                                 .font(.system(size: 8))
@@ -387,16 +423,12 @@ struct ReactionPicker: View {
             if more {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(L10n.Message.reactPickerHint)
-                        .font(BanditoFont.font(size: 12, weight: 400))
+                        .font(BanditoFont.text(size: 12, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .fixedSize(horizontal: false, vertical: true)
                     TextField("", text: $typed)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 18))
-                        .padding(.horizontal, 10)
-                        .frame(height: 34)
-                        .background(Color.Bandito.bg, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.Bandito.line))
+                        .banditoField()
+                        .font(BanditoFont.text(size: 18, weight: 400))
                         .focused($typedFocused)
                         .accessibilityLabel(L10n.Message.reactMore)
                         .onChange(of: typed) { _, text in
@@ -431,7 +463,7 @@ struct ReactionPicker: View {
             onPick(emoji)
         } label: {
             Text(emoji)
-                .font(.system(size: size))
+                .font(BanditoFont.text(size: size, weight: 400))
                 .frame(width: 34, height: 34)
                 .background(
                     emoji == current ? Color.Bandito.signal.opacity(0.18) : Color.clear,
@@ -481,7 +513,7 @@ private struct SelectableTextView: NSViewRepresentable {
             view.isEditable = false
             view.isSelectable = true
             view.drawsBackground = false
-            view.font = .systemFont(ofSize: 13.5)
+            view.font = BanditoFont.appKitText(size: 13.5)
             view.textColor = NSColor(Color.Bandito.text)
             view.textContainerInset = NSSize(width: 8, height: 8)
             view.string = text

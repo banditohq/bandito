@@ -3,6 +3,7 @@
 pub mod agent_token;
 pub mod attachments;
 pub mod avatar;
+pub mod backup;
 pub mod browser;
 pub mod cdp;
 pub mod cdp_pipe;
@@ -23,6 +24,7 @@ pub mod hub;
 pub mod integrations;
 pub mod limit;
 pub mod logs;
+pub mod mcp_oauth;
 pub mod pairing;
 pub mod policy;
 pub mod redact;

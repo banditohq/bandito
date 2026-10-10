@@ -33,6 +33,35 @@ impl IntegrationKind {
     }
 }
 
+/// How an http integration signs in. `Oauth` rows carry no token in their headers: the daemon holds the tokens
+/// (see `mcp_oauth.rs`) and puts the `Authorization` header in when a session starts.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum IntegrationAuth {
+    /// Whatever its headers and environment hold.
+    #[default]
+    None,
+    /// Signed in through the service's own page in the browser.
+    Oauth,
+}
+
+impl IntegrationAuth {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Oauth => "oauth",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "none" => Some(Self::None),
+            "oauth" => Some(Self::Oauth),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Integration {
     pub id: String,
@@ -47,6 +76,9 @@ pub struct Integration {
     pub headers: BTreeMap<String, String>,
     pub enabled: bool,
     pub created_at: i64,
+    /// `oauth` for a service the owner signed in to in the browser; `none` for the rest.
+    #[serde(default)]
+    pub auth: IntegrationAuth,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -65,6 +97,8 @@ pub struct NewIntegration {
     pub headers: BTreeMap<String, String>,
     #[serde(default = "yes")]
     pub enabled: bool,
+    #[serde(default)]
+    pub auth: IntegrationAuth,
 }
 
 fn yes() -> bool {
@@ -92,7 +126,7 @@ fn present_or_null<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Opti
     Option::<String>::deserialize(d).map(Some)
 }
 
-const COLS: &str = "id, name, kind, command, args, url, env, headers, enabled, created_at";
+const COLS: &str = "id, name, kind, command, args, url, env, headers, enabled, created_at, auth";
 
 fn json_column<T: serde::de::DeserializeOwned + Default>(r: &Row, i: usize) -> rusqlite::Result<T> {
     let text: String = r.get(i)?;
@@ -112,6 +146,7 @@ fn from_row(r: &Row) -> rusqlite::Result<Integration> {
         headers: json_column(r, 7)?,
         enabled: r.get::<_, i64>(8)? != 0,
         created_at: r.get(9)?,
+        auth: IntegrationAuth::parse(&r.get::<_, String>(10)?).unwrap_or_default(),
     })
 }
 
@@ -147,10 +182,11 @@ impl Store {
             headers: n.headers,
             enabled: n.enabled,
             created_at: now_ms(),
+            auth: n.auth,
         };
         let res = self.conn().execute(
-            "INSERT INTO integrations (id, name, kind, command, args, url, env, headers, enabled, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            "INSERT INTO integrations (id, name, kind, command, args, url, env, headers, enabled, created_at, auth)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             params![
                 row.id,
                 row.name,
@@ -162,6 +198,7 @@ impl Store {
                 serde_json::to_string(&row.headers)?,
                 i64::from(row.enabled),
                 row.created_at,
+                row.auth.as_str(),
             ],
         );
         match res {
@@ -226,6 +263,15 @@ impl Store {
         }
     }
 
+    /// Set how the row signs in. `false` if there is no such row.
+    pub fn integration_set_auth(&self, id: &str, auth: IntegrationAuth) -> Result<bool> {
+        let n = self.conn().execute(
+            "UPDATE integrations SET auth = ?2 WHERE id = ?1",
+            params![id, auth.as_str()],
+        )?;
+        Ok(n > 0)
+    }
+
     /// Delete the row and drop its id from every agent's list. `false` if there was no such row.
     pub fn integration_delete(&self, id: &str) -> Result<bool> {
         let conn = self.conn();
@@ -266,6 +312,7 @@ mod tests {
             env: BTreeMap::from([("TOKEN".to_string(), "secret:github".to_string())]),
             headers: BTreeMap::new(),
             enabled: true,
+            auth: Default::default(),
         }
     }
 

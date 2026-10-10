@@ -19,19 +19,15 @@ private struct RunningDaemon: CommandRunner {
 
 private let storeKey = "servers.v1"
 
-private func saveServers(_ servers: [ServerConfig]) -> Data? {
-    let defaults = UserDefaults.standard
-    let previous = defaults.data(forKey: storeKey)
-    defaults.set(try! JSONEncoder().encode(servers), forKey: storeKey)
-    return previous
+/// A UserDefaults suite of its own for one test. The test removes it with `removePersistentDomain` when it ends.
+private func isolatedDefaults() -> (defaults: UserDefaults, suite: String) {
+    let suite = "test-\(UUID())"
+    return (UserDefaults(suiteName: suite)!, suite)
 }
 
-private func restoreSaved(_ previous: Data?) {
-    if let previous {
-        UserDefaults.standard.set(previous, forKey: storeKey)
-    } else {
-        UserDefaults.standard.removeObject(forKey: storeKey)
-    }
+/// Saves `servers` where AppModel loads them, in the test's own defaults.
+private func saveServers(_ servers: [ServerConfig], in defaults: UserDefaults) {
+    defaults.set(try! JSONEncoder().encode(servers), forKey: storeKey)
 }
 
 /// An installed binary, so the check gets as far as the runner.
@@ -45,18 +41,18 @@ private func loopback(_ port: Int = 17779) -> URL {
     URL(string: "ws://127.0.0.1:\(port)/v1/rpc")!
 }
 
-// The tests share the saved server list in UserDefaults with `LocalServerMigrationTests`. They are part of that
-// serialized suite, so the two never run side by side.
+// Each test has its own UserDefaults suite, so the saved server list never meets another test's.
 @MainActor
 extension LocalServerMigrationTests {
     @Test func aConfirmedServerIsMarkedKeptAndSaved() async throws {
         let id = UUID()
-        let previous = saveServers([ServerConfig(id: id, name: "Mac", endpoint: .webSocket(url: loopback()))])
-        defer { restoreSaved(previous) }
+        let (defaults, suite) = isolatedDefaults()
+        defer { defaults.removePersistentDomain(forName: suite) }
+        saveServers([ServerConfig(id: id, name: "Mac", endpoint: .webSocket(url: loopback()))], in: defaults)
         let binary = try installedBinary()
         defer { try? FileManager.default.removeItem(at: binary) }
 
-        let app = AppModel()
+        let app = AppModel(defaults: defaults)
         await app.confirmThisMacServers(binary: binary, runner: RunningDaemon(), timeout: .seconds(2))
 
         let server = try #require(app.servers.first)
@@ -64,20 +60,21 @@ extension LocalServerMigrationTests {
         #expect(server.config.isThisMac)
         #expect(server.config.endpoint == .webSocket(url: loopback()))
         let saved = try JSONDecoder().decode(
-            [ServerConfig].self, from: try #require(UserDefaults.standard.data(forKey: storeKey)))
+            [ServerConfig].self, from: try #require(defaults.data(forKey: storeKey)))
         #expect(saved.first?.isThisMac == true)
     }
 
     @Test func theChecksOfSeveralServersRunTogether() async throws {
-        let previous = saveServers([
+        let (defaults, suite) = isolatedDefaults()
+        defer { defaults.removePersistentDomain(forName: suite) }
+        saveServers([
             ServerConfig(name: "A", endpoint: .webSocket(url: loopback())),
             ServerConfig(name: "B", endpoint: .webSocket(url: loopback())),
-        ])
-        defer { restoreSaved(previous) }
+        ], in: defaults)
         let binary = try installedBinary()
         defer { try? FileManager.default.removeItem(at: binary) }
 
-        let app = AppModel()
+        let app = AppModel(defaults: defaults)
         let start = ContinuousClock.now
         await app.confirmThisMacServers(
             binary: binary, runner: RunningDaemon(delay: .milliseconds(300)), timeout: .seconds(2))
@@ -88,12 +85,13 @@ extension LocalServerMigrationTests {
 
     @Test func aServerRemovedDuringItsCheckIsNotBroughtBack() async throws {
         let id = UUID()
-        let previous = saveServers([ServerConfig(id: id, name: "Mac", endpoint: .webSocket(url: loopback()))])
-        defer { restoreSaved(previous) }
+        let (defaults, suite) = isolatedDefaults()
+        defer { defaults.removePersistentDomain(forName: suite) }
+        saveServers([ServerConfig(id: id, name: "Mac", endpoint: .webSocket(url: loopback()))], in: defaults)
         let binary = try installedBinary()
         defer { try? FileManager.default.removeItem(at: binary) }
 
-        let app = AppModel()
+        let app = AppModel(defaults: defaults)
         struct RemovingDaemon: CommandRunner {
             let app: AppModel
             let id: UUID
@@ -107,7 +105,7 @@ extension LocalServerMigrationTests {
             binary: binary, runner: RemovingDaemon(app: app, id: id), timeout: .seconds(2))
 
         #expect(app.servers.isEmpty)
-        let saved = UserDefaults.standard.data(forKey: storeKey).flatMap {
+        let saved = defaults.data(forKey: storeKey).flatMap {
             try? JSONDecoder().decode([ServerConfig].self, from: $0)
         } ?? []
         #expect(saved.allSatisfy { $0.id != id })

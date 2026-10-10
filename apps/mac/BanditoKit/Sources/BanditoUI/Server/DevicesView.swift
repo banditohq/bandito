@@ -24,12 +24,12 @@ struct DevicesView: View {
         ) {
             if let server, server.supports("pairing") {
                 Text(L10n.Devices.intro)
-                    .font(.system(size: 13))
+                    .font(BanditoFont.text(size: 13, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                 ServerCard {
                     if devices.isEmpty {
                         Text(L10n.Devices.empty)
-                            .font(.system(size: 13))
+                            .font(BanditoFont.text(size: 13, weight: 400))
                             .foregroundStyle(Color.Bandito.text2)
                     }
                     ForEach(Array(devices.enumerated()), id: \.element.id) { index, device in
@@ -86,19 +86,19 @@ struct DevicesView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 8) {
                     Text(device.name)
-                        .font(.system(size: 13.5, weight: .medium))
+                        .font(BanditoFont.text(size: 13.5, weight: 500))
                         .foregroundStyle(Color.Bandito.text)
                         .lineLimit(1)
                     if isThisMac {
                         Text(L10n.Server.Add.thisMac)
-                            .font(.system(size: 11.5, weight: .medium))
+                            .font(BanditoFont.text(size: 11.5, weight: 500))
                             .foregroundStyle(Color.Bandito.signal)
                             .lineLimit(1)
                             .fixedSize()
                     }
                 }
                 Text(Self.detail(device))
-                    .font(.system(size: 12))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
             }
             Spacer(minLength: 8)
@@ -156,20 +156,20 @@ private struct PairSheet: View {
     var body: some View {
         VStack(spacing: 18) {
             Text(L10n.Devices.pairTitle)
-                .font(.system(size: 17, weight: .semibold))
+                .font(BanditoFont.display(size: 15.5, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
             Text(L10n.Devices.pairIntro)
-                .font(.system(size: 13))
+                .font(BanditoFont.text(size: 13, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .multilineTextAlignment(.center)
             if let code {
                 Text(code.code)
-                    .font(.system(size: 26, weight: .semibold, design: .monospaced))
+                    .font(BanditoFont.mono(size: 26, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                     .textSelection(.enabled)
                 QRCodeView(text: PairLink.url(code: code.code, host: host))
                 Text(L10n.Devices.pairExpires(minutes: String(code.expiresInMs / 60_000)))
-                    .font(.system(size: 12))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
             } else if let error {
                 UserFacingErrorView(message: error)

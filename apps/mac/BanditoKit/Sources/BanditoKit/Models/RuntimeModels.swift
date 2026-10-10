@@ -11,13 +11,19 @@ public struct RuntimeModel: Codable, Sendable, Hashable, Identifiable {
     public var isDefault: Bool
     /// Reasoning effort levels the model accepts, as the daemon names them. Empty when it takes none.
     public var efforts: [String]
+    /// The context window in tokens, when the daemon knows it. Nil when the daemon's table does not list the model.
+    public var contextWindow: Int?
 
-    public init(id: String, name: String, description: String? = nil, isDefault: Bool = false, efforts: [String] = []) {
+    public init(
+        id: String, name: String, description: String? = nil, isDefault: Bool = false, efforts: [String] = [],
+        contextWindow: Int? = nil
+    ) {
         self.id = id
         self.name = name
         self.description = description
         self.isDefault = isDefault
         self.efforts = efforts
+        self.contextWindow = contextWindow
     }
 
     public init(from decoder: Decoder) throws {
@@ -27,6 +33,7 @@ public struct RuntimeModel: Codable, Sendable, Hashable, Identifiable {
         description = try c.decodeIfPresent(String.self, forKey: .description)
         isDefault = try c.decodeIfPresent(Bool.self, forKey: .isDefault) ?? false
         efforts = try c.decodeIfPresent([String].self, forKey: .efforts) ?? []
+        contextWindow = try c.decodeIfPresent(Int.self, forKey: .contextWindow)
     }
 
     /// The effort levels this app knows that the model accepts, lowest first. Other names are ignored.

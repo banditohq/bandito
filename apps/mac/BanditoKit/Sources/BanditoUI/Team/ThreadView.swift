@@ -27,6 +27,8 @@ struct ThreadView: View {
     @State private var unseen = 0
     /// The scroll position, kept outside the view state: a scroll must not redraw the header and the composer.
     @State private var scroll = ThreadScrollMemory()
+    /// Which messages arrived after the chat opened: the baseline is set after the first history load (see `ThreadArrival`).
+    @State private var arrival = ThreadArrival()
     /// A row to bring on screen (a quoted message, a form), and the row that flashes after it.
     @State private var scrollRequest: ScrollRequest?
     @State private var highlightedID: String?
@@ -101,8 +103,10 @@ struct ThreadView: View {
                 primaryRuntime: agent.runtime.rawValue,
                 chat: chat,
                 typing: thread.turnRunning && !isStreaming,
+                turnStartedAt: thread.turnStartedAt,
                 onRowSpan: { [scroll] id, span in scroll.rowSpans[id] = span },
-                onContent: { offset, height in contentChanged(offset: offset, height: height, proxy) })
+                onContent: { offset, height in contentChanged(offset: offset, height: height, proxy) },
+                arrival: arrival)
         }
         .coordinateSpace(name: ThreadScroll.scrollSpace)
         .modifier(ThreadGeometryGate { old, new in scrollGeometryChanged(old, new, proxy) })
@@ -115,6 +119,7 @@ struct ThreadView: View {
     /// The content moved or changed height (reported from its geometry): the top is watched for older rows, and where
     /// the scroll geometry is not known (macOS 14) the metrics are built from it.
     private func contentChanged(offset: Double, height: Double, _ proxy: ScrollViewProxy) {
+        if offset != scroll.offset { ThreadScrollActivity.noteMove() }
         scroll.offset = offset
         scroll.contentHeight = height
         let near = ThreadScroll.nearTop(offset: offset)
@@ -183,10 +188,13 @@ struct ThreadView: View {
     /// The scroll geometry changed (macOS 15 and later): the bottom, the "down" button and the follow of the bottom
     /// all follow from the measured distance, never from the position of a marker.
     private func scrollGeometryChanged(_ old: ThreadScrollMetrics?, _ new: ThreadScrollMetrics, _ proxy: ScrollViewProxy) {
-        let at = ThreadScroll.atBottom(was: atBottom, old: old, new: new)
-        setAtBottom(at)
-        setJumpVisible(ThreadScroll.showsJump(atBottom: at, distance: new.distance))
-        if ThreadScroll.shouldFollow(atBottom: at, old: old, new: new) { followBottom(proxy) }
+        if let old, old.offset != new.offset { ThreadScrollActivity.noteMove() }
+        // After a send the thread follows the bottom until the person scrolls up themselves.
+        if scroll.sendPinned, let old, ThreadScroll.leavesBottom(old: old, new: new) { scroll.sendPinned = false }
+        let flags = ThreadScroll.flags(was: atBottom, old: old, new: new, pinned: scroll.sendPinned)
+        setAtBottom(flags.atBottom)
+        setJumpVisible(flags.jump)
+        if ThreadScroll.shouldFollow(atBottom: flags.atBottom, old: old, new: new) { followBottom(proxy) }
     }
 
     /// Brings the bottom on screen, without animation (an animation shakes a growing stream), at most once per
@@ -208,6 +216,7 @@ struct ThreadView: View {
 
     /// The person goes to the newest message (the send, the "down" button): the thread follows the bottom again.
     private func goToBottom(_ proxy: ScrollViewProxy) {
+        scroll.skipFollow = false
         setAtBottom(true)
         setJumpVisible(false)
         withAnimation(.easeOut(duration: 0.15)) {
@@ -238,7 +247,7 @@ struct ThreadView: View {
                     .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
                 if unseen > 0 {
                     Text(unseen > 99 ? "99+" : "\(unseen)")
-                        .font(BanditoFont.font(size: 10, weight: 600))
+                        .font(BanditoFont.text(size: 10, weight: 600))
                         .monospacedDigit()
                         .foregroundStyle(Color.Bandito.bg)
                         .padding(.horizontal, 5)
@@ -339,6 +348,11 @@ struct ThreadView: View {
                     // further up, must not jump to the bottom. (Growth of the last item, a stream or an opened
                     // card, is followed from the scroll geometry.)
                     .onChange(of: thread.items.last?.id) { _, _ in
+                        // The echo of the person's own message (and the answer to it) is looked at.
+                        if scroll.sendPinned {
+                            setAtBottom(true)
+                            setJumpVisible(false)
+                        }
                         guard atBottom else { return }
                         followBottom(proxy)
                     }
@@ -429,6 +443,8 @@ struct ThreadView: View {
         .background(Color.Bandito.bg)
         .task(id: agent.id) {
             await loadHistory()
+            // What is read now is the old history: a message that comes after it is new (see `ThreadArrival`).
+            arrival.settle(thread.items)
             // A thread shorter than the screen sits at its top: its older history is read now, not when scrolled to.
             if scroll.nearTop, scroll.contentHeight <= scroll.containerHeight { topReached() }
             await loadChanges()
@@ -528,6 +544,7 @@ struct ThreadView: View {
         let reply = replyDrafts.take(for: id)
         sendError = nil
         // As in any messenger: the person's own message, and the answer to it, are looked at.
+        scroll.sendPinned = true
         bottomRequest += 1
         Task {
             do {
@@ -563,6 +580,9 @@ struct ThreadView: View {
             reactions: current.reactions,
             replies: current.replies,
             attachments: current.attachments,
+            waiting: current.waitingSeqs,
+            undelivered: current.undeliveredSeqs,
+            onResend: { seq in resend(seq) },
             highlightedID: highlightedID,
             original: { seq in Self.original(seq, in: current.items) },
             onReply: { target in
@@ -587,6 +607,16 @@ struct ThreadView: View {
             }
         }
         return nil
+    }
+
+    /// Sends a message the daemon gave up on once more (see `ServerModel.resendUndelivered`).
+    private func resend(_ seq: Int64) {
+        let agentID = agent.id
+        Task {
+            do { try await server.resendUndelivered(seq, of: agentID) } catch {
+                actionError = UserFacingError.message(for: error)
+            }
+        }
     }
 
     private func react(_ seq: Int64, _ emoji: String?) {
@@ -664,6 +694,8 @@ final class ThreadScrollMemory {
     /// A restore to a row waits for the history to load.
     var restorePending = false
     var skipFollow = false
+    /// The person sent a message: the thread follows the bottom until they scroll up themselves.
+    var sendPinned = false
 }
 
 /// Reports the scroll geometry of the thread (macOS 15 and later): the distance to the bottom, the height of the
@@ -699,10 +731,14 @@ struct ThreadItemsView: View {
     var chat = ThreadChat()
     /// Shows the typing indicator after the last row while a turn runs.
     var typing = false
+    /// When the running turn began (Unix ms), for the elapsed time on the typing indicator.
+    var turnStartedAt: Int64?
     /// Where a row is in the content (its id, top and bottom edge): for the memory of the place.
     var onRowSpan: (String, ThreadRowSpan) -> Void = { _, _ in }
     /// The content's offset in the scroll view and its height.
     var onContent: (Double, Double) -> Void = { _, _ in }
+    /// Which messages came in live (see `ThreadArrival`); only those rise in. Empty by default: nothing animates.
+    var arrival = ThreadArrival()
 
     var body: some View {
         let rows = ThreadRows.build(items)
@@ -713,10 +749,13 @@ struct ThreadItemsView: View {
         })?.id
         return VStack(alignment: .leading, spacing: 12) {
             ForEach(rows) { row in
-                ThreadRowView(
-                    row: row, agentName: agentName, primaryRuntime: primaryRuntime, server: server, chat: rowChat,
-                    agentID: agentID, folder: folder, onError: onError)
-                    .banditoRise()
+                EquatableThreadRow(
+                    key: ThreadRowKey(
+                        row: row, agentName: agentName, primaryRuntime: primaryRuntime, agentID: agentID,
+                        folder: folder, chat: rowChat),
+                    server: server, chat: rowChat, onError: onError)
+                    .equatable()
+                    .modifier(LiveArrivalModifier(live: arrival.isLive(seq: ThreadArrival.seq(of: row))))
                     .onGeometryChange(for: ThreadRowSpan.self) { proxy in
                         let frame = proxy.frame(in: .named(ThreadScroll.contentSpace))
                         return ThreadRowSpan(minY: Double(frame.minY).rounded(), maxY: Double(frame.maxY).rounded())
@@ -725,7 +764,7 @@ struct ThreadItemsView: View {
                     }
             }
             if typing {
-                TypingIndicator(activity: AgentActivity.current(in: items), since: AgentActivity.turnStart(in: items))
+                TypingIndicator(activity: AgentActivity.current(in: items), since: turnStartedAt)
             }
             Color.clear.frame(height: 1).id(ThreadScroll.bottomID)
         }
@@ -770,7 +809,7 @@ private struct Banner: View {
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Color.Bandito.danger)
-            Text(text).font(.system(size: 12)).foregroundStyle(Color.Bandito.text).textSelection(.enabled)
+            Text(text).font(BanditoFont.text(size: 12, weight: 400)).foregroundStyle(Color.Bandito.text).textSelection(.enabled)
             Spacer()
         }
         .padding(12)

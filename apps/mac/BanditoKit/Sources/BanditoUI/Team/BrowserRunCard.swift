@@ -3,17 +3,48 @@ import BanditoKit
 import BanditoL10n
 import SwiftUI
 
-/// The host of a page address for the card's title: `shop.example` for `https://www.shop.example/cart`. `nil` for
-/// an address without a host (`about:blank`, an empty page).
-enum BrowserRunDomain {
-    static func host(of address: String) -> String? {
-        guard let host = URL(string: address)?.host, !host.isEmpty else { return nil }
-        return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+/// The size of the picture in the card. Pure, so the rule is easy to read and test.
+enum BrowserRunPreview {
+    /// The picture's height in the card, in points. It is the same for every page, so the card's height does not
+    /// change when the page changes shape.
+    static let pictureHeight: CGFloat = 200
+
+    /// The picture's height in a card `width` wide: always `pictureHeight`, or 0 when the width is not a usable number.
+    static func height(width: CGFloat) -> CGFloat {
+        guard width.isFinite, width > 0 else { return 0 }
+        return pictureHeight
+    }
+
+    /// What the picture area shows: the live picture, the wait for the first picture of a running browser, the last
+    /// picture of a closed browser, or the word that the browser is closed.
+    enum Picture: Equatable {
+        case live, waiting, lastFrame, closed
+    }
+
+    /// `running` is nil until the browser's status is known: the card waits then, as it does while the browser starts.
+    static func picture(hasFrame: Bool, running: Bool?, hasLastFrame: Bool) -> Picture {
+        if hasFrame { return .live }
+        guard running == false else { return .waiting }
+        return hasLastFrame ? .lastFrame : .closed
     }
 }
 
-/// The browser calls of the agent in a row, as one live card: "Agent in the browser · shop.example", a small
-/// picture of the page that updates twice a second while the card is on screen, and two buttons: watch it beside
+/// Gives its content the card's full width and the height `BrowserRunPreview.height(width:)` says.
+private struct BrowserRunPreviewLayout: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? 360
+        return CGSize(width: width, height: BrowserRunPreview.height(width: width))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        for subview in subviews {
+            subview.place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
+        }
+    }
+}
+
+/// The browser calls of the agent in a row, as one live card: "Agent in the browser", a picture of the page that
+/// follows the browser while the card is on screen, the page's title and domain, and two buttons: watch it beside
 /// the chat, or open the Browser mode.
 struct BrowserRunCard: View {
     var tools: [ToolRow]
@@ -23,33 +54,12 @@ struct BrowserRunCard: View {
     /// Optional, like the thread's: without a router the buttons do nothing.
     @Environment(Router.self) private var router: Router?
 
-    /// How often the picture is taken from the browser model. Twice a second is enough for a preview.
-    static let refreshInterval: TimeInterval = 0.5
-
     var body: some View {
         let model = BrowserStore.shared.model(for: server)
         VStack(alignment: .leading, spacing: 10) {
-            header(domain: BrowserRunDomain.host(of: model.currentURL))
+            header
             preview(model)
-            HStack(spacing: 8) {
-                Button {
-                    router?.showInWorkbench(.browser, agentID: agentID)
-                } label: {
-                    Text(L10n.Thread.BrowserRun.watchBeside)
-                        .lineLimit(1)
-                        .fixedSize(horizontal: true, vertical: false)
-                }
-                .banditoButton(.quiet())
-                Button {
-                    router?.select(mode: .browser)
-                } label: {
-                    Text(L10n.Thread.BrowserRun.openBrowser)
-                        .lineLimit(1)
-                        .fixedSize(horizontal: true, vertical: false)
-                }
-                .banditoButton(.quiet())
-                Spacer(minLength: 0)
-            }
+            footer(model)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -61,16 +71,12 @@ struct BrowserRunCard: View {
         .onDisappear { model.detach() }
     }
 
-    private func header(domain: String?) -> some View {
+    private var header: some View {
         HStack(spacing: 8) {
-            Image(systemName: "globe")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(Color.Bandito.text3)
-            Text(domain.map { L10n.Thread.BrowserRun.titleDomain(domain: $0) } ?? L10n.Thread.BrowserRun.title)
-                .font(BanditoFont.font(size: 12.5, weight: 500))
+            Text(L10n.Thread.BrowserRun.title)
+                .font(BanditoFont.text(size: 12.5, weight: 500))
                 .foregroundStyle(Color.Bandito.text2)
                 .lineLimit(1)
-                .minimumScaleFactor(0.85)
             Spacer(minLength: 8)
             if tools.contains(where: { $0.ok == nil }) {
                 StatusDot(status: .working)
@@ -78,27 +84,82 @@ struct BrowserRunCard: View {
         }
     }
 
-    /// The last picture of the page, or a quiet placeholder while there is none. The timeline samples the model
-    /// every `refreshInterval`, so the picture follows the browser without a change notification per frame.
+    /// The picture fills the card's width, 200 pt tall, cropped from the bottom so the top of the page shows (as
+    /// `.aspectRatio(.fill)` with top alignment). It sits in a thin frame. It is drawn in a layer that the browser
+    /// model feeds directly: the card does not redraw per frame.
     private func preview(_ model: BrowserModel) -> some View {
-        TimelineView(.periodic(from: .now, by: Self.refreshInterval)) { _ in
-            Group {
-                if let frame = model.frame {
-                    Image(decorative: frame, scale: 1)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                } else {
-                    Text(L10n.Thread.BrowserRun.noPicture)
-                        .font(BanditoFont.font(size: 12, weight: 400))
-                        .foregroundStyle(Color.Bandito.text3)
-                        .multilineTextAlignment(.center)
-                        .padding(12)
+        BrowserRunPreviewLayout {
+            ZStack {
+                Color.Bandito.surface1
+                switch BrowserRunPreview.picture(
+                    hasFrame: model.hasFrame, running: model.status?.running, hasLastFrame: model.hasLastFrame)
+                {
+                case .live:
+                    BrowserFrameLayer(store: model.frames, fillsFromTop: true)
+                        .accessibilityHidden(true)
+                case .lastFrame:
+                    BrowserFrameLayer(store: model.lastFrames, fillsFromTop: true)
+                        .accessibilityHidden(true)
+                case .waiting:
+                    placeholder(L10n.Thread.BrowserRun.noPicture)
+                case .closed:
+                    placeholder(L10n.Thread.BrowserRun.closed)
                 }
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: 150)
-            .background(Color.Bandito.bg, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.Bandito.line, lineWidth: 0.5))
+    }
+
+    private func placeholder(_ text: String) -> some View {
+        Text(text)
+            .font(BanditoFont.text(size: 12, weight: 400))
+            .foregroundStyle(Color.Bandito.text3)
+            .multilineTextAlignment(.center)
+            .padding(12)
+    }
+
+    /// One line: the page's icon, title and domain on the left, the two buttons on the right.
+    private func footer(_ model: BrowserModel) -> some View {
+        let label = BrowserTabLabel.make(title: model.pageTitle, url: model.currentURL, newTabTitle: L10n.Browser.newTab)
+        return HStack(spacing: 8) {
+            Image(systemName: "globe")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Color.Bandito.text3)
+            Text(label.title)
+                .font(BanditoFont.text(size: 12.5, weight: 500))
+                .foregroundStyle(Color.Bandito.text)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                // The title keeps its room: the buttons give way before it does.
+                .frame(minWidth: 120, alignment: .leading)
+                .layoutPriority(1)
+            if !label.domain.isEmpty, label.domain != label.title {
+                Text(label.domain)
+                    .font(BanditoFont.text(size: 12, weight: 400))
+                    .foregroundStyle(Color.Bandito.text3)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .layoutPriority(-1)
+            }
+            Spacer(minLength: 8)
+            Button {
+                router?.showInWorkbench(.browser, agentID: agentID)
+            } label: {
+                Text(L10n.Thread.BrowserRun.watchBeside)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+            .banditoButton(.lightPill(size: .regular))
+            Button {
+                router?.select(mode: .browser)
+            } label: {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .banditoButton(.quiet())
+            .help(L10n.Thread.BrowserRun.fullscreen)
+            .accessibilityLabel(L10n.Thread.BrowserRun.fullscreen)
         }
     }
 }

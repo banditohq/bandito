@@ -125,12 +125,12 @@ struct AccountSignInView: View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 8) {
                 Text(L10n.Onboarding.Account.title)
-                    .font(BanditoFont.font(size: 34, weight: 600))
+                    .font(BanditoFont.display(size: 31.5, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
                 Text(L10n.Onboarding.Account.subtitle)
-                    .font(BanditoFont.font(size: 15, weight: 400))
+                    .font(BanditoFont.text(size: 15, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                     .lineSpacing(2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -155,7 +155,7 @@ struct AccountSignInView: View {
                     withAnimation(BanditoMotion.ease) { showEmail.toggle() }
                 } label: {
                     Text(L10n.Onboarding.Account.emailToggle)
-                        .font(BanditoFont.font(size: 13.5, weight: 500))
+                        .font(BanditoFont.text(size: 13.5, weight: 500))
                         .foregroundStyle(Color.Bandito.text2)
                 }
                 .banditoButton(.link)
@@ -173,7 +173,7 @@ struct AccountSignInView: View {
                 onSkipAccount?()
             } label: {
                 Text(L10n.Onboarding.Account.skip)
-                    .font(BanditoFont.font(size: 13.5, weight: 400))
+                    .font(BanditoFont.text(size: 13.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
             }
             .banditoButton(.link)
@@ -192,7 +192,7 @@ struct AccountSignInView: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(AvatarColor.sage.color)
             Text(L10n.Onboarding.Account.privacy)
-                .font(BanditoFont.font(size: 12.5, weight: 400))
+                .font(BanditoFont.text(size: 12.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
@@ -234,12 +234,8 @@ private struct EmailBlock: View {
             if model.phase == .address {
                 HStack(spacing: 8) {
                     TextField(L10n.Onboarding.Account.emailPlaceholder, text: $model.email)
-                        .textFieldStyle(.plain)
-                        .font(BanditoFont.font(size: 14.5, weight: 400))
-                        .padding(.horizontal, 14)
-                        .frame(height: 46)
-                        .background(Color.Bandito.surface1, in: RoundedRectangle(cornerRadius: 14))
-                        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.Bandito.text.opacity(0.12)))
+                        .banditoField()
+                        .font(BanditoFont.text(size: 14.5, weight: 400))
                         .onSubmit { Task { await model.sendCode(now: Date()) } }
                         .accessibilityLabel(L10n.Onboarding.Account.emailLabel)
                     Button(L10n.Onboarding.Account.sendCode) {
@@ -250,19 +246,19 @@ private struct EmailBlock: View {
                 }
             } else {
                 Text(L10n.Onboarding.Account.codeHint(email: model.email))
-                    .font(BanditoFont.font(size: 13.5, weight: 400))
+                    .font(BanditoFont.text(size: 13.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                 CodeBoxes(model: model)
                 HStack(spacing: 14) {
                     ResendControl(model: model)
                     Button(L10n.Onboarding.Account.changeEmail) { model.changeEmail() }
                         .buttonStyle(.plain)
-                        .font(BanditoFont.font(size: 13, weight: 400))
+                        .font(BanditoFont.text(size: 13, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                 }
                 if model.isBusy {
                     Text(L10n.Onboarding.Account.checking)
-                        .font(BanditoFont.font(size: 13, weight: 400))
+                        .font(BanditoFont.text(size: 13, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                 }
             }
@@ -284,7 +280,7 @@ private struct CodeBoxes: View {
                 TextField("", text: binding(for: index))
                     .textFieldStyle(.plain)
                     .multilineTextAlignment(.center)
-                    .font(BanditoFont.font(size: 22, weight: 600, mono: true))
+                    .font(BanditoFont.mono(size: 22, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                     .frame(width: 44, height: 56)
                     .background(Color.Bandito.surface1, in: RoundedRectangle(cornerRadius: 12))
@@ -333,7 +329,7 @@ private struct ResendControl: View {
                 Task { await model.resend(now: Date()) }
             }
             .buttonStyle(.plain)
-            .font(BanditoFont.font(size: 13, weight: 500))
+            .font(BanditoFont.text(size: 13, weight: 500))
             .foregroundStyle(left > 0 ? Color.Bandito.text3 : Color.Bandito.signal)
             .disabled(left > 0 || model.isBusy)
         }
@@ -350,7 +346,7 @@ struct GitHubSignInSheet: View {
     var body: some View {
         VStack(spacing: 18) {
             Text(L10n.Onboarding.Account.Github.title)
-                .font(BanditoFont.font(size: 20, weight: 600))
+                .font(BanditoFont.display(size: 18.5, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
             content
             Button(L10n.Common.cancel, action: close)
@@ -374,7 +370,7 @@ struct GitHubSignInSheet: View {
                 .foregroundStyle(Color.Bandito.text2)
         case .waiting(let flow):
             Text(UserCodeFormat.grouped(flow.userCode))
-                .font(BanditoFont.font(size: 36, weight: 600, mono: true))
+                .font(BanditoFont.mono(size: 36, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
                 .tracking(3)
                 .textSelection(.enabled)
@@ -385,7 +381,7 @@ struct GitHubSignInSheet: View {
             .banditoButton(.signal())
             if copiedNote {
                 Text(L10n.Onboarding.Account.Github.copied)
-                    .font(BanditoFont.font(size: 12.5, weight: 400))
+                    .font(BanditoFont.text(size: 12.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
             }
             HStack(spacing: 8) {

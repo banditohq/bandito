@@ -21,19 +21,17 @@ struct FileNameSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(sheet == .folder ? L10n.Files.Dialog.newFolder : L10n.Files.Dialog.newFile)
-                .font(.system(size: 17, weight: .semibold))
+                .font(BanditoFont.display(size: 15.5, weight: 600))
+                .lineLimit(1)
+                .truncationMode(.tail)
                 .foregroundStyle(Color.Bandito.text)
             TextField(L10n.Files.Dialog.name, text: $name)
-                .textFieldStyle(.plain)
-                .font(.system(size: 14))
-                .padding(.horizontal, 12)
-                .frame(height: 38)
-                .background(Color.Bandito.text.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
-                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.Bandito.text.opacity(0.1)))
+                .banditoField()
+                .font(BanditoFont.text(size: 14, weight: 400))
                 .onSubmit(submit)
             if existing.contains(trimmed) {
                 Text(L10n.Files.Error.exists)
-                    .font(.system(size: 12))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.danger)
             }
             HStack {

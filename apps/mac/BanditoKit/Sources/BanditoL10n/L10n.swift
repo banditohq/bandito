@@ -279,7 +279,6 @@ public enum L10n {
 
     public enum Avatar {
         public static var allEmoji: String { L10n.tr("avatar.allEmoji") }
-        public static var chooseFile: String { L10n.tr("avatar.chooseFile") }
         public static var color: String { L10n.tr("avatar.color") }
         public static var colorAria: String { L10n.tr("avatar.colorAria") }
         public static var colorBlue: String { L10n.tr("avatar.colorBlue") }
@@ -290,26 +289,59 @@ public enum L10n {
         public static var colorSage: String { L10n.tr("avatar.colorSage") }
         public static var cropHint: String { L10n.tr("avatar.cropHint") }
         public static var customColor: String { L10n.tr("avatar.customColor") }
+        public static var dropZone: String { L10n.tr("avatar.dropZone") }
         public static var emojiField: String { L10n.tr("avatar.emojiField") }
         public static var face: String { L10n.tr("avatar.face") }
         public static var generate: String { L10n.tr("avatar.generate") }
+        public static var hint: String { L10n.tr("avatar.hint") }
         public static var noEmoji: String { L10n.tr("avatar.noEmoji") }
+        public static var noMatches: String { L10n.tr("avatar.noMatches") }
         public static var pickerMessage: String { L10n.tr("avatar.pickerMessage") }
-        public static var pictureCurrent: String { L10n.tr("avatar.pictureCurrent") }
-        public static var pictureEmpty: String { L10n.tr("avatar.pictureEmpty") }
         public static var pictureNeedsDaemon: String { L10n.tr("avatar.pictureNeedsDaemon") }
         public static var pictureTooLarge: String { L10n.tr("avatar.pictureTooLarge") }
         public static var pictureUnreadable: String { L10n.tr("avatar.pictureUnreadable") }
         public static var presets: String { L10n.tr("avatar.presets") }
         public static var removePicture: String { L10n.tr("avatar.removePicture") }
+        public static var replacePicture: String { L10n.tr("avatar.replacePicture") }
         public static var reset: String { L10n.tr("avatar.reset") }
-        public static var savePicture: String { L10n.tr("avatar.savePicture") }
         public static var set: String { L10n.tr("avatar.set") }
         public static var tabEmoji: String { L10n.tr("avatar.tabEmoji") }
         public static var tabFace: String { L10n.tr("avatar.tabFace") }
         public static var tabPicture: String { L10n.tr("avatar.tabPicture") }
         public static var upload: String { L10n.tr("avatar.upload") }
         public static var zoom: String { L10n.tr("avatar.zoom") }
+    }
+
+    public enum Backups {
+        public static var confirmMessage: String { L10n.tr("backups.confirmMessage") }
+        public static func confirmTitle(date: String) -> String { L10n.tr("backups.confirmTitle", date) }
+        public static var create: String { L10n.tr("backups.create") }
+        public static var emptyMessage: String { L10n.tr("backups.emptyMessage") }
+        public static var emptyTitle: String { L10n.tr("backups.emptyTitle") }
+        public static var explain: String { L10n.tr("backups.explain") }
+        public static var leaveSafeMode: String { L10n.tr("backups.leaveSafeMode") }
+        public static var restarting: String { L10n.tr("backups.restarting") }
+        public static var restore: String { L10n.tr("backups.restore") }
+        public static func restoreFailed(error: String) -> String { L10n.tr("backups.restoreFailed", error) }
+        public static var restoreUnknown: String { L10n.tr("backups.restoreUnknown") }
+        public static func restoredFrom(date: String) -> String { L10n.tr("backups.restoredFrom", date) }
+        public static func safeMode(error: String) -> String { L10n.tr("backups.safeMode", error) }
+        public static var safeModeHint: String { L10n.tr("backups.safeModeHint") }
+        public static var timedOut: String { L10n.tr("backups.timedOut") }
+        public static func whenToday(time: String) -> String { L10n.tr("backups.whenToday", time) }
+        public static func whenYesterday(time: String) -> String { L10n.tr("backups.whenYesterday", time) }
+
+        public enum Reason {
+            public static var beforeRestore: String { L10n.tr("backups.reason.beforeRestore") }
+            public static var broken: String { L10n.tr("backups.reason.broken") }
+            public static var daily: String { L10n.tr("backups.reason.daily") }
+            public static var incomplete: String { L10n.tr("backups.reason.incomplete") }
+            public static var manual: String { L10n.tr("backups.reason.manual") }
+            public static var other: String { L10n.tr("backups.reason.other") }
+            public static var replaced: String { L10n.tr("backups.reason.replaced") }
+            public static var start: String { L10n.tr("backups.reason.start") }
+            public static var upgrade: String { L10n.tr("backups.reason.upgrade") }
+        }
     }
 
     public enum Banner {
@@ -351,6 +383,7 @@ public enum L10n {
         public static var newTabHelp: String { L10n.tr("browser.newTabHelp") }
         public static var onServer: String { L10n.tr("browser.onServer") }
         public static var onServerHelp: String { L10n.tr("browser.onServerHelp") }
+        public static var openFullscreen: String { L10n.tr("browser.openFullscreen") }
         public static var openOnMac: String { L10n.tr("browser.openOnMac") }
         public static var openPreview: String { L10n.tr("browser.openPreview") }
         public static var openServer: String { L10n.tr("browser.openServer") }
@@ -380,7 +413,8 @@ public enum L10n {
         public static func askAgent(name: String) -> String { L10n.tr("changes.askAgent", name) }
         public static func askPlace(path: String, line: String) -> String { L10n.tr("changes.askPlace", path, line) }
         public static var binary: String { L10n.tr("changes.binary") }
-        public static var empty: String { L10n.tr("changes.empty") }
+        public static var emptyMessage: String { L10n.tr("changes.emptyMessage") }
+        public static var emptyTitle: String { L10n.tr("changes.emptyTitle") }
         public static func fileCount(count: Int) -> String { L10n.tr("changes.fileCount", count) }
         public static var inline: String { L10n.tr("changes.inline") }
         public static func keepAria(name: String) -> String { L10n.tr("changes.keepAria", name) }
@@ -599,10 +633,15 @@ public enum L10n {
     }
 
     public enum Failure {
+        public static var connectAgain: String { L10n.tr("failure.connectAgain") }
         public static var copy: String { L10n.tr("failure.copy") }
         public static var details: String { L10n.tr("failure.details") }
         public static var deviceRevoked: String { L10n.tr("failure.deviceRevoked") }
         public static var generic: String { L10n.tr("failure.generic") }
+        public static var keyRejected: String { L10n.tr("failure.keyRejected") }
+        public static var keyRejectedThisMac: String { L10n.tr("failure.keyRejectedThisMac") }
+        public static var keyRepairFailed: String { L10n.tr("failure.keyRepairFailed") }
+        public static var keyRepairing: String { L10n.tr("failure.keyRepairing") }
         public static var noAnswer: String { L10n.tr("failure.noAnswer") }
 
         public enum Reason {
@@ -947,18 +986,47 @@ public enum L10n {
         public static var connected: String { L10n.tr("integrations.connected") }
         public static var edit: String { L10n.tr("integrations.edit") }
         public static var empty: String { L10n.tr("integrations.empty") }
-        public static var hint: String { L10n.tr("integrations.hint") }
-        public static var more: String { L10n.tr("integrations.more") }
         public static var remove: String { L10n.tr("integrations.remove") }
         public static var removeMessage: String { L10n.tr("integrations.removeMessage") }
         public static func removeTitle(name: String) -> String { L10n.tr("integrations.removeTitle", name) }
         public static var title: String { L10n.tr("integrations.title") }
-        public static var toggleHelp: String { L10n.tr("integrations.toggleHelp") }
         public static func toolsFound(names: String) -> String { L10n.tr("integrations.toolsFound", names) }
 
         public enum Agent {
             public static var all: String { L10n.tr("integrations.agent.all") }
             public static var hint: String { L10n.tr("integrations.agent.hint") }
+        }
+
+        public enum Custom {
+            public static var add: String { L10n.tr("integrations.custom.add") }
+            public static var commandHint: String { L10n.tr("integrations.custom.commandHint") }
+            public static var commandLine: String { L10n.tr("integrations.custom.commandLine") }
+            public static var editName: String { L10n.tr("integrations.custom.editName") }
+            public static func failed(reason: String) -> String { L10n.tr("integrations.custom.failed", reason) }
+            public static var kindProgram: String { L10n.tr("integrations.custom.kindProgram") }
+            public static var kindProgramHint: String { L10n.tr("integrations.custom.kindProgramHint") }
+            public static var kindWeb: String { L10n.tr("integrations.custom.kindWeb") }
+            public static var kindWebHint: String { L10n.tr("integrations.custom.kindWebHint") }
+            public static var manual: String { L10n.tr("integrations.custom.manual") }
+            public static var paste: String { L10n.tr("integrations.custom.paste") }
+            public static var pastePlaceholder: String { L10n.tr("integrations.custom.pastePlaceholder") }
+            public static func recognizedMany(count: Int) -> String { L10n.tr("integrations.custom.recognizedMany", count) }
+            public static func recognizedProgram(command: String) -> String { L10n.tr("integrations.custom.recognizedProgram", command) }
+            public static func recognizedWeb(url: String) -> String { L10n.tr("integrations.custom.recognizedWeb", url) }
+            public static func remaining(count: Int) -> String { L10n.tr("integrations.custom.remaining", count) }
+            public static var titleLabel: String { L10n.tr("integrations.custom.titleLabel") }
+            public static var titlePlaceholder: String { L10n.tr("integrations.custom.titlePlaceholder") }
+            public static var trialNote: String { L10n.tr("integrations.custom.trialNote") }
+            public static func useSelected(count: Int) -> String { L10n.tr("integrations.custom.useSelected", count) }
+            public static var variables: String { L10n.tr("integrations.custom.variables") }
+            public static func willBe(name: String) -> String { L10n.tr("integrations.custom.willBe", name) }
+
+            public enum Reason {
+                public static func command(word: String) -> String { L10n.tr("integrations.custom.reason.command", word) }
+                public static var json: String { L10n.tr("integrations.custom.reason.json") }
+                public static var noServers: String { L10n.tr("integrations.custom.reason.noServers") }
+                public static var quote: String { L10n.tr("integrations.custom.reason.quote") }
+            }
         }
 
         public enum Failure {
@@ -969,9 +1037,21 @@ public enum L10n {
             public static var unreachable: String { L10n.tr("integrations.failure.unreachable") }
         }
 
-        public enum Kind {
-            public static var http: String { L10n.tr("integrations.kind.http") }
-            public static var stdio: String { L10n.tr("integrations.kind.stdio") }
+        public enum Oauth {
+            public static var connected: String { L10n.tr("integrations.oauth.connected") }
+            public static func denied(name: String) -> String { L10n.tr("integrations.oauth.denied", name) }
+            public static var done: String { L10n.tr("integrations.oauth.done") }
+            public static var failed: String { L10n.tr("integrations.oauth.failed") }
+            public static var finishing: String { L10n.tr("integrations.oauth.finishing") }
+            public static var lost: String { L10n.tr("integrations.oauth.lost") }
+            public static func needsUpdate(name: String) -> String { L10n.tr("integrations.oauth.needsUpdate", name) }
+            public static var openAgain: String { L10n.tr("integrations.oauth.openAgain") }
+            public static var retry: String { L10n.tr("integrations.oauth.retry") }
+            public static var signInAgain: String { L10n.tr("integrations.oauth.signInAgain") }
+            public static var starting: String { L10n.tr("integrations.oauth.starting") }
+            public static func title(name: String) -> String { L10n.tr("integrations.oauth.title", name) }
+            public static var waiting: String { L10n.tr("integrations.oauth.waiting") }
+            public static var waitingHint: String { L10n.tr("integrations.oauth.waitingHint") }
         }
 
         public enum Problem {
@@ -981,6 +1061,7 @@ public enum L10n {
             public static var nameEmpty: String { L10n.tr("integrations.problem.nameEmpty") }
             public static var nameInvalid: String { L10n.tr("integrations.problem.nameInvalid") }
             public static var nameTaken: String { L10n.tr("integrations.problem.nameTaken") }
+            public static var quoteUnclosed: String { L10n.tr("integrations.problem.quoteUnclosed") }
             public static func secretMissing(key: String) -> String { L10n.tr("integrations.problem.secretMissing", key) }
             public static func secretNameInvalid(name: String) -> String { L10n.tr("integrations.problem.secretNameInvalid", name) }
             public static var urlInvalid: String { L10n.tr("integrations.problem.urlInvalid") }
@@ -989,17 +1070,12 @@ public enum L10n {
 
         public enum Sheet {
             public static var addLine: String { L10n.tr("integrations.sheet.addLine") }
-            public static var addTitle: String { L10n.tr("integrations.sheet.addTitle") }
-            public static var args: String { L10n.tr("integrations.sheet.args") }
-            public static var argsHint: String { L10n.tr("integrations.sheet.argsHint") }
-            public static var command: String { L10n.tr("integrations.sheet.command") }
             public static var composioHint: String { L10n.tr("integrations.sheet.composioHint") }
             public static func connectTitle(name: String) -> String { L10n.tr("integrations.sheet.connectTitle", name) }
             public static var docs: String { L10n.tr("integrations.sheet.docs") }
             public static func editTitle(name: String) -> String { L10n.tr("integrations.sheet.editTitle", name) }
             public static var headers: String { L10n.tr("integrations.sheet.headers") }
             public static var keyPlaceholder: String { L10n.tr("integrations.sheet.keyPlaceholder") }
-            public static var kindLabel: String { L10n.tr("integrations.sheet.kindLabel") }
             public static var name: String { L10n.tr("integrations.sheet.name") }
             public static var nameHint: String { L10n.tr("integrations.sheet.nameHint") }
             public static var secret: String { L10n.tr("integrations.sheet.secret") }
@@ -1016,6 +1092,8 @@ public enum L10n {
             public static func connected(count: Int) -> String { L10n.tr("integrations.status.connected", count) }
             public static var disabled: String { L10n.tr("integrations.status.disabled") }
             public static var failed: String { L10n.tr("integrations.status.failed") }
+            public static var needsLogin: String { L10n.tr("integrations.status.needsLogin") }
+            public static var refreshError: String { L10n.tr("integrations.status.refreshError") }
             public static var unchecked: String { L10n.tr("integrations.status.unchecked") }
         }
     }
@@ -1128,7 +1206,59 @@ public enum L10n {
         }
     }
 
+    public enum Market {
+        public static var availableToAgents: String { L10n.tr("market.availableToAgents") }
+        public static var configure: String { L10n.tr("market.configure") }
+        public static var docs: String { L10n.tr("market.docs") }
+        public static var more: String { L10n.tr("market.more") }
+        public static var noResults: String { L10n.tr("market.noResults") }
+        public static var official: String { L10n.tr("market.official") }
+        public static var search: String { L10n.tr("market.search") }
+        public static var subtitle: String { L10n.tr("market.subtitle") }
+        public static var view: String { L10n.tr("market.view") }
+        public static var website: String { L10n.tr("market.website") }
+
+        public enum Category {
+            public static var data: String { L10n.tr("market.category.data") }
+            public static var design: String { L10n.tr("market.category.design") }
+            public static var dev: String { L10n.tr("market.category.dev") }
+            public static var other: String { L10n.tr("market.category.other") }
+            public static var productivity: String { L10n.tr("market.category.productivity") }
+            public static var web: String { L10n.tr("market.category.web") }
+        }
+
+        public enum Filter {
+            public static var all: String { L10n.tr("market.filter.all") }
+            public static var connected: String { L10n.tr("market.filter.connected") }
+        }
+
+        public enum Section {
+            public static var abilities: String { L10n.tr("market.section.abilities") }
+            public static var about: String { L10n.tr("market.section.about") }
+            public static var connection: String { L10n.tr("market.section.connection") }
+            public static var how: String { L10n.tr("market.section.how") }
+            public static var links: String { L10n.tr("market.section.links") }
+            public static var needs: String { L10n.tr("market.section.needs") }
+            public static var tools: String { L10n.tr("market.section.tools") }
+        }
+
+        public enum Step {
+            public static var connect: String { L10n.tr("market.step.connect") }
+            public static var fillAddress: String { L10n.tr("market.step.fillAddress") }
+            public static var fillPath: String { L10n.tr("market.step.fillPath") }
+            public static var getKey: String { L10n.tr("market.step.getKey") }
+            public static var signIn: String { L10n.tr("market.step.signIn") }
+        }
+    }
+
     public enum Memory {
+        public static var chapterLength: String { L10n.tr("memory.chapterLength") }
+        public static var chapterLengthCustom: String { L10n.tr("memory.chapterLengthCustom") }
+        public static var chapterLengthDefault: String { L10n.tr("memory.chapterLengthDefault") }
+        public static var chapterLengthHint: String { L10n.tr("memory.chapterLengthHint") }
+        public static var chapterLengthInvalid: String { L10n.tr("memory.chapterLengthInvalid") }
+        public static func chapterLengthModelMax(max: String) -> String { L10n.tr("memory.chapterLengthModelMax", max) }
+        public static func chapterLengthTooLong(max: String) -> String { L10n.tr("memory.chapterLengthTooLong", max) }
         public static var daily: String { L10n.tr("memory.daily") }
         public static var dailyDesc: String { L10n.tr("memory.dailyDesc") }
         public static var files: String { L10n.tr("memory.files") }
@@ -1192,6 +1322,7 @@ public enum L10n {
         public static var reactionMine: String { L10n.tr("message.reactionMine") }
         public static func reactionOf(name: String) -> String { L10n.tr("message.reactionOf", name) }
         public static var reactionSame: String { L10n.tr("message.reactionSame") }
+        public static var resend: String { L10n.tr("message.resend") }
         public static var selectText: String { L10n.tr("message.selectText") }
     }
 
@@ -1199,10 +1330,11 @@ public enum L10n {
         public static var browser: String { L10n.tr("mode.browser") }
         public static var connectServer: String { L10n.tr("mode.connectServer") }
         public static var files: String { L10n.tr("mode.files") }
+        public static var market: String { L10n.tr("mode.market") }
         public static var screen: String { L10n.tr("mode.screen") }
         public static var server: String { L10n.tr("mode.server") }
+        public static var serverBackups: String { L10n.tr("mode.serverBackups") }
         public static var serverDevices: String { L10n.tr("mode.serverDevices") }
-        public static var serverIntegrations: String { L10n.tr("mode.serverIntegrations") }
         public static var serverJournal: String { L10n.tr("mode.serverJournal") }
         public static var serverOverview: String { L10n.tr("mode.serverOverview") }
         public static var serverPorts: String { L10n.tr("mode.serverPorts") }
@@ -1860,6 +1992,7 @@ public enum L10n {
             public static var installed: String { L10n.tr("server.features.installed") }
             public static func loginHelp(command: String) -> String { L10n.tr("server.features.loginHelp", command) }
             public static var notInstalled: String { L10n.tr("server.features.notInstalled") }
+            public static var signIn: String { L10n.tr("server.features.signIn") }
             public static var title: String { L10n.tr("server.features.title") }
         }
 
@@ -1886,6 +2019,11 @@ public enum L10n {
             public static var agent: String { L10n.tr("server.owner.agent") }
             public static var daemon: String { L10n.tr("server.owner.daemon") }
             public static var terminal: String { L10n.tr("server.owner.terminal") }
+        }
+
+        public enum Passport {
+            public static func uptimeHours(count: Int) -> String { L10n.tr("server.passport.uptimeHours", count) }
+            public static var uptimeLessHour: String { L10n.tr("server.passport.uptimeLessHour") }
         }
 
         public enum Picker {
@@ -2321,6 +2459,7 @@ public enum L10n {
         }
 
         public enum Home {
+            public static var asleep: String { L10n.tr("team.home.asleep") }
             public static var idea1: String { L10n.tr("team.home.idea1") }
             public static var idea2: String { L10n.tr("team.home.idea2") }
             public static var idea3: String { L10n.tr("team.home.idea3") }
@@ -2407,7 +2546,6 @@ public enum L10n {
         }
 
         public enum Dock {
-            public static var empty: String { L10n.tr("terminals.dock.empty") }
             public static func lastHint(shortcut: String) -> String { L10n.tr("terminals.dock.lastHint", shortcut) }
             public static func lines(count: Int) -> String { L10n.tr("terminals.dock.lines", count) }
             public static var restore: String { L10n.tr("terminals.dock.restore") }
@@ -2464,8 +2602,10 @@ public enum L10n {
         public static func messageFor(name: String) -> String { L10n.tr("thread.messageFor", name) }
         public static func messageFrom(name: String) -> String { L10n.tr("thread.messageFrom", name) }
         public static var more: String { L10n.tr("thread.more") }
+        public static var notDelivered: String { L10n.tr("thread.notDelivered") }
         public static func notRanCommands(count: Int) -> String { L10n.tr("thread.notRanCommands", count) }
         public static var placeholder: String { L10n.tr("thread.placeholder") }
+        public static var queued: String { L10n.tr("thread.queued") }
         public static func ranCommands(count: Int) -> String { L10n.tr("thread.ranCommands", count) }
         public static var react: String { L10n.tr("thread.react") }
         public static var reply: String { L10n.tr("thread.reply") }
@@ -2483,10 +2623,10 @@ public enum L10n {
         public static var yesterday: String { L10n.tr("thread.yesterday") }
 
         public enum BrowserRun {
+            public static var closed: String { L10n.tr("thread.browserRun.closed") }
+            public static var fullscreen: String { L10n.tr("thread.browserRun.fullscreen") }
             public static var noPicture: String { L10n.tr("thread.browserRun.noPicture") }
-            public static var openBrowser: String { L10n.tr("thread.browserRun.openBrowser") }
             public static var title: String { L10n.tr("thread.browserRun.title") }
-            public static func titleDomain(domain: String) -> String { L10n.tr("thread.browserRun.titleDomain", domain) }
             public static var watchBeside: String { L10n.tr("thread.browserRun.watchBeside") }
         }
 
@@ -2620,19 +2760,27 @@ public enum L10n {
     }
 
     public enum Viewer {
+        public static var close: String { L10n.tr("viewer.close") }
         public static var closeTab: String { L10n.tr("viewer.closeTab") }
+        public static func counter(n: String, total: String) -> String { L10n.tr("viewer.counter", n, total) }
         public static var empty: String { L10n.tr("viewer.empty") }
         public static var emptyFile: String { L10n.tr("viewer.emptyFile") }
         public static func error(error: String) -> String { L10n.tr("viewer.error", error) }
+        public static var fit: String { L10n.tr("viewer.fit") }
         public static var folder: String { L10n.tr("viewer.folder") }
+        public static var imageFailed: String { L10n.tr("viewer.imageFailed") }
         public static var moreActions: String { L10n.tr("viewer.moreActions") }
         public static func notSaved(name: String) -> String { L10n.tr("viewer.notSaved", name) }
+        public static var openInFiles: String { L10n.tr("viewer.openInFiles") }
         public static var readOnly: String { L10n.tr("viewer.readOnly") }
         public static var save: String { L10n.tr("viewer.save") }
+        public static var saveAs: String { L10n.tr("viewer.saveAs") }
         public static func saveError(error: String) -> String { L10n.tr("viewer.saveError", error) }
         public static var savedStatus: String { L10n.tr("viewer.savedStatus") }
         public static var saving: String { L10n.tr("viewer.saving") }
         public static var tooLarge: String { L10n.tr("viewer.tooLarge") }
+        public static var zoomIn: String { L10n.tr("viewer.zoomIn") }
+        public static var zoomOut: String { L10n.tr("viewer.zoomOut") }
 
         public enum Binary {
             public static var title: String { L10n.tr("viewer.binary.title") }

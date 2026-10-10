@@ -19,7 +19,7 @@ struct TerminalFilesSection: View {
                 SettingsRow(title: L10n.Settings.TerminalFiles.fontSize, hint: L10n.Settings.TerminalFiles.fontSizeHint) {
                     Stepper(value: fontSize, in: TerminalFontSize.range, step: TerminalFontSize.step) {
                         Text(String(format: "%g pt", app.terminalFont.size))
-                            .font(.system(size: 13))
+                            .font(BanditoFont.text(size: 13, weight: 400))
                             .monospacedDigit()
                             .foregroundStyle(Color.Bandito.text2)
                     }

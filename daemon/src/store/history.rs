@@ -101,6 +101,7 @@ mod tests {
             command: None,
             reply_to: None,
             attachments: Vec::new(),
+            queued: false,
         }
     }
 
@@ -191,6 +192,7 @@ mod tests {
                     command: None,
                     reply_to: None,
                     attachments: Vec::new(),
+                    queued: false,
                 },
             )
             .unwrap();

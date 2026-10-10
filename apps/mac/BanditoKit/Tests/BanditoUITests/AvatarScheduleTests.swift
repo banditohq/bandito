@@ -47,4 +47,30 @@ struct AvatarScheduleTests {
         let schedule = AvatarSchedule(mood: .working, phase: 0, paused: true)
         #expect(Array(schedule.entries(from: Date(), mode: .normal)).count == 1)
     }
+
+    @Test func sleepingIsDrawnAtMostTenTimesASecond() {
+        // The "z" of a sleeping raccoon rises all the time. Frames (= redraws of the avatar) in ten seconds: it used to
+        // be 200 (20 per second), now 80 (8 per second).
+        let count = frames(.sleeping, seconds: 10).count
+        #expect(count <= 10 * 10 + 1)
+        #expect(count >= 10 * 6)
+        #expect(AvatarSchedule.interval(for: .sleeping) >= 0.1)
+        #expect(AvatarSchedule.interval(for: .working) == AvatarSchedule.frameInterval)
+    }
+
+    @Test func aSleepingAvatarInAListOrInAnInactiveWindowDoesNotAnimate() {
+        #expect(AvatarSleepPolicy.rests(mood: .sleeping, listed: true))
+        #expect(!AvatarSleepPolicy.rests(mood: .sleeping, listed: false))
+        #expect(!AvatarSleepPolicy.rests(mood: .working, listed: true))
+        #expect(AvatarSleepPolicy.pausesWhenInactive(mood: .sleeping, active: false))
+        #expect(!AvatarSleepPolicy.pausesWhenInactive(mood: .sleeping, active: true))
+        #expect(!AvatarSleepPolicy.pausesWhenInactive(mood: .idle, active: false))
+    }
+
+    @Test func aRestingSleeperDrawsOnceAndShowsNoZ() {
+        let schedule = AvatarSchedule(mood: .sleeping, phase: 0, paused: true)
+        #expect(Array(schedule.entries(from: Date(), mode: .normal)).count == 1)
+        let pose = AvatarPose.make(mood: .sleeping, time: 5, phase: 0, reduceMotion: true)
+        #expect(pose.showsDashEyes && !pose.showsZ)
+    }
 }

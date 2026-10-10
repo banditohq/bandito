@@ -87,7 +87,20 @@ public final class ServerModel: Identifiable {
     public let config: ServerConfig
     public nonisolated var id: UUID { config.id }
 
-    public private(set) var state: ConnectionState = .disconnected
+    public private(set) var state: ConnectionState = .disconnected {
+        didSet {
+            if state != oldValue { onStateChange?(state) }
+        }
+    }
+    /// The server answers and refuses this device's key: it stopped there, or it is still being retried (a remote
+    /// server) and the last attempt was refused. Cleared by the next successful connection.
+    public var refusesKey: Bool {
+        if state == .failed(.keyRejected) { return true }
+        if case .reconnecting = state { return lastError == .keyRejected }
+        return false
+    }
+    /// Called on the main actor each time `state` changes. The app model repairs a rejected key from it.
+    @ObservationIgnored public var onStateChange: (@MainActor (ConnectionState) -> Void)?
     public internal(set) var info: DaemonInfo? {
         didSet {
             // A listing asked for before the daemon's info was known is sent now that it is.
@@ -286,6 +299,14 @@ public final class ServerModel: Identifiable {
             notificationPump = startNotificationPump(c)
             let daemon = try await c.call("daemon.info", NoParams(), as: DaemonInfo.self)
             info = daemon
+            if daemon.isSafeMode {
+                // A daemon in safe mode answers only `daemon.info` and `backups.*` (docs/ARCHITECTURE.md#backups):
+                // stay connected with nothing loaded, so the Backups section can show why and restore a copy.
+                try checkCurrent(attempt)
+                state = .connected
+                lastError = nil
+                return
+            }
             setAgents(try await c.call("agents.list", NoParams(), as: [Agent].self))
             runtimes = try await c.call("runtimes.status", NoParams(), as: [RuntimeStatus].self)
             runtimesFetchedAt = Date()
@@ -381,7 +402,15 @@ public final class ServerModel: Identifiable {
                     return
                 } catch {
                     if Task.isCancelled { return }
-                    model.lastError = FailureKind.classify(error)
+                    let kind = FailureKind.classify(error)
+                    model.lastError = kind
+                    // This Mac's own daemon that refuses the key refuses it again: retrying cannot help. A remote
+                    // server may answer 401/403 from a proxy or firewall in front of it, so it keeps its backoff.
+                    if kind == .keyRejected, LocalDaemonUpgrade.isThisMac(model.config) {
+                        model.reconnectTask = nil
+                        model.state = .failed(kind)
+                        return
+                    }
                 }
             }
         }
@@ -527,9 +556,12 @@ public final class ServerModel: Identifiable {
         agentsReadAt = Date()
     }
 
+    /// The daemon runs in safe mode: it answers only `daemon.info` and `backups.*`, so nothing else is asked.
+    private var inSafeMode: Bool { info?.isSafeMode == true }
+
     /// Reads `agents.list` after `agentsRefreshDelay`. Requests that come meanwhile share that one read.
     private func requestAgentsRefresh() {
-        guard !agentsRefreshScheduled else { return }
+        guard !inSafeMode, !agentsRefreshScheduled else { return }
         agentsRefreshScheduled = true
         Task { [weak self] in
             try? await Task.sleep(for: Self.agentsRefreshDelay)
@@ -542,6 +574,7 @@ public final class ServerModel: Identifiable {
     /// the front does not ask again at once.
     private func runAgentsRefresh() async {
         agentsRefreshScheduled = false
+        guard !inSafeMode else { return }
         guard !agentsRefreshing else {
             requestAgentsRefresh()
             return
@@ -568,13 +601,14 @@ public final class ServerModel: Identifiable {
     }
 
     private func scheduleAgentsRetry() {
-        guard !agentsRetryScheduled else { return }
+        guard !inSafeMode, !agentsRetryScheduled else { return }
         agentsRetryScheduled = true
         let delay = agentsRetryDelay
         Task { [weak self] in
             try? await Task.sleep(for: delay)
             guard let self else { return }
             self.agentsRetryScheduled = false
+            // A daemon that went into safe mode meanwhile refuses `agents.list`: no retry.
             self.requestAgentsRefresh()
         }
     }
@@ -582,7 +616,7 @@ public final class ServerModel: Identifiable {
     /// Called when the app comes back to the front. Re-reads the agents when the last read is older than
     /// `agentsStaleAfter`: a daemon from before `agent_changed` sends no event for changes made elsewhere.
     public func refreshAgentsIfStale(now: Date = Date()) {
-        guard state == .connected else { return }
+        guard state == .connected, !inSafeMode else { return }
         let stale = agentsReadAt.map { now.timeIntervalSince($0) > Self.agentsStaleAfter } ?? true
         if stale { requestAgentsRefresh() }
     }
@@ -622,6 +656,7 @@ public final class ServerModel: Identifiable {
             t.status = live.status
             t.statusDetail = live.statusDetail
             t.turnRunning = live.turnRunning
+            t.turnStartedAt = live.turnStartedAt
             t.lastSeq = max(t.lastSeq, live.lastSeq)
             t.mergeMessageMeta(from: live)
         }
@@ -673,6 +708,24 @@ public final class ServerModel: Identifiable {
             agentId: agentId, text: text, attachments: attachments.isEmpty ? nil : attachments.map(\.path),
             replyTo: supports("attachments") ? replyTo : nil)
         try await rpc().call("agents.send", request)
+    }
+
+    /// Sends an undelivered message again, with its files and the message it answered. The line "Not delivered" goes
+    /// away at once, so a second click does nothing; a failed send brings it back.
+    public func resendUndelivered(_ seq: Int64, of agentId: String) async throws {
+        guard var thread = threads[agentId], thread.undeliveredSeqs.contains(seq),
+            case .user(_, let text, _, _, _, _)? = thread.items.first(where: { $0.id == ThreadItem.messageID(seq: seq) })
+        else { return }
+        let files = thread.attachments[seq] ?? []
+        let replyTo = thread.replies[seq]
+        thread.markResent(seq)
+        threads[agentId] = thread
+        do {
+            try await send(text, to: agentId, replyTo: replyTo, attachments: files)
+        } catch {
+            threads[agentId]?.unmarkResent(seq)
+            throw error
+        }
     }
 
     /// Saves one file in the agent's attachment folder (`attachments.upload`). The daemon refuses more than 20 MB.

@@ -54,7 +54,7 @@ struct MetricDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
                 Text(metric.title)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(BanditoFont.text(size: 15, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1)
                 Spacer(minLength: 8)
@@ -114,11 +114,11 @@ struct MetricDetailView: View {
     private func figure(_ label: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(label)
-                .font(.system(size: 11.5))
+                .font(BanditoFont.text(size: 11.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
                 .lineLimit(1)
             Text(value)
-                .font(.system(size: 15, weight: .semibold))
+                .font(BanditoFont.display(size: 14, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
@@ -143,7 +143,7 @@ struct MetricDetailView: View {
                     .foregroundStyle(Color.Bandito.text3.opacity(0.6))
                     .annotation(position: .top, alignment: .leading, spacing: 4) {
                         Text(annotationText(for: nearest))
-                            .font(.system(size: 11.5, weight: .medium))
+                            .font(BanditoFont.text(size: 11.5, weight: 500))
                             .foregroundStyle(Color.Bandito.text)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 3)
@@ -197,14 +197,14 @@ struct MetricDetailView: View {
                         showAll.toggle()
                     }
                     .buttonStyle(.plain)
-                    .font(.system(size: 12.5))
+                    .font(BanditoFont.text(size: 12.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                     .padding(.horizontal, 6)
                     .frame(height: 28)
                 }
                 if stillRunning {
                     Text(L10n.Server.Detail.stillRunning)
-                        .font(.system(size: 12))
+                        .font(BanditoFont.text(size: 12, weight: 400))
                         .foregroundStyle(Color.Bandito.text2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -217,11 +217,11 @@ struct MetricDetailView: View {
 
     @ViewBuilder
     private func groupRows(_ group: HostProcessGroup) -> some View {
-        if group.isGroup {
+        if group.isGroup, !group.members.isEmpty {
             let open = expanded.contains(group.id)
             ProcessRowView(
                 owner: group.owner, ownerName: ownerName, title: group.appName,
-                subtitle: L10n.Server.Detail.processCount(count: group.members.count),
+                subtitle: L10n.Server.Detail.processCount(count: group.processCount),
                 value: groupValue(group), indent: false, trailing: .chevron(open: open), stopName: nil,
                 onTap: {
                     if open { expanded.remove(group.id) } else { expanded.insert(group.id) }
@@ -232,8 +232,15 @@ struct MetricDetailView: View {
                     memberRow(row, indent: true)
                 }
             }
-        } else if let row = group.members.first {
+        } else if !group.isGroup, let row = group.members.first {
             memberRow(row, indent: false)
+        } else {
+            // The sums of an app whose processes this list does not name: a plain row, nothing to stop or expand.
+            ProcessRowView(
+                owner: group.owner, ownerName: ownerName, title: group.appName,
+                subtitle: group.isGroup ? L10n.Server.Detail.processCount(count: group.processCount) : nil,
+                value: groupValue(group), indent: false, trailing: .none, stopName: nil,
+                onTap: nil, onStop: nil)
         }
     }
 
@@ -279,21 +286,23 @@ struct MetricDetailView: View {
         return VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(HostFormat.diskBytes(max(0, total - used)))
-                    .font(.system(size: 26, weight: .semibold))
+                    .font(BanditoFont.display(size: 24, weight: 600))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                     .foregroundStyle(Color.Bandito.text)
                 Text(L10n.Server.Tile.freeWord)
-                    .font(.system(size: 13))
+                    .font(BanditoFont.text(size: 13, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
             }
             Text(L10n.Server.Tile.diskUsed(used: usage.used, total: usage.total))
-                .font(.system(size: 12.5))
+                .font(BanditoFont.text(size: 12.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
             FillBar(fraction: fraction, tint: Color.Bandito.text)
                 .frame(height: 8)
             Text(L10n.Server.Detail.diskNoHistory)
-                .font(.system(size: 11.5))
+                .font(BanditoFont.text(size: 11.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
         }
     }
@@ -394,7 +403,9 @@ struct MetricDetailView: View {
         metric == .memory ? HostFormat.bytes(group.rssBytes) : HostFormat.percent(group.cpuPercent)
     }
 
-    /// The CPU list is sorted by CPU among the biggest processes by memory, which is all the daemon sends.
+    /// The CPU list is sorted by CPU among the biggest processes by memory, which is all the daemon sends. With the
+    /// daemon's app groups each app's sums are exact; agents', terminals' and the daemon's processes stay in their own
+    /// owner groups, built from the list.
     private var topGroups: [HostProcessGroup] {
         let top = monitor.stats?.topProcesses ?? []
         let sort: HostProcessList.Sort
@@ -405,7 +416,7 @@ struct MetricDetailView: View {
         }
         // No cut before grouping: the helpers of one app must all land in its group.
         let rows = HostProcessList.rows(top: top, owners: monitor.ownerGroups, sort: sort, limit: .max)
-        return HostProcessList.groups(rows, sort: sort)
+        return HostProcessList.listGroups(rows, apps: monitor.stats?.appGroups, sort: sort)
     }
 
     private func processValue(_ row: HostProcessEntry) -> String {
@@ -484,13 +495,13 @@ private struct ProcessRowView: View {
                 .frame(width: 18, height: 18)
             HStack(spacing: 6) {
                 Text(title)
-                    .font(.system(size: 13))
+                    .font(BanditoFont.text(size: 13, weight: 400))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 if let subtitle {
                     Text(subtitle)
-                        .font(.system(size: 11.5))
+                        .font(BanditoFont.text(size: 11.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -499,7 +510,7 @@ private struct ProcessRowView: View {
             }
             Spacer(minLength: 8)
             Text(value)
-                .font(.system(size: 12.5, weight: .medium).monospacedDigit())
+                .font(BanditoFont.text(size: 12.5, weight: 500)).monospacedDigit()
                 .foregroundStyle(Color.Bandito.text2)
                 .lineLimit(1)
                 .frame(width: 64, alignment: .trailing)

@@ -1,0 +1,28 @@
+name: Idea
+description: Something you want Bandito to do
+labels: [idea]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The problem first, then the solution you imagine.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What should Bandito do?
+      description: What it would look like for you, in a few sentences.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you tried
+      description: Other tools, scripts or workarounds. Optional.
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Screenshot or mockup
+      description: Drag the image into this box. Optional.

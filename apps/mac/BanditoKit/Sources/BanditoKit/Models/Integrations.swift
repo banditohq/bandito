@@ -10,6 +10,13 @@ public enum IntegrationKind: String, Codable, Sendable, CaseIterable {
     case http
 }
 
+/// How an integration signs in (`auth` on the wire): `oauth` is a sign-in in the browser, whose tokens only the
+/// daemon holds (docs/ARCHITECTURE.md#integrations).
+public enum IntegrationAuth: String, Codable, Sendable {
+    case none
+    case oauth
+}
+
 public struct Integration: Codable, Sendable, Identifiable, Hashable {
     public var id: String
     public var name: String
@@ -22,11 +29,13 @@ public struct Integration: Codable, Sendable, Identifiable, Hashable {
     public var enabled: Bool
     /// Unix milliseconds.
     public var createdAt: Int64
+    /// `oauth` when the owner signed in in the browser; an older daemon has no field, which reads as `none`.
+    public var auth: IntegrationAuth
 
     public init(
         id: String, name: String, kind: IntegrationKind, command: String? = nil, args: [String] = [],
         url: String? = nil, env: [String: String] = [:], headers: [String: String] = [:],
-        enabled: Bool = true, createdAt: Int64 = 0
+        enabled: Bool = true, createdAt: Int64 = 0, auth: IntegrationAuth = .none
     ) {
         self.id = id
         self.name = name
@@ -38,6 +47,7 @@ public struct Integration: Codable, Sendable, Identifiable, Hashable {
         self.headers = headers
         self.enabled = enabled
         self.createdAt = createdAt
+        self.auth = auth
     }
 
     public init(from decoder: Decoder) throws {
@@ -52,6 +62,8 @@ public struct Integration: Codable, Sendable, Identifiable, Hashable {
         headers = try c.decodeIfPresent([String: String].self, forKey: .headers) ?? [:]
         enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
         createdAt = try c.decodeIfPresent(Int64.self, forKey: .createdAt) ?? 0
+        // A value this app does not know is read as `none`: the row still lists.
+        auth = (try? c.decodeIfPresent(IntegrationAuth.self, forKey: .auth)).flatMap { $0 } ?? .none
     }
 }
 
@@ -91,13 +103,37 @@ public struct IntegrationCatalogEntry: Codable, Sendable, Identifiable, Hashable
     /// A pattern to fill in by hand when the url has placeholders, for example `https://…/mcp/<SERVER_ID>`.
     public var urlHint: String?
     public var headersKeys: [IntegrationHeaderKey]
+    /// The environment variables a program asks for (a stdio template), like the headers of a web one.
+    public var envKeys: [IntegrationHeaderKey]
     public var docsUrl: String
     public var icon: String
+    /// The group of the sidebar: `dev`, `productivity`, `data`, `web`, `design` or `other`. Nil for an older daemon.
+    public var category: String?
+    /// The brand color as `#RRGGBB`, for the tile. Nil for an older daemon.
+    public var accent: String?
+    public var publisher: String?
+    /// The maker's own server, or a reference server of the MCP project.
+    public var official: Bool
+    public var homepage: String?
+    public var longEn: String?
+    public var longRu: String?
+    public var abilitiesEn: [String]
+    public var abilitiesRu: [String]
+    public var needsEn: String?
+    public var needsRu: String?
+    /// `oauth` for a service that signs in in the browser; nil (or `none`) for one that takes a key.
+    public var auth: IntegrationAuth
+
+    /// Whether Connect starts a sign-in in the browser instead of opening the sheet of keys.
+    public var usesOAuth: Bool { auth == .oauth }
 
     public init(
         id: String, name: String, descriptionEn: String, descriptionRu: String, kind: IntegrationKind,
         command: String? = nil, args: [String] = [], url: String? = nil, urlHint: String? = nil,
-        headersKeys: [IntegrationHeaderKey] = [], docsUrl: String, icon: String
+        headersKeys: [IntegrationHeaderKey] = [], envKeys: [IntegrationHeaderKey] = [], docsUrl: String, icon: String,
+        category: String? = nil, accent: String? = nil, publisher: String? = nil, official: Bool = false, homepage: String? = nil,
+        longEn: String? = nil, longRu: String? = nil, abilitiesEn: [String] = [], abilitiesRu: [String] = [],
+        needsEn: String? = nil, needsRu: String? = nil, auth: IntegrationAuth = .none
     ) {
         self.id = id
         self.name = name
@@ -109,8 +145,21 @@ public struct IntegrationCatalogEntry: Codable, Sendable, Identifiable, Hashable
         self.url = url
         self.urlHint = urlHint
         self.headersKeys = headersKeys
+        self.envKeys = envKeys
         self.docsUrl = docsUrl
         self.icon = icon
+        self.category = category
+        self.accent = accent
+        self.publisher = publisher
+        self.official = official
+        self.homepage = homepage
+        self.longEn = longEn
+        self.longRu = longRu
+        self.abilitiesEn = abilitiesEn
+        self.abilitiesRu = abilitiesRu
+        self.needsEn = needsEn
+        self.needsRu = needsRu
+        self.auth = auth
     }
 
     public init(from decoder: Decoder) throws {
@@ -125,13 +174,42 @@ public struct IntegrationCatalogEntry: Codable, Sendable, Identifiable, Hashable
         url = try c.decodeIfPresent(String.self, forKey: .url)
         urlHint = try c.decodeIfPresent(String.self, forKey: .urlHint)
         headersKeys = try c.decodeIfPresent([IntegrationHeaderKey].self, forKey: .headersKeys) ?? []
+        envKeys = try c.decodeIfPresent([IntegrationHeaderKey].self, forKey: .envKeys) ?? []
         docsUrl = try c.decode(String.self, forKey: .docsUrl)
         icon = try c.decodeIfPresent(String.self, forKey: .icon) ?? ""
+        category = try c.decodeIfPresent(String.self, forKey: .category)
+        accent = try c.decodeIfPresent(String.self, forKey: .accent)
+        publisher = try c.decodeIfPresent(String.self, forKey: .publisher)
+        official = try c.decodeIfPresent(Bool.self, forKey: .official) ?? false
+        homepage = try c.decodeIfPresent(String.self, forKey: .homepage)
+        longEn = try c.decodeIfPresent(String.self, forKey: .longEn)
+        longRu = try c.decodeIfPresent(String.self, forKey: .longRu)
+        abilitiesEn = try c.decodeIfPresent([String].self, forKey: .abilitiesEn) ?? []
+        abilitiesRu = try c.decodeIfPresent([String].self, forKey: .abilitiesRu) ?? []
+        needsEn = try c.decodeIfPresent(String.self, forKey: .needsEn)
+        needsRu = try c.decodeIfPresent(String.self, forKey: .needsRu)
+        auth = (try? c.decodeIfPresent(IntegrationAuth.self, forKey: .auth)).flatMap { $0 } ?? .none
     }
 
     /// The description in the app's language: Russian for `ru`, English for every other language.
     public func description(languageCode: String) -> String {
         Self.isRussian(languageCode) ? descriptionRu : descriptionEn
+    }
+
+    /// The longer text of the detail page; the short description when the daemon has none.
+    public func longDescription(languageCode: String) -> String {
+        let text = Self.isRussian(languageCode) ? longRu : longEn
+        return text ?? description(languageCode: languageCode)
+    }
+
+    /// The short points of what the service can do.
+    public func abilities(languageCode: String) -> [String] {
+        Self.isRussian(languageCode) ? abilitiesRu : abilitiesEn
+    }
+
+    /// What the owner needs before connecting: a key, an account, a program.
+    public func needs(languageCode: String) -> String? {
+        Self.isRussian(languageCode) ? needsRu : needsEn
     }
 
     static func isRussian(_ languageCode: String) -> Bool {
@@ -144,11 +222,14 @@ public struct IntegrationTest: Codable, Sendable, Hashable {
     public var ok: Bool
     public var tools: [String]
     public var error: String?
+    /// The service refused the browser sign-in and it could not be renewed: the owner signs in again.
+    public var needsLogin: Bool
 
-    public init(ok: Bool, tools: [String] = [], error: String? = nil) {
+    public init(ok: Bool, tools: [String] = [], error: String? = nil, needsLogin: Bool = false) {
         self.ok = ok
         self.tools = tools
         self.error = error
+        self.needsLogin = needsLogin
     }
 
     public init(from decoder: Decoder) throws {
@@ -156,6 +237,7 @@ public struct IntegrationTest: Codable, Sendable, Hashable {
         ok = try c.decode(Bool.self, forKey: .ok)
         tools = try c.decodeIfPresent([String].self, forKey: .tools) ?? []
         error = try c.decodeIfPresent(String.self, forKey: .error)
+        needsLogin = try c.decodeIfPresent(Bool.self, forKey: .needsLogin) ?? false
     }
 }
 

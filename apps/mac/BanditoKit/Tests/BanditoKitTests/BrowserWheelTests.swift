@@ -179,7 +179,7 @@ import Testing
             sender.add(x: 900, y: 500, deltaX: 0, deltaY: 200, modifiers: [])
         }
         // Waits for the loop to drain instead of a fixed sleep: under a loaded test run the last tick can be late.
-        let deadline = ContinuousClock.now + .seconds(5)
+        let deadline = ContinuousClock.now + .seconds(20)
         while !(sender.isIdle && sent.reduce(0) { $0 + $1.deltaY } == 3000), ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(10))
         }

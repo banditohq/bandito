@@ -1,5 +1,6 @@
 #if os(macOS)
 import AppKit
+import BanditoDesign
 import SwiftUI
 
 /// Monospaced text editor with a line-number gutter. Markdown gets light highlighting: headings, bold,
@@ -27,7 +28,7 @@ struct SourceEditor: NSViewRepresentable {
         textView.isAutomaticTextReplacementEnabled = false
         textView.isAutomaticSpellingCorrectionEnabled = false
         textView.isAutomaticLinkDetectionEnabled = false
-        textView.font = NSFont.monospacedSystemFont(ofSize: 12.5, weight: .regular)
+        textView.font = BanditoFont.appKitMono(size: 12.5)
         textView.textColor = NSColor(calibratedRed: 0.745, green: 0.698, blue: 0.635, alpha: 1)
         textView.backgroundColor = NSColor(calibratedRed: 0.055, green: 0.047, blue: 0.043, alpha: 1)
         textView.insertionPointColor = NSColor(calibratedRed: 1, green: 0.541, blue: 0.122, alpha: 1)
@@ -70,7 +71,7 @@ struct SourceEditor: NSViewRepresentable {
         guard let storage = textView.textStorage else { return }
         let full = NSRange(location: 0, length: storage.length)
         let base: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedSystemFont(ofSize: 12.5, weight: .regular),
+            .font: BanditoFont.appKitMono(size: 12.5),
             .foregroundColor: NSColor(calibratedRed: 0.745, green: 0.698, blue: 0.635, alpha: 1),
         ]
         storage.beginEditing()
@@ -115,7 +116,7 @@ private enum MarkdownHighlighter {
         let muted = NSColor(calibratedRed: 0.431, green: 0.396, blue: 0.353, alpha: 1)
         let bright = NSColor(calibratedRed: 0.953, green: 0.922, blue: 0.867, alpha: 1)
 
-        let boldFont = NSFont.monospacedSystemFont(ofSize: 12.5, weight: .semibold)
+        let boldFont = BanditoFont.appKitMono(size: 12.5, weight: 600)
         for match in heading.matches(in: text, range: whole) {
             storage.addAttributes([.foregroundColor: orange, .font: boldFont], range: match.range)
         }
@@ -159,7 +160,7 @@ final class LineNumberRuler: NSRulerView {
         }
         let text = textView.string as NSString
         let attributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedSystemFont(ofSize: 11, weight: .regular),
+            .font: BanditoFont.appKitMono(size: 11),
             .foregroundColor: NSColor(calibratedRed: 0.431, green: 0.396, blue: 0.353, alpha: 1),
         ]
         let origin = convert(NSPoint.zero, from: textView)
@@ -199,8 +200,9 @@ struct SourceEditor: View {
 
     var body: some View {
         TextEditor(text: $text)
-            .font(.system(size: 12.5, design: .monospaced))
+            .font(BanditoFont.mono(size: 12.5, weight: 400))
             .disabled(!isEditable)
+            .banditoEditor()
     }
 }
 #endif

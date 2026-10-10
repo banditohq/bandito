@@ -76,7 +76,7 @@ struct WelcomeView: View {
                 }
             }
             Text(L10n.Onboarding.Welcome.subtitle)
-                .font(BanditoFont.font(size: 17, weight: 400))
+                .font(BanditoFont.text(size: 17, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .lineSpacing(3)
             StoryCard(anchorIndex: $storyAnchorIndex, anchorTime: $storyAnchorTime, compact: compact)
@@ -94,7 +94,7 @@ struct WelcomeView: View {
             // Under the buttons, in the same column, so it lines up with them on every width.
             if !compact {
                 Text(L10n.Onboarding.Welcome.footer)
-                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .padding(.top, -8)
             }
@@ -110,7 +110,7 @@ struct WelcomeView: View {
                     LinearGradient(
                         colors: [AvatarColor.peach.color, Color.Bandito.signal, Color.Bandito.signalFillEnd],
                         startPoint: .leading, endPoint: .trailing)))
-            .font(BanditoFont.font(size: size, weight: 600))
+            .font(BanditoFont.text(size: size, weight: 600))
             .foregroundStyle(Color.Bandito.text)
             .lineSpacing(-4)
             .fixedSize()
@@ -228,10 +228,10 @@ private struct StoryCard: View {
                     .background(slide.tint.opacity(0.13), in: RoundedRectangle(cornerRadius: 16))
                 VStack(alignment: .leading, spacing: 5) {
                     Text(slide.title)
-                        .font(BanditoFont.font(size: 18, weight: 600))
+                        .font(BanditoFont.display(size: 16.5, weight: 600))
                         .foregroundStyle(Color.Bandito.text)
                     Text(slide.text)
-                        .font(BanditoFont.font(size: 14, weight: 400))
+                        .font(BanditoFont.text(size: 14, weight: 400))
                         .foregroundStyle(Color.Bandito.text2)
                         .lineSpacing(2)
                         .fixedSize(horizontal: false, vertical: true)

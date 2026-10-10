@@ -101,6 +101,47 @@ impl Store {
         })
     }
 
+    /// Creates or replaces several secrets in one transaction, for no agent: all are written or none is. A value
+    /// that does not pass the checks stops it before anything is written.
+    pub fn secrets_set_many(&self, items: &[(&str, &str)]) -> Result<()> {
+        for (name, value) in items {
+            check_name(name)?;
+            check_value(value)?;
+        }
+        let now = now_ms();
+        let conn = self.conn();
+        let tx = conn.unchecked_transaction()?;
+        for (name, value) in items {
+            tx.execute(
+                "INSERT INTO secrets (name, value, agents, created_at, updated_at) VALUES (?1, ?2, '[]', ?3, ?3)
+                 ON CONFLICT(name) DO UPDATE SET
+                    value = excluded.value,
+                    agents = excluded.agents,
+                    updated_at = excluded.updated_at",
+                params![name, value, now],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Removes several secrets in one transaction.
+    pub fn secrets_delete_many(&self, names: &[&str]) -> Result<()> {
+        let conn = self.conn();
+        let tx = conn.unchecked_transaction()?;
+        for name in names {
+            tx.execute("DELETE FROM secrets WHERE name = ?1", [name])?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Runs SQL straight on the connection, for tests that need the database to fail.
+    #[cfg(test)]
+    pub(crate) fn exec_for_test(&self, sql: &str) {
+        self.conn().execute_batch(sql).expect("the SQL of a test is valid");
+    }
+
     /// Remove a secret. `false` when there was none.
     pub fn secret_delete(&self, name: &str) -> Result<bool> {
         let n = self.conn().execute("DELETE FROM secrets WHERE name = ?1", [name])?;
@@ -140,6 +181,15 @@ impl Store {
         let mut stmt = conn.prepare("SELECT name, value FROM secrets ORDER BY name")?;
         let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
         Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
+    /// One secret's value, for the daemon's own use (the OAuth tokens of `mcp_oauth.rs`).
+    pub fn secret_get(&self, name: &str) -> Result<Option<String>> {
+        use rusqlite::OptionalExtension;
+        Ok(self
+            .conn()
+            .query_row("SELECT value FROM secrets WHERE name = ?1", [name], |r| r.get(0))
+            .optional()?)
     }
 
     pub fn secrets_for_agent(&self, agent_id: &str) -> Result<Vec<(String, String)>> {
@@ -329,5 +379,38 @@ mod tests {
             list[0].agents.is_empty(),
             "an old row goes to no agent until it is set again"
         );
+    }
+
+    #[test]
+    fn several_secrets_are_written_together_or_not_at_all() {
+        let s = Store::open_in_memory().unwrap();
+        s.secrets_set_many(&[("A_ONE", "first"), ("A_TWO", "second")]).unwrap();
+        assert_eq!(s.secret_get("A_ONE").unwrap().as_deref(), Some("first"));
+        assert_eq!(s.secret_get("A_TWO").unwrap().as_deref(), Some("second"));
+        // The database refuses the write of the second name: the first must not stay changed.
+        s.exec_for_test(
+            "CREATE TRIGGER refuse_two BEFORE UPDATE ON secrets WHEN NEW.name = 'A_TWO'
+             BEGIN SELECT RAISE(ABORT, 'disk full'); END;",
+        );
+        assert!(
+            s.secrets_set_many(&[("A_ONE", "changed"), ("A_TWO", "changed")])
+                .is_err()
+        );
+        assert_eq!(s.secret_get("A_ONE").unwrap().as_deref(), Some("first"));
+        assert_eq!(s.secret_get("A_TWO").unwrap().as_deref(), Some("second"));
+        // A bad value stops it before anything is written.
+        s.exec_for_test("DROP TRIGGER refuse_two");
+        assert!(s.secrets_set_many(&[("A_ONE", "again"), ("A_TWO", "")]).is_err());
+        assert_eq!(s.secret_get("A_ONE").unwrap().as_deref(), Some("first"));
+        // Deleting goes the same way.
+        s.exec_for_test(
+            "CREATE TRIGGER keep_two BEFORE DELETE ON secrets WHEN OLD.name = 'A_TWO'
+             BEGIN SELECT RAISE(ABORT, 'locked'); END;",
+        );
+        assert!(s.secrets_delete_many(&["A_ONE", "A_TWO"]).is_err());
+        assert!(s.secret_get("A_ONE").unwrap().is_some());
+        s.exec_for_test("DROP TRIGGER keep_two");
+        s.secrets_delete_many(&["A_ONE", "A_TWO"]).unwrap();
+        assert!(s.secret_get("A_ONE").unwrap().is_none() && s.secret_get("A_TWO").unwrap().is_none());
     }
 }

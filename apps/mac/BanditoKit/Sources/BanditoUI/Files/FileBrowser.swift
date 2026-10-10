@@ -209,7 +209,9 @@ struct FileBrowser: View {
                 if model.searchResults != nil {
                     EmptyNote(text: L10n.Files.noResults, actionTitle: nil, action: nil)
                 } else {
-                    EmptyNote(text: L10n.Files.empty, actionTitle: L10n.Files.emptyCreate) { nameSheet = .folder }
+                    EmptyState(
+                        symbol: "folder", title: L10n.Files.empty,
+                        action: EmptyStateAction(L10n.Files.emptyCreate) { nameSheet = .folder })
                 }
             } else if model.layout == .list {
                 let showsSize = FileColumns.showsSize(model.visibleEntries)
@@ -251,7 +253,7 @@ struct FileBrowser: View {
             }
             if model.truncated || model.skipped > 0 {
                 Text(truncationNote)
-                    .font(.system(size: 11.5))
+                    .font(BanditoFont.text(size: 11.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 22)
@@ -594,7 +596,7 @@ struct FilesToolbar: View {
                 .foregroundStyle(Color.Bandito.text3)
             TextField(L10n.Files.searchPlaceholder, text: $model.searchText)
                 .textFieldStyle(.plain)
-                .font(.system(size: 13))
+                .font(BanditoFont.text(size: 13, weight: 400))
                 .lineLimit(1)
                 .focused($searchFocused)
                 .onChange(of: model.searchText) { onSearchChange() }
@@ -746,7 +748,7 @@ private struct CrumbTrailView: View {
                     .font(.system(size: 13, weight: isLast ? .semibold : .regular))
             } else {
                 Text(crumb.title)
-                    .font(.system(size: 13.5, weight: isLast ? .semibold : .regular))
+                    .font(BanditoFont.text(size: 13.5, weight: isLast ? 600 : 400))
             }
         }
         .banditoButton(.link)
@@ -771,7 +773,7 @@ private struct CrumbTrailView: View {
             }
         } label: {
             Text("…")
-                .font(.system(size: 13.5))
+                .font(BanditoFont.text(size: 13.5, weight: 400))
         }
         .banditoButton(.link)
         .menuIndicator(.hidden)
@@ -790,7 +792,7 @@ private struct EmptyNote: View {
     var body: some View {
         VStack(spacing: 14) {
             Text(text)
-                .font(.system(size: 13))
+                .font(BanditoFont.text(size: 13, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -820,12 +822,12 @@ private struct AccessNote: View {
                 .font(.system(size: 34))
                 .foregroundStyle(Color.Bandito.text3)
             Text(title)
-                .font(.system(size: 17, weight: .semibold))
+                .font(BanditoFont.display(size: 15.5, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
             Text(detail)
-                .font(.system(size: 13))
+                .font(BanditoFont.text(size: 13, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 420)
