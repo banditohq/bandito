@@ -153,7 +153,7 @@ jobs:
       # The owner gets an album of previews in Telegram: on a push to a release branch and on a manual run, never on a
       # pull request (the Bandito Bot comments there). The pictures are 1280 px wide, so no resizing is needed.
       - name: Send previews to Telegram
-        if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/') || github.ref == 'refs/heads/wt9/gallery')) && env.TG_TOKEN != '' && env.TG_CHAT != '' }}
+        if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/'))) && env.TG_TOKEN != '' && env.TG_CHAT != '' }}
         continue-on-error: true
         env:
           BRANCH: ${{ github.ref_name }}
