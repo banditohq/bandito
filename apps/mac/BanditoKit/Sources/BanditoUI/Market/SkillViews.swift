@@ -5,14 +5,21 @@ import SwiftUI
 
 // The Skills page of the Marketplace: the cards, the page of one skill, and the sheet that installs it.
 
-/// A skill's tile: the first letter of its name on a stable palette colour.
+/// A skill's tile: the first letter of its name on a stable palette colour. Cream is left out: the white letter
+/// does not read on it.
 struct SkillTile: View {
     let skill: SkillEntry
     let size: CGFloat
     var glow = false
 
+    private static let palette: [AvatarColor] = [.peach, .sky, .sage, .rose, .lilac]
+
+    private var color: Color {
+        Self.palette[MarketTileStyle.paletteIndex(for: skill.id, count: Self.palette.count)].color
+    }
+
     var body: some View {
-        MarketTileSurface(color: MarketTileStyle.color(hex: nil, name: skill.id), size: size, glow: glow) {
+        MarketTileSurface(color: color, size: size, glow: glow) {
             Text(String(skill.name.prefix(1)).uppercased())
                 .font(BanditoFont.display(size: size * 0.42, weight: 700))
         }

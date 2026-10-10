@@ -65,7 +65,9 @@ Build only from these. Need something that is not here: add it to the system fir
 | Text input | `.banditoField(error:)`, `.banditoEditor(error:)` | `Components/BanditoField.swift` |
 | Choose one of many | `BanditoSelect` (`.field`, `.compact`, `.regular`) | `Components/BanditoSelect.swift` |
 | Choose one with an explanation | `RadioRow` | `Components/RadioRow.swift` |
-| Two to five views of the same content | `SegmentedPicker` | `Components/SegmentedPicker.swift` |
+| Two to five views of the same content (the Marketplace pages: Services, Bots, Skills) | `SegmentedPicker` | `Components/SegmentedPicker.swift` |
+| Tile of a Marketplace entry (service, bot, skill) | `MarketTileSurface`, `MarketTile`, `BotTile`, `SkillTile`, `ServiceMiniLogo` | `Market/MarketView.swift`, `Market/BotViews.swift`, `Market/SkillViews.swift` |
+| Modal page inside the Marketplace (a bot, a skill, their create and install sheets) | `MarketPanel`, `MarketPanelFooter` | `Market/MarketPanel.swift` |
 | On/off setting | `Toggle` + `BanditoToggleStyle` | `Components/BanditoToggleStyle.swift` |
 | Empty pane | `EmptyState` | `Components/EmptyState.swift` |
 | Group heading | `SectionLabel` (`.muted`, `.signal`) | `Components/SectionLabel.swift` |
@@ -95,6 +97,8 @@ Build only from these. Need something that is not here: add it to the system fir
 - **Chip**: 11/500, padding 7 x 2, radius 6, tone color on itself at 12% (neutral `text2` on `text` 7%).
 - **StatusDot**: 11 pt; idle `BanditoPalette.idle`, working `ok` + glow, needsYou `signal` + glow + pulsing ring (size+4 to size+14, 1.8 s), error `danger`, offline idle at 40%.
 - **SegmentedPicker**: track radius 12, padding 3, gap 2, `text` 5%; segment 30 high, radius 9, 12.5 text; selected `surface3` raised with a 1 pt shadow.
+- **Marketplace tile**: a rounded square (corner size x 0.28) in one colour, a vertical gradient (white 24% on top to black 14% at the bottom), a 1 pt highlight border (white 45% to 4%), a white symbol or letter with a 0.5 pt shadow; `glow` adds a soft shadow of its colour. Colours: a service's brand colour, a bot's `accent`, a skill's first letter on peach, sky, sage, rose or lilac (cream is left out: white does not read on it). Cards are `MarketCardFrame` (surface1, radius 14, hairline; on hover the border brightens to `text` 22% and the card lifts 2 pt). A bot card has the SF Symbol on its accent tile and a row of 22 pt service logos (optional ones at 60%); a skill card carries the author and licence in 11 pt `text3` and a warning in `peach` 11.5.
+- **Marketplace panel**: for a page that must open sheets of its own (connecting a service, signing in in the browser), which a system sheet cannot do from the window behind it. A black 50% scrim over the page, a card of width 500 to 580 on `surface2`, radius 18, border `text` 12%, shadow black 50% (0 14 30). Header: a 48 pt tile with the name in display 18 and a line under it; hairline; body (scrolls above 460 pt); hairline; footer with Cancel or Close as `.quiet` and one `.signal`. Esc and a click on the scrim close it, except while a create or an install runs.
 - **RadioRow**: a card; 16 pt mark, selected = `onSignal` center in a 5 pt `signalFill` ring; title 13.5/600; description 12 `text3`; optional `ok` badge chip.
 - **Toggle**: 36 x 21 capsule, on `signalFill` with `onSignal` knob, off `text` 14% with `text2` knob; the whole row toggles.
 - **Select**: field 40 high, radius 12, `bg` fill, `line` border; compact 28, regular 38; panel `surface2`, radius 14, padding 8, options radius 9, highlight `text` 7%, a `signal` check on the chosen one, search above eight options.
