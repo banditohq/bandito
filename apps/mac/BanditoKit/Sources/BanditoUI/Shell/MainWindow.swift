@@ -161,7 +161,7 @@ private struct ModeArea: View {
                 .transition(.opacity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.Bandito.bg)
+        .background { ContentBackdrop().ignoresSafeArea() }
         .banditoAnimation(.easeInOut(duration: BanditoMotion.base), value: router.mode)
     }
 
@@ -175,6 +175,25 @@ private struct ModeArea: View {
         case .screen: ScreenMode()
         case .market: MarketView()
         case .server: ServerMode()
+        }
+    }
+}
+
+/// The main area's backdrop: the warm background, a faint signal glow hanging over the top edge, and a slight
+/// darkening toward the bottom. Static: nothing here animates or redraws per frame.
+private struct ContentBackdrop: View {
+    var body: some View {
+        ZStack {
+            Color.Bandito.bg
+            RadialGradient(
+                colors: [Color.Bandito.signal.opacity(0.07), Color.Bandito.signal.opacity(0)],
+                center: UnitPoint(x: 0.5, y: -0.05),
+                startRadius: 0,
+                endRadius: 700)
+            LinearGradient(
+                colors: [Color.black.opacity(0), Color.black.opacity(0.18)],
+                startPoint: .top,
+                endPoint: .bottom)
         }
     }
 }

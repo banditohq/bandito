@@ -561,8 +561,7 @@ struct MemoryTab: View {
                 .lineSpacing(2)
         }
         .padding(14)
-        .background(Color.Bandito.text.opacity(0.025), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.Bandito.line, lineWidth: 1))
+        .banditoCard()
     }
 
     /// The chapter length as a menu under the split modes (smart chapters only). Sizes above the model's window are
@@ -916,8 +915,7 @@ struct WhereTab: View {
                 }
             }
             .padding(14)
-            .background(Color.Bandito.text.opacity(0.025), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.Bandito.line, lineWidth: 1))
+            .banditoCard()
 
             SectionLabel(L10n.Inspector.usage)
             VStack(spacing: 8) {

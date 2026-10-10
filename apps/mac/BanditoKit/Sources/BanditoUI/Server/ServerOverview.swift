@@ -549,7 +549,7 @@ private struct MetricTile: View {
         .padding(.top, 14)
         .padding(.bottom, 8)
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .banditoCard()
+        .banditoCard(hoverLift: true)
     }
 }
 

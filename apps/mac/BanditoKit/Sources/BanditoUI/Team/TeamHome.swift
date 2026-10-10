@@ -156,7 +156,7 @@ struct TeamHome: View {
             }
             .padding(14)
             .frame(maxWidth: .infinity, minHeight: 84, alignment: .topLeading)
-            .banditoCard()
+            .banditoCard(hoverLift: true)
             .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .banditoButton(.row(cornerRadius: 14))
