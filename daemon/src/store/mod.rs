@@ -20,6 +20,7 @@ mod reactions;
 mod rules;
 mod schedules;
 mod secrets;
+mod tool_calls;
 mod usage;
 mod workspaces;
 
@@ -33,6 +34,7 @@ pub use reactions::Reaction;
 pub use rules::{Rule, RuleAction};
 pub use schedules::{NewSchedule, NextRun, Schedule, SchedulePatch};
 pub use secrets::{SecretInfo, check_agents, check_name, check_value};
+pub use tool_calls::{CallFilter, CallStats, ToolCall};
 pub use usage::UsageEntry;
 pub use workspaces::{Mount, Network, NewWorkspace, SHARED_WORKSPACE, Workspace, WorkspaceKind, WorkspacePatch};
 
@@ -54,6 +56,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../../migrations/0016_integrations.sql"),
     include_str!("../../migrations/0017_agent_lead.sql"),
     include_str!("../../migrations/0018_integration_auth.sql"),
+    include_str!("../../migrations/0019_tool_calls.sql"),
 ];
 
 pub struct Store {
