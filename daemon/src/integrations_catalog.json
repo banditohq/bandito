@@ -4052,5 +4052,999 @@
         "needs": "一个 Prisma 账号。点击“连接”后在浏览器中登录，然后选择工作区。"
       }
     }
+  },
+  {
+    "id": "todoist",
+    "name": "Todoist",
+    "category": "productivity",
+    "publisher": "Doist",
+    "official": true,
+    "homepage": "https://todoist.com",
+    "description_en": "Tasks, projects and filters in Todoist, through Todoist's own MCP server.",
+    "description_ru": "Задачи, проекты и фильтры Todoist через собственный MCP-сервер Todoist.",
+    "long_en": "Todoist's own MCP server lets an agent read and change your tasks and projects. For example: list what is due today, or move overdue tasks to a new date. Access includes writing, so the agent can also change or complete tasks: check what it is about to do.",
+    "long_ru": "Официальный MCP-сервер Todoist позволяет агенту читать и менять ваши задачи и проекты. Например: показать, что на сегодня, или перенести просроченные задачи на другую дату. Доступ включает запись: агент может менять и закрывать задачи, поэтому проверяйте, что он собирается сделать.",
+    "abilities_en": [
+      "Find and read tasks and projects",
+      "Create and update tasks and projects",
+      "Plan the day and review what is overdue",
+      "Search with plain-language queries"
+    ],
+    "abilities_ru": [
+      "Находить и читать задачи и проекты",
+      "Создавать и обновлять задачи и проекты",
+      "Планировать день и смотреть просроченное",
+      "Искать обычными фразами"
+    ],
+    "needs_en": "A Todoist account. Sign in in the browser after you press Connect; the server asks for the data:read_write scope.",
+    "needs_ru": "Аккаунт Todoist: войдите в браузере после нажатия «Подключить». Сервер запрашивает доступ data:read_write.",
+    "kind": "http",
+    "url": "https://ai.todoist.net/mcp",
+    "auth": "oauth",
+    "docs_url": "https://developer.todoist.com/api/v1/",
+    "icon": "todoist",
+    "accent": "#E44332",
+    "l10n": {
+      "de": {
+        "description": "Aufgaben, Projekte und Filter in Todoist, über den eigenen MCP-Server von Todoist.",
+        "long": "Der MCP-Server von Todoist lässt den Agenten Ihre Aufgaben und Projekte lesen und ändern. Zum Beispiel: die heute fälligen Aufgaben anzeigen oder überfällige Aufgaben auf ein neues Datum verschieben. Der Zugriff umfasst Schreibrechte: Der Agent kann Aufgaben auch ändern und abschließen, prüfen Sie daher, was er vorhat.",
+        "abilities": [
+          "Aufgaben und Projekte finden und lesen",
+          "Aufgaben und Projekte anlegen und ändern",
+          "Den Tag planen und Überfälliges prüfen",
+          "Mit Suchanfragen in natürlicher Sprache suchen"
+        ],
+        "needs": "Ein Todoist-Konto. Melden Sie sich nach dem Klick auf „Verbinden“ im Browser an; der Server fragt nach dem Zugriff data:read_write."
+      },
+      "es": {
+        "description": "Tareas, proyectos y filtros de Todoist, a través del servidor MCP propio de Todoist.",
+        "long": "El servidor MCP de Todoist permite al agente leer y cambiar tus tareas y proyectos. Por ejemplo: listar lo que vence hoy o mover las tareas atrasadas a otra fecha. El acceso incluye escritura: el agente también puede cambiar y completar tareas, así que revisa lo que va a hacer.",
+        "abilities": [
+          "Buscar y leer tareas y proyectos",
+          "Crear y actualizar tareas y proyectos",
+          "Planificar el día y revisar lo atrasado",
+          "Buscar con frases en lenguaje natural"
+        ],
+        "needs": "Una cuenta de Todoist. Inicia sesión en el navegador después de pulsar Conectar; el servidor pide el permiso data:read_write."
+      },
+      "fr": {
+        "description": "Tâches, projets et filtres dans Todoist, via le serveur MCP propre à Todoist.",
+        "long": "Le serveur MCP de Todoist permet à l'agent de lire et de modifier vos tâches et projets. Par exemple : afficher ce qui est dû aujourd'hui, ou reporter les tâches en retard à une autre date. L'accès inclut l'écriture : l'agent peut aussi modifier et terminer des tâches, vérifiez donc ce qu'il s'apprête à faire.",
+        "abilities": [
+          "Trouver et lire tâches et projets",
+          "Créer et modifier tâches et projets",
+          "Planifier la journée et revoir les retards",
+          "Chercher avec des phrases en langage naturel"
+        ],
+        "needs": "Un compte Todoist. Connectez-vous dans le navigateur après avoir cliqué sur Connecter ; le serveur demande l'accès data:read_write."
+      },
+      "ja": {
+        "description": "Todoist のタスク、プロジェクト、フィルターを、Todoist 自身の MCP サーバー経由で扱います。",
+        "long": "Todoist の MCP サーバーを使うと、エージェントがタスクとプロジェクトを読み取り、変更できます。例: 今日が期限のタスクを一覧にする、期限切れのタスクを別の日に移す。アクセスには書き込みも含まれるため、エージェントはタスクを変更・完了することもできます。実行前に内容を確認してください。",
+        "abilities": [
+          "タスクとプロジェクトを探して読む",
+          "タスクとプロジェクトを作成・更新する",
+          "一日の計画を立て、期限切れを確認する",
+          "自然文で検索する"
+        ],
+        "needs": "Todoist のアカウント。「接続」を押した後にブラウザでサインインします。サーバーは data:read_write の権限を求めます。"
+      },
+      "ko": {
+        "description": "Todoist의 작업, 프로젝트, 필터를 Todoist 공식 MCP 서버로 다룹니다.",
+        "long": "Todoist MCP 서버를 쓰면 에이전트가 작업과 프로젝트를 읽고 바꿀 수 있습니다. 예: 오늘 마감인 작업 목록 보기, 기한이 지난 작업을 다른 날짜로 옮기기. 접근 권한에 쓰기가 포함되므로 에이전트가 작업을 바꾸거나 완료할 수도 있습니다. 실행 전에 내용을 확인하세요.",
+        "abilities": [
+          "작업과 프로젝트 찾고 읽기",
+          "작업과 프로젝트 만들고 수정하기",
+          "하루 계획 세우고 기한 지난 작업 확인",
+          "자연어로 검색"
+        ],
+        "needs": "Todoist 계정. '연결'을 누른 뒤 브라우저에서 로그인하세요. 서버는 data:read_write 권한을 요청합니다."
+      },
+      "pt-BR": {
+        "description": "Tarefas, projetos e filtros do Todoist, pelo servidor MCP próprio do Todoist.",
+        "long": "O servidor MCP do Todoist permite que o agente leia e altere suas tarefas e projetos. Por exemplo: listar o que vence hoje ou mover tarefas atrasadas para outra data. O acesso inclui escrita: o agente também pode alterar e concluir tarefas, então revise o que ele vai fazer.",
+        "abilities": [
+          "Encontrar e ler tarefas e projetos",
+          "Criar e atualizar tarefas e projetos",
+          "Planejar o dia e revisar o que está atrasado",
+          "Buscar com frases em linguagem natural"
+        ],
+        "needs": "Uma conta no Todoist. Entre no navegador depois de clicar em Conectar; o servidor pede a permissão data:read_write."
+      },
+      "zh-Hans": {
+        "description": "通过 Todoist 官方 MCP 服务器处理任务、项目和筛选器。",
+        "long": "Todoist 官方 MCP 服务器让智能体读取并修改您的任务和项目。例如：列出今天到期的任务，或把逾期任务改到另一天。授权包含写入权限，因此智能体也可以修改或完成任务，请先确认它要做的操作。",
+        "abilities": [
+          "查找并读取任务和项目",
+          "创建并更新任务和项目",
+          "规划当天安排并检查逾期任务",
+          "用自然语言搜索"
+        ],
+        "needs": "一个 Todoist 账号。点击“连接”后在浏览器中登录；服务器会请求 data:read_write 权限。"
+      }
+    }
+  },
+  {
+    "id": "airtable",
+    "name": "Airtable",
+    "category": "productivity",
+    "publisher": "Airtable",
+    "official": true,
+    "homepage": "https://airtable.com",
+    "description_en": "Bases, tables and records in Airtable, through Airtable's own MCP server.",
+    "description_ru": "Базы, таблицы и записи Airtable через собственный MCP-сервер Airtable.",
+    "long_en": "Airtable's MCP server lets an agent work with your bases, tables and records. For example: find a project's tasks table and list the records that are not done, or add a row for a new lead. Each person signs in with their own account, so the agent sees only what that account can see. It can also change records and table structure, so grant write access only where it is needed.",
+    "long_ru": "MCP-сервер Airtable позволяет агенту работать с вашими базами, таблицами и записями. Например: найти таблицу задач проекта и вывести незавершённые записи или добавить строку с новым лидом. Каждый входит под своим аккаунтом, поэтому агент видит только то, что видит этот аккаунт. Агент может менять записи и структуру таблиц, поэтому выдавайте право на запись только там, где это нужно.",
+    "abilities_en": [
+      "Find bases and tables and read their structure",
+      "Read records and comments",
+      "Create and update records",
+      "Work only with bases your account can reach"
+    ],
+    "abilities_ru": [
+      "Находить базы и таблицы и читать их структуру",
+      "Читать записи и комментарии",
+      "Создавать и обновлять записи",
+      "Работать только с базами, доступными вашему аккаунту"
+    ],
+    "needs_en": "An Airtable account. Sign in in the browser after you press Connect; Airtable applies the permissions of your account.",
+    "needs_ru": "Аккаунт Airtable: войдите в браузере после нажатия «Подключить». Airtable применяет права вашего аккаунта.",
+    "kind": "http",
+    "url": "https://mcp.airtable.com/mcp",
+    "auth": "oauth",
+    "docs_url": "https://airtable.com/developers/agents/mcp/getting-started",
+    "icon": "airtable",
+    "accent": "#18BFFF",
+    "l10n": {
+      "de": {
+        "description": "Basen, Tabellen und Datensätze in Airtable, über den eigenen MCP-Server von Airtable.",
+        "long": "Der MCP-Server von Airtable lässt den Agenten mit Ihren Basen, Tabellen und Datensätzen arbeiten. Zum Beispiel: die Aufgabentabelle eines Projekts finden und die offenen Datensätze auflisten oder eine Zeile für einen neuen Lead anlegen. Jede Person meldet sich mit dem eigenen Konto an, der Agent sieht also nur, was dieses Konto sieht. Er kann Datensätze und die Struktur der Tabellen ändern; geben Sie Schreibrechte daher nur dort, wo sie nötig sind.",
+        "abilities": [
+          "Basen und Tabellen finden und ihre Struktur lesen",
+          "Datensätze und Kommentare lesen",
+          "Datensätze anlegen und ändern",
+          "Nur mit Basen arbeiten, die Ihr Konto erreicht"
+        ],
+        "needs": "Ein Airtable-Konto. Melden Sie sich nach dem Klick auf „Verbinden“ im Browser an. Airtable wendet die Rechte Ihres Kontos an."
+      },
+      "es": {
+        "description": "Bases, tablas y registros de Airtable, a través del servidor MCP propio de Airtable.",
+        "long": "El servidor MCP de Airtable permite al agente trabajar con tus bases, tablas y registros. Por ejemplo: encontrar la tabla de tareas de un proyecto y listar los registros pendientes, o añadir una fila para un nuevo lead. Cada persona inicia sesión con su propia cuenta, así que el agente solo ve lo que ve esa cuenta. También puede cambiar registros y la estructura de las tablas, así que da permiso de escritura solo donde haga falta.",
+        "abilities": [
+          "Encontrar bases y tablas y leer su estructura",
+          "Leer registros y comentarios",
+          "Crear y actualizar registros",
+          "Trabajar solo con las bases que tu cuenta puede ver"
+        ],
+        "needs": "Una cuenta de Airtable. Inicia sesión en el navegador después de pulsar Conectar. Airtable aplica los permisos de tu cuenta."
+      },
+      "fr": {
+        "description": "Bases, tables et enregistrements Airtable, via le serveur MCP propre à Airtable.",
+        "long": "Le serveur MCP d'Airtable permet à l'agent de travailler avec vos bases, tables et enregistrements. Par exemple : trouver la table des tâches d'un projet et lister les enregistrements non terminés, ou ajouter une ligne pour un nouveau prospect. Chaque personne se connecte avec son propre compte, donc l'agent ne voit que ce que ce compte voit. Il peut aussi modifier des enregistrements et la structure des tables ; n'accordez donc l'écriture que là où elle est nécessaire.",
+        "abilities": [
+          "Trouver bases et tables et lire leur structure",
+          "Lire les enregistrements et les commentaires",
+          "Créer et modifier des enregistrements",
+          "Travailler uniquement avec les bases accessibles à votre compte"
+        ],
+        "needs": "Un compte Airtable. Connectez-vous dans le navigateur après avoir cliqué sur Connecter. Airtable applique les droits de votre compte."
+      },
+      "ja": {
+        "description": "Airtable のベース、テーブル、レコードを、Airtable 自身の MCP サーバー経由で扱います。",
+        "long": "Airtable の MCP サーバーを使うと、エージェントがベース、テーブル、レコードを扱えます。例: プロジェクトのタスク表を探して未完了のレコードを一覧にする、新しいリードの行を追加する。利用者はそれぞれ自分のアカウントでサインインするため、エージェントに見えるのはそのアカウントが見られるものだけです。レコードやテーブルの構造も変更できるので、書き込みの権限は必要な場所だけに与えてください。",
+        "abilities": [
+          "ベースとテーブルを探し、構造を読む",
+          "レコードとコメントを読む",
+          "レコードを作成・更新する",
+          "アカウントが参照できるベースだけで作業する"
+        ],
+        "needs": "Airtable のアカウント。「接続」を押した後にブラウザでサインインします。権限は Airtable がアカウントごとに適用します。"
+      },
+      "ko": {
+        "description": "Airtable의 베이스, 테이블, 레코드를 Airtable 공식 MCP 서버로 다룹니다.",
+        "long": "Airtable MCP 서버를 쓰면 에이전트가 베이스, 테이블, 레코드를 다룰 수 있습니다. 예: 프로젝트의 작업 테이블을 찾아 완료되지 않은 레코드 목록 보기, 새 리드의 행 추가하기. 각자 자신의 계정으로 로그인하므로 에이전트는 그 계정이 볼 수 있는 것만 봅니다. 레코드와 테이블 구조도 바꿀 수 있으니 쓰기 권한은 꼭 필요한 곳에만 주세요.",
+        "abilities": [
+          "베이스와 테이블 찾고 구조 읽기",
+          "레코드와 댓글 읽기",
+          "레코드 만들기와 수정하기",
+          "계정이 접근할 수 있는 베이스에서만 작업"
+        ],
+        "needs": "Airtable 계정. '연결'을 누른 뒤 브라우저에서 로그인하세요. 권한은 Airtable이 계정 기준으로 적용합니다."
+      },
+      "pt-BR": {
+        "description": "Bases, tabelas e registros do Airtable, pelo servidor MCP próprio do Airtable.",
+        "long": "O servidor MCP do Airtable permite que o agente trabalhe com suas bases, tabelas e registros. Por exemplo: encontrar a tabela de tarefas de um projeto e listar os registros não concluídos, ou adicionar uma linha para um novo lead. Cada pessoa entra com a própria conta, então o agente vê só o que essa conta vê. Ele também pode alterar registros e a estrutura das tabelas, por isso dê permissão de escrita apenas onde for preciso.",
+        "abilities": [
+          "Encontrar bases e tabelas e ler a estrutura",
+          "Ler registros e comentários",
+          "Criar e atualizar registros",
+          "Trabalhar só com as bases que sua conta acessa"
+        ],
+        "needs": "Uma conta no Airtable. Entre no navegador depois de clicar em Conectar. O Airtable aplica as permissões da sua conta."
+      },
+      "zh-Hans": {
+        "description": "通过 Airtable 官方 MCP 服务器处理 Airtable 的数据库、表格和记录。",
+        "long": "Airtable 官方 MCP 服务器让智能体处理您的数据库、表格和记录。例如：找到项目的任务表并列出未完成的记录，或为新线索添加一行。每个人使用自己的账号登录，因此智能体只能看到该账号能看到的内容。它也能修改记录和表格结构，请只在需要的地方授予写入权限。",
+        "abilities": [
+          "查找数据库和表格并读取结构",
+          "读取记录和评论",
+          "创建和更新记录",
+          "只处理您账号可访问的数据库"
+        ],
+        "needs": "一个 Airtable 账号。点击“连接”后在浏览器中登录。权限由 Airtable 按您的账号执行。"
+      }
+    }
+  },
+  {
+    "id": "clickup",
+    "name": "ClickUp",
+    "category": "productivity",
+    "publisher": "ClickUp",
+    "official": true,
+    "homepage": "https://clickup.com",
+    "description_en": "Tasks, documents and chat in ClickUp, through ClickUp's own MCP server.",
+    "description_ru": "Задачи, документы и чат ClickUp через собственный MCP-сервер ClickUp.",
+    "long_en": "ClickUp's MCP server lets an agent work with your tasks, documents and chat. For example: list the tasks due this week in a space, or draft a document from meeting notes. It signs in with OAuth only; personal API tokens do not work here. The agent can create and change tasks, documents and messages, so keep an eye on what it writes.",
+    "long_ru": "MCP-сервер ClickUp позволяет агенту работать с задачами, документами и чатом. Например: вывести задачи пространства на эту неделю или подготовить документ по заметкам встречи. Вход только через OAuth, личные токены здесь не работают. Агент может создавать и менять задачи, документы и сообщения, поэтому следите за тем, что он записывает.",
+    "abilities_en": [
+      "Find and read tasks and spaces",
+      "Create and update tasks",
+      "Read and edit documents",
+      "Read chat and post messages"
+    ],
+    "abilities_ru": [
+      "Находить задачи и пространства и читать их",
+      "Создавать и обновлять задачи",
+      "Читать и редактировать документы",
+      "Читать чат и писать в него"
+    ],
+    "needs_en": "A ClickUp account. Sign in in the browser after you press Connect. Personal API tokens are not accepted: the sign-in is OAuth only.",
+    "needs_ru": "Аккаунт ClickUp: войдите в браузере после нажатия «Подключить». Личные токены не принимаются: вход только через OAuth.",
+    "kind": "http",
+    "url": "https://mcp.clickup.com/mcp",
+    "auth": "oauth",
+    "docs_url": "https://clickup.com/blog/how-to-use-clickup-mcp-server/",
+    "icon": "clickup",
+    "accent": "#7B68EE",
+    "l10n": {
+      "de": {
+        "description": "Aufgaben, Dokumente und Chat in ClickUp, über den eigenen MCP-Server von ClickUp.",
+        "long": "Der MCP-Server von ClickUp lässt den Agenten mit Ihren Aufgaben, Dokumenten und dem Chat arbeiten. Zum Beispiel: die Aufgaben eines Bereichs für diese Woche anzeigen oder ein Dokument aus Besprechungsnotizen entwerfen. Die Anmeldung läuft nur über OAuth; persönliche API-Tokens funktionieren hier nicht. Der Agent kann Aufgaben, Dokumente und Nachrichten anlegen und ändern, achten Sie daher darauf, was er schreibt.",
+        "abilities": [
+          "Aufgaben und Bereiche finden und lesen",
+          "Aufgaben anlegen und ändern",
+          "Dokumente lesen und bearbeiten",
+          "Chat lesen und Nachrichten schreiben"
+        ],
+        "needs": "Ein ClickUp-Konto. Melden Sie sich nach dem Klick auf „Verbinden“ im Browser an. Persönliche Tokens werden nicht angenommen: Die Anmeldung läuft nur über OAuth."
+      },
+      "es": {
+        "description": "Tareas, documentos y chat de ClickUp, a través del servidor MCP propio de ClickUp.",
+        "long": "El servidor MCP de ClickUp permite al agente trabajar con tus tareas, documentos y chat. Por ejemplo: listar las tareas de un espacio que vencen esta semana, o redactar un documento a partir de notas de una reunión. Solo inicia sesión con OAuth; los tokens personales de API no funcionan aquí. El agente puede crear y cambiar tareas, documentos y mensajes, así que vigila lo que escribe.",
+        "abilities": [
+          "Buscar y leer tareas y espacios",
+          "Crear y actualizar tareas",
+          "Leer y editar documentos",
+          "Leer el chat y escribir mensajes"
+        ],
+        "needs": "Una cuenta de ClickUp. Inicia sesión en el navegador después de pulsar Conectar. No se aceptan tokens personales: el inicio de sesión es solo por OAuth."
+      },
+      "fr": {
+        "description": "Tâches, documents et chat dans ClickUp, via le serveur MCP propre à ClickUp.",
+        "long": "Le serveur MCP de ClickUp permet à l'agent de travailler avec vos tâches, documents et chat. Par exemple : lister les tâches d'un espace dues cette semaine, ou rédiger un document à partir de notes de réunion. La connexion se fait uniquement par OAuth ; les jetons d'API personnels ne fonctionnent pas ici. L'agent peut créer et modifier tâches, documents et messages : surveillez ce qu'il écrit.",
+        "abilities": [
+          "Trouver et lire tâches et espaces",
+          "Créer et modifier des tâches",
+          "Lire et modifier des documents",
+          "Lire le chat et y écrire"
+        ],
+        "needs": "Un compte ClickUp. Connectez-vous dans le navigateur après avoir cliqué sur Connecter. Les jetons personnels ne sont pas acceptés : la connexion passe uniquement par OAuth."
+      },
+      "ja": {
+        "description": "ClickUp のタスク、ドキュメント、チャットを、ClickUp 自身の MCP サーバー経由で扱います。",
+        "long": "ClickUp の MCP サーバーを使うと、エージェントがタスク、ドキュメント、チャットを扱えます。例: スペース内で今週期限のタスクを一覧にする、会議メモからドキュメントの下書きを作る。サインインは OAuth のみで、個人の API トークンは使えません。エージェントはタスク、ドキュメント、メッセージを作成・変更できるため、何を書き込むか確認してください。",
+        "abilities": [
+          "タスクとスペースを探して読む",
+          "タスクを作成・更新する",
+          "ドキュメントを読んで編集する",
+          "チャットを読み、メッセージを投稿する"
+        ],
+        "needs": "ClickUp のアカウント。「接続」を押した後にブラウザでサインインします。個人トークンは受け付けず、サインインは OAuth のみです。"
+      },
+      "ko": {
+        "description": "ClickUp의 작업, 문서, 채팅을 ClickUp 공식 MCP 서버로 다룹니다.",
+        "long": "ClickUp MCP 서버를 쓰면 에이전트가 작업, 문서, 채팅을 다룰 수 있습니다. 예: 스페이스에서 이번 주 마감인 작업 목록 보기, 회의 메모로 문서 초안 쓰기. 로그인은 OAuth로만 하며 개인 API 토큰은 쓸 수 없습니다. 에이전트가 작업, 문서, 메시지를 만들고 바꿀 수 있으니 무엇을 쓰는지 살펴보세요.",
+        "abilities": [
+          "작업과 스페이스 찾고 읽기",
+          "작업 만들기와 수정하기",
+          "문서 읽고 편집하기",
+          "채팅 읽고 메시지 보내기"
+        ],
+        "needs": "ClickUp 계정. '연결'을 누른 뒤 브라우저에서 로그인하세요. 개인 토큰은 받지 않으며 로그인은 OAuth로만 합니다."
+      },
+      "pt-BR": {
+        "description": "Tarefas, documentos e chat do ClickUp, pelo servidor MCP próprio do ClickUp.",
+        "long": "O servidor MCP do ClickUp permite que o agente trabalhe com suas tarefas, documentos e chat. Por exemplo: listar as tarefas de um espaço que vencem nesta semana, ou rascunhar um documento a partir de notas de reunião. O acesso é só por OAuth; tokens pessoais de API não funcionam aqui. O agente pode criar e alterar tarefas, documentos e mensagens, então acompanhe o que ele escreve.",
+        "abilities": [
+          "Encontrar e ler tarefas e espaços",
+          "Criar e atualizar tarefas",
+          "Ler e editar documentos",
+          "Ler o chat e enviar mensagens"
+        ],
+        "needs": "Uma conta no ClickUp. Entre no navegador depois de clicar em Conectar. Tokens pessoais não são aceitos: o acesso é só por OAuth."
+      },
+      "zh-Hans": {
+        "description": "通过 ClickUp 官方 MCP 服务器处理任务、文档和聊天。",
+        "long": "ClickUp 官方 MCP 服务器让智能体处理您的任务、文档和聊天。例如：列出某个空间中本周到期的任务，或根据会议纪要起草文档。仅支持 OAuth 登录，个人 API 令牌在此不可用。智能体可以创建和修改任务、文档及消息，请留意它写入的内容。",
+        "abilities": [
+          "查找并读取任务和空间",
+          "创建和更新任务",
+          "读取和编辑文档",
+          "读取聊天并发送消息"
+        ],
+        "needs": "一个 ClickUp 账号。点击“连接”后在浏览器中登录。不接受个人令牌，登录只能通过 OAuth。"
+      }
+    }
+  },
+  {
+    "id": "zapier",
+    "name": "Zapier",
+    "category": "productivity",
+    "publisher": "Zapier",
+    "official": true,
+    "homepage": "https://zapier.com",
+    "description_en": "Actions in the apps connected to your Zapier account, through Zapier's MCP server.",
+    "description_ru": "Действия приложений, подключённых в вашем аккаунте Zapier, через MCP-сервер Zapier.",
+    "long_en": "Zapier's MCP server gives an agent the actions of the apps connected in your Zapier account, so one connection can reach many services. For example: add a row to a spreadsheet when a form is submitted. Each connection gives the agent access to that app's data and the right to write to it, so connect only what the agent needs.",
+    "long_ru": "MCP-сервер Zapier даёт агенту действия приложений, подключённых в вашем аккаунте Zapier, так что одно подключение открывает доступ ко многим сервисам. Например: добавить строку в таблицу, когда отправлена форма. Каждое подключение даёт агенту доступ к данным приложения и право писать в него, поэтому подключайте только нужное агенту.",
+    "abilities_en": [
+      "Run actions in the apps connected to your Zapier account",
+      "Use the connections you set up in Zapier",
+      "Sign in with OAuth, or with a connection token in a header"
+    ],
+    "abilities_ru": [
+      "Выполнять действия в приложениях, подключённых к аккаунту Zapier",
+      "Использовать подключения, настроенные в Zapier",
+      "Входить через OAuth или токеном подключения в заголовке"
+    ],
+    "needs_en": "A Zapier account with the apps connected. Sign in in the browser after you press Connect; you do not need to create a server first.",
+    "needs_ru": "Аккаунт Zapier с подключёнными приложениями: войдите в браузере после нажатия «Подключить». Создавать сервер заранее не нужно.",
+    "kind": "http",
+    "url": "https://mcp.zapier.com/api/v1/connect",
+    "auth": "oauth",
+    "docs_url": "https://docs.zapier.com/mcp",
+    "icon": "zapier",
+    "accent": "#FF4A00",
+    "l10n": {
+      "de": {
+        "description": "Aktionen in den Apps, die in Ihrem Zapier-Konto verbunden sind, über den MCP-Server von Zapier.",
+        "long": "Der MCP-Server von Zapier gibt dem Agenten die Aktionen der Apps, die in Ihrem Zapier-Konto verbunden sind. Eine Verbindung reicht so für viele Dienste. Zum Beispiel: eine Zeile in eine Tabelle schreiben, wenn ein Formular abgeschickt wird. Jede Verbindung gibt dem Agenten Zugriff auf die Daten dieser App und das Recht, dort zu schreiben; verbinden Sie daher nur, was der Agent braucht.",
+        "abilities": [
+          "Aktionen in den Apps ausführen, die in Ihrem Zapier-Konto verbunden sind",
+          "Die in Zapier eingerichteten Verbindungen nutzen",
+          "Mit OAuth anmelden oder mit einem Verbindungstoken im Header"
+        ],
+        "needs": "Ein Zapier-Konto mit verbundenen Apps. Melden Sie sich nach dem Klick auf „Verbinden“ im Browser an; einen Server müssen Sie vorher nicht anlegen."
+      },
+      "es": {
+        "description": "Acciones de las apps conectadas a tu cuenta de Zapier, a través del servidor MCP de Zapier.",
+        "long": "El servidor MCP de Zapier da al agente las acciones de las apps conectadas en tu cuenta de Zapier, así que una sola conexión llega a muchos servicios. Por ejemplo: añadir una fila a una hoja de cálculo cuando se envía un formulario. Cada conexión da al agente acceso a los datos de esa app y permiso para escribir en ella, así que conecta solo lo que necesite.",
+        "abilities": [
+          "Ejecutar acciones en las apps conectadas a tu cuenta de Zapier",
+          "Usar las conexiones que configuraste en Zapier",
+          "Iniciar sesión con OAuth o con un token de conexión en un encabezado"
+        ],
+        "needs": "Una cuenta de Zapier con las apps conectadas. Inicia sesión en el navegador después de pulsar Conectar; no hace falta crear antes un servidor."
+      },
+      "fr": {
+        "description": "Actions des applications connectées à votre compte Zapier, via le serveur MCP de Zapier.",
+        "long": "Le serveur MCP de Zapier donne à l'agent les actions des applications connectées à votre compte Zapier : une seule connexion donne accès à de nombreux services. Par exemple : ajouter une ligne dans un tableur quand un formulaire est envoyé. Chaque connexion donne à l'agent l'accès aux données de l'application et le droit d'y écrire ; ne connectez donc que ce dont il a besoin.",
+        "abilities": [
+          "Exécuter des actions dans les applications connectées à votre compte Zapier",
+          "Utiliser les connexions configurées dans Zapier",
+          "Se connecter par OAuth ou avec un jeton de connexion dans un en-tête"
+        ],
+        "needs": "Un compte Zapier avec des applications connectées. Connectez-vous dans le navigateur après avoir cliqué sur Connecter ; inutile de créer un serveur au préalable."
+      },
+      "ja": {
+        "description": "Zapier アカウントに接続したアプリの操作を、Zapier の MCP サーバー経由で行います。",
+        "long": "Zapier の MCP サーバーを使うと、エージェントが Zapier アカウントに接続したアプリの操作を実行できます。ひとつの接続で多くのサービスに届くのが特徴です。例: フォームが送信されたら表に行を追加する。各接続はそのアプリのデータへのアクセスと書き込みの権限をエージェントに与えるため、必要なものだけを接続してください。",
+        "abilities": [
+          "Zapier アカウントに接続したアプリで操作を実行する",
+          "Zapier で設定した接続を使う",
+          "OAuth、またはヘッダーの接続トークンでサインインする"
+        ],
+        "needs": "アプリを接続した Zapier のアカウント。「接続」を押した後にブラウザでサインインします。事前にサーバーを作る必要はありません。"
+      },
+      "ko": {
+        "description": "Zapier 계정에 연결한 앱의 작업을 Zapier 공식 MCP 서버로 실행합니다.",
+        "long": "Zapier MCP 서버를 쓰면 에이전트가 Zapier 계정에 연결된 앱의 작업을 실행할 수 있습니다. 연결 하나로 여러 서비스에 닿는 것이 장점입니다. 예: 폼이 제출되면 스프레드시트에 행 추가하기. 각 연결은 해당 앱의 데이터에 대한 접근과 쓰기 권한을 에이전트에 줍니다. 필요한 것만 연결하세요.",
+        "abilities": [
+          "Zapier 계정에 연결된 앱에서 작업 실행",
+          "Zapier에서 설정한 연결 사용",
+          "OAuth 또는 헤더의 연결 토큰으로 로그인"
+        ],
+        "needs": "앱이 연결된 Zapier 계정. '연결'을 누른 뒤 브라우저에서 로그인하세요. 서버를 미리 만들 필요는 없습니다."
+      },
+      "pt-BR": {
+        "description": "Ações dos apps conectados à sua conta Zapier, pelo servidor MCP da Zapier.",
+        "long": "O servidor MCP da Zapier dá ao agente as ações dos apps conectados na sua conta Zapier, então uma única conexão alcança muitos serviços. Por exemplo: adicionar uma linha numa planilha quando um formulário é enviado. Cada conexão dá ao agente acesso aos dados daquele app e permissão para escrever nele, então conecte só o que ele precisa.",
+        "abilities": [
+          "Executar ações nos apps conectados à sua conta Zapier",
+          "Usar as conexões configuradas na Zapier",
+          "Entrar com OAuth ou com um token de conexão no cabeçalho"
+        ],
+        "needs": "Uma conta na Zapier com os apps conectados. Entre no navegador depois de clicar em Conectar; não precisa criar um servidor antes."
+      },
+      "zh-Hans": {
+        "description": "通过 Zapier 官方 MCP 服务器，在您 Zapier 账号中已连接的应用里执行操作。",
+        "long": "Zapier 官方 MCP 服务器让智能体使用您 Zapier 账号中已连接应用的操作，一个连接即可覆盖许多服务。例如：表单提交后向表格添加一行。每个连接都会让智能体有权访问该应用的数据并写入，因此只连接智能体需要的内容。",
+        "abilities": [
+          "在 Zapier 账号已连接的应用中执行操作",
+          "使用您在 Zapier 中设置的连接",
+          "通过 OAuth 登录，或在请求头中使用连接令牌"
+        ],
+        "needs": "一个已连接应用的 Zapier 账号。点击“连接”后在浏览器中登录，无需事先创建服务器。"
+      }
+    }
+  },
+  {
+    "id": "intercom",
+    "name": "Intercom",
+    "category": "productivity",
+    "publisher": "Intercom",
+    "official": true,
+    "homepage": "https://www.intercom.com",
+    "description_en": "Conversations, contacts, companies and Help Center articles in Intercom, through Intercom's MCP server.",
+    "description_ru": "Диалоги, контакты, компании и статьи Центра справки Intercom через MCP-сервер Intercom.",
+    "long_en": "Intercom's hosted MCP server lets an agent read conversations, contacts and companies in your workspace, and work with Help Center articles. For example: summarize a customer's open conversations, or draft a new help article. Write access covers Help Center articles only, but check each change before you publish it.",
+    "long_ru": "Размещённый MCP-сервер Intercom позволяет агенту читать диалоги, контакты и компании вашего пространства и работать со статьями Центра справки. Например: кратко описать открытые диалоги клиента или подготовить новую статью справки. Запись касается только статей Центра справки; проверяйте изменения перед публикацией.",
+    "abilities_en": [
+      "Find and read conversations, contacts and companies",
+      "Read and write Help Center articles",
+      "Sign in with OAuth in the browser"
+    ],
+    "abilities_ru": [
+      "Находить и читать диалоги, контакты и компании",
+      "Читать и писать статьи Центра справки",
+      "Входить через OAuth в браузере"
+    ],
+    "needs_en": "An Intercom workspace hosted in the US: Intercom's connector page says its server covers US-hosted workspaces only. Sign in in the browser after you press Connect and allow access.",
+    "needs_ru": "Рабочее пространство Intercom в США: по странице коннектора Intercom сервер работает только с пространствами, размещёнными в США. Войдите в браузере после нажатия «Подключить» и разрешите доступ.",
+    "kind": "http",
+    "url": "https://mcp.intercom.com/mcp",
+    "auth": "oauth",
+    "docs_url": "https://developers.intercom.com/docs/guides/mcp",
+    "icon": "intercom",
+    "accent": "#1F8DED",
+    "l10n": {
+      "de": {
+        "description": "Gespräche, Kontakte, Firmen und Artikel des Help Centers in Intercom, über den MCP-Server von Intercom.",
+        "long": "Der gehostete MCP-Server von Intercom lässt den Agenten Gespräche, Kontakte und Firmen Ihres Workspaces lesen und mit Artikeln des Help Centers arbeiten. Zum Beispiel: die offenen Gespräche eines Kunden zusammenfassen oder einen neuen Hilfeartikel entwerfen. Schreibrechte gelten nur für Help-Center-Artikel; prüfen Sie jede Änderung vor der Veröffentlichung.",
+        "abilities": [
+          "Gespräche, Kontakte und Firmen finden und lesen",
+          "Help-Center-Artikel lesen und schreiben",
+          "Anmeldung per OAuth im Browser"
+        ],
+        "needs": "Ein Intercom-Workspace, der in den USA gehostet wird: Laut der Seite des Konnektors gilt der Server nur für solche Workspaces. Melden Sie sich nach dem Klick auf „Verbinden“ im Browser an und erlauben Sie den Zugriff."
+      },
+      "es": {
+        "description": "Conversaciones, contactos, empresas y artículos del Centro de ayuda de Intercom, a través del servidor MCP de Intercom.",
+        "long": "El servidor MCP alojado de Intercom permite al agente leer conversaciones, contactos y empresas de tu espacio de trabajo y trabajar con artículos del Centro de ayuda. Por ejemplo: resumir las conversaciones abiertas de un cliente o redactar un artículo de ayuda nuevo. La escritura se limita a los artículos del Centro de ayuda; revisa cada cambio antes de publicarlo.",
+        "abilities": [
+          "Encontrar y leer conversaciones, contactos y empresas",
+          "Leer y escribir artículos del Centro de ayuda",
+          "Inicio de sesión con OAuth en el navegador"
+        ],
+        "needs": "Un espacio de trabajo de Intercom alojado en EE. UU.: según la página del conector, el servidor solo funciona con espacios alojados allí. Inicia sesión en el navegador después de pulsar Conectar y permite el acceso."
+      },
+      "fr": {
+        "description": "Conversations, contacts, entreprises et articles du Centre d'aide dans Intercom, via le serveur MCP d'Intercom.",
+        "long": "Le serveur MCP hébergé d'Intercom permet à l'agent de lire les conversations, contacts et entreprises de votre espace de travail et de travailler avec les articles du Centre d'aide. Par exemple : résumer les conversations ouvertes d'un client, ou rédiger un nouvel article d'aide. L'écriture ne porte que sur les articles du Centre d'aide ; vérifiez chaque modification avant de publier.",
+        "abilities": [
+          "Trouver et lire conversations, contacts et entreprises",
+          "Lire et écrire les articles du Centre d'aide",
+          "Connexion par OAuth dans le navigateur"
+        ],
+        "needs": "Un espace de travail Intercom hébergé aux États-Unis : d'après la page du connecteur, le serveur ne couvre que ces espaces. Connectez-vous dans le navigateur après avoir cliqué sur Connecter, puis autorisez l'accès."
+      },
+      "ja": {
+        "description": "Intercom の会話、連絡先、会社、ヘルプセンターの記事を、Intercom の MCP サーバー経由で扱います。",
+        "long": "Intercom のホスト型 MCP サーバーを使うと、エージェントがワークスペースの会話、連絡先、会社を読み、ヘルプセンターの記事を扱えます。例: 顧客の未完了の会話を要約する、新しいヘルプ記事の下書きを作る。書き込みはヘルプセンターの記事だけに及ぶので、公開前に各変更を確認してください。",
+        "abilities": [
+          "会話、連絡先、会社を探して読む",
+          "ヘルプセンターの記事を読み書きする",
+          "ブラウザで OAuth サインインする"
+        ],
+        "needs": "米国でホストされている Intercom のワークスペース。Intercom のコネクタページによれば、このサーバーは米国ホストのワークスペースのみ対応です。「接続」を押した後にブラウザでサインインし、アクセスを許可してください。"
+      },
+      "ko": {
+        "description": "Intercom의 대화, 연락처, 회사, 도움말 센터 문서를 Intercom 공식 MCP 서버로 다룹니다.",
+        "long": "Intercom 호스팅 MCP 서버를 쓰면 에이전트가 워크스페이스의 대화, 연락처, 회사를 읽고 도움말 센터 문서를 다룰 수 있습니다. 예: 고객의 열린 대화 요약하기, 새 도움말 문서 초안 쓰기. 쓰기 권한은 도움말 센터 문서에만 적용되니 게시 전에 각 변경을 확인하세요.",
+        "abilities": [
+          "대화, 연락처, 회사 찾고 읽기",
+          "도움말 센터 문서 읽고 쓰기",
+          "브라우저에서 OAuth로 로그인"
+        ],
+        "needs": "미국에 호스팅된 Intercom 워크스페이스: Intercom 커넥터 페이지에 따르면 이 서버는 미국 호스팅 워크스페이스만 지원합니다. '연결'을 누른 뒤 브라우저에서 로그인하고 접근을 허용하세요."
+      },
+      "pt-BR": {
+        "description": "Conversas, contatos, empresas e artigos da Central de Ajuda no Intercom, pelo servidor MCP do Intercom.",
+        "long": "O servidor MCP hospedado do Intercom permite que o agente leia conversas, contatos e empresas do seu workspace e trabalhe com artigos da Central de Ajuda. Por exemplo: resumir as conversas abertas de um cliente, ou rascunhar um novo artigo de ajuda. A escrita vale só para os artigos da Central de Ajuda; confira cada alteração antes de publicar.",
+        "abilities": [
+          "Encontrar e ler conversas, contatos e empresas",
+          "Ler e escrever artigos da Central de Ajuda",
+          "Entrar com OAuth no navegador"
+        ],
+        "needs": "Um workspace do Intercom hospedado nos EUA: segundo a página do conector, o servidor só atende workspaces hospedados nos EUA. Entre no navegador depois de clicar em Conectar e permita o acesso."
+      },
+      "zh-Hans": {
+        "description": "通过 Intercom 官方 MCP 服务器处理 Intercom 的对话、联系人、公司和帮助中心文章。",
+        "long": "Intercom 托管的 MCP 服务器让智能体读取工作区的对话、联系人和公司，并处理帮助中心文章。例如：汇总某客户未关闭的对话，或起草一篇新的帮助文章。写入权限仅限帮助中心文章，请在发布前逐项确认修改。",
+        "abilities": [
+          "查找并读取对话、联系人和公司",
+          "读写帮助中心文章",
+          "在浏览器中通过 OAuth 登录"
+        ],
+        "needs": "一个在美国托管的 Intercom 工作区：据 Intercom 连接器页面说明，该服务器仅支持美国托管的工作区。点击“连接”后在浏览器中登录并允许访问。"
+      }
+    }
+  },
+  {
+    "id": "bitrix24-docs",
+    "name": "Bitrix24 docs",
+    "category": "productivity",
+    "publisher": "Bitrix24",
+    "official": true,
+    "homepage": "https://www.bitrix24.com",
+    "description_en": "Search the Bitrix24 REST API documentation: methods, events and developer articles.",
+    "description_ru": "Поиск по документации REST API Bitrix24: методы, события и статьи для разработчиков.",
+    "long_en": "Bitrix24's own MCP server gives an agent up-to-date documentation of the Bitrix24 REST API. For example: find the parameters of a CRM method, or the code sample for an event. It only reads documentation: it does not run methods or touch portal data, so no account is needed. The address is the one in the official documentation; it is a development endpoint and may change.",
+    "long_ru": "Собственный MCP-сервер Bitrix24 даёт агенту актуальную документацию REST API Bitrix24. Например: найти параметры метода CRM или пример кода для события. Сервер только читает документацию: он не выполняет методы и не обращается к данным портала, поэтому аккаунт не нужен. Адрес — тот, что указан в официальной документации; это адрес для разработки, он может измениться.",
+    "abilities_en": [
+      "Search the REST documentation in plain language",
+      "Show a method's parameters, results, errors and code samples",
+      "Show events and developer articles"
+    ],
+    "abilities_ru": [
+      "Искать по документации REST обычными фразами",
+      "Показывать параметры, результат, ошибки и примеры кода метода",
+      "Показывать события и статьи для разработчиков"
+    ],
+    "needs_en": "Nothing: no key and no account. The server reads documentation only and does not reach your portal's data. A connection to a portal is not covered by this entry.",
+    "needs_ru": "Ничего не нужно: ни ключа, ни аккаунта. Сервер читает только документацию и не обращается к данным портала. Подключение к порталу этой записью не покрывается.",
+    "kind": "http",
+    "url": "https://mcp-dev.bitrix24.com/mcp",
+    "docs_url": "https://apidocs.bitrix24.com/ai-tools/mcp.html",
+    "icon": "book",
+    "accent": "#2FC6F6",
+    "l10n": {
+      "de": {
+        "description": "Suche in der Dokumentation der Bitrix24-REST-API: Methoden, Ereignisse und Entwicklerartikel.",
+        "long": "Der eigene MCP-Server von Bitrix24 gibt dem Agenten aktuelle Dokumentation der Bitrix24-REST-API. Zum Beispiel: die Parameter einer CRM-Methode oder das Codebeispiel für ein Ereignis finden. Der Server liest nur Dokumentation: Er führt keine Methoden aus und greift nicht auf Portaldaten zu, daher ist kein Konto nötig. Die Adresse steht in der offiziellen Dokumentation; es ist eine Entwicklungsadresse und kann sich ändern.",
+        "abilities": [
+          "Die REST-Dokumentation in einfacher Sprache durchsuchen",
+          "Parameter, Ergebnis, Fehler und Codebeispiele einer Methode zeigen",
+          "Ereignisse und Entwicklerartikel zeigen"
+        ],
+        "needs": "Nichts: kein Schlüssel und kein Konto. Der Server liest nur Dokumentation und greift nicht auf die Daten Ihres Portals zu. Eine Verbindung zu einem Portal deckt dieser Eintrag nicht ab."
+      },
+      "es": {
+        "description": "Búsqueda en la documentación de la API REST de Bitrix24: métodos, eventos y artículos para desarrolladores.",
+        "long": "El servidor MCP propio de Bitrix24 da al agente documentación actualizada de la API REST de Bitrix24. Por ejemplo: encontrar los parámetros de un método de CRM o el ejemplo de código de un evento. Solo lee documentación: no ejecuta métodos ni toca datos del portal, así que no hace falta cuenta. La dirección es la de la documentación oficial; es un punto de desarrollo y puede cambiar.",
+        "abilities": [
+          "Buscar en la documentación REST con lenguaje sencillo",
+          "Mostrar parámetros, resultado, errores y ejemplos de código de un método",
+          "Mostrar eventos y artículos para desarrolladores"
+        ],
+        "needs": "Nada: ni clave ni cuenta. El servidor solo lee documentación y no accede a los datos de tu portal. Este registro no cubre la conexión a un portal."
+      },
+      "fr": {
+        "description": "Recherche dans la documentation de l'API REST de Bitrix24 : méthodes, événements et articles pour développeurs.",
+        "long": "Le serveur MCP propre à Bitrix24 donne à l'agent une documentation à jour de l'API REST de Bitrix24. Par exemple : trouver les paramètres d'une méthode CRM, ou l'exemple de code d'un événement. Il ne fait que lire la documentation : il n'exécute aucune méthode et n'accède pas aux données du portail, aucun compte n'est donc nécessaire. L'adresse est celle de la documentation officielle ; c'est un point de terminaison de développement susceptible de changer.",
+        "abilities": [
+          "Chercher dans la documentation REST en langage courant",
+          "Afficher paramètres, résultat, erreurs et exemples de code d'une méthode",
+          "Afficher les événements et les articles pour développeurs"
+        ],
+        "needs": "Rien : ni clé ni compte. Le serveur ne lit que la documentation et n'accède pas aux données de votre portail. La connexion à un portail n'est pas couverte par cette fiche."
+      },
+      "ja": {
+        "description": "Bitrix24 REST API のドキュメント（メソッド、イベント、開発者向け記事）を検索します。",
+        "long": "Bitrix24 公式の MCP サーバーを使うと、エージェントが Bitrix24 REST API の最新ドキュメントを参照できます。例: CRM メソッドのパラメーターや、イベントのコードサンプルを探す。サーバーはドキュメントを読むだけで、メソッドの実行やポータルのデータへのアクセスは行わないため、アカウントは不要です。アドレスは公式ドキュメントに載っているもので、開発用のエンドポイントのため変更される可能性があります。",
+        "abilities": [
+          "REST ドキュメントを自然な言葉で検索する",
+          "メソッドのパラメーター、結果、エラー、コード例を表示する",
+          "イベントと開発者向け記事を表示する"
+        ],
+        "needs": "何も不要です。キーもアカウントも要りません。サーバーはドキュメントのみを読み、ポータルのデータにはアクセスしません。ポータルへの接続はこの項目の対象外です。"
+      },
+      "ko": {
+        "description": "Bitrix24 REST API 문서(메서드, 이벤트, 개발자 문서)를 검색합니다.",
+        "long": "Bitrix24 자체 MCP 서버를 쓰면 에이전트가 Bitrix24 REST API의 최신 문서를 볼 수 있습니다. 예: CRM 메서드의 매개변수나 이벤트의 코드 예제 찾기. 서버는 문서만 읽으며 메서드를 실행하거나 포털 데이터에 접근하지 않으므로 계정이 필요 없습니다. 주소는 공식 문서에 적힌 것이며 개발용 엔드포인트라 바뀔 수 있습니다.",
+        "abilities": [
+          "REST 문서를 쉬운 말로 검색",
+          "메서드의 매개변수, 결과, 오류, 코드 예제 보기",
+          "이벤트와 개발자 문서 보기"
+        ],
+        "needs": "필요한 것 없음: 키도 계정도 필요 없습니다. 서버는 문서만 읽고 포털 데이터에 접근하지 않습니다. 포털 연결은 이 항목에 포함되지 않습니다."
+      },
+      "pt-BR": {
+        "description": "Busca na documentação da API REST do Bitrix24: métodos, eventos e artigos para desenvolvedores.",
+        "long": "O servidor MCP próprio do Bitrix24 dá ao agente documentação atualizada da API REST do Bitrix24. Por exemplo: encontrar os parâmetros de um método do CRM ou o exemplo de código de um evento. Ele só lê documentação: não executa métodos nem acessa dados do portal, por isso não precisa de conta. O endereço é o da documentação oficial; é um endpoint de desenvolvimento e pode mudar.",
+        "abilities": [
+          "Buscar na documentação REST em linguagem simples",
+          "Mostrar parâmetros, resultado, erros e exemplos de código de um método",
+          "Mostrar eventos e artigos para desenvolvedores"
+        ],
+        "needs": "Nada: sem chave e sem conta. O servidor só lê documentação e não acessa os dados do seu portal. A conexão com um portal não está coberta por este item."
+      },
+      "zh-Hans": {
+        "description": "搜索 Bitrix24 REST API 文档：方法、事件和开发者文章。",
+        "long": "Bitrix24 官方 MCP 服务器让智能体获取最新的 Bitrix24 REST API 文档。例如：查找某个 CRM 方法的参数，或某个事件的代码示例。它只读取文档，不执行方法，也不访问门户数据，因此无需账号。该地址来自官方文档，属于开发用端点，可能会变更。",
+        "abilities": [
+          "用自然语言搜索 REST 文档",
+          "显示方法的参数、返回结果、错误和代码示例",
+          "显示事件和开发者文章"
+        ],
+        "needs": "无需准备：不需要密钥，也不需要账号。服务器只读取文档，不访问您门户的数据。本条目不包括门户连接。"
+      }
+    }
+  },
+  {
+    "id": "shopify-dev",
+    "name": "Shopify Dev MCP",
+    "category": "dev",
+    "publisher": "Shopify",
+    "official": true,
+    "homepage": "https://www.shopify.com",
+    "description_en": "Shopify developer docs, API schemas and checks of GraphQL, Liquid and theme code, through Shopify's Dev MCP server.",
+    "description_ru": "Документация Shopify для разработчиков, схемы API и проверка GraphQL, Liquid и кода темы через Dev MCP-сервер Shopify.",
+    "long_en": "Shopify's Dev MCP server gives an agent Shopify's developer resources: documentation, the Admin GraphQL schema, and checks of GraphQL, Liquid and theme code. For example: check that a products query is valid before it goes into an app. It runs on your computer without a key and does not read or change any store data.",
+    "long_ru": "Dev MCP-сервер Shopify даёт агенту ресурсы разработчика Shopify: документацию, схему Admin GraphQL API и проверку GraphQL-запросов, Liquid и файлов темы. Например: проверить, что запрос товаров корректен, до того как он попадёт в приложение. Сервер работает на вашем компьютере без ключа и не читает и не меняет данные магазина.",
+    "abilities_en": [
+      "Search Shopify's developer documentation and API schemas",
+      "Validate GraphQL operations, Liquid and theme files",
+      "Resolve supported API versions"
+    ],
+    "abilities_ru": [
+      "Искать по документации Shopify и схемам API",
+      "Проверять GraphQL-запросы, Liquid и файлы темы",
+      "Определять поддерживаемые версии API"
+    ],
+    "needs_en": "Node.js 18 or later on your computer. No key and no store access: the server runs locally without authentication.",
+    "needs_ru": "Node.js 18 или новее на вашем компьютере. Ключ и доступ к магазину не нужны: сервер работает локально без входа.",
+    "kind": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@shopify/dev-mcp@1.16.0"
+    ],
+    "docs_url": "https://shopify.dev/docs/apps/build/ai-toolkit",
+    "icon": "shopify-dev",
+    "accent": "#95BF47",
+    "l10n": {
+      "de": {
+        "description": "Entwicklerdokumentation, API-Schemas und Prüfung von GraphQL-, Liquid- und Theme-Code: der Dev-MCP-Server von Shopify.",
+        "long": "Der Dev-MCP-Server von Shopify gibt dem Agenten Ressourcen für Entwickler: Dokumentation, das Admin-GraphQL-Schema und die Prüfung von GraphQL-, Liquid- und Theme-Code. Zum Beispiel: prüfen, ob eine Produktabfrage gültig ist, bevor sie in eine App kommt. Er läuft auf Ihrem Rechner ohne Schlüssel und liest oder ändert keine Shop-Daten.",
+        "abilities": [
+          "Shopify-Dokumentation und API-Schemas durchsuchen",
+          "GraphQL-Abfragen sowie Liquid- und Theme-Dateien prüfen",
+          "Unterstützte API-Versionen ermitteln"
+        ],
+        "needs": "Node.js 18 oder neuer auf Ihrem Rechner. Kein Schlüssel und kein Shop-Zugang nötig: Der Server läuft lokal und greift nicht auf den Shop zu."
+      },
+      "es": {
+        "description": "Documentación para desarrolladores, esquemas de API y revisión de código GraphQL, Liquid y de temas: el servidor Dev MCP de Shopify.",
+        "long": "El servidor Dev MCP de Shopify da al agente recursos para desarrolladores: documentación, el esquema de la API Admin GraphQL y la revisión de código GraphQL, Liquid y de temas. Por ejemplo: comprobar que una consulta de productos es válida antes de meterla en una app. Se ejecuta en tu equipo sin clave y no lee ni cambia datos de la tienda.",
+        "abilities": [
+          "Buscar en la documentación de Shopify y en los esquemas de API",
+          "Validar consultas GraphQL y archivos Liquid o de tema",
+          "Saber qué versiones de API están disponibles"
+        ],
+        "needs": "Node.js 18 o posterior en tu equipo. No hacen falta clave ni acceso a la tienda: el servidor se ejecuta en local y no accede a la tienda."
+      },
+      "fr": {
+        "description": "Documentation développeur, schémas d'API et vérification du code GraphQL, Liquid et des thèmes : le serveur Dev MCP de Shopify.",
+        "long": "Le serveur Dev MCP de Shopify donne à l'agent des ressources pour développeurs : documentation, schéma de l'API Admin GraphQL et vérification du code GraphQL, Liquid et des thèmes. Par exemple : vérifier qu'une requête de produits est valide avant de l'intégrer à une application. Il tourne sur votre ordinateur sans clé et ne lit ni ne modifie les données de la boutique.",
+        "abilities": [
+          "Chercher dans la documentation Shopify et les schémas d'API",
+          "Valider les requêtes GraphQL et les fichiers Liquid ou de thème",
+          "Connaître les versions d'API prises en charge"
+        ],
+        "needs": "Node.js 18 ou plus récent sur votre ordinateur. Aucune clé ni accès à la boutique n'est nécessaire : le serveur tourne en local et n'accède pas à la boutique."
+      },
+      "ja": {
+        "description": "Shopify の開発者向けドキュメント、API スキーマ、GraphQL・Liquid・テーマコードの検証を、Shopify の Dev MCP サーバー経由で扱います。",
+        "long": "Shopify の Dev MCP サーバーを使うと、エージェントが開発者向けのリソースを扱えます。ドキュメント、Admin GraphQL のスキーマ、GraphQL・Liquid・テーマコードの検証です。例: アプリに組み込む前に商品クエリが正しいかを確認する。お使いのコンピューターでキーなしに動き、ストアのデータを読んだり変更したりはしません。",
+        "abilities": [
+          "Shopify のドキュメントと API スキーマを検索する",
+          "GraphQL クエリと Liquid・テーマのファイルを検証する",
+          "対応している API バージョンを確認する"
+        ],
+        "needs": "お使いのコンピューターに Node.js 18 以降。キーもストアへのアクセスも不要です。サーバーはローカルで動き、ストアにはアクセスしません。"
+      },
+      "ko": {
+        "description": "Shopify 개발자 문서, API 스키마, GraphQL·Liquid·테마 코드 검사를 Shopify Dev MCP 서버로 제공합니다.",
+        "long": "Shopify Dev MCP 서버를 쓰면 에이전트가 개발자용 자료를 쓸 수 있습니다. 문서, Admin GraphQL 스키마, GraphQL·Liquid·테마 코드 검사입니다. 예: 상품 쿼리가 유효한지 앱에 넣기 전에 확인하기. 내 컴퓨터에서 키 없이 실행되며 스토어 데이터를 읽거나 바꾸지 않습니다.",
+        "abilities": [
+          "Shopify 문서와 API 스키마 검색",
+          "GraphQL 쿼리와 Liquid·테마 파일 검사",
+          "지원되는 API 버전 확인"
+        ],
+        "needs": "내 컴퓨터에 Node.js 18 이상. 키도 스토어 접근도 필요 없습니다. 서버는 로컬에서 실행되며 스토어에 접근하지 않습니다."
+      },
+      "pt-BR": {
+        "description": "Documentação para desenvolvedores, esquemas de API e verificação de código GraphQL, Liquid e de temas: o servidor Dev MCP da Shopify.",
+        "long": "O servidor Dev MCP da Shopify dá ao agente recursos para desenvolvedores: documentação, o esquema da Admin GraphQL API e a verificação de código GraphQL, Liquid e de temas. Por exemplo: checar se uma consulta de produtos é válida antes de colocá-la num app. Ele roda no seu computador sem chave e não lê nem altera dados da loja.",
+        "abilities": [
+          "Buscar na documentação da Shopify e nos esquemas de API",
+          "Validar consultas GraphQL e arquivos Liquid ou de tema",
+          "Descobrir as versões de API disponíveis"
+        ],
+        "needs": "Node.js 18 ou mais novo no seu computador. Não precisa de chave nem de acesso à loja: o servidor roda localmente e não acessa a loja."
+      },
+      "zh-Hans": {
+        "description": "开发者文档、API 架构以及 GraphQL、Liquid 和主题代码检查，通过 Shopify 官方 Dev MCP 服务器提供。",
+        "long": "Shopify 官方 Dev MCP 服务器为智能体提供开发者资源：文档、Admin GraphQL 架构，以及 GraphQL、Liquid 和主题代码检查。例如：在把商品查询放进应用前，先确认它是否有效。服务器在您的电脑上本地运行，无需密钥，不读取也不修改店铺数据。",
+        "abilities": [
+          "搜索 Shopify 文档和 API 架构",
+          "检查 GraphQL 查询以及 Liquid 和主题文件",
+          "查询支持的 API 版本"
+        ],
+        "needs": "您电脑上需要 Node.js 18 或更高版本。无需密钥，也无需店铺访问权限：服务器在本地运行，不访问店铺。"
+      }
+    }
+  },
+  {
+    "id": "wix",
+    "name": "Wix",
+    "category": "web",
+    "publisher": "Wix",
+    "official": true,
+    "homepage": "https://www.wix.com",
+    "description_en": "Wix sites, stores, bookings and content, and Wix documentation, through Wix's MCP server.",
+    "description_ru": "Сайты Wix, магазин, записи и контент, а также документация Wix через MCP-сервер Wix.",
+    "long_en": "Wix's MCP server lets an agent search the Wix documentation and work with your sites: read a site's details, and call its APIs for stores, bookings or content. For example: list products that are out of stock, or upload an image to the Media Manager. The agent can also create, update and publish sites, so it can change a live site: check changes on a test site first.",
+    "long_ru": "MCP-сервер Wix позволяет агенту искать по документации Wix и работать с вашими сайтами: читать данные сайта и вызывать API магазина, записей или контента. Например: показать товары, которых нет в наличии, или загрузить изображение в Media Manager. Агент может создавать, обновлять и публиковать сайты, то есть менять живой сайт, поэтому сначала проверяйте изменения на тестовом сайте.",
+    "abilities_en": [
+      "Search Wix documentation: REST, SDK, Design System, Headless",
+      "List the sites of your account and read a site's details",
+      "Call site APIs (store, bookings, CMS), and create, update or publish sites"
+    ],
+    "abilities_ru": [
+      "Искать по документации Wix: REST, SDK, Design System, Headless",
+      "Показывать сайты аккаунта и данные сайта",
+      "Вызывать API сайтов (магазин, записи, CMS), создавать, обновлять и публиковать сайты"
+    ],
+    "needs_en": "A Wix account with a site. Sign in in the browser after you press Connect; the account must have access to the site.",
+    "needs_ru": "Аккаунт Wix с сайтом: войдите в браузере после нажатия «Подключить». У аккаунта должен быть доступ к сайту.",
+    "kind": "http",
+    "url": "https://mcp.wix.com/mcp",
+    "auth": "oauth",
+    "docs_url": "https://dev.wix.com/docs/sdk/articles/use-the-wix-mcp/about-the-wix-mcp",
+    "icon": "wix",
+    "accent": "#0C6EFC",
+    "l10n": {
+      "de": {
+        "description": "Wix-Websites, Shops, Buchungen und Inhalte sowie die Wix-Dokumentation, über den MCP-Server von Wix.",
+        "long": "Der MCP-Server von Wix lässt den Agenten in der Wix-Dokumentation suchen und mit Ihren Websites arbeiten: Angaben zur Website lesen und die APIs für Shop, Buchungen oder Inhalte aufrufen. Zum Beispiel: Produkte ohne Lagerbestand auflisten oder ein Bild in den Media Manager hochladen. Der Agent kann Websites auch anlegen, ändern und veröffentlichen, also eine Live-Website verändern; prüfen Sie Änderungen daher zuerst auf einer Testseite.",
+        "abilities": [
+          "Die Wix-Dokumentation durchsuchen (REST, SDK, Design System, Headless)",
+          "Websites des Kontos und deren Angaben lesen",
+          "APIs der Websites aufrufen (Shop, Buchungen, CMS) sowie Websites anlegen, ändern und veröffentlichen"
+        ],
+        "needs": "Ein Wix-Konto mit einer Website. Melden Sie sich nach dem Klick auf „Verbinden“ im Browser an; das Konto braucht Zugriff auf die Website."
+      },
+      "es": {
+        "description": "Sitios, tiendas, reservas y contenido de Wix, y la documentación de Wix, a través del servidor MCP de Wix.",
+        "long": "El servidor MCP de Wix permite al agente buscar en la documentación de Wix y trabajar con tus sitios: leer los datos de un sitio y llamar a sus APIs de tienda, reservas o contenido. Por ejemplo: listar productos agotados, o subir una imagen al Media Manager. El agente también puede crear, cambiar y publicar sitios, es decir, modificar un sitio en vivo; prueba antes los cambios en un sitio de pruebas.",
+        "abilities": [
+          "Buscar en la documentación de Wix (REST, SDK, Design System, Headless)",
+          "Listar los sitios de la cuenta y leer sus datos",
+          "Llamar a las APIs de los sitios (tienda, reservas, CMS) y crear, cambiar y publicar sitios"
+        ],
+        "needs": "Una cuenta de Wix con un sitio. Inicia sesión en el navegador después de pulsar Conectar; la cuenta debe tener acceso al sitio."
+      },
+      "fr": {
+        "description": "Sites, boutiques, réservations et contenus Wix, ainsi que la documentation Wix, via le serveur MCP de Wix.",
+        "long": "Le serveur MCP de Wix permet à l'agent de chercher dans la documentation Wix et de travailler avec vos sites : lire les informations d'un site et appeler ses API de boutique, de réservations ou de contenu. Par exemple : lister les produits en rupture, ou téléverser une image dans le Media Manager. L'agent peut aussi créer, modifier et publier des sites, donc changer un site en ligne ; testez d'abord les modifications sur un site de test.",
+        "abilities": [
+          "Chercher dans la documentation Wix (REST, SDK, Design System, Headless)",
+          "Lister les sites du compte et lire leurs informations",
+          "Appeler les API des sites (boutique, réservations, CMS) et créer, modifier, publier des sites"
+        ],
+        "needs": "Un compte Wix avec un site. Connectez-vous dans le navigateur après avoir cliqué sur Connecter ; le compte doit avoir accès au site."
+      },
+      "ja": {
+        "description": "Wix のサイト、ストア、予約、コンテンツと Wix のドキュメントを、Wix の MCP サーバー経由で扱います。",
+        "long": "Wix の MCP サーバーを使うと、エージェントが Wix のドキュメントを検索し、サイトを扱えます。サイトの情報を読み、ストア、予約、コンテンツの API を呼び出せます。例: 在庫切れの商品を一覧にする、Media Manager に画像をアップロードする。エージェントはサイトの作成、更新、公開も行えるため、公開中のサイトを変更できます。まずはテスト用のサイトで変更を確かめてください。",
+        "abilities": [
+          "Wix のドキュメント（REST、SDK、Design System、Headless）を検索する",
+          "アカウントのサイト一覧とサイトの情報を読む",
+          "サイトの API（ストア、予約、CMS）を呼び出し、サイトを作成・更新・公開する"
+        ],
+        "needs": "サイトを持つ Wix のアカウント。「接続」を押した後にブラウザでサインインします。アカウントがそのサイトにアクセスできる必要があります。"
+      },
+      "ko": {
+        "description": "Wix 사이트, 스토어, 예약, 콘텐츠와 Wix 문서를 Wix 공식 MCP 서버로 다룹니다.",
+        "long": "Wix MCP 서버를 쓰면 에이전트가 Wix 문서를 검색하고 사이트를 다룰 수 있습니다. 사이트 정보를 읽고 스토어, 예약, 콘텐츠 API를 호출할 수 있습니다. 예: 재고가 없는 상품 목록 보기, Media Manager에 이미지 올리기. 에이전트는 사이트를 만들고, 수정하고, 게시할 수도 있어 실서비스 사이트를 바꿀 수 있으니 먼저 테스트 사이트에서 변경을 확인하세요.",
+        "abilities": [
+          "Wix 문서 검색(REST, SDK, Design System, Headless)",
+          "계정의 사이트 목록과 사이트 정보 읽기",
+          "사이트 API(스토어, 예약, CMS) 호출과 사이트 만들기·수정·게시"
+        ],
+        "needs": "사이트가 있는 Wix 계정. '연결'을 누른 뒤 브라우저에서 로그인하세요. 계정이 해당 사이트에 접근할 수 있어야 합니다."
+      },
+      "pt-BR": {
+        "description": "Sites, lojas, agendamentos e conteúdo do Wix, e a documentação do Wix, pelo servidor MCP do Wix.",
+        "long": "O servidor MCP do Wix permite que o agente busque na documentação do Wix e trabalhe com seus sites: ler os dados de um site e chamar as APIs de loja, agendamentos ou conteúdo. Por exemplo: listar produtos sem estoque, ou enviar uma imagem ao Media Manager. O agente também pode criar, alterar e publicar sites, ou seja, mudar um site no ar; teste antes as alterações num site de testes.",
+        "abilities": [
+          "Buscar na documentação do Wix (REST, SDK, Design System, Headless)",
+          "Listar os sites da conta e ler os dados deles",
+          "Chamar as APIs dos sites (loja, agendamentos, CMS) e criar, alterar e publicar sites"
+        ],
+        "needs": "Uma conta no Wix com um site. Entre no navegador depois de clicar em Conectar; a conta precisa ter acesso ao site."
+      },
+      "zh-Hans": {
+        "description": "Wix 网站、店铺、预约和内容，以及 Wix 文档，通过 Wix 官方 MCP 服务器提供。",
+        "long": "Wix 官方 MCP 服务器让智能体搜索 Wix 文档，并处理您的网站：读取网站信息，调用店铺、预约或内容相关的 API。例如：列出缺货的商品，或把图片上传到媒体管理器。智能体还能创建、修改和发布网站，也就是改动正在线上运行的网站，因此请先在测试网站上确认修改。",
+        "abilities": [
+          "搜索 Wix 文档（REST、SDK、Design System、Headless）",
+          "列出账号下的网站并读取网站信息",
+          "调用网站 API（店铺、预约、CMS），并创建、修改、发布网站"
+        ],
+        "needs": "一个带网站的 Wix 账号。点击“连接”后在浏览器中登录；该账号需要有权访问此网站。"
+      }
+    }
+  },
+  {
+    "id": "yandex-metrika",
+    "name": "Yandex Metrika",
+    "category": "data",
+    "publisher": "BoxLab-Ltd",
+    "official": false,
+    "homepage": "https://github.com/BoxLab-Ltd/yandex-metrica-mcp",
+    "description_en": "Yandex Metrika reports, comparisons and time series for one counter, through a community MCP server (not made by Yandex).",
+    "description_ru": "Отчёты, сравнения и ряды по времени Яндекс Метрики для одного счётчика через MCP-сервер сообщества (не от Яндекса).",
+    "long_en": "A community MCP server (BoxLab, MIT licence, not made by Yandex) lets an agent query Yandex Metrika: reports, comparisons, drill-downs and time series for one counter. For example: compare last week's traffic with the week before, or find pages that lose visitors. The server is read-only by design; log exports start jobs and use the counter's quota. Use a token with read rights only.",
+    "long_ru": "MCP-сервер сообщества (BoxLab, лицензия MIT, не от Яндекса) позволяет агенту запрашивать Яндекс Метрику: отчёты, сравнения, детализацию и ряды по времени для одного счётчика. Например: сравнить трафик прошлой недели с предыдущей или найти страницы, которые теряют посетителей. Сервер задуман только для чтения; выгрузка логов запускает задания и тратит квоту счётчика. Используйте токен только с правом чтения.",
+    "abilities_en": [
+      "Run reports, comparisons and drill-downs for a counter",
+      "Show time series of visits and other metrics",
+      "Describe the counter and list the fields you can query"
+    ],
+    "abilities_ru": [
+      "Строить отчёты, сравнения и детализацию по счётчику",
+      "Показывать ряды по времени: визиты и другие показатели",
+      "Описывать счётчик и список полей для запросов"
+    ],
+    "needs_en": "Node.js 18 or later (npx), a Yandex OAuth token with the metrika:read scope (created at oauth.yandex.ru), and the Metrika counter ID. A community project by BoxLab, not made by Yandex.",
+    "needs_ru": "Node.js 18 или новее (npx), OAuth-токен Яндекса с правом metrika:read (создаётся на oauth.yandex.ru) и ID счётчика Метрики. Проект сообщества BoxLab, не Яндекса.",
+    "kind": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "yandex-metrica-mcp@0.3.0"
+    ],
+    "env_keys": [
+      {
+        "key": "YANDEX_METRIKA_TOKEN",
+        "label_en": "Yandex OAuth token (metrika:read)",
+        "label_ru": "OAuth-токен Яндекса (metrika:read)",
+        "secret": true,
+        "value_template": "{secret}"
+      },
+      {
+        "key": "YANDEX_METRIKA_COUNTER_ID",
+        "label_en": "Metrika counter ID",
+        "label_ru": "ID счётчика Метрики",
+        "secret": true,
+        "value_template": "{secret}"
+      }
+    ],
+    "docs_url": "https://github.com/BoxLab-Ltd/yandex-metrica-mcp",
+    "icon": "globe",
+    "accent": "#FC3F1D",
+    "l10n": {
+      "de": {
+        "description": "Berichte, Vergleiche und Zeitreihen von Yandex Metrika für einen Zähler, über einen MCP-Server der Community (nicht von Yandex).",
+        "long": "Ein MCP-Server der Community (BoxLab, MIT-Lizenz, nicht von Yandex) lässt den Agenten Yandex Metrika abfragen: Berichte, Vergleiche, Detailanalysen und Zeitreihen für einen Zähler. Zum Beispiel: den Verkehr der letzten Woche mit der Woche davor vergleichen oder Seiten finden, die Besucher verlieren. Der Server ist nur zum Lesen gedacht; das Herunterladen von Protokollen startet Aufträge und verbraucht das Kontingent des Zählers. Verwenden Sie ein Token nur mit Leserechten.",
+        "abilities": [
+          "Berichte, Vergleiche und Detailanalysen erstellen",
+          "Zeitreihen von Besuchen und anderen Kennzahlen zeigen",
+          "Den Zähler beschreiben und die abfragbaren Felder auflisten"
+        ],
+        "needs": "Node.js 18 oder neuer (npx), ein OAuth-Token von Yandex mit dem Recht metrika:read (erstellt auf oauth.yandex.ru) und die ID des Metrika-Zählers. Ein Projekt der Community von BoxLab, nicht von Yandex.",
+        "labels": {
+          "YANDEX_METRIKA_TOKEN": "OAuth-Token von Yandex (metrika:read)",
+          "YANDEX_METRIKA_COUNTER_ID": "ID des Metrika-Zählers"
+        }
+      },
+      "es": {
+        "description": "Informes, comparativas y series temporales de Yandex Metrika de un contador, a través de un servidor MCP de la comunidad (no de Yandex).",
+        "long": "Un servidor MCP de la comunidad (BoxLab, licencia MIT, no hecho por Yandex) permite al agente consultar Yandex Metrika: informes, comparativas, desgloses y series temporales de un contador. Por ejemplo: comparar el tráfico de la semana pasada con la anterior, o encontrar páginas que pierden visitantes. El servidor está pensado solo para lectura; las exportaciones de logs inician trabajos y gastan la cuota del contador. Usa un token solo con permiso de lectura.",
+        "abilities": [
+          "Crear informes, comparativas y desgloses",
+          "Mostrar series temporales de visitas y otros indicadores",
+          "Describir el contador y listar los campos disponibles"
+        ],
+        "needs": "Node.js 18 o posterior (npx), un token OAuth de Yandex con el permiso metrika:read (se crea en oauth.yandex.ru) y el ID del contador de Metrika. Proyecto de la comunidad de BoxLab, no de Yandex.",
+        "labels": {
+          "YANDEX_METRIKA_TOKEN": "Token OAuth de Yandex (metrika:read)",
+          "YANDEX_METRIKA_COUNTER_ID": "ID del contador de Metrika"
+        }
+      },
+      "fr": {
+        "description": "Rapports, comparaisons et séries temporelles de Yandex Metrika pour un compteur, via un serveur MCP communautaire (non édité par Yandex).",
+        "long": "Un serveur MCP communautaire (BoxLab, licence MIT, non édité par Yandex) permet à l'agent d'interroger Yandex Metrika : rapports, comparaisons, analyses détaillées et séries temporelles pour un compteur. Par exemple : comparer le trafic de la semaine passée à celui de la semaine précédente, ou repérer les pages qui perdent des visiteurs. Le serveur est conçu pour la lecture seule ; les exports de journaux lancent des tâches et consomment le quota du compteur. Utilisez un jeton avec des droits de lecture uniquement.",
+        "abilities": [
+          "Créer des rapports, comparaisons et analyses détaillées",
+          "Afficher les séries temporelles des visites et d'autres indicateurs",
+          "Décrire le compteur et lister les champs interrogeables"
+        ],
+        "needs": "Node.js 18 ou plus récent (npx), un jeton OAuth Yandex avec le droit metrika:read (créé sur oauth.yandex.ru) et l'identifiant du compteur Metrika. Projet communautaire de BoxLab, pas de Yandex.",
+        "labels": {
+          "YANDEX_METRIKA_TOKEN": "Jeton OAuth Yandex (metrika:read)",
+          "YANDEX_METRIKA_COUNTER_ID": "Identifiant du compteur Metrika"
+        }
+      },
+      "ja": {
+        "description": "1 つのカウンターの Yandex Metrika のレポート、比較、時系列を、コミュニティの MCP サーバー経由で扱います（Yandex 製ではありません）。",
+        "long": "コミュニティの MCP サーバー（BoxLab 製、MIT ライセンス、Yandex 製ではありません）を使うと、エージェントが Yandex Metrika に問い合わせられます。1 つのカウンターのレポート、比較、詳細分析、時系列です。例: 先週のアクセスを前週と比較する、訪問者が減っているページを探す。サーバーは読み取り専用の設計です。ログのエクスポートは作業を開始してカウンターの枠を消費するので注意してください。読み取り権限だけのトークンを使ってください。",
+        "abilities": [
+          "レポート、比較、詳細分析を作成する",
+          "訪問数などの時系列を表示する",
+          "カウンターを説明し、照会できる項目を一覧にする"
+        ],
+        "needs": "Node.js 18 以降（npx）、metrika:read 権限を持つ Yandex の OAuth トークン（oauth.yandex.ru で作成）、Metrika のカウンター ID。BoxLab のコミュニティプロジェクトで、Yandex の製品ではありません。",
+        "labels": {
+          "YANDEX_METRIKA_TOKEN": "Yandex の OAuth トークン（metrika:read）",
+          "YANDEX_METRIKA_COUNTER_ID": "Metrika カウンター ID"
+        }
+      },
+      "ko": {
+        "description": "하나의 카운터에 대한 Yandex Metrika 보고서, 비교, 시계열을 커뮤니티 MCP 서버로 다룹니다(Yandex 제작 아님).",
+        "long": "커뮤니티 MCP 서버(BoxLab 제작, MIT 라이선스, Yandex 제작 아님)를 쓰면 에이전트가 Yandex Metrika를 조회할 수 있습니다. 한 카운터의 보고서, 비교, 세부 분석, 시계열입니다. 예: 지난주 트래픽을 그 전주와 비교하기, 방문자가 줄고 있는 페이지 찾기. 서버는 읽기 전용으로 설계되었습니다. 로그 내보내기는 작업을 시작하고 카운터의 할당량을 쓰니 주의하세요. 읽기 권한만 있는 토큰을 쓰세요.",
+        "abilities": [
+          "보고서, 비교, 세부 분석 만들기",
+          "방문 등 지표의 시계열 보기",
+          "카운터를 설명하고 조회할 필드 목록 보기"
+        ],
+        "needs": "Node.js 18 이상(npx), metrika:read 권한의 Yandex OAuth 토큰(oauth.yandex.ru에서 발급), Metrika 카운터 ID. BoxLab의 커뮤니티 프로젝트이며 Yandex 제품이 아닙니다.",
+        "labels": {
+          "YANDEX_METRIKA_TOKEN": "Yandex OAuth 토큰(metrika:read)",
+          "YANDEX_METRIKA_COUNTER_ID": "Metrika 카운터 ID"
+        }
+      },
+      "pt-BR": {
+        "description": "Relatórios, comparações e séries temporais do Yandex Metrika de um contador, pelo servidor MCP da comunidade (não é da Yandex).",
+        "long": "Um servidor MCP da comunidade (BoxLab, licença MIT, não feito pela Yandex) permite que o agente consulte o Yandex Metrika: relatórios, comparações, detalhamentos e séries temporais de um contador. Por exemplo: comparar o tráfego da semana passada com a anterior, ou achar páginas que perdem visitantes. O servidor foi feito só para leitura; as exportações de logs iniciam tarefas e consomem a cota do contador. Use um token só com permissão de leitura.",
+        "abilities": [
+          "Criar relatórios, comparações e detalhamentos",
+          "Mostrar séries temporais de visitas e de outras métricas",
+          "Descrever o contador e listar os campos disponíveis"
+        ],
+        "needs": "Node.js 18 ou mais novo (npx), um token OAuth da Yandex com a permissão metrika:read (criado em oauth.yandex.ru) e o ID do contador do Metrika. Projeto da comunidade BoxLab, não da Yandex.",
+        "labels": {
+          "YANDEX_METRIKA_TOKEN": "Token OAuth da Yandex (metrika:read)",
+          "YANDEX_METRIKA_COUNTER_ID": "ID do contador do Metrika"
+        }
+      },
+      "zh-Hans": {
+        "description": "通过社区 MCP 服务器查询 Yandex Metrika 单个计数器的报告、对比和时间序列（非 Yandex 官方）。",
+        "long": "社区 MCP 服务器（BoxLab 开发，MIT 许可，非 Yandex 官方）让智能体查询 Yandex Metrika：单个计数器的报告、对比、钻取分析和时间序列。例如：把上周流量与前一周对比，或找出访客在减少的页面。服务器设计为只读；日志导出会启动任务并占用计数器的配额。请使用仅具读取权限的令牌。",
+        "abilities": [
+          "生成报告、对比和钻取分析",
+          "显示访问量等指标的时间序列",
+          "描述计数器并列出可查询的字段"
+        ],
+        "needs": "Node.js 18 或更高版本（npx），一个具有 metrika:read 权限的 Yandex OAuth 令牌（在 oauth.yandex.ru 创建），以及 Metrika 计数器 ID。这是 BoxLab 的社区项目，并非 Yandex 产品。",
+        "labels": {
+          "YANDEX_METRIKA_TOKEN": "Yandex OAuth 令牌（metrika:read）",
+          "YANDEX_METRIKA_COUNTER_ID": "Metrika 计数器 ID"
+        }
+      }
+    }
   }
 ]
