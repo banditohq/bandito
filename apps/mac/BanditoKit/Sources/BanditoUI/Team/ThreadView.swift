@@ -188,7 +188,9 @@ struct ThreadView: View {
     /// all follow from the measured distance, never from the position of a marker.
     private func scrollGeometryChanged(_ old: ThreadScrollMetrics?, _ new: ThreadScrollMetrics, _ proxy: ScrollViewProxy) {
         if let old, old.offset != new.offset { ThreadScrollActivity.noteMove() }
-        let flags = ThreadScroll.flags(was: atBottom, old: old, new: new)
+        // After a send the thread follows the bottom until the person scrolls up themselves.
+        if scroll.sendPinned, let old, ThreadScroll.leavesBottom(old: old, new: new) { scroll.sendPinned = false }
+        let flags = ThreadScroll.flags(was: atBottom, old: old, new: new, pinned: scroll.sendPinned)
         setAtBottom(flags.atBottom)
         setJumpVisible(flags.jump)
         if ThreadScroll.shouldFollow(atBottom: flags.atBottom, old: old, new: new) { followBottom(proxy) }
@@ -213,6 +215,7 @@ struct ThreadView: View {
 
     /// The person goes to the newest message (the send, the "down" button): the thread follows the bottom again.
     private func goToBottom(_ proxy: ScrollViewProxy) {
+        scroll.skipFollow = false
         setAtBottom(true)
         setJumpVisible(false)
         withAnimation(.easeOut(duration: 0.15)) {
@@ -344,6 +347,11 @@ struct ThreadView: View {
                     // further up, must not jump to the bottom. (Growth of the last item, a stream or an opened
                     // card, is followed from the scroll geometry.)
                     .onChange(of: thread.items.last?.id) { _, _ in
+                        // The echo of the person's own message (and the answer to it) is looked at.
+                        if scroll.sendPinned {
+                            setAtBottom(true)
+                            setJumpVisible(false)
+                        }
                         guard atBottom else { return }
                         followBottom(proxy)
                     }
@@ -535,6 +543,7 @@ struct ThreadView: View {
         let reply = replyDrafts.take(for: id)
         sendError = nil
         // As in any messenger: the person's own message, and the answer to it, are looked at.
+        scroll.sendPinned = true
         bottomRequest += 1
         Task {
             do {
@@ -671,6 +680,8 @@ final class ThreadScrollMemory {
     /// A restore to a row waits for the history to load.
     var restorePending = false
     var skipFollow = false
+    /// The person sent a message: the thread follows the bottom until they scroll up themselves.
+    var sendPinned = false
 }
 
 /// Reports the scroll geometry of the thread (macOS 15 and later): the distance to the bottom, the height of the

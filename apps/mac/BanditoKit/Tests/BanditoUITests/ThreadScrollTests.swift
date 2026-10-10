@@ -75,6 +75,38 @@ import Testing
         #expect(ThreadScroll.atBottom(was: true, old: old, new: shorter))
     }
 
+    @Test func aTallerScreenMovingTheOffsetDownIsNotAScrollUp() {
+        // The composer shrank after a send: the screen got 40 taller, the offset fell, rounding left a distance of 1.
+        let old = m(distance: 0, offset: 500, content: 1300)
+        let taller = m(distance: 1, offset: 460, content: 1300, height: 840)
+        #expect(!ThreadScroll.leavesBottom(old: old, new: taller))
+        #expect(ThreadScroll.atBottom(was: true, old: old, new: taller))
+        // Even a wider gap on a screen that changed height is not the person's scroll.
+        let gap = m(distance: 30, offset: 440, content: 1300, height: 840)
+        #expect(ThreadScroll.atBottom(was: true, old: old, new: gap))
+    }
+
+    @Test func aRealScrollUpStillLeavesTheBottom() {
+        let old = m(distance: 0, offset: 500, content: 1300)
+        let up = m(distance: 30, offset: 470, content: 1300)
+        #expect(ThreadScroll.leavesBottom(old: old, new: up))
+        // A one-point wobble with a distance of 1 is not a scroll.
+        #expect(!ThreadScroll.leavesBottom(old: old, new: m(distance: 1, offset: 499, content: 1300)))
+    }
+
+    @Test func afterASendTheThreadFollowsUntilThePersonScrollsUp() {
+        let old = m(distance: 60, offset: 500, content: 1360)
+        // Content grew with a rounding wobble, screen changed: the pinned thread stays at the bottom.
+        let grown = m(distance: 160, offset: 480, content: 1480, height: 840)
+        #expect(ThreadScroll.flags(was: false, old: old, new: grown, pinned: true).atBottom)
+        #expect(!ThreadScroll.flags(was: false, old: old, new: grown, pinned: true).jump)
+        // Without the pin, away from the bottom, growth alone does not bring it back.
+        #expect(!ThreadScroll.atBottom(was: false, old: old, new: grown))
+        // The person's own scroll up ends the follow even when pinned.
+        let up = m(distance: 100, offset: 460, content: 1360)
+        #expect(!ThreadScroll.atBottom(was: true, old: old, new: up, pinned: true))
+    }
+
     @Test func smallScrollUpIsNotUndoneByTheNextChunk() {
         let atEnd = m(distance: 0, offset: 500, content: 1300)
         let up = m(distance: 30, offset: 470, content: 1300)
