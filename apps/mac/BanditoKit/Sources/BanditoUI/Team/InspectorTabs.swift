@@ -22,8 +22,18 @@ struct DetailsTab: View {
 
     private var effort: Binding<Effort> {
         Binding(
-            get: { agent.effort ?? .medium },
+            get: {
+                RuntimeModelDisplay.effort(
+                    agent.effort ?? .medium, modelID: agent.model ?? "", runtime: agent.runtime,
+                    lists: server.runtimeModels) ?? .medium
+            },
             set: { value in change { _ = try await server.updateAgent(agent.id, effort: value) } })
+    }
+
+    /// The effort levels the agent's saved model takes. Empty for a model that takes no effort.
+    private var effortLevels: [Effort] {
+        RuntimeModelDisplay.effortLevels(
+            modelID: agent.model ?? "", runtime: agent.runtime, lists: server.runtimeModels)
     }
 
     var body: some View {
@@ -57,11 +67,11 @@ struct DetailsTab: View {
                     .fixedSize()
                 }
                 InspectorRow(label: L10n.Inspector.model) {
-                    TextField(L10n.AgentSheet.modelDefault, text: $modelDraft)
-                        .textFieldStyle(.plain)
-                        .multilineTextAlignment(.trailing)
-                        .frame(maxWidth: 170)
-                        .onSubmit(saveModel)
+                    ModelPicker(
+                        runtime: agent.runtime, selection: $modelDraft,
+                        models: server.runtimeModels[agent.runtime.rawValue],
+                        status: server.runtimeModelsStatus, onCommit: saveModel)
+                        .frame(maxWidth: 260)
                 }
                 InspectorRow(label: L10n.AgentSheet.fallbackLabel) {
                     Menu {
@@ -102,9 +112,16 @@ struct DetailsTab: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 SectionLabel(L10n.Effort.title)
-                SegmentedPicker(
-                    selection: effort,
-                    options: EffortLevels.levels(for: agent.runtime).map { ($0, $0.title) })
+                if effortLevels.isEmpty {
+                    Text(L10n.ModelPicker.noEffort)
+                        .font(BanditoFont.font(size: 12.5, weight: 400))
+                        .foregroundStyle(Color.Bandito.text3)
+                        .padding(.vertical, 6)
+                } else {
+                    SegmentedPicker(
+                        selection: effort,
+                        options: effortLevels.map { ($0, $0.title) })
+                }
             }
 
             VStack(alignment: .leading, spacing: 8) {
@@ -225,6 +242,9 @@ struct DetailsTab: View {
             patch.fallbackRuntime = .clear
             patch.fallbackModel = .clear
         }
+        // A model is kept only when the new runtime's list names it; otherwise the new runtime gets its default.
+        patch.model = RuntimeModelDisplay.modelChange(
+            afterSwitchingTo: kind, current: agent.model ?? "", lists: server.runtimeModels)
         apply(patch)
     }
 
@@ -236,12 +256,17 @@ struct DetailsTab: View {
         }
     }
 
-    /// An empty field goes back to the runtime's default model.
-    private func saveModel() {
-        let text = modelDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+    /// An empty model goes back to the runtime's default model. Saved when a model is picked or a typed id is confirmed.
+    private func saveModel(_ value: String) {
+        let text = value.trimmingCharacters(in: .whitespacesAndNewlines)
         let next: FieldChange<String> = text.isEmpty ? .clear : .set(text)
         if text == (agent.model ?? "") { return }
-        apply(AgentPatch(model: next))
+        var patch = AgentPatch(model: next)
+        // One request: a model change that needs another effort carries it along. Opening the inspector writes nothing.
+        patch.effort = RuntimeModelDisplay.effortWrite(
+            modelChangedFrom: agent.model ?? "", to: text, stored: agent.effort,
+            runtime: agent.runtime, lists: server.runtimeModels)
+        apply(patch)
     }
 }
 

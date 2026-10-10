@@ -75,7 +75,6 @@
   "agentSheet.runtime": "Antrieb",
   "agentSheet.runtimeHint": "Abos auf {server}",
   "agentSheet.model": "Modell",
-  "agentSheet.modelDefault": "Standard",
   "agentSheet.folder": "Projekt auf dem Server",
   "agentSheet.folderHint": "Wo der Code liegt, mit dem er arbeitet.",
   "agentSheet.approvals": "Freigaben",
@@ -588,5 +587,17 @@
   "settings.approvals.then": "Was tun",
   "server.features.notInstalled": "Nicht installiert",
   "server.features.installed": "Installiert",
-  "server.features.loginHelp": "Auf dem Server anmelden: {command}"
+  "server.features.loginHelp": "Auf dem Server anmelden: {command}",
+  "modelPicker.defaultLabel": "Standard · {name}",
+  "modelPicker.defaultMenu": "Standard ({name})",
+  "modelPicker.defaultPlain": "Standard",
+  "modelPicker.loading": "Modelle werden geladen…",
+  "modelPicker.other": "Anderes Modell…",
+  "modelPicker.typePlaceholder": "Modell-ID",
+  "modelPicker.backToList": "Zurück zur Liste",
+  "modelPicker.notInstalled": "Auf dem Server nicht installiert",
+  "modelPicker.failed": "Modellliste konnte nicht geladen werden: {reason}",
+  "modelPicker.noEffort": "Dieses Modell stellt den Aufwand nicht ein",
+  "modelPicker.failedMenu": "Modellliste konnte nicht geladen werden",
+  "modelPicker.unsupported": "Der Bandito-Daemon auf diesem Server ist zu alt und liefert keine Modellliste. Sie können die ID von Hand eingeben."
 }

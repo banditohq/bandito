@@ -75,7 +75,6 @@
   "agentSheet.runtime": "驱动方",
   "agentSheet.runtimeHint": "{server} 上的订阅",
   "agentSheet.model": "模型",
-  "agentSheet.modelDefault": "默认",
   "agentSheet.folder": "服务器上的项目",
   "agentSheet.folderHint": "它所处理的代码所在位置。",
   "agentSheet.approvals": "审批",
@@ -588,5 +587,17 @@
   "settings.approvals.then": "执行什么",
   "server.features.notInstalled": "未安装",
   "server.features.installed": "已安装",
-  "server.features.loginHelp": "在服务器上登录：{command}"
+  "server.features.loginHelp": "在服务器上登录：{command}",
+  "modelPicker.defaultLabel": "默认 · {name}",
+  "modelPicker.defaultMenu": "默认（{name}）",
+  "modelPicker.defaultPlain": "默认",
+  "modelPicker.loading": "正在加载模型…",
+  "modelPicker.other": "其他模型…",
+  "modelPicker.typePlaceholder": "模型 ID",
+  "modelPicker.backToList": "返回列表",
+  "modelPicker.notInstalled": "服务器上未安装",
+  "modelPicker.failed": "无法获取模型列表：{reason}",
+  "modelPicker.noEffort": "此模型不设置推理强度",
+  "modelPicker.failedMenu": "无法获取模型列表",
+  "modelPicker.unsupported": "此服务器上的 Bandito 守护进程版本过旧，无法列出模型。可以手动输入 ID。"
 }

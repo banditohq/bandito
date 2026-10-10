@@ -86,8 +86,6 @@
 "agentSheet.memoryAuto" = "создастся сама";
 "agentSheet.memoryHint" = "Ведёт заметки в своей папке, поэтому помнит всё, а сообщения не дорожают.";
 "agentSheet.model" = "Модель";
-"agentSheet.modelDefault" = "По умолчанию";
-"agentSheet.modelFreeHint" = "Любое имя модели, которое понимает CLI.";
 "agentSheet.name" = "Имя";
 "agentSheet.noFolder" = "Выберите папку проекта…";
 "agentSheet.noServer" = "Сначала выберите сервер.";
@@ -685,6 +683,18 @@
 "mode.soonHere" = "Скоро здесь";
 "mode.team" = "Команда";
 "mode.terminals" = "Терминалы";
+"modelPicker.backToList" = "Вернуться к списку";
+"modelPicker.defaultLabel" = "По умолчанию · %1$@";
+"modelPicker.defaultMenu" = "По умолчанию (%1$@)";
+"modelPicker.defaultPlain" = "По умолчанию";
+"modelPicker.failed" = "Не удалось получить список моделей: %1$@";
+"modelPicker.failedMenu" = "Не удалось получить список моделей";
+"modelPicker.loading" = "Загружаем модели…";
+"modelPicker.noEffort" = "Эта модель не настраивает усилие";
+"modelPicker.notInstalled" = "Программа не установлена на сервере";
+"modelPicker.other" = "Другая модель…";
+"modelPicker.typePlaceholder" = "Id модели";
+"modelPicker.unsupported" = "Демон Bandito на сервере слишком старый, он не отдаёт список моделей. Можно ввести id вручную.";
 "new.agent" = "Новый агент";
 "new.channel" = "Новый канал экипажа";
 "new.placeholder" = "Начать чат с…";

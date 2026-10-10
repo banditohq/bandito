@@ -75,7 +75,6 @@
   "agentSheet.runtime": "使用エンジン",
   "agentSheet.runtimeHint": "{server} のサブスクリプション",
   "agentSheet.model": "モデル",
-  "agentSheet.modelDefault": "デフォルト",
   "agentSheet.folder": "サーバー上のプロジェクト",
   "agentSheet.folderHint": "エージェントが扱うコードの場所です。",
   "agentSheet.approvals": "承認",
@@ -588,5 +587,17 @@
   "settings.approvals.then": "実行する操作",
   "server.features.notInstalled": "未インストール",
   "server.features.installed": "インストール済み",
-  "server.features.loginHelp": "サーバーでサインイン：{command}"
+  "server.features.loginHelp": "サーバーでサインイン：{command}",
+  "modelPicker.defaultLabel": "デフォルト · {name}",
+  "modelPicker.defaultMenu": "デフォルト（{name}）",
+  "modelPicker.defaultPlain": "デフォルト",
+  "modelPicker.loading": "モデルを読み込み中…",
+  "modelPicker.other": "別のモデル…",
+  "modelPicker.typePlaceholder": "モデルID",
+  "modelPicker.backToList": "一覧に戻る",
+  "modelPicker.notInstalled": "サーバーにインストールされていません",
+  "modelPicker.failed": "モデル一覧を取得できませんでした: {reason}",
+  "modelPicker.noEffort": "このモデルは思考の強度を設定しません",
+  "modelPicker.failedMenu": "モデル一覧を取得できませんでした",
+  "modelPicker.unsupported": "このサーバーのBanditoデーモンが古く、モデル一覧を返せません。IDを直接入力できます。"
 }

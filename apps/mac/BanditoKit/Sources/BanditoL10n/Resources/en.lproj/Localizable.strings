@@ -86,8 +86,6 @@
 "agentSheet.memoryAuto" = "created automatically";
 "agentSheet.memoryHint" = "Keeps notes in its own folder, so it remembers everything and messages don't get more expensive.";
 "agentSheet.model" = "Model";
-"agentSheet.modelDefault" = "Default";
-"agentSheet.modelFreeHint" = "Any model name the CLI accepts.";
 "agentSheet.name" = "Name";
 "agentSheet.noFolder" = "Pick the project folder…";
 "agentSheet.noServer" = "Choose a server first.";
@@ -685,6 +683,18 @@
 "mode.soonHere" = "Coming soon";
 "mode.team" = "Team";
 "mode.terminals" = "Terminals";
+"modelPicker.backToList" = "Back to the list";
+"modelPicker.defaultLabel" = "Default · %1$@";
+"modelPicker.defaultMenu" = "Default (%1$@)";
+"modelPicker.defaultPlain" = "Default";
+"modelPicker.failed" = "Could not get the model list: %1$@";
+"modelPicker.failedMenu" = "Could not get the model list";
+"modelPicker.loading" = "Loading models…";
+"modelPicker.noEffort" = "This model does not set effort";
+"modelPicker.notInstalled" = "Not installed on the server";
+"modelPicker.other" = "Other model…";
+"modelPicker.typePlaceholder" = "Model ID";
+"modelPicker.unsupported" = "This server's Bandito daemon is too old to list models. You can type an ID by hand.";
 "new.agent" = "New agent";
 "new.channel" = "New crew channel";
 "new.placeholder" = "Start a chat with…";

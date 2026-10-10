@@ -75,7 +75,6 @@
   "agentSheet.runtime": "Impulsado por",
   "agentSheet.runtimeHint": "suscripciones en {server}",
   "agentSheet.model": "Modelo",
-  "agentSheet.modelDefault": "Predeterminado",
   "agentSheet.folder": "Proyecto en el servidor",
   "agentSheet.folderHint": "Dónde está el código con el que trabaja.",
   "agentSheet.approvals": "Aprobaciones",
@@ -588,5 +587,17 @@
   "settings.approvals.then": "Qué hacer",
   "server.features.notInstalled": "No instalado",
   "server.features.installed": "Instalado",
-  "server.features.loginHelp": "Inicia sesión en el servidor: {command}"
+  "server.features.loginHelp": "Inicia sesión en el servidor: {command}",
+  "modelPicker.defaultLabel": "Predeterminado · {name}",
+  "modelPicker.defaultMenu": "Predeterminado ({name})",
+  "modelPicker.defaultPlain": "Predeterminado",
+  "modelPicker.loading": "Cargando modelos…",
+  "modelPicker.other": "Otro modelo…",
+  "modelPicker.typePlaceholder": "ID del modelo",
+  "modelPicker.backToList": "Volver a la lista",
+  "modelPicker.notInstalled": "No está instalado en el servidor",
+  "modelPicker.failed": "No se pudo obtener la lista de modelos: {reason}",
+  "modelPicker.noEffort": "Este modelo no configura el esfuerzo",
+  "modelPicker.failedMenu": "No se pudo obtener la lista de modelos",
+  "modelPicker.unsupported": "El demonio de Bandito en este servidor es demasiado antiguo y no da la lista de modelos. Puedes escribir el ID a mano."
 }

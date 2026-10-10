@@ -20,3 +20,17 @@ extension RuntimeKind {
         return ordered[..<index].last(where: { offered.contains($0) }) ?? offered[0]
     }
 }
+
+extension Effort {
+    /// The level in `offered` closest to this one, counted in `Effort` order. A tie goes to the lower level.
+    /// Nil when `offered` is empty.
+    public func nearest(in offered: [Effort]) -> Effort? {
+        let order = Effort.allCases
+        let here = order.firstIndex(of: self) ?? 0
+        func rank(_ level: Effort) -> (distance: Int, index: Int) {
+            let index = order.firstIndex(of: level) ?? 0
+            return (abs(index - here), index)
+        }
+        return offered.min { rank($0) < rank($1) }
+    }
+}

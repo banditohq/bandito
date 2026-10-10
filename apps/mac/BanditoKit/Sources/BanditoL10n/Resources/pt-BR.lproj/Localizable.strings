@@ -64,7 +64,6 @@
 "agentSheet.memoryAuto" = "será criada automaticamente";
 "agentSheet.memoryHint" = "Mantém notas na própria pasta, então lembra de tudo e as mensagens não ficam mais caras.";
 "agentSheet.model" = "Modelo";
-"agentSheet.modelDefault" = "Padrão";
 "agentSheet.name" = "Nome";
 "agentSheet.ownFolderHint" = "Sem pasta, o agente trabalha na sua própria pasta pessoal";
 "agentSheet.role" = "Função";
@@ -241,6 +240,18 @@
 "menubar.upNext" = "A SEGUIR";
 "menubar.wantsPush" = "quer enviar";
 "menubar.working" = "TRABALHANDO";
+"modelPicker.backToList" = "Voltar à lista";
+"modelPicker.defaultLabel" = "Padrão · %1$@";
+"modelPicker.defaultMenu" = "Padrão (%1$@)";
+"modelPicker.defaultPlain" = "Padrão";
+"modelPicker.failed" = "Não foi possível obter a lista de modelos: %1$@";
+"modelPicker.failedMenu" = "Não foi possível obter a lista de modelos";
+"modelPicker.loading" = "Carregando modelos…";
+"modelPicker.noEffort" = "Este modelo não configura o esforço";
+"modelPicker.notInstalled" = "Não instalado no servidor";
+"modelPicker.other" = "Outro modelo…";
+"modelPicker.typePlaceholder" = "ID do modelo";
+"modelPicker.unsupported" = "O daemon do Bandito neste servidor é antigo demais e não fornece a lista de modelos. Você pode digitar o ID manualmente.";
 "new.agent" = "Novo agente";
 "new.channel" = "Novo canal de equipe";
 "new.placeholder" = "Iniciar conversa com…";

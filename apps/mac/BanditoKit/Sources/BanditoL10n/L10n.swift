@@ -176,8 +176,6 @@ public enum L10n {
         public static var memoryAuto: String { L10n.tr("agentSheet.memoryAuto") }
         public static var memoryHint: String { L10n.tr("agentSheet.memoryHint") }
         public static var model: String { L10n.tr("agentSheet.model") }
-        public static var modelDefault: String { L10n.tr("agentSheet.modelDefault") }
-        public static var modelFreeHint: String { L10n.tr("agentSheet.modelFreeHint") }
         public static var name: String { L10n.tr("agentSheet.name") }
         public static var noFolder: String { L10n.tr("agentSheet.noFolder") }
         public static var noServer: String { L10n.tr("agentSheet.noServer") }
@@ -997,6 +995,21 @@ public enum L10n {
         public static var soonHere: String { L10n.tr("mode.soonHere") }
         public static var team: String { L10n.tr("mode.team") }
         public static var terminals: String { L10n.tr("mode.terminals") }
+    }
+
+    public enum ModelPicker {
+        public static var backToList: String { L10n.tr("modelPicker.backToList") }
+        public static func defaultLabel(name: String) -> String { L10n.tr("modelPicker.defaultLabel", name) }
+        public static func defaultMenu(name: String) -> String { L10n.tr("modelPicker.defaultMenu", name) }
+        public static var defaultPlain: String { L10n.tr("modelPicker.defaultPlain") }
+        public static func failed(reason: String) -> String { L10n.tr("modelPicker.failed", reason) }
+        public static var failedMenu: String { L10n.tr("modelPicker.failedMenu") }
+        public static var loading: String { L10n.tr("modelPicker.loading") }
+        public static var noEffort: String { L10n.tr("modelPicker.noEffort") }
+        public static var notInstalled: String { L10n.tr("modelPicker.notInstalled") }
+        public static var other: String { L10n.tr("modelPicker.other") }
+        public static var typePlaceholder: String { L10n.tr("modelPicker.typePlaceholder") }
+        public static var unsupported: String { L10n.tr("modelPicker.unsupported") }
     }
 
     public enum New {

@@ -75,7 +75,6 @@
   "agentSheet.runtime": "Baseado em",
   "agentSheet.runtimeHint": "assinaturas em {server}",
   "agentSheet.model": "Modelo",
-  "agentSheet.modelDefault": "Padrão",
   "agentSheet.folder": "Projeto no servidor",
   "agentSheet.folderHint": "Onde está o código com que ele trabalha.",
   "agentSheet.approvals": "Aprovações",
@@ -588,5 +587,17 @@
   "settings.approvals.then": "O que fazer",
   "server.features.notInstalled": "Não instalado",
   "server.features.installed": "Instalado",
-  "server.features.loginHelp": "Entre no servidor: {command}"
+  "server.features.loginHelp": "Entre no servidor: {command}",
+  "modelPicker.defaultLabel": "Padrão · {name}",
+  "modelPicker.defaultMenu": "Padrão ({name})",
+  "modelPicker.defaultPlain": "Padrão",
+  "modelPicker.loading": "Carregando modelos…",
+  "modelPicker.other": "Outro modelo…",
+  "modelPicker.typePlaceholder": "ID do modelo",
+  "modelPicker.backToList": "Voltar à lista",
+  "modelPicker.notInstalled": "Não instalado no servidor",
+  "modelPicker.failed": "Não foi possível obter a lista de modelos: {reason}",
+  "modelPicker.noEffort": "Este modelo não configura o esforço",
+  "modelPicker.failedMenu": "Não foi possível obter a lista de modelos",
+  "modelPicker.unsupported": "O daemon do Bandito neste servidor é antigo demais e não fornece a lista de modelos. Você pode digitar o ID manualmente."
 }

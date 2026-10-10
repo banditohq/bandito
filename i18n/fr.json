@@ -75,7 +75,6 @@
   "agentSheet.runtime": "Propulsé par",
   "agentSheet.runtimeHint": "abonnements sur {server}",
   "agentSheet.model": "Modèle",
-  "agentSheet.modelDefault": "Par défaut",
   "agentSheet.folder": "Projet sur le serveur",
   "agentSheet.folderHint": "Où se trouve le code sur lequel il travaille.",
   "agentSheet.approvals": "Approbations",
@@ -588,5 +587,17 @@
   "settings.approvals.then": "Que faire",
   "server.features.notInstalled": "Non installé",
   "server.features.installed": "Installé",
-  "server.features.loginHelp": "Connexion sur le serveur : {command}"
+  "server.features.loginHelp": "Connexion sur le serveur : {command}",
+  "modelPicker.defaultLabel": "Par défaut · {name}",
+  "modelPicker.defaultMenu": "Par défaut ({name})",
+  "modelPicker.defaultPlain": "Par défaut",
+  "modelPicker.loading": "Chargement des modèles…",
+  "modelPicker.other": "Autre modèle…",
+  "modelPicker.typePlaceholder": "ID du modèle",
+  "modelPicker.backToList": "Retour à la liste",
+  "modelPicker.notInstalled": "Non installé sur le serveur",
+  "modelPicker.failed": "Impossible d'obtenir la liste des modèles : {reason}",
+  "modelPicker.noEffort": "Ce modèle ne règle pas l'effort",
+  "modelPicker.failedMenu": "Impossible d'obtenir la liste des modèles",
+  "modelPicker.unsupported": "Le démon Bandito de ce serveur est trop ancien et ne fournit pas la liste des modèles. Vous pouvez saisir l'ID à la main."
 }

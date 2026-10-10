@@ -64,7 +64,6 @@
 "agentSheet.memoryAuto" = "自動で作成されます";
 "agentSheet.memoryHint" = "自分のフォルダにメモを残すので、すべて覚えていて、メッセージが高くなりません。";
 "agentSheet.model" = "モデル";
-"agentSheet.modelDefault" = "デフォルト";
 "agentSheet.name" = "名前";
 "agentSheet.ownFolderHint" = "フォルダなしの場合、エージェントは専用の個人フォルダで作業します";
 "agentSheet.role" = "役割";
@@ -241,6 +240,18 @@
 "menubar.upNext" = "次に";
 "menubar.wantsPush" = "push しようとしています";
 "menubar.working" = "作業中";
+"modelPicker.backToList" = "一覧に戻る";
+"modelPicker.defaultLabel" = "デフォルト · %1$@";
+"modelPicker.defaultMenu" = "デフォルト（%1$@）";
+"modelPicker.defaultPlain" = "デフォルト";
+"modelPicker.failed" = "モデル一覧を取得できませんでした: %1$@";
+"modelPicker.failedMenu" = "モデル一覧を取得できませんでした";
+"modelPicker.loading" = "モデルを読み込み中…";
+"modelPicker.noEffort" = "このモデルは思考の強度を設定しません";
+"modelPicker.notInstalled" = "サーバーにインストールされていません";
+"modelPicker.other" = "別のモデル…";
+"modelPicker.typePlaceholder" = "モデルID";
+"modelPicker.unsupported" = "このサーバーのBanditoデーモンが古く、モデル一覧を返せません。IDを直接入力できます。";
 "new.agent" = "新規エージェント";
 "new.channel" = "新規クルーチャンネル";
 "new.placeholder" = "送信先を指定してチャットを開始…";

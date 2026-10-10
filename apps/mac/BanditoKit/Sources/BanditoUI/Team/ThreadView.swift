@@ -34,6 +34,7 @@ struct ThreadView: View {
                 changes: server.info?.supports("changes") == true ? changes : nil,
                 showsChanges: server.info?.supports("changes") == true,
                 showsTerminal: server.supports("terminals"),
+                models: server.runtimeModels,
                 onChanges: { router.sheet = .changes(agentID: agent.id) },
                 onTerminal: { router.openTerminalHere(agent.cwd) },
                 onSchedules: {
@@ -94,6 +95,11 @@ struct ThreadView: View {
         .task(id: agent.id) {
             await loadHistory()
             await loadChanges()
+        }
+        // The header names the model from the server's list, so the list is asked once per server, not on opening
+        // the inspector. The daemon caches the answer, so a repeat of this request is cheap.
+        .task(id: server.id) {
+            _ = try? await server.refreshRuntimeModels()
         }
         // Text put here by another screen ("Ask about this place") goes into the composer, once.
         .onChange(of: router.pendingComposerText, initial: true) { _, _ in

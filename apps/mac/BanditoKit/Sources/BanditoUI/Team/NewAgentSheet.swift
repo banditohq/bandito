@@ -77,6 +77,8 @@ struct NewAgentSheet: View {
             guard let server else { return }
             let loaded = WorkspacesModel(server: server)
             workplaces = loaded
+            // The model lists are asked in the background; until they come the model field says "loading".
+            Task { _ = try? await server.refreshRuntimeModels() }
             // Limits are read in the background and their failure is not shown. The runtime status is asked again
             // when the last answer is more than a minute old; until it arrives the cards say "checking".
             Task { await server.refreshUsageIfStale() }
@@ -200,30 +202,40 @@ struct NewAgentSheet: View {
             }
 
             labeled(L10n.AgentSheet.model) {
-                modelField
+                ModelPicker(
+                    runtime: draft.runtime, selection: $draft.model,
+                    models: server?.runtimeModels[draft.runtime.rawValue],
+                    status: server?.runtimeModelsStatus ?? .unknown)
             }
-            labeled(L10n.Effort.title) {
-                SegmentedPicker(
-                    selection: $draft.effort,
-                    options: draft.runtime.supportedEfforts.map { ($0, effortName($0)) })
-                    .frame(maxWidth: .infinity)
+            if effortLevels.isEmpty {
+                Text(L10n.ModelPicker.noEffort)
+                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .foregroundStyle(Color.Bandito.text3)
+                    .offset(y: -6)
+            } else {
+                labeled(L10n.Effort.title) {
+                    SegmentedPicker(
+                        selection: $draft.effort,
+                        options: effortLevels.map { ($0, effortName($0)) })
+                        .frame(maxWidth: .infinity)
+                }
+                Text(effortHint(draft.effort))
+                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .foregroundStyle(Color.Bandito.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .offset(y: -6)
             }
-            Text(effortHint(draft.effort))
-                .font(BanditoFont.font(size: 12, weight: 400))
-                .foregroundStyle(Color.Bandito.text3)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .offset(y: -6)
 
             labeled(L10n.AgentSheet.fallbackLabel) {
                 fallbackPicker
             }
-            if draft.fallbackRuntime != nil {
+            if let fallback = draft.fallbackRuntime {
                 labeled(L10n.AgentSheet.model) {
-                    TextField(L10n.AgentSheet.modelDefault, text: $draft.fallbackModel)
-                        .textFieldStyle(.plain)
-                        .font(BanditoFont.font(size: 13, weight: 400))
-                        .modifier(FieldBox())
+                    ModelPicker(
+                        runtime: fallback, selection: $draft.fallbackModel,
+                        models: server?.runtimeModels[fallback.rawValue],
+                        status: server?.runtimeModelsStatus ?? .unknown)
                 }
             }
             Text(L10n.AgentSheet.fallbackHint)
@@ -245,6 +257,19 @@ struct NewAgentSheet: View {
                     .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.Bandito.line))
             }
         }
+        // A model that takes fewer levels (or a list that arrives late) moves the effort to the nearest level it takes.
+        .onChange(of: effortLevels) { _, levels in
+            if let nearest = draft.effort.nearest(in: levels) {
+                draft.effort = nearest
+            }
+        }
+    }
+
+    /// The levels the effort control offers: those of the chosen model when its list says, else the runtime's. Empty
+    /// when the model takes no effort at all.
+    private var effortLevels: [Effort] {
+        RuntimeModelDisplay.effortLevels(
+            modelID: draft.model, runtime: draft.runtime, lists: server?.runtimeModels ?? [:])
     }
 
     private var runtimeGrid: some View {
@@ -270,11 +295,10 @@ struct NewAgentSheet: View {
     private var fallbackPicker: some View {
         Menu {
             Button(L10n.AgentSheet.fallbackNone) {
-                draft.fallbackRuntime = nil
-                draft.fallbackModel = ""
+                draft.setFallbackRuntime(nil)
             }
             ForEach(NewAgentDraft.fallbackOptions(for: draft.runtime), id: \.self) { kind in
-                Button(runtimeName(kind)) { draft.fallbackRuntime = kind }
+                Button(runtimeName(kind)) { draft.setFallbackRuntime(kind, lists: server?.runtimeModels ?? [:]) }
             }
         } label: {
             HStack(spacing: 10) {
@@ -296,6 +320,7 @@ struct NewAgentSheet: View {
     private func runtimeCard(_ kind: RuntimeKind, now: Date) -> some View {
         let selected = draft.runtime == kind
         let card = usageCards.first { $0.runtime == kind.rawValue }
+        let lists = server?.runtimeModels ?? [:]
         // Only this runtime's card counts: `percentLeft` falls back to all cards when given no runtime.
         let remaining = card.flatMap { UsageCards.percentLeft([$0], runtime: nil) }
         let state = RuntimeCardState.make(
@@ -303,7 +328,7 @@ struct NewAgentSheet: View {
             exhaustedUntil: card.flatMap { UsageCards.exhaustedReset($0.windows, now: now) }, now: now)
         return VStack(alignment: .leading, spacing: 4) {
             Button {
-                draft.setRuntime(kind)
+                draft.setRuntime(kind, lists: lists)
             } label: {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 7) {
@@ -427,35 +452,6 @@ struct NewAgentSheet: View {
     private func resetCaption(_ line: UsageWindowLine, now: Date) -> String? {
         guard let resetsAt = line.resetsAt else { return nil }
         return "\(L10n.AgentSheet.windowResets) \(Countdown.text(to: resetsAt, now: now))"
-    }
-
-    @ViewBuilder
-    private var modelField: some View {
-        let presets = NewAgentDraft.modelPresets(for: draft.runtime)
-        HStack(spacing: 6) {
-            TextField(L10n.AgentSheet.modelDefault, text: $draft.model)
-                .textFieldStyle(.plain)
-                .font(BanditoFont.font(size: 13, weight: 400, mono: true))
-                .foregroundStyle(Color.Bandito.text)
-            if !presets.isEmpty {
-                Menu {
-                    ForEach(presets, id: \.self) { preset in
-                        Button(preset) { draft.model = preset }
-                    }
-                    Divider()
-                    Button(L10n.AgentSheet.modelDefault) { draft.model = "" }
-                } label: {
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.system(size: 10))
-                        .foregroundStyle(Color.Bandito.text3)
-                }
-                .menuStyle(.button)
-                .banditoButton(.row(cornerRadius: 5, hoverOpacity: 0.08))
-                .fixedSize()
-            }
-        }
-        .modifier(FieldBox())
-        .help(presets.isEmpty ? L10n.AgentSheet.modelFreeHint : presets.joined(separator: ", "))
     }
 
     /// The project folder as one field: a click anywhere on it opens the folder picker. The clear icon shows only
@@ -727,7 +723,8 @@ struct NewAgentSheet: View {
             do {
                 let workspaceID = try await workplaceForCreate(on: server)
                 let agent = try await server.createAgent(
-                    draft.makeNewAgent(workspaceID: workspaceID, existingNames: agentNames))
+                    draft.makeNewAgent(
+                        workspaceID: workspaceID, existingNames: agentNames, lists: server.runtimeModels))
                 // Only a folder the person chose is a recent project folder; an agent's own folder is not.
                 if !draft.cwd.isEmpty {
                     var recent = RecentFolders.load(serverID: server.id.uuidString)
@@ -1001,7 +998,7 @@ struct PreparedWorkplace: Equatable {
 }
 
 /// A rounded field surface used by the sheet's inputs.
-private struct FieldBox: ViewModifier {
+struct FieldBox: ViewModifier {
     func body(content: Content) -> some View {
         content
             .font(BanditoFont.font(size: 13.5, weight: 400))

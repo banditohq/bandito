@@ -64,7 +64,6 @@
 "agentSheet.memoryAuto" = "자동으로 생성됨";
 "agentSheet.memoryHint" = "자체 폴더에 메모를 남겨 모든 것을 기억하며, 메시지 비용도 늘지 않습니다.";
 "agentSheet.model" = "모델";
-"agentSheet.modelDefault" = "기본값";
 "agentSheet.name" = "이름";
 "agentSheet.ownFolderHint" = "폴더가 없으면 에이전트는 자신의 개인 폴더에서 작업합니다";
 "agentSheet.role" = "역할";
@@ -241,6 +240,18 @@
 "menubar.upNext" = "다음";
 "menubar.wantsPush" = "push하려고 함";
 "menubar.working" = "작업 중";
+"modelPicker.backToList" = "목록으로 돌아가기";
+"modelPicker.defaultLabel" = "기본값 · %1$@";
+"modelPicker.defaultMenu" = "기본값 (%1$@)";
+"modelPicker.defaultPlain" = "기본값";
+"modelPicker.failed" = "모델 목록을 가져오지 못했습니다: %1$@";
+"modelPicker.failedMenu" = "모델 목록을 가져오지 못했습니다";
+"modelPicker.loading" = "모델 불러오는 중…";
+"modelPicker.noEffort" = "이 모델은 추론 강도를 설정하지 않습니다";
+"modelPicker.notInstalled" = "서버에 설치되어 있지 않음";
+"modelPicker.other" = "다른 모델…";
+"modelPicker.typePlaceholder" = "모델 ID";
+"modelPicker.unsupported" = "이 서버의 Bandito 데몬이 너무 오래되어 모델 목록을 제공하지 않습니다. ID를 직접 입력할 수 있습니다.";
 "new.agent" = "새 에이전트";
 "new.channel" = "새 크루 채널";
 "new.placeholder" = "대상과 대화 시작…";

@@ -75,7 +75,6 @@
   "agentSheet.runtime": "구동 방식",
   "agentSheet.runtimeHint": "{server}의 구독",
   "agentSheet.model": "모델",
-  "agentSheet.modelDefault": "기본값",
   "agentSheet.folder": "서버의 프로젝트",
   "agentSheet.folderHint": "에이전트가 작업하는 코드가 있는 곳입니다.",
   "agentSheet.approvals": "승인",
@@ -588,5 +587,17 @@
   "settings.approvals.then": "실행할 작업",
   "server.features.notInstalled": "설치되지 않음",
   "server.features.installed": "설치됨",
-  "server.features.loginHelp": "서버에서 로그인: {command}"
+  "server.features.loginHelp": "서버에서 로그인: {command}",
+  "modelPicker.defaultLabel": "기본값 · {name}",
+  "modelPicker.defaultMenu": "기본값 ({name})",
+  "modelPicker.defaultPlain": "기본값",
+  "modelPicker.loading": "모델 불러오는 중…",
+  "modelPicker.other": "다른 모델…",
+  "modelPicker.typePlaceholder": "모델 ID",
+  "modelPicker.backToList": "목록으로 돌아가기",
+  "modelPicker.notInstalled": "서버에 설치되어 있지 않음",
+  "modelPicker.failed": "모델 목록을 가져오지 못했습니다: {reason}",
+  "modelPicker.noEffort": "이 모델은 추론 강도를 설정하지 않습니다",
+  "modelPicker.failedMenu": "모델 목록을 가져오지 못했습니다",
+  "modelPicker.unsupported": "이 서버의 Bandito 데몬이 너무 오래되어 모델 목록을 제공하지 않습니다. ID를 직접 입력할 수 있습니다."
 }

@@ -64,7 +64,6 @@
 "agentSheet.memoryAuto" = "wird automatisch angelegt";
 "agentSheet.memoryHint" = "Führt Notizen in einem eigenen Ordner, daher merkt er sich alles, und Nachrichten werden nicht teurer.";
 "agentSheet.model" = "Modell";
-"agentSheet.modelDefault" = "Standard";
 "agentSheet.name" = "Name";
 "agentSheet.ownFolderHint" = "Ohne Ordner arbeitet der Agent in seinem eigenen persönlichen Ordner";
 "agentSheet.role" = "Rolle";
@@ -241,6 +240,18 @@
 "menubar.upNext" = "ALS NÄCHSTES";
 "menubar.wantsPush" = "will pushen";
 "menubar.working" = "AKTIV";
+"modelPicker.backToList" = "Zurück zur Liste";
+"modelPicker.defaultLabel" = "Standard · %1$@";
+"modelPicker.defaultMenu" = "Standard (%1$@)";
+"modelPicker.defaultPlain" = "Standard";
+"modelPicker.failed" = "Modellliste konnte nicht geladen werden: %1$@";
+"modelPicker.failedMenu" = "Modellliste konnte nicht geladen werden";
+"modelPicker.loading" = "Modelle werden geladen…";
+"modelPicker.noEffort" = "Dieses Modell stellt den Aufwand nicht ein";
+"modelPicker.notInstalled" = "Auf dem Server nicht installiert";
+"modelPicker.other" = "Anderes Modell…";
+"modelPicker.typePlaceholder" = "Modell-ID";
+"modelPicker.unsupported" = "Der Bandito-Daemon auf diesem Server ist zu alt und liefert keine Modellliste. Sie können die ID von Hand eingeben.";
 "new.agent" = "Neuer Agent";
 "new.channel" = "Neuer Crew-Kanal";
 "new.placeholder" = "Chat starten mit…";

@@ -87,12 +87,25 @@ public final class ServerModel: Identifiable {
     public nonisolated var id: UUID { config.id }
 
     public private(set) var state: ConnectionState = .disconnected
-    public internal(set) var info: DaemonInfo?
+    public internal(set) var info: DaemonInfo? {
+        didSet {
+            // A listing asked for before the daemon's info was known is sent now that it is.
+            if info != nil, runtimeModelsWanted {
+                Task { _ = try? await self.refreshRuntimeModels() }
+            }
+        }
+    }
     public private(set) var agents: [Agent] = []
     public private(set) var threads: [String: AgentThread] = [:]
     public private(set) var runtimes: [RuntimeStatus] = []
     /// When `runtimes` was last read from the daemon; nil until the first answer.
     public private(set) var runtimesFetchedAt: Date?
+    /// The models each agent CLI offers, by runtime raw value (`claude`, `codex`, `grok`). Kept after a later failure.
+    public private(set) var runtimeModels: [String: RuntimeModelList] = [:]
+    /// What the last request for `runtimeModels` came to. See `RuntimeModelsStatus`.
+    public private(set) var runtimeModelsStatus: RuntimeModelsStatus = .unknown
+    /// A listing was asked for and waits for the daemon's info.
+    private var runtimeModelsWanted = false
     /// Rate-limit windows per runtime, as last learned (from `usage.*` calls or live events).
     public private(set) var usage: [UsageEntry] = []
     /// Why the last `refreshUsage` could not read a runtime, by runtime id.
@@ -647,6 +660,36 @@ extension ServerModel {
     public func refreshRuntimes() async throws {
         runtimes = try await rpc().call("runtimes.status", NoParams(), as: [RuntimeStatus].self)
         runtimesFetchedAt = Date()
+    }
+
+    /// Asks the daemon which models each agent CLI offers. `refresh` skips the daemon's 15-minute cache.
+    /// Until the daemon's info is known the request waits and is sent when the info arrives. A daemon without
+    /// `runtime_models` is not asked: the status becomes `.unsupported`, which is not the same as a failed request.
+    public func refreshRuntimeModels(refresh: Bool = false) async throws {
+        runtimeModelsWanted = true
+        let gate = RuntimeModelsGate.decide(
+            hasInfo: info != nil, supportsModels: info?.supports("runtime_models") ?? false)
+        switch gate {
+        case .wait:
+            return
+        case .unsupported:
+            runtimeModelsWanted = false
+            runtimeModelsStatus = .unsupported
+            return
+        case .ask:
+            break
+        }
+        runtimeModelsWanted = false
+        struct P: Encodable { var refresh: Bool }
+        do {
+            let lists = try await rpc().call("runtimes.models", P(refresh: refresh), as: [RuntimeModelList].self)
+            runtimeModels = Dictionary(
+                lists.map { ($0.runtime.rawValue, $0) }, uniquingKeysWith: { _, last in last })
+            runtimeModelsStatus = .loaded
+        } catch {
+            runtimeModelsStatus = .failed((error as? RPCError)?.message ?? error.localizedDescription)
+            throw error
+        }
     }
 
     public func rules(agentId: String? = nil) async throws -> [Rule] {

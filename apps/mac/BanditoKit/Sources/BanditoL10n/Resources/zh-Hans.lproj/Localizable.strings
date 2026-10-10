@@ -64,7 +64,6 @@
 "agentSheet.memoryAuto" = "自动创建";
 "agentSheet.memoryHint" = "在自己的文件夹里做笔记，因此能记住一切，而且消息不会变贵。";
 "agentSheet.model" = "模型";
-"agentSheet.modelDefault" = "默认";
 "agentSheet.name" = "名称";
 "agentSheet.ownFolderHint" = "不选文件夹时，代理在自己的个人文件夹中工作";
 "agentSheet.role" = "角色";
@@ -241,6 +240,18 @@
 "menubar.upNext" = "接下来";
 "menubar.wantsPush" = "想推送";
 "menubar.working" = "工作中";
+"modelPicker.backToList" = "返回列表";
+"modelPicker.defaultLabel" = "默认 · %1$@";
+"modelPicker.defaultMenu" = "默认（%1$@）";
+"modelPicker.defaultPlain" = "默认";
+"modelPicker.failed" = "无法获取模型列表：%1$@";
+"modelPicker.failedMenu" = "无法获取模型列表";
+"modelPicker.loading" = "正在加载模型…";
+"modelPicker.noEffort" = "此模型不设置推理强度";
+"modelPicker.notInstalled" = "服务器上未安装";
+"modelPicker.other" = "其他模型…";
+"modelPicker.typePlaceholder" = "模型 ID";
+"modelPicker.unsupported" = "此服务器上的 Bandito 守护进程版本过旧，无法列出模型。可以手动输入 ID。";
 "new.agent" = "新建智能体";
 "new.channel" = "新建团队频道";
 "new.placeholder" = "开始与…聊天";
