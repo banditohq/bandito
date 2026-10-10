@@ -337,6 +337,7 @@ private struct FormFieldView: View {
     var field: FormField
     @Binding var input: FormInput
     @FocusState private var fieldFocused: Bool
+    @State private var click = FirstClick()
     var problem: FormProblem?
     /// The field sits in the summary of a confirmation: a plain value, with the label above it.
     var summary: Bool
@@ -466,10 +467,10 @@ private struct FormFieldView: View {
         if FormPresentation.usesRadio(field) {
             VStack(spacing: 8) {
                 ForEach(options, id: \.self) { option in
-                    RadioRow(title: option, isSelected: selected == option) {
-                        // A second click on the chosen option of an optional field takes the choice back.
-                        input = .option(selected == option && !field.isRequired ? nil : option)
-                    }
+                    // A second click on the chosen option of an optional field takes the choice back.
+                    let choose = { input = .option(selected == option && !field.isRequired ? nil : option) }
+                    RadioRow(title: option, isSelected: selected == option) { click.release(choose) }
+                        .simultaneousGesture(click.down(choose))
                 }
             }
         } else {
@@ -493,11 +494,14 @@ private struct FormFieldView: View {
         FlowLayout(spacing: 8) {
             ForEach(field.options ?? [], id: \.self) { option in
                 let on = picked.contains(option)
-                Button {
+                let toggle = {
                     var next = Set(picked)
                     if on { next.remove(option) } else { next.insert(option) }
                     // Kept in the order of the field's options, whatever the order of the clicks.
                     input = .options((field.options ?? []).filter(next.contains))
+                }
+                Button {
+                    click.release(toggle)
                 } label: {
                     HStack(spacing: 6) {
                         if on {
@@ -521,6 +525,7 @@ private struct FormFieldView: View {
                         Capsule().stroke(on ? Color.Bandito.signal.opacity(0.45) : Color.Bandito.line, lineWidth: 1))
                 }
                 .banditoButton(.row(cornerRadius: 16))
+                .simultaneousGesture(click.down(toggle))
                 .help(option)
                 .accessibilityAddTraits(on ? .isSelected : [])
             }
@@ -539,15 +544,11 @@ private struct FormFieldView: View {
                 requiredMark
             }
             Spacer(minLength: 8)
-            Toggle(
-                field.label,
+            FormSwitch(
+                label: field.label,
                 isOn: Binding(
                     get: { if case .flag(let b) = input { return b } else { return false } },
-                    set: { input = .flag($0) })
-            )
-            .labelsHidden()
-            .toggleStyle(.switch)
-            .tint(Color.Bandito.signalFill)
+                    set: { input = .flag($0) }))
         }
     }
 
@@ -624,5 +625,68 @@ private struct FormFieldBox: ViewModifier {
                 .background(Color.Bandito.bg, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(edge))
         }
+    }
+}
+
+/// Makes a button act on the press, not on the release. When a text field is being edited, the first click on
+/// another control ends the editing and the release is lost, so a click that starts in a field's neighbour needs
+/// two. The press gesture acts at once; the button's own action (the release, the keyboard, VoiceOver) acts only
+/// when the press did not.
+@MainActor
+final class FirstClick {
+    private var handled = false
+
+    /// The press: acts once per click.
+    func down(_ action: @escaping () -> Void) -> some SwiftUI.Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { [self] _ in
+                guard !handled else { return }
+                handled = true
+                action()
+            }
+            .onEnded { [self] _ in
+                // The button's release comes about now; a release that never comes must not swallow the next key press.
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(300))
+                    handled = false
+                }
+            }
+    }
+
+    func markHandledForTest() { handled = true }
+
+    /// The button's own action: skipped when the press already did it.
+    func release(_ action: () -> Void) {
+        if handled {
+            handled = false
+        } else {
+            action()
+        }
+    }
+}
+
+/// A switch drawn by hand, so that it can act on the first click like the other choices (the system switch cannot).
+private struct FormSwitch: View {
+    var label: String
+    @Binding var isOn: Bool
+    @State private var click = FirstClick()
+
+    var body: some View {
+        Button {
+            click.release { isOn.toggle() }
+        } label: {
+            ZStack(alignment: isOn ? .trailing : .leading) {
+                Capsule().fill(isOn ? Color.Bandito.signalFill : Color.Bandito.text.opacity(0.18))
+                Circle().fill(Color.white).padding(2)
+            }
+            .frame(width: 38, height: 22)
+            .contentShape(Capsule())
+        }
+        .banditoButton(.row(cornerRadius: 11))
+        .simultaneousGesture(click.down { isOn.toggle() })
+        .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: isOn)
+        .accessibilityLabel(label)
+        .accessibilityValue(isOn ? L10n.Form.yes : L10n.Form.no)
+        .accessibilityAddTraits(.isButton)
     }
 }

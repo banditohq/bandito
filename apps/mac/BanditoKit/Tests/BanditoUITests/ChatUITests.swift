@@ -379,3 +379,19 @@ import Testing
         #expect(!ComposerFocus.shouldTakeFocus(reason: .feedUpdate, otherFieldHasFocus: true))
     }
 }
+
+@MainActor
+@Suite struct FirstClickTests {
+    @Test func theReleaseDoesNotRepeatWhatThePressDid() async {
+        let click = FirstClick()
+        var count = 0
+        // A press acts through the gesture's callback; the release finds it handled and stays quiet.
+        click.markHandledForTest()
+        click.release { count += 1 }
+        #expect(count == 0)
+        // Without a press (keyboard, VoiceOver) the release acts, once per call.
+        click.release { count += 1 }
+        click.release { count += 1 }
+        #expect(count == 2)
+    }
+}
