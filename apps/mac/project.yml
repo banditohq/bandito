@@ -52,6 +52,12 @@ targets:
           identity="${EXPANDED_CODE_SIGN_IDENTITY:--}"
           if [ "$identity" = "-" ]; then timestamp="--timestamp=none"; else timestamp="--timestamp"; fi
           codesign --force --options runtime $timestamp --sign "$identity" "$helpers/bandito"
+    # The hardened runtime needs a declared entitlement for the microphone (dictation). The release script re-signs
+    # with the entitlements of the built app, so this one survives notarization.
+    entitlements:
+      path: Config/Bandito.entitlements
+      properties:
+        com.apple.security.device.audio-input: true
     # Merged into the generated Info.plist (GENERATE_INFOPLIST_FILE stays YES).
     info:
       path: Config/Info.plist
