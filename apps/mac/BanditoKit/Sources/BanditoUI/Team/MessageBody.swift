@@ -32,7 +32,7 @@ struct MessageBodyView: View {
 
     private func runningText(_ value: AttributedString) -> some View {
         Text(value)
-            .font(BanditoFont.font(size: 14.5, weight: 400))
+            .font(BanditoFont.text(size: 14.5, weight: 400))
             .foregroundStyle(Color.Bandito.text)
             .lineSpacing(markdown ? 4 : 3)
             .textSelection(.enabled)
@@ -104,7 +104,7 @@ struct CodeBlockView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 Text(language ?? "")
-                    .font(BanditoFont.font(size: 11, weight: 500, mono: true))
+                    .font(BanditoFont.mono(size: 11, weight: 500))
                     .foregroundStyle(Color.Bandito.text3)
                     .lineLimit(1)
                 Spacer(minLength: 8)
@@ -116,7 +116,7 @@ struct CodeBlockView: View {
 
             ScrollView(.horizontal) {
                 Text(code.isEmpty ? " " : code)
-                    .font(BanditoFont.font(size: 12.5, weight: 400, mono: true))
+                    .font(BanditoFont.mono(size: 12.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text)
                     .lineSpacing(2)
                     .textSelection(.enabled)
@@ -147,7 +147,7 @@ struct CodeBlockView: View {
                 Image(systemName: copied ? "checkmark" : "doc.on.doc")
                     .font(.system(size: 11, weight: .medium))
                 Text(copied ? L10n.Message.copied : L10n.Thread.copy)
-                    .font(BanditoFont.font(size: 11.5, weight: 500))
+                    .font(BanditoFont.text(size: 11.5, weight: 500))
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
             }
@@ -179,12 +179,12 @@ struct ReplyQuoteView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     if !name.isEmpty {
                         Text(name)
-                            .font(BanditoFont.font(size: 11.5, weight: 600))
+                            .font(BanditoFont.text(size: 11.5, weight: 600))
                             .foregroundStyle(accent)
                             .lineLimit(1)
                     }
                     Text(text.map { MessageBlocks.plainText($0) } ?? L10n.Reply.earlier)
-                        .font(BanditoFont.font(size: 12.5, weight: 400))
+                        .font(BanditoFont.text(size: 12.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text2)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)

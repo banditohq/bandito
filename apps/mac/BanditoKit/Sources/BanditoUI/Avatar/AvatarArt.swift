@@ -43,7 +43,7 @@ struct AvatarArtView: View {
             .fill(tint)
             .overlay {
                 Text(emoji)
-                    .font(.system(size: size * 0.52))
+                    .font(BanditoFont.text(size: size * 0.52, weight: 400))
                     .minimumScaleFactor(0.5)
                     .lineLimit(1)
             }

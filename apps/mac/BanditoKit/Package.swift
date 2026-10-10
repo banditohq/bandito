@@ -24,7 +24,7 @@ let package = Package(
     ],
     targets: [
         .target(name: "BanditoKit", dependencies: ["BanditoL10n"]),
-        .target(name: "BanditoDesign", resources: [.process("Colors.xcassets")]),
+        .target(name: "BanditoDesign", resources: [.process("Colors.xcassets"), .copy("Fonts")]),
         .target(name: "BanditoL10n", resources: [.process("Resources")]),
         .target(
             name: "BanditoUI",
@@ -34,6 +34,6 @@ let package = Package(
                 .product(name: "RoyalVNCKit", package: "royalvnc", condition: .when(platforms: [.macOS])),
             ]),
         .testTarget(name: "BanditoKitTests", dependencies: ["BanditoKit", "BanditoL10n"]),
-        .testTarget(name: "BanditoUITests", dependencies: ["BanditoUI", "BanditoKit", "BanditoL10n"]),
+        .testTarget(name: "BanditoUITests", dependencies: ["BanditoUI", "BanditoDesign", "BanditoKit", "BanditoL10n"]),
     ]
 )

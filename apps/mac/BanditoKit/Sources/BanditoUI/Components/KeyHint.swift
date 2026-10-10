@@ -12,7 +12,7 @@ public struct KeyHint: View {
 
     public var body: some View {
         Text(text)
-            .font(BanditoFont.font(size: 10.5, weight: 400, mono: true))
+            .font(BanditoFont.mono(size: 10.5, weight: 400))
             .foregroundStyle(Color.Bandito.text3)
             .padding(.horizontal, 5)
             .padding(.vertical, 1)

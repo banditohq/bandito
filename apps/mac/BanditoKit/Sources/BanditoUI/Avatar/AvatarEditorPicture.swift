@@ -11,7 +11,7 @@ extension AvatarEditor {
     var pictureTab: some View {
         if !pictureSupported {
             Text(L10n.Avatar.pictureNeedsDaemon)
-                .font(BanditoFont.font(size: 12, weight: 400))
+                .font(BanditoFont.text(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -52,7 +52,7 @@ extension AvatarEditor {
                     .banditoButton(.quiet())
                 Button(L10n.Avatar.removePicture) { removePicture() }
                     .banditoButton(.link)
-                    .font(BanditoFont.font(size: 12.5, weight: 500))
+                    .font(BanditoFont.text(size: 12.5, weight: 500))
             }
             Spacer(minLength: 0)
         }
@@ -88,7 +88,7 @@ struct AvatarDropZone: View {
                     .font(.system(size: 22, weight: .regular))
                     .foregroundStyle(targeted ? Color.Bandito.text : Color.Bandito.text2)
                 Text(L10n.Avatar.dropZone)
-                    .font(BanditoFont.font(size: 13, weight: 400))
+                    .font(BanditoFont.text(size: 13, weight: 400))
                     .foregroundStyle(targeted ? Color.Bandito.text : Color.Bandito.text2)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 24)

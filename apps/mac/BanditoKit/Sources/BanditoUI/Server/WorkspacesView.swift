@@ -21,7 +21,7 @@ struct WorkspacesView: View {
     var body: some View {
         ServerPage(title: L10n.Server.Workspaces.title) {
             Text(L10n.Server.Workspaces.intro)
-                .font(.system(size: 13.5))
+                .font(BanditoFont.text(size: 13.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
@@ -37,7 +37,7 @@ struct WorkspacesView: View {
             } else {
                 ServerCard {
                     Text(L10n.Server.Workspaces.demoOff)
-                        .font(.system(size: 13))
+                        .font(BanditoFont.text(size: 13, weight: 400))
                         .foregroundStyle(Color.Bandito.text2)
                 }
             }
@@ -141,7 +141,7 @@ private struct DockerCard: View {
         ServerCard {
             SectionLabel(L10n.Workspace.Docker.title)
             Text(L10n.Workspace.Docker.body)
-                .font(.system(size: 13))
+                .font(BanditoFont.text(size: 13, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .fixedSize(horizontal: false, vertical: true)
             if let docker = model.docker, docker.installable {
@@ -153,19 +153,19 @@ private struct DockerCard: View {
                     .disabled(setup.isRunning)
                     if setup.isRunning {
                         Text(L10n.Workspace.Docker.installing)
-                            .font(.system(size: 12.5))
+                            .font(BanditoFont.text(size: 12.5, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                     }
                 }
             } else {
                 Text(model.docker?.hint ?? L10n.Workspace.Docker.manual)
-                    .font(.system(size: 12.5))
+                    .font(BanditoFont.text(size: 12.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if let command = setup.passwordCommand {
                 Text(command)
-                    .font(BanditoFont.font(size: 12, weight: 400, mono: true))
+                    .font(BanditoFont.mono(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text)
                     .textSelection(.enabled)
             }
@@ -202,7 +202,7 @@ private struct RealWorkspaceCard: View {
                 SectionLabel(L10n.Workspace.agents)
                 if agents.isEmpty {
                     Text(L10n.Workspace.Agents.none)
-                        .font(.system(size: 12.5))
+                        .font(BanditoFont.text(size: 12.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                 } else {
                     HStack(spacing: 8) {
@@ -210,7 +210,7 @@ private struct RealWorkspaceCard: View {
                             VStack(spacing: 3) {
                                 AgentAvatarView(agent: agent, server: model.server, size: 30)
                                 Text(agent.name)
-                                    .font(.system(size: 10.5))
+                                    .font(BanditoFont.text(size: 10.5, weight: 400))
                                     .foregroundStyle(Color.Bandito.text2)
                                     .lineLimit(1)
                             }
@@ -257,12 +257,12 @@ private struct RealWorkspaceCard: View {
                 .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             VStack(alignment: .leading, spacing: 3) {
                 Text(isShared ? L10n.Workspace.Shared.title : workspace.name)
-                    .font(.system(size: 15.5, weight: .semibold))
+                    .font(BanditoFont.text(size: 15.5, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1)
                 if isShared {
                     Text(L10n.Workspace.Shared.subtitle)
-                        .font(.system(size: 11.5))
+                        .font(BanditoFont.text(size: 11.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .fixedSize(horizontal: false, vertical: true)
                 } else {
@@ -304,11 +304,11 @@ private struct RealWorkspaceCard: View {
                 .foregroundStyle(Color.Bandito.text3)
                 .frame(width: 15)
             Text(label)
-                .font(.system(size: 12.5))
+                .font(BanditoFont.text(size: 12.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
                 .frame(width: 74, alignment: .leading)
             Text(value)
-                .font(.system(size: 12.5))
+                .font(BanditoFont.text(size: 12.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -333,7 +333,7 @@ private struct RealWorkspaceCard: View {
             SectionLabel(L10n.Workspace.Row.folders)
             if workspace.mounts.isEmpty {
                 Text(L10n.Workspace.Folders.none)
-                    .font(.system(size: 12.5))
+                    .font(BanditoFont.text(size: 12.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -343,7 +343,7 @@ private struct RealWorkspaceCard: View {
                         .font(.system(size: 12))
                         .foregroundStyle(Color.Bandito.text3)
                     Text(mount.host)
-                        .font(BanditoFont.font(size: 12, weight: 400, mono: true))
+                        .font(BanditoFont.mono(size: 12, weight: 400))
                         .foregroundStyle(Color.Bandito.text)
                         .lineLimit(1)
                         .truncationMode(.head)
@@ -388,7 +388,7 @@ private struct RealWorkspaceCard: View {
             if !workspace.canDelete {
                 // The list of agents says why it cannot go; the daemon would refuse it too.
                 Text(L10n.Workspace.Delete.blocked(names: agents.map(\.name).joined(separator: ", ")))
-                    .font(.system(size: 12))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -416,13 +416,15 @@ struct WorkspaceCreateSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(L10n.Workspace.Create.title)
-                .font(BanditoFont.font(size: 20, weight: 600))
+                .font(BanditoFont.display(size: 18.5, weight: 600))
+                .lineLimit(1)
+                .truncationMode(.tail)
                 .foregroundStyle(Color.Bandito.text)
             field(L10n.Workspace.Create.name) {
                 TextField("", text: $draft.name)
                     .banditoField()
                 Text(L10n.Workspace.Create.nameHint)
-                    .font(.system(size: 11.5))
+                    .font(BanditoFont.text(size: 11.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
             }
             HStack(alignment: .top, spacing: 14) {
@@ -447,15 +449,15 @@ struct WorkspaceCreateSheet: View {
                         (WorkspaceNetwork.offline, L10n.Workspace.Network.offline),
                     ])
                 Text(L10n.Workspace.Create.networkHint)
-                    .font(.system(size: 11.5))
+                    .font(BanditoFont.text(size: 11.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
             }
             Text(L10n.Workspace.Choice.isolation)
-                .font(.system(size: 12.5))
+                .font(BanditoFont.text(size: 12.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .fixedSize(horizontal: false, vertical: true)
             Text(L10n.Workspace.Choice.lost)
-                .font(.system(size: 12.5))
+                .font(BanditoFont.text(size: 12.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .fixedSize(horizontal: false, vertical: true)
             if let error = model.errorText {
@@ -495,7 +497,7 @@ struct WorkspaceCreateSheet: View {
     private func field<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .font(.system(size: 12.5, weight: .medium))
+                .font(BanditoFont.text(size: 12.5, weight: 500))
                 .foregroundStyle(Color.Bandito.text2)
             content()
         }
@@ -558,10 +560,10 @@ private struct DemoWorkspaceCard: View {
                     .background(space.kind.tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 VStack(alignment: .leading, spacing: 3) {
                     Text(space.name)
-                        .font(.system(size: 15.5, weight: .semibold))
+                        .font(BanditoFont.text(size: 15.5, weight: 600))
                         .foregroundStyle(Color.Bandito.text)
                     Text(space.kind.label)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(BanditoFont.text(size: 11, weight: 600))
                         .foregroundStyle(space.kind.tint)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 1)
@@ -577,7 +579,7 @@ private struct DemoWorkspaceCard: View {
                         VStack(spacing: 3) {
                             AgentAvatar(name: name, size: 30)
                             Text(name)
-                                .font(.system(size: 10.5))
+                                .font(BanditoFont.text(size: 10.5, weight: 400))
                                 .foregroundStyle(Color.Bandito.text2)
                                 .lineLimit(1)
                         }
@@ -610,11 +612,11 @@ private struct DemoWorkspaceCard: View {
                             .foregroundStyle(Color.Bandito.text3)
                             .frame(width: 15)
                         Text(row.label)
-                            .font(.system(size: 12.5))
+                            .font(BanditoFont.text(size: 12.5, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                             .frame(width: 74, alignment: .leading)
                         Text(row.value)
-                            .font(.system(size: 12.5))
+                            .font(BanditoFont.text(size: 12.5, weight: 400))
                             .foregroundStyle(Color.Bandito.text)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -626,11 +628,11 @@ private struct DemoWorkspaceCard: View {
                         VStack(alignment: .leading, spacing: 5) {
                             HStack {
                                 Text(meter.label)
-                                    .font(.system(size: 11.5))
+                                    .font(BanditoFont.text(size: 11.5, weight: 400))
                                     .foregroundStyle(Color.Bandito.text3)
                                 Spacer(minLength: 4)
                                 Text(meter.value)
-                                    .font(.system(size: 11.5))
+                                    .font(BanditoFont.text(size: 11.5, weight: 400))
                                     .foregroundStyle(Color.Bandito.text)
                             }
                             MeterBar(fraction: meter.fraction, tint: space.kind.tint)
@@ -663,15 +665,15 @@ private struct CompareItem: View {
                 .padding(.top, 5)
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.system(size: 13.5, weight: .semibold))
+                    .font(BanditoFont.text(size: 13.5, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                 Text(text)
-                    .font(.system(size: 12.5))
+                    .font(BanditoFont.text(size: 12.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                     .lineSpacing(2)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(note)
-                    .font(.system(size: 12))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color(hex: 0xA9C7A2))
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)

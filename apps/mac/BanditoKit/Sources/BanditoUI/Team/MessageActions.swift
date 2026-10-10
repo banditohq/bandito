@@ -327,7 +327,7 @@ private struct QuickReaction: View {
     var body: some View {
         Button(action: onPick) {
             Text(emoji)
-                .font(.system(size: 22))
+                .font(BanditoFont.text(size: 22, weight: 400))
                 .scaleEffect(hovered ? 1.2 : 1)
                 .banditoAnimation(.spring(response: 0.3, dampingFraction: 0.5), value: hovered)
                 .frame(width: 34, height: 34)
@@ -356,7 +356,7 @@ struct ReactionChipsRow: View {
                 } label: {
                     HStack(spacing: 4) {
                         Text(chip.emoji)
-                            .font(.system(size: 14))
+                            .font(BanditoFont.text(size: 14, weight: 400))
                         if chip.byUser && chip.byAgent {
                             Image(systemName: "person.2.fill")
                                 .font(.system(size: 8))
@@ -414,12 +414,12 @@ struct ReactionPicker: View {
             if more {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(L10n.Message.reactPickerHint)
-                        .font(BanditoFont.font(size: 12, weight: 400))
+                        .font(BanditoFont.text(size: 12, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .fixedSize(horizontal: false, vertical: true)
                     TextField("", text: $typed)
                         .banditoField()
-                        .font(.system(size: 18))
+                        .font(BanditoFont.text(size: 18, weight: 400))
                         .focused($typedFocused)
                         .accessibilityLabel(L10n.Message.reactMore)
                         .onChange(of: typed) { _, text in
@@ -454,7 +454,7 @@ struct ReactionPicker: View {
             onPick(emoji)
         } label: {
             Text(emoji)
-                .font(.system(size: size))
+                .font(BanditoFont.text(size: size, weight: 400))
                 .frame(width: 34, height: 34)
                 .background(
                     emoji == current ? Color.Bandito.signal.opacity(0.18) : Color.clear,
@@ -504,7 +504,7 @@ private struct SelectableTextView: NSViewRepresentable {
             view.isEditable = false
             view.isSelectable = true
             view.drawsBackground = false
-            view.font = .systemFont(ofSize: 13.5)
+            view.font = BanditoFont.appKitText(size: 13.5)
             view.textColor = NSColor(Color.Bandito.text)
             view.textContainerInset = NSSize(width: 8, height: 8)
             view.string = text

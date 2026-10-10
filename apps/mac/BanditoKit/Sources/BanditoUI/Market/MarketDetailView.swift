@@ -94,12 +94,12 @@ struct MarketDetailView: View {
                 }
             VStack(alignment: .leading, spacing: 5) {
                 Text(entry.name)
-                    .font(.system(size: 24, weight: .semibold))
+                    .font(BanditoFont.display(size: 22, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1)
                 HStack(spacing: 8) {
                     Text(subtitle)
-                        .font(.system(size: 12.5))
+                        .font(BanditoFont.text(size: 12.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .lineLimit(1)
                     if template?.official == true {
@@ -125,7 +125,7 @@ struct MarketDetailView: View {
         } icon: {
             Image(systemName: "checkmark.seal.fill")
         }
-        .font(.system(size: 11, weight: .medium))
+        .font(BanditoFont.text(size: 11, weight: 500))
         .foregroundStyle(Color.Bandito.info)
         .padding(.horizontal, 7)
         .padding(.vertical, 2)
@@ -142,7 +142,7 @@ struct MarketDetailView: View {
                 } icon: {
                     Image(systemName: "checkmark")
                 }
-                .font(.system(size: 12.5, weight: .medium))
+                .font(BanditoFont.text(size: 12.5, weight: 500))
                 .foregroundStyle(Color.Bandito.ok)
                 Button(L10n.Market.configure, action: onConfigure)
                     .banditoButton(.quiet())
@@ -188,7 +188,7 @@ struct MarketDetailView: View {
                 ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
                         Text("\(index + 1)")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(BanditoFont.text(size: 11, weight: 600))
                             .foregroundStyle(Color.Bandito.text2)
                             .frame(width: 20, height: 20)
                             .background(Circle().fill(Color.Bandito.text.opacity(0.07)))
@@ -209,7 +209,7 @@ struct MarketDetailView: View {
             : ShellWords.join([template.command ?? ""] + template.args)
         if !text.isEmpty {
             Text(text)
-                .font(BanditoFont.font(size: 12, weight: 400, mono: true))
+                .font(BanditoFont.mono(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .textSelection(.enabled)
                 .padding(.horizontal, 10)
@@ -236,19 +236,19 @@ struct MarketDetailView: View {
             VStack(alignment: .leading, spacing: 12) {
                 if template == nil {
                     Text(MarketLogic.address(integration))
-                        .font(BanditoFont.font(size: 12, weight: 400, mono: true))
+                        .font(BanditoFont.mono(size: 12, weight: 400))
                         .foregroundStyle(Color.Bandito.text2)
                         .textSelection(.enabled)
                 }
                 IntegrationStatusLine(status: status)
                 if let test, test.ok, !test.tools.isEmpty {
                     Text(L10n.Market.Section.tools)
-                        .font(.system(size: 12))
+                        .font(BanditoFont.text(size: 12, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 6, alignment: .leading)], alignment: .leading, spacing: 6) {
                         ForEach(test.tools, id: \.self) { tool in
                             Text(tool)
-                                .font(BanditoFont.font(size: 11.5, weight: 400, mono: true))
+                                .font(BanditoFont.mono(size: 11.5, weight: 400))
                                 .foregroundStyle(Color.Bandito.text2)
                                 .lineLimit(1)
                                 .truncationMode(.middle)
@@ -261,7 +261,7 @@ struct MarketDetailView: View {
                 }
                 Toggle(isOn: Binding(get: { integration.enabled }, set: onSetEnabled)) {
                     Text(L10n.Market.availableToAgents)
-                        .font(.system(size: 12.5))
+                        .font(BanditoFont.text(size: 12.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text2)
                 }
                 .toggleStyle(BanditoToggleStyle())
@@ -302,7 +302,7 @@ struct MarketDetailView: View {
         Link(destination: url) {
             Label(title, systemImage: "arrow.up.right")
         }
-        .font(.system(size: 13, weight: .medium))
+        .font(BanditoFont.text(size: 13, weight: 500))
         .foregroundStyle(Color.Bandito.info)
         .fixedSize()
     }
@@ -322,7 +322,7 @@ struct MarketDetailView: View {
 
     private func paragraph(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 13.5))
+            .font(BanditoFont.text(size: 13.5, weight: 400))
             .foregroundStyle(Color.Bandito.text)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)

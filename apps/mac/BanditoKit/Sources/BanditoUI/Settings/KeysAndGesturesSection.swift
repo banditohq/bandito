@@ -66,11 +66,11 @@ struct KeysAndGesturesSection: View {
         HStack(alignment: .top, spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(SettingsSection.keysGestures.title)
-                    .font(.system(size: 22, weight: .semibold))
+                    .font(BanditoFont.display(size: 20, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1)
                 Text(L10n.Settings.keysIntro)
-                    .font(.system(size: 13.5))
+                    .font(BanditoFont.text(size: 13.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -96,7 +96,7 @@ struct KeysAndGesturesSection: View {
                     // The field names the set ("Set: Bandito"); the panel lists the sets.
                     HStack(spacing: 8) {
                         Text(L10n.Keys.presetMenu(name: preset.title))
-                            .font(.system(size: 13))
+                            .font(BanditoFont.text(size: 13, weight: 400))
                             .lineLimit(1)
                             .fixedSize()
                         Image(systemName: "chevron.down")
@@ -124,7 +124,7 @@ struct KeysAndGesturesSection: View {
                     .foregroundStyle(Color.Bandito.text3)
                 TextField(L10n.Keys.search, text: $query)
                     .banditoField()
-                    .font(.system(size: 13))
+                    .font(BanditoFont.text(size: 13, weight: 400))
                     .foregroundStyle(Color.Bandito.text)
             }
             .padding(.horizontal, 12)
@@ -169,7 +169,7 @@ struct KeysAndGesturesSection: View {
             ForEach(groups, id: \.0) { context, commands in
                 VStack(alignment: .leading, spacing: 2) {
                     Text(context.title.uppercased())
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(BanditoFont.text(size: 11, weight: 600))
                         .tracking(0.8)
                         .foregroundStyle(Color.Bandito.text3)
                         .padding(.top, 6)
@@ -189,13 +189,13 @@ struct KeysAndGesturesSection: View {
         let waiting = pending.flatMap { $0.commandID == command.id ? $0 : nil }
         return HStack(spacing: 10) {
             Text(command.title)
-                .font(.system(size: 13))
+                .font(BanditoFont.text(size: 13, weight: 400))
                 .foregroundStyle(custom ? Color.Bandito.signalGlow : Color.Bandito.text)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if let waiting, let taken = waiting.conflicts.first {
                 Text(L10n.Keys.conflict(name: taken.title))
-                    .font(.system(size: 11.5))
+                    .font(BanditoFont.text(size: 11.5, weight: 400))
                     .foregroundStyle(Color.Bandito.signalGlow)
                     .lineLimit(1)
                 Button(L10n.Keys.replace) { replace(waiting) }
@@ -221,7 +221,7 @@ struct KeysAndGesturesSection: View {
     private func keyCap(text: String, custom: Bool, recording: Bool) -> some View {
         let tint = recording || custom ? Color.Bandito.signal : Color.Bandito.text.opacity(0.14)
         return Text(text)
-            .font(.system(size: 12, design: .monospaced))
+            .font(BanditoFont.mono(size: 12, weight: 400))
             .lineLimit(1)
             .fixedSize()
             .foregroundStyle(recording || custom ? Color.Bandito.signalGlow : Color.Bandito.text)
@@ -258,7 +258,7 @@ struct KeysAndGesturesSection: View {
                 .fill(Color.Bandito.signal)
                 .frame(width: 8, height: 8)
             Text(L10n.Keys.customizedCount(count: keymap.customizedCount))
-                .font(.system(size: 12.5))
+                .font(BanditoFont.text(size: 12.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
                 .lineLimit(1)
                 .fixedSize()
@@ -393,15 +393,15 @@ struct KeysAndGesturesSection: View {
                 }
                 HStack(spacing: 14) {
                     Text(L10n.Gestures.sensitivity)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(BanditoFont.text(size: 13, weight: 600))
                         .foregroundStyle(Color.Bandito.text)
                     Text(L10n.Gestures.softer)
-                        .font(.system(size: 12))
+                        .font(BanditoFont.text(size: 12, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                     Slider(value: $gestures.swipeSensitivity, in: 0...1)
                         .tint(Color.Bandito.signal)
                     Text(L10n.Gestures.sharper)
-                        .font(.system(size: 12))
+                        .font(BanditoFont.text(size: 12, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                 }
                 .padding(.horizontal, 14)
@@ -425,14 +425,14 @@ struct KeysAndGesturesSection: View {
                     RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.Bandito.text.opacity(0.08)))
             VStack(alignment: .leading, spacing: 4) {
                 Text(gesture.title)
-                    .font(.system(size: 13.5, weight: .semibold))
+                    .font(BanditoFont.text(size: 13.5, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                 Text(gesture.text)
-                    .font(.system(size: 12.5))
+                    .font(BanditoFont.text(size: 12.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(gesture.whereUsed)
-                    .font(.system(size: 11.5))
+                    .font(BanditoFont.text(size: 11.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3.opacity(0.8))
             }
             Spacer(minLength: 0)

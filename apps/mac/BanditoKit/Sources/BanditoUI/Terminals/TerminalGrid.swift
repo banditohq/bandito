@@ -128,14 +128,14 @@ struct PaneHeader: View {
             if renaming {
                 TextField(L10n.Terminals.rename, text: $draft)
                     .banditoField()
-                    .font(.system(size: 12.5, weight: .semibold))
+                    .font(BanditoFont.text(size: 12.5, weight: 600))
                     .frame(maxWidth: 180)
                     .focused($nameFocused)
                     .onSubmit { commitRename(id) }
                     .onExitCommand { renaming = false }
             } else {
                 Text(controller.displayTitle(id) ?? session.info.title)
-                    .font(.system(size: 12.5, weight: .semibold))
+                    .font(BanditoFont.text(size: 12.5, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1)
                     .contentShape(Rectangle())
@@ -143,7 +143,7 @@ struct PaneHeader: View {
                     .help(L10n.Terminals.Pane.rename)
             }
             Text(session.info.cwd)
-                .font(.system(size: 11.5, design: .monospaced))
+                .font(BanditoFont.mono(size: 11.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
                 .lineLimit(1)
                 .truncationMode(.head)
@@ -222,7 +222,7 @@ struct ExitStrip: View {
     var body: some View {
         HStack(spacing: 10) {
             Text(text)
-                .font(.system(size: 12))
+                .font(BanditoFont.text(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
             Spacer(minLength: 8)
             Button(L10n.Terminals.restart, action: restart)

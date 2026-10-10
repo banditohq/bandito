@@ -18,7 +18,7 @@ struct UpdatesView: View {
                     row(L10n.Updates.latestVersion, latestText(current: info.version), mono: latestIsVersion(current: info.version))
                     HStack {
                         Text(available ? L10n.Updates.available : L10n.Updates.upToDate)
-                            .font(.system(size: 13, weight: .medium))
+                            .font(BanditoFont.text(size: 13, weight: 500))
                             .foregroundStyle(Color.Bandito.text)
                         Spacer(minLength: 8)
                         Chip(text: available ? L10n.Updates.badgeNew : L10n.Updates.badgeCurrent, tone: available ? .signal : .ok)
@@ -53,11 +53,11 @@ struct UpdatesView: View {
     private func row(_ label: String, _ value: String, mono: Bool = true) -> some View {
         HStack {
             Text(label)
-                .font(.system(size: 13))
+                .font(BanditoFont.text(size: 13, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
             Spacer(minLength: 8)
             Text(value)
-                .font(mono ? .system(size: 13, design: .monospaced) : .system(size: 13))
+                .font(mono ? BanditoFont.mono(size: 13) : BanditoFont.text(size: 13))
                 .foregroundStyle(Color.Bandito.text)
         }
     }

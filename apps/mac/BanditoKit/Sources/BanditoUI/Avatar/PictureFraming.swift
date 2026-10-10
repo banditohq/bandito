@@ -37,7 +37,7 @@ struct PictureFraming: View {
                     .foregroundStyle(Color.Bandito.text3)
             }
             Text(L10n.Avatar.cropHint)
-                .font(BanditoFont.font(size: 12, weight: 400))
+                .font(BanditoFont.text(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .center)

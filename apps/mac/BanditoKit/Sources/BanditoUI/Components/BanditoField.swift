@@ -48,7 +48,7 @@ private struct BanditoFieldChrome: ViewModifier {
             ? Color.Bandito.danger.opacity(0.6)
             : Color.Bandito.text.opacity(BanditoFieldLook.borderOpacity(focused: focused))
         content
-            .font(.system(size: 13.5))
+            .font(BanditoFont.text(size: 13.5, weight: 400))
             .foregroundStyle(Color.Bandito.text)
             .padding(.horizontal, 12)
             .padding(.vertical, verticalPadding)

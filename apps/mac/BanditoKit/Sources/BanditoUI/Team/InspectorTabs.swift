@@ -70,7 +70,7 @@ struct DetailsTab: View {
         InspectorRow(label: L10n.Effort.title, compact: true) {
             if effortLevels.isEmpty {
                 Text(L10n.ModelPicker.noEffort)
-                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .lineLimit(2)
                     .multilineTextAlignment(.trailing)
@@ -97,12 +97,12 @@ struct DetailsTab: View {
                     .rotationEffect(.degrees(advancedOpen ? 90 : 0))
                     .frame(width: 12)
                 Text(L10n.AgentSheet.advanced)
-                    .font(BanditoFont.font(size: 12.5, weight: 400))
+                    .font(BanditoFont.text(size: 12.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                 Spacer(minLength: 10)
                 if !advancedOpen, let fallback = agent.fallbackRuntime {
                     Text(L10n.AgentSheet.advancedFallback(runtime: fallback.title))
-                        .font(BanditoFont.font(size: 12.5, weight: 400))
+                        .font(BanditoFont.text(size: 12.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .lineLimit(1)
                 }
@@ -129,13 +129,13 @@ struct DetailsTab: View {
                 InspectorRow(label: L10n.Inspector.state, compact: true) {
                     HStack(spacing: 10) {
                         Text(agent.paused ? L10n.Inspector.statePaused : L10n.Inspector.stateRunning)
-                            .font(BanditoFont.font(size: 12.5, weight: 500))
+                            .font(BanditoFont.text(size: 12.5, weight: 500))
                             .foregroundStyle(agent.paused ? Color.Bandito.text2 : Color.Bandito.text)
                         Button(agent.paused ? L10n.Agent.Menu.resume : L10n.Agent.Menu.pause) {
                             change { _ = try await server.setPaused(agentID: agent.id, !agent.paused) }
                         }
                         .banditoButton(.link)
-                        .font(BanditoFont.font(size: 12.5, weight: 500))
+                        .font(BanditoFont.text(size: 12.5, weight: 500))
                         .foregroundStyle(BanditoPalette.peach)
                         .disabled(!PauseActions.available(on: server))
                         .help(PauseActions.available(on: server) ? "" : L10n.Team.pauseUnavailable)
@@ -147,14 +147,14 @@ struct DetailsTab: View {
                     if folderFocused {
                         TextField("", text: $folder)
                             .banditoField()
-                            .font(BanditoFont.font(size: 12.5, weight: 400, mono: true))
+                            .font(BanditoFont.mono(size: 12.5, weight: 400))
                             .multilineTextAlignment(.trailing)
                             .frame(maxWidth: 200)
                             .focused($folderFocused)
                             .onSubmit(saveFolder)
                     } else {
                         Text(folder)
-                            .font(BanditoFont.font(size: 12.5, weight: 400, mono: true))
+                            .font(BanditoFont.mono(size: 12.5, weight: 400))
                             .lineLimit(1)
                             .truncationMode(.head)
                             .frame(maxWidth: 200, alignment: .trailing)
@@ -203,7 +203,7 @@ struct DetailsTab: View {
                 }
                 VStack(alignment: .leading, spacing: 8) {
                     Text(L10n.Capability.title)
-                        .font(BanditoFont.font(size: 12.5, weight: 400))
+                        .font(BanditoFont.text(size: 12.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                     CapabilityChips(enabled: capabilities)
                 }
@@ -225,13 +225,13 @@ struct DetailsTab: View {
                     Spacer()
                     Button(L10n.Inspector.addSchedule) { router.sheet = .schedule(agentID: agent.id, existing: nil) }
                         .banditoButton(.link)
-                        .font(BanditoFont.font(size: 12.5, weight: 500))
+                        .font(BanditoFont.text(size: 12.5, weight: 500))
                         .foregroundStyle(BanditoPalette.peach)
                 }
                 if schedules.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(L10n.Schedule.emptyHint)
-                            .font(BanditoFont.font(size: 12.5, weight: 400))
+                            .font(BanditoFont.text(size: 12.5, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                             .fixedSize(horizontal: false, vertical: true)
                         Button(L10n.Inspector.addSchedule) { router.sheet = .schedule(agentID: agent.id, existing: nil) }
@@ -269,12 +269,12 @@ struct DetailsTab: View {
                 // the wheel for its own scrolling. Return adds a line; the field grows from 4 to 12 lines.
                 TextField(L10n.Inspector.instructionsPlaceholder, text: $instructions, axis: .vertical)
                     .banditoField()
-                    .font(BanditoFont.font(size: 13, weight: 400))
+                    .font(BanditoFont.text(size: 13, weight: 400))
                     .lineLimit(4...12)
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                 HStack(spacing: 12) {
                     Text(L10n.Inspector.instructionsHint)
-                        .font(BanditoFont.font(size: 12, weight: 400))
+                        .font(BanditoFont.text(size: 12, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .lineLimit(2)
                     Spacer(minLength: 8)
@@ -291,7 +291,7 @@ struct DetailsTab: View {
 
             ForEach(notes, id: \.self) { note in
                 Text(note)
-                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(BanditoPalette.peach)
             }
 
@@ -527,11 +527,11 @@ struct MemoryTab: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
                 Text(L10n.Chapter.title(count: agent.chapter))
-                    .font(BanditoFont.font(size: 14.5, weight: 600))
+                    .font(BanditoFont.text(size: 14.5, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                 Spacer()
                 Text(L10n.Chapter.startedToday)
-                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
             }
             let fraction = ContextUsage.fraction(tokens: agent.contextTokens, budget: agent.contextBudget)
@@ -549,10 +549,10 @@ struct MemoryTab: View {
                 Spacer()
                 Text(L10n.Chapter.nextAt(limit: budget.formatted()))
             }
-            .font(BanditoFont.font(size: 12, weight: 400))
+            .font(BanditoFont.text(size: 12, weight: 400))
             .foregroundStyle(Color.Bandito.text3)
             Text(L10n.Chapter.explainer(name: agent.name))
-                .font(BanditoFont.font(size: 12.5, weight: 400))
+                .font(BanditoFont.text(size: 12.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .lineSpacing(2)
         }
@@ -590,7 +590,7 @@ struct MemoryTab: View {
                         }
                     } label: {
                         Text(ChapterLength.label(budget))
-                            .font(BanditoFont.font(size: 12.5, weight: 500))
+                            .font(BanditoFont.text(size: 12.5, weight: 500))
                             .foregroundStyle(Color.Bandito.text)
                     }
                     .menuStyle(.borderlessButton)
@@ -602,7 +602,7 @@ struct MemoryTab: View {
                 Text(budget > modelWindow
                      ? L10n.Memory.chapterLengthTooLong(max: ChapterLength.label(modelWindow))
                      : L10n.Memory.chapterLengthModelMax(max: ChapterLength.label(modelWindow)))
-                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(budget > modelWindow ? Color.Bandito.signal : Color.Bandito.text3)
                     .padding(.horizontal, 16)
             }
@@ -631,7 +631,7 @@ struct MemoryTab: View {
     private var customPopover: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(L10n.Memory.chapterLengthCustom)
-                .font(BanditoFont.font(size: 13, weight: 600))
+                .font(BanditoFont.text(size: 13, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
             HStack(spacing: 6) {
                 TextField("", text: $customDraft)
@@ -639,12 +639,12 @@ struct MemoryTab: View {
                     .frame(width: 110)
                     .onSubmit { saveCustom() }
                 Text("K")
-                    .font(BanditoFont.font(size: 12.5, weight: 400))
+                    .font(BanditoFont.text(size: 12.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
             }
             if let problem = customProblem {
                 Text(problem)
-                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.danger)
             }
             HStack {
@@ -706,12 +706,12 @@ struct MemoryTab: View {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
                         Text(title)
-                            .font(BanditoFont.font(size: 13, weight: 600))
+                            .font(BanditoFont.text(size: 13, weight: 600))
                             .foregroundStyle(Color.Bandito.text)
                         if let badge { Chip(text: badge, tone: .ok) }
                     }
                     Text(description)
-                        .font(BanditoFont.font(size: 12, weight: 400))
+                        .font(BanditoFont.text(size: 12, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .lineSpacing(2)
                 }
@@ -739,7 +739,7 @@ struct MemoryTab: View {
                 SectionLabel(L10n.Memory.header)
                 Spacer()
                 Text(agent.homeDir ?? "")
-                    .font(BanditoFont.font(size: 11.5, weight: 400, mono: true))
+                    .font(BanditoFont.mono(size: 11.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .lineLimit(1)
                     .truncationMode(.head)
@@ -760,16 +760,16 @@ struct MemoryTab: View {
                                     .background(Color.Bandito.text.opacity(0.06), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(item.title)
-                                        .font(BanditoFont.font(size: 13, weight: 500))
+                                        .font(BanditoFont.text(size: 13, weight: 500))
                                         .foregroundStyle(Color.Bandito.text)
                                     Text(item.meta)
-                                        .font(BanditoFont.font(size: 11.5, weight: 400))
+                                        .font(BanditoFont.text(size: 11.5, weight: 400))
                                         .foregroundStyle(Color.Bandito.text3)
                                         .lineLimit(1)
                                 }
                                 Spacer(minLength: 8)
                                 Text(L10n.Keys.open)
-                                    .font(BanditoFont.font(size: 11.5, weight: 600))
+                                    .font(BanditoFont.text(size: 11.5, weight: 600))
                                     .foregroundStyle(BanditoPalette.peach)
                                 Image(systemName: "chevron.right")
                                     .font(.system(size: 10, weight: .semibold))
@@ -783,7 +783,7 @@ struct MemoryTab: View {
                     }
                 }
                 Text(L10n.Memory.footer)
-                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .lineSpacing(2)
             }
@@ -869,12 +869,12 @@ struct WhereTab: View {
                         // With the change select on, its field is the place's name: the title would say it twice.
                         if !showsChangeMenu {
                             Text(workplaceTitle)
-                                .font(BanditoFont.font(size: 14, weight: 600))
+                                .font(BanditoFont.text(size: 14, weight: 600))
                                 .foregroundStyle(Color.Bandito.text)
                                 .lineLimit(1)
                         }
                         Text(workplaceSubtitle)
-                            .font(BanditoFont.font(size: 12, weight: 400))
+                            .font(BanditoFont.text(size: 12, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                     }
                     Spacer()
@@ -888,7 +888,7 @@ struct WhereTab: View {
                 }
                 ForEach(notes, id: \.self) { note in
                     Text(note)
-                        .font(BanditoFont.font(size: 12, weight: 400))
+                        .font(BanditoFont.text(size: 12, weight: 400))
                         .foregroundStyle(Color.Bandito.text2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -905,7 +905,7 @@ struct WhereTab: View {
                 }
                 if inContainer {
                     Text(L10n.Workspace.Location.noBrowser)
-                        .font(BanditoFont.font(size: 11.5, weight: 400))
+                        .font(BanditoFont.text(size: 11.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -1002,7 +1002,7 @@ struct WhereTab: View {
             HStack(spacing: 8) {
                 Image(systemName: symbol).font(.system(size: 12.5))
                 Text(label)
-                    .font(BanditoFont.font(size: 12.5, weight: 400))
+                    .font(BanditoFont.text(size: 12.5, weight: 400))
                 Spacer(minLength: 0)
             }
             .foregroundStyle(Color.Bandito.text2)
@@ -1021,7 +1021,7 @@ struct WhereTab: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(status.kind.title)
-                        .font(BanditoFont.font(size: 13, weight: 600))
+                        .font(BanditoFont.text(size: 13, weight: 600))
                         .foregroundStyle(Color.Bandito.text)
                     if let plan { Chip(text: plan, tone: .signal) }
                 }

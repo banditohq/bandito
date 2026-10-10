@@ -65,7 +65,9 @@ struct ServerPage<Trailing: View, Content: View>: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 14) {
                 Text(title)
-                    .font(.system(size: 26, weight: .semibold))
+                    .font(BanditoFont.display(size: 24, weight: 600))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                     .foregroundStyle(Color.Bandito.text)
                 Spacer(minLength: 12)
                 trailing
@@ -98,7 +100,7 @@ struct ServerUnavailable: View {
 
     var body: some View {
         Text(message)
-            .font(.system(size: 13))
+            .font(BanditoFont.text(size: 13, weight: 400))
             .foregroundStyle(Color.Bandito.text2)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(16)
@@ -123,7 +125,7 @@ struct ServerSidebar: View {
                     router.serverSection = section
                 } label: {
                     Text(section.title)
-                        .font(.system(size: 13, weight: selected ? .semibold : .regular))
+                        .font(BanditoFont.text(size: 13, weight: selected ? 600 : 400))
                         .foregroundStyle(selected ? Color.Bandito.text : Color.Bandito.text2)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 10)

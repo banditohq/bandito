@@ -347,7 +347,7 @@ struct FileDropHighlight: View {
                     .strokeBorder(Color.Bandito.signal, style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])))
             .overlay {
                 Text(L10n.Composer.Attach.dropHint)
-                    .font(BanditoFont.font(size: 14, weight: 500))
+                    .font(BanditoFont.text(size: 14, weight: 500))
                     .foregroundStyle(Color.Bandito.text)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)

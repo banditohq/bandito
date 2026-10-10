@@ -136,7 +136,7 @@ public struct SelectFieldView: View {
             Spacer(minLength: 8)
             if let subtitle, !subtitle.isEmpty {
                 Text(subtitle)
-                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .lineLimit(1)
             }
@@ -306,7 +306,7 @@ private struct SelectPanel<Value: Hashable, Footer: View>: View {
                         .accessibilityHidden(true)
                     TextField(L10n.Select.search, text: $model.query)
                         .banditoField()
-                        .font(.system(size: 13))
+                        .font(BanditoFont.text(size: 13, weight: 400))
                         .foregroundStyle(Color.Bandito.text)
                         .focused($searchFocused)
                         .accessibilityLabel(L10n.Select.search)
@@ -327,7 +327,7 @@ private struct SelectPanel<Value: Hashable, Footer: View>: View {
                             .id(SelectPanelModel<Value>.topMarker)
                         if rows.isEmpty {
                             Text(L10n.Select.noResults)
-                                .font(BanditoFont.font(size: 12.5, weight: 400))
+                                .font(BanditoFont.text(size: 12.5, weight: 400))
                                 .foregroundStyle(Color.Bandito.text3)
                                 .frame(maxWidth: .infinity, alignment: .center)
                                 .padding(.vertical, 14)
@@ -406,7 +406,7 @@ private struct SelectPanel<Value: Hashable, Footer: View>: View {
                         .lineLimit(1)
                     if let subtitle = option.subtitle, !subtitle.isEmpty {
                         Text(subtitle)
-                            .font(BanditoFont.font(size: 11.5, weight: 400))
+                            .font(BanditoFont.text(size: 11.5, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                             .lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)

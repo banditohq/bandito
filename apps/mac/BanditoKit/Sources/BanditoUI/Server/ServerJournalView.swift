@@ -38,7 +38,7 @@ struct ServerJournalView: View {
                 }
             } else {
                 Text(L10n.Journal.needsNewer)
-                    .font(.system(size: 13))
+                    .font(BanditoFont.text(size: 13, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
             }
         }
@@ -95,11 +95,11 @@ struct ServerJournalView: View {
     private var logBody: some View {
         if log == nil {
             Text(loading ? L10n.Journal.loading : L10n.Journal.empty)
-                .font(.system(size: 13))
+                .font(BanditoFont.text(size: 13, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
         } else if entries.isEmpty {
             Text(L10n.Journal.empty)
-                .font(.system(size: 13))
+                .font(BanditoFont.text(size: 13, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
         } else {
             ScrollViewReader { proxy in
@@ -117,7 +117,7 @@ struct ServerJournalView: View {
                 .onChange(of: entries.last?.id) { _, _ in scrollToEnd(proxy) }
             }
             Text(sourceText)
-                .font(.system(size: 11.5))
+                .font(BanditoFont.text(size: 11.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
         }
     }
@@ -125,13 +125,13 @@ struct ServerJournalView: View {
     private func row(_ entry: JournalEntry) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             Text(entry.line.time ?? "")
-                .font(BanditoFont.font(size: 12, weight: 400, mono: true))
+                .font(BanditoFont.mono(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
                 .frame(width: 62, alignment: .leading)
             Group {
                 if let level = entry.line.level {
                     Text(level.rawValue)
-                        .font(BanditoFont.font(size: 10.5, weight: 600, mono: true))
+                        .font(BanditoFont.mono(size: 10.5, weight: 600))
                         .foregroundStyle(Self.color(for: level))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 1)
@@ -141,19 +141,19 @@ struct ServerJournalView: View {
             .fixedSize()
             .frame(width: 58, alignment: .leading)
             Text(entry.line.module ?? "")
-                .font(BanditoFont.font(size: 12, weight: 400, mono: true))
+                .font(BanditoFont.mono(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
                 .lineLimit(1)
                 .frame(width: 150, alignment: .leading)
             Text(entry.line.message)
-                .font(BanditoFont.font(size: 12, weight: 400, mono: true))
+                .font(BanditoFont.mono(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if entry.repeats > 1 {
                 Text(verbatim: "×\(entry.repeats)")
-                    .font(BanditoFont.font(size: 11.5, weight: 600))
+                    .font(BanditoFont.text(size: 11.5, weight: 600))
                     .monospacedDigit()
                     .foregroundStyle(Color.Bandito.text3)
                     .fixedSize()

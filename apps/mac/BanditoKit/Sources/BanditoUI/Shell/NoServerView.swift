@@ -27,10 +27,10 @@ struct NoServerView: View {
                 .font(.system(size: 22, weight: .regular))
                 .foregroundStyle(Color.Bandito.text3)
             Text(L10n.Empty.NoServers.title)
-                .font(.system(size: 13, weight: .semibold))
+                .font(BanditoFont.text(size: 13, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
             Text(L10n.Mode.connectServer)
-                .font(.system(size: 12))
+                .font(BanditoFont.text(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .multilineTextAlignment(.center)
             Button(L10n.Empty.NoServers.action) {

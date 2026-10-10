@@ -185,13 +185,13 @@ struct ServerFeaturesCard: View {
             ForEach(setup.lines) { line in
                 HStack(spacing: 10) {
                     Text(line.title)
-                        .font(.system(size: 13))
+                        .font(BanditoFont.text(size: 13, weight: 400))
                         .foregroundStyle(Color.Bandito.text)
                         .lineLimit(1)
                     Spacer(minLength: 8)
                     if let hint = line.hint, line.state != .ready {
                         Text(hint)
-                            .font(.system(size: 12))
+                            .font(BanditoFont.text(size: 12, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                             .lineLimit(1)
                             .minimumScaleFactor(0.85)
@@ -208,10 +208,10 @@ struct ServerFeaturesCard: View {
             if let command = setup.passwordCommand {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(L10n.Setup.needsPassword)
-                        .font(.system(size: 12.5))
+                        .font(BanditoFont.text(size: 12.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text2)
                     Text(command)
-                        .font(.system(size: 12, design: .monospaced))
+                        .font(BanditoFont.mono(size: 12, weight: 400))
                         .foregroundStyle(Color.Bandito.text)
                         .textSelection(.enabled)
                         .padding(8)
@@ -225,7 +225,7 @@ struct ServerFeaturesCard: View {
             }
             if let failed = setup.job?.failedComponent {
                 Text(L10n.Setup.failed(component: failed))
-                    .font(.system(size: 12.5))
+                    .font(BanditoFont.text(size: 12.5, weight: 400))
                     .foregroundStyle(Color.Bandito.danger)
             } else if let error = setup.error {
                 UserFacingErrorView(message: error)
@@ -244,7 +244,7 @@ struct ServerFeaturesCard: View {
         let count = Self.logLines(text).count
         return VStack(alignment: .leading, spacing: 8) {
             Text(showsFullLog ? text : Self.logTail(text, lines: Self.logPreviewLines))
-                .font(.system(size: 11, design: .monospaced))
+                .font(BanditoFont.mono(size: 11, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .textSelection(.enabled)

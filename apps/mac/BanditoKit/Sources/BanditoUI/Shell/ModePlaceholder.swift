@@ -26,10 +26,10 @@ struct SidebarPlaceholder: View {
             } else {
                 VStack(spacing: 6) {
                     Text(mode.title)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(BanditoFont.text(size: 13, weight: 600))
                         .foregroundStyle(Color.Bandito.text2)
                     Text(L10n.Server.updateNote)
-                        .font(.system(size: 12))
+                        .font(BanditoFont.text(size: 12, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .multilineTextAlignment(.center)
                 }

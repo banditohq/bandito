@@ -85,7 +85,7 @@ public struct OnboardingFlow: View {
     private var topBar: some View {
         HStack {
             Text(L10n.Onboarding.stepOf(step: "\(onboarding.step.position)", total: "5"))
-                .font(BanditoFont.font(size: 12, weight: 500))
+                .font(BanditoFont.text(size: 12, weight: 500))
                 .monospacedDigit()
                 .foregroundStyle(Color.Bandito.text3)
             Spacer()

@@ -69,14 +69,14 @@ struct UpdatesSection: View {
                     title: L10n.Settings.Updates.app, hint: nil,
                     icon: SettingsIcon(symbol: "app.badge", tint: BanditoPalette.badgeSlate)
                 ) {
-                    Text(appVersion).font(.system(size: 13, design: .monospaced)).foregroundStyle(Color.Bandito.text2)
+                    Text(appVersion).font(BanditoFont.mono(size: 13, weight: 400)).foregroundStyle(Color.Bandito.text2)
                 }
                 Divider().padding(.horizontal, 16)
                 SettingsRow(
                     title: L10n.Settings.Updates.daemonServer, hint: nil,
                     icon: SettingsIcon(symbol: "server.rack", tint: BanditoPalette.badgeGreen)
                 ) {
-                    Text(daemon).font(.system(size: 13, design: .monospaced)).foregroundStyle(Color.Bandito.text2)
+                    Text(daemon).font(BanditoFont.mono(size: 13, weight: 400)).foregroundStyle(Color.Bandito.text2)
                 }
                 Divider().padding(.horizontal, 16)
                 SettingsRow(
@@ -84,7 +84,7 @@ struct UpdatesSection: View {
                     icon: SettingsIcon(symbol: "sparkles", tint: BanditoPalette.badgeOrange)
                 ) {
                     Text(latestValue.text)
-                        .font(latestValue.isVersion ? .system(size: 13, design: .monospaced) : .system(size: 13))
+                        .font(latestValue.isVersion ? BanditoFont.mono(size: 13) : BanditoFont.text(size: 13))
                         .foregroundStyle(Color.Bandito.text2)
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
@@ -93,7 +93,7 @@ struct UpdatesSection: View {
             if let server = app.currentServer {
                 VStack(alignment: .leading, spacing: 12) {
                     Text(ServerPicker.name(server))
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(BanditoFont.text(size: 13, weight: 600))
                         .foregroundStyle(Color.Bandito.text)
                         .lineLimit(1)
                         .truncationMode(.middle)

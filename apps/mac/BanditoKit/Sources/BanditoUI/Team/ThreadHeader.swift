@@ -85,18 +85,18 @@ struct ThreadHeader: View {
                     }
                 }
             Text(agent.name)
-                .font(BanditoFont.font(size: 13, weight: 600))
+                .font(BanditoFont.display(size: 12.5, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
                 .lineLimit(1)
             if showsCaption, !caption.isEmpty {
                 Text(caption)
-                    .font(BanditoFont.font(size: 11.5, weight: 400))
+                    .font(BanditoFont.text(size: 11.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .lineLimit(1)
             }
             Rectangle().fill(Color.Bandito.text.opacity(0.12)).frame(width: 1, height: 14)
             Text(status.title)
-                .font(BanditoFont.font(size: 12, weight: 600))
+                .font(BanditoFont.text(size: 12, weight: 600))
                 .foregroundStyle(statusTint)
                 .lineLimit(1)
                 .fixedSize()
@@ -137,11 +137,11 @@ struct ThreadHeader: View {
                         Text("+\(changes.additions)").foregroundStyle(Color.Bandito.ok)
                         Text("−\(changes.deletions)").foregroundStyle(Color.Bandito.danger)
                     }
-                    .font(BanditoFont.font(size: 11, weight: 500))
+                    .font(BanditoFont.text(size: 11, weight: 500))
                     .monospacedDigit()
                 }
             }
-            .font(BanditoFont.font(size: 12, weight: 500))
+            .font(BanditoFont.text(size: 12, weight: 500))
             .foregroundStyle(counted ? Color.Bandito.text : Color.Bandito.text3)
             .padding(.horizontal, 11)
             .frame(height: 30)
@@ -163,11 +163,11 @@ struct ThreadHeader: View {
                     .fixedSize()
                 Rectangle().fill(Color.Bandito.text.opacity(0.12)).frame(width: 1, height: 12)
                 Text(L10n.Workbench.show)
-                    .font(BanditoFont.font(size: 12, weight: 600))
+                    .font(BanditoFont.text(size: 12, weight: 600))
                     .lineLimit(1)
                     .fixedSize()
             }
-            .font(BanditoFont.font(size: 12, weight: 500))
+            .font(BanditoFont.text(size: 12, weight: 500))
             .foregroundStyle(Color.Bandito.text2)
             .padding(.horizontal, 11)
             .frame(height: 30)

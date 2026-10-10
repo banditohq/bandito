@@ -1,4 +1,5 @@
 import AppKit
+import BanditoDesign
 import BanditoUI
 import SwiftUI
 
@@ -16,6 +17,8 @@ struct BanditoApp: App {
     private let updater = AppUpdater()
 
     init() {
+        // Brand fonts first: the first frame already draws with them.
+        BanditoFont.registerBundledFonts()
         // Saved servers are read synchronously by AppModel, so the first frame already knows the launch state.
         let app = AppModel()
         _model = State(initialValue: app)
@@ -25,6 +28,7 @@ struct BanditoApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                .font(BanditoFont.text(size: 13))
                 .environment(model)
                 .environment(router)
                 .environment(keymap)
@@ -67,6 +71,7 @@ struct BanditoApp: App {
 
         Settings {
             SettingsWindow()
+                .font(BanditoFont.text(size: 13))
                 .environment(model)
                 .environment(router)
                 .environment(keymap)
@@ -78,6 +83,7 @@ struct BanditoApp: App {
 
         MenuBarExtra {
             MenuBarContent()
+                .font(BanditoFont.text(size: 13))
                 .environment(model)
                 .environment(demo)
                 .environment(router)

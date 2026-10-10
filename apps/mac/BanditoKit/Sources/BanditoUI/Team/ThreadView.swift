@@ -246,7 +246,7 @@ struct ThreadView: View {
                     .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
                 if unseen > 0 {
                     Text(unseen > 99 ? "99+" : "\(unseen)")
-                        .font(BanditoFont.font(size: 10, weight: 600))
+                        .font(BanditoFont.text(size: 10, weight: 600))
                         .monospacedDigit()
                         .foregroundStyle(Color.Bandito.bg)
                         .padding(.horizontal, 5)
@@ -793,7 +793,7 @@ private struct Banner: View {
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Color.Bandito.danger)
-            Text(text).font(.system(size: 12)).foregroundStyle(Color.Bandito.text).textSelection(.enabled)
+            Text(text).font(BanditoFont.text(size: 12, weight: 400)).foregroundStyle(Color.Bandito.text).textSelection(.enabled)
             Spacer()
         }
         .padding(12)

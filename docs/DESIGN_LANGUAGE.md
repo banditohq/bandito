@@ -9,7 +9,7 @@ Sources of truth in the repo: `brand/tokens/tokens.json` (generates `apps/mac/Ba
 1. **Warm dark.** Ground `bg`, text `text`, hairlines instead of boxes. Light is a twin with the same token names.
 2. **Cream is the accent you see most.** The primary button is a cream capsule (`text` fill, `bg` label) with a small orange dot. A selected state is a cream border, not an orange fill.
 3. **Orange means you.** `signal` appears only where a person is needed: the needs-you status dot and glow, a section label that waits for the person, the keyboard focus ring, accent text. Never a button fill.
-4. **Two voices.** Geist for people, Geist Mono for machine text (commands, paths, ids, keys). The app draws the system face today (`BanditoFont.sansName` is nil); sizes below apply either way.
+4. **Three faces.** Unbounded is the brand's voice (titles, big numbers, names, labels, the primary button), Onest is everything a person reads, JetBrains Mono is machine text (code, paths, commands, ids, keys). See Typography.
 5. **The raccoon is the one mascot.** Avatars and empty states. No stock illustrations.
 6. **Quiet.** Fills and hairlines. A shadow means "this floats" (composer, a hovered clickable card, a popover), never on rows of a list.
 
@@ -31,11 +31,28 @@ Use `Color.Bandito.*`, `BanditoSpace.*`, `BanditoRadius.*`, `BanditoType.*`, `Ba
 
 Translucent overlays are `Color.Bandito.text.opacity(x)` so they flip with the theme. The alphas in use: 3% icon-button fill, 4% mode-cell hover, 5% row hover and segmented track, 6% quiet fill and card highlight, 7% highlighted option, 8% hairline, 9% to 4% card border, 12% quiet border, chip tint and ring track, 13% person bubble, 14% key hint border, 30% focused field border, 45% selected card border. Do not add new ones.
 
-Type (`BanditoType`): display 80/700, title 44/700, heading 22/600, body 15/400, small 13/500, mono 13/400, label 11/500. Sizes the app actually uses: button 13.5 (large 15), field 13.5, message and composer 14.5, empty-state title 18, caption 12, option title 13, option subtitle 11.5, chip 11, section label 11/600 with 0.8 pt tracking, key hint 10.5 mono. Always go through `BanditoFont.font(size:weight:mono:)` or `Font.bandito(_:)`; never `.font(.system(...))` for text a person reads (existing icon sizes excepted).
-
 Space is a 4 pt scale (`BanditoSpace`: 4 8 12 16 20 24 32 40 48 64). Brand radii: 8, 12, 18, 24, pill. The components ship these off-scale radii and keep them: key hint 5, chip 6, icon button and raised cells 9, field 10, card 14, bubble 16 (tail 6). Corners are `.continuous`.
 
 Motion (`BanditoMotion`): fast 0.12 s, base 0.2 s, slow 0.32 s, ease `(0.2, 0.8, 0.2, 1)`.
+
+## Typography
+
+Three families, all SIL OFL, bundled as variable TTFs in `apps/mac/BanditoKit/Sources/BanditoDesign/Fonts/` (each with its `OFL.txt`) and registered for the process by `BanditoFont.registerBundledFonts()` (called at app start; the first use registers them too). The weight is the `wght` axis, so any weight in the font's range is exact (Unbounded 200-900, Onest 100-900, JetBrains Mono 100-800).
+
+| Role | Family | API | Use |
+| --- | --- | --- | --- |
+| `display` | Unbounded | `BanditoFont.display(size:weight:)` | Page and sheet titles, big metric numbers and usage percents, agent names (list, chat header, menu bar), template titles, `SectionLabel`, the text of `.signal` and `.lightPill` buttons, avatar initials |
+| `text` | Onest | `BanditoFont.text(size:weight:)` | Everything else: messages, descriptions, fields, menus, settings, hints, chips, captions |
+| `mono` | JetBrains Mono | `BanditoFont.mono(size:weight:)` | Code in messages, paths, commands, ids, keys, monospaced fields, the terminal and the file editor (`appKitMono`, `appKitTerminalMono`) |
+
+Rules:
+
+- Always go through these functions (or `Font.bandito(_:)`); never `.font(.system(...))` for text. `.system` stays only for SF Symbols. `BanditoFont.font(size:weight:mono:)` is the helper for a role chosen at run time. Text with no explicit font gets Onest 13 from the scene root.
+- Unbounded is wide: where it replaces a text face the size drops about 8% (page titles 26 to 24, big numbers 26 to 24, names 14 to 13.5 or 13 to 12.5, section label 11 to 10.5 with 0.6 pt tracking, button label 13.5 to 12.5 and 15 to 14). A single-line display text carries `.lineLimit(1)` and `.truncationMode(.tail)` (or `minimumScaleFactor` for numbers) so a long name or a translation is cut with an ellipsis and never breaks the layout. Titles that may wrap (onboarding) wrap.
+- Chinese, Japanese and Korean: Onest and Unbounded have no CJK glyphs, CoreText substitutes the system font for those characters (tested with "设置 設定 설정").
+- Terminal: pass the plain named font (`appKitTerminalMono`); SwiftTerm derives bold with `NSFontManager`, which works from the named instance but not from a font built on a variation.
+
+Scale (`BanditoType`, tokens in `brand/tokens`): display 80/700, title 44/700, heading 22/600, body 15/400, small 13/500, mono 13/400, label 11/500. Sizes the app actually uses: button 13.5 (large 15; the `.signal` and `.lightPill` label is x0.92), field 13.5, message and composer 14.5, empty-state title 16.5 display, caption 12, option title 13, option subtitle 11.5, chip 11, section label 10.5/600 display with 0.6 pt tracking, key hint 10.5 mono, sheet title 15.5 to 18.5 display, page title 24 display, onboarding title 35 display.
 
 ## Components
 

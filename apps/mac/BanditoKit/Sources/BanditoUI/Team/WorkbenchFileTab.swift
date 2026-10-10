@@ -91,7 +91,7 @@ struct WorkbenchFileTab: View {
                     ForEach(Array(crumbs.enumerated()), id: \.offset) { index, crumb in
                         if index == crumbs.count - 1 {
                             Text(crumb.name)
-                                .font(BanditoFont.font(size: 13, weight: 600))
+                                .font(BanditoFont.text(size: 13, weight: 600))
                                 .foregroundStyle(Color.Bandito.text)
                                 .lineLimit(1)
                                 .padding(.horizontal, index == 0 ? 0 : 6)
@@ -133,7 +133,7 @@ struct WorkbenchFileTab: View {
                 .padding(16)
         } else if entries.isEmpty {
             Text(L10n.Memory.Viewer.empty)
-                .font(BanditoFont.font(size: 13, weight: 400))
+                .font(BanditoFont.text(size: 13, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
@@ -153,7 +153,7 @@ struct WorkbenchFileTab: View {
                                     .frame(width: 18)
                                     .foregroundStyle(entry.kind == .dir ? BanditoPalette.peach : Color.Bandito.text2)
                                 Text(entry.name)
-                                    .font(BanditoFont.font(size: 13, weight: 400))
+                                    .font(BanditoFont.text(size: 13, weight: 400))
                                     .foregroundStyle(Color.Bandito.text)
                                     .lineLimit(1)
                                     .truncationMode(.middle)

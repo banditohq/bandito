@@ -31,7 +31,7 @@ struct ApprovalsSection: View {
                     noServer
                 } else {
                     Text(L10n.Server.updateNote)
-                        .font(.system(size: 13))
+                        .font(BanditoFont.text(size: 13, weight: 400))
                         .foregroundStyle(Color.Bandito.text2)
                 }
                 builtinChecks
@@ -51,7 +51,7 @@ struct ApprovalsSection: View {
     private var noServer: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(L10n.Server.noServer)
-                .font(.system(size: 13))
+                .font(BanditoFont.text(size: 13, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
             Button(L10n.Settings.Servers.add) {
                 router.sheet = .addServer
@@ -63,14 +63,14 @@ struct ApprovalsSection: View {
     private func newRule(_ server: ServerModel) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(L10n.Settings.Approvals.newRule)
-                .font(.system(size: 13, weight: .semibold))
+                .font(BanditoFont.text(size: 13, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
             // The pattern gets the full width; the choices and the button share the row below, so nothing is squeezed
             // at the smallest window size.
             labeled(L10n.Settings.Approvals.when) {
                 TextField(L10n.Settings.Approvals.patternPlaceholder, text: $pattern)
                     .banditoField()
-                    .font(.system(size: 13, design: .monospaced))
+                    .font(BanditoFont.mono(size: 13, weight: 400))
                     .onSubmit { add(server) }
             }
             HStack(alignment: .bottom, spacing: 10) {
@@ -96,7 +96,7 @@ struct ApprovalsSection: View {
                     .disabled(pattern.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             Text(L10n.Settings.Approvals.wildcardNote)
-                .font(.system(size: 11.5))
+                .font(BanditoFont.text(size: 11.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
             if let error {
                 UserFacingErrorView(message: error)
@@ -139,21 +139,21 @@ struct ApprovalsSection: View {
             .background(Color.Bandito.text.opacity(0.025))
             if rules.isEmpty {
                 Text(L10n.Settings.Approvals.empty)
-                    .font(.system(size: 13))
+                    .font(BanditoFont.text(size: 13, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                     .padding(16)
             }
             ForEach(rules) { rule in
                 HStack(spacing: 12) {
                     Text(rule.pattern)
-                        .font(.system(size: 13, design: .monospaced))
+                        .font(BanditoFont.mono(size: 13, weight: 400))
                         .foregroundStyle(Color.Bandito.text)
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     behaviorPill(rule.action)
                         .frame(width: 130, alignment: .leading)
                     Text(scopeName(rule.agentId, server: server))
-                        .font(.system(size: 13))
+                        .font(BanditoFont.text(size: 13, weight: 400))
                         .foregroundStyle(Color.Bandito.text2)
                         .lineLimit(1)
                         .frame(width: 150, alignment: .leading)
@@ -178,18 +178,18 @@ struct ApprovalsSection: View {
         VStack(alignment: .leading, spacing: 10) {
             SectionLabel(L10n.Settings.Approvals.builtin)
             Text(L10n.Settings.Approvals.builtinHint)
-                .font(.system(size: 12))
+                .font(BanditoFont.text(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 6, alignment: .leading)], alignment: .leading, spacing: 6) {
                 ForEach(Self.builtin, id: \.self) { item in
-                    chip(item, font: .system(size: 12, design: .monospaced), color: Color.Bandito.text2)
+                    chip(item, font: BanditoFont.mono(size: 12), color: Color.Bandito.text2)
                 }
-                chip(L10n.Settings.Approvals.outsideProject, font: .system(size: 12), color: Color.Bandito.text2)
+                chip(L10n.Settings.Approvals.outsideProject, font: BanditoFont.text(size: 12), color: Color.Bandito.text2)
             }
             SectionLabel(L10n.Settings.Approvals.browserChecks)
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 6, alignment: .leading)], alignment: .leading, spacing: 6) {
                 ForEach(Self.browserChecks, id: \.self) { item in
-                    chip(item, font: .system(size: 12), color: Color(hex: 0xA3BDEB))
+                    chip(item, font: BanditoFont.text(size: 12), color: Color(hex: 0xA3BDEB))
                 }
             }
         }
@@ -205,7 +205,7 @@ struct ApprovalsSection: View {
     private func labeled<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label)
-                .font(.system(size: 12))
+                .font(BanditoFont.text(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
             content()
         }
@@ -232,7 +232,7 @@ struct ApprovalsSection: View {
         case .deny: (L10n.Settings.Approvals.deny, Color.Bandito.danger)
         }
         return Text(text)
-            .font(.system(size: 12, weight: .semibold))
+            .font(BanditoFont.text(size: 12, weight: 600))
             .foregroundStyle(tint)
             .padding(.horizontal, 10)
             .padding(.vertical, 3)

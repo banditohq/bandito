@@ -62,7 +62,7 @@ private struct FilesSidebarContent: View {
                                 favorites.unhideAll(serverID: server.id)
                             } label: {
                                 Text(L10n.Files.showHiddenPlaces)
-                                    .font(.system(size: 11.5))
+                                    .font(BanditoFont.text(size: 11.5, weight: 400))
                                     .foregroundStyle(Color.Bandito.text3)
                                     .lineLimit(1)
                                     .fixedSize()
@@ -249,7 +249,7 @@ private struct PlaceRow: View {
                     .foregroundStyle(place.tint)
                     .frame(width: 18)
                 Text(place.title)
-                    .font(.system(size: 13))
+                    .font(BanditoFont.text(size: 13, weight: 400))
                     .foregroundStyle(isCurrent ? Color.Bandito.text : Color.Bandito.text2)
                     .lineLimit(1)
                 Spacer(minLength: 6)
@@ -274,7 +274,7 @@ private struct AgentPlaceRow: View {
             HStack(spacing: 10) {
                 AgentAvatarView(agent: agent, server: server, size: 22)
                 Text(agent.name)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(BanditoFont.display(size: 12.5, weight: 500))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1)
                 Spacer(minLength: 6)
@@ -299,11 +299,11 @@ private struct DiskBlock: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(L10n.Files.Disk.title)
-                    .font(.system(size: 12))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                 Spacer()
                 Text(L10n.Files.Disk.free(size: HostFormat.diskBytes(free)))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(BanditoFont.text(size: 12, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1)
                     .fixedSize()

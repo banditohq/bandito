@@ -67,7 +67,7 @@ struct FolderPicker: View {
                 .foregroundStyle(Color.Bandito.text3)
             TextField(L10n.FolderPicker.search, text: $query)
                 .banditoField()
-                .font(BanditoFont.font(size: 12.5, weight: 400))
+                .font(BanditoFont.text(size: 12.5, weight: 400))
                 .onSubmit {
                     if FolderPickerLogic.isPath(query) {
                         Task { await open(query.trimmingCharacters(in: .whitespaces)) }
@@ -119,7 +119,7 @@ struct FolderPicker: View {
                         } trailing: {
                             if entry.hidden {
                                 Text(L10n.FolderPicker.hidden)
-                                    .font(BanditoFont.font(size: 11, weight: 400))
+                                    .font(BanditoFont.text(size: 11, weight: 400))
                                     .foregroundStyle(Color.Bandito.text3.opacity(0.7))
                             }
                         }
@@ -147,7 +147,7 @@ struct FolderPicker: View {
                     get: { newFolder ?? "" }, set: { newFolder = $0 })
                 )
                 .banditoField()
-                .font(BanditoFont.font(size: 12.5, weight: 400))
+                .font(BanditoFont.text(size: 12.5, weight: 400))
                 .focused($newFolderFocused)
                 .onSubmit { Task { await createFolder() } }
                 .onExitCommand { newFolder = nil; error = nil }
@@ -175,7 +175,7 @@ struct FolderPicker: View {
                 }
                 Button(part.name) { Task { await open(part.path) } }
                     .banditoButton(.link)
-                    .font(BanditoFont.font(size: 12.5, weight: index == parts.count - 1 ? 600 : 400))
+                    .font(BanditoFont.text(size: 12.5, weight: index == parts.count - 1 ? 600 : 400))
                     .foregroundStyle(index == parts.count - 1 ? Color.Bandito.text : Color.Bandito.text3)
             }
             Spacer(minLength: 0)
@@ -213,7 +213,7 @@ struct FolderPicker: View {
 
     private func groupLabel(_ text: String) -> some View {
         Text(text)
-            .font(BanditoFont.font(size: 10.5, weight: 600))
+            .font(BanditoFont.text(size: 10.5, weight: 600))
             .tracking(0.8)
             .foregroundStyle(Color.Bandito.text3)
             .padding(.horizontal, 8)
@@ -231,7 +231,7 @@ struct FolderPicker: View {
                     .font(.system(size: 12.5))
                     .foregroundStyle(tint)
                 Text(name)
-                    .font(BanditoFont.font(size: 12.5, weight: 400))
+                    .font(BanditoFont.text(size: 12.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -302,7 +302,7 @@ struct FolderPicker: View {
     private var cloneForm: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(L10n.FolderPicker.cloneHint(folder: FolderPickerLogic.name(of: listing?.path ?? "")))
-                .font(BanditoFont.font(size: 12, weight: 400))
+                .font(BanditoFont.text(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
             TextField(L10n.FolderPicker.cloneURL, text: $cloneURL)
                 .banditoField()
@@ -314,7 +314,7 @@ struct FolderPicker: View {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
                     Text(L10n.FolderPicker.cloning)
-                        .font(BanditoFont.font(size: 12, weight: 400))
+                        .font(BanditoFont.text(size: 12, weight: 400))
                         .foregroundStyle(Color.Bandito.text2)
                 }
             }

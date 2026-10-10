@@ -54,7 +54,7 @@ struct MetricDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
                 Text(metric.title)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(BanditoFont.text(size: 15, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1)
                 Spacer(minLength: 8)
@@ -114,11 +114,11 @@ struct MetricDetailView: View {
     private func figure(_ label: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(label)
-                .font(.system(size: 11.5))
+                .font(BanditoFont.text(size: 11.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
                 .lineLimit(1)
             Text(value)
-                .font(.system(size: 15, weight: .semibold))
+                .font(BanditoFont.display(size: 14, weight: 600))
                 .foregroundStyle(Color.Bandito.text)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
@@ -143,7 +143,7 @@ struct MetricDetailView: View {
                     .foregroundStyle(Color.Bandito.text3.opacity(0.6))
                     .annotation(position: .top, alignment: .leading, spacing: 4) {
                         Text(annotationText(for: nearest))
-                            .font(.system(size: 11.5, weight: .medium))
+                            .font(BanditoFont.text(size: 11.5, weight: 500))
                             .foregroundStyle(Color.Bandito.text)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 3)
@@ -197,14 +197,14 @@ struct MetricDetailView: View {
                         showAll.toggle()
                     }
                     .buttonStyle(.plain)
-                    .font(.system(size: 12.5))
+                    .font(BanditoFont.text(size: 12.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                     .padding(.horizontal, 6)
                     .frame(height: 28)
                 }
                 if stillRunning {
                     Text(L10n.Server.Detail.stillRunning)
-                        .font(.system(size: 12))
+                        .font(BanditoFont.text(size: 12, weight: 400))
                         .foregroundStyle(Color.Bandito.text2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -279,21 +279,23 @@ struct MetricDetailView: View {
         return VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(HostFormat.diskBytes(max(0, total - used)))
-                    .font(.system(size: 26, weight: .semibold))
+                    .font(BanditoFont.display(size: 24, weight: 600))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                     .foregroundStyle(Color.Bandito.text)
                 Text(L10n.Server.Tile.freeWord)
-                    .font(.system(size: 13))
+                    .font(BanditoFont.text(size: 13, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
             }
             Text(L10n.Server.Tile.diskUsed(used: usage.used, total: usage.total))
-                .font(.system(size: 12.5))
+                .font(BanditoFont.text(size: 12.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
             FillBar(fraction: fraction, tint: Color.Bandito.text)
                 .frame(height: 8)
             Text(L10n.Server.Detail.diskNoHistory)
-                .font(.system(size: 11.5))
+                .font(BanditoFont.text(size: 11.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
         }
     }
@@ -484,13 +486,13 @@ private struct ProcessRowView: View {
                 .frame(width: 18, height: 18)
             HStack(spacing: 6) {
                 Text(title)
-                    .font(.system(size: 13))
+                    .font(BanditoFont.text(size: 13, weight: 400))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 if let subtitle {
                     Text(subtitle)
-                        .font(.system(size: 11.5))
+                        .font(BanditoFont.text(size: 11.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -499,7 +501,7 @@ private struct ProcessRowView: View {
             }
             Spacer(minLength: 8)
             Text(value)
-                .font(.system(size: 12.5, weight: .medium).monospacedDigit())
+                .font(BanditoFont.text(size: 12.5, weight: 500)).monospacedDigit()
                 .foregroundStyle(Color.Bandito.text2)
                 .lineLimit(1)
                 .frame(width: 64, alignment: .trailing)

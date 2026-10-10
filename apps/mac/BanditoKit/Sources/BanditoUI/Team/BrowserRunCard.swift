@@ -61,7 +61,7 @@ struct BrowserRunCard: View {
     private var header: some View {
         HStack(spacing: 8) {
             Text(L10n.Thread.BrowserRun.title)
-                .font(BanditoFont.font(size: 12.5, weight: 500))
+                .font(BanditoFont.text(size: 12.5, weight: 500))
                 .foregroundStyle(Color.Bandito.text2)
                 .lineLimit(1)
             Spacer(minLength: 8)
@@ -83,7 +83,7 @@ struct BrowserRunCard: View {
                         .accessibilityHidden(true)
                 } else {
                     Text(L10n.Thread.BrowserRun.noPicture)
-                        .font(BanditoFont.font(size: 12, weight: 400))
+                        .font(BanditoFont.text(size: 12, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .multilineTextAlignment(.center)
                         .padding(12)
@@ -102,13 +102,13 @@ struct BrowserRunCard: View {
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(Color.Bandito.text3)
             Text(label.title)
-                .font(BanditoFont.font(size: 12.5, weight: 500))
+                .font(BanditoFont.text(size: 12.5, weight: 500))
                 .foregroundStyle(Color.Bandito.text)
                 .lineLimit(1)
                 .truncationMode(.tail)
             if !label.domain.isEmpty, label.domain != label.title {
                 Text(label.domain)
-                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .lineLimit(1)
                     .truncationMode(.middle)

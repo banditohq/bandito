@@ -37,7 +37,7 @@ struct ApprovalCard: View {
                 HStack(spacing: 6) {
                     StatusDot(status: .needsYou, size: 7, ringColor: Color.Bandito.signal.opacity(0.15))
                     Text(L10n.Approval.needsYou)
-                        .font(BanditoFont.font(size: 11.5, weight: 600))
+                        .font(BanditoFont.text(size: 11.5, weight: 600))
                         .foregroundStyle(Color.Bandito.signalGlow)
                 }
                 .padding(.leading, 7).padding(.trailing, 9).padding(.vertical, 3)
@@ -45,12 +45,12 @@ struct ApprovalCard: View {
                 .overlay(Capsule().stroke(Color.Bandito.signal.opacity(0.3), lineWidth: 1))
 
                 Text(L10n.Approval.wants(name: agentName))
-                    .font(BanditoFont.font(size: 14.5, weight: 600))
+                    .font(BanditoFont.text(size: 14.5, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                 Spacer(minLength: 8)
                 Text(ApprovalReason.text(row.reason))
                     .help(row.reason)
-                    .font(BanditoFont.font(size: 11.5, weight: 500))
+                    .font(BanditoFont.text(size: 11.5, weight: 500))
                     .foregroundStyle(Color.Bandito.text3)
                     .lineLimit(1)
             }
@@ -60,7 +60,7 @@ struct ApprovalCard: View {
             if let diff = row.diff, !diff.isEmpty {
                 ScrollView {
                     Text(diff)
-                        .font(BanditoFont.font(size: 11.5, weight: 400, mono: true))
+                        .font(BanditoFont.mono(size: 11.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text2)
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -143,7 +143,7 @@ struct ApprovalCard: View {
                 .foregroundStyle(Color.Bandito.text3)
                 .lineLimit(1)
         }
-        .font(BanditoFont.font(size: 12.5, weight: 400))
+        .font(BanditoFont.text(size: 12.5, weight: 400))
         .foregroundStyle(Color.Bandito.text3)
         .padding(.horizontal, 4)
     }
@@ -155,7 +155,7 @@ struct KeyCap: View {
 
     var body: some View {
         Text(text)
-            .font(BanditoFont.font(size: 10.5, weight: 500, mono: true))
+            .font(BanditoFont.mono(size: 10.5, weight: 500))
             .foregroundStyle(Color.Bandito.text2)
             .padding(.horizontal, 5)
             .frame(minHeight: 16)
@@ -188,7 +188,7 @@ struct CheckBoxRow: View {
                     }
                     .frame(width: 15, height: 15)
                 Text(label)
-                    .font(BanditoFont.font(size: 12.5, weight: 400))
+                    .font(BanditoFont.text(size: 12.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
             }
             .contentShape(Rectangle())

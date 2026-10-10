@@ -54,7 +54,7 @@ struct NewAgentSheet: View {
             if server == nil {
                 Spacer()
                 Text(L10n.AgentSheet.noServer)
-                    .font(BanditoFont.font(size: 13, weight: 400))
+                    .font(BanditoFont.text(size: 13, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                 Spacer()
             } else {
@@ -185,7 +185,9 @@ struct NewAgentSheet: View {
             avatarButton
             VStack(alignment: .leading, spacing: 8) {
                 Text(L10n.AgentSheet.title)
-                    .font(BanditoFont.font(size: 20, weight: 650))
+                    .font(BanditoFont.display(size: 18.5, weight: 600))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                     .foregroundStyle(Color.Bandito.text)
             }
             Spacer(minLength: 0)
@@ -199,7 +201,7 @@ struct NewAgentSheet: View {
                 }
             } label: {
                 Text(L10n.AgentSheet.fromTemplate)
-                    .font(BanditoFont.font(size: 12.5, weight: 400))
+                    .font(BanditoFont.text(size: 12.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                     .padding(.horizontal, 12)
                     .frame(height: 32)
@@ -248,7 +250,7 @@ struct NewAgentSheet: View {
                 // scrolls it instead of the sheet. The field grows with the text (4 to 12 lines); Return adds a line.
                 TextField(L10n.AgentSheet.instructionsPlaceholder, text: $draft.instructions, axis: .vertical)
                     .banditoField()
-                    .font(BanditoFont.font(size: 13, weight: 400))
+                    .font(BanditoFont.text(size: 13, weight: 400))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(4...12)
                     .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -287,12 +289,12 @@ struct NewAgentSheet: View {
                         .rotationEffect(.degrees(advancedOpen ? 90 : 0))
                         .frame(width: 12)
                     Text(L10n.AgentSheet.advanced)
-                        .font(BanditoFont.font(size: 12.5, weight: 500))
+                        .font(BanditoFont.text(size: 12.5, weight: 500))
                         .foregroundStyle(Color.Bandito.text2)
                     Spacer(minLength: 8)
                     if !advancedOpen, let summary = advancedSummary {
                         Text(summary)
-                            .font(BanditoFont.font(size: 12, weight: 400))
+                            .font(BanditoFont.text(size: 12, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                             .lineLimit(1)
                             .truncationMode(.tail)
@@ -308,7 +310,7 @@ struct NewAgentSheet: View {
                 VStack(alignment: .leading, spacing: 14) {
                     if effortLevels.isEmpty {
                         Text(L10n.ModelPicker.noEffort)
-                            .font(BanditoFont.font(size: 12, weight: 400))
+                            .font(BanditoFont.text(size: 12, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                     } else {
                         labeled(L10n.Effort.title) {
@@ -318,7 +320,7 @@ struct NewAgentSheet: View {
                                 .frame(maxWidth: .infinity)
                         }
                         Text(L10n.AgentSheet.effortCaption)
-                            .font(BanditoFont.font(size: 12, weight: 400))
+                            .font(BanditoFont.text(size: 12, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -338,7 +340,7 @@ struct NewAgentSheet: View {
                         }
                     }
                     Text(L10n.AgentSheet.fallbackHint)
-                        .font(BanditoFont.font(size: 12, weight: 400))
+                        .font(BanditoFont.text(size: 12, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .fixedSize(horizontal: false, vertical: true)
                         .offset(y: -8)
@@ -438,11 +440,11 @@ struct NewAgentSheet: View {
                 VStack(alignment: .leading, spacing: 5) {
                     HStack(spacing: 7) {
                         Text(runtimeName(kind))
-                            .font(BanditoFont.font(size: 13.5, weight: 600))
+                            .font(BanditoFont.text(size: 13.5, weight: 600))
                             .foregroundStyle(Color.Bandito.text)
                         if let plan = card?.plan {
                             Text(plan)
-                                .font(BanditoFont.font(size: 10.5, weight: 600))
+                                .font(BanditoFont.text(size: 10.5, weight: 600))
                                 .foregroundStyle(BanditoPalette.peach)
                                 .lineLimit(1)
                                 .fixedSize()
@@ -468,7 +470,7 @@ struct NewAgentSheet: View {
                             Circle().fill(state.tint).frame(width: 6, height: 6)
                         }
                         Text(state.text)
-                            .font(BanditoFont.font(size: 11.5, weight: 400))
+                            .font(BanditoFont.text(size: 11.5, weight: 400))
                             .foregroundStyle(state.tint)
                             .lineLimit(1)
                             .minimumScaleFactor(0.85)
@@ -481,7 +483,7 @@ struct NewAgentSheet: View {
                             [L10n.Usage.used(percent: "\(used)%"), resetCaption(nearest, now: now)]
                                 .compactMap { $0 }.joined(separator: " · ")
                         )
-                        .font(BanditoFont.font(size: 11, weight: 400))
+                        .font(BanditoFont.text(size: 11, weight: 400))
                         .monospacedDigit()
                         .foregroundStyle(Color.Bandito.text3)
                         .lineLimit(1)
@@ -489,11 +491,11 @@ struct NewAgentSheet: View {
                     }
                     if let command = state.command {
                         Text(L10n.AgentSheet.statusNeedsLoginHint)
-                            .font(BanditoFont.font(size: 11, weight: 400))
+                            .font(BanditoFont.text(size: 11, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                             .lineLimit(1)
                         Text(command)
-                            .font(BanditoFont.font(size: 11.5, weight: 500, mono: true))
+                            .font(BanditoFont.mono(size: 11.5, weight: 500))
                             .foregroundStyle(Color.Bandito.text)
                             .lineLimit(1)
                             .textSelection(.enabled)
@@ -518,7 +520,7 @@ struct NewAgentSheet: View {
             // Outside the card's button: a link inside a button would not be clickable on its own.
             if let url = state.installURL {
                 Button(L10n.AgentSheet.installGuide) { openURL(url) }
-                    .font(BanditoFont.font(size: 11.5, weight: 500))
+                    .font(BanditoFont.text(size: 11.5, weight: 500))
                     .banditoButton(.link)
                     .padding(.leading, 12)
             }
@@ -556,12 +558,12 @@ struct NewAgentSheet: View {
                         .foregroundStyle(BanditoPalette.peach)
                     if draft.cwd.isEmpty {
                         Text(L10n.AgentSheet.noFolder)
-                            .font(BanditoFont.font(size: 13, weight: 400))
+                            .font(BanditoFont.text(size: 13, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                             .lineLimit(1)
                     } else {
                         Text(draft.cwd)
-                            .font(BanditoFont.font(size: 13, weight: 400, mono: true))
+                            .font(BanditoFont.mono(size: 13, weight: 400))
                             .foregroundStyle(Color.Bandito.text)
                             .lineLimit(1)
                             .truncationMode(.head)
@@ -608,7 +610,7 @@ struct NewAgentSheet: View {
 
             if draft.folderOptional && draft.cwd.isEmpty {
                 Text(L10n.AgentSheet.ownFolderHint)
-                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .fixedSize(horizontal: false, vertical: true)
                     .offset(y: -8)
@@ -625,12 +627,12 @@ struct NewAgentSheet: View {
                         field: { option in SelectFieldView(option: option?.titleOnly, placeholder: "") },
                         footer: { _ in EmptyView() })
                     Text(L10n.AgentSheet.memoryAuto)
-                        .font(BanditoFont.font(size: 11.5, weight: 400))
+                        .font(BanditoFont.text(size: 11.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .padding(.leading, 4)
                 }
                 Text(L10n.AgentSheet.memoryHint)
-                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
             }
 
@@ -640,7 +642,7 @@ struct NewAgentSheet: View {
                     options: ApprovalChoice.allCases.map { ($0, $0.title) })
             }
             Text(L10n.AgentSheet.approvalsHint(path: draft.cwd.isEmpty ? "~" : draft.cwd))
-                .font(BanditoFont.font(size: 12, weight: 400))
+                .font(BanditoFont.text(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
                 .fixedSize(horizontal: false, vertical: true)
                 .offset(y: -8)
@@ -667,14 +669,14 @@ struct NewAgentSheet: View {
                 ])
             if draft.workplace.mode == .shared {
                 Text(L10n.AgentSheet.workplaceSharedText)
-                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
             } else if available {
                 separateFields
             }
             if supported && !available {
                 Text(L10n.Workspace.Choice.dockerNeeded)
-                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -687,7 +689,7 @@ struct NewAgentSheet: View {
             if containers.isEmpty {
                 // Nothing to choose from: the place is the new one, shown as text.
                 Text(workplaceName(containers))
-                    .font(BanditoFont.font(size: 13, weight: 400))
+                    .font(BanditoFont.text(size: 13, weight: 400))
                     .foregroundStyle(Color.Bandito.text)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .modifier(FieldBox())
@@ -707,7 +709,7 @@ struct NewAgentSheet: View {
                                 close()
                             } label: {
                                 Text(L10n.Workspace.Choice.newOne)
-                                    .font(BanditoFont.font(size: 13, weight: 500))
+                                    .font(BanditoFont.text(size: 13, weight: 500))
                                     .foregroundStyle(Color.Bandito.text)
                                     .lineLimit(1)
                                     .padding(.horizontal, 10)
@@ -722,17 +724,17 @@ struct NewAgentSheet: View {
             if draft.workplace == .new {
                 TextField(L10n.Workspace.Create.name, text: $draft.newWorkplace.name)
                     .banditoField()
-                    .font(BanditoFont.font(size: 13.5, weight: 400))
+                    .font(BanditoFont.text(size: 13.5, weight: 400))
                 Text(L10n.Workspace.Draft.defaults(limits: draft.newWorkplace.limitsText))
-                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
             }
             Text(L10n.Workspace.Choice.isolation)
-                .font(BanditoFont.font(size: 12, weight: 400))
+                .font(BanditoFont.text(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
                 .fixedSize(horizontal: false, vertical: true)
             Text(L10n.Workspace.Choice.lost)
-                .font(BanditoFont.font(size: 12, weight: 400))
+                .font(BanditoFont.text(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -788,7 +790,7 @@ struct NewAgentSheet: View {
             }
             HStack(spacing: 10) {
                 Text(blockerText ?? L10n.AgentSheet.changeLater)
-                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(blockerText == nil ? Color.Bandito.text3 : BanditoPalette.peach)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -916,11 +918,11 @@ struct NewAgentSheet: View {
     private func labeledHeader(_ title: String, hint: String?) -> some View {
         HStack(spacing: 6) {
             Text(title)
-                .font(BanditoFont.font(size: 12.5, weight: 500))
+                .font(BanditoFont.text(size: 12.5, weight: 500))
                 .foregroundStyle(Color.Bandito.text2)
             if let hint, !hint.isEmpty {
                 Text("· " + hint)
-                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .lineLimit(1)
             }
@@ -1094,7 +1096,7 @@ struct PreparedWorkplace: Equatable {
 struct FieldBox: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .font(BanditoFont.font(size: 13.5, weight: 400))
+            .font(BanditoFont.text(size: 13.5, weight: 400))
             .foregroundStyle(Color.Bandito.text)
             .padding(.horizontal, 13)
             .frame(height: 40)
@@ -1117,7 +1119,7 @@ private struct FlowTags: View {
         WrapLayout(spacing: 6, lineSpacing: 6) {
             ForEach(tags) { tag in
                 Text(tag.text)
-                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(tag.on ? Color.Bandito.text : Color.Bandito.text3)
                     .lineLimit(1)
                     .fixedSize()

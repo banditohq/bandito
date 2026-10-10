@@ -277,7 +277,7 @@ struct LocalDaemonUpgradeBanner: View {
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Color.Bandito.signal)
                 Text(L10n.Server.LocalUpgrade.waiting)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(BanditoFont.text(size: 13, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                 Spacer(minLength: 8)
                 Button(L10n.Server.LocalUpgrade.updateNow) { confirming = true }
@@ -297,7 +297,7 @@ struct LocalDaemonUpgradeBanner: View {
                 ProgressView()
                     .controlSize(.small)
                 Text(L10n.Server.LocalUpgrade.title(version: version))
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(BanditoFont.text(size: 13, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                 Spacer(minLength: 8)
             }

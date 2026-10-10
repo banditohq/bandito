@@ -164,7 +164,7 @@ private struct ItemView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     if let from {
                         Text(L10n.Thread.messageFrom(name: from))
-                            .font(BanditoFont.font(size: 11.5, weight: 500))
+                            .font(BanditoFont.text(size: 11.5, weight: 500))
                             .foregroundStyle(Color.Bandito.text3)
                     }
                     HStack {
@@ -327,7 +327,7 @@ enum InlineMarkdown {
             run.inlinePresentationIntent?.contains(.code) == true ? run.range : nil
         }
         for range in codeRanges {
-            rendered[range].font = .system(size: 12.5, design: .monospaced)
+            rendered[range].font = BanditoFont.mono(size: 12.5)
             rendered[range].foregroundColor = BanditoPalette.peach
         }
         return rendered
@@ -363,7 +363,7 @@ struct TypingIndicator: View {
                 }
             }
             Text(activity.title)
-                .font(BanditoFont.font(size: 12.5, weight: 400))
+                .font(BanditoFont.text(size: 12.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
@@ -371,7 +371,7 @@ struct TypingIndicator: View {
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     if let seconds = AgentActivity.elapsedSeconds(since: since, now: context.date) {
                         Text("· \(AgentActivity.elapsedText(seconds: seconds))")
-                            .font(BanditoFont.font(size: 12, weight: 400))
+                            .font(BanditoFont.text(size: 12, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                             .monospacedDigit()
                             .lineLimit(1)
@@ -417,7 +417,7 @@ private struct NoteLine: View {
 
     var body: some View {
         Text(text)
-            .font(BanditoFont.font(size: 12, weight: 400))
+            .font(BanditoFont.text(size: 12, weight: 400))
             .foregroundStyle(isError ? Color.Bandito.danger : Color.Bandito.text3)
             .multilineTextAlignment(.center)
             .textSelection(.enabled)
@@ -438,7 +438,7 @@ private struct ChapterDivider: View {
             Image(systemName: "book.closed")
                 .font(.system(size: 12))
             Text(saved ? L10n.Chapter.resumed(count: number, name: agentName) : L10n.Thread.chapterNotSaved(chapter: "\(number)"))
-                .font(BanditoFont.font(size: 12, weight: 400))
+                .font(BanditoFont.text(size: 12, weight: 400))
                 .foregroundStyle(saved ? Color.Bandito.text3 : BanditoPalette.peach)
                 .lineLimit(1)
                 .optionalHelp(saved ? nil : L10n.Thread.chapterNotSavedHelp)
@@ -456,7 +456,7 @@ private struct DayDivider: View {
 
     var body: some View {
         Text(caption)
-            .font(BanditoFont.font(size: 11.5, weight: 500))
+            .font(BanditoFont.text(size: 11.5, weight: 500))
             .foregroundStyle(Color.Bandito.text3)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 6)

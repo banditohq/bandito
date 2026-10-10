@@ -76,7 +76,7 @@ struct CapabilityChips: View {
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
             }
-            .font(BanditoFont.font(size: 12.5, weight: 500))
+            .font(BanditoFont.text(size: 12.5, weight: 500))
             .foregroundStyle(on ? Color.Bandito.text : Color.Bandito.text3)
             .padding(.horizontal, 12)
             .frame(height: 30)

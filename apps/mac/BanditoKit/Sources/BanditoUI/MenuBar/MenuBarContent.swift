@@ -68,16 +68,16 @@ public struct MenuBarContent: View {
     private var header: some View {
         HStack(spacing: 9) {
             Text(L10n.App.name)
-                .font(.system(size: 13, weight: .semibold))
+                .font(BanditoFont.text(size: 13, weight: 600))
             Text(app.servers.map { $0.info?.hostname ?? $0.config.name }.joined(separator: " · "))
-                .font(.system(size: 11.5))
+                .font(BanditoFont.text(size: 11.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
                 .lineLimit(1)
             Spacer(minLength: 0)
             let count = Self.waitingCount(app)
             if count > 0 {
                 Text("\(count)")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(BanditoFont.text(size: 11, weight: 600))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 1)
@@ -94,7 +94,7 @@ public struct MenuBarContent: View {
             let unlisted = Self.unlisted(app)
             if rows.isEmpty && unlisted.isEmpty {
                 Text(L10n.Menubar.noneWaiting)
-                    .font(.system(size: 12.5))
+                    .font(BanditoFont.text(size: 12.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .padding(.horizontal, 8)
             }
@@ -118,9 +118,9 @@ public struct MenuBarContent: View {
             HStack(spacing: 9) {
                 AgentAvatarView(agent: row.agent, server: row.server, size: 26)
                 Text(row.agent.name)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(BanditoFont.display(size: 12.5, weight: 600))
                 Text(row.approval.title)
-                    .font(.system(size: 12))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -146,9 +146,9 @@ public struct MenuBarContent: View {
             AgentAvatarView(agent: row.agent, server: row.server, size: 26)
             VStack(alignment: .leading, spacing: 2) {
                 Text(row.agent.name)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(BanditoFont.display(size: 12.5, weight: 600))
                 Text(L10n.Menubar.approvalsWaiting(count: row.count))
-                    .font(.system(size: 12))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                     .lineLimit(1)
             }
@@ -177,7 +177,7 @@ public struct MenuBarContent: View {
                 .padding(.bottom, 4)
             if rows.isEmpty {
                 Text(L10n.Menubar.nothingRunning)
-                    .font(.system(size: 12.5))
+                    .font(BanditoFont.text(size: 12.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .padding(.horizontal, 8)
             }
@@ -187,9 +187,9 @@ public struct MenuBarContent: View {
                         .fill(Color.Bandito.ok)
                         .frame(width: 7, height: 7)
                     Text(row.agent.name)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(BanditoFont.text(size: 13, weight: 500))
                     Text(AgentPreview.text(thread: row.thread, agent: row.agent) ?? row.agent.cwd)
-                        .font(.system(size: 12.5))
+                        .font(BanditoFont.text(size: 12.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .lineLimit(1)
                 }
@@ -210,11 +210,13 @@ public struct MenuBarContent: View {
                         .fill(card.color.color)
                         .frame(width: 8, height: 8)
                     Text(card.name)
-                        .font(.system(size: 12.5, weight: .semibold))
+                        .font(BanditoFont.text(size: 12.5, weight: 600))
                     Spacer(minLength: 6)
                     if let fullest = UsageCards.fullestWindow([card], runtime: nil) {
                         Text("\(fullest.usedPercent)%")
-                            .font(.system(size: 12.5, weight: .semibold))
+                            .font(BanditoFont.display(size: 11.5, weight: 600))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
                             .foregroundStyle(UsageLevel(usedPercent: fullest.usedPercent).color)
                             .help(L10n.Usage.fullestHelp(
                                 percent: "\(fullest.usedPercent)%", runtime: fullest.runtimeName,
@@ -308,7 +310,7 @@ private struct MenuRowStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         InteractiveBody(isPressed: configuration.isPressed) { hovered in
             configuration.label
-                .font(.system(size: 13))
+                .font(BanditoFont.text(size: 13, weight: 400))
                 .foregroundStyle(Color.Bandito.text)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 8)

@@ -138,13 +138,13 @@ struct ChangesContent: View {
             VStack(alignment: .leading, spacing: 2) {
                 if WorkbenchLayout.showsAgentTitle(panelWidth: panelWidth) {
                     Text(L10n.Changes.title(name: agent.name))
-                        .font(BanditoFont.font(size: 14, weight: 650))
+                        .font(BanditoFont.text(size: 14, weight: 650))
                         .foregroundStyle(Color.Bandito.text)
                         .lineLimit(1)
                         .truncationMode(.tail)
                 }
                 summaryLine
-                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .lineLimit(1)
             }
@@ -218,7 +218,7 @@ struct ChangesContent: View {
                 .padding(10)
             }
             Text(L10n.Changes.keepHint)
-                .font(BanditoFont.font(size: 12, weight: 400))
+                .font(BanditoFont.text(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
                 .lineSpacing(2)
                 .padding(10)
@@ -249,7 +249,7 @@ struct ChangesContent: View {
                     StatusTag(status: change.status)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(Self.fileName(change.path))
-                            .font(BanditoFont.font(size: 13, weight: 400))
+                            .font(BanditoFont.text(size: 13, weight: 400))
                             .foregroundStyle(Color.Bandito.text)
                             .lineLimit(1)
                             .truncationMode(.middle)
@@ -270,7 +270,7 @@ struct ChangesContent: View {
                             Text("−\(deletions)").foregroundStyle(Color.Bandito.danger)
                         }
                     }
-                    .font(BanditoFont.font(size: 11.5, weight: 400))
+                    .font(BanditoFont.text(size: 11.5, weight: 400))
                     .monospacedDigit()
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -296,12 +296,12 @@ struct ChangesContent: View {
             if let change = selectedChange {
                 HStack(spacing: 10) {
                     Text(change.path)
-                        .font(BanditoFont.font(size: 13, weight: 400, mono: true))
+                        .font(BanditoFont.mono(size: 13, weight: 400))
                         .foregroundStyle(Color.Bandito.text)
                         .lineLimit(1)
                         .truncationMode(.head)
                     Text(change.status.title)
-                        .font(BanditoFont.font(size: 11.5, weight: 600))
+                        .font(BanditoFont.text(size: 11.5, weight: 600))
                         .foregroundStyle(change.status.tint)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 1)
@@ -309,7 +309,7 @@ struct ChangesContent: View {
                     Spacer(minLength: 8)
                     if case .text(let hunks, _) = file, !hunks.isEmpty {
                         Text(L10n.Changes.placeCount(count: hunks.count))
-                            .font(BanditoFont.font(size: 12, weight: 400))
+                            .font(BanditoFont.text(size: 12, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                     }
                 }
@@ -351,7 +351,7 @@ struct ChangesContent: View {
                     }
                     if truncated {
                         Text(L10n.Changes.truncated)
-                            .font(BanditoFont.font(size: 12, weight: 400))
+                            .font(BanditoFont.text(size: 12, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(10)
@@ -394,7 +394,7 @@ struct ChangesContent: View {
             Spacer(minLength: 12)
             if !unticked.isEmpty {
                 Text(L10n.Changes.unticked(count: unticked.count))
-                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
             }
             Button(L10n.Changes.keepFiles(count: keptCount)) { keepFiles() }
@@ -411,7 +411,7 @@ struct ChangesContent: View {
 
     private func message(_ text: String, tint: Color = Color.Bandito.text2) -> some View {
         Text(text)
-            .font(BanditoFont.font(size: 13, weight: 500))
+            .font(BanditoFont.text(size: 13, weight: 500))
             .foregroundStyle(tint)
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -676,7 +676,7 @@ private struct RestorePointStrip: View {
                     .overlay(Circle().stroke(Color.Bandito.surface2, lineWidth: 3))
                     .frame(width: dotSize, height: dotSize)
                 Text(nowTitle)
-                    .font(BanditoFont.font(size: 12.5, weight: 600))
+                    .font(BanditoFont.text(size: 12.5, weight: 600))
                     .foregroundStyle(Color.Bandito.signal)
             }
             .frame(maxWidth: .infinity)
@@ -728,10 +728,10 @@ private struct RestorePointStrip: View {
             }
             .frame(width: dotSize, height: dotSize)
             Text(Self.time(point))
-                .font(BanditoFont.font(size: 12.5, weight: 600))
+                .font(BanditoFont.text(size: 12.5, weight: 600))
                 .foregroundStyle(selected ? Color.Bandito.signal : Color.Bandito.text)
             Text(CheckpointLabel.text(for: point))
-                .font(BanditoFont.font(size: 12, weight: 400))
+                .font(BanditoFont.text(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
                 .lineLimit(1)
                 .frame(maxWidth: 160)
@@ -750,7 +750,7 @@ private struct StatusTag: View {
 
     var body: some View {
         Text(status.letter)
-            .font(BanditoFont.font(size: 11, weight: 700))
+            .font(BanditoFont.text(size: 11, weight: 700))
             .foregroundStyle(status.tint)
             .frame(width: 20, height: 20)
             .background(status.tint.opacity(0.13), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
@@ -781,7 +781,7 @@ private struct HunkHeaderRow: View {
 
     var body: some View {
         Text(text)
-            .font(BanditoFont.font(size: 11.5, weight: 400, mono: true))
+            .font(BanditoFont.mono(size: 11.5, weight: 400))
             .foregroundStyle(Color.Bandito.text3)
             .lineLimit(1)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -813,7 +813,7 @@ private struct InlineLineRow: View {
                     .strikethrough(line.kind == .removed, color: Color.Bandito.danger.opacity(0.4))
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .font(BanditoFont.font(size: 12.5, weight: 400, mono: true))
+            .font(BanditoFont.mono(size: 12.5, weight: 400))
             .padding(.trailing, 16)
             .background(line.kind.rowTint)
             .contentShape(Rectangle())
@@ -862,7 +862,7 @@ private struct SideCellView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.leading, 8)
         }
-        .font(BanditoFont.font(size: 12.5, weight: 400, mono: true))
+        .font(BanditoFont.mono(size: 12.5, weight: 400))
         .padding(.trailing, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(cell?.kind.rowTint ?? Color.clear)
@@ -875,7 +875,7 @@ private struct PillButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         InteractiveBody(isPressed: configuration.isPressed) { hovered in
             configuration.label
-                .font(BanditoFont.font(size: 13, weight: 500))
+                .font(BanditoFont.text(size: 13, weight: 500))
                 .foregroundStyle(tint)
                 .padding(.horizontal, 14)
                 .frame(height: 36)
@@ -897,14 +897,14 @@ struct RollbackToast: View {
     var body: some View {
         HStack(spacing: 12) {
             Text(L10n.Changes.rolledBack(count: notice.count))
-                .font(BanditoFont.font(size: 13, weight: 500))
+                .font(BanditoFont.text(size: 13, weight: 500))
                 .foregroundStyle(Color.Bandito.text)
             if let failure {
                 UserFacingErrorView(message: failure)
             }
             Button(L10n.Changes.undo) { undo() }
                 .banditoButton(.link)
-                .font(BanditoFont.font(size: 13, weight: 600))
+                .font(BanditoFont.text(size: 13, weight: 600))
                 .foregroundStyle(Color.Bandito.signal)
                 .disabled(undoing)
         }

@@ -193,10 +193,10 @@ struct FirstAgentStep: View {
         HStack(alignment: .top, spacing: 28) {
             VStack(alignment: .leading, spacing: 18) {
                 Text(L10n.Onboarding.Agent.title)
-                    .font(BanditoFont.font(size: 38, weight: 600))
+                    .font(BanditoFont.display(size: 35, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                 Text(L10n.Onboarding.Agent.subtitle)
-                    .font(BanditoFont.font(size: 15, weight: 400))
+                    .font(BanditoFont.text(size: 15, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                     .lineSpacing(2)
                 if model.signedIn.isEmpty {
@@ -249,18 +249,18 @@ struct FirstAgentStep: View {
                 ? template.title : model.name.trimmingCharacters(in: .whitespaces)
             VStack(alignment: .leading, spacing: 16) {
                 Text(L10n.Onboarding.Agent.yourFirst)
-                    .font(BanditoFont.font(size: 11, weight: 600))
+                    .font(BanditoFont.text(size: 11, weight: 600))
                     .tracking(0.8)
                     .foregroundStyle(Color.Bandito.text3)
                 HStack(spacing: 14) {
                     RaccoonAvatar(name: template.title, color: color(template), size: 60)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(shownName)
-                            .font(BanditoFont.font(size: 20, weight: 600))
+                            .font(BanditoFont.display(size: 18.5, weight: 600))
                             .foregroundStyle(Color.Bandito.text)
                             .lineLimit(1)
                         Text(template.title)
-                            .font(BanditoFont.font(size: 12.5, weight: 400))
+                            .font(BanditoFont.text(size: 12.5, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                     }
                 }
@@ -273,12 +273,12 @@ struct FirstAgentStep: View {
                 .background(Color.Bandito.text.opacity(0.02), in: RoundedRectangle(cornerRadius: 14))
                 .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.Bandito.text.opacity(0.08)))
                 Text(template.description)
-                    .font(BanditoFont.font(size: 12.5, weight: 400))
+                    .font(BanditoFont.text(size: 12.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                     .lineSpacing(2)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(L10n.Onboarding.Agent.firstMessage(name: shownName))
-                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .lineSpacing(2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -293,7 +293,7 @@ struct FirstAgentStep: View {
     private func previewRow(_ key: String, _ value: String) -> some View {
         HStack(spacing: 10) {
             Text(key)
-                .font(BanditoFont.font(size: 13, weight: 400))
+                .font(BanditoFont.text(size: 13, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
             Spacer(minLength: 8)
             Text(value)
@@ -320,7 +320,7 @@ struct FirstAgentStep: View {
     private var noSubscription: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(L10n.Onboarding.Agent.needSubscription)
-                .font(BanditoFont.font(size: 14, weight: 400))
+                .font(BanditoFont.text(size: 14, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
                 .lineSpacing(2)
             HStack(spacing: 10) {
@@ -345,10 +345,10 @@ struct FirstAgentStep: View {
                     VStack(alignment: .leading, spacing: 8) {
                         RaccoonAvatar(name: template.title, color: color(template), size: 34)
                         Text(template.title)
-                            .font(BanditoFont.font(size: 14, weight: 600))
+                            .font(BanditoFont.display(size: 13, weight: 600))
                             .foregroundStyle(Color.Bandito.text)
                         Text(template.description)
-                            .font(BanditoFont.font(size: 12, weight: 400))
+                            .font(BanditoFont.text(size: 12, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
                             .lineLimit(2)
                     }
@@ -369,14 +369,14 @@ struct FirstAgentStep: View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(L10n.Onboarding.Agent.nameLabel)
-                    .font(BanditoFont.font(size: 12.5, weight: 500))
+                    .font(BanditoFont.text(size: 12.5, weight: 500))
                     .foregroundStyle(Color.Bandito.text2)
                 TextField(model.template?.title ?? "", text: Binding(get: { model.name }, set: { model.setName($0) }))
                     .banditoField()
-                    .font(BanditoFont.font(size: 14.5, weight: 400))
+                    .font(BanditoFont.text(size: 14.5, weight: 400))
                 if !model.name.isEmpty, let problem = model.nameProblem {
                     Text(Self.problemText(problem))
-                        .font(BanditoFont.font(size: 12.5, weight: 400))
+                        .font(BanditoFont.text(size: 12.5, weight: 400))
                         .foregroundStyle(Color.Bandito.danger)
                 }
             }
@@ -389,7 +389,7 @@ struct FirstAgentStep: View {
     private var runtimeRow: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(L10n.Onboarding.Agent.runtimeLabel)
-                .font(BanditoFont.font(size: 12.5, weight: 500))
+                .font(BanditoFont.text(size: 12.5, weight: 500))
                 .foregroundStyle(Color.Bandito.text2)
             HStack(spacing: 6) {
                 ForEach(model.signedIn, id: \.self) { kind in
@@ -406,11 +406,11 @@ struct FirstAgentStep: View {
     private var folderRow: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(L10n.Onboarding.Agent.folderLabel)
-                .font(BanditoFont.font(size: 12.5, weight: 500))
+                .font(BanditoFont.text(size: 12.5, weight: 500))
                 .foregroundStyle(Color.Bandito.text2)
             HStack(spacing: 10) {
                 Text(model.folder)
-                    .font(BanditoFont.font(size: 13, weight: 400, mono: true))
+                    .font(BanditoFont.mono(size: 13, weight: 400))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1)
                     .truncationMode(.head)
@@ -429,7 +429,7 @@ struct FirstAgentStep: View {
     private var workplaceRow: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(L10n.Onboarding.Agent.workplace)
-                .font(BanditoFont.font(size: 12.5, weight: 500))
+                .font(BanditoFont.text(size: 12.5, weight: 500))
                 .foregroundStyle(Color.Bandito.text2)
             if model.workplaces.canCreateSeparate {
                 HStack(spacing: 6) {
@@ -457,24 +457,24 @@ struct FirstAgentStep: View {
                             text: Binding(get: { model.newWorkplace.name }, set: { model.setNewWorkplaceName($0) })
                         )
                         .banditoField()
-                        .font(BanditoFont.font(size: 14, weight: 400))
+                        .font(BanditoFont.text(size: 14, weight: 400))
                     }
                     Text(L10n.Workspace.Choice.isolation)
-                        .font(BanditoFont.font(size: 12, weight: 400))
+                        .font(BanditoFont.text(size: 12, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .fixedSize(horizontal: false, vertical: true)
                     Text(L10n.Workspace.Choice.lost)
-                        .font(BanditoFont.font(size: 12, weight: 400))
+                        .font(BanditoFont.text(size: 12, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             } else {
                 Text(L10n.Onboarding.Agent.workplaceShared)
-                    .font(BanditoFont.font(size: 12.5, weight: 400))
+                    .font(BanditoFont.text(size: 12.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                 if model.workplaces.supported {
                     Text(L10n.Workspace.Choice.dockerNeeded)
-                        .font(BanditoFont.font(size: 12, weight: 400))
+                        .font(BanditoFont.text(size: 12, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -545,7 +545,7 @@ struct AgentStep: View {
             } else {
                 VStack(alignment: .leading, spacing: 12) {
                     Text(L10n.Onboarding.Agent.noServer)
-                        .font(BanditoFont.font(size: 14, weight: 400))
+                        .font(BanditoFont.text(size: 14, weight: 400))
                         .foregroundStyle(Color.Bandito.text2)
                     Button(L10n.Onboarding.Agent.createLater, action: onCreated)
                         .banditoButton(.quiet())

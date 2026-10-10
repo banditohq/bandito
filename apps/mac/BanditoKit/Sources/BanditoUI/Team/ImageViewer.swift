@@ -158,7 +158,7 @@ struct ImageViewer: View {
                 Image(systemName: "photo.slash")
                     .font(.system(size: 34, weight: .regular))
                 Text(L10n.Viewer.imageFailed)
-                    .font(BanditoFont.font(size: 14, weight: 400))
+                    .font(BanditoFont.text(size: 14, weight: 400))
             }
             .foregroundStyle(Color.white.opacity(0.75))
             .background(boxReader)
@@ -256,7 +256,7 @@ struct ImageViewer: View {
             .disabled(image == nil)
             if image != nil {
                 Text("\(ImageViewerZoom.percent(zoom.effectiveScale(fit: fit)))%")
-                    .font(BanditoFont.font(size: 12, weight: 400, mono: true))
+                    .font(BanditoFont.mono(size: 12, weight: 400))
                     .foregroundStyle(Color.white.opacity(0.8))
                     .monospacedDigit()
                     .frame(minWidth: 44)
@@ -292,7 +292,7 @@ struct ImageViewer: View {
 
     private var counter: some View {
         Text(L10n.Viewer.counter(n: String(index + 1), total: String(request.items.count)))
-            .font(BanditoFont.font(size: 12, weight: 400, mono: true))
+            .font(BanditoFont.mono(size: 12, weight: 400))
             .foregroundStyle(Color.white.opacity(0.8))
             .monospacedDigit()
             .padding(.bottom, 16)

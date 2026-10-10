@@ -20,7 +20,7 @@ public struct Chip: View {
 
     public var body: some View {
         Text(text)
-            .font(BanditoFont.font(size: 11, weight: 500))
+            .font(BanditoFont.text(size: 11, weight: 500))
             .foregroundStyle(tone.foreground)
             .padding(.horizontal, 7)
             .padding(.vertical, 2)
