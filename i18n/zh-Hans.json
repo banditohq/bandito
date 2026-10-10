@@ -1075,7 +1075,7 @@
   "menubar.resolveFailed": "无法发送回复：{error}",
   "team.delete.action": "删除",
   "team.changes": "更改",
-  "changes.title": "变更：{name}",
+  "changes.heading": "变更",
   "changes.task": "任务“{task}”",
   "changes.fileCount": {
     "other": "{count} 个文件"
@@ -1100,11 +1100,12 @@
   "changes.unticked": {
     "other": "已取消勾选 {count} 个文件"
   },
-  "changes.rollbackAll": "回滚整个任务",
+  "changes.rollbackAll": "全部回滚",
   "changes.rollbackConfirmTitle": "回滚整个任务？",
   "changes.rollbackConfirmMessage": "文件将恢复为任务开始前的样子。可在通知中撤销此操作。",
   "changes.rollbackConfirmAction": "回滚",
   "changes.askAgent": "就此处询问 {name}",
+  "changes.askAgentLabel": "询问智能体",
   "changes.askPlace": "请查看 {path}:{line} — 这里改了什么，为什么要改？",
   "changes.keepFiles": {
     "other": "保留 {count} 个文件"

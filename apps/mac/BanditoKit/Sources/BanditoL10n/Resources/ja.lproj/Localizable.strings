@@ -287,10 +287,12 @@
 "capability.title" = "できること";
 "changes.agentGone" = "このエージェントはもう存在しません";
 "changes.askAgent" = "この箇所について %1$@ に質問";
+"changes.askAgentLabel" = "エージェントに質問";
 "changes.askPlace" = "%1$@:%2$@ を見てください。ここで何が変わり、なぜ変わったのか教えてください。";
 "changes.binary" = "バイナリファイルが変更されました";
 "changes.emptyMessage" = "エージェントがプロジェクト内で変更したファイルがここに表示されます。";
 "changes.emptyTitle" = "まだ変更はありません";
+"changes.heading" = "変更";
 "changes.inline" = "インライン";
 "changes.keepAria" = "%1$@ を残す";
 "changes.keepHint" = "チェックを外すと、そのファイルはタスク開始前の状態に戻ります。それ以外はそのままです。";
@@ -300,7 +302,7 @@
 "changes.point.start" = "タスク開始前";
 "changes.point.turnEnd" = "ターン終了時";
 "changes.renamedFrom" = "%1$@ から名前変更";
-"changes.rollbackAll" = "タスク全体を元に戻す";
+"changes.rollbackAll" = "すべて元に戻す";
 "changes.rollbackConfirmAction" = "元に戻す";
 "changes.rollbackConfirmMessage" = "ファイルはタスク開始前の状態に戻ります。通知から取り消すことができます。";
 "changes.rollbackConfirmTitle" = "タスク全体を元に戻しますか？";
@@ -312,7 +314,6 @@
 "changes.status.renamed" = "名前変更";
 "changes.task" = "タスク「%1$@」";
 "changes.timeline" = "復元ポイント";
-"changes.title" = "変更: %1$@";
 "changes.truncated" = "差分は 512 KiB で切り詰められています";
 "changes.undo" = "取り消す";
 "changes.updateServer" = "サーバーを更新してください";

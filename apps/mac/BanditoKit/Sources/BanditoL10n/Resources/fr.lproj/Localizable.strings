@@ -287,10 +287,12 @@
 "capability.title" = "Ce qu'il peut faire";
 "changes.agentGone" = "Cet agent n’existe plus";
 "changes.askAgent" = "Demander à %1$@ à propos de cet emplacement";
+"changes.askAgentLabel" = "Demander à l’agent";
 "changes.askPlace" = "Regardez %1$@:%2$@ — qu’est-ce qui a changé ici et pourquoi ?";
 "changes.binary" = "Fichier binaire modifié";
 "changes.emptyMessage" = "Ici apparaîtront les fichiers que l’agent modifie dans le projet.";
 "changes.emptyTitle" = "Rien n’a encore changé";
+"changes.heading" = "Modifications";
 "changes.inline" = "En ligne";
 "changes.keepAria" = "Garder %1$@";
 "changes.keepHint" = "Décochez un fichier pour le remettre tel qu’il était avant la tâche. Le reste est conservé.";
@@ -300,7 +302,7 @@
 "changes.point.start" = "Avant la tâche";
 "changes.point.turnEnd" = "Fin du tour";
 "changes.renamedFrom" = "renommé depuis %1$@";
-"changes.rollbackAll" = "Annuler toute la tâche";
+"changes.rollbackAll" = "Tout annuler";
 "changes.rollbackConfirmAction" = "Annuler";
 "changes.rollbackConfirmMessage" = "Les fichiers reviennent à leur état d’avant la tâche. Vous pouvez annuler cela depuis la notification.";
 "changes.rollbackConfirmTitle" = "Annuler toute la tâche ?";
@@ -312,7 +314,6 @@
 "changes.status.renamed" = "renommé";
 "changes.task" = "Tâche « %1$@ »";
 "changes.timeline" = "Points de restauration";
-"changes.title" = "Modifications : %1$@";
 "changes.truncated" = "La différence est tronquée à 512 Kio";
 "changes.undo" = "Annuler";
 "changes.updateServer" = "Mettez à jour le serveur";

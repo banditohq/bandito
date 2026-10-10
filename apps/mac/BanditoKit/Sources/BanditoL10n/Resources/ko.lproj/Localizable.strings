@@ -287,10 +287,12 @@
 "capability.title" = "할 수 있는 일";
 "changes.agentGone" = "이 에이전트는 더 이상 없어요";
 "changes.askAgent" = "이 부분에 대해 %1$@에게 묻기";
+"changes.askAgentLabel" = "에이전트에게 묻기";
 "changes.askPlace" = "%1$@:%2$@을 봐 주세요. 여기서 무엇이 바뀌었고 왜 바뀌었나요?";
 "changes.binary" = "바이너리 파일이 변경됐어요";
 "changes.emptyMessage" = "에이전트가 프로젝트에서 바꾼 파일이 여기에 표시됩니다.";
 "changes.emptyTitle" = "아직 변경된 내용이 없어요";
+"changes.heading" = "변경 사항";
 "changes.inline" = "인라인";
 "changes.keepAria" = "%1$@ 유지";
 "changes.keepHint" = "체크를 해제하면 해당 파일이 작업 전 상태로 돌아가요. 나머지는 그대로 유지돼요.";
@@ -300,7 +302,7 @@
 "changes.point.start" = "작업 시작 전";
 "changes.point.turnEnd" = "턴 종료 시점";
 "changes.renamedFrom" = "%1$@에서 이름 변경";
-"changes.rollbackAll" = "작업 전체 되돌리기";
+"changes.rollbackAll" = "모두 되돌리기";
 "changes.rollbackConfirmAction" = "되돌리기";
 "changes.rollbackConfirmMessage" = "파일이 작업 전 상태로 돌아가요. 알림에서 이 작업을 취소할 수 있어요.";
 "changes.rollbackConfirmTitle" = "작업 전체를 되돌릴까요?";
@@ -312,7 +314,6 @@
 "changes.status.renamed" = "이름 변경됨";
 "changes.task" = "작업 “%1$@”";
 "changes.timeline" = "복원 지점";
-"changes.title" = "%1$@의 변경 사항";
 "changes.truncated" = "차이가 512 KiB에서 잘렸어요";
 "changes.undo" = "실행 취소";
 "changes.updateServer" = "서버를 업데이트해 주세요";

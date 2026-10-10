@@ -35,19 +35,23 @@ extension BanditoButtonSize {
 public struct SignalButtonStyle: ButtonStyle {
     /// Height and label size of the button.
     public var size: BanditoButtonSize
+    /// The capsule takes the whole width the button is offered, the label stays centred (a narrow panel's main action).
+    public var fillsWidth: Bool
 
-    public init(size: BanditoButtonSize = .regular) {
+    public init(size: BanditoButtonSize = .regular, fillsWidth: Bool = false) {
         self.size = size
+        self.fillsWidth = fillsWidth
     }
 
     public func makeBody(configuration: Configuration) -> some View {
-        SignalButtonBody(configuration: configuration, size: size)
+        SignalButtonBody(configuration: configuration, size: size, fillsWidth: fillsWidth)
     }
 }
 
 private struct SignalButtonBody: View {
     let configuration: ButtonStyleConfiguration
     let size: BanditoButtonSize
+    let fillsWidth: Bool
     @Environment(\.isEnabled) private var isEnabled
 
     var body: some View {
@@ -67,8 +71,9 @@ private struct SignalButtonBody: View {
             .font(BanditoFont.display(size: size.fontSize * 0.92, weight: 600))
             .foregroundStyle(isEnabled ? Color.Bandito.bg : Color.Bandito.text3)
             .lineLimit(1)
-            .fixedSize(horizontal: true, vertical: false)
+            .fixedSize(horizontal: !fillsWidth, vertical: false)
             .padding(.horizontal, size.horizontalPadding)
+            .frame(maxWidth: fillsWidth ? .infinity : nil)
             .frame(height: size.height)
             .background(isEnabled ? Color.Bandito.text : Color.Bandito.surface3, in: Capsule())
             .brightness(isEnabled && hovered ? 0.06 : 0)
@@ -173,7 +178,7 @@ public struct BrightenButtonStyle: ButtonStyle {
 /// Which Bandito button style a button uses. `banditoButton(_:)` applies the style and the matching focus ring,
 /// so the two never disagree about the shape.
 public enum BanditoButtonKind {
-    case signal(size: BanditoButtonSize = .regular)
+    case signal(size: BanditoButtonSize = .regular, fillsWidth: Bool = false)
     case quiet(size: BanditoButtonSize = .regular)
     case lightPill(size: BanditoButtonSize = .regular)
     case icon(size: CGFloat = 30, label: String)
@@ -188,8 +193,8 @@ private struct BanditoButtonModifier: ViewModifier {
     @ViewBuilder
     func body(content: Content) -> some View {
         switch kind {
-        case .signal(let size):
-            content.buttonStyle(SignalButtonStyle(size: size)).brandFocusRing(shape: Capsule())
+        case .signal(let size, let fillsWidth):
+            content.buttonStyle(SignalButtonStyle(size: size, fillsWidth: fillsWidth)).brandFocusRing(shape: Capsule())
         case .quiet(let size):
             content.buttonStyle(QuietButtonStyle(size: size)).brandFocusRing(shape: Capsule())
         case .lightPill(let size):

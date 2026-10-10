@@ -255,10 +255,28 @@ enum CheckpointLabel {
     }
 }
 
-/// The text of the summary chips in the changes header ("+412", "−18").
+/// The text of the added and removed line counts in the changes header ("+412", "−18").
 enum ChangesChips {
     static func additions(_ count: Int) -> String { "+\(count)" }
     static func deletions(_ count: Int) -> String { "−\(count)" }
+}
+
+/// The quiet line under the changes header: "6 файлов · +412 −18". The task follows it in the view.
+enum ChangesSummaryLine {
+    static func stats(files: Int, additions: Int, deletions: Int) -> String {
+        "\(L10n.Changes.fileCount(count: files)) · \(ChangesChips.additions(additions)) \(ChangesChips.deletions(deletions))"
+    }
+}
+
+/// Footer of the changes panel. Wide: one row (two quiet buttons, the hint, the main button). Narrow: the main
+/// button on top, full width, and the two others side by side under it.
+enum ChangesFooterLayout {
+    /// Below this width the row does not fit with the longest translations and the hint.
+    static let rowMinWidth: CGFloat = 680
+
+    static func isStacked(width: CGFloat) -> Bool {
+        width < rowMinWidth
+    }
 }
 
 /// The icon of a changed file: the kind of the file, from its name, as the Files mode draws it.

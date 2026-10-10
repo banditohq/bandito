@@ -242,9 +242,9 @@ A tab of the workbench panel that lists the files the agent changed, task by tas
 1. Open the changes tab. The tasks are listed with their restore points: Before the task (До задачи), End of turn (Конец хода), and Before restore (Перед откатом).
 2. Click a file to see its diff. Switch between Inline (Построчно) and Side by side (Рядом). Binary files show Binary file changed.
 3. To keep a file as it was before the task, untick it (Keep {name}). The count shows Keep N files. The other files stay as they are.
-4. To roll back the whole task, click Roll back the whole task (Откатить всю задачу), read the question, and click Roll back (Откатить). Files go back to how they were before the task.
+4. To roll back the whole task, click Roll back all (Откатить всё), read the question (Откатить всю задачу?), and click Roll back (Откатить). Files go back to how they were before the task.
 5. After a rollback, a notice appears with Undo (Отменить). Click it to bring the changes back.
-6. Ask about a place: click Ask {name} about this place (Ask {name} about this place) on a diff line. The composer gets the request for that file and line.
+6. Ask about a place: click Ask agent (Спросить агента) on a diff line; its tooltip names the agent. The composer gets the request for that file and line.
 
 ## Changes needs a current server (Update the server)
 

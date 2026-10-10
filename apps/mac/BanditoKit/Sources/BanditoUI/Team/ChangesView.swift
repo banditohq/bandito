@@ -81,12 +81,12 @@ struct ChangesContent: View {
 
     private func sheetBody(_ agent: Agent) -> some View {
         GeometryReader { outer in
-            sheetContent(agent)
+            sheetContent(agent, width: outer.size.width)
                 .frame(width: outer.size.width, height: outer.size.height)
         }
     }
 
-    private func sheetContent(_ agent: Agent) -> some View {
+    private func sheetContent(_ agent: Agent, width: CGFloat) -> some View {
         VStack(spacing: 0) {
             header(agent)
             if !timeline.isEmpty {
@@ -107,8 +107,7 @@ struct ChangesContent: View {
                 EmptyState(
                     symbol: "doc.text.magnifyingglass",
                     title: L10n.Changes.emptyTitle,
-                    message: L10n.Changes.emptyMessage,
-                    mascot: nil)
+                    message: L10n.Changes.emptyMessage)
             } else {
                 // Wide: the list beside the diff. Narrow (the workbench panel): the list on top, at most 40 % of the
                 // height, and the diff below it.
@@ -127,22 +126,27 @@ struct ChangesContent: View {
                         }
                     }
                 }
-                footer(agent)
+                footer(agent, stacked: ChangesFooterLayout.isStacked(width: width))
             }
         }
     }
 
-    /// The compact header of the workbench tab, in two lines. The first: avatar, "Changes: <name>" in one line, the
-    /// diff layout. The second: the summary chips (files, added, removed) and the task. The tab closes the view, so
-    /// there is no close button here. Narrow, the layout switch shows icons instead of words.
+    /// The compact header of the workbench tab, in two lines. The first: avatar, "Changes" and the agent's name, the
+    /// diff layout on the right. The second, quiet: the file count, the lines added and removed, and the task, which is
+    /// the only part cut (the whole task on hover). The tab closes the view, so there is no close button here. Narrow,
+    /// the layout switch shows icons instead of words.
     private func header(_ agent: Agent) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 AgentAvatarView(agent: agent, server: server, size: 20)
-                    .help(L10n.Changes.title(name: agent.name))
-                Text(L10n.Changes.title(name: agent.name))
+                Text(L10n.Changes.heading)
                     .font(BanditoFont.display(size: 15, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
+                    .lineLimit(1)
+                    .fixedSize()
+                Text(agent.name)
+                    .font(BanditoFont.display(size: 15, weight: 600))
+                    .foregroundStyle(Color.Bandito.text2)
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .layoutPriority(0)
@@ -157,7 +161,7 @@ struct ChangesContent: View {
                 }
                 .layoutPriority(1)
             }
-            summaryChips
+            summaryLine
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -191,24 +195,32 @@ struct ChangesContent: View {
         .help(label)
     }
 
-    /// Chips "6 files", "+412" (ok), "−18" (danger), then the task in secondary text. The parts appear once known.
-    @ViewBuilder private var summaryChips: some View {
-        HStack(spacing: 6) {
-            if let diff {
-                Chip(text: L10n.Changes.fileCount(count: diff.files.count))
-                Chip(text: ChangesChips.additions(diff.additions), tone: .ok)
-                Chip(text: ChangesChips.deletions(diff.deletions), tone: .danger)
+    /// "6 файлов · +412 −18 · Задача «…»" in one quiet line. The stats never cut; the task is cut with an ellipsis and
+    /// shows in full on hover. The parts appear once known.
+    @ViewBuilder private var summaryLine: some View {
+        let task = base.flatMap(CheckpointLabel.task(for:)).map { L10n.Changes.task(task: $0) }
+        if diff != nil || task != nil {
+            HStack(spacing: 0) {
+                if let diff {
+                    Text(ChangesSummaryLine.stats(
+                        files: diff.files.count, additions: diff.additions, deletions: diff.deletions))
+                        .fixedSize()
+                }
+                if diff != nil, task != nil {
+                    Text(" · ").fixedSize()
+                }
+                if let task {
+                    Text(task)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .help(task)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
-            if let task = base.flatMap(CheckpointLabel.task(for:)) {
-                Text(L10n.Changes.task(task: task))
-                    .font(BanditoFont.text(size: 12, weight: 400))
-                    .foregroundStyle(Color.Bandito.text2)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
+            .font(BanditoFont.text(size: 12, weight: 400))
+            .foregroundStyle(Color.Bandito.text3)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func fileList(compact: Bool) -> some View {
@@ -379,32 +391,72 @@ struct ChangesContent: View {
         }
     }
 
-    private func footer(_ agent: Agent) -> some View {
-        HStack(spacing: 10) {
-            Button(L10n.Changes.rollbackAll) { confirmRollback = true }
-                .buttonStyle(PillButtonStyle(tint: Color.Bandito.danger))
-                .brandFocusRing(shape: Capsule())
-                .disabled(busy)
-            Button(L10n.Changes.askAgent(name: agent.name)) { askAgent(agent) }
-                .buttonStyle(PillButtonStyle(tint: Color.Bandito.text))
-                .brandFocusRing(shape: Capsule())
-                .disabled(busy || placeLine == nil)
-            Spacer(minLength: 12)
-            if !unticked.isEmpty {
-                Text(L10n.Changes.unticked(count: unticked.count))
-                    .font(BanditoFont.text(size: 12, weight: 400))
-                    .foregroundStyle(Color.Bandito.text3)
+    /// The actions under the list. Wide: one row, the two quiet buttons on the left, the hint and the main button on the
+    /// right. Narrow: the hint, the main button full width on top, and the two quiet buttons side by side under it. When
+    /// they do not fit side by side, they stack.
+    private func footer(_ agent: Agent, stacked: Bool) -> some View {
+        VStack(spacing: 10) {
+            if stacked {
+                if !unticked.isEmpty {
+                    untickedHint
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                keepButton(fillsWidth: true)
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) {
+                        rollbackButton
+                        askButton(agent)
+                    }
+                    VStack(alignment: .leading, spacing: 8) {
+                        rollbackButton
+                        askButton(agent)
+                    }
+                }
+            } else {
+                HStack(spacing: 10) {
+                    rollbackButton
+                    askButton(agent)
+                    Spacer(minLength: 12)
+                    if !unticked.isEmpty {
+                        untickedHint
+                    }
+                    keepButton(fillsWidth: false)
+                }
             }
-            Button(L10n.Changes.keepFiles(count: keptCount)) { keepFiles() }
-                .banditoButton(.signal())
-                .disabled(busy)
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 12)
+        .frame(maxWidth: .infinity)
         .background(Color.Bandito.bg.opacity(0.6))
         .overlay(alignment: .top) {
             Rectangle().fill(Color.Bandito.text.opacity(0.06)).frame(height: 1)
         }
+    }
+
+    private var untickedHint: some View {
+        Text(L10n.Changes.unticked(count: unticked.count))
+            .font(BanditoFont.text(size: 12, weight: 400))
+            .foregroundStyle(Color.Bandito.text3)
+    }
+
+    private var rollbackButton: some View {
+        Button(L10n.Changes.rollbackAll) { confirmRollback = true }
+            .banditoButton(.quiet())
+            .disabled(busy)
+    }
+
+    /// The name of the agent is in the tooltip; the label stays short so the two quiet buttons fit side by side.
+    private func askButton(_ agent: Agent) -> some View {
+        Button(L10n.Changes.askAgentLabel) { askAgent(agent) }
+            .banditoButton(.quiet())
+            .help(L10n.Changes.askAgent(name: agent.name))
+            .disabled(busy || placeLine == nil)
+    }
+
+    private func keepButton(fillsWidth: Bool) -> some View {
+        Button(L10n.Changes.keepFiles(count: keptCount)) { keepFiles() }
+            .banditoButton(.signal(fillsWidth: fillsWidth))
+            .disabled(busy)
     }
 
     private func message(_ text: String, tint: Color = Color.Bandito.text2) -> some View {
@@ -673,6 +725,7 @@ private struct RestorePointStrip: View {
                     pointColumn(point, selected: point.id == baseID, leadingTrack: index > 0)
                 }
                 .banditoButton(.row(cornerRadius: 8))
+                .help(CheckpointLabel.text(for: point))
                 .frame(minWidth: Self.columnWidth, maxWidth: maxWidth)
             }
             nowColumn
@@ -707,7 +760,6 @@ private struct RestorePointStrip: View {
                 .multilineTextAlignment(.center)
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .help(label)
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 6)
@@ -729,7 +781,7 @@ private struct RestorePointStrip: View {
         .frame(width: Self.dotSize, height: Self.dotSize)
     }
 
-    /// The current state: a filled cream dot with a ring, and its name.
+    /// The current state: a filled cream dot with a ring, a signal dot in its centre, and its name.
     private var nowColumn: some View {
         VStack(spacing: 6) {
             HStack(spacing: 0) {
@@ -741,6 +793,9 @@ private struct RestorePointStrip: View {
                     Circle()
                         .fill(Color.Bandito.text)
                         .frame(width: 9, height: 9)
+                    Circle()
+                        .fill(Color.Bandito.signal)
+                        .frame(width: 4, height: 4)
                 }
                 .frame(width: Self.dotSize, height: Self.dotSize)
                 track(false)
@@ -869,22 +924,6 @@ private struct SideCellView: View {
         .padding(.trailing, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(cell?.kind.rowTint ?? Color.clear)
-    }
-}
-
-private struct PillButtonStyle: ButtonStyle {
-    let tint: Color
-
-    func makeBody(configuration: Configuration) -> some View {
-        InteractiveBody(isPressed: configuration.isPressed) { hovered in
-            configuration.label
-                .font(BanditoFont.text(size: 13, weight: 500))
-                .foregroundStyle(tint)
-                .padding(.horizontal, 14)
-                .frame(height: 36)
-                .background(Capsule().fill(tint.opacity(hovered ? 0.12 : 0.06)))
-                .overlay(Capsule().stroke(tint.opacity(hovered ? 0.55 : 0.35), lineWidth: 1))
-        }
     }
 }
 
