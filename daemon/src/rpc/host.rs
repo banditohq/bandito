@@ -418,9 +418,13 @@ mod tests {
         assert!(mem.windows(2).all(|w| w[0] >= w[1]), "biggest first: {mem:?}");
         for a in apps {
             assert!(a["name"].is_string() && a["cpu_percent"].is_number(), "{a}");
-            let pids = a["top_pids"].as_array().expect("top_pids");
-            assert!(pids.len() <= host::APP_TOP_PIDS, "{a}");
-            assert!(a["process_count"].as_u64().unwrap() >= pids.len() as u64, "{a}");
+            let top = a["top"].as_array().expect("top");
+            assert!(top.len() <= host::APP_TOP, "{a}");
+            assert!(a["process_count"].as_u64().unwrap() >= top.len() as u64, "{a}");
+            for p in top {
+                assert!(p["pid"].is_i64() && p["name"].is_string(), "{p}");
+                assert!(p["cpu_percent"].is_number() && p["memory_bytes"].is_u64(), "{p}");
+            }
         }
     }
 }

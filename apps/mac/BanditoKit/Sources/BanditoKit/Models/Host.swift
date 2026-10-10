@@ -46,8 +46,18 @@ public struct HostAppGroup: Codable, Sendable, Hashable {
     public var cpuPercent: Double
     public var memoryBytes: Int64
     public var processCount: Int
-    /// Up to three of the app's processes, the biggest by memory first.
-    public var topPids: [Int]
+    /// Up to three of the app's processes, the biggest by memory first; a group opens from these alone.
+    public var top: [HostAppProcess]
+}
+
+/// One of an app's processes (`host.stats` → `app_groups[].top`).
+public struct HostAppProcess: Codable, Sendable, Hashable {
+    public var pid: Int
+    /// The program's file name.
+    public var name: String
+    /// Share of one CPU; 0 on the first reading after the daemon starts.
+    public var cpuPercent: Double
+    public var memoryBytes: Int64
 }
 
 /// One of the busiest or biggest processes of the server (`host.stats` → `top_processes`).
@@ -172,22 +182,46 @@ public enum HostProcessList {
         }
     }
 
+    /// The groups of a Memory or CPU list. Without the daemon's app groups: the groups built from `rows`, as before.
+    /// With them: the groups of the processes that have an owner (agents, terminals, the daemon: the app groups leave
+    /// them out) built from `rows`, and one group per app with the daemon's exact sums. All of them sorted together by
+    /// the sum for `sort`.
+    public static func listGroups(_ rows: [HostProcessEntry], apps: [HostAppGroup]?, sort: Sort) -> [HostProcessGroup] {
+        guard let apps, !apps.isEmpty else { return groups(rows, sort: sort) }
+        let owned = groups(rows.filter { $0.owner != nil }, sort: sort)
+        return (owned + appGroups(apps, rows: rows, sort: sort)).sorted { a, b in
+            let (x, y) = (sum(a, sort), sum(b, sort))
+            return x != y ? x > y : a.id < b.id
+        }
+    }
+
     /// The groups of `host.stats` → `app_groups`: one per app, with the daemon's exact sums over all of its processes.
-    /// Members are the app's processes the daemon named (`top_pids`) that `rows` also carries, sorted for `sort`; the
-    /// group expands only when it has such members. Its owner is nil: the daemon's app groups do not split owners.
+    /// Members are the app's `top` processes, sorted for `sort`. A member can be stopped only when `rows` lists the same
+    /// pid as stoppable. Its owner is nil: the app groups hold no owned process.
     public static func appGroups(_ apps: [HostAppGroup], rows: [HostProcessEntry], sort: Sort) -> [HostProcessGroup] {
-        let byPid = Dictionary(rows.map { ($0.pid, $0) }, uniquingKeysWith: { first, _ in first })
-        let groups = apps.map { app in
-            HostProcessGroup(
+        let known = Dictionary(rows.map { ($0.pid, $0) }, uniquingKeysWith: { first, _ in first })
+        let groups = apps.map { app -> HostProcessGroup in
+            let members = app.top.map { process in
+                HostProcessEntry(
+                    pid: process.pid, name: process.name, rssBytes: process.memoryBytes,
+                    cpuPercent: process.cpuPercent, owner: nil, canStop: known[process.pid]?.canStop == true)
+            }
+            return HostProcessGroup(
                 id: "app|\(app.name)", appName: app.name, owner: nil,
-                members: app.topPids.compactMap { byPid[$0] }.sorted(by: { precedes($0, $1, sort) }),
+                members: members.sorted { precedes($0, $1, sort) },
                 rssBytes: app.memoryBytes, cpuPercent: app.cpuPercent, processCount: app.processCount)
         }
         return groups.sorted { a, b in
-            switch sort {
-            case .memory: a.rssBytes != b.rssBytes ? a.rssBytes > b.rssBytes : a.appName < b.appName
-            case .cpu: a.cpuPercent != b.cpuPercent ? a.cpuPercent > b.cpuPercent : a.appName < b.appName
-            }
+            let (x, y) = (sum(a, sort), sum(b, sort))
+            return x != y ? x > y : a.appName < b.appName
+        }
+    }
+
+    /// The figure a list is sorted by for `sort`: the group's memory, or its CPU.
+    private static func sum(_ group: HostProcessGroup, _ sort: Sort) -> Double {
+        switch sort {
+        case .memory: Double(group.rssBytes)
+        case .cpu: group.cpuPercent
         }
     }
 

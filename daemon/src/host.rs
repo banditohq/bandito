@@ -30,8 +30,8 @@ const CMD_CHARS: usize = 200;
 pub const TOP_PROCESSES: usize = 15;
 /// Apps in `host.stats` → `app_groups`: the biggest by memory.
 pub const APP_GROUPS: usize = 25;
-/// Pids listed per app in `host.stats` → `app_groups[].top_pids`: the biggest by memory.
-pub const APP_TOP_PIDS: usize = 3;
+/// Processes listed per app in `host.stats` → `app_groups[].top`: the biggest by memory.
+pub const APP_TOP: usize = 3;
 /// How long a process gets to exit after SIGTERM from `host.kill_process` before SIGKILL.
 pub const OWN_GRACE: Duration = Duration::from_secs(5);
 /// How long `host.kill_process` waits for the process to exit before it answers.
@@ -75,8 +75,19 @@ pub struct AppGroup {
     pub cpu_percent: f32,
     pub memory_bytes: u64,
     pub process_count: u32,
-    /// Up to `APP_TOP_PIDS` of the app's processes, the biggest by memory first.
-    pub top_pids: Vec<i32>,
+    /// Up to `APP_TOP` of the app's processes, the biggest by memory first, so a group opens without `top_processes`.
+    pub top: Vec<AppProcess>,
+}
+
+/// One of an app's processes (`host.stats` → `app_groups[].top`).
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct AppProcess {
+    pub pid: i32,
+    /// Short name: the program's file name.
+    pub name: String,
+    /// Share of one CPU. The first reading after the daemon starts reports 0.
+    pub cpu_percent: f32,
+    pub memory_bytes: u64,
 }
 
 /// One of the biggest processes of the server (`host.stats` → `top_processes`).
@@ -463,17 +474,20 @@ impl Sampler {
                 }
             })
             .collect();
+        // Processes of an agent, a terminal or the daemon are left out: they are listed under their owner.
         let apps: Vec<AppRow> = procs
             .table
             .iter()
+            .filter(|entry| !is_owned(procs.classes.get(entry.0)))
             .map(|(&pid, row)| AppRow {
                 pid,
                 app: row.app.clone(),
+                name: row.name.clone(),
                 rss_bytes: row.rss_bytes,
                 cpu_percent: cpu_of(pid),
             })
             .collect();
-        (top, group_apps(&apps, APP_GROUPS, APP_TOP_PIDS))
+        (top, group_apps(&apps, APP_GROUPS, APP_TOP))
     }
 
     /// Listening TCP ports, one entry per port and address.
@@ -643,39 +657,43 @@ fn top_pids(rows: &[(i32, u64, f32)], count: usize) -> Vec<i32> {
 struct AppRow {
     pid: i32,
     app: String,
+    name: String,
     rss_bytes: u64,
     cpu_percent: f32,
 }
 
-/// Sums every process by its app: the `count` apps biggest by memory (ties by name), each with its `top` biggest
-/// processes by memory (ties by pid). No process is left out, so the sums are exact.
+/// Whether a process belongs to an agent, a terminal or the daemon (see `ProcessOwnerRef`).
+fn is_owned(class: Option<&TreeOwner>) -> bool {
+    matches!(class, Some(TreeOwner::Owned(_)))
+}
+
+/// Sums every given process by its app: the `count` apps biggest by memory (ties by name), each with its `top` biggest
+/// processes by memory (ties by pid). Every given process is counted, so the sums are exact.
 fn group_apps(rows: &[AppRow], count: usize, top: usize) -> Vec<AppGroup> {
-    let mut by_app: HashMap<&str, AppGroup> = HashMap::new();
-    // Every app's processes as (memory, pid), kept apart from the group so the group stays a plain struct.
-    let mut pids_of: HashMap<&str, Vec<(u64, i32)>> = HashMap::new();
+    let mut by_app: HashMap<&str, Vec<&AppRow>> = HashMap::new();
     for row in rows {
-        let group = by_app.entry(row.app.as_str()).or_insert_with(|| AppGroup {
-            name: row.app.clone(),
-            cpu_percent: 0.0,
-            memory_bytes: 0,
-            process_count: 0,
-            top_pids: Vec::new(),
-        });
-        group.cpu_percent += row.cpu_percent;
-        group.memory_bytes += row.rss_bytes;
-        group.process_count += 1;
-        pids_of
-            .entry(row.app.as_str())
-            .or_default()
-            .push((row.rss_bytes, row.pid));
+        by_app.entry(row.app.as_str()).or_default().push(row);
     }
     let mut groups: Vec<AppGroup> = by_app
         .into_iter()
-        .map(|(app, mut group)| {
-            let mut pids = pids_of.remove(app).unwrap_or_default();
-            pids.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
-            group.top_pids = pids.iter().take(top).map(|&(_, pid)| pid).collect();
-            group
+        .map(|(app, mut members)| {
+            members.sort_by(|a, b| b.rss_bytes.cmp(&a.rss_bytes).then(a.pid.cmp(&b.pid)));
+            AppGroup {
+                name: app.to_string(),
+                cpu_percent: members.iter().map(|m| m.cpu_percent).sum::<f32>(),
+                memory_bytes: members.iter().map(|m| m.rss_bytes).sum(),
+                process_count: u32::try_from(members.len()).unwrap_or(u32::MAX),
+                top: members
+                    .iter()
+                    .take(top)
+                    .map(|m| AppProcess {
+                        pid: m.pid,
+                        name: m.name.clone(),
+                        cpu_percent: m.cpu_percent,
+                        memory_bytes: m.rss_bytes,
+                    })
+                    .collect(),
+            }
         })
         .collect();
     groups.sort_by(|a, b| b.memory_bytes.cmp(&a.memory_bytes).then_with(|| a.name.cmp(&b.name)));
@@ -2007,22 +2025,31 @@ mod tests {
         assert_eq!(bundle_app("/usr/bin/.app/x"), None);
     }
 
-    #[test]
-    fn apps_are_summed_with_exact_totals_and_ordered_by_memory() {
-        let row = |pid: i32, app: &str, rss: u64, cpu: f32| AppRow {
+    /// An app row for the tests: the name is the app's, the pid tells the processes apart.
+    fn app_row(pid: i32, app: &str, rss: u64, cpu: f32) -> AppRow {
+        AppRow {
             pid,
             app: app.into(),
+            name: format!("p{pid}"),
             rss_bytes: rss,
             cpu_percent: cpu,
-        };
+        }
+    }
+
+    fn pids(group: &AppGroup) -> Vec<i32> {
+        group.top.iter().map(|p| p.pid).collect()
+    }
+
+    #[test]
+    fn apps_are_summed_with_exact_totals_and_ordered_by_memory() {
         let rows = vec![
-            row(10, "Google Chrome", 100, 1.5),
-            row(11, "Google Chrome", 300, 2.0),
-            row(12, "Google Chrome", 200, 0.5),
-            row(13, "Google Chrome", 50, 0.0),
-            row(20, "sshd", 400, 0.25),
-            row(30, "cargo", 10, 3.0),
-            row(31, "cargo", 10, 0.0),
+            app_row(10, "Google Chrome", 100, 1.5),
+            app_row(11, "Google Chrome", 300, 2.0),
+            app_row(12, "Google Chrome", 200, 0.5),
+            app_row(13, "Google Chrome", 50, 0.0),
+            app_row(20, "sshd", 400, 0.25),
+            app_row(30, "cargo", 10, 3.0),
+            app_row(31, "cargo", 10, 0.0),
         ];
         let groups = group_apps(&rows, 10, 3);
         let names: Vec<&str> = groups.iter().map(|g| g.name.as_str()).collect();
@@ -2032,21 +2059,19 @@ mod tests {
         assert_eq!(chrome.memory_bytes, 650);
         assert_eq!(chrome.process_count, 4);
         assert!((chrome.cpu_percent - 4.0).abs() < 0.001);
-        // Only the three biggest by memory, biggest first; the fourth process is counted but not listed.
-        assert_eq!(chrome.top_pids, [11, 12, 10]);
+        // The three biggest by memory, biggest first, each with its own name, CPU and memory; the fourth is counted only.
+        assert_eq!(pids(chrome), [11, 12, 10]);
+        assert_eq!(chrome.top[0].name, "p11");
+        assert_eq!(chrome.top[0].memory_bytes, 300);
+        assert!((chrome.top[0].cpu_percent - 2.0).abs() < 0.001);
         assert_eq!(groups[2].process_count, 2);
-        assert_eq!(groups[2].top_pids, [30, 31]);
+        assert_eq!(pids(&groups[2]), [30, 31]);
     }
 
     #[test]
     fn app_groups_are_cut_to_the_count_and_ties_break_by_name() {
         let rows: Vec<AppRow> = (0..5)
-            .map(|i| AppRow {
-                pid: i,
-                app: format!("app{i}"),
-                rss_bytes: if i < 2 { 1000 } else { 1 + i as u64 },
-                cpu_percent: 0.0,
-            })
+            .map(|i| app_row(i, &format!("app{i}"), if i < 2 { 1000 } else { 1 + i as u64 }, 0.0))
             .collect();
         let groups = group_apps(&rows, 3, 3);
         let names: Vec<&str> = groups.iter().map(|g| g.name.as_str()).collect();
@@ -2059,29 +2084,26 @@ mod tests {
     fn linux_apps_are_grouped_by_the_file_name() {
         // Linux has no bundles: the app is the executable's file name, the same name for every instance.
         let rows = vec![
-            AppRow {
-                pid: 1,
-                app: "node".into(),
-                rss_bytes: 5,
-                cpu_percent: 1.0,
-            },
-            AppRow {
-                pid: 2,
-                app: "node".into(),
-                rss_bytes: 7,
-                cpu_percent: 1.0,
-            },
-            AppRow {
-                pid: 3,
-                app: "bash".into(),
-                rss_bytes: 1,
-                cpu_percent: 0.0,
-            },
+            app_row(1, "node", 5, 1.0),
+            app_row(2, "node", 7, 1.0),
+            app_row(3, "bash", 1, 0.0),
         ];
-        let groups = group_apps(&rows, APP_GROUPS, APP_TOP_PIDS);
+        let groups = group_apps(&rows, APP_GROUPS, APP_TOP);
         assert_eq!(groups.len(), 2);
         assert_eq!((groups[0].name.as_str(), groups[0].process_count), ("node", 2));
-        assert_eq!(groups[0].top_pids, [2, 1]);
+        assert_eq!(pids(&groups[0]), [2, 1]);
+    }
+
+    #[test]
+    fn agent_terminal_and_daemon_processes_are_owned_and_stay_out_of_apps() {
+        let owned = |kind| TreeOwner::Owned(Owner { kind, id: None });
+        assert!(is_owned(Some(&owned(OwnerKind::Agent))));
+        assert!(is_owned(Some(&owned(OwnerKind::Terminal))));
+        assert!(is_owned(Some(&owned(OwnerKind::Daemon))));
+        // A process with no owner, and one whose tree cannot be read, are ordinary: they group by app.
+        assert!(!is_owned(Some(&TreeOwner::Free)));
+        assert!(!is_owned(Some(&TreeOwner::Unknown)));
+        assert!(!is_owned(None));
     }
 
     fn row(ppid: i32) -> ProcRow {

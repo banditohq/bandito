@@ -154,9 +154,13 @@ import Testing
     @Test func statsDecodeTheAppGroupsAndOldDaemonsLeaveThemOut() throws {
         let with = try RPCClient.decoder.decode(
             HostStats.self, from: Data(
-                #"{"os":"macos","kernel":"25","arch":"arm64","hostname":"mini","cpus":8,"cpu_percent":5.0,"load":[0.1,0.2,0.3],"mem_total":10,"mem_used":5,"swap_total":0,"swap_used":0,"disks":[],"net_rx_bps":0,"net_tx_bps":0,"net_supported":true,"uptime_s":60,"app_groups":[{"name":"Google Chrome","cpu_percent":12.5,"memory_bytes":900,"process_count":40,"top_pids":[11,12,13]}]}"#
+                #"{"os":"macos","kernel":"25","arch":"arm64","hostname":"mini","cpus":8,"cpu_percent":5.0,"load":[0.1,0.2,0.3],"mem_total":10,"mem_used":5,"swap_total":0,"swap_used":0,"disks":[],"net_rx_bps":0,"net_tx_bps":0,"net_supported":true,"uptime_s":60,"app_groups":[{"name":"Google Chrome","cpu_percent":12.5,"memory_bytes":900,"process_count":40,"top":[{"pid":11,"name":"Google Chrome Helper","cpu_percent":1.5,"memory_bytes":400}]}]}"#
                     .utf8))
-        #expect(with.appGroups == [HostAppGroup(name: "Google Chrome", cpuPercent: 12.5, memoryBytes: 900, processCount: 40, topPids: [11, 12, 13])])
+        #expect(with.appGroups == [
+            HostAppGroup(
+                name: "Google Chrome", cpuPercent: 12.5, memoryBytes: 900, processCount: 40,
+                top: [HostAppProcess(pid: 11, name: "Google Chrome Helper", cpuPercent: 1.5, memoryBytes: 400)]),
+        ])
         let without = try RPCClient.decoder.decode(
             HostStats.self, from: Data(
                 #"{"os":"macos","kernel":"25","arch":"arm64","hostname":"mini","cpus":8,"cpu_percent":5.0,"load":[0.1,0.2,0.3],"mem_total":10,"mem_used":5,"swap_total":0,"swap_used":0,"disks":[],"net_rx_bps":0,"net_tx_bps":0,"net_supported":true,"uptime_s":60}"#
@@ -164,26 +168,52 @@ import Testing
         #expect(without.appGroups == nil)
     }
 
-    @Test func appGroupsUseTheDaemonsSumsAndListTheProcessesTheListKnows() {
-        // The daemon counted 40 Chrome processes and names three; the list knows pids 11 and 12, not 99.
+    @Test func appGroupsUseTheDaemonsSumsAndOpenFromTheirOwnTop() {
+        // The daemon counted 40 Chrome processes; its `top` names pids 11 and 12 (and 99, which the list does not know).
         let apps = [
-            HostAppGroup(name: "Google Chrome", cpuPercent: 12.5, memoryBytes: 900, processCount: 40, topPids: [11, 99, 12]),
-            HostAppGroup(name: "Preview", cpuPercent: 0, memoryBytes: 50, processCount: 1, topPids: [30]),
+            HostAppGroup(
+                name: "Google Chrome", cpuPercent: 12.5, memoryBytes: 900, processCount: 40,
+                top: [
+                    HostAppProcess(pid: 11, name: "Google Chrome Helper", cpuPercent: 3, memoryBytes: 500),
+                    HostAppProcess(pid: 99, name: "gone", cpuPercent: 0, memoryBytes: 1),
+                    HostAppProcess(pid: 12, name: "Google Chrome", cpuPercent: 1, memoryBytes: 100),
+                ]),
+            HostAppGroup(
+                name: "Preview", cpuPercent: 0, memoryBytes: 50, processCount: 1,
+                top: [HostAppProcess(pid: 30, name: "Preview", cpuPercent: 0, memoryBytes: 50)]),
         ]
-        let rows = [
-            entry(11, "Google Chrome Helper", memory: 500, cpu: 3), entry(12, "Google Chrome", memory: 100, cpu: 1),
-            entry(30, "Preview", memory: 50, cpu: 0),
-        ]
+        // Only pid 11 is in the list, and it is stoppable there: the group opens without the list's other rows.
+        let rows = [HostProcessEntry(pid: 11, name: "Google Chrome Helper", rssBytes: 500, cpuPercent: 3, owner: nil, canStop: true)]
         let groups = HostProcessList.appGroups(apps, rows: rows, sort: .memory)
         #expect(groups.map(\.appName) == ["Google Chrome", "Preview"])
         #expect(groups[0].rssBytes == 900 && groups[0].cpuPercent == 12.5)
         #expect(groups[0].processCount == 40 && groups[0].isGroup)
-        #expect(groups[0].members.map(\.pid) == [11, 12])
+        // Members in memory order, with their own figures; a pid the list does not know is listed too.
+        #expect(groups[0].members.map(\.pid) == [11, 12, 99])
+        #expect(groups[0].members.map(\.canStop) == [true, false, false])
+        #expect(groups[0].members[0].owner == nil && groups[0].members[0].rssBytes == 500)
         #expect(groups[1].isGroup == false && groups[1].members.map(\.pid) == [30])
-        // An app whose processes the list does not name is still shown with its sums, and has nothing to expand.
-        let unknown = HostProcessList.appGroups(
-            [HostAppGroup(name: "Dock", cpuPercent: 1, memoryBytes: 7, processCount: 3, topPids: [77])],
-            rows: rows, sort: .cpu)
-        #expect(unknown[0].members.isEmpty && unknown[0].processCount == 3 && unknown[0].rssBytes == 7)
+    }
+
+    @Test func aListKeepsOwnersGroupsAndSortsAppsAndOwnersTogether() {
+        // An agent's process is in the list with its owner; the app groups hold the rest.
+        let agent = ProcessOwnerRef(kind: .agent, id: "a1")
+        let agentRow = HostProcessEntry(pid: 5, name: "claude", rssBytes: 800, cpuPercent: 1, owner: agent, canStop: false)
+        let rows = [agentRow, entry(11, "Google Chrome", memory: 100, cpu: 9)]
+        let apps = [
+            HostAppGroup(
+                name: "Google Chrome", cpuPercent: 9, memoryBytes: 300, processCount: 3,
+                top: [HostAppProcess(pid: 11, name: "Google Chrome", cpuPercent: 9, memoryBytes: 100)]),
+        ]
+        let memory = HostProcessList.listGroups(rows, apps: apps, sort: .memory)
+        // The agent's 800 MB group first, then Chrome's 300 MB, the agent's group keeps its owner.
+        #expect(memory.map(\.appName) == ["claude", "Google Chrome"])
+        #expect(memory[0].owner == agent)
+        #expect(memory[1].owner == nil && memory[1].processCount == 3)
+        // By CPU, Chrome's 9 % comes before the agent's 1 %.
+        let cpu = HostProcessList.listGroups(rows, apps: apps, sort: .cpu)
+        #expect(cpu.map(\.appName) == ["Google Chrome", "claude"])
+        // Without app groups the list is built from its rows alone, as before.
+        #expect(HostProcessList.listGroups(rows, apps: nil, sort: .memory).count == 2)
     }
 }

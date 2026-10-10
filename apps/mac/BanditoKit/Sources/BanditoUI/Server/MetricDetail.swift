@@ -404,7 +404,8 @@ struct MetricDetailView: View {
     }
 
     /// The CPU list is sorted by CPU among the biggest processes by memory, which is all the daemon sends. With the
-    /// daemon's app groups the sums are exact (every process counted); without them the groups are built from the list.
+    /// daemon's app groups each app's sums are exact; agents', terminals' and the daemon's processes stay in their own
+    /// owner groups, built from the list.
     private var topGroups: [HostProcessGroup] {
         let top = monitor.stats?.topProcesses ?? []
         let sort: HostProcessList.Sort
@@ -415,10 +416,7 @@ struct MetricDetailView: View {
         }
         // No cut before grouping: the helpers of one app must all land in its group.
         let rows = HostProcessList.rows(top: top, owners: monitor.ownerGroups, sort: sort, limit: .max)
-        if let apps = monitor.stats?.appGroups, !apps.isEmpty {
-            return HostProcessList.appGroups(apps, rows: rows, sort: sort)
-        }
-        return HostProcessList.groups(rows, sort: sort)
+        return HostProcessList.listGroups(rows, apps: monitor.stats?.appGroups, sort: sort)
     }
 
     private func processValue(_ row: HostProcessEntry) -> String {
