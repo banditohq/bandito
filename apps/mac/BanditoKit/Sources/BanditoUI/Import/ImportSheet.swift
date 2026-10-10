@@ -330,6 +330,7 @@ enum ImportText {
         case .notText: L10n.ClaudeImport.Skip.notText(path: path)
         case .link: L10n.ClaudeImport.Skip.link(path: path)
         case .sensitiveFile: L10n.ClaudeImport.Skip.sensitive(path: path)
+        case .hidden: L10n.ClaudeImport.Skip.hidden(path: path)
         case .truncated: L10n.ClaudeImport.Skip.truncated(path: path)
         case .tooManyFiles: L10n.ClaudeImport.Skip.tooManyFiles(path: path)
         case .tooLarge: L10n.ClaudeImport.Skip.tooLarge(path: path)
@@ -491,6 +492,12 @@ private struct ImportRowView: View {
                 .foregroundStyle(Color.Bandito.text3)
                 .lineLimit(1)
                 .truncationMode(.middle)
+            if !item.notSent.isEmpty {
+                Text(L10n.ClaudeImport.notSentFiles(files: item.notSent.joined(separator: ", ")))
+                    .font(BanditoFont.text(size: 11.5, weight: 500))
+                    .foregroundStyle(BanditoPalette.peach)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if !item.frontMatter.isEmpty {
                 Text(item.frontMatter.joined(separator: "\n"))
                     .font(BanditoFont.mono(size: 11.5, weight: 400))

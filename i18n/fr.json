@@ -2528,5 +2528,7 @@
   "claudeImport.warning.leftOut": {
     "one": "{count} fichier du dossier a été laissé de côté (pas du texte, ou nommé comme une clé) ; le skill est installé sans lui.",
     "other": "{count} fichiers du dossier ont été laissés de côté (pas du texte, ou nommés comme une clé) ; le skill est installé sans eux."
-  }
+  },
+  "claudeImport.skip.hidden": "{path} est un fichier caché : il n'est donc pas copié",
+  "claudeImport.notSentFiles": "Ne sera pas envoyé : {files}"
 }

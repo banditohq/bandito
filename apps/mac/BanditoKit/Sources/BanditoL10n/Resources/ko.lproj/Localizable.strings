@@ -339,6 +339,7 @@
 "claudeImport.needsAgentFolder" = "이 서버는 아직 파일로 에이전트를 만들 수 없어요. 먼저 업데이트하세요.";
 "claudeImport.needsCommands" = "이 서버는 아직 명령과 스킬을 설치할 수 없어요. 먼저 업데이트하세요.";
 "claudeImport.newName" = "새 이름";
+"claudeImport.notSentFiles" = "보내지 않음: %1$@";
 "claudeImport.notTaken" = "찾았지만 가져오지 않음";
 "claudeImport.origin.agentsMd" = "%1$@의 AGENTS.md";
 "claudeImport.origin.codex" = "Codex";
@@ -364,6 +365,7 @@
 "claudeImport.skip" = "건너뛰기";
 "claudeImport.skip.badName" = "%1$@의 이름은 서버에서 쓸 수 없어요";
 "claudeImport.skip.empty" = "%1$@에 지침이 없어요";
+"claudeImport.skip.hidden" = "%1$@은(는) 숨김 파일이라 복사하지 않아요";
 "claudeImport.skip.link" = "%1$@은(는) 링크이며 링크는 따라가지 않아요";
 "claudeImport.skip.noSkillFile" = "%1$@에 SKILL.md가 없어요";
 "claudeImport.skip.notText" = "%1$@은(는) 텍스트가 아니에요";

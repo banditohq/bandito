@@ -339,6 +339,7 @@
 "claudeImport.needsAgentFolder" = "此服务器暂时无法用文件创建智能体，请先更新。";
 "claudeImport.needsCommands" = "此服务器暂时无法安装命令和技能，请先更新。";
 "claudeImport.newName" = "新名称";
+"claudeImport.notSentFiles" = "不会发送：%1$@";
 "claudeImport.notTaken" = "已找到但未导入";
 "claudeImport.origin.agentsMd" = "%1$@ 的 AGENTS.md";
 "claudeImport.origin.codex" = "Codex";
@@ -364,6 +365,7 @@
 "claudeImport.skip" = "跳过";
 "claudeImport.skip.badName" = "%1$@ 的名称服务器无法使用";
 "claudeImport.skip.empty" = "%1$@ 中没有指令";
+"claudeImport.skip.hidden" = "%1$@ 是隐藏文件，因此不会复制";
 "claudeImport.skip.link" = "%1$@ 是链接，不会跟随链接";
 "claudeImport.skip.noSkillFile" = "%1$@ 中没有 SKILL.md";
 "claudeImport.skip.notText" = "%1$@ 不是文本";

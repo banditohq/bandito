@@ -477,6 +477,7 @@ public enum L10n {
         public static var needsAgentFolder: String { L10n.tr("claudeImport.needsAgentFolder") }
         public static var needsCommands: String { L10n.tr("claudeImport.needsCommands") }
         public static var newName: String { L10n.tr("claudeImport.newName") }
+        public static func notSentFiles(files: String) -> String { L10n.tr("claudeImport.notSentFiles", files) }
         public static var notTaken: String { L10n.tr("claudeImport.notTaken") }
         public static var preview: String { L10n.tr("claudeImport.preview") }
         public static var rename: String { L10n.tr("claudeImport.rename") }
@@ -532,6 +533,7 @@ public enum L10n {
         public enum Skip {
             public static func badName(path: String) -> String { L10n.tr("claudeImport.skip.badName", path) }
             public static func empty(path: String) -> String { L10n.tr("claudeImport.skip.empty", path) }
+            public static func hidden(path: String) -> String { L10n.tr("claudeImport.skip.hidden", path) }
             public static func link(path: String) -> String { L10n.tr("claudeImport.skip.link", path) }
             public static func noSkillFile(path: String) -> String { L10n.tr("claudeImport.skip.noSkillFile", path) }
             public static func notText(path: String) -> String { L10n.tr("claudeImport.skip.notText", path) }

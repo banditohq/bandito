@@ -2496,5 +2496,7 @@
   "claudeImport.stop": "중단",
   "claudeImport.warning.leftOut": {
     "other": "폴더 안의 파일 {count}개는 제외됐어요(텍스트가 아니거나 키 같은 이름). 스킬은 그 파일 없이 설치돼요."
-  }
+  },
+  "claudeImport.skip.hidden": "{path}은(는) 숨김 파일이라 복사하지 않아요",
+  "claudeImport.notSentFiles": "보내지 않음: {files}"
 }

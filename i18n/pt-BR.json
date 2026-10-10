@@ -2528,5 +2528,7 @@
   "claudeImport.warning.leftOut": {
     "one": "{count} arquivo da pasta ficou de fora (não é texto ou tem nome de chave); a skill é instalada sem ele.",
     "other": "{count} arquivos da pasta ficaram de fora (não são texto ou têm nome de chave); a skill é instalada sem eles."
-  }
+  },
+  "claudeImport.skip.hidden": "{path} é um arquivo oculto, por isso não é copiado",
+  "claudeImport.notSentFiles": "Não será enviado: {files}"
 }

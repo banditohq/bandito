@@ -2496,5 +2496,7 @@
   "claudeImport.stop": "停止",
   "claudeImport.warning.leftOut": {
     "other": "文件夹中有 {count} 个文件被排除（不是文本，或名称像密钥）；技能将不含它们安装。"
-  }
+  },
+  "claudeImport.skip.hidden": "{path} 是隐藏文件，因此不会复制",
+  "claudeImport.notSentFiles": "不会发送：{files}"
 }

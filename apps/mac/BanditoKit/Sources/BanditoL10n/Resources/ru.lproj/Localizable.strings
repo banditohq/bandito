@@ -339,6 +339,7 @@
 "claudeImport.needsAgentFolder" = "Этот сервер пока не умеет создавать агентов из файлов: сначала обновите его.";
 "claudeImport.needsCommands" = "Этот сервер пока не умеет ставить команды и скиллы: сначала обновите его.";
 "claudeImport.newName" = "Новое имя";
+"claudeImport.notSentFiles" = "Не будет отправлено: %1$@";
 "claudeImport.notTaken" = "Найдено, но не взято";
 "claudeImport.origin.agentsMd" = "AGENTS.md проекта %1$@";
 "claudeImport.origin.codex" = "Codex";
@@ -364,6 +365,7 @@
 "claudeImport.skip" = "Пропустить";
 "claudeImport.skip.badName" = "У %1$@ имя, которое сервер не принимает";
 "claudeImport.skip.empty" = "В %1$@ нет инструкций";
+"claudeImport.skip.hidden" = "%1$@ — скрытый файл, поэтому не копируется";
 "claudeImport.skip.link" = "%1$@ — ссылка, а по ссылкам Bandito не ходит";
 "claudeImport.skip.noSkillFile" = "В %1$@ нет SKILL.md";
 "claudeImport.skip.notText" = "%1$@ не текстовый файл";

@@ -2528,5 +2528,7 @@
   "claudeImport.warning.leftOut": {
     "one": "{count} file of the folder was left out (not text, or named like a key); the skill is installed without it.",
     "other": "{count} files of the folder were left out (not text, or named like a key); the skill is installed without them."
-  }
+  },
+  "claudeImport.skip.hidden": "{path} is a hidden file, so it is not copied",
+  "claudeImport.notSentFiles": "Not sent: {files}"
 }
