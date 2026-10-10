@@ -1,0 +1,193 @@
+name: gallery
+
+# A gallery of the app: the cloud builds the QA daemon and a QA copy of the Debug app (docs/qa/RUNBOOK.md), seeds
+# the daemon with a few agents and threads, walks every mode and sheet at two window sizes and uploads the pictures
+# with an HTML page as the artifact `gallery-<sha>`. On a pull request the Bandito Bot keeps one comment with the link.
+# Informational: ci.yml does not wait for it, and a failure here never fails the run of a push or pull request.
+on:
+  # Runs through ci.yml when a part of the app changed.
+  workflow_call:
+    secrets:
+      BANDITO_BOT_APP_ID:
+        required: false
+      BANDITO_BOT_PRIVATE_KEY:
+        required: false
+  # By hand: Actions > gallery > Run workflow.
+  workflow_dispatch:
+
+# A newer push to the same PR or branch cancels the older run.
+concurrency:
+  group: gallery-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  gallery:
+    name: gallery
+    runs-on: macos-15
+    timeout-minutes: 60
+    # Information, not a gate: on a push or pull request a failed gallery leaves the run green (and sends no alert).
+    # By hand it fails visibly.
+    continue-on-error: ${{ github.event_name != 'workflow_dispatch' }}
+    env:
+      SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      # The Bandito Bot's app id; empty when the run has no secrets (a pull request from a fork).
+      BOT_APP_ID: ${{ secrets.BANDITO_BOT_APP_ID }}
+      QA_CARGO_TARGET: ${{ github.workspace }}/daemon/target
+      QA_DERIVED_DATA: ${{ github.workspace }}/.qa-xcode
+      QA_BANDITO_BIN: ${{ github.workspace }}/daemon/target/release/bandito
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Select the newest Xcode
+        run: |
+          xcode="$(printf '%s\n' /Applications/Xcode_*.app | sort -V | tail -n 1)"
+          if [ -d "$xcode" ]; then sudo xcode-select -s "$xcode"; fi
+          xcodebuild -version
+
+      - name: Install Rust (the app bundles the bandito daemon)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo (daemon)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: daemon
+
+      - name: Build the daemon
+        working-directory: daemon
+        env:
+          CARGO_TARGET_DIR: ${{ env.QA_CARGO_TARGET }}
+        run: cargo build --release --locked -p bandito
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Cache Xcode build products
+        uses: actions/cache@v4
+        with:
+          path: .qa-xcode
+          key: qa-xcode-${{ runner.os }}-${{ hashFiles('apps/mac/BanditoKit/Package.resolved') }}-${{ github.sha }}
+          restore-keys: |
+            qa-xcode-${{ runner.os }}-${{ hashFiles('apps/mac/BanditoKit/Package.resolved') }}-
+            qa-xcode-${{ runner.os }}-
+
+      - name: Build the QA app (Debug)
+        run: scripts/qa/app.sh build
+
+      - name: Python with websockets (the QA scripts talk to the daemon)
+        run: |
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet websockets==16.0
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+
+      - name: QA daemon with seeded data
+        run: |
+          scripts/qa/server.sh up 1 --fresh
+          scripts/qa/seed.sh 1
+
+      - name: Take the pictures
+        id: shots
+        run: |
+          out="$RUNNER_TEMP/gallery"
+          mkdir -p "$out"
+          # The display must stay awake, and a picture of the whole screen shows whether capture is allowed at all.
+          caffeinate -d -u -t 3600 >/dev/null 2>&1 &
+          screencapture -x "$RUNNER_TEMP/screen.png" || true
+          ls -l "$RUNNER_TEMP/screen.png" || true
+
+          scripts/qa/app.sh launch 1 -qa.mode team -qa.window 1280x820
+          i=0
+          until scripts/qa/shot.sh 1 "$RUNNER_TEMP/probe.png" >/dev/null 2>&1; do
+            i=$((i + 1))
+            if [ "$i" -ge 45 ]; then
+              echo "::error::the QA app never showed a window"
+              exit 1
+            fi
+            sleep 2
+          done
+          sleep 6
+
+          status=0
+          QA_SWEEP_SIZES="1280x820 900x600" scripts/qa/sweep.sh 1 "$out" || status=$?
+          scripts/qa/app.sh quit 1 || true
+          scripts/qa/server.sh down 1 || true
+          exit "$status"
+
+      - name: Build the gallery page
+        if: ${{ !cancelled() }}
+        run: |
+          out="$RUNNER_TEMP/gallery"
+          mkdir -p "$out"
+          python3 scripts/qa/gallery.py "$out" "Bandito gallery ${SHA:0:7}" --markdown "$RUNNER_TEMP/table.md"
+
+      - name: Upload the gallery
+        id: upload
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: gallery-${{ env.SHA }}
+          path: ${{ runner.temp }}/gallery
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload logs
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: gallery-logs-${{ env.SHA }}
+          path: |
+            ~/.cache/bandito-qa/build.log
+            ~/.cache/bandito-qa/1/daemon.log
+            ${{ runner.temp }}/screen.png
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # One comment on the pull request, edited by later pushes. A pull request from a fork has no secrets: skipped.
+      - name: Token for Bandito Bot
+        id: bot
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && env.BOT_APP_ID != '' }}
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.BANDITO_BOT_APP_ID }}
+          private-key: ${{ secrets.BANDITO_BOT_PRIVATE_KEY }}
+
+      - name: Comment on the pull request
+        if: ${{ steps.bot.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ steps.bot.outputs.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RESULT: ${{ steps.shots.outcome }}
+        run: |
+          set -eu
+          marker='<!-- bandito-gallery -->'
+          {
+            echo "$marker"
+            echo "### Gallery for \`${SHA:0:7}\`"
+            echo
+            if [ "$RESULT" = success ]; then
+              echo "Every mode and sheet of the app at 1280x820 and 900x600, with seeded data."
+            else
+              echo "The gallery run did not finish cleanly; the pictures below may be incomplete."
+            fi
+            echo
+            echo "- Gallery (open \`index.html\` from the downloaded zip): ${ARTIFACT_URL:-see the run}"
+            echo "- Run: $RUN_URL"
+            echo
+            echo "First look (all of them are in the artifact):"
+            echo
+            cat "$RUNNER_TEMP/table.md"
+          } > "$RUNNER_TEMP/comment.md"
+          id=$(gh api --paginate "repos/$REPO/issues/$PR/comments" \
+            --jq ".[] | select(.user.type == \"Bot\") | select(.body | contains(\"$marker\")) | .id" | head -n 1)
+          if [ -n "$id" ]; then
+            gh api --method PATCH "repos/$REPO/issues/comments/$id" -F "body=@$RUNNER_TEMP/comment.md" >/dev/null
+            echo "updated comment $id"
+          else
+            gh api --method POST "repos/$REPO/issues/$PR/comments" -F "body=@$RUNNER_TEMP/comment.md" >/dev/null
+            echo "created a comment"
+          fi
