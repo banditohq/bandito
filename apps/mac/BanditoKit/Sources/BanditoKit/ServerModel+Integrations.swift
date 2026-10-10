@@ -13,6 +13,21 @@ extension ServerModel {
         try await rpc().call("integrations.catalog", NoParams(), as: [IntegrationCatalogEntry].self)
     }
 
+    /// Brings an integration up to its catalog template: command, arguments and address only; secrets, headers and
+    /// the agents' lists stay. Refused when the row has no `template_update`. Needs the `template_updates` feature.
+    @discardableResult
+    public func updateIntegrationFromTemplate(_ id: String) async throws -> Integration {
+        struct P: Encodable { var id: String }
+        return try await rpc().call("integrations.update_from_template", P(id: id), as: Integration.self)
+    }
+
+    /// The catalog services that suit an agent's project folder, with the reason (`integrations.recommend`, feature
+    /// `integrations_recommend`): at most six, none of them connected.
+    public func recommendedIntegrations(agentID: String) async throws -> [IntegrationRecommendation] {
+        struct P: Encodable { var agentId: String }
+        return try await rpc().call("integrations.recommend", P(agentId: agentID), as: [IntegrationRecommendation].self)
+    }
+
     /// Adds an integration. The daemon refuses a name that is taken or a definition it cannot run.
     @discardableResult
     public func addIntegration(_ new: NewIntegration) async throws -> Integration {
@@ -43,6 +58,23 @@ extension ServerModel {
     public func probeIntegration(_ draft: NewIntegration) async throws -> IntegrationTest {
         struct P: Encodable { var draft: NewIntegration }
         return try await rpc().call("integrations.probe", P(draft: draft), as: IntegrationTest.self, timeout: .seconds(30))
+    }
+}
+
+/// One suggestion of `integrations.recommend`.
+public struct IntegrationRecommendation: Decodable, Sendable, Hashable, Identifiable {
+    public var templateId: String
+    /// A key of the app's text, `recommend.reason.<name>`.
+    public var reasonKey: String
+    /// The file that showed it, relative to the agent's folder.
+    public var evidence: String
+
+    public var id: String { templateId }
+
+    public init(templateId: String, reasonKey: String, evidence: String) {
+        self.templateId = templateId
+        self.reasonKey = reasonKey
+        self.evidence = evidence
     }
 }
 

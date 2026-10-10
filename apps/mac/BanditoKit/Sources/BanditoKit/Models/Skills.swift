@@ -106,14 +106,18 @@ public struct SkillEntry: Decodable, Sendable, Identifiable, Hashable {
     public var installed: SkillPlaces
     /// Folders with this name that are not Bandito's: the daemon will not replace them.
     public var conflicts: SkillPlaces
+    /// Installs made from an older catalog: the copy there is behind the catalog's commit.
+    public var updates: SkillPlaces
 
     public init(
         id: String, name: String, publisher: String = "", source: SkillSource = SkillSource(repo: ""),
         descriptionEn: String = "", descriptionRu: String = "", longEn: String = "", longRu: String = "",
         warningEn: String? = nil, warningRu: String? = nil, l10n: [String: SkillTranslation] = [:],
         category: String = "dev", runtimes: [String] = ["claude"], files: [String] = [],
-        installed: SkillPlaces = SkillPlaces(), conflicts: SkillPlaces = SkillPlaces()
+        installed: SkillPlaces = SkillPlaces(), conflicts: SkillPlaces = SkillPlaces(),
+        updates: SkillPlaces = SkillPlaces()
     ) {
+        self.updates = updates
         self.id = id
         self.name = name
         self.publisher = publisher
@@ -150,11 +154,12 @@ public struct SkillEntry: Decodable, Sendable, Identifiable, Hashable {
         files = try c.decodeIfPresent([String].self, forKey: .files) ?? []
         installed = try c.decodeIfPresent(SkillPlaces.self, forKey: .installed) ?? SkillPlaces()
         conflicts = try c.decodeIfPresent(SkillPlaces.self, forKey: .conflicts) ?? SkillPlaces()
+        updates = try c.decodeIfPresent(SkillPlaces.self, forKey: .updates) ?? SkillPlaces()
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, name, publisher, source, descriptionEn, descriptionRu, longEn, longRu, warningEn, warningRu
-        case l10n, category, runtimes, files, installed, conflicts
+        case l10n, category, runtimes, files, installed, conflicts, updates
     }
 
     private func translation(_ languageCode: String) -> SkillTranslation? {
