@@ -27,6 +27,8 @@ struct ThreadView: View {
     @State private var unseen = 0
     /// The scroll position, kept outside the view state: a scroll must not redraw the header and the composer.
     @State private var scroll = ThreadScrollMemory()
+    /// Which messages arrived after the chat opened: the baseline is set after the first history load (see `ThreadArrival`).
+    @State private var arrival = ThreadArrival()
     /// A row to bring on screen (a quoted message, a form), and the row that flashes after it.
     @State private var scrollRequest: ScrollRequest?
     @State private var highlightedID: String?
@@ -102,7 +104,8 @@ struct ThreadView: View {
                 chat: chat,
                 typing: thread.turnRunning && !isStreaming,
                 onRowSpan: { [scroll] id, span in scroll.rowSpans[id] = span },
-                onContent: { offset, height in contentChanged(offset: offset, height: height, proxy) })
+                onContent: { offset, height in contentChanged(offset: offset, height: height, proxy) },
+                arrival: arrival)
         }
         .coordinateSpace(name: ThreadScroll.scrollSpace)
         .modifier(ThreadGeometryGate { old, new in scrollGeometryChanged(old, new, proxy) })
@@ -431,6 +434,8 @@ struct ThreadView: View {
         .background(Color.Bandito.bg)
         .task(id: agent.id) {
             await loadHistory()
+            // What is read now is the old history: a message that comes after it is new (see `ThreadArrival`).
+            arrival.settle(thread.items)
             // A thread shorter than the screen sits at its top: its older history is read now, not when scrolled to.
             if scroll.nearTop, scroll.contentHeight <= scroll.containerHeight { topReached() }
             await loadChanges()
@@ -705,6 +710,8 @@ struct ThreadItemsView: View {
     var onRowSpan: (String, ThreadRowSpan) -> Void = { _, _ in }
     /// The content's offset in the scroll view and its height.
     var onContent: (Double, Double) -> Void = { _, _ in }
+    /// Which messages came in live (see `ThreadArrival`); only those rise in. Empty by default: nothing animates.
+    var arrival = ThreadArrival()
 
     var body: some View {
         let rows = ThreadRows.build(items)
@@ -721,7 +728,7 @@ struct ThreadItemsView: View {
                         folder: folder, chat: rowChat),
                     server: server, chat: rowChat, onError: onError)
                     .equatable()
-                    .banditoRise()
+                    .modifier(LiveArrivalModifier(live: arrival.isLive(seq: ThreadArrival.seq(of: row))))
                     .onGeometryChange(for: ThreadRowSpan.self) { proxy in
                         let frame = proxy.frame(in: .named(ThreadScroll.contentSpace))
                         return ThreadRowSpan(minY: Double(frame.minY).rounded(), maxY: Double(frame.maxY).rounded())

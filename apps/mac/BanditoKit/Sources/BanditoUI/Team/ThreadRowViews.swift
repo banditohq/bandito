@@ -217,7 +217,31 @@ private struct ItemView: View {
 
 // MARK: - Bubbles
 
-/// The user's message: on the raised surface. `ThreadItemsView` places it at the right (see `MessageContainer`).
+/// The look of the two bubbles: 16 pt corners, and a 6 pt tail corner on the speaker's side (bottom right for the
+/// person, bottom left for the agent). Fills and borders only: no shadows, one per bubble is too many to draw.
+enum BubbleLook {
+    static func shape(fromUser: Bool) -> UnevenRoundedRectangle {
+        UnevenRoundedRectangle(
+            topLeadingRadius: 16,
+            bottomLeadingRadius: fromUser ? 16 : 6,
+            bottomTrailingRadius: fromUser ? 6 : 16,
+            topTrailingRadius: 16,
+            style: .continuous)
+    }
+
+    /// The person's bubble: a warm film of the text colour over the raised surface, with a faint edge.
+    static var userTint: Color { Color.Bandito.text.opacity(0.10) }
+    static var userBorder: Color { Color.Bandito.text.opacity(0.08) }
+
+    /// The agent's bubble: the surface, with an edge that fades from top to bottom.
+    static var agentBorder: LinearGradient {
+        LinearGradient(
+            colors: [Color.Bandito.text.opacity(0.08), Color.Bandito.text.opacity(0.03)],
+            startPoint: .top, endPoint: .bottom)
+    }
+}
+
+/// The user's message: a warm bubble. `ThreadItemsView` places it at the right (see `MessageContainer`).
 /// `header` goes above the text inside the bubble: the quote of a reply.
 struct UserBubble<Header: View>: View {
     var text: String
@@ -229,16 +253,18 @@ struct UserBubble<Header: View>: View {
     }
 
     var body: some View {
+        let shape = BubbleLook.shape(fromUser: true)
         VStack(alignment: .leading, spacing: 8) {
             header
             MessageBodyView(text: text, markdown: false)
         }
-        .padding(.horizontal, 15)
-        .padding(.vertical, 11)
-        .background(
-            Color.Bandito.surface3,
-            in: UnevenRoundedRectangle(
-                topLeadingRadius: 18, bottomLeadingRadius: 18, bottomTrailingRadius: 6, topTrailingRadius: 18))
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background {
+            shape.fill(Color.Bandito.surface2)
+            shape.fill(BubbleLook.userTint)
+            shape.stroke(BubbleLook.userBorder, lineWidth: 1)
+        }
     }
 }
 
@@ -269,20 +295,15 @@ struct AgentBubble<Header: View>: View {
     }
 
     var body: some View {
+        let shape = BubbleLook.shape(fromUser: false)
         VStack(alignment: .leading, spacing: 8) {
             header
             MessageBodyView(text: text, markdown: true, streaming: streaming)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(
-            Color.Bandito.surface1,
-            in: UnevenRoundedRectangle(
-                topLeadingRadius: 18, bottomLeadingRadius: 6, bottomTrailingRadius: 18, topTrailingRadius: 18))
-        .overlay(
-            UnevenRoundedRectangle(
-                topLeadingRadius: 18, bottomLeadingRadius: 6, bottomTrailingRadius: 18, topTrailingRadius: 18)
-                .stroke(Color.Bandito.line, lineWidth: 1))
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(Color.Bandito.surface1, in: shape)
+        .overlay(shape.stroke(BubbleLook.agentBorder, lineWidth: 1))
     }
 }
 
@@ -322,12 +343,14 @@ struct TypingIndicator: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(MotionLevel.storageKey) private var motionLevel = MotionLevel.full.rawValue
+    /// The row is on screen: the wave stops when it scrolls away (the timeline is not driven off screen).
+    @State private var onScreen = false
     /// Repeating motion stands still: Reduce Motion, or "Less" / "Off" in settings.
     private var still: Bool { reduceMotion || !MotionLevel(stored: motionLevel).allowsRepeatingMotion }
 
     var body: some View {
         HStack(spacing: 9) {
-            TimelineView(.animation(minimumInterval: 1.0 / 20, paused: still)) { context in
+            TimelineView(.animation(minimumInterval: 1.0 / 30, paused: still || !onScreen)) { context in
                 let time = context.date.timeIntervalSinceReferenceDate
                 HStack(spacing: 4) {
                     ForEach(0..<3, id: \.self) { index in
@@ -357,17 +380,13 @@ struct TypingIndicator: View {
                 }
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 11)
-        .background(
-            Color.Bandito.surface1,
-            in: UnevenRoundedRectangle(
-                topLeadingRadius: 18, bottomLeadingRadius: 6, bottomTrailingRadius: 18, topTrailingRadius: 18))
-        .overlay(
-            UnevenRoundedRectangle(
-                topLeadingRadius: 18, bottomLeadingRadius: 6, bottomTrailingRadius: 18, topTrailingRadius: 18)
-                .stroke(Color.Bandito.line, lineWidth: 1))
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(Color.Bandito.surface1, in: BubbleLook.shape(fromUser: false))
+        .overlay(BubbleLook.shape(fromUser: false).stroke(BubbleLook.agentBorder, lineWidth: 1))
         .frame(maxWidth: .infinity, alignment: .leading)
+        .onAppear { onScreen = true }
+        .onDisappear { onScreen = false }
     }
 
     /// Each dot brightens in turn, 0.2 s apart, over a 1.2 s cycle. Still dots stay at a middle level.
@@ -376,10 +395,10 @@ struct TypingIndicator: View {
         return 0.25 + 0.75 * peak(time: time, index: index)
     }
 
-    /// The same wave as the brightness, lifting each dot by up to 3 pt. Still dots do not move.
+    /// The same wave as the brightness, lifting each dot by up to 2 pt. Still dots do not move.
     static func lift(time: Double, index: Int, still: Bool) -> Double {
         if still { return 0 }
-        return -3 * peak(time: time, index: index)
+        return -2 * peak(time: time, index: index)
     }
 
     /// 0...1 where a dot is at the top of its beat.

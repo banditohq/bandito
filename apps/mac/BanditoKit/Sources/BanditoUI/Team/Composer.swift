@@ -147,8 +147,13 @@ struct Composer: View {
             .padding(.trailing, 10)
             .padding(.vertical, 10)
             .background(Color.Bandito.surface2, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(Color.Bandito.line, lineWidth: 1))
+            .overlay(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .stroke(focused ? Color.Bandito.text.opacity(0.18) : Color.Bandito.line, lineWidth: 1))
             .shadow(color: .black.opacity(0.35), radius: 18, x: 0, y: 10)
+            // In focus only: a faint signal glow around the whole field.
+            .shadow(color: Color.Bandito.signal.opacity(focused ? 0.10 : 0), radius: 12)
+            .banditoAnimation(.easeOut(duration: 0.18), value: focused)
 
             if showsHints {
                 HStack(spacing: 14) {
@@ -372,6 +377,9 @@ struct Composer: View {
             .banditoButton(.brighten)
             .disabled(!canSend)
             .opacity(canSend ? 1 : 0.4)
+            // The button springs up from 0.9 when text appears, and settles back when the field is empty.
+            .scaleEffect(canSend ? 1 : 0.9)
+            .banditoAnimation(.spring(response: 0.25, dampingFraction: 0.6), value: canSend)
             .help(L10n.Thread.send)
         }
     }
