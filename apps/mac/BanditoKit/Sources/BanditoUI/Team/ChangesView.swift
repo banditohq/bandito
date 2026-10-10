@@ -441,7 +441,7 @@ struct ChangesContent: View {
 
     private var rollbackButton: some View {
         Button(L10n.Changes.rollbackAll) { confirmRollback = true }
-            .banditoButton(.quiet())
+            .banditoButton(.quiet(tone: .danger))
             .disabled(busy)
     }
 
