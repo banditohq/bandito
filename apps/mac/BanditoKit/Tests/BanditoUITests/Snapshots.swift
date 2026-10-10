@@ -44,6 +44,26 @@ import Testing
         #expect(FileManager.default.fileExists(atPath: url.path))
     }
 
+    /// Messages with their action rows: the agent's rows under its bubbles on the left (the last one faintly shown), the
+    /// person's on the right. The rows show only on hover, so this picture has none of them lit.
+    @Test func threadMessageActions() throws {
+        let (server, _) = Self.demoServer()
+        var chat = ThreadChat()
+        chat.reactionsOn = true
+        chat.repliesOn = true
+        chat.agentName = "Forge"
+        let items: [ThreadItem] = [
+            .user(id: "u1", text: "Add tests for the billing webhook.", source: .user, from: nil, ts: 1_791_530_000_000),
+            .assistant(id: "a1", text: "Wrote 14 tests. Two failed on currency rounding, fixed.", ts: 1_791_530_001_000),
+            .user(id: "u2", text: "Open a PR too.", source: .user, from: nil, ts: 1_791_530_002_000),
+            .assistant(id: "a2", text: "PR is up: feat/billing-webhook-tests.", ts: 1_791_530_003_000),
+        ]
+        let view = ThreadItemsView(items: items, server: server, agentName: "Forge", chat: chat)
+            .background(Color(red: 0.07, green: 0.063, blue: 0.055))
+        let url = try SnapshotSupport.render(view, "thread-message-actions", size: CGSize(width: 900, height: 480))
+        #expect(FileManager.default.fileExists(atPath: url.path))
+    }
+
     @Test func sidebarRows() throws {
         let (server, agent) = Self.demoServer()
         let rows = VStack(alignment: .leading, spacing: 4) {

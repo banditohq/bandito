@@ -26,6 +26,8 @@ struct ThreadChat {
     var attachments: [Int64: [MessageAttachment]] = [:]
     /// The id of the row that flashes after a jump to it.
     var highlightedID: String?
+    /// The row id of the agent's last message. Its action row stays faintly visible (see `MessageActionsPlacement`).
+    var lastAgentID: String?
     /// A loaded message by `seq`, for a quote. Nil when it is not on screen's history.
     var original: (Int64) -> ReplyTarget? = { _ in nil }
     var onReply: (ReplyTarget) -> Void = { _ in }
@@ -56,6 +58,8 @@ struct MessageContainer<Bubble: View>: View {
     @State private var hideTask: Task<Void, Never>?
     @State private var reactOpen = false
     @State private var selecting = false
+    /// The mouse is down and moving over the bubble: a text selection is under way, so the row stays away.
+    @State private var dragging = false
     @State private var copied = false
     @State private var copyReset: Task<Void, Never>?
 
@@ -64,6 +68,11 @@ struct MessageContainer<Bubble: View>: View {
     private var mine: String? { seq.flatMap { chat.reactions[$0]?.mine } }
     private var chips: [ReactionChip] { seq.flatMap { chat.reactions[$0]?.chips } ?? [] }
     private var flashing: Bool { chat.highlightedID == itemID }
+    private var rowOpacity: Double {
+        MessageActionsPlacement.opacity(
+            hovering: hovering, open: reactOpen || selecting, selectingText: dragging, isUser: fromUser,
+            isLastAgent: itemID == chat.lastAgentID)
+    }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -77,8 +86,11 @@ struct MessageContainer<Bubble: View>: View {
                             Color.clear.contentShape(Rectangle()).onTapGesture(count: 2, perform: toggleLike)
                         }
                     }
-                    .overlay(alignment: .topTrailing) { actionBar.offset(x: -6, y: -14) }
                     .onHover(perform: setHover)
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 4)
+                            .onChanged { _ in dragging = true }
+                            .onEnded { _ in dragging = false })
                     .contextMenu { contextMenuItems }
                     .popover(isPresented: $selecting, arrowEdge: .bottom) {
                         SelectableTextPanel(text: text)
@@ -99,10 +111,15 @@ struct MessageContainer<Bubble: View>: View {
             )
             .padding(-6)
             .banditoAnimation(.easeOut(duration: 0.3), value: flashing)
+            // The row hangs under the bubble, from its edge, and is drawn over the reserved space below it.
+            .overlay(alignment: Alignment(horizontal: MessageActionsPlacement.edge(isUser: fromUser), vertical: .bottom)) {
+                actionRow.offset(y: MessageActionsPlacement.rowHeight)
+            }
             if !fromUser { Spacer(minLength: 120) }
         }
+        .padding(.bottom, MessageActionsPlacement.reservedBelow)
         .frame(maxWidth: .infinity, alignment: fromUser ? .trailing : .leading)
-        // After a reaction is picked the bar goes away; it comes back when the pointer re-enters.
+        // After a reaction is picked the row goes away; it comes back when the pointer re-enters.
         .onChange(of: reactOpen) { _, open in if !open { setHover(false) } }
         .onDisappear {
             hideTask?.cancel()
@@ -112,63 +129,71 @@ struct MessageContainer<Bubble: View>: View {
 
     // MARK: Hover
 
-    private var barVisible: Bool { hovering || reactOpen || selecting }
-
-    /// The bar stays a moment after the pointer leaves the bubble, so that it can be reached across the gap.
+    /// The row stays a moment (250 ms) after the pointer leaves the bubble, so that it can be reached across the gap.
     private func setHover(_ on: Bool) {
         hideTask?.cancel()
         if on {
             hovering = true
         } else {
             hideTask = Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(220))
+                try? await Task.sleep(for: .milliseconds(250))
                 if !Task.isCancelled { hovering = false }
             }
         }
     }
 
-    // MARK: The bar
+    // MARK: The row
 
-    private var actionBar: some View {
+    /// The icons under the bubble. The agent's: copy, react, reply, more. The person's: copy, reply, react.
+    private var actionRow: some View {
         HStack(spacing: 2) {
-            if canReply {
-                barButton(icon: "arrowshape.turn.up.left", label: L10n.Thread.reply, action: reply)
+            if fromUser {
+                copyButton
+                if canReply { replyButton }
+                if canReact { reactButton }
+            } else {
+                copyButton
+                if canReact { reactButton }
+                if canReply { replyButton }
+                moreMenu
             }
-            if canReact {
-                barButton(icon: mine == nil ? "face.smiling" : "face.smiling.inverse", label: L10n.Message.react) {
-                    reactOpen.toggle()
-                }
-                .popover(isPresented: $reactOpen, arrowEdge: .bottom) {
-                    ReactionPicker(current: mine) { emoji in
-                        reactOpen = false
-                        guard let seq else { return }
-                        chat.onReact(seq, emoji == mine ? nil : emoji)
-                    }
-                }
-            }
-            barButton(
-                icon: copied ? "checkmark" : "doc.on.doc", label: copied ? L10n.Message.copied : L10n.Thread.copy,
-                action: copyRaw)
-            moreMenu
         }
-        .padding(3)
-        .background(Color.Bandito.surface2, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).stroke(Color.Bandito.line, lineWidth: 1))
-        .shadow(color: .black.opacity(0.3), radius: 6, y: 2)
-        // Hidden, not removed: an open menu belongs to the bar, and a bar that left the tree would close it.
-        .opacity(barVisible ? 1 : 0)
-        .allowsHitTesting(barVisible)
+        .frame(height: MessageActionsPlacement.rowHeight)
+        .opacity(rowOpacity)
+        .allowsHitTesting(rowOpacity > 0)
         .onHover(perform: setHover)
-        .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: barVisible)
+        .banditoAnimation(.easeOut(duration: 0.12), value: rowOpacity)
     }
 
-    private func barButton(icon: String, label: String, action: @escaping () -> Void) -> some View {
+    private var copyButton: some View {
+        actionButton(
+            icon: copied ? "checkmark" : "doc.on.doc", label: copied ? L10n.Message.copied : L10n.Thread.copy,
+            action: copyRaw)
+    }
+
+    private var replyButton: some View {
+        actionButton(icon: "arrowshape.turn.up.left", label: L10n.Thread.reply, action: reply)
+    }
+
+    private var reactButton: some View {
+        actionButton(icon: mine == nil ? "face.smiling" : "face.smiling.inverse", label: L10n.Message.react) {
+            reactOpen.toggle()
+        }
+        .popover(isPresented: $reactOpen, arrowEdge: .bottom) {
+            ReactionPicker(current: mine) { emoji in
+                reactOpen = false
+                guard let seq else { return }
+                chat.onReact(seq, emoji == mine ? nil : emoji)
+            }
+        }
+    }
+
+    private func actionButton(icon: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 12, weight: .medium))
-                .frame(width: 26, height: 26)
+                .font(.system(size: 13, weight: .medium))
         }
-        .banditoButton(.icon(size: 26, label: label))
+        .buttonStyle(MessageActionStyle(label: label))
         .help(label)
     }
 
@@ -178,12 +203,11 @@ struct MessageContainer<Bubble: View>: View {
             Button(L10n.Message.selectText) { selecting = true }
         } label: {
             Image(systemName: "ellipsis")
-                .font(.system(size: 12, weight: .medium))
-                .frame(width: 26, height: 26)
+                .font(.system(size: 13, weight: .medium))
         }
         .menuStyle(.button)
         .menuIndicator(.hidden)
-        .banditoButton(.icon(size: 26, label: L10n.Message.more))
+        .buttonStyle(MessageActionStyle(label: L10n.Message.more))
         .help(L10n.Message.more)
         .fixedSize()
     }
@@ -226,7 +250,7 @@ struct MessageContainer<Bubble: View>: View {
         copied = true
         copyReset?.cancel()
         copyReset = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(1.5))
+            try? await Task.sleep(for: .seconds(1.2))
             if !Task.isCancelled { copied = false }
         }
     }
@@ -239,6 +263,51 @@ struct MessageContainer<Bubble: View>: View {
     private func toggleLike() {
         guard canReact, let seq else { return }
         chat.onReact(seq, mine == ReactionRules.common[0] ? nil : ReactionRules.common[0])
+    }
+}
+
+/// An icon of the action row: 28 pt, no plate. On hover a circle of `text` at 7% lights up, and a press shrinks the icon
+/// to 0.92. The icon is `text3`, and `text` on hover.
+struct MessageActionStyle: ButtonStyle {
+    var label: String
+
+    func makeBody(configuration: Configuration) -> some View {
+        InteractiveBody(isPressed: configuration.isPressed) { hovered in
+            configuration.label
+                .foregroundStyle(hovered ? Color.Bandito.text : Color.Bandito.text3)
+                .frame(width: MessageActionsPlacement.rowHeight, height: MessageActionsPlacement.rowHeight)
+                .background(Circle().fill(Color.Bandito.text.opacity(hovered ? 0.07 : 0)))
+                .contentShape(Circle())
+                // InteractiveBody already presses to 0.97; this factor brings the whole press to 0.92.
+                .scaleEffect(configuration.isPressed ? 0.92 / 0.97 : 1)
+                .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: configuration.isPressed)
+                .brandFocusRing(shape: Circle())
+                .accessibilityLabel(label)
+        }
+    }
+}
+
+/// One of the quick reactions in the popover: 22 pt, growing to 1.2 under the pointer with a spring.
+private struct QuickReaction: View {
+    var emoji: String
+    var isCurrent: Bool
+    var onPick: () -> Void
+
+    @State private var hovered = false
+
+    var body: some View {
+        Button(action: onPick) {
+            Text(emoji)
+                .font(.system(size: 22))
+                .scaleEffect(hovered ? 1.2 : 1)
+                .banditoAnimation(.spring(response: 0.3, dampingFraction: 0.5), value: hovered)
+                .frame(width: 34, height: 34)
+                .background(
+                    isCurrent ? Color.Bandito.signal.opacity(0.18) : Color.clear, in: Circle())
+                .onHover { hovered = $0 }
+        }
+        .banditoButton(.row(cornerRadius: 17, hoverOpacity: 0.07))
+        .accessibilityLabel(emoji)
     }
 }
 
@@ -301,11 +370,18 @@ struct ReactionPicker: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            // The quick row: a capsule of the usual emoji, then "+" for the system panel.
             HStack(spacing: 2) {
                 ForEach(ReactionRules.common, id: \.self) { emoji in
-                    emojiButton(emoji, size: 22)
+                    QuickReaction(emoji: emoji, isCurrent: emoji == current) { onPick(emoji) }
                 }
+                plusButton
             }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(Capsule().fill(Color.Bandito.surface2))
+            .overlay(Capsule().stroke(Color.Bandito.line, lineWidth: 1))
+            .shadow(color: .black.opacity(0.3), radius: 6, y: 2)
             if more {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(L10n.Message.reactPickerHint)
@@ -328,22 +404,24 @@ struct ReactionPicker: View {
                         ForEach(Self.extra, id: \.self) { emojiButton($0, size: 18) }
                     }
                 }
-            } else {
-                Button {
-                    more = true
-                    typedFocused = true
-                    Self.openSystemPicker()
-                } label: {
-                    Text(L10n.Message.reactMore)
-                        .font(BanditoFont.font(size: 12.5, weight: 500))
-                        .lineLimit(1)
-                        .fixedSize(horizontal: true, vertical: false)
-                }
-                .banditoButton(.link)
             }
         }
         .padding(12)
         .fixedSize()
+    }
+
+    /// "+": opens the system's emoji panel and the field that takes what is typed into it.
+    private var plusButton: some View {
+        Button {
+            more = true
+            typedFocused = true
+            Self.openSystemPicker()
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 12, weight: .semibold))
+        }
+        .buttonStyle(MessageActionStyle(label: L10n.Message.reactMore))
+        .help(L10n.Message.reactMore)
     }
 
     private func emojiButton(_ emoji: String, size: CGFloat) -> some View {

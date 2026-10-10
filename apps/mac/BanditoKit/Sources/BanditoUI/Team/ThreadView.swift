@@ -505,7 +505,12 @@ struct ThreadItemsView: View {
 
     var body: some View {
         let rows = ThreadRows.build(items)
-        LazyVStack(alignment: .leading, spacing: 12) {
+        var rowChat = chat
+        rowChat.lastAgentID = items.last(where: { item in
+            if case .assistant = item { return true }
+            return false
+        })?.id
+        return LazyVStack(alignment: .leading, spacing: 12) {
             if showsLoadEarlier {
                 Color.clear
                     .frame(height: 1)
@@ -513,7 +518,7 @@ struct ThreadItemsView: View {
             }
             ForEach(rows) { row in
                 ThreadRowView(
-                    row: row, agentName: agentName, primaryRuntime: primaryRuntime, server: server, chat: chat,
+                    row: row, agentName: agentName, primaryRuntime: primaryRuntime, server: server, chat: rowChat,
                     agentID: agentID, folder: folder, onError: onError)
                     .banditoRise()
             }
