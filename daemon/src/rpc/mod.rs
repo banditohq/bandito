@@ -46,6 +46,7 @@ pub mod screen;
 pub mod secrets;
 pub mod setup;
 pub mod skills;
+pub mod templates;
 pub mod term;
 pub mod tunnel;
 pub mod unix;
@@ -92,6 +93,7 @@ pub fn features() -> Vec<&'static str> {
         "integrations_oauth",
         "avatar_pictures",
         "lead",
+        "agent_templates",
     ];
     if cfg!(target_os = "linux") {
         list.push("screen");
@@ -711,6 +713,56 @@ const HISTORY_LINE_CHARS: usize = 600;
 const HISTORY_REPLY_CHARS: usize = 8000;
 const HISTORY_MORE: &str = "… (more; narrow the search)";
 
+/// Creates an agent the way `agents.create` does: the checks, the row, the agent's own folder when it has no cwd, and
+/// `agent_changed(created)`. `agents.create_from_template` shares it. Returns the new agent's id. Nothing is stored
+/// when a check fails; a folder that cannot be made undoes the row.
+pub(super) fn create_agent(app: &App, mut a: NewAgent, workspace_id: Option<String>) -> Result<String, RpcError> {
+    let store = &app.sup.hub().store;
+    a.avatar = a.avatar.map(clean_avatar).transpose()?;
+    check_capabilities(a.runtime, a.capabilities.as_deref())?;
+    check_integration_ids(store, a.integrations.as_deref())?;
+    // No cwd given: the agent's own folder is its cwd, which only exists once it is created.
+    let own_folder = a.cwd.trim().is_empty();
+    if !own_folder {
+        check_cwd(&a.cwd)?;
+    }
+    check_effort(a.runtime, a.effort)?;
+    check_context_budget(a.context_budget)?;
+    if let Some(fallback) = a.fallback_runtime {
+        check_fallback(a.runtime, Some(fallback))?;
+    }
+    let created = store.agent_create_in(a, workspace_id.as_deref().unwrap_or(SHARED_WORKSPACE))?;
+    let folder = home::ensure_agent_home(&app.agents_root, &created.id, &created.name).and_then(|dir| {
+        store.agent_set_home(&created.id, &dir.display().to_string())?;
+        if own_folder {
+            let cwd = dir.display().to_string();
+            store.agent_update(
+                &created.id,
+                AgentPatch {
+                    cwd: Some(cwd),
+                    ..Default::default()
+                },
+            )?;
+        }
+        Ok(dir)
+    });
+    if let Err(e) = folder {
+        // Without its folder the agent is useless: undo the create.
+        store.agent_delete(&created.id)?;
+        return Err(RpcError::new(
+            SERVER_ERROR,
+            format!("could not create the agent's folder: {e:#}"),
+        ));
+    }
+    app.sup.hub().emit(
+        &created.id,
+        EventBody::AgentChanged {
+            action: AgentChange::Created,
+        },
+    );
+    Ok(created.id)
+}
+
 fn check_cwd(cwd: &str) -> Result<(), RpcError> {
     let p = std::path::Path::new(cwd);
     if !p.is_absolute() {
@@ -1046,6 +1098,10 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
     if method.starts_with("screen.") {
         return screen::dispatch(app, peer, method, p).await;
     }
+    if matches!(method, "agents.templates" | "agents.create_from_template") {
+        // Answered in `templates.rs`, which shares the agent creation of `agents.create`.
+        return templates::dispatch(app, method, p).await;
+    }
     if method.starts_with("skills.") {
         // Every `skills.*` name is answered there, unknown ones with METHOD_NOT_FOUND.
         return skills::dispatch(app, method, p).await;
@@ -1160,55 +1216,11 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                 .ok_or_else(|| RpcError::new(SERVER_ERROR, format!("no agent {id}")))?)
         }
         "agents.create" => {
-            let CreateAgent {
-                agent: mut a,
-                workspace_id,
-            } = params(p)?;
-            a.avatar = a.avatar.map(clean_avatar).transpose()?;
-            check_capabilities(a.runtime, a.capabilities.as_deref())?;
-            check_integration_ids(store, a.integrations.as_deref())?;
-            // No cwd given: the agent's own folder is its cwd, which only exists once it is created.
-            let own_folder = a.cwd.trim().is_empty();
-            if !own_folder {
-                check_cwd(&a.cwd)?;
-            }
-            check_effort(a.runtime, a.effort)?;
-            check_context_budget(a.context_budget)?;
-            if let Some(fallback) = a.fallback_runtime {
-                check_fallback(a.runtime, Some(fallback))?;
-            }
-            let created = store.agent_create_in(a, workspace_id.as_deref().unwrap_or(SHARED_WORKSPACE))?;
-            let folder = home::ensure_agent_home(&app.agents_root, &created.id, &created.name).and_then(|dir| {
-                store.agent_set_home(&created.id, &dir.display().to_string())?;
-                if own_folder {
-                    let cwd = dir.display().to_string();
-                    store.agent_update(
-                        &created.id,
-                        AgentPatch {
-                            cwd: Some(cwd),
-                            ..Default::default()
-                        },
-                    )?;
-                }
-                Ok(dir)
-            });
-            if let Err(e) = folder {
-                // Without its folder the agent is useless: undo the create.
-                store.agent_delete(&created.id)?;
-                return Err(RpcError::new(
-                    SERVER_ERROR,
-                    format!("could not create the agent's folder: {e:#}"),
-                ));
-            }
-            app.sup.hub().emit(
-                &created.id,
-                EventBody::AgentChanged {
-                    action: AgentChange::Created,
-                },
-            );
+            let CreateAgent { agent, workspace_id } = params(p)?;
+            let id = create_agent(app, agent, workspace_id)?;
             ok(store
-                .agent_view(&created.id)?
-                .ok_or_else(|| RpcError::new(SERVER_ERROR, format!("no agent {}", created.id)))?)
+                .agent_view(&id)?
+                .ok_or_else(|| RpcError::new(SERVER_ERROR, format!("no agent {id}")))?)
         }
         "agents.update" => {
             let UpdateAgent { id, mut patch } = params(p)?;
@@ -3740,6 +3752,8 @@ mod trust_tests {
         "secrets.set",
         "secrets.delete",
         "agents.create",
+        "agents.templates",
+        "agents.create_from_template",
         "agents.update",
         "agents.delete",
         "agents.get",

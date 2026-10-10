@@ -23,7 +23,7 @@ mod secrets;
 mod usage;
 mod workspaces;
 
-pub use agents::{ALL_CAPABILITIES, Agent, AgentPatch, Avatar, Capability, NewAgent, capabilities_csv};
+pub use agents::{ALL_CAPABILITIES, Agent, AgentPatch, Avatar, Capability, NewAgent, capabilities_csv, validate_name};
 pub use approvals::{Approval, ApprovalStatus};
 pub use auth::Device;
 pub use checkpoints::{Checkpoint, CheckpointKind};
