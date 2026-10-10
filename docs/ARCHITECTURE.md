@@ -779,6 +779,32 @@ Install writes under the daemon user's home (`user`) or under the agent's folder
 
 Errors: code `-32027` (`COMMANDS_ERROR`) with `error.data.reason`: `invalid_name`, `invalid_path`, `invalid_content`, `file_count`, `too_many_files`, `too_large`, `missing_skill_file`, `exists`, `no_home`, `io`. Bad params are `-32602`.
 
+## Skills
+
+A catalog of open skills the owner can install for the daemon user or for one agent's folder. Code: `daemon/src/skills.rs` (catalog, embedded files, install and remove), `daemon/src/rpc/skills.rs` (methods). Feature string: `"skills"`. The app's catalog screen is a separate step.
+
+**Catalog.** `daemon/src/skills_catalog.json`: one entry per skill (`id`, `name`, `publisher`, `source{repo, path, commit, license}`, descriptions in English and Russian and in 7 more languages, `category`, `runtimes`, `scripts`, `files`). Only licenses that allow redistribution (MIT, Apache-2.0, BSD, ISC, CC0, CC-BY) are listed. The tests check every entry against its folder.
+
+**Embedding.** The skill files are vendored in `daemon/skills/<id>/` (a copy of the author's folder at the pinned commit, with its `LICENSE`). Nothing fetches them at run time. `daemon/build.rs` walks the folder and writes `OUT_DIR/bundled_skills.rs`, which `skills.rs` includes: every file, as bytes, in the binary. A symlink in the vendored folders fails the build. No new dependency. The vendored files are not edited by hand: an update replaces the folder from a new pinned commit (see `daemon/skills/README.md`).
+
+**Methods.**
+
+| method | params | result |
+|---|---|---|
+| `skills.catalog` | none | `[Entry]`: each catalog entry as in the JSON, plus `installed: {user: bool, projects: [agent_id]}` |
+| `skills.install` | `skill_id`, `scope: "user"\|"project"`, `agent_id` (for `project`) | `{path}` |
+| `skills.remove` | `skill_id`, `scope`, `agent_id` (for `project`) | `{path}` |
+
+`installed` uses the same discovery as `commands.list` (source `skill`), matched by the folder name, which is the id. `user` is the daemon user's home, `projects` are the agents whose folder holds the skill.
+
+Install writes the bundled files into `.claude/skills/<id>/` under the home (`user`) or the agent's folder (`project`), with `commands.install` `kind: "skill"` and `overwrite: true` (the same code path): an older copy is replaced as a whole. LICENSE is written with the files.
+
+Remove deletes `.claude/skills/<id>/` only when it is a real folder (not a link), holds a `SKILL.md` file, and the `.claude` and `skills` folders above it are not links. Links inside the folder are removed as links and never followed. Nothing outside that folder is touched. Removing a skill that is not installed is an error.
+
+**Rights.** The owner's CLI and paired devices may call the three methods, with the rights of the daemon user. Agents (crew server) may not: `skills.*` is not in the agent method list (see `rpc/mod.rs`), as with `integrations.add`.
+
+Errors: unknown `skill_id`, unknown `agent_id`, a `project` scope without `agent_id`, and a bad id are `-32602` (`INVALID_PARAMS`) with a short message. Install and remove failures are `-32027` (`COMMANDS_ERROR`) with `error.data.reason`: `unknown_skill`, `invalid_name`, `invalid_path`, `invalid_content`, `file_count`, `too_many_files`, `too_large`, `missing_skill_file`, `exists`, `no_home`, `io`, `not_installed`, `not_a_skill_folder`.
+
 ## Workspaces
 
 A workspace is where an agent's CLI runs: on the server itself, or in a Docker container with its own disk, network and limits. Agents can be mixed freely: some share the server, one sits in a container. Code: `daemon/src/workspace.rs` (Docker, the command each runtime runs), `daemon/src/store/workspaces.rs` (rows), `daemon/src/rpc/workspaces.rs` (methods). Feature string: `"workspaces"`.
