@@ -23,6 +23,10 @@ pub struct Inner {
     /// A redirect address the registration answers with instead of the one asked for.
     pub registered_redirect: Option<String>,
     pub expires_in: i64,
+    /// The token answers carry no `expires_in` at all.
+    pub no_expires_in: bool,
+    /// The refresh grant answers after this many ms.
+    pub token_delay_ms: u64,
     /// `(status, error)` the refresh grant answers with, when it should fail.
     pub refresh_failure: Option<(u16, String)>,
     pub token_status: Option<(u16, String)>,
@@ -211,6 +215,10 @@ async fn register(State(f): State<Arc<Fake>>, body: Bytes) -> Response {
 
 async fn token(State(f): State<Arc<Fake>>, body: Bytes) -> Response {
     let req = parse_form(&String::from_utf8_lossy(&body));
+    let delay = f.inner.lock().unwrap().token_delay_ms;
+    if delay > 0 && req.get("grant_type").is_some_and(|g| g == "refresh_token") {
+        tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
+    }
     let mut inner = f.inner.lock().unwrap();
     inner.token_requests.push(req.clone());
     if let Some((status, error)) = inner.token_status.clone() {
@@ -250,16 +258,17 @@ async fn token(State(f): State<Arc<Fake>>, body: Bytes) -> Response {
     inner.counter += 1;
     inner.access = format!("at-{}", inner.counter);
     inner.refresh = format!("rt-{}", inner.counter);
-    json_response(
-        200,
-        json!({
-            "access_token": inner.access,
-            "refresh_token": inner.refresh,
-            "token_type": "Bearer",
-            "expires_in": inner.expires_in,
-            "scope": "read write",
-        }),
-    )
+    let mut answer = json!({
+        "access_token": inner.access,
+        "refresh_token": inner.refresh,
+        "token_type": "Bearer",
+        "expires_in": inner.expires_in,
+        "scope": "read write",
+    });
+    if inner.no_expires_in {
+        answer.as_object_mut().map(|o| o.remove("expires_in"));
+    }
+    json_response(200, answer)
 }
 
 async fn revoke(State(f): State<Arc<Fake>>, body: Bytes) -> Response {

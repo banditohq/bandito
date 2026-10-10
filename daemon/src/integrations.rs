@@ -92,6 +92,12 @@ pub fn oauth_state_name(id: &str) -> String {
     format!("{OAUTH_SECRET_PREFIX}{}_STATE", oauth_id_part(id))
 }
 
+/// The secret that holds the client Bandito registered with the service (`client_id`, issuer, redirect address), as
+/// JSON. It outlives a disconnect, so signing in again reuses the client; it goes when the integration is removed.
+pub fn oauth_client_name(id: &str) -> String {
+    format!("{OAUTH_SECRET_PREFIX}{}_CLIENT", oauth_id_part(id))
+}
+
 /// The name rules: 1 to 40 characters of `a-z 0-9 _ -`, not the reserved one.
 pub fn check_integration_name(name: &str) -> Result<()> {
     let valid = !name.is_empty()
@@ -464,6 +470,17 @@ pub fn relogin_line(names: &[&str]) -> Option<String> {
     })
 }
 
+/// The line put in the agent's prompt for OAuth integrations whose token ran out and could not be renewed now (the
+/// service is out of reach); `None` for none.
+pub fn unreachable_line(names: &[&str]) -> Option<String> {
+    (!names.is_empty()).then(|| {
+        format!(
+            "Интеграции с просроченным входом: {}. Их инструментов в этой сессии нет: сервис не ответил на обновление входа, попросите владельца проверить эту интеграцию в маркетплейсе Bandito.",
+            names.join(", ")
+        )
+    })
+}
+
 fn pairs_object(pairs: &[Pair]) -> Value {
     Value::Object(pairs.iter().map(|p| (p.key.clone(), json!(p.value))).collect())
 }
@@ -746,11 +763,12 @@ mod tests {
     #[test]
     fn oauth_secret_names_are_valid_secret_names() {
         let id = "0198f3a2-7b1c-7d4e-8a55-0123456789ab";
-        for name in [oauth_access_name(id), oauth_state_name(id)] {
+        for name in [oauth_access_name(id), oauth_state_name(id), oauth_client_name(id)] {
             check_name(&name).unwrap();
             assert!(name.starts_with(OAUTH_SECRET_PREFIX));
         }
         assert_ne!(oauth_access_name(id), oauth_state_name(id));
+        assert_ne!(oauth_client_name(id), oauth_state_name(id));
     }
 
     #[test]

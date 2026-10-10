@@ -35,8 +35,8 @@ async fn connect(store: &Store, flows: &Flows, fake: &Fake, now: i64) -> Complet
     complete(store, flows, "dev1", &state, &code, None, now).await.unwrap()
 }
 
-fn rig() -> (Store, Flows) {
-    (Store::open_in_memory().unwrap(), Flows::default())
+fn rig() -> (Arc<Store>, Flows) {
+    (Arc::new(Store::open_in_memory().unwrap()), Flows::default())
 }
 
 /// A log writer the tests read back.
@@ -539,7 +539,9 @@ async fn a_service_that_is_down_keeps_the_sign_in_as_it_was() {
             .is_err()
     );
     assert_eq!(access_token(&store, &id).unwrap(), before);
-    assert_eq!(status(&store, &id, late).unwrap().status, "connected");
+    let st = status(&store, &id, late).unwrap();
+    assert_eq!(st.status, "refresh_error");
+    assert!(st.error.unwrap().contains("503"));
     // Still valid for a minute: the session starts with it. Past its end it is left out, without a prompt for the person.
     assert!(ready_for_session(&store, &[&done.integration], late).await.is_empty());
     let after_end = now + 3_600_000 + 1_000;
@@ -566,7 +568,7 @@ async fn disconnect_revokes_and_deletes_and_a_refused_revoke_does_not_stop_it() 
         (i.access.clone(), i.refresh.clone())
     };
     fake.set(|i| i.revoke_status = 500);
-    let revoked = disconnect(&store, &done.integration).await.unwrap();
+    let revoked = disconnect(&store, &done.integration, false).await.unwrap();
     assert!(!revoked);
     // Both tokens were offered, with the client, and nothing is left.
     let sent = fake.inner.lock().unwrap().revoked.clone();
@@ -576,7 +578,9 @@ async fn disconnect_revokes_and_deletes_and_a_refused_revoke_does_not_stop_it() 
     assert_eq!(sent[0]["client_id"], "client-1");
     assert_eq!(sent[1]["token"], access);
     assert_eq!(status(&store, &id, now_ms()).unwrap().status, "not_connected");
-    assert!(store.secret_list().unwrap().is_empty());
+    // The tokens are gone; the registered client stays for the next sign-in.
+    let left: Vec<String> = store.secret_list().unwrap().into_iter().map(|s| s.name).collect();
+    assert_eq!(left, [crate::integrations::oauth_client_name(&id)]);
     // The refusal went to the log, without a token in it.
     let text = logs.text();
     assert!(text.contains("revocation was refused"), "{text}");
@@ -588,7 +592,7 @@ async fn a_working_revoke_is_reported() {
     let (store, flows) = rig();
     let fake = Fake::start().await;
     let done = connect(&store, &flows, &fake, now_ms()).await;
-    assert!(disconnect(&store, &done.integration).await.unwrap());
+    assert!(disconnect(&store, &done.integration, false).await.unwrap());
 }
 
 #[tokio::test]
@@ -766,4 +770,517 @@ fn waiting_sign_ins_are_capped_and_the_oldest_goes_first() {
     let map = flows.0.lock().unwrap();
     assert_eq!(map.len(), MAX_FLOWS);
     assert!(!map.contains_key("s0") && map.contains_key(&format!("s{}", MAX_FLOWS as i64 + 4)));
+}
+
+// ---- renewal rhythm, atomic writes, failures that pass ----
+
+fn refresh_grants(fake: &Fake) -> usize {
+    fake.inner
+        .lock()
+        .unwrap()
+        .token_requests
+        .iter()
+        .filter(|r| r["grant_type"] == "refresh_token")
+        .count()
+}
+
+#[tokio::test]
+async fn a_token_of_five_minutes_is_renewed_once_in_five_minutes_of_ticks() {
+    let (store, flows) = rig();
+    let fake = Fake::start().await;
+    fake.set(|i| i.expires_in = 300);
+    let now = now_ms();
+    connect(&store, &flows, &fake, now).await;
+    // The background tick runs every minute; the margin is ten minutes, but never more than half the life.
+    for minute in 0..=5 {
+        refresh_due(&store, now + minute * 60_000).await;
+    }
+    assert_eq!(refresh_grants(&fake), 1);
+}
+
+#[test]
+fn the_margin_is_ten_minutes_or_half_the_life_whichever_is_less() {
+    let stored = |life_s: i64| Stored {
+        refresh_token: None,
+        client_id: "c".into(),
+        issuer: "i".into(),
+        token_endpoint: "t".into(),
+        revocation_endpoint: None,
+        resource: "r".into(),
+        scope: None,
+        expires_at: Some(life_s * 1000),
+        issued_at: Some(0),
+        lifetime_ms: Some(life_s * 1000),
+        needs_login: false,
+    };
+    let hour = stored(3600);
+    assert!(!hour.due(BACKGROUND_SKEW_MS, 3_600_000 - 600_001));
+    assert!(hour.due(BACKGROUND_SKEW_MS, 3_600_000 - 600_000));
+    let short = stored(300);
+    assert!(!short.due(BACKGROUND_SKEW_MS, 149_000));
+    assert!(short.due(BACKGROUND_SKEW_MS, 150_000));
+    // A session start asks with five minutes: a five-minute token is not renewed at every start.
+    assert!(!short.due(SESSION_SKEW_MS, 100_000));
+    // Old state without a life: the margin alone.
+    let mut old = stored(3600);
+    old.lifetime_ms = None;
+    old.issued_at = None;
+    assert!(old.due(BACKGROUND_SKEW_MS, 3_600_000 - 600_000));
+    assert!(!old.due(BACKGROUND_SKEW_MS, 3_600_000 - 600_001));
+    // No end: never due.
+    old.expires_at = None;
+    assert!(!old.due(BACKGROUND_SKEW_MS, i64::MAX / 2));
+}
+
+#[tokio::test]
+async fn a_token_without_expires_in_is_long_lived_and_never_renewed_in_the_background() {
+    let (store, flows) = rig();
+    let fake = Fake::start().await;
+    fake.set(|i| i.no_expires_in = true);
+    let now = now_ms();
+    let id = connect(&store, &flows, &fake, now).await.integration.id;
+    let st = status(&store, &id, now).unwrap();
+    assert_eq!((st.status, st.expires_at), ("connected", None));
+    for hour in 0..72 {
+        assert!(refresh_due(&store, now + hour * 3_600_000).await.is_empty());
+    }
+    assert_eq!(refresh_grants(&fake), 0);
+    assert_eq!(status(&store, &id, now + 72 * 3_600_000).unwrap().status, "connected");
+    // A 401 from the service still renews it (the refresh token is there).
+    let stale = access_token(&store, &id).unwrap().unwrap();
+    assert_eq!(
+        refresh(&store, &id, Why::Rejected(stale), now).await.unwrap(),
+        Outcome::Refreshed
+    );
+}
+
+#[tokio::test]
+async fn a_failed_write_of_the_rotated_state_leaves_the_old_sign_in_whole() {
+    let (store, flows) = rig();
+    let fake = Fake::start().await;
+    let now = now_ms();
+    let id = connect(&store, &flows, &fake, now).await.integration.id;
+    let access = store.secret_get(&oauth_access_name(&id)).unwrap();
+    let state = store.secret_get(&oauth_state_name(&id)).unwrap();
+    // The database takes the new access token but refuses the new state.
+    store.exec_for_test(
+        "CREATE TRIGGER refuse_state BEFORE UPDATE ON secrets WHEN NEW.name LIKE '%_STATE'
+         BEGIN SELECT RAISE(ABORT, 'disk full'); END;",
+    );
+    let late = now + 3_600_000 - 60_000;
+    let err = refresh(&store, &id, Why::Expiring(SESSION_SKEW_MS), late)
+        .await
+        .err()
+        .unwrap();
+    assert!(format!("{err:#}").contains("could not store"), "{err:#}");
+    assert_eq!(store.secret_get(&oauth_access_name(&id)).unwrap(), access);
+    assert_eq!(store.secret_get(&oauth_state_name(&id)).unwrap(), state);
+    assert_eq!(status(&store, &id, late).unwrap().status, "refresh_error");
+}
+
+#[tokio::test]
+async fn a_failed_first_write_leaves_no_row_and_no_secret() {
+    let (store, flows) = rig();
+    let fake = Fake::start().await;
+    store.exec_for_test(
+        "CREATE TRIGGER refuse_client BEFORE INSERT ON secrets WHEN NEW.name LIKE '%_CLIENT'
+         BEGIN SELECT RAISE(ABORT, 'disk full'); END;",
+    );
+    let begun = begin(
+        &store,
+        &flows,
+        "dev1",
+        Target::Draft(draft("notion", &fake.url())),
+        None,
+        now_ms(),
+    )
+    .await
+    .unwrap();
+    let (code, state) = fake.authorize(&begun.authorize_url);
+    assert!(
+        complete(&store, &flows, "dev1", &state, &code, None, now_ms())
+            .await
+            .is_err()
+    );
+    assert!(store.integration_list().unwrap().is_empty());
+    assert!(store.secret_list().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn only_invalid_grant_and_invalid_client_end_the_sign_in() {
+    // (status, error, ends the sign-in)
+    let cases: [(u16, &str, bool); 9] = [
+        (400, "invalid_grant", true),
+        (401, "invalid_client", true),
+        (400, "invalid_request", false),
+        (401, "invalid_token", false),
+        (403, "invalid_grant", false),
+        (403, "access_denied", false),
+        (429, "slow_down", false),
+        (500, "server_error", false),
+        (503, "temporarily_unavailable", false),
+    ];
+    for (code, error, ends) in cases {
+        let (store, flows) = rig();
+        let fake = Fake::start().await;
+        let now = now_ms();
+        let id = connect(&store, &flows, &fake, now).await.integration.id;
+        let access = store.secret_get(&oauth_access_name(&id)).unwrap();
+        let state = store.secret_get(&oauth_state_name(&id)).unwrap();
+        fake.set(|i| i.refresh_failure = Some((code, error.into())));
+        let late = now + 3_600_000 - 60_000;
+        let out = refresh(&store, &id, Why::Expiring(SESSION_SKEW_MS), late).await;
+        if ends {
+            assert_eq!(out.unwrap(), Outcome::NeedsLogin, "{code} {error}");
+            assert_eq!(status(&store, &id, late).unwrap().status, "needs_login");
+        } else {
+            assert!(out.is_err(), "{code} {error}");
+            // Nothing stored was touched.
+            assert_eq!(
+                store.secret_get(&oauth_access_name(&id)).unwrap(),
+                access,
+                "{code} {error}"
+            );
+            assert_eq!(
+                store.secret_get(&oauth_state_name(&id)).unwrap(),
+                state,
+                "{code} {error}"
+            );
+            assert_eq!(status(&store, &id, late).unwrap().status, "refresh_error");
+        }
+    }
+}
+
+#[tokio::test]
+async fn an_unreachable_service_is_a_pause_and_not_a_sign_out() {
+    let (store, flows) = rig();
+    let fake = Fake::start().await;
+    let now = now_ms();
+    let id = connect(&store, &flows, &fake, now).await.integration.id;
+    // The token address now leads to a closed port: the connection is refused.
+    let mut stored = load_stored(&store, &id).unwrap().unwrap();
+    stored.token_endpoint = "http://localhost:1/token".into();
+    save_state(&store, &id, &stored).unwrap();
+    let state = store.secret_get(&oauth_state_name(&id)).unwrap();
+    let late = now + 3_600_000 - 60_000;
+    assert!(
+        refresh(&store, &id, Why::Expiring(SESSION_SKEW_MS), late)
+            .await
+            .is_err()
+    );
+    assert_eq!(store.secret_get(&oauth_state_name(&id)).unwrap(), state);
+    let st = status(&store, &id, late).unwrap();
+    assert_eq!(st.status, "refresh_error");
+    assert!(st.error.is_some_and(|e| e.chars().count() <= 160));
+}
+
+#[test]
+fn the_wait_after_a_failed_renewal_doubles_up_to_thirty_minutes() {
+    let minutes: Vec<i64> = [1u32, 2, 3, 4, 5, 6, 7, 40, u32::MAX]
+        .iter()
+        .map(|f| backoff_ms(*f) / 60_000)
+        .collect();
+    assert_eq!(minutes, [1, 2, 4, 8, 16, 30, 30, 30, 30]);
+}
+
+#[tokio::test]
+async fn failed_renewals_are_retried_with_backoff_and_a_success_ends_it() {
+    let (store, flows) = rig();
+    let fake = Fake::start().await;
+    let now = now_ms();
+    let id = connect(&store, &flows, &fake, now).await.integration.id;
+    fake.set(|i| i.refresh_failure = Some((503, "temporarily_unavailable".into())));
+    let t0 = now + 3_600_000 - 60_000;
+    let tick = |secs: i64| refresh(&store, &id, Why::Expiring(BACKGROUND_SKEW_MS), t0 + secs * 1000);
+    assert!(tick(0).await.is_err());
+    assert_eq!(refresh_grants(&fake), 1);
+    // One minute is the first wait.
+    assert_eq!(tick(30).await.unwrap(), Outcome::Waiting);
+    assert_eq!(refresh_grants(&fake), 1);
+    assert!(tick(60).await.is_err());
+    assert_eq!(refresh_grants(&fake), 2);
+    // Then two minutes (until 60 + 120 = 180 s).
+    assert_eq!(tick(179).await.unwrap(), Outcome::Waiting);
+    assert!(tick(180).await.is_err());
+    assert_eq!(refresh_grants(&fake), 3);
+    // Then four minutes (until 420 s). The service is back by then.
+    fake.set(|i| i.refresh_failure = None);
+    assert_eq!(tick(419).await.unwrap(), Outcome::Waiting);
+    assert_eq!(tick(420).await.unwrap(), Outcome::Refreshed);
+    assert_eq!(refresh_grants(&fake), 4);
+    assert_eq!(status(&store, &id, t0 + 420_000).unwrap().status, "connected");
+    // A 401 from the service is tried at once, whatever the wait.
+    fake.set(|i| i.refresh_failure = Some((500, "server_error".into())));
+    let late = t0 + 420_000 + 3_600_000 - 60_000;
+    assert!(
+        refresh(&store, &id, Why::Expiring(BACKGROUND_SKEW_MS), late)
+            .await
+            .is_err()
+    );
+    let stale = access_token(&store, &id).unwrap().unwrap();
+    let before = refresh_grants(&fake);
+    assert!(refresh(&store, &id, Why::Rejected(stale), late + 1000).await.is_err());
+    assert_eq!(refresh_grants(&fake), before + 1);
+}
+
+#[tokio::test]
+async fn a_session_start_waits_for_the_renewals_a_short_time_and_all_together() {
+    let (store, flows) = rig();
+    let (fake_a, fake_b) = (Fake::start().await, Fake::start().await);
+    let now = now_ms();
+    let mut rows = Vec::new();
+    for (name, fake) in [("one", &fake_a), ("two", &fake_b)] {
+        let begun = begin(
+            &store,
+            &flows,
+            "dev1",
+            Target::Draft(draft(name, &fake.url())),
+            None,
+            now,
+        )
+        .await
+        .unwrap();
+        let (code, state) = fake.authorize(&begun.authorize_url);
+        rows.push(
+            complete(&store, &flows, "dev1", &state, &code, None, now)
+                .await
+                .unwrap()
+                .integration,
+        );
+    }
+    for fake in [&fake_a, &fake_b] {
+        fake.set(|i| i.token_delay_ms = 1500);
+    }
+    let refs: Vec<&Integration> = rows.iter().collect();
+    // The tokens end in a minute but are good: both are used as they are, and the wait is shared, not added up.
+    let late = now + 3_600_000 - 60_000;
+    let started = std::time::Instant::now();
+    let skipped = ready_within(&store, &refs, late, Duration::from_millis(300)).await;
+    let took = started.elapsed();
+    assert!(skipped.is_empty(), "{skipped:?}");
+    assert!(took < Duration::from_millis(550), "{took:?}");
+    // Past their end they cannot be used: left out, as "the service did not answer in time".
+    let after_end = now + 3_600_000 + 5_000;
+    let mut skipped = ready_within(&store, &refs, after_end, Duration::from_millis(300)).await;
+    skipped.sort();
+    let mut want: Vec<(String, bool)> = rows.iter().map(|r| (r.id.clone(), false)).collect();
+    want.sort();
+    assert_eq!(skipped, want);
+    // The renewals were not cancelled: they finish in the background.
+    tokio::time::sleep(Duration::from_millis(2200)).await;
+    assert!(refresh_grants(&fake_a) >= 1 && refresh_grants(&fake_b) >= 1);
+    let renewed = access_token(&store, &rows[0].id).unwrap().unwrap();
+    assert_eq!(renewed, fake_a.inner.lock().unwrap().access);
+}
+
+#[tokio::test]
+async fn a_client_registered_once_is_reused_after_a_disconnect_until_the_integration_goes() {
+    let (store, flows) = rig();
+    let fake = Fake::start().await;
+    let done = connect(&store, &flows, &fake, now_ms()).await;
+    let id = done.integration.id.clone();
+    disconnect(&store, &done.integration, false).await.unwrap();
+    assert!(store.secret_get(&oauth_state_name(&id)).unwrap().is_none());
+    let begun = begin(
+        &store,
+        &flows,
+        "dev1",
+        Target::Existing(done.integration.clone()),
+        None,
+        now_ms(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(query_of(&begun.authorize_url)["client_id"], "client-1");
+    assert_eq!(fake.inner.lock().unwrap().registrations.len(), 1);
+    // The registration is not among the tokens, and removing the integration deletes it.
+    let (code, state) = fake.authorize(&begun.authorize_url);
+    complete(&store, &flows, "dev1", &state, &code, None, now_ms())
+        .await
+        .unwrap();
+    disconnect(&store, &done.integration, true).await.unwrap();
+    assert!(store.secret_list().unwrap().is_empty());
+    let begun = begin(
+        &store,
+        &flows,
+        "dev1",
+        Target::Existing(done.integration),
+        None,
+        now_ms(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(query_of(&begun.authorize_url)["client_id"], "client-2");
+}
+
+// ---- addresses that lead to the person's own machine ----
+
+#[test]
+fn every_way_to_write_a_local_address_is_refused() {
+    let remote = |s: &str| Url::parse(s).and_then(|u| check_remote_url(&u, "x", false));
+    for bad in [
+        // numbers written other than as a dotted quad
+        "https://127.1/x",
+        "https://0x7f.0.0.1/x",
+        "https://0X7F.0.0.1/x",
+        "https://0177.0.0.1/x",
+        "https://2130706433/x",
+        "https://0x7f000001/x",
+        "https://017700000001/x",
+        "https://127.0.1/x",
+        "https://10.1/x",
+        "https://1.2.3.0x4/x",
+        "https://01.02.03.04/x",
+        // the dotted quads that are local
+        "https://127.0.0.1/x",
+        "https://127.255.255.254/x",
+        "https://0.0.0.0/x",
+        "https://10.0.0.1/x",
+        "https://172.31.255.255/x",
+        "https://192.168.1.1/x",
+        "https://169.254.169.254/x",
+        "https://100.64.0.1/x",
+        "https://100.127.255.255/x",
+        "https://224.0.0.1/x",
+        "https://239.255.255.250/x",
+        "https://255.255.255.255/x",
+        // the root dot and capitals do not change the name
+        "https://localhost./x",
+        "https://LOCALHOST/x",
+        "https://127.0.0.1./x",
+        "https://printer.local./x",
+        "https://a.b.localhost/x",
+        // IPv6, also with an IPv4 address inside
+        "https://[::1]/x",
+        "https://[0:0:0:0:0:0:0:1]/x",
+        "https://[::]/x",
+        "https://[fe80::1]/x",
+        "https://[fd12:3456::1]/x",
+        "https://[fc00::1]/x",
+        "https://[ff02::1]/x",
+        "https://[::ffff:127.0.0.1]/x",
+        "https://[::ffff:7f00:1]/x",
+        "https://[::ffff:10.0.0.1]/x",
+        "https://[::ffff:a9fe:a9fe]/x",
+        "https://[::127.0.0.1]/x",
+        "https://[64:ff9b::7f00:1]/x",
+        "https://[2002:7f00:1::]/x",
+        "https://[2002:c0a8:101::1]/x",
+    ] {
+        assert!(remote(bad).is_err(), "{bad} must be refused");
+    }
+    for good in [
+        "https://example.com/x",
+        "https://Example.COM./x",
+        "https://8.8.8.8/x",
+        "https://1.1.1.1/x",
+        "https://[2606:4700:4700::1111]/x",
+        "https://[::ffff:8.8.8.8]/x",
+        "https://mcp.linear.app/mcp",
+        "https://100.63.255.255/x",
+        "https://172.32.0.1/x",
+    ] {
+        assert!(remote(good).is_ok(), "{good} must pass");
+    }
+    // The root dot is cut: the host is kept in one spelling.
+    assert_eq!(Url::parse("https://Example.COM./a").unwrap().host, "example.com");
+    assert_eq!(Url::parse("https://[0:0:0:0:0:0:0:1]/a").unwrap().host, "[::1]");
+    // Empty labels, a double dot and a bad IPv6 do not parse at all.
+    for bad in [
+        "https://a..b/",
+        "https://.example.com/",
+        "https://example.com../",
+        "https://[::1%25en0]/",
+        "https://[1::2::3]/",
+    ] {
+        assert!(Url::parse(bad).is_err(), "{bad}");
+    }
+}
+
+#[tokio::test]
+async fn a_name_that_resolves_to_a_local_address_is_refused_before_any_request() {
+    use std::net::IpAddr;
+    let ip = |s: &str| s.parse::<IpAddr>().unwrap();
+    let cases: [(&str, Vec<IpAddr>); 7] = [
+        ("loop.test", vec![ip("127.0.0.1")]),
+        ("private.test", vec![ip("10.1.2.3")]),
+        ("linklocal.test", vec![ip("169.254.169.254")]),
+        ("cgnat.test", vec![ip("100.64.0.9")]),
+        ("ula.test", vec![ip("fd00::5")]),
+        ("mapped.test", vec![ip("::ffff:192.168.0.1")]),
+        // one local address among public ones is enough to refuse
+        (
+            "mixed.test",
+            vec![ip("93.184.216.34"), ip("2606:2800:220:1::1"), ip("127.0.0.1")],
+        ),
+    ];
+    for (name, addrs) in cases {
+        fake_dns().lock().unwrap().insert(name.into(), addrs);
+        let url = Url::parse(&format!("https://{name}/x")).unwrap();
+        let err = send(Req::get(&url)).await.err().unwrap();
+        assert!(format!("{err:#}").contains("local address"), "{name}: {err:#}");
+    }
+    // The same through discovery: a server whose name resolves to a local address cannot start a sign-in.
+    fake_dns()
+        .lock()
+        .unwrap()
+        .insert("rebind.test".into(), vec![ip("127.0.0.1")]);
+    let (store, flows) = rig();
+    let err = begin(
+        &store,
+        &flows,
+        "dev1",
+        Target::Draft(draft("evil", "https://rebind.test/mcp")),
+        None,
+        now_ms(),
+    )
+    .await
+    .err()
+    .unwrap();
+    assert!(format!("{err:#}").contains("local address"), "{err:#}");
+    // A name with no address at all is refused too.
+    fake_dns().lock().unwrap().insert("nothing.test".into(), vec![]);
+    let url = Url::parse("https://nothing.test/x").unwrap();
+    assert!(send(Req::get(&url)).await.is_err());
+}
+
+#[tokio::test]
+async fn the_connection_is_pinned_to_the_addresses_that_were_checked() {
+    use std::net::IpAddr;
+    let ip = |s: &str| s.parse::<IpAddr>().unwrap();
+    fake_dns().lock().unwrap().insert(
+        "pinned.test".into(),
+        vec![ip("93.184.216.34"), ip("2606:2800:220:1::1")],
+    );
+    let url = Url::parse("https://pinned.test/token").unwrap();
+    let pin = pin_address(&url).await.unwrap().unwrap();
+    assert_eq!(pin, "pinned.test:443:93.184.216.34,[2606:2800:220:1::1]");
+    let config = curl_config(&Req::get(&url), Some(&pin), false).unwrap();
+    for line in [
+        "globoff\n",
+        "proto = \"=https\"\n",
+        "resolve = \"pinned.test:443:93.184.216.34,[2606:2800:220:1::1]\"\n",
+        "url = \"https://pinned.test/token\"\n",
+    ] {
+        assert!(config.contains(line), "{line:?} not in\n{config}");
+    }
+    assert!(!config.contains("location"), "no redirect is followed");
+    // The port is part of the pin.
+    let other = Url::parse("https://pinned.test:8443/x").unwrap();
+    assert!(
+        pin_address(&other)
+            .await
+            .unwrap()
+            .unwrap()
+            .starts_with("pinned.test:8443:")
+    );
+    // An IP literal needs no pin; a local one never gets there.
+    let literal = Url::parse("https://8.8.8.8/x").unwrap();
+    assert_eq!(pin_address(&literal).await.unwrap(), None);
+    // Only tests let the loopback of the fake service pass unpinned over plain http.
+    assert!(
+        curl_config(&Req::get(&url), None, true)
+            .unwrap()
+            .contains("=https,http")
+    );
 }

@@ -9,7 +9,7 @@
 //! passed through a [`Redactor`] first. Requests go through `curl` with the request on stdin, like the http probe
 //! of `rpc/integrations.rs`, so no value reaches an argument list.
 
-use crate::integrations::{oauth_access_name, oauth_state_name};
+use crate::integrations::{oauth_access_name, oauth_client_name, oauth_state_name};
 use crate::redact::Redactor;
 use crate::store::{Integration, IntegrationAuth, IntegrationKind, NewIntegration, Store};
 use anyhow::{Context, Result, anyhow, bail};
@@ -35,6 +35,8 @@ pub const SESSION_SKEW_MS: i64 = 5 * 60 * 1000;
 pub const BACKGROUND_SKEW_MS: i64 = 10 * 60 * 1000;
 /// Longest wait for one answer of the service.
 const REQUEST_SECONDS: u64 = 15;
+/// Longest wait for the lookup of a name.
+const RESOLVE_SECONDS: u64 = 5;
 /// Most bytes read from one answer.
 const MAX_RESPONSE_BYTES: u64 = 2 * 1024 * 1024;
 /// The MCP protocol version sent to the server.
@@ -83,20 +85,17 @@ impl Url {
                 bail!("not a valid address");
             }
             let port = after.strip_prefix(':');
-            (format!("[{}]", host.to_ascii_lowercase()), port)
+            // Written one way only: the address as `Ipv6Addr` prints it.
+            let ip = host
+                .parse::<std::net::Ipv6Addr>()
+                .map_err(|_| anyhow!("not a valid address"))?;
+            (format!("[{ip}]"), port)
         } else {
             match authority.split_once(':') {
-                Some((host, port)) => (host.to_ascii_lowercase(), Some(port)),
-                None => (authority.to_ascii_lowercase(), None),
+                Some((host, port)) => (normal_name(host)?, Some(port)),
+                None => (normal_name(authority)?, None),
             }
         };
-        let valid_host = !host.is_empty()
-            && host
-                .bytes()
-                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_' | b'[' | b']' | b':'));
-        if !valid_host {
-            bail!("not a valid address");
-        }
         let port = match port {
             Some(p) => Some(p.parse::<u16>().map_err(|_| anyhow!("not a valid address"))?),
             None => None,
@@ -132,54 +131,118 @@ impl Url {
     }
 }
 
-/// Whether `host` is the machine itself or a network of the person's own.
-fn is_local_host(host: &str) -> bool {
-    use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
-    let bare = host.trim_start_matches('[').trim_end_matches(']');
-    if bare == "localhost"
-        || bare.ends_with(".localhost")
-        || bare.ends_with(".local")
-        || bare.ends_with(".internal")
-        || bare.ends_with(".lan")
-        || bare.ends_with(".home.arpa")
-        || !bare.contains('.') && !bare.contains(':')
-    {
-        return true;
+/// A host name or IPv4 address, as one string in one spelling: lower case, one trailing dot (the root) cut, ASCII
+/// letters, digits, `-` and `_` in labels that are not empty. An address written as a number in any way but the
+/// canonical dotted quad (`127.1`, `0x7f.0.0.1`, `0177.0.0.1`, `2130706433`) is refused: `curl` and the system
+/// resolver read those as other addresses than a person does.
+fn normal_name(host: &str) -> Result<String> {
+    let host = host.to_ascii_lowercase();
+    let host = host.strip_suffix('.').unwrap_or(&host);
+    let plain = !host.is_empty()
+        && host.len() <= 253
+        && host.split('.').all(|label| {
+            !label.is_empty()
+                && label.len() <= 63
+                && label
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_'))
+        });
+    if !plain {
+        bail!("not a valid address");
     }
-    let v4_local = |ip: Ipv4Addr| {
+    let last = host.rsplit('.').next().unwrap_or_default();
+    let digits = last.bytes().all(|b| b.is_ascii_digit());
+    let hex = last
+        .strip_prefix("0x")
+        .is_some_and(|h| h.bytes().all(|b| b.is_ascii_hexdigit()));
+    if (digits || hex) && host.parse::<std::net::Ipv4Addr>().is_err() {
+        bail!("an address written as a number is not accepted: use the usual form");
+    }
+    Ok(host.to_string())
+}
+
+/// Whether `ip` is the machine itself or a network that is not the public internet: loopback, private, link-local,
+/// carrier-grade NAT, unspecified, multicast, broadcast, reserved, unique-local (IPv6), and an IPv4 address inside an
+/// IPv6 one (mapped, compatible, NAT64, 6to4) that is any of those.
+fn ip_is_local(ip: std::net::IpAddr) -> bool {
+    use std::net::{IpAddr, Ipv4Addr};
+    fn v4(ip: Ipv4Addr) -> bool {
         let o = ip.octets();
         ip.is_loopback()
             || ip.is_private()
             || ip.is_link_local()
             || ip.is_unspecified()
             || ip.is_broadcast()
+            || ip.is_multicast()
+            || o[0] == 0
             || (o[0] == 100 && (64..128).contains(&o[1]))
-    };
-    match bare.parse::<IpAddr>() {
-        Ok(IpAddr::V4(ip)) => v4_local(ip),
-        Ok(IpAddr::V6(ip)) => {
-            let first = ip.segments()[0];
+            || (o[0] == 192 && o[1] == 0 && o[2] == 0)
+            || (o[0] == 192 && o[1] == 0 && o[2] == 2)
+            || (o[0] == 198 && (o[1] == 18 || o[1] == 19))
+            || (o[0] == 198 && o[1] == 51 && o[2] == 100)
+            || (o[0] == 203 && o[1] == 0 && o[2] == 113)
+            || o[0] >= 240
+    }
+    match ip {
+        IpAddr::V4(ip) => v4(ip),
+        IpAddr::V6(ip) => {
+            let s = ip.segments();
+            let embedded = |a: u16, b: u16| Ipv4Addr::from([(a >> 8) as u8, a as u8, (b >> 8) as u8, b as u8]);
             ip.is_loopback()
                 || ip.is_unspecified()
-                || (first & 0xfe00) == 0xfc00
-                || (first & 0xffc0) == 0xfe80
-                || ip.to_ipv4_mapped().is_some_and(v4_local)
-                || ip == Ipv6Addr::LOCALHOST
+                || ip.is_multicast()
+                || (s[0] & 0xfe00) == 0xfc00
+                || (s[0] & 0xffc0) == 0xfe80
+                || (s[0] & 0xffc0) == 0xfec0
+                || (s[0] == 0x2001 && s[1] == 0x0db8)
+                || ip.to_ipv4_mapped().is_some_and(v4)
+                // ::a.b.c.d, the old IPv4-compatible form
+                || (s[..6] == [0; 6] && v4(embedded(s[6], s[7])))
+                // 64:ff9b::/96 (NAT64)
+                || (s[0] == 0x0064 && s[1] == 0xff9b && s[2..6] == [0; 4] && v4(embedded(s[6], s[7])))
+                // 2002::/16 (6to4) carries the IPv4 address in the next 32 bits
+                || (s[0] == 0x2002 && v4(embedded(s[1], s[2])))
         }
-        Err(_) => false,
     }
+}
+
+/// Whether `host` (as `Url` keeps it) is the machine itself or a network of the person's own, by its spelling.
+fn is_local_host(host: &str) -> bool {
+    let bare = host.trim_start_matches('[').trim_end_matches(']');
+    if let Ok(ip) = bare.parse::<std::net::IpAddr>() {
+        return ip_is_local(ip);
+    }
+    bare == "localhost"
+        || bare.ends_with(".localhost")
+        || bare.ends_with(".local")
+        || bare.ends_with(".internal")
+        || bare.ends_with(".lan")
+        || bare.ends_with(".home.arpa")
+        || !bare.contains('.')
+}
+
+/// The address as an IP, when the host is one.
+fn literal_ip(host: &str) -> Option<std::net::IpAddr> {
+    host.trim_start_matches('[').trim_end_matches(']').parse().ok()
 }
 
 fn is_loopback_host(host: &str) -> bool {
     matches!(host, "localhost" | "127.0.0.1" | "[::1]")
 }
 
-/// Whether the address of the MCP server itself is acceptable: https, or (in tests) a loopback http one.
+/// Whether the address of the MCP server itself is acceptable: https and public, or (in tests) a loopback http one.
+/// The same rule holds for every request (`pin_address`), so a server on the person's own network cannot sign in.
 fn check_server_url(url: &Url, allow_local: bool) -> Result<()> {
-    if url.https || (allow_local && is_loopback_host(&url.host)) {
+    if allow_local && is_loopback_host(&url.host) {
         return Ok(());
     }
-    bail!("signing in needs an https:// address")
+    if !url.https {
+        bail!("signing in needs an https:// address");
+    }
+    if is_local_host(&url.host) {
+        bail!("signing in works with services on the internet, not on a local address");
+    }
+    Ok(())
 }
 
 /// Whether an address the service named (its metadata, its endpoints) is acceptable. It is https and public:
@@ -296,22 +359,96 @@ impl<'a> Req<'a> {
     }
 }
 
-/// One request. Redirects are not followed: a service may not hand the daemon on to another address.
-async fn send(req: Req<'_>) -> Result<Resp> {
+/// The addresses of `host`. In tests a name can be given addresses by hand (`fake_dns`), so the checks that follow
+/// a lookup can be tried without a network.
+async fn resolve_host(host: &str, port: u16) -> Result<Vec<std::net::IpAddr>> {
+    #[cfg(test)]
+    if let Some(found) = fake_dns().lock().unwrap_or_else(|e| e.into_inner()).get(host) {
+        return Ok(found.clone());
+    }
+    let lookup = tokio::net::lookup_host((host, port));
+    let found = tokio::time::timeout(Duration::from_secs(RESOLVE_SECONDS), lookup)
+        .await
+        .map_err(|_| anyhow!("the service's address did not resolve in time"))?
+        .map_err(|_| anyhow!("the service's address could not be found"))?;
+    Ok(found.map(|a| a.ip()).collect())
+}
+
+/// Names the tests gave addresses to.
+#[cfg(test)]
+pub(crate) fn fake_dns() -> &'static Mutex<HashMap<String, Vec<std::net::IpAddr>>> {
+    static MAP: LazyLock<Mutex<HashMap<String, Vec<std::net::IpAddr>>>> = LazyLock::new(Mutex::default);
+    &MAP
+}
+
+/// The `curl` `resolve` entry that pins `host:port` to the addresses just checked, or `None` when the address is
+/// an IP already (or, in tests, the loopback of the fake service). Every address of the name must be public: one
+/// address in a private range is enough to refuse, since `curl` could pick it. Pinning means the connection goes to
+/// exactly what was checked, not to what a second lookup says (DNS rebinding).
+async fn pin_address(url: &Url) -> Result<Option<String>> {
+    if allow_local() && is_loopback_host(&url.host) {
+        return Ok(None);
+    }
+    if let Some(ip) = literal_ip(&url.host) {
+        if ip_is_local(ip) {
+            bail!("the address {} is not a public one", url.host);
+        }
+        return Ok(None);
+    }
+    if is_local_host(&url.host) {
+        bail!("the address {} is not a public one", url.host);
+    }
+    let port = url.port.unwrap_or(if url.https { 443 } else { 80 });
+    let found = resolve_host(&url.host, port).await?;
+    if found.is_empty() {
+        bail!("the service's address could not be found");
+    }
+    if found.iter().any(|ip| ip_is_local(*ip)) {
+        bail!("the address {} points to a local address", url.host);
+    }
+    let list: Vec<String> = found
+        .iter()
+        .map(|ip| match ip {
+            std::net::IpAddr::V4(v4) => v4.to_string(),
+            std::net::IpAddr::V6(v6) => format!("[{v6}]"),
+        })
+        .collect();
+    Ok(Some(format!("{}:{port}:{}", url.host, list.join(","))))
+}
+
+/// The `curl` configuration of a request. `pin` is the `resolve` entry from [`pin_address`].
+fn curl_config(req: &Req<'_>, pin: Option<&str>, local: bool) -> Result<String> {
     let mut config = String::new();
     config.push_str(&format!("url = {}\n", quote(&req.url.text())?));
     config.push_str(&format!("request = {}\n", quote(req.method)?));
-    config.push_str("silent\nshow-error\ninclude\nproto = \"=https,http\"\n");
+    // `globoff`: no `[]`/`{}` expansion in the address. No `location`: a redirect is not followed.
+    config.push_str("silent\nshow-error\ninclude\ngloboff\n");
+    config.push_str(if local {
+        "proto = \"=https,http\"\n"
+    } else {
+        "proto = \"=https\"\n"
+    });
     config.push_str(&format!(
         "max-time = {}\nconnect-timeout = 8\nmax-filesize = {MAX_RESPONSE_BYTES}\n",
         req.seconds
     ));
+    if let Some(pin) = pin {
+        config.push_str(&format!("resolve = {}\n", quote(pin)?));
+    }
     for (name, value) in &req.headers {
         config.push_str(&format!("header = {}\n", quote(&format!("{name}: {value}"))?));
     }
     if let Some(body) = &req.body {
         config.push_str(&format!("data-raw = {}\n", quote(body)?));
     }
+    Ok(config)
+}
+
+/// One request. Redirects are not followed: a service may not hand the daemon on to another address. The name is
+/// looked up here, every address must be public, and the connection is pinned to what was checked.
+async fn send(req: Req<'_>) -> Result<Resp> {
+    let pin = pin_address(req.url).await?;
+    let config = curl_config(&req, pin.as_deref(), allow_local())?;
     let mut cmd = tokio::process::Command::new("curl");
     cmd.args(["--config", "-"])
         .stdin(std::process::Stdio::piped())
@@ -742,12 +879,36 @@ struct Stored {
     resource: String,
     #[serde(default)]
     scope: Option<String>,
-    /// Unix ms the access token ends; `None` when the service did not say.
+    /// Unix ms the access token ends; `None` when the service did not say (`expires_in` missing: the token is taken
+    /// as long-lived, it is not renewed in the background, and only a 401 renews it).
     #[serde(default)]
     expires_at: Option<i64>,
+    /// Unix ms the last token was issued.
+    #[serde(default)]
+    issued_at: Option<i64>,
+    /// How long the last token lived (`expires_in`), in ms. A token is renewed when the margin of the caller or
+    /// half of this is left, whichever is less.
+    #[serde(default)]
+    lifetime_ms: Option<i64>,
     /// The service refused the refresh token: the person has to sign in again.
     #[serde(default)]
     needs_login: bool,
+}
+
+impl Stored {
+    /// The token lives for this long, if known.
+    fn lifetime(&self) -> Option<i64> {
+        self.lifetime_ms
+            .or_else(|| self.expires_at.zip(self.issued_at).map(|(end, start)| end - start))
+            .filter(|l| *l > 0)
+    }
+
+    /// Whether the token should be renewed now: it ends within `skew` ms, but never earlier than half its life, so a
+    /// token that lives five minutes is renewed once per life and not on every look.
+    fn due(&self, skew: i64, now: i64) -> bool {
+        let margin = self.lifetime().map_or(skew, |l| skew.min(l / 2));
+        self.expires_at.is_some_and(|e| e - now <= margin)
+    }
 }
 
 fn load_stored(store: &Store, id: &str) -> Result<Option<Stored>> {
@@ -758,9 +919,84 @@ fn load_stored(store: &Store, id: &str) -> Result<Option<Stored>> {
     Ok(serde_json::from_str(&text).ok())
 }
 
-fn save_stored(store: &Store, id: &str, stored: &Stored) -> Result<()> {
-    store.secret_set(&oauth_state_name(id), &serde_json::to_string(stored)?, &[])?;
-    Ok(())
+/// Writes the access token and the state together, in one transaction: a failure leaves both as they were. A
+/// rotated refresh token and the access token it came with are never apart.
+fn save_tokens(store: &Store, id: &str, access: &str, stored: &Stored) -> Result<()> {
+    store.secrets_set_many(&[
+        (&oauth_access_name(id), access),
+        (&oauth_state_name(id), &serde_json::to_string(stored)?),
+    ])
+}
+
+/// Writes the state alone (a mark that the person has to sign in again).
+fn save_state(store: &Store, id: &str, stored: &Stored) -> Result<()> {
+    store.secrets_set_many(&[(&oauth_state_name(id), &serde_json::to_string(stored)?)])
+}
+
+/// The client Bandito registered with a service (RFC 7591), kept apart from the tokens: a disconnect deletes the
+/// tokens and leaves this, so the next sign-in does not register again.
+#[derive(Serialize, Deserialize, Clone)]
+struct Client {
+    issuer: String,
+    redirect_uri: String,
+    client_id: String,
+}
+
+fn load_client(store: &Store, id: &str) -> Result<Option<Client>> {
+    let Some(text) = store.secret_get(&oauth_client_name(id))? else {
+        return Ok(None);
+    };
+    Ok(serde_json::from_str(&text).ok())
+}
+
+// ---- failed renewals ----
+
+/// A renewal that failed for a reason that may pass.
+struct Failing {
+    failures: u32,
+    retry_at: i64,
+    error: String,
+}
+
+/// Per integration; in memory only: a restart tries again at once.
+static FAILING: LazyLock<Mutex<HashMap<String, Failing>>> = LazyLock::new(Mutex::default);
+
+/// Longest wait between two tries after failures.
+const MAX_BACKOFF_MS: i64 = 30 * 60 * 1000;
+/// The wait after the first failure; it doubles with each next one.
+const FIRST_BACKOFF_MS: i64 = 60 * 1000;
+
+fn backoff_ms(failures: u32) -> i64 {
+    FIRST_BACKOFF_MS
+        .saturating_mul(1 << failures.saturating_sub(1).min(16))
+        .min(MAX_BACKOFF_MS)
+}
+
+fn note_failure(id: &str, text: &str, now: i64) {
+    let mut map = FAILING.lock().unwrap_or_else(|e| e.into_inner());
+    let failures = map.get(id).map_or(1, |f| f.failures.saturating_add(1));
+    let error: String = text.chars().filter(|c| !c.is_control()).take(160).collect();
+    map.insert(
+        id.to_string(),
+        Failing {
+            failures,
+            retry_at: now + backoff_ms(failures),
+            error,
+        },
+    );
+}
+
+fn clear_failure(id: &str) {
+    FAILING.lock().unwrap_or_else(|e| e.into_inner()).remove(id);
+}
+
+/// `(retry_at, error)` of a renewal that is failing.
+fn failing(id: &str) -> Option<(i64, String)> {
+    FAILING
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(id)
+        .map(|f| (f.retry_at, f.error.clone()))
 }
 
 /// Per integration: one refresh, sign-in or disconnect at a time.
@@ -782,12 +1018,15 @@ struct Tokens {
     access: String,
     refresh: Option<String>,
     expires_at: Option<i64>,
+    /// `expires_in` in ms.
+    lifetime_ms: Option<i64>,
     scope: Option<String>,
 }
 
 #[derive(Debug, thiserror::Error)]
 enum TokenFail {
-    /// The service said no (a 4xx with an OAuth `error`): this grant will not work again.
+    /// The service said the grant or the client is no good (HTTP 400 or 401 with `invalid_grant` or
+    /// `invalid_client`): it will not work again, the person signs in.
     #[error("{0}")]
     Rejected(String),
     /// Anything that may pass: no network, a 5xx, an answer that did not read.
@@ -840,7 +1079,10 @@ async fn token_call(
         if let Some(detail) = detail {
             text.push_str(&format!(": {detail}"));
         }
-        let refused = (400..500).contains(&resp.status) && resp.status != 408 && resp.status != 429;
+        // Only these two say the sign-in itself is over. Any other answer (a 403 from a gateway, a 429, a 5xx, a
+        // 400 with another error) may pass, and must not cost the person their sign-in.
+        let refused =
+            matches!(resp.status, 400 | 401) && matches!(code.as_deref(), Some("invalid_grant" | "invalid_client"));
         return Err(if refused {
             TokenFail::Rejected(text)
         } else {
@@ -858,7 +1100,7 @@ async fn token_call(
         .and_then(Value::as_str)
         .is_some_and(|t| !t.eq_ignore_ascii_case("bearer"))
     {
-        return Err(TokenFail::Rejected(
+        return Err(TokenFail::Transient(
             "the service issued a token that is not a Bearer token".into(),
         ));
     }
@@ -877,6 +1119,7 @@ async fn token_call(
         expires_at: seconds
             .filter(|s| *s > 0)
             .map(|s| now + s.min(10 * 365 * 86_400) * 1000),
+        lifetime_ms: seconds.filter(|s| *s > 0).map(|s| s.min(10 * 365 * 86_400) * 1000),
         scope: body
             .get("scope")
             .and_then(Value::as_str)
@@ -929,8 +1172,10 @@ pub async fn begin(
     let server = Url::parse(&url)?;
     check_server_url(&server, allow_local())?;
     let found = discover(&server).await?;
+    // A client registered earlier for this issuer and this redirect address is used again, also after a disconnect.
     let known = match &integration_id {
-        Some(id) => load_stored(store, id)?.filter(|s| s.issuer == found.issuer),
+        Some(id) => load_client(store, id)?
+            .filter(|c| c.issuer == found.issuer && c.redirect_uri == REDIRECT_URI && valid_client_id(&c.client_id)),
         None => None,
     };
     let client_id = match (client_id, known) {
@@ -1049,7 +1294,14 @@ pub async fn complete(
         resource: flow.resource.clone(),
         scope: tokens.scope.clone().or(flow.scope.clone()),
         expires_at: tokens.expires_at,
+        issued_at: Some(now),
+        lifetime_ms: tokens.lifetime_ms,
         needs_login: false,
+    };
+    let client = Client {
+        issuer: flow.issuer.clone(),
+        redirect_uri: REDIRECT_URI.to_string(),
+        client_id: flow.client_id.clone(),
     };
     let (integration, created) = match (&flow.integration_id, flow.draft) {
         (Some(id), _) => {
@@ -1071,11 +1323,16 @@ pub async fn complete(
         (None, None) => bail!("this sign-in has no integration"),
     };
     let _guard = lock(&integration.id).await;
-    let saved = save_stored(store, &integration.id, &stored)
-        .and_then(|()| {
-            store
-                .secret_set(&oauth_access_name(&integration.id), &tokens.access, &[])
-                .map(|_| ())
+    // The token, its state and the client go in together: a failure leaves what was there.
+    let saved = serde_json::to_string(&stored)
+        .map_err(anyhow::Error::from)
+        .and_then(|state| {
+            let client = serde_json::to_string(&client)?;
+            store.secrets_set_many(&[
+                (&oauth_access_name(&integration.id), &tokens.access),
+                (&oauth_state_name(&integration.id), &state),
+                (&oauth_client_name(&integration.id), &client),
+            ])
         })
         .and_then(|()| {
             store
@@ -1085,9 +1342,15 @@ pub async fn complete(
     if let Err(e) = saved {
         if created {
             let _ = store.integration_delete(&integration.id);
+            let _ = store.secrets_delete_many(&[
+                &oauth_access_name(&integration.id),
+                &oauth_state_name(&integration.id),
+                &oauth_client_name(&integration.id),
+            ]);
         }
         return Err(e.context("could not store the sign-in"));
     }
+    clear_failure(&integration.id);
     let integration = store.integration_get(&integration.id)?.unwrap_or(integration);
     Ok(Completed { integration, created })
 }
@@ -1096,11 +1359,14 @@ pub async fn complete(
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Status {
-    /// `connected`, `needs_login` (the service refused or the token ran out with nothing to renew it) or
+    /// `connected`; `refresh_error` (the sign-in is there, but renewing it keeps failing for a reason that may pass:
+    /// `error` says what, short); `needs_login` (the service refused or the token ran out with nothing to renew it);
     /// `not_connected` (no sign-in yet, or disconnected).
     pub status: &'static str,
     pub expires_at: Option<i64>,
     pub scope: Option<String>,
+    /// For `refresh_error`: a short text, never a token.
+    pub error: Option<String>,
 }
 
 pub fn status(store: &Store, id: &str, now: i64) -> Result<Status> {
@@ -1111,14 +1377,21 @@ pub fn status(store: &Store, id: &str, now: i64) -> Result<Status> {
             status: "not_connected",
             expires_at: None,
             scope: None,
+            error: None,
         });
     };
     let ended = stored.expires_at.is_some_and(|e| e <= now);
     let ok = !stored.needs_login && (!ended || stored.refresh_token.is_some());
+    let failed = if ok { failing(id).map(|(_, error)| error) } else { None };
     Ok(Status {
-        status: if ok { "connected" } else { "needs_login" },
+        status: match (ok, &failed) {
+            (false, _) => "needs_login",
+            (true, Some(_)) => "refresh_error",
+            (true, None) => "connected",
+        },
         expires_at: stored.expires_at,
         scope: stored.scope,
+        error: failed,
     })
 }
 
@@ -1126,7 +1399,8 @@ pub fn status(store: &Store, id: &str, now: i64) -> Result<Status> {
 
 /// Why a token is renewed.
 pub enum Why {
-    /// It ends within `skew` ms.
+    /// It ends within `skew` ms, but not before half of its life has passed (see [`Stored::due`]). A token without
+    /// an end (`expires_in` missing) is never renewed for this reason.
     Expiring(i64),
     /// The service refused it (a 401); `stale` is the token that was refused. When the stored token is another one,
     /// somebody has renewed it already.
@@ -1135,15 +1409,20 @@ pub enum Why {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Outcome {
-    /// Nothing to do: the token is good, or was renewed by someone else.
+    /// Nothing to do: the token is good, or was renewed by someone else, or the renewal gave the same token.
     Unchanged,
+    /// The access token is another one now.
     Refreshed,
     /// There is no way to renew it: the person signs in again.
     NeedsLogin,
+    /// The last renewal failed for a reason that may pass and the next try is not due yet.
+    Waiting,
 }
 
-/// Renews the access token of an integration, once at a time per integration. A failure that may pass (no network,
-/// a 5xx) is an error and leaves everything as it was; a refusal marks the sign-in as needing the person.
+/// Renews the access token of an integration, once at a time per integration. The service saying the grant or the
+/// client is no good (`invalid_grant`, `invalid_client`) marks the sign-in as needing the person. Anything else that
+/// goes wrong (no network, a 5xx, a 403, a 429, an answer that does not read) is an error and touches nothing
+/// stored: the next tries wait 1, 2, 4 ... up to 30 minutes, and `status` says `refresh_error`.
 pub async fn refresh(store: &Store, id: &str, why: Why, now: i64) -> Result<Outcome> {
     let _guard = lock(id).await;
     let Some(mut stored) = load_stored(store, id)? else {
@@ -1156,7 +1435,7 @@ pub async fn refresh(store: &Store, id: &str, why: Why, now: i64) -> Result<Outc
         return Ok(Outcome::NeedsLogin);
     }
     let due = match &why {
-        Why::Expiring(skew) => stored.expires_at.is_some_and(|e| e - now <= *skew),
+        Why::Expiring(skew) => stored.due(*skew, now),
         Why::Rejected(stale) => *stale == current,
     };
     if !due {
@@ -1169,12 +1448,16 @@ pub async fn refresh(store: &Store, id: &str, why: Why, now: i64) -> Result<Outc
             return Ok(Outcome::Unchanged);
         }
         stored.needs_login = true;
-        save_stored(store, id, &stored)?;
+        save_state(store, id, &stored)?;
         return Ok(Outcome::NeedsLogin);
     };
+    // A 401 is news about the token, not a tick of the clock: it is tried at once. A tick waits for its turn.
+    if matches!(why, Why::Expiring(_)) && failing(id).is_some_and(|(retry_at, _)| now < retry_at) {
+        return Ok(Outcome::Waiting);
+    }
     let hide = vec![
         ("REFRESH_TOKEN".to_string(), refresh_token.clone()),
-        ("ACCESS_TOKEN".to_string(), current),
+        ("ACCESS_TOKEN".to_string(), current.clone()),
     ];
     match token_call(
         &stored.token_endpoint,
@@ -1192,19 +1475,34 @@ pub async fn refresh(store: &Store, id: &str, why: Why, now: i64) -> Result<Outc
         Ok(tokens) => {
             stored.refresh_token = tokens.refresh.or(Some(refresh_token));
             stored.expires_at = tokens.expires_at;
+            stored.issued_at = Some(now);
+            stored.lifetime_ms = tokens.lifetime_ms;
             if tokens.scope.is_some() {
                 stored.scope = tokens.scope;
             }
-            store.secret_set(&oauth_access_name(id), &tokens.access, &[])?;
-            save_stored(store, id, &stored)?;
-            Ok(Outcome::Refreshed)
+            // Both secrets in one step. If it fails nothing changed here, and the service may already have rotated
+            // the refresh token: the error is told, and the next try (after the wait) shows whether it still works.
+            if let Err(e) = save_tokens(store, id, &tokens.access, &stored) {
+                note_failure(id, "the renewed sign-in could not be stored", now);
+                return Err(e.context("could not store the renewed sign-in"));
+            }
+            clear_failure(id);
+            Ok(if tokens.access == current {
+                Outcome::Unchanged
+            } else {
+                Outcome::Refreshed
+            })
         }
         Err(TokenFail::Rejected(_)) => {
             stored.needs_login = true;
-            save_stored(store, id, &stored)?;
+            save_state(store, id, &stored)?;
+            clear_failure(id);
             Ok(Outcome::NeedsLogin)
         }
-        Err(TokenFail::Transient(text)) => Err(anyhow!("could not renew the sign-in: {text}")),
+        Err(TokenFail::Transient(text)) => {
+            note_failure(id, &text, now);
+            Err(anyhow!("could not renew the sign-in: {text}"))
+        }
     }
 }
 
@@ -1213,21 +1511,54 @@ pub fn access_token(store: &Store, id: &str) -> Result<Option<String>> {
     store.secret_get(&oauth_access_name(id))
 }
 
-/// Before a session starts: renews the tokens of `rows` that end soon. Returns the ids that cannot be used now, each
-/// with whether the person has to sign in again (`true`) or the service is only out of reach (`false`).
-pub async fn ready_for_session(store: &Store, rows: &[&Integration], now: i64) -> Vec<(String, bool)> {
+/// Whether the stored token of `id` is still good at `now` (it has no end, or the end is ahead).
+fn token_alive(store: &Store, id: &str, now: i64) -> bool {
+    matches!(store.secret_get(&oauth_access_name(id)), Ok(Some(_)))
+        && load_stored(store, id)
+            .ok()
+            .flatten()
+            .is_some_and(|s| !s.needs_login && s.expires_at.is_none_or(|e| e > now))
+}
+
+/// How long a session start waits for the renewals, in all.
+pub const SESSION_WAIT: Duration = Duration::from_secs(5);
+
+/// Before a session starts: renews the tokens of `rows` that are due, all at once, waiting for them 5 seconds in all
+/// (`SESSION_WAIT`). A renewal that is not done by then goes on in the background (it is not cancelled: the service
+/// may have rotated the refresh token already). Returns the ids that cannot be used now, each with whether the
+/// person has to sign in again (`true`) or the token ran out and the service could not be asked in time (`false`).
+/// A token that is still good is used whatever happened to its renewal.
+pub async fn ready_for_session(store: &Arc<Store>, rows: &[&Integration], now: i64) -> Vec<(String, bool)> {
+    ready_within(store, rows, now, SESSION_WAIT).await
+}
+
+/// [`ready_for_session`] with the wait given, so a test need not wait five seconds.
+async fn ready_within(store: &Arc<Store>, rows: &[&Integration], now: i64, wait: Duration) -> Vec<(String, bool)> {
+    let tasks: Vec<_> = rows
+        .iter()
+        .filter(|r| r.auth == IntegrationAuth::Oauth)
+        .map(|row| {
+            let (store, id) = (store.clone(), row.id.clone());
+            let task = tokio::spawn(async move { refresh(&store, &id, Why::Expiring(SESSION_SKEW_MS), now).await });
+            (row, task)
+        })
+        .collect();
+    let deadline = tokio::time::Instant::now() + wait;
     let mut skipped = Vec::new();
-    for row in rows.iter().filter(|r| r.auth == IntegrationAuth::Oauth) {
-        match refresh(store, &row.id, Why::Expiring(SESSION_SKEW_MS), now).await {
-            Ok(Outcome::NeedsLogin) => skipped.push((row.id.clone(), true)),
-            Ok(_) => {}
-            Err(e) => {
-                tracing::warn!(integration = row.name, "{e:#}");
-                let ended = load_stored(store, &row.id)
-                    .ok()
-                    .flatten()
-                    .is_some_and(|s| s.expires_at.is_some_and(|e| e <= now));
-                if ended {
+    for (row, task) in tasks {
+        match tokio::time::timeout_at(deadline, task).await {
+            Ok(Ok(Ok(Outcome::NeedsLogin))) => skipped.push((row.id.clone(), true)),
+            Ok(Ok(Ok(Outcome::Unchanged | Outcome::Refreshed))) => {}
+            late_or_failed => {
+                match late_or_failed {
+                    Ok(Ok(Err(e))) => tracing::warn!(integration = row.name, "{e:#}"),
+                    Err(_) => tracing::warn!(
+                        integration = row.name,
+                        "the sign-in renewal is slow: using the token as it is"
+                    ),
+                    _ => {}
+                }
+                if !token_alive(store, &row.id, now) {
                     skipped.push((row.id.clone(), false));
                 }
             }
@@ -1236,7 +1567,7 @@ pub async fn ready_for_session(store: &Store, rows: &[&Integration], now: i64) -
     skipped
 }
 
-/// Renews every token that ends within the background margin. Returns the ids that got a new token.
+/// Renews every token that is due by the background margin, all at once. Returns the ids that got another token.
 pub async fn refresh_due(store: &Store, now: i64) -> Vec<String> {
     let rows = match store.integration_list() {
         Ok(rows) => rows,
@@ -1245,15 +1576,24 @@ pub async fn refresh_due(store: &Store, now: i64) -> Vec<String> {
             return Vec::new();
         }
     };
-    let mut done = Vec::new();
-    for row in rows.iter().filter(|r| r.auth == IntegrationAuth::Oauth) {
-        match refresh(store, &row.id, Why::Expiring(BACKGROUND_SKEW_MS), now).await {
-            Ok(Outcome::Refreshed) => done.push(row.id.clone()),
-            Ok(_) => {}
-            Err(e) => tracing::warn!(integration = row.name, "{e:#}"),
-        }
-    }
-    done
+    let jobs = rows
+        .iter()
+        .filter(|r| r.auth == IntegrationAuth::Oauth)
+        .map(|row| async move {
+            match refresh(store, &row.id, Why::Expiring(BACKGROUND_SKEW_MS), now).await {
+                Ok(Outcome::Refreshed) => Some(row.id.clone()),
+                Ok(_) => None,
+                Err(e) => {
+                    tracing::warn!(integration = row.name, "{e:#}");
+                    None
+                }
+            }
+        });
+    futures_util::future::join_all(jobs)
+        .await
+        .into_iter()
+        .flatten()
+        .collect()
 }
 
 // ---- disconnect ----
@@ -1291,17 +1631,27 @@ async fn revoke(stored: &Stored, access: Option<&str>, name: &str) -> bool {
     any
 }
 
-/// Signs out: asks the service to revoke the tokens (a failure does not stop the rest) and deletes them. Returns
-/// whether the service revoked something.
-pub async fn disconnect(store: &Store, row: &Integration) -> Result<bool> {
+/// Signs out: asks the service to revoke the tokens (a failure does not stop the rest) and deletes them, both in one
+/// step. The client registered with the service stays, so signing in again does not register a new one; with
+/// `remove` (the integration is going away) it is deleted too. Returns whether the service revoked something.
+pub async fn disconnect(store: &Store, row: &Integration, remove: bool) -> Result<bool> {
     let _guard = lock(&row.id).await;
     let access = store.secret_get(&oauth_access_name(&row.id))?;
     let revoked = match load_stored(store, &row.id)? {
         Some(stored) => revoke(&stored, access.as_deref(), &row.name).await,
         None => false,
     };
-    store.secret_delete(&oauth_access_name(&row.id))?;
-    store.secret_delete(&oauth_state_name(&row.id))?;
+    let (access_name, state_name, client_name) = (
+        oauth_access_name(&row.id),
+        oauth_state_name(&row.id),
+        oauth_client_name(&row.id),
+    );
+    let mut names = vec![access_name.as_str(), state_name.as_str()];
+    if remove {
+        names.push(client_name.as_str());
+    }
+    store.secrets_delete_many(&names)?;
+    clear_failure(&row.id);
     Ok(revoked)
 }
 

@@ -103,7 +103,10 @@ pub fn spawn_oauth_refresher(app: Arc<App>) {
             tick.tick().await;
             let store = &app.sup.hub().store;
             for id in mcp_oauth::refresh_due(store, now_ms()).await {
-                reload_agents(&app, users_of(store, &id)).await;
+                // Only a session that runs with the old token of this integration is renewed.
+                for agent in users_of(store, &id) {
+                    app.sup.reload_for_tokens(&agent, vec![id.clone()]).await;
+                }
             }
         }
     });
@@ -158,6 +161,7 @@ async fn oauth_dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcRe
                 "created": done.created,
                 "status": status.status,
                 "expires_at": status.expires_at,
+                "error": status.error,
             }))
         }
         "integrations.oauth_cancel" => {
@@ -179,6 +183,7 @@ async fn oauth_dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcRe
                     "status": s.status,
                     "expires_at": s.expires_at,
                     "scope": s.scope,
+                    "error": s.error,
                 }));
             }
             ok(json!({ "integrations": items }))
@@ -193,7 +198,7 @@ async fn oauth_dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcRe
                 ));
             }
             let users = users_of(store, &id);
-            let revoked = mcp_oauth::disconnect(store, &row).await?;
+            let revoked = mcp_oauth::disconnect(store, &row, remove).await?;
             if remove {
                 store.integration_delete(&id)?;
             }
@@ -259,7 +264,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             let Id { id } = params(p)?;
             if let Some(row) = store.integration_get(&id)?.filter(|r| r.auth == IntegrationAuth::Oauth) {
                 // Its tokens go with it, and the service is told (a refusal there does not stop the removal).
-                mcp_oauth::disconnect(store, &row).await?;
+                mcp_oauth::disconnect(store, &row, true).await?;
             }
             ok(json!({ "deleted": store.integration_delete(&id)? }))
         }
@@ -314,7 +319,7 @@ async fn probe_row(store: &Store, row: &Integration, draft: bool) -> RpcResult {
         match mcp_oauth::refresh(store, &row.id, Why::Rejected(stale), now_ms()).await {
             Ok(Outcome::Refreshed) => result = run_probe(store, row, draft).await,
             Ok(Outcome::NeedsLogin) => return sign_in(),
-            Ok(Outcome::Unchanged) => result = run_probe(store, row, draft).await,
+            Ok(Outcome::Unchanged | Outcome::Waiting) => result = run_probe(store, row, draft).await,
             Err(e) => tracing::warn!(integration = row.name, "{e:#}"),
         }
     }
