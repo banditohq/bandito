@@ -922,6 +922,10 @@ public enum L10n {
         public static var trash: String { L10n.tr("keys.trash") }
         public static var usage: String { L10n.tr("keys.usage") }
         public static var whatChanged: String { L10n.tr("keys.whatChanged") }
+        public static var workbenchCloseTab: String { L10n.tr("keys.workbenchCloseTab") }
+        public static var workbenchSplit: String { L10n.tr("keys.workbenchSplit") }
+        public static func workbenchTab(number: String) -> String { L10n.tr("keys.workbenchTab", number) }
+        public static var workbenchToggle: String { L10n.tr("keys.workbenchToggle") }
 
         public enum Context {
             public static var browser: String { L10n.tr("keys.context.browser") }
@@ -2360,6 +2364,31 @@ public enum L10n {
             public static var read: String { L10n.tr("viewer.mode.read") }
             public static var split: String { L10n.tr("viewer.mode.split") }
         }
+    }
+
+    public enum Workbench {
+        public static var add: String { L10n.tr("workbench.add") }
+        public static var agentInBrowser: String { L10n.tr("workbench.agentInBrowser") }
+        public static var browser: String { L10n.tr("workbench.browser") }
+        public static var changes: String { L10n.tr("workbench.changes") }
+        public static var closePanel: String { L10n.tr("workbench.closePanel") }
+        public static var closeTab: String { L10n.tr("workbench.closeTab") }
+        public static var details: String { L10n.tr("workbench.details") }
+        public static var emptyHint: String { L10n.tr("workbench.emptyHint") }
+        public static var emptyTitle: String { L10n.tr("workbench.emptyTitle") }
+        public static var moveToOtherPane: String { L10n.tr("workbench.moveToOtherPane") }
+        public static var newTerminal: String { L10n.tr("workbench.newTerminal") }
+        public static var openNewTerminal: String { L10n.tr("workbench.openNewTerminal") }
+        public static var show: String { L10n.tr("workbench.show") }
+        public static var showHere: String { L10n.tr("workbench.showHere") }
+        public static var split: String { L10n.tr("workbench.split") }
+        public static var terminal: String { L10n.tr("workbench.terminal") }
+        public static var terminalElsewhere: String { L10n.tr("workbench.terminalElsewhere") }
+        public static var terminalEnded: String { L10n.tr("workbench.terminalEnded") }
+        public static var terminalFailed: String { L10n.tr("workbench.terminalFailed") }
+        public static var terminalInOtherPane: String { L10n.tr("workbench.terminalInOtherPane") }
+        public static var togglePanel: String { L10n.tr("workbench.togglePanel") }
+        public static var unsplit: String { L10n.tr("workbench.unsplit") }
     }
 
     public enum Workspace {

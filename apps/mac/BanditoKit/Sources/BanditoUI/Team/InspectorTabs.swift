@@ -471,8 +471,6 @@ struct MemoryTab: View {
     @Environment(Router.self) private var router
     @State private var files: [FsEntry] = []
     @State private var error: UserFacingMessage?
-    /// What the memory viewer shows, over the chat; nil when closed.
-    @State private var viewing: MemoryViewerTarget?
 
     private var budget: Int { agent.contextBudget ?? ContextUsage.defaultBudget }
 
@@ -493,9 +491,6 @@ struct MemoryTab: View {
             }
         }
         .task(id: agent.id) { await loadFiles() }
-        .banditoSheet(item: $viewing) { target in
-            MemoryViewerSheet(server: server, target: target, onClose: { viewing = nil })
-        }
     }
 
     private var chapterCard: some View {
@@ -597,7 +592,7 @@ struct MemoryTab: View {
                 InspectorCard {
                     ForEach(memoryItems, id: \.path) { item in
                         Button {
-                            viewing = MemoryViewerTarget(path: item.path, isFile: item.isFile)
+                            router.showInWorkbench(.file(path: item.path), agentID: agent.id)
                         } label: {
                             HStack(spacing: 11) {
                                 Image(systemName: item.symbol)

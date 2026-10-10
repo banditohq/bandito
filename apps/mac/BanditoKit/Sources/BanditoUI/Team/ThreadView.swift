@@ -11,6 +11,7 @@ struct ThreadView: View {
     @Binding var inspectorTab: InspectorTab
 
     @Environment(Router.self) private var router
+    @Environment(AppModel.self) private var app
     @State private var sendError: UserFacingMessage?
     /// Failures of interrupt, approval and history loading.
     @State private var actionError: UserFacingMessage?
@@ -19,6 +20,28 @@ struct ThreadView: View {
     @State private var changes: ChangesDiff?
 
     private var thread: AgentThread { server.thread(for: agent.id) }
+
+    /// The tools the agent is running now, by name (a tool row without a result yet).
+    private var runningToolNames: [String] {
+        let rows: [ToolRow] = thread.items.compactMap { item in
+            if case .tool(let row) = item { return row }
+            return nil
+        }
+        return WorkbenchRules.runningToolNames(rows, now: Int64(Date().timeIntervalSince1970 * 1000))
+    }
+
+    /// The agent's details in the workbench, on their details tab (the capsule and the schedules button).
+    private func showDetails() {
+        inspectorTab = .details
+        router.showInWorkbench(.details, agentID: agent.id)
+    }
+
+    /// The agent's terminal in the workbench: the one in its folder, or a new one there.
+    private func showAgentTerminal() {
+        #if os(macOS)
+        WorkbenchTerminals.showAgentTerminal(server: server, agent: agent, app: app, router: router)
+        #endif
+    }
 
     /// The composer text of this agent, kept by the Router (see `Router.drafts`).
     private var draft: Binding<String> {
@@ -35,18 +58,15 @@ struct ThreadView: View {
                 showsChanges: server.info?.supports("changes") == true,
                 showsTerminal: server.supports("terminals"),
                 models: server.runtimeModels,
-                onInspect: {
-                    inspectorTab = .details
-                    router.inspectorOpen = true
-                },
+                onInspect: { showDetails() },
                 isLead: LeadAgentStore.shared.id(server: server.id.uuidString) == agent.id,
-                onChanges: { router.sheet = .changes(agentID: agent.id) },
-                onTerminal: { router.openTerminalHere(agent.cwd) },
-                onSchedules: {
-                    inspectorTab = .details
-                    router.inspectorOpen = true
-                },
-                onDetails: { router.inspectorOpen.toggle() })
+                onChanges: { router.showInWorkbench(.changes, agentID: agent.id) },
+                onTerminal: { showAgentTerminal() },
+                onSchedules: { showDetails() },
+                onTogglePanel: { router.toggleWorkbench() },
+                showsBrowserChip: WorkbenchRules.showsBrowserChip(
+                    state: router.workbenchState(for: agent.id), runningTools: runningToolNames),
+                onShowBrowser: { router.showInWorkbench(.browser, agentID: agent.id) })
 
             ScrollViewReader { proxy in
                 ScrollView {

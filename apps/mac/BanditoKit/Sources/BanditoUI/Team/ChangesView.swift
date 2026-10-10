@@ -9,15 +9,15 @@ enum ChangesViewMode: Hashable {
 }
 
 /// "What changed": the files an agent changed since a restore point, their diffs, and what to do about
-/// them (keep, roll back, ask the agent). Opened with ⌘⇧D. Design: docs/design/Changes.dc.html.
-struct ChangesSheet: View {
+/// them (keep, roll back, ask the agent). A tab of the workbench (⌘⇧D). Design: docs/design/Changes.dc.html.
+struct ChangesContent: View {
     var agentID: String
-    /// Called after a rollback with what it restored, so the window can offer to undo it.
-    var onRolledBack: (RollbackNotice) -> Void
+    /// Closes the view: the tab's close, or the sheet's. Called after "Keep" with nothing to change, after a rollback,
+    /// and after the agent was asked.
+    var onDone: () -> Void
 
     @Environment(AppModel.self) private var app
     @Environment(Router.self) private var router
-    @Environment(\.dismiss) private var dismiss
 
     @State private var checkpoints: [Checkpoint] = []
     @State private var loaded = false
@@ -36,6 +36,8 @@ struct ChangesSheet: View {
     @State private var loadError: UserFacingMessage?
     @State private var busy = false
     @State private var confirmRollback = false
+    /// Below this width the list goes on top of the diff, not beside it.
+    static let sideBySideMinWidth: CGFloat = 700
 
     private var server: ServerModel? { app.currentServer }
     private var agent: Agent? { server?.agents.first { $0.id == agentID } }
@@ -63,7 +65,7 @@ struct ChangesSheet: View {
                 message(L10n.Changes.agentGone)
             }
         }
-        .frame(minWidth: 880, idealWidth: 1100, maxWidth: .infinity, minHeight: 560, idealHeight: 740, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.Bandito.surface2)
         .task(id: agentID) { await loadCheckpoints() }
         .task(id: FileLoadKey(base: base?.id, path: selectedPath)) { await loadFile() }
@@ -97,9 +99,22 @@ struct ChangesSheet: View {
             } else if files.isEmpty {
                 message(L10n.Changes.empty)
             } else {
-                HStack(spacing: 0) {
-                    fileList
-                    diffPane
+                // Wide: the list beside the diff. Narrow (the workbench panel): the list on top, at most 40 % of the
+                // height, and the diff below it.
+                GeometryReader { proxy in
+                    if proxy.size.width < Self.sideBySideMinWidth {
+                        VStack(spacing: 0) {
+                            fileList(compact: true)
+                                .frame(maxHeight: proxy.size.height * 0.4)
+                            diffPane
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        }
+                    } else {
+                        HStack(spacing: 0) {
+                            fileList(compact: false)
+                            diffPane
+                        }
+                    }
                 }
                 footer(agent)
             }
@@ -124,7 +139,7 @@ struct ChangesSheet: View {
                 options: [(.inline, L10n.Changes.inline), (.sideBySide, L10n.Changes.sideBySide)]
             )
             .frame(width: 210)
-            Button { dismiss() } label: {
+            Button { onDone() } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color.Bandito.text2)
@@ -159,7 +174,7 @@ struct ChangesSheet: View {
         }
     }
 
-    private var fileList: some View {
+    private func fileList(compact: Bool) -> some View {
         VStack(spacing: 0) {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
@@ -178,9 +193,13 @@ struct ChangesSheet: View {
                 .background(Color.Bandito.text.opacity(0.03), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .padding(10)
         }
-        .frame(width: 320)
-        .overlay(alignment: .trailing) {
-            Rectangle().fill(Color.Bandito.text.opacity(0.06)).frame(width: 1)
+        .frame(width: compact ? nil : 320)
+        .frame(maxWidth: compact ? .infinity : nil)
+        .overlay(alignment: compact ? .bottom : .trailing) {
+            Rectangle()
+                .fill(Color.Bandito.text.opacity(0.06))
+                .frame(width: compact ? nil : 1, height: compact ? 1 : nil)
+                .frame(maxWidth: compact ? .infinity : nil, maxHeight: compact ? nil : .infinity)
         }
     }
 
@@ -398,13 +417,13 @@ struct ChangesSheet: View {
         router.selectAgent(agent.id, on: server)
         router.pendingComposerText = L10n.Changes.askPlace(path: path, line: String(line))
         router.select(mode: .team)
-        dismiss()
+        onDone()
     }
 
     private func keepFiles() {
         let paths = RollbackPlan.paths(files: files, keep: keep)
         guard !paths.isEmpty else {
-            dismiss()
+            onDone()
             return
         }
         Task { await restore(paths: paths) }
@@ -422,12 +441,11 @@ struct ChangesSheet: View {
         do {
             let result = try await server.restore(agentID: agentID, checkpointID: base.id, paths: paths)
             if !result.restored.isEmpty {
-                onRolledBack(
-                    RollbackNotice(
-                        server: server, agentID: agentID,
-                        count: result.restored.count, undoCheckpointID: result.undo))
+                router.rollbackNotice = RollbackNotice(
+                    server: server, agentID: agentID,
+                    count: result.restored.count, undoCheckpointID: result.undo)
             }
-            dismiss()
+            onDone()
         } catch {
             loadError = UserFacingError.message(for: error)
         }

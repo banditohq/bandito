@@ -66,7 +66,7 @@ enum QACommand: Equatable {
         }
     }
 
-    /// The sheets a QA run can open (`Sheet.changes` needs an agent id, so it is not one of them).
+    /// The sheets a QA run can open.
     static func parseSheet(_ name: String) -> Sheet? {
         switch name {
         case "newAgent": .newAgent

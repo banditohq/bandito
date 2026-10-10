@@ -83,9 +83,11 @@ import Testing
 
     @Test func inspectorTabIsKeptInTheRouter() {
         let router = Router()
+        router.selectedAgentID = "forge"
         #expect(router.inspectorTab == .details)
         router.openInspector(.memory)
         #expect(router.inspectorOpen)
         #expect(router.inspectorTab == .memory)
+        #expect(router.workbenchState(for: "forge").allTabs == [.details])
     }
 }

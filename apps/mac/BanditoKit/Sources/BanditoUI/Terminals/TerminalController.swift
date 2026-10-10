@@ -13,10 +13,22 @@ final class TerminalController {
     let workspace: TerminalWorkspace
     let font: TerminalFontStore
     private(set) var sessions: [String: TerminalSession] = [:]
+    /// A place takes the terminal views: the Terminals mode, or a pane of a workbench. The last claim wins.
+    func claimDisplay(_ place: String) {
+        display.claim(place)
+    }
+
+    /// A place gives the terminal views back. Does nothing when another place has taken them since.
+    func releaseDisplay(_ place: String) {
+        display.release(place)
+    }
+
     /// Whether the server's terminals have been read since the app started (or since the last reconnect).
     private(set) var isListed = false
     /// The last failure to show, such as a terminal that could not be opened.
     private(set) var notice: UserFacingMessage?
+    /// Which place on screen draws the terminal views now (see `TerminalDisplayOwner`).
+    private(set) var display = TerminalDisplayOwner()
 
     @ObservationIgnored private var watchTask: Task<Void, Never>?
     @ObservationIgnored private var wasConnected = false
@@ -110,7 +122,9 @@ final class TerminalController {
 
     /// Starts a terminal on the server and puts it on screen (or in the dock when the grid is full).
     /// `afterFocused` places it next to the focused pane (split).
-    func openNew(cwd: String?, afterFocused: Bool) async {
+    /// Opens a terminal on the server. Returns its id, or `nil` when it could not be opened (then `notice` says why).
+    @discardableResult
+    func openNew(cwd: String?, afterFocused: Bool) async -> String? {
         let size = focusedSize()
         do {
             let info = try await server.openTerminal(cwd: cwd, cols: size.cols, rows: size.rows)
@@ -120,8 +134,10 @@ final class TerminalController {
             if placement == .screen {
                 focusKeyboard(on: info.id)
             }
+            return info.id
         } catch {
             notice = UserFacingError.message(for: error).wrapped { L10n.Terminals.newFailed(message: $0) }
+            return nil
         }
     }
 

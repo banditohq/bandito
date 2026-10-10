@@ -1,16 +1,30 @@
 # Team (Команда)
 
-The Team mode is the main place: your agents in a sidebar, one chat per agent in the middle, and the agent details
-on the right. Open it with ⌘1 or the Team (Команда) button in the mode bar.
+The Team mode is the main place: your agents in a sidebar, one chat per agent in the middle, and the workbench panel
+on the right. The panel holds the agent's details, its terminal, the browser, files and the changes, so you do not
+leave the chat for them. Open the Team mode with ⌘1 or the Team (Команда) button in the mode bar.
 
 ## Team mode
 
 <!-- id: team-mode; covers: mode:team -->
-The window has three parts: the sidebar with agents (Pinned, NEEDS YOU, TEAM), the thread of the selected agent, and the inspector (agent details) that you open on demand.
+The window has three parts: the sidebar with agents (Pinned, NEEDS YOU, TEAM), the thread of the selected agent, and the workbench panel on the right that you open on demand (see "Workbench panel" below).
 Где: Mode bar → Team (Команда), or Menu View → Team (Команда)
 1. Press ⌘1 or click Team (Команда) in the mode bar.
 2. Click an agent in the sidebar to open its chat. The selection is kept when you switch to another mode and back.
-3. Click the agent name at the top of the thread, or press ⌘I, to open the details.
+3. Click the agent name at the top of the thread, or press ⌘I, to show the agent's details in the panel.
+
+## Workbench panel (Панель)
+
+<!-- id: team-workbench; covers: -->
+A panel beside the chat with tabs: Details (the agent's name), Terminal (a terminal of the server in the agent's folder), Browser, a file or a folder of the server (the memory files open this way), and What changed. Each agent has its own tabs; they stay when you switch agents or modes. The terminal tab is the same terminal as in the Terminals mode, so it is shown in one place at a time: where it is not on show, the panel says where it is and offers Show here (Показать здесь).
+Где: Team → chat header → the panel button (sidebar icon) or ⌘J; the + button in the panel adds a tab
+1. Press ⌘J, or click the panel button in the chat header, to open the panel. Press ⌘J again to close it.
+2. Click + to add a tab: New terminal, Browser, Changes or Details. The new tab goes to the pane you are in.
+3. Click the square-split button to split the panel into two panes, one above the other. Drag the line between them to change their sizes, or double-click it to make them even. Right-click a tab and choose Move to the other pane (Переместить в другую панель) to move it.
+4. Drag the left edge of the panel to make it wider or narrower; double-click the edge to return to the default width.
+5. Close a tab with its × or ⌘⌥W. Close the panel with its × button. Pick a tab with ⌘⌥1…9.
+6. When the agent starts using its browser, the chat header shows "The agent is using the browser · Show". Click Show to open the browser tab; the tab is never opened by itself.
+7. If a terminal could not open, the panel says why above the tabs. A closed terminal tab offers Open a new one.
 
 ## Agent status dots
 
@@ -96,8 +110,8 @@ Change the model and the effort of the selected agent for the next messages. Wit
 Five commands that open other places for the selected agent.
 Где: Team → agent thread → composer → /memory, /changes, /terminal, /files, /usage
 1. /memory opens the inspector on the Memory tab (see "Memory tab" below).
-2. /changes opens What changed (see [team.md](team.md) "What changed").
-3. /terminal opens the Terminals mode with a new terminal in the agent's project folder.
+2. /changes opens What changed in the workbench panel (see "What changed" above).
+3. /terminal opens the agent's terminal in the workbench panel, the same as the terminal button in the chat header: the terminal in the project folder, or a new one there.
 4. /files opens the Files mode in the agent's project folder.
 5. /usage opens the Subscription limits popover.
 ## /pause
@@ -184,7 +198,7 @@ Runs a prompt for the agent at a set time, for example every morning. A schedule
 <!-- id: team-where; covers: -->
 Shows where the agent works on the server and the state of its runtime: the install and login state of the CLI, and the usage limits. Each place opens its own mode.
 Где: Team → agent → Agent details → Where it runs (Где работает)
-1. Click Project folder (Папка проекта) to open the Files mode in the project. Agent terminal (Терминал агента) opens Terminals. Its browser (Его браузер) opens the Browser mode. Screen (Экран) opens the Server screen.
+1. Click Project folder (Папка проекта) to open the Files mode in the project. Agent terminal (Терминал агента) opens the terminal tab in the panel. Its browser (Его браузер) opens the browser tab in the panel. Screen (Экран) opens the Server screen.
 2. Read the runtime state: Installed or Not installed (Не установлен), Logged in or Not logged in (Вход не выполнен).
 3. Usage (Использование) shows the limit bars of the runtime; the reset time is shown on each bar.
 
@@ -195,15 +209,15 @@ The agent keeps its memory in plain Markdown files on the server. Long chats are
 Где: Team → agent → Agent details → Memory (Память); also /memory
 1. Read Chapter N (Chapter {count}), the line N tokens used (tokens used), and new chapter after N (new chapter after {limit}), which is the limit of the chapter.
 2. Choose how to split the chats under HOW TO SPLIT INTO CHAPTERS (КАК ДЕЛИТЬ НА ГЛАВЫ): Smart (Smart, recommended) starts a new chapter when the conversation grows and a fresh one each morning; Every day (Каждый день) starts a clean page each morning; One long chapter (Одна длинная глава) keeps one chapter, and the agent compresses old messages itself. This costs more.
-3. Open the memory files under MEMORY: MEMORY.md (main points: projects, decisions, open tasks), Notes (notes/), Journal (journal/), Files (files/). Each opens in Files (Файлы) with Open (Открыть).
+3. Open the memory files under MEMORY: MEMORY.md (main points: projects, decisions, open tasks), Notes (notes/), Journal (journal/), Files (files/). Each opens as a tab in the workbench panel. Open in Files (Открыть в Файлах) in the tab moves to the Files mode.
 4. Edit or delete a file in Files. The agent reads the new version next time.
 
 ## What changed (Что изменил агент)
 
-<!-- id: team-changes; covers: sheet:changes -->
-A sheet that lists the files the agent changed, task by task, with a diff for each file. You can keep a file back to its state before the task, or roll back the whole task.
+<!-- id: team-changes; covers: -->
+A tab of the workbench panel that lists the files the agent changed, task by task, with a diff for each file. You can keep a file back to its state before the task, or roll back the whole task. In a narrow panel the file list is on top of the diff.
 Где: Team → agent thread → Changes (Изменения) button in the header; Menu Agent → What changed (Что изменил агент); ⌘⇧D; /changes
-1. Open the sheet. The tasks are listed with their restore points: Before the task (До задачи), End of turn (Конец хода), and Before restore (Перед откатом).
+1. Open the changes tab. The tasks are listed with their restore points: Before the task (До задачи), End of turn (Конец хода), and Before restore (Перед откатом).
 2. Click a file to see its diff. Switch between Inline (Построчно) and Side by side (Рядом). Binary files show Binary file changed.
 3. To keep a file as it was before the task, untick it (Keep {name}). The count shows Keep N files. The other files stay as they are.
 4. To roll back the whole task, click Roll back the whole task (Откатить всю задачу), read the question, and click Roll back (Откатить). Files go back to how they were before the task.
@@ -213,7 +227,7 @@ A sheet that lists the files the agent changed, task by task, with a diff for ea
 ## Changes needs a current server (Update the server)
 
 <!-- id: team-changes-old-server; covers: -->
-The Changes sheet needs a current server. On an older server it shows Update the server (Обновите сервер).
+The Changes tab needs a current server. On an older server it shows Update the server (Обновите сервер).
 Где: Team → agent → What changed → Update the server (Обновите сервер)
 1. Update the daemon from the Server mode → Updates (see [server.md](server.md)).
 

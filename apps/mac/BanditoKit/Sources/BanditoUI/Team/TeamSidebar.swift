@@ -223,6 +223,7 @@ struct TeamSidebar: View {
                 try await server.deleteAgent(agent.id)
                 LeadAgentStore.shared.forget(agentID: agent.id, server: server.id.uuidString)
                 router.drafts[agent.id] = nil
+                router.forgetWorkbench(agentID: agent.id)
                 if router.selectedAgentID == agent.id { router.selectedAgentID = nil }
             } catch {
                 actionError = UserFacingError.message(for: error)

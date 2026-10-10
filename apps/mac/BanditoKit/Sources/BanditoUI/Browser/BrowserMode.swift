@@ -58,7 +58,7 @@ private struct BrowserContent: View {
 }
 
 /// The main area: toolbar, the control banner, and the page (or the preview, or an empty state).
-private struct BrowserMainArea: View {
+struct BrowserMainArea: View {
     @Bindable var model: BrowserModel
     @Environment(Router.self) private var router
 

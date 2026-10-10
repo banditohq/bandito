@@ -36,7 +36,6 @@ public enum AppMode: String, CaseIterable, Identifiable, Sendable {
 /// A modal sheet over the main window.
 public enum Sheet: Identifiable, Hashable, Sendable {
     case newAgent
-    case changes(agentID: String)
     case addServer
     /// Sign in or create an account (Onboarding's account step, reused from Settings).
     case account
@@ -44,7 +43,6 @@ public enum Sheet: Identifiable, Hashable, Sendable {
     public var id: String {
         switch self {
         case .newAgent: "newAgent"
-        case .changes(let agentID): "changes-\(agentID)"
         case .addServer: "addServer"
         case .account: "account"
         }
@@ -102,13 +100,80 @@ public final class Router {
     /// The tab of the agent details panel. Kept here so `/memory` can open it on the memory tab.
     var inspectorTab: InspectorTab = .details
 
+    /// The agent whose chat is on screen (set by Team mode). ⌘I, ⌘J and the workbench shortcuts act on it.
+    var shownAgentID: String?
+    /// The server in front (set by the main window). Workbench state belongs to an agent of this server.
+    var frontServerID: String?
+
+    /// The workbench panel of each agent, by `workbenchKey`: its tabs and panes (see `WorkbenchRules`).
+    var workbench: [String: WorkbenchState] = [:]
+    /// Failures of the workbench's actions, by `workbenchKey`. Shown in the panel until dismissed.
+    private var notices: [String: UserFacingMessage] = [:]
+    /// Agents whose workbench is opening a terminal now, by `workbenchKey`. A second request waits for the first.
+    private var terminalsOpening: Set<String> = []
+
+    /// The key of an agent's workbench state: the server and the agent, since agent ids repeat across servers.
+    static func workbenchKey(server: String?, agentID: String) -> String {
+        "\(server ?? "")|\(agentID)"
+    }
+
+    func workbenchKey(_ agentID: String) -> String {
+        Self.workbenchKey(server: frontServerID, agentID: agentID)
+    }
+
+    /// The agent the shortcuts act on: the one on screen, else the selected one.
+    private var actingAgentID: String? { shownAgentID ?? selectedAgentID }
+
+    /// The workbench of an agent; a closed, empty one when the agent has none yet.
+    func workbenchState(for agentID: String) -> WorkbenchState {
+        workbench[workbenchKey(agentID)] ?? WorkbenchState()
+    }
+
+    /// Applies a change to the workbench of an agent and keeps the result.
+    func updateWorkbench(for agentID: String, _ change: (WorkbenchState) -> WorkbenchState) {
+        workbench[workbenchKey(agentID)] = change(workbenchState(for: agentID))
+    }
+
+    /// Drops everything the workbench keeps for a deleted agent.
+    func forgetWorkbench(agentID: String) {
+        let key = workbenchKey(agentID)
+        workbench[key] = nil
+        notices[key] = nil
+        terminalsOpening.remove(key)
+        if shownAgentID == agentID { shownAgentID = nil }
+    }
+
+    /// The failure shown in the panel of an agent, if any.
+    func workbenchNotice(for agentID: String) -> UserFacingMessage? {
+        notices[workbenchKey(agentID)]
+    }
+
+    func setWorkbenchNotice(_ message: UserFacingMessage?, for agentID: String) {
+        notices[workbenchKey(agentID)] = message
+    }
+
+    /// Marks that a terminal for `agentID` is opening. `false` when one already is: the request is dropped.
+    func beginOpeningTerminal(agentID: String) -> Bool {
+        terminalsOpening.insert(workbenchKey(agentID)).inserted
+    }
+
+    func endOpeningTerminal(agentID: String) {
+        terminalsOpening.remove(workbenchKey(agentID))
+    }
+
     public var sheet: Sheet?
     /// The quick-open palette (⌘K).
     public var paletteOpen = false
     /// The subscription limits popover, opened from the sidebar footer (⌥⌘U).
     public var usagePopoverOpen = false
-    /// The agent details inspector (⌘I).
-    public var inspectorOpen = false
+    /// The agent details are on show in the workbench of the selected agent (⌘I). Read-only: change it with
+    /// `toggleDetails()` or `openInspector(_:)`.
+    var inspectorOpen: Bool {
+        actingAgentID.map { WorkbenchRules.showsDetails(workbenchState(for: $0)) } ?? false
+    }
+
+    /// The toast after a rollback from "What changed", with the undo. Shown over the window.
+    var rollbackNotice: RollbackNotice?
     /// The sidebar column (⌃⌘S).
     public var sidebarVisible = true
 
@@ -296,9 +361,89 @@ public final class Router {
         composerFocusAgentID = nil
     }
 
-    /// Opens the agent details panel on `tab`.
+    /// Opens the agent details on `tab` (`/memory` opens the memory tab): the details tab of the selected agent's
+    /// workbench is shown, with that tab selected inside it.
     func openInspector(_ tab: InspectorTab) {
         inspectorTab = tab
-        inspectorOpen = true
+        if let agentID = actingAgentID {
+            showInWorkbench(.details, agentID: agentID)
+        }
+    }
+
+    // MARK: workbench
+
+    /// Shows `tab` in the workbench of `agentID` and opens the panel (buttons, menus, the memory viewer).
+    func showInWorkbench(_ tab: WorkbenchTab, agentID: String) {
+        updateWorkbench(for: agentID) { WorkbenchRules.open(tab, in: $0) }
+    }
+
+    /// Selects a tab that is already open in the workbench of `agentID`.
+    func selectWorkbenchTab(_ tab: WorkbenchTab, agentID: String) {
+        updateWorkbench(for: agentID) { WorkbenchRules.select(tab, in: $0) }
+    }
+
+    /// Closes a tab of the workbench of `agentID`.
+    func closeWorkbenchTab(_ tab: WorkbenchTab, agentID: String) {
+        updateWorkbench(for: agentID) { WorkbenchRules.close(tab, in: $0) }
+    }
+
+    /// Makes pane `index` of the workbench of `agentID` the one new tabs go to.
+    func focusWorkbenchPane(_ index: Int, agentID: String) {
+        updateWorkbench(for: agentID) { state in
+            guard state.panes.indices.contains(index) else { return state }
+            var next = state
+            next.focusedPane = index
+            return next
+        }
+    }
+
+    /// Moves a tab of the workbench of `agentID` into pane `index`.
+    func moveWorkbenchTab(_ tab: WorkbenchTab, toPane index: Int, agentID: String) {
+        updateWorkbench(for: agentID) { WorkbenchRules.move(tab, toPane: index, in: $0) }
+    }
+
+    /// Splits the workbench of `agentID` into two panes, or joins them back (⌘⌥\).
+    func toggleWorkbenchSplit(agentID: String) {
+        updateWorkbench(for: agentID) { state in
+            state.isSplit ? WorkbenchRules.unsplit(state) : WorkbenchRules.split(state)
+        }
+    }
+
+    /// ⌘⌥1…9: selects the tab at `index` in the focused pane of the selected agent's workbench.
+    func selectFocusedWorkbenchTab(at index: Int) {
+        guard let agentID = actingAgentID, let pane = WorkbenchRules.focusedPane(of: workbenchState(for: agentID)),
+            pane.tabs.indices.contains(index)
+        else { return }
+        selectWorkbenchTab(pane.tabs[index], agentID: agentID)
+    }
+
+    /// ⌘⌥W: closes the selected tab of the focused pane of the selected agent's workbench.
+    func closeFocusedWorkbenchTab() {
+        guard let agentID = actingAgentID, let tab = WorkbenchRules.focusedPane(of: workbenchState(for: agentID))?.selected
+        else { return }
+        closeWorkbenchTab(tab, agentID: agentID)
+    }
+
+    /// Closes the workbench panel of `agentID`; its tabs stay open for the next time.
+    func closeWorkbenchPanel(agentID: String) {
+        updateWorkbench(for: agentID) { state in
+            var next = state
+            next.isOpen = false
+            return next
+        }
+    }
+
+    /// ⌘J: opens or closes the workbench panel of the selected agent.
+    func toggleWorkbench() {
+        guard let agentID = actingAgentID else { return }
+        updateWorkbench(for: agentID) { WorkbenchRules.toggle($0) }
+    }
+
+    /// ⌘I: shows the agent details in the workbench, or closes the panel when the details are on show.
+    func toggleDetails() {
+        guard let agentID = actingAgentID else { return }
+        updateWorkbench(for: agentID) { state in
+            WorkbenchRules.showsDetails(state) ? WorkbenchRules.toggle(state) : WorkbenchRules.open(.details, in: state)
+        }
     }
 }

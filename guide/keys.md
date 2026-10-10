@@ -189,7 +189,7 @@ Pauses every agent of the current server, or resumes them all when they are all 
 ## What changed (Что изменил агент)
 
 <!-- id: key-team-whatchanged; covers: command:team.whatChanged -->
-Opens the list of files the selected agent changed, with rollback.
+Opens the list of files the selected agent changed, with rollback, as a tab of the workbench panel.
 Где: Agent → What changed (Что изменил агент)
 1. Select an agent.
 2. Press ⇧⌘D to open the list of changes (see [team.md](team.md)).
@@ -198,11 +198,44 @@ Opens the list of files the selected agent changed, with rollback.
 ## Agent details (Сведения об агенте)
 
 <!-- id: key-team-agentdetails; covers: command:team.agentDetails -->
-Opens or closes the agent details inspector.
+Shows the agent's details in the workbench panel, or closes the panel when they are on show.
 Где: Agent → Agent details (Сведения об агенте)
 1. Select an agent.
-2. Press ⌘I to open or close the inspector.
+2. Press ⌘I to show the details, or to close the panel when they are on show.
 Хоткей: ⌘I
+
+## Show or hide the panel (Показать или скрыть панель)
+
+<!-- id: key-team-workbench-toggle; covers: command:team.workbench.toggle -->
+Opens or closes the workbench panel of the agent on screen. A closed panel keeps its tabs.
+Где: Agent → Show or hide the panel (Показать или скрыть панель)
+1. Open the Team mode with ⌘1 and select an agent.
+2. Press ⌘J to open the panel, and ⌘J again to close it.
+Хоткей: ⌘J
+
+## Split or join the panels (Разделить или объединить панели)
+
+<!-- id: key-team-workbench-split; covers: command:team.workbench.split -->
+Splits the workbench panel into two panes, one above the other, or joins them back. Joining moves the tabs of the lower pane up.
+Где: Agent → Split or join the panels (Разделить или объединить панели)
+1. In the Team mode, press ⌥⌘\ to split the panel. Press it again to join the panes.
+Хоткей: ⌥⌘\
+
+## Close the panel's tab (Закрыть вкладку панели)
+
+<!-- id: key-team-workbench-closetab; covers: command:team.workbench.closeTab -->
+Closes the selected tab of the focused pane of the workbench panel. A terminal keeps running on the server; the tab only stops showing it.
+Где: Agent → Close the panel's tab (Закрыть вкладку панели)
+1. In the Team mode, press ⌥⌘W on a tab of the panel.
+Хоткей: ⌥⌘W
+
+## Panel tab 1…9 (Вкладка панели 1…9)
+
+<!-- id: key-team-workbench-tabs; covers: command:team.workbench.tab1, command:team.workbench.tab2, command:team.workbench.tab3, command:team.workbench.tab4, command:team.workbench.tab5, command:team.workbench.tab6, command:team.workbench.tab7, command:team.workbench.tab8, command:team.workbench.tab9 -->
+Selects the tab with that number in the focused pane of the workbench panel. Tabs are counted from the left.
+Где: Agent → Panel tab 1…9 (Вкладка панели 1…9)
+1. In the Team mode, press ⌥⌘1 … ⌥⌘9 to select the tab with that number.
+Хоткей: ⌥⌘1 … ⌥⌘9
 
 ## New terminal (Новый терминал)
 

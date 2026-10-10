@@ -3,14 +3,7 @@ import BanditoKit
 import BanditoL10n
 import SwiftUI
 
-/// What the memory viewer opens: one file (MEMORY.md), or a folder of the agent's memory (notes, journal, files).
-struct MemoryViewerTarget: Identifiable, Equatable {
-    var path: String
-    var isFile: Bool
-    var id: String { path }
-}
-
-/// Rules of the memory viewer. Pure, so they can be tested.
+/// Rules of the file tab (the agent's memory files and folders). Pure, so they can be tested.
 enum MemoryViewerRules {
     /// The save button shows only when a text file has changes that can be saved, in the viewer itself.
     static func showsSave(isDirty: Bool, readOnly: Bool, showingViewer: Bool) -> Bool {
@@ -23,61 +16,54 @@ enum MemoryViewerRules {
     }
 }
 
-/// The memory viewer: a sheet over the chat, so the person stays in the thread. A file opens in the file viewer; a
-/// folder lists its files, and a click on a file opens it in the same sheet. "Open in Files" goes to the Files mode.
-struct MemoryViewerSheet: View {
+/// A file or a folder of the server, in a workbench tab. A file opens in the file viewer; a folder lists its entries,
+/// and a click on a file opens it in the same tab. The agent's memory (MEMORY.md, notes, journal, files) opens here,
+/// so the person stays beside the chat. The tab's own tabs are kept here, apart from the Files mode.
+struct WorkbenchFileTab: View {
     var server: ServerModel
-    var target: MemoryViewerTarget
-    var onClose: () -> Void
+    var agentID: String
+    /// The file or folder on the server.
+    var path: String
 
     @Environment(Router.self) private var router
-    /// The tabs of this sheet only: closing the sheet leaves nothing open in the Files mode.
+    /// The file tabs of this workbench tab only: closing it leaves nothing open in the Files mode.
     @State private var workspace = FileWorkspace()
-    /// Entries of the folder on show. Empty for a single file.
+    /// Entries of the folder on show. Empty for a file.
     @State private var entries: [FsEntry] = []
-    /// The folder the list shows; starts at the target folder and moves down when a subfolder is opened.
-    @State private var folder: String
+    /// The folder the list shows; starts at the path itself for a folder and moves down when a subfolder opens.
+    @State private var folder = ""
     /// Folders above `folder`, for the way back.
     @State private var history: [String] = []
+    /// Whether the path is a folder (decided by its parent's listing) or a file.
+    @State private var isFolder = false
     @State private var showingViewer = false
     @State private var error: UserFacingMessage?
-    /// False until the first listing has answered: a spinner shows, not "no files".
+    /// False until the path is known and listed: a spinner shows, not "no files".
     @State private var loaded = false
-
-    init(server: ServerModel, target: MemoryViewerTarget, onClose: @escaping () -> Void) {
-        self.server = server
-        self.target = target
-        self.onClose = onClose
-        _folder = State(initialValue: target.isFile ? (FilePath.parent(of: target.path) ?? target.path) : target.path)
-    }
 
     var body: some View {
         VStack(spacing: 0) {
             header
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
                 .overlay(alignment: .bottom) {
                     Rectangle().fill(Color.Bandito.line).frame(height: 1)
                 }
             if showingViewer {
-                // The header's back button goes to the list of the folder, or closes the sheet for a single file.
-                FileViewer(server: server, workspace: workspace, onBack: target.isFile ? onClose : { showingViewer = false })
+                // The header's back button goes to the folder's list, or closes the tab for a single file.
+                FileViewer(server: server, workspace: workspace, onBack: isFolder ? { showingViewer = false } : close)
             } else {
                 folderList
             }
         }
-        .frame(minWidth: 680, idealWidth: 820, minHeight: 480, idealHeight: 600)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.Bandito.bg)
-        .task(id: folder) { await load() }
-        .task {
-            // A single file opens straight away.
-            if target.isFile { openFile(path: target.path) }
-        }
+        .task(id: "\(server.id.uuidString)|\(path)") { await resolve() }
     }
 
     private var header: some View {
         HStack(spacing: 10) {
-            if showingViewer && !target.isFile {
+            if showingViewer && isFolder {
                 Button {
                     showingViewer = false
                 } label: {
@@ -101,7 +87,7 @@ struct MemoryViewerSheet: View {
                 .foregroundStyle(Color.Bandito.text)
                 .lineLimit(1)
                 .truncationMode(.head)
-                .help(target.path)
+                .help(path)
             Spacer(minLength: 8)
             if let document = workspace.selectedDocument,
                 MemoryViewerRules.showsSave(isDirty: document.isDirty, readOnly: document.readOnly, showingViewer: showingViewer)
@@ -114,20 +100,17 @@ struct MemoryViewerSheet: View {
                 .fixedSize()
             }
             Button(L10n.Memory.Viewer.openInFiles) {
-                router.openInFiles(target.path, isFile: target.isFile)
-                onClose()
+                router.openInFiles(path, isFile: !isFolder)
             }
             .banditoButton(.quiet())
             .fixedSize()
-            Button(L10n.Common.close, action: onClose)
-                .banditoButton(.quiet())
-                .fixedSize()
         }
     }
 
     /// The last part of the path: the file name, or the folder name.
     private var title: String {
-        URL(fileURLWithPath: showingViewer ? (workspace.selectedDocument?.path ?? folder) : folder).lastPathComponent
+        let shown = showingViewer ? (workspace.selectedDocument?.path ?? path) : (folder.isEmpty ? path : folder)
+        return URL(fileURLWithPath: shown).lastPathComponent
     }
 
     @ViewBuilder
@@ -152,8 +135,9 @@ struct MemoryViewerSheet: View {
                             if entry.kind == .dir {
                                 history.append(folder)
                                 folder = entry.path
+                                Task { await load() }
                             } else if entry.kind == .file {
-                                openFile(path: entry.path)
+                                openFile(entry)
                             }
                         } label: {
                             HStack(spacing: 10) {
@@ -179,6 +163,28 @@ struct MemoryViewerSheet: View {
         }
     }
 
+    /// Looks the path up in its parent's listing: a folder lists its entries, a file opens in the viewer.
+    private func resolve() async {
+        do {
+            let parent = FilePath.parent(of: path) ?? path
+            let listing = try await server.list(parent).entries
+            if let entry = listing.first(where: { $0.path == path }), entry.kind != .dir {
+                isFolder = false
+                openFile(entry)
+            } else {
+                isFolder = true
+                folder = path
+                history = []
+                showingViewer = false
+                await load()
+            }
+            error = nil
+        } catch {
+            self.error = UserFacingError.message(for: error)
+        }
+        loaded = true
+    }
+
     private func load() async {
         do {
             entries = MemoryViewerRules.sortedForList(try await server.list(folder).entries)
@@ -192,20 +198,15 @@ struct MemoryViewerSheet: View {
     private func goUp() {
         guard let previous = history.popLast() else { return }
         folder = previous
+        Task { await load() }
     }
 
-    /// Opens a file in the viewer of this sheet. The file is looked up in its folder, which the sheet lists anyway.
-    private func openFile(path: String) {
-        Task {
-            let parent = FilePath.parent(of: path) ?? folder
-            do {
-                let listing = try await server.list(parent).entries
-                guard let entry = listing.first(where: { $0.path == path }) else { return }
-                workspace.open(entry, server: server)
-                showingViewer = true
-            } catch {
-                self.error = UserFacingError.message(for: error)
-            }
-        }
+    private func openFile(_ entry: FsEntry) {
+        workspace.open(entry, server: server)
+        showingViewer = true
+    }
+
+    private func close() {
+        router.closeWorkbenchTab(.file(path: path), agentID: agentID)
     }
 }

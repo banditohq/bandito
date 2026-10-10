@@ -11,8 +11,6 @@ struct MainWindow: View {
     @Environment(AccountHub.self) private var hub
     @Environment(OnboardingModel.self) private var onboarding
     @Environment(\.scenePhase) private var scenePhase
-    /// Shown after a rollback from "What changed", with the undo.
-    @State private var rollbackNotice: RollbackNotice?
 
     var body: some View {
         @Bindable var router = router
@@ -48,13 +46,13 @@ struct MainWindow: View {
             }
         }
         .overlay(alignment: .bottom) {
-            if let notice = rollbackNotice {
-                RollbackToast(notice: notice) { rollbackNotice = nil }
+            if let notice = router.rollbackNotice {
+                RollbackToast(notice: notice) { router.rollbackNotice = nil }
                     .padding(.bottom, 18)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .banditoAnimation(BanditoMotion.ease, value: rollbackNotice?.id)
+        .banditoAnimation(BanditoMotion.ease, value: router.rollbackNotice?.id)
         .overlayPreferenceValue(TourAnchorKey.self) { anchors in
             if onboarding.tourRequested {
                 TourLayer(anchors: anchors)
@@ -67,6 +65,10 @@ struct MainWindow: View {
             await hub.refreshPending()
             hub.startWatchingPending()
         }
+        // The server in front: the workbench state of its agents is kept under it (see `Router.workbenchKey`).
+        .onChange(of: app.currentServer?.id, initial: true) { _, id in
+            router.frontServerID = id?.uuidString
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active, hub.signedIn {
                 Task { await hub.refreshPending() }
@@ -78,7 +80,6 @@ struct MainWindow: View {
     private func sheetView(for sheet: Sheet) -> some View {
         switch sheet {
         case .newAgent: NewAgentSheet()
-        case .changes(let agentID): ChangesSheet(agentID: agentID) { rollbackNotice = $0 }
         case .account: AccountSheet()
         case .addServer: AddServerSheet()
         }

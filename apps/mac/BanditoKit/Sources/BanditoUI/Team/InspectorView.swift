@@ -3,12 +3,13 @@ import BanditoKit
 import BanditoL10n
 import SwiftUI
 
-/// The details panel of the selected agent (⌘I): header, three tabs, and the tab's content.
+/// The details of the agent (⌘I), shown in the workbench: header, three tabs, and the tab's content.
+/// The close button sits on the workbench's panel, so the header has one only when `onClose` is given.
 struct InspectorView: View {
     var server: ServerModel
     var agent: Agent
     @Binding var tab: InspectorTab
-    var onClose: () -> Void
+    var onClose: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -63,7 +64,7 @@ struct InspectorView: View {
 private struct IdentityCard: View {
     var server: ServerModel
     var agent: Agent
-    var onClose: () -> Void
+    var onClose: (() -> Void)?
 
     @State private var name = ""
     @State private var role = ""
@@ -76,6 +77,20 @@ private struct IdentityCard: View {
     @FocusState private var focused: Field?
 
     private enum Field: Hashable { case name, role }
+
+    private func closeButton(_ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: "xmark")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Color.Bandito.text3)
+                .frame(width: 30, height: 30)
+                .overlay(Circle().stroke(Color.Bandito.line, lineWidth: 1))
+                .contentShape(Circle())
+        }
+        .banditoButton(.row(cornerRadius: 15, hoverOpacity: 0.08))
+        .help(L10n.Common.close)
+        .padding(16)
+    }
 
     var body: some View {
         HStack(spacing: 14) {
@@ -103,22 +118,15 @@ private struct IdentityCard: View {
         }
         // Room on the right for the close button, which sits 16 pt from the top and the right edge.
         .padding(.leading, 20)
-        .padding(.trailing, 60)
+        .padding(.trailing, onClose == nil ? 20 : 60)
         .padding(.top, 18)
         .padding(.bottom, 14)
         .overlay(alignment: .topTrailing) {
-            Button(action: onClose) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Color.Bandito.text3)
-                    .frame(width: 30, height: 30)
-                    .overlay(Circle().stroke(Color.Bandito.line, lineWidth: 1))
-                    .contentShape(Circle())
+            if let onClose {
+                closeButton(onClose)
             }
-            .banditoButton(.row(cornerRadius: 15, hoverOpacity: 0.08))
-            .help(L10n.Common.close)
-            .padding(16)
         }
+
         .onChange(of: agent.avatar, initial: true) { _, _ in adoptLook() }
         .onChange(of: avatarSync.isIdle) { _, _ in adoptLook() }
         .onChange(of: agent.name, initial: true) { _, value in

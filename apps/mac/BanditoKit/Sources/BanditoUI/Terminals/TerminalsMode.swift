@@ -28,6 +28,7 @@ struct TerminalsContent: View {
 
     var body: some View {
         let controller = app.terminalController(for: server)
+        let place = TerminalDisplayOwner.terminals
         Group {
             if !server.supports("terminals") {
                 TerminalsPlaceholder(symbol: "terminal", title: L10n.Terminals.updateServer, detail: nil, action: nil)
@@ -49,6 +50,9 @@ struct TerminalsContent: View {
         .task(id: server.id) {
             await controller.start()
         }
+        // The Terminals mode draws the terminal views while it is on screen; a workbench pane gives them up.
+        .onAppear { controller.claimDisplay(place) }
+        .onDisappear { controller.releaseDisplay(place) }
         .onChange(of: router.terminalRequest) { _, request in
             guard let request else { return }
             router.terminalRequest = nil
