@@ -74,7 +74,13 @@ final class LanguageBundles: @unchecked Sendable {
         if let cached = bundles[languageCode] {
             return cached
         }
-        guard let path = L10n.bundle.path(forResource: languageCode, ofType: "lproj"),
+        // The folder's name can differ in case from the code ("zh-hans.lproj" for "zh-Hans"), depending on how the
+        // resources were built, so the bundle's own list of localizations is matched without case.
+        let wanted = languageCode.lowercased().replacingOccurrences(of: "_", with: "-")
+        let name = L10n.bundle.localizations.first {
+            $0.lowercased().replacingOccurrences(of: "_", with: "-") == wanted
+        } ?? languageCode
+        guard let path = L10n.bundle.path(forResource: name, ofType: "lproj"),
             let bundle = Bundle(path: path)
         else { return nil }
         bundles[languageCode] = bundle
