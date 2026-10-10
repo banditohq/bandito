@@ -394,6 +394,8 @@ public final class Router {
     /// The composer's text of each agent, by agent id. Kept here rather than in the thread view, so a draft stays with
     /// its agent when the view is recreated or the person goes to another agent.
     public var drafts: [String: String] = [:]
+    /// The `@` mentions in each agent's draft (see `MentionDraft`). They live as long as their `@Label` is in the text.
+    var draftMentions: [String: [DraftMention]] = [:]
     /// Counts each ⌘R. The thread and the folder on show reload their data when it changes (see `RefreshRules`).
     var refreshRequests = 0
     /// Where each agent's thread was left (see `ThreadPlace`). Not observed: only the thread reads and writes it, and
@@ -405,6 +407,20 @@ public final class Router {
         let text = (drafts[agentID] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         drafts[agentID] = nil
         return text
+    }
+
+    /// The mentions of an agent's draft, for sending; they are cleared with the draft.
+    func takeMentions(for agentID: String) -> [DraftMention] {
+        defer { draftMentions[agentID] = nil }
+        return draftMentions[agentID] ?? []
+    }
+
+    /// Puts the mentions of a message that could not be sent back, beside any made since.
+    func restoreMentions(_ list: [DraftMention], for agentID: String) {
+        guard !list.isEmpty else { return }
+        var merged = list
+        for item in draftMentions[agentID] ?? [] where !merged.contains(item) { merged.append(item) }
+        draftMentions[agentID] = merged
     }
 
     /// Puts text that could not be sent back into the draft of its own agent, in front of anything typed since.

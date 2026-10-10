@@ -98,6 +98,17 @@ Typing / in the composer opens a list of commands. Four sources are merged and c
 1. Type / and read the list. Use ↑↓ to choose (↑↓ select), ↵ to run (↵ run), or ⇥ to complete the name (⇥ complete).
 2. Use the filters All (Все), Server (Сервер), From Mac (С Mac), Bandito (Bandito), Mine (Мои) to narrow the list.
 3. A command from This Mac that is not on the server yet asks Install /name on the server? (Install /name on the server?). Click Install and send (Установить и отправить): the command is copied once, then the message is sent.
+4. The Bandito commands also answer to words in the language of the app: in Russian, /модель finds /model and /усилие finds /effort. The English name always works, case and accents do not matter.
+
+## Mentions (@)
+
+<!-- id: team-mentions; covers: -->
+Type @ after a space to point the agent at something: a service (SERVICES), a teammate (AGENTS), a file or folder of the agent's project (FILES), or an open tab of the server's browser (BROWSER). The pick leaves @Name in the message and a chip above the field; the agent reads a short note of what each one is. The message in the thread shows the chips under it. A service that is not connected is marked Connect (Подключить). Search finds the name, the English name and the words of the group (@сервисы, @files).
+Где: Team → agent thread → composer → type @
+1. Type @ and a few letters. Use ↑↓ to choose (↑↓ select), ↵ to insert (↵ insert), ⇥ to complete (⇥ complete), Esc to close.
+2. The chip appears above the field. Click ✕ on it, or press Backspace right after @Name, to take it away with its words.
+3. A service that is not connected asks Connect Linear? (Connect {name}?) above the field. Click Connect: the sign-in opens in the browser, or the sheet of keys, as in the Marketplace. The message goes by itself when the service is connected.
+4. A server older than this build sends the words only, without the chips.
 
 ## /new
 

@@ -133,6 +133,8 @@ public struct AgentThread: Sendable, Hashable {
     public private(set) var replies: [Int64: Int64] = [:]
     /// The files each message carries, by its `seq`.
     public private(set) var attachments: [Int64: [MessageAttachment]] = [:]
+    /// The `@` mentions each message carries (feature `mentions`), by its `seq`: chips under the message.
+    public private(set) var mentions: [Int64: [Mention]] = [:]
     /// How each form ended, by form id. Kept apart from the rows because a page of history may hold the answer and not
     /// the question (the question comes with an older page).
     private var formOutcomes: [String: FormOutcome] = [:]
@@ -220,11 +222,12 @@ public struct AgentThread: Sendable, Hashable {
             if let messageSeq { startedAt[messageSeq] = e.seq }
         case .messageDropped(let seq, _):
             droppedAt[seq] = e.seq
-        case .messageUser(let text, let source, let from, let replyTo, let files, let queued):
+        case .messageUser(let text, let source, let from, let replyTo, let files, let queued, let mentioned):
             if queued, source != .system, e.seq > 0 { queuedSeqs.insert(e.seq) }
             if source != .system {
                 if let replyTo { replies[e.seq] = replyTo }
                 if !files.isEmpty { attachments[e.seq] = files }
+                if !mentioned.isEmpty { mentions[e.seq] = mentioned }
             }
             switch source {
             case .user:
@@ -411,6 +414,7 @@ public struct AgentThread: Sendable, Hashable {
         for (seq, theirs) in other.reactions { reactions[seq, default: MessageReactions()].merge(theirs) }
         for (seq, to) in other.replies where replies[seq] == nil { replies[seq] = to }
         for (seq, files) in other.attachments where attachments[seq] == nil { attachments[seq] = files }
+        for (seq, list) in other.mentions where mentions[seq] == nil { mentions[seq] = list }
         for (id, outcome) in other.formOutcomes where formOutcomes[id] == nil { formOutcomes[id] = outcome }
         for (i, item) in items.enumerated() {
             guard case .form(var row) = item, row.outcome == nil, let outcome = formOutcomes[row.formId] else { continue }

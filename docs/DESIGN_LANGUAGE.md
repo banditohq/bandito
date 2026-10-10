@@ -77,6 +77,8 @@ Build only from these. Need something that is not here: add it to the system fir
 | Mode switch | `ModeBar` | `Shell/ModeBar.swift` |
 | Chat bubbles | `BubbleLook`, `UserBubble`, `AgentBubble` | `Team/ThreadRowViews.swift` |
 | Chat input | `Composer` | `Team/Composer.swift` |
+| Menu above the composer (`/`, `@`) | `.composerMenuSurface()`, `ComposerMenuGroupTitle`, `.composerMenuRow(selected:)`, `ComposerMenuFooter` | `Team/ComposerMenuChrome.swift` |
+| Mention of a service, teammate, file or tab | `MentionChip`, `MentionIcon` | `Team/MentionChips.swift`, `Team/MentionMenu.swift` |
 | Agent identity | `RaccoonAvatar`, `AgentAvatar`, `AvatarArtView` | `Components/RaccoonAvatar.swift`, `Avatar/` |
 | Animation | `.banditoAnimation`, `.banditoRise` | `Components/Motion.swift`, `RiseIn.swift` |
 | Hover fill for a gesture row | `.rowHighlight()` | `Components/Interaction.swift` |
@@ -100,6 +102,8 @@ Build only from these. Need something that is not here: add it to the system fir
 - **ModeBar**: `surface1`, radius 12, padding 3, gradient hairline; cells 32 high, radius 9, icon 16; active cell `surface3` with a `text` 10% border and a soft shadow, sliding on a spring (0.32, 0.86).
 - **Bubbles**: corners 16 with a 6 pt tail on the speaker's side; padding 14 x 10; text 14.5. Person: `surface2` + `text` 13% + `text` 8% border. Agent: `surface1` with a border fading 8% to 3%. No shadows. A person's message that still waits for its turn (the agent is busy or saving its memory) carries a quiet line under the bubble, right-aligned: `Queued`, 11.5 pt `text3`; it goes away when the turn takes the message. A message the daemon gave up on (crash, stop, restart) carries `Not delivered` in the same style, and its context menu offers Send again.
 - **Composer**: radius 24, `surface2`, border `line` (`text` 18% in focus), `black` 35% shadow (0 10 18), a `signal` 10% glow in focus; 14.5 text; 34 pt cream send disc with a `bg` arrow (stop while running).
+- **Menu above the composer** (`/` and `@`): max 640 wide, radius 18, `#201C18` at 98%, 1 pt `text` 12% border, `black` 50% shadow (0 14 30); group title 10.5/600 with 0.8 tracking in `text3`; row radius 10, padding 10 x 7, selected = `peach` 10% fill and 30% edge; footer 11.5 `text3` under a `text` 7% hairline.
+- **Mention chip**: a capsule 26 high, `surface3`, 0.5 pt `line` border (dashed `peach` 60% while the service is not connected), 18 pt picture on the left (a service's Marketplace tile, an agent's avatar, a file glyph, the browser mark), label 12.5/500 `text`, 260 max, middle-truncated. In the composer it sits in a strip above the field with a 18 pt cross; in the thread it sits right-aligned under the bubble, wrapping to the right edge. A file chip opens the file in the workbench.
 - **Avatar**: tile corner size x 17/52; fixed tile colors (peach, sky, sage, rose, lilac, cream) and mask `#12100E`; nine faces; six moods (idle, working, needsYou, thinking, error, sleeping) that rest under reduced motion.
 
 ## Motion

@@ -85,13 +85,7 @@ struct SlashMenuView: View {
                     ForEach(SlashOrigin.allCases, id: \.self) { origin in
                         let group = entries.enumerated().filter { $0.element.origin == origin }
                         if !group.isEmpty {
-                            Text(groupTitle(origin))
-                                .font(BanditoFont.text(size: 10.5, weight: 600))
-                                .tracking(0.8)
-                                .foregroundStyle(Color.Bandito.text3)
-                                .padding(.horizontal, 10)
-                                .padding(.top, 8)
-                                .padding(.bottom, 4)
+                            ComposerMenuGroupTitle(text: groupTitle(origin))
                             ForEach(group, id: \.element.id) { item in
                                 Button { onRun(item.element) } label: {
                                     row(item.element, selected: item.offset == model.index)
@@ -106,10 +100,7 @@ struct SlashMenuView: View {
             .frame(maxHeight: 340)
             footer
         }
-        .frame(maxWidth: 640)
-        .background(Color(hex: 0x201C18).opacity(0.98), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Color.Bandito.text.opacity(0.12)))
-        .shadow(color: .black.opacity(0.5), radius: 30, x: 0, y: 14)
+        .composerMenuSurface()
     }
 
     private var filters: some View {
@@ -167,34 +158,14 @@ struct SlashMenuView: View {
                 .padding(.vertical, 1)
                 .background(tint(entry.origin).opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
-        .background(
-            selected ? BanditoPalette.peach.opacity(0.1) : Color.clear,
-            in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(selected ? BanditoPalette.peach.opacity(0.3) : Color.clear))
-        .contentShape(Rectangle())
-        .accessibilityAddTraits(selected ? .isSelected : [])
+        .composerMenuRow(selected: selected)
     }
 
     private var footer: some View {
-        HStack(spacing: 14) {
-            Text(L10n.Slash.footerSelect)
-            Text(L10n.Slash.footerRun)
-            Text(L10n.Slash.footerComplete)
-            Spacer(minLength: 8)
+        ComposerMenuFooter(hints: [L10n.Slash.footerSelect, L10n.Slash.footerRun, L10n.Slash.footerComplete]) {
             Button(L10n.Slash.newSnippet, action: onNewSnippet)
                 .banditoButton(.link)
                 .foregroundStyle(BanditoPalette.peach)
-        }
-        .font(BanditoFont.text(size: 11.5, weight: 400))
-        .foregroundStyle(Color.Bandito.text3)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 9)
-        .overlay(alignment: .top) {
-            Rectangle().fill(Color.Bandito.text.opacity(0.07)).frame(height: 1)
         }
     }
 

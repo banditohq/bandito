@@ -700,13 +700,16 @@ public final class ServerModel: Identifiable {
 
     /// Sends a message to an agent. `attachments` are files from `uploadAttachment`; they go by path. `replyTo` is the
     /// `seq` of the message it answers (the daemon takes it with the `attachments` feature; without that feature the
-    /// field is left out and the text goes alone).
+    /// field is left out and the text goes alone). `mentions` go with the `mentions` feature; without it the text
+    /// keeps the `@Name` words and nothing more.
     public func send(
-        _ text: String, to agentId: String, replyTo: Int64? = nil, attachments: [AgentAttachment] = []
+        _ text: String, to agentId: String, replyTo: Int64? = nil, attachments: [AgentAttachment] = [],
+        mentions: [Mention] = []
     ) async throws {
         let request = AgentSendRequest(
             agentId: agentId, text: text, attachments: attachments.isEmpty ? nil : attachments.map(\.path),
-            replyTo: supports("attachments") ? replyTo : nil)
+            replyTo: supports("attachments") ? replyTo : nil,
+            mentions: mentions.isEmpty || !supports("mentions") ? nil : mentions)
         try await rpc().call("agents.send", request)
     }
 
@@ -718,10 +721,11 @@ public final class ServerModel: Identifiable {
         else { return }
         let files = thread.attachments[seq] ?? []
         let replyTo = thread.replies[seq]
+        let mentions = thread.mentions[seq] ?? []
         thread.markResent(seq)
         threads[agentId] = thread
         do {
-            try await send(text, to: agentId, replyTo: replyTo, attachments: files)
+            try await send(text, to: agentId, replyTo: replyTo, attachments: files, mentions: mentions)
         } catch {
             threads[agentId]?.unmarkResent(seq)
             throw error

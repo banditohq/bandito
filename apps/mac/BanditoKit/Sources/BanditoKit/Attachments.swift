@@ -56,18 +56,23 @@ public enum AttachmentRules {
     }
 }
 
-/// Body of `agents.send`. `attachments` (paths from the upload) and `replyTo` (the `seq` of the message it answers)
-/// are left out when there are none.
+/// Body of `agents.send`. `attachments` (paths from the upload), `replyTo` (the `seq` of the message it answers) and
+/// `mentions` are left out when there are none.
 public struct AgentSendRequest: Encodable, Sendable, Equatable {
     public var agentId: String
     public var text: String
     public var attachments: [String]?
     public var replyTo: Int64?
+    /// The `@` mentions in `text`; left out when there are none or the daemon lacks the `mentions` feature.
+    public var mentions: [Mention]?
 
-    public init(agentId: String, text: String, attachments: [String]?, replyTo: Int64? = nil) {
+    public init(
+        agentId: String, text: String, attachments: [String]?, replyTo: Int64? = nil, mentions: [Mention]? = nil
+    ) {
         self.agentId = agentId
         self.text = text
         self.attachments = attachments
         self.replyTo = replyTo
+        self.mentions = mentions
     }
 }

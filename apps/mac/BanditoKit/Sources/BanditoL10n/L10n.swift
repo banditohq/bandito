@@ -1288,6 +1288,23 @@ public enum L10n {
         }
     }
 
+    public enum Mention {
+        public static var connectHint: String { L10n.tr("mention.connectHint") }
+        public static func connectPrompt(name: String) -> String { L10n.tr("mention.connectPrompt", name) }
+        public static var footerInsert: String { L10n.tr("mention.footerInsert") }
+        public static var groupAgents: String { L10n.tr("mention.groupAgents") }
+        public static var groupBrowser: String { L10n.tr("mention.groupBrowser") }
+        public static var groupFiles: String { L10n.tr("mention.groupFiles") }
+        public static var groupServices: String { L10n.tr("mention.groupServices") }
+
+        public enum Alias {
+            public static var agent: String { L10n.tr("mention.alias.agent") }
+            public static var browserTab: String { L10n.tr("mention.alias.browserTab") }
+            public static var file: String { L10n.tr("mention.alias.file") }
+            public static var integration: String { L10n.tr("mention.alias.integration") }
+        }
+    }
+
     public enum Menu {
         public static var agent: String { L10n.tr("menu.agent") }
         public static var checkForUpdates: String { L10n.tr("menu.checkForUpdates") }
@@ -2414,6 +2431,18 @@ public enum L10n {
         public static var sourceServer: String { L10n.tr("slash.sourceServer") }
         public static var terminalSummary: String { L10n.tr("slash.terminalSummary") }
         public static var usageSummary: String { L10n.tr("slash.usageSummary") }
+
+        public enum Alias {
+            public static var changes: String { L10n.tr("slash.alias.changes") }
+            public static var effort: String { L10n.tr("slash.alias.effort") }
+            public static var files: String { L10n.tr("slash.alias.files") }
+            public static var memory: String { L10n.tr("slash.alias.memory") }
+            public static var model: String { L10n.tr("slash.alias.model") }
+            public static var new: String { L10n.tr("slash.alias.new") }
+            public static var pause: String { L10n.tr("slash.alias.pause") }
+            public static var terminal: String { L10n.tr("slash.alias.terminal") }
+            public static var usage: String { L10n.tr("slash.alias.usage") }
+        }
     }
 
     public enum Status {
