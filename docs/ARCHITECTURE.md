@@ -399,6 +399,10 @@ How each runtime gets them: Claude, in the same `--mcp-config` file as the crew 
 
 The agent's prompt names its integrations in one line: «Подключённые интеграции: <имена>. Используйте их инструменты, когда задача про эти сервисы.» (after the role, before the owner's own instructions). `daemon.info.features` contains `integrations`, `integrations_probe`, `integrations_oauth` and `avatar_pictures`.
 
+## Agent templates (data)
+
+The built-in starting points for a bot: `daemon/src/agent_templates.json`, 16 entries in six categories (`dev`, `ops`, `research`, `writing`, `business`, `personal`). An entry has `id` (kebab-case), `name_*`, `description_*`, `long_*`, `role_en`, `starter_*` (the first message, put in the input field and never sent by itself) and `system_prompt` (English, always with «Reply in the language the owner writes in.»). `l10n` holds the other seven languages (`de`, `es`, `fr`, `ja`, `ko`, `pt-BR`, `zh-Hans`): `name`, `description`, `long`, `starter`, `schedule_prompts`. Also `icon` (an SF Symbol), `accent` (`#RRGGBB`), `runtime` (`claude`), `effort`, `capabilities` (a subset of the capability names), `integrations` (`{id, required}`, ids from `integrations_catalog.json`), `skills` (empty until the skills catalog exists) and `schedules` (`{cron, prompt_en, prompt_ru, enabled_by_default}`; the cron is read by the scheduler, the prompts are the owner's language pair). `agent_templates.rs` parses the file with `deny_unknown_fields`, and its test holds every entry to these rules. The RPC that lists templates and creates an agent from one (`agents.templates`, `agents.create_from_template`) is not built yet.
+
 ## Logs
 
 `daemon.logs {lines?, level?}` returns the newest lines of the daemon's own log, for the app's journal view. `lines` is 1–2000 (default 500); `level` is the lowest level to show: `info` (default; debug and trace lines are left out), `warn` or `error`. The reply is `{source, lines}`, where `source` is `journald` or `file`.
