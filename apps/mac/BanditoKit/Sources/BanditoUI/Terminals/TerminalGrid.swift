@@ -23,7 +23,7 @@ struct TerminalGrid: View {
                         let hidden = workspace.fullscreenID.map { $0 != id } ?? false
                         TerminalPaneView(
                             controller: controller, session: session,
-                            isFocused: workspace.focusedID == id, requestClose: requestClose)
+                            isFocused: workspace.focusedID == id || workspace.onScreen.count == 1, requestClose: requestClose)
                             .frame(width: rect.width, height: rect.height)
                             .position(x: rect.midX, y: rect.midY)
                             .opacity(hidden ? 0 : 1)
@@ -73,7 +73,7 @@ struct TerminalPaneView: View {
             }
             ZStack(alignment: .bottom) {
                 TerminalPane(view: session.view, fontSize: app.terminalFont.size)
-                    .padding(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 8))
+                    .padding(EdgeInsets(top: 10, leading: 14, bottom: 10, trailing: 10))
                 if let message = session.errorMessage {
                     UserFacingErrorView(message: message)
                         .padding(.horizontal, 12)
@@ -90,12 +90,20 @@ struct TerminalPaneView: View {
             }
         }
         .background(Color(hex: 0x0B0A09))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(isFocused ? Color(hex: 0xFF8A1F).opacity(0.55) : Color.Bandito.text.opacity(0.07), lineWidth: 1)
-        )
-        .shadow(color: isFocused ? Color(hex: 0xFF8A1F).opacity(0.12) : .clear, radius: 6)
+        // The pane that has the keys is not outlined: the others are dimmed a little, as in iTerm or Warp.
+        .overlay {
+            Color.black.opacity(isFocused ? 0 : 0.22)
+                .allowsHitTesting(false)
+                .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: isFocused)
+        }
+        // In the side panel the terminal fills its tab, edge to edge; in the grid each pane is a quiet card.
+        .clipShape(RoundedRectangle(cornerRadius: compact ? 0 : 10, style: .continuous))
+        .overlay {
+            if !compact {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(Color.Bandito.text.opacity(0.06), lineWidth: 1)
+            }
+        }
     }
 }
 
