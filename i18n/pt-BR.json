@@ -527,7 +527,7 @@
   "account.links.settings": "Ajustes do app",
   "account.links.help": "Ajuda e feedback",
   "account.signOut.title": "Sair da conta?",
-  "account.signOut.message": "Este Mac perde a chave de sincronização, o login, o apelido e a cor do avatar. Servidores e agentes continuam como estão. Os outros dispositivos não são afetados.",
+  "account.signOut.message": "O apelido e a cor do avatar saem deste Mac. Servidores e agentes continuam. A chave de sincronização fica no Chaveiro deste Mac, então você entra na mesma conta de novo sem confirmação. “Esquecer este Mac” remove também.",
   "account.signOut.confirm": "Sair",
   "account.color.peach": "Pêssego",
   "account.color.sky": "Céu",
@@ -570,5 +570,15 @@
   "usage.error.unknown": "Não foi possível obter os limites",
   "usage.grokNoLimits": "O Grok não informa seus limites",
   "agentSheet.statusExhaustedPlain": "Limite esgotado",
-  "inspector.promptPlaceholder": "O que o agente faz em cada execução"
+  "inspector.promptPlaceholder": "O que o agente faz em cada execução",
+  "account.signOut.forget": "Sair e esquecer este Mac",
+  "server.localUpgrade.title": "Atualizando o Bandito neste Mac para {version}…",
+  "server.localUpgrade.timedOut": "O servidor deste Mac não voltou com {version} em dois minutos.",
+  "server.localUpgrade.failed": "Não foi possível atualizar o servidor deste Mac: {error}",
+  "server.localUpgrade.retry": "Tentar de novo",
+  "server.localUpgrade.waiting": "Vamos atualizar o Bandito neste Mac quando os agentes terminarem",
+  "server.localUpgrade.updateNow": "Atualizar agora",
+  "server.localUpgrade.confirmTitle": "Os agentes serão interrompidos. Atualizar?",
+  "server.localUpgrade.confirm": "Atualizar",
+  "server.localUpgrade.notConnected": "O servidor deste Mac não está conectado"
 }

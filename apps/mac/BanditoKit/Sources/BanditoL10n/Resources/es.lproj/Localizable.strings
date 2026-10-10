@@ -25,7 +25,8 @@
 "account.signIn.text" = "Inicia sesión para mantener tus servidores sincronizados entre tus Mac.";
 "account.signIn.title" = "Inicia sesión en Bandito";
 "account.signOut.confirm" = "Cerrar sesión";
-"account.signOut.message" = "Este Mac pierde la clave de sincronización, el inicio de sesión, el apodo y el color del avatar. Los servidores y agentes se quedan donde están. Los demás dispositivos no se ven afectados.";
+"account.signOut.forget" = "Salir y olvidar este Mac";
+"account.signOut.message" = "El apodo y el color del avatar salen de este Mac. Los servidores y agentes se quedan. La clave de sincronización se queda en el Llavero de este Mac, así que volverás a entrar en la misma cuenta sin confirmación. «Olvidar este Mac» también la borra.";
 "account.signOut.title" = "¿Cerrar sesión en la cuenta?";
 "account.sync.done" = "Sincronizado · %1$@";
 "account.sync.now" = "Sincronizar ahora";
@@ -417,6 +418,15 @@
 "server.detail.peak" = "Máximo";
 "server.detail.topProcesses" = "Procesos principales";
 "server.detail.upload" = "Envío";
+"server.localUpgrade.confirm" = "Actualizar";
+"server.localUpgrade.confirmTitle" = "Los agentes se interrumpirán. ¿Actualizar?";
+"server.localUpgrade.failed" = "No se pudo actualizar el servidor de este Mac: %1$@";
+"server.localUpgrade.notConnected" = "El servidor de este Mac no está conectado";
+"server.localUpgrade.retry" = "Reintentar";
+"server.localUpgrade.timedOut" = "El servidor de este Mac no volvió con %1$@ en dos minutos.";
+"server.localUpgrade.title" = "Actualizando Bandito en este Mac a %1$@…";
+"server.localUpgrade.updateNow" = "Actualizar ahora";
+"server.localUpgrade.waiting" = "Actualizaremos Bandito en este Mac cuando los agentes terminen";
 "server.picker.connect" = "Conectar servidor…";
 "server.picker.manage" = "Administrar servidores…";
 "server.status.offline" = "Sin conexión";

@@ -25,7 +25,8 @@
 "account.signIn.text" = "サインインすると、サーバーの情報を複数のMac間で同期できます。";
 "account.signIn.title" = "Banditoにサインイン";
 "account.signOut.confirm" = "サインアウト";
-"account.signOut.message" = "このMacから同期キー、サインイン、ニックネーム、アバターの色が削除されます。サーバーとエージェントはそのままです。他のデバイスには影響しません。";
+"account.signOut.forget" = "サインアウトしてこのMacを忘れる";
+"account.signOut.message" = "ニックネームとアバターの色はこのMacから削除されます。サーバーとエージェントはそのままです。同期キーはこのMacのキーチェーンに残るので、同じアカウントに確認なしで再サインインできます。「このMacを忘れる」を選ぶと同期キーも削除されます。";
 "account.signOut.title" = "アカウントからサインアウトしますか？";
 "account.sync.done" = "同期済み · %1$@";
 "account.sync.now" = "今すぐ同期";
@@ -417,6 +418,15 @@
 "server.detail.peak" = "最大";
 "server.detail.topProcesses" = "主なプロセス";
 "server.detail.upload" = "送信";
+"server.localUpgrade.confirm" = "更新";
+"server.localUpgrade.confirmTitle" = "エージェントが中断されます。更新しますか？";
+"server.localUpgrade.failed" = "このMacのサーバーを更新できませんでした: %1$@";
+"server.localUpgrade.notConnected" = "このMacのサーバーに接続されていません";
+"server.localUpgrade.retry" = "再試行";
+"server.localUpgrade.timedOut" = "このMacのサーバーが2分以内に%1$@で応答しませんでした。";
+"server.localUpgrade.title" = "このMacのBanditoを%1$@に更新しています…";
+"server.localUpgrade.updateNow" = "今すぐ更新";
+"server.localUpgrade.waiting" = "エージェントの作業が終わったら、このMacのBanditoを更新します";
 "server.picker.connect" = "サーバーを接続…";
 "server.picker.manage" = "サーバーを管理…";
 "server.status.offline" = "オフライン";

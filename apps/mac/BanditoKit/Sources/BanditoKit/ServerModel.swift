@@ -23,16 +23,30 @@ public struct ServerConfig: Codable, Sendable, Hashable, Identifiable, CustomStr
     public var endpoint: ServerEndpoint
     /// Device token for WebSocket endpoints. The app keeps it in the Keychain; it is never encoded.
     public var token: String?
+    /// True for the daemon this app installed on this Mac (`LocalDaemonPairing` sets it). Configs saved before this
+    /// flag existed decode as false; `LocalDaemonUpgrade.confirmsThisMac` checks them at launch.
+    public var isThisMac: Bool
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, endpoint
+        case id, name, endpoint, isThisMac
     }
 
-    public init(id: UUID = UUID(), name: String, endpoint: ServerEndpoint, token: String? = nil) {
+    public init(
+        id: UUID = UUID(), name: String, endpoint: ServerEndpoint, token: String? = nil, isThisMac: Bool = false
+    ) {
         self.id = id
         self.name = name
         self.endpoint = endpoint
         self.token = token
+        self.isThisMac = isThisMac
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        endpoint = try container.decode(ServerEndpoint.self, forKey: .endpoint)
+        isThisMac = try container.decodeIfPresent(Bool.self, forKey: .isThisMac) ?? false
     }
 
     public var description: String {

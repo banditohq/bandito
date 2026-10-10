@@ -527,7 +527,7 @@
   "account.links.settings": "앱 설정",
   "account.links.help": "도움말 및 피드백",
   "account.signOut.title": "계정에서 로그아웃할까요?",
-  "account.signOut.message": "이 Mac에서 동기화 키, 로그인, 닉네임, 아바타 색상이 삭제됩니다. 서버와 에이전트는 그대로 남습니다. 다른 기기에는 영향이 없습니다.",
+  "account.signOut.message": "닉네임과 아바타 색상은 이 Mac에서 삭제됩니다. 서버와 에이전트는 그대로 남습니다. 동기화 키는 이 Mac의 키체인에 남아 있어 같은 계정에 확인 없이 다시 로그인할 수 있습니다. ‘이 Mac 잊기’를 선택하면 키도 삭제됩니다.",
   "account.signOut.confirm": "로그아웃",
   "account.color.peach": "복숭아",
   "account.color.sky": "하늘",
@@ -570,5 +570,15 @@
   "usage.error.unknown": "한도를 가져오지 못했습니다",
   "usage.grokNoLimits": "Grok는 한도를 알려주지 않습니다",
   "agentSheet.statusExhaustedPlain": "한도 소진",
-  "inspector.promptPlaceholder": "실행할 때마다 에이전트가 할 일"
+  "inspector.promptPlaceholder": "실행할 때마다 에이전트가 할 일",
+  "account.signOut.forget": "로그아웃하고 이 Mac 잊기",
+  "server.localUpgrade.title": "이 Mac의 Bandito를 {version}(으)로 업데이트하는 중…",
+  "server.localUpgrade.timedOut": "이 Mac의 서버가 2분 안에 {version}으로 돌아오지 않았습니다.",
+  "server.localUpgrade.failed": "이 Mac의 서버를 업데이트하지 못했습니다: {error}",
+  "server.localUpgrade.retry": "다시 시도",
+  "server.localUpgrade.waiting": "에이전트 작업이 끝나면 이 Mac의 Bandito를 업데이트합니다",
+  "server.localUpgrade.updateNow": "지금 업데이트",
+  "server.localUpgrade.confirmTitle": "에이전트가 중단됩니다. 업데이트할까요?",
+  "server.localUpgrade.confirm": "업데이트",
+  "server.localUpgrade.notConnected": "이 Mac의 서버에 연결되어 있지 않습니다"
 }

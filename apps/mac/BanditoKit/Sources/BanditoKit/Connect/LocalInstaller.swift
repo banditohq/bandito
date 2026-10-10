@@ -76,31 +76,42 @@ public struct LocalInstaller: Sendable {
         return name.isEmpty ? fallbackName : name
     }
 
+    /// Replaces the installed daemon with the one in the app bundle, when the content differs. The service is restarted
+    /// with `service install --json` (launchd replaces the running daemon), and the call returns once the daemon answers.
+    /// No pairing: the daemon stays the same, so the device tokens stay valid. Throws `InstallError`. An upgrade never
+    /// installs from scratch: without an installed daemon it throws `localBinaryMissing` and changes nothing. A QA copy
+    /// never upgrades either.
+    public func upgrade() async throws {
+        guard !qaBuild else { throw InstallError.io("QA builds do not install Bandito on this Mac.") }
+        guard FileManager.default.fileExists(atPath: binary.path) else { throw InstallError.localBinaryMissing }
+        try installBinary(emit: { _ in })
+        _ = try await startService(emit: { _ in })
+    }
+
+    /// The version of the daemon in the app bundle, read once per binary for the life of the process (`--version`).
+    /// Nil when the bundle has no daemon or the answer has no version. A nil answer is asked again next time.
+    public func bundledVersion() async -> String? {
+        guard let bundledBinary else { return nil }
+        return await BundledVersionCache.shared.version(of: bundledBinary) {
+            guard let result = try? await self.runner.run(bundledBinary.path, ["--version"], stdin: nil),
+                result.status == 0
+            else { return nil }
+            return LocalDaemonUpgrade.parseVersion(result.stdout)
+        }
+    }
+
     private func run(emit: (InstallEvent) -> Void) async {
         // Checked before anything is copied or started: a QA copy must not touch the owner's ~/.local/bin or service.
         if qaBuild {
             emit(.failed(.io("QA builds do not install Bandito on this Mac.")))
             return
         }
-        let existed = FileManager.default.fileExists(atPath: binary.path)
         do {
             emit(.step(.install, "Installing Bandito on this Mac"))
-            if let bundledBinary {
-                guard FileManager.default.fileExists(atPath: bundledBinary.path) else {
-                    throw InstallError.localBinaryMissing
-                }
-                if try !existed || Self.digest(of: bundledBinary) != Self.digest(of: binary) {
-                    try Self.replace(binary, withCopyOf: bundledBinary)
-                    emit(.log("Copied bandito to \(binary.path)"))
-                }
-            } else if !existed {
-                throw InstallError.localBinaryMissing
-            }
+            let existed = try installBinary(emit: emit)
 
             emit(.step(.service, "Starting the service"))
-            let result = try await runner.run(binary.path, ["service", "install", "--json"], stdin: nil)
-            let service = try SSHInstaller.serviceOutcome(result)
-            try await waitForDaemon(emit: emit)
+            let service = try await startService(emit: emit)
 
             emit(.step(.pair, "Pairing the app"))
             let paired = try await pairing.pair(name: serverName, deviceName: serverName)
@@ -112,6 +123,33 @@ public struct LocalInstaller: Sendable {
         } catch {
             emit(.failed(.io(error.localizedDescription)))
         }
+    }
+
+    /// Copies the bundled daemon over `~/.local/bin/bandito` when it is missing or has different content (SHA-256).
+    /// Returns whether a binary was installed before this call. Throws `localBinaryMissing` when there is nothing to copy.
+    @discardableResult
+    private func installBinary(emit: (InstallEvent) -> Void) throws -> Bool {
+        let existed = FileManager.default.fileExists(atPath: binary.path)
+        if let bundledBinary {
+            guard FileManager.default.fileExists(atPath: bundledBinary.path) else {
+                throw InstallError.localBinaryMissing
+            }
+            if try !existed || Self.digest(of: bundledBinary) != Self.digest(of: binary) {
+                try Self.replace(binary, withCopyOf: bundledBinary)
+                emit(.log("Copied bandito to \(binary.path)"))
+            }
+        } else if !existed {
+            throw InstallError.localBinaryMissing
+        }
+        return existed
+    }
+
+    /// Runs `service install --json`, then waits until the daemon answers. Returns the service's answer.
+    private func startService(emit: (InstallEvent) -> Void) async throws -> SSHInstaller.ServiceReply {
+        let result = try await runner.run(binary.path, ["service", "install", "--json"], stdin: nil)
+        let service = try SSHInstaller.serviceOutcome(result)
+        try await waitForDaemon(emit: emit)
+        return service
     }
 
     /// Asks `info --json` until the daemon reports `running: true`. A daemon that is still starting is asked again.
@@ -173,5 +211,20 @@ public struct LocalInstaller: Sendable {
             try? fileManager.removeItem(at: temporary)
             throw error
         }
+    }
+}
+
+/// The bundled daemon's version per binary path, kept for the life of the process. Only answers with a version are
+/// kept: a failed read is asked again the next time.
+actor BundledVersionCache {
+    static let shared = BundledVersionCache()
+
+    private var versions: [String: String] = [:]
+
+    func version(of binary: URL, read: @Sendable () async -> String?) async -> String? {
+        if let known = versions[binary.path] { return known }
+        guard let version = await read() else { return nil }
+        versions[binary.path] = version
+        return version
     }
 }

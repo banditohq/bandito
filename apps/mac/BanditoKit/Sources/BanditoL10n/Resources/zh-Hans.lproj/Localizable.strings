@@ -25,7 +25,8 @@
 "account.signIn.text" = "登录后，你的服务器会在多台 Mac 之间保持同步。";
 "account.signIn.title" = "登录 Bandito";
 "account.signOut.confirm" = "退出";
-"account.signOut.message" = "此 Mac 将删除同步密钥、登录状态、昵称和头像颜色。服务器和代理保持不变，其他设备不受影响。";
+"account.signOut.forget" = "退出并忘记此 Mac";
+"account.signOut.message" = "昵称和头像颜色会从此 Mac 移除。服务器和代理保持不变。同步密钥保留在此 Mac 的钥匙串中，再次登录同一账户无需确认。“忘记此 Mac”会一并删除它。";
 "account.signOut.title" = "退出账户？";
 "account.sync.done" = "已同步 · %1$@";
 "account.sync.now" = "立即同步";
@@ -417,6 +418,15 @@
 "server.detail.peak" = "最高";
 "server.detail.topProcesses" = "主要进程";
 "server.detail.upload" = "发送";
+"server.localUpgrade.confirm" = "更新";
+"server.localUpgrade.confirmTitle" = "代理将被中断。要更新吗？";
+"server.localUpgrade.failed" = "无法更新此 Mac 上的服务器：%1$@";
+"server.localUpgrade.notConnected" = "此 Mac 上的服务器未连接";
+"server.localUpgrade.retry" = "重试";
+"server.localUpgrade.timedOut" = "此 Mac 上的服务器两分钟内未以 %1$@ 恢复运行。";
+"server.localUpgrade.title" = "正在将此 Mac 上的 Bandito 更新到 %1$@…";
+"server.localUpgrade.updateNow" = "立即更新";
+"server.localUpgrade.waiting" = "等代理完成工作后，再更新此 Mac 上的 Bandito";
 "server.picker.connect" = "连接服务器…";
 "server.picker.manage" = "管理服务器…";
 "server.status.offline" = "离线";

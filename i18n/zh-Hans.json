@@ -527,7 +527,7 @@
   "account.links.settings": "应用设置",
   "account.links.help": "帮助与反馈",
   "account.signOut.title": "退出账户？",
-  "account.signOut.message": "此 Mac 将删除同步密钥、登录状态、昵称和头像颜色。服务器和代理保持不变，其他设备不受影响。",
+  "account.signOut.message": "昵称和头像颜色会从此 Mac 移除。服务器和代理保持不变。同步密钥保留在此 Mac 的钥匙串中，再次登录同一账户无需确认。“忘记此 Mac”会一并删除它。",
   "account.signOut.confirm": "退出",
   "account.color.peach": "桃色",
   "account.color.sky": "天蓝",
@@ -570,5 +570,15 @@
   "usage.error.unknown": "无法获取限额",
   "usage.grokNoLimits": "Grok 不报告限额",
   "agentSheet.statusExhaustedPlain": "额度已用完",
-  "inspector.promptPlaceholder": "每次运行时智能体要做什么"
+  "inspector.promptPlaceholder": "每次运行时智能体要做什么",
+  "account.signOut.forget": "退出并忘记此 Mac",
+  "server.localUpgrade.title": "正在将此 Mac 上的 Bandito 更新到 {version}…",
+  "server.localUpgrade.timedOut": "此 Mac 上的服务器两分钟内未以 {version} 恢复运行。",
+  "server.localUpgrade.failed": "无法更新此 Mac 上的服务器：{error}",
+  "server.localUpgrade.retry": "重试",
+  "server.localUpgrade.waiting": "等代理完成工作后，再更新此 Mac 上的 Bandito",
+  "server.localUpgrade.updateNow": "立即更新",
+  "server.localUpgrade.confirmTitle": "代理将被中断。要更新吗？",
+  "server.localUpgrade.confirm": "更新",
+  "server.localUpgrade.notConnected": "此 Mac 上的服务器未连接"
 }

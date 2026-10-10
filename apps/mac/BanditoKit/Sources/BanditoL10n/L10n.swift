@@ -97,6 +97,7 @@ public enum L10n {
 
         public enum SignOut {
             public static var confirm: String { L10n.tr("account.signOut.confirm") }
+            public static var forget: String { L10n.tr("account.signOut.forget") }
             public static var message: String { L10n.tr("account.signOut.message") }
             public static var title: String { L10n.tr("account.signOut.title") }
         }
@@ -1557,6 +1558,18 @@ public enum L10n {
             public static var diskFull: String { L10n.tr("server.health.diskFull") }
             public static var memoryFull: String { L10n.tr("server.health.memoryFull") }
             public static var ok: String { L10n.tr("server.health.ok") }
+        }
+
+        public enum LocalUpgrade {
+            public static var confirm: String { L10n.tr("server.localUpgrade.confirm") }
+            public static var confirmTitle: String { L10n.tr("server.localUpgrade.confirmTitle") }
+            public static func failed(error: String) -> String { L10n.tr("server.localUpgrade.failed", error) }
+            public static var notConnected: String { L10n.tr("server.localUpgrade.notConnected") }
+            public static var retry: String { L10n.tr("server.localUpgrade.retry") }
+            public static func timedOut(version: String) -> String { L10n.tr("server.localUpgrade.timedOut", version) }
+            public static func title(version: String) -> String { L10n.tr("server.localUpgrade.title", version) }
+            public static var updateNow: String { L10n.tr("server.localUpgrade.updateNow") }
+            public static var waiting: String { L10n.tr("server.localUpgrade.waiting") }
         }
 
         public enum Owner {

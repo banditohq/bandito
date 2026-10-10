@@ -562,58 +562,88 @@ public struct ProcessCommandRunner: CommandRunner {
     public init() {}
 
     public func run(_ executable: String, _ arguments: [String], stdin: Data?) async throws -> CommandResult {
-        try await withCheckedThrowingContinuation { continuation in
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: executable)
-            process.arguments = arguments
-            let out = Pipe()
-            let err = Pipe()
-            let input = stdin == nil ? nil : Pipe()
-            process.standardOutput = out
-            process.standardError = err
-            if let input {
-                process.standardInput = input
-            } else {
-                process.standardInput = FileHandle.nullDevice
-            }
-
-            let collector = OutputCollector()
-            let readers = DispatchGroup()
-            readers.enter()
-            DispatchQueue.global().async {
-                collector.readStdout(out.fileHandleForReading)
-                readers.leave()
-            }
-            readers.enter()
-            DispatchQueue.global().async {
-                collector.readStderr(err.fileHandleForReading)
-                readers.leave()
-            }
-            process.terminationHandler = { finished in
-                readers.notify(queue: .global()) {
-                    continuation.resume(
-                        returning: CommandResult(
-                            status: finished.terminationStatus,
-                            stdout: collector.stdout,
-                            stderr: collector.stderr))
+        // A cancelled run ends its process: the caller stopped waiting, and nothing else would stop the child.
+        let running = RunningProcess()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: executable)
+                process.arguments = arguments
+                let out = Pipe()
+                let err = Pipe()
+                let input = stdin == nil ? nil : Pipe()
+                process.standardOutput = out
+                process.standardError = err
+                if let input {
+                    process.standardInput = input
+                } else {
+                    process.standardInput = FileHandle.nullDevice
                 }
-            }
 
-            do {
-                try process.run()
-            } catch {
-                continuation.resume(throwing: InstallError.io("could not run \(executable): \(error.localizedDescription)"))
-                return
-            }
-            // Drop this process's copies of the child's pipe ends, or the readers never see end of file.
-            try? out.fileHandleForWriting.close()
-            try? err.fileHandleForWriting.close()
-            if let input, let stdin {
+                let collector = OutputCollector()
+                let readers = DispatchGroup()
+                readers.enter()
                 DispatchQueue.global().async {
-                    try? input.fileHandleForWriting.write(contentsOf: stdin)
-                    try? input.fileHandleForWriting.close()
+                    collector.readStdout(out.fileHandleForReading)
+                    readers.leave()
+                }
+                readers.enter()
+                DispatchQueue.global().async {
+                    collector.readStderr(err.fileHandleForReading)
+                    readers.leave()
+                }
+                process.terminationHandler = { finished in
+                    readers.notify(queue: .global()) {
+                        continuation.resume(
+                            returning: CommandResult(
+                                status: finished.terminationStatus,
+                                stdout: collector.stdout,
+                                stderr: collector.stderr))
+                    }
+                }
+
+                do {
+                    try process.run()
+                } catch {
+                    continuation.resume(throwing: InstallError.io("could not run \(executable): \(error.localizedDescription)"))
+                    return
+                }
+                running.attach(process)
+                // Drop this process's copies of the child's pipe ends, or the readers never see end of file.
+                try? out.fileHandleForWriting.close()
+                try? err.fileHandleForWriting.close()
+                if let input, let stdin {
+                    DispatchQueue.global().async {
+                        try? input.fileHandleForWriting.write(contentsOf: stdin)
+                        try? input.fileHandleForWriting.close()
+                    }
                 }
             }
+        } onCancel: {
+            running.cancel()
+        }
+    }
+}
+
+/// The child process of one `ProcessCommandRunner.run`, so that a cancelled run can stop it. A cancel that comes
+/// before the process starts stops it as soon as it starts.
+private final class RunningProcess: @unchecked Sendable {
+    // @unchecked: `process` and `cancelled` are guarded by `lock`.
+    private let lock = NSLock()
+    private var process: Process?
+    private var cancelled = false
+
+    func attach(_ process: Process) {
+        lock.withLock {
+            self.process = process
+            if cancelled, process.isRunning { process.terminate() }
+        }
+    }
+
+    func cancel() {
+        lock.withLock {
+            cancelled = true
+            if let process, process.isRunning { process.terminate() }
         }
     }
 }

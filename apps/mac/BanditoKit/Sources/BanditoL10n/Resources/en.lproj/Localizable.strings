@@ -25,7 +25,8 @@
 "account.signIn.text" = "Sign in to keep your servers in sync between your Macs.";
 "account.signIn.title" = "Sign in to Bandito";
 "account.signOut.confirm" = "Sign out";
-"account.signOut.message" = "This Mac loses the sync key, the sign-in, the nickname and the avatar colour. Servers and agents stay where they are. Other devices are not affected.";
+"account.signOut.forget" = "Sign out and forget this Mac";
+"account.signOut.message" = "The nickname and avatar colour leave this Mac. Servers and agents stay. The sync key stays in this Mac's Keychain, so you sign in to the same account again without approval. “Forget this Mac” removes it too.";
 "account.signOut.title" = "Sign out of the account?";
 "account.sync.done" = "Synced · %1$@";
 "account.sync.now" = "Sync now";
@@ -1145,6 +1146,15 @@
 "server.health.diskFull" = "Disk almost full";
 "server.health.memoryFull" = "Memory almost full";
 "server.health.ok" = "All good";
+"server.localUpgrade.confirm" = "Update";
+"server.localUpgrade.confirmTitle" = "The agents will be interrupted. Update?";
+"server.localUpgrade.failed" = "Could not update this Mac's server: %1$@";
+"server.localUpgrade.notConnected" = "This Mac's server is not connected";
+"server.localUpgrade.retry" = "Try again";
+"server.localUpgrade.timedOut" = "This Mac's server did not come back on %1$@ within two minutes.";
+"server.localUpgrade.title" = "Updating Bandito on this Mac to %1$@…";
+"server.localUpgrade.updateNow" = "Update now";
+"server.localUpgrade.waiting" = "We'll update Bandito on this Mac when the agents finish";
 "server.noServer" = "No server connected.";
 "server.notConnected" = "Connecting to the server…";
 "server.owner.agent" = "Agent";

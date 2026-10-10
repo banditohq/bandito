@@ -527,7 +527,7 @@
   "account.links.settings": "Réglages de l'app",
   "account.links.help": "Aide et commentaires",
   "account.signOut.title": "Se déconnecter du compte ?",
-  "account.signOut.message": "Ce Mac perd la clé de synchronisation, la connexion, le pseudo et la couleur de l'avatar. Les serveurs et agents restent en place. Les autres appareils ne sont pas touchés.",
+  "account.signOut.message": "Le pseudo et la couleur de l'avatar quittent ce Mac. Les serveurs et agents restent. La clé de synchronisation reste dans le trousseau de ce Mac : vous vous reconnecterez au même compte sans confirmation. « Oublier ce Mac » la supprime aussi.",
   "account.signOut.confirm": "Se déconnecter",
   "account.color.peach": "Pêche",
   "account.color.sky": "Ciel",
@@ -570,5 +570,15 @@
   "usage.error.unknown": "Impossible d’obtenir les limites",
   "usage.grokNoLimits": "Grok ne signale pas ses limites",
   "agentSheet.statusExhaustedPlain": "Limite atteinte",
-  "inspector.promptPlaceholder": "Ce que fait l’agent à chaque exécution"
+  "inspector.promptPlaceholder": "Ce que fait l’agent à chaque exécution",
+  "account.signOut.forget": "Se déconnecter et oublier ce Mac",
+  "server.localUpgrade.title": "Mise à jour de Bandito sur ce Mac vers {version}…",
+  "server.localUpgrade.timedOut": "Le serveur de ce Mac n'est pas revenu en {version} en deux minutes.",
+  "server.localUpgrade.failed": "Impossible de mettre à jour le serveur de ce Mac : {error}",
+  "server.localUpgrade.retry": "Réessayer",
+  "server.localUpgrade.waiting": "Nous mettrons à jour Bandito sur ce Mac quand les agents auront fini",
+  "server.localUpgrade.updateNow": "Mettre à jour maintenant",
+  "server.localUpgrade.confirmTitle": "Les agents seront interrompus. Mettre à jour ?",
+  "server.localUpgrade.confirm": "Mettre à jour",
+  "server.localUpgrade.notConnected": "Le serveur de ce Mac n'est pas connecté"
 }

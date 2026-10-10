@@ -527,7 +527,7 @@
   "account.links.settings": "アプリの設定",
   "account.links.help": "ヘルプとフィードバック",
   "account.signOut.title": "アカウントからサインアウトしますか？",
-  "account.signOut.message": "このMacから同期キー、サインイン、ニックネーム、アバターの色が削除されます。サーバーとエージェントはそのままです。他のデバイスには影響しません。",
+  "account.signOut.message": "ニックネームとアバターの色はこのMacから削除されます。サーバーとエージェントはそのままです。同期キーはこのMacのキーチェーンに残るので、同じアカウントに確認なしで再サインインできます。「このMacを忘れる」を選ぶと同期キーも削除されます。",
   "account.signOut.confirm": "サインアウト",
   "account.color.peach": "ピーチ",
   "account.color.sky": "スカイ",
@@ -570,5 +570,15 @@
   "usage.error.unknown": "上限を取得できませんでした",
   "usage.grokNoLimits": "Grokは上限を報告しません",
   "agentSheet.statusExhaustedPlain": "上限に達しました",
-  "inspector.promptPlaceholder": "実行ごとにエージェントが行うこと"
+  "inspector.promptPlaceholder": "実行ごとにエージェントが行うこと",
+  "account.signOut.forget": "サインアウトしてこのMacを忘れる",
+  "server.localUpgrade.title": "このMacのBanditoを{version}に更新しています…",
+  "server.localUpgrade.timedOut": "このMacのサーバーが2分以内に{version}で応答しませんでした。",
+  "server.localUpgrade.failed": "このMacのサーバーを更新できませんでした: {error}",
+  "server.localUpgrade.retry": "再試行",
+  "server.localUpgrade.waiting": "エージェントの作業が終わったら、このMacのBanditoを更新します",
+  "server.localUpgrade.updateNow": "今すぐ更新",
+  "server.localUpgrade.confirmTitle": "エージェントが中断されます。更新しますか？",
+  "server.localUpgrade.confirm": "更新",
+  "server.localUpgrade.notConnected": "このMacのサーバーに接続されていません"
 }
