@@ -1,9 +1,23 @@
 //! Agent templates: the built-in starting points for a bot (`agent_templates.json`, see docs/ARCHITECTURE.md#agent-templates-data).
-//! This module holds the catalog's shape and the test that holds every entry to the rules. The RPC that serves the
-//! list comes later; until then nothing in the daemon reads the file at run time.
+//! This module holds the catalog's shape, the embedded file and the test that holds every entry to the rules. The RPC
+//! that serves the list and creates a bot from one is `rpc/templates.rs` (docs/ARCHITECTURE.md#agent-templates).
 
 use serde::Deserialize;
 use std::collections::BTreeMap;
+
+/// The catalog as written, embedded in the binary. `agents.templates` serves it as it is.
+pub const CATALOG_JSON: &str = include_str!("agent_templates.json");
+
+/// Every template, parsed with the strict type. A parse error is an error for the caller (a request answers it as a
+/// server error); the catalog tests keep the shipped file valid.
+pub fn catalog() -> Result<Vec<AgentTemplate>, serde_json::Error> {
+    serde_json::from_str(CATALOG_JSON)
+}
+
+/// The template with this id, if there is one.
+pub fn find(id: &str) -> Result<Option<AgentTemplate>, serde_json::Error> {
+    Ok(catalog()?.into_iter().find(|t| t.id == id))
+}
 
 /// One template as written in `agent_templates.json`. Unknown fields are an error, so a typo cannot pass silently.
 #[derive(Debug, Clone, Deserialize)]
@@ -90,13 +104,8 @@ mod tests {
     use crate::store::{ALL_CAPABILITIES, Capability};
     use std::collections::HashSet;
 
-    const CATALOG_JSON: &str = include_str!("agent_templates.json");
     const INTEGRATIONS_JSON: &str = include_str!("integrations_catalog.json");
     const LANGUAGES: [&str; 7] = ["de", "es", "fr", "ja", "ko", "pt-BR", "zh-Hans"];
-
-    fn catalog() -> Vec<AgentTemplate> {
-        serde_json::from_str(CATALOG_JSON).expect("agent_templates.json matches the strict AgentTemplate type")
-    }
 
     fn integration_ids() -> HashSet<String> {
         let entries: Vec<serde_json::Value> = serde_json::from_str(INTEGRATIONS_JSON).unwrap();
@@ -115,6 +124,11 @@ mod tests {
 
     fn is_hex_color(s: &str) -> bool {
         s.len() == 7 && s.starts_with('#') && s[1..].chars().all(|c| c.is_ascii_hexdigit())
+    }
+
+    /// The shipped catalog, which the tests hold to the rules. Failing to parse it is a test failure.
+    fn catalog() -> Vec<AgentTemplate> {
+        super::catalog().expect("agent_templates.json matches the strict AgentTemplate type")
     }
 
     #[test]
