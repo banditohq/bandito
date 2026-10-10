@@ -98,6 +98,22 @@
 			<string>%1$lld tokens used</string>
 		</dict>
 	</dict>
+	<key>claudeImport.warning.leftOut</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%1$lld file of the folder was left out (not text, or named like a key); the skill is installed without it.</string>
+			<key>other</key>
+			<string>%1$lld files of the folder were left out (not text, or named like a key); the skill is installed without them.</string>
+		</dict>
+	</dict>
 	<key>common.agentCount</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>

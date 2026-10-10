@@ -31,6 +31,20 @@ enum FilePanels {
         #endif
     }
 
+    /// A folder on this Mac, or `nil` if the user cancelled. `message` is the line the panel shows.
+    static func folderURL(message: String) -> URL? {
+        #if os(macOS)
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.message = message
+        return panel.runModal() == .OK ? panel.url : nil
+        #else
+        return nil
+        #endif
+    }
+
     /// A JSON file to open, or `nil` if the user cancelled.
     static func openURL() -> URL? {
         #if os(macOS)

@@ -416,9 +416,14 @@ struct MarketView: View {
     }
 
     private var addOwnButton: some View {
-        Button(L10n.Integrations.addOwn) { editing = .custom }
-            .banditoButton(.quiet())
-            .fixedSize()
+        HStack(spacing: 8) {
+            Button(L10n.ClaudeImport.title) { router.sheet = .importer }
+                .banditoButton(.quiet())
+                .fixedSize()
+            Button(L10n.Integrations.addOwn) { editing = .custom }
+                .banditoButton(.quiet())
+                .fixedSize()
+        }
     }
 
     /// One capsule holds the lens and the field: the capsule draws the fill and the border, the field inside is plain.
