@@ -752,7 +752,7 @@ struct FirstServerStep: View {
 }
 
 /// One way to run Bandito, as a whole-card button: a tinted tile, title, a line or two of text, and at the foot either a
-/// time chip or a link. The chosen card has a signal border and a check. Hover lifts the card a little.
+/// time chip or a link. The chosen card has a cream border and a cream check. Hover lifts the card by 2 pt.
 private struct ServerOptionCard: View {
     let title: String
     let text: String
@@ -780,7 +780,7 @@ private struct ServerOptionCard: View {
             }
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(selected ? Color.Bandito.signal.opacity(0.09) : Color.Bandito.text.opacity(hovered ? 0.05 : 0.025)))
+                    .fill(selected ? Color.Bandito.surface2 : Color.Bandito.surface1))
             .overlay(alignment: .topTrailing) {
                 if side, !selected, badge != nil {
                     badgeView.padding(14)
@@ -788,21 +788,21 @@ private struct ServerOptionCard: View {
                 if selected {
                     Image(systemName: "checkmark")
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(Color.Bandito.onSignal)
+                        .foregroundStyle(Color.Bandito.bg)
                         .frame(width: 22, height: 22)
-                        .background(Color.Bandito.signalFill, in: Circle())
+                        .background(Color.Bandito.text, in: Circle())
                         .padding(12)
                 }
             }
             .overlay(border)
             .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .scaleEffect(hovered ? 1.01 : 1)
         }
         .buttonStyle(.plain)
         .brandFocusRing(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .offset(y: hovered ? -2 : 0)
         .onHover { hovered = $0 }
-        .banditoAnimation(BanditoMotion.ease, value: hovered)
-        .banditoAnimation(BanditoMotion.ease, value: selected)
+        .banditoAnimation(.spring(response: 0.25, dampingFraction: 0.8), value: hovered)
+        .banditoAnimation(.spring(response: 0.25, dampingFraction: 0.8), value: selected)
     }
 
     /// Side by side: tile, badge and title, text, and the chip at the foot. The row shares its width equally.
@@ -843,13 +843,11 @@ private struct ServerOptionCard: View {
     private func tile(size: CGFloat) -> some View {
         Image(systemName: icon)
             .font(.system(size: size * 0.45, weight: .medium))
-            .foregroundStyle(selected ? Color.Bandito.onSignal : tint)
+            .foregroundStyle(tint)
             .frame(width: size, height: size)
             .background(
                 LinearGradient(
-                    colors: selected
-                        ? [Color.Bandito.signalFill, Color.Bandito.signalFillEnd]
-                        : [tint.opacity(0.28), tint.opacity(0.08)],
+                    colors: [tint.opacity(0.28), tint.opacity(0.08)],
                     startPoint: .topLeading, endPoint: .bottomTrailing),
                 in: RoundedRectangle(cornerRadius: size * 0.32, style: .continuous))
     }
@@ -907,13 +905,13 @@ private struct ServerOptionCard: View {
         let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
         return Group {
             if selected {
-                shape.stroke(Color.Bandito.signal, lineWidth: 1.5)
+                shape.stroke(Color.Bandito.text, lineWidth: 1.5)
             } else if dashed {
                 shape.strokeBorder(
-                    Color.Bandito.text.opacity(hovered ? 0.26 : 0.16),
+                    Color.Bandito.text.opacity(hovered ? 0.2 : 0.12),
                     style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
             } else {
-                shape.stroke(Color.Bandito.text.opacity(hovered ? 0.2 : 0.09), lineWidth: 1)
+                shape.stroke(Color.Bandito.text.opacity(hovered ? 0.2 : 0.08), lineWidth: 1)
             }
         }
     }
