@@ -7,9 +7,7 @@ import SwiftUI
 public struct RootView: View {
     @Environment(OnboardingModel.self) private var onboarding
     @Environment(AppModel.self) private var app
-    #if DEBUG && os(macOS)
     @Environment(Router.self) private var router
-    #endif
 
     public init() {}
 
@@ -22,6 +20,8 @@ public struct RootView: View {
             }
         }
         .background(Color.Bandito.bg)
+        // Every mode switch (mode bar, ⌘1…⌘6, back and forward, swipes) makes the tab sound.
+        .onChange(of: router.mode) { _, _ in SoundPlayer.play(.tab) }
         // The system focus ring is off for the whole scene; Bandito draws its own (brandFocusRing).
         .focusEffectDisabled()
         #if os(macOS)

@@ -142,6 +142,20 @@
 			<string>%1$lld일째 가동 중</string>
 		</dict>
 	</dict>
+	<key>integrations.status.connected</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>other</key>
+			<string>도구 %1$lld개</string>
+		</dict>
+	</dict>
 	<key>memory.filesMeta</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
@@ -226,6 +240,20 @@
 			<string>약 ≈ %1$lld분</string>
 		</dict>
 	</dict>
+	<key>schedule.step.hours</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>other</key>
+			<string>%1$lld시간</string>
+		</dict>
+	</dict>
 	<key>server.cores</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
@@ -238,6 +266,34 @@
 			<string>lld</string>
 			<key>other</key>
 			<string>코어 %1$lld개</string>
+		</dict>
+	</dict>
+	<key>server.detail.processCount</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>other</key>
+			<string>프로세스 %1$lld개</string>
+		</dict>
+	</dict>
+	<key>setup.showFullLog</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>other</key>
+			<string>전체 로그 보기 (%1$lld줄)</string>
 		</dict>
 	</dict>
 	<key>terminals.dock.lines</key>

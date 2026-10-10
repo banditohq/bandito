@@ -34,6 +34,13 @@ struct MetricDetailView: View {
     @State private var stopError: UserFacingMessage?
     /// Set when the daemon sent SIGTERM but the process was still running a second later.
     @State private var stillRunning = false
+    /// Ids of the groups that are open, and whether the list shows every row.
+    @State private var expanded: Set<String> = []
+    @State private var showAll = false
+
+    /// Rows shown before "Show all".
+    private static let collapsedRows = 8
+    private static let gib = 1024.0 * 1024 * 1024
 
     /// One drawn sample: a time, a value and the line it belongs to.
     private struct Sample: Identifiable {
@@ -44,7 +51,7 @@ struct MetricDetailView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
                 Text(metric.title)
                     .font(.system(size: 15, weight: .semibold))
@@ -62,16 +69,19 @@ struct MetricDetailView: View {
             if metric == .disk {
                 diskBody
             } else {
-                summary
-                chart
-                Text(L10n.Server.Detail.hint)
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(Color.Bandito.text3)
-                topProcesses
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        summary
+                        chart
+                        topProcesses
+                    }
+                }
+                .scrollIndicators(.hidden)
             }
         }
-        .padding(18)
+        .padding(16)
         .frame(width: 520, alignment: .leading)
+        .frame(maxHeight: 560)
         .background(Color.Bandito.surface2)
         .confirmationDialog(
             stopping.map { L10n.Server.Detail.stopTitle(name: $0.name) } ?? "",
@@ -93,7 +103,7 @@ struct MetricDetailView: View {
         let current = currentValue
         let average = values.isEmpty ? 0 : values.reduce(0, +) / Double(values.count)
         let peak = values.max() ?? 0
-        return HStack(alignment: .top, spacing: 24) {
+        return HStack(alignment: .top, spacing: 28) {
             figure(L10n.Server.Detail.now, format(current))
             figure(L10n.Server.Detail.average, format(average))
             figure(L10n.Server.Detail.peak, format(peak))
@@ -102,13 +112,13 @@ struct MetricDetailView: View {
     }
 
     private func figure(_ label: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 1) {
             Text(label)
                 .font(.system(size: 11.5))
                 .foregroundStyle(Color.Bandito.text3)
                 .lineLimit(1)
             Text(value)
-                .font(.system(size: 17, weight: .semibold))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Color.Bandito.text)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
@@ -120,9 +130,10 @@ struct MetricDetailView: View {
     private var chart: some View {
         let samples = samples
         let names = seriesNames
+        let scale = yScale
         return Chart {
             ForEach(samples) { sample in
-                LineMark(x: .value("Time", sample.date), y: .value("Value", sample.value))
+                LineMark(x: .value("Time", sample.date), y: .value("Value", sample.value / yScale))
                     .interpolationMethod(.monotone)
                     .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
                     .foregroundStyle(by: .value("Series", sample.series))
@@ -151,31 +162,45 @@ struct MetricDetailView: View {
             }
         }
         .chartYAxis {
-            AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
+            AxisMarks(position: .leading, values: yTicks) { value in
                 AxisGridLine()
                 AxisValueLabel {
                     if let number = value.as(Double.self) {
-                        Text(format(number))
+                        Text(Self.axisLabel(format(number * scale)))
                     }
                 }
             }
         }
-        .frame(height: 220)
+        .frame(height: 150)
+        .help(L10n.Server.Detail.hint)
         .banditoAnimation(.easeInOut(duration: 0.3), value: monitor.range)
     }
 
     // MARK: - Processes
 
-    /// The biggest processes of the server (`top_processes`). Hidden while there are none, and for a daemon
-    /// that does not send the list.
+    /// The biggest processes of the server (`top_processes`), merged by app. Hidden while there are none, and for a
+    /// daemon that does not send the list.
     @ViewBuilder
     private var topProcesses: some View {
-        let rows = topRows
-        if !rows.isEmpty {
-            VStack(alignment: .leading, spacing: 6) {
+        let groups = topGroups
+        if !groups.isEmpty {
+            let visible = showAll ? groups : Array(groups.prefix(Self.collapsedRows))
+            VStack(alignment: .leading, spacing: 4) {
                 SectionLabel(L10n.Server.Detail.topProcesses)
-                ForEach(rows) { row in
-                    processRow(row)
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(visible) { group in
+                        groupRows(group)
+                    }
+                }
+                if groups.count > Self.collapsedRows {
+                    Button(showAll ? L10n.Server.Detail.showLess : L10n.Server.Detail.showAll(count: groups.count)) {
+                        showAll.toggle()
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Color.Bandito.text2)
+                    .padding(.horizontal, 6)
+                    .frame(height: 28)
                 }
                 if stillRunning {
                     Text(L10n.Server.Detail.stillRunning)
@@ -190,40 +215,42 @@ struct MetricDetailView: View {
         }
     }
 
-    private func processRow(_ row: HostProcessEntry) -> some View {
-        HStack(spacing: 10) {
-            if row.isAgent, let owner = row.owner {
-                AgentAvatar(name: ownerName(owner), size: 20)
-                    .help(L10n.Server.Detail.agentMark)
-            }
-            VStack(alignment: .leading, spacing: 1) {
-                Text(row.name)
-                    .font(.system(size: 13))
-                    .foregroundStyle(Color.Bandito.text)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                if let owner = row.owner {
-                    Text(ownerName(owner))
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(Color.Bandito.text3)
-                        .lineLimit(1)
+    @ViewBuilder
+    private func groupRows(_ group: HostProcessGroup) -> some View {
+        if group.isGroup {
+            let open = expanded.contains(group.id)
+            ProcessRowView(
+                owner: group.owner, ownerName: ownerName, title: group.appName,
+                subtitle: L10n.Server.Detail.processCount(count: group.members.count),
+                value: groupValue(group), indent: false, trailing: .chevron(open: open), stopName: nil,
+                onTap: {
+                    if open { expanded.remove(group.id) } else { expanded.insert(group.id) }
+                },
+                onStop: nil)
+            if open {
+                ForEach(group.members) { row in
+                    memberRow(row, indent: true)
                 }
             }
-            Spacer(minLength: 8)
-            Text(processValue(row))
-                .font(.system(size: 12.5, weight: .medium).monospacedDigit())
-                .foregroundStyle(Color.Bandito.text2)
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
-            if row.canStop {
-                Button(L10n.Server.Detail.stopConfirm) {
-                    stopping = row
-                }
-                .banditoButton(.quiet())
-                .help(L10n.Server.Detail.stopAria(name: row.name))
-            }
+        } else if let row = group.members.first {
+            memberRow(row, indent: false)
         }
-        .padding(.vertical, 3)
+    }
+
+    private func memberRow(_ row: HostProcessEntry, indent: Bool) -> some View {
+        let owned = row.owner != nil
+        let appName = HostProcessList.appName(row.name)
+        // An agent's process shows the agent first and the program under it; an ordinary one shows the program,
+        // and under it the raw name when the app name is a shortened form of it.
+        let title = row.owner.map { ownerName($0) } ?? appName
+        let subtitle: String? = owned ? appName : (appName != row.name ? row.name : nil)
+        return ProcessRowView(
+            owner: row.owner, ownerName: ownerName, title: title, subtitle: subtitle,
+            value: processValue(row), indent: indent,
+            trailing: row.canStop ? .stop : .none,
+            stopName: row.canStop ? row.name : nil,
+            onTap: nil,
+            onStop: { stopping = row })
     }
 
     private func stop(_ row: HostProcessEntry) {
@@ -321,26 +348,64 @@ struct MetricDetailView: View {
         }
     }
 
+    /// What the chart's y values are divided by: memory is drawn in GiB, so the axis ends on round numbers.
+    private var yScale: Double { metric == .memory ? Self.gib : 1 }
+
+    /// The chart's y range, in drawn units (percent, GiB, or bytes per second).
     private var yDomain: ClosedRange<Double> {
         switch metric {
         case .cpu:
             return 0...100
         case .memory:
-            let total = Double(monitor.stats?.memTotal ?? 0)
-            return 0...max(1, total, samples.map(\.value).max() ?? 0)
+            return 0...(memoryTicks.last ?? 1)
         case .network, .disk:
             return 0...max(1, samples.map(\.value).max() ?? 0)
         }
     }
 
-    /// The CPU list is sorted by CPU among the biggest processes by memory, which is all the daemon sends.
-    private var topRows: [HostProcessEntry] {
-        let top = monitor.stats?.topProcesses ?? []
+    private var yTicks: AxisMarkValues {
         switch metric {
-        case .cpu: return HostProcessList.rows(top: top, owners: monitor.ownerGroups, sort: .cpu)
-        case .memory: return HostProcessList.rows(top: top, owners: monitor.ownerGroups, sort: .memory)
+        case .memory: .stride(by: memoryStep)
+        case .cpu: .automatic(desiredCount: 4)
+        case .network, .disk: .automatic(desiredCount: 4)
+        }
+    }
+
+    private var memoryTop: Double {
+        max(1, Double(monitor.stats?.memTotal ?? 0) / Self.gib, (samples.map(\.value).max() ?? 0) / Self.gib)
+    }
+
+    private var memoryStep: Double { Self.memoryAxis(topGiB: memoryTop).step }
+
+    private var memoryTicks: [Double] {
+        let axis = Self.memoryAxis(topGiB: memoryTop)
+        return stride(from: 0, through: axis.top, by: axis.step).map { $0 }
+    }
+
+    /// The smallest round step (in GiB) with at most four intervals up to `topGiB`, and the axis top it gives.
+    nonisolated static func memoryAxis(topGiB: Double) -> (step: Double, top: Double) {
+        let steps: [Double] = [1, 2, 2.5, 4, 5, 8, 10, 16, 20, 25, 32, 50, 64, 100, 128, 256]
+        let top = max(1, topGiB)
+        let step = steps.first { top / $0 <= 4 } ?? (top / 4).rounded(.up)
+        return (step, step * (top / step).rounded(.up))
+    }
+
+    private func groupValue(_ group: HostProcessGroup) -> String {
+        metric == .memory ? HostFormat.bytes(group.rssBytes) : HostFormat.percent(group.cpuPercent)
+    }
+
+    /// The CPU list is sorted by CPU among the biggest processes by memory, which is all the daemon sends.
+    private var topGroups: [HostProcessGroup] {
+        let top = monitor.stats?.topProcesses ?? []
+        let sort: HostProcessList.Sort
+        switch metric {
+        case .cpu: sort = .cpu
+        case .memory: sort = .memory
         case .network, .disk: return []
         }
+        // No cut before grouping: the helpers of one app must all land in its group.
+        let rows = HostProcessList.rows(top: top, owners: monitor.ownerGroups, sort: sort, limit: .max)
+        return HostProcessList.groups(rows, sort: sort)
     }
 
     private func processValue(_ row: HostProcessEntry) -> String {
@@ -357,6 +422,11 @@ struct MetricDetailView: View {
             return "\(clock) · \(sample.series) \(format(sample.value))"
         }
         return "\(clock) · \(format(sample.value))"
+    }
+
+    /// An axis label without a zero fraction: "8 ГБ", not "8,0 ГБ".
+    static func axisLabel(_ text: String) -> String {
+        text.replacingOccurrences(of: #"(\d)[.,]0(?=\D|$)"#, with: "$1", options: .regularExpression)
     }
 
     private func format(_ value: Double) -> String {
@@ -381,6 +451,127 @@ struct FillBar: View {
                     .fill(tint)
                     .frame(width: proxy.size.width * min(1, max(0, fraction)))
             }
+        }
+    }
+}
+
+/// One line of the process list: 28pt, a hover backdrop, and a 24pt action column that is always reserved so the
+/// values line up. The column holds the chevron of a group, or the stop icon of a process, shown on hover.
+private struct ProcessRowView: View {
+    enum Trailing: Equatable {
+        case none, stop, chevron(open: Bool)
+    }
+
+    let owner: ProcessOwnerRef?
+    let ownerName: (ProcessOwnerRef) -> String
+    let title: String
+    let subtitle: String?
+    let value: String
+    let indent: Bool
+    let trailing: Trailing
+    /// The process name in the stop tooltip.
+    let stopName: String?
+    let onTap: (() -> Void)?
+    let onStop: (() -> Void)?
+
+    @State private var hovering = false
+    @State private var overStop = false
+    @FocusState private var stopFocused: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            icon
+                .frame(width: 18, height: 18)
+            HStack(spacing: 6) {
+                Text(title)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.Bandito.text)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Color.Bandito.text3)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .layoutPriority(-1)
+                }
+            }
+            Spacer(minLength: 8)
+            Text(value)
+                .font(.system(size: 12.5, weight: .medium).monospacedDigit())
+                .foregroundStyle(Color.Bandito.text2)
+                .lineLimit(1)
+                .frame(width: 64, alignment: .trailing)
+            action
+                .frame(width: 24, height: 24)
+        }
+        .padding(.leading, indent ? 30 : 6)
+        .padding(.trailing, 2)
+        .frame(height: 28)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(Color.Bandito.text.opacity(hovering ? 0.06 : 0)))
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+        .onTapGesture { onTap?() }
+        .modifier(RowButtonTraits(action: onTap))
+    }
+
+    @ViewBuilder
+    private var icon: some View {
+        if let owner, owner.kind == .agent {
+            AgentAvatar(name: ownerName(owner), size: 18)
+                .help(L10n.Server.Detail.agentMark)
+        } else {
+            // Only agents carry a picture; the other names line up with them.
+            Color.clear.frame(width: 18, height: 18)
+        }
+    }
+
+    @ViewBuilder
+    private var action: some View {
+        switch trailing {
+        case .none:
+            Color.clear
+        case .chevron(let open):
+            Image(systemName: "chevron.right")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(Color.Bandito.text3)
+                .rotationEffect(.degrees(open ? 90 : 0))
+        case .stop:
+            Button(action: { onStop?() }) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 14))
+                    .foregroundStyle(overStop ? Color.Bandito.text : Color.Bandito.text3)
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .onHover { overStop = $0 }
+            .focused($stopFocused)
+            .opacity(hovering || stopFocused ? 1 : 0)
+            .help(stopName.map { L10n.Server.Detail.stopAria(name: $0) } ?? "")
+            .accessibilityLabel(stopName.map { L10n.Server.Detail.stopAria(name: $0) } ?? "")
+        }
+    }
+}
+
+/// Makes a tappable row a button for the keyboard and VoiceOver; no-op for a row without an action.
+private struct RowButtonTraits: ViewModifier {
+    let action: (() -> Void)?
+
+    func body(content: Content) -> some View {
+        if let action {
+            content
+                .focusable()
+                .onKeyPress(.return) { action(); return .handled }
+                .onKeyPress(.space) { action(); return .handled }
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction(.default, action)
+        } else {
+            content
         }
     }
 }

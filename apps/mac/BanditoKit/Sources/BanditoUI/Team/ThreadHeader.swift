@@ -4,9 +4,11 @@ import BanditoL10n
 import SwiftUI
 
 /// The capsule at the top of the thread: avatar, name, model and effort, status; on the right, the actions
-/// (changes, terminal, schedules, details).
+/// (changes, terminal, browser, panel). Schedules are in the details tab and in the agent's menu.
 struct ThreadHeader: View {
     var agent: Agent
+    /// The server the agent lives on, for its picture.
+    var server: ServerModel?
     var status: AgentStatus
     var turnRunning: Bool
     /// Changes since the last checkpoint; `nil` when not loaded.
@@ -23,11 +25,12 @@ struct ThreadHeader: View {
     var isLead = false
     var onChanges: () -> Void = {}
     var onTerminal: () -> Void = {}
-    var onSchedules: () -> Void = {}
     /// Opens or closes the workbench panel.
     var onTogglePanel: () -> Void = {}
     /// The agent's browser tool is running and the browser is not open in the panel: the chip is shown.
     var showsBrowserChip = false
+    /// The server has the browser feature: the globe button opens the browser tab of the panel.
+    var showsBrowserButton = false
     var onShowBrowser: () -> Void = {}
 
     var body: some View {
@@ -55,7 +58,9 @@ struct ThreadHeader: View {
                 if showsTerminal {
                     iconButton("terminal", help: L10n.Team.Header.terminal, action: onTerminal)
                 }
-                iconButton("clock", help: L10n.Team.Header.schedules, action: onSchedules)
+                if showsBrowserButton {
+                    iconButton("globe", help: L10n.Team.Header.browser, action: onShowBrowser)
+                }
                 iconButton("sidebar.right", help: L10n.Workbench.togglePanel, action: onTogglePanel)
             }
             .fixedSize()
@@ -70,8 +75,8 @@ struct ThreadHeader: View {
 
     private func capsule(showsCaption: Bool) -> some View {
         HStack(spacing: 9) {
-            AgentAvatar(
-                name: agent.name, size: 26,
+            AgentAvatarView(
+                agent: agent, server: server, size: 26,
                 mood: AvatarMood.make(status: status, turnRunning: turnRunning, paused: agent.paused))
                 .overlay(alignment: .topTrailing) {
                     if isLead {

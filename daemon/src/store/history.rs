@@ -99,6 +99,8 @@ mod tests {
             source: Source::User,
             from_agent: None,
             command: None,
+            reply_to: None,
+            attachments: Vec::new(),
         }
     }
 
@@ -187,6 +189,8 @@ mod tests {
                     source: Source::System,
                     from_agent: None,
                     command: None,
+                    reply_to: None,
+                    attachments: Vec::new(),
                 },
             )
             .unwrap();

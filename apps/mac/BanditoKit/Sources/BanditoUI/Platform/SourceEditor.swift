@@ -44,6 +44,12 @@ struct SourceEditor: NSViewRepresentable {
         scroll.verticalRulerView = LineNumberRuler(scrollView: scroll, textView: textView)
 
         highlight(textView)
+        if isEditable && text.isEmpty {
+            // An empty file takes the keyboard at once, with the caret at its start.
+            DispatchQueue.main.async { [weak scroll] in
+                scroll?.window?.makeFirstResponder(scroll?.documentView)
+            }
+        }
         return scroll
     }
 

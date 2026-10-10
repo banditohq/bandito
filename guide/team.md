@@ -54,6 +54,15 @@ Pause all agents (Пауза для всех агентов) pauses every agent 
 3. To resume one agent, click Resume (Продолжить) in the same place.
 4. On a server with an older Bandito the pause items are disabled (see [troubleshooting.md](troubleshooting.md)).
 
+## Team home (⌘0)
+
+<!-- id: team-home; covers: -->
+The screen shown in the Team mode when no chat is open: a greeting, the New agent (Новый агент) button, the templates, the six agents used last and a few ideas for what to hand off.
+Где: Sidebar → TEAM (КОМАНДА) label; ⌘0; swipe right with two fingers in a chat
+1. Click the TEAM label above the agents, press ⌘0, or swipe right with two fingers in a chat.
+2. Click New agent, or a template, to open the New agent sheet; click an agent to open its chat.
+3. Swipe left with two fingers to return to the chat you left.
+
 ## Search and quick open (⌘K)
 
 <!-- id: team-quick-open; covers: -->

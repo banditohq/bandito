@@ -1,3 +1,4 @@
+import AppKit
 import BanditoDesign
 import BanditoKit
 import BanditoL10n
@@ -21,9 +22,12 @@ struct AccountSheet: View {
     @State private var confirmingSignOut = false
     @State private var lastSynced: Date?
     @State private var syncing = false
+    @State private var hoveringPhoto = false
+    /// A photo picked for the profile, framed in a popover until it is saved.
+    @State private var photoFraming: CGImage?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 22) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Spacer(minLength: 0)
                 Button {
@@ -39,7 +43,7 @@ struct AccountSheet: View {
                 UserFacingErrorView(message: errorText)
             }
         }
-        .padding(28)
+        .padding(20)
         .frame(width: 520, alignment: .leading)
         .background(Color.Bandito.surface2)
         .task { await reload() }
@@ -105,9 +109,9 @@ struct AccountSheet: View {
 
     private func identityHeader(_ me: Me) -> some View {
         let name = ProfileNames.displayName(nickname: hub.profile.nickname, account: me.user)
-        return HStack(alignment: .top, spacing: 16) {
-            ProfileAvatar(name: name, color: AvatarColor.at(hub.profile.colorIndex), size: 56)
-            VStack(alignment: .leading, spacing: 6) {
+        return HStack(alignment: .center, spacing: 16) {
+            photoButton(name: name)
+            VStack(alignment: .leading, spacing: 5) {
                 if editingNickname {
                     nicknameEditor(me)
                 } else {
@@ -118,11 +122,63 @@ struct AccountSheet: View {
                     .foregroundStyle(Color.Bandito.text3)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                loginMethod(me)
+                HStack(spacing: 10) {
+                    loginMethod(me)
+                    if hub.avatar.image != nil {
+                        Button(L10n.Account.Photo.remove) { removePhoto() }
+                            .banditoButton(.link)
+                            .font(BanditoFont.font(size: 12, weight: 500))
+                    }
+                }
                 colorChoice
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    /// The profile photo, 88 pt. On hover a camera button appears over it: a click picks a new photo.
+    private func photoButton(name: String?) -> some View {
+        ProfileAvatar(
+            name: name, color: AvatarColor.at(hub.profile.colorIndex), picture: hub.avatar.image, size: 88)
+            .overlay(alignment: .bottomTrailing) {
+                Button {
+                    pickPhoto()
+                } label: {
+                    Image(systemName: "camera.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.Bandito.text)
+                        .frame(width: 28, height: 28)
+                        .background(Color.Bandito.surface3, in: Circle())
+                        .overlay(Circle().stroke(Color.Bandito.line, lineWidth: 1))
+                }
+                .banditoButton(.icon(size: 28, label: L10n.Account.Photo.change))
+                .help(L10n.Account.Photo.change)
+                .opacity(hoveringPhoto ? 1 : 0)
+            }
+            .contentShape(Circle())
+            .onHover { hoveringPhoto = $0 }
+            .popover(isPresented: Binding(get: { photoFraming != nil }, set: { if !$0 { photoFraming = nil } })) {
+                if let image = photoFraming {
+                    PictureFraming(
+                        image: image,
+                        encode: { AvatarPicture.jpeg(image: $0, crop: $1) },
+                        maxBytes: AvatarPicture.profileMaxBytes,
+                        tooLargeText: L10n.Account.Photo.tooLarge,
+                        onSave: { data in
+                            try await hub.avatar.setPicture(data, at: Self.nowMs())
+                            // The sync comes first; its failure is shown on the sheet, then the popover closes.
+                            do {
+                                try await hub.syncProfilePicture()
+                            } catch {
+                                errorText = SignInMessages.text(for: error)
+                            }
+                            photoFraming = nil
+                        },
+                        onCancel: { photoFraming = nil },
+                        side: 240)
+                        .padding(14)
+                }
+            }
     }
 
     private func nicknameLine(name: String?, me: Me) -> some View {
@@ -210,35 +266,44 @@ struct AccountSheet: View {
     // MARK: - This Mac
 
     private var thisMacSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             SectionLabel(L10n.Account.Section.thisMac)
             HStack(spacing: 10) {
                 Image(systemName: "laptopcomputer")
-                    .font(.system(size: 15))
+                    .font(.system(size: 14))
                     .foregroundStyle(Color.Bandito.text2)
-                    .frame(width: 30, height: 30)
-                    .background(Color.Bandito.text.opacity(0.06), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .frame(width: 28, height: 28)
+                    .background(Color.Bandito.text.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 Text(DeviceDescriptor.current.name)
                     .font(BanditoFont.font(size: 13.5, weight: 500))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
-            DeviceCodeText(code: hub.identity?.fingerprint ?? "")
-            HStack(spacing: 12) {
-                Button(L10n.Account.copyCode) {
+            HStack(spacing: 8) {
+                Text(hub.identity?.fingerprint ?? "")
+                    .font(BanditoFont.font(size: 15, weight: 500, mono: true))
+                    .foregroundStyle(Color.Bandito.text)
+                    .textSelection(.enabled)
+                    .lineLimit(1)
+                    .fixedSize()
+                Button {
                     SystemActions.copy(hub.identity?.fingerprint ?? "")
+                } label: {
+                    Image(systemName: "doc.on.doc")
+                        .font(.system(size: 12, weight: .medium))
                 }
-                .banditoButton(.quiet())
-                .fixedSize()
+                .banditoButton(.icon(size: 26, label: L10n.Account.copyCode))
+                .help(L10n.Account.copyCode)
                 .disabled(hub.identity == nil)
-                Text(L10n.Account.ThisMac.hint)
-                    .font(BanditoFont.font(size: 12.5, weight: 400))
-                    .foregroundStyle(Color.Bandito.text3)
-                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
             }
+            Text(L10n.Account.ThisMac.hint)
+                .font(BanditoFont.font(size: 12, weight: 400))
+                .foregroundStyle(Color.Bandito.text3)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(16)
+        .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .banditoCard()
     }
@@ -382,19 +447,19 @@ struct AccountSheet: View {
     }
 
     private var actions: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 16) {
                 Button(L10n.Onboarding.Account.signOutAction) {
                     confirmingSignOut = true
                 }
-                .banditoButton(.quiet())
-                .fixedSize()
+                .banditoButton(.link)
+                .font(BanditoFont.font(size: 13, weight: 500))
                 Spacer(minLength: 8)
                 Button(L10n.Onboarding.Account.resetAccountAction) {
                     resetting.toggle()
                 }
                 .banditoButton(.link)
-                .fixedSize()
+                .font(BanditoFont.font(size: 13, weight: 500))
                 .foregroundStyle(Color.Bandito.danger)
             }
             if resetting {
@@ -461,6 +526,7 @@ struct AccountSheet: View {
         defer { syncing = false }
         do {
             try await hub.publishServers(app.servers.map(\.config))
+            try await hub.syncProfilePicture()
             lastSynced = Date()
             errorText = nil
         } catch {
@@ -487,6 +553,40 @@ struct AccountSheet: View {
         } catch {
             errorText = SignInMessages.text(for: error)
         }
+    }
+
+    /// Picks a photo for the profile and frames it. Nothing changes until the framing is saved.
+    private func pickPhoto() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.message = L10n.Account.Photo.pickerMessage
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        Task {
+            guard let image = await Task.detached(operation: { AvatarImageFile.load(url) }).value else {
+                errorText = UserFacingMessage(text: L10n.Avatar.pictureUnreadable)
+                return
+            }
+            errorText = nil
+            photoFraming = image
+        }
+    }
+
+    private func removePhoto() {
+        Task {
+            do {
+                try await hub.avatar.removePicture(at: Self.nowMs())
+                try await hub.syncProfilePicture()
+                errorText = nil
+            } catch {
+                errorText = SignInMessages.text(for: error)
+            }
+        }
+    }
+
+    static func nowMs() -> Int64 {
+        Int64(Date().timeIntervalSince1970 * 1000)
     }
 
     static func colorName(_ color: AvatarColor) -> String {

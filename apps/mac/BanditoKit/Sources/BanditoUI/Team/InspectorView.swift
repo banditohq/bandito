@@ -1,6 +1,7 @@
 import BanditoDesign
 import BanditoKit
 import BanditoL10n
+import CoreGraphics
 import SwiftUI
 
 /// The details of the agent (⌘I), shown in the workbench: header, three tabs, and the tab's content.
@@ -43,6 +44,8 @@ struct InspectorView: View {
         .overlay(alignment: .leading) {
             Rectangle().fill(Color.Bandito.line).frame(width: 1)
         }
+        // Every inspector tab change (picker, or opened on a tab by the app) makes the tab sound.
+        .onChange(of: tab) { _, _ in SoundPlayer.play(.tab) }
     }
 
     private var header: some View {
@@ -70,9 +73,8 @@ private struct IdentityCard: View {
     @State private var role = ""
     @State private var error: UserFacingMessage?
     @State private var pickingAvatar = false
-    /// The avatar's color and face as shown; the picker changes them at once and sends both.
-    @State private var color: AvatarColor = .peach
-    @State private var face: AvatarFace = .auto
+    /// The avatar as the editor shows it. Changes stay local while the editor is open and are sent when it closes.
+    @State private var look = AvatarLook(palette: .peach, customHex: nil, face: .chevronDash, emoji: nil)
     @State private var avatarSync = InFlightCounter()
     @FocusState private var focused: Field?
 
@@ -135,6 +137,9 @@ private struct IdentityCard: View {
 
         .onChange(of: agent.avatar, initial: true) { _, _ in adoptLook() }
         .onChange(of: avatarSync.isIdle) { _, _ in adoptLook() }
+        .onChange(of: pickingAvatar) { _, open in
+            if !open { sendLookIfChanged() }
+        }
         .onChange(of: agent.name, initial: true) { _, value in
             name = IdentityField.text(current: name, saved: value, editing: focused == .name)
         }
@@ -148,56 +153,61 @@ private struct IdentityCard: View {
         }
     }
 
-    /// Takes the agent's avatar, or the look the name gives when none is saved. Only when no send is in flight.
+    /// Takes the agent's avatar, or the look the name gives when none is saved. Not while the editor is open, and only
+    /// when no send is in flight.
     private func adoptLook() {
-        guard avatarSync.isIdle else { return }
-        let resolved = AvatarResolver.resolve(
-            name: agent.name,
-            color: agent.avatar.flatMap { AvatarColor(rawValue: $0.color) },
-            face: agent.avatar.flatMap { AvatarFace(rawValue: $0.face) } ?? .auto)
-        color = resolved.color
-        face = resolved.face
+        guard avatarSync.isIdle, !pickingAvatar else { return }
+        look = AvatarLook(spec: agent.avatar, name: agent.name)
     }
 
-    /// The avatar; a click opens the color and face picker of the new agent sheet.
+    /// The picture of the agent, when it has one and the daemon has loaded it.
+    private var picture: CGImage? {
+        _ = AvatarPictures.shared.version
+        return AvatarPictureCache.pictureKey(for: agent, serverID: server.id.uuidString)
+            .flatMap { AvatarPictures.shared.image(for: $0) }
+    }
+
+    /// The avatar; a click opens the editor: face, emoji, color and picture.
     private var avatarButton: some View {
         Button {
             pickingAvatar = true
         } label: {
-            RaccoonAvatar(
-                name: agent.name, color: color, face: face, size: 56,
+            AvatarArtView(
+                name: agent.name, look: look, picture: picture, size: 56,
                 mood: AvatarMood.make(status: server.thread(for: agent.id).status, paused: agent.paused))
         }
         .banditoButton(.row(cornerRadius: 16, hoverOpacity: 0.06))
         .help(L10n.Inspector.Avatar.help)
+        .task(id: AvatarPictureCache.pictureKey(for: agent, serverID: server.id.uuidString)) {
+            guard server.supports("avatar_pictures") else { return }
+            AvatarPictures.shared.retain(on: server)
+            await AvatarPictures.shared.load(agent: agent, server: server)
+        }
         .popover(isPresented: $pickingAvatar, arrowEdge: .bottom) {
-            AvatarStylePicker(color: colorChoice, face: faceChoice)
-                .padding(14)
+            AvatarEditor(
+                name: agent.name, look: $look, picture: picture,
+                pictureSupported: server.supports("avatar_pictures"),
+                onSetPicture: { data in
+                    try await server.setAgentAvatarImage(agent.id, data)
+                },
+                onRemovePicture: {
+                    try await server.clearAgentAvatarImage(agent.id)
+                })
         }
     }
 
-    private var colorChoice: Binding<AvatarColor> {
-        Binding(get: { color }, set: { sendAvatar(color: $0, face: face) })
-    }
-
-    private var faceChoice: Binding<AvatarFace> {
-        Binding(get: { face }, set: { sendAvatar(color: color, face: $0) })
-    }
-
-    /// Sends the whole avatar (color and face). A daemon without the field ignores it; the look then comes back from
-    /// the name, and the picker shows that.
-    private func sendAvatar(color next: AvatarColor, face nextFace: AvatarFace) {
-        let before = (color, face)
-        color = next
-        face = nextFace
+    /// Sends the look when the editor closes, if it changed. A daemon without the field ignores it; the look then comes
+    /// back from the name, and the editor shows that.
+    private func sendLookIfChanged() {
+        guard look != AvatarLook(spec: agent.avatar, name: agent.name) else { return }
+        let before = AvatarLook(spec: agent.avatar, name: agent.name)
         avatarSync.begin()
         Task {
             defer { avatarSync.end() }
             do {
-                _ = try await server.updateAgent(
-                    agent.id, patch: AgentPatch(avatar: AvatarSpec(color: next.rawValue, face: nextFace.rawValue)))
+                _ = try await server.updateAgent(agent.id, patch: AgentPatch(avatar: look.spec))
             } catch {
-                (color, face) = before
+                look = before
                 self.error = UserFacingError.message(for: error)
             }
         }
@@ -256,6 +266,8 @@ struct InspectorCard<Content: View>: View {
 /// One line of a card: the label on the left, the value (text or control) on the right.
 struct InspectorRow<Value: View>: View {
     var label: String
+    /// The calm layout of the agent's details: rows of 32 pt with 16 pt sides.
+    var compact = false
     @ViewBuilder var value: Value
 
     var body: some View {
@@ -268,8 +280,9 @@ struct InspectorRow<Value: View>: View {
                 .font(BanditoFont.font(size: 13, weight: 500))
                 .foregroundStyle(Color.Bandito.text)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
+        .padding(.horizontal, compact ? 16 : 14)
+        .padding(.vertical, compact ? 3 : 11)
+        .frame(minHeight: compact ? 32 : nil)
         .overlay(alignment: .bottom) {
             Rectangle().fill(Color.Bandito.text.opacity(0.05)).frame(height: 1)
         }

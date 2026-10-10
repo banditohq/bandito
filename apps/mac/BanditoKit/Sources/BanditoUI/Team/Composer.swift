@@ -2,6 +2,9 @@ import BanditoDesign
 import BanditoKit
 import BanditoL10n
 import SwiftUI
+#if os(macOS)
+import AppKit
+#endif
 
 /// The message box under the thread. Enter sends, Shift+Enter starts a new line. While a turn runs,
 /// the send button becomes Stop (⌘. is the menu command, see `BanditoCommands`).
@@ -17,16 +20,39 @@ struct Composer: View {
     /// The agent and its server, for slash commands. Without them the slash menu is off.
     var agent: Agent?
     var server: ServerModel?
+    /// The message this one answers, shown in a bar above the field. Esc and the cross in the bar take it away.
+    var reply: ReplyTarget?
+    var onCancelReply: () -> Void = {}
+    /// A form the agent waits on: the hint above the field, with a link that scrolls to the form (given its id).
+    var waitingForm: FormRow?
+    var onGoToForm: (String) -> Void = { _ in }
     var onSend: () -> Void
     var onStop: () -> Void
+    /// Starts the agent's next chapter now (see `ServerModel.startNewChapter`). Shown only when the server supports it.
+    var onNewChapter: () -> Void = {}
+    /// The key hints under the field. The thread passes `false` once it has messages: the hints are for the empty thread.
+    var showsHints: Bool = true
 
     @Environment(Router.self) private var router
     @Environment(AppModel.self) private var app
     @FocusState private var focused: Bool
     @State private var slash = SlashMenuModel()
-
+    /// The context popover is open (the ring is a button).
+    @State private var showsContext = false
+    /// The popover asks "start a new chapter?" before it does (reset when the popover closes).
+    @State private var asksNewChapter = false
     private var canSend: Bool {
-        !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        AttachmentTray.canSend(text: draft, files: files)
+    }
+
+    /// The files waiting in this agent's composer.
+    private var files: [DraftFile] {
+        AttachmentTrays.shared.files(for: agent?.id ?? "")
+    }
+
+    /// Attaching needs an agent and a daemon that lists the `attachments` feature.
+    private var canAttach: Bool {
+        agent != nil && server?.supports("attachments") == true
     }
 
     /// The typed command name while the menu is open, `nil` when it is closed.
@@ -57,35 +83,65 @@ struct Composer: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 16)
             }
-            HStack(alignment: .bottom, spacing: 10) {
-                // Attaching files returns with uploads; a name-only "@file" was misleading.
-
-                TextField(L10n.Thread.placeholder, text: $draft, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(BanditoFont.font(size: 14.5, weight: 400))
-                    .foregroundStyle(Color.Bandito.text)
-                    .tint(Color.Bandito.signal)
-                    .lineLimit(1...8)
-                    .focused($focused)
-                    .padding(.vertical, 8)
-                    .onKeyPress(keys: [.upArrow, .downArrow, .tab, .escape]) { press in
-                        handleMenuKey(press.key)
+            if let waitingForm {
+                formHint(waitingForm)
+                    .transition(.opacity.combined(with: .offset(y: 6)))
+            }
+            if let reply {
+                replyBar(reply)
+                    .transition(.opacity.combined(with: .offset(y: 6)))
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                if !files.isEmpty {
+                    attachmentStrip
+                }
+                HStack(alignment: .bottom, spacing: 10) {
+                    if canAttach {
+                        attachMenu
                     }
-                    .onKeyPress(keys: [.return]) { press in
-                        // Shift+Return is left to the field, which inserts a line break.
-                        if press.modifiers.contains(.shift) { return .ignored }
-                        if query != nil, entries.indices.contains(slash.index) {
-                            run(entries[slash.index])
+
+                    TextField(L10n.Thread.placeholder, text: $draft, axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .font(BanditoFont.font(size: 14.5, weight: 400))
+                        .foregroundStyle(Color.Bandito.text)
+                        .tint(Color.Bandito.signal)
+                        .lineLimit(1...8)
+                        .focused($focused)
+                        .padding(.vertical, 8)
+                        .onKeyPress(keys: [.upArrow, .downArrow, .tab, .escape]) { press in
+                            handleMenuKey(press.key)
+                        }
+                        .onKeyPress(keys: [KeyEquivalent("v")]) { press in
+                            // ⌘V of a picture (and no text) attaches it. Text paste is left to the field.
+                            guard canAttach, press.modifiers == .command, PictureSource.clipboardHoldsOnlyPicture,
+                                let data = PictureSource.clipboardPNG(), let agent, let server
+                            else { return .ignored }
+                            AttachmentTrays.shared.addPicture(data, name: Self.pictureName("Clipboard"), agentID: agent.id, server: server)
                             return .handled
                         }
-                        if canSend && !running { submit() }
-                        return .handled
-                    }
+                        .onKeyPress(keys: [.return]) { press in
+                            // Shift or Option with Return: a line break at the caret. Plain Return sends.
+                            let newLine = ComposerReturn.action(
+                                shift: press.modifiers.contains(.shift), option: press.modifiers.contains(.option))
+                            if newLine == .newLine {
+                                #if os(macOS)
+                                FieldNewline.insert()
+                                #endif
+                                return .handled
+                            }
+                            if query != nil, entries.indices.contains(slash.index) {
+                                run(entries[slash.index])
+                                return .handled
+                            }
+                            if canSend && !running { submit() }
+                            return .handled
+                        }
 
-                contextIndicator
-                    .padding(.bottom, 9)
+                    contextIndicator
+                        .padding(.bottom, 9)
 
-                sendOrStop
+                    sendOrStop
+                }
             }
             .padding(.leading, 14)
             .padding(.trailing, 10)
@@ -94,26 +150,31 @@ struct Composer: View {
             .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(Color.Bandito.line, lineWidth: 1))
             .shadow(color: .black.opacity(0.35), radius: 18, x: 0, y: 10)
 
-            HStack(spacing: 14) {
-                Text(L10n.Thread.hintSend)
-                Text(L10n.Thread.hintNewLine)
-                Text(L10n.Thread.hintStop)
-                Text(L10n.Thread.hintSearch)
+            if showsHints {
+                HStack(spacing: 14) {
+                    Text(L10n.Thread.hintSend)
+                    Text(L10n.Thread.hintNewLine)
+                    Text(L10n.Thread.hintStop)
+                    Text(L10n.Thread.hintSearch)
+                }
+                .font(BanditoFont.font(size: 11, weight: 400))
+                .foregroundStyle(Color.Bandito.text3.opacity(0.7))
             }
-            .font(BanditoFont.font(size: 11, weight: 400))
-            .foregroundStyle(Color.Bandito.text3.opacity(0.7))
         }
         .animation(.easeOut(duration: BanditoMotion.fast), value: query != nil)
-        .onAppear { focused = true }
+        .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: reply)
+        .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: waitingForm?.formId)
+        .onAppear { takeFocus(.agentOpened) }
         .tourAnchor(.composer)
         .onChange(of: router.composerFocusAgentID, initial: true) { _, _ in
             guard let agentID = agent?.id else { return }
-            if router.takeComposerFocus(agentID: agentID) { focused = true }
+            if router.takeComposerFocus(agentID: agentID) { takeFocus(.requested) }
         }
-        .onChange(of: draft) { _, _ in
+        .onChange(of: draft) { old, new in
             slash.suppressed = false
             slash.notice = nil
             slash.index = 0
+            if SoundRules.isTypedCharacter(old: old, new: new) { SoundPlayer.play(.type) }
         }
         .task(id: agent?.id) {
             guard let agent, let server else { return }
@@ -139,15 +200,153 @@ struct Composer: View {
         }
     }
 
-    private var contextIndicator: some View {
-        HStack(spacing: 6) {
-            ContextRing(fraction: contextFraction, size: 16)
-            Text("\(Int((contextFraction * 100).rounded()))%")
-                .font(BanditoFont.font(size: 11.5, weight: 400))
-                .monospacedDigit()
+    /// Focuses the field when `ComposerFocus` allows it. Another text field being edited is told from the composer's
+    /// own by the focus state: the field editor is first responder while `focused` is false.
+    private func takeFocus(_ reason: ComposerFocus.Reason) {
+        var other = false
+        #if os(macOS)
+        if !focused, let editor = NSApp.keyWindow?.firstResponder as? NSTextView, editor.isFieldEditor || editor.isEditable {
+            other = true
         }
-        .foregroundStyle(Color.Bandito.text3)
+        #endif
+        if ComposerFocus.shouldTakeFocus(reason: reason, otherFieldHasFocus: other) { focused = true }
+    }
+
+    /// The bar above the field: whom the message answers, and the first words of the original.
+    private func replyBar(_ target: ReplyTarget) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(Color.Bandito.signal)
+                .frame(width: 3, height: 32)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(target.fromUser ? L10n.Reply.toSelf : L10n.Reply.toAgent(name: agentName))
+                    .font(BanditoFont.font(size: 12, weight: 600))
+                    .foregroundStyle(Color.Bandito.signal)
+                    .lineLimit(1)
+                Text(target.excerpt)
+                    .font(BanditoFont.font(size: 12.5, weight: 400))
+                    .foregroundStyle(Color.Bandito.text2)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            Spacer(minLength: 8)
+            Button(action: onCancelReply) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .semibold))
+                    .frame(width: 24, height: 24)
+            }
+            .banditoButton(.icon(size: 24, label: L10n.Reply.cancel))
+            .help(L10n.Reply.cancel)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.Bandito.surface2, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.Bandito.line, lineWidth: 1))
+    }
+
+    /// The agent is waiting for an answer in a form: what to do, and a way to the form.
+    private func formHint(_ form: FormRow) -> some View {
+        HStack(spacing: 10) {
+            StatusDot(status: .needsYou, size: 7, ringColor: Color.Bandito.signal.opacity(0.15))
+            Text(L10n.Composer.formWaiting(name: agentName))
+                .font(BanditoFont.font(size: 12.5, weight: 500))
+                .foregroundStyle(Color.Bandito.text)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+            Spacer(minLength: 8)
+            Button {
+                onGoToForm(form.formId)
+            } label: {
+                Text(L10n.Composer.formGo)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+            .banditoButton(.link)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.Bandito.signal.opacity(0.1), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.Bandito.signal.opacity(0.3), lineWidth: 1))
+    }
+
+    private var contextIndicator: some View {
+        let percent = Int((contextFraction * 100).rounded())
+        return Button {
+            showsContext.toggle()
+        } label: {
+            HStack(spacing: 6) {
+                ContextRing(fraction: contextFraction, size: 16)
+                Text("\(percent)%")
+                    .font(BanditoFont.font(size: 11.5, weight: 400))
+                    .monospacedDigit()
+            }
+            .foregroundStyle(Color.Bandito.text3)
+            .padding(.horizontal, 4)
+            .frame(height: 22)
+        }
+        .banditoButton(.row(cornerRadius: 8))
         .help(L10n.Composer.contextHint)
+        .popover(isPresented: $showsContext, arrowEdge: .top) {
+            contextPopover(percent: percent)
+        }
+        .onChange(of: showsContext) { _, open in
+            if !open { asksNewChapter = false }
+        }
+    }
+
+    private func contextPopover(percent: Int) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(L10n.Composer.contextPopover(percent: "\(percent)"))
+                .font(BanditoFont.font(size: 12.5, weight: 400))
+                .foregroundStyle(Color.Bandito.text)
+                .fixedSize(horizontal: false, vertical: true)
+            if server?.supportsNewChapter == true {
+                if asksNewChapter {
+                    Text(L10n.Composer.NewChapter.confirm)
+                        .font(BanditoFont.font(size: 12.5, weight: 400))
+                        .foregroundStyle(Color.Bandito.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: 8) {
+                        Button {
+                            asksNewChapter = false
+                        } label: {
+                            Text(L10n.Common.cancel)
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
+                        }
+                        .banditoButton(.quiet())
+                        Button {
+                            showsContext = false
+                            onNewChapter()
+                        } label: {
+                            Text(L10n.Composer.NewChapter.continue)
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
+                        }
+                        .banditoButton(.signal())
+                    }
+                } else {
+                    Button {
+                        asksNewChapter = true
+                    } label: {
+                        Text(L10n.Composer.NewChapter.button)
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                    }
+                    .banditoButton(.quiet())
+                }
+                if running {
+                    Text(L10n.Composer.NewChapter.afterTurn)
+                        .font(BanditoFont.font(size: 11.5, weight: 400))
+                        .foregroundStyle(Color.Bandito.text3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .frame(width: 280, alignment: .leading)
+        .padding(14)
     }
 
     @ViewBuilder
@@ -180,6 +379,11 @@ struct Composer: View {
     // MARK: Keys and menu actions
 
     private func handleMenuKey(_ key: KeyEquivalent) -> KeyPress.Result {
+        // Esc with no menu open takes the reply away.
+        if query == nil, key == .escape, reply != nil {
+            onCancelReply()
+            return .handled
+        }
         guard query != nil else { return .ignored }
         switch key {
         case .upArrow:
@@ -228,6 +432,7 @@ struct Composer: View {
     /// the install prompt; everything else is sent as typed.
     private func submit() {
         guard let agent, let server else {
+            SoundPlayer.play(.send)
             onSend()
             return
         }
@@ -241,6 +446,7 @@ struct Composer: View {
                 return
             }
         }
+        SoundPlayer.play(.send)
         onSend()
     }
 
@@ -321,11 +527,146 @@ struct Composer: View {
         }
     }
 
-    /// Until uploads exist, an attached file is referred to by its name: the file path goes into the text as `@name`.
-    private func attachFile() {
-        guard let url = FilePanels.openURL() else { return }
-        let separator = draft.isEmpty || draft.hasSuffix(" ") ? "" : " "
-        draft += "\(separator)@\(url.lastPathComponent) "
+    // MARK: Attachments
+
+    /// The "+" menu: files, a screenshot of a region, or the picture on the clipboard.
+    private var attachMenu: some View {
+        Menu {
+            Button(L10n.Composer.Attach.file) { attachFiles() }
+            Button(L10n.Composer.Attach.screenshot) { takeScreenshot() }
+            Button(L10n.Composer.Attach.clipboard) { attachClipboard() }
+                .disabled(!PictureSource.clipboardHoldsOnlyPicture)
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Color.Bandito.text2)
+                .frame(width: 30, height: 30)
+        }
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .banditoButton(.icon(size: 30, label: L10n.Composer.Attach.label))
+        .padding(.bottom, 2)
+    }
+
+    /// The files of the draft, in a row above the field: pictures as miniatures, other files as chips.
+    private var attachmentStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(files) { file in
+                    if file.isImage {
+                        pictureTile(file)
+                    } else {
+                        fileChip(file)
+                    }
+                }
+            }
+            .padding(.top, 6)
+            .padding(.trailing, 6)
+        }
+    }
+
+    /// A picture of 56 pt. A failed one is marked red; an uploading one shows a spinner.
+    private func pictureTile(_ file: DraftFile) -> some View {
+        ZStack(alignment: .topTrailing) {
+            Group {
+                if let preview = file.preview {
+                    Image(nsImage: preview).resizable().scaledToFill()
+                } else {
+                    Image(systemName: "photo")
+                        .font(.system(size: 18, weight: .regular))
+                        .foregroundStyle(Color.Bandito.text3)
+                }
+            }
+            .frame(width: 56, height: 56)
+            .background(Color.Bandito.surface3)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay {
+                stateOverlay(file)
+            }
+            .help(file.failureText ?? file.name)
+            removeButton(file)
+        }
+    }
+
+    /// A file that is not a picture: its icon, name and size, or what is wrong with it.
+    private func fileChip(_ file: DraftFile) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "doc")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Color.Bandito.text3)
+            Text(file.name)
+                .font(BanditoFont.font(size: 12.5, weight: 500))
+                .foregroundStyle(Color.Bandito.text2)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+            if let detail = file.detailText {
+                Text(detail)
+                    .font(BanditoFont.font(size: 11.5, weight: 400))
+                    .foregroundStyle(file.failureText == nil ? Color.Bandito.text3 : Color.Bandito.danger)
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+            removeButton(file)
+        }
+        .padding(.leading, 10)
+        .padding(.trailing, 4)
+        .frame(height: 32)
+        .background(Color.Bandito.surface3, in: Capsule())
+        .overlay(Capsule().stroke(Color.Bandito.line, lineWidth: 0.5))
+    }
+
+    /// The spinner while a picture uploads, and a red wash when it failed.
+    @ViewBuilder
+    private func stateOverlay(_ file: DraftFile) -> some View {
+        if file.state == .uploading {
+            ZStack {
+                Color.black.opacity(0.35)
+                ProgressView().controlSize(.small)
+            }
+        } else if file.failureText != nil {
+            ZStack {
+                Color.Bandito.danger.opacity(0.35)
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(Color.white)
+            }
+        }
+    }
+
+    private func removeButton(_ file: DraftFile) -> some View {
+        Button {
+            AttachmentTrays.shared.remove(file.id, agentID: agent?.id ?? "")
+        } label: {
+            Image(systemName: "xmark")
+                .font(.system(size: 8, weight: .bold))
+        }
+        .banditoButton(.icon(size: 18, label: L10n.Composer.Attach.remove))
+    }
+
+    private func attachFiles() {
+        guard canAttach, let agent, let server else { return }
+        let urls = FilePanels.attachmentURLs()
+        guard !urls.isEmpty else { return }
+        AttachmentTrays.shared.add(urls: urls, agentID: agent.id, server: server)
         focused = true
+    }
+
+    private func attachClipboard() {
+        guard canAttach, let agent, let server, let data = PictureSource.clipboardPNG() else { return }
+        AttachmentTrays.shared.addPicture(data, name: Self.pictureName("Clipboard"), agentID: agent.id, server: server)
+        focused = true
+    }
+
+    private func takeScreenshot() {
+        guard canAttach, let agent, let server else { return }
+        Task {
+            guard let data = await PictureSource.screenshot() else { return }
+            AttachmentTrays.shared.addPicture(data, name: Self.pictureName("Screenshot"), agentID: agent.id, server: server)
+        }
+    }
+
+    /// A name for a picture that has none: the source and the time, without characters a file name cannot hold.
+    static func pictureName(_ source: String) -> String {
+        "\(source)-\(Int(Date().timeIntervalSince1970 * 1000)).png"
     }
 }

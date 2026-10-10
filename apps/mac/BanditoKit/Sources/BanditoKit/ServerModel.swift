@@ -472,6 +472,13 @@ public final class ServerModel: Identifiable {
                 } else {
                     agents[i].pendingApprovals = max(0, agents[i].pendingApprovals - 1)
                 }
+            case .turnCompleted:
+                // The daemon stores the context the turn left when the turn ends; the ring and the memory tab read it
+                // from the list.
+                requestAgentsRefresh()
+            case .sessionRotated(let chapter, _, _):
+                agents[i].chapter = chapter
+                agents[i].contextTokens = 0
             default:
                 break
             }
@@ -616,10 +623,26 @@ public final class ServerModel: Identifiable {
             t.statusDetail = live.statusDetail
             t.turnRunning = live.turnRunning
             t.lastSeq = max(t.lastSeq, live.lastSeq)
+            t.mergeMessageMeta(from: live)
         }
         threads[agentId] = t
         oldestSeq[agentId] = page.first?.seq
         hasMoreHistory[agentId] = !page.isEmpty && page.count == Self.historyPageSize
+        await addOpenForms(agentId)
+    }
+
+    /// A form that still waits can be older than the page that was loaded: the daemon holds it for a day. It is added
+    /// to the thread, so the person sees what the agent is waiting for. A failed read leaves the thread as it is.
+    private func addOpenForms(_ agentId: String) async {
+        guard supports("forms"), let c = try? rpc() else { return }
+        struct P: Encodable { var agentId: String; var status: String }
+        guard let open = try? await c.call("forms.list", P(agentId: agentId, status: "pending"), as: [FormRecord].self)
+        else { return }
+        guard var thread = threads[agentId] else { return }
+        for record in open.reversed() {
+            thread.addPending(form: FormRow(formId: record.id, spec: record.spec, outcome: nil, ts: record.createdAt))
+        }
+        threads[agentId] = thread
     }
 
     /// Prepends the page before the oldest loaded event.
@@ -632,6 +655,7 @@ public final class ServerModel: Identifiable {
         var current = threads[agentId] ?? AgentThread()
         let known = Set(current.items.map(\.id))
         current.items = older.items.filter { !known.contains($0.id) } + current.items
+        current.mergeMessageMeta(from: older)
         threads[agentId] = current
         if let oldest = page.first?.seq { oldestSeq[agentId] = oldest }
         hasMoreHistory[agentId] = !page.isEmpty && page.count == Self.historyPageSize
@@ -639,14 +663,78 @@ public final class ServerModel: Identifiable {
 
     // MARK: actions
 
-    public func send(_ text: String, to agentId: String) async throws {
-        struct P: Encodable { var agentId: String; var text: String }
-        try await rpc().call("agents.send", P(agentId: agentId, text: text))
+    /// Sends a message to an agent. `attachments` are files from `uploadAttachment`; they go by path. `replyTo` is the
+    /// `seq` of the message it answers (the daemon takes it with the `attachments` feature; without that feature the
+    /// field is left out and the text goes alone).
+    public func send(
+        _ text: String, to agentId: String, replyTo: Int64? = nil, attachments: [AgentAttachment] = []
+    ) async throws {
+        let request = AgentSendRequest(
+            agentId: agentId, text: text, attachments: attachments.isEmpty ? nil : attachments.map(\.path),
+            replyTo: supports("attachments") ? replyTo : nil)
+        try await rpc().call("agents.send", request)
+    }
+
+    /// Saves one file in the agent's attachment folder (`attachments.upload`). The daemon refuses more than 20 MB.
+    public func uploadAttachment(_ data: Data, name: String, agentId: String) async throws -> AgentAttachment {
+        struct P: Encodable { var agentId: String; var name: String; var dataBase64: String }
+        return try await rpc().call(
+            "attachments.upload",
+            P(agentId: agentId, name: name, dataBase64: data.base64EncodedString()),
+            as: AgentAttachment.self)
+    }
+
+    /// Throws `unsupported` when the daemon does not list `feature`: the call would only be refused as an unknown method.
+    private func requireFeature(_ feature: String) throws {
+        guard supports(feature) else {
+            throw RPCError(code: RPCError.invalidParams, message: "unsupported: \(feature) is not available on this server")
+        }
+    }
+
+    /// Puts an emoji on a message, or takes the person's reaction off with `nil` (`messages.react`). The thread shows
+    /// it when the daemon's `reaction` event arrives.
+    public func react(_ emoji: String?, toMessage seq: Int64, of agentId: String) async throws {
+        try requireFeature("reactions")
+        struct P: Encodable {
+            var agentId: String; var seq: Int64; var emoji: String?
+            // The daemon reads a missing `emoji` as null, but an explicit null says it plainly.
+            func encode(to encoder: Encoder) throws {
+                var c = encoder.container(keyedBy: Keys.self)
+                try c.encode(agentId, forKey: .agentId)
+                try c.encode(seq, forKey: .seq)
+                try c.encode(emoji, forKey: .emoji)
+            }
+            enum Keys: String, CodingKey { case agentId, seq, emoji }
+        }
+        try await rpc().call("messages.react", P(agentId: agentId, seq: seq, emoji: emoji))
+    }
+
+    /// Answers a form (`forms.answer`). The answer reaches the thread as the daemon's `form_answered` event. A form the
+    /// daemon says is over (`expired`) is closed in the thread at once; the error is still thrown for the card to show.
+    public func answerForm(
+        _ formId: String, in agentId: String, action: FormAction, values: [String: JSONValue]? = nil,
+        comment: String? = nil
+    ) async throws {
+        try requireFeature("forms")
+        let params = try FormAnswer.answerParams(formId: formId, action: action, values: values, comment: comment)
+        do {
+            try await rpc().call("forms.answer", jsonParams: params)
+        } catch let error as RPCError where error.message == "expired" {
+            threads[agentId]?.close(form: formId, with: .expired)
+            throw error
+        }
     }
 
     public func interrupt(_ agentId: String) async throws {
         struct P: Encodable { var agentId: String }
         try await rpc().call("agents.interrupt", P(agentId: agentId))
+    }
+
+    /// Starts the agent's next chapter now (`agents.new_chapter`). The memory is saved first; a running turn finishes
+    /// before the new chapter starts, so the reply comes back at once.
+    public func startNewChapter(_ agentId: String) async throws {
+        struct P: Encodable { var id: String }
+        try await rpc().call("agents.new_chapter", P(id: agentId))
     }
 
     public func resolve(_ approvalId: String, _ decision: Decision, remember: Bool = false) async throws {
@@ -665,6 +753,57 @@ public final class ServerModel: Identifiable {
     @discardableResult
     public func setPaused(agentID: String, _ paused: Bool) async throws -> Agent {
         try await updateAgent(agentID, patch: AgentPatch(paused: paused)).agent
+    }
+
+    /// Makes the agent the main one of the server, or takes the role away (`agents.update {lead}`). The daemon takes
+    /// the role from the old main agent in the same step; the list here follows at once, and the `agent_changed`
+    /// events read it again.
+    @discardableResult
+    public func setLead(agentID: String, _ lead: Bool) async throws -> Agent {
+        let agent = try await updateAgent(agentID, patch: AgentPatch(lead: lead)).agent
+        if lead {
+            for i in agents.indices where agents[i].id != agentID && agents[i].lead { agents[i].lead = false }
+        }
+        return agent
+    }
+
+    /// The id of the main agent of this server, or `nil` when there is none (or the daemon has no such thing).
+    public var leadAgentID: String? {
+        supports("lead") ? agents.first(where: \.lead)?.id : nil
+    }
+
+    /// Stores the agent's picture (`agents.avatar_image_set`): a PNG or JPEG of at most 1 MB. The daemon needs the
+    /// avatar set first. Returns the agent, with its new `image_rev`.
+    @discardableResult
+    public func setAgentAvatarImage(_ agentID: String, _ data: Data) async throws -> Agent {
+        struct P: Encodable {
+            var id: String
+            var dataBase64: String
+
+            enum CodingKeys: String, CodingKey {
+                case id
+                case dataBase64 = "data_base64"
+            }
+        }
+        let agent = try await rpc().call(
+            "agents.avatar_image_set", P(id: agentID, dataBase64: data.base64EncodedString()), as: Agent.self)
+        replaceAgent(agent)
+        return agent
+    }
+
+    /// The agent's picture (`agents.avatar_image_get`), or nil when it has none.
+    public func agentAvatarImage(_ agentID: String) async throws -> AvatarImage? {
+        struct P: Encodable { var id: String }
+        return try await rpc().call("agents.avatar_image_get", P(id: agentID), as: AvatarImage?.self)
+    }
+
+    /// Removes the agent's picture (`agents.avatar_image_clear`). Returns the agent.
+    @discardableResult
+    public func clearAgentAvatarImage(_ agentID: String) async throws -> Agent {
+        struct P: Encodable { var id: String }
+        let agent = try await rpc().call("agents.avatar_image_clear", P(id: agentID), as: Agent.self)
+        replaceAgent(agent)
+        return agent
     }
 
     /// The newest lines of the daemon's own log (`daemon.logs`). `level` is the lowest level to show.
@@ -701,6 +840,9 @@ public final class ServerModel: Identifiable {
     public func supports(_ feature: String) -> Bool {
         info?.supports(feature) ?? false
     }
+
+    /// Whether the connected daemon knows `agents.new_chapter` (see `DaemonInfo.supportsNewChapter`).
+    public var supportsNewChapter: Bool { info?.supportsNewChapter ?? false }
 
     /// Current rate-limit windows of every runtime (cached by the daemon).
     @discardableResult
@@ -814,20 +956,25 @@ extension ServerModel {
         return try await rpc().call("schedules.list", P(agentId: agentId), as: [Schedule].self)
     }
 
+    /// Creates an owner schedule. `cron` is the expression in the server's zone `tz`; `title` is optional.
     @discardableResult
-    public func createSchedule(agentId: String, cron: String, tz: String, prompt: String) async throws -> Schedule {
-        struct P: Encodable { var agentId: String; var cron: String; var tz: String; var prompt: String }
+    public func createSchedule(
+        agentId: String, cron: String, tz: String, prompt: String, title: String? = nil
+    ) async throws -> Schedule {
+        struct P: Encodable { var agentId: String; var cron: String; var tz: String; var prompt: String; var title: String? }
         return try await rpc().call(
-            "schedules.create", P(agentId: agentId, cron: cron, tz: tz, prompt: prompt), as: Schedule.self)
+            "schedules.create", P(agentId: agentId, cron: cron, tz: tz, prompt: prompt, title: title), as: Schedule.self)
     }
 
+    /// Changes the fields that are set. `title` `.clear` sends `null`, which removes the title.
     @discardableResult
     public func updateSchedule(
-        _ id: String, cron: String? = nil, tz: String? = nil, prompt: String? = nil, enabled: Bool? = nil
+        _ id: String, cron: String? = nil, tz: String? = nil, prompt: String? = nil, enabled: Bool? = nil,
+        title: FieldChange<String>? = nil
     ) async throws -> Schedule {
-        struct P: Encodable { var id: String; var cron: String?; var tz: String?; var prompt: String?; var enabled: Bool? }
-        return try await rpc().call(
-            "schedules.update", P(id: id, cron: cron, tz: tz, prompt: prompt, enabled: enabled), as: Schedule.self)
+        let params = ScheduleUpdateParams(
+            id: id, cron: cron, tz: tz, prompt: prompt, enabled: enabled, title: title)
+        return try await rpc().call("schedules.update", params, as: Schedule.self)
     }
 
     public func deleteSchedule(_ id: String) async throws {
@@ -953,5 +1100,31 @@ struct ListGeneration: Sendable, Equatable {
 
     func accepts(_ generation: ListGeneration) -> Bool {
         generation == self
+    }
+}
+
+/// `schedules.update` params: the id and the fields that are set. `title` `.clear` is sent as `null`.
+struct ScheduleUpdateParams: Encodable, Sendable {
+    var id: String
+    var cron: String?
+    var tz: String?
+    var prompt: String?
+    var enabled: Bool?
+    var title: FieldChange<String>?
+
+    enum Key: String, CodingKey { case id, cron, tz, prompt, enabled, title }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: Key.self)
+        try c.encode(id, forKey: .id)
+        try c.encodeIfPresent(cron, forKey: .cron)
+        try c.encodeIfPresent(tz, forKey: .tz)
+        try c.encodeIfPresent(prompt, forKey: .prompt)
+        try c.encodeIfPresent(enabled, forKey: .enabled)
+        switch title {
+        case nil: break
+        case .set(let value)?: try c.encode(value, forKey: .title)
+        case .clear?: try c.encodeNil(forKey: .title)
+        }
     }
 }

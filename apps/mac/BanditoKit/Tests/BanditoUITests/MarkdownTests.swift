@@ -35,7 +35,7 @@ import Testing
         #expect(blocks.contains(.item(text: "**billing** — `~/projects/billing` Деньги в копейках.", line: 3, checkbox: nil)))
         #expect(blocks.contains(.item(text: "PR #43: тесты вебхука", line: 6, checkbox: false)))
         #expect(blocks.contains(.item(text: "Перевести суммы", line: 7, checkbox: true)))
-        #expect(blocks.contains(.item(text: "первый", line: 8, checkbox: nil)))
+        #expect(blocks.contains(.item(text: "первый", line: 8, checkbox: nil, number: "1.")))
     }
 
     @Test func parsesQuoteAndFencedCodeWithoutReadingItAsMarkdown() {

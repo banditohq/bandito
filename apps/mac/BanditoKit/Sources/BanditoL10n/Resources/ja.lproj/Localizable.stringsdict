@@ -142,6 +142,20 @@
 			<string>稼働 %1$lld 日</string>
 		</dict>
 	</dict>
+	<key>integrations.status.connected</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>other</key>
+			<string>%1$lld 個のツール</string>
+		</dict>
+	</dict>
 	<key>memory.filesMeta</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
@@ -226,6 +240,20 @@
 			<string>約 ≈ %1$lld 分</string>
 		</dict>
 	</dict>
+	<key>schedule.step.hours</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>other</key>
+			<string>%1$lld 時間</string>
+		</dict>
+	</dict>
 	<key>server.cores</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
@@ -238,6 +266,34 @@
 			<string>lld</string>
 			<key>other</key>
 			<string>%1$lld コア</string>
+		</dict>
+	</dict>
+	<key>server.detail.processCount</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>other</key>
+			<string>%1$lld 個のプロセス</string>
+		</dict>
+	</dict>
+	<key>setup.showFullLog</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>other</key>
+			<string>ログ全体を表示（%1$lld行）</string>
 		</dict>
 	</dict>
 	<key>terminals.dock.lines</key>

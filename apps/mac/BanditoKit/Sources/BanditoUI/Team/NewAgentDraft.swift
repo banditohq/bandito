@@ -1,4 +1,5 @@
 import BanditoKit
+import Foundation
 import BanditoL10n
 
 /// What the "Only risky / Everything / Nothing" control means, in the words of the approval policy.
@@ -36,7 +37,13 @@ public struct NewAgentDraft: Equatable, Sendable {
     public var name = ""
     public var role = ""
     public var color: AvatarColor = .peach
+    /// A custom tile color as `#RRGGBB`; wins over `color` when set.
+    public var customHex: String?
     public var face: AvatarFace = .chevronDash
+    /// One emoji shown instead of the face when there is no picture.
+    public var emoji: String?
+    /// The framed picture as PNG. Sent right after the agent is created: `agents.avatar_image_set` needs its id.
+    public var picture: Data?
     public var runtime: RuntimeKind = .claude
     /// Empty means the runtime's default model.
     public var model = ""
@@ -59,6 +66,8 @@ public struct NewAgentDraft: Equatable, Sendable {
     /// The "What it may do" chips. Sent with `agents.create` as `capabilities`; a daemon without the field ignores it,
     /// so nothing is enforced until the daemon has it.
     public var capabilities: Set<AgentCapability> = AgentCapability.allOn
+    /// The integrations the agent may use. `.all` (the default) is sent as no list, which means every enabled one.
+    public var integrations: IntegrationChoice = .all
 
     public init() {}
 
@@ -174,8 +183,9 @@ public struct NewAgentDraft: Equatable, Sendable {
             fallbackRuntime: fallbackRuntime,
             fallbackModel: trimmed(fallbackModel).isEmpty ? nil : trimmed(fallbackModel),
             workspaceId: workspace,
-            avatar: AvatarSpec(color: color.rawValue, face: face.rawValue),
-            capabilities: AgentCapability.wire(capabilities))
+            avatar: AvatarSpec(color: customHex ?? color.rawValue, face: face.rawValue, emoji: emoji),
+            capabilities: AgentCapability.wire(capabilities),
+            integrations: integrations.wireIDs)
     }
 
     /// Model names offered in the menu. Other runtimes take free text only.

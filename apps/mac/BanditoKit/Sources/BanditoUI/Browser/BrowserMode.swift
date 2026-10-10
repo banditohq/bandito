@@ -46,8 +46,17 @@ private struct BrowserContent: View {
             .task(id: server.id) {
                 model.attach()
             }
+            // ⌘[ and ⌘] (and the Go menu) walk the page's history while Browser mode is on screen.
+            .onAppear {
+                router.browserHistory = BrowserHistoryHandle(
+                    canBack: { model.canGoBack },
+                    canForward: { model.canGoForward },
+                    back: { Task { await model.goBack() } },
+                    forward: { Task { await model.goForward() } })
+            }
             .onDisappear {
                 model.detach()
+                router.browserHistory = nil
             }
             .task(id: router.pendingPreviewPort) {
                 if let port = router.takePreviewPort() {
@@ -165,9 +174,8 @@ private struct BrowserToolbar: View {
         .overlay(alignment: .bottom) {
             Rectangle().fill(Color.Bandito.text.opacity(0.05)).frame(height: 1)
         }
-        // The shortcuts come from the keymap, so Settings → Keys can change them: ⌘L address, ⌘R reload.
+        // The shortcuts come from the keymap, so Settings → Keys can change them: ⌘L address (⌘R is Refresh, in the menu).
         .keymapShortcut("browser.address", keymap: keymap) { addressFocused = true }
-        .keymapShortcut("browser.reload", keymap: keymap) { Task { await model.reload() } }
     }
 
     private var addressBar: some View {
@@ -430,6 +438,9 @@ private struct PageSurface: View {
     @Bindable var model: BrowserModel
     /// Device pixels per point of the window the page is in. Read from the window (see `WindowScaleReader`).
     @State private var scale: CGFloat = 2
+    /// This picture area's own key in the model: the panel and Browser mode each keep the size they show.
+    @State private var areaID = UUID()
+    @Environment(GestureSettings.self) private var gestures
 
     var body: some View {
         GeometryReader { geo in
@@ -455,6 +466,12 @@ private struct PageSurface: View {
                     onPointer: { pointer in
                         Task { @MainActor in
                             guard let page = model.pagePoint(pointer.point, viewSize: size) else { return }
+                            if pointer.type == .mouseWheel {
+                                model.scroll(
+                                    at: page, deltaX: pointer.deltaX, deltaY: pointer.deltaY,
+                                    modifiers: pointer.modifiers)
+                                return
+                            }
                             await model.send(
                                 .mouse(
                                     type: pointer.type, x: Double(page.x), y: Double(page.y), button: pointer.button,
@@ -471,7 +488,9 @@ private struct PageSurface: View {
                                 await model.send(.insertText(text))
                             }
                         }
-                    }
+                    },
+                    swipeNavigates: gestures.isEnabled(.twoFingerSwipe),
+                    canSwipe: { back in back ? model.canGoBack : model.canGoForward }
                 )
                 #endif
             }
@@ -479,7 +498,7 @@ private struct PageSurface: View {
             .onAppear { reportArea(size) }
             .onChange(of: size) { _, area in reportArea(area) }
             .onChange(of: scale) { _, _ in reportArea(size) }
-            .onDisappear { model.pageAreaHidden() }
+            .onDisappear { model.pageSurfaceDisappeared(id: areaID) }
             .background { scaleReader }
         }
         .clipShape(RoundedRectangle(cornerRadius: BanditoRadius.md))
@@ -496,7 +515,7 @@ private struct PageSurface: View {
     }
 
     private func reportArea(_ area: CGSize) {
-        model.pageAreaChanged(width: area.width, height: area.height, scale: Double(scale))
+        model.pageAreaChanged(id: areaID, width: area.width, height: area.height, scale: Double(scale))
     }
 }
 

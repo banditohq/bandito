@@ -96,4 +96,58 @@ import Testing
         let reply = try RPCClient.decoder.decode(HostKillReply.self, from: Data(#"{"ok":true,"killed":false}"#.utf8))
         #expect(reply == HostKillReply(ok: true, killed: false))
     }
+
+    private func entry(_ pid: Int, _ name: String, memory: Int64, cpu: Double = 0, owner: ProcessOwnerRef? = nil) -> HostProcessEntry {
+        HostProcessEntry(pid: pid, name: name, rssBytes: memory, cpuPercent: cpu, owner: owner, canStop: owner == nil)
+    }
+
+    @Test func appNameCutsHelperSuffixes() {
+        #expect(HostProcessList.appName("Google Chrome Helper (Renderer)") == "Google Chrome")
+        #expect(HostProcessList.appName("Google Chrome Helper (GPU)") == "Google Chrome")
+        #expect(HostProcessList.appName("Slack Helper") == "Slack")
+        #expect(HostProcessList.appName("Foo (Renderer)") == "Foo")
+        #expect(HostProcessList.appName("Google Chrome") == "Google Chrome")
+        #expect(HostProcessList.appName("com.apple.Virtualization.VirtualMachine") == "com.apple.Virtualization.VirtualMachine")
+        #expect(HostProcessList.appName("Helper") == "Helper")
+    }
+
+    @Test func chromeHelpersMergeAndSumUp() {
+        let rows = [
+            entry(1, "Google Chrome Helper (Renderer)", memory: 300),
+            entry(2, "zsh", memory: 500),
+            entry(3, "Google Chrome Helper (Renderer)", memory: 200),
+            entry(4, "Google Chrome", memory: 100),
+        ]
+        let groups = HostProcessList.groups(rows, sort: .memory)
+        #expect(groups.map(\.appName) == ["Google Chrome", "zsh"])
+        #expect(groups[0].rssBytes == 600)
+        #expect(groups[0].members.map(\.pid) == [1, 3, 4])
+        #expect(groups[0].isGroup && !groups[1].isGroup)
+    }
+
+    @Test func agentProcessesAreNotMergedWithOthers() {
+        let agent = ProcessOwnerRef(kind: .agent, id: "a1")
+        let other = ProcessOwnerRef(kind: .agent, id: "a2")
+        let rows = [
+            entry(1, "claude", memory: 100),
+            entry(2, "claude", memory: 400, owner: agent),
+            entry(3, "claude", memory: 300, owner: other),
+            entry(4, "claude", memory: 50, owner: agent),
+        ]
+        let groups = HostProcessList.groups(rows, sort: .memory)
+        #expect(groups.count == 3)
+        #expect(groups[0].owner == agent && groups[0].rssBytes == 450 && groups[0].members.count == 2)
+        #expect(groups[1].owner == other)
+        #expect(groups[2].owner == nil && groups[2].rssBytes == 100)
+    }
+
+    @Test func groupsAreSortedBySumForCPU() {
+        let rows = [
+            entry(1, "A Helper", memory: 1, cpu: 10), entry(2, "A Helper (GPU)", memory: 1, cpu: 15),
+            entry(3, "B", memory: 1, cpu: 20),
+        ]
+        let groups = HostProcessList.groups(rows, sort: .cpu)
+        #expect(groups.map(\.appName) == ["A", "B"])
+        #expect(groups[0].cpuPercent == 25)
+    }
 }

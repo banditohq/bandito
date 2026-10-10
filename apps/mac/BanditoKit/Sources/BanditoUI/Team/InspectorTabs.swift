@@ -14,11 +14,16 @@ struct DetailsTab: View {
     @State private var folder = ""
     @State private var instructions = ""
     @State private var schedules: [Schedule] = []
-    @State private var showingNewSchedule = false
+    @State private var integrations: [Integration] = []
+    /// The schedule sheet: a new one (`schedule` nil) or the one being edited.
+    @State private var scheduleTarget: ScheduleTarget?
+    @State private var deletingSchedule: Schedule?
     @State private var error: UserFacingMessage?
     /// Values the daemon changed on its own after the last change (for example an effort the runtime lacks).
     @State private var notes: [String] = []
     @State private var modelDraft = ""
+    /// The folded "Advanced" row of the model section (the fallback runtime).
+    @State private var advancedOpen = false
     @FocusState private var folderFocused: Bool
     /// The chips on screen, and the sends that have not been answered yet.
     @State private var chips = AgentCapability.allOn
@@ -59,10 +64,70 @@ struct DetailsTab: View {
             modelID: agent.model ?? "", runtime: agent.runtime, lists: server.runtimeModels)
     }
 
+    /// Effort as one compact row under the model it belongs to: the levels are the model's own. A model that takes
+    /// no effort says so in the row's value; the caption about what effort means is the row's tooltip.
+    @ViewBuilder
+    private var effortRow: some View {
+        InspectorRow(label: L10n.Effort.title, compact: true) {
+            if effortLevels.isEmpty {
+                Text(L10n.ModelPicker.noEffort)
+                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .foregroundStyle(Color.Bandito.text3)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.trailing)
+            } else {
+                BanditoSelect(
+                    selection: effort,
+                    sections: [SelectSection(options: effortLevels.map { SelectOption(value: $0, title: $0.title) })],
+                    label: L10n.Effort.title, placeholder: effort.wrappedValue.title)
+                    .frame(maxWidth: 260)
+            }
+        }
+        .help(L10n.AgentSheet.effortCaption)
+    }
+
+    /// The folded "Advanced" row of the model section: its summary shows what differs from the default.
+    private var advancedRow: some View {
+        Button {
+            advancedOpen.toggle()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Color.Bandito.text3)
+                    .rotationEffect(.degrees(advancedOpen ? 90 : 0))
+                    .frame(width: 12)
+                Text(L10n.AgentSheet.advanced)
+                    .font(BanditoFont.font(size: 12.5, weight: 400))
+                    .foregroundStyle(Color.Bandito.text3)
+                Spacer(minLength: 10)
+                if !advancedOpen, let fallback = agent.fallbackRuntime {
+                    Text(L10n.AgentSheet.advancedFallback(runtime: fallback.title))
+                        .font(BanditoFont.font(size: 12.5, weight: 400))
+                        .foregroundStyle(Color.Bandito.text3)
+                        .lineLimit(1)
+                }
+            }
+            .padding(.horizontal, 16)
+            .frame(minHeight: 32)
+            .contentShape(Rectangle())
+        }
+        .banditoButton(.row(cornerRadius: 8))
+        .accessibilityValue(advancedOpen ? L10n.AgentSheet.advancedExpanded : L10n.AgentSheet.advancedCollapsed)
+    }
+
+    /// One of the three calm sections of the card: a small heading over a card of rows.
+    private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionLabel(title)
+            InspectorCard { content() }
+        }
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            InspectorCard {
-                InspectorRow(label: L10n.Inspector.state) {
+        VStack(alignment: .leading, spacing: 20) {
+            section(L10n.Inspector.sectionWork) {
+                InspectorRow(label: L10n.Inspector.state, compact: true) {
                     HStack(spacing: 10) {
                         Text(agent.paused ? L10n.Inspector.statePaused : L10n.Inspector.stateRunning)
                             .font(BanditoFont.font(size: 12.5, weight: 500))
@@ -77,33 +142,7 @@ struct DetailsTab: View {
                         .help(PauseActions.available(on: server) ? "" : L10n.Team.pauseUnavailable)
                     }
                 }
-                InspectorRow(label: L10n.Inspector.runsOn) {
-                    BanditoSelect(
-                        selection: runtimeBinding, sections: [SelectSection(options: runtimeChoices)],
-                        label: L10n.Inspector.runsOn, placeholder: agent.runtime.title)
-                        .frame(maxWidth: 260)
-                }
-                InspectorRow(label: L10n.Inspector.model) {
-                    ModelPicker(
-                        runtime: agent.runtime, selection: $modelDraft,
-                        models: server.runtimeModels[agent.runtime.rawValue],
-                        status: server.runtimeModelsStatus, onCommit: saveModel)
-                        .frame(maxWidth: 260)
-                }
-                InspectorRow(label: L10n.AgentSheet.fallbackLabel) {
-                    BanditoSelect(
-                        selection: fallbackBinding, sections: [SelectSection(options: fallbackChoices)],
-                        label: L10n.AgentSheet.fallbackLabel, placeholder: L10n.AgentSheet.fallbackNone)
-                        .frame(maxWidth: 260)
-                }
-                InspectorRow(label: L10n.Inspector.approvals) {
-                    BanditoSelect(
-                        selection: approvalBinding,
-                        sections: [SelectSection(options: ApprovalMode.allCases.map { SelectOption(value: $0, title: $0.title) })],
-                        label: L10n.Inspector.approvals, placeholder: agent.approvalMode.title)
-                        .frame(maxWidth: 260)
-                }
-                InspectorRow(label: L10n.Inspector.project) {
+                InspectorRow(label: L10n.Inspector.project, compact: true) {
                     // A long path is cut at its start ("…/projects/app") and the full path is in the tooltip. Clicking
                     // it turns into the field for editing.
                     if folderFocused {
@@ -127,22 +166,57 @@ struct DetailsTab: View {
                 }
             }
 
-            VStack(alignment: .leading, spacing: 8) {
-                SectionLabel(L10n.Capability.title)
-                CapabilityChips(enabled: capabilities)
+            section(L10n.Inspector.model) {
+                InspectorRow(label: L10n.Inspector.runsOn, compact: true) {
+                    BanditoSelect(
+                        selection: runtimeBinding, sections: [SelectSection(options: runtimeChoices)],
+                        label: L10n.Inspector.runsOn, placeholder: agent.runtime.title)
+                        .frame(maxWidth: 260)
+                }
+                InspectorRow(label: L10n.Inspector.model, compact: true) {
+                    ModelPicker(
+                        runtime: agent.runtime, selection: $modelDraft,
+                        models: server.runtimeModels[agent.runtime.rawValue],
+                        status: server.runtimeModelsStatus, onCommit: saveModel)
+                        .frame(maxWidth: 260)
+                }
+                effortRow
+                advancedRow
+                if advancedOpen {
+                    InspectorRow(label: L10n.AgentSheet.fallbackLabel, compact: true) {
+                        BanditoSelect(
+                            selection: fallbackBinding, sections: [SelectSection(options: fallbackChoices)],
+                            label: L10n.AgentSheet.fallbackLabel, placeholder: L10n.AgentSheet.fallbackNone)
+                            .frame(maxWidth: 260)
+                    }
+                    .transition(.opacity)
+                }
             }
+            .banditoAnimation(BanditoMotion.ease, value: advancedOpen)
 
-            VStack(alignment: .leading, spacing: 8) {
-                SectionLabel(L10n.Effort.title)
-                if effortLevels.isEmpty {
-                    Text(L10n.ModelPicker.noEffort)
+            section(L10n.Inspector.sectionAccess) {
+                InspectorRow(label: L10n.Inspector.approvals, compact: true) {
+                    BanditoSelect(
+                        selection: approvalBinding,
+                        sections: [SelectSection(options: ApprovalMode.allCases.map { SelectOption(value: $0, title: $0.title) })],
+                        label: L10n.Inspector.approvals, placeholder: agent.approvalMode.title)
+                        .frame(maxWidth: 260)
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(L10n.Capability.title)
                         .font(BanditoFont.font(size: 12.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
-                        .padding(.vertical, 6)
-                } else {
-                    SegmentedPicker(
-                        selection: effort,
-                        options: effortLevels.map { ($0, $0.title) })
+                    CapabilityChips(enabled: capabilities)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+            }
+
+            if !integrations.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    SectionLabel(L10n.Integrations.title)
+                    AgentIntegrationsPicker(integrations: integrations, choice: integrationChoice)
                 }
             }
 
@@ -150,25 +224,41 @@ struct DetailsTab: View {
                 HStack {
                     SectionLabel(L10n.Inspector.scheduleHeader)
                     Spacer()
-                    Button(L10n.Inspector.addSchedule) { showingNewSchedule = true }
+                    Button(L10n.Inspector.addSchedule) { scheduleTarget = ScheduleTarget(schedule: nil) }
                         .banditoButton(.link)
                         .font(BanditoFont.font(size: 12.5, weight: 500))
                         .foregroundStyle(BanditoPalette.peach)
                 }
                 if schedules.isEmpty {
-                    Text(L10n.Inspector.noSchedules)
-                        .font(BanditoFont.font(size: 12.5, weight: 400))
-                        .foregroundStyle(Color.Bandito.text3)
-                        .padding(.vertical, 6)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(L10n.Schedule.emptyHint)
+                            .font(BanditoFont.font(size: 12.5, weight: 400))
+                            .foregroundStyle(Color.Bandito.text3)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button(L10n.Inspector.addSchedule) { scheduleTarget = ScheduleTarget(schedule: nil) }
+                            .banditoButton(.quiet())
+                            .fixedSize()
+                    }
+                    .padding(.vertical, 6)
                 } else {
                     InspectorCard {
                         ForEach(schedules) { schedule in
-                            ScheduleRow(schedule: schedule) { enabled in
-                                change {
-                                    _ = try await server.updateSchedule(schedule.id, enabled: enabled)
-                                    await loadSchedules()
-                                }
-                            }
+                            ScheduleRow(
+                                schedule: schedule,
+                                onToggle: { enabled in
+                                    change {
+                                        _ = try await server.updateSchedule(schedule.id, enabled: enabled)
+                                        await loadSchedules()
+                                    }
+                                },
+                                onRunNow: {
+                                    change {
+                                        try await server.runScheduleNow(schedule.id)
+                                        await loadSchedules()
+                                    }
+                                },
+                                onEdit: { scheduleTarget = ScheduleTarget(schedule: schedule) },
+                                onDelete: { deletingSchedule = schedule })
                         }
                     }
                 }
@@ -232,9 +322,26 @@ struct DetailsTab: View {
             folder = agent.cwd
             instructions = agent.systemPrompt ?? ""
             await loadSchedules()
+            await loadIntegrations()
         }
-        .banditoSheet(isPresented: $showingNewSchedule, onDismiss: { Task { await loadSchedules() } }) {
-            ScheduleEditor(server: server, agentID: agent.id)
+        .banditoSheet(item: $scheduleTarget, onDismiss: { Task { await loadSchedules() } }) { target in
+            ScheduleEditor(server: server, agentID: agent.id, existing: target.schedule)
+        }
+        .confirmationDialog(
+            L10n.Schedule.deleteTitle(name: deletingSchedule.map(Self.scheduleName) ?? ""),
+            isPresented: Binding(get: { deletingSchedule != nil }, set: { if !$0 { deletingSchedule = nil } }),
+            titleVisibility: .visible,
+            presenting: deletingSchedule
+        ) { schedule in
+            Button(L10n.Common.delete, role: .destructive) {
+                change {
+                    try await server.deleteSchedule(schedule.id)
+                    await loadSchedules()
+                }
+            }
+            Button(L10n.Common.cancel, role: .cancel) {}
+        } message: { _ in
+            Text(L10n.Schedule.deleteMessage)
         }
     }
 
@@ -287,6 +394,33 @@ struct DetailsTab: View {
 
     private func loadSchedules() async {
         schedules = (try? await server.schedules(agentId: agent.id)) ?? []
+    }
+
+    /// The integrations of the server. A daemon without them shows no section.
+    private func loadIntegrations() async {
+        guard server.supports("integrations") else { return }
+        integrations = (try? await server.integrations()) ?? []
+    }
+
+    /// The integrations the agent uses. Choosing one sends the whole choice as the agent's list.
+    private var integrationChoice: Binding<IntegrationChoice> {
+        Binding(
+            get: { IntegrationChoice.from(agent.integrations) },
+            set: { next in
+                // Only ids the server still has are sent (an integration removed meanwhile is not offered).
+                let existing = Set(integrations.map(\.id))
+                change {
+                    _ = try await server.updateAgent(
+                        agent.id, patch: AgentPatch(integrations: next.limited(to: existing).patchChange))
+                }
+            })
+    }
+
+    /// A schedule's name in a sentence: its title, else its words, else its cron.
+    static func scheduleName(_ schedule: Schedule) -> String {
+        schedule.title
+            ?? schedule.humanText(languageCode: ModelDescription.currentLanguageCode)
+            ?? schedule.cron
     }
 
     /// Runs a change and shows its failure in the tab.
@@ -345,119 +479,6 @@ struct DetailsTab: View {
             modelChangedFrom: agent.model ?? "", to: text, stored: agent.effort,
             runtime: agent.runtime, lists: server.runtimeModels)
         apply(patch)
-    }
-}
-
-private struct ScheduleRow: View {
-    var schedule: Schedule
-    var onToggle: (Bool) -> Void
-    @State private var enabled: Bool
-    
-    init(schedule: Schedule, onToggle: @escaping (Bool) -> Void) {
-        self.schedule = schedule
-        self.onToggle = onToggle
-        _enabled = State(initialValue: schedule.enabled)
-    }
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "clock")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(BanditoPalette.peach)
-                .frame(width: 32, height: 32)
-                .background(BanditoPalette.peach.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(schedule.cron)
-                    .font(BanditoFont.font(size: 12.5, weight: 500, mono: true))
-                    .foregroundStyle(Color.Bandito.text)
-                Text(schedule.prompt)
-                    .font(BanditoFont.font(size: 12, weight: 400))
-                    .foregroundStyle(Color.Bandito.text3)
-                    .lineLimit(1)
-                if let next = schedule.nextRunAt {
-                    Text(L10n.Inspector.nextRun(time: TeamTime.label(ms: next)))
-                        .font(BanditoFont.font(size: 11, weight: 400))
-                        .foregroundStyle(Color.Bandito.text3)
-                }
-            }
-            Spacer(minLength: 8)
-            Toggle("", isOn: $enabled)
-                .toggleStyle(.switch)
-                .labelsHidden()
-                .onChange(of: enabled) { _, value in
-                    if value != schedule.enabled { onToggle(value) }
-                }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
-    }
-}
-
-/// New schedule: a cron expression and the prompt the agent receives on each run.
-private struct ScheduleEditor: View {
-    var server: ServerModel
-    var agentID: String
-
-    @Environment(\.dismiss) private var dismiss
-    @State private var cron = ""
-    @State private var prompt = ""
-    @State private var error: UserFacingMessage?
-    @State private var busy = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text(L10n.Inspector.addSchedule)
-                .font(BanditoFont.font(size: 16, weight: 650))
-                .foregroundStyle(Color.Bandito.text)
-            VStack(alignment: .leading, spacing: 6) {
-                SectionLabel(L10n.Inspector.cronLabel)
-                TextField("0 9 * * 1-5", text: $cron)
-                    .textFieldStyle(.roundedBorder)
-                    .font(BanditoFont.font(size: 13, weight: 400, mono: true))
-            }
-            VStack(alignment: .leading, spacing: 6) {
-                SectionLabel(L10n.Inspector.promptLabel)
-                // Vertical TextField for the same reason as the instructions above (inside a ScrollView).
-                TextField(L10n.Inspector.promptPlaceholder, text: $prompt, axis: .vertical)
-                    .accessibilityLabel(L10n.Inspector.promptLabel)
-                    .textFieldStyle(.plain)
-                    .font(BanditoFont.font(size: 13, weight: 400))
-                    .lineLimit(3...10)
-                    .padding(8)
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.Bandito.line, lineWidth: 1))
-            }
-            if let error {
-                InspectorError(message: error)
-            }
-            HStack {
-                Spacer()
-                Button(L10n.Common.cancel) { dismiss() }
-                    .banditoButton(.quiet())
-                Button(L10n.Inspector.addSchedule) { add() }
-                    .banditoButton(.signal())
-                    .disabled(busy || cron.trimmingCharacters(in: .whitespaces).isEmpty
-                        || prompt.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-        }
-        .padding(20)
-        .frame(width: 420)
-    }
-
-    private func add() {
-        busy = true
-        error = nil
-        Task {
-            do {
-                _ = try await server.createSchedule(
-                    agentId: agentID, cron: cron.trimmingCharacters(in: .whitespaces),
-                    tz: TimeZone.current.identifier, prompt: prompt.trimmingCharacters(in: .whitespacesAndNewlines))
-                dismiss()
-            } catch {
-                self.error = UserFacingError.message(for: error)
-                busy = false
-            }
-        }
     }
 }
 

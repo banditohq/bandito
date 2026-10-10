@@ -3,7 +3,7 @@ import Testing
 
 @testable import BanditoUI
 
-/// The memory viewer: when save shows, and the order of a folder's list.
+/// The memory viewer: the crumbs of a list, and the order of a folder's list.
 @Suite struct MemoryViewerRulesTests {
     private func entry(_ name: String, dir: Bool = false) -> FsEntry {
         FsEntry(
@@ -11,11 +11,18 @@ import Testing
             hidden: false, readonly: false, symlinkTarget: nil, ext: nil)
     }
 
-    @Test func saveShowsOnlyForChangesInTheViewer() {
-        #expect(MemoryViewerRules.showsSave(isDirty: true, readOnly: false, showingViewer: true))
-        #expect(!MemoryViewerRules.showsSave(isDirty: false, readOnly: false, showingViewer: true))
-        #expect(!MemoryViewerRules.showsSave(isDirty: true, readOnly: true, showingViewer: true))
-        #expect(!MemoryViewerRules.showsSave(isDirty: true, readOnly: false, showingViewer: false))
+    @Test func crumbsRunFromTheRootDown() {
+        #expect(
+            MemoryViewerRules.crumbs(root: "/m/agent", current: "/m/agent/notes/2026/")
+                == [
+                    .init(name: "agent", path: "/m/agent"),
+                    .init(name: "notes", path: "/m/agent/notes"),
+                    .init(name: "2026", path: "/m/agent/notes/2026"),
+                ])
+        #expect(MemoryViewerRules.crumbs(root: "/m/agent", current: "/m/agent") == [.init(name: "agent", path: "/m/agent")])
+        #expect(MemoryViewerRules.crumbs(root: "/", current: "/a") == [.init(name: "/", path: "/"), .init(name: "a", path: "/a")])
+        // Outside the root: a single crumb, not a broken path.
+        #expect(MemoryViewerRules.crumbs(root: "/m/agent", current: "/m/agentx") == [.init(name: "agentx", path: "/m/agentx")])
     }
 
     @Test func foldersComeFirstThenFilesByName() {

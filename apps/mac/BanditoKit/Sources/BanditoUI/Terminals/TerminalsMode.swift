@@ -164,9 +164,15 @@ struct TerminalArea: View {
             if let notice = controller.notice {
                 TerminalNoticeStrip(message: notice) { controller.clearNotice() }
             }
+            if controller.workspace.inputToAll {
+                TerminalInputToAllStrip { controller.workspace.inputToAll = false }
+            }
             TerminalGrid(controller: controller, requestClose: requestClose)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            TerminalDock(controller: controller)
+            // The dock is there only while some terminal is collapsed.
+            if !controller.workspace.collapsed.isEmpty {
+                TerminalDock(controller: controller)
+            }
         }
         .onChange(of: controller.workspace.focusedID) { _, id in
             // Keyboard focus follows the focused pane, so typing goes where the orange frame is.
@@ -180,7 +186,8 @@ struct TerminalArea: View {
     }
 }
 
-/// 52 pt: the desktop name, the layout picker, "input to all" and "new terminal".
+/// 52 pt: the desktop name and the count on the left. On the right, quiet 28 pt icons, as in the file viewer's bar:
+/// the layout menu, "new terminal", and "…" with "input to all".
 struct TerminalToolbar: View {
     let controller: TerminalController
     let onNew: () -> Void
@@ -188,7 +195,6 @@ struct TerminalToolbar: View {
 
     var body: some View {
         let workspace = controller.workspace
-        let inputToAll = workspace.inputToAll
         HStack(spacing: 10) {
             Text(L10n.Mode.terminals)
                 .font(.system(size: 14, weight: .semibold))
@@ -201,40 +207,17 @@ struct TerminalToolbar: View {
                 .lineLimit(1)
                 .fixedSize()
             Spacer(minLength: 12)
-            Text(L10n.Terminals.layoutTitle)
-                .font(.system(size: 12))
-                .foregroundStyle(Color.Bandito.text3)
-            layoutPicker
-            Button {
-                workspace.inputToAll.toggle()
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "arrow.right")
-                        .font(.system(size: 11, weight: .semibold))
-                    Text(L10n.Terminals.inputToAll)
-                        .font(.system(size: 12.5))
-                }
-                .padding(.horizontal, 11)
-                .frame(height: 30)
-            }
-            .banditoButton(.row(cornerRadius: 15, hoverOpacity: 0.08))
-            .foregroundStyle(inputToAll ? BanditoPalette.peach : Color.Bandito.text2)
-            .background(
-                inputToAll ? Color.Bandito.signal.opacity(0.13) : Color.Bandito.text.opacity(0.04),
-                in: RoundedRectangle(cornerRadius: 9, style: .continuous)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .strokeBorder(inputToAll ? Color.Bandito.signal.opacity(0.4) : Color.Bandito.text.opacity(0.1))
-            )
-            .help(L10n.Terminals.inputToAllHint)
-            .banditoAnimation(BanditoMotion.ease, value: inputToAll)
-
+            layoutMenu
             Button(action: onNew) {
-                Text(L10n.Keys.newTerminal)
+                Image(systemName: "plus")
+                    .font(.system(size: 12.5, weight: .medium))
             }
-            .banditoButton(.signal())
-            .help(keymap.binding(for: "terminals.new")?.symbols ?? "")
+            .banditoButton(.icon(size: 28, label: L10n.Keys.newTerminal))
+            .help(newTerminalHelp)
+            ViewerMoreMenu {
+                Toggle(L10n.Terminals.inputToAll, isOn: Bindable(workspace).inputToAll)
+                    .help(L10n.Terminals.inputToAllHint)
+            }
         }
         .padding(.horizontal, 14)
         .frame(height: 52)
@@ -245,29 +228,31 @@ struct TerminalToolbar: View {
         }
     }
 
-    private var layoutPicker: some View {
+    private var newTerminalHelp: String {
+        guard let symbols = keymap.binding(for: "terminals.new")?.symbols else { return L10n.Keys.newTerminal }
+        return "\(L10n.Keys.newTerminal) \(symbols)"
+    }
+
+    /// One icon for the layout on screen. The menu lists all four; the current one carries a check.
+    private var layoutMenu: some View {
         let current = controller.workspace.layout
-        return HStack(spacing: 2) {
+        return Menu {
             ForEach(TerminalLayout.allCases, id: \.self) { layout in
-                Button {
+                Button(layout.title, systemImage: layout == current ? "checkmark" : layout.systemImage) {
                     controller.setLayout(layout)
-                } label: {
-                    Image(systemName: layout.systemImage)
-                        .font(.system(size: 12, weight: .regular))
-                        .frame(width: 34, height: 26)
                 }
-                .banditoButton(.row(cornerRadius: 6, hoverOpacity: 0.08))
-                .foregroundStyle(layout == current ? Color.Bandito.text : Color.Bandito.text3)
-                .background(
-                    layout == current ? Color.Bandito.text.opacity(0.1) : Color.clear,
-                    in: RoundedRectangle(cornerRadius: 7, style: .continuous)
-                )
-                .help(layout.title)
-                .accessibilityLabel(layout.title)
             }
+        } label: {
+            Image(systemName: current.systemImage)
+                .font(.system(size: 12.5, weight: .medium))
+                .foregroundStyle(Color.Bandito.text2)
+                .frame(width: 28, height: 28)
         }
-        .padding(3)
-        .background(Color.Bandito.text.opacity(0.05), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .menuStyle(.button)
+        .menuIndicator(.hidden)
+        .banditoButton(.icon(size: 28, label: L10n.Terminals.layoutTitle))
+        .help(L10n.Terminals.layoutTitle)
+        .fixedSize()
     }
 }
 
@@ -290,6 +275,34 @@ struct TerminalNoticeStrip: View {
         .padding(.horizontal, 14)
         .frame(minHeight: 30)
         .background(Color.Bandito.signal.opacity(0.08))
+    }
+}
+
+/// Above the grid while "input to all" is on: what is typed goes to every pane. One click turns it off.
+struct TerminalInputToAllStrip: View {
+    let turnOff: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "arrow.right")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(BanditoPalette.peach)
+            Text(L10n.Terminals.inputToAll)
+                .font(.system(size: 12.5))
+                .foregroundStyle(Color.Bandito.text)
+            Spacer(minLength: 8)
+            Button(action: turnOff) {
+                Text(L10n.Terminals.inputToAllOff)
+                    .font(.system(size: 12, weight: .semibold))
+                    .padding(.horizontal, 8)
+                    .frame(height: 24)
+            }
+            .banditoButton(.row(cornerRadius: 6, hoverOpacity: 0.08))
+            .foregroundStyle(BanditoPalette.peach)
+        }
+        .padding(.horizontal, 14)
+        .frame(minHeight: 30)
+        .background(Color.Bandito.signal.opacity(0.12))
     }
 }
 

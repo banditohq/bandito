@@ -16,6 +16,9 @@ pub struct Schedule {
     pub last_run_at: Option<i64>,
     pub next_run_at: Option<i64>,
     pub created_at: i64,
+    /// A short name for the list; `None` = none given.
+    #[serde(default)]
+    pub title: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -27,6 +30,13 @@ pub struct NewSchedule {
     pub prompt: String,
     #[serde(default = "yes")]
     pub enabled: bool,
+    #[serde(default)]
+    pub title: Option<String>,
+}
+
+/// A field that is present (even as `null`) reads as `Some`, so `null` can clear it.
+fn present_or_null<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Option<String>>, D::Error> {
+    Option::<String>::deserialize(d).map(Some)
 }
 
 fn utc() -> String {
@@ -50,9 +60,12 @@ pub struct SchedulePatch {
     pub tz: Option<String>,
     pub prompt: Option<String>,
     pub enabled: Option<bool>,
+    /// `Some(None)` clears the title.
+    #[serde(default, deserialize_with = "present_or_null")]
+    pub title: Option<Option<String>>,
 }
 
-const COLS: &str = "id, agent_id, cron, tz, prompt, enabled, last_run_at, next_run_at, created_at";
+const COLS: &str = "id, agent_id, cron, tz, prompt, enabled, last_run_at, next_run_at, created_at, title";
 
 fn from_row(r: &Row) -> rusqlite::Result<Schedule> {
     let enabled: i64 = r.get(5)?;
@@ -66,6 +79,7 @@ fn from_row(r: &Row) -> rusqlite::Result<Schedule> {
         last_run_at: r.get(6)?,
         next_run_at: r.get(7)?,
         created_at: r.get(8)?,
+        title: r.get(9)?,
     })
 }
 
@@ -82,10 +96,11 @@ impl Store {
             last_run_at: None,
             next_run_at,
             created_at: now_ms(),
+            title: s.title,
         };
         self.conn().execute(
-            "INSERT INTO schedules (id, agent_id, cron, tz, prompt, enabled, last_run_at, next_run_at, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            "INSERT INTO schedules (id, agent_id, cron, tz, prompt, enabled, last_run_at, next_run_at, created_at, title)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 sch.id,
                 sch.agent_id,
@@ -95,7 +110,8 @@ impl Store {
                 i64::from(sch.enabled),
                 sch.last_run_at,
                 sch.next_run_at,
-                sch.created_at
+                sch.created_at,
+                sch.title
             ],
         )?;
         Ok(sch)
@@ -142,12 +158,15 @@ impl Store {
         if let Some(v) = p.enabled {
             s.enabled = v;
         }
+        if let Some(v) = p.title {
+            s.title = v;
+        }
         if let NextRun::Set(v) = next {
             s.next_run_at = v;
         }
         tx.execute(
-            "UPDATE schedules SET cron = ?2, tz = ?3, prompt = ?4, enabled = ?5, next_run_at = ?6 WHERE id = ?1",
-            params![s.id, s.cron, s.tz, s.prompt, i64::from(s.enabled), s.next_run_at],
+            "UPDATE schedules SET cron = ?2, tz = ?3, prompt = ?4, enabled = ?5, next_run_at = ?6, title = ?7 WHERE id = ?1",
+            params![s.id, s.cron, s.tz, s.prompt, i64::from(s.enabled), s.next_run_at, s.title],
         )?;
         tx.commit()?;
         Ok(s)
@@ -220,6 +239,7 @@ mod tests {
             tz: "UTC".into(),
             prompt: "report".into(),
             enabled: true,
+            title: None,
         }
     }
 
@@ -258,8 +278,10 @@ mod tests {
             tz: Some("Asia/Tokyo".into()),
             prompt: Some("new prompt".into()),
             enabled: Some(false),
+            title: Some(Some("Nightly".into())),
         };
         let b = s.schedule_update(&a.id, patch, NextRun::Set(Some(2000))).unwrap();
+        assert_eq!(b.title.as_deref(), Some("Nightly"));
         assert_eq!(b.cron, "*/5 * * * *");
         assert_eq!(b.tz, "Asia/Tokyo");
         assert_eq!(b.prompt, "new prompt");

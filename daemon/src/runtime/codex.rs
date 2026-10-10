@@ -128,6 +128,12 @@ impl Runtime for CodexRuntime {
             ));
             cmd.arg("-c").arg(format!("mcp_servers.bandito.args={}", json!(args)));
         }
+        // The owner's integrations (see docs/ARCHITECTURE.md#integrations). Secret header values travel in the
+        // environment, named by `env_http_headers`, so they stay out of the argument list.
+        let integrations = crate::integrations::codex_config(&cfg.mcp_servers);
+        for line in &integrations.overrides {
+            cmd.arg("-c").arg(line);
+        }
         if !cfg.extra_dirs.is_empty() {
             // The workspace-write sandbox also writes to these roots. One override carries the whole list.
             let roots: Vec<String> = cfg.extra_dirs.iter().map(|dir| dir.display().to_string()).collect();
@@ -135,6 +141,7 @@ impl Runtime for CodexRuntime {
                 .arg(format!("sandbox_workspace_write.writable_roots={}", json!(roots)));
         }
         cmd.current_dir(&cfg.cwd).envs(cfg.env.iter().map(|(k, v)| (k, v)));
+        cmd.envs(integrations.env.iter().map(|(k, v)| (k, v)));
         // Marks the CLI and its children for `host.processes` (see docs/ARCHITECTURE.md#host).
         cmd.env("BANDITO_AGENT_ID", &cfg.agent_id);
         if let Some(token) = &cfg.agent_token {

@@ -36,6 +36,9 @@ enum BanditoPalette {
     static let badgeTeal = Color(hex: 0x2A9D8F)
     static let badgeRed = Color(hex: 0xC9453A)
     static let badgeIndigo = Color(hex: 0x5B5BD6)
+    static let badgePink = Color(hex: 0xC2457A)
+    static let badgeBrown = Color(hex: 0x8D6E4C)
+    static let badgeSlate = Color(hex: 0x4F6D7A)
 
     // MARK: Avatars
 

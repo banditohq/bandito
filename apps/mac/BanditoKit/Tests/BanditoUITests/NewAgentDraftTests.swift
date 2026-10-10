@@ -1,3 +1,4 @@
+import Foundation
 import BanditoL10n
 import Testing
 
@@ -233,5 +234,26 @@ import Testing
         #expect(draft.canCreate)
         #expect(draft.createBlocker(status: nil) == nil)
         #expect(draft.makeNewAgent().cwd == "", "an empty folder is sent as is: the agent gets its own")
+    }
+}
+
+@Suite struct NewAgentDraftAvatarTests {
+    @Test func newAgentCarriesEmojiAndCustomColorButNotThePicture() {
+        var draft = NewAgentDraft()
+        draft.cwd = "/home/me/billing"
+        draft.color = .sky
+        draft.customHex = "#FF8800"
+        draft.emoji = "🦝"
+        draft.face = .wink
+        draft.picture = Data([1, 2, 3])
+        let avatar = draft.makeNewAgent(existingNames: []).avatar
+        #expect(avatar == AvatarSpec(color: "#FF8800", face: "wink", emoji: "🦝"))
+    }
+
+    @Test func paletteColorIsSentWhenThereIsNoCustomColor() {
+        var draft = NewAgentDraft()
+        draft.cwd = "/home/me/billing"
+        draft.color = .rose
+        #expect(draft.makeNewAgent(existingNames: []).avatar == AvatarSpec(color: "rose", face: "chevronDash"))
     }
 }

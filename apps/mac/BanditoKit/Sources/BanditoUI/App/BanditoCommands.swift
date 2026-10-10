@@ -41,6 +41,8 @@ public struct BanditoCommands: Commands {
             Divider()
             item("global.toggleSidebar") { router.toggleSidebar() }
             item("global.usage") { router.usagePopoverOpen.toggle() }
+            Divider()
+            item("global.refresh") { Task { await app.refreshCurrentScreen(router: router) } }
         }
         CommandMenu(L10n.Menu.go) {
             item("global.back") { router.back() }

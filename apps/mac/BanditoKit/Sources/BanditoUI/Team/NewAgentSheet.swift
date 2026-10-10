@@ -1,6 +1,7 @@
 import BanditoDesign
 import BanditoKit
 import BanditoL10n
+import CoreGraphics
 import SwiftUI
 
 /// The new agent sheet (docs/design/NewAgent.dc.html). Identity and runtime on the left; project,
@@ -11,10 +12,19 @@ struct NewAgentSheet: View {
 
     @State private var draft = NewAgentDraft()
     @State private var pickerOpen = false
+    /// The "Advanced" block (effort, fallback) is folded until the person opens it.
+    @State private var advancedOpen = false
     @State private var creating = false
     @State private var error: UserFacingMessage?
+    /// The agent made by a create that then failed on its picture; the next press only saves the picture.
+    @State private var createdAgent: Agent?
+    /// The draft's picture, decoded for the header and the editor.
+    @State private var previewPicture: CGImage?
+    @State private var editingAvatar = false
     /// The server's workplaces, loaded when the sheet opens: what the workplace section can offer.
     @State private var workplaces: WorkspacesModel?
+    /// The server's integrations, for the "Integrations" choice. Empty when the server has none.
+    @State private var integrations: [Integration] = []
     /// True once the `runtimes.status` request has finished, with or without an answer.
     @State private var runtimesAnswered = false
     /// The workplace made by an earlier attempt to create the agent, reused when the attempt is repeated.
@@ -93,6 +103,9 @@ struct NewAgentSheet: View {
         }
         .task {
             guard let server else { return }
+            if server.supports("integrations") {
+                integrations = (try? await server.integrations()) ?? []
+            }
             let loaded = WorkspacesModel(server: server)
             workplaces = loaded
             // The model lists are asked in the background; until they come the model field says "loading".
@@ -116,14 +129,60 @@ struct NewAgentSheet: View {
 
     // MARK: Header
 
+    /// The avatar in the header; a click opens the editor. Its look and picture go into the draft.
+    private var avatarButton: some View {
+        Button {
+            editingAvatar = true
+        } label: {
+            AvatarArtView(name: draft.name, look: draftLook.wrappedValue, picture: previewPicture, size: 60)
+        }
+        .banditoButton(.row(cornerRadius: 16, hoverOpacity: 0.06))
+        .help(L10n.Inspector.Avatar.help)
+        .popover(isPresented: $editingAvatar, arrowEdge: .bottom) {
+            AvatarEditor(
+                name: draft.name, look: draftLook, picture: previewPicture,
+                pictureSupported: server?.supports("avatar_pictures") == true,
+                onSetPicture: { data in
+                    draft.picture = data
+                    previewPicture = await AvatarPictures.decodeOffMain(data)
+                },
+                onRemovePicture: {
+                    draft.picture = nil
+                    previewPicture = nil
+                })
+        }
+        .onChange(of: draft.picture, initial: true) { _, data in
+            Task {
+                guard let data else {
+                    previewPicture = nil
+                    return
+                }
+                previewPicture = await AvatarPictures.decodeOffMain(data)
+            }
+        }
+    }
+
+    /// The draft's look as the editor edits it.
+    private var draftLook: Binding<AvatarLook> {
+        Binding(
+            get: {
+                AvatarLook(palette: draft.color, customHex: draft.customHex, face: draft.face, emoji: draft.emoji)
+            },
+            set: { look in
+                draft.color = look.palette
+                draft.customHex = look.customHex
+                draft.face = look.face
+                draft.emoji = look.emoji
+            })
+    }
+
     private var header: some View {
         HStack(alignment: .center, spacing: 18) {
-            RaccoonAvatar(name: draft.name, color: draft.color, face: draft.face, size: 60, mood: .idle)
+            avatarButton
             VStack(alignment: .leading, spacing: 8) {
                 Text(L10n.AgentSheet.title)
                     .font(BanditoFont.font(size: 20, weight: 650))
                     .foregroundStyle(Color.Bandito.text)
-                AvatarStylePicker(color: $draft.color, face: $draft.face)
             }
             Spacer(minLength: 0)
             Menu {
@@ -180,42 +239,7 @@ struct NewAgentSheet: View {
                     status: server?.runtimeModelsStatus ?? .unknown,
                     onRetry: retryModels, onUpdate: updateThisMac)
             }
-            if effortLevels.isEmpty {
-                Text(L10n.ModelPicker.noEffort)
-                    .font(BanditoFont.font(size: 12, weight: 400))
-                    .foregroundStyle(Color.Bandito.text3)
-                    .offset(y: -6)
-            } else {
-                labeled(L10n.Effort.title) {
-                    SegmentedPicker(
-                        selection: $draft.effort,
-                        options: effortLevels.map { ($0, effortName($0)) })
-                        .frame(maxWidth: .infinity)
-                }
-                Text(effortHint(draft.effort))
-                    .font(BanditoFont.font(size: 12, weight: 400))
-                    .foregroundStyle(Color.Bandito.text3)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .offset(y: -6)
-            }
-
-            labeled(L10n.AgentSheet.fallbackLabel) {
-                fallbackPicker
-            }
-            if let fallback = draft.fallbackRuntime {
-                labeled(L10n.AgentSheet.model) {
-                    ModelPicker(
-                        runtime: fallback, selection: $draft.fallbackModel,
-                        models: server?.runtimeModels[fallback.rawValue],
-                        status: server?.runtimeModelsStatus ?? .unknown,
-                        onRetry: retryModels, onUpdate: updateThisMac)
-                }
-            }
-            Text(L10n.AgentSheet.fallbackHint)
-                .font(BanditoFont.font(size: 12, weight: 400))
-                .foregroundStyle(Color.Bandito.text3)
-                .offset(y: -8)
+            advancedSection
 
             labeled(L10n.AgentSheet.instructions, hint: L10n.AgentSheet.instructionsHint) {
                 // A vertical TextField, not TextEditor: a TextEditor is a scroll view of its own, so the wheel over it
@@ -234,6 +258,12 @@ struct NewAgentSheet: View {
             labeled(L10n.Capability.title) {
                 CapabilityChips(enabled: $draft.capabilities)
             }
+
+            if !integrations.isEmpty {
+                labeled(L10n.Integrations.title) {
+                    AgentIntegrationsPicker(integrations: integrations, choice: $draft.integrations)
+                }
+            }
         }
         // A model that takes fewer levels (or a list that arrives late) moves the effort to the nearest level it takes.
         .onChange(of: effortLevels) { _, levels in
@@ -241,6 +271,97 @@ struct NewAgentSheet: View {
                 draft.effort = nearest
             }
         }
+    }
+
+    // MARK: Advanced
+
+    /// "Effort" and "If the limit runs out" live under one folded block; the model above is what most people change.
+    private var advancedSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Button {
+                advancedOpen.toggle()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Color.Bandito.text3)
+                        .rotationEffect(.degrees(advancedOpen ? 90 : 0))
+                        .frame(width: 12)
+                    Text(L10n.AgentSheet.advanced)
+                        .font(BanditoFont.font(size: 12.5, weight: 500))
+                        .foregroundStyle(Color.Bandito.text2)
+                    Spacer(minLength: 8)
+                    if !advancedOpen, let summary = advancedSummary {
+                        Text(summary)
+                            .font(BanditoFont.font(size: 12, weight: 400))
+                            .foregroundStyle(Color.Bandito.text3)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                }
+                .frame(minHeight: 28)
+                .contentShape(Rectangle())
+            }
+            .banditoButton(.row(cornerRadius: 8))
+            .accessibilityValue(advancedOpen ? L10n.AgentSheet.advancedExpanded : L10n.AgentSheet.advancedCollapsed)
+
+            if advancedOpen {
+                VStack(alignment: .leading, spacing: 14) {
+                    if effortLevels.isEmpty {
+                        Text(L10n.ModelPicker.noEffort)
+                            .font(BanditoFont.font(size: 12, weight: 400))
+                            .foregroundStyle(Color.Bandito.text3)
+                    } else {
+                        labeled(L10n.Effort.title) {
+                            SegmentedPicker(
+                                selection: $draft.effort,
+                                options: effortLevels.map { ($0, effortName($0)) })
+                                .frame(maxWidth: .infinity)
+                        }
+                        Text(L10n.AgentSheet.effortCaption)
+                            .font(BanditoFont.font(size: 12, weight: 400))
+                            .foregroundStyle(Color.Bandito.text3)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .offset(y: -6)
+                    }
+
+                    labeled(L10n.AgentSheet.fallbackLabel) {
+                        fallbackPicker
+                    }
+                    if let fallback = draft.fallbackRuntime {
+                        labeled(L10n.AgentSheet.model) {
+                            ModelPicker(
+                                runtime: fallback, selection: $draft.fallbackModel,
+                                models: server?.runtimeModels[fallback.rawValue],
+                                status: server?.runtimeModelsStatus ?? .unknown,
+                                onRetry: retryModels, onUpdate: updateThisMac)
+                        }
+                    }
+                    Text(L10n.AgentSheet.fallbackHint)
+                        .font(BanditoFont.font(size: 12, weight: 400))
+                        .foregroundStyle(Color.Bandito.text3)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .offset(y: -8)
+                }
+                .padding(.leading, 20)
+                .transition(.opacity)
+            }
+        }
+        .banditoAnimation(BanditoMotion.ease, value: advancedOpen)
+        .banditoAnimation(BanditoMotion.ease, value: draft.fallbackRuntime)
+    }
+
+    /// What was changed from the defaults, for the folded block: "Effort: High · Fallback: Codex". Nil when nothing was.
+    private var advancedSummary: String? {
+        var parts: [String] = []
+        if !effortLevels.isEmpty, draft.effort != NewAgentDraft().effort {
+            parts.append(L10n.AgentSheet.advancedEffort(level: effortName(draft.effort)))
+        }
+        if let fallback = draft.fallbackRuntime {
+            parts.append(L10n.AgentSheet.advancedFallback(runtime: runtimeName(fallback)))
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     /// The levels the effort control offers: those of the chosen model when its list says, else the runtime's. Empty
@@ -315,7 +436,7 @@ struct NewAgentSheet: View {
             Button {
                 draft.setRuntime(kind, lists: lists)
             } label: {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 5) {
                     HStack(spacing: 7) {
                         Text(runtimeName(kind))
                             .font(BanditoFont.font(size: 13.5, weight: 600))
@@ -353,8 +474,19 @@ struct NewAgentSheet: View {
                             .lineLimit(1)
                             .minimumScaleFactor(0.85)
                     }
-                    if state.showsLimit, let windows = card?.windows {
-                        limitWindows(windows, now: now)
+                    if state.showsLimit, let nearest = card?.windows.max(by: { $0.used < $1.used }) {
+                        // One thin bar for the limit that runs out first; every window is in the tooltip.
+                        let used = Int((nearest.used * 100).rounded())
+                        UsageBar(fraction: nearest.used, tint: UsageLevel(usedPercent: used).color, height: 3)
+                        Text(
+                            [L10n.Usage.used(percent: "\(used)%"), resetCaption(nearest, now: now)]
+                                .compactMap { $0 }.joined(separator: " · ")
+                        )
+                        .font(BanditoFont.font(size: 11, weight: 400))
+                        .monospacedDigit()
+                        .foregroundStyle(Color.Bandito.text3)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                     }
                     if let command = state.command {
                         Text(L10n.AgentSheet.statusNeedsLoginHint)
@@ -369,7 +501,7 @@ struct NewAgentSheet: View {
                     }
                 }
                 .padding(.horizontal, 12)
-                .padding(.vertical, 10)
+                .padding(.vertical, 8)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .frame(maxHeight: .infinity, alignment: .topLeading)
                 .background(
@@ -381,6 +513,7 @@ struct NewAgentSheet: View {
                 .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
             .banditoButton(.row(cornerRadius: 14))
+            .help(limitTooltip(card?.windows ?? [], state: state, now: now))
             .accessibilityAddTraits(selected ? .isSelected : [])
 
             // Outside the card's button: a link inside a button would not be clickable on its own.
@@ -394,43 +527,15 @@ struct NewAgentSheet: View {
         .frame(maxHeight: .infinity, alignment: .top)
     }
 
-    /// Every limit window of the runtime, shortest first: its label, how much is used, a bar and when it resets.
-    private func limitWindows(_ windows: [UsageWindowLine], now: Date) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ForEach(windows) { line in
-                limitWindowRow(line, now: now)
-            }
+    /// The card's tooltip: the status, then every limit window with how much is used and when it resets.
+    private func limitTooltip(_ windows: [UsageWindowLine], state: RuntimeCardState, now: Date) -> String {
+        var lines = [state.text]
+        for line in windows {
+            var text = "\(line.label): \(L10n.Usage.used(percent: "\(Int((line.used * 100).rounded()))%"))"
+            if let caption = resetCaption(line, now: now) { text += " · " + caption }
+            lines.append(text)
         }
-        .padding(.top, 2)
-    }
-
-    private func limitWindowRow(_ line: UsageWindowLine, now: Date) -> some View {
-        let used = Int((line.used * 100).rounded())
-        let tint = UsageLevel(usedPercent: used).color
-        return VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 6) {
-                Text(line.label)
-                    .font(BanditoFont.font(size: 11, weight: 400))
-                    .foregroundStyle(Color.Bandito.text3)
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
-                Spacer(minLength: 4)
-                Text(L10n.Usage.used(percent: "\(used)%"))
-                    .font(BanditoFont.font(size: 11, weight: 600))
-                    .foregroundStyle(tint)
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
-            }
-            UsageBar(fraction: line.used, tint: tint, height: 3)
-            if let caption = resetCaption(line, now: now) {
-                Text(caption)
-                    .font(BanditoFont.font(size: 10.5, weight: 400))
-                    .monospacedDigit()
-                    .foregroundStyle(Color.Bandito.text3)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-            }
-        }
+        return lines.joined(separator: "\n")
     }
 
     /// "Resets in 2 h 48 min", or "again in 5:48:12" while the window is used up. `nil` without a reset time.
@@ -712,15 +817,33 @@ struct NewAgentSheet: View {
         error = nil
         Task {
             do {
-                let workspaceID = try await workplaceForCreate(on: server)
-                let agent = try await server.createAgent(
-                    draft.makeNewAgent(
-                        workspaceID: workspaceID, existingNames: agentNames, lists: server.runtimeModels))
-                // Only a folder the person chose is a recent project folder; an agent's own folder is not.
-                if !draft.cwd.isEmpty {
-                    var recent = RecentFolders.load(serverID: server.id.uuidString)
-                    recent.remember(agent.cwd)
-                    recent.save(serverID: server.id.uuidString)
+                // A picture that failed to save on the first try retries alone: the agent exists already.
+                let agent: Agent
+                if let made = createdAgent {
+                    agent = made
+                } else {
+                    let workspaceID = try await workplaceForCreate(on: server)
+                    // Only integrations the server still has are sent with the new agent.
+                    draft.integrations = draft.integrations.limited(to: Set(integrations.map(\.id)))
+                    agent = try await server.createAgent(
+                        draft.makeNewAgent(
+                            workspaceID: workspaceID, existingNames: agentNames, lists: server.runtimeModels))
+                    createdAgent = agent
+                    // Only a folder the person chose is a recent project folder; an agent's own folder is not.
+                    if !draft.cwd.isEmpty {
+                        var recent = RecentFolders.load(serverID: server.id.uuidString)
+                        recent.remember(agent.cwd)
+                        recent.save(serverID: server.id.uuidString)
+                    }
+                }
+                if let picture = draft.picture {
+                    do {
+                        try await server.setAgentAvatarImage(agent.id, picture)
+                    } catch {
+                        self.error = UserFacingMessage(text: L10n.AgentSheet.pictureFailed)
+                        creating = false
+                        return
+                    }
                 }
                 router.selectAgent(agent.id, on: server)
                 router.select(mode: .team)
@@ -825,16 +948,6 @@ struct NewAgentSheet: View {
         }
     }
 
-    private func effortHint(_ effort: Effort) -> String {
-        switch effort {
-        case .low: L10n.AgentSheet.effortHintLow
-        case .medium: L10n.AgentSheet.effortHintMedium
-        case .high: L10n.AgentSheet.effortHintHigh
-        case .xhigh: L10n.AgentSheet.effortHintXhigh
-        case .max: L10n.AgentSheet.effortHintMax
-        }
-    }
-
     private var memorySections: [SelectSection<MemoryMode>] {
         [
             SelectSection(
@@ -867,17 +980,10 @@ extension RuntimeKind {
 }
 
 extension AvatarFace {
-    /// The faces the new agent sheet offers, in the design's order.
-    static let faces: [AvatarFace] = [.chevronDash, .dots, .carets]
-
-    /// The text drawn for a face in the picker.
-    static func glyph(_ face: AvatarFace) -> String {
-        switch face {
-        case .auto, .chevronDash: "> –"
-        case .dots: "• •"
-        case .carets: "^ ^"
-        }
-    }
+    /// The faces the avatar editor offers, in the design's order: the three first, then the six new ones.
+    static let faces: [AvatarFace] = [
+        .chevronDash, .dots, .carets, .wink, .surprised, .sleeping, .glasses, .happy, .serious,
+    ]
 }
 
 /// The layout of the runtime cards: two per row. Kept out of the view, which is main-actor isolated, so it can be tested.

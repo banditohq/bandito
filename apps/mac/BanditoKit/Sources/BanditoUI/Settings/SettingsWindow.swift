@@ -23,7 +23,7 @@ enum SettingsHandoff {
     }
 }
 
-/// The Settings window (⌘,): 12 sections in a left navigation. Opens at 980 × 680 pt, never smaller than 860 × 560.
+/// The Settings window (⌘,): 12 sections in a left navigation. Opens at 900 × 640 pt, never smaller than 760 × 520.
 public struct SettingsWindow: View {
     @State private var section: SettingsSection = .general
 
@@ -43,7 +43,7 @@ public struct SettingsWindow: View {
             .clipped()
             .background(Color.Bandito.surface1)
         }
-        .frame(minWidth: 860, idealWidth: 980, maxWidth: .infinity, minHeight: 560, idealHeight: 680, maxHeight: .infinity)
+        .frame(minWidth: 760, idealWidth: 900, maxWidth: .infinity, minHeight: 520, idealHeight: 640, maxHeight: .infinity)
         .preferredColorScheme(.dark)
         .onAppear(perform: takeRequest)
         .onChange(of: SettingsNavigation.shared.requested) { _, _ in takeRequest() }
@@ -70,12 +70,7 @@ public struct SettingsWindow: View {
                         section = item
                     } label: {
                         HStack(spacing: 10) {
-                            Image(systemName: item.symbol)
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(Color.white)
-                                .frame(width: 24, height: 24)
-                                .background(item.tint, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                                .accessibilityHidden(true)
+                            SettingsBadge(symbol: item.symbol, tint: item.tint)
                             Text(item.title)
                                 .font(.system(size: 13, weight: selected ? .semibold : .regular))
                                 .foregroundStyle(selected ? Color.Bandito.text : Color.Bandito.text2)
@@ -87,7 +82,7 @@ public struct SettingsWindow: View {
                         .padding(.vertical, 7)
                         .background(
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .fill(selected ? Color.Bandito.text.opacity(0.08) : .clear))
+                                .fill(selected ? Color.Bandito.signal.opacity(0.12) : .clear))
                         .contentShape(Rectangle())
                     }
                     .banditoButton(.row(cornerRadius: 10))
@@ -108,11 +103,11 @@ public struct SettingsWindow: View {
         case .servers: ServersSection()
         case .approvals: ApprovalsSection()
         case .usage: UsageSection()
-        case .workplaces: WorkplacesSection()
         case .terminalFiles: TerminalFilesSection()
         case .browserScreen: BrowserScreenSection()
         case .keysGestures: KeysAndGesturesSection()
         case .notifications: NotificationsSection()
+        case .sounds: SoundsSection()
         case .appearance: AppearanceSection()
         case .updates: UpdatesSection()
         }

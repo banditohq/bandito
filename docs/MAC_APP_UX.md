@@ -49,7 +49,10 @@ Typing in **To:** filters. Sending to an existing agent just opens its thread.
 - **Crew and system events** are quiet centered lines with an icon, not bubbles: "2 messages with Scout", "Schedule paused · Night audit", "Message for Forge", "Session restarted".
 - **Tool calls** collapse into one line per call ("$ cargo test · 14 passed"), expandable to output; consecutive calls group ("Ran 6 commands").
 - **Approval card** inline (same as the landing demo): chip "needs you", agent + action, the command or a diff, buttons Deny (esc) · Approve (↵), checkbox "Always allow this here". Resolved cards shrink to a line ("Approved by you · 14:02").
-- Hover actions on a message: react, reply (quote into composer), more (copy, copy as Markdown).
+- Hover actions on a message (agent's and your own), a small bar at its top right: Reply, React (the six usual emoji and "More…", the system emoji picker), Copy (the whole text as written, Markdown included), and ⋯ (Copy as text, Select text). The right-click menu has the same. A double click on an agent's message likes it 👍, and again takes it off. Reactions are chips under the bubble; yours is lit and a click takes it off.
+- Reply: a bar above the composer ("Reply to Forge" / "Reply to yourself", the first 120 characters, a cross, Esc). A reply shows a quote at the top of its bubble (a bar in the agent's colour, the sender, two lines); a click goes to the original and it flashes for a second.
+- Code blocks in messages have a Copy button in the corner.
+- **Form card** (the agent asks with `ask_form`): title, intro, the fields (text, long text, email, number, choice as a list of up to four or a select, several choices as chips, switch, date), help under a field, a star on the required ones, the error under the field. A question has Send and Skip; a confirmation shows the fields as an editable summary, with Confirm, Reject and an optional "Why?". The card folds into "You answered: …", "Confirmed", "Rejected", "Skipped" or "Expired". While a form waits the composer says so and links to it.
 - Banner above the composer for blocking states, with one action: runtime not logged in, server offline, usage limit reached (with reset time).
 - Composer: "+" (attach files → uploaded to the agent's folder), placeholder "Message Forge", mic (dictation, later), send. Enter sends, ⇧Enter newline. While a turn runs, the send button becomes Stop (interrupt).
 
@@ -68,6 +71,7 @@ Avatar editor: tabs Presets (raccoon-family shapes × brand colors) · Generate 
 Modal with a left nav, content in grouped cards (title + description on the left, control on the right).
 
 - **General** — appearance (theme, accent, language), notifications (approvals, finished turns, errors; sound), menu bar item on/off, launch at login.
+- **Sounds** — main switch (off by default), sound set (Soft · Mechanical · Glass · Retro) with a listen button, volume, a switch per event (button clicks, typing, section switch, send, agent done / waits for you / error), and "And when the window is in the background". Sounds are synthesised, no files; a closed window plays only done and waiting.
 - **Servers** — list of servers (name, how connected, status, version); Add server (wizard below); per server: rename, reconnect, show pairing devices, remove.
 - **Approvals** — global rules table (Action · Behavior: Allow / Ask / Deny, edit, delete), "Add rule" (pattern + behavior), the built-in risky list (read-only, explained), default mode for new agents. Note: "Rules apply on this server. Built-in checks always apply."
 - **Usage** — per runtime: plan limits from the CLI. All limit windows the program reports are shown, shortest first, each with how much is used and when it resets; the app does not assume a fixed set of windows. Grok does not report its limits. API spend for API-key agents.

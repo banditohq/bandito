@@ -160,6 +160,22 @@
 			<string>actif depuis %1$lld jours</string>
 		</dict>
 	</dict>
+	<key>integrations.status.connected</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%1$lld outil</string>
+			<key>other</key>
+			<string>%1$lld outils</string>
+		</dict>
+	</dict>
 	<key>memory.filesMeta</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
@@ -256,6 +272,22 @@
 			<string>≈ %1$lld minutes</string>
 		</dict>
 	</dict>
+	<key>schedule.step.hours</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%1$lld heure</string>
+			<key>other</key>
+			<string>%1$lld heures</string>
+		</dict>
+	</dict>
 	<key>server.cores</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
@@ -270,6 +302,38 @@
 			<string>%1$lld cœur</string>
 			<key>other</key>
 			<string>%1$lld cœurs</string>
+		</dict>
+	</dict>
+	<key>server.detail.processCount</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%1$lld processus</string>
+			<key>other</key>
+			<string>%1$lld processus</string>
+		</dict>
+	</dict>
+	<key>setup.showFullLog</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>Afficher tout le journal (%1$lld ligne)</string>
+			<key>other</key>
+			<string>Afficher tout le journal (%1$lld lignes)</string>
 		</dict>
 	</dict>
 	<key>terminals.dock.lines</key>

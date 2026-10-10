@@ -259,6 +259,31 @@ func eventPage(_ seqs: ClosedRange<Int>) -> String {
         await model.disconnect()
     }
 
+    /// The context ring follows the turns: a finished turn reads the list again (the daemon stores the context the
+    /// turn left), and a new chapter starts the ring from zero at once.
+    @Test func contextFollowsTurnsAndChapters() async throws {
+        let calls = Counter()
+        let tokens = Counter()
+        let fake = FakeTransport(handlers: daemonHandlers(lastSeq: 1, extra: ["agents.list": { _ in
+            calls.add()
+            return #"[{"id":"a","name":"Forge","runtime":"claude","cwd":"/x","status":"idle","context_tokens":"#
+                + "\(tokens.value)" + #","chapter":1,"last_message":null}]"#
+        }]))
+        let (model, _) = makeModel([fake])
+        await model.connect()
+        let before = calls.value
+
+        tokens.set(30000)
+        model.apply(Event(seq: 2, agentId: "a", ts: 2, body: .turnCompleted(turnId: "t", status: .ok, usage: nil, costUsd: nil)))
+        try await eventually { model.agents.first?.contextTokens == 30000 }
+        #expect(calls.value > before)
+
+        model.apply(Event(seq: 3, agentId: "a", ts: 3, body: .sessionRotated(chapter: 2, reason: "manual", contextTokens: 30000)))
+        #expect(model.agents.first?.contextTokens == 0)
+        #expect(model.agents.first?.chapter == 2)
+        await model.disconnect()
+    }
+
     /// Approvals and status that arrive live keep the team's view current, with no thread loaded.
     @Test func liveApprovalAndStatusEventsUpdateTheTeamView() async throws {
         let agents = #"[{"id":"a","name":"Forge","runtime":"claude","cwd":"/x","pending_approvals":0,"last_message":null}]"#
@@ -391,4 +416,13 @@ func eventPage(_ seqs: ClosedRange<Int>) -> String {
         #expect(model.state == .connected)
         await model.disconnect()
     }
+}
+
+/// A number shared with a fake daemon's handlers.
+private final class Counter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var n = 0
+    var value: Int { lock.withLock { n } }
+    func add() { lock.withLock { n += 1 } }
+    func set(_ v: Int) { lock.withLock { n = v } }
 }

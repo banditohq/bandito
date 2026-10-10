@@ -19,6 +19,10 @@ struct InteractiveBody<Content: View>: View {
             .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: pointerOver && isEnabled)
             .scaleEffect(isPressed ? 0.97 : 1)
             .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: isPressed)
+            // The one place a click sound comes from: every Bandito button wraps this body.
+            .onChange(of: isPressed) { _, pressed in
+                if pressed { SoundPlayer.play(.click) }
+            }
     }
 }
 

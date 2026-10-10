@@ -69,7 +69,7 @@ public struct LastMessage: Codable, Sendable, Hashable {
     /// and nothing but user and assistant messages counts. Nil for any other event.
     init?(event e: Event) {
         switch e.body {
-        case .messageUser(let text, let source, _) where source != .system:
+        case .messageUser(let text, let source, _, _, _) where source != .system:
             self.init(role: "user", text: Self.cut(text), ts: e.ts)
         case .messageAssistant(let text):
             self.init(role: "assistant", text: Self.cut(text), ts: e.ts)
@@ -89,10 +89,24 @@ public struct LastMessage: Codable, Sendable, Hashable {
 public struct AvatarSpec: Codable, Sendable, Hashable {
     public var color: String
     public var face: String
+    /// One emoji the owner chose, shown instead of the face when the agent has no picture. Nil when none.
+    public var emoji: String?
+    /// True when the daemon holds a picture for the agent (`avatar_pictures` feature). Left out of the wire when false.
+    public var image: Bool?
+    /// Changes with each picture: the key a picture is cached under. Nil without a picture.
+    public var imageRev: Int64?
 
-    public init(color: String, face: String) {
+    public init(color: String, face: String, emoji: String? = nil, image: Bool? = nil, imageRev: Int64? = nil) {
         self.color = color
         self.face = face
+        self.emoji = emoji
+        self.image = image
+        self.imageRev = imageRev
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case color, face, emoji, image
+        case imageRev = "image_rev"
     }
 }
 
@@ -134,6 +148,11 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
     public var avatar: AvatarSpec?
     /// What the agent may do: `terminal`, `files`, `browser`, `team`, `screen`. `nil` = everything (see `AgentCapability`).
     public var capabilities: [String]?
+    /// The integrations (ids) the agent may use; `nil` = every enabled one (see `Integration`).
+    public var integrations: [String]?
+    /// The main agent of the server: the one that hands out work to the others (`lead`, feature `lead`). One per
+    /// server. A daemon without the feature sends none, and the agent is then not main.
+    public var lead: Bool
     /// The newest user or assistant message; `nil` when there is none, or when the daemon predates the field.
     public var lastMessage: LastMessage?
     /// The status from the agent's newest `agent.status` event; `nil` before any, or when the daemon predates the field.
@@ -167,10 +186,14 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
         reportsPendingApprovalIds: Bool = false,
         reportsLastMessage: Bool = true,
         avatar: AvatarSpec? = nil,
-        capabilities: [String]? = nil
+        capabilities: [String]? = nil,
+        integrations: [String]? = nil,
+        lead: Bool = false
     ) {
+        self.lead = lead
         self.avatar = avatar
         self.capabilities = capabilities
+        self.integrations = integrations
         self.workspaceId = workspaceId
         self.id = id
         self.name = name
@@ -232,6 +255,8 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
         reportsLastMessage = c.contains(.lastMessage)
         avatar = try c.decodeIfPresent(AvatarSpec.self, forKey: .avatar)
         capabilities = try c.decodeIfPresent([String].self, forKey: .capabilities)
+        integrations = try c.decodeIfPresent([String].self, forKey: .integrations)
+        lead = try c.decodeIfPresent(Bool.self, forKey: .lead) ?? false
         status = try c.decodeIfPresent(AgentStatus.self, forKey: .status)
         pendingApprovals = try c.decodeIfPresent(Int.self, forKey: .pendingApprovals) ?? 0
         pendingApprovalIds = Set(try c.decodeIfPresent([String].self, forKey: .pendingApprovalIds) ?? [])
@@ -259,16 +284,19 @@ public struct NewAgent: Codable, Sendable {
     public var avatar: AvatarSpec?
     /// Sent only when set (see `Agent.capabilities`).
     public var capabilities: [String]?
+    /// Sent only when set: the integration ids the agent may use. Missing = every enabled one (see `Agent.integrations`).
+    public var integrations: [String]?
 
     public init(
         name: String, role: String = "", runtime: RuntimeKind, model: String? = nil, cwd: String,
         approvalMode: ApprovalMode = .risky, systemPrompt: String? = nil,
         effort: Effort? = nil, memoryMode: MemoryMode = .smart, contextBudget: Int? = nil,
         fallbackRuntime: RuntimeKind? = nil, fallbackModel: String? = nil, workspaceId: String? = nil,
-        avatar: AvatarSpec? = nil, capabilities: [String]? = nil
+        avatar: AvatarSpec? = nil, capabilities: [String]? = nil, integrations: [String]? = nil
     ) {
         self.avatar = avatar
         self.capabilities = capabilities
+        self.integrations = integrations
         self.workspaceId = workspaceId
         self.fallbackRuntime = fallbackRuntime
         self.fallbackModel = fallbackModel
@@ -376,7 +404,10 @@ public enum AgentChange: String, Codable, Sendable, Hashable {
 /// The typed body of an event (`kind` + `payload` on the wire).
 public enum EventBody: Sendable, Hashable {
     case turnStarted(turnId: String, source: MessageSource)
-    case messageUser(text: String, source: MessageSource, fromAgent: String?)
+    /// `replyTo` is the `seq` of the message this one answers; `attachments` are the files it carries.
+    case messageUser(
+        text: String, source: MessageSource, fromAgent: String?, replyTo: Int64? = nil,
+        attachments: [AgentAttachment] = [])
     case messageAssistant(text: String)
     case messageDelta(text: String)
     case toolCall(callId: String, tool: String, title: String, input: JSONValue)
@@ -398,6 +429,12 @@ public enum EventBody: Sendable, Hashable {
     /// An agent's record was created, changed or deleted, by any client. Read `agents.list` to see the change.
     case agentChanged(action: AgentChange)
     case error(message: String)
+    /// The agent asked the person a form (`form_requested`).
+    case formRequested(formId: String, spec: FormSpec)
+    /// The form ended. `values` are keyed by field id.
+    case formAnswered(formId: String, action: FormAction, values: [String: JSONValue]?, comment: String?)
+    /// A reaction on the message with that `seq`; no `emoji` means it was taken off.
+    case reaction(seq: Int64, emoji: String?, by: ReactionBy)
     /// A kind this app version doesn't know yet. Shown as nothing; kept for forward compatibility.
     case unknown(kind: String)
 }
@@ -424,7 +461,24 @@ extension Event: Decodable {
     private enum Keys: String, CodingKey { case seq, agentId, ts, kind, payload }
 
     private struct TurnStartedP: Decodable { var turnId: String; var source: MessageSource }
-    private struct MessageUserP: Decodable { var text: String; var source: MessageSource; var fromAgent: String? }
+    private struct MessageUserP: Decodable {
+        var text: String; var source: MessageSource; var fromAgent: String?
+        var replyTo: Int64?; var attachments: [AgentAttachment]?
+    }
+    private struct FormRequestedP: Decodable {
+        var formId: String
+        var spec: FormSpec
+        private enum Keys: String, CodingKey { case formId }
+        init(from decoder: Decoder) throws {
+            formId = try decoder.container(keyedBy: Keys.self).decode(String.self, forKey: .formId)
+            // The spec's fields sit beside `form_id` in the payload.
+            spec = try FormSpec(from: decoder)
+        }
+    }
+    private struct FormAnsweredP: Decodable {
+        var formId: String; var action: FormAction; var values: [String: JSONValue]?; var comment: String?
+    }
+    private struct ReactionP: Decodable { var seq: Int64; var emoji: String?; var by: ReactionBy }
     private struct TextP: Decodable { var text: String }
     private struct ToolCallP: Decodable { var callId: String; var tool: String; var title: String; var input: JSONValue? }
     private struct ToolResultP: Decodable { var callId: String; var ok: Bool; var output: String }
@@ -457,7 +511,10 @@ extension Event: Decodable {
         case "turn.started":
             let x = try p(TurnStartedP.self); body = .turnStarted(turnId: x.turnId, source: x.source)
         case "message.user":
-            let x = try p(MessageUserP.self); body = .messageUser(text: x.text, source: x.source, fromAgent: x.fromAgent)
+            let x = try p(MessageUserP.self)
+            body = .messageUser(
+                text: x.text, source: x.source, fromAgent: x.fromAgent, replyTo: x.replyTo,
+                attachments: x.attachments ?? [])
         case "message.assistant": body = .messageAssistant(text: try p(TextP.self).text)
         case "message.delta": body = .messageDelta(text: try p(TextP.self).text)
         case "tool.call":
@@ -497,6 +554,13 @@ extension Event: Decodable {
                 body = .unknown(kind: kind)
             }
         case "error": body = .error(message: try p(ErrorP.self).message)
+        case "form_requested":
+            let x = try p(FormRequestedP.self); body = .formRequested(formId: x.formId, spec: x.spec)
+        case "form_answered":
+            let x = try p(FormAnsweredP.self)
+            body = .formAnswered(formId: x.formId, action: x.action, values: x.values, comment: x.comment)
+        case "reaction":
+            let x = try p(ReactionP.self); body = .reaction(seq: x.seq, emoji: x.emoji, by: x.by)
         default: body = .unknown(kind: kind)
         }
     }
@@ -524,6 +588,16 @@ public struct Schedule: Codable, Sendable, Identifiable, Hashable {
     public var lastRunAt: Int64?
     public var nextRunAt: Int64?
     public var createdAt: Int64
+    /// A short name, at most 80 characters; `nil` when none.
+    public var title: String?
+    /// The cron in words, in English and Russian, as the daemon writes them (`every 15 minutes`, `каждые 15 минут`).
+    public var humanEn: String?
+    public var humanRu: String?
+
+    /// The words for the app's language; the English ones for any language but Russian.
+    public func humanText(languageCode: String) -> String? {
+        languageCode.lowercased().hasPrefix("ru") ? humanRu : humanEn
+    }
 }
 
 public struct RuntimeStatus: Codable, Sendable, Hashable {
@@ -547,6 +621,14 @@ public struct DaemonInfo: Codable, Sendable, Hashable {
     public var update: DaemonUpdate?
 
     public func supports(_ feature: String) -> Bool { features?.contains(feature) ?? false }
+
+    /// `agents.new_chapter` came with daemon 0.1.5 and has no feature flag of its own, so the version decides.
+    /// A pre-release of 0.1.5 (`0.1.5-rc.1`) sorts before it and does not count. Older daemons do not know the
+    /// method: the app hides the button instead of showing a refusal.
+    public var supportsNewChapter: Bool {
+        guard let version = SemanticVersion(version), let since = SemanticVersion("0.1.5") else { return false }
+        return version >= since
+    }
 }
 
 public struct Device: Codable, Sendable, Identifiable, Hashable {

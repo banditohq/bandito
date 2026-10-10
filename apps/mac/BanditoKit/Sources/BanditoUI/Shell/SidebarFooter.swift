@@ -16,7 +16,7 @@ struct SidebarFooter: View {
                 router.sheet = .account
             } label: {
                 HStack(spacing: 10) {
-                    ProfileAvatar(name: name, color: AvatarColor.at(hub.profile.colorIndex), size: 28)
+                    ProfileAvatar(name: name, color: AvatarColor.at(hub.profile.colorIndex), picture: hub.avatar.image, size: 28)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(title)
                             .font(BanditoFont.font(size: 13, weight: 600))

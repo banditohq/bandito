@@ -154,6 +154,8 @@ pub struct SpawnConfig {
     pub personal_settings: bool,
     /// What the agent may use (see docs/ARCHITECTURE.md#capabilities). `None`: all of it.
     pub capabilities: Option<Vec<crate::store::Capability>>,
+    /// The owner's MCP servers for this session, secrets already read (see docs/ARCHITECTURE.md#integrations).
+    pub mcp_servers: Vec<crate::integrations::Server>,
 }
 
 /// A live session with one agent CLI.

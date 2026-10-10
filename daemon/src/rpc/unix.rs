@@ -394,6 +394,17 @@ pub async fn call_agent(path: &Path, token: &str, method: &str, params: Value) -
     call_within(path, Some(token), method, params, CALL_TIMEOUT).await
 }
 
+/// [`call_agent`] for a call that waits for the human (a form): it may take up to `limit`.
+pub async fn call_agent_waiting(
+    path: &Path,
+    token: &str,
+    method: &str,
+    params: Value,
+    limit: Duration,
+) -> anyhow::Result<Value> {
+    call_within(path, Some(token), method, params, limit).await
+}
+
 async fn call_within(
     path: &Path,
     token: Option<&str>,

@@ -43,7 +43,7 @@ public final class AppModel {
     @ObservationIgnored public var onServerChanged: (() -> Void)?
     /// The last problem the user should know about (e.g. a token that could not be stored).
     public private(set) var lastError: String?
-    /// Text size of every terminal pane (⌘+ ⌘− ⌘0 and pinch).
+    /// Text size of every terminal pane (⌘+ ⌘− ⌥⌘0 and pinch).
     public let terminalFont = TerminalFontStore()
     /// Keeps this Mac's daemon at the version of the app (see `LocalDaemonUpgradeModel`).
     let localUpgrade = LocalDaemonUpgradeModel()
@@ -93,8 +93,22 @@ public final class AppModel {
             if case .approvalResolved(let approvalID, _, _, _) = event.body {
                 self.notifications?.approvalSettled(approvalID)
             }
+            // The sound follows the event whether or not a notification is shown (see `SoundRules`).
+            if let sound = Self.soundEvent(for: event.body) {
+                SoundPlayer.play(sound)
+            }
             guard let notice = Self.notice(for: event, in: server) else { return }
             self.notifications?.handle(notice)
+        }
+    }
+
+    /// The sound an agent event makes: an approval or question waiting, a finished turn, or an error.
+    static func soundEvent(for body: EventBody) -> SoundEvent? {
+        switch body {
+        case .approvalRequested: .needsYou
+        case .turnCompleted(_, .ok, _, _): .done
+        case .error: .error
+        default: nil
         }
     }
 
@@ -293,6 +307,23 @@ public final class AppModel {
 
     #if os(macOS)
     /// The terminals of `server`, created on first use.
+    /// ⌘R: reconnects to the server in front and re-reads what the screen on show displays. The thread and the folder
+    /// reload in their views (on `Router.refreshRequests`); the terminals and the browser page are asked here. The app
+    /// does not restart.
+    func refreshCurrentScreen(router: Router) async {
+        guard let server = currentServer else { return }
+        await server.disconnect()
+        await server.connect()
+        let reloads = RefreshRules.reloads(for: router.mode)
+        if reloads.contains(.terminals) {
+            await terminalController(for: server).refresh()
+        }
+        if reloads.contains(.browserPage) {
+            await BrowserStore.shared.model(for: server).reload()
+        }
+        router.refreshRequests += 1
+    }
+
     func terminalController(for server: ServerModel) -> TerminalController {
         if let existing = terminalControllers[server.id] {
             return existing

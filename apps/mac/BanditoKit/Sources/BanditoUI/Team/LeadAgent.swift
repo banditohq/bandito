@@ -1,45 +1,9 @@
 import BanditoDesign
 import BanditoL10n
 import Foundation
-import Observation
 import SwiftUI
 
-/// The main agent of each server: the one that answers for the others. The daemon has no field for it yet, so the
-/// choice is kept on this Mac, one main agent per server. Making another agent main replaces the old choice.
-@MainActor
-@Observable
-final class LeadAgentStore {
-    static let shared = LeadAgentStore()
-
-    static let defaultsKey = "bandito.leadAgents"
-
-    /// Server id → main agent id. Views that read it are drawn again when it changes.
-    private(set) var leads: [String: String]
-    private let defaults: UserDefaults
-
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
-        leads = defaults.dictionary(forKey: Self.defaultsKey) as? [String: String] ?? [:]
-    }
-
-    /// The main agent's id on this server, or `nil` when none is set.
-    func id(server: String) -> String? {
-        leads[server]
-    }
-
-    /// Sets the main agent of this server, or clears it with `nil`.
-    func set(_ agentID: String?, server: String) {
-        leads[server] = agentID
-        defaults.set(leads, forKey: Self.defaultsKey)
-    }
-
-    /// Clears the choice when the main agent is deleted. Another agent's choice is left as it is.
-    func forget(agentID: String, server: String) {
-        guard leads[server] == agentID else { return }
-        set(nil, server: server)
-    }
-}
-
+/// Helpers for the main agent of a server. Which agent it is comes from the daemon (`Agent.lead`).
 enum LeadAgent {
     /// The main item first; the rest keep their order. A main id that is no longer in the list changes nothing.
     static func leadFirst<Item>(_ items: [Item], id: (Item) -> String, lead: String?) -> [Item] {

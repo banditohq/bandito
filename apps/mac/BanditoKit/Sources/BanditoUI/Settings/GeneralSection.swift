@@ -3,23 +3,24 @@ import BanditoKit
 import BanditoL10n
 import SwiftUI
 
-/// Settings → General: interface language, sample data, launch at login, and how the app updates itself.
+/// Settings → General: interface language, sample data, and launch at login.
 struct GeneralSection: View {
     @Environment(DemoStore.self) private var demo
     @State private var language = Self.storedLanguage()
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
     @State private var launchError: String?
-    // The app target reads these keys and configures Sparkle (AppUpdater).
-    @AppStorage(AppUpdatePreferences.automaticChecksKey) private var autoCheckUpdates = true
-    @AppStorage(AppUpdatePreferences.channelKey) private var updateChannel = AppUpdatePreferences.Channel.stable.rawValue
 
     private static let systemLanguage = InterfaceLanguageChoice.systemTag
 
     var body: some View {
         @Bindable var demo = demo
         SettingsPage(title: SettingsSection.general.title, intro: nil) {
-            VStack(spacing: 0) {
-                SettingsRow(title: L10n.Settings.language, hint: L10n.Settings.languageRestart) {
+            // The first group has no label: the page title already says "General".
+            SettingsGroup(title: nil) {
+                SettingsRow(
+                    title: L10n.Settings.language, hint: L10n.Settings.languageRestart,
+                    icon: SettingsIcon(symbol: "globe", tint: BanditoPalette.badgeBlue)
+                ) {
                     BanditoSelect(
                         selection: $language, sections: [SelectSection(options: languageChoices)],
                         label: L10n.Settings.language, placeholder: L10n.Settings.Language.system,
@@ -29,7 +30,9 @@ struct GeneralSection: View {
                 }
                 Divider().padding(.horizontal, 16)
                 SettingsRow(
-                    title: L10n.Settings.showExamples, hint: L10n.Settings.showExamplesHint, keepsControlBeside: true
+                    title: L10n.Settings.showExamples, hint: L10n.Settings.showExamplesHint,
+                    icon: SettingsIcon(symbol: "sparkles", tint: BanditoPalette.badgeOrange),
+                    keepsControlBeside: true
                 ) {
                     Toggle("", isOn: $demo.enabled)
                         .labelsHidden()
@@ -38,42 +41,14 @@ struct GeneralSection: View {
                 Divider().padding(.horizontal, 16)
                 SettingsRow(
                     title: L10n.Settings.launchAtLogin, hint: launchError ?? L10n.Settings.launchAtLoginHint,
+                    icon: SettingsIcon(symbol: "power", tint: BanditoPalette.badgeGreen),
                     keepsControlBeside: true
                 ) {
                     Toggle("", isOn: $launchAtLogin)
                         .labelsHidden()
                         .toggleStyle(BanditoToggleStyle())
                 }
-                Divider().padding(.horizontal, 16)
-                SettingsRow(
-                    title: L10n.Settings.autoCheckUpdates, hint: L10n.Settings.autoCheckUpdatesHint,
-                    keepsControlBeside: true
-                ) {
-                    Toggle("", isOn: $autoCheckUpdates)
-                        .labelsHidden()
-                        .toggleStyle(BanditoToggleStyle())
-                }
-                Divider().padding(.horizontal, 16)
-                SettingsRow(title: L10n.Settings.Updates.channel, hint: L10n.Settings.channelHint) {
-                    BanditoSelect(
-                        selection: $updateChannel,
-                        sections: [
-                            SelectSection(options: [
-                                SelectOption(
-                                    value: AppUpdatePreferences.Channel.stable.rawValue,
-                                    title: L10n.Settings.Updates.stable, subtitle: L10n.Settings.Updates.stableDesc),
-                                SelectOption(
-                                    value: AppUpdatePreferences.Channel.beta.rawValue,
-                                    title: L10n.Settings.Updates.beta, subtitle: L10n.Settings.Updates.betaDesc),
-                            ])
-                        ],
-                        label: L10n.Settings.Updates.channel, placeholder: L10n.Settings.Updates.stable,
-                        field: { SelectFieldView(option: $0?.titleOnly, placeholder: L10n.Settings.Updates.stable) },
-                        footer: { _ in EmptyView() })
-                        .frame(width: 220)
-                }
             }
-            .banditoCard()
         }
         .onChange(of: language) { _, code in
             Self.storeLanguage(code)

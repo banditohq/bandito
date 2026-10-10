@@ -169,6 +169,14 @@ pub(super) fn require_device(app: &App, headers: &HeaderMap) -> Result<Device, (
     }
 }
 
+/// The largest message and frame on the RPC socket. An attachment of the largest size goes up in one
+/// `attachments.upload` message: 20 MB as base64 is about 26.7 MB, plus the JSON around it.
+pub const RPC_MESSAGE_LIMIT: usize = 32 << 20;
+
+/// The largest message and frame on a socket that is not paired yet. Such a socket only says `daemon.hello` and
+/// `pair.redeem` (see `allowed`), and a pairing request is a few hundred bytes.
+pub const ANONYMOUS_MESSAGE_LIMIT: usize = 64 << 10;
+
 async fn rpc(
     State(app): State<Arc<App>>,
     Extension(client): Extension<ClientAddr>,
@@ -183,7 +191,14 @@ async fn rpc(
         Ok(None) => Peer::Anonymous(client.0),
         Err(e) => return e.into_response(),
     };
-    ws.max_message_size(4 << 20)
+    // The peer is fixed for the whole connection: a socket that was anonymous stays anonymous after `pair.redeem`,
+    // and the app reconnects with its token. So the big limit is only ever for a paired device.
+    let limit = match peer {
+        Peer::Anonymous(_) => ANONYMOUS_MESSAGE_LIMIT,
+        _ => RPC_MESSAGE_LIMIT,
+    };
+    ws.max_message_size(limit)
+        .max_frame_size(limit)
         .on_upgrade(move |socket| handle(app, peer, socket))
 }
 
@@ -516,6 +531,87 @@ mod tests {
     fn clip(dir: &Path) -> String {
         std::fs::write(dir.join("clip.mp4"), b"0123456789").unwrap();
         dir.join("clip.mp4").display().to_string()
+    }
+
+    /// The router on a real socket, so that WebSocket messages travel as they do in the app.
+    async fn serve_rpc(app: Arc<App>) -> std::net::SocketAddr {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(listener, router(app)).await.unwrap() });
+        addr
+    }
+
+    /// An attachment of the largest size goes up in one `attachments.upload` message: 20 MB as base64 and the JSON
+    /// around it. The socket must take that one message, and answer the request after it.
+    #[tokio::test]
+    async fn the_rpc_socket_takes_a_full_size_attachment_in_one_message() {
+        use futures_util::{SinkExt, StreamExt};
+        use tokio_tungstenite::tungstenite::Message as ClientMessage;
+        use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+        use tokio_tungstenite::tungstenite::http::HeaderValue;
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let addr = serve_rpc(served(dir.path())).await;
+        let mut req = format!("ws://{addr}/v1/rpc").into_client_request().unwrap();
+        req.headers_mut()
+            .insert("authorization", HeaderValue::from_static("Bearer bdt_test_token"));
+        let (mut ws, _) = tokio_tungstenite::connect_async(req).await.unwrap();
+
+        let base64_len = crate::attachments::MAX_BYTES / 3 * 4 + 4;
+        let pad = "A".repeat(base64_len);
+        let request = format!(r#"{{"id":1,"method":"daemon.info","params":{{"data_base64":"{pad}"}}}}"#);
+        assert!(
+            request.len() > 4 << 20,
+            "the message must be bigger than the old 4 MB limit"
+        );
+        ws.send(ClientMessage::Text(request.into())).await.unwrap();
+
+        let reply = ws.next().await.expect("the socket closed on the big message").unwrap();
+        let ClientMessage::Text(text) = reply else {
+            panic!("expected a text reply, got {reply:?}")
+        };
+        let value: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(value["id"], 1);
+        assert!(value.get("result").is_some(), "{text}");
+    }
+
+    /// A socket that is not paired yet takes only small messages: 64 KB. A big one closes it, so an anonymous client
+    /// cannot send a large body. A paired device gets the full limit (the test above).
+    #[tokio::test]
+    async fn an_anonymous_socket_takes_only_small_messages() {
+        use futures_util::{SinkExt, StreamExt};
+        use tokio_tungstenite::tungstenite::Message as ClientMessage;
+        use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let addr = serve_rpc(served(dir.path())).await;
+        let url = format!("ws://{addr}/v1/rpc");
+
+        // Just under the limit: answered (with an error for the bad code, but with the id).
+        let (mut ws, _) = tokio_tungstenite::connect_async(url.clone().into_client_request().unwrap())
+            .await
+            .unwrap();
+        let pad = "A".repeat(60 << 10);
+        let small = format!(r#"{{"id":1,"method":"pair.redeem","params":{{"code":"x","pad":"{pad}"}}}}"#);
+        ws.send(ClientMessage::Text(small.into())).await.unwrap();
+        let reply = ws.next().await.expect("a small message gets an answer").unwrap();
+        let ClientMessage::Text(text) = reply else {
+            panic!("expected a text reply, got {reply:?}")
+        };
+        let value: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(value["id"], 1, "{text}");
+
+        // Over the limit: the socket is closed, no answer.
+        let (mut ws, _) = tokio_tungstenite::connect_async(url.into_client_request().unwrap())
+            .await
+            .unwrap();
+        let big = "A".repeat(1 << 20);
+        let body = format!(r#"{{"id":2,"method":"pair.redeem","params":{{"code":"x","pad":"{big}"}}}}"#);
+        let _ = ws.send(ClientMessage::Text(body.into())).await;
+        match ws.next().await {
+            None | Some(Err(_)) | Some(Ok(ClientMessage::Close(_))) => {}
+            Some(Ok(other)) => panic!("an anonymous socket answered a 1 MB message: {other:?}"),
+        }
     }
 
     #[tokio::test]

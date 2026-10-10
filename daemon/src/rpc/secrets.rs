@@ -128,6 +128,7 @@ mod tests {
                 use_personal_settings: false,
                 avatar: None,
                 capabilities: None,
+                integrations: None,
                 name: name.into(),
                 role: "builder".into(),
                 runtime: RuntimeKind::Claude,

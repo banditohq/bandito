@@ -160,6 +160,22 @@
 			<string>läuft seit %1$lld Tagen</string>
 		</dict>
 	</dict>
+	<key>integrations.status.connected</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%1$lld Werkzeug</string>
+			<key>other</key>
+			<string>%1$lld Werkzeuge</string>
+		</dict>
+	</dict>
 	<key>memory.filesMeta</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
@@ -254,6 +270,22 @@
 			<string>≈ %1$lld Minuten</string>
 		</dict>
 	</dict>
+	<key>schedule.step.hours</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%1$lld Stunde</string>
+			<key>other</key>
+			<string>%1$lld Stunden</string>
+		</dict>
+	</dict>
 	<key>server.cores</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
@@ -268,6 +300,38 @@
 			<string>%1$lld Kern</string>
 			<key>other</key>
 			<string>%1$lld Kerne</string>
+		</dict>
+	</dict>
+	<key>server.detail.processCount</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%1$lld Prozess</string>
+			<key>other</key>
+			<string>%1$lld Prozesse</string>
+		</dict>
+	</dict>
+	<key>setup.showFullLog</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>Gesamtes Protokoll anzeigen (%1$lld Zeile)</string>
+			<key>other</key>
+			<string>Gesamtes Protokoll anzeigen (%1$lld Zeilen)</string>
 		</dict>
 	</dict>
 	<key>terminals.dock.lines</key>

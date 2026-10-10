@@ -5,8 +5,9 @@ import Foundation
 enum MarkdownBlock: Equatable, Sendable {
     case heading(level: Int, text: String, line: Int)
     case paragraph(text: String, line: Int)
-    /// A list item. `checkbox` is `nil` for a plain item, `false` for `- [ ]`, `true` for `- [x]`.
-    case item(text: String, line: Int, checkbox: Bool?)
+    /// A list item. `checkbox` is `nil` for a plain item, `false` for `- [ ]`, `true` for `- [x]`. `number` is the
+    /// marker of an ordered item as written (`1.`, `2)`), `nil` for a bullet.
+    case item(text: String, line: Int, checkbox: Bool?, number: String? = nil)
     case code(language: String?, text: String, line: Int)
     case quote(text: String, line: Int)
 }
@@ -65,7 +66,7 @@ enum MarkdownParser {
 
             if let item = listItem(trimmed) {
                 flushParagraph()
-                blocks.append(.item(text: item.text, line: index, checkbox: item.checkbox))
+                blocks.append(.item(text: item.text, line: index, checkbox: item.checkbox, number: item.number))
                 lastEnd = index
                 index += 1
                 continue
@@ -85,10 +86,11 @@ enum MarkdownParser {
             }
 
             // An indented line right after a list item continues that item.
-            if case .item(let text, let start, let checkbox)? = blocks.last, lastEnd == index - 1,
+            if case .item(let text, let start, let checkbox, let number)? = blocks.last, lastEnd == index - 1,
                 raw.first == " " || raw.first == "\t"
             {
-                blocks[blocks.count - 1] = .item(text: text + " " + trimmed, line: start, checkbox: checkbox)
+                blocks[blocks.count - 1] = .item(
+                    text: text + " " + trimmed, line: start, checkbox: checkbox, number: number)
                 lastEnd = index
                 index += 1
                 continue
@@ -122,8 +124,10 @@ enum MarkdownParser {
     }
 
     /// A bullet (`-`, `*`, `+`) or ordered (`1.`, `1)`) item, with its checkbox state if it has one.
-    private static func listItem(_ trimmed: String) -> (text: String, checkbox: Bool?)? {
+    private static func listItem(_ trimmed: String) -> (text: String, checkbox: Bool?, number: String?)? {
         guard let marker = listMarkerEnd(trimmed) else { return nil }
+        let written = trimmed[..<marker].trimmingCharacters(in: .whitespaces)
+        let number = written.first?.isNumber == true ? written : nil
         var body = trimmed[marker...].trimmingCharacters(in: .whitespaces)
         var checkbox: Bool?
         if body.hasPrefix("[ ]") {
@@ -133,7 +137,7 @@ enum MarkdownParser {
             checkbox = true
             body = String(body.dropFirst(3))
         }
-        return (body.trimmingCharacters(in: .whitespaces), checkbox)
+        return (body.trimmingCharacters(in: .whitespaces), checkbox, number)
     }
 
     /// The index just after a list marker and its space, or `nil` if the line has no list marker.

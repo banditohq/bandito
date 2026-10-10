@@ -100,6 +100,8 @@ pub enum BrowserError {
     Failed(String),
     InvalidWorkspace,
     UnsupportedUrl,
+    /// A tab id that is not one of the browser's pages.
+    NoSuchTab,
 }
 
 /// One running Chrome.
@@ -312,6 +314,16 @@ impl BrowserManager {
     /// Takes one of the device's DevTools socket slots, or `None` when it has them all.
     pub fn cdp_slot(&self, device_id: &str) -> Option<CdpSlot> {
         self.cdp_slots.acquire(device_id, CDP_SOCKETS_PER_DEVICE)
+    }
+
+    /// Closes a tab for the owner even when a client has it attached, which a plain `Target.closeTarget` from a
+    /// browser client refuses. For a tab that does not answer. `target` is checked by the caller.
+    pub async fn close_tab(&self, workspace: &str, target: &str) -> Result<(), BrowserError> {
+        let relay = self.app_relay(workspace).await?;
+        // Only a page the browser lists: an id made up by a caller never reaches Chrome.
+        let pages = page_tabs(&relay).await?;
+        ensure_listed(&pages, target)?;
+        relay.force_close_tab(target).await.map_err(link_failed)
     }
 
     /// The pages open in the workspace's browser.
@@ -761,6 +773,15 @@ async fn page_tabs(relay: &Relay) -> Result<Vec<Tab>, BrowserError> {
     Ok(list.into_iter().filter(|t| t.kind == "page").collect())
 }
 
+/// `Ok` when `target` is one of `pages`, else [`BrowserError::NoSuchTab`].
+fn ensure_listed(pages: &[Tab], target: &str) -> Result<(), BrowserError> {
+    if pages.iter().any(|t| t.id == target) {
+        Ok(())
+    } else {
+        Err(BrowserError::NoSuchTab)
+    }
+}
+
 /// Opens a blank tab and returns its target id.
 async fn create_tab(relay: &Relay) -> Result<String, BrowserError> {
     let created = browser_call(relay, "Target.createTarget", json!({ "url": "about:blank" })).await?;
@@ -870,6 +891,19 @@ fn signal_orphan(pid: u32, signal: i32) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_forced_close_names_only_listed_pages() {
+        let pages = vec![Tab {
+            id: "T1".into(),
+            kind: "page".into(),
+            title: String::new(),
+            url: String::new(),
+        }];
+        assert!(ensure_listed(&pages, "T1").is_ok());
+        assert!(matches!(ensure_listed(&pages, "T2"), Err(BrowserError::NoSuchTab)));
+        assert!(matches!(ensure_listed(&[], "T1"), Err(BrowserError::NoSuchTab)));
+    }
+
     use super::*;
     use crate::event::{DecidedBy, Event, EventBody};
     use crate::hub::Hub;
@@ -912,6 +946,7 @@ mod tests {
                 use_personal_settings: false,
                 avatar: None,
                 capabilities: None,
+                integrations: None,
                 name: "Forge".into(),
                 role: "builder".into(),
                 runtime: RuntimeKind::Claude,

@@ -93,7 +93,7 @@ private struct FilesSidebarContent: View {
                             .padding(.bottom, 6)
                         VStack(spacing: 1) {
                             ForEach(agentsInFolders) { agent in
-                                AgentPlaceRow(agent: agent, isCurrent: router.filesPath == agent.cwd) {
+                                AgentPlaceRow(server: server, agent: agent, isCurrent: router.filesPath == agent.cwd) {
                                     router.filesPath = agent.cwd
                                 }
                             }
@@ -264,6 +264,7 @@ private struct PlaceRow: View {
 }
 
 private struct AgentPlaceRow: View {
+    let server: ServerModel
     let agent: Agent
     let isCurrent: Bool
     let action: () -> Void
@@ -271,7 +272,7 @@ private struct AgentPlaceRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                AgentAvatar(name: agent.name, size: 22)
+                AgentAvatarView(agent: agent, server: server, size: 22)
                 Text(agent.name)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(Color.Bandito.text)

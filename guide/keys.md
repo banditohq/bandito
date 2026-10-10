@@ -72,6 +72,14 @@ Switches the main window to the Server mode (health, workplaces, secrets, ports,
 1. Press ⌘6, or choose the item in the View menu.
 Хоткей: ⌘6
 
+## Team home (Главная команды)
+
+<!-- id: key-global-teamhome; covers: command:global.teamHome -->
+Shows the team home in the Team mode (see [team.md](team.md)).
+Где: Sidebar → TEAM (КОМАНДА) label
+1. Press ⌘0, or click the TEAM label in the sidebar.
+Хоткей: ⌘0
+
 ## New agent (Новый агент)
 
 <!-- id: key-global-newagent; covers: command:global.newAgent -->
@@ -83,9 +91,9 @@ Opens the New agent sheet.
 ## Back (Назад)
 
 <!-- id: key-global-back; covers: command:global.back -->
-Returns to the previously shown mode.
+Returns to the previously shown mode. In Files it goes back one folder, and in Browser it goes back one page.
 Где: Go → Back (Назад)
-1. Press ⌘[ to go to the previous mode.
+1. Press ⌘[ to go to the previous mode, folder or page.
 2. The item is greyed out when there is no history.
 Хоткей: ⌘[
 
@@ -347,8 +355,8 @@ Makes the text of all terminals smaller.
 <!-- id: key-terminals-fontreset; covers: command:terminals.fontReset -->
 Resets the text size of the terminals to the default.
 Где: Terminals → Reset font size (Сбросить размер)
-1. Press ⌘0 to reset the text size.
-Хоткей: ⌘0
+1. Press ⌥⌘0 to reset the text size.
+Хоткей: ⌥⌘0
 
 ## Open (Открыть)
 
@@ -472,12 +480,12 @@ Moves the focus to the address bar of the browser.
 2. Press ⌘L and type the address.
 Хоткей: ⌘L
 
-## Reload (Обновить)
+## Refresh (Обновить)
 
-<!-- id: key-browser-reload; covers: command:browser.reload -->
-Reloads the current page in the browser.
-Где: Browser → Reload (Обновить)
-1. In the Browser mode, press ⌘R to load the page again.
+<!-- id: key-global-refresh; covers: command:global.refresh -->
+Reconnects to the server and reloads what is on screen: the chat, the folder, the terminals or the browser page. The app does not restart.
+Где: View → Refresh (Обновить)
+1. Press ⌘R. In the Browser mode, the page loads again.
 Хоткей: ⌘R
 
 ## New tab (Новая вкладка)

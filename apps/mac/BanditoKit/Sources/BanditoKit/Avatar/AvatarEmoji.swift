@@ -1,0 +1,29 @@
+import Foundation
+
+/// The emoji an avatar can show in place of its face.
+public enum AvatarEmoji {
+    /// Forty-eight popular emoji, one character each, for the emoji grid.
+    public static let popular: [String] = [
+        "🦝", "🦊", "🐱", "🐶", "🦁", "🐼", "🐸", "🐵", "🦉", "🐧", "🦄", "🐙", "🐢", "🦋", "🐝", "🦈",
+        "🌟", "🔥", "💡", "⚡", "🎯", "🚀", "🛠️", "🔧", "📦", "📝", "📚", "🧠", "💻", "🔍", "🧪", "🎨",
+        "🎵", "🌈", "☕", "🍕", "🎲", "🏆", "💎", "🌍", "🛰️", "✨", "🧩", "🪄", "🌙", "🍀", "🎁", "❤️",
+    ]
+
+    /// Whether `character` is an emoji: an emoji-presentation character (🦝, ☕, 🚀), a ZWJ sequence or flag built from
+    /// them, or a character that asks for emoji presentation with VS16 (❤️, 🛠️). Plain letters, digits and the
+    /// symbols that are text by default (#, ©) are not.
+    public static func isEmoji(_ character: Character) -> Bool {
+        let scalars = Array(character.unicodeScalars)
+        guard let first = scalars.first else { return false }
+        if first.properties.isEmojiPresentation { return true }
+        // A text-default symbol is an emoji only with VS16; a digit with it is a keycap, which is not offered here.
+        let hasVS16 = scalars.contains { $0.value == 0xFE0F }
+        return hasVS16 && first.properties.isEmoji && !first.properties.isASCIIHexDigit
+    }
+
+    /// The newest emoji in `text`: the last character that is an emoji. Nil when there is none. Used when the owner
+    /// types or inserts an emoji; a letter or a digit typed after it does not replace it.
+    public static func last(of text: String) -> String? {
+        text.last(where: isEmoji).map(String.init)
+    }
+}

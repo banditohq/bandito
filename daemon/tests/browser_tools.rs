@@ -179,6 +179,9 @@ impl CrewBackend for BrowserMock {
     async fn screen(&self, _method: &str, _params: Value) -> anyhow::Result<Value> {
         anyhow::bail!("no screen in this test")
     }
+    async fn schedules(&self, _method: &str, _params: Value) -> anyhow::Result<Value> {
+        anyhow::bail!("no schedules in this test")
+    }
     async fn browser(&self, method: &str, params: Value) -> anyhow::Result<Value> {
         self.calls.lock().unwrap().push((method.to_string(), params));
         if let Some(e) = &self.fail {
@@ -230,6 +233,8 @@ async fn crew_lists_the_browser_tools_after_the_crew_tools() {
             "crew_send",
             "history_search",
             "history_day",
+            "ask_form",
+            "react",
             "screen_screenshot",
             "screen_click",
             "screen_move",
@@ -246,6 +251,10 @@ async fn crew_lists_the_browser_tools_after_the_crew_tools() {
             "browser_screenshot",
             "browser_tabs",
             "browser_switch",
+            "schedule_list",
+            "schedule_create",
+            "schedule_delete",
+            "schedule_pause",
         ]
     );
 }

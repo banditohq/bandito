@@ -3,14 +3,17 @@ import BanditoL10n
 import SwiftUI
 
 /// The main window: the sidebar (296 pt) on the left and the current mode on the right.
-/// Two-finger swipes go back and forward between modes when that gesture is on.
+/// Two-finger swipes go back and forward where that means something (see `SwipeRoute`) when that gesture is on.
 struct MainWindow: View {
     @Environment(AppModel.self) private var app
     @Environment(Router.self) private var router
     @Environment(GestureSettings.self) private var gestures
     @Environment(AccountHub.self) private var hub
     @Environment(OnboardingModel.self) private var onboarding
+    @Environment(Keymap.self) private var keymap
     @Environment(\.scenePhase) private var scenePhase
+    /// The swipe in progress, for the arrow at the edge of the main area.
+    @State private var swipeProgress: SwipeProgress?
 
     var body: some View {
         @Bindable var router = router
@@ -26,6 +29,7 @@ struct MainWindow: View {
                 PendingDevicesBanner()
                 ModeArea()
             }
+            .overlay { SwipeHint(progress: swipeProgress, symbol: swipeSymbol) }
         }
         .frame(minWidth: 900, minHeight: 600)
         .background(Color.Bandito.bg)
@@ -33,8 +37,11 @@ struct MainWindow: View {
         .onTwoFingerSwipe(
             isEnabled: gestures.isEnabled(.twoFingerSwipe),
             sensitivity: gestures.swipeSensitivity,
-            onBack: { router.back() },
-            onForward: { router.forward() })
+            canSwipe: { direction, overPage in canSwipe(direction, overBrowserPage: overPage) },
+            onProgress: { swipeProgress = $0 },
+            onCommit: { direction, overPage in perform(direction, overBrowserPage: overPage) })
+        // ⌘0 (the keymap's "team home") works from every mode; the menu in BanditoCommands does not list it.
+        .keymapShortcut("global.teamHome", keymap: keymap) { router.showTeamHome() }
         // Adding a server may be in the middle of an install: a stray click must not cancel it (Esc still closes).
         .banditoSheet(item: $router.sheet, dismissOnOutsideClick: router.sheet != .addServer) { sheet in
             sheetView(for: sheet)
@@ -76,6 +83,51 @@ struct MainWindow: View {
         }
     }
 
+    // MARK: swipes
+
+    private func swipeAction(_ direction: SwipeDirection, overBrowserPage: Bool) -> SwipeAction {
+        let hasAgent = app.currentServer.map { !$0.agents.isEmpty } ?? false
+        let context = SwipeContext(
+            overBrowserPage: overBrowserPage,
+            chatOpen: router.mode == .team && hasAgent && !router.showsTeamHome,
+            onTeamHome: router.mode == .team && router.showsTeamHome,
+            hasAgent: hasAgent)
+        return SwipeRoute.action(mode: router.mode, context: context, direction: direction)
+    }
+
+    private var browserModel: BrowserModel? {
+        app.currentServer.map { BrowserStore.shared.model(for: $0) }
+    }
+
+    /// Whether the swipe has anywhere to go: a page with no earlier page, or Files at its first folder, shows no arrow.
+    private func canSwipe(_ direction: SwipeDirection, overBrowserPage: Bool) -> Bool {
+        switch swipeAction(direction, overBrowserPage: overBrowserPage) {
+        case .none: false
+        case .browserBack: browserModel?.canGoBack ?? false
+        case .browserForward: browserModel?.canGoForward ?? false
+        case .filesBack: router.canGoBack
+        case .filesForward: router.canGoForward
+        case .closeChat, .reopenLastAgent: true
+        }
+    }
+
+    private func perform(_ direction: SwipeDirection, overBrowserPage: Bool) {
+        switch swipeAction(direction, overBrowserPage: overBrowserPage) {
+        case .none: break
+        case .browserBack: Task { await browserModel?.goBack() }
+        case .browserForward: Task { await browserModel?.goForward() }
+        case .filesBack: router.back()
+        case .filesForward: router.forward()
+        case .closeChat: router.showTeamHome()
+        case .reopenLastAgent: router.leaveTeamHome()
+        }
+    }
+
+    private var swipeSymbol: String? {
+        guard let progress = swipeProgress else { return nil }
+        return swipeAction(progress.direction, overBrowserPage: progress.overBrowserPage).symbol
+    }
+
     @ViewBuilder
     private func sheetView(for sheet: Sheet) -> some View {
         switch sheet {
@@ -110,6 +162,36 @@ private struct ModeArea: View {
         case .browser: BrowserMode()
         case .screen: ScreenMode()
         case .server: ServerMode()
+        }
+    }
+}
+
+/// The arrow at the edge of the main area while a swipe is under way: it grows and brightens as the swipe nears the
+/// distance that commits it, and says where the swipe goes (a page back, a folder back, the team home).
+private struct SwipeHint: View {
+    var progress: SwipeProgress?
+    var symbol: String?
+
+    var body: some View {
+        if let progress, let symbol {
+            let leading = progress.direction == .back
+            HStack {
+                if !leading { Spacer(minLength: 0) }
+                Image(systemName: symbol)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(progress.fraction >= 1 ? Color.Bandito.signal : Color.Bandito.text)
+                    .frame(width: 44, height: 44)
+                    .background(Color.Bandito.surface2, in: Circle())
+                    .overlay(Circle().stroke(Color.Bandito.text.opacity(0.12), lineWidth: 1))
+                    .shadow(color: Color.black.opacity(0.25), radius: 8, y: 2)
+                    .scaleEffect(0.6 + 0.4 * progress.fraction)
+                    .opacity(min(1, progress.fraction * 1.5))
+                    .padding(leading ? .leading : .trailing, 14)
+                if leading { Spacer(minLength: 0) }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
         }
     }
 }

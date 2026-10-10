@@ -1,0 +1,75 @@
+[
+  {
+    "id": "composio",
+    "name": "Composio",
+    "description_en": "Hundreds of apps through one MCP server. Replace the server id and user id in the URL with yours.",
+    "description_ru": "Сотни приложений через один MCP-сервер. В адресе замените идентификатор сервера и пользователя на свои.",
+    "kind": "http",
+    "url": null,
+    "url_hint": "https://backend.composio.dev/v3/mcp/<SERVER_ID>?user_id=<USER_ID>",
+    "headers_keys": [
+      { "key": "x-api-key", "label_en": "Composio API key", "label_ru": "Ключ API Composio", "secret": true, "value_template": "{secret}" }
+    ],
+    "docs_url": "https://docs.composio.dev/docs/mcp",
+    "icon": "composio"
+  },
+  {
+    "id": "github",
+    "name": "GitHub",
+    "description_en": "Repositories, issues and pull requests, through GitHub's own MCP server.",
+    "description_ru": "Репозитории, задачи и pull request через официальный MCP-сервер GitHub.",
+    "kind": "http",
+    "url": "https://api.githubcopilot.com/mcp/",
+    "headers_keys": [
+      { "key": "Authorization", "label_en": "Personal access token", "label_ru": "Персональный токен доступа", "secret": true, "value_template": "Bearer {secret}" }
+    ],
+    "docs_url": "https://github.com/github/github-mcp-server",
+    "icon": "github"
+  },
+  {
+    "id": "linear",
+    "name": "Linear",
+    "description_en": "Issues, projects and cycles in Linear, through Linear's MCP server.",
+    "description_ru": "Задачи, проекты и циклы в Linear через MCP-сервер Linear.",
+    "kind": "http",
+    "url": "https://mcp.linear.app/mcp",
+    "headers_keys": [
+      { "key": "Authorization", "label_en": "Linear API key", "label_ru": "Ключ API Linear", "secret": true, "value_template": "Bearer {secret}" }
+    ],
+    "docs_url": "https://linear.app/docs/mcp",
+    "icon": "linear"
+  },
+  {
+    "id": "playwright",
+    "name": "Playwright",
+    "description_en": "Drives a browser: open pages, click, type, take screenshots.",
+    "description_ru": "Управление браузером: открыть страницу, нажать, ввести текст, сделать снимок.",
+    "kind": "stdio",
+    "command": "npx",
+    "args": ["-y", "@playwright/mcp@latest"],
+    "docs_url": "https://github.com/microsoft/playwright-mcp",
+    "icon": "playwright"
+  },
+  {
+    "id": "filesystem",
+    "name": "Filesystem",
+    "description_en": "Reads and writes files in the folders you allow. Replace the last argument with the folder.",
+    "description_ru": "Чтение и запись файлов в разрешённых папках. Последний аргумент замените на свою папку.",
+    "kind": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/allowed/folder"],
+    "docs_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem",
+    "icon": "folder"
+  },
+  {
+    "id": "fetch",
+    "name": "Fetch",
+    "description_en": "Fetches web pages and turns them into text for the model.",
+    "description_ru": "Загружает веб-страницы и переводит их в текст для модели.",
+    "kind": "stdio",
+    "command": "uvx",
+    "args": ["mcp-server-fetch"],
+    "docs_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/fetch",
+    "icon": "globe"
+  }
+]

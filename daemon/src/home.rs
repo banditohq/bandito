@@ -44,11 +44,30 @@ pub fn set_data_home(home: &Path) {
 
 /// Bandito's data folder: the one `main` set, else `$BANDITO_HOME`, else `~/.bandito`.
 pub fn data_home() -> PathBuf {
-    data_home_from(
-        DATA_HOME.get().map(PathBuf::as_path),
-        std::env::var_os("BANDITO_HOME"),
-        dirs::home_dir(),
-    )
+    data_home_from(DATA_HOME.get().map(PathBuf::as_path), env_home(), user_home())
+}
+
+#[cfg(not(test))]
+fn env_home() -> Option<OsString> {
+    std::env::var_os("BANDITO_HOME")
+}
+
+#[cfg(not(test))]
+fn user_home() -> Option<PathBuf> {
+    dirs::home_dir()
+}
+
+// Unit tests never resolve to the person's data folder: a test that cleans up after itself would delete the
+// daemon's database. Each test process gets a folder of its own under `target/` instead (not under the temp
+// directory: tests use that as a project folder, and a project must not contain Bandito's data).
+#[cfg(test)]
+fn env_home() -> Option<OsString> {
+    None
+}
+
+#[cfg(test)]
+fn user_home() -> Option<PathBuf> {
+    Some(Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("target/unit-home-{}", std::process::id())))
 }
 
 /// The rule behind [`data_home`]: `configured` first, then `BANDITO_HOME`, then `<user home>/.bandito`.
@@ -404,6 +423,7 @@ mod tests {
                 use_personal_settings: false,
                 avatar: None,
                 capabilities: None,
+                integrations: None,
                 name: name.into(),
                 role: String::new(),
                 runtime: RuntimeKind::Claude,

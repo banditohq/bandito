@@ -193,11 +193,12 @@ struct UnreadableStore: SecretStore {
 
     @Test func publishingRetriesAfterAConflict() async throws {
         var writes = 0
-        try await ServerPublishing.publish(
+        _ = try await ServerPublishing.publish(
             local: SyncPayload(), fetch: { nil },
-            write: { _ in
+            write: { payload in
                 writes += 1
                 if writes < 3 { throw AccountError.conflict(current: writes) }
+                return payload
             })
         #expect(writes == 3)
     }
@@ -205,7 +206,7 @@ struct UnreadableStore: SecretStore {
     @Test func publishingGivesUpAfterThreeConflicts() async throws {
         var writes = 0
         await #expect(throws: AccountError.conflict(current: 9)) {
-            try await ServerPublishing.publish(
+            _ = try await ServerPublishing.publish(
                 local: SyncPayload(), fetch: { nil },
                 write: { _ in
                     writes += 1

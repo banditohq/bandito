@@ -22,9 +22,12 @@ struct TeamSidebar: View {
     @ViewBuilder
     private func content(_ server: ServerModel) -> some View {
         // The main agent goes first in the whole list, before the list is split into its groups.
-        let lead = LeadAgentStore.shared.id(server: server.id.uuidString)
+        let lead = server.leadAgentID
         let agents = LeadAgent.leadFirst(server.sortedAgents, id: \.id, lead: lead)
-        let shown = TeamSelection.shownAgentID(server: server, selected: router.selectedAgentID, pinned: Set(pins.ids))
+        // On the team home no chat is on screen, so no row is marked.
+        let shown = router.showsTeamHome
+            ? nil
+            : TeamSelection.shownAgentID(server: server, selected: router.selectedAgentID, pinned: Set(pins.ids))
         let waiting = agents.filter { server.needsPerson($0.id) }
         let waitingIDs = Set(waiting.map(\.id))
         let others = agents.filter { !waitingIDs.contains($0.id) }
@@ -55,10 +58,22 @@ struct TeamSidebar: View {
                         }
                         .padding(.horizontal, 8)
                     }
-                    SectionLabel(L10n.Sidebar.agents)
-                        .padding(.horizontal, 18)
-                        .padding(.top, 16)
-                        .padding(.bottom, 6)
+                    // The label opens the team home (also ⌘0).
+                    Button {
+                        router.showTeamHome()
+                    } label: {
+                        SectionLabel(L10n.Sidebar.agents)
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .contentShape(Rectangle())
+                    }
+                    .banditoButton(.row(cornerRadius: 8))
+                    .help(L10n.Team.Home.open)
+                    .padding(.horizontal, 8)
+                    .padding(.top, 12)
+                    .padding(.bottom, 2)
                     VStack(spacing: 2) {
                         ForEach(Array(others.enumerated()), id: \.element.id) { index, agent in
                             teamRow(
@@ -106,8 +121,8 @@ struct TeamSidebar: View {
                     } label: {
                         VStack(spacing: 4) {
                             ZStack(alignment: .bottomTrailing) {
-                                AgentAvatar(
-                                    name: agent.name, size: 36,
+                                AgentAvatarView(
+                                    agent: agent, server: server, size: 36,
                                     mood: AvatarMood.make(status: status, turnRunning: thread.turnRunning, paused: agent.paused))
                                 StatusDot(status: status, size: 10, ringColor: Color.Bandito.surface1)
                             }
@@ -138,7 +153,7 @@ struct TeamSidebar: View {
             router.selectAgent(agent.id, on: server)
         } label: {
             HStack(spacing: 11) {
-                AgentAvatar(name: agent.name, size: 40, mood: .needsYou)
+                AgentAvatarView(agent: agent, server: server, size: 40, mood: .needsYou)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Text(agent.name)
@@ -180,7 +195,7 @@ struct TeamSidebar: View {
             router.selectAgent(agent.id, on: server)
         } label: {
             AgentRow(
-                agent: agent, thread: thread, status: server.status(of: agent.id), isSelected: selected,
+                agent: agent, server: server, thread: thread, status: server.status(of: agent.id), isSelected: selected,
                 lastActivity: lastActivityLabel(agent, thread: thread), isLead: isLead)
                 .contentShape(Rectangle())
         }
@@ -204,11 +219,25 @@ struct TeamSidebar: View {
         }
         .disabled(!PauseActions.available(on: server))
         .help(PauseActions.available(on: server) ? "" : L10n.Team.pauseUnavailable)
-        let serverKey = server.id.uuidString
-        let isLead = LeadAgentStore.shared.id(server: serverKey) == agent.id
-        Button(isLead ? L10n.Agent.Menu.removeLead : L10n.Agent.Menu.makeLead) {
-            // One main agent per server: making another one main replaces the old choice.
-            LeadAgentStore.shared.set(isLead ? nil : agent.id, server: serverKey)
+        // The main agent lives on the server. A daemon without the feature has no such thing: no item.
+        if server.supports("lead") {
+            let isLead = server.leadAgentID == agent.id
+            Button(isLead ? L10n.Agent.Menu.removeLead : L10n.Agent.Menu.makeLead) {
+                // One main agent per server: the daemon takes the role from the old one.
+                Task {
+                    do {
+                        try await server.setLead(agentID: agent.id, !isLead)
+                    } catch {
+                        actionError = UserFacingError.message(for: error)
+                    }
+                }
+            }
+        }
+        Button(L10n.Agent.Menu.schedules) {
+            // The schedules are a section of the details tab: the agent is chosen and its details are shown.
+            router.selectAgent(agent.id, on: server)
+            router.inspectorTab = .details
+            router.showInWorkbench(.details, agentID: agent.id)
         }
         Divider()
         Button(L10n.Agent.Menu.delete, role: .destructive) {
@@ -221,7 +250,6 @@ struct TeamSidebar: View {
         Task {
             do {
                 try await server.deleteAgent(agent.id)
-                LeadAgentStore.shared.forget(agentID: agent.id, server: server.id.uuidString)
                 router.drafts[agent.id] = nil
                 router.forgetWorkbench(agentID: agent.id)
                 if router.selectedAgentID == agent.id { router.selectedAgentID = nil }
@@ -245,6 +273,8 @@ struct TeamSidebar: View {
 /// One agent in the team list: avatar with its status dot, name, role, the time of the last event and a preview.
 struct AgentRow: View {
     var agent: Agent
+    /// The server the agent lives on, for its picture.
+    var server: ServerModel?
     var thread: AgentThread
     /// The status the team shows (see `ServerModel.status(of:)`); the thread may not be loaded.
     var status: AgentStatus
@@ -256,8 +286,8 @@ struct AgentRow: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 11) {
-            AgentAvatar(
-                name: agent.name, size: 40,
+            AgentAvatarView(
+                agent: agent, server: server, size: 40,
                 mood: AvatarMood.make(status: status, turnRunning: thread.turnRunning, paused: agent.paused))
                 .overlay(alignment: .bottomTrailing) {
                     StatusDot(status: status, size: 11, ringColor: Color.Bandito.surface1)

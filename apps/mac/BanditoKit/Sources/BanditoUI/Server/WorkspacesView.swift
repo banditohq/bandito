@@ -208,7 +208,7 @@ private struct RealWorkspaceCard: View {
                     HStack(spacing: 8) {
                         ForEach(agents) { agent in
                             VStack(spacing: 3) {
-                                AgentAvatar(name: agent.name, size: 30)
+                                AgentAvatarView(agent: agent, server: model.server, size: 30)
                                 Text(agent.name)
                                     .font(.system(size: 10.5))
                                     .foregroundStyle(Color.Bandito.text2)

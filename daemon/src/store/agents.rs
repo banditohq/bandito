@@ -22,11 +22,38 @@ pub struct LastMessage {
     pub ts: i64,
 }
 
-/// The agent's avatar: the tile color and the face on it, named as the app names them.
+/// The agent's avatar: the tile color and the face on it, named as the app names them (a `#RRGGBB` color is
+/// taken as is). `emoji` is one grapheme; `image` says a picture is set (served by `agents.avatar_image_get`).
+/// See docs/ARCHITECTURE.md#capabilities.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Avatar {
     pub color: String,
     pub face: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub emoji: Option<String>,
+    /// Set and cleared only by the picture methods; an `agents.update` keeps it. Left out of the wire when false.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub image: bool,
+    /// Changes with every new picture, so a client can drop its cache. Only set while `image` is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image_rev: Option<i64>,
+}
+
+fn is_false(b: &bool) -> bool {
+    !*b
+}
+
+impl Avatar {
+    /// A name-and-face avatar with no emoji and no picture.
+    pub fn new(color: impl Into<String>, face: impl Into<String>) -> Self {
+        Self {
+            color: color.into(),
+            face: face.into(),
+            emoji: None,
+            image: false,
+            image_rev: None,
+        }
+    }
 }
 
 /// What an agent may use. A session gets the tools of its capabilities only (see docs/ARCHITECTURE.md#capabilities).
@@ -118,6 +145,13 @@ pub struct Agent {
     pub avatar: Option<Avatar>,
     /// What the agent may use; `null` = all of it. Read when a session starts (see docs/ARCHITECTURE.md#capabilities).
     pub capabilities: Option<Vec<Capability>>,
+    /// The integrations the agent may use, by id; `null` = every enabled one. Read when a session starts
+    /// (see docs/ARCHITECTURE.md#integrations).
+    pub integrations: Option<Vec<String>>,
+    /// The main agent of the crew; at most one agent has it (see docs/ARCHITECTURE.md#lead-agent). Set only by
+    /// `Store::agent_set_lead`, never by a patch.
+    #[serde(default)]
+    pub lead: bool,
     /// The newest user or assistant message; `null` when there is none. Only set by `agent_view` and
     /// `agent_list_view`, the reads the wire uses (see docs/ARCHITECTURE.md#team-preview).
     #[serde(default)]
@@ -168,6 +202,9 @@ pub struct NewAgent {
     /// What the agent may use; `null` or missing = all of it.
     #[serde(default)]
     pub capabilities: Option<Vec<Capability>>,
+    /// The integrations it may use; `null` or missing = every enabled one.
+    #[serde(default)]
+    pub integrations: Option<Vec<String>>,
 }
 
 fn default_memory() -> MemoryMode {
@@ -199,9 +236,12 @@ pub struct AgentPatch {
     pub use_personal_settings: Option<bool>,
     pub avatar: Option<Option<Avatar>>,
     pub capabilities: Option<Option<Vec<Capability>>>,
+    pub integrations: Option<Option<Vec<String>>>,
+    /// Makes the agent the main one (`true`: the old one loses it in the same transaction) or takes the role away.
+    pub lead: Option<bool>,
 }
 
-const COLS: &str = "id, name, role, runtime, model, cwd, approval_mode, system_prompt, runtime_session_id, created_at, updated_at, effort, memory_mode, context_budget, home_dir, context_tokens, chapter, last_turn_at, fallback_runtime, fallback_model, active_runtime, workspace_id, paused, use_personal_settings, avatar_color, avatar_face, capabilities";
+const COLS: &str = "id, name, role, runtime, model, cwd, approval_mode, system_prompt, runtime_session_id, created_at, updated_at, effort, memory_mode, context_budget, home_dir, context_tokens, chapter, last_turn_at, fallback_runtime, fallback_model, active_runtime, workspace_id, paused, use_personal_settings, avatar_color, avatar_face, capabilities, avatar_emoji, avatar_image, avatar_image_rev, integrations, lead";
 
 /// The newest message of the agent in `agents.id`, as one JSON array `[kind, ts, text]` (text cut to
 /// `LAST_MESSAGE_CHARS` in SQL too, so a long message is not read in full). One correlated subquery per agent, served by
@@ -251,8 +291,10 @@ fn from_row(r: &Row) -> rusqlite::Result<Agent> {
         workspace_id: r.get(21)?,
         paused: r.get(22)?,
         use_personal_settings: r.get(23)?,
-        avatar: avatar_column(r, 24, 25)?,
+        avatar: avatar_column(r)?,
         capabilities: capabilities_column(r, 26)?,
+        integrations: integrations_column(r, 30)?,
+        lead: r.get::<_, i64>(31)? != 0,
         last_message: None,
         status: None,
         pending_approval_ids: Vec::new(),
@@ -263,18 +305,25 @@ fn from_row(r: &Row) -> rusqlite::Result<Agent> {
 /// `from_row` for `view_sql()`: the agent columns, then the message, the status and the pending count.
 fn from_row_view(r: &Row) -> rusqlite::Result<Agent> {
     let mut agent = from_row(r)?;
-    agent.last_message = last_message_column(r, 27)?;
-    agent.status = status_column(r, 28)?;
-    agent.pending_approval_ids = pending_ids_column(r, 29)?;
+    agent.last_message = last_message_column(r, 32)?;
+    agent.status = status_column(r, 33)?;
+    agent.pending_approval_ids = pending_ids_column(r, 34)?;
     agent.pending_approvals = agent.pending_approval_ids.len() as u32;
     Ok(agent)
 }
 
-/// The avatar from its two columns: both set, or none (the app derives it from the name).
-fn avatar_column(r: &Row, color: usize, face: usize) -> rusqlite::Result<Option<Avatar>> {
+/// The avatar from its columns: color and face both set, or none (the app derives it from the name).
+/// The emoji and the picture columns belong to it and are read only with it.
+fn avatar_column(r: &Row) -> rusqlite::Result<Option<Avatar>> {
     Ok(
-        match (r.get::<_, Option<String>>(color)?, r.get::<_, Option<String>>(face)?) {
-            (Some(color), Some(face)) => Some(Avatar { color, face }),
+        match (r.get::<_, Option<String>>(24)?, r.get::<_, Option<String>>(25)?) {
+            (Some(color), Some(face)) => Some(Avatar {
+                color,
+                face,
+                emoji: r.get(27)?,
+                image: r.get::<_, i64>(28)? != 0,
+                image_rev: r.get(29)?,
+            }),
             _ => None,
         },
     )
@@ -290,6 +339,21 @@ fn capabilities_column(r: &Row, i: usize) -> rusqlite::Result<Option<Vec<Capabil
 }
 
 /// The stored form of a capability list: a JSON array, or NULL for all of them.
+/// The integration ids from their column: a JSON array, or NULL (every enabled one).
+fn integrations_column(r: &Row, i: usize) -> rusqlite::Result<Option<Vec<String>>> {
+    let Some(json) = r.get::<_, Option<String>>(i)? else {
+        return Ok(None);
+    };
+    Ok(Some(serde_json::from_str(&json).unwrap_or_default()))
+}
+
+fn integrations_json(list: Option<&[String]>) -> Result<Option<String>> {
+    Ok(match list {
+        Some(ids) => Some(serde_json::to_string(ids)?),
+        None => None,
+    })
+}
+
 fn capabilities_json(list: Option<&[Capability]>) -> Result<Option<String>> {
     Ok(match list {
         Some(list) => Some(serde_json::to_string(list)?),
@@ -384,15 +448,18 @@ impl Store {
             use_personal_settings: a.use_personal_settings,
             avatar: a.avatar,
             capabilities: a.capabilities,
+            integrations: a.integrations,
+            lead: false,
             last_message: None,
             status: None,
             pending_approval_ids: Vec::new(),
             pending_approvals: 0,
         };
         let capabilities = capabilities_json(agent.capabilities.as_deref())?;
+        let integrations = integrations_json(agent.integrations.as_deref())?;
         let res = self.conn().execute(
             &format!(
-                "INSERT INTO agents ({COLS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27)"
+                "INSERT INTO agents ({COLS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32)"
             ),
             params![
                 agent.id,
@@ -421,7 +488,12 @@ impl Store {
                 agent.use_personal_settings,
                 agent.avatar.as_ref().map(|v| v.color.as_str()),
                 agent.avatar.as_ref().map(|v| v.face.as_str()),
-                capabilities
+                capabilities,
+                agent.avatar.as_ref().and_then(|v| v.emoji.as_deref()),
+                agent.avatar.as_ref().is_some_and(|v| v.image),
+                agent.avatar.as_ref().and_then(|v| v.image_rev),
+                integrations,
+                agent.lead,
             ],
         );
         match res {
@@ -531,18 +603,38 @@ impl Store {
             a.use_personal_settings = v;
         }
         if let Some(v) = p.avatar {
-            a.avatar = v;
+            // A new name-and-face keeps the picture; `null` (derived again) drops it.
+            a.avatar = v.map(|mut new| {
+                let old = a.avatar.as_ref();
+                new.image = old.is_some_and(|o| o.image);
+                new.image_rev = old.and_then(|o| o.image_rev);
+                new
+            });
         }
         if let Some(v) = p.capabilities {
             a.capabilities = v;
         }
+        if let Some(v) = p.integrations {
+            a.integrations = v;
+        }
         a.updated_at = now_ms();
         let capabilities = capabilities_json(a.capabilities.as_deref())?;
-        let res = self.conn().execute(
+        let integrations = integrations_json(a.integrations.as_deref())?;
+        // The role and the other fields are written together: a refused name leaves the main agent as it was.
+        let conn = self.conn();
+        let tx = conn.unchecked_transaction()?;
+        if let Some(lead) = p.lead {
+            if lead {
+                tx.execute("UPDATE agents SET lead = 0 WHERE lead = 1 AND id <> ?1", [id])?;
+            }
+            a.lead = lead;
+        }
+        let res = tx.execute(
             "UPDATE agents SET name=?2, role=?3, model=?4, cwd=?5, approval_mode=?6, system_prompt=?7, updated_at=?8,
              effort=?9, memory_mode=?10, context_budget=?11, runtime=?12, fallback_runtime=?13, fallback_model=?14,
              active_runtime=?15, workspace_id=?16, use_personal_settings=?17,
-             avatar_color=?18, avatar_face=?19, capabilities=?20 WHERE id=?1",
+             avatar_color=?18, avatar_face=?19, capabilities=?20, avatar_emoji=?21, avatar_image=?22,
+             avatar_image_rev=?23, integrations=?24, lead=?25 WHERE id=?1",
             params![
                 a.id,
                 a.name,
@@ -563,16 +655,73 @@ impl Store {
                 a.use_personal_settings,
                 a.avatar.as_ref().map(|v| v.color.as_str()),
                 a.avatar.as_ref().map(|v| v.face.as_str()),
-                capabilities
+                capabilities,
+                a.avatar.as_ref().and_then(|v| v.emoji.as_deref()),
+                a.avatar.as_ref().is_some_and(|v| v.image),
+                a.avatar.as_ref().and_then(|v| v.image_rev),
+                integrations,
+                i64::from(a.lead),
             ],
         );
         match res {
-            Ok(_) => Ok(a),
+            Ok(_) => {
+                tx.commit()?;
+                Ok(a)
+            }
             Err(rusqlite::Error::SqliteFailure(e, _)) if e.code == rusqlite::ErrorCode::ConstraintViolation => {
                 Err(anyhow!("an agent named '{}' already exists", a.name))
             }
             Err(e) => Err(e.into()),
         }
+    }
+
+    /// Makes the agent the main one, or takes the role away. Making one main takes it from the old one in the same
+    /// transaction, so the crew never has two. Returns the ids whose flag changed (the new main agent last), and
+    /// none when nothing changed or the agent does not exist.
+    pub fn agent_set_lead(&self, id: &str, lead: bool) -> Result<Vec<String>> {
+        let conn = self.conn();
+        let tx = conn.unchecked_transaction()?;
+        let exists: bool = tx.query_row("SELECT EXISTS(SELECT 1 FROM agents WHERE id = ?1)", [id], |r| r.get(0))?;
+        if !exists {
+            return Ok(Vec::new());
+        }
+        let mut changed: Vec<String> = Vec::new();
+        if lead {
+            let mut stmt = tx.prepare("SELECT id FROM agents WHERE lead = 1 AND id <> ?1")?;
+            changed = stmt.query_map([id], |r| r.get(0))?.collect::<rusqlite::Result<_>>()?;
+            drop(stmt);
+            tx.execute("UPDATE agents SET lead = 0 WHERE lead = 1 AND id <> ?1", [id])?;
+        }
+        let own = tx.execute(
+            "UPDATE agents SET lead = ?2 WHERE id = ?1 AND lead <> ?2",
+            params![id, i64::from(lead)],
+        )?;
+        if own > 0 {
+            changed.push(id.to_string());
+        }
+        tx.commit()?;
+        Ok(changed)
+    }
+
+    /// The newest thing the agent said, in full: when, and the text. For the main agent's status read.
+    pub fn last_assistant_message(&self, id: &str) -> Result<Option<(i64, String)>> {
+        Ok(self
+            .conn()
+            .query_row(
+                "SELECT ts, json_extract(payload, '$.text') FROM events
+                 WHERE agent_id = ?1 AND kind = 'message.assistant' ORDER BY seq DESC LIMIT 1",
+                [id],
+                |r| Ok((r.get(0)?, r.get::<_, Option<String>>(1)?.unwrap_or_default())),
+            )
+            .optional()?)
+    }
+
+    /// The main agent of the crew, if there is one.
+    pub fn agent_lead(&self) -> Result<Option<Agent>> {
+        Ok(self
+            .conn()
+            .query_row(&format!("SELECT {COLS} FROM agents WHERE lead = 1"), [], from_row)
+            .optional()?)
     }
 
     /// Sets the pause flag. Returns `false` when the agent is missing or already has that value.
@@ -631,6 +780,17 @@ impl Store {
 
     /// Deletes the agent with its approvals, rules, schedules and checkpoints. Events stay
     /// (history), keyed by the old id.
+    /// Set or clear the avatar's picture flag and revision (`None` clears both). The avatar must be set:
+    /// the picture belongs to it. `false` if the agent is missing or has no avatar.
+    pub fn agent_set_avatar_image(&self, id: &str, rev: Option<i64>) -> Result<bool> {
+        let n = self.conn().execute(
+            "UPDATE agents SET avatar_image = ?2, avatar_image_rev = ?3
+             WHERE id = ?1 AND avatar_color IS NOT NULL AND avatar_face IS NOT NULL",
+            params![id, i64::from(rev.is_some()), rev],
+        )?;
+        Ok(n == 1)
+    }
+
     pub fn agent_delete(&self, id: &str) -> Result<bool> {
         let conn = self.conn();
         let tx = conn.unchecked_transaction()?;
@@ -639,6 +799,8 @@ impl Store {
         tx.execute("DELETE FROM rules WHERE agent_id=?1", [id])?;
         tx.execute("DELETE FROM schedules WHERE agent_id=?1", [id])?;
         tx.execute("DELETE FROM checkpoints WHERE agent_id=?1", [id])?;
+        tx.execute("DELETE FROM forms WHERE agent_id=?1", [id])?;
+        tx.execute("DELETE FROM reactions WHERE agent_id=?1", [id])?;
         tx.commit()?;
         Ok(n > 0)
     }
@@ -665,6 +827,7 @@ mod tests {
             use_personal_settings: false,
             avatar: None,
             capabilities: None,
+            integrations: None,
         }
     }
 
@@ -675,10 +838,7 @@ mod tests {
         assert_eq!((a.avatar.clone(), a.capabilities.clone()), (None, None));
 
         let mut with = new("Scout");
-        with.avatar = Some(Avatar {
-            color: "sky".into(),
-            face: "dots".into(),
-        });
+        with.avatar = Some(Avatar::new("sky", "dots"));
         with.capabilities = Some(vec![Capability::Team, Capability::Browser]);
         let scout = s.agent_create(with).unwrap();
         let stored = s.agent_get(&scout.id).unwrap().unwrap();
@@ -869,6 +1029,8 @@ mod tests {
             source,
             from_agent: None,
             command: None,
+            reply_to: None,
+            attachments: Vec::new(),
         };
         s.append_event(&a.id, user("hi", Source::User)).unwrap();
         let reply = s
@@ -1019,5 +1181,89 @@ mod tests {
             (plain.status, plain.pending_approvals, plain.last_message.is_none()),
             (None, 0, true)
         );
+    }
+
+    #[test]
+    fn one_agent_is_main_and_the_change_comes_in_one_step() {
+        let store = Store::open_in_memory().unwrap();
+        let a = store.agent_create(new("Forge")).unwrap();
+        let b = store.agent_create(new("Scout")).unwrap();
+        assert!(!a.lead && !b.lead);
+        assert!(store.agent_lead().unwrap().is_none());
+
+        assert_eq!(store.agent_set_lead(&a.id, true).unwrap(), vec![a.id.clone()]);
+        assert_eq!(store.agent_lead().unwrap().unwrap().id, a.id);
+        // Setting it again changes nothing.
+        assert!(store.agent_set_lead(&a.id, true).unwrap().is_empty());
+
+        // Another one takes over: the old one is first in the list of changes, the new one last.
+        assert_eq!(
+            store.agent_set_lead(&b.id, true).unwrap(),
+            vec![a.id.clone(), b.id.clone()]
+        );
+        let leads: Vec<String> = store
+            .agent_list()
+            .unwrap()
+            .into_iter()
+            .filter(|x| x.lead)
+            .map(|x| x.id)
+            .collect();
+        assert_eq!(leads, vec![b.id.clone()]);
+        // The wire reads carry the flag.
+        assert!(store.agent_view(&b.id).unwrap().unwrap().lead);
+        assert!(
+            !store
+                .agent_list_view()
+                .unwrap()
+                .iter()
+                .find(|x| x.id == a.id)
+                .unwrap()
+                .lead
+        );
+
+        // Taking it away from one that is not main changes nothing; from the main one, it does.
+        assert!(store.agent_set_lead(&a.id, false).unwrap().is_empty());
+        assert_eq!(store.agent_set_lead(&b.id, false).unwrap(), vec![b.id.clone()]);
+        assert!(store.agent_lead().unwrap().is_none());
+        // A missing agent changes nothing, and does not take the role from the main one.
+        store.agent_set_lead(&a.id, true).unwrap();
+        assert!(store.agent_set_lead("nobody", true).unwrap().is_empty());
+        assert_eq!(store.agent_lead().unwrap().unwrap().id, a.id);
+    }
+
+    #[test]
+    fn the_database_refuses_a_second_main_agent_and_an_update_keeps_the_role() {
+        let store = Store::open_in_memory().unwrap();
+        let a = store.agent_create(new("Forge")).unwrap();
+        let b = store.agent_create(new("Scout")).unwrap();
+        store.agent_set_lead(&a.id, true).unwrap();
+        // The unique index is the last line of defence, below the transaction.
+        let err = store
+            .conn()
+            .execute("UPDATE agents SET lead = 1 WHERE id = ?1", [&b.id]);
+        assert!(err.is_err());
+        // An ordinary update does not touch the flag; deleting the main agent leaves none.
+        let patch = AgentPatch {
+            role: Some("boss".into()),
+            ..Default::default()
+        };
+        assert!(store.agent_update(&a.id, patch).unwrap().lead);
+        assert!(store.agent_get(&a.id).unwrap().unwrap().lead);
+        store.agent_delete(&a.id).unwrap();
+        assert!(store.agent_lead().unwrap().is_none());
+    }
+
+    #[test]
+    fn last_assistant_message_is_the_newest_in_full() {
+        let store = Store::open_in_memory().unwrap();
+        let a = store.agent_create(new("Forge")).unwrap();
+        assert_eq!(store.last_assistant_message(&a.id).unwrap(), None);
+        let long = "y".repeat(500);
+        for text in ["first".to_string(), long.clone()] {
+            store
+                .append_event(&a.id, crate::event::EventBody::MessageAssistant { text })
+                .unwrap();
+        }
+        assert_eq!(store.last_assistant_message(&a.id).unwrap().unwrap().1, long);
     }
 }

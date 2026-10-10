@@ -202,6 +202,26 @@
 			<string>работает %1$lld дня</string>
 		</dict>
 	</dict>
+	<key>integrations.status.connected</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%1$lld инструмента</string>
+			<key>many</key>
+			<string>%1$lld инструментов</string>
+			<key>one</key>
+			<string>%1$lld инструмент</string>
+			<key>other</key>
+			<string>%1$lld инструмента</string>
+		</dict>
+	</dict>
 	<key>memory.filesMeta</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
@@ -322,6 +342,26 @@
 			<string>≈ %1$lld минуты</string>
 		</dict>
 	</dict>
+	<key>schedule.step.hours</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%1$lld часа</string>
+			<key>many</key>
+			<string>%1$lld часов</string>
+			<key>one</key>
+			<string>%1$lld час</string>
+			<key>other</key>
+			<string>%1$lld часа</string>
+		</dict>
+	</dict>
 	<key>server.cores</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
@@ -340,6 +380,46 @@
 			<string>%1$lld ядро</string>
 			<key>other</key>
 			<string>%1$lld ядра</string>
+		</dict>
+	</dict>
+	<key>server.detail.processCount</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%1$lld процесса</string>
+			<key>many</key>
+			<string>%1$lld процессов</string>
+			<key>one</key>
+			<string>%1$lld процесс</string>
+			<key>other</key>
+			<string>%1$lld процесса</string>
+		</dict>
+	</dict>
+	<key>setup.showFullLog</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>Показать весь журнал (%1$lld строки)</string>
+			<key>many</key>
+			<string>Показать весь журнал (%1$lld строк)</string>
+			<key>one</key>
+			<string>Показать весь журнал (%1$lld строка)</string>
+			<key>other</key>
+			<string>Показать весь журнал (%1$lld строк)</string>
 		</dict>
 	</dict>
 	<key>terminals.dock.lines</key>

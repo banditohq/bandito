@@ -35,7 +35,7 @@ struct FileBrowser: View {
     }
 
     private var panelShown: Bool {
-        panelDocked ? previewVisible : detailsOverlay
+        FileBrowserLayout.panelShown(docked: panelDocked, previewVisible: previewVisible, overlayOpen: detailsOverlay)
     }
 
     private var selectedEntry: FsEntry? {
@@ -70,7 +70,17 @@ struct FileBrowser: View {
                     onTerminal: openTerminalHere,
                     onCreate: { nameSheet = $0 },
                     onToggleDetails: togglePanel)
+                // Over the list (narrow window), the panel lies under the toolbar: the toolbar's toggle stays in reach.
                 content
+                    .overlay(alignment: .trailing) {
+                        if !panelDocked && detailsOverlay {
+                            detailsPanel
+                                .frame(width: 320)
+                                .background(Color.Bandito.bg)
+                                .shadow(color: .black.opacity(0.35), radius: 18, x: -6)
+                                .transition(.move(edge: .trailing).combined(with: .opacity))
+                        }
+                    }
                 if let job = model.upload {
                     UploadStrip(job: job, folder: current)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -86,15 +96,6 @@ struct FileBrowser: View {
             if panelDocked && panelShown {
                 detailsPanel
                     .frame(width: 320)
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
-            }
-        }
-        .overlay(alignment: .trailing) {
-            if !panelDocked && detailsOverlay {
-                detailsPanel
-                    .frame(width: 320)
-                    .background(Color.Bandito.bg)
-                    .shadow(color: .black.opacity(0.35), radius: 18, x: -6)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
@@ -130,6 +131,7 @@ struct FileBrowser: View {
             router.files.open(entry, server: server)
         }
         .onChange(of: model.showHidden) { Task { await model.reload(server: server) } }
+        .onChange(of: router.refreshRequests) { Task { await model.reload(server: server) } }
         .onDrop(of: [.fileURL], isTargeted: $dropTargeted) { providers in
             let folder = current
             Task {
@@ -186,7 +188,8 @@ struct FileBrowser: View {
         FilePreviewPanel(
             entry: selectedEntry, server: server, onOpen: open, onDownload: download,
             showsTerminal: server.supports("terminals"),
-            onTerminal: { openTerminal(in: $0.path) }, onAgent: { createAgent(in: $0.path) })
+            onTerminal: { openTerminal(in: $0.path) }, onAgent: { createAgent(in: $0.path) },
+            onClose: closePanel)
     }
 
     // MARK: Content
@@ -396,6 +399,14 @@ struct FileBrowser: View {
         }
     }
 
+    /// The panel's own close button: hides it in the mode on screen.
+    private func closePanel() {
+        let next = FileBrowserLayout.closed(
+            docked: panelDocked, previewVisible: previewVisible, overlayOpen: detailsOverlay)
+        previewVisible = next.previewVisible
+        detailsOverlay = next.overlayOpen
+    }
+
     private func toggleFavorite(_ path: String, isFavorite: Bool) {
         if isFavorite {
             router.files.favorites.remove(path, serverID: server.id, home: model.home)
@@ -493,7 +504,7 @@ struct FilesToolbar: View {
     let current: String
     let canGoBack: Bool
     let canGoForward: Bool
-    /// The server has terminals. Without them the terminal button is not shown at all.
+    /// The server has terminals. Without them the terminal item is not in the «…» menu at all.
     let showsTerminal: Bool
     let detailsShown: Bool
     let onBack: () -> Void
@@ -511,9 +522,8 @@ struct FilesToolbar: View {
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
-            layout(terminal: .words, create: .words, search: .field)
-            layout(terminal: .icon, create: .icon, search: .field)
-            layout(terminal: .icon, create: .icon, search: .loupe)
+            layout(search: .field)
+            layout(search: .loupe)
         }
         .padding(.horizontal, 14)
         .frame(height: 52)
@@ -523,12 +533,10 @@ struct FilesToolbar: View {
         }
     }
 
-    enum TerminalStyle { case words, icon }
-    enum CreateStyle { case words, icon }
     enum SearchStyle { case field, loupe }
 
     @ViewBuilder
-    func layout(terminal: TerminalStyle, create: CreateStyle, search: SearchStyle) -> some View {
+    func layout(search: SearchStyle) -> some View {
         HStack(spacing: 8) {
             Button(action: onBack) { Image(systemName: "chevron.left") }
                 .banditoButton(.icon(size: 32, label: L10n.Files.back))
@@ -554,18 +562,11 @@ struct FilesToolbar: View {
 
             layoutSwitch
 
-            if showsTerminal {
-                switch terminal {
-                case .words: terminalWords
-                case .icon: terminalIcon
-                }
-            }
-
             Button(action: onToggleDetails) { Image(systemName: "sidebar.right") }
                 .banditoButton(.icon(size: 32, label: detailsShown ? L10n.Files.hideDetails : L10n.Files.showDetails))
                 .help(detailsShown ? L10n.Files.hideDetails : L10n.Files.showDetails)
 
-            createMenu(iconOnly: create == .icon)
+            createMenu
 
             moreMenu
         }
@@ -649,25 +650,8 @@ struct FilesToolbar: View {
         .help(label)
     }
 
-    /// The terminal with its icon and the word "Terminal".
-    private var terminalWords: some View {
-        Button(action: onTerminal) {
-            Label(L10n.Files.terminalHere, systemImage: "terminal")
-                .lineLimit(1)
-                .fixedSize()
-        }
-        .banditoButton(.quiet())
-        .help(L10n.Files.terminalHint)
-    }
-
-    private var terminalIcon: some View {
-        Button(action: onTerminal) { Image(systemName: "terminal") }
-            .banditoButton(.icon(size: 32, label: L10n.Files.terminalHere))
-            .help(L10n.Files.terminalHint)
-    }
-
-    @ViewBuilder
-    private func createMenu(iconOnly: Bool) -> some View {
+    /// Folder or file, in the quiet icon style of the toolbar.
+    private var createMenu: some View {
         Menu {
             Button { onCreate(.folder) } label: {
                 Label(L10n.Files.Create.folder, systemImage: "folder.badge.plus")
@@ -676,42 +660,22 @@ struct FilesToolbar: View {
                 Label(L10n.Files.Create.file, systemImage: "doc.badge.plus")
             }
         } label: {
-            if iconOnly {
-                Image(systemName: "plus")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.Bandito.onSignal)
-                    .frame(width: 32, height: 32)
-                    .background(
-                        LinearGradient(
-                            colors: [Color.Bandito.signalFill, Color.Bandito.signalFillEnd], startPoint: .top,
-                            endPoint: .bottom),
-                        in: Circle())
-            } else {
-                Label(L10n.Files.create, systemImage: "plus")
-                    .font(.system(size: 12.5, weight: .semibold))
-                    .lineLimit(1)
-                    .fixedSize()
-                    .foregroundStyle(Color.Bandito.onSignal)
-                    .padding(.horizontal, 12)
-                    .frame(height: 32)
-                    .background(
-                        LinearGradient(
-                            colors: [Color.Bandito.signalFill, Color.Bandito.signalFillEnd], startPoint: .top,
-                            endPoint: .bottom),
-                        in: Capsule())
-            }
+            Image(systemName: "plus")
         }
-        .menuStyle(.button)
-        .banditoButton(.brighten)
+        .banditoButton(.icon(size: 32, label: L10n.Files.create))
         .menuIndicator(.hidden)
         .fixedSize()
         .help(L10n.Files.createHelp)
-        .accessibilityLabel(L10n.Files.create)
     }
 
-    /// Everything that is not a button of its own: copy the path, show hidden files, the details panel.
+    /// Everything that is not a button of its own: the terminal, copy the path, show hidden files, the details panel.
     private var moreMenu: some View {
         Menu {
+            if showsTerminal {
+                Button(action: onTerminal) {
+                    Label(L10n.Files.Menu.terminal, systemImage: "terminal")
+                }
+            }
             Button { onCopyPath(current) } label: {
                 Label(L10n.Files.Menu.copyPath, systemImage: "doc.on.doc")
             }

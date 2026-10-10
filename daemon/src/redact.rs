@@ -257,6 +257,7 @@ mod tests {
         let body = EventBody::TurnStarted {
             turn_id: "t1".into(),
             source: Source::User,
+            reactions_until: None,
         };
         assert_eq!(r.redact_event(body.clone()), body);
     }

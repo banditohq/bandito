@@ -41,7 +41,8 @@ Platform/     AppKit bridges: trackpad gestures, key recorder, window chrome
 - `mode: AppMode` — `.team, .files, .terminals, .browser, .screen, .server`. The sidebar's mode bar and ⌘1…⌘6 switch it. Each mode owns its sidebar content and its main area.
 - `selection` per mode (agent id, folder path, terminal id, tab id, workspace id, server section), kept when switching modes.
 - `sheet: Sheet?` — `.newAgent, .changes(agentId), .addServer, .settings(section)`; `palette: Bool`; `usagePopover: Bool`; `inspector: Bool`.
-- History stack per mode for back/forward (⌘[ ⌘] and two-finger swipe).
+- History stack of modes for back/forward (⌘[ ⌘]). In Files they walk the folders; in Browser, the page's history. The two-finger swipe no longer steps through modes (see Trackpad gestures).
+- Team home: shown in Team mode instead of a chat after the sidebar's TEAM label, ⌘0, or a swipe right in a chat (`Router.showsTeamHome`). Choosing an agent leaves it.
 - Onboarding shows instead of the main window until a server and an agent exist (or the user skips).
 
 ## Data
@@ -77,6 +78,7 @@ Defaults (presets "VS Code", "iTerm", "Slack" only override what they differ in)
 |---|---|---|
 | global | Quick open | ⌘K |
 | global | Modes Team…Server | ⌘1…⌘6 |
+| global | Team home | ⌘0 |
 | global | New agent | ⌘N |
 | global | Back / Forward | ⌘[ / ⌘] |
 | global | Toggle sidebar | ⌃⌘S |
@@ -97,7 +99,7 @@ Defaults (presets "VS Code", "iTerm", "Slack" only override what they differ in)
 | terminals | Next pane | ⌥⌘←→↑↓ |
 | terminals | Close (ends the process) | ⌘W |
 | terminals | Clear | ⌘⇧K |
-| terminals | Font bigger / smaller / reset | ⌘+ / ⌘− / ⌘0 |
+| terminals | Font bigger / smaller / reset | ⌘+ / ⌘− / ⌥⌘0 |
 | files | Open / Enclosing folder | ⌘↓ / ⌘↑ |
 | files | Quick look | Space |
 | files | New folder / New file | ⌘⇧N / ⌥⌘N |
@@ -141,7 +143,10 @@ Each can be switched off in Settings → Keys and gestures; one sensitivity slid
 
 | gesture | where | does |
 |---|---|---|
-| Two-finger swipe left/right | Files, Browser, File viewer | back / forward (scroll-wheel phase tracking, like Safari) |
+| Two-finger swipe left/right | Browser (also a browser tab in the agent panel) | back / forward in the page's history, with an arrow while the swipe is under way; a sideways swipe is not scrolled into the page |
+| Two-finger swipe left/right | Files | back / forward through the folders |
+| Two-finger swipe right / left | Agent chat / team home | close the chat to the team home / return to the chat |
+| Two-finger swipe left/right | everywhere else | nothing (rules: `SwipeRoute`) |
 | Two-finger swipe on an agent row | Sidebar | left: pin, pause, delete; right: mark read (like Mail) |
 | Pinch | Terminal, File viewer, Screen | text size / zoom |
 | Pinch out / in on a pane | Terminals | full screen / back to the grid |

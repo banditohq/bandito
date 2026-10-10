@@ -4,6 +4,7 @@ import BanditoL10n
 import Foundation
 import ImageIO
 import Observation
+import OSLog
 import SwiftUI
 
 /// What the browser main area shows: a page of the server's browser, or a preview of a port an agent opened.
@@ -18,6 +19,7 @@ enum BrowserSelection: Hashable {
 @Observable
 final class BrowserModel {
     let server: ServerModel
+    private static let log = Logger(subsystem: "dev.bandito.app", category: "browser")
 
     private(set) var status: BrowserStatus?
     private(set) var tabs: [BrowserTab] = []
@@ -53,15 +55,28 @@ final class BrowserModel {
     private var clientTabID: String?
     private var eventTask: Task<Void, Never>?
     private var pollTask: Task<Void, Never>?
+    /// The views attached now (see `BrowserAttachments`). The polling runs while it is above zero.
+    private var attachments = BrowserAttachments()
+    /// The picture areas on screen, each with its own size (`PageSurface` views: the panel and Browser mode). The page
+    /// follows the newest one; it gets its own size back only when none is left.
+    private var pageAreas = BrowserPageAreas()
     private var pollTick = 0
     /// The size the shown page is set to: the picture area on screen. Nil while no page is on screen.
     private var viewport: BrowserViewport?
-    /// The wait for the picture area to settle (300 ms) before the page is resized.
+    /// The wait for the picture area to settle before the page is resized.
+    static let viewportDelay: Duration = .milliseconds(150)
+    /// The task of that wait.
     private var viewportTask: Task<Void, Never>?
     /// The tail of the viewport command queue: each command starts after the one before it has ended.
     private var viewportQueue: Task<Void, Never>?
+    /// Wheel events waiting to go to the page, merged and sent at most every 16 ms (see `WheelSender`).
+    @ObservationIgnored private var wheel: WheelSender!
+    /// Tabs being closed now: a second close of the same tab (⌘W held down) is dropped.
+    private var closing: Set<String> = []
     /// True while a title read is waiting for the page's answer. Only one read runs at a time.
     private var titleReadInFlight = false
+    /// A title read was asked for while one ran: it runs again once that one ends.
+    private var titleReadAgain = false
     private var lastTouch: Date = .distantPast
     /// Reopens the page connection after it drops. Its count restarts once a connection shows an event.
     private var reconnect = BrowserReconnectPolicy()
@@ -70,6 +85,7 @@ final class BrowserModel {
 
     init(server: ServerModel) {
         self.server = server
+        wheel = WheelSender { [weak self] batch in await self?.sendWheel(batch) }
     }
 
     /// Whether the server has the browser feature (`server.info.features`).
@@ -83,9 +99,10 @@ final class BrowserModel {
 
     // MARK: Lifecycle
 
-    /// Starts polling the status and the tabs. Called when the browser view appears.
+    /// Starts polling the status and the tabs. Called when a browser view appears (Browser mode, a workbench tab).
+    /// Counted: the views share this model, so the polling runs while any of them is attached.
     func attach() {
-        guard pollTask == nil else { return }
+        guard attachments.attach() else { return }
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
                 await self?.refresh()
@@ -94,8 +111,9 @@ final class BrowserModel {
         }
     }
 
-    /// Stops polling and closes the page connection. The browser keeps running on the server.
+    /// Stops polling and closes the page connection once no view is attached. The browser keeps running on the server.
     func detach() {
+        guard attachments.detach() else { return }
         pollTask?.cancel()
         pollTask = nil
         Task { await closeClient() }
@@ -149,7 +167,12 @@ final class BrowserModel {
         }
     }
 
-    /// Closes a tab (`Target.closeTarget`). The tab is removed from the list only when the browser closed it.
+    /// How long a tab gets to answer `Target.closeTarget` before the daemon closes it by force.
+    static let closeTimeout = 3.0
+
+    /// Closes a tab. The page connection to that tab is let go first: the relay refuses to close a tab another client
+    /// holds. The browser is asked to close it and given 3 s; a tab that does not answer, or is refused, is closed by the
+    /// daemon (`browser.close_tab`). Either way the tab leaves the list: a hung page never keeps its tab open.
     /// When the shown page is the one closed, the next tab takes its place (see `BrowserTabPolicy`); when none is
     /// left, a blank tab opens. While an agent drives the browser, it asks to take control instead.
     func closeTab(_ id: String) async {
@@ -158,21 +181,15 @@ final class BrowserModel {
             noteAgentHasControl()
             return
         }
-        let browser: CDPClient
-        do {
-            browser = try await server.browserTargetsClient()
-        } catch {
-            errorText = Self.describe(error)
-            return
+        guard closing.insert(id).inserted else { return }
+        defer { closing.remove(id) }
+        if clientTabID == id {
+            await closeClient()
         }
-        do {
-            _ = try await browser.send(.closeTarget(id: id))
-        } catch {
-            await browser.close()
-            errorText = Self.describe(error)
-            return
+        if await !askToClose(id, within: Self.closeTimeout) {
+            // Old daemons have no forced close: the tab is then dropped from the list and the next poll tells the truth.
+            try? await server.browserCloseTab(id)
         }
-        await browser.close()
         let before = tabs.map(\.id)
         let fresh = (try? await server.browserTabs()) ?? tabs
         tabs = fresh.filter { $0.id != id }
@@ -188,6 +205,40 @@ final class BrowserModel {
             if let blank = await createBlankTab() {
                 tabs = (try? await server.browserTabs()) ?? tabs
                 await selectPage(blank)
+            }
+        }
+    }
+
+    /// Asks the browser to close a tab on a connection of its own. False when it refused, failed or did not answer in time.
+    private func askToClose(_ id: String, within seconds: Double) async -> Bool {
+        let browser: CDPClient
+        do {
+            browser = try await server.browserTargetsClient()
+        } catch {
+            return false
+        }
+        let work = Task { () -> Bool in
+            do {
+                _ = try await browser.send(.closeTarget(id: id))
+                return true
+            } catch {
+                return false
+            }
+        }
+        let answered = await Self.first(of: work, orElse: false, after: seconds)
+        // Closing the connection ends a call that never got its answer, so nothing stays waiting.
+        await browser.close()
+        return answered
+    }
+
+    /// The result of `task`, or `fallback` when it takes longer than `seconds`.
+    private static func first<T: Sendable>(of task: Task<T, Never>, orElse fallback: T, after seconds: Double) async -> T {
+        await withCheckedContinuation { (resume: CheckedContinuation<T, Never>) in
+            let once = ResumeOnceValue(resume)
+            Task { once.finish(await task.value) }
+            Task {
+                try? await Task.sleep(for: .seconds(seconds))
+                once.finish(fallback)
             }
         }
     }
@@ -409,17 +460,62 @@ final class BrowserModel {
         }
     }
 
+    /// Scrolls the page: a wheel or trackpad event at a page point. Events are merged and go out at most every 16 ms
+    /// (see `WheelBatch`). Dropped quietly while an agent holds the browser: a scroll is not an action worth a banner.
+    func scroll(at page: CGPoint, deltaX: Double, deltaY: Double, modifiers: KeyModifiers) {
+        guard canInteract, client != nil else {
+            Self.log.debug("scroll dropped: canInteract=\(self.canInteract) connected=\(self.client != nil)")
+            return
+        }
+        wheel.add(x: Double(page.x), y: Double(page.y), deltaX: deltaX, deltaY: deltaY, modifiers: modifiers)
+    }
+
+    private func sendWheel(_ batch: WheelBatch.Pending) async {
+        guard canInteract, let client else { return }
+        do {
+            _ = try await client.send(
+                .mouse(
+                    type: .mouseWheel, x: batch.x, y: batch.y, button: .none, clickCount: 0,
+                    deltaX: batch.deltaX, deltaY: batch.deltaY, modifiers: batch.modifiers))
+            Self.log.debug("wheel sent at \(batch.x),\(batch.y) by \(batch.deltaX),\(batch.deltaY)")
+        } catch {
+            // Not shown to the person (a closed connection is handled by its own path), but kept in the log.
+            Self.log.error("wheel failed: \(String(describing: error))")
+        }
+    }
+
+    private func stopWheel() {
+        wheel.stop()
+    }
+
     // MARK: Picture area
 
-    /// The picture area of the shown page changed size, or its window moved to a screen with another scale. The page
-    /// follows it after 300 ms without another change, so a window drag sends one resize, not one per pixel.
-    /// Only the page on screen is resized.
-    func pageAreaChanged(width: Double, height: Double, scale: Double) {
+    /// The picture area `id` of the shown page changed size, or its window moved to a screen with another scale. The
+    /// page follows the newest area after 150 ms without another change, so a window drag sends one resize, not one per
+    /// pixel. A view that is not on screen never gets here: it reports only while it is shown.
+    func pageAreaChanged(id: UUID, width: Double, height: Double, scale: Double) {
+        pageAreas.report(BrowserPageAreas.Area(width: width, height: height, scale: scale), for: id)
+        scheduleViewport()
+    }
+
+    /// The picture area `id` went away. The page follows the area still on screen (the other view that shows the page
+    /// keeps the size it set), and gets its own size back when none is left.
+    func pageSurfaceDisappeared(id: UUID) {
+        pageAreas.remove(id)
+        if pageAreas.isEmpty {
+            pageAreaHidden()
+        } else {
+            scheduleViewport()
+        }
+    }
+
+    /// Applies the active area's size after the settle delay, restarting the wait on every change.
+    private func scheduleViewport() {
         viewportTask?.cancel()
         viewportTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(300))
+            try? await Task.sleep(for: Self.viewportDelay)
             guard !Task.isCancelled, let self else { return }
-            self.applyViewport(BrowserViewport.fitting(width: width, height: height, scale: scale))
+            self.applyViewport(self.pageAreas.active)
         }
     }
 
@@ -557,7 +653,11 @@ final class BrowserModel {
     /// because a JS dialog or a busy page would hold the call for good. One read at a time; an answer later than
     /// one second is dropped, but the read counts as running until the page answers.
     private func requestTitle(client: CDPClient) {
-        guard !titleReadInFlight else { return }
+        guard !titleReadInFlight else {
+            // The title may have changed since the running read was asked: read once more when it ends.
+            titleReadAgain = true
+            return
+        }
         titleReadInFlight = true
         let deadline = TitleDeadline()
         Task {
@@ -568,6 +668,10 @@ final class BrowserModel {
             let reply = try? await client.send(.evaluate(expression: "document.title"))
             guard let self else { return }
             self.titleReadInFlight = false
+            if self.titleReadAgain, self.client === client {
+                self.titleReadAgain = false
+                self.requestTitle(client: client)
+            }
             guard !deadline.expired, self.client === client,
                   let title = reply?["result"]?["value"]?.string
             else { return }
@@ -589,6 +693,10 @@ final class BrowserModel {
         let next = BrowserAddressRule.afterPageMoved(to: url, currentURL: currentURL, typed: addressText, editing: isEditingAddress)
         currentURL = next.currentURL
         addressText = next.typed
+        // The tab row in the sidebar names the tab by its address too, so its entry follows the page.
+        if let clientTabID, let index = tabs.firstIndex(where: { $0.id == clientTabID }), tabs[index].url != url {
+            tabs[index].url = url
+        }
     }
 
     /// Called by the address field when focus comes or goes. When focus leaves, the field shows the page's address.
@@ -607,6 +715,7 @@ final class BrowserModel {
     /// The socket closed under us. Drops the connection; the next poll reconnects, under the policy.
     private func connectionEnded(_ ended: CDPClient) {
         guard client === ended else { return }
+        stopWheel()
         client = nil
         clientTabID = nil
         mainFrameID = nil
@@ -615,6 +724,7 @@ final class BrowserModel {
     }
 
     private func closeClient() async {
+        stopWheel()
         eventTask?.cancel()
         eventTask = nil
         let old = client
@@ -657,6 +767,24 @@ private final class ResumeOnce {
     func finish() {
         resume?.resume()
         resume = nil
+    }
+}
+
+/// Resumes a continuation with the first value given; later ones are dropped.
+private final class ResumeOnceValue<T: Sendable>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var resume: CheckedContinuation<T, Never>?
+
+    init(_ resume: CheckedContinuation<T, Never>) {
+        self.resume = resume
+    }
+
+    func finish(_ value: T) {
+        lock.lock()
+        let pending = resume
+        resume = nil
+        lock.unlock()
+        pending?.resume(returning: value)
     }
 }
 

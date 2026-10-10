@@ -77,6 +77,16 @@ enum WorkbenchRules {
         return next
     }
 
+    /// Shows `tab` from pane `index`: the pane the person pressed in (a "+" in that pane, or an empty pane's button).
+    /// That pane is focused first, so a new tab lands there. An index the state does not have keeps the focused pane.
+    static func open(_ tab: WorkbenchTab, inPane index: Int, in state: WorkbenchState) -> WorkbenchState {
+        var next = normalized(state)
+        if next.panes.indices.contains(index) {
+            next.focusedPane = index
+        }
+        return open(tab, in: next)
+    }
+
     /// Selects a tab that is already open, and focuses its pane. Does nothing for a tab that is not open.
     static func select(_ tab: WorkbenchTab, in state: WorkbenchState) -> WorkbenchState {
         guard let index = state.paneIndex(of: tab) else { return state }
@@ -255,6 +265,12 @@ enum WorkbenchLayout {
     static func draggedWidth(stored: Double, translation: Double, windowWidth: Double) -> Double? {
         guard translation != 0 else { return nil }
         return clampWidth(stored - translation, windowWidth: windowWidth)
+    }
+
+    /// The share of the top pane after dragging the divider by `translation` points down, from the share the person
+    /// chose. A zero height keeps the share.
+    static func splitAfterDrag(stored: Double, translation: Double, height: Double) -> Double {
+        clampSplit(stored + translation / max(height, 1))
     }
 
     /// The width the panel takes in a mode area of `modeWidth`: the chosen width, narrowed to what the chat leaves
