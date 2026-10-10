@@ -1,5 +1,6 @@
 import AppKit
 import BanditoDesign
+import ImageIO
 import BanditoKit
 import BanditoL10n
 import Foundation
@@ -43,6 +44,19 @@ struct DraftFile: Identifiable {
         case .failed(let failure): AttachmentTray.message(for: failure)
         case .ready: ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
         }
+    }
+}
+
+/// The miniature of a picture: decoded by ImageIO, so it can run off the main thread. At most `maxPixel` on the long side.
+enum Thumbnail {
+    static func decode(_ data: Data, maxPixel: Int = 256) -> CGImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixel,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+        ]
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
     }
 }
 
@@ -110,10 +124,18 @@ final class AttachmentTrays {
     /// The last task in the chain: the next upload waits for it.
     @ObservationIgnored private var chainTail: Task<Void, Never>?
 
-    /// Where the bytes of a file come from: a file on disk, or a picture already in memory.
+    /// Where the bytes of a file come from: a file on disk (and whether it is a picture, to make a miniature), or a
+    /// picture already in memory.
     private enum Source {
-        case file(URL)
+        case file(URL, picture: Bool)
         case picture(Data)
+    }
+
+    /// What the background step makes of a file: its bytes, and a miniature when it is a picture. The miniature is a
+    /// CGImage (ImageIO decodes it off the main thread); the view's NSImage is made on the main thread.
+    private struct Loaded: @unchecked Sendable {
+        var data: Data
+        var miniature: CGImage?
     }
 
     /// Uploads one file: its bytes, its name and the agent it goes to. The server's `attachments.upload` in the app.
@@ -141,10 +163,9 @@ final class AttachmentTrays {
                 append(DraftFile(name: name, size: size, preview: nil, state: .failed(failure)), agentID: agentID)
                 continue
             }
-            let preview = AttachmentRules.isImage(name: name) ? NSImage(contentsOf: url) : nil
-            let file = DraftFile(name: name, size: size, preview: preview, state: .uploading)
+            let file = DraftFile(name: name, size: size, preview: nil, state: .uploading)
             append(file, agentID: agentID)
-            enqueue(file.id, name: name, agentID: agentID, upload: upload, source: .file(url))
+            enqueue(file.id, name: name, agentID: agentID, upload: upload, source: .file(url, picture: AttachmentRules.isImage(name: name)))
         }
     }
 
@@ -160,7 +181,7 @@ final class AttachmentTrays {
             append(DraftFile(name: name, size: size, preview: nil, state: .failed(failure)), agentID: agentID)
             return
         }
-        let file = DraftFile(name: name, size: size, preview: NSImage(data: data), state: .uploading)
+        let file = DraftFile(name: name, size: size, preview: nil, state: .uploading)
         append(file, agentID: agentID)
         enqueue(file.id, name: name, agentID: agentID, upload: upload, source: .picture(data))
     }
@@ -211,13 +232,20 @@ final class AttachmentTrays {
             await previous?.value
             guard !Task.isCancelled, let self else { return }
             do {
-                let data: Data
-                switch source {
-                case .file(let url):
-                    data = try await Task.detached(priority: .utility) { try Data(contentsOf: url) }.value
-                case .picture(let bytes):
-                    data = bytes
+                // The bytes are read and, for a picture, the miniature is decoded: all off the main thread.
+                let loaded = try await Task.detached(priority: .utility) { () throws -> Loaded in
+                    switch source {
+                    case .file(let url, let picture):
+                        let data = try Data(contentsOf: url)
+                        return Loaded(data: data, miniature: picture ? Thumbnail.decode(data) : nil)
+                    case .picture(let bytes):
+                        return Loaded(data: bytes, miniature: Thumbnail.decode(bytes))
+                    }
+                }.value
+                if let miniature = loaded.miniature {
+                    self.setPreview(id, agentID: agentID, NSImage(cgImage: miniature, size: NSSize(width: miniature.width, height: miniature.height)))
                 }
+                let data = loaded.data
                 // Removed while it was read: no upload.
                 guard !Task.isCancelled else { return }
                 let attachment = try await upload(data, name, agentID)
@@ -229,6 +257,11 @@ final class AttachmentTrays {
         }
         tasks[id] = task
         chainTail = task
+    }
+
+    private func setPreview(_ id: UUID, agentID: String, _ image: NSImage) {
+        guard let index = trays[agentID]?.firstIndex(where: { $0.id == id }) else { return }
+        trays[agentID]?[index].preview = image
     }
 
     private func finish(_ id: UUID, agentID: String, _ state: DraftFile.State) {

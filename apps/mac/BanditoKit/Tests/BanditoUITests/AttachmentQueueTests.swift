@@ -1,4 +1,5 @@
 import BanditoKit
+import AppKit
 import BanditoL10n
 import Foundation
 import Testing
@@ -76,5 +77,22 @@ import Testing
         }
         await settle { trays.files(for: "agent").first?.failureText != nil }
         #expect(trays.files(for: "agent").first?.failureText == L10n.Composer.Attach.failed)
+    }
+
+    /// A picture gets a miniature of at most 256 pixels, decoded off the main thread; a non-picture has none.
+    @Test func aPictureGetsAMiniature() async {
+        let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: 800, pixelsHigh: 600, bitsPerSample: 8, samplesPerPixel: 4,
+            hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+        let png = rep.representation(using: .png, properties: [:])!
+        let mini = Thumbnail.decode(png)
+        #expect(mini != nil)
+        #expect(max(mini?.width ?? 0, mini?.height ?? 0) == 256)
+
+        let trays = AttachmentTrays()
+        trays.addPicture(png, name: "big.png", agentID: "agent", upload: upload(Recorder(), delay: .milliseconds(1)))
+        await settle { trays.files(for: "agent").first?.preview != nil }
+        #expect(trays.files(for: "agent").first?.preview != nil)
+        #expect(Thumbnail.decode(Data("not a picture".utf8)) == nil)
     }
 }
