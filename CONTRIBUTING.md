@@ -122,7 +122,7 @@ Tests that need a real, logged-in CLI are marked `#[ignore]` and run by hand, as
 - Keep the title a Conventional Commit. Scopes are optional.
 - Keep PRs small and focused. Split a refactor from a behavior change.
 - If behavior, RPC, store or protocol changes, update `docs/ARCHITECTURE.md` in the same PR.
-- CI must be green. It runs the daemon, Apple, i18n and PR-title checks.
+- CI must be green. The required check is **`ci-ok`** (`.github/workflows/ci.yml`). It runs on every pull request and passes when every job that applies to your change passed. A job for a part of the repo you did not touch is skipped, and a skipped job counts as passed. The jobs behind it are `apple` (Mac app, guide), `i18n`, `daemon` (fmt, clippy, tests) and `audit` (cargo audit and cargo deny, when dependencies change). The PR-title check runs next to it.
 - One approval from a member of `@banditohq/core` (see `.github/CODEOWNERS`).
 - You don't need to sign off commits (no DCO).
 
