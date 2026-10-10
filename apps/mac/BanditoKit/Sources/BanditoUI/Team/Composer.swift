@@ -11,6 +11,10 @@ import AppKit
 ///
 /// Typing `/` at the start opens the slash menu (see `SlashMenuView`). Built-in commands run in the app,
 /// server and Mac commands are sent as `/name args`, and snippets are inserted into the draft.
+///
+/// Typing `@` after a space opens the mention menu (see `MentionMenuView`): services, teammates, files of the agent's
+/// folder, open browser tabs. A pick leaves `@Label` in the text and a chip above the field; Backspace at the end of
+/// the text takes a whole chip away. A service that is not connected asks "Connect X?" before the message goes.
 struct Composer: View {
     @Binding var draft: String
     var agentName: String
@@ -37,6 +41,7 @@ struct Composer: View {
     @Environment(AppModel.self) private var app
     @FocusState private var focused: Bool
     @State private var slash = SlashMenuModel()
+    @State private var mention = MentionMenuModel()
     /// The context popover is open (the ring is a button).
     @State private var showsContext = false
     /// The popover asks "start a new chapter?" before it does (reset when the popover closes).
@@ -65,8 +70,39 @@ struct Composer: View {
         query.map { slash.entries(query: $0) } ?? []
     }
 
+    // MARK: Mentions
+
+    private var agentID: String { agent?.id ?? "" }
+
+    /// The mentions in this agent's draft.
+    private var draftMentions: [DraftMention] { router.draftMentions[agentID] ?? [] }
+
+    /// The `@word` being typed at the end of the draft; `nil` while the slash menu is open or Esc closed this one.
+    private var mentionMatch: MentionTrigger.Match? {
+        guard agent != nil, server != nil, !mention.suppressed, query == nil else { return nil }
+        return MentionTrigger.match(in: draft)
+    }
+
+    private var mentionSections: [MentionSection] {
+        guard let match = mentionMatch, let agent, let server else { return [] }
+        return MentionSearch.sections(
+            query: match.query, services: mention.services,
+            agents: MentionSources.agents(server.agents, excluding: agent.id), files: mention.files,
+            tabs: mention.tabs)
+    }
+
+    /// The menu has something to pick. With nothing to list it stays shut, so Enter sends as usual.
+    private func mentionRows(_ sections: [MentionSection]) -> [MentionEntry] {
+        MentionSearch.flatten(sections)
+    }
+
+    private func selectedMention(in rows: [MentionEntry]) -> MentionEntry? {
+        rows.isEmpty ? nil : rows[min(max(mention.index, 0), rows.count - 1)]
+    }
+
     var body: some View {
         @Bindable var model = slash
+        @Bindable var mentionModel = mention
         VStack(spacing: 8) {
             if query != nil {
                 SlashMenuView(
@@ -78,10 +114,27 @@ struct Composer: View {
                     onNewSnippet: { slash.editingSnippet = true })
                     .transition(.opacity.combined(with: .offset(y: 6)))
             }
+            let mentionSectionsNow = mentionSections
+            let mentionRowsNow = mentionRows(mentionSectionsNow)
+            if !mentionRowsNow.isEmpty {
+                MentionMenuView(
+                    sections: mentionSectionsNow, selectedKey: selectedMention(in: mentionRowsNow)?.key,
+                    server: server, onPick: pickMention)
+                    .transition(.opacity.combined(with: .offset(y: 6)))
+            }
             if let notice = slash.notice {
                 UserFacingErrorView(message: notice)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 16)
+            }
+            if let notice = mention.notice {
+                UserFacingErrorView(message: notice)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+            }
+            if let prompt = mention.connectPrompt, draftMentions.contains(where: { $0.pendingTemplate == prompt.pendingTemplate }) {
+                connectBar(prompt)
+                    .transition(.opacity.combined(with: .offset(y: 6)))
             }
             if let waitingForm {
                 formHint(waitingForm)
@@ -92,6 +145,9 @@ struct Composer: View {
                     .transition(.opacity.combined(with: .offset(y: 6)))
             }
             VStack(alignment: .leading, spacing: 8) {
+                if !draftMentions.isEmpty {
+                    MentionStrip(items: draftMentions, server: server, onRemove: removeMention)
+                }
                 if !files.isEmpty {
                     attachmentStrip
                 }
@@ -110,6 +166,9 @@ struct Composer: View {
                         .padding(.vertical, 8)
                         .onKeyPress(keys: [.upArrow, .downArrow, .tab, .escape]) { press in
                             handleMenuKey(press.key)
+                        }
+                        .onKeyPress(keys: [.delete]) { press in
+                            handleBackspace(press)
                         }
                         .onKeyPress(keys: [KeyEquivalent("v")]) { press in
                             // ⌘V of a picture (and no text) attaches it. Text paste is left to the field.
@@ -131,6 +190,10 @@ struct Composer: View {
                             }
                             if query != nil, entries.indices.contains(slash.index) {
                                 run(entries[slash.index])
+                                return .handled
+                            }
+                            if let picked = selectedMention(in: mentionRows(mentionSections)) {
+                                pickMention(picked)
                                 return .handled
                             }
                             if canSend && !running { submit() }
@@ -175,10 +238,45 @@ struct Composer: View {
             guard let agentID = agent?.id else { return }
             if router.takeComposerFocus(agentID: agentID) { takeFocus(.requested) }
         }
+        .onChange(of: mentionMatch?.query) { old, new in
+            guard let agent, let server else { return }
+            if let new {
+                if old == nil { Task { await mention.opened(server: server, agent: agent) } }
+                mention.updateFiles(query: new, server: server, agent: agent)
+            } else {
+                mention.closed()
+            }
+        }
+        .onChange(of: agent?.id, initial: true) { _, id in
+            // A connect belongs to the agent it was started for: going to another one drops it, and sends nothing.
+            mention.agentID = id
+            if mention.connecting != nil { mention.connecting = nil }
+            if mention.connectPrompt != nil { mention.connectPrompt = nil }
+            if mention.editing != nil { mention.editing = nil }
+        }
+        .onChange(of: app.oauth.phase) { _, phase in
+            handleSignIn(phase)
+        }
+        .onChange(of: mention.editing) { old, new in
+            if old != nil, new == nil { Task { await keyedServiceClosed() } }
+        }
+        .banditoSheet(item: $mentionModel.editing, dismissOnOutsideClick: false) { template in
+            if let server {
+                IntegrationEditor(
+                    server: server, target: .catalog(template),
+                    existingNames: MentionServices.shared.snapshot(for: server)?.integrations.map(\.name) ?? [],
+                    onChecked: { _, _ in }, onSaved: { await MentionServices.shared.ensure(server, force: true) })
+            }
+        }
         .onChange(of: draft) { old, new in
             slash.suppressed = false
             slash.notice = nil
             slash.index = 0
+            // Written only when they change: each write redraws the composer.
+            if mention.suppressed { mention.suppressed = false }
+            if mention.notice != nil { mention.notice = nil }
+            if mention.index != 0 { mention.index = 0 }
+            reconcileMentions()
             if SoundRules.isTypedCharacter(old: old, new: new) { SoundPlayer.play(.type) }
         }
         .task(id: agent?.id) {
@@ -388,8 +486,24 @@ struct Composer: View {
 
     private func handleMenuKey(_ key: KeyEquivalent) -> KeyPress.Result {
         // Esc with no menu open takes the reply away.
-        if query == nil, key == .escape, reply != nil {
+        if query == nil, key == .escape, reply != nil, mentionRows(mentionSections).isEmpty {
             onCancelReply()
+            return .handled
+        }
+        let rows = mentionRows(mentionSections)
+        if mentionMatch != nil, !rows.isEmpty {
+            switch key {
+            case .upArrow:
+                mention.index = max(0, min(mention.index, rows.count - 1) - 1)
+            case .downArrow:
+                mention.index = min(rows.count - 1, mention.index + 1)
+            case .tab:
+                if let picked = selectedMention(in: rows) { pickMention(picked) }
+            case .escape:
+                mention.suppressed = true
+            default:
+                return .ignored
+            }
             return .handled
         }
         guard query != nil else { return .ignored }
@@ -442,6 +556,11 @@ struct Composer: View {
         guard let agent, let server else {
             SoundPlayer.play(.send)
             onSend()
+            return
+        }
+        // A service named in the message that is not connected: ask first, send after.
+        if let pending = MentionDraft.pendingService(in: MentionDraft.reconcile(draftMentions, in: draft)) {
+            mention.connectPrompt = pending
             return
         }
         if let invocation = SlashInvocationParser.parse(draft) {
@@ -532,6 +651,168 @@ struct Composer: View {
             } catch {
                 slash.notice = UserFacingError.message(for: error)
             }
+        }
+    }
+
+    // MARK: Mentions: picking, chips, connecting
+
+    /// Enter, Tab or a click on a row: `@Label ` takes the place of the typed `@word`, and the chip appears.
+    private func pickMention(_ entry: MentionEntry) {
+        guard let match = mentionMatch else { return }
+        let result = MentionDraft.insert(entry, replacing: match, in: draft, list: draftMentions)
+        draft = result.draft
+        if router.draftMentions[agentID] != result.list { router.draftMentions[agentID] = result.list }
+        if mention.index != 0 { mention.index = 0 }
+        focused = true
+    }
+
+    /// The cross of a chip: its `@Label` goes from the text too.
+    private func removeMention(_ item: DraftMention) {
+        let token = item.mention.token
+        if let range = draft.range(of: token + " ") ?? draft.range(of: token) {
+            draft.removeSubrange(range)
+        }
+        let rest = draftMentions.filter { $0 != item }
+        if router.draftMentions[agentID] != rest { router.draftMentions[agentID] = rest }
+        focused = true
+    }
+
+    /// Text the person deleted takes its chip with it.
+    private func reconcileMentions() {
+        let current = draftMentions
+        guard !current.isEmpty else { return }
+        let kept = MentionDraft.reconcile(current, in: draft)
+        if kept != current { router.draftMentions[agentID] = kept }
+    }
+
+    /// Backspace with the caret at the end of the text, right after a chip: the whole chip goes.
+    private func handleBackspace(_ press: KeyPress) -> KeyPress.Result {
+        guard press.modifiers.isEmpty, !draftMentions.isEmpty, FieldCaret.isAtEnd,
+            let result = MentionDraft.removeTrailingChip(draft: draft, list: draftMentions)
+        else { return .ignored }
+        draft = result.draft
+        router.draftMentions[agentID] = result.list
+        return .handled
+    }
+
+    /// "Connect Linear?" above the field, for a service the message names that is not connected.
+    private func connectBar(_ item: DraftMention) -> some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.Mention.connectPrompt(name: item.mention.label))
+                    .font(BanditoFont.text(size: 12.5, weight: 600))
+                    .foregroundStyle(Color.Bandito.text)
+                    .lineLimit(1)
+                Text(L10n.Mention.connectHint)
+                    .font(BanditoFont.text(size: 12, weight: 400))
+                    .foregroundStyle(Color.Bandito.text2)
+                    .lineLimit(2)
+                // An agent with its own list of services gets this one added: said before it happens.
+                if agent?.integrations != nil {
+                    Text(L10n.Mention.connectAccess(service: item.mention.label, agent: agentName))
+                        .font(BanditoFont.text(size: 12, weight: 500))
+                        .foregroundStyle(Color.Bandito.text)
+                        .lineLimit(2)
+                }
+            }
+            Spacer(minLength: 8)
+            Button(L10n.Common.cancel) { mention.connectPrompt = nil }
+                .banditoButton(.quiet())
+            Button(L10n.Mention.connectAndSend) { connectService(item) }
+                .banditoButton(.signal())
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.Bandito.signal.opacity(0.1), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.Bandito.signal.opacity(0.3), lineWidth: 1))
+    }
+
+    /// The same connect as the Marketplace: a service that signs in in the browser starts the sign-in, the others open
+    /// the sheet of keys. The message goes when the service is connected.
+    private func connectService(_ item: DraftMention) {
+        guard let server, let templateID = item.pendingTemplate,
+            let snapshot = MentionServices.shared.snapshot(for: server),
+            let template = snapshot.catalog.first(where: { $0.id == templateID })
+        else { return }
+        let known = Set(snapshot.integrations.map(\.id))
+        guard template.usesOAuth, let url = template.url else {
+            mention.connecting = MentionMenuModel.Connecting(
+                agentID: agentID, name: template.name, template: templateID, known: known)
+            mention.editing = template
+            return
+        }
+        guard server.supports("integrations_oauth") else {
+            mention.notice = UserFacingMessage(text: L10n.Integrations.Oauth.needsUpdate(name: template.name))
+            return
+        }
+        let draft = NewIntegration(name: template.id, kind: .http, url: url)
+        Task {
+            await app.oauth.begin(server: server, target: .draft(draft), name: template.name)
+            if case .waiting = app.oauth.phase {
+                mention.connecting = MentionMenuModel.Connecting(
+                    agentID: agentID, name: template.name, template: templateID, known: known)
+            }
+        }
+    }
+
+    /// The browser sign-in ended: well, and the message goes; otherwise the prompt stays for another try.
+    private func handleSignIn(_ phase: OAuthSignIn.Phase) {
+        guard mention.connecting != nil, mention.editing == nil else { return }
+        if let id = MentionConnectRules.finishedIntegration(
+            connecting: mention.connecting, agentID: mention.agentID, phase: phase)
+        {
+            finishConnect(integrationID: id)
+            return
+        }
+        switch phase {
+        case .idle, .failed: mention.connecting = nil
+        default: break
+        }
+    }
+
+    /// The sheet of keys was closed. If it saved a service (an integration that was not there before), the message
+    /// goes; the sheet writes the keys after it saves, so this waits for the close.
+    private func keyedServiceClosed() async {
+        guard let server, let connecting = mention.connecting, connecting.agentID == mention.agentID else {
+            mention.connecting = nil
+            return
+        }
+        await MentionServices.shared.ensure(server, force: true)
+        let added = MentionServices.shared.snapshot(for: server)?.integrations.first { !connecting.known.contains($0.id) }
+        guard let added else {
+            mention.connecting = nil
+            return
+        }
+        finishConnect(integrationID: added.id)
+    }
+
+    /// The service is connected: its mention gets the integration, an agent with its own list of services may use it,
+    /// and the message goes.
+    private func finishConnect(integrationID: String) {
+        guard let connecting = mention.connecting, connecting.agentID == mention.agentID, let server, let agent else {
+            mention.connecting = nil
+            return
+        }
+        mention.connecting = nil
+        let list = MentionDraft.connected(draftMentions, template: connecting.template, integrationID: integrationID)
+        if router.draftMentions[agentID] != list { router.draftMentions[agentID] = list }
+        mention.connectPrompt = nil
+        Task {
+            await MentionServices.shared.ensure(server, force: true)
+            // The person went to another agent while this ran: nothing is changed or sent.
+            guard mention.agentID == connecting.agentID else { return }
+            mention.refreshServices(server: server, agent: agent)
+            if let ids = agent.integrations, !ids.contains(integrationID) {
+                do {
+                    try await server.updateAgent(agent.id, patch: AgentPatch(integrations: .set(ids + [integrationID])))
+                } catch {
+                    mention.notice = UserFacingError.message(for: error)
+                    return
+                }
+            }
+            guard mention.agentID == connecting.agentID else { return }
+            submit()
         }
     }
 
@@ -694,5 +975,20 @@ struct Composer: View {
     /// A name for a picture that has none: the source and the time, without characters a file name cannot hold.
     static func pictureName(_ source: String) -> String {
         "\(source)-\(Int(Date().timeIntervalSince1970 * 1000)).png"
+    }
+}
+
+/// Where the caret is in the field being edited. The composer's `TextField` offers no caret, so the field editor is
+/// asked.
+enum FieldCaret {
+    /// No selection, and the caret after the last character. `true` where there is no field editor to ask.
+    static var isAtEnd: Bool {
+        #if os(macOS)
+        guard let editor = NSApp.keyWindow?.firstResponder as? NSTextView else { return true }
+        let range = editor.selectedRange()
+        return range.length == 0 && range.location == (editor.string as NSString).length
+        #else
+        return true
+        #endif
     }
 }

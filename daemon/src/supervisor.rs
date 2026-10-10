@@ -11,6 +11,7 @@ use crate::event::{AgentChange, AgentStatus, DecidedBy, Decision, EventBody, Sou
 use crate::forms::{FormSpec, Outcome};
 use crate::hub::Hub;
 use crate::limit;
+use crate::mentions::Mention;
 use crate::policy::{self, Protected, Verdict};
 use crate::redact::Redactor;
 use crate::runtime::sandbox::SandboxPolicy;
@@ -68,6 +69,8 @@ pub struct Inbound {
     pub reply_to: Option<i64>,
     /// Files attached to the message (a human's message only), already saved in the agent's folder.
     pub attachments: Vec<Attachment>,
+    /// `@` mentions of the message (a human's message only), checked by `agents.send`.
+    pub mentions: Vec<Mention>,
 }
 
 impl Inbound {
@@ -82,6 +85,7 @@ impl Inbound {
             command: None,
             reply_to: None,
             attachments: Vec::new(),
+            mentions: Vec::new(),
         }
     }
 
@@ -96,6 +100,7 @@ impl Inbound {
             command: None,
             reply_to: None,
             attachments: Vec::new(),
+            mentions: Vec::new(),
         }
     }
 }
@@ -636,6 +641,7 @@ impl Supervisor {
             command: None,
             reply_to: None,
             attachments: Vec::new(),
+            mentions: Vec::new(),
         };
         self.send(&to.id, msg).await?;
         Ok(to.id)
@@ -1121,6 +1127,7 @@ impl Actor {
                 command: msg.command.clone(),
                 reply_to: msg.reply_to,
                 attachments: msg.attachments.clone(),
+                mentions: msg.mentions.clone(),
                 queued,
             },
         );
@@ -1480,6 +1487,7 @@ impl Actor {
             command: None,
             reply_to: None,
             attachments: Vec::new(),
+            mentions: Vec::new(),
         };
         match self.start_turn(msg, None).await {
             Ok(()) => true,
@@ -1606,7 +1614,13 @@ impl Actor {
         self.turn_note = note.clone();
         self.turn_until = until;
         let quote = self.reply_quote(&msg);
-        let mut prompt = chat::runtime_text(&msg.text, note.as_deref(), quote.as_deref(), &msg.attachments);
+        let mut prompt = chat::runtime_text(
+            &msg.text,
+            note.as_deref(),
+            quote.as_deref(),
+            &msg.attachments,
+            crate::mentions::note(&crate::mentions::resolve(&self.hub.store, &msg.mentions)).as_deref(),
+        );
         if let Some(name) = self.lead_sender(&msg) {
             prompt = format!("{}\n\n{prompt}", FROM_LEAD.replace("{name}", &name));
         }
@@ -3027,6 +3041,7 @@ mod tests {
             command: None,
             reply_to: None,
             attachments: Vec::new(),
+            mentions: Vec::new(),
             queued: true,
         };
         let lost = w.store.append_event(&w.agent, queued("lost")).unwrap().seq;
@@ -3164,6 +3179,7 @@ mod tests {
                 command: None,
                 reply_to: None,
                 attachments: Vec::new(),
+                mentions: Vec::new(),
                 queued: false,
             }
         );
@@ -3245,6 +3261,7 @@ mod tests {
             command: None,
             reply_to: None,
             attachments: Vec::new(),
+            mentions: Vec::new(),
         };
         w.sup.send(&w.agent, msg).await.unwrap();
         w.wait_log("send hi").await;
@@ -3366,6 +3383,7 @@ mod tests {
             command: None,
             reply_to: None,
             attachments: Vec::new(),
+            mentions: Vec::new(),
         };
         w.sup.send(&w.agent, msg).await.unwrap();
         w.wait_log("send hi").await;
@@ -4474,6 +4492,7 @@ mod tests {
             command: None,
             reply_to: None,
             attachments: Vec::new(),
+            mentions: Vec::new(),
         };
         w.sup.send(&w.agent, wrap_up).await.unwrap();
         w.wait_log("send wrap up").await;
@@ -4951,6 +4970,59 @@ mod tests {
                 assert_eq!(reply_to, Some(quoted));
                 assert_eq!(attachments, vec![file]);
             }
+            other => panic!("not a message: {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn mentions_are_read_when_the_turn_starts_not_when_the_message_was_sent() {
+        let mut w = world(ApprovalMode::Risky);
+        let linear = w
+            .store
+            .integration_create(crate::store::NewIntegration {
+                name: "linear".into(),
+                kind: crate::store::IntegrationKind::Http,
+                command: None,
+                args: Vec::new(),
+                url: Some("https://mcp.example.com/mcp".into()),
+                env: Default::default(),
+                headers: Default::default(),
+                enabled: true,
+                auth: Default::default(),
+            })
+            .unwrap();
+        let mention = Mention {
+            kind: crate::mentions::MentionKind::Integration,
+            id: linear.id.clone(),
+            label: "Linear".into(),
+            url: None,
+        };
+        // The message waits behind a pause; the service is renamed in the meantime.
+        assert!(w.sup.set_paused(&w.agent, true).await.unwrap());
+        let msg = Inbound {
+            mentions: vec![mention.clone()],
+            ..Inbound::user("check @Linear")
+        };
+        w.sup.send_held(&w.agent, msg).await.unwrap();
+        w.store
+            .integration_update(
+                &linear.id,
+                crate::store::IntegrationPatch {
+                    name: Some("linear2".into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        assert!(w.sup.set_paused(&w.agent, false).await.unwrap());
+        w.wait_log(
+            "send check @Linear\n\nMentioned:\n- linear2 (a connected service): use its tools (prefix mcp__linear2__) for this request",
+        )
+        .await;
+        let echo = w
+            .wait(|b| matches!(b, EventBody::MessageUser { text, .. } if text == "check @Linear"))
+            .await;
+        match echo.body {
+            EventBody::MessageUser { mentions, .. } => assert_eq!(mentions, vec![mention]),
             other => panic!("not a message: {other:?}"),
         }
     }

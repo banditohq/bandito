@@ -177,8 +177,8 @@ import Testing
         let plain = Data(#"{"seq":6,"agent_id":"a","ts":1,"kind":"message.user","payload":{"text":"x","source":"user"}}"#.utf8)
         let turn = Data(
             #"{"seq":7,"agent_id":"a","ts":1,"kind":"turn.started","payload":{"turn_id":"t","source":"user","message_seq":5}}"#.utf8)
-        guard case .messageUser(_, _, _, _, _, let queued) = try RPCClient.decoder.decode(Event.self, from: message).body,
-            case .messageUser(_, _, _, _, _, let notQueued) = try RPCClient.decoder.decode(Event.self, from: plain).body,
+        guard case .messageUser(_, _, _, _, _, let queued, _) = try RPCClient.decoder.decode(Event.self, from: message).body,
+            case .messageUser(_, _, _, _, _, let notQueued, _) = try RPCClient.decoder.decode(Event.self, from: plain).body,
             case .turnStarted(_, _, let messageSeq) = try RPCClient.decoder.decode(Event.self, from: turn).body
         else {
             Issue.record("unexpected bodies")

@@ -24,6 +24,8 @@ struct ThreadChat {
     /// The message each reply answers, by the reply's `seq`.
     var replies: [Int64: Int64] = [:]
     var attachments: [Int64: [MessageAttachment]] = [:]
+    /// The `@` mentions each message carries, by `seq`: chips under the bubble.
+    var mentions: [Int64: [Mention]] = [:]
     /// Messages shown while they wait for their turn, by `seq`: they carry a quiet "Queued" line.
     var waiting: Set<Int64> = []
     /// Messages the daemon gave up on (no turn will take them), by `seq`: a quiet "Not delivered" line, and Send again.

@@ -6,6 +6,7 @@ use crate::attachments::{self, Attachment};
 use crate::chat;
 use crate::event::{EventBody, ReactionBy};
 use crate::forms::{self, Outcome};
+use crate::mentions::{self, Mention, MentionKind};
 use crate::store::{Agent, FormStatus};
 use crate::supervisor::{APPROVAL_TTL_MS, FormReply};
 use base64::Engine;
@@ -208,6 +209,116 @@ pub fn attachments_for(app: &App, agent: &Agent, paths: &[String]) -> Result<Vec
             })
         })
         .collect()
+}
+
+/// The mentions of a message the person sends, checked against this server: an integration must exist, be enabled
+/// and be one the agent may use; an agent must exist; a file must be a real path inside the agent's folder (or its
+/// own home) and never inside Bandito's data folder; a browser tab must be listed by the server's browser. Returns
+/// the mentions as the thread keeps them (files by their real path) and the block the runtime reads.
+pub async fn mentions_for(app: &App, agent: Option<&Agent>, list: &[Mention]) -> Result<Vec<Mention>, RpcError> {
+    if list.is_empty() {
+        return Ok(Vec::new());
+    }
+    mentions::check_shape(list).map_err(|e| RpcError::new(INVALID_PARAMS, e))?;
+    let agent = agent.ok_or_else(|| RpcError::new(INVALID_PARAMS, "no such agent"))?;
+    let store = &app.sup.hub().store;
+    let integrations = if list.iter().any(|m| m.kind == MentionKind::Integration) {
+        store.integration_list().map_err(server)?
+    } else {
+        Vec::new()
+    };
+    let mut pages = None;
+    let mut kept: Vec<Mention> = Vec::new();
+    for m in list {
+        let id = m.id.trim();
+        let (id, url) = match m.kind {
+            MentionKind::Integration => {
+                let usable = crate::integrations::for_agent(&integrations, agent.integrations.as_deref());
+                let found = usable.iter().find(|i| i.id == id).ok_or_else(|| {
+                    RpcError::new(
+                        INVALID_PARAMS,
+                        format!("the agent cannot use the service {}", m.label.trim()),
+                    )
+                })?;
+                (found.id.clone(), None)
+            }
+            MentionKind::Agent => {
+                let found = store
+                    .agent_get(id)
+                    .map_err(server)?
+                    .ok_or_else(|| RpcError::new(INVALID_PARAMS, format!("no agent {}", m.label.trim())))?;
+                (found.id.clone(), None)
+            }
+            MentionKind::File => {
+                let real = mentioned_file(app, agent, id)?;
+                (real, None)
+            }
+            MentionKind::BrowserTab => {
+                if pages.is_none() {
+                    pages = Some(
+                        app.browser
+                            .pages(crate::browser::DEFAULT_WORKSPACE)
+                            .await
+                            .map_err(|e| {
+                                RpcError::new(
+                                    INVALID_PARAMS,
+                                    match e {
+                                        crate::browser::BrowserError::NotRunning => "the browser is not running",
+                                        _ => "could not read the browser's tabs",
+                                    },
+                                )
+                            })?,
+                    );
+                }
+                let tab = pages
+                    .iter()
+                    .flatten()
+                    .find(|p| p.id == id)
+                    .ok_or_else(|| RpcError::new(INVALID_PARAMS, "that browser tab is not open any more"))?;
+                (tab.id.clone(), Some(tab.url.clone()))
+            }
+        };
+        // The same thing named twice is one mention.
+        if kept.iter().any(|k| k.kind == m.kind && k.id == id) {
+            continue;
+        }
+        kept.push(Mention {
+            kind: m.kind,
+            id,
+            label: m.label.trim().to_string(),
+            url,
+        });
+    }
+    Ok(kept)
+}
+
+/// The real path of a file the person mentioned. It must be absolute and plain (no `.` or `..`), exist, lie in the
+/// server's file roots, and be inside the agent's folder or its own home. Bandito's data folder is closed except for
+/// the agent's own home in it.
+fn mentioned_file(app: &App, agent: &Agent, raw: &str) -> Result<String, RpcError> {
+    let bad = |m: String| RpcError::new(INVALID_PARAMS, m);
+    // `Path::components` hides a `.` in the middle, so the segments are read from the text.
+    if !raw.starts_with('/') || raw.split('/').any(|segment| segment == "." || segment == "..") {
+        return Err(bad(format!("not a plain absolute path: {raw}")));
+    }
+    let real = app
+        .files
+        .resolve(raw)
+        .map_err(|_| bad(format!("not a file this agent can use: {raw}")))?;
+    // The file as it really is: a link that points out of the folder does not pass for a file inside it.
+    let real = std::fs::canonicalize(&real).map_err(|_| bad(format!("no such file: {raw}")))?;
+    let canon = |p: &str| p.starts_with('/').then(|| std::fs::canonicalize(p).ok()).flatten();
+    let data = std::fs::canonicalize(&app.data_home).unwrap_or_else(|_| app.data_home.clone());
+    let in_cwd = canon(&agent.cwd).is_some_and(|cwd| real.starts_with(&cwd) && !real.starts_with(&data));
+    let in_home = agent
+        .home_dir
+        .as_deref()
+        .and_then(canon)
+        .is_some_and(|home| real.starts_with(&home));
+    if !(in_cwd || in_home) {
+        return Err(bad(format!("not inside this agent's folder: {raw}")));
+    }
+    Ok(real.display().to_string())
 }
 
 /// The message `seq` of the agent must be a message (the person's or the agent's) for a reaction or a reply.
@@ -685,6 +796,7 @@ mod tests {
                     command: None,
                     reply_to: None,
                     attachments: Vec::new(),
+                    mentions: Vec::new(),
                     queued: false,
                 },
             )
@@ -727,6 +839,7 @@ mod tests {
             command: None,
             reply_to: None,
             attachments: Vec::new(),
+            mentions: Vec::new(),
             queued,
         };
         let turn = |message_seq| EventBody::TurnStarted {
@@ -902,5 +1015,217 @@ mod tests {
         .await
         .unwrap_err();
         assert!(e.message.contains("not an attachment"), "{}", e.message);
+    }
+
+    fn extra_agent(f: &Fixture, name: &str, integrations: Option<Vec<String>>) -> String {
+        f.store
+            .agent_create(NewAgent {
+                use_personal_settings: false,
+                avatar: None,
+                capabilities: None,
+                integrations,
+                name: name.into(),
+                role: String::new(),
+                runtime: RuntimeKind::Claude,
+                model: None,
+                cwd: f.cwd.display().to_string(),
+                approval_mode: ApprovalMode::Risky,
+                system_prompt: None,
+                effort: None,
+                memory_mode: crate::store::MemoryMode::Smart,
+                context_budget: None,
+                fallback_runtime: None,
+                fallback_model: None,
+            })
+            .unwrap()
+            .id
+    }
+
+    fn integration(f: &Fixture, name: &str, enabled: bool) -> String {
+        f.store
+            .integration_create(crate::store::NewIntegration {
+                name: name.into(),
+                kind: crate::store::IntegrationKind::Http,
+                command: None,
+                args: Vec::new(),
+                url: Some("https://mcp.example.com/mcp".into()),
+                env: Default::default(),
+                headers: Default::default(),
+                enabled,
+                auth: Default::default(),
+            })
+            .unwrap()
+            .id
+    }
+
+    fn mention(kind: MentionKind, id: &str, label: &str) -> Mention {
+        Mention {
+            kind,
+            id: id.into(),
+            label: label.into(),
+            url: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn mentions_are_checked_and_become_the_mentioned_block() {
+        let f = fixture();
+        let linear = integration(&f, "linear", true);
+        let scout = extra_agent(&f, "Scout", None);
+        std::fs::create_dir_all(f.cwd.join("src")).unwrap();
+        std::fs::write(f.cwd.join("src/main.rs"), b"fn main() {}").unwrap();
+        let agent = f.store.agent_get(&f.agent).unwrap().unwrap();
+        let file = f.cwd.join("src/main.rs").canonicalize().unwrap().display().to_string();
+        let list = vec![
+            mention(MentionKind::Integration, &linear, "Linear"),
+            mention(MentionKind::Agent, &scout, "Scout"),
+            mention(MentionKind::File, &file, "main.rs"),
+            // The same thing twice counts once.
+            mention(MentionKind::Agent, &scout, "Scout"),
+        ];
+        let kept = mentions_for(&f.app, Some(&agent), &list).await.unwrap();
+        let note = mentions::note(&mentions::resolve(&f.store, &kept));
+        assert_eq!(kept.len(), 3);
+        assert_eq!(kept[2].id, file);
+        assert_eq!(
+            note.unwrap(),
+            format!(
+                "Mentioned:\n\
+                 - linear (a connected service): use its tools (prefix mcp__linear__) for this request\n\
+                 - @Scout is a teammate; hand this to them with crew_send if it belongs to them\n\
+                 - file: {file}"
+            )
+        );
+        // No mentions, no block.
+        assert!(mentions_for(&f.app, Some(&agent), &[]).await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn an_integration_the_agent_cannot_use_is_refused() {
+        let f = fixture();
+        let off = integration(&f, "linear", false);
+        let agent = f.store.agent_get(&f.agent).unwrap().unwrap();
+        // Disabled.
+        let e = mentions_for(
+            &f.app,
+            Some(&agent),
+            &[mention(MentionKind::Integration, &off, "Linear")],
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(e.code, INVALID_PARAMS);
+        // Unknown.
+        assert!(
+            mentions_for(
+                &f.app,
+                Some(&agent),
+                &[mention(MentionKind::Integration, "nope", "Linear")]
+            )
+            .await
+            .is_err()
+        );
+        // Enabled, but not in this agent's list.
+        let on = integration(&f, "fetch", true);
+        let limited = extra_agent(&f, "Limited", Some(Vec::new()));
+        let limited = f.store.agent_get(&limited).unwrap().unwrap();
+        assert!(
+            mentions_for(
+                &f.app,
+                Some(&limited),
+                &[mention(MentionKind::Integration, &on, "Fetch")]
+            )
+            .await
+            .is_err()
+        );
+        assert!(
+            mentions_for(&f.app, Some(&agent), &[mention(MentionKind::Integration, &on, "Fetch")])
+                .await
+                .is_ok()
+        );
+    }
+
+    #[tokio::test]
+    async fn files_outside_the_agents_folder_are_refused() {
+        let f = fixture();
+        let agent = f.store.agent_get(&f.agent).unwrap().unwrap();
+        let outside = f.root.join("secret.txt");
+        std::fs::write(&outside, b"s").unwrap();
+        std::fs::write(f.cwd.join("ok.txt"), b"ok").unwrap();
+        let ask = |path: String| {
+            let agent = agent.clone();
+            let app = f.app.clone();
+            async move { mentions_for(&app, Some(&agent), &[mention(MentionKind::File, &path, "x")]).await }
+        };
+        assert!(ask(f.cwd.join("ok.txt").display().to_string()).await.is_ok());
+        for bad in [
+            outside.display().to_string(),
+            format!("{}/../secret.txt", f.cwd.display()),
+            format!("{}/./ok.txt", f.cwd.display()),
+            "ok.txt".to_string(),
+            f.cwd.join("missing.txt").display().to_string(),
+            "/etc/hosts".to_string(),
+        ] {
+            let e = ask(bad.clone()).await.unwrap_err();
+            assert_eq!(e.code, INVALID_PARAMS, "{bad}");
+        }
+        // A link in the folder that points out of it.
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(&outside, f.cwd.join("link.txt")).unwrap();
+            assert!(ask(f.cwd.join("link.txt").display().to_string()).await.is_err());
+        }
+    }
+
+    #[tokio::test]
+    async fn agents_and_tabs_must_exist() {
+        let f = fixture();
+        let agent = f.store.agent_get(&f.agent).unwrap().unwrap();
+        assert!(
+            mentions_for(&f.app, Some(&agent), &[mention(MentionKind::Agent, "ghost", "Ghost")])
+                .await
+                .is_err()
+        );
+        // The server's browser is not running in a test.
+        let e = mentions_for(
+            &f.app,
+            Some(&agent),
+            &[mention(MentionKind::BrowserTab, "ABC123", "Docs")],
+        )
+        .await
+        .unwrap_err();
+        assert!(e.message.contains("browser"), "{}", e.message);
+        // A bad shape never reaches the lookups.
+        let e = mentions_for(&f.app, Some(&agent), &[mention(MentionKind::Agent, "a", "")])
+            .await
+            .unwrap_err();
+        assert_eq!(e.code, INVALID_PARAMS);
+    }
+
+    #[tokio::test]
+    async fn agents_send_refuses_a_bad_mention_and_sends_nothing() {
+        let f = fixture();
+        assert!(crate::rpc::features().contains(&"mentions"));
+        let e = call(
+            &f,
+            &Peer::Local,
+            "agents.send",
+            json!({ "agent_id": f.agent, "text": "see @Ghost",
+                    "mentions": [{ "kind": "agent", "id": "ghost", "label": "Ghost" }] }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(e.code, INVALID_PARAMS);
+        assert!(f.store.events_page(&f.agent, None, 10).unwrap().is_empty());
+        // An unknown kind is a bad parameter, not a skipped mention.
+        let e = call(
+            &f,
+            &Peer::Local,
+            "agents.send",
+            json!({ "agent_id": f.agent, "text": "hi",
+                    "mentions": [{ "kind": "web", "id": "x", "label": "X" }] }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(e.code, INVALID_PARAMS);
     }
 }

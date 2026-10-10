@@ -538,6 +538,8 @@ struct ThreadView: View {
     private func send() {
         let id = agent.id
         let text = router.takeDraft(for: id)
+        let draftMentions = router.takeMentions(for: id)
+        let mentions = MentionDraft.wire(draftMentions, in: text)
         // The files that finished uploading go with the text; a failed send leaves them in the tray for a retry.
         let files = AttachmentTray.readyFiles(AttachmentTrays.shared.files(for: id))
         guard !text.isEmpty || !files.isEmpty else { return }
@@ -548,11 +550,12 @@ struct ThreadView: View {
         bottomRequest += 1
         Task {
             do {
-                try await server.send(text, to: id, replyTo: reply?.seq, attachments: files)
+                try await server.send(text, to: id, replyTo: reply?.seq, attachments: files, mentions: mentions)
                 AttachmentTrays.shared.removeSent(files, agentID: id)
             } catch {
                 sendError = UserFacingError.message(for: error)
                 router.restoreDraft(text, for: id)
+                router.restoreMentions(draftMentions, for: id)
                 replyDrafts.restore(reply, for: id)
             }
         }
@@ -580,6 +583,7 @@ struct ThreadView: View {
             reactions: current.reactions,
             replies: current.replies,
             attachments: current.attachments,
+            mentions: current.mentions,
             waiting: current.waitingSeqs,
             undelivered: current.undeliveredSeqs,
             onResend: { seq in resend(seq) },
@@ -613,7 +617,13 @@ struct ThreadView: View {
     private func resend(_ seq: Int64) {
         let agentID = agent.id
         Task {
-            do { try await server.resendUndelivered(seq, of: agentID) } catch {
+            do {
+                let dropped = try await server.resendUndelivered(seq, of: agentID)
+                if !dropped.isEmpty {
+                    let names = dropped.map(\.label).joined(separator: ", ")
+                    actionError = UserFacingMessage(text: L10n.Mention.resendDropped(names: names))
+                }
+            } catch {
                 actionError = UserFacingError.message(for: error)
             }
         }
