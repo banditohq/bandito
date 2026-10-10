@@ -59,7 +59,7 @@ struct MarketView: View {
             }
         }
         .confirmationDialog(
-            L10n.Integrations.removeTitle(name: removing.map { MarketLogic.displayName(of: $0, in: catalog) } ?? ""),
+            L10n.Integrations.removeTitle(name: removing?.name ?? ""),
             isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
             titleVisibility: .visible,
             presenting: removing
@@ -411,8 +411,10 @@ struct MarketView: View {
 
     private func signInAgain(_ integration: Integration) {
         guard let server else { return }
-        let name = MarketLogic.displayName(of: integration, in: catalog)
-        Task { await app.oauth.begin(server: server, target: .existing(id: integration.id), name: name) }
+        // The name the card shows: a service's name, or the owner's own name for an own integration.
+        let entry = MarketLogic.entries(catalog: catalog, integrations: integrations, languageCode: "en")
+            .first { $0.integration?.id == integration.id }
+        Task { await app.oauth.begin(server: server, target: .existing(id: integration.id), name: entry?.name ?? integration.name) }
     }
 
     /// A sign-in just ended well: the list is read again and the new service is checked, so its tools show.

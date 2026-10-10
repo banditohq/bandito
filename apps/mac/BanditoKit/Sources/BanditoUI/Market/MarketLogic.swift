@@ -16,8 +16,12 @@ struct MarketEntry: Identifiable, Equatable {
 
     var isConnected: Bool { integration != nil }
 
-    /// The category of the catalog template; nil for an own integration.
-    var category: String? { template?.category }
+    /// An integration of the owner's, shown under its own name. It may carry a template for the logo and colour
+    /// (a second connection of a service that is already listed); it is not a catalog entry.
+    var isOwn: Bool { id.hasPrefix("own:") }
+
+    /// The category of the catalog template. An own entry is in no category: the catalog entry of the service is.
+    var category: String? { isOwn ? nil : template?.category }
 }
 
 /// The page of the Marketplace for one filter and one search: the connected row above the grid, and the grid.
@@ -54,9 +58,9 @@ enum MarketEmptyState: Equatable {
 /// The rules of the Marketplace list. Pure, so the filter, the search and the order are easy to test.
 enum MarketLogic {
     /// The catalog templates in catalog order, then the own integrations, in their order. A template that matches an
-    /// integration is connected: it is one entry, not two. The template takes the integration named after it, or else
-    /// the first one that matches by address. Any other integration that matches a template is listed as an own entry
-    /// that carries the template, so it shows the template's name and logo.
+    /// integration is connected: it is one entry, not two. The template takes its main integration: the one named after
+    /// it, else the first one that matches by address. Any other integration that matches a template is an own entry
+    /// under its own name, with the template's logo and colour; it is in no category.
     static func entries(
         catalog: [IntegrationCatalogEntry], integrations: [Integration], languageCode: String
     ) -> [MarketEntry] {
@@ -71,19 +75,18 @@ enum MarketLogic {
         }
         let taken = Set(templates.compactMap { $0.integration?.id })
         let own = integrations.filter { !taken.contains($0.id) }.map { integration in
-            let match = template(for: integration, in: catalog)
             return MarketEntry(
                 id: "own:\(integration.id)",
-                name: match?.name ?? integration.name,
+                name: integration.name,
                 description: address(integration),
-                template: match,
+                template: template(for: integration, in: catalog),
                 integration: integration)
         }
         return templates + own
     }
 
     /// The catalog template an integration belongs to: the one whose id is the integration's name, else the one whose
-    /// address is the integration's address. Addresses match ignoring a trailing `/`. Nil when neither matches.
+    /// address is the integration's address. Nil when neither matches.
     static func template(for integration: Integration, in catalog: [IntegrationCatalogEntry]) -> IntegrationCatalogEntry? {
         if let byName = catalog.first(where: { $0.id == integration.name }) {
             return byName
@@ -92,14 +95,16 @@ enum MarketLogic {
         return catalog.first { normalizedURL($0.url) == address }
     }
 
-    /// The name to show for an integration: the name of its catalog template, else the name the daemon has.
-    static func displayName(of integration: Integration, in catalog: [IntegrationCatalogEntry]) -> String {
-        template(for: integration, in: catalog)?.name ?? integration.name
-    }
-
-    /// An address without spaces at the ends and without trailing slashes; nil when nothing is left.
+    /// An address for comparing: the scheme and the host in lower case, the path as it is, no trailing `/`. Nil when
+    /// nothing is left. Spaces at the ends are ignored.
     static func normalizedURL(_ raw: String?) -> String? {
-        guard var address = raw?.trimmingCharacters(in: .whitespacesAndNewlines) else { return nil }
+        guard let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return nil }
+        var address = trimmed
+        if var parts = URLComponents(string: trimmed) {
+            parts.scheme = parts.scheme?.lowercased()
+            parts.host = parts.host?.lowercased()
+            address = parts.string ?? trimmed
+        }
         while address.hasSuffix("/") { address.removeLast() }
         return address.isEmpty ? nil : address
     }

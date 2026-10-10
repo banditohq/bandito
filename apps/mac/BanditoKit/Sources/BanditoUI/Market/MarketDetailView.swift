@@ -246,7 +246,7 @@ struct MarketDetailView: View {
         let status = IntegrationStatus.of(integration, test: test, connection: connection)
         return section(L10n.Market.Section.connection) {
             VStack(alignment: .leading, spacing: 12) {
-                if template == nil {
+                if entry.isOwn {
                     Text(MarketLogic.address(integration))
                         .font(BanditoFont.mono(size: 12, weight: 400))
                         .foregroundStyle(Color.Bandito.text2)
