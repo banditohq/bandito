@@ -240,6 +240,8 @@ The daemon always listens on:
 
 WebSocket upgrades that carry an `Origin` header are refused: native apps don't send one, browsers always do, so a web page can't drive the daemon through the user's browser. Unix socket paths are limited to ~104 bytes on macOS, so keep `BANDITO_HOME` short.
 
+An unknown or revoked device token is refused at the upgrade with HTTP 401 (a browser origin: 403). The app reads that status from the handshake (`URLSessionWebSocketTask.response`; the system error alone is `-1011` "bad server response") and reports a rejected key (`FailureKind.keyRejected`), not "the server does not answer". On This Mac the app then pairs again through the installed `bandito pair` and replaces the stored token, once per event; for any other server it offers "Connect again" (the add-server flow with the address).
+
 Optional: `listen = ["0.0.0.0:7879"]` with TLS (self-signed cert generated on first start; the app pins its SHA-256 fingerprint at pairing).
 
 Pairing: `bandito pair` prints a 6-word code, a QR and a `bandito://pair?...` link (host hints + cert fingerprint). `pair.redeem` swaps the one-time code (10 min) for a device token; the app keeps it in the Keychain. Tokens are stored hashed and can be revoked.

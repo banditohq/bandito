@@ -402,6 +402,26 @@
 			<string>%1$lld процесса</string>
 		</dict>
 	</dict>
+	<key>server.passport.uptimeHours</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>работает %1$lld часа</string>
+			<key>many</key>
+			<string>работает %1$lld часов</string>
+			<key>one</key>
+			<string>работает %1$lld час</string>
+			<key>other</key>
+			<string>работает %1$lld часов</string>
+		</dict>
+	</dict>
 	<key>setup.showFullLog</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>

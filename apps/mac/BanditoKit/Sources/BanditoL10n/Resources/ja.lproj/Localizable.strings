@@ -285,7 +285,8 @@
 "changes.askAgent" = "この箇所について %1$@ に質問";
 "changes.askPlace" = "%1$@:%2$@ を見てください。ここで何が変わり、なぜ変わったのか教えてください。";
 "changes.binary" = "バイナリファイルが変更されました";
-"changes.empty" = "まだ変更はありません";
+"changes.emptyMessage" = "エージェントがプロジェクト内で変更したファイルがここに表示されます。";
+"changes.emptyTitle" = "まだ変更はありません";
 "changes.inline" = "インライン";
 "changes.keepAria" = "%1$@ を残す";
 "changes.keepHint" = "チェックを外すと、そのファイルはタスク開始前の状態に戻ります。それ以外はそのままです。";
@@ -307,7 +308,7 @@
 "changes.status.renamed" = "名前変更";
 "changes.task" = "タスク「%1$@」";
 "changes.timeline" = "復元ポイント";
-"changes.title" = "%1$@ が変更した内容";
+"changes.title" = "変更: %1$@";
 "changes.truncated" = "差分は 512 KiB で切り詰められています";
 "changes.undo" = "取り消す";
 "changes.updateServer" = "サーバーを更新してください";
@@ -423,10 +424,15 @@
 "empty.noServers.title" = "サーバーがありません";
 "error.disconnected" = "%1$@ から切断されました";
 "error.generic" = "問題が発生しました: %1$@";
+"failure.connectAgain" = "再接続";
 "failure.copy" = "コピー";
 "failure.details" = "詳細";
 "failure.deviceRevoked" = "このデバイスはサーバーに接続されていません。もう一度接続してください。";
 "failure.generic" = "問題が発生しました。";
+"failure.keyRejected" = "サーバーがこの Mac のキーを受け付けませんでした。サーバーが再インストールされたか、キーが取り消された可能性があります。";
+"failure.keyRejectedThisMac" = "この Mac のサーバーがアプリのキーを受け付けませんでした。データが失われた可能性があります。";
+"failure.keyRepairFailed" = "この Mac のサーバーに再接続できませんでした。";
+"failure.keyRepairing" = "この Mac のサーバーに再接続しています…";
 "failure.noAnswer" = "サーバーが応答しません。電源が入っていて、接続が機能しているか確認してください。";
 "failure.reason.binary" = "テキストファイルではないため、ここでは表示できません。";
 "failure.reason.cloneFailed" = "リポジトリをクローンできませんでした。";
@@ -1461,6 +1467,7 @@
 "server.features.installed" = "インストール済み";
 "server.features.loginHelp" = "サーバーでサインイン：%1$@";
 "server.features.notInstalled" = "未インストール";
+"server.features.signIn" = "サインイン";
 "server.features.title" = "機能";
 "server.health.bothFull" = "ディスクとメモリの空きがわずかです";
 "server.health.diskFull" = "ディスクの空きがわずかです";
@@ -1480,6 +1487,7 @@
 "server.owner.agent" = "エージェント";
 "server.owner.daemon" = "Bandito デーモン";
 "server.owner.terminal" = "ターミナル";
+"server.passport.uptimeLessHour" = "稼働 1時間未満";
 "server.picker.connect" = "サーバーを接続…";
 "server.picker.kindRemote" = "サーバー";
 "server.picker.manage" = "サーバーを管理…";
@@ -1786,6 +1794,7 @@
 "team.header.browser" = "パネルでエージェントのブラウザを開く";
 "team.header.openInspector" = "エージェントの詳細を開く";
 "team.header.terminal" = "エージェントのフォルダでターミナルを開く";
+"team.home.asleep" = "休止中";
 "team.home.idea1" = "昨日の変更を確認して、危なそうな点を挙げて。";
 "team.home.idea2" = "メインブランチでテストが失敗する理由を調べて直して。";
 "team.home.idea3" = "サーバーのログを見張って、何か壊れたら知らせて。";

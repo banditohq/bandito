@@ -15,7 +15,7 @@ The Server mode has seven sections: Overview (Обзор), Workplaces (Рабо�
 ## Overview: load and health (Overview)
 
 <!-- id: server-overview; covers: -->
-The first screen: CPU, Memory, Disk and Network tiles, a health line, and the processes that use the most resources.
+The first screen: a passport card at the top (the device, the name, the system and version line, the uptime, and a status ring with the health words; This Mac (Этот Mac) marks the local server), then CPU, Memory, Disk and Network tiles, and the processes that use the most resources, with their CPU and memory bars.
 Где: Server → Overview (Обзор)
 1. Read the health line: All good (Всё в порядке), Disk almost full (Диск почти полон), Memory almost full (Памяти почти не осталось), or Disk and memory almost full (Диск и память почти заполнены).
 2. Switch the chart range: 1 h (1 h) or 24 h (24 h).
@@ -40,7 +40,7 @@ Stops all processes of one agent that use the server. Use it when an agent runs 
 ## Capabilities: components and install (Capabilities, Install)
 
 <!-- id: server-capabilities; covers: -->
-Shows what the server has: the Screen (Экран), the Browser (Браузер), Containers (Контейнеры), and the runtimes Claude Code, Codex and Grok. Each line has a state: Ready (Готово), Not installed (Не установлен), or Not available (Недоступно).
+Shows what the server has: the Screen (Экран), the Browser (Браузер), Containers (Контейнеры), and the runtimes Claude Code, Codex and Grok. Each line is a tile with a state chip: Ready (Готово), Sign in needed (Нужно войти, with the Sign in (Войти) link), Not installed (Не установлено, with the Install (Установить) link), or Not available (Недоступно).
 Где: Server → Overview → Capabilities (Возможности) → Install (Установить)
 1. Read the states. Click Install (Установить) to install all missing items that can be installed here. The log shows the progress.
 2. If an administrator password is needed, the card asks you to run the command in a Bandito terminal. Click Open terminal (Открыть терминал) and type the password there. See [getting-started.md](getting-started.md).

@@ -182,24 +182,9 @@ struct ServerFeaturesCard: View {
                     .disabled(setup.isRunning)
                 }
             }
-            ForEach(setup.lines) { line in
-                HStack(spacing: 10) {
-                    Text(line.title)
-                        .font(BanditoFont.text(size: 13, weight: 400))
-                        .foregroundStyle(Color.Bandito.text)
-                        .lineLimit(1)
-                    Spacer(minLength: 8)
-                    if let hint = line.hint, line.state != .ready {
-                        Text(hint)
-                            .font(BanditoFont.text(size: 12, weight: 400))
-                            .foregroundStyle(Color.Bandito.text3)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.85)
-                    }
-                    let badge = SetupBadge.make(for: line, runtimes: server.runtimes)
-                    Chip(text: badge.text, tone: badge.tone)
-                        .fixedSize()
-                        .optionalHelp(badge.help)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 12, alignment: .top)], alignment: .leading, spacing: 12) {
+                ForEach(setup.lines) { line in
+                    featureTile(line)
                 }
             }
             if let job = setup.job {
@@ -232,6 +217,75 @@ struct ServerFeaturesCard: View {
             }
         }
         .task { await setup.load(server) }
+    }
+
+    /// One capability: an icon in a circle, its name, the status chip, and the action the person can take (install, sign in).
+    private func featureTile(_ line: SetupLine) -> some View {
+        let badge = SetupBadge.make(for: line, runtimes: server.runtimes)
+        return HStack(alignment: .center, spacing: 12) {
+            Image(systemName: Self.symbol(for: line.id))
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(Color.Bandito.text2)
+                .frame(width: 32, height: 32)
+                .background(Circle().fill(Color.Bandito.text.opacity(0.06)))
+            VStack(alignment: .leading, spacing: 6) {
+                Text(line.title)
+                    .font(BanditoFont.text(size: 13, weight: 600))
+                    .foregroundStyle(Color.Bandito.text)
+                    .lineLimit(1)
+                HStack(spacing: 8) {
+                    Chip(text: badge.text, tone: Self.chipTone(badge.tone))
+                        .fixedSize()
+                        .optionalHelp(badge.help)
+                    featureAction(line, tone: badge.tone)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.Bandito.bg))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.Bandito.line))
+    }
+
+    /// Install for a missing part the app can install; sign in for a runtime that is installed but not logged in.
+    @ViewBuilder
+    private func featureAction(_ line: SetupLine, tone: ChipTone) -> some View {
+        if line.state != .ready, setup.missingInstallable.contains(line.id) {
+            Button(L10n.Setup.install) {
+                Task { await setup.install([line.id], server: server) }
+            }
+            .banditoButton(.link)
+            .disabled(setup.isRunning)
+        } else if tone == .warning, let kind = RuntimeKind(rawValue: line.id), let command = SetupBadge.loginCommand(kind) {
+            Button(L10n.Server.Features.signIn) {
+                router.requestTerminalCommand(command)
+            }
+            .banditoButton(.link)
+        }
+    }
+
+    /// The symbol of a capability, so each tile reads at a glance.
+    static func symbol(for id: String) -> String {
+        switch id {
+        case "screen": "display"
+        case "browser": "globe"
+        case "containers": "shippingbox"
+        case "claude": "sparkle"
+        case "codex": "chevron.left.forwardslash.chevron.right"
+        case "grok": "bolt"
+        default: RuntimeKind(rawValue: id) != nil ? "cpu" : "puzzlepiece.extension"
+        }
+    }
+
+    /// The chip tones of the grid: ready is green, a sign-in is orange, not installed is the quiet grey.
+    static func chipTone(_ tone: ChipTone) -> ChipTone {
+        switch tone {
+        case .ok: .ok
+        case .warning: .signal
+        case .danger: .neutral
+        default: tone
+        }
     }
 
     /// Lines shown before the person opens the whole log.

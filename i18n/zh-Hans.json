@@ -663,6 +663,11 @@
   "server.features.notInstalled": "未安装",
   "server.features.installed": "已安装",
   "server.features.loginHelp": "在服务器上登录：{command}",
+  "server.features.signIn": "登录",
+  "server.passport.uptimeHours": {
+    "other": "已运行 {count} 小时"
+  },
+  "server.passport.uptimeLessHour": "已运行不到 1 小时",
   "modelPicker.defaultLabel": "默认 · {name}",
   "modelPicker.defaultMenu": "默认（{name}）",
   "modelPicker.defaultPlain": "默认",
@@ -1068,7 +1073,7 @@
   "menubar.resolveFailed": "无法发送回复：{error}",
   "team.delete.action": "删除",
   "team.changes": "更改",
-  "changes.title": "{name} 的更改",
+  "changes.title": "变更：{name}",
   "changes.task": "任务“{task}”",
   "changes.fileCount": {
     "other": "{count} 个文件"
@@ -1106,7 +1111,8 @@
     "other": "已回滚 {count} 个文件"
   },
   "changes.undo": "撤销",
-  "changes.empty": "尚无更改",
+  "changes.emptyTitle": "尚无更改",
+  "changes.emptyMessage": "智能体在项目中更改的文件会显示在这里。",
   "changes.updateServer": "请更新服务器",
   "changes.binary": "二进制文件已更改",
   "changes.noTextChanges": "没有文本更改",
@@ -1850,6 +1856,11 @@
   "journal.needsNewer": "日志功能需要更新的服务器。请更新服务器后即可在此查看其日志。",
   "failure.noAnswer": "服务器没有响应。请检查它是否开机，以及连接是否正常。",
   "failure.deviceRevoked": "此设备已无法连接到服务器。请重新连接。",
+  "failure.keyRejected": "服务器不接受这台 Mac 的密钥。服务器可能已重新安装，或密钥已被撤销。",
+  "failure.keyRejectedThisMac": "这台 Mac 的服务器不接受应用的密钥。它可能丢失了数据。",
+  "failure.keyRepairing": "正在重新连接这台 Mac 的服务器…",
+  "failure.keyRepairFailed": "无法重新连接这台 Mac 的服务器。",
+  "failure.connectAgain": "重新连接",
   "failure.generic": "出了点问题。",
   "failure.details": "详情",
   "failure.copy": "复制",
@@ -1923,6 +1934,7 @@
   "team.home.subtitle": "从上次停下的地方继续，或把下一项工作交给新的智能体。",
   "team.home.templates": "从模板开始",
   "team.home.recent": "最近的智能体",
+  "team.home.asleep": "休眠中",
   "team.home.ideas": "可以交给它们的事",
   "team.home.idea1": "看看昨天的改动，列出看起来有风险的地方。",
   "team.home.idea2": "查明主分支上测试失败的原因并修复。",

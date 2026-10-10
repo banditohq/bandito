@@ -285,7 +285,8 @@
 "changes.askAgent" = "就此处询问 %1$@";
 "changes.askPlace" = "请查看 %1$@:%2$@ — 这里改了什么，为什么要改？";
 "changes.binary" = "二进制文件已更改";
-"changes.empty" = "尚无更改";
+"changes.emptyMessage" = "智能体在项目中更改的文件会显示在这里。";
+"changes.emptyTitle" = "尚无更改";
 "changes.inline" = "内联";
 "changes.keepAria" = "保留 %1$@";
 "changes.keepHint" = "取消勾选某个文件，即可将其恢复为任务开始前的样子。其余内容保持不变。";
@@ -307,7 +308,7 @@
 "changes.status.renamed" = "已重命名";
 "changes.task" = "任务“%1$@”";
 "changes.timeline" = "恢复点";
-"changes.title" = "%1$@ 的更改";
+"changes.title" = "变更：%1$@";
 "changes.truncated" = "差异内容已在 512 KiB 处截断";
 "changes.undo" = "撤销";
 "changes.updateServer" = "请更新服务器";
@@ -423,10 +424,15 @@
 "empty.noServers.title" = "没有服务器";
 "error.disconnected" = "与 %1$@ 的连接已断开";
 "error.generic" = "出错了：%1$@";
+"failure.connectAgain" = "重新连接";
 "failure.copy" = "复制";
 "failure.details" = "详情";
 "failure.deviceRevoked" = "此设备已无法连接到服务器。请重新连接。";
 "failure.generic" = "出了点问题。";
+"failure.keyRejected" = "服务器不接受这台 Mac 的密钥。服务器可能已重新安装，或密钥已被撤销。";
+"failure.keyRejectedThisMac" = "这台 Mac 的服务器不接受应用的密钥。它可能丢失了数据。";
+"failure.keyRepairFailed" = "无法重新连接这台 Mac 的服务器。";
+"failure.keyRepairing" = "正在重新连接这台 Mac 的服务器…";
 "failure.noAnswer" = "服务器没有响应。请检查它是否开机，以及连接是否正常。";
 "failure.reason.binary" = "这不是文本文件，无法在此显示。";
 "failure.reason.cloneFailed" = "无法克隆该仓库。";
@@ -1461,6 +1467,7 @@
 "server.features.installed" = "已安装";
 "server.features.loginHelp" = "在服务器上登录：%1$@";
 "server.features.notInstalled" = "未安装";
+"server.features.signIn" = "登录";
 "server.features.title" = "功能";
 "server.health.bothFull" = "磁盘和内存即将占满";
 "server.health.diskFull" = "磁盘即将占满";
@@ -1480,6 +1487,7 @@
 "server.owner.agent" = "代理";
 "server.owner.daemon" = "Bandito 守护进程";
 "server.owner.terminal" = "终端";
+"server.passport.uptimeLessHour" = "已运行不到 1 小时";
 "server.picker.connect" = "连接服务器…";
 "server.picker.kindRemote" = "服务器";
 "server.picker.manage" = "管理服务器…";
@@ -1786,6 +1794,7 @@
 "team.header.browser" = "在面板中打开智能体的浏览器";
 "team.header.openInspector" = "打开智能体详情";
 "team.header.terminal" = "在代理的文件夹中打开终端";
+"team.home.asleep" = "休眠中";
 "team.home.idea1" = "看看昨天的改动，列出看起来有风险的地方。";
 "team.home.idea2" = "查明主分支上测试失败的原因并修复。";
 "team.home.idea3" = "盯着服务器日志，出问题时告诉我。";

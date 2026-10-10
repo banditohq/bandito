@@ -285,7 +285,8 @@
 "changes.askAgent" = "Спросить %1$@ об этом месте";
 "changes.askPlace" = "Посмотри %1$@:%2$@ — что здесь изменилось и почему?";
 "changes.binary" = "Бинарный файл изменён";
-"changes.empty" = "Пока ничего не изменено";
+"changes.emptyMessage" = "Здесь появятся файлы, которые агент поменял в проекте";
+"changes.emptyTitle" = "Пока ничего не изменено";
 "changes.inline" = "Построчно";
 "changes.keepAria" = "Оставить %1$@";
 "changes.keepHint" = "Снимите галочку — файл вернётся к виду до задачи. Остальное останется.";
@@ -307,7 +308,7 @@
 "changes.status.renamed" = "переименован";
 "changes.task" = "Задача «%1$@»";
 "changes.timeline" = "Точки возврата";
-"changes.title" = "Что изменил %1$@";
+"changes.title" = "Изменения: %1$@";
 "changes.truncated" = "Разница обрезана на 512 КиБ";
 "changes.undo" = "Отменить";
 "changes.updateServer" = "Обновите сервер";
@@ -423,10 +424,15 @@
 "empty.noServers.title" = "Нет серверов";
 "error.disconnected" = "Соединение с %1$@ разорвано";
 "error.generic" = "Что-то пошло не так: %1$@";
+"failure.connectAgain" = "Подключить заново";
 "failure.copy" = "Скопировать";
 "failure.details" = "Подробнее";
 "failure.deviceRevoked" = "Это устройство больше не подключено к серверу — подключите заново.";
 "failure.generic" = "Что-то пошло не так.";
+"failure.keyRejected" = "Сервер не принял ключ этого Mac. Возможно, сервер переустановили или ключ отозвали.";
+"failure.keyRejectedThisMac" = "Сервер этого Mac не принял ключ приложения. Возможно, он потерял свои данные.";
+"failure.keyRepairFailed" = "Не удалось заново подключиться к серверу этого Mac.";
+"failure.keyRepairing" = "Подключаюсь к серверу этого Mac заново…";
 "failure.noAnswer" = "Сервер не отвечает. Проверьте, что он включён и подключение работает.";
 "failure.reason.binary" = "Это не текстовый файл, здесь его не показать.";
 "failure.reason.cloneFailed" = "Не удалось клонировать репозиторий.";
@@ -1461,6 +1467,7 @@
 "server.features.installed" = "Установлен";
 "server.features.loginHelp" = "Войдите на сервере: %1$@";
 "server.features.notInstalled" = "Не установлен";
+"server.features.signIn" = "Войти";
 "server.features.title" = "Возможности";
 "server.health.bothFull" = "Диск и память почти заполнены";
 "server.health.diskFull" = "Диск почти полон";
@@ -1480,6 +1487,7 @@
 "server.owner.agent" = "Агент";
 "server.owner.daemon" = "Демон Bandito";
 "server.owner.terminal" = "Терминал";
+"server.passport.uptimeLessHour" = "работает меньше часа";
 "server.picker.connect" = "Подключить сервер…";
 "server.picker.kindRemote" = "Сервер";
 "server.picker.manage" = "Управлять серверами…";
@@ -1786,6 +1794,7 @@
 "team.header.browser" = "Браузер агента в панели";
 "team.header.openInspector" = "Открыть сведения агента";
 "team.header.terminal" = "Открыть терминал в папке агента";
+"team.home.asleep" = "спит";
 "team.home.idea1" = "Просмотри вчерашние изменения и перечисли, что выглядит рискованно.";
 "team.home.idea2" = "Выясни, почему падают тесты в основной ветке, и исправь.";
 "team.home.idea3" = "Следи за логами сервера и скажи, если что-то сломается.";

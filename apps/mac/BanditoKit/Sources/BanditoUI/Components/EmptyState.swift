@@ -121,7 +121,7 @@ public struct EmptyState: View {
 
 /// Moves its content up and down by 3 pt over 3.2 s (1.6 s each way, ease in and out). A `PhaseAnimator` runs the
 /// loop, so nothing is computed per frame. Disabled, the content stays at rest.
-private struct Floating<Content: View>: View {
+struct Floating<Content: View>: View {
     let enabled: Bool
     @ViewBuilder let content: () -> Content
 

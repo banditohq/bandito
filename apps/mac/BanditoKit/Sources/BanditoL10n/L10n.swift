@@ -411,7 +411,8 @@ public enum L10n {
         public static func askAgent(name: String) -> String { L10n.tr("changes.askAgent", name) }
         public static func askPlace(path: String, line: String) -> String { L10n.tr("changes.askPlace", path, line) }
         public static var binary: String { L10n.tr("changes.binary") }
-        public static var empty: String { L10n.tr("changes.empty") }
+        public static var emptyMessage: String { L10n.tr("changes.emptyMessage") }
+        public static var emptyTitle: String { L10n.tr("changes.emptyTitle") }
         public static func fileCount(count: Int) -> String { L10n.tr("changes.fileCount", count) }
         public static var inline: String { L10n.tr("changes.inline") }
         public static func keepAria(name: String) -> String { L10n.tr("changes.keepAria", name) }
@@ -630,10 +631,15 @@ public enum L10n {
     }
 
     public enum Failure {
+        public static var connectAgain: String { L10n.tr("failure.connectAgain") }
         public static var copy: String { L10n.tr("failure.copy") }
         public static var details: String { L10n.tr("failure.details") }
         public static var deviceRevoked: String { L10n.tr("failure.deviceRevoked") }
         public static var generic: String { L10n.tr("failure.generic") }
+        public static var keyRejected: String { L10n.tr("failure.keyRejected") }
+        public static var keyRejectedThisMac: String { L10n.tr("failure.keyRejectedThisMac") }
+        public static var keyRepairFailed: String { L10n.tr("failure.keyRepairFailed") }
+        public static var keyRepairing: String { L10n.tr("failure.keyRepairing") }
         public static var noAnswer: String { L10n.tr("failure.noAnswer") }
 
         public enum Reason {
@@ -1963,6 +1969,7 @@ public enum L10n {
             public static var installed: String { L10n.tr("server.features.installed") }
             public static func loginHelp(command: String) -> String { L10n.tr("server.features.loginHelp", command) }
             public static var notInstalled: String { L10n.tr("server.features.notInstalled") }
+            public static var signIn: String { L10n.tr("server.features.signIn") }
             public static var title: String { L10n.tr("server.features.title") }
         }
 
@@ -1989,6 +1996,11 @@ public enum L10n {
             public static var agent: String { L10n.tr("server.owner.agent") }
             public static var daemon: String { L10n.tr("server.owner.daemon") }
             public static var terminal: String { L10n.tr("server.owner.terminal") }
+        }
+
+        public enum Passport {
+            public static func uptimeHours(count: Int) -> String { L10n.tr("server.passport.uptimeHours", count) }
+            public static var uptimeLessHour: String { L10n.tr("server.passport.uptimeLessHour") }
         }
 
         public enum Picker {
@@ -2424,6 +2436,7 @@ public enum L10n {
         }
 
         public enum Home {
+            public static var asleep: String { L10n.tr("team.home.asleep") }
             public static var idea1: String { L10n.tr("team.home.idea1") }
             public static var idea2: String { L10n.tr("team.home.idea2") }
             public static var idea3: String { L10n.tr("team.home.idea3") }

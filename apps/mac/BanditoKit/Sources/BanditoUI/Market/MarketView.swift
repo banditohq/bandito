@@ -18,6 +18,7 @@ struct MarketView: View {
     /// The server the lists above belong to. A switch to another server clears them before the new lists load.
     @State private var shownServer: UUID?
     @State private var query = ""
+    @FocusState private var searchFocused: Bool
     @State private var error: UserFacingMessage?
     @State private var editing: IntegrationTarget?
     @State private var removing: Integration?
@@ -165,8 +166,10 @@ struct MarketView: View {
         }
     }
 
+    /// One capsule holds the lens and the field: the capsule draws the fill and the border, the field inside is plain.
+    /// Focus shows as a cream ring on the capsule.
     private var searchField: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(Color.Bandito.text3)
@@ -174,11 +177,13 @@ struct MarketView: View {
                 .textFieldStyle(.plain)
                 .font(BanditoFont.text(size: 13, weight: 400))
                 .foregroundStyle(Color.Bandito.text)
+                .focused($searchFocused)
         }
-        .padding(.horizontal, 10)
-        .frame(width: 240, height: 30)
-        .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Color.Bandito.text.opacity(0.05)))
-        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(Color.Bandito.line))
+        .padding(.horizontal, 12)
+        .frame(width: 240, height: 32)
+        .background(Capsule().fill(Color.Bandito.text.opacity(0.05)))
+        .overlay(Capsule().strokeBorder(searchFocused ? Color.Bandito.text.opacity(0.3) : Color.Bandito.line, lineWidth: 1))
+        .banditoAnimation(.timingCurve(0.2, 0.8, 0.2, 1, duration: BanditoMotion.fast), value: searchFocused)
     }
 
     private func emptyText(_ state: MarketEmptyState) -> some View {
@@ -444,8 +449,16 @@ struct MarketTile: View {
         let shape = RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
         Group {
             if let template = entry.template {
-                Image(systemName: IntegrationSymbol.name(icon: template.icon, kind: template.kind))
-                    .font(.system(size: size * 0.44, weight: .semibold))
+                if let logo = ServiceLogo.image(for: template.id) {
+                    Image(nsImage: logo)
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: size * 0.5, height: size * 0.5)
+                } else {
+                    Image(systemName: IntegrationSymbol.name(icon: template.icon, kind: template.kind))
+                        .font(.system(size: size * 0.44, weight: .semibold))
+                }
             } else {
                 Text(String(entry.name.prefix(1)).uppercased())
                     .font(BanditoFont.display(size: size * 0.42, weight: 700))

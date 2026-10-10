@@ -663,6 +663,11 @@
   "server.features.notInstalled": "未インストール",
   "server.features.installed": "インストール済み",
   "server.features.loginHelp": "サーバーでサインイン：{command}",
+  "server.features.signIn": "サインイン",
+  "server.passport.uptimeHours": {
+    "other": "稼働 {count} 時間"
+  },
+  "server.passport.uptimeLessHour": "稼働 1時間未満",
   "modelPicker.defaultLabel": "デフォルト · {name}",
   "modelPicker.defaultMenu": "デフォルト（{name}）",
   "modelPicker.defaultPlain": "デフォルト",
@@ -1068,7 +1073,7 @@
   "menubar.resolveFailed": "回答を送信できませんでした: {error}",
   "team.delete.action": "削除",
   "team.changes": "変更",
-  "changes.title": "{name} が変更した内容",
+  "changes.title": "変更: {name}",
   "changes.task": "タスク「{task}」",
   "changes.fileCount": {
     "other": "{count} 件のファイル"
@@ -1106,7 +1111,8 @@
     "other": "{count} 件のファイルを元に戻しました"
   },
   "changes.undo": "取り消す",
-  "changes.empty": "まだ変更はありません",
+  "changes.emptyTitle": "まだ変更はありません",
+  "changes.emptyMessage": "エージェントがプロジェクト内で変更したファイルがここに表示されます。",
   "changes.updateServer": "サーバーを更新してください",
   "changes.binary": "バイナリファイルが変更されました",
   "changes.noTextChanges": "テキストの変更はありません",
@@ -1850,6 +1856,11 @@
   "journal.needsNewer": "ログを表示するには、より新しいサーバーが必要です。サーバーを更新すると、ここでログを確認できます。",
   "failure.noAnswer": "サーバーが応答しません。電源が入っていて、接続が機能しているか確認してください。",
   "failure.deviceRevoked": "このデバイスはサーバーに接続されていません。もう一度接続してください。",
+  "failure.keyRejected": "サーバーがこの Mac のキーを受け付けませんでした。サーバーが再インストールされたか、キーが取り消された可能性があります。",
+  "failure.keyRejectedThisMac": "この Mac のサーバーがアプリのキーを受け付けませんでした。データが失われた可能性があります。",
+  "failure.keyRepairing": "この Mac のサーバーに再接続しています…",
+  "failure.keyRepairFailed": "この Mac のサーバーに再接続できませんでした。",
+  "failure.connectAgain": "再接続",
   "failure.generic": "問題が発生しました。",
   "failure.details": "詳細",
   "failure.copy": "コピー",
@@ -1923,6 +1934,7 @@
   "team.home.subtitle": "前回の続きから再開するか、新しいエージェントに次の仕事を任せましょう。",
   "team.home.templates": "テンプレートから始める",
   "team.home.recent": "最近のエージェント",
+  "team.home.asleep": "休止中",
   "team.home.ideas": "任せられること",
   "team.home.idea1": "昨日の変更を確認して、危なそうな点を挙げて。",
   "team.home.idea2": "メインブランチでテストが失敗する理由を調べて直して。",

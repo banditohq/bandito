@@ -285,7 +285,8 @@
 "changes.askAgent" = "%1$@ zu dieser Stelle fragen";
 "changes.askPlace" = "Sehen Sie sich %1$@:%2$@ an — was hat sich hier geändert und warum?";
 "changes.binary" = "Binärdatei geändert";
-"changes.empty" = "Noch nichts geändert";
+"changes.emptyMessage" = "Hier erscheinen die Dateien, die der Agent im Projekt ändert.";
+"changes.emptyTitle" = "Noch nichts geändert";
 "changes.inline" = "Zeilenweise";
 "changes.keepAria" = "%1$@ behalten";
 "changes.keepHint" = "Haken Sie eine Datei ab, damit sie wieder so wird wie vor der Aufgabe. Der Rest bleibt.";
@@ -307,7 +308,7 @@
 "changes.status.renamed" = "umbenannt";
 "changes.task" = "Aufgabe «%1$@»";
 "changes.timeline" = "Wiederherstellungspunkte";
-"changes.title" = "Was %1$@ geändert hat";
+"changes.title" = "Änderungen: %1$@";
 "changes.truncated" = "Der Unterschied ist bei 512 KiB abgeschnitten";
 "changes.undo" = "Rückgängig";
 "changes.updateServer" = "Aktualisieren Sie den Server";
@@ -423,10 +424,15 @@
 "empty.noServers.title" = "Keine Server";
 "error.disconnected" = "Verbindung zu %1$@ getrennt";
 "error.generic" = "Etwas ist schiefgelaufen: %1$@";
+"failure.connectAgain" = "Erneut verbinden";
 "failure.copy" = "Kopieren";
 "failure.details" = "Details";
 "failure.deviceRevoked" = "Dieses Gerät ist nicht mehr mit dem Server verbunden — verbinden Sie es erneut.";
 "failure.generic" = "Etwas ist schiefgelaufen.";
+"failure.keyRejected" = "Der Server hat den Schlüssel dieses Macs nicht akzeptiert. Vielleicht wurde der Server neu installiert oder der Schlüssel widerrufen.";
+"failure.keyRejectedThisMac" = "Der Server dieses Macs hat den Schlüssel der App nicht akzeptiert. Möglicherweise hat er seine Daten verloren.";
+"failure.keyRepairFailed" = "Die erneute Verbindung mit dem Server dieses Macs ist fehlgeschlagen.";
+"failure.keyRepairing" = "Verbindung mit dem Server dieses Macs wird erneut hergestellt …";
 "failure.noAnswer" = "Der Server antwortet nicht. Prüfen Sie, ob er eingeschaltet ist und die Verbindung funktioniert.";
 "failure.reason.binary" = "Das ist keine Textdatei, daher kann sie hier nicht angezeigt werden.";
 "failure.reason.cloneFailed" = "Das Repository konnte nicht geklont werden.";
@@ -1461,6 +1467,7 @@
 "server.features.installed" = "Installiert";
 "server.features.loginHelp" = "Auf dem Server anmelden: %1$@";
 "server.features.notInstalled" = "Nicht installiert";
+"server.features.signIn" = "Anmelden";
 "server.features.title" = "Funktionen";
 "server.health.bothFull" = "Speicher und Arbeitsspeicher fast voll";
 "server.health.diskFull" = "Speicher fast voll";
@@ -1480,6 +1487,7 @@
 "server.owner.agent" = "Agent";
 "server.owner.daemon" = "Bandito-Daemon";
 "server.owner.terminal" = "Terminal";
+"server.passport.uptimeLessHour" = "läuft seit weniger als einer Stunde";
 "server.picker.connect" = "Server verbinden …";
 "server.picker.kindRemote" = "Server";
 "server.picker.manage" = "Server verwalten …";
@@ -1786,6 +1794,7 @@
 "team.header.browser" = "Browser des Agenten im Bereich öffnen";
 "team.header.openInspector" = "Details des Agenten öffnen";
 "team.header.terminal" = "Terminal im Ordner des Agenten öffnen";
+"team.home.asleep" = "schläft";
 "team.home.idea1" = "Prüfe die gestrigen Änderungen und liste auf, was riskant aussieht.";
 "team.home.idea2" = "Finde heraus, warum die Tests im Hauptzweig fehlschlagen, und behebe es.";
 "team.home.idea3" = "Beobachte die Server-Logs und sag Bescheid, wenn etwas ausfällt.";

@@ -24,6 +24,16 @@ shoot() {
     }
 }
 
+# Closes every sheet and popover before the next picture: `dismiss` clears the sheet, then Escape closes what is left
+# (a popover, the account sign-in window). Without it the sign-in window stays on the next mode's picture.
+close_all() {
+    "$here/cmd.sh" "$n" dismiss
+    qa_bid "$n"
+    osascript -e "tell application id \"$bid\" to activate" \
+        -e 'tell application "System Events" to key code 53' >/dev/null 2>&1 || true
+    sleep 0.3
+}
+
 for size in ${QA_SWEEP_SIZES:-900x600 1200x800 1600x1000}; do
     "$here/cmd.sh" "$n" window "$size"
     for mode in team files terminals browser screen market server; do
@@ -35,7 +45,7 @@ for size in ${QA_SWEEP_SIZES:-900x600 1200x800 1600x1000}; do
         "$here/cmd.sh" "$n" sheet "$sheet"
         sleep "$pause"
         shoot "$outdir/sheet-$sheet-$size.png"
-        "$here/cmd.sh" "$n" dismiss
+        close_all
     done
 done
 

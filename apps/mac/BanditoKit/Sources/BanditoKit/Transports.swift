@@ -35,17 +35,39 @@ public actor WebSocketTransport: RPCTransport {
         t.resume()
     }
 
+    /// The error for a handshake the server answered with this HTTP status: `keyRejected` for 401 and 403 (the daemon
+    /// is there and refuses the device token), nil for anything else.
+    static func rejection(forStatus status: Int?) -> RPCError? {
+        guard let status, status == 401 || status == 403 else { return nil }
+        return RPCError(code: RPCError.keyRejected, message: "the server rejected the device key (HTTP \(status))")
+    }
+
+    /// A failed handshake shows up as `NSURLErrorBadServerResponse` (-1011) on the first send or receive. The HTTP
+    /// answer is on the task: a 401/403 there means the server answered and refused the key, which is not "no answer".
+    private func mapped(_ error: Error, of task: URLSessionWebSocketTask) -> Error {
+        let status = (task.response as? HTTPURLResponse)?.statusCode
+        return Self.rejection(forStatus: status) ?? error
+    }
+
     public func send(_ text: String) async throws {
         guard let task else { throw RPCError(code: RPCError.disconnected, message: "not connected") }
-        try await task.send(.string(text))
+        do {
+            try await task.send(.string(text))
+        } catch {
+            throw mapped(error, of: task)
+        }
     }
 
     public func receive() async throws -> String {
         guard let task else { throw RPCError(code: RPCError.disconnected, message: "not connected") }
-        switch try await task.receive() {
-        case .string(let s): return s
-        case .data(let d): return String(decoding: d, as: UTF8.self)
-        @unknown default: return ""
+        do {
+            switch try await task.receive() {
+            case .string(let s): return s
+            case .data(let d): return String(decoding: d, as: UTF8.self)
+            @unknown default: return ""
+            }
+        } catch {
+            throw mapped(error, of: task)
         }
     }
 

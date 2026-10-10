@@ -285,7 +285,8 @@
 "changes.askAgent" = "Demander à %1$@ à propos de cet emplacement";
 "changes.askPlace" = "Regardez %1$@:%2$@ — qu’est-ce qui a changé ici et pourquoi ?";
 "changes.binary" = "Fichier binaire modifié";
-"changes.empty" = "Rien n’a encore changé";
+"changes.emptyMessage" = "Ici apparaîtront les fichiers que l’agent modifie dans le projet.";
+"changes.emptyTitle" = "Rien n’a encore changé";
 "changes.inline" = "En ligne";
 "changes.keepAria" = "Garder %1$@";
 "changes.keepHint" = "Décochez un fichier pour le remettre tel qu’il était avant la tâche. Le reste est conservé.";
@@ -307,7 +308,7 @@
 "changes.status.renamed" = "renommé";
 "changes.task" = "Tâche « %1$@ »";
 "changes.timeline" = "Points de restauration";
-"changes.title" = "Ce que %1$@ a modifié";
+"changes.title" = "Modifications : %1$@";
 "changes.truncated" = "La différence est tronquée à 512 Kio";
 "changes.undo" = "Annuler";
 "changes.updateServer" = "Mettez à jour le serveur";
@@ -423,10 +424,15 @@
 "empty.noServers.title" = "Aucun serveur";
 "error.disconnected" = "Connexion à %1$@ interrompue";
 "error.generic" = "Une erreur est survenue : %1$@";
+"failure.connectAgain" = "Se reconnecter";
 "failure.copy" = "Copier";
 "failure.details" = "Détails";
 "failure.deviceRevoked" = "Cet appareil n’est plus connecté au serveur — reconnectez-le.";
 "failure.generic" = "Une erreur s’est produite.";
+"failure.keyRejected" = "Le serveur n’a pas accepté la clé de ce Mac. Il a peut-être été réinstallé, ou la clé a été révoquée.";
+"failure.keyRejectedThisMac" = "Le serveur de ce Mac n’a pas accepté la clé de l’app. Il a peut-être perdu ses données.";
+"failure.keyRepairFailed" = "Impossible de se reconnecter au serveur de ce Mac.";
+"failure.keyRepairing" = "Nouvelle connexion au serveur de ce Mac…";
 "failure.noAnswer" = "Le serveur ne répond pas. Vérifiez qu’il est allumé et que la connexion fonctionne.";
 "failure.reason.binary" = "Ce n’est pas un fichier texte, il ne peut donc pas être affiché ici.";
 "failure.reason.cloneFailed" = "Le dépôt n’a pas pu être cloné.";
@@ -1461,6 +1467,7 @@
 "server.features.installed" = "Installé";
 "server.features.loginHelp" = "Connexion sur le serveur : %1$@";
 "server.features.notInstalled" = "Non installé";
+"server.features.signIn" = "Se connecter";
 "server.features.title" = "Fonctionnalités";
 "server.health.bothFull" = "Disque et mémoire presque pleins";
 "server.health.diskFull" = "Disque presque plein";
@@ -1480,6 +1487,7 @@
 "server.owner.agent" = "Agent";
 "server.owner.daemon" = "Démon Bandito";
 "server.owner.terminal" = "Terminal";
+"server.passport.uptimeLessHour" = "actif depuis moins d'une heure";
 "server.picker.connect" = "Connecter un serveur…";
 "server.picker.kindRemote" = "Serveur";
 "server.picker.manage" = "Gérer les serveurs…";
@@ -1786,6 +1794,7 @@
 "team.header.browser" = "Ouvrir le navigateur de l'agent dans le panneau";
 "team.header.openInspector" = "Ouvrir les détails de l'agent";
 "team.header.terminal" = "Ouvrir un terminal dans le dossier de l'agent";
+"team.home.asleep" = "en veille";
 "team.home.idea1" = "Passe en revue les changements d'hier et liste ce qui paraît risqué.";
 "team.home.idea2" = "Trouve pourquoi les tests échouent sur la branche principale et corrige-le.";
 "team.home.idea3" = "Surveille les journaux du serveur et préviens-moi si quelque chose casse.";

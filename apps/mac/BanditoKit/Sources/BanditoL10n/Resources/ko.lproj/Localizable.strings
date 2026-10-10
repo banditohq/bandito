@@ -285,7 +285,8 @@
 "changes.askAgent" = "이 부분에 대해 %1$@에게 묻기";
 "changes.askPlace" = "%1$@:%2$@을 봐 주세요. 여기서 무엇이 바뀌었고 왜 바뀌었나요?";
 "changes.binary" = "바이너리 파일이 변경됐어요";
-"changes.empty" = "아직 변경된 내용이 없어요";
+"changes.emptyMessage" = "에이전트가 프로젝트에서 바꾼 파일이 여기에 표시됩니다.";
+"changes.emptyTitle" = "아직 변경된 내용이 없어요";
 "changes.inline" = "인라인";
 "changes.keepAria" = "%1$@ 유지";
 "changes.keepHint" = "체크를 해제하면 해당 파일이 작업 전 상태로 돌아가요. 나머지는 그대로 유지돼요.";
@@ -307,7 +308,7 @@
 "changes.status.renamed" = "이름 변경됨";
 "changes.task" = "작업 “%1$@”";
 "changes.timeline" = "복원 지점";
-"changes.title" = "%1$@이(가) 바꾼 내용";
+"changes.title" = "%1$@의 변경 사항";
 "changes.truncated" = "차이가 512 KiB에서 잘렸어요";
 "changes.undo" = "실행 취소";
 "changes.updateServer" = "서버를 업데이트해 주세요";
@@ -423,10 +424,15 @@
 "empty.noServers.title" = "서버 없음";
 "error.disconnected" = "%1$@와의 연결이 끊어졌어요";
 "error.generic" = "문제가 발생했어요: %1$@";
+"failure.connectAgain" = "다시 연결";
 "failure.copy" = "복사";
 "failure.details" = "자세히";
 "failure.deviceRevoked" = "이 기기는 더 이상 서버에 연결되어 있지 않아요. 다시 연결해 주세요.";
 "failure.generic" = "문제가 생겼어요.";
+"failure.keyRejected" = "서버가 이 Mac의 키를 받아들이지 않았어요. 서버를 다시 설치했거나 키가 취소됐을 수 있어요.";
+"failure.keyRejectedThisMac" = "이 Mac의 서버가 앱의 키를 받아들이지 않았어요. 데이터가 사라졌을 수 있어요.";
+"failure.keyRepairFailed" = "이 Mac의 서버에 다시 연결하지 못했어요.";
+"failure.keyRepairing" = "이 Mac의 서버에 다시 연결하는 중…";
 "failure.noAnswer" = "서버가 응답하지 않아요. 전원이 켜져 있고 연결이 정상인지 확인하세요.";
 "failure.reason.binary" = "텍스트 파일이 아니라서 여기에 표시할 수 없어요.";
 "failure.reason.cloneFailed" = "저장소를 클론할 수 없었어요.";
@@ -1461,6 +1467,7 @@
 "server.features.installed" = "설치됨";
 "server.features.loginHelp" = "서버에서 로그인: %1$@";
 "server.features.notInstalled" = "설치되지 않음";
+"server.features.signIn" = "로그인";
 "server.features.title" = "기능";
 "server.health.bothFull" = "디스크와 메모리가 거의 찼어요";
 "server.health.diskFull" = "디스크가 거의 찼어요";
@@ -1480,6 +1487,7 @@
 "server.owner.agent" = "에이전트";
 "server.owner.daemon" = "Bandito 데몬";
 "server.owner.terminal" = "터미널";
+"server.passport.uptimeLessHour" = "가동 중 1시간 미만";
 "server.picker.connect" = "서버 연결…";
 "server.picker.kindRemote" = "서버";
 "server.picker.manage" = "서버 관리…";
@@ -1786,6 +1794,7 @@
 "team.header.browser" = "패널에서 에이전트의 브라우저 열기";
 "team.header.openInspector" = "에이전트 세부 정보 열기";
 "team.header.terminal" = "에이전트 폴더에서 터미널 열기";
+"team.home.asleep" = "잠듦";
 "team.home.idea1" = "어제 바뀐 내용을 살펴보고 위험해 보이는 부분을 정리해 줘.";
 "team.home.idea2" = "메인 브랜치에서 테스트가 실패하는 이유를 찾아 고쳐 줘.";
 "team.home.idea3" = "서버 로그를 지켜보다가 문제가 생기면 알려 줘.";
