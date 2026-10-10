@@ -1924,6 +1924,7 @@
 "thread.messageFrom" = "Mensagem de %1$@";
 "thread.more" = "Mais";
 "thread.placeholder" = "Escreva uma tarefa ou uma pergunta…";
+"thread.queued" = "Na fila";
 "thread.react" = "Reagir";
 "thread.reply" = "Responder";
 "thread.reviewApproved" = "%1$@ revisou as mudanças · aprovado";

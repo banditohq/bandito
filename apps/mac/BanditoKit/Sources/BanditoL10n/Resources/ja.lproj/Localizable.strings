@@ -1924,6 +1924,7 @@
 "thread.messageFrom" = "%1$@ からのメッセージ";
 "thread.more" = "その他";
 "thread.placeholder" = "タスクや質問を入力…";
+"thread.queued" = "順番待ち";
 "thread.react" = "リアクション";
 "thread.reply" = "返信";
 "thread.reviewApproved" = "%1$@ が変更を確認 · 承認";

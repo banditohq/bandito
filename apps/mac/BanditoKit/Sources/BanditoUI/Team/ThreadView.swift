@@ -103,6 +103,7 @@ struct ThreadView: View {
                 primaryRuntime: agent.runtime.rawValue,
                 chat: chat,
                 typing: thread.turnRunning && !isStreaming,
+                turnStartedAt: thread.turnStartedAt,
                 onRowSpan: { [scroll] id, span in scroll.rowSpans[id] = span },
                 onContent: { offset, height in contentChanged(offset: offset, height: height, proxy) },
                 arrival: arrival)
@@ -579,6 +580,8 @@ struct ThreadView: View {
             reactions: current.reactions,
             replies: current.replies,
             attachments: current.attachments,
+            // A waiting message is marked only while the agent is busy: after a restart the queue is gone.
+            waiting: current.turnRunning ? current.waitingSeqs : [],
             highlightedID: highlightedID,
             original: { seq in Self.original(seq, in: current.items) },
             onReply: { target in
@@ -717,6 +720,8 @@ struct ThreadItemsView: View {
     var chat = ThreadChat()
     /// Shows the typing indicator after the last row while a turn runs.
     var typing = false
+    /// When the running turn began (Unix ms), for the elapsed time on the typing indicator.
+    var turnStartedAt: Int64?
     /// Where a row is in the content (its id, top and bottom edge): for the memory of the place.
     var onRowSpan: (String, ThreadRowSpan) -> Void = { _, _ in }
     /// The content's offset in the scroll view and its height.
@@ -748,7 +753,7 @@ struct ThreadItemsView: View {
                     }
             }
             if typing {
-                TypingIndicator(activity: AgentActivity.current(in: items), since: AgentActivity.turnStart(in: items))
+                TypingIndicator(activity: AgentActivity.current(in: items), since: turnStartedAt)
             }
             Color.clear.frame(height: 1).id(ThreadScroll.bottomID)
         }

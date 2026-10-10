@@ -1924,6 +1924,7 @@
 "thread.messageFrom" = "%1$@의 메시지";
 "thread.more" = "더 보기";
 "thread.placeholder" = "작업이나 질문을 입력하세요…";
+"thread.queued" = "대기 중";
 "thread.react" = "반응";
 "thread.reply" = "답장";
 "thread.reviewApproved" = "%1$@이(가) 변경 사항을 검토 · 승인";

@@ -1924,6 +1924,7 @@
 "thread.messageFrom" = "来自 %1$@ 的消息";
 "thread.more" = "更多";
 "thread.placeholder" = "输入任务或问题…";
+"thread.queued" = "排队中";
 "thread.react" = "回应";
 "thread.reply" = "回复";
 "thread.reviewApproved" = "%1$@ 已审阅更改 · 已批准";

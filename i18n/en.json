@@ -22,6 +22,7 @@
   "thread.chapterNotSaved": "Chapter {chapter} · memory not saved",
   "thread.chapterNotSavedHelp": "The agent could not save its memory before this chapter. Facts from the previous chapter may be missing.",
   "thread.savingMemory": "Saving memory before a new chapter",
+  "thread.queued": "Queued",
   "thread.aTeammate": "a teammate",
   "app.name": "Bandito",
   "sidebar.search": "Search (⌘K)",

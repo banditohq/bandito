@@ -1,5 +1,6 @@
 {
   "thread.savingMemory": "Enregistre la mémoire avant un nouveau chapitre",
+  "thread.queued": "En attente",
   "thread.aTeammate": "un coéquipier",
   "onboarding.server.newHostTitle": "Nouveau serveur — confirmez-le",
   "onboarding.skip": "Configurer plus tard",

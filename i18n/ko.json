@@ -1,5 +1,6 @@
 {
   "thread.savingMemory": "새 챕터 전에 메모리 저장 중",
+  "thread.queued": "대기 중",
   "thread.aTeammate": "팀원",
   "onboarding.server.newHostTitle": "새 서버예요 — 확인해 주세요",
   "onboarding.skip": "나중에 설정",

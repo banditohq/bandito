@@ -1,5 +1,6 @@
 {
   "thread.savingMemory": "Speichert das Gedächtnis vor einem neuen Kapitel",
+  "thread.queued": "In der Warteschlange",
   "thread.aTeammate": "einem Teammitglied",
   "onboarding.server.newHostTitle": "Neuer Server — bitte bestätigen",
   "onboarding.skip": "Später einrichten",

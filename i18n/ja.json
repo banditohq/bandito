@@ -1,5 +1,6 @@
 {
   "thread.savingMemory": "新しい章の前にメモリを保存中",
+  "thread.queued": "順番待ち",
   "thread.aTeammate": "チームメイト",
   "onboarding.server.newHostTitle": "新しいサーバーです — 確認してください",
   "onboarding.skip": "あとで設定",

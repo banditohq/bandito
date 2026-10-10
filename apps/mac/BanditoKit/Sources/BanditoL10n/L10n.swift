@@ -2602,6 +2602,7 @@ public enum L10n {
         public static var more: String { L10n.tr("thread.more") }
         public static func notRanCommands(count: Int) -> String { L10n.tr("thread.notRanCommands", count) }
         public static var placeholder: String { L10n.tr("thread.placeholder") }
+        public static var queued: String { L10n.tr("thread.queued") }
         public static func ranCommands(count: Int) -> String { L10n.tr("thread.ranCommands", count) }
         public static var react: String { L10n.tr("thread.react") }
         public static var reply: String { L10n.tr("thread.reply") }

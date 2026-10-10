@@ -53,6 +53,7 @@ struct ThreadRowKey: Equatable {
     var quoted: ReplyTarget?
     var flashing: Bool
     var isLastAgent: Bool
+    var waiting: Bool
 
     init(
         row: ThreadRow, agentName: String, primaryRuntime: String, agentID: String, folder: String?, chat: ThreadChat
@@ -72,7 +73,9 @@ struct ThreadRowKey: Equatable {
             quoted = (chat.repliesOn ? seq.flatMap { chat.replies[$0] } : nil).flatMap { chat.original($0) }
             flashing = chat.highlightedID == item.id
             isLastAgent = chat.lastAgentID == item.id
+            waiting = seq.map { chat.waiting.contains($0) } ?? false
         } else {
+            waiting = false
             reactions = nil
             quoted = nil
             flashing = false
@@ -156,7 +159,15 @@ private struct ItemView: View {
                         itemID: id, seq: seq, text: text, fromUser: true, chat: chat, files: files, agentID: agentID,
                         server: server
                     ) {
-                        UserBubble(text: text) { quote(forSeq: seq) }
+                        VStack(alignment: .trailing, spacing: 4) {
+                            UserBubble(text: text) { quote(forSeq: seq) }
+                            if let seq, chat.waiting.contains(seq) {
+                                Text(L10n.Thread.queued)
+                                    .font(BanditoFont.text(size: 11.5, weight: 400))
+                                    .foregroundStyle(Color.Bandito.text3)
+                                    .padding(.trailing, 4)
+                            }
+                        }
                     }
                 }
             } else {

@@ -656,6 +656,7 @@ public final class ServerModel: Identifiable {
             t.status = live.status
             t.statusDetail = live.statusDetail
             t.turnRunning = live.turnRunning
+            t.turnStartedAt = live.turnStartedAt
             t.lastSeq = max(t.lastSeq, live.lastSeq)
             t.mergeMessageMeta(from: live)
         }

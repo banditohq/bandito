@@ -1924,6 +1924,7 @@
 "thread.messageFrom" = "Message from %1$@";
 "thread.more" = "More";
 "thread.placeholder" = "Write a task or a question…";
+"thread.queued" = "Queued";
 "thread.react" = "React";
 "thread.reply" = "Reply";
 "thread.reviewApproved" = "%1$@ reviewed the changes · approved";

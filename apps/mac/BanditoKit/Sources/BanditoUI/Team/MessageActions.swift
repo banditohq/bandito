@@ -24,6 +24,8 @@ struct ThreadChat {
     /// The message each reply answers, by the reply's `seq`.
     var replies: [Int64: Int64] = [:]
     var attachments: [Int64: [MessageAttachment]] = [:]
+    /// Messages shown while they wait for their turn, by `seq`: they carry a quiet "Queued" line.
+    var waiting: Set<Int64> = []
     /// The id of the row that flashes after a jump to it.
     var highlightedID: String?
     /// The row id of the agent's last message. Its action row stays faintly visible (see `MessageActionsPlacement`).

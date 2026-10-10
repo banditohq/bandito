@@ -109,6 +109,13 @@ public struct AgentThread: Sendable, Hashable {
     /// Last persisted event applied (deltas don't count).
     public var lastSeq: Int64 = 0
     public var turnRunning = false
+    /// When the running turn began (Unix ms, the time of its `turn.started`); nil when no turn runs or its start is
+    /// not in the loaded history. The "Thinking · N min" counter counts from here, not from the last message.
+    public internal(set) var turnStartedAt: Int64?
+    /// Seqs of the messages that were shown while they waited for their turn (`queued`), and of those whose turn has
+    /// begun (named by `turn.started.messageSeq`). A message waits while it is in the first set and not in the second.
+    private var queuedSeqs: Set<Int64> = []
+    private var startedSeqs: Set<Int64> = []
     /// Reactions by the `seq` of the message they are on.
     public private(set) var reactions: [Int64: MessageReactions] = [:]
     /// The message each reply answers: `seq` of the reply to `seq` of the original.
@@ -124,6 +131,9 @@ public struct AgentThread: Sendable, Hashable {
     private var memorySaveFailed = false
 
     public init() {}
+
+    /// The messages that are in the thread but not yet taken by a turn.
+    public var waitingSeqs: Set<Int64> { queuedSeqs.subtracting(startedSeqs) }
 
     /// The daemon closes a chapter with "… memory not saved" when it could not run the memory-save turn at all
     /// (see `unsaved` in daemon/src/supervisor.rs).
@@ -183,9 +193,12 @@ public struct AgentThread: Sendable, Hashable {
             lastSeq = e.seq
         }
         switch e.body {
-        case .turnStarted:
+        case .turnStarted(_, _, let messageSeq):
             turnRunning = true
-        case .messageUser(let text, let source, let from, let replyTo, let files):
+            turnStartedAt = e.ts
+            if let messageSeq { startedSeqs.insert(messageSeq) }
+        case .messageUser(let text, let source, let from, let replyTo, let files, let queued):
+            if queued, source != .system, e.seq > 0 { queuedSeqs.insert(e.seq) }
             if source != .system {
                 if let replyTo { replies[e.seq] = replyTo }
                 if !files.isEmpty { attachments[e.seq] = files }
@@ -256,6 +269,7 @@ public struct AgentThread: Sendable, Hashable {
             }
         case .turnCompleted(_, let status, _, _):
             turnRunning = false
+            turnStartedAt = nil
             if memorySaveRunning {
                 memorySaveRunning = false
                 // An interrupted wrap-up did not save the memory either.
@@ -278,6 +292,7 @@ public struct AgentThread: Sendable, Hashable {
             memorySaveRunning = false
             memorySaveFailed = false
             items.append(.chapter(id: e.id, number: chapter, saved: !unsaved, ts: e.ts))
+            moveWaitingMessagesToEnd()
         case .runtimeSwitched(let from, let to, let until):
             items.append(.runtimeSwitch(id: e.id, from: from, to: to, until: until, ts: e.ts))
         case .formRequested(let formId, let spec):
@@ -331,9 +346,26 @@ public struct AgentThread: Sendable, Hashable {
         items.insert(.form(row), at: at ?? items.endIndex)
     }
 
+    /// A message that waited through a memory save is read by the agent in the new chapter, so it moves below the
+    /// chapter divider: the thread shows the order the agent works in. One copy, never a second (see
+    /// docs/ARCHITECTURE.md, Chapters).
+    private mutating func moveWaitingMessagesToEnd() {
+        for seq in waitingSeqs.sorted() {
+            let id = ThreadItem.messageID(seq: seq)
+            // A crew or schedule message has a quiet line of its own in front of it.
+            let wanted: Set<String> = [id, id + "-n"]
+            let moving = items.filter { wanted.contains($0.id) }
+            guard !moving.isEmpty else { continue }
+            items.removeAll { wanted.contains($0.id) }
+            items.append(contentsOf: moving)
+        }
+    }
+
     /// Folds in what another reading of the same thread knew about reactions, replies, files and forms: the older page
     /// of history, or the live events that came while a page was loading.
     public mutating func mergeMessageMeta(from other: AgentThread) {
+        queuedSeqs.formUnion(other.queuedSeqs)
+        startedSeqs.formUnion(other.startedSeqs)
         for (seq, theirs) in other.reactions { reactions[seq, default: MessageReactions()].merge(theirs) }
         for (seq, to) in other.replies where replies[seq] == nil { replies[seq] = to }
         for (seq, files) in other.attachments where attachments[seq] == nil { attachments[seq] = files }

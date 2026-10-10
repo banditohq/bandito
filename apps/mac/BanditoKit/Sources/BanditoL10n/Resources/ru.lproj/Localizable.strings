@@ -1924,6 +1924,7 @@
 "thread.messageFrom" = "Сообщение от %1$@";
 "thread.more" = "Ещё";
 "thread.placeholder" = "Напишите задачу или вопрос…";
+"thread.queued" = "В очереди";
 "thread.react" = "Реакция";
 "thread.reply" = "Ответить";
 "thread.reviewApproved" = "%1$@ проверил изменения · одобрил";
