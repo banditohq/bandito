@@ -959,17 +959,44 @@ public enum L10n {
             public static var hint: String { L10n.tr("integrations.agent.hint") }
         }
 
+        public enum Custom {
+            public static var add: String { L10n.tr("integrations.custom.add") }
+            public static var commandHint: String { L10n.tr("integrations.custom.commandHint") }
+            public static var commandLine: String { L10n.tr("integrations.custom.commandLine") }
+            public static var editName: String { L10n.tr("integrations.custom.editName") }
+            public static func failed(reason: String) -> String { L10n.tr("integrations.custom.failed", reason) }
+            public static var kindProgram: String { L10n.tr("integrations.custom.kindProgram") }
+            public static var kindProgramHint: String { L10n.tr("integrations.custom.kindProgramHint") }
+            public static var kindWeb: String { L10n.tr("integrations.custom.kindWeb") }
+            public static var kindWebHint: String { L10n.tr("integrations.custom.kindWebHint") }
+            public static var manual: String { L10n.tr("integrations.custom.manual") }
+            public static var paste: String { L10n.tr("integrations.custom.paste") }
+            public static var pastePlaceholder: String { L10n.tr("integrations.custom.pastePlaceholder") }
+            public static func recognizedMany(count: Int) -> String { L10n.tr("integrations.custom.recognizedMany", count) }
+            public static func recognizedProgram(command: String) -> String { L10n.tr("integrations.custom.recognizedProgram", command) }
+            public static func recognizedWeb(url: String) -> String { L10n.tr("integrations.custom.recognizedWeb", url) }
+            public static func remaining(count: Int) -> String { L10n.tr("integrations.custom.remaining", count) }
+            public static var titleLabel: String { L10n.tr("integrations.custom.titleLabel") }
+            public static var titlePlaceholder: String { L10n.tr("integrations.custom.titlePlaceholder") }
+            public static var trialNote: String { L10n.tr("integrations.custom.trialNote") }
+            public static func useSelected(count: Int) -> String { L10n.tr("integrations.custom.useSelected", count) }
+            public static var variables: String { L10n.tr("integrations.custom.variables") }
+            public static func willBe(name: String) -> String { L10n.tr("integrations.custom.willBe", name) }
+
+            public enum Reason {
+                public static func command(word: String) -> String { L10n.tr("integrations.custom.reason.command", word) }
+                public static var json: String { L10n.tr("integrations.custom.reason.json") }
+                public static var noServers: String { L10n.tr("integrations.custom.reason.noServers") }
+                public static var quote: String { L10n.tr("integrations.custom.reason.quote") }
+            }
+        }
+
         public enum Failure {
             public static var missingProgram: String { L10n.tr("integrations.failure.missingProgram") }
             public static var other: String { L10n.tr("integrations.failure.other") }
             public static var rejected: String { L10n.tr("integrations.failure.rejected") }
             public static var timeout: String { L10n.tr("integrations.failure.timeout") }
             public static var unreachable: String { L10n.tr("integrations.failure.unreachable") }
-        }
-
-        public enum Kind {
-            public static var http: String { L10n.tr("integrations.kind.http") }
-            public static var stdio: String { L10n.tr("integrations.kind.stdio") }
         }
 
         public enum Problem {
@@ -979,6 +1006,7 @@ public enum L10n {
             public static var nameEmpty: String { L10n.tr("integrations.problem.nameEmpty") }
             public static var nameInvalid: String { L10n.tr("integrations.problem.nameInvalid") }
             public static var nameTaken: String { L10n.tr("integrations.problem.nameTaken") }
+            public static var quoteUnclosed: String { L10n.tr("integrations.problem.quoteUnclosed") }
             public static func secretMissing(key: String) -> String { L10n.tr("integrations.problem.secretMissing", key) }
             public static func secretNameInvalid(name: String) -> String { L10n.tr("integrations.problem.secretNameInvalid", name) }
             public static var urlInvalid: String { L10n.tr("integrations.problem.urlInvalid") }
@@ -987,17 +1015,12 @@ public enum L10n {
 
         public enum Sheet {
             public static var addLine: String { L10n.tr("integrations.sheet.addLine") }
-            public static var addTitle: String { L10n.tr("integrations.sheet.addTitle") }
-            public static var args: String { L10n.tr("integrations.sheet.args") }
-            public static var argsHint: String { L10n.tr("integrations.sheet.argsHint") }
-            public static var command: String { L10n.tr("integrations.sheet.command") }
             public static var composioHint: String { L10n.tr("integrations.sheet.composioHint") }
             public static func connectTitle(name: String) -> String { L10n.tr("integrations.sheet.connectTitle", name) }
             public static var docs: String { L10n.tr("integrations.sheet.docs") }
             public static func editTitle(name: String) -> String { L10n.tr("integrations.sheet.editTitle", name) }
             public static var headers: String { L10n.tr("integrations.sheet.headers") }
             public static var keyPlaceholder: String { L10n.tr("integrations.sheet.keyPlaceholder") }
-            public static var kindLabel: String { L10n.tr("integrations.sheet.kindLabel") }
             public static var name: String { L10n.tr("integrations.sheet.name") }
             public static var nameHint: String { L10n.tr("integrations.sheet.nameHint") }
             public static var secret: String { L10n.tr("integrations.sheet.secret") }
@@ -1129,14 +1152,44 @@ public enum L10n {
     public enum Market {
         public static var availableToAgents: String { L10n.tr("market.availableToAgents") }
         public static var configure: String { L10n.tr("market.configure") }
+        public static var docs: String { L10n.tr("market.docs") }
         public static var more: String { L10n.tr("market.more") }
         public static var noResults: String { L10n.tr("market.noResults") }
+        public static var official: String { L10n.tr("market.official") }
         public static var search: String { L10n.tr("market.search") }
         public static var subtitle: String { L10n.tr("market.subtitle") }
+        public static var view: String { L10n.tr("market.view") }
+        public static var website: String { L10n.tr("market.website") }
+
+        public enum Category {
+            public static var data: String { L10n.tr("market.category.data") }
+            public static var design: String { L10n.tr("market.category.design") }
+            public static var dev: String { L10n.tr("market.category.dev") }
+            public static var other: String { L10n.tr("market.category.other") }
+            public static var productivity: String { L10n.tr("market.category.productivity") }
+            public static var web: String { L10n.tr("market.category.web") }
+        }
 
         public enum Filter {
             public static var all: String { L10n.tr("market.filter.all") }
             public static var connected: String { L10n.tr("market.filter.connected") }
+        }
+
+        public enum Section {
+            public static var abilities: String { L10n.tr("market.section.abilities") }
+            public static var about: String { L10n.tr("market.section.about") }
+            public static var connection: String { L10n.tr("market.section.connection") }
+            public static var how: String { L10n.tr("market.section.how") }
+            public static var links: String { L10n.tr("market.section.links") }
+            public static var needs: String { L10n.tr("market.section.needs") }
+            public static var tools: String { L10n.tr("market.section.tools") }
+        }
+
+        public enum Step {
+            public static var connect: String { L10n.tr("market.step.connect") }
+            public static var fillAddress: String { L10n.tr("market.step.fillAddress") }
+            public static var fillPath: String { L10n.tr("market.step.fillPath") }
+            public static var getKey: String { L10n.tr("market.step.getKey") }
         }
     }
 

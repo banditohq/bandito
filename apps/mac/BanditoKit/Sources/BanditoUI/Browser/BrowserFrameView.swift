@@ -30,17 +30,45 @@ final class BrowserFrameStore {
     }
 }
 
+/// The part of a picture to show, as a `contentsRect` (unit square, y counted from the bottom), so that it fills a
+/// view of `view`'s shape and keeps the top of the page: cut from the bottom when the picture is taller than the
+/// view, from both sides when it is wider. Pure, so the rule is easy to test. A size that is not usable gives the
+/// whole picture.
+enum BrowserFrameCrop {
+    static func topFill(view: CGSize, picture: CGSize) -> CGRect {
+        let whole = CGRect(x: 0, y: 0, width: 1, height: 1)
+        guard usable(view), usable(picture) else { return whole }
+        let viewAspect = view.width / view.height
+        let pictureAspect = picture.width / picture.height
+        if pictureAspect > viewAspect {
+            let kept = viewAspect / pictureAspect
+            return CGRect(x: (1 - kept) / 2, y: 0, width: kept, height: 1)
+        }
+        // The top of the picture is the top of the unit square: the kept strip sits at the top edge.
+        let kept = pictureAspect / viewAspect
+        return CGRect(x: 0, y: 1 - kept, width: 1, height: kept)
+    }
+
+    private static func usable(_ size: CGSize) -> Bool {
+        size.width.isFinite && size.height.isFinite && size.width > 0 && size.height > 0
+    }
+}
+
 #if os(macOS)
-/// Draws the page picture in a layer: scaled to fit the view with the aspect kept, by the GPU. It takes no clicks.
+/// Draws the page picture in a layer, by the GPU. It takes no clicks.
+/// By default the whole page fits the view, with the aspect kept. With `fillsFromTop` the view is filled and the
+/// picture is cut from the bottom, so the top of the page stays in view (as `.aspectRatio(.fill)` aligned to the top).
 struct BrowserFrameLayer: NSViewRepresentable {
     let store: BrowserFrameStore
+    var fillsFromTop = false
 
     func makeNSView(context: Context) -> FrameView {
-        FrameView(store: store)
+        FrameView(store: store, fillsFromTop: fillsFromTop)
     }
 
     func updateNSView(_ view: FrameView, context: Context) {
         view.use(store)
+        view.setFillsFromTop(fillsFromTop)
     }
 
     static func dismantleNSView(_ view: FrameView, coordinator: ()) {
@@ -50,15 +78,19 @@ struct BrowserFrameLayer: NSViewRepresentable {
     final class FrameView: NSView {
         private var store: BrowserFrameStore
         private let id = UUID()
+        private var fillsFromTop: Bool
+        /// The picture now shown, to work out the crop again when the view changes size.
+        private var picture: CGImage?
 
-        init(store: BrowserFrameStore) {
+        init(store: BrowserFrameStore, fillsFromTop: Bool) {
             self.store = store
+            self.fillsFromTop = fillsFromTop
             super.init(frame: .zero)
             wantsLayer = true
             layerContentsRedrawPolicy = .never
-            layer?.contentsGravity = .resizeAspect
             layer?.magnificationFilter = .linear
             layer?.minificationFilter = .trilinear
+            applyGravity()
             listen()
         }
 
@@ -73,6 +105,11 @@ struct BrowserFrameLayer: NSViewRepresentable {
             layer?.contentsScale = window?.backingScaleFactor ?? 2
         }
 
+        override func setFrameSize(_ newSize: NSSize) {
+            super.setFrameSize(newSize)
+            applyCrop()
+        }
+
         func use(_ next: BrowserFrameStore) {
             guard next !== store else { return }
             store.stopListening(id)
@@ -80,16 +117,42 @@ struct BrowserFrameLayer: NSViewRepresentable {
             listen()
         }
 
+        func setFillsFromTop(_ on: Bool) {
+            guard on != fillsFromTop else { return }
+            fillsFromTop = on
+            applyGravity()
+            applyCrop()
+        }
+
         func stop() {
             store.stopListening(id)
         }
 
+        /// Fit: the layer scales the picture by its aspect ratio. Fill from the top: the crop already has the view's
+        /// ratio (see `applyCrop`), so the layer only stretches the cut part over the whole view.
+        private func applyGravity() {
+            layer?.contentsGravity = fillsFromTop ? .resize : .resizeAspect
+        }
+
+        private func applyCrop() {
+            guard let layer else { return }
+            guard fillsFromTop else {
+                layer.contentsRect = CGRect(x: 0, y: 0, width: 1, height: 1)
+                return
+            }
+            let size = picture.map { CGSize(width: $0.width, height: $0.height) } ?? .zero
+            layer.contentsRect = BrowserFrameCrop.topFill(view: bounds.size, picture: size)
+        }
+
         private func listen() {
             store.listen(id) { [weak self] image in
+                guard let self else { return }
                 // No fade between pictures.
                 CATransaction.begin()
                 CATransaction.setDisableActions(true)
-                self?.layer?.contents = image
+                self.picture = image
+                self.layer?.contents = image
+                self.applyCrop()
                 CATransaction.commit()
             }
         }
@@ -98,6 +161,7 @@ struct BrowserFrameLayer: NSViewRepresentable {
 #else
 struct BrowserFrameLayer: View {
     let store: BrowserFrameStore
+    var fillsFromTop = false
 
     var body: some View { Color.clear }
 }

@@ -82,24 +82,71 @@ import Testing
 }
 
 @Suite struct BrowserRunPreviewTests {
-    @Test func theHeightFollowsTheRatioAndStopsAt220() {
-        #expect(BrowserRunPreview.height(width: 320, aspect: 1.6) == 200)
-        #expect(BrowserRunPreview.height(width: 600, aspect: 1.6) == 220)
-        #expect(BrowserRunPreview.height(width: 400, aspect: 0.5) == 220)
+    @Test func thePictureIsAlways200TallWhateverTheWidth() {
+        #expect(BrowserRunPreview.height(width: 320) == 200)
+        #expect(BrowserRunPreview.height(width: 600) == 200)
+        #expect(BrowserRunPreview.height(width: 1) == 200)
     }
 
     @Test func aBadWidthGivesNoHeight() {
-        #expect(BrowserRunPreview.height(width: 0, aspect: 1.6) == 0)
-        #expect(BrowserRunPreview.height(width: .infinity, aspect: 1.6) == 0)
-        #expect(BrowserRunPreview.height(width: 300, aspect: 0) == 0)
+        #expect(BrowserRunPreview.height(width: 0) == 0)
+        #expect(BrowserRunPreview.height(width: -10) == 0)
+        #expect(BrowserRunPreview.height(width: .infinity) == 0)
+        #expect(BrowserRunPreview.height(width: .nan) == 0)
+    }
+}
+
+@Suite struct BrowserFrameCropTests {
+    private let card = CGSize(width: 300, height: 200)
+
+    @Test func aTallPageIsCutFromTheBottomSoTheTopShows() {
+        // 1:2 page in a 3:2 card: the full width is used, the top 1/3 of the page height is kept. The unit square
+        // counts y from the bottom, so the top third starts at 2/3.
+        let rect = BrowserFrameCrop.topFill(view: card, picture: CGSize(width: 1000, height: 2000))
+        #expect(rect.origin.x == 0)
+        #expect(abs(rect.origin.y - 2.0 / 3.0) < 0.0001)
+        #expect(rect.width == 1)
+        #expect(abs(rect.height - 1.0 / 3.0) < 0.0001)
+        #expect(abs(rect.maxY - 1) < 0.0001)
     }
 
-    @Test func theRatioComesFromThePageAndStaysSane() {
-        #expect(BrowserRunPreview.aspect(of: CGSize(width: 1600, height: 1000)) == 1.6)
-        #expect(BrowserRunPreview.aspect(of: .zero) == BrowserRunPreview.placeholderAspect)
-        #expect(BrowserRunPreview.aspect(of: CGSize(width: 100, height: 5000)) == 0.4)
-        #expect(BrowserRunPreview.aspect(of: CGSize(width: 5000, height: 100)) == 3)
-        #expect(BrowserRunPreview.aspect(of: CGSize(width: CGFloat.nan, height: 100)) == BrowserRunPreview.placeholderAspect)
+    @Test func aWidePageIsCutFromBothSidesEvenly() {
+        // 4:1 page in a 3:2 card: the full height is used, the middle 3/8 of the width is kept.
+        let rect = BrowserFrameCrop.topFill(view: card, picture: CGSize(width: 4000, height: 1000))
+        #expect(rect.origin.y == 0)
+        #expect(rect.height == 1)
+        #expect(abs(rect.width - 0.375) < 0.0001)
+        #expect(abs(rect.origin.x - 0.3125) < 0.0001)
+    }
+
+    @Test func aPageWithTheCardsRatioIsShownWhole() {
+        let rect = BrowserFrameCrop.topFill(view: card, picture: CGSize(width: 900, height: 600))
+        #expect(rect == CGRect(x: 0, y: 0, width: 1, height: 1))
+    }
+
+    @Test func aBadSizeGivesTheWholePicture() {
+        let whole = CGRect(x: 0, y: 0, width: 1, height: 1)
+        #expect(BrowserFrameCrop.topFill(view: card, picture: .zero) == whole)
+        #expect(BrowserFrameCrop.topFill(view: .zero, picture: CGSize(width: 10, height: 10)) == whole)
+        #expect(BrowserFrameCrop.topFill(view: card, picture: CGSize(width: CGFloat.nan, height: 10)) == whole)
+    }
+}
+
+@Suite struct BrowserToolbarLayoutTests {
+    @Test func aNarrowToolbarShowsOpenOnMacAsAnIcon() {
+        #expect(BrowserToolbarLayout.opensOnMacAsIcon(width: 360))
+        #expect(BrowserToolbarLayout.opensOnMacAsIcon(width: 519.5))
+    }
+
+    @Test func aWideToolbarKeepsTheText() {
+        #expect(!BrowserToolbarLayout.opensOnMacAsIcon(width: 520))
+        #expect(!BrowserToolbarLayout.opensOnMacAsIcon(width: 900))
+    }
+
+    @Test func aWidthNotMeasuredYetKeepsTheText() {
+        #expect(!BrowserToolbarLayout.opensOnMacAsIcon(width: 0))
+        #expect(!BrowserToolbarLayout.opensOnMacAsIcon(width: .nan))
+        #expect(!BrowserToolbarLayout.opensOnMacAsIcon(width: .infinity))
     }
 }
 

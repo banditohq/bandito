@@ -484,20 +484,69 @@ mod tests {
     use std::collections::BTreeMap;
 
     #[test]
-    fn the_catalog_parses_and_has_the_verified_entries() {
-        let cat: Vec<Value> = serde_json::from_str(CATALOG_JSON).unwrap();
-        let ids: Vec<&str> = cat.iter().filter_map(|e| e["id"].as_str()).collect();
-        assert_eq!(
-            ids,
-            ["composio", "github", "linear", "playwright", "filesystem", "fetch"]
-        );
-        for entry in &cat {
-            assert!(entry["docs_url"].as_str().is_some_and(|u| u.starts_with("https://")));
-            match entry["kind"].as_str() {
-                Some("stdio") => assert!(entry["command"].is_string(), "{entry}"),
-                Some("http") => assert!(entry["url"].is_string() || entry["url_hint"].is_string(), "{entry}"),
-                other => panic!("kind {other:?}"),
+    fn the_catalog_parses_and_every_entry_is_complete() {
+        use crate::integrations::{CATALOG_CATEGORIES, CatalogEntry};
+        let cat: Vec<CatalogEntry> = serde_json::from_str(CATALOG_JSON).unwrap();
+        assert!(cat.len() >= 18, "{}", cat.len());
+        let mut ids = std::collections::HashSet::new();
+        for e in &cat {
+            assert!(ids.insert(e.id.as_str()), "duplicate id {}", e.id);
+            // The id is the integration's name once connected, so it has to be a valid one.
+            integrations::check_integration_name(&e.id).unwrap();
+            assert!(e.docs_url.starts_with("https://"), "{}", e.id);
+            assert!(
+                e.homepage.as_deref().is_none_or(|h| h.starts_with("https://")),
+                "{}",
+                e.id
+            );
+            assert!(
+                e.category.as_deref().is_some_and(|c| CATALOG_CATEGORIES.contains(&c)),
+                "{}",
+                e.id
+            );
+            assert!(e.publisher.is_some() && e.official.is_some(), "{}", e.id);
+            let accent = e.accent.as_deref().unwrap_or_default();
+            assert!(
+                accent.len() == 7 && accent.starts_with('#') && accent[1..].chars().all(|c| c.is_ascii_hexdigit()),
+                "{}: accent {accent}",
+                e.id
+            );
+            assert!(e.long_en.is_some() && e.long_ru.is_some(), "{}", e.id);
+            assert!(e.needs_en.is_some() && e.needs_ru.is_some(), "{}", e.id);
+            for abilities in [&e.abilities_en, &e.abilities_ru] {
+                let n = abilities.as_ref().map_or(0, Vec::len);
+                assert!((2..=6).contains(&n), "{}: {n} abilities", e.id);
             }
+            assert_eq!(
+                e.abilities_en.as_ref().map(Vec::len),
+                e.abilities_ru.as_ref().map(Vec::len),
+                "{}",
+                e.id
+            );
+            match e.kind {
+                IntegrationKind::Stdio => {
+                    assert!(
+                        e.command.is_some() && e.url.is_none() && e.headers_keys.is_none(),
+                        "{}",
+                        e.id
+                    );
+                }
+                IntegrationKind::Http => {
+                    assert!(e.url.is_some() || e.url_hint.is_some(), "{}", e.id);
+                    assert!(e.command.is_none() && e.env_keys.is_none(), "{}", e.id);
+                    if let Some(url) = &e.url {
+                        assert!(url.starts_with("https://"), "{}", e.id);
+                    }
+                }
+            }
+            for key in e.headers_keys.iter().flatten().chain(e.env_keys.iter().flatten()) {
+                assert!(key.value_template.contains("{secret}"), "{}", e.id);
+            }
+        }
+        // No key, token or password sits in the public catalog.
+        let raw = CATALOG_JSON.to_lowercase();
+        for needle in ["sk-", "ghp_", "xoxb-", "bearer ey"] {
+            assert!(!raw.contains(needle), "{needle}");
         }
     }
 
@@ -744,7 +793,7 @@ mod tests {
             assert_eq!(err.code, super::super::UNAUTHORIZED, "{method}");
         }
         let catalog = owner(&app, "integrations.catalog", json!({})).await.unwrap();
-        assert_eq!(catalog.as_array().map(Vec::len), Some(6));
+        assert!(catalog.as_array().is_some_and(|c| c.len() >= 18));
     }
 
     fn sh_server(script: &str, env: &[(&str, &str, bool)]) -> Server {

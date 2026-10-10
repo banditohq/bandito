@@ -37,12 +37,19 @@ struct MarketView: View {
         .task(id: loadKey) {
             await loadForCurrentServer()
         }
-        .banditoSheet(item: $editing) { target in
+        .banditoSheet(item: $editing, dismissOnOutsideClick: false) { target in
             if let server = app.currentServer {
-                IntegrationEditor(
-                    server: server, target: target, existingNames: integrations.map(\.name),
-                    onChecked: { id, result in tests[id] = result },
-                    onSaved: { await reload() })
+                if case .custom = target {
+                    CustomIntegrationSheet(
+                        server: server, existingNames: integrations.map(\.name),
+                        onChecked: { id, result in tests[id] = result },
+                        onSaved: { await reload() })
+                } else {
+                    IntegrationEditor(
+                        server: server, target: target, existingNames: integrations.map(\.name),
+                        onChecked: { id, result in tests[id] = result },
+                        onSaved: { await reload() })
+                }
             }
         }
         .confirmationDialog(
@@ -73,7 +80,30 @@ struct MarketView: View {
             catalog: catalog, integrations: integrations, languageCode: ModelDescription.currentLanguageCode)
         let shown = MarketLogic.page(entries, filter: router.marketFilter, query: query)
         let empty = MarketLogic.emptyState(shown, filter: router.marketFilter, query: query)
-        return VStack(alignment: .leading, spacing: 16) {
+        if supported, let open = MarketLogic.entry(withID: router.marketDetail, in: entries) {
+            return AnyView(detailPage(open))
+        }
+        return AnyView(listPage(supported: supported, shown: shown, empty: empty))
+    }
+
+    private func detailPage(_ entry: MarketEntry) -> some View {
+        MarketDetailView(
+            entry: entry,
+            languageCode: ModelDescription.currentLanguageCode,
+            test: entry.integration.flatMap { tests[$0.id] },
+            checking: entry.integration.map { checking.contains($0.id) } ?? false,
+            onBack: { router.marketDetail = nil },
+            onConnect: { if let template = entry.template { editing = .catalog(template) } },
+            onConfigure: { if let integration = entry.integration { editing = .edit(integration) } },
+            onCheck: { if let integration = entry.integration { Task { await check(integration.id) } } },
+            onRemove: { removing = entry.integration },
+            onSetEnabled: { on in
+                if let integration = entry.integration { Task { await setEnabled(integration, on) } }
+            })
+    }
+
+    private func listPage(supported: Bool, shown: MarketPage, empty: MarketEmptyState?) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
             header(supported: supported)
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
@@ -205,6 +235,7 @@ struct MarketView: View {
             .padding(14)
             .frame(width: 300, alignment: .topLeading)
         }
+        .onTapGesture { router.marketDetail = entry.id }
     }
 
     private func menu(_ integration: Integration) -> some View {
@@ -224,35 +255,8 @@ struct MarketView: View {
         .fixedSize()
     }
 
-    @ViewBuilder
     private func statusLine(_ status: IntegrationStatus) -> some View {
-        switch status {
-        case .disabled:
-            Text(L10n.Integrations.Status.disabled)
-                .font(.system(size: 12.5, weight: .medium))
-                .foregroundStyle(Color.Bandito.text3)
-        case .unchecked:
-            Text(L10n.Integrations.Status.unchecked)
-                .font(.system(size: 12.5, weight: .medium))
-                .foregroundStyle(Color.Bandito.text3)
-        case .connected(let tools):
-            Label {
-                Text(L10n.Integrations.Status.connected(count: tools))
-            } icon: {
-                Image(systemName: "checkmark.circle.fill")
-            }
-            .font(.system(size: 12.5, weight: .medium))
-            .foregroundStyle(Color.Bandito.ok)
-        case .failed(let failure):
-            Label {
-                Text(IntegrationFailureText.text(failure))
-                    .fixedSize(horizontal: false, vertical: true)
-            } icon: {
-                Image(systemName: "exclamationmark.triangle.fill")
-            }
-            .font(.system(size: 12.5, weight: .medium))
-            .foregroundStyle(Color.Bandito.danger)
-        }
+        IntegrationStatusLine(status: status)
     }
 
     private func catalogCard(_ entry: MarketEntry) -> some View {
@@ -260,26 +264,38 @@ struct MarketView: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 10) {
                     MarketTile(entry: entry, size: 36)
-                    Text(entry.name)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Color.Bandito.text)
-                        .lineLimit(1)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(entry.name)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Color.Bandito.text)
+                            .lineLimit(1)
+                        if let publisher = entry.template?.publisher {
+                            Text(publisher)
+                                .font(.system(size: 11))
+                                .foregroundStyle(Color.Bandito.text3)
+                                .lineLimit(1)
+                        }
+                    }
                     Spacer(minLength: 0)
                 }
                 Text(entry.description)
                     .font(.system(size: 12.5))
                     .foregroundStyle(Color.Bandito.text2)
-                    .lineLimit(2)
+                    .lineLimit(2, reservesSpace: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Spacer(minLength: 0)
                 HStack(spacing: 8) {
+                    Button(L10n.Market.view) { router.marketDetail = entry.id }
+                        .banditoButton(.quiet())
+                        .fixedSize()
                     Spacer(minLength: 0)
                     cardActions(entry)
                 }
             }
             .padding(14)
-            .frame(maxWidth: .infinity, minHeight: 132, alignment: .topLeading)
+            .frame(maxWidth: .infinity, minHeight: 148, alignment: .topLeading)
         }
+        .onTapGesture { router.marketDetail = entry.id }
     }
 
     @ViewBuilder
@@ -311,6 +327,8 @@ struct MarketView: View {
             shownServer = id
             integrations = []
             catalog = []
+            router.marketCategories = []
+            router.marketDetail = nil
             tests = [:]
             checking = []
             error = nil
@@ -324,6 +342,10 @@ struct MarketView: View {
             integrations = try await server.integrations()
             if catalog.isEmpty {
                 catalog = try await server.integrationCatalog()
+                router.marketCategories = MarketCategory.present(in: catalog)
+                if case .category(let name) = router.marketFilter, !router.marketCategories.contains(name) {
+                    router.marketFilter = .all
+                }
             }
             error = nil
         } catch {
@@ -375,43 +397,124 @@ private struct MarketCardFrame<Content: View>: View {
             .background(shape.fill(Color.Bandito.surface1))
             .overlay(shape.strokeBorder(hovering ? Color.Bandito.text.opacity(0.22) : Color.Bandito.line, lineWidth: 1))
             .contentShape(shape)
+            .shadow(color: .black.opacity(hovering ? 0.22 : 0), radius: hovering ? 14 : 0, y: hovering ? 8 : 0)
+            .offset(y: hovering ? -2 : 0)
             .onHover { hovering = $0 }
-            .banditoAnimation(.easeOut(duration: BanditoMotion.base), value: hovering)
+            .banditoAnimation(.spring(response: 0.32, dampingFraction: 0.72), value: hovering)
     }
 }
 
-/// The tile of a Marketplace entry: the symbol of its catalog icon, or the first letter of its name when it has no
-/// catalog entry (an own integration).
-private struct MarketTile: View {
+/// The colour of a Marketplace tile. A catalog service has its brand colour (`accent`); an own integration, or a
+/// service without one, takes a colour of the avatar palette chosen by a hash of its name, so it stays the same.
+enum MarketTileStyle {
+    /// The brand colour as 0xRRGGBB, if the entry has a valid one.
+    static func accent(of entry: MarketEntry) -> UInt32? {
+        entry.template?.accent.flatMap(AvatarHex.value)
+    }
+
+    /// A stable index into the avatar palette (FNV-1a; `hashValue` changes on every launch).
+    static func paletteIndex(for name: String, count: Int = AvatarColor.allCases.count) -> Int {
+        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+        for byte in name.lowercased().utf8 {
+            hash = (hash ^ UInt64(byte)) &* 0x0000_0100_0000_01b3
+        }
+        return Int(hash % UInt64(max(count, 1)))
+    }
+
+    static func color(of entry: MarketEntry) -> Color {
+        if let hex = accent(of: entry) { return Color(hex: hex) }
+        return AvatarColor.allCases[paletteIndex(for: entry.name)].color
+    }
+}
+
+/// The tile of a Marketplace entry: a rounded square in the service's colour with a soft vertical gradient (lighter on
+/// top), a thin highlight on the upper edge, and a white symbol, or the first letter of the name for an own
+/// integration. With `glow` it casts a soft shadow of its colour.
+struct MarketTile: View {
     let entry: MarketEntry
     let size: CGFloat
+    var glow = false
 
     var body: some View {
+        let base = MarketTileStyle.color(of: entry)
+        let shape = RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
         Group {
             if let template = entry.template {
                 Image(systemName: IntegrationSymbol.name(icon: template.icon, kind: template.kind))
-                    .font(.system(size: size * 0.42, weight: .medium))
+                    .font(.system(size: size * 0.44, weight: .semibold))
             } else {
                 Text(String(entry.name.prefix(1)).uppercased())
-                    .font(.system(size: size * 0.42, weight: .semibold))
+                    .font(.system(size: size * 0.46, weight: .bold))
             }
         }
-        .foregroundStyle(Color.Bandito.info)
+        .foregroundStyle(.white)
+        .shadow(color: .black.opacity(0.18), radius: 1, y: 0.5)
         .frame(width: size, height: size)
-        .background(Color.Bandito.info.opacity(0.12), in: RoundedRectangle(cornerRadius: size * 0.28, style: .continuous))
+        .background(
+            shape.fill(base).overlay(
+                shape.fill(
+                    LinearGradient(
+                        colors: [.white.opacity(0.24), .clear, .black.opacity(0.14)],
+                        startPoint: .top, endPoint: .bottom))))
+        .overlay(
+            shape.strokeBorder(
+                LinearGradient(
+                    colors: [.white.opacity(0.45), .white.opacity(0.04)], startPoint: .top, endPoint: .bottom),
+                lineWidth: 1))
+        .shadow(color: glow ? base.opacity(0.35) : .clear, radius: 16, y: 6)
     }
 }
 
-/// Sidebar of the Marketplace: the two filters. Picking one sets `Router.marketFilter`.
+/// The result of the last check of an integration, in one line.
+struct IntegrationStatusLine: View {
+    let status: IntegrationStatus
+
+    var body: some View {
+        switch status {
+        case .disabled:
+            Text(L10n.Integrations.Status.disabled)
+                .font(.system(size: 12.5, weight: .medium))
+                .foregroundStyle(Color.Bandito.text3)
+        case .unchecked:
+            Text(L10n.Integrations.Status.unchecked)
+                .font(.system(size: 12.5, weight: .medium))
+                .foregroundStyle(Color.Bandito.text3)
+        case .connected(let tools):
+            Label {
+                Text(L10n.Integrations.Status.connected(count: tools))
+            } icon: {
+                Image(systemName: "checkmark.circle.fill")
+            }
+            .font(.system(size: 12.5, weight: .medium))
+            .foregroundStyle(Color.Bandito.ok)
+        case .failed(let failure):
+            Label {
+                Text(IntegrationFailureText.text(failure))
+                    .fixedSize(horizontal: false, vertical: true)
+            } icon: {
+                Image(systemName: "exclamationmark.triangle.fill")
+            }
+            .font(.system(size: 12.5, weight: .medium))
+            .foregroundStyle(Color.Bandito.danger)
+        }
+    }
+}
+
+/// Sidebar of the Marketplace: All, Connected, and the categories of the catalog. Picking one sets
+/// `Router.marketFilter` and leaves the page of a service.
 struct MarketSidebar: View {
     @Environment(Router.self) private var router
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            ForEach(MarketFilter.allCases) { filter in
+            ForEach(MarketFilter.rows(categories: router.marketCategories)) { filter in
                 let selected = router.marketFilter == filter
+                if case .category(let name) = filter, name == router.marketCategories.first {
+                    Divider().padding(.vertical, 6).padding(.horizontal, 10)
+                }
                 Button {
                     router.marketFilter = filter
+                    router.marketDetail = nil
                 } label: {
                     Text(filter.title)
                         .font(.system(size: 13, weight: selected ? .semibold : .regular))
@@ -472,6 +575,17 @@ enum IntegrationSymbol {
         case "playwright": "theatermasks"
         case "folder": "folder"
         case "globe": "globe"
+        case "atlassian": "rectangle.3.group"
+        case "stripe": "creditcard"
+        case "database": "cylinder.split.1x2"
+        case "cloud": "cloud"
+        case "book": "book"
+        case "search": "magnifyingglass"
+        case "web": "safari"
+        case "brain": "brain"
+        case "steps": "list.number"
+        case "branch": "arrow.triangle.branch"
+        case "clock": "clock"
         default: kind == .http ? "network" : "puzzlepiece.extension"
         }
     }

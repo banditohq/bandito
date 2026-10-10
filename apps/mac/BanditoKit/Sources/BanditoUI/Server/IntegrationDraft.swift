@@ -57,10 +57,13 @@ public struct IntegrationDraft: Equatable, Sendable {
     public var originalName: String?
     public var name = ""
     public var kind: IntegrationKind = .stdio
-    public var command = ""
-    /// The arguments, separated by spaces.
-    public var argsText = ""
+    /// The whole command, as typed: the program and its arguments, with quotes for an argument that holds a space.
+    public var commandLine = ""
     public var url = ""
+    /// The title the owner gave an own integration. The `name` is made from it until the owner edits the name.
+    public var title = ""
+    /// The owner typed the name himself: a new title no longer changes it.
+    public var nameEdited = false
     public var env: [IntegrationPair] = []
     public var headers: [IntegrationPair] = []
 
@@ -72,6 +75,8 @@ public struct IntegrationDraft: Equatable, Sendable {
         case nameInvalid
         case nameTaken
         case commandEmpty
+        /// A quote in the command is not closed.
+        case quoteUnclosed
         case urlInvalid
         case keyEmpty
         case keyInvalid(String)
@@ -92,12 +97,10 @@ public struct IntegrationDraft: Equatable, Sendable {
         var draft = IntegrationDraft()
         draft.name = entry.id
         draft.kind = entry.kind
-        draft.command = entry.command ?? ""
-        draft.argsText = entry.args.joined(separator: " ")
+        draft.commandLine = entry.command.map { ShellWords.join([$0] + entry.args) } ?? ""
         draft.url = entry.url ?? ""
-        draft.headers = entry.headersKeys.map { header in
-            IntegrationPair(key: header.key, isSecret: header.secret, template: header.valueTemplate)
-        }
+        draft.headers = entry.headersKeys.map(catalogPair)
+        draft.env = entry.envKeys.map(catalogPair)
         return draft
     }
 
@@ -116,8 +119,8 @@ public struct IntegrationDraft: Equatable, Sendable {
         draft.originalName = integration.name
         draft.name = integration.name
         draft.kind = integration.kind
-        draft.command = integration.command ?? ""
-        draft.argsText = integration.args.joined(separator: " ")
+        draft.commandLine = integration.command.map { ShellWords.join([$0] + integration.args) } ?? ""
+        draft.nameEdited = true
         draft.url = integration.url ?? ""
         draft.env = integration.env.sorted { $0.key < $1.key }.map(pair)
         draft.headers = integration.headers.sorted { $0.key < $1.key }.map(pair)
@@ -167,9 +170,29 @@ public struct IntegrationDraft: Equatable, Sendable {
         return result
     }
 
-    /// The arguments as the daemon takes them: the text split on spaces.
-    public var args: [String] {
-        argsText.split(whereSeparator: { $0 == " " || $0 == "\n" || $0 == "\t" }).map(String.init)
+    /// The words of the command line. With a quote left open it falls back to a split on spaces.
+    private var words: [String] { ShellWords.lenientSplit(commandLine) }
+
+    /// The program: the first word of the command line.
+    public var command: String {
+        get { words.first ?? "" }
+        set {
+            let program = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            commandLine = ShellWords.join((program.isEmpty ? [] : [program]) + Array(words.dropFirst()))
+        }
+    }
+
+    /// The arguments as one text, with quotes where a word holds a space.
+    public var argsText: String {
+        get { ShellWords.join(Array(words.dropFirst())) }
+        set { commandLine = ShellWords.join((command.isEmpty ? [] : [command]) + ShellWords.lenientSplit(newValue)) }
+    }
+
+    /// The arguments as the daemon takes them: the words after the program, quotes resolved.
+    public var args: [String] { Array(words.dropFirst()) }
+
+    private static func catalogPair(_ header: IntegrationHeaderKey) -> IntegrationPair {
+        IntegrationPair(key: header.key, isSecret: header.secret, template: header.valueTemplate)
     }
 
     /// After `integrations.add`: the draft now stands for the saved integration. Typed secret values stay until
@@ -236,7 +259,8 @@ public struct IntegrationDraft: Equatable, Sendable {
         if others.contains(name) { return .nameTaken }
         switch kind {
         case .stdio:
-            if trimmed(command).isEmpty { return .commandEmpty }
+            if trimmed(commandLine).isEmpty { return .commandEmpty }
+            if ShellWords.split(commandLine) == nil { return .quoteUnclosed }
         case .http:
             if !Self.isURL(trimmed(url)) { return .urlInvalid }
         }
@@ -281,7 +305,7 @@ public struct IntegrationDraft: Equatable, Sendable {
     // MARK: - build
 
     /// What saving sends. Call it only when `problem(existingNames:)` is nil.
-    public func build() -> IntegrationSave {
+    public func build(enabled: Bool? = nil) -> IntegrationSave {
         let name = trimmed(name)
         var secrets: [IntegrationSecretWrite] = []
         let envMap = resolve(env, name: name, secrets: &secrets)
@@ -291,7 +315,7 @@ public struct IntegrationDraft: Equatable, Sendable {
                 name: name,
                 args: kind == .stdio ? args : [],
                 env: envMap,
-                headers: headerMap)
+                headers: headerMap, enabled: enabled)
             switch kind {
             case .stdio:
                 patch.command = .set(trimmed(command))
@@ -310,7 +334,7 @@ public struct IntegrationDraft: Equatable, Sendable {
             url: kind == .http ? trimmed(url) : nil,
             env: envMap,
             headers: headerMap,
-            enabled: true)
+            enabled: enabled ?? true)
         return IntegrationSave(secrets: secrets, create: create, patch: nil)
     }
 

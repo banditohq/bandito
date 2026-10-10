@@ -35,16 +35,54 @@ public enum AppMode: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-/// The filter of the Marketplace sidebar: every service, or only the connected ones.
-public enum MarketFilter: String, CaseIterable, Identifiable, Sendable {
+/// The filter of the Marketplace sidebar: every service, only the connected ones, or one category of the catalog.
+public enum MarketFilter: Hashable, Identifiable, Sendable {
     case all, connected
+    /// A catalog category: `dev`, `productivity`, `data`, `web`, `design`, `other`.
+    case category(String)
 
-    public var id: String { rawValue }
+    public var id: String {
+        switch self {
+        case .all: "all"
+        case .connected: "connected"
+        case .category(let name): "category:\(name)"
+        }
+    }
 
     public var title: String {
         switch self {
         case .all: L10n.Market.Filter.all
         case .connected: L10n.Market.Filter.connected
+        case .category(let name): MarketCategory.title(name)
+        }
+    }
+
+    /// The sidebar rows: All, Connected, then the categories the catalog has.
+    public static func rows(categories: [String]) -> [MarketFilter] {
+        [.all, .connected] + categories.map { .category($0) }
+    }
+}
+
+/// The categories of the catalog and their words.
+public enum MarketCategory {
+    /// The order of the sidebar. A category the daemon adds later comes after these.
+    static let order = ["dev", "productivity", "data", "web", "design", "other"]
+
+    /// The categories the catalog uses, in the sidebar order.
+    public static func present(in catalog: [IntegrationCatalogEntry]) -> [String] {
+        let used = Set(catalog.compactMap(\.category))
+        return order.filter { used.contains($0) } + used.subtracting(order).sorted()
+    }
+
+    public static func title(_ name: String) -> String {
+        switch name {
+        case "dev": L10n.Market.Category.dev
+        case "productivity": L10n.Market.Category.productivity
+        case "data": L10n.Market.Category.data
+        case "web": L10n.Market.Category.web
+        case "design": L10n.Market.Category.design
+        case "other": L10n.Market.Category.other
+        default: name.prefix(1).uppercased() + name.dropFirst()
         }
     }
 }
@@ -134,8 +172,12 @@ public final class Router {
     public var screenID: String?
     /// Server: the section in view.
     public var serverSection: ServerSection = .overview
-    /// Marketplace: the filter the sidebar picked (all services or the connected ones).
+    /// Marketplace: the filter the sidebar picked (all services, the connected ones, or a category).
     public var marketFilter: MarketFilter = .all
+    /// Marketplace: the entry whose page is open (`catalog:<id>` or `own:<integration id>`); nil shows the list.
+    public var marketDetail: String?
+    /// Marketplace: the categories of the loaded catalog, for the sidebar. Set by the Marketplace page.
+    public var marketCategories: [String] = []
     /// Terminals: a command to type into a new terminal (Server → Install, Update). Taken once by the terminals.
     public var pendingTerminalCommand: String?
 

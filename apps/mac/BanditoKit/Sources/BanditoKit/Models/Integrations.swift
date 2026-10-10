@@ -91,13 +91,32 @@ public struct IntegrationCatalogEntry: Codable, Sendable, Identifiable, Hashable
     /// A pattern to fill in by hand when the url has placeholders, for example `https://…/mcp/<SERVER_ID>`.
     public var urlHint: String?
     public var headersKeys: [IntegrationHeaderKey]
+    /// The environment variables a program asks for (a stdio template), like the headers of a web one.
+    public var envKeys: [IntegrationHeaderKey]
     public var docsUrl: String
     public var icon: String
+    /// The group of the sidebar: `dev`, `productivity`, `data`, `web`, `design` or `other`. Nil for an older daemon.
+    public var category: String?
+    /// The brand color as `#RRGGBB`, for the tile. Nil for an older daemon.
+    public var accent: String?
+    public var publisher: String?
+    /// The maker's own server, or a reference server of the MCP project.
+    public var official: Bool
+    public var homepage: String?
+    public var longEn: String?
+    public var longRu: String?
+    public var abilitiesEn: [String]
+    public var abilitiesRu: [String]
+    public var needsEn: String?
+    public var needsRu: String?
 
     public init(
         id: String, name: String, descriptionEn: String, descriptionRu: String, kind: IntegrationKind,
         command: String? = nil, args: [String] = [], url: String? = nil, urlHint: String? = nil,
-        headersKeys: [IntegrationHeaderKey] = [], docsUrl: String, icon: String
+        headersKeys: [IntegrationHeaderKey] = [], envKeys: [IntegrationHeaderKey] = [], docsUrl: String, icon: String,
+        category: String? = nil, accent: String? = nil, publisher: String? = nil, official: Bool = false, homepage: String? = nil,
+        longEn: String? = nil, longRu: String? = nil, abilitiesEn: [String] = [], abilitiesRu: [String] = [],
+        needsEn: String? = nil, needsRu: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -109,8 +128,20 @@ public struct IntegrationCatalogEntry: Codable, Sendable, Identifiable, Hashable
         self.url = url
         self.urlHint = urlHint
         self.headersKeys = headersKeys
+        self.envKeys = envKeys
         self.docsUrl = docsUrl
         self.icon = icon
+        self.category = category
+        self.accent = accent
+        self.publisher = publisher
+        self.official = official
+        self.homepage = homepage
+        self.longEn = longEn
+        self.longRu = longRu
+        self.abilitiesEn = abilitiesEn
+        self.abilitiesRu = abilitiesRu
+        self.needsEn = needsEn
+        self.needsRu = needsRu
     }
 
     public init(from decoder: Decoder) throws {
@@ -125,13 +156,41 @@ public struct IntegrationCatalogEntry: Codable, Sendable, Identifiable, Hashable
         url = try c.decodeIfPresent(String.self, forKey: .url)
         urlHint = try c.decodeIfPresent(String.self, forKey: .urlHint)
         headersKeys = try c.decodeIfPresent([IntegrationHeaderKey].self, forKey: .headersKeys) ?? []
+        envKeys = try c.decodeIfPresent([IntegrationHeaderKey].self, forKey: .envKeys) ?? []
         docsUrl = try c.decode(String.self, forKey: .docsUrl)
         icon = try c.decodeIfPresent(String.self, forKey: .icon) ?? ""
+        category = try c.decodeIfPresent(String.self, forKey: .category)
+        accent = try c.decodeIfPresent(String.self, forKey: .accent)
+        publisher = try c.decodeIfPresent(String.self, forKey: .publisher)
+        official = try c.decodeIfPresent(Bool.self, forKey: .official) ?? false
+        homepage = try c.decodeIfPresent(String.self, forKey: .homepage)
+        longEn = try c.decodeIfPresent(String.self, forKey: .longEn)
+        longRu = try c.decodeIfPresent(String.self, forKey: .longRu)
+        abilitiesEn = try c.decodeIfPresent([String].self, forKey: .abilitiesEn) ?? []
+        abilitiesRu = try c.decodeIfPresent([String].self, forKey: .abilitiesRu) ?? []
+        needsEn = try c.decodeIfPresent(String.self, forKey: .needsEn)
+        needsRu = try c.decodeIfPresent(String.self, forKey: .needsRu)
     }
 
     /// The description in the app's language: Russian for `ru`, English for every other language.
     public func description(languageCode: String) -> String {
         Self.isRussian(languageCode) ? descriptionRu : descriptionEn
+    }
+
+    /// The longer text of the detail page; the short description when the daemon has none.
+    public func longDescription(languageCode: String) -> String {
+        let text = Self.isRussian(languageCode) ? longRu : longEn
+        return text ?? description(languageCode: languageCode)
+    }
+
+    /// The short points of what the service can do.
+    public func abilities(languageCode: String) -> [String] {
+        Self.isRussian(languageCode) ? abilitiesRu : abilitiesEn
+    }
+
+    /// What the owner needs before connecting: a key, an account, a program.
+    public func needs(languageCode: String) -> String? {
+        Self.isRussian(languageCode) ? needsRu : needsEn
     }
 
     static func isRussian(_ languageCode: String) -> Bool {
