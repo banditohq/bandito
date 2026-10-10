@@ -459,6 +459,7 @@ struct MarketView: View {
             agents: server?.agents ?? [],
             onView: { panel = .botDetail($0.id) },
             onCreate: { panel = .botCreate($0.id) },
+            onViewBundle: { panel = .bundle($0.id) },
             onOpen: { agent in
                 guard let server else { return }
                 router.selectAgent(agent.id, on: server)
@@ -515,6 +516,19 @@ struct MarketView: View {
                             languageCode: languageCode, creating: $panelBusy,
                             onClose: closePanel, onConnect: { connect($0) })
                         .id(template.id)
+                    }
+                    .transition(.opacity)
+                }
+            case .bundle(let id):
+                if let bundle = bots.bundles.first(where: { $0.id == id }) {
+                    MarketPanel(width: 580, canClose: !panelBusy, onClose: closePanel) {
+                        BundlePanel(
+                            bundle: bundle, members: BundleLogic.members(of: bundle, templates: bots.templates),
+                            services: BundleLogic.services(
+                                of: bundle, templates: bots.templates, catalog: catalog, integrations: integrations),
+                            server: server, languageCode: languageCode, creating: $panelBusy,
+                            onClose: closePanel, onConnect: { connect($0) })
+                        .id(bundle.id)
                     }
                     .transition(.opacity)
                 }

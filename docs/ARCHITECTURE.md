@@ -526,6 +526,8 @@ Nothing is rolled back once the agent exists: a failed step is listed in `errors
 
 Rights: the owner's CLI and paired devices. Agents (crew MCP) may not call either method: they are not in `AGENT_METHODS`, and both are in the owner-only list of the trust tests (`rpc/mod.rs`). In safe mode they are refused like every other write.
 
+Concurrency: `agents.create_from_template` and each template of `agents.create_bundle` run under one lock (`CREATE_LOCK` in `rpc/templates.rs`), held from the pick of the bot's name to the creation of its agent. Two requests at once therefore never pick the same " 2" name. The lock is never taken inside `create_from`.
+
 ### Marketplace pages
 
 The Mac app's Marketplace has three pages behind one switch: Services (`integrations`), Bots (`agent_templates`) and Skills (`skills`). A page shows only when `daemon.info.features` has its feature; the last page is kept in the app's defaults (`market.tab.v1`). Each page has its own sidebar rows and its own search (the name in the app's language and in English, and the description).
@@ -537,6 +539,25 @@ Updates: a connected service whose row has `template_update` shows "Update avail
 The page of a connected service has two more sections. **Journal** (feature `integrations_calls`): `integrations.calls {integration: <name>, limit: 30, before}` pages the calls, newest first; a full page means there may be older rows, and `before` is the id of the last row read. The card's line comes from `integrations.call_stats` (read with the list of services; the entry is keyed by the service's *name*; no call in 24 hours, no line). **Try** (feature `integrations_call_tool`, in the Tools section): a form from the tool's `input_schema` (string, number, integer, boolean and enum are fields; an array, an object, `anyOf`/`oneOf`/`allOf` and any other type are JSON text checked before sending; a schema that is missing or is no object schema is one JSON object; an object schema with no properties takes none). Empty optional fields are left out, an empty required one is refused, and nothing is sent while a field has a problem. A tool the last check did not mark `read_only` asks first. The answer shows the text parts (a part that is not text by its type) and `structured` as sorted JSON; `is_error` is the tool's own failure, shown as an answer. The app waits 45 s for the daemon's 30. The owner's own tries do not apply the service's mode and are not yet in the journal.
 
 The create sheet sends `schedules` always (the ticked indexes, possibly none) and the runtime the person picked among those installed and signed in on the server. It asks for the name with the agent rules and the daemon's 32 characters. When the reply has an `agent`, the app opens its chat and puts the template's `starter` into the input field without sending it; `errors` go into a notice over the window. The skill install sheet offers the server (`scope: user`) or one agent (`scope: project`); a place that is installed or in conflict is not offered, and a conflicting folder is never overwritten.
+
+## Agent bundles
+
+A bundle is a named set of 3–5 templates that the owner makes in one go (a team of bots). The catalog is `daemon/src/agent_bundles.json`: six entries, built into the binary and read by `daemon/src/agent_bundles.rs`, whose test holds every entry to the rules (strict parse, unique kebab-case ids, every template id exists in `agent_templates.json`, each listed once, English, Russian and the seven other languages filled, names short enough for a number suffix). An entry has `id`, `name_en`/`name_ru`, `description_en`/`description_ru`, `l10n` (`{name, description}` for the seven other languages), `icon` (an SF Symbol), `accent` (`#RRGGBB`), `templates` (ids) and `category` (the template categories). Code: `daemon/src/rpc/templates.rs`. Feature string: `"agent_bundles"`.
+
+**`agents.bundles`** answers the catalog as written: an array of the six entries.
+
+**`agents.create_bundle`** takes `bundle_id`, `language` (required), `runtime?` (passed to every template; default: each template's) `workspace_id?` and `templates?` (a list of template ids of the bundle: absent makes all of them; given, makes only those, in the bundle's order, which is how a retry makes the ones still missing). An unknown bundle, an empty `language`, an empty `templates` list or a template id the bundle does not list is `INVALID_PARAMS`, and nothing is created. Otherwise the templates are made in the bundle's order, each by the code of `agents.create_from_template` with:
+- `name`: the template's name in `language` (the same language rule as the role: `ru`, `en`, or `l10n[tag].name`, English when that is empty), and when another agent already has that name, compared without case and outer spaces, the first free `<name> 2`, `<name> 3`… (agent names are not unique in the store);
+- `schedules`: absent, so the ones with `enabled_by_default`;
+- `model`: none.
+
+One template that fails does not stop the others. Its entry carries `error`. A step that fails after the agent exists (a skill, a schedule) leaves the agent in place, and its entry has both `agent` and `error`.
+
+The reply is `{agents: [{template_id, agent?, error?}], missing_integrations: [{id, required}]}`. `agents` keeps the bundle's order. `missing_integrations` lists each integration once, across all the templates, with `required` true when any template requires it (the same rule as `agents.create_from_template`).
+
+Rights: the owner's CLI and paired devices. Agents may not call either method (not in `AGENT_METHODS`; both are in the owner-only list of the trust tests in `rpc/mod.rs`). In safe mode they are refused like every other write.
+
+Every bot name of every bundle, in every language, passes the agent-name rule and leaves room for a number suffix (the test `every_bundle_name_is_a_valid_agent_name_in_every_language`).
 
 ## Logs
 

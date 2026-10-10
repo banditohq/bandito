@@ -173,6 +173,36 @@ agent stays.
 3. Click Create bot (Создать бота). The button says Creating… (Создаём…) and the sheet cannot be closed until it is done.
 4. Click Cancel (Отмена) or press Esc to leave without creating.
 
+## Bundles
+
+<!-- id: market-bundles; covers: -->
+Above the ready-made bots, Bots (Боты) shows Bundles (Наборы): a set of three to five bots that work together, such as a
+startup team (a task manager, a code reviewer, a Sentry on-call and a documentation writer). Each set card shows its icon,
+its name and description in the language of the app, and small tiles of the bots it holds. The sets follow the sidebar
+filter and the search; My bots (Мои боты) shows none of them. Bundles show only when the server is new enough to have them.
+If the sets do not load, a quiet line says Sets did not load (Наборы не загрузились) with Retry (Повторить); the single bots still show.
+Где: Marketplace → Bots (Боты) → Bundles (Наборы), above the ready-made bots
+1. Click View (Посмотреть) on a set, or the card itself, to open its panel.
+2. Sets are found by their name, in the language of the app and in English, and by their description.
+
+## A set's panel
+
+<!-- id: market-bundle-panel; covers: -->
+The panel lists the bots of the set, each with its description, the services the set's bots use, and Powered by (Чем
+думает). A service is Required (Обязательно) or Optional (По желанию) and connects as it does on a bot's page. Create team
+(Создать команду) makes one bot for each template of the set, in the language of the app, with the template's schedules
+turned on. A bot whose name is taken gets a number (for example Code reviewer 2). The panel then lists the bots that were
+made and the ones that were not, with the reason; a bot made with a problem after its creation still exists. Open (Открыть)
+goes to the chat of the first bot the set made. Close (Закрыть) or Esc leaves the panel. The panel cannot be closed while
+the team is being made. If the request fails (a timeout, a lost connection), the panel reads the list of bots again and
+says that some bots may have been created. Create missing bots (Создать недостающих) then makes only the bots that have
+no agent of their template from the last ten minutes; nothing is made twice.
+Где: Marketplace → Bots (Боты) → Bundles (Наборы) → a set → View (Посмотреть)
+1. Choose Powered by (Чем думает) if the default is not the one you want. Only the programs ready on the server are offered.
+2. If a required service is not connected, the panel says so and you can Connect (Подключить) it there, or create the team now and connect later.
+3. Click Create team (Создать команду). The button says Creating… (Создаём…) while the bots are made.
+4. Read the list of results, then click Open (Открыть) to see the first bot's chat.
+
 ## Skills
 
 <!-- id: market-skills; covers: -->

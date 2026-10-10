@@ -100,6 +100,7 @@ pub fn features() -> Vec<&'static str> {
         "lead",
         "mentions",
         "agent_templates",
+        "agent_bundles",
     ];
     if cfg!(target_os = "linux") {
         list.push("screen");
@@ -1107,7 +1108,10 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
     if method.starts_with("screen.") {
         return screen::dispatch(app, peer, method, p).await;
     }
-    if matches!(method, "agents.templates" | "agents.create_from_template") {
+    if matches!(
+        method,
+        "agents.templates" | "agents.create_from_template" | "agents.bundles" | "agents.create_bundle"
+    ) {
         // Answered in `templates.rs`, which shares the agent creation of `agents.create`.
         return templates::dispatch(app, method, p).await;
     }
@@ -3774,6 +3778,8 @@ mod trust_tests {
         "agents.create",
         "agents.templates",
         "agents.create_from_template",
+        "agents.bundles",
+        "agents.create_bundle",
         "agents.update",
         "agents.delete",
         "agents.get",

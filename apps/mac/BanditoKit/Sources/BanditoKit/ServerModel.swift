@@ -556,6 +556,14 @@ public final class ServerModel: Identifiable {
         agentsReadAt = Date()
     }
 
+    /// Reads `agents.list` now and waits for the answer, for a caller that must see the list as it is (after a create
+    /// that failed, the agents it made may be in it). Throws when the read fails; the list stays as it was.
+    public func readAgentsNow() async throws {
+        guard !inSafeMode, let c = client else { return }
+        let list = try await c.call("agents.list", NoParams(), as: [Agent].self)
+        setAgents(list)
+    }
+
     /// The daemon runs in safe mode: it answers only `daemon.info` and `backups.*`, so nothing else is asked.
     private var inSafeMode: Bool { info?.isSafeMode == true }
 
