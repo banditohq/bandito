@@ -56,7 +56,7 @@ enum SwipeRoute {
             case .forward:
                 return context.onTeamHome && context.hasAgent ? .reopenLastAgent : .none
             }
-        case .terminals, .screen, .server, .browser:
+        case .terminals, .screen, .market, .server, .browser:
             return .none
         }
     }

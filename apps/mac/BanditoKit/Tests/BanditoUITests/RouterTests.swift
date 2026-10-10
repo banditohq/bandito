@@ -62,7 +62,7 @@ import Testing
     }
 
     @Test func everyModeHasTitleAndIcon() {
-        #expect(AppMode.allCases.count == 6)
+        #expect(AppMode.allCases.count == 7)
         for mode in AppMode.allCases {
             #expect(!mode.title.isEmpty)
             #expect(!mode.systemImage.isEmpty)

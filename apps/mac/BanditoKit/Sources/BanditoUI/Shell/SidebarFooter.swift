@@ -22,7 +22,7 @@ struct SidebarFooter: View {
                             .font(BanditoFont.font(size: 13, weight: 600))
                             .foregroundStyle(Color.Bandito.text)
                             .lineLimit(1)
-                            .truncationMode(.middle)
+                            .truncationMode(.tail)
                         Text(subtitle)
                             .font(BanditoFont.font(size: 11.5, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
@@ -40,6 +40,7 @@ struct SidebarFooter: View {
             .accessibilityLabel(L10n.Account.title)
             .frame(maxWidth: .infinity)
 
+            MarketButton()
             UsageButton()
         }
         .padding(.horizontal, 14)
@@ -68,5 +69,27 @@ struct SidebarFooter: View {
     private var subtitle: String {
         guard hub.signedIn else { return L10n.Account.notSignedIn }
         return app.currentServer.map(ServerPicker.name) ?? ""
+    }
+}
+
+/// The Marketplace button between the profile and the usage pill: a square icon button, lit while the Marketplace
+/// is on show.
+private struct MarketButton: View {
+    @Environment(Router.self) private var router
+
+    var body: some View {
+        let open = router.mode == .market
+        Button {
+            router.select(mode: .market)
+        } label: {
+            Image(systemName: AppMode.market.systemImage)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(open ? Color.Bandito.text : Color.Bandito.text2)
+        }
+        .banditoButton(.icon(size: 34, label: L10n.Mode.market))
+        .background(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(Color.Bandito.text.opacity(open ? 0.12 : 0)))
+        .accessibilityAddTraits(open ? .isSelected : [])
     }
 }

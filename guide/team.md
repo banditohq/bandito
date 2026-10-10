@@ -83,10 +83,11 @@ The composer sits at the bottom of the thread. It sends the message to the selec
 ## Attach a file to a message
 
 <!-- id: team-attach; covers: -->
-The + button opens the macOS file picker and adds the file name to the message as `@name`. The file itself is not uploaded in this build: the agent reads the file from its folder, so put the file into the agent's project folder first (Files → upload, see [files.md](files.md)).
+Attach files, pictures and screenshots to the composer. They upload to the agent's attachment folder and go out with your next message. Drop files anywhere in the chat, or paste a picture with ⌘V when the clipboard holds no text. Folders and web links are not attached. Pictures show in the thread; click one to see it full size: pinch, or ⌘= and ⌘- (⌘ with the scroll wheel too) to zoom, double-click to switch between fit and 100% at the click, drag a zoomed picture to move it, ← and → for the other pictures of the message, Esc to close. The + button is off when the server is too old to take attachments.
 Где: Team → agent thread → composer → +
-1. Click +. Choose the file in the picker and click Open.
-2. Check the text: it now contains `@file-name`. Add your request and press ↵.
+1. Click +. Choose File or picture…, Screenshot or From clipboard.
+2. Wait until the file stops showing Uploading…. A file that cannot be attached shows why (for example, Over 20 MB) and is not sent; remove it with ✕.
+3. Press ↵. The files leave the composer with the message.
 
 ## Slash commands (/)
 

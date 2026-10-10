@@ -52,6 +52,14 @@ struct MainWindow: View {
                     .transition(.opacity)
             }
         }
+        .overlay {
+            if let viewer = router.imageViewer {
+                ImageViewer(request: viewer)
+                    .id(viewer.id)
+                    .transition(.opacity)
+            }
+        }
+        .banditoAnimation(.easeOut(duration: BanditoMotion.base), value: router.imageViewer != nil)
         .overlay(alignment: .bottom) {
             if let notice = router.rollbackNotice {
                 RollbackToast(notice: notice) { router.rollbackNotice = nil }
@@ -161,6 +169,7 @@ private struct ModeArea: View {
         case .terminals: TerminalsMode()
         case .browser: BrowserMode()
         case .screen: ScreenMode()
+        case .market: MarketView()
         case .server: ServerMode()
         }
     }

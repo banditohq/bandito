@@ -5,21 +5,15 @@ import SwiftUI
 
 /// The sections of the Server mode, picked in its sidebar.
 public enum ServerSection: String, CaseIterable, Identifiable, Sendable {
-    case overview, workspaces, secrets, integrations, ports, devices, updates, journal
+    case overview, workspaces, secrets, ports, devices, updates, journal
 
     public var id: String { rawValue }
-
-    /// The sections the sidebar lists. Integrations are listed only when the server has them.
-    public static func visible(integrations: Bool) -> [ServerSection] {
-        allCases.filter { $0 != .integrations || integrations }
-    }
 
     public var title: String {
         switch self {
         case .overview: L10n.Mode.serverOverview
         case .workspaces: L10n.Mode.serverWorkspaces
         case .secrets: L10n.Mode.serverSecrets
-        case .integrations: L10n.Mode.serverIntegrations
         case .ports: L10n.Mode.serverPorts
         case .devices: L10n.Mode.serverDevices
         case .updates: L10n.Mode.serverUpdates
@@ -42,7 +36,6 @@ struct ServerMode: View {
                 case .overview: ServerOverview(server: app.currentServer)
                 case .workspaces: WorkspacesView()
                 case .secrets: SecretsView(server: app.currentServer)
-                case .integrations: IntegrationsView(server: app.currentServer)
                 case .ports: PortsView(server: app.currentServer)
                 case .devices: DevicesView(server: app.currentServer)
                 case .updates: UpdatesView(server: app.currentServer)
@@ -121,11 +114,10 @@ struct ServerUnavailable: View {
 /// Sidebar of the Server mode: the seven sections. Picking one sets `Router.serverSection`.
 struct ServerSidebar: View {
     @Environment(Router.self) private var router
-    @Environment(AppModel.self) private var app
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            ForEach(ServerSection.visible(integrations: app.currentServer?.supports("integrations") ?? false)) { section in
+            ForEach(ServerSection.allCases) { section in
                 let selected = router.serverSection == section
                 Button {
                     router.serverSection = section

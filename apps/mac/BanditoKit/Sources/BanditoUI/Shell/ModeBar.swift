@@ -8,7 +8,8 @@ struct ModeBar: View {
 
     var body: some View {
         HStack(spacing: 2) {
-            ForEach(AppMode.allCases) { mode in
+            // The Marketplace is opened from the sidebar footer, not from this bar.
+            ForEach(AppMode.allCases.filter { $0 != .market }) { mode in
                 let selected = router.mode == mode
                 Button {
                     router.select(mode: mode)

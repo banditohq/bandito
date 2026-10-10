@@ -948,13 +948,10 @@ public enum L10n {
         public static var connected: String { L10n.tr("integrations.connected") }
         public static var edit: String { L10n.tr("integrations.edit") }
         public static var empty: String { L10n.tr("integrations.empty") }
-        public static var hint: String { L10n.tr("integrations.hint") }
-        public static var more: String { L10n.tr("integrations.more") }
         public static var remove: String { L10n.tr("integrations.remove") }
         public static var removeMessage: String { L10n.tr("integrations.removeMessage") }
         public static func removeTitle(name: String) -> String { L10n.tr("integrations.removeTitle", name) }
         public static var title: String { L10n.tr("integrations.title") }
-        public static var toggleHelp: String { L10n.tr("integrations.toggleHelp") }
         public static func toolsFound(names: String) -> String { L10n.tr("integrations.toolsFound", names) }
 
         public enum Agent {
@@ -1129,6 +1126,20 @@ public enum L10n {
         }
     }
 
+    public enum Market {
+        public static var availableToAgents: String { L10n.tr("market.availableToAgents") }
+        public static var configure: String { L10n.tr("market.configure") }
+        public static var more: String { L10n.tr("market.more") }
+        public static var noResults: String { L10n.tr("market.noResults") }
+        public static var search: String { L10n.tr("market.search") }
+        public static var subtitle: String { L10n.tr("market.subtitle") }
+
+        public enum Filter {
+            public static var all: String { L10n.tr("market.filter.all") }
+            public static var connected: String { L10n.tr("market.filter.connected") }
+        }
+    }
+
     public enum Memory {
         public static var chapterLength: String { L10n.tr("memory.chapterLength") }
         public static var chapterLengthCustom: String { L10n.tr("memory.chapterLengthCustom") }
@@ -1207,10 +1218,10 @@ public enum L10n {
         public static var browser: String { L10n.tr("mode.browser") }
         public static var connectServer: String { L10n.tr("mode.connectServer") }
         public static var files: String { L10n.tr("mode.files") }
+        public static var market: String { L10n.tr("mode.market") }
         public static var screen: String { L10n.tr("mode.screen") }
         public static var server: String { L10n.tr("mode.server") }
         public static var serverDevices: String { L10n.tr("mode.serverDevices") }
-        public static var serverIntegrations: String { L10n.tr("mode.serverIntegrations") }
         public static var serverJournal: String { L10n.tr("mode.serverJournal") }
         public static var serverOverview: String { L10n.tr("mode.serverOverview") }
         public static var serverPorts: String { L10n.tr("mode.serverPorts") }
@@ -2627,19 +2638,27 @@ public enum L10n {
     }
 
     public enum Viewer {
+        public static var close: String { L10n.tr("viewer.close") }
         public static var closeTab: String { L10n.tr("viewer.closeTab") }
+        public static func counter(n: String, total: String) -> String { L10n.tr("viewer.counter", n, total) }
         public static var empty: String { L10n.tr("viewer.empty") }
         public static var emptyFile: String { L10n.tr("viewer.emptyFile") }
         public static func error(error: String) -> String { L10n.tr("viewer.error", error) }
+        public static var fit: String { L10n.tr("viewer.fit") }
         public static var folder: String { L10n.tr("viewer.folder") }
+        public static var imageFailed: String { L10n.tr("viewer.imageFailed") }
         public static var moreActions: String { L10n.tr("viewer.moreActions") }
         public static func notSaved(name: String) -> String { L10n.tr("viewer.notSaved", name) }
+        public static var openInFiles: String { L10n.tr("viewer.openInFiles") }
         public static var readOnly: String { L10n.tr("viewer.readOnly") }
         public static var save: String { L10n.tr("viewer.save") }
+        public static var saveAs: String { L10n.tr("viewer.saveAs") }
         public static func saveError(error: String) -> String { L10n.tr("viewer.saveError", error) }
         public static var savedStatus: String { L10n.tr("viewer.savedStatus") }
         public static var saving: String { L10n.tr("viewer.saving") }
         public static var tooLarge: String { L10n.tr("viewer.tooLarge") }
+        public static var zoomIn: String { L10n.tr("viewer.zoomIn") }
+        public static var zoomOut: String { L10n.tr("viewer.zoomOut") }
 
         public enum Binary {
             public static var title: String { L10n.tr("viewer.binary.title") }

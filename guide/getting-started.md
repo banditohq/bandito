@@ -65,8 +65,8 @@ When a server is added over SSH, Bandito shows its host key fingerprint and asks
 
 <!-- id: gs-components; covers: -->
 Agents need the Claude Code, Codex or Grok CLI on the server, plus Chrome for the browser and Docker or Podman for containers. Bandito lists what is missing and installs it from the Server mode. Some installs need an administrator password (sudo): the app does not ask for it. It shows the exact command to run in a Bandito terminal, where you type the password yourself.
-Где: Server (⌘6) → Overview (Обзор) → the Capabilities card (Capabilities) → Install (Установить)
-1. Open the Server mode with ⌘6 and stay on Overview.
+Где: Server (⌘7) → Overview (Обзор) → the Capabilities card (Capabilities) → Install (Установить)
+1. Open the Server mode with ⌘7 and stay on Overview.
 2. In Capabilities, see which items are Not installed (Не установлен) and which are Ready (Готово).
 3. Click Install (Установить). The log shows the progress. Installs that need the administrator password stop with the message "An administrator password is needed".
 4. Click Open terminal (Открыть терминал). A terminal opens with the command typed in. Type the password there. Nothing is typed for you.

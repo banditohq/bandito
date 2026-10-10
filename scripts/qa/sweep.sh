@@ -15,7 +15,7 @@ pause=1.2
 
 for size in 900x600 1200x800 1600x1000; do
     "$here/cmd.sh" "$n" window "$size"
-    for mode in team files terminals browser screen server; do
+    for mode in team files terminals browser screen market server; do
         "$here/cmd.sh" "$n" mode "$mode"
         sleep "$pause"
         "$here/shot.sh" "$n" "$outdir/$mode-$size.png" >/dev/null
