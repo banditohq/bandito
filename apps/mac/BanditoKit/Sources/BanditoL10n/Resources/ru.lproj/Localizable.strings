@@ -314,6 +314,10 @@
 "composer.contextPopover" = "Контекст: %1$@%% — столько памяти модели занимает этот разговор. На 80%% агент сохранит память и начнёт новую главу.";
 "composer.formGo" = "К форме";
 "composer.formWaiting" = "%1$@ ждёт ответа в форме выше";
+"composer.newChapter.afterTurn" = "Начнётся после текущего ответа";
+"composer.newChapter.button" = "Начать новую главу сейчас";
+"composer.newChapter.confirm" = "Агент сохранит память и начнёт новую главу. Продолжить?";
+"composer.newChapter.continue" = "Продолжить";
 "connect.addKey" = "Добавить ключ →";
 "connect.limitUntil" = "Лимит до %1$@";
 "connect.loggedInPlan" = "Вход выполнен · %1$@";
@@ -1519,6 +1523,11 @@
 "settings.channelHint" = "Бета получает предварительные сборки раньше.";
 "settings.close" = "Закрыть настройки";
 "settings.general" = "Общие";
+"settings.group.background" = "В фоне";
+"settings.group.motion" = "Анимация";
+"settings.group.playback" = "Воспроизведение";
+"settings.group.system" = "Система";
+"settings.group.versions" = "Версии";
 "settings.keysIntro" = "Всё как в привычных приложениях Mac. Нажмите на сочетание, чтобы поменять.";
 "settings.language" = "Язык";
 "settings.language.system" = "Как в системе";
@@ -1614,6 +1623,7 @@
 "settings.workplaces.body" = "Рабочие места настраиваются в режиме «Сервер». Каждое — общее с сервером, контейнер или отдельный пользователь.";
 "settings.workplaces.intro" = "Где работает каждый агент: его файлы, браузер, экран и терминалы.";
 "settings.workplaces.open" = "Открыть «Сервер» → «Рабочие места»";
+"setup.collapseLog" = "Свернуть журнал";
 "setup.failed" = "Не удалось установить: %1$@. Подробности в журнале выше.";
 "setup.feature.browser" = "Браузер";
 "setup.feature.containers" = "Контейнеры";

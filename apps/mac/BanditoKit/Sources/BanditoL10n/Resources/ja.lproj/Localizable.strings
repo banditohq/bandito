@@ -314,6 +314,10 @@
 "composer.contextPopover" = "コンテキスト: %1$@%% — この会話がモデルのメモリをどれだけ使っているかです。80%%に達するとエージェントはメモリを保存して新しいチャプターを始めます。";
 "composer.formGo" = "フォームへ";
 "composer.formWaiting" = "%1$@が上のフォームへの回答を待っています";
+"composer.newChapter.afterTurn" = "現在の返信の後に開始されます";
+"composer.newChapter.button" = "今すぐ新しい章を始める";
+"composer.newChapter.confirm" = "エージェントはメモリを保存して、新しい章を始めます。続けますか？";
+"composer.newChapter.continue" = "続ける";
 "connect.addKey" = "キーを追加 →";
 "connect.limitUntil" = "%1$@ まで上限";
 "connect.loggedInPlan" = "ログイン済み · %1$@";
@@ -1519,6 +1523,11 @@
 "settings.channelHint" = "ベータ版は先にプレビュービルドを受け取ります。";
 "settings.close" = "設定を閉じる";
 "settings.general" = "一般";
+"settings.group.background" = "バックグラウンド";
+"settings.group.motion" = "アニメーション";
+"settings.group.playback" = "再生";
+"settings.group.system" = "システム";
+"settings.group.versions" = "バージョン";
 "settings.keysIntro" = "使い慣れた Mac のアプリと同じように操作できます。ショートカットをクリックすると変更できます。";
 "settings.language" = "言語";
 "settings.language.system" = "システム";
@@ -1614,6 +1623,7 @@
 "settings.workplaces.body" = "作業場所は「サーバー」画面で設定します。それぞれ、サーバーと共有、コンテナ、または別ユーザーのいずれかです。";
 "settings.workplaces.intro" = "各エージェントの作業場所: ファイル、ブラウザ、画面、ターミナルです。";
 "settings.workplaces.open" = "サーバー → 作業場所 を開く";
+"setup.collapseLog" = "ログを折りたたむ";
 "setup.failed" = "%1$@ をインストールできませんでした。上のログを確認してください。";
 "setup.feature.browser" = "ブラウザ";
 "setup.feature.containers" = "コンテナ";

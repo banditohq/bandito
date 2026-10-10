@@ -723,6 +723,13 @@ public final class ServerModel: Identifiable {
         try await rpc().call("agents.interrupt", P(agentId: agentId))
     }
 
+    /// Starts the agent's next chapter now (`agents.new_chapter`). The memory is saved first; a running turn finishes
+    /// before the new chapter starts, so the reply comes back at once.
+    public func startNewChapter(_ agentId: String) async throws {
+        struct P: Encodable { var id: String }
+        try await rpc().call("agents.new_chapter", P(id: agentId))
+    }
+
     public func resolve(_ approvalId: String, _ decision: Decision, remember: Bool = false) async throws {
         struct P: Encodable { var approvalId: String; var decision: Decision; var remember: Bool }
         try await rpc().call("approvals.resolve", P(approvalId: approvalId, decision: decision, remember: remember))
@@ -809,6 +816,9 @@ public final class ServerModel: Identifiable {
     public func supports(_ feature: String) -> Bool {
         info?.supports(feature) ?? false
     }
+
+    /// Whether the connected daemon knows `agents.new_chapter` (see `DaemonInfo.supportsNewChapter`).
+    public var supportsNewChapter: Bool { info?.supportsNewChapter ?? false }
 
     /// Current rate-limit windows of every runtime (cached by the daemon).
     @discardableResult

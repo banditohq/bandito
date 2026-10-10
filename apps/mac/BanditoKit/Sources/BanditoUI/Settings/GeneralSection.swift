@@ -18,8 +18,12 @@ struct GeneralSection: View {
     var body: some View {
         @Bindable var demo = demo
         SettingsPage(title: SettingsSection.general.title, intro: nil) {
-            VStack(spacing: 0) {
-                SettingsRow(title: L10n.Settings.language, hint: L10n.Settings.languageRestart) {
+            // The first group has no label: the page title already says "General".
+            SettingsGroup(title: nil) {
+                SettingsRow(
+                    title: L10n.Settings.language, hint: L10n.Settings.languageRestart,
+                    icon: SettingsIcon(symbol: "globe", tint: BanditoPalette.badgeBlue)
+                ) {
                     BanditoSelect(
                         selection: $language, sections: [SelectSection(options: languageChoices)],
                         label: L10n.Settings.language, placeholder: L10n.Settings.Language.system,
@@ -29,7 +33,9 @@ struct GeneralSection: View {
                 }
                 Divider().padding(.horizontal, 16)
                 SettingsRow(
-                    title: L10n.Settings.showExamples, hint: L10n.Settings.showExamplesHint, keepsControlBeside: true
+                    title: L10n.Settings.showExamples, hint: L10n.Settings.showExamplesHint,
+                    icon: SettingsIcon(symbol: "sparkles", tint: BanditoPalette.badgeOrange),
+                    keepsControlBeside: true
                 ) {
                     Toggle("", isOn: $demo.enabled)
                         .labelsHidden()
@@ -38,15 +44,18 @@ struct GeneralSection: View {
                 Divider().padding(.horizontal, 16)
                 SettingsRow(
                     title: L10n.Settings.launchAtLogin, hint: launchError ?? L10n.Settings.launchAtLoginHint,
+                    icon: SettingsIcon(symbol: "power", tint: BanditoPalette.badgeGreen),
                     keepsControlBeside: true
                 ) {
                     Toggle("", isOn: $launchAtLogin)
                         .labelsHidden()
                         .toggleStyle(BanditoToggleStyle())
                 }
-                Divider().padding(.horizontal, 16)
+            }
+            SettingsGroup(title: L10n.Settings.Nav.updates) {
                 SettingsRow(
                     title: L10n.Settings.autoCheckUpdates, hint: L10n.Settings.autoCheckUpdatesHint,
+                    icon: SettingsIcon(symbol: "arrow.down.circle", tint: BanditoPalette.badgeSlate),
                     keepsControlBeside: true
                 ) {
                     Toggle("", isOn: $autoCheckUpdates)
@@ -54,7 +63,10 @@ struct GeneralSection: View {
                         .toggleStyle(BanditoToggleStyle())
                 }
                 Divider().padding(.horizontal, 16)
-                SettingsRow(title: L10n.Settings.Updates.channel, hint: L10n.Settings.channelHint) {
+                SettingsRow(
+                    title: L10n.Settings.Updates.channel, hint: L10n.Settings.channelHint,
+                    icon: SettingsIcon(symbol: "antenna.radiowaves.left.and.right", tint: BanditoPalette.badgePurple)
+                ) {
                     BanditoSelect(
                         selection: $updateChannel,
                         sections: [
@@ -73,7 +85,6 @@ struct GeneralSection: View {
                         .frame(width: 220)
                 }
             }
-            .banditoCard()
         }
         .onChange(of: language) { _, code in
             Self.storeLanguage(code)

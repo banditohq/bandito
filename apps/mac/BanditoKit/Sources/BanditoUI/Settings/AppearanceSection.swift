@@ -12,8 +12,11 @@ struct AppearanceSection: View {
 
     var body: some View {
         SettingsPage(title: SettingsSection.appearance.title, intro: L10n.Settings.Appearance.intro) {
-            VStack(spacing: 0) {
-                SettingsRow(title: L10n.Settings.Appearance.motion, hint: L10n.Settings.Appearance.motionHint) {
+            SettingsGroup(title: L10n.Settings.Group.motion) {
+                SettingsRow(
+                    title: L10n.Settings.Appearance.motion, hint: L10n.Settings.Appearance.motionHint,
+                    icon: SettingsIcon(symbol: "figure.walk.motion", tint: BanditoPalette.badgeIndigo)
+                ) {
                     SegmentedPicker(
                         selection: motion,
                         options: [
@@ -25,7 +28,6 @@ struct AppearanceSection: View {
                     .fixedSize()
                 }
             }
-            .banditoCard()
         }
     }
 }

@@ -28,6 +28,8 @@ struct Composer: View {
     var onGoToForm: (String) -> Void = { _ in }
     var onSend: () -> Void
     var onStop: () -> Void
+    /// Starts the agent's next chapter now (see `ServerModel.startNewChapter`). Shown only when the server supports it.
+    var onNewChapter: () -> Void = {}
 
     @Environment(Router.self) private var router
     @Environment(AppModel.self) private var app
@@ -35,6 +37,8 @@ struct Composer: View {
     @State private var slash = SlashMenuModel()
     /// The context popover is open (the ring is a button).
     @State private var showsContext = false
+    /// The popover asks "start a new chapter?" before it does (reset when the popover closes).
+    @State private var asksNewChapter = false
     private var canSend: Bool {
         AttachmentTray.canSend(text: draft, files: files)
     }
@@ -281,13 +285,64 @@ struct Composer: View {
         .banditoButton(.row(cornerRadius: 8))
         .help(L10n.Composer.contextHint)
         .popover(isPresented: $showsContext, arrowEdge: .top) {
+            contextPopover(percent: percent)
+        }
+        .onChange(of: showsContext) { _, open in
+            if !open { asksNewChapter = false }
+        }
+    }
+
+    private func contextPopover(percent: Int) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
             Text(L10n.Composer.contextPopover(percent: "\(percent)"))
                 .font(BanditoFont.font(size: 12.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text)
                 .fixedSize(horizontal: false, vertical: true)
-                .frame(width: 280, alignment: .leading)
-                .padding(14)
+            if server?.supportsNewChapter == true {
+                if asksNewChapter {
+                    Text(L10n.Composer.NewChapter.confirm)
+                        .font(BanditoFont.font(size: 12.5, weight: 400))
+                        .foregroundStyle(Color.Bandito.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: 8) {
+                        Button {
+                            asksNewChapter = false
+                        } label: {
+                            Text(L10n.Common.cancel)
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
+                        }
+                        .banditoButton(.quiet())
+                        Button {
+                            showsContext = false
+                            onNewChapter()
+                        } label: {
+                            Text(L10n.Composer.NewChapter.continue)
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
+                        }
+                        .banditoButton(.signal())
+                    }
+                } else {
+                    Button {
+                        asksNewChapter = true
+                    } label: {
+                        Text(L10n.Composer.NewChapter.button)
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                    }
+                    .banditoButton(.quiet())
+                }
+                if running {
+                    Text(L10n.Composer.NewChapter.afterTurn)
+                        .font(BanditoFont.font(size: 11.5, weight: 400))
+                        .foregroundStyle(Color.Bandito.text3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
         }
+        .frame(width: 280, alignment: .leading)
+        .padding(14)
     }
 
     @ViewBuilder

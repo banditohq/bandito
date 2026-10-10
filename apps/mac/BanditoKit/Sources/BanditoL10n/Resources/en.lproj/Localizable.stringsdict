@@ -304,6 +304,22 @@
 			<string>%1$lld cores</string>
 		</dict>
 	</dict>
+	<key>setup.showFullLog</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>Show full log (%1$lld line)</string>
+			<key>other</key>
+			<string>Show full log (%1$lld lines)</string>
+		</dict>
+	</dict>
 	<key>terminals.dock.lines</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>

@@ -16,8 +16,11 @@ struct NotificationsSection: View {
 
     var body: some View {
         SettingsPage(title: SettingsSection.notifications.title, intro: L10n.Settings.Notifications.intro) {
-            VStack(spacing: 0) {
-                SettingsRow(title: L10n.Settings.Notifications.system, hint: Self.statusText(status)) {
+            SettingsGroup(title: L10n.Settings.Group.system) {
+                SettingsRow(
+                    title: L10n.Settings.Notifications.system, hint: Self.statusText(status),
+                    icon: SettingsIcon(symbol: "bell.badge", tint: BanditoPalette.badgeRed)
+                ) {
                     if status == .notDetermined {
                         Button(L10n.Settings.Notifications.allow) {
                             Task { await request() }
@@ -36,14 +39,20 @@ struct NotificationsSection: View {
                             .fixedSize()
                     }
                 }
-                Divider().padding(.horizontal, 16)
-                toggle(L10n.Settings.Notifications.needsYou, L10n.Settings.Notifications.needsYouHint, $needsYou)
-                Divider().padding(.horizontal, 16)
-                toggle(L10n.Settings.Notifications.finished, L10n.Settings.Notifications.finishedHint, $finished)
-                Divider().padding(.horizontal, 16)
-                toggle(L10n.Settings.Notifications.failed, L10n.Settings.Notifications.failedHint, $failed)
             }
-            .banditoCard()
+            SettingsGroup(title: L10n.Settings.Sounds.events) {
+                toggle(
+                    L10n.Settings.Notifications.needsYou, L10n.Settings.Notifications.needsYouHint, $needsYou,
+                    symbol: "exclamationmark.bubble.fill", tint: BanditoPalette.badgeOrange)
+                Divider().padding(.horizontal, 16)
+                toggle(
+                    L10n.Settings.Notifications.finished, L10n.Settings.Notifications.finishedHint, $finished,
+                    symbol: "checkmark.circle.fill", tint: BanditoPalette.badgeGreen)
+                Divider().padding(.horizontal, 16)
+                toggle(
+                    L10n.Settings.Notifications.failed, L10n.Settings.Notifications.failedHint, $failed,
+                    symbol: "xmark.octagon.fill", tint: BanditoPalette.badgeRed)
+            }
         }
         .task { await refresh() }
         #if os(macOS)
@@ -54,8 +63,12 @@ struct NotificationsSection: View {
         #endif
     }
 
-    private func toggle(_ title: String, _ hint: String, _ isOn: Binding<Bool>) -> some View {
-        SettingsRow(title: title, hint: hint, keepsControlBeside: true) {
+    private func toggle(
+        _ title: String, _ hint: String, _ isOn: Binding<Bool>, symbol: String, tint: Color
+    ) -> some View {
+        SettingsRow(
+            title: title, hint: hint, icon: SettingsIcon(symbol: symbol, tint: tint), keepsControlBeside: true
+        ) {
             Toggle("", isOn: isOn)
                 .labelsHidden()
                 .toggleStyle(BanditoToggleStyle())

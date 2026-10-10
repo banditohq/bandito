@@ -461,6 +461,13 @@ public enum L10n {
             public static var tooLarge: String { L10n.tr("composer.attach.tooLarge") }
             public static var uploading: String { L10n.tr("composer.attach.uploading") }
         }
+
+        public enum NewChapter {
+            public static var afterTurn: String { L10n.tr("composer.newChapter.afterTurn") }
+            public static var button: String { L10n.tr("composer.newChapter.button") }
+            public static var confirm: String { L10n.tr("composer.newChapter.confirm") }
+            public static var `continue`: String { L10n.tr("composer.newChapter.continue") }
+        }
     }
 
     public enum Connect {
@@ -2072,6 +2079,14 @@ public enum L10n {
             public static var qualitySharper: String { L10n.tr("settings.browserScreen.qualitySharper") }
         }
 
+        public enum Group {
+            public static var background: String { L10n.tr("settings.group.background") }
+            public static var motion: String { L10n.tr("settings.group.motion") }
+            public static var playback: String { L10n.tr("settings.group.playback") }
+            public static var system: String { L10n.tr("settings.group.system") }
+            public static var versions: String { L10n.tr("settings.group.versions") }
+        }
+
         public enum Language {
             public static var system: String { L10n.tr("settings.language.system") }
         }
@@ -2188,6 +2203,7 @@ public enum L10n {
     }
 
     public enum Setup {
+        public static var collapseLog: String { L10n.tr("setup.collapseLog") }
         public static func failed(component: String) -> String { L10n.tr("setup.failed", component) }
         public static var install: String { L10n.tr("setup.install") }
         public static var missing: String { L10n.tr("setup.missing") }
@@ -2195,6 +2211,7 @@ public enum L10n {
         public static var openTerminal: String { L10n.tr("setup.openTerminal") }
         public static var ready: String { L10n.tr("setup.ready") }
         public static var screenLinuxOnly: String { L10n.tr("setup.screenLinuxOnly") }
+        public static func showFullLog(count: Int) -> String { L10n.tr("setup.showFullLog", count) }
         public static var unsupported: String { L10n.tr("setup.unsupported") }
 
         public enum Feature {

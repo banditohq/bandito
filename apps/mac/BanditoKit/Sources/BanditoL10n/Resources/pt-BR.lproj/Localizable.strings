@@ -314,6 +314,10 @@
 "composer.contextPopover" = "Contexto: %1$@%% — quanto da memória do modelo esta conversa ocupa. Em 80%%, o agente salva a memória e começa um novo capítulo.";
 "composer.formGo" = "Ir ao formulário";
 "composer.formWaiting" = "%1$@ aguarda a sua resposta no formulário acima";
+"composer.newChapter.afterTurn" = "Começa depois da resposta atual";
+"composer.newChapter.button" = "Começar um novo capítulo agora";
+"composer.newChapter.confirm" = "O agente vai salvar a memória e começar um novo capítulo. Continuar?";
+"composer.newChapter.continue" = "Continuar";
 "connect.addKey" = "Adicionar chave →";
 "connect.limitUntil" = "Limite até %1$@";
 "connect.loggedInPlan" = "Conectado · %1$@";
@@ -1519,6 +1523,11 @@
 "settings.channelHint" = "A versão Beta recebe as prévias primeiro.";
 "settings.close" = "Fechar ajustes";
 "settings.general" = "Geral";
+"settings.group.background" = "Em segundo plano";
+"settings.group.motion" = "Animação";
+"settings.group.playback" = "Reprodução";
+"settings.group.system" = "Sistema";
+"settings.group.versions" = "Versões";
 "settings.keysIntro" = "Tudo funciona como nos apps do Mac que você já conhece. Clique em um atalho para alterá-lo.";
 "settings.language" = "Idioma";
 "settings.language.system" = "Sistema";
@@ -1614,6 +1623,7 @@
 "settings.workplaces.body" = "Os espaços de trabalho são configurados na tela Servidor. Cada um é compartilhado com o servidor, um contêiner ou um usuário separado.";
 "settings.workplaces.intro" = "Onde cada agente trabalha: os arquivos, o navegador, a tela e os terminais dele.";
 "settings.workplaces.open" = "Abrir Servidor → Espaços de trabalho";
+"setup.collapseLog" = "Recolher o registro";
 "setup.failed" = "Não foi possível instalar %1$@. Veja o registro acima.";
 "setup.feature.browser" = "Navegador";
 "setup.feature.containers" = "Contêineres";

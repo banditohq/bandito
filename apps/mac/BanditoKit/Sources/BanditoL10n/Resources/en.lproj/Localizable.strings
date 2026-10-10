@@ -314,6 +314,10 @@
 "composer.contextPopover" = "Context: %1$@%% — how much of the model's memory this conversation takes. At 80%% the agent saves its memory and starts a new chapter.";
 "composer.formGo" = "Go to the form";
 "composer.formWaiting" = "%1$@ is waiting for your answer in the form above";
+"composer.newChapter.afterTurn" = "Starts after the current reply";
+"composer.newChapter.button" = "Start a new chapter now";
+"composer.newChapter.confirm" = "The agent will save its memory and start a new chapter. Continue?";
+"composer.newChapter.continue" = "Continue";
 "connect.addKey" = "Add key →";
 "connect.limitUntil" = "Limit until %1$@";
 "connect.loggedInPlan" = "Logged in · %1$@";
@@ -1519,6 +1523,11 @@
 "settings.channelHint" = "Beta gets preview builds first.";
 "settings.close" = "Close settings";
 "settings.general" = "General";
+"settings.group.background" = "In the background";
+"settings.group.motion" = "Animation";
+"settings.group.playback" = "Playback";
+"settings.group.system" = "System";
+"settings.group.versions" = "Versions";
 "settings.keysIntro" = "Everything works as in the Mac apps you know. Click a shortcut to change it.";
 "settings.language" = "Language";
 "settings.language.system" = "System";
@@ -1614,6 +1623,7 @@
 "settings.workplaces.body" = "Workplaces are set up on the Server screen. Each one is shared with the server, a container, or a separate user.";
 "settings.workplaces.intro" = "Where each agent works: its files, browser, screen and terminals.";
 "settings.workplaces.open" = "Open Server → Workplaces";
+"setup.collapseLog" = "Show only the last lines";
 "setup.failed" = "Could not install %1$@. See the log above.";
 "setup.feature.browser" = "Browser";
 "setup.feature.containers" = "Containers";

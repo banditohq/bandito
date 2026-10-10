@@ -615,6 +615,14 @@ public struct DaemonInfo: Codable, Sendable, Hashable {
     public var update: DaemonUpdate?
 
     public func supports(_ feature: String) -> Bool { features?.contains(feature) ?? false }
+
+    /// `agents.new_chapter` came with daemon 0.1.5 and has no feature flag of its own, so the version decides.
+    /// A pre-release of 0.1.5 (`0.1.5-rc.1`) sorts before it and does not count. Older daemons do not know the
+    /// method: the app hides the button instead of showing a refusal.
+    public var supportsNewChapter: Bool {
+        guard let version = SemanticVersion(version), let since = SemanticVersion("0.1.5") else { return false }
+        return version >= since
+    }
 }
 
 public struct Device: Codable, Sendable, Identifiable, Hashable {

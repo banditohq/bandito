@@ -45,10 +45,10 @@ public enum SettingsSection: String, CaseIterable, Identifiable, Hashable, Senda
         }
     }
 
-    /// Fill of the navigation badge: one color per section, as in System Settings.
+    /// Fill of the navigation badge: one color per section, all different, as in System Settings.
     var tint: Color {
         switch self {
-        case .general, .keysGestures, .updates: BanditoPalette.badgeGray
+        case .general: BanditoPalette.badgeGray
         case .account: BanditoPalette.badgeBlue
         case .servers: BanditoPalette.badgeGreen
         case .approvals: BanditoPalette.badgeOrange
@@ -56,8 +56,11 @@ public enum SettingsSection: String, CaseIterable, Identifiable, Hashable, Senda
         case .workplaces: BanditoPalette.badgeTeal
         case .terminalFiles: BanditoPalette.badgeDarkGray
         case .browserScreen: BanditoPalette.badgeLightBlue
-        case .notifications, .sounds: BanditoPalette.badgeRed
+        case .keysGestures: BanditoPalette.badgePink
+        case .notifications: BanditoPalette.badgeRed
+        case .sounds: BanditoPalette.badgeBrown
         case .appearance: BanditoPalette.badgeIndigo
+        case .updates: BanditoPalette.badgeSlate
         }
     }
 }

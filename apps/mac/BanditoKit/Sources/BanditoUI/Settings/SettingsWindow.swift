@@ -70,12 +70,7 @@ public struct SettingsWindow: View {
                         section = item
                     } label: {
                         HStack(spacing: 10) {
-                            Image(systemName: item.symbol)
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(Color.white)
-                                .frame(width: 24, height: 24)
-                                .background(item.tint, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                                .accessibilityHidden(true)
+                            SettingsBadge(symbol: item.symbol, tint: item.tint)
                             Text(item.title)
                                 .font(.system(size: 13, weight: selected ? .semibold : .regular))
                                 .foregroundStyle(selected ? Color.Bandito.text : Color.Bandito.text2)
@@ -87,7 +82,7 @@ public struct SettingsWindow: View {
                         .padding(.vertical, 7)
                         .background(
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .fill(selected ? Color.Bandito.text.opacity(0.08) : .clear))
+                                .fill(selected ? Color.Bandito.signal.opacity(0.12) : .clear))
                         .contentShape(Rectangle())
                     }
                     .banditoButton(.row(cornerRadius: 10))

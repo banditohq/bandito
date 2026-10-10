@@ -314,6 +314,10 @@
 "composer.contextPopover" = "上下文：%1$@%%——这段对话占用的模型记忆量。达到 80%% 时，智能体会保存记忆并开始新的章节。";
 "composer.formGo" = "前往表单";
 "composer.formWaiting" = "%1$@ 正在等待上方表单的回答";
+"composer.newChapter.afterTurn" = "将在当前回复结束后开始";
+"composer.newChapter.button" = "立即开始新章节";
+"composer.newChapter.confirm" = "智能体将保存其记忆并开始新章节。继续吗？";
+"composer.newChapter.continue" = "继续";
 "connect.addKey" = "添加密钥 →";
 "connect.limitUntil" = "限额至 %1$@";
 "connect.loggedInPlan" = "已登录 · %1$@";
@@ -1519,6 +1523,11 @@
 "settings.channelHint" = "Beta 版会优先获得预览版本。";
 "settings.close" = "关闭设置";
 "settings.general" = "通用";
+"settings.group.background" = "后台";
+"settings.group.motion" = "动画";
+"settings.group.playback" = "播放";
+"settings.group.system" = "系统";
+"settings.group.versions" = "版本";
 "settings.keysIntro" = "一切操作都与熟悉的 Mac 应用相同。点击快捷键即可更改。";
 "settings.language" = "语言";
 "settings.language.system" = "跟随系统";
@@ -1614,6 +1623,7 @@
 "settings.workplaces.body" = "工作区在“服务器”页面中设置。每个工作区都与服务器共享、位于容器中，或属于独立用户。";
 "settings.workplaces.intro" = "每个代理的工作位置：它的文件、浏览器、屏幕和终端。";
 "settings.workplaces.open" = "打开“服务器 → 工作区”";
+"setup.collapseLog" = "收起日志";
 "setup.failed" = "无法安装 %1$@。请查看上方日志。";
 "setup.feature.browser" = "浏览器";
 "setup.feature.containers" = "容器";

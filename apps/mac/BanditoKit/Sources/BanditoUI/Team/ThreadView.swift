@@ -249,7 +249,8 @@ struct ThreadView: View {
                 waitingForm: server.supports("forms") ? thread.pendingForms.last : nil,
                 onGoToForm: { scrollTo(id: "form-\($0)") },
                 onSend: send,
-                onStop: stop)
+                onStop: stop,
+                onNewChapter: startNewChapter)
                 .frame(maxWidth: 780)
                 .padding(.horizontal, 20)
                 .padding(.bottom, 14)
@@ -323,6 +324,13 @@ struct ThreadView: View {
     private func stop() {
         Task {
             do { try await server.interrupt(agent.id) } catch { actionError = UserFacingError.message(for: error) }
+        }
+    }
+
+    /// Starts the next chapter now; a running turn finishes first. Failures show in the banner above the composer.
+    private func startNewChapter() {
+        Task {
+            do { try await server.startNewChapter(agent.id) } catch { actionError = UserFacingError.message(for: error) }
         }
     }
 

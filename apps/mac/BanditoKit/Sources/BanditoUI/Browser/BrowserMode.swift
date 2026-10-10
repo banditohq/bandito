@@ -438,6 +438,8 @@ private struct PageSurface: View {
     @Bindable var model: BrowserModel
     /// Device pixels per point of the window the page is in. Read from the window (see `WindowScaleReader`).
     @State private var scale: CGFloat = 2
+    /// This picture area's own key in the model: the panel and Browser mode each keep the size they show.
+    @State private var areaID = UUID()
     @Environment(GestureSettings.self) private var gestures
 
     var body: some View {
@@ -493,13 +495,10 @@ private struct PageSurface: View {
                 #endif
             }
             // The page is sized to the area the picture is drawn in, so the picture fills it with no bars.
-            .onAppear {
-                model.pageSurfaceAppeared()
-                reportArea(size)
-            }
+            .onAppear { reportArea(size) }
             .onChange(of: size) { _, area in reportArea(area) }
             .onChange(of: scale) { _, _ in reportArea(size) }
-            .onDisappear { model.pageSurfaceDisappeared() }
+            .onDisappear { model.pageSurfaceDisappeared(id: areaID) }
             .background { scaleReader }
         }
         .clipShape(RoundedRectangle(cornerRadius: BanditoRadius.md))
@@ -516,7 +515,7 @@ private struct PageSurface: View {
     }
 
     private func reportArea(_ area: CGSize) {
-        model.pageAreaChanged(width: area.width, height: area.height, scale: Double(scale))
+        model.pageAreaChanged(id: areaID, width: area.width, height: area.height, scale: Double(scale))
     }
 }
 

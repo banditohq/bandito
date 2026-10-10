@@ -165,6 +165,8 @@ struct ServerFeaturesCard: View {
     let server: ServerModel
     @Bindable var setup: SetupModel
     @Environment(Router.self) private var router
+    /// The whole log is open, not only its last lines. It is part of the page flow, so the page scrolls it.
+    @State private var showsFullLog = false
 
     var body: some View {
         ServerCard {
@@ -232,18 +234,46 @@ struct ServerFeaturesCard: View {
         .task { await setup.load(server) }
     }
 
+    /// Lines shown before the person opens the whole log.
+    static let logPreviewLines = 12
+
+    /// The newest lines of the job's log, and a button for the rest. No scroll of its own: a nested scroll area would
+    /// take the wheel from the overview page, which must scroll as one piece. Opened, every line sits in the page flow.
     private func logPanel(_ job: SetupJob) -> some View {
-        ScrollView {
-            Text(setup.log.isEmpty ? job.step : setup.log)
+        let text = setup.log.isEmpty ? job.step : setup.log
+        let count = Self.logLines(text).count
+        return VStack(alignment: .leading, spacing: 8) {
+            Text(showsFullLog ? text : Self.logTail(text, lines: Self.logPreviewLines))
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundStyle(Color.Bandito.text2)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .textSelection(.enabled)
+            if count > Self.logPreviewLines {
+                Button {
+                    showsFullLog.toggle()
+                } label: {
+                    Text(showsFullLog ? L10n.Setup.collapseLog : L10n.Setup.showFullLog(count: count))
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
+                .banditoButton(.quiet())
+            }
         }
-        .defaultScrollAnchor(.bottom)
-        .frame(height: 140)
         .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.Bandito.bg, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    /// The lines of `text`. The newline that ends the text does not start a line of its own.
+    static func logLines(_ text: String) -> [Substring] {
+        var lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+        if lines.count > 1, lines.last == "" { lines.removeLast() }
+        return lines
+    }
+
+    /// The last `lines` lines of `text`, joined back with newlines.
+    static func logTail(_ text: String, lines: Int) -> String {
+        logLines(text).suffix(lines).joined(separator: "\n")
     }
 
     static func label(_ state: SetupReady) -> String {

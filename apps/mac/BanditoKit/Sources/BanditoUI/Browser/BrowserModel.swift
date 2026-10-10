@@ -57,8 +57,9 @@ final class BrowserModel {
     private var pollTask: Task<Void, Never>?
     /// The views attached now (see `BrowserAttachments`). The polling runs while it is above zero.
     private var attachments = BrowserAttachments()
-    /// The picture areas on screen (`PageSurface` views). The page's size is given back only when the last one goes.
-    private var pageSurfaces = BrowserAttachments()
+    /// The picture areas on screen, each with its own size (`PageSurface` views: the panel and Browser mode). The page
+    /// follows the newest one; it gets its own size back only when none is left.
+    private var pageAreas = BrowserPageAreas()
     private var pollTick = 0
     /// The size the shown page is set to: the picture area on screen. Nil while no page is on screen.
     private var viewport: BrowserViewport?
@@ -489,28 +490,32 @@ final class BrowserModel {
 
     // MARK: Picture area
 
-    /// The picture area of the shown page changed size, or its window moved to a screen with another scale. The page
-    /// follows it after 150 ms without another change, so a window drag sends one resize, not one per pixel.
-    /// Only the page on screen is resized.
-    func pageAreaChanged(width: Double, height: Double, scale: Double) {
+    /// The picture area `id` of the shown page changed size, or its window moved to a screen with another scale. The
+    /// page follows the newest area after 150 ms without another change, so a window drag sends one resize, not one per
+    /// pixel. A view that is not on screen never gets here: it reports only while it is shown.
+    func pageAreaChanged(id: UUID, width: Double, height: Double, scale: Double) {
+        pageAreas.report(BrowserPageAreas.Area(width: width, height: height, scale: scale), for: id)
+        scheduleViewport()
+    }
+
+    /// The picture area `id` went away. The page follows the area still on screen (the other view that shows the page
+    /// keeps the size it set), and gets its own size back when none is left.
+    func pageSurfaceDisappeared(id: UUID) {
+        pageAreas.remove(id)
+        if pageAreas.isEmpty {
+            pageAreaHidden()
+        } else {
+            scheduleViewport()
+        }
+    }
+
+    /// Applies the active area's size after the settle delay, restarting the wait on every change.
+    private func scheduleViewport() {
         viewportTask?.cancel()
         viewportTask = Task { [weak self] in
             try? await Task.sleep(for: Self.viewportDelay)
             guard !Task.isCancelled, let self else { return }
-            self.applyViewport(BrowserViewport.fitting(width: width, height: height, scale: scale))
-        }
-    }
-
-    /// A picture area came on screen. Counted, like the views (see `BrowserAttachments`).
-    func pageSurfaceAppeared() {
-        _ = pageSurfaces.attach()
-    }
-
-    /// A picture area went away. The page is given back its own size only when none is left: the other view that shows
-    /// the page (Browser mode next to a workbench tab, or the reverse) keeps the size it set.
-    func pageSurfaceDisappeared() {
-        if pageSurfaces.detach() {
-            pageAreaHidden()
+            self.applyViewport(self.pageAreas.active)
         }
     }
 
