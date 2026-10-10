@@ -306,6 +306,16 @@ async fn mcp(State(f): State<Arc<Fake>>, headers: HeaderMap, body: Bytes) -> Res
             200,
             json!({ "jsonrpc": "2.0", "id": id, "result": { "tools": [{ "name": "search" }, { "name": "fetch" }] } }),
         ),
+        // Echoes the tool and its arguments as text; the tool `fail` answers with `isError`.
+        Some("tools/call") => {
+            let name = msg["params"]["name"].as_str().unwrap_or_default();
+            let text = format!("{name} {}", msg["params"]["arguments"]);
+            json_response(
+                200,
+                json!({ "jsonrpc": "2.0", "id": id, "result": {
+                    "content": [{ "type": "text", "text": text }], "isError": name == "fail" } }),
+            )
+        }
         _ => (StatusCode::ACCEPTED, String::new()).into_response(),
     }
 }

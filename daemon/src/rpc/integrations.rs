@@ -5,7 +5,8 @@ use super::{App, INVALID_PARAMS, METHOD_NOT_FOUND, Peer, RpcError, RpcResult, SE
 use crate::integrations::{self, Pair, Server, Transport};
 use crate::mcp_oauth::{self, Outcome, Target, Why};
 use crate::recommend;
-use crate::store::{Integration, IntegrationAuth, IntegrationPatch, NewIntegration, Store, now_ms};
+use crate::redact::Redactor;
+use crate::store::{Integration, IntegrationAuth, IntegrationPatch, IntegrationTool, NewIntegration, Store, now_ms};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -17,6 +18,15 @@ use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 
 /// How long `integrations.test` may take, end to end.
 const TEST_TIMEOUT: Duration = Duration::from_secs(15);
+
+/// How long `integrations.call_tool` may take, end to end.
+const CALL_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// How much text a tool's answer keeps, in all (`integrations.call_tool`); the structured content too, when it fits.
+const CALL_TEXT_BYTES: usize = 64 * 1024;
+
+/// The largest input schema kept for a tool; a larger one is kept as none.
+const SCHEMA_BYTES: usize = 32 * 1024;
 
 /// The catalog: ready templates for the owner to add, built into the daemon.
 const CATALOG_JSON: &str = include_str!("../integrations_catalog.json");
@@ -61,6 +71,14 @@ struct StateParams {
 struct StatusParams {
     #[serde(default)]
     id: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct CallParams {
+    id: String,
+    tool: String,
+    #[serde(default)]
+    arguments: Option<Value>,
 }
 
 #[derive(Deserialize)]
@@ -344,6 +362,31 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                 .ok_or_else(|| RpcError::new(SERVER_ERROR, format!("no integration {id}")))?;
             probe_row(store, &cur, false).await
         }
+        "integrations.tools" => {
+            // The tools the last successful test listed, with their annotations (see docs/ARCHITECTURE.md#integrations).
+            let Id { id } = params(p)?;
+            if store.integration_get(&id)?.is_none() {
+                return Err(no_integration(&id));
+            }
+            ok(store.integration_tools(&id)?)
+        }
+        "integrations.call_tool" => {
+            let CallParams { id, tool, arguments } = params(p)?;
+            if tool.trim().is_empty() {
+                return Err(RpcError::new(INVALID_PARAMS, "name the tool to call"));
+            }
+            let arguments = match arguments {
+                None | Some(Value::Null) => json!({}),
+                Some(v @ Value::Object(_)) => v,
+                Some(_) => return Err(RpcError::new(INVALID_PARAMS, "arguments must be an object")),
+            };
+            let cur = store.integration_get(&id)?.ok_or_else(|| no_integration(&id))?;
+            match reach(store, &cur, false, &call_request(&tool, &arguments), CALL_TIMEOUT).await {
+                Ok(reply) => ok(call_answer(&reply.result, &Redactor::exact(reply.secrets))),
+                Err(Refused::SignIn) => Err(RpcError::new(SERVER_ERROR, "sign in to this service again")),
+                Err(Refused::Failed(e)) => Err(RpcError::new(SERVER_ERROR, format!("{e:#}"))),
+            }
+        }
         "integrations.probe" => {
             #[derive(Deserialize)]
             struct ProbeParams {
@@ -385,48 +428,65 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
     }
 }
 
-/// What `integrations.test` and `integrations.probe` answer for `row`: the server starts (or is reached) and its
-/// tools come back, or the error. With `draft`, every value of the row's environment and headers is a secret for
-/// the error text, since the owner typed them and they are not stored.
-async fn probe_row(store: &Store, row: &Integration, draft: bool) -> RpcResult {
+/// Why a server could not be asked: its browser sign-in is over (the owner signs in again), or the exchange failed.
+enum Refused {
+    SignIn,
+    Failed(anyhow::Error),
+}
+
+/// A server's answer to the request, with the secret values it was asked with (what its answer must not show).
+struct Reply {
+    result: Value,
+    secrets: Vec<(String, String)>,
+}
+
+/// Asks the row's server once with `request` (the handshake first), as `integrations.test` and `integrations.call_tool`
+/// do. A browser sign-in renews its token first when that is about to end, and once more after the service refused it
+/// (HTTP 401), then asks again. With `draft`, every value of the row's environment and headers is a secret: the owner
+/// typed them and they are not stored.
+async fn reach(
+    store: &Store,
+    row: &Integration,
+    draft: bool,
+    request: &Value,
+    limit: Duration,
+) -> Result<Reply, Refused> {
     let oauth = row.auth == IntegrationAuth::Oauth;
-    let sign_in =
-        || ok(json!({ "ok": false, "tools": [], "error": "sign in to this service again", "needs_login": true }));
     if oauth {
-        if draft {
-            return ok(
-                json!({ "ok": false, "tools": [], "error": "a browser sign-in cannot be tried before it is done" }),
-            );
-        }
         // A token that is about to end is renewed first.
         match mcp_oauth::refresh(store, &row.id, Why::Expiring(mcp_oauth::SESSION_SKEW_MS), now_ms()).await {
-            Ok(Outcome::NeedsLogin) => return sign_in(),
+            Ok(Outcome::NeedsLogin) => return Err(Refused::SignIn),
             Ok(_) => {}
             Err(e) => tracing::warn!(integration = row.name, "{e:#}"),
         }
     }
-    let mut result = run_probe(store, row, draft).await;
+    let mut result = run_once(store, row, draft, request, limit).await;
     if oauth
         && let Err(e) = &result
         && e.downcast_ref::<HttpStatus>().is_some_and(|s| s.0 == 401)
-        && let Some(stale) = mcp_oauth::access_token(store, &row.id)?
+        && let Some(stale) = mcp_oauth::access_token(store, &row.id).map_err(Refused::Failed)?
     {
         // The service refused the token: renew it once and try again.
         match mcp_oauth::refresh(store, &row.id, Why::Rejected(stale), now_ms()).await {
-            Ok(Outcome::Refreshed) => result = run_probe(store, row, draft).await,
-            Ok(Outcome::NeedsLogin) => return sign_in(),
-            Ok(Outcome::Unchanged | Outcome::Waiting) => result = run_probe(store, row, draft).await,
+            Ok(Outcome::Refreshed | Outcome::Unchanged | Outcome::Waiting) => {
+                result = run_once(store, row, draft, request, limit).await;
+            }
+            Ok(Outcome::NeedsLogin) => return Err(Refused::SignIn),
             Err(e) => tracing::warn!(integration = row.name, "{e:#}"),
         }
     }
-    match result {
-        Ok(tools) => ok(json!({ "ok": true, "tools": tools })),
-        Err(e) => ok(json!({ "ok": false, "tools": [], "error": format!("{e:#}") })),
-    }
+    result.map_err(Refused::Failed)
 }
 
-/// One run of the probe for `row`, with the secrets it names read now.
-async fn run_probe(store: &Store, row: &Integration, draft: bool) -> anyhow::Result<Vec<String>> {
+/// One exchange with the row's server, with the secrets it names read now. A failure's text has every secret value of
+/// the server hidden (`••••NAME`), as the stderr tail always was; a 401 keeps its type for the renewal.
+async fn run_once(
+    store: &Store,
+    row: &Integration,
+    draft: bool,
+    request: &Value,
+    limit: Duration,
+) -> anyhow::Result<Reply> {
     let mut all = store.secrets_all()?;
     // A sign-in renewal the database refused is the live token.
     mcp_oauth::overlay_held(&mut all);
@@ -438,7 +498,49 @@ async fn run_probe(store: &Store, row: &Integration, draft: bool) -> anyhow::Res
     if draft {
         server = all_secret(server);
     }
-    probe_guarded(&server, TEST_TIMEOUT, row.auth == IntegrationAuth::Oauth).await
+    let public_only = row.auth == IntegrationAuth::Oauth;
+    let secrets = server_secrets(&server);
+    match exchange(&server, limit, public_only, request).await {
+        Ok(result) => Ok(Reply { result, secrets }),
+        Err(e) if e.downcast_ref::<HttpStatus>().is_some() => Err(e),
+        Err(e) => {
+            let text = Redactor::exact(secrets).redact(&format!("{e:#}")).into_owned();
+            Err(anyhow::anyhow!(text))
+        }
+    }
+}
+
+/// What `integrations.test` and `integrations.probe` answer for `row`: the server starts (or is reached) and its
+/// tools come back, or the error. A draft saves nothing; a successful test keeps the tools for `integrations.tools`.
+async fn probe_row(store: &Store, row: &Integration, draft: bool) -> RpcResult {
+    if draft && row.auth == IntegrationAuth::Oauth {
+        return ok(json!({ "ok": false, "tools": [], "error": "a browser sign-in cannot be tried before it is done" }));
+    }
+    match reach(store, row, draft, &list_request(), TEST_TIMEOUT).await {
+        Ok(reply) => {
+            let tools = tools_of(&reply.result, now_ms());
+            if !draft {
+                save_tools(store, row, &tools);
+            }
+            ok(json!({ "ok": true, "tools": names(&tools) }))
+        }
+        Err(Refused::SignIn) => {
+            ok(json!({ "ok": false, "tools": [], "error": "sign in to this service again", "needs_login": true }))
+        }
+        Err(Refused::Failed(e)) => ok(json!({ "ok": false, "tools": [], "error": format!("{e:#}") })),
+    }
+}
+
+/// Keeps the tools of a successful test: the list replaces the earlier one. A failure to write does not fail the
+/// test; a row removed meanwhile keeps none.
+fn save_tools(store: &Store, row: &Integration, tools: &[IntegrationTool]) {
+    if let Err(e) = store.integration_tools_replace(&row.id, tools) {
+        tracing::warn!(integration = row.name, "keeping the tools: {e:#}");
+    }
+}
+
+fn names(tools: &[IntegrationTool]) -> Vec<&str> {
+    tools.iter().map(|t| t.name.as_str()).collect()
 }
 
 /// An http server answered with this status: kept as a type so a 401 can be told from other failures.
@@ -525,19 +627,35 @@ const ERROR_TAIL_CHARS: usize = 2 * 1024;
 /// How much is collected before redaction, so a secret cut at the edge is still caught.
 const STDERR_KEEP_BYTES: usize = 16 * 1024;
 
-/// Start the server (or reach it) and ask for its tools: `initialize`, `notifications/initialized`,
-/// `tools/list`. Stops after `limit`, and kills the whole process group it started: no child of the server
-/// outlives the probe. Returns the tool names. A failure carries the tail of the server's stderr, redacted.
+/// Start the server (or reach it) and ask for its tools: `initialize`, `notifications/initialized`, `tools/list`.
+/// Stops after `limit`, and kills the whole process group it started: no child of the server outlives the probe.
+/// Returns the tool names. A failure carries the tail of the server's stderr, redacted.
 pub async fn probe(server: &Server, limit: Duration) -> anyhow::Result<Vec<String>> {
-    probe_guarded(server, limit, false).await
+    let tools = probe_guarded(server, limit, false).await?;
+    Ok(names(&tools).into_iter().map(str::to_string).collect())
 }
 
-/// [`probe`]; with `public_only` (a row that signs in in the browser, whose requests carry the daemon's token) an
-/// http address gets the checks and the pinning of the sign-in itself (`mcp_oauth::guard_http`) before a token is sent.
-async fn probe_guarded(server: &Server, limit: Duration, public_only: bool) -> anyhow::Result<Vec<String>> {
+/// [`probe`] with the tools as the server listed them, annotations included. With `public_only` (a row that signs
+/// in in the browser, whose requests carry the daemon's token) an http address gets the checks and the pinning of
+/// the sign-in itself (`mcp_oauth::guard_http`) before a token is sent.
+async fn probe_guarded(server: &Server, limit: Duration, public_only: bool) -> anyhow::Result<Vec<IntegrationTool>> {
+    let result = exchange(server, limit, public_only, &list_request()).await?;
+    Ok(tools_of(&result, now_ms()))
+}
+
+/// The handshake, then `last` (a request with id 2), and the `result` of `last`. Stops after `limit`.
+async fn exchange(server: &Server, limit: Duration, public_only: bool, last: &Value) -> anyhow::Result<Value> {
     match &server.transport {
-        Transport::Stdio { command, args, env } => probe_stdio(command, args, env, limit).await,
-        Transport::Http { url, headers } => probe_http(url, headers, limit, public_only).await,
+        Transport::Stdio { command, args, env } => exchange_stdio(command, args, env, limit, last).await,
+        Transport::Http { url, headers } => exchange_http(url, headers, limit, public_only, last).await,
+    }
+}
+
+/// The secret values of a server, by name: what an answer must not show (see [`secret_pairs`]).
+fn server_secrets(server: &Server) -> Vec<(String, String)> {
+    match &server.transport {
+        Transport::Stdio { env, .. } => secret_pairs(env),
+        Transport::Http { headers, .. } => secret_pairs(headers),
     }
 }
 
@@ -642,7 +760,13 @@ fn secret_pairs(pairs: &[Pair]) -> Vec<(String, String)> {
         .collect()
 }
 
-async fn probe_stdio(command: &str, args: &[String], env: &[Pair], limit: Duration) -> anyhow::Result<Vec<String>> {
+async fn exchange_stdio(
+    command: &str,
+    args: &[String],
+    env: &[Pair],
+    limit: Duration,
+    last: &Value,
+) -> anyhow::Result<Value> {
     let mut cmd = tokio::process::Command::new(command);
     cmd.args(args)
         .envs(env.iter().map(|p| (&p.key, &p.value)))
@@ -667,9 +791,8 @@ async fn probe_stdio(command: &str, args: &[String], env: &[Pair], limit: Durati
             &json!({ "jsonrpc": "2.0", "method": "notifications/initialized" }),
         )
         .await?;
-        send(&mut stdin, &list_request()).await?;
-        let tools = read_reply(&mut lines, 2).await?;
-        anyhow::Ok(tool_names(&tools))
+        send(&mut stdin, last).await?;
+        read_reply(&mut lines, 2).await
     };
     match tokio::time::timeout(limit, exchange).await {
         Ok(Ok(tools)) => Ok(tools),
@@ -723,22 +846,96 @@ fn result_of(msg: &Value) -> anyhow::Result<Value> {
         .ok_or_else(|| anyhow::anyhow!("the server's answer has no result"))
 }
 
-fn tool_names(result: &Value) -> Vec<String> {
-    result
-        .get("tools")
-        .and_then(Value::as_array)
-        .map(|tools| {
-            tools
-                .iter()
-                .filter_map(|t| t.get("name").and_then(Value::as_str).map(str::to_string))
-                .collect()
+/// The tools of a `tools/list` result, with the annotations the owner's rules read: `readOnlyHint` and
+/// `destructiveHint` (anything but `true`, or no annotation, counts as `false`). A schema over 32 KB is kept as none.
+fn tools_of(result: &Value, seen_at: i64) -> Vec<IntegrationTool> {
+    let Some(tools) = result.get("tools").and_then(Value::as_array) else {
+        return Vec::new();
+    };
+    tools
+        .iter()
+        .filter_map(|t| {
+            let name = t.get("name").and_then(Value::as_str)?;
+            let notes = t.get("annotations");
+            let hint = |key: &str| notes.and_then(|a| a.get(key)).and_then(Value::as_bool).unwrap_or(false);
+            let note_title = notes.and_then(|a| a.get("title"));
+            Some(IntegrationTool {
+                name: name.to_string(),
+                title: t
+                    .get("title")
+                    .or(note_title)
+                    .and_then(Value::as_str)
+                    .map(str::to_string),
+                description: t.get("description").and_then(Value::as_str).map(str::to_string),
+                read_only: hint("readOnlyHint"),
+                destructive: hint("destructiveHint"),
+                input_schema: t
+                    .get("inputSchema")
+                    .filter(|s| s.to_string().len() <= SCHEMA_BYTES)
+                    .cloned(),
+                seen_at,
+            })
         })
-        .unwrap_or_default()
+        .collect()
+}
+
+fn call_request(tool: &str, arguments: &Value) -> Value {
+    json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": { "name": tool, "arguments": arguments } })
+}
+
+/// A `tools/call` result as the daemon answers it: `is_error`, the content (a text part with its text; any other part
+/// with its type only, so an image or a file never leaves in full), and `structured` when it fits in 64 KB. Every
+/// string is redacted first, then the text is cut after 64 KB in all; the parts after the cut are left out.
+fn call_answer(result: &Value, red: &Redactor) -> Value {
+    let mut result = result.clone();
+    red.redact_json(&mut result);
+    let mut budget = CALL_TEXT_BYTES;
+    let mut content = Vec::new();
+    for part in result.get("content").and_then(Value::as_array).into_iter().flatten() {
+        let kind = part.get("type").and_then(Value::as_str).unwrap_or("unknown");
+        if kind != "text" {
+            content.push(json!({ "type": kind }));
+            continue;
+        }
+        let text = part.get("text").and_then(Value::as_str).unwrap_or_default();
+        let kept = cut_at(text, budget);
+        content.push(json!({ "type": kind, "text": kept }));
+        budget -= kept.len();
+        if kept.len() < text.len() {
+            break;
+        }
+    }
+    let mut answer = json!({
+        "is_error": result.get("isError").and_then(Value::as_bool).unwrap_or(false),
+        "content": content,
+    });
+    if let Some(structured) = result
+        .get("structuredContent")
+        .filter(|s| s.to_string().len() <= CALL_TEXT_BYTES)
+    {
+        answer["structured"] = structured.clone();
+    }
+    answer
+}
+
+/// The start of `text`, at most `max` bytes, cut at a character boundary.
+fn cut_at(text: &str, max: usize) -> &str {
+    let mut end = max.min(text.len());
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    &text[..end]
 }
 
 /// Streamable HTTP through `curl`, its config (URL, headers, body) fed on stdin so no header value reaches argv.
-/// Stops after `limit` as the stdio probe does.
-async fn probe_http(url: &str, headers: &[Pair], limit: Duration, public_only: bool) -> anyhow::Result<Vec<String>> {
+/// The handshake, then `last`; stops after `limit` as the stdio exchange does.
+async fn exchange_http(
+    url: &str,
+    headers: &[Pair],
+    limit: Duration,
+    public_only: bool,
+    last: &Value,
+) -> anyhow::Result<Value> {
     let exchange = async {
         // Every request is checked again: the name may lead somewhere else than a moment ago.
         let init = http_post(url, headers, &initialize_request(), None, public_only).await?;
@@ -751,9 +948,9 @@ async fn probe_http(url: &str, headers: &[Pair], limit: Duration, public_only: b
             public_only,
         )
         .await?;
-        let listed = http_post(url, headers, &list_request(), session.as_deref(), public_only).await?;
-        let reply = find_reply(&listed.body, 2).ok_or_else(|| anyhow::anyhow!("no tools/list answer"))?;
-        anyhow::Ok(tool_names(&result_of(&reply)?))
+        let answer = http_post(url, headers, last, session.as_deref(), public_only).await?;
+        let reply = find_reply(&answer.body, 2).ok_or_else(|| anyhow::anyhow!("no answer to the request"))?;
+        anyhow::Ok(result_of(&reply)?)
     };
     match tokio::time::timeout(limit, exchange).await {
         Ok(result) => result,
@@ -1045,7 +1242,7 @@ mod tests {
         assert!(find_reply("{\"id\":3,\"result\":{}}", 2).is_none());
         let sse = "event: message\ndata: {\"jsonrpc\":\"2.0\",\"method\":\"ping\"}\n\nevent: message\ndata: {\"id\":2,\"result\":{\"tools\":[{\"name\":\"fetch\"}]}}\n\n";
         let reply = find_reply(sse, 2).unwrap();
-        assert_eq!(tool_names(&result_of(&reply).unwrap()), ["fetch"]);
+        assert_eq!(names(&tools_of(&result_of(&reply).unwrap(), 0)), ["fetch"]);
     }
 
     #[test]
@@ -1639,6 +1836,306 @@ mod tests {
         }
         std::fs::remove_dir_all(&dir).ok();
         assert!(gone, "pid {pid} still runs after the probe");
+    }
+
+    /// The script of a stdio server: it answers the handshake, then `answer` (`"result":…` or `"error":…`) to its request.
+    fn answering(answer: &str) -> String {
+        format!(
+            "read a; echo '{{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{{\"protocolVersion\":\"{PROTOCOL}\",\"capabilities\":{{}}}}}}'; \
+             read b; read c; echo '{{\"jsonrpc\":\"2.0\",\"id\":2,{answer}}}'"
+        )
+    }
+
+    /// Adds a stdio integration that runs `script` with `sh -c`, through the RPC; returns its id.
+    async fn add_sh(app: &App, name: &str, script: &str, env: Value) -> String {
+        let row = owner(
+            app,
+            "integrations.add",
+            json!({ "name": name, "kind": "stdio", "command": "sh", "args": ["-c", script], "env": env }),
+        )
+        .await
+        .unwrap();
+        row["id"].as_str().unwrap().to_string()
+    }
+
+    /// The tool called `name` in a `integrations.tools` answer.
+    fn tool_of(list: &Value, name: &str) -> Value {
+        list.as_array()
+            .unwrap()
+            .iter()
+            .find(|t| t["name"] == name)
+            .unwrap_or_else(|| panic!("no tool {name} in {list}"))
+            .clone()
+    }
+
+    fn tool_names_of(list: &Value) -> Vec<String> {
+        list.as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t["name"].as_str().unwrap().to_string())
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn a_successful_test_keeps_the_annotated_tools_and_a_later_list_replaces_them() {
+        let app = app();
+        let first = answering(
+            r#""result":{"tools":[{"name":"search","title":"Search","description":"Finds things","annotations":{"readOnlyHint":true},"inputSchema":{"type":"object"}},{"name":"drop","annotations":{"destructiveHint":true}},{"name":"plain"}]}"#,
+        );
+        let id = add_sh(&app, "tools-a", &first, json!({})).await;
+        let answer = owner(&app, "integrations.test", json!({ "id": id })).await.unwrap();
+        assert_eq!(answer["ok"], true, "{answer}");
+
+        let list = owner(&app, "integrations.tools", json!({ "id": id })).await.unwrap();
+        let search = tool_of(&list, "search");
+        assert_eq!(search["read_only"], true, "{list}");
+        assert_eq!(search["destructive"], false, "{list}");
+        assert_eq!(search["title"], "Search", "{list}");
+        assert_eq!(search["description"], "Finds things", "{list}");
+        assert_eq!(search["input_schema"], json!({ "type": "object" }), "{list}");
+        assert!(search["seen_at"].as_i64().unwrap() > 0, "{list}");
+        let gone = tool_of(&list, "drop");
+        assert_eq!(
+            (gone["read_only"].clone(), gone["destructive"].clone()),
+            (json!(false), json!(true))
+        );
+        assert!(gone["title"].is_null() && gone["input_schema"].is_null(), "{list}");
+        let plain = tool_of(&list, "plain");
+        assert_eq!(
+            (plain["read_only"].clone(), plain["destructive"].clone()),
+            (json!(false), json!(false))
+        );
+
+        // A later successful test lists only `search`: the others are gone.
+        let second = answering(r#""result":{"tools":[{"name":"search","annotations":{"readOnlyHint":true}}]}"#);
+        owner(&app, "integrations.update", json!({ "id": id, "args": ["-c", second] }))
+            .await
+            .unwrap();
+        assert_eq!(
+            owner(&app, "integrations.test", json!({ "id": id })).await.unwrap()["ok"],
+            true
+        );
+        let list = owner(&app, "integrations.tools", json!({ "id": id })).await.unwrap();
+        assert_eq!(tool_names_of(&list), ["search"], "{list}");
+
+        // A test that fails keeps the list it had.
+        owner(
+            &app,
+            "integrations.update",
+            json!({ "id": id, "command": "/definitely/not/here" }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            owner(&app, "integrations.test", json!({ "id": id })).await.unwrap()["ok"],
+            false
+        );
+        let list = owner(&app, "integrations.tools", json!({ "id": id })).await.unwrap();
+        assert_eq!(tool_names_of(&list), ["search"], "{list}");
+
+        // Removing the integration removes its tools with it.
+        owner(&app, "integrations.remove", json!({ "id": id })).await.unwrap();
+        assert!(app.sup.hub().store.integration_tools(&id).unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_tool_call_over_stdio_returns_its_text_and_passes_is_error_through() {
+        let app = app();
+        let ok_id = add_sh(
+            &app,
+            "call-ok",
+            &answering(r#""result":{"content":[{"type":"text","text":"hello"}],"isError":false}"#),
+            json!({}),
+        )
+        .await;
+        let answer = owner(
+            &app,
+            "integrations.call_tool",
+            json!({ "id": ok_id, "tool": "echo", "arguments": { "text": "hello" } }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(answer["is_error"], false, "{answer}");
+        assert_eq!(
+            answer["content"],
+            json!([{ "type": "text", "text": "hello" }]),
+            "{answer}"
+        );
+
+        let err_id = add_sh(
+            &app,
+            "call-err",
+            &answering(r#""result":{"content":[{"type":"text","text":"no such row"}],"isError":true}"#),
+            json!({}),
+        )
+        .await;
+        let answer = owner(&app, "integrations.call_tool", json!({ "id": err_id, "tool": "get" }))
+            .await
+            .unwrap();
+        assert_eq!(answer["is_error"], true, "{answer}");
+        assert_eq!(answer["content"][0]["text"], "no such row", "{answer}");
+    }
+
+    #[tokio::test]
+    async fn a_tool_call_over_http_sends_the_header_secret_and_returns_the_text() {
+        let fake = crate::mcp_oauth::fake::Fake::start().await;
+        let app = app();
+        // The fake accepts the bearer token it issued first: `at-initial`.
+        app.sup.hub().store.secret_set("FAKE_TOKEN", "at-initial", &[]).unwrap();
+        let row = owner(
+            &app,
+            "integrations.add",
+            json!({ "name": "fake-http", "kind": "http", "url": fake.url(),
+                    "headers": { "Authorization": "Bearer secret:FAKE_TOKEN" } }),
+        )
+        .await
+        .unwrap();
+        let id = row["id"].as_str().unwrap().to_string();
+
+        let answer = owner(
+            &app,
+            "integrations.call_tool",
+            json!({ "id": id, "tool": "echo", "arguments": { "text": "hi" } }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(answer["is_error"], false, "{answer}");
+        assert_eq!(answer["content"][0]["text"], r#"echo {"text":"hi"}"#, "{answer}");
+
+        let failed = owner(&app, "integrations.call_tool", json!({ "id": id, "tool": "fail" }))
+            .await
+            .unwrap();
+        assert_eq!(failed["is_error"], true, "{failed}");
+        assert!(!answer.to_string().contains("at-initial") && !failed.to_string().contains("at-initial"));
+    }
+
+    #[tokio::test]
+    async fn a_silent_tool_call_times_out_with_a_plain_message() {
+        let server = Server {
+            name: "silent".into(),
+            transport: Transport::Stdio {
+                command: "sleep".into(),
+                args: vec!["30".into()],
+                env: vec![],
+            },
+        };
+        let request = call_request("echo", &json!({}));
+        let err = exchange(&server, Duration::from_millis(300), false, &request)
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("no answer within"), "{err}");
+        assert_eq!(CALL_TIMEOUT, Duration::from_secs(30));
+    }
+
+    #[tokio::test]
+    async fn the_secret_of_a_header_or_env_never_shows_in_a_tool_answer_or_an_error() {
+        let app = app();
+        app.sup
+            .hub()
+            .store
+            .secret_set("GITHUB_TOKEN", "tok-real-value", &[])
+            .unwrap();
+        let env = json!({ "TOKEN": "secret:GITHUB_TOKEN" });
+
+        // The tool's text echoes the token: it is redacted.
+        let echoing = add_sh(
+            &app,
+            "echo-secret",
+            &answering(r#""result":{"content":[{"type":"text","text":"leaked tok-real-value"}],"isError":true}"#),
+            env.clone(),
+        )
+        .await;
+        let answer = owner(&app, "integrations.call_tool", json!({ "id": echoing, "tool": "t" }))
+            .await
+            .unwrap();
+        let text = answer["content"][0]["text"].as_str().unwrap();
+        assert!(
+            text.contains("••••TOKEN") && !text.contains("tok-real-value"),
+            "{answer}"
+        );
+
+        // The server's error echoes it: the RPC error hides it too.
+        let failing = add_sh(
+            &app,
+            "error-secret",
+            &answering(r#""error":{"code":-32602,"message":"bad token tok-real-value"}"#),
+            env,
+        )
+        .await;
+        let err = owner(&app, "integrations.call_tool", json!({ "id": failing, "tool": "t" }))
+            .await
+            .unwrap_err();
+        assert!(
+            err.message.contains("••••TOKEN") && !err.message.contains("tok-real-value"),
+            "{}",
+            err.message
+        );
+    }
+
+    #[tokio::test]
+    async fn a_tool_call_needs_an_owner_or_a_device_and_a_tool_name() {
+        let app = app();
+        let agent = super::super::Peer::Agent("someone".into());
+        for method in ["integrations.call_tool", "integrations.tools"] {
+            let err = super::super::dispatch(&app, &agent, method, json!({ "id": "x", "tool": "t" }))
+                .await
+                .unwrap_err();
+            assert_eq!(err.code, super::super::UNAUTHORIZED, "{method}");
+        }
+        let nameless = owner(&app, "integrations.call_tool", json!({ "id": "x", "tool": " " }))
+            .await
+            .unwrap_err();
+        assert_eq!(nameless.code, INVALID_PARAMS);
+        assert!(super::super::features().contains(&"integrations_call_tool"));
+    }
+
+    #[test]
+    fn a_schema_over_32_kilobytes_is_kept_as_none_and_annotations_read_as_hints() {
+        let big = json!({ "type": "object", "description": "x".repeat(SCHEMA_BYTES) });
+        let result = json!({ "tools": [
+            { "name": "big", "inputSchema": big },
+            { "name": "small", "inputSchema": { "type": "object" }, "annotations": { "readOnlyHint": "yes" } },
+        ] });
+        let tools = tools_of(&result, 7);
+        assert_eq!(tools[0].input_schema, None);
+        assert_eq!(tools[1].input_schema, Some(json!({ "type": "object" })));
+        // A hint that is not `true` counts as not set.
+        assert!(!tools[1].read_only && !tools[1].destructive);
+        assert!(tools.iter().all(|t| t.seen_at == 7));
+    }
+
+    #[test]
+    fn a_tool_answer_cuts_its_text_at_64_kilobytes_and_keeps_other_parts_by_type() {
+        let long = "é".repeat(CALL_TEXT_BYTES); // two bytes each: 128 KB of text
+        let result = json!({
+            "content": [
+                { "type": "text", "text": long },
+                { "type": "text", "text": "after the cut" },
+            ],
+            "isError": false,
+        });
+        let answer = call_answer(&result, &Redactor::default());
+        let parts = answer["content"].as_array().unwrap();
+        assert_eq!(parts.len(), 1, "{answer}");
+        assert_eq!(parts[0]["text"].as_str().unwrap().len(), CALL_TEXT_BYTES);
+
+        let image = json!({ "content": [
+            { "type": "image", "data": "AAAA", "mimeType": "image/png" },
+            { "type": "text", "text": "a caption" },
+        ] });
+        let answer = call_answer(&image, &Redactor::default());
+        assert_eq!(
+            answer["content"],
+            json!([{ "type": "image" }, { "type": "text", "text": "a caption" }])
+        );
+        assert_eq!(answer["is_error"], false);
+
+        let echo = json!({ "content": [{ "type": "text", "text": "a tok-real-value b" }],
+                           "structuredContent": { "k": "tok-real-value" } });
+        let red = Redactor::exact([("TOKEN".to_string(), "tok-real-value".to_string())]);
+        let answer = call_answer(&echo, &red);
+        assert_eq!(answer["content"][0]["text"], "a ••••TOKEN b");
+        assert_eq!(answer["structured"], json!({ "k": "••••TOKEN" }));
     }
 
     mod oauth {
