@@ -50,7 +50,7 @@ public enum UsageCards {
             }
             let updated = server.usage.map { Date(timeIntervalSince1970: TimeInterval($0.updatedAt) / 1000) }.max()
             return UsageSnapshot(
-                cards: cards(from: server.usage, agentCounts: counts), isExample: false, updatedAt: updated)
+                cards: cards(from: server.usage, agentCounts: counts, now: now), isExample: false, updatedAt: updated)
         }
         if let demo, demo.enabled {
             return UsageSnapshot(cards: demoCards(demo), isExample: true, updatedAt: demo.startedAt)
@@ -58,8 +58,10 @@ public enum UsageCards {
         return UsageSnapshot(cards: [], isExample: false, updatedAt: nil)
     }
 
-    /// Cards for the daemon's entries. Runtimes come in a fixed order; unknown ones follow.
-    public static func cards(from entries: [UsageEntry], agentCounts: [String: Int]) -> [UsageCard] {
+    /// Cards for the daemon's entries. Runtimes come in a fixed order; unknown ones follow. Windows come shortest
+    /// first (see `windowMinutes`). A window whose reset time is already past has reset: it reads as unused and has
+    /// no countdown, until the limits are refreshed.
+    public static func cards(from entries: [UsageEntry], agentCounts: [String: Int], now: Date = Date()) -> [UsageCard] {
         let order = ["claude", "codex", "grok", "api"]
         return entries.sorted { lhs, rhs in
             (order.firstIndex(of: lhs.runtime) ?? order.count) < (order.firstIndex(of: rhs.runtime) ?? order.count)
@@ -72,15 +74,47 @@ public enum UsageCards {
                 plan: entry.plan?.label,
                 color: color(entry.runtime),
                 who: count > 0 ? L10n.Common.agentCount(count: count) : nil,
-                windows: entry.windows.map { window in
-                    UsageWindowLine(
+                windows: sortedWindows(entry.windows).map { window in
+                    let reset = window.resetsAt.map { Date(timeIntervalSince1970: TimeInterval($0)) }
+                    let passed = reset.map { $0 <= now } ?? false
+                    return UsageWindowLine(
                         id: window.name,
                         label: windowLabel(window.name),
-                        remaining: 1 - min(max(window.utilization, 0), 1),
-                        resetsAt: window.resetsAt.map { Date(timeIntervalSince1970: TimeInterval($0)) },
+                        remaining: passed ? 1 : 1 - min(max(window.utilization, 0), 1),
+                        resetsAt: passed ? nil : reset,
                         note: nil)
                 })
         }
+    }
+
+    /// The latest reset among the used-up windows (100% used) that is still ahead: the time the runtime is back. A reset
+    /// in the past is a stale value of a window that has already reset, so it does not count.
+    public static func exhaustedReset(_ windows: [UsageWindowLine], now: Date) -> Date? {
+        windows.filter(\.exhausted).compactMap(\.resetsAt).filter { $0 > now }.max()
+    }
+
+    /// The windows shortest first; a window of unknown length goes last, in the order the daemon sent it.
+    public static func sortedWindows(_ windows: [LimitWindow]) -> [LimitWindow] {
+        windows.enumerated().sorted { lhs, rhs in
+            let left = windowMinutes(lhs.element.name) ?? Int.max
+            let right = windowMinutes(rhs.element.name) ?? Int.max
+            return left != right ? left < right : lhs.offset < rhs.offset
+        }
+        .map(\.element)
+    }
+
+    /// The length of a limit window in minutes, read from its name: `five_hour`/`5h` 300, `one_day`/`daily`/`1d` 1440,
+    /// `seven_day`/`weekly` and `seven_day_<model>` 10080, `<N>m` N. `nil` for any other name.
+    public static func windowMinutes(_ name: String) -> Int? {
+        switch name {
+        case "five_hour", "5h": return 300
+        case "one_day", "daily", "1d": return 1440
+        case "seven_day", "weekly": return 10080
+        default: break
+        }
+        if name.hasPrefix("seven_day_") { return 10080 }
+        if name.hasSuffix("m"), let minutes = Int(name.dropLast()), minutes > 0 { return minutes }
+        return nil
     }
 
     /// The smallest share left across the windows of `runtime`'s card, or across all cards when
@@ -123,6 +157,15 @@ public enum UsageCards {
         }
     }
 
+    /// What a runtime without limits says: Claude reports them after its first reply, Grok does not report them at all.
+    static func waitingText(_ runtime: String) -> String {
+        switch runtime {
+        case "claude": L10n.Usage.claudeWaitsForReply
+        case "grok": L10n.Usage.grokNoLimits
+        default: L10n.Usage.noLimitsYet
+        }
+    }
+
     static func displayName(_ runtime: String) -> String {
         switch runtime {
         case "claude": "Claude"
@@ -143,12 +186,42 @@ public enum UsageCards {
         }
     }
 
+    /// The name of a window as people read it: "5 hours", "Day", "Week", "Week · Opus", "3 days", or the name itself
+    /// with spaces and a capital, for a window this app does not know.
     static func windowLabel(_ name: String) -> String {
         switch name {
-        case "five_hour", "5h": L10n.Inspector.Window.fiveHour
-        case "seven_day": L10n.Inspector.Window.sevenDay
-        default: name
+        case "five_hour", "5h": return L10n.Inspector.Window.fiveHour
+        case "seven_day", "weekly": return L10n.Inspector.Window.sevenDay
+        case "one_day", "daily", "1d": return L10n.Usage.Window.day
+        default: break
         }
+        if name.hasPrefix("seven_day_") {
+            let model = humanized(String(name.dropFirst("seven_day_".count)))
+            return model.isEmpty ? L10n.Inspector.Window.sevenDay : L10n.Usage.Window.weekModel(model: model)
+        }
+        if let minutes = windowMinutes(name), name.hasSuffix("m") {
+            return durationLabel(minutes: minutes)
+        }
+        return humanized(name)
+    }
+
+    /// A length in minutes as people say it: "Day", "3 days", "12 hours", "1 hour", "90 min".
+    static func durationLabel(minutes: Int) -> String {
+        if minutes % 1440 == 0 {
+            let days = minutes / 1440
+            return days == 1 ? L10n.Usage.Window.day : L10n.Usage.Window.days(count: days)
+        }
+        if minutes % 60 == 0 {
+            return L10n.Usage.Window.hours(count: minutes / 60)
+        }
+        return L10n.Usage.Window.minutes(minutes: "\(minutes)")
+    }
+
+    /// "weird_name" → "Weird name".
+    static func humanized(_ name: String) -> String {
+        let spaced = name.replacingOccurrences(of: "_", with: " ")
+        guard let first = spaced.first else { return spaced }
+        return first.uppercased() + spaced.dropFirst()
     }
 }
 
@@ -165,11 +238,12 @@ public struct FullestWindow: Hashable, Sendable {
     public var usedPercent: Int { Int((used * 100).rounded()) }
 }
 
-/// One line of the usage popover: a runtime's card, or a runtime that has no limits yet. `error` is the daemon's
-/// reason the last refresh could not read it, shown in grey.
+/// One line of the usage popover: a runtime's card, or a runtime that has no limits yet. `problem` says what went wrong
+/// when the last refresh could not read it (see `UsageProblem`).
 public enum UsageRow: Identifiable, Hashable, Sendable {
-    case card(UsageCard, error: String?)
-    case waiting(runtime: String, name: String, text: String, error: String?)
+    case card(UsageCard, problem: UsageProblem?)
+    /// A runtime without a card: its name, the line that says why, and the problem it had, if any.
+    case waiting(runtime: String, name: String, text: String, problem: UsageProblem?)
 
     public var id: String {
         switch self {
@@ -191,20 +265,70 @@ public enum UsageRow: Identifiable, Hashable, Sendable {
 
         var rows: [UsageRow] = cards
             .filter { !notInstalled.contains($0.runtime) && !signedOut.contains($0.runtime) }
-            .map { .card($0, error: errors[$0.runtime]) }
+            .map { card in .card(card, problem: errors[card.runtime].map { UsageProblem.make(runtime: card.runtime, raw: $0) }) }
         for runtime in installed {
             if signedOut.contains(runtime) {
+                // The signed-out line names the login command; the daemon's own words stay in the tooltip.
                 rows.append(.waiting(
                     runtime: runtime, name: UsageCards.displayName(runtime),
-                    text: L10n.AgentSheet.statusNeedsLogin, error: errors[runtime]))
+                    text: L10n.AgentSheet.statusNeedsLogin,
+                    problem: UsageProblem.needsLogin(runtime: runtime, raw: errors[runtime] ?? "")))
             } else if !cards.contains(where: { $0.runtime == runtime }) {
                 rows.append(.waiting(
                     runtime: runtime, name: UsageCards.displayName(runtime),
-                    text: runtime == "claude" ? L10n.Usage.claudeWaitsForReply : L10n.Usage.noLimitsYet,
-                    error: errors[runtime]))
+                    text: UsageCards.waitingText(runtime),
+                    problem: errors[runtime].map { UsageProblem.make(runtime: runtime, raw: $0) }))
             }
         }
         return rows.sorted { (rank($0.id), $0.id) < (rank($1.id), $1.id) }
+    }
+}
+
+/// A runtime's usage error as people read it: what is wrong, and for a login the command that fixes it.
+/// The daemon's words stay in `raw`, for the tooltip.
+public struct UsageProblem: Hashable, Sendable {
+    public enum Kind: Equatable, Sendable {
+        case needsLogin
+        case notInstalled
+        case unknown
+    }
+
+    public let kind: Kind
+    public let raw: String
+    /// The command that signs the person in, for a login problem only.
+    public let loginCommand: String?
+
+    public static func make(runtime: String, raw: String) -> UsageProblem {
+        let text = raw.lowercased()
+        let loginWords = ["authentication", "unauthorized", "not logged in", "not signed in", "log in", "login", "sign in"]
+        let installWords = ["command not found", "no such file", "is not installed"]
+        if loginWords.contains(where: { text.contains($0) }) {
+            return UsageProblem(kind: .needsLogin, raw: raw, loginCommand: loginCommand(runtime: runtime))
+        }
+        if installWords.contains(where: { text.contains($0) }) {
+            return UsageProblem(kind: .notInstalled, raw: raw, loginCommand: nil)
+        }
+        return UsageProblem(kind: .unknown, raw: raw, loginCommand: nil)
+    }
+
+    /// A problem known to be a login: the runtime is installed but not signed in.
+    public static func needsLogin(runtime: String, raw: String) -> UsageProblem {
+        UsageProblem(kind: .needsLogin, raw: raw, loginCommand: loginCommand(runtime: runtime))
+    }
+
+    /// The command that signs the person in to `runtime`, e.g. "codex login"; nil for an unknown runtime.
+    public static func loginCommand(runtime: String) -> String? {
+        guard let kind = RuntimeKind(rawValue: runtime) else { return nil }
+        return LoginCommand.arguments(for: kind).joined(separator: " ")
+    }
+
+    /// The line the card shows: "Sign-in needed", "Not installed on the server" or "Couldn't get the limits".
+    public var title: String {
+        switch kind {
+        case .needsLogin: L10n.AgentSheet.statusNeedsLogin
+        case .notInstalled: L10n.AgentSheet.statusNotInstalled
+        case .unknown: L10n.Usage.Error.unknown
+        }
     }
 }
 

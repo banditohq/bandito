@@ -6,6 +6,7 @@ import SwiftUI
 /// The model is injected by the app (`BanditoApp`), which also owns the Help menu item that replays it.
 public struct RootView: View {
     @Environment(OnboardingModel.self) private var onboarding
+    @Environment(AppModel.self) private var app
     #if DEBUG && os(macOS)
     @Environment(Router.self) private var router
     #endif
@@ -30,5 +31,6 @@ public struct RootView: View {
         // QA copies (scripts/qa): launch arguments and the command channel. Not in release builds.
         .task { QAHooks.start(router: router, onboarding: onboarding) }
         #endif
+        .task { await app.keepUsageFresh() }
     }
 }

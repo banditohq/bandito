@@ -22,12 +22,12 @@ import Testing
         let rows = UsageRow.make(
             cards: [], runtimes: [status(.claude, installed: true), status(.codex, installed: true)], errors: [:])
         #expect(rows.map(\.id) == ["claude", "codex"])
-        guard case .waiting(_, _, let text, let error) = rows[0] else {
+        guard case .waiting(_, _, let text, let problem) = rows[0] else {
             Issue.record("claude should wait for its first reply")
             return
         }
         #expect(text == L10n.Usage.claudeWaitsForReply)
-        #expect(error == nil)
+        #expect(problem == nil)
     }
 
     @Test func notInstalledRuntimeIsLeftOut() {
@@ -50,12 +50,13 @@ import Testing
         let rows = UsageRow.make(
             cards: [card("claude")], runtimes: [status(.claude, installed: true), status(.codex, installed: true)],
             errors: ["codex": "no answer within 20 s", "claude": "rate limits read failed"])
-        guard case .card(_, let claudeError) = rows[0], case .waiting(_, _, _, let codexError) = rows[1] else {
+        guard case .card(_, let claudeProblem) = rows[0], case .waiting(_, _, _, let codexProblem) = rows[1] else {
             Issue.record("unexpected rows \(rows)")
             return
         }
-        #expect(claudeError == "rate limits read failed")
-        #expect(codexError == "no answer within 20 s")
+        #expect(claudeProblem?.raw == "rate limits read failed")
+        #expect(codexProblem?.raw == "no answer within 20 s")
+        #expect(codexProblem?.kind == .unknown)
     }
 
     @Test func rowsFollowTheFixedRuntimeOrder() {
@@ -69,11 +70,22 @@ import Testing
     @Test func signedOutRuntimeSaysSoEvenWithACachedCard() {
         let rows = UsageRow.make(cards: [card("codex")], runtimes: [signedOut(.codex)], errors: [:])
         #expect(rows.count == 1)
-        guard case .waiting(_, _, let text, _) = rows[0] else {
+        guard case .waiting(_, _, let text, let problem) = rows[0] else {
             Issue.record("a signed-out runtime should not show its old card")
             return
         }
         #expect(text == L10n.AgentSheet.statusNeedsLogin)
+        #expect(problem?.kind == .needsLogin)
+        #expect(problem?.loginCommand == "codex login")
+    }
+
+    @Test func grokSaysItDoesNotReportItsLimits() {
+        let rows = UsageRow.make(cards: [], runtimes: [status(.grok, installed: true)], errors: [:])
+        guard case .waiting(_, _, let text, _) = rows[0] else {
+            Issue.record("grok should have a waiting line")
+            return
+        }
+        #expect(text == L10n.Usage.grokNoLimits)
     }
 
     @Test func rowsWithTheSameRankAreOrderedById() {

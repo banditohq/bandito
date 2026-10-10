@@ -82,6 +82,10 @@ public final class ServerModel: Identifiable {
     private var usageRefreshStartedAt: Date?
     /// How long an automatic refresh waits after the last request before it asks the runtimes again.
     public static let usageRefreshInterval: TimeInterval = 30
+    /// Limits older than this are asked again when a surface opens.
+    public static let usageStaleAfter: TimeInterval = UsageFreshness.staleAfter
+    /// How often the limits refresh in the background while the app is active.
+    public static let usageBackgroundInterval: TimeInterval = 300
     /// The last failure of a background operation (subscription, reconnect, unreadable updates).
     public internal(set) var lastError: FailureKind?
     /// Whether an agent's thread has events older than the ones loaded.
@@ -594,6 +598,17 @@ public final class ServerModel: Identifiable {
         return try await task.value
     }
 
+    /// True when no limits are known yet, or the newest ones were received more than `usageStaleAfter` ago.
+    public var usageIsStale: Bool {
+        UsageFreshness.isStale(usage, now: Date(), after: Self.usageStaleAfter)
+    }
+
+    /// Asks the runtimes for fresh limits when the known ones are stale. Otherwise does nothing.
+    public func refreshUsageIfStale() async {
+        guard usageIsStale else { return }
+        _ = try? await refreshUsage()
+    }
+
     /// The `usage.refresh` call itself.
     private func askRuntimesForUsage() async throws -> [UsageEntry] {
         struct Refusal: Decodable { var runtime: String; var message: String }
@@ -748,4 +763,16 @@ public struct DaemonLog: Decodable, Sendable, Equatable {
 /// The lowest level `daemon.logs` shows.
 public enum DaemonLogLevel: String, CaseIterable, Sendable {
     case info, warn, error
+}
+
+/// When the limits of a server were last received. Pure, so the rule is tested without a server.
+public enum UsageFreshness {
+    /// Limits older than this many seconds are stale.
+    public static let staleAfter: TimeInterval = 120
+
+    /// True when `entries` is empty, or the newest of them was received more than `after` seconds before `now`.
+    public static func isStale(_ entries: [UsageEntry], now: Date, after: TimeInterval) -> Bool {
+        guard let newest = entries.map(\.updatedAt).max() else { return true }
+        return now.timeIntervalSince1970 - Double(newest) / 1000 > after
+    }
 }

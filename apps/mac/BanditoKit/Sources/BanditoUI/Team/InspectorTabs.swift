@@ -137,11 +137,14 @@ struct DetailsTab: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 SectionLabel(L10n.Inspector.instructionsHeader)
-                TextEditor(text: $instructions)
+                // A vertical TextField, not TextEditor: this view is inside a ScrollView, and a TextEditor would take
+                // the wheel for its own scrolling. Return adds a line; the field grows from 4 to 12 lines.
+                TextField(L10n.Inspector.instructionsPlaceholder, text: $instructions, axis: .vertical)
+                    .textFieldStyle(.plain)
                     .font(BanditoFont.font(size: 13, weight: 400))
-                    .scrollContentBackground(.hidden)
-                    .frame(minHeight: 96)
+                    .lineLimit(4...12)
                     .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
                     .background(Color.Bandito.bg, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.Bandito.line, lineWidth: 1))
@@ -311,9 +314,14 @@ private struct ScheduleEditor: View {
             }
             VStack(alignment: .leading, spacing: 6) {
                 SectionLabel(L10n.Inspector.promptLabel)
-                TextEditor(text: $prompt)
+                // Vertical TextField for the same reason as the instructions above (inside a ScrollView).
+                TextField(L10n.Inspector.promptPlaceholder, text: $prompt, axis: .vertical)
+                    .accessibilityLabel(L10n.Inspector.promptLabel)
+                    .textFieldStyle(.plain)
                     .font(BanditoFont.font(size: 13, weight: 400))
-                    .frame(minHeight: 90)
+                    .lineLimit(3...10)
+                    .padding(8)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.Bandito.line, lineWidth: 1))
             }
             if let error {

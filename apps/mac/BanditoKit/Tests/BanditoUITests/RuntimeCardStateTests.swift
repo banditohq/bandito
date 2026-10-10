@@ -16,10 +16,11 @@ import Testing
 
     private func make(
         _ kind: RuntimeKind = .claude, status: RuntimeStatus?, requestDone: Bool = true,
-        remaining: Double? = nil, resetsAt: Date? = nil
+        remaining: Double? = nil, exhaustedUntil: Date? = nil
     ) -> RuntimeCardState {
         RuntimeCardState.make(
-            runtime: kind, status: status, requestDone: requestDone, remaining: remaining, resetsAt: resetsAt,
+            runtime: kind, status: status, requestDone: requestDone, remaining: remaining,
+            exhaustedUntil: exhaustedUntil,
             now: now)
     }
 
@@ -47,7 +48,6 @@ import Testing
     @Test func notLoggedInShowsTheLoginCommand() {
         let claude = make(.claude, status: status(.claude, installed: true, loggedIn: false))
         #expect(claude.kind == .needsLogin)
-        #expect(claude.hint.isEmpty)
         #expect(claude.command == "claude")
         #expect(claude.installURL == nil)
 
@@ -78,12 +78,10 @@ import Testing
         #expect(state.text == L10n.AgentSheet.statusReady)
     }
 
-    @Test func limitsShowThePercentLeft() {
-        let state = make(
-            status: status(.claude, installed: true, loggedIn: true), remaining: 0.6,
-            resetsAt: now.addingTimeInterval(3_600))
+    @Test func limitsShowASignedInStatusAndTheWindowsAreDrawn() {
+        let state = make(status: status(.claude, installed: true, loggedIn: true), remaining: 0.6)
         #expect(state.kind == .limits)
-        #expect(state.text == L10n.AgentSheet.statusSignedIn(percent: "60"))
+        #expect(state.text == L10n.AgentSheet.statusSignedInPlain)
         #expect(state.showsLimit)
     }
 
@@ -91,6 +89,26 @@ import Testing
         let state = make(status: status(.claude, installed: true, loggedIn: true), remaining: 0)
         #expect(state.kind == .exhausted)
         #expect(state.showsLimit)
+    }
+
+    /// "Again" comes with the time the used-up window resets: a week at 100% (5 days) reads "again in 5 d".
+    @Test func exhaustedShowsWhenItEnds() {
+        let state = make(
+            status: status(.claude, installed: true, loggedIn: true), remaining: 0,
+            exhaustedUntil: now.addingTimeInterval(5 * 86_400))
+        #expect(state.text == L10n.AgentSheet.statusExhausted(time: L10n.Countdown.days(count: 5)))
+    }
+
+    /// Without a known reset the line is just "Limit used up": never "again" with no time after it.
+    @Test func exhaustedWithoutAResetSaysOnlyLimitUsedUp() {
+        let state = make(status: status(.claude, installed: true, loggedIn: true), remaining: 0, exhaustedUntil: nil)
+        #expect(state.text == L10n.AgentSheet.statusExhaustedPlain)
+    }
+
+    @Test func runtimesGoTwoPerRowAndAnOddOneStaysAlone() {
+        let rows = RuntimeCardRows.pairs([.claude, .codex, .grok])
+        #expect(rows == [[.claude, .codex], [.grok]])
+        #expect(RuntimeCardRows.pairs([.claude, .codex]) == [[.claude, .codex]])
     }
 
     @Test func versionLabelTakesTheFirstVersionNumber() {

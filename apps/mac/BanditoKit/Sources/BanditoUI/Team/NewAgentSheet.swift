@@ -79,7 +79,7 @@ struct NewAgentSheet: View {
             workplaces = loaded
             // Limits are read in the background and their failure is not shown. The runtime status is asked again
             // when the last answer is more than a minute old; until it arrives the cards say "checking".
-            Task { _ = try? await server.refreshUsage() }
+            Task { await server.refreshUsageIfStale() }
             let fresh = server.runtimesFetchedAt.map { Date().timeIntervalSince($0) < Self.runtimesMaxAge } ?? false
             if !fresh {
                 _ = try? await server.refreshRuntimes()
@@ -232,12 +232,15 @@ struct NewAgentSheet: View {
                 .offset(y: -8)
 
             labeled(L10n.AgentSheet.instructions, hint: L10n.AgentSheet.instructionsHint) {
-                TextEditor(text: $draft.instructions)
+                // A vertical TextField, not TextEditor: a TextEditor is a scroll view of its own, so the wheel over it
+                // scrolls it instead of the sheet. The field grows with the text (4 to 12 lines); Return adds a line.
+                TextField(L10n.AgentSheet.instructionsPlaceholder, text: $draft.instructions, axis: .vertical)
+                    .textFieldStyle(.plain)
                     .font(BanditoFont.font(size: 13, weight: 400))
                     .foregroundStyle(Color.Bandito.text)
-                    .scrollContentBackground(.hidden)
-                    .frame(height: 78)
-                    .padding(8)
+                    .lineLimit(4...12)
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
                     .background(Color.Bandito.bg, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.Bandito.line))
             }
@@ -246,9 +249,18 @@ struct NewAgentSheet: View {
 
     private var runtimeGrid: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 9), GridItem(.flexible(), spacing: 9)], spacing: 9) {
-                ForEach(RuntimeKind.pickable, id: \.self) { kind in
-                    runtimeCard(kind, now: context.date)
+            let rows = RuntimeCardRows.pairs(RuntimeKind.pickable)
+            // Each row is a pair of cards that share one height. An odd last card keeps the left half of the row.
+            Grid(alignment: .top, horizontalSpacing: 9, verticalSpacing: 9) {
+                ForEach(rows.indices, id: \.self) { index in
+                    GridRow {
+                        ForEach(rows[index], id: \.self) { kind in
+                            runtimeCard(kind, now: context.date)
+                        }
+                        if rows[index].count == 1 {
+                            Color.clear
+                        }
+                    }
                 }
             }
         }
@@ -288,7 +300,7 @@ struct NewAgentSheet: View {
         let remaining = card.flatMap { UsageCards.percentLeft([$0], runtime: nil) }
         let state = RuntimeCardState.make(
             runtime: kind, status: runtimeStatus(kind), requestDone: runtimesAnswered, remaining: remaining,
-            resetsAt: card?.windows.compactMap(\.resetsAt).min(), now: now)
+            exhaustedUntil: card.flatMap { UsageCards.exhaustedReset($0.windows, now: now) }, now: now)
         return VStack(alignment: .leading, spacing: 4) {
             Button {
                 draft.setRuntime(kind)
@@ -331,8 +343,8 @@ struct NewAgentSheet: View {
                             .lineLimit(1)
                             .minimumScaleFactor(0.85)
                     }
-                    if state.showsLimit {
-                        UsageBar(fraction: remaining ?? 0, tint: state.barTint, height: 4)
+                    if state.showsLimit, let windows = card?.windows {
+                        limitWindows(windows, now: now)
                     }
                     if let command = state.command {
                         Text(L10n.AgentSheet.statusNeedsLoginHint)
@@ -345,17 +357,11 @@ struct NewAgentSheet: View {
                             .lineLimit(1)
                             .textSelection(.enabled)
                     }
-                    if !state.hint.isEmpty {
-                        Text(state.hint)
-                            .font(BanditoFont.font(size: 11, weight: 400))
-                            .foregroundStyle(Color.Bandito.text3)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.85)
-                    }
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxHeight: .infinity, alignment: .topLeading)
                 .background(
                     selected ? Color.Bandito.signal.opacity(0.08) : Color.Bandito.text.opacity(0.03),
                     in: RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -375,6 +381,52 @@ struct NewAgentSheet: View {
                     .padding(.leading, 12)
             }
         }
+        .frame(maxHeight: .infinity, alignment: .top)
+    }
+
+    /// Every limit window of the runtime, shortest first: its label, how much is used, a bar and when it resets.
+    private func limitWindows(_ windows: [UsageWindowLine], now: Date) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(windows) { line in
+                limitWindowRow(line, now: now)
+            }
+        }
+        .padding(.top, 2)
+    }
+
+    private func limitWindowRow(_ line: UsageWindowLine, now: Date) -> some View {
+        let used = Int((line.used * 100).rounded())
+        let tint = UsageLevel(usedPercent: used).color
+        return VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 6) {
+                Text(line.label)
+                    .font(BanditoFont.font(size: 11, weight: 400))
+                    .foregroundStyle(Color.Bandito.text3)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                Spacer(minLength: 4)
+                Text(L10n.Usage.used(percent: "\(used)%"))
+                    .font(BanditoFont.font(size: 11, weight: 600))
+                    .foregroundStyle(tint)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+            UsageBar(fraction: line.used, tint: tint, height: 3)
+            if let caption = resetCaption(line, now: now) {
+                Text(caption)
+                    .font(BanditoFont.font(size: 10.5, weight: 400))
+                    .monospacedDigit()
+                    .foregroundStyle(Color.Bandito.text3)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+            }
+        }
+    }
+
+    /// "Resets in 2 h 48 min", or "again in 5:48:12" while the window is used up. `nil` without a reset time.
+    private func resetCaption(_ line: UsageWindowLine, now: Date) -> String? {
+        guard let resetsAt = line.resetsAt else { return nil }
+        return "\(L10n.AgentSheet.windowResets) \(Countdown.text(to: resetsAt, now: now))"
     }
 
     @ViewBuilder
@@ -406,30 +458,67 @@ struct NewAgentSheet: View {
         .help(presets.isEmpty ? L10n.AgentSheet.modelFreeHint : presets.joined(separator: ", "))
     }
 
+    /// The project folder as one field: a click anywhere on it opens the folder picker. The clear icon shows only
+    /// when a folder is chosen and the server takes an agent without one (the agent then works in its own folder).
+    private var folderField: some View {
+        HStack(spacing: 0) {
+            Button {
+                pickerOpen.toggle()
+            } label: {
+                HStack(spacing: 9) {
+                    Image(systemName: "folder")
+                        .font(.system(size: 14))
+                        .foregroundStyle(BanditoPalette.peach)
+                    if draft.cwd.isEmpty {
+                        Text(L10n.AgentSheet.noFolder)
+                            .font(BanditoFont.font(size: 13, weight: 400))
+                            .foregroundStyle(Color.Bandito.text3)
+                            .lineLimit(1)
+                    } else {
+                        Text(draft.cwd)
+                            .font(BanditoFont.font(size: 13, weight: 400, mono: true))
+                            .foregroundStyle(Color.Bandito.text)
+                            .lineLimit(1)
+                            .truncationMode(.head)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Color.Bandito.text3)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .banditoButton(.row(cornerRadius: 12))
+            .popover(isPresented: $pickerOpen, arrowEdge: .top) {
+                if let server {
+                    FolderPicker(server: server, selection: $draft.cwd) { pickerOpen = false }
+                }
+            }
+            .accessibilityLabel(L10n.AgentSheet.folderAccessibility)
+            .accessibilityValue(draft.cwd)
+
+            if draft.folderOptional && !draft.cwd.isEmpty {
+                Button {
+                    draft.cwd = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.Bandito.text3)
+                }
+                .banditoButton(.icon(size: 26, label: L10n.AgentSheet.folderClear))
+                .help(L10n.AgentSheet.folderClear)
+            }
+        }
+        .modifier(FieldBox())
+    }
+
     // MARK: Right column
 
     private var rightColumn: some View {
         VStack(alignment: .leading, spacing: 14) {
             labeled(L10n.AgentSheet.folder, hint: L10n.AgentSheet.folderHint) {
-                HStack(spacing: 9) {
-                    Image(systemName: "folder")
-                        .font(.system(size: 14))
-                        .foregroundStyle(BanditoPalette.peach)
-                    Text(draft.cwd.isEmpty ? L10n.AgentSheet.noFolder : draft.cwd)
-                        .font(BanditoFont.font(size: 13, weight: 400, mono: true))
-                        .foregroundStyle(draft.cwd.isEmpty ? Color.Bandito.text3 : Color.Bandito.text)
-                        .lineLimit(1)
-                        .truncationMode(.head)
-                    Spacer(minLength: 0)
-                    Button(L10n.AgentSheet.chooseFolder) { pickerOpen.toggle() }
-                        .banditoButton(.quiet(size: .regular))
-                        .popover(isPresented: $pickerOpen, arrowEdge: .top) {
-                            if let server {
-                                FolderPicker(server: server, selection: $draft.cwd) { pickerOpen = false }
-                            }
-                        }
-                }
-                .modifier(FieldBox())
+                folderField
             }
 
             if draft.folderOptional && draft.cwd.isEmpty {
@@ -805,6 +894,14 @@ extension AvatarFace {
     }
 }
 
+/// The layout of the runtime cards: two per row. Kept out of the view, which is main-actor isolated, so it can be tested.
+enum RuntimeCardRows {
+    /// The runtimes in pairs, in order.
+    static func pairs(_ kinds: [RuntimeKind]) -> [[RuntimeKind]] {
+        stride(from: 0, to: kinds.count, by: 2).map { Array(kinds[$0..<min($0 + 2, kinds.count)]) }
+    }
+}
+
 /// Where to read how to install each CLI, for a runtime the server does not have.
 enum RuntimeInstallLinks {
     static func url(for runtime: RuntimeKind) -> URL? {
@@ -817,8 +914,8 @@ enum RuntimeInstallLinks {
     }
 }
 
-/// What a runtime card shows: text, tint, the hint line and whether the limit bar is drawn. Pure, so the rules are
-/// easy to read and test.
+/// What a runtime card shows: text, tint and whether the limit windows are drawn. Pure, so the rules are easy to read
+/// and test. The reset times of the windows are shown on the windows themselves.
 struct RuntimeCardState: Equatable {
     enum Kind: Equatable {
         /// `runtimes.status` is on its way.
@@ -835,62 +932,55 @@ struct RuntimeCardState: Equatable {
 
     let kind: Kind
     let text: String
-    /// The reset countdown, or empty.
-    let hint: String
     let tint: Color
-    let barTint: Color
     /// Where to read how to install the CLI. Only for a runtime that is not installed.
     let installURL: URL?
     /// The command that signs the person in, shown in monospace. Only when the runtime is not signed in.
     var command: String?
 
+    /// The limit windows are drawn for a signed-in runtime that reports limits.
     var showsLimit: Bool { kind == .limits || kind == .exhausted }
 
+    /// `remaining` is the share left across the runtime's windows (the most used one decides). `exhaustedUntil` is
+    /// when the used-up windows reset (see `UsageCards.exhaustedReset`), or nil when that is not known.
     static func make(
-        runtime: RuntimeKind, status: RuntimeStatus?, requestDone: Bool, remaining: Double?, resetsAt: Date?,
+        runtime: RuntimeKind, status: RuntimeStatus?, requestDone: Bool, remaining: Double?, exhaustedUntil: Date?,
         now: Date
     ) -> RuntimeCardState {
         guard let status else {
             if requestDone {
                 return RuntimeCardState(
-                    kind: .unknown, text: L10n.AgentSheet.statusUnknown, hint: "", tint: Color.Bandito.text3,
-                    barTint: Color.Bandito.text3, installURL: nil)
+                    kind: .unknown, text: L10n.AgentSheet.statusUnknown, tint: Color.Bandito.text3, installURL: nil)
             }
             return RuntimeCardState(
-                kind: .checking, text: L10n.AgentSheet.statusChecking, hint: "", tint: Color.Bandito.text3,
-                barTint: Color.Bandito.text3, installURL: nil)
+                kind: .checking, text: L10n.AgentSheet.statusChecking, tint: Color.Bandito.text3, installURL: nil)
         }
         if !status.installed {
             return RuntimeCardState(
-                kind: .notInstalled, text: L10n.AgentSheet.statusNotInstalled, hint: "", tint: Color.Bandito.danger,
-                barTint: Color.Bandito.danger, installURL: RuntimeInstallLinks.url(for: runtime))
+                kind: .notInstalled, text: L10n.AgentSheet.statusNotInstalled, tint: Color.Bandito.danger,
+                installURL: RuntimeInstallLinks.url(for: runtime))
         }
         if status.loggedIn == false {
             return RuntimeCardState(
-                kind: .needsLogin, text: L10n.AgentSheet.statusNeedsLogin, hint: "", tint: BanditoPalette.peach,
-                barTint: BanditoPalette.peach, installURL: nil,
-                command: LoginCommand.arguments(for: runtime).joined(separator: " "))
+                kind: .needsLogin, text: L10n.AgentSheet.statusNeedsLogin, tint: BanditoPalette.peach,
+                installURL: nil, command: LoginCommand.arguments(for: runtime).joined(separator: " "))
         }
         guard let remaining else {
             let text = versionLabel(status.version).map { L10n.AgentSheet.statusReadyVersion(version: $0) }
                 ?? L10n.AgentSheet.statusReady
-            return RuntimeCardState(
-                kind: .ready, text: text, hint: "", tint: Color.Bandito.ok, barTint: Color.Bandito.ok,
-                installURL: nil)
+            return RuntimeCardState(kind: .ready, text: text, tint: Color.Bandito.ok, installURL: nil)
         }
-        let percent = Int((remaining * 100).rounded())
-        let reset = resetsAt.map { Countdown.text(to: $0, now: now) } ?? ""
         if remaining <= 0 {
-            let again = resetsAt.map { Countdown.text(to: $0, now: now, exhausted: true) } ?? ""
-            return RuntimeCardState(
-                kind: .exhausted, text: L10n.AgentSheet.statusExhausted(time: again), hint: "",
-                tint: Color.Bandito.danger, barTint: Color.Bandito.danger, installURL: nil)
+            // With a known reset: "Limit used up · again in 5 d". Without one: just "Limit used up", never "again" alone.
+            let text = exhaustedUntil.map {
+                L10n.AgentSheet.statusExhausted(time: Countdown.text(to: $0, now: now))
+            } ?? L10n.AgentSheet.statusExhaustedPlain
+            return RuntimeCardState(kind: .exhausted, text: text, tint: Color.Bandito.danger, installURL: nil)
         }
-        let tint = remaining < 0.25 ? BanditoPalette.peach : Color.Bandito.ok
+        let used = Int(((1 - remaining) * 100).rounded())
         return RuntimeCardState(
-            kind: .limits, text: L10n.AgentSheet.statusSignedIn(percent: "\(percent)"),
-            hint: reset.isEmpty ? "" : L10n.AgentSheet.resetsIn(time: reset), tint: tint,
-            barTint: remaining < 0.25 ? BanditoPalette.peach : Color.Bandito.ok, installURL: nil)
+            kind: .limits, text: L10n.AgentSheet.statusSignedInPlain,
+            tint: UsageLevel(usedPercent: used).color, installURL: nil)
     }
 
     /// "v2.0.5" from a CLI's version line such as "2.0.5 (Claude Code)": the first number with a dot in it.

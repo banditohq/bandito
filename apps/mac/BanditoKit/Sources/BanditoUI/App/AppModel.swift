@@ -1,6 +1,9 @@
 import BanditoKit
 import Foundation
 import Observation
+#if os(macOS)
+import AppKit
+#endif
 
 /// App-wide state: saved servers and which one is in front. What is selected inside a server lives in `Router`.
 @MainActor
@@ -12,6 +15,18 @@ public final class AppModel {
             if oldValue != selectedServerID { onServerChanged?() }
         }
     }
+    /// Asks the server in front for fresh limits each `ServerModel.usageBackgroundInterval` while the app is active.
+    /// Runs until it is cancelled; the root view starts it once.
+    public func keepUsageFresh() async {
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(ServerModel.usageBackgroundInterval))
+            #if os(macOS)
+            guard NSApplication.shared.isActive else { continue }
+            #endif
+            await currentServer?.refreshUsageIfStale()
+        }
+    }
+
     /// Called when the server in front changes. The app drops the actions that were aimed at the old server.
     @ObservationIgnored public var onServerChanged: (() -> Void)?
     /// The last problem the user should know about (e.g. a token that could not be stored).

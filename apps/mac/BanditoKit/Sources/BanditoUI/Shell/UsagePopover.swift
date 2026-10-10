@@ -19,7 +19,7 @@ struct UsagePopover: View {
         }
         .frame(width: 344)
         .task {
-            // Opening the popover asks the runtimes for fresh limits, unless they were asked a moment ago.
+            // Opening the popover asks for fresh limits when the known ones are over two minutes old.
             await refresh(force: false)
         }
     }
@@ -27,7 +27,7 @@ struct UsagePopover: View {
     private func content(_ snapshot: UsageSnapshot, now: Date) -> some View {
         let server = app.currentServer
         let rows: [UsageRow] = snapshot.isExample
-            ? snapshot.cards.map { .card($0, error: nil) }
+            ? snapshot.cards.map { .card($0, problem: nil) }
             : UsageRow.make(cards: snapshot.cards, runtimes: server?.runtimes ?? [], errors: server?.usageErrors ?? [:])
         let noneInstalled = !snapshot.isExample && rows.isEmpty && !(server?.runtimes.isEmpty ?? true)
         return VStack(alignment: .leading, spacing: 10) {
@@ -52,26 +52,28 @@ struct UsagePopover: View {
             }
             ForEach(rows) { row in
                 switch row {
-                case .card(let card, let error):
-                    UsageCardView(card: card, example: snapshot.isExample, now: now, error: error)
-                case .waiting(_, let name, let text, let error):
-                    UsageWaitingView(name: name, text: text, error: error)
+                case .card(let card, let problem):
+                    UsageCardView(card: card, example: snapshot.isExample, now: now, problem: problem)
+                case .waiting(_, let name, let text, let problem):
+                    UsageWaitingView(name: name, text: text, problem: problem)
                 }
             }
-            HStack(alignment: .top, spacing: 9) {
-                Image(systemName: "arrow.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.Bandito.ok)
-                    .padding(.top, 1)
-                Text(L10n.Usage.fallbackNote(time: Self.updatedText(snapshot.updatedAt, now: now)))
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(Color.Bandito.text3)
-                    .lineSpacing(2)
-            }
-            .padding(.top, 10)
-            .padding(.horizontal, 2)
-            .overlay(alignment: .top) {
-                Rectangle().fill(Color.Bandito.text.opacity(0.07)).frame(height: 1)
+            if snapshot.updatedAt != nil {
+                HStack(alignment: .top, spacing: 9) {
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.Bandito.ok)
+                        .padding(.top, 1)
+                    Text(L10n.Usage.fallbackNote(time: Self.updatedText(snapshot.updatedAt, now: now)))
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Color.Bandito.text3)
+                        .lineSpacing(2)
+                }
+                .padding(.top, 10)
+                .padding(.horizontal, 2)
+                .overlay(alignment: .top) {
+                    Rectangle().fill(Color.Bandito.text.opacity(0.07)).frame(height: 1)
+                }
             }
         }
         .padding(.horizontal, 14)
@@ -125,22 +127,40 @@ struct UsagePopover: View {
         refreshing = true
         defer { refreshing = false }
         _ = try? await server.refreshRuntimes()
-        _ = try? await server.refreshUsage(force: force)
+        if force {
+            _ = try? await server.refreshUsage(force: true)
+        } else {
+            await server.refreshUsageIfStale()
+        }
     }
 
-    /// "now" or "N min ago", for the footnote.
-    static func updatedText(_ updated: Date?, now: Date) -> String {
+    /// When the limits were received, for the footnote: "just now", "5 min ago", "2 h ago", "yesterday at 18:40",
+    /// or the date and time for anything older.
+    static func updatedText(
+        _ updated: Date?, now: Date, calendar: Calendar = .current, locale: Locale = L10n.locale
+    ) -> String {
         guard let updated else { return L10n.Common.now }
         let minutes = Int(now.timeIntervalSince(updated) / 60)
-        return minutes < 1 ? L10n.Common.now : L10n.Common.minutesAgo(count: minutes)
+        if minutes < 1 { return L10n.Usage.Updated.justNow }
+        if minutes < 60 { return L10n.Common.minutesAgo(count: minutes) }
+        let style = Date.FormatStyle(locale: locale, calendar: calendar, timeZone: calendar.timeZone)
+        if calendar.isDate(updated, inSameDayAs: now) {
+            return L10n.Usage.Updated.hoursAgo(count: minutes / 60)
+        }
+        let time = updated.formatted(style.hour().minute())
+        if let yesterday = calendar.date(byAdding: .day, value: -1, to: now),
+           calendar.isDate(updated, inSameDayAs: yesterday) {
+            return L10n.Usage.Updated.yesterday(time: time)
+        }
+        return L10n.Usage.Updated.dateTime(date: updated.formatted(style.day().month(.abbreviated)), time: time)
     }
 }
 
-/// A runtime that is installed but has no limits yet: its name and why there are none.
+/// A runtime that is installed but has no limits yet: its name, why there are none, and its problem, if any.
 struct UsageWaitingView: View {
     var name: String
     var text: String
-    var error: String?
+    var problem: UsageProblem?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -151,11 +171,9 @@ struct UsageWaitingView: View {
                 .font(.system(size: 11.5))
                 .foregroundStyle(Color.Bandito.text3)
                 .fixedSize(horizontal: false, vertical: true)
-            if let error {
-                Text(L10n.Usage.readFailed(reason: error))
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(Color.Bandito.text3)
-                    .fixedSize(horizontal: false, vertical: true)
+            if let problem {
+                // A signed-out line already says "Sign-in needed"; only the command is added under it.
+                UsageProblemDetail(problem: problem, showsTitle: problem.kind != .needsLogin)
             }
         }
         .padding(.horizontal, 12)
@@ -175,8 +193,8 @@ struct UsageCardView: View {
     var card: UsageCard
     var example: Bool
     var now: Date
-    /// The reason the last refresh could not read this runtime; shown in grey under the windows.
-    var error: String? = nil
+    /// What went wrong when the last refresh read this runtime; shown in grey under the windows.
+    var problem: UsageProblem? = nil
 
     var body: some View {
         let warn = card.windows.contains(where: \.exhausted)
@@ -207,11 +225,8 @@ struct UsageCardView: View {
             ForEach(card.windows) { line in
                 UsageWindowRow(line: line, now: now)
             }
-            if let error {
-                Text(L10n.Usage.readFailed(reason: error))
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(Color.Bandito.text3)
-                    .fixedSize(horizontal: false, vertical: true)
+            if let problem {
+                UsageProblemDetail(problem: problem, showsTitle: true)
             }
         }
         .padding(.horizontal, 12)
@@ -267,9 +282,43 @@ private struct UsageWindowRow: View {
                 Image(systemName: "clock")
                     .font(.system(size: 10.5, weight: .semibold))
                 Text(Countdown.text(to: resetsAt, now: now, exhausted: line.exhausted))
-                    .font(.system(size: 11.5, design: .monospaced))
+                    .monospacedDigit()
             }
             .foregroundStyle(level == .ok ? Color.Bandito.text2 : level.color)
         }
+    }
+}
+
+/// A usage problem in words people read: its title (unless the line above already says it) and the command that
+/// fixes a login. The daemon's own text stays in the tooltip.
+struct UsageProblemDetail: View {
+    var problem: UsageProblem
+    var showsTitle: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            if showsTitle {
+                Text(problem.title)
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Color.Bandito.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let command = problem.loginCommand {
+                UsageCommandLine(command: command)
+            }
+        }
+        .help(problem.raw)
+    }
+}
+
+/// A command the person runs on the server, in monospace and selectable.
+struct UsageCommandLine: View {
+    var command: String
+
+    var body: some View {
+        Text(command)
+            .font(.system(size: 11.5, design: .monospaced))
+            .foregroundStyle(Color.Bandito.text2)
+            .textSelection(.enabled)
     }
 }

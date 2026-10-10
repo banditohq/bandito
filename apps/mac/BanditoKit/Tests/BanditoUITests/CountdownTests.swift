@@ -24,6 +24,14 @@ import Testing
         #expect(Countdown.text(to: now.addingTimeInterval(-10), now: now) == L10n.Countdown.lessThanMinute)
     }
 
+    /// A zero smaller unit is not written: "in 2 h", "in 5 d", never "in 2 h 0 min" or "in 5 d 0 h".
+    @Test func zeroSmallerUnitIsLeftOut() {
+        #expect(Countdown.text(to: now.addingTimeInterval(2 * 3600), now: now) == L10n.Countdown.hours(count: 2))
+        #expect(Countdown.text(to: now.addingTimeInterval(5 * 86_400), now: now) == L10n.Countdown.days(count: 5))
+        #expect(Countdown.text(to: now.addingTimeInterval(5 * 86_400 + 3600), now: now)
+            == L10n.Countdown.daysHours(days: "5", hours: "1"))
+    }
+
     @Test func daysAndHours() {
         let text = Countdown.text(to: now.addingTimeInterval(5 * 86_400 + 20 * 3600), now: now)
         #expect(text == L10n.Countdown.daysHours(days: "5", hours: "20"))

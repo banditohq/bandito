@@ -141,7 +141,6 @@ public enum L10n {
         public static var avatar: String { L10n.tr("agentSheet.avatar") }
         public static var cancel: String { L10n.tr("agentSheet.cancel") }
         public static var changeLater: String { L10n.tr("agentSheet.changeLater") }
-        public static var chooseFolder: String { L10n.tr("agentSheet.chooseFolder") }
         public static var colorCream: String { L10n.tr("agentSheet.colorCream") }
         public static var colorLilac: String { L10n.tr("agentSheet.colorLilac") }
         public static var colorPeach: String { L10n.tr("agentSheet.colorPeach") }
@@ -164,11 +163,14 @@ public enum L10n {
         public static var fallbackLabel: String { L10n.tr("agentSheet.fallbackLabel") }
         public static var fallbackNone: String { L10n.tr("agentSheet.fallbackNone") }
         public static var folder: String { L10n.tr("agentSheet.folder") }
+        public static var folderAccessibility: String { L10n.tr("agentSheet.folderAccessibility") }
+        public static var folderClear: String { L10n.tr("agentSheet.folderClear") }
         public static var folderHint: String { L10n.tr("agentSheet.folderHint") }
         public static var fromTemplate: String { L10n.tr("agentSheet.fromTemplate") }
         public static var installGuide: String { L10n.tr("agentSheet.installGuide") }
         public static var instructions: String { L10n.tr("agentSheet.instructions") }
         public static var instructionsHint: String { L10n.tr("agentSheet.instructionsHint") }
+        public static var instructionsPlaceholder: String { L10n.tr("agentSheet.instructionsPlaceholder") }
         public static var memory: String { L10n.tr("agentSheet.memory") }
         public static var memoryAuto: String { L10n.tr("agentSheet.memoryAuto") }
         public static var memoryHint: String { L10n.tr("agentSheet.memoryHint") }
@@ -179,7 +181,6 @@ public enum L10n {
         public static var noFolder: String { L10n.tr("agentSheet.noFolder") }
         public static var noServer: String { L10n.tr("agentSheet.noServer") }
         public static var ownFolderHint: String { L10n.tr("agentSheet.ownFolderHint") }
-        public static func resetsIn(time: String) -> String { L10n.tr("agentSheet.resetsIn", time) }
         public static var role: String { L10n.tr("agentSheet.role") }
         public static var roleHint: String { L10n.tr("agentSheet.roleHint") }
         public static var rolePlaceholder: String { L10n.tr("agentSheet.rolePlaceholder") }
@@ -189,13 +190,13 @@ public enum L10n {
         public static func runtimeMissing(runtime: String, server: String) -> String { L10n.tr("agentSheet.runtimeMissing", runtime, server) }
         public static var statusChecking: String { L10n.tr("agentSheet.statusChecking") }
         public static func statusExhausted(time: String) -> String { L10n.tr("agentSheet.statusExhausted", time) }
+        public static var statusExhaustedPlain: String { L10n.tr("agentSheet.statusExhaustedPlain") }
         public static var statusNeedsLogin: String { L10n.tr("agentSheet.statusNeedsLogin") }
         public static var statusNeedsLoginHint: String { L10n.tr("agentSheet.statusNeedsLoginHint") }
         public static var statusNotInstalled: String { L10n.tr("agentSheet.statusNotInstalled") }
         public static var statusNotSignedIn: String { L10n.tr("agentSheet.statusNotSignedIn") }
         public static var statusReady: String { L10n.tr("agentSheet.statusReady") }
         public static func statusReadyVersion(version: String) -> String { L10n.tr("agentSheet.statusReadyVersion", version) }
-        public static func statusSignedIn(percent: String) -> String { L10n.tr("agentSheet.statusSignedIn", percent) }
         public static var statusSignedInPlain: String { L10n.tr("agentSheet.statusSignedInPlain") }
         public static var statusUnknown: String { L10n.tr("agentSheet.statusUnknown") }
         public static var title: String { L10n.tr("agentSheet.title") }
@@ -205,6 +206,7 @@ public enum L10n {
         public static var toolTeam: String { L10n.tr("agentSheet.toolTeam") }
         public static var toolTerminal: String { L10n.tr("agentSheet.toolTerminal") }
         public static var tools: String { L10n.tr("agentSheet.tools") }
+        public static var windowResets: String { L10n.tr("agentSheet.windowResets") }
         public static var workplace: String { L10n.tr("agentSheet.workplace") }
         public static var workplaceContainer: String { L10n.tr("agentSheet.workplaceContainer") }
         public static var workplaceContainerText: String { L10n.tr("agentSheet.workplaceContainerText") }
@@ -414,8 +416,10 @@ public enum L10n {
     }
 
     public enum Countdown {
+        public static func days(count: Int) -> String { L10n.tr("countdown.days", count) }
         public static func daysHours(days: String, hours: String) -> String { L10n.tr("countdown.daysHours", days, hours) }
         public static func exhausted(time: String) -> String { L10n.tr("countdown.exhausted", time) }
+        public static func hours(count: Int) -> String { L10n.tr("countdown.hours", count) }
         public static func hoursMinutes(hours: String, minutes: String) -> String { L10n.tr("countdown.hoursMinutes", hours, minutes) }
         public static var lessThanMinute: String { L10n.tr("countdown.lessThanMinute") }
         public static func minutes(count: Int) -> String { L10n.tr("countdown.minutes", count) }
@@ -798,6 +802,7 @@ public enum L10n {
         public static var placeTerminal: String { L10n.tr("inspector.placeTerminal") }
         public static var project: String { L10n.tr("inspector.project") }
         public static var promptLabel: String { L10n.tr("inspector.promptLabel") }
+        public static var promptPlaceholder: String { L10n.tr("inspector.promptPlaceholder") }
         public static func resets(time: String) -> String { L10n.tr("inspector.resets", time) }
         public static var rules: String { L10n.tr("inspector.rules") }
         public static var runNow: String { L10n.tr("inspector.runNow") }
@@ -2150,11 +2155,11 @@ public enum L10n {
         public static func fallbackNote(time: String) -> String { L10n.tr("usage.fallbackNote", time) }
         public static func footnote(time: String) -> String { L10n.tr("usage.footnote", time) }
         public static func fullestHelp(percent: String, runtime: String, window: String) -> String { L10n.tr("usage.fullestHelp", percent, runtime, window) }
+        public static var grokNoLimits: String { L10n.tr("usage.grokNoLimits") }
         public static func hours(count: Int) -> String { L10n.tr("usage.hours", count) }
         public static var limits: String { L10n.tr("usage.limits") }
         public static var noLimitsYet: String { L10n.tr("usage.noLimitsYet") }
         public static var noSubscriptions: String { L10n.tr("usage.noSubscriptions") }
-        public static func readFailed(reason: String) -> String { L10n.tr("usage.readFailed", reason) }
         public static var refresh: String { L10n.tr("usage.refresh") }
         public static func resetDate(time: String) -> String { L10n.tr("usage.resetDate", time) }
         public static func resetIn(time: String) -> String { L10n.tr("usage.resetIn", time) }
@@ -2162,6 +2167,25 @@ public enum L10n {
         public static func resetToday(time: String) -> String { L10n.tr("usage.resetToday", time) }
         public static var title: String { L10n.tr("usage.title") }
         public static func used(percent: String) -> String { L10n.tr("usage.used", percent) }
+
+        public enum Error {
+            public static var unknown: String { L10n.tr("usage.error.unknown") }
+        }
+
+        public enum Updated {
+            public static func dateTime(date: String, time: String) -> String { L10n.tr("usage.updated.dateTime", date, time) }
+            public static func hoursAgo(count: Int) -> String { L10n.tr("usage.updated.hoursAgo", count) }
+            public static var justNow: String { L10n.tr("usage.updated.justNow") }
+            public static func yesterday(time: String) -> String { L10n.tr("usage.updated.yesterday", time) }
+        }
+
+        public enum Window {
+            public static var day: String { L10n.tr("usage.window.day") }
+            public static func days(count: Int) -> String { L10n.tr("usage.window.days", count) }
+            public static func hours(count: Int) -> String { L10n.tr("usage.window.hours", count) }
+            public static func minutes(minutes: String) -> String { L10n.tr("usage.window.minutes", minutes) }
+            public static func weekModel(model: String) -> String { L10n.tr("usage.window.weekModel", model) }
+        }
     }
 
     public enum Viewer {
