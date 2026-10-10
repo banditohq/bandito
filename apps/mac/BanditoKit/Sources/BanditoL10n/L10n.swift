@@ -1278,6 +1278,11 @@ public enum L10n {
             public static var installed: String { L10n.tr("market.filter.installed") }
         }
 
+        public enum Recommend {
+            public static var hide: String { L10n.tr("market.recommend.hide") }
+            public static func title(agent: String) -> String { L10n.tr("market.recommend.title", agent) }
+        }
+
         public enum Section {
             public static var abilities: String { L10n.tr("market.section.abilities") }
             public static var about: String { L10n.tr("market.section.about") }
@@ -1342,6 +1347,14 @@ public enum L10n {
             public static var bots: String { L10n.tr("market.tab.bots") }
             public static var services: String { L10n.tr("market.tab.services") }
             public static var skills: String { L10n.tr("market.tab.skills") }
+        }
+
+        public enum Update {
+            public static var available: String { L10n.tr("market.update.available") }
+            public static var button: String { L10n.tr("market.update.button") }
+            public static var newAddress: String { L10n.tr("market.update.newAddress") }
+            public static var updating: String { L10n.tr("market.update.updating") }
+            public static func versions(from: String, to: String) -> String { L10n.tr("market.update.versions", from, to) }
         }
     }
 
@@ -1881,6 +1894,30 @@ public enum L10n {
         public static var help: String { L10n.tr("profile.help") }
         public static var settings: String { L10n.tr("profile.settings") }
         public static var signOut: String { L10n.tr("profile.signOut") }
+    }
+
+    public enum Recommend {
+
+        public enum Reason {
+            public static var composePostgres: String { L10n.tr("recommend.reason.composePostgres") }
+            public static var gitRemoteGithub: String { L10n.tr("recommend.reason.gitRemoteGithub") }
+            public static var gitRemoteGitlab: String { L10n.tr("recommend.reason.gitRemoteGitlab") }
+            public static var linearFolder: String { L10n.tr("recommend.reason.linearFolder") }
+            public static var linearReadme: String { L10n.tr("recommend.reason.linearReadme") }
+            public static var netlifyToml: String { L10n.tr("recommend.reason.netlifyToml") }
+            public static var nextPackage: String { L10n.tr("recommend.reason.nextPackage") }
+            public static var other: String { L10n.tr("recommend.reason.other") }
+            public static var posthogPackage: String { L10n.tr("recommend.reason.posthogPackage") }
+            public static var prismaSchema: String { L10n.tr("recommend.reason.prismaSchema") }
+            public static var sentryPackage: String { L10n.tr("recommend.reason.sentryPackage") }
+            public static var sentryProperties: String { L10n.tr("recommend.reason.sentryProperties") }
+            public static var sentryPython: String { L10n.tr("recommend.reason.sentryPython") }
+            public static var stripePackage: String { L10n.tr("recommend.reason.stripePackage") }
+            public static var supabaseFolder: String { L10n.tr("recommend.reason.supabaseFolder") }
+            public static var supabasePackage: String { L10n.tr("recommend.reason.supabasePackage") }
+            public static var vercelJson: String { L10n.tr("recommend.reason.vercelJson") }
+            public static var wranglerToml: String { L10n.tr("recommend.reason.wranglerToml") }
+        }
     }
 
     public enum Reply {

@@ -17,6 +17,24 @@ public enum IntegrationAuth: String, Codable, Sendable {
     case oauth
 }
 
+/// The catalog template of an integration is ahead of it (`template_update` of `integrations.list`, feature
+/// `template_updates`). `from` and `to` are the versions of a pinned package; both are nil when the template's address
+/// moved, since an address has no version.
+public struct TemplateUpdate: Codable, Sendable, Hashable {
+    public var from: String?
+    public var to: String?
+
+    public init(from: String? = nil, to: String? = nil) {
+        self.from = from
+        self.to = to
+    }
+
+    /// The address moved: there are no versions to show.
+    public var isNewAddress: Bool {
+        (from ?? "").isEmpty && (to ?? "").isEmpty
+    }
+}
+
 public struct Integration: Codable, Sendable, Identifiable, Hashable {
     public var id: String
     public var name: String
@@ -31,12 +49,16 @@ public struct Integration: Codable, Sendable, Identifiable, Hashable {
     public var createdAt: Int64
     /// `oauth` when the owner signed in in the browser; an older daemon has no field, which reads as `none`.
     public var auth: IntegrationAuth
+    /// Set when the template this integration came from has moved on; `update_from_template` brings it up to date.
+    public var templateUpdate: TemplateUpdate?
 
     public init(
         id: String, name: String, kind: IntegrationKind, command: String? = nil, args: [String] = [],
         url: String? = nil, env: [String: String] = [:], headers: [String: String] = [:],
-        enabled: Bool = true, createdAt: Int64 = 0, auth: IntegrationAuth = .none
+        enabled: Bool = true, createdAt: Int64 = 0, auth: IntegrationAuth = .none,
+        templateUpdate: TemplateUpdate? = nil
     ) {
+        self.templateUpdate = templateUpdate
         self.id = id
         self.name = name
         self.kind = kind
@@ -64,6 +86,7 @@ public struct Integration: Codable, Sendable, Identifiable, Hashable {
         createdAt = try c.decodeIfPresent(Int64.self, forKey: .createdAt) ?? 0
         // A value this app does not know is read as `none`: the row still lists.
         auth = (try? c.decodeIfPresent(IntegrationAuth.self, forKey: .auth)).flatMap { $0 } ?? .none
+        templateUpdate = (try? c.decodeIfPresent(TemplateUpdate.self, forKey: .templateUpdate)).flatMap { $0 }
     }
 }
 
