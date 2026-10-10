@@ -5,7 +5,7 @@ import SwiftUI
 
 /// The sections of the Server mode, picked in its sidebar.
 public enum ServerSection: String, CaseIterable, Identifiable, Sendable {
-    case overview, workspaces, secrets, ports, devices, updates, journal
+    case overview, workspaces, secrets, ports, devices, updates, backups, journal
 
     public var id: String { rawValue }
 
@@ -17,6 +17,7 @@ public enum ServerSection: String, CaseIterable, Identifiable, Sendable {
         case .ports: L10n.Mode.serverPorts
         case .devices: L10n.Mode.serverDevices
         case .updates: L10n.Mode.serverUpdates
+        case .backups: L10n.Mode.serverBackups
         case .journal: L10n.Mode.serverJournal
         }
     }
@@ -39,6 +40,7 @@ struct ServerMode: View {
                 case .ports: PortsView(server: app.currentServer)
                 case .devices: DevicesView(server: app.currentServer)
                 case .updates: UpdatesView(server: app.currentServer)
+                case .backups: BackupsView(server: app.currentServer)
                 case .journal: ServerJournalView(server: app.currentServer)
                 }
             }
@@ -113,13 +115,15 @@ struct ServerUnavailable: View {
     }
 }
 
-/// Sidebar of the Server mode: the seven sections. Picking one sets `Router.serverSection`.
+/// Sidebar of the Server mode: its sections, Backups only on a server that has the feature. Picking one sets
+/// `Router.serverSection`.
 struct ServerSidebar: View {
     @Environment(Router.self) private var router
+    @Environment(AppModel.self) private var app
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            ForEach(ServerSection.allCases) { section in
+            ForEach(ServerSection.visible(supportsBackups: app.currentServer?.supports("backups") ?? false)) { section in
                 let selected = router.serverSection == section
                 Button {
                     router.serverSection = section

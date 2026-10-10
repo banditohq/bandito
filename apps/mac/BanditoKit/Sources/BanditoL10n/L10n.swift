@@ -312,6 +312,37 @@ public enum L10n {
         public static var zoom: String { L10n.tr("avatar.zoom") }
     }
 
+    public enum Backups {
+        public static var confirmMessage: String { L10n.tr("backups.confirmMessage") }
+        public static func confirmTitle(date: String) -> String { L10n.tr("backups.confirmTitle", date) }
+        public static var create: String { L10n.tr("backups.create") }
+        public static var emptyMessage: String { L10n.tr("backups.emptyMessage") }
+        public static var emptyTitle: String { L10n.tr("backups.emptyTitle") }
+        public static var explain: String { L10n.tr("backups.explain") }
+        public static var restarting: String { L10n.tr("backups.restarting") }
+        public static var restore: String { L10n.tr("backups.restore") }
+        public static func restoreFailed(error: String) -> String { L10n.tr("backups.restoreFailed", error) }
+        public static var restoreUnknown: String { L10n.tr("backups.restoreUnknown") }
+        public static func restoredFrom(date: String) -> String { L10n.tr("backups.restoredFrom", date) }
+        public static func safeMode(error: String) -> String { L10n.tr("backups.safeMode", error) }
+        public static var safeModeHint: String { L10n.tr("backups.safeModeHint") }
+        public static var timedOut: String { L10n.tr("backups.timedOut") }
+        public static func whenToday(time: String) -> String { L10n.tr("backups.whenToday", time) }
+        public static func whenYesterday(time: String) -> String { L10n.tr("backups.whenYesterday", time) }
+
+        public enum Reason {
+            public static var beforeRestore: String { L10n.tr("backups.reason.beforeRestore") }
+            public static var broken: String { L10n.tr("backups.reason.broken") }
+            public static var daily: String { L10n.tr("backups.reason.daily") }
+            public static var incomplete: String { L10n.tr("backups.reason.incomplete") }
+            public static var manual: String { L10n.tr("backups.reason.manual") }
+            public static var other: String { L10n.tr("backups.reason.other") }
+            public static var replaced: String { L10n.tr("backups.reason.replaced") }
+            public static var start: String { L10n.tr("backups.reason.start") }
+            public static var upgrade: String { L10n.tr("backups.reason.upgrade") }
+        }
+    }
+
     public enum Banner {
         public static func limit(time: String) -> String { L10n.tr("banner.limit", time) }
         public static func notLoggedIn(runtime: String, server: String, command: String) -> String { L10n.tr("banner.notLoggedIn", runtime, server, command) }
@@ -1280,6 +1311,7 @@ public enum L10n {
         public static var market: String { L10n.tr("mode.market") }
         public static var screen: String { L10n.tr("mode.screen") }
         public static var server: String { L10n.tr("mode.server") }
+        public static var serverBackups: String { L10n.tr("mode.serverBackups") }
         public static var serverDevices: String { L10n.tr("mode.serverDevices") }
         public static var serverJournal: String { L10n.tr("mode.serverJournal") }
         public static var serverOverview: String { L10n.tr("mode.serverOverview") }

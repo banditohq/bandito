@@ -619,6 +619,16 @@ public struct DaemonInfo: Codable, Sendable, Hashable {
     public var features: [String]?
     /// The daemon's last successful check for a newer release. Null until one succeeded; missing on old daemons.
     public var update: DaemonUpdate?
+    /// What the last restore the daemon applied at a start did; nil before any (and on daemons without backups).
+    public var lastRestore: LastRestore?
+    /// True when the daemon started without a usable database after a restore (it then answers only `daemon.info`
+    /// and `backups.*`). Missing on daemons that predate safe mode.
+    public var safeMode: Bool?
+    /// Why the daemon is in safe mode, in one short sentence.
+    public var safeModeError: String?
+
+    /// Whether the daemon runs in safe mode: the Backups section is the only one that works.
+    public var isSafeMode: Bool { safeMode == true }
 
     public func supports(_ feature: String) -> Bool { features?.contains(feature) ?? false }
 

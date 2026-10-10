@@ -32,6 +32,7 @@ use std::time::Duration;
 use tokio::sync::{broadcast, mpsc};
 
 pub mod avatar;
+pub mod backups;
 pub mod browser;
 pub mod changes;
 pub mod chat;
@@ -76,6 +77,7 @@ pub fn features() -> Vec<&'static str> {
         "workspaces",
         "browser",
         "update",
+        "backups",
         "pause",
         "logs",
         "agent_own_folder",
@@ -126,6 +128,9 @@ pub struct App {
     pub data_home: PathBuf,
     /// The models each agent CLI offers, as last read (see docs/ARCHITECTURE.md#runtime-models).
     pub models: crate::runtime::models::ModelCache,
+    /// Set when the database could not be opened or put back after a restore: why. The daemon then answers only
+    /// `daemon.hello`, `daemon.info` and `backups.*` (see [`safe_mode_refusal`] and docs/ARCHITECTURE.md#backups).
+    safe_mode: std::sync::OnceLock<String>,
 }
 
 impl App {
@@ -165,8 +170,32 @@ impl App {
             screens: Arc::new(crate::screen::ScreenManager::new(screens_dir())),
             data_home,
             models: crate::runtime::models::ModelCache::default(),
+            safe_mode: std::sync::OnceLock::new(),
         })
     }
+
+    /// Puts the daemon in safe mode, with the reason. Called once, at start, by `main`.
+    pub fn enter_safe_mode(&self, why: &str) {
+        let _ = self.safe_mode.set(why.to_string());
+    }
+
+    /// Why the daemon is in safe mode, or None when it is not.
+    pub fn safe_mode(&self) -> Option<&str> {
+        self.safe_mode.get().map(String::as_str)
+    }
+}
+
+/// In safe mode only `daemon.hello`, `daemon.info` and `backups.*` are answered: the real database is not open, so
+/// anything else would read or write an empty stand-in.
+fn safe_mode_refusal(app: &App, method: &str) -> Option<RpcError> {
+    app.safe_mode()?;
+    if matches!(method, "daemon.hello" | "daemon.info") || method.starts_with("backups.") {
+        return None;
+    }
+    Some(RpcError::new(
+        SERVER_ERROR,
+        "the daemon is in safe mode: the database could not be opened. Restore a copy in Backups first",
+    ))
 }
 
 /// Where screen state (VNC password files, one folder per workspace) lives: `<data dir>/screens`.
@@ -991,6 +1020,9 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
     if !allowed(peer, method) {
         return Err(denied(peer, method));
     }
+    if let Some(refusal) = safe_mode_refusal(app, method) {
+        return Err(refusal);
+    }
     let p = match peer {
         Peer::Agent(agent) => bind_to_agent(agent, p)?,
         _ => p,
@@ -1051,6 +1083,9 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             "pid": std::process::id(),
             "features": features(),
             "update": update::last_check(),
+            "last_restore": crate::backup::read_last_restore(&app.data_home),
+            "safe_mode": app.safe_mode().is_some(),
+            "safe_mode_error": app.safe_mode(),
         })),
         "runtimes.status" => {
             let mut out: Vec<(&'static str, Value)> = Vec::new();
@@ -1650,6 +1685,10 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
         }
 
         "setup.status" | "setup.install" | "setup.job" => setup::dispatch(app, method, p).await,
+
+        "backups.list" | "backups.create" | "backups.restore" | "backups.leave_safe_mode" => {
+            backups::dispatch(app, method, p).await
+        }
 
         "daemon.update_check" => ok(update::check_async(VERSION).await?),
         "daemon.update_apply" => {
@@ -2446,6 +2485,8 @@ pub async fn serve(app: Arc<App>, peer: Peer, mut inbox: mpsc::Receiver<String>,
                 };
                 let result = if !allowed(&peer, &req.method) {
                     Err(denied(&peer, &req.method))
+                } else if let Some(refusal) = safe_mode_refusal(&app, &req.method) {
+                    Err(refusal)
                 } else if req.method == "events.subscribe" {
                     match params::<SubscribeParams>(req.params) {
                         Err(e) => Err(e),
@@ -3713,6 +3754,10 @@ mod trust_tests {
         "browser.close_tab",
         "screen.start",
         "screen.stop",
+        "backups.list",
+        "backups.create",
+        "backups.restore",
+        "backups.leave_safe_mode",
     ];
 
     #[tokio::test]
