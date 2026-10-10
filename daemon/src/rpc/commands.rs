@@ -166,6 +166,8 @@ mod tests {
         store
             .agent_create(NewAgent {
                 use_personal_settings: false,
+                avatar: None,
+                capabilities: None,
                 name: name.into(),
                 role: String::new(),
                 runtime,

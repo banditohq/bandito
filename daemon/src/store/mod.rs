@@ -19,7 +19,7 @@ mod secrets;
 mod usage;
 mod workspaces;
 
-pub use agents::{Agent, AgentPatch, NewAgent};
+pub use agents::{ALL_CAPABILITIES, Agent, AgentPatch, Avatar, Capability, NewAgent, capabilities_csv};
 pub use approvals::{Approval, ApprovalStatus};
 pub use auth::Device;
 pub use checkpoints::{Checkpoint, CheckpointKind};
@@ -40,6 +40,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../../migrations/0009_agent_pause.sql"),
     include_str!("../../migrations/0010_events_agent_kind_seq.sql"),
     include_str!("../../migrations/0011_agent_personal_settings.sql"),
+    include_str!("../../migrations/0012_agent_avatar_capabilities.sql"),
 ];
 
 pub struct Store {
@@ -403,6 +404,27 @@ mod tests {
             s.workspace_get(SHARED_WORKSPACE).unwrap().unwrap().kind,
             WorkspaceKind::Shared
         );
+    }
+
+    #[test]
+    fn avatar_migration_leaves_existing_agents_on_the_derived_avatar_and_all_capabilities() {
+        // A database as the previous release left it: every migration but the newest, with an agent.
+        let before = MIGRATIONS.len() - 1;
+        let conn = Connection::open_in_memory().unwrap();
+        for sql in &MIGRATIONS[..before] {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.pragma_update(None, "user_version", before as i64).unwrap();
+        conn.execute(
+            "INSERT INTO agents (id, name, runtime, cwd, created_at, updated_at) VALUES ('old', 'Old', 'claude', '/work', 1, 1)",
+            [],
+        )
+        .unwrap();
+
+        let s = Store::init(conn).unwrap();
+        let old = s.agent_view("old").unwrap().unwrap();
+        assert_eq!((old.avatar, old.capabilities), (None, None));
+        assert_eq!(s.agent_get("old").unwrap().unwrap().name, "Old");
     }
 
     #[test]

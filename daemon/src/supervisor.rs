@@ -13,8 +13,8 @@ use crate::redact::Redactor;
 use crate::runtime::sandbox::SandboxPolicy;
 use crate::runtime::{ApprovalRequest, Runtime, RuntimeKind, RuntimeOutput, Session, SpawnConfig};
 use crate::store::{
-    Agent, CheckpointKind, DEFAULT_CONTEXT_BUDGET, MemoryMode, RuleAction, Store, UsageEntry, WorkspaceKind, new_id,
-    now_ms,
+    Agent, CheckpointKind, DEFAULT_CONTEXT_BUDGET, MemoryMode, RuleAction, Store, UsageEntry, WorkspaceKind,
+    capabilities_csv, new_id, now_ms,
 };
 use crate::workspace::{self, WorkspaceManager, WorkspaceSpec};
 use anyhow::{Result, anyhow, bail};
@@ -992,6 +992,10 @@ impl Actor {
                 program: None,
                 mcp: mcp.map(|(prog, mut args)| {
                     args.extend(["--agent".to_string(), agent.id.clone()]);
+                    // The crew server registers only the tools of these capabilities. Missing = all of them.
+                    if let Some(list) = &agent.capabilities {
+                        args.extend(["--capabilities".to_string(), capabilities_csv(list)]);
+                    }
                     // The bridge reads the token from this file, so the token stays out of argument lists.
                     if let Some(file) = &token_file_arg {
                         args.extend(["--token-file".to_string(), file.clone()]);
@@ -1006,6 +1010,7 @@ impl Actor {
                 agent_mcp_file: token_guard.config_file().map(Path::to_path_buf),
                 sandbox,
                 personal_settings: agent.use_personal_settings,
+                capabilities: agent.capabilities.clone(),
             })
             .await?;
         self.root = spawned
@@ -1806,6 +1811,8 @@ mod tests {
         let agent = store
             .agent_create(NewAgent {
                 use_personal_settings: false,
+                avatar: None,
+                capabilities: None,
                 name: "Forge".into(),
                 role: "builder".into(),
                 runtime: RuntimeKind::Claude,
@@ -2344,6 +2351,8 @@ mod tests {
         store
             .agent_create(NewAgent {
                 use_personal_settings: false,
+                avatar: None,
+                capabilities: None,
                 name: name.into(),
                 role: String::new(),
                 runtime: RuntimeKind::Claude,
@@ -2623,6 +2632,45 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn the_crew_server_and_the_session_get_the_agents_capabilities() {
+        use crate::store::{AgentPatch, Capability};
+        let store = Arc::new(Store::open_in_memory().unwrap());
+        let hub = Hub::new(store.clone());
+        let spawns = Arc::new(Mutex::new(Vec::new()));
+        let mut rts = Runtimes::default();
+        rts.insert(Arc::new(MockRuntime {
+            log: Arc::default(),
+            out: Arc::default(),
+            spawns: spawns.clone(),
+        }));
+        let id = add_agent(&store, "Forge");
+        store
+            .agent_update(
+                &id,
+                AgentPatch {
+                    capabilities: Some(Some(vec![Capability::Team, Capability::Browser])),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let sup = Supervisor::new(hub, rts, Some((PathBuf::from("/bin/bandito"), vec!["mcp".into()])));
+        sup.send(&id, Inbound::user("go")).await.unwrap();
+        let spawn = spawns.lock().unwrap()[0].clone();
+        let (_, args) = spawn.mcp.clone().unwrap();
+        assert_eq!(
+            args,
+            vec![
+                "mcp".to_string(),
+                "--agent".to_string(),
+                id,
+                "--capabilities".to_string(),
+                "team,browser".to_string()
+            ]
+        );
+        assert_eq!(spawn.capabilities, Some(vec![Capability::Team, Capability::Browser]));
+    }
+
+    #[tokio::test]
     async fn unknown_agent_and_missing_runtime() {
         let w = world(ApprovalMode::Risky);
         assert!(w.sup.send("nope", Inbound::user("x")).await.is_err());
@@ -2630,6 +2678,8 @@ mod tests {
             .store
             .agent_create(NewAgent {
                 use_personal_settings: false,
+                avatar: None,
+                capabilities: None,
                 name: "Scout".into(),
                 role: String::new(),
                 runtime: RuntimeKind::Codex,
@@ -3170,6 +3220,8 @@ mod tests {
         let agent = store
             .agent_create(NewAgent {
                 use_personal_settings: false,
+                avatar: None,
+                capabilities: None,
                 name: "Forge".into(),
                 role: "builder".into(),
                 runtime: RuntimeKind::Claude,
@@ -3335,6 +3387,8 @@ mod tests {
         let agent = store
             .agent_create(NewAgent {
                 use_personal_settings: false,
+                avatar: None,
+                capabilities: None,
                 name: "Forge".into(),
                 role: "builder".into(),
                 runtime: RuntimeKind::Claude,
@@ -3603,6 +3657,8 @@ mod workspace_tests {
             .agent_create_in(
                 NewAgent {
                     use_personal_settings: false,
+                    avatar: None,
+                    capabilities: None,
                     name: name.into(),
                     role: String::new(),
                     runtime: RuntimeKind::Claude,

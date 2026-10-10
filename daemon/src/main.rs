@@ -61,6 +61,10 @@ enum Cmd {
         /// The file the daemon wrote the session token to (under `$BANDITO_HOME/run`).
         #[arg(long)]
         token_file: Option<PathBuf>,
+        /// The capabilities whose tools this server serves, comma-separated (see docs/ARCHITECTURE.md#capabilities).
+        /// Missing: all of them. Empty: none.
+        #[arg(long)]
+        capabilities: Option<String>,
     },
     /// Check for a newer signed release, or install one (and restart the daemon when a service runs it).
     Update {
@@ -174,7 +178,11 @@ async fn run_command(cmd: Cmd, home: PathBuf, home_given: bool) -> Result<()> {
         Cmd::Pair { json } => pair(&sock, json).await,
         Cmd::Info { json } => info(&home, &sock, json).await,
         Cmd::Service { cmd } => service_cmd(cmd, &home).await,
-        Cmd::Mcp { token_file, .. } => bandito::crew::serve_stdio(home.join("agent.sock"), token_file).await,
+        Cmd::Mcp {
+            token_file,
+            capabilities,
+            ..
+        } => bandito::crew::serve_stdio(home.join("agent.sock"), token_file, capabilities).await,
         Cmd::Update {
             check,
             json,

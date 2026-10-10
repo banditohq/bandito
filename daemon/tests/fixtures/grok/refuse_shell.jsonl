@@ -1,0 +1,21 @@
+// Same script as approve.jsonl, but the agent has no terminal capability: the shell request is refused with the
+// one-time reject (opt-no), and no owner card is shown.
+// grok agent stdio (ACP, protocol v1). Handshake shapes from a real run of grok 1.0.46; turn updates
+// follow the ACP spec. One tool call needs permission; the host allows once.
+{"expect": {"method": "initialize", "params": {"protocolVersion": 1}}}
+{"send": {"jsonrpc": "2.0", "id": "$last:/id", "result": {"protocolVersion": 1, "agentCapabilities": {"loadSession": true, "promptCapabilities": {"image": false, "audio": false, "embeddedContext": true}, "mcpCapabilities": {"http": true, "sse": true}}}}}
+{"expect": {"method": "session/new", "params": {"mcpServers": [{"name": "bandito", "command": "/usr/local/bin/bandito", "args": ["mcp", "--agent", "a1"], "env": []}]}}}
+{"send": {"jsonrpc": "2.0", "method": "_x.ai/session/setup", "params": {"method": "session/new", "phase": "auth", "sessionId": null}}}
+{"send": {"jsonrpc": "2.0", "id": "$last:/id", "result": {"sessionId": "sess-g1", "models": {"currentModelId": "grok-4.7"}}}}
+{"expect": {"method": "session/prompt", "params": {"sessionId": "sess-g1", "prompt": [{"type": "text", "text": "Instructions from Bandito:\nYou are Night Owl.\n\nUser message:\nrun the audit"}]}}}
+{"send": {"jsonrpc": "2.0", "id": "skills-reload", "result": {"result": {"reloaded": 1}}}}
+{"send": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "sess-g1", "update": {"sessionUpdate": "agent_thought_chunk", "content": {"type": "text", "text": "thinking"}}}}}
+{"send": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "sess-g1", "update": {"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": "Running "}}}}}
+{"send": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "sess-g1", "update": {"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": "the audit."}}}}}
+{"send": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "sess-g1", "update": {"sessionUpdate": "tool_call", "toolCallId": "call-1", "title": "cargo audit", "kind": "execute", "status": "pending", "rawInput": {"command": "cargo audit"}}}}}
+{"send": {"jsonrpc": "2.0", "id": 7, "method": "session/request_permission", "params": {"sessionId": "sess-g1", "toolCall": {"toolCallId": "call-1", "title": "cargo audit", "kind": "execute", "rawInput": {"command": "cargo audit"}}, "options": [{"optionId": "opt-always", "name": "Always allow", "kind": "allow_always"}, {"optionId": "opt-once", "name": "Allow", "kind": "allow_once"}, {"optionId": "opt-no", "name": "Reject", "kind": "reject_once"}]}}}
+{"expect": {"id": 7, "result": {"outcome": {"outcome": "selected", "optionId": "opt-no"}}}}
+{"send": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "sess-g1", "update": {"sessionUpdate": "tool_call_update", "toolCallId": "call-1", "status": "in_progress"}}}}
+{"send": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "sess-g1", "update": {"sessionUpdate": "tool_call_update", "toolCallId": "call-1", "status": "completed", "content": [{"type": "content", "content": {"type": "text", "text": "0 vulnerabilities"}}]}}}}
+{"send": {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": "sess-g1", "update": {"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": "Clean."}}}}}
+{"send": {"jsonrpc": "2.0", "id": 3, "result": {"stopReason": "end_turn"}}}

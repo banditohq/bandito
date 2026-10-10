@@ -7,7 +7,7 @@ use super::{
     ApprovalRequest, Runtime, RuntimeKind, RuntimeOutput, RuntimeStatus, Session, SpawnConfig, Spawned, clip_input,
 };
 use crate::event::{Decision, EventBody, TOOL_OUTPUT_LIMIT, TurnStatus, truncate_output};
-use crate::store::Effort;
+use crate::store::{Capability, Effort};
 use anyhow::{anyhow, bail};
 use async_trait::async_trait;
 use serde_json::{Value, json};
@@ -92,7 +92,9 @@ impl Runtime for GrokRuntime {
         if let Some((program, _)) = &cfg.mcp {
             crate::runtime::path_text(program)?;
         }
-        let state = Arc::new(Mutex::new(State::new(cfg.system_prompt.clone())));
+        let mut st = State::new(cfg.system_prompt.clone());
+        st.capabilities = cfg.capabilities.clone();
+        let state = Arc::new(Mutex::new(st));
         let handshake = Handshake {
             cwd: cfg.cwd.clone(),
             resume: cfg.resume.clone(),
@@ -174,6 +176,8 @@ struct State {
     text_buf: String,
     /// Tool calls that already produced their `ToolResult`.
     finished_tools: HashSet<String>,
+    /// What the agent may use (see docs/ARCHITECTURE.md#capabilities). `None`: all of it.
+    capabilities: Option<Vec<Capability>>,
 }
 
 impl State {
@@ -344,7 +348,7 @@ fn incoming_request(
 ) {
     if method == "session/request_permission" {
         let params = msg.get("params").unwrap_or(&Value::Null);
-        permission_request(id, params, st, out);
+        permission_request(id, params, st, sink, out);
     } else {
         let frame = json!({
             "jsonrpc": "2.0",
@@ -587,9 +591,14 @@ fn tool_output(update: &Value) -> String {
     truncate_output(&output, TOOL_OUTPUT_LIMIT)
 }
 
-fn permission_request(id: &Value, params: &Value, st: &mut State, out: &mut Vec<RuntimeOutput>) {
+fn permission_request(id: &Value, params: &Value, st: &mut State, sink: &LineSink, out: &mut Vec<RuntimeOutput>) {
     // Text the agent wrote before asking shows up before the approval, as it does before a tool call.
     out.extend(flush_text(st));
+    // A request for a capability the agent does not have is refused at once: the owner is not asked.
+    if let Some(refusal) = refusal_for(id, params, st.capabilities.as_deref()) {
+        reply(sink, &refusal, out);
+        return;
+    }
     let key = request_key(id);
     let call = params.get("toolCall").unwrap_or(&Value::Null);
     let content = array(call, "content");
@@ -629,6 +638,39 @@ fn permission_request(id: &Value, params: &Value, st: &mut State, out: &mut Vec<
         paths,
         input: clip_input(&raw_input, INPUT_CLIP_BYTES),
     }));
+}
+
+/// The capability a permission request needs, from its ACP tool kind: `execute` runs a command, and
+/// `edit`, `delete` and `move` change files. A request with a command but another kind needs the shell too.
+/// Any other request needs none.
+fn capability_of_request(kind: Option<&str>, has_command: bool) -> Option<Capability> {
+    match kind {
+        Some("execute") => Some(Capability::Terminal),
+        Some("edit" | "delete" | "move") => Some(Capability::Files),
+        _ if has_command => Some(Capability::Terminal),
+        _ => None,
+    }
+}
+
+/// The answer that refuses a permission request the agent's capabilities do not allow: a one-time reject, else a
+/// permanent one (as `Decision::Deny` picks). `None` means the request goes to the owner as usual.
+fn refusal_for(id: &Value, params: &Value, caps: Option<&[Capability]>) -> Option<Value> {
+    let caps = caps?;
+    let call = params.get("toolCall").unwrap_or(&Value::Null);
+    let needed = capability_of_request(non_empty(call, "kind"), str_at(&call["rawInput"], "command").is_some())?;
+    if caps.contains(&needed) {
+        return None;
+    }
+    let options: Vec<ApprovalOption> = array(params, "options").iter().filter_map(approval_option).collect();
+    let outcome = match choose_option(&options, Decision::Deny) {
+        Some(option_id) => json!({"outcome": "selected", "optionId": option_id}),
+        None => json!({"outcome": "cancelled"}),
+    };
+    tracing::info!(
+        capability = needed.as_str(),
+        "grok: permission refused, the agent lacks the capability"
+    );
+    Some(json!({"jsonrpc": "2.0", "id": id, "result": {"outcome": outcome}}))
 }
 
 /// Key of a permission request, from its JSON-RPC id. A string id that could be read as
@@ -1017,5 +1059,80 @@ mod tests {
                 output: "boom".into(),
             })]
         );
+    }
+
+    #[test]
+    fn a_request_needs_the_capability_of_its_tool_kind() {
+        assert_eq!(capability_of_request(Some("execute"), true), Some(Capability::Terminal));
+        assert_eq!(capability_of_request(Some("edit"), false), Some(Capability::Files));
+        assert_eq!(capability_of_request(Some("delete"), false), Some(Capability::Files));
+        assert_eq!(capability_of_request(Some("move"), false), Some(Capability::Files));
+        // A command under another kind is still a command.
+        assert_eq!(capability_of_request(Some("other"), true), Some(Capability::Terminal));
+        assert_eq!(capability_of_request(Some("read"), false), None);
+        assert_eq!(capability_of_request(None, false), None);
+    }
+
+    fn permission(kind: &str, command: Option<&str>, options: Value) -> Value {
+        let mut call = json!({"toolCallId": "c1", "title": "t", "kind": kind});
+        if let Some(command) = command {
+            call["rawInput"] = json!({ "command": command });
+        }
+        json!({"sessionId": "s", "toolCall": call, "options": options})
+    }
+
+    fn outcome(frame: &Value) -> Value {
+        frame["result"]["outcome"].clone()
+    }
+
+    #[test]
+    fn a_shell_request_is_refused_without_the_terminal_capability_and_kept_otherwise() {
+        let options = json!([
+            {"optionId": "always", "kind": "allow_always"},
+            {"optionId": "once", "kind": "allow_once"},
+            {"optionId": "no", "kind": "reject_once"},
+        ]);
+        let shell = permission("execute", Some("rm -rf cache"), options.clone());
+        let no_shell = [
+            Capability::Files,
+            Capability::Browser,
+            Capability::Team,
+            Capability::Screen,
+        ];
+        let refused = refusal_for(&json!("p-1"), &shell, Some(&no_shell)).expect("refused");
+        assert_eq!(refused["id"], json!("p-1"), "answered under the request's own id");
+        assert_eq!(outcome(&refused), json!({"outcome": "selected", "optionId": "no"}));
+        // With the capability, or with every capability, the owner decides.
+        assert!(refusal_for(&json!(1), &shell, Some(&[Capability::Terminal])).is_none());
+        assert!(refusal_for(&json!(1), &shell, None).is_none());
+    }
+
+    #[test]
+    fn a_file_change_is_refused_without_the_files_capability() {
+        let edit = permission(
+            "edit",
+            None,
+            json!([{"optionId": "y", "kind": "allow_once"}, {"optionId": "n", "kind": "reject_once"}]),
+        );
+        let refused = refusal_for(&json!(7), &edit, Some(&[Capability::Terminal])).expect("refused");
+        assert_eq!(outcome(&refused), json!({"outcome": "selected", "optionId": "n"}));
+        // A read stays allowed without the files capability.
+        let read = permission("read", None, json!([{"optionId": "n", "kind": "reject_once"}]));
+        assert!(refusal_for(&json!(7), &read, Some(&[Capability::Terminal])).is_none());
+    }
+
+    #[test]
+    fn a_refusal_without_a_reject_option_is_a_cancel() {
+        let shell = permission("execute", Some("ls"), json!([{"optionId": "a", "kind": "allow_once"}]));
+        let refused = refusal_for(&json!(2), &shell, Some(&[])).expect("refused");
+        assert_eq!(outcome(&refused), json!({"outcome": "cancelled"}));
+        // A permanent reject is the fallback for a refusal, as for a deny.
+        let always = permission(
+            "execute",
+            Some("ls"),
+            json!([{"optionId": "r", "kind": "reject_always"}]),
+        );
+        let refused = refusal_for(&json!(2), &always, Some(&[])).expect("refused");
+        assert_eq!(outcome(&refused), json!({"outcome": "selected", "optionId": "r"}));
     }
 }

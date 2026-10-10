@@ -3,7 +3,7 @@
 use bandito::event::{Decision, EventBody, TurnStatus};
 use bandito::runtime::grok::GrokRuntime;
 use bandito::runtime::{Runtime, RuntimeOutput, SpawnConfig, Spawned};
-use bandito::store::Effort;
+use bandito::store::{Capability, Effort};
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -389,5 +389,31 @@ async fn unsupported_protocol_version_is_reported() {
     assert!(out.contains(&RuntimeOutput::Event(EventBody::Error {
         message: "Unsupported ACP version 2 from grok".into(),
     })));
+    s.session.shutdown().await;
+}
+
+#[tokio::test]
+async fn a_shell_request_without_the_terminal_capability_is_refused_without_a_card() {
+    let mut c = cfg("refuse_shell.jsonl");
+    // The script expects the same handshake as `permission_flow_and_message_assembly`.
+    c.system_prompt = Some("You are Night Owl.".into());
+    c.mcp = Some((
+        PathBuf::from("/usr/local/bin/bandito"),
+        vec!["mcp".into(), "--agent".into(), "a1".into()],
+    ));
+    c.capabilities = Some(vec![
+        Capability::Files,
+        Capability::Browser,
+        Capability::Team,
+        Capability::Screen,
+    ]);
+    let mut s = spawn(c).await;
+    s.session.send("run the audit").await.unwrap();
+    let out = until(&mut s, is_turn_end).await;
+    // The fixture expects the reject (opt-no) as the answer to request 7; the owner is not asked.
+    assert!(!out.iter().any(is_approval), "no approval card for a refused request");
+    assert!(out.iter().any(|o| matches!(o,
+        RuntimeOutput::Event(EventBody::ToolCall { call_id, .. }) if call_id == "call-1")));
+    assert_eq!(texts(&out).last().map(String::as_str), Some("Clean."));
     s.session.shutdown().await;
 }

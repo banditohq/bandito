@@ -192,9 +192,14 @@ async fn mcp(backend: &BrowserMock, name: &str, args: Value) -> Value {
     let request =
         json!({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": name, "arguments": args}});
     let mut out = Vec::new();
-    serve(format!("{request}\n").as_bytes(), &mut out, backend)
-        .await
-        .unwrap();
+    serve(
+        format!("{request}\n").as_bytes(),
+        &mut out,
+        backend,
+        &bandito::store::ALL_CAPABILITIES,
+    )
+    .await
+    .unwrap();
     serde_json::from_slice(&out).unwrap()
 }
 
@@ -203,7 +208,14 @@ async fn crew_lists_the_browser_tools_after_the_crew_tools() {
     let backend = BrowserMock::default();
     let mut out = Vec::new();
     let req = json!({"jsonrpc": "2.0", "id": 1, "method": "tools/list"});
-    serve(format!("{req}\n").as_bytes(), &mut out, &backend).await.unwrap();
+    serve(
+        format!("{req}\n").as_bytes(),
+        &mut out,
+        &backend,
+        &bandito::store::ALL_CAPABILITIES,
+    )
+    .await
+    .unwrap();
     let reply: Value = serde_json::from_slice(&out).unwrap();
     let names: Vec<&str> = reply["result"]["tools"]
         .as_array()

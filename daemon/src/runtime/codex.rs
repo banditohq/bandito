@@ -7,7 +7,7 @@ use super::{
     Session, SpawnConfig, Spawned, capitalized, clip_input,
 };
 use crate::event::{Decision, EventBody, LimitWindow, TOOL_OUTPUT_LIMIT, TurnStatus, Usage, truncate_output};
-use crate::store::Effort;
+use crate::store::{Capability, Effort};
 use anyhow::{anyhow, bail};
 use async_trait::async_trait;
 use serde_json::{Value, json};
@@ -141,16 +141,22 @@ impl Runtime for CodexRuntime {
             cmd.env("BANDITO_AGENT_TOKEN", token);
         }
 
-        let state = Arc::new(Mutex::new(State::new(cfg.effort.map(turn_effort))));
+        let mut st = State::new(cfg.effort.map(turn_effort));
         let launch = Launch::from_config(&cfg);
+        st.files_refused = !launch.files_on;
+        let state = Arc::new(Mutex::new(st));
         let router_state = Arc::clone(&state);
         let router_launch = launch.clone();
         let router: Router =
             Box::new(move |msg: &Value, sink: &LineSink| route(msg, &router_state, &router_launch, sink));
-        if crate::runtime::sandbox::applies(cfg.sandbox.as_ref()) {
+        if launch.own_sandbox_off || !launch.files_on {
             // Our sandbox is the one that applies here. Codex's own would nest inside it, and macOS refuses
             // nested sandboxes; so Codex's is turned off, and approvals stay with Codex's approval policy.
-            cmd.arg("-c").arg(r#"sandbox_mode="danger-full-access""#);
+            // Without the files capability, Codex's own sandbox keeps the agent read-only.
+            cmd.arg("-c").arg(format!(
+                "sandbox_mode=\"{}\"",
+                sandbox_mode(launch.own_sandbox_off, launch.files_on)
+            ));
         }
         let cmd = crate::runtime::sandbox::wrap(cmd, cfg.sandbox.as_ref())?;
         let cmd = crate::workspace::confine(cmd, cfg.workspace.as_ref());
@@ -382,6 +388,8 @@ struct Launch {
     resume: Option<String>,
     /// Codex's own sandbox is off: the sandbox of the daemon applies instead (see `spawn`).
     own_sandbox_off: bool,
+    /// The agent may change files (see docs/ARCHITECTURE.md#capabilities). Without it Codex runs read-only.
+    files_on: bool,
 }
 
 impl Launch {
@@ -392,7 +400,24 @@ impl Launch {
             system_prompt: cfg.system_prompt.clone(),
             resume: cfg.resume.clone(),
             own_sandbox_off: crate::runtime::sandbox::applies(cfg.sandbox.as_ref()),
+            files_on: cfg
+                .capabilities
+                .as_deref()
+                .is_none_or(|list| list.contains(&Capability::Files)),
         }
+    }
+}
+
+/// Codex's sandbox mode for its threads. Without `files` it is `read-only`, except when the daemon's own sandbox
+/// is in charge: a macOS sandbox does not nest, so Codex's stays off there (`danger-full-access`), and the file
+/// changes it asks for are declined instead (see `server_request`).
+fn sandbox_mode(own_sandbox_off: bool, files_on: bool) -> &'static str {
+    if own_sandbox_off {
+        "danger-full-access"
+    } else if files_on {
+        "workspace-write"
+    } else {
+        "read-only"
     }
 }
 
@@ -430,6 +455,8 @@ struct State {
     last_usage: Option<Usage>,
     /// `effort` sent with every `turn/start`. `None` leaves it out.
     effort: Option<&'static str>,
+    /// The agent has no `files` capability: file-change approvals are declined, not asked (see `sandbox_mode`).
+    files_refused: bool,
 }
 
 impl State {
@@ -447,6 +474,7 @@ impl State {
             requests: HashMap::new(),
             file_changes: HashMap::new(),
             last_usage: None,
+            files_refused: false,
         }
     }
 
@@ -534,11 +562,7 @@ impl State {
 fn thread_params(launch: &Launch, mut params: Value) -> Value {
     params["approvalPolicy"] = json!("untrusted");
     // Codex's sandbox mode for its threads: the same setting as the `-c` override (see `spawn`).
-    params["sandbox"] = json!(if launch.own_sandbox_off {
-        "danger-full-access"
-    } else {
-        "workspace-write"
-    });
+    params["sandbox"] = json!(sandbox_mode(launch.own_sandbox_off, launch.files_on));
     if let Some(model) = &launch.model {
         params["model"] = json!(model);
     }
@@ -642,6 +666,15 @@ fn server_request(st: &mut State, method: &str, id: &Value, params: &Value, sink
             let key = request_key(id);
             st.approvals.insert(key.clone(), id.clone());
             vec![RuntimeOutput::Approval(command_approval(&key, params))]
+        }
+        "item/fileChange/requestApproval" if st.files_refused => {
+            // The agent has no files capability: the change is declined at once, and the owner is not asked.
+            tracing::info!("codex: file change declined, the agent lacks the files capability");
+            let frame = json!({"jsonrpc": "2.0", "id": id, "result": {"decision": "decline"}});
+            if let Err(e) = process::push_line(sink, LABEL, &frame) {
+                tracing::debug!("could not answer {method}: {e}");
+            }
+            Vec::new()
         }
         "item/fileChange/requestApproval" => {
             let key = request_key(id);
@@ -1350,6 +1383,7 @@ mod tests {
 mod login_tests {
     use super::*;
     use crate::runtime::ProbeOutput;
+    use tokio::sync::mpsc;
 
     fn probe(code: Option<i32>, stdout: &str, stderr: &str) -> ProbeOutput {
         ProbeOutput {
@@ -1386,5 +1420,72 @@ mod login_tests {
         assert_eq!(login_from_status(Some(&probe(Some(2), "Not logged in", ""))), None);
         assert_eq!(login_from_status(Some(&probe(None, "Not logged in", ""))), None);
         assert_eq!(login_from_status(None), None);
+    }
+
+    #[test]
+    fn the_sandbox_mode_follows_the_files_capability_unless_the_daemon_sandbox_is_in_charge() {
+        assert_eq!(sandbox_mode(false, true), "workspace-write");
+        assert_eq!(sandbox_mode(false, false), "read-only");
+        // A macOS sandbox does not nest: Codex's stays off, whatever the files capability.
+        assert_eq!(sandbox_mode(true, true), "danger-full-access");
+        assert_eq!(sandbox_mode(true, false), "danger-full-access");
+    }
+
+    #[test]
+    fn a_launch_reads_the_files_capability_and_the_thread_gets_the_sandbox_mode() {
+        let cfg = |caps: Option<Vec<Capability>>| SpawnConfig {
+            capabilities: caps,
+            ..Default::default()
+        };
+        assert!(Launch::from_config(&cfg(None)).files_on);
+        assert!(!Launch::from_config(&cfg(Some(vec![Capability::Browser]))).files_on);
+        assert!(Launch::from_config(&cfg(Some(vec![Capability::Files]))).files_on);
+
+        let launch = Launch {
+            cwd: "/w".into(),
+            model: None,
+            system_prompt: None,
+            resume: None,
+            own_sandbox_off: false,
+            files_on: false,
+        };
+        let params = thread_params(&launch, json!({"cwd": "/w"}));
+        assert_eq!(params["sandbox"], json!("read-only"));
+        assert_eq!(params["approvalPolicy"], json!("untrusted"));
+    }
+
+    #[test]
+    fn a_file_change_is_declined_without_the_files_capability_and_asked_with_it() {
+        let (tx, mut rx) = mpsc::unbounded_channel::<String>();
+        let sink: LineSink = Arc::new(Mutex::new(Some(tx)));
+        let params = json!({"itemId": "item-1"});
+
+        let mut refused = State::new(None);
+        refused.files_refused = true;
+        let out = server_request(
+            &mut refused,
+            "item/fileChange/requestApproval",
+            &json!(9),
+            &params,
+            &sink,
+        );
+        assert!(out.is_empty(), "the owner gets no card");
+        assert!(refused.approvals.is_empty());
+        let frame: Value = serde_json::from_str(&rx.try_recv().expect("an answer went out")).unwrap();
+        assert_eq!(
+            frame,
+            json!({"jsonrpc": "2.0", "id": 9, "result": {"decision": "decline"}})
+        );
+
+        let mut allowed = State::new(None);
+        let out = server_request(
+            &mut allowed,
+            "item/fileChange/requestApproval",
+            &json!(10),
+            &params,
+            &sink,
+        );
+        assert!(matches!(out.as_slice(), [RuntimeOutput::Approval(_)]));
+        assert!(rx.try_recv().is_err(), "nothing answered before the owner decides");
     }
 }

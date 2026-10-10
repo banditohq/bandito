@@ -14,7 +14,8 @@ use crate::runtime::RuntimeKind;
 use crate::scheduler;
 use crate::setup::Setup;
 use crate::store::{
-    AgentPatch, Device, Effort, NewAgent, NewSchedule, NextRun, RuleAction, SHARED_WORKSPACE, SchedulePatch, Store,
+    ALL_CAPABILITIES, AgentPatch, Avatar, Capability, Device, Effort, NewAgent, NewSchedule, NextRun, RuleAction,
+    SHARED_WORKSPACE, SchedulePatch, Store,
 };
 use crate::supervisor::Supervisor;
 use crate::terminal::{Limits, TerminalManager};
@@ -433,6 +434,12 @@ struct AgentPatchParams {
     /// Pauses or resumes the agent (see docs/ARCHITECTURE.md#pause). Not stored with the other fields.
     paused: Option<bool>,
     use_personal_settings: Option<bool>,
+    /// `null` derives the avatar from the name again (see docs/ARCHITECTURE.md#capabilities).
+    #[serde(default, deserialize_with = "double_option")]
+    avatar: Option<Option<Avatar>>,
+    /// `null` gives the agent all capabilities again.
+    #[serde(default, deserialize_with = "double_option")]
+    capabilities: Option<Option<Vec<Capability>>>,
 }
 impl AgentPatchParams {
     /// Whether the patch changes something a running session was started with, so
@@ -458,8 +465,12 @@ impl AgentPatchParams {
             // Applied by `Supervisor::set_paused`: a pause starts no new session.
             paused: _,
             use_personal_settings,
+            // The app draws it: nothing a running session was started with.
+            avatar: _,
+            capabilities,
         } = self;
         workspace_id.as_ref().is_some_and(|w| *w != current.workspace_id)
+            || capabilities.as_ref().is_some_and(|c| *c != current.capabilities)
             || runtime.as_ref().is_some_and(|r| *r != current.runtime)
             || name.as_ref().is_some_and(|n| n.trim() != current.name)
             || role.as_ref().is_some_and(|r| *r != current.role)
@@ -602,6 +613,25 @@ fn check_effort(kind: RuntimeKind, effort: Option<Effort>) -> Result<(), RpcErro
     }
 }
 
+/// An agent's capability list may leave out only what its runtime can switch off (see docs/ARCHITECTURE.md#capabilities).
+/// `None` (all of them) is always fine.
+fn check_capabilities(kind: RuntimeKind, caps: Option<&[Capability]>) -> Result<(), RpcError> {
+    let Some(list) = caps else {
+        return Ok(());
+    };
+    let supported = crate::runtime::supported_capabilities(kind);
+    match ALL_CAPABILITIES
+        .iter()
+        .find(|c| !supported.contains(c) && !list.contains(c))
+    {
+        Some(c) => Err(RpcError::new(
+            INVALID_PARAMS,
+            format!("{} не умеет запрещать {}", kind.as_str(), c.as_str()),
+        )),
+        None => Ok(()),
+    }
+}
+
 /// A fallback is one of the subscription runtimes, and not the agent's primary runtime.
 fn check_fallback(primary: RuntimeKind, fallback: Option<RuntimeKind>) -> Result<(), RpcError> {
     match fallback {
@@ -615,6 +645,24 @@ fn check_fallback(primary: RuntimeKind, fallback: Option<RuntimeKind>) -> Result
             "fallback runtime must differ from the agent's runtime",
         )),
         Some(_) => Ok(()),
+    }
+}
+
+/// Longest color or face name of an avatar, in characters. The app picks the names; the daemon only keeps them short.
+const AVATAR_PART_CHARS: usize = 32;
+
+/// The avatar as stored: both names trimmed, each 1 to 32 characters.
+fn clean_avatar(avatar: Avatar) -> Result<Avatar, RpcError> {
+    let part = |s: &str| {
+        let t = s.trim();
+        (!t.is_empty() && t.chars().count() <= AVATAR_PART_CHARS).then(|| t.to_string())
+    };
+    match (part(&avatar.color), part(&avatar.face)) {
+        (Some(color), Some(face)) => Ok(Avatar { color, face }),
+        _ => Err(RpcError::new(
+            INVALID_PARAMS,
+            "avatar color and face must be 1 to 32 characters",
+        )),
     }
 }
 
@@ -821,12 +869,16 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             "update": update::last_check(),
         })),
         "runtimes.status" => {
-            let mut out = Vec::new();
+            let mut out: Vec<(&'static str, Value)> = Vec::new();
             for rt in app.sup.runtimes().all() {
-                out.push(rt.status().await);
+                let status = rt.status().await;
+                let mut body = serde_json::to_value(&status).map_err(|e| RpcError::new(SERVER_ERROR, e.to_string()))?;
+                // What the runtime can apply of the agent's capabilities; the app greys out the rest.
+                body["supported_capabilities"] = json!(crate::runtime::supported_capabilities(status.kind));
+                out.push((status.kind.as_str(), body));
             }
-            out.sort_by_key(|s| s.kind.as_str());
-            ok(out)
+            out.sort_by_key(|(kind, _)| *kind);
+            ok(out.into_iter().map(|(_, body)| body).collect::<Vec<_>>())
         }
 
         "runtimes.models" => {
@@ -864,7 +916,12 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                 .ok_or_else(|| RpcError::new(SERVER_ERROR, format!("no agent {id}")))?)
         }
         "agents.create" => {
-            let CreateAgent { agent: a, workspace_id } = params(p)?;
+            let CreateAgent {
+                agent: mut a,
+                workspace_id,
+            } = params(p)?;
+            a.avatar = a.avatar.map(clean_avatar).transpose()?;
+            check_capabilities(a.runtime, a.capabilities.as_deref())?;
             // No cwd given: the agent's own folder is its cwd, which only exists once it is created.
             let own_folder = a.cwd.trim().is_empty();
             if !own_folder {
@@ -904,6 +961,10 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
         }
         "agents.update" => {
             let UpdateAgent { id, mut patch } = params(p)?;
+            patch.avatar = match patch.avatar.take() {
+                Some(Some(avatar)) => Some(Some(clean_avatar(avatar)?)),
+                other => other,
+            };
             let paused = patch.paused;
             if let Some(cwd) = &patch.cwd {
                 check_cwd(cwd)?;
@@ -919,6 +980,12 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                     format!("{} is not available on this server", runtime.as_str()),
                 ));
             }
+            // The list as it will be after the patch, for the runtime it will run on.
+            let caps_after = match &patch.capabilities {
+                Some(list) => list.as_deref(),
+                None => current.capabilities.as_deref(),
+            };
+            check_capabilities(runtime, caps_after)?;
             // Effort is checked against the runtime the agent will run on. One carried over from
             // the old runtime that the new one lacks is dropped, with a warning.
             let mut warnings: Vec<String> = Vec::new();
@@ -984,6 +1051,8 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                     fallback_runtime: patch.fallback_runtime,
                     fallback_model: patch.fallback_model,
                     use_personal_settings: patch.use_personal_settings,
+                    avatar: patch.avatar,
+                    capabilities: patch.capabilities,
                 },
             )?;
             // New config takes effect with the next session: the running one is
@@ -1331,6 +1400,8 @@ mod crew_tests {
             store
                 .agent_create(NewAgent {
                     use_personal_settings: false,
+                    avatar: None,
+                    capabilities: None,
                     name: name.into(),
                     role: role.into(),
                     runtime: RuntimeKind::Claude,
@@ -1438,6 +1509,8 @@ mod history_tests {
         let agent = store
             .agent_create(NewAgent {
                 use_personal_settings: false,
+                avatar: None,
+                capabilities: None,
                 name: "Forge".into(),
                 role: String::new(),
                 runtime: RuntimeKind::Claude,
@@ -1851,6 +1924,8 @@ mod schedule_tests {
         let agent = store
             .agent_create(NewAgent {
                 use_personal_settings: false,
+                avatar: None,
+                capabilities: None,
                 name: "Forge".into(),
                 role: String::new(),
                 runtime: RuntimeKind::Claude,
@@ -2077,6 +2152,182 @@ mod memory_tests {
     }
 
     #[tokio::test]
+    async fn avatar_and_capabilities_travel_on_the_wire_and_patch_like_the_other_fields() {
+        let (app, _dir) = app_in_tempdir();
+        let mut p = new_agent("Forge", "claude");
+        p["avatar"] = json!({"color": " sky ", "face": "dots"});
+        p["capabilities"] = json!(["team", "browser"]);
+        let created = call(&app, "agents.create", p).await.unwrap();
+        assert_eq!(
+            created["avatar"],
+            json!({"color": "sky", "face": "dots"}),
+            "stored trimmed"
+        );
+        assert_eq!(created["capabilities"], json!(["team", "browser"]));
+        let id = created["id"].as_str().unwrap().to_string();
+        let got = call(&app, "agents.get", json!({ "id": id })).await.unwrap();
+        assert_eq!(got["capabilities"], json!(["team", "browser"]));
+        let listed = call(&app, "agents.list", json!({})).await.unwrap();
+        assert_eq!(listed[0]["avatar"], json!({"color": "sky", "face": "dots"}));
+
+        // A patch without the fields keeps them; an empty list is no capabilities at all.
+        let renamed = call(&app, "agents.update", json!({ "id": id, "role": "reviewer" }))
+            .await
+            .unwrap();
+        assert_eq!(
+            (renamed["capabilities"].clone(), renamed["avatar"]["face"].clone()),
+            (json!(["team", "browser"]), json!("dots"))
+        );
+        let none = call(&app, "agents.update", json!({ "id": id, "capabilities": [] }))
+            .await
+            .unwrap();
+        assert_eq!(none["capabilities"], json!([]));
+        // Explicit nulls give back the derived avatar and all capabilities.
+        let reset = call(
+            &app,
+            "agents.update",
+            json!({ "id": id, "capabilities": null, "avatar": null }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            (reset["capabilities"].clone(), reset["avatar"].clone()),
+            (json!(null), json!(null))
+        );
+        let set = call(
+            &app,
+            "agents.update",
+            json!({ "id": id, "avatar": {"color": "rose", "face": "carets"} }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(set["avatar"], json!({"color": "rose", "face": "carets"}));
+        assert_eq!(set["capabilities"], json!(null));
+    }
+
+    #[tokio::test]
+    async fn bad_capabilities_and_avatars_are_invalid_params_and_change_nothing() {
+        let (app, _dir) = app_in_tempdir();
+        let mut p = new_agent("Forge", "claude");
+        p["capabilities"] = json!(["terminal", "shell"]);
+        assert_eq!(call(&app, "agents.create", p).await.unwrap_err().code, INVALID_PARAMS);
+        assert!(
+            app.sup.hub().store.agent_list().unwrap().is_empty(),
+            "nothing was created"
+        );
+        for avatar in [
+            json!({"color": "  ", "face": "dots"}),
+            json!({"color": "sky", "face": ""}),
+            json!({"color": "x".repeat(33), "face": "dots"}),
+        ] {
+            let mut p = new_agent("Forge", "claude");
+            p["avatar"] = avatar;
+            assert_eq!(call(&app, "agents.create", p).await.unwrap_err().code, INVALID_PARAMS);
+        }
+
+        let created = call(&app, "agents.create", new_agent("Forge", "claude")).await.unwrap();
+        let id = created["id"].as_str().unwrap().to_string();
+        let err = call(&app, "agents.update", json!({ "id": id, "capabilities": ["Browser"] }))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, INVALID_PARAMS);
+        let err = call(
+            &app,
+            "agents.update",
+            json!({ "id": id, "avatar": {"color": "x", "face": ""} }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, INVALID_PARAMS);
+        let got = call(&app, "agents.get", json!({ "id": id })).await.unwrap();
+        assert_eq!(
+            (got["capabilities"].clone(), got["avatar"].clone()),
+            (json!(null), json!(null))
+        );
+    }
+
+    #[tokio::test]
+    async fn a_capability_change_reloads_the_session_and_an_avatar_does_not() {
+        let (app, _dir) = app_in_tempdir();
+        let created = call(&app, "agents.create", new_agent("Forge", "claude")).await.unwrap();
+        let current = app
+            .sup
+            .hub()
+            .store
+            .agent_get(created["id"].as_str().unwrap())
+            .unwrap()
+            .unwrap();
+        let avatar: AgentPatchParams =
+            serde_json::from_value(json!({ "avatar": {"color": "sky", "face": "dots"} })).unwrap();
+        assert!(!avatar.changes_session(&current), "the app draws the avatar; no reload");
+        // Null on an agent that has all capabilities already changes nothing.
+        let all: AgentPatchParams = serde_json::from_value(json!({ "capabilities": null })).unwrap();
+        assert!(!all.changes_session(&current));
+        let some: AgentPatchParams = serde_json::from_value(json!({ "capabilities": ["team"] })).unwrap();
+        assert!(some.changes_session(&current));
+    }
+
+    #[test]
+    fn only_a_runtime_that_can_switch_a_capability_off_may_leave_it_out() {
+        use crate::runtime::RuntimeKind;
+        assert!(check_capabilities(RuntimeKind::Claude, Some(&[Capability::Team])).is_ok());
+        assert!(check_capabilities(RuntimeKind::Grok, None).is_ok());
+        assert!(check_capabilities(RuntimeKind::Codex, Some(&ALL_CAPABILITIES)).is_ok());
+        let grok = check_capabilities(RuntimeKind::Grok, Some(&[Capability::Team, Capability::Browser])).unwrap_err();
+        assert_eq!(grok.code, INVALID_PARAMS);
+        assert_eq!(grok.message, "grok не умеет запрещать terminal");
+        let codex = check_capabilities(
+            RuntimeKind::Codex,
+            Some(&[
+                Capability::Terminal,
+                Capability::Team,
+                Capability::Browser,
+                Capability::Screen,
+            ]),
+        )
+        .unwrap_err();
+        assert_eq!(codex.message, "codex не умеет запрещать files");
+    }
+
+    #[tokio::test]
+    async fn grok_and_codex_agents_keep_the_shell_and_the_files_in_their_list() {
+        let (app, _dir) = app_in_tempdir();
+        let mut p = new_agent("Forge", "grok");
+        p["capabilities"] = json!(["team", "browser", "screen"]);
+        let err = call(&app, "agents.create", p).await.unwrap_err();
+        assert_eq!(err.code, INVALID_PARAMS);
+        assert_eq!(err.message, "grok не умеет запрещать terminal");
+        assert!(
+            app.sup.hub().store.agent_list().unwrap().is_empty(),
+            "nothing was created"
+        );
+
+        let mut p = new_agent("Scout", "codex");
+        p["capabilities"] = json!(["terminal", "team", "browser", "screen"]);
+        let err = call(&app, "agents.create", p).await.unwrap_err();
+        assert_eq!(err.message, "codex не умеет запрещать files");
+        let mut p = new_agent("Scout", "codex");
+        p["capabilities"] = json!(["terminal", "files", "team", "browser", "screen"]);
+        assert!(call(&app, "agents.create", p).await.is_ok());
+
+        // An update that leaves the shell out of a Grok agent's list is refused and changes nothing.
+        let created = call(&app, "agents.create", new_agent("Grokker", "grok")).await.unwrap();
+        let id = created["id"].as_str().unwrap().to_string();
+        let err = call(&app, "agents.update", json!({ "id": id, "capabilities": ["browser"] }))
+            .await
+            .unwrap_err();
+        assert_eq!(err.message, "grok не умеет запрещать terminal");
+        let got = call(&app, "agents.get", json!({ "id": id })).await.unwrap();
+        assert_eq!(got["capabilities"], json!(null));
+        // A patch that does not touch the list is still fine.
+        assert!(
+            call(&app, "agents.update", json!({ "id": id, "role": "reviewer" }))
+                .await
+                .is_ok()
+        );
+    }
+
+    #[tokio::test]
     async fn update_reloads_the_session_only_when_it_changes_something() {
         use crate::event::TurnStatus;
         use crate::runtime::RuntimeOutput;
@@ -2099,6 +2350,8 @@ mod memory_tests {
         let id = store
             .agent_create(NewAgent {
                 use_personal_settings: false,
+                avatar: None,
+                capabilities: None,
                 name: "Forge".into(),
                 role: String::new(),
                 runtime: RuntimeKind::Claude,
@@ -2929,6 +3182,8 @@ mod pause_and_logs_tests {
         store
             .agent_create(NewAgent {
                 use_personal_settings: false,
+                avatar: None,
+                capabilities: None,
                 name: name.into(),
                 role: String::new(),
                 runtime: RuntimeKind::Claude,

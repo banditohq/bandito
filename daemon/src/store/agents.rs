@@ -22,6 +22,60 @@ pub struct LastMessage {
     pub ts: i64,
 }
 
+/// The agent's avatar: the tile color and the face on it, named as the app names them.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Avatar {
+    pub color: String,
+    pub face: String,
+}
+
+/// What an agent may use. A session gets the tools of its capabilities only (see docs/ARCHITECTURE.md#capabilities).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Capability {
+    /// The shell: Claude's `Bash`.
+    Terminal,
+    /// Changing files: Claude's `Edit`, `Write`, `MultiEdit` and `NotebookEdit`. Reading stays.
+    Files,
+    /// The browser on the server: the `browser_*` tools.
+    Browser,
+    /// The crew: `crew_list` and `crew_send`.
+    Team,
+    /// The server's screen: the `screen_*` tools.
+    Screen,
+}
+
+/// Every capability, in the order the app lists them.
+pub const ALL_CAPABILITIES: [Capability; 5] = [
+    Capability::Terminal,
+    Capability::Files,
+    Capability::Browser,
+    Capability::Team,
+    Capability::Screen,
+];
+
+impl Capability {
+    /// The wire name, also used in the daemon's own argument lists.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Capability::Terminal => "terminal",
+            Capability::Files => "files",
+            Capability::Browser => "browser",
+            Capability::Team => "team",
+            Capability::Screen => "screen",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        ALL_CAPABILITIES.into_iter().find(|c| c.as_str() == s)
+    }
+}
+
+/// The capabilities as one comma-separated list (`browser,team`), for the crew server's `--capabilities`.
+pub fn capabilities_csv(list: &[Capability]) -> String {
+    list.iter().map(|c| c.as_str()).collect::<Vec<_>>().join(",")
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Agent {
     pub id: String,
@@ -60,6 +114,10 @@ pub struct Agent {
     /// Whether the agent's CLI also loads the owner's own Claude settings (see docs/ARCHITECTURE.md#personal-settings).
     /// Read when a session starts.
     pub use_personal_settings: bool,
+    /// The avatar the app draws; `null` = derived from the name.
+    pub avatar: Option<Avatar>,
+    /// What the agent may use; `null` = all of it. Read when a session starts (see docs/ARCHITECTURE.md#capabilities).
+    pub capabilities: Option<Vec<Capability>>,
     /// The newest user or assistant message; `null` when there is none. Only set by `agent_view` and
     /// `agent_list_view`, the reads the wire uses (see docs/ARCHITECTURE.md#team-preview).
     #[serde(default)]
@@ -104,6 +162,12 @@ pub struct NewAgent {
     /// Loads the owner's own Claude settings in new sessions (see docs/ARCHITECTURE.md#personal-settings).
     #[serde(default)]
     pub use_personal_settings: bool,
+    /// The avatar to start with; `null` or missing = derived from the name.
+    #[serde(default)]
+    pub avatar: Option<Avatar>,
+    /// What the agent may use; `null` or missing = all of it.
+    #[serde(default)]
+    pub capabilities: Option<Vec<Capability>>,
 }
 
 fn default_memory() -> MemoryMode {
@@ -133,9 +197,11 @@ pub struct AgentPatch {
     pub fallback_runtime: Option<Option<RuntimeKind>>,
     pub fallback_model: Option<Option<String>>,
     pub use_personal_settings: Option<bool>,
+    pub avatar: Option<Option<Avatar>>,
+    pub capabilities: Option<Option<Vec<Capability>>>,
 }
 
-const COLS: &str = "id, name, role, runtime, model, cwd, approval_mode, system_prompt, runtime_session_id, created_at, updated_at, effort, memory_mode, context_budget, home_dir, context_tokens, chapter, last_turn_at, fallback_runtime, fallback_model, active_runtime, workspace_id, paused, use_personal_settings";
+const COLS: &str = "id, name, role, runtime, model, cwd, approval_mode, system_prompt, runtime_session_id, created_at, updated_at, effort, memory_mode, context_budget, home_dir, context_tokens, chapter, last_turn_at, fallback_runtime, fallback_model, active_runtime, workspace_id, paused, use_personal_settings, avatar_color, avatar_face, capabilities";
 
 /// The newest message of the agent in `agents.id`, as one JSON array `[kind, ts, text]` (text cut to
 /// `LAST_MESSAGE_CHARS` in SQL too, so a long message is not read in full). One correlated subquery per agent, served by
@@ -185,6 +251,8 @@ fn from_row(r: &Row) -> rusqlite::Result<Agent> {
         workspace_id: r.get(21)?,
         paused: r.get(22)?,
         use_personal_settings: r.get(23)?,
+        avatar: avatar_column(r, 24, 25)?,
+        capabilities: capabilities_column(r, 26)?,
         last_message: None,
         status: None,
         pending_approval_ids: Vec::new(),
@@ -195,11 +263,38 @@ fn from_row(r: &Row) -> rusqlite::Result<Agent> {
 /// `from_row` for `view_sql()`: the agent columns, then the message, the status and the pending count.
 fn from_row_view(r: &Row) -> rusqlite::Result<Agent> {
     let mut agent = from_row(r)?;
-    agent.last_message = last_message_column(r, 24)?;
-    agent.status = status_column(r, 25)?;
-    agent.pending_approval_ids = pending_ids_column(r, 26)?;
+    agent.last_message = last_message_column(r, 27)?;
+    agent.status = status_column(r, 28)?;
+    agent.pending_approval_ids = pending_ids_column(r, 29)?;
     agent.pending_approvals = agent.pending_approval_ids.len() as u32;
     Ok(agent)
+}
+
+/// The avatar from its two columns: both set, or none (the app derives it from the name).
+fn avatar_column(r: &Row, color: usize, face: usize) -> rusqlite::Result<Option<Avatar>> {
+    Ok(
+        match (r.get::<_, Option<String>>(color)?, r.get::<_, Option<String>>(face)?) {
+            (Some(color), Some(face)) => Some(Avatar { color, face }),
+            _ => None,
+        },
+    )
+}
+
+fn capabilities_column(r: &Row, i: usize) -> rusqlite::Result<Option<Vec<Capability>>> {
+    let Some(json) = r.get::<_, Option<String>>(i)? else {
+        return Ok(None);
+    };
+    serde_json::from_str(&json)
+        .map(Some)
+        .map_err(|e| rusqlite::Error::FromSqlConversionFailure(i, Type::Text, Box::new(e)))
+}
+
+/// The stored form of a capability list: a JSON array, or NULL for all of them.
+fn capabilities_json(list: Option<&[Capability]>) -> Result<Option<String>> {
+    Ok(match list {
+        Some(list) => Some(serde_json::to_string(list)?),
+        None => None,
+    })
 }
 
 fn pending_ids_column(r: &Row, i: usize) -> rusqlite::Result<Vec<String>> {
@@ -287,14 +382,17 @@ impl Store {
             workspace_id: workspace_id.to_string(),
             paused: false,
             use_personal_settings: a.use_personal_settings,
+            avatar: a.avatar,
+            capabilities: a.capabilities,
             last_message: None,
             status: None,
             pending_approval_ids: Vec::new(),
             pending_approvals: 0,
         };
+        let capabilities = capabilities_json(agent.capabilities.as_deref())?;
         let res = self.conn().execute(
             &format!(
-                "INSERT INTO agents ({COLS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)"
+                "INSERT INTO agents ({COLS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27)"
             ),
             params![
                 agent.id,
@@ -320,7 +418,10 @@ impl Store {
                 agent.active_runtime.map(RuntimeKind::as_str),
                 agent.workspace_id,
                 agent.paused,
-                agent.use_personal_settings
+                agent.use_personal_settings,
+                agent.avatar.as_ref().map(|v| v.color.as_str()),
+                agent.avatar.as_ref().map(|v| v.face.as_str()),
+                capabilities
             ],
         );
         match res {
@@ -429,11 +530,19 @@ impl Store {
         if let Some(v) = p.use_personal_settings {
             a.use_personal_settings = v;
         }
+        if let Some(v) = p.avatar {
+            a.avatar = v;
+        }
+        if let Some(v) = p.capabilities {
+            a.capabilities = v;
+        }
         a.updated_at = now_ms();
+        let capabilities = capabilities_json(a.capabilities.as_deref())?;
         let res = self.conn().execute(
             "UPDATE agents SET name=?2, role=?3, model=?4, cwd=?5, approval_mode=?6, system_prompt=?7, updated_at=?8,
              effort=?9, memory_mode=?10, context_budget=?11, runtime=?12, fallback_runtime=?13, fallback_model=?14,
-             active_runtime=?15, workspace_id=?16, use_personal_settings=?17 WHERE id=?1",
+             active_runtime=?15, workspace_id=?16, use_personal_settings=?17,
+             avatar_color=?18, avatar_face=?19, capabilities=?20 WHERE id=?1",
             params![
                 a.id,
                 a.name,
@@ -451,7 +560,10 @@ impl Store {
                 a.fallback_model,
                 a.active_runtime.map(RuntimeKind::as_str),
                 a.workspace_id,
-                a.use_personal_settings
+                a.use_personal_settings,
+                a.avatar.as_ref().map(|v| v.color.as_str()),
+                a.avatar.as_ref().map(|v| v.face.as_str()),
+                capabilities
             ],
         );
         match res {
@@ -551,7 +663,83 @@ mod tests {
             fallback_runtime: None,
             fallback_model: None,
             use_personal_settings: false,
+            avatar: None,
+            capabilities: None,
         }
+    }
+
+    #[test]
+    fn avatar_and_capabilities_are_stored_and_patched_like_the_other_fields() {
+        let s = Store::open_in_memory().unwrap();
+        let a = s.agent_create(new("Forge")).unwrap();
+        assert_eq!((a.avatar.clone(), a.capabilities.clone()), (None, None));
+
+        let mut with = new("Scout");
+        with.avatar = Some(Avatar {
+            color: "sky".into(),
+            face: "dots".into(),
+        });
+        with.capabilities = Some(vec![Capability::Team, Capability::Browser]);
+        let scout = s.agent_create(with).unwrap();
+        let stored = s.agent_get(&scout.id).unwrap().unwrap();
+        assert_eq!(stored.avatar, scout.avatar);
+        assert_eq!(stored.capabilities, Some(vec![Capability::Team, Capability::Browser]));
+        let view = s.agent_view(&scout.id).unwrap().unwrap();
+        assert_eq!((view.avatar, view.capabilities), (stored.avatar, stored.capabilities));
+
+        // A patch that does not mention them keeps them.
+        let renamed = s
+            .agent_update(
+                &scout.id,
+                AgentPatch {
+                    role: Some("reviewer".into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        assert!(renamed.avatar.is_some() && renamed.capabilities.is_some());
+
+        // An empty list is a real choice: no capabilities at all. Explicit null goes back to all of them.
+        let none = s
+            .agent_update(
+                &scout.id,
+                AgentPatch {
+                    capabilities: Some(Some(vec![])),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        assert_eq!(none.capabilities, Some(vec![]));
+        assert_eq!(s.agent_get(&scout.id).unwrap().unwrap().capabilities, Some(vec![]));
+        let reset = s
+            .agent_update(
+                &scout.id,
+                AgentPatch {
+                    avatar: Some(None),
+                    capabilities: Some(None),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        assert_eq!((reset.avatar, reset.capabilities), (None, None));
+        let listed = s.agent_list_view().unwrap();
+        let back = listed.iter().find(|x| x.id == scout.id).unwrap();
+        assert_eq!((back.avatar.clone(), back.capabilities.clone()), (None, None));
+    }
+
+    #[test]
+    fn capability_names_are_the_wire_names() {
+        for c in ALL_CAPABILITIES {
+            assert_eq!(Capability::parse(c.as_str()), Some(c));
+            assert_eq!(serde_json::to_value(c).unwrap(), serde_json::json!(c.as_str()));
+        }
+        assert_eq!(Capability::parse("shell"), None);
+        assert_eq!(Capability::parse("Browser"), None);
+        assert_eq!(
+            capabilities_csv(&[Capability::Browser, Capability::Team]),
+            "browser,team"
+        );
+        assert_eq!(capabilities_csv(&[]), "");
     }
 
     #[test]

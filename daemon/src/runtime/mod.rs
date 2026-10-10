@@ -97,6 +97,20 @@ pub enum RuntimeOutput {
     },
 }
 
+/// The capabilities a runtime can switch off for an agent (see docs/ARCHITECTURE.md#capabilities). The app shows the
+/// others as unavailable for that runtime, and `agents.create|update` refuse to switch them off.
+/// Grok and Codex cannot be stopped from the shell or from changing files: Grok runs in always-approve, which ACP does
+/// not turn off, and Codex's read-only sandbox does not hold inside the daemon's own sandbox on macOS. Their refusals of
+/// single requests are an extra layer with no guarantee. The API runtime is not served.
+pub fn supported_capabilities(kind: RuntimeKind) -> &'static [crate::store::Capability] {
+    use crate::store::Capability::{Browser, Files, Screen, Team, Terminal};
+    match kind {
+        RuntimeKind::Claude => &[Terminal, Files, Browser, Team, Screen],
+        RuntimeKind::Grok | RuntimeKind::Codex => &[Browser, Team, Screen],
+        RuntimeKind::Api => &[],
+    }
+}
+
 /// A path as text for an argument list or a config file. A path that is not valid UTF-8 cannot be
 /// given faithfully, so the session that needs it does not start (fail closed).
 pub fn path_text(path: &Path) -> anyhow::Result<&str> {
@@ -138,6 +152,8 @@ pub struct SpawnConfig {
     pub sandbox: Option<sandbox::SandboxPolicy>,
     /// Whether the CLI also loads the owner's own settings (user scope). Off: only the project's and the local ones.
     pub personal_settings: bool,
+    /// What the agent may use (see docs/ARCHITECTURE.md#capabilities). `None`: all of it.
+    pub capabilities: Option<Vec<crate::store::Capability>>,
 }
 
 /// A live session with one agent CLI.
@@ -431,5 +447,23 @@ mod login_probe_tests {
         );
         assert_eq!([a.logged_in, b.logged_in, c.logged_in], [Some(true); 3]);
         assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
+}
+
+#[cfg(test)]
+mod capability_tests {
+    use super::*;
+    use crate::store::{ALL_CAPABILITIES, Capability};
+
+    #[test]
+    fn only_claude_can_switch_the_shell_and_the_files_off() {
+        assert_eq!(supported_capabilities(RuntimeKind::Claude), ALL_CAPABILITIES);
+        for kind in [RuntimeKind::Grok, RuntimeKind::Codex] {
+            let list = supported_capabilities(kind);
+            assert!(!list.contains(&Capability::Terminal), "{}", kind.as_str());
+            assert!(!list.contains(&Capability::Files), "{}", kind.as_str());
+            assert_eq!(list, [Capability::Browser, Capability::Team, Capability::Screen]);
+        }
+        assert!(supported_capabilities(RuntimeKind::Api).is_empty());
     }
 }
