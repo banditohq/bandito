@@ -1945,6 +1945,7 @@
 "team.header.browser" = "Abrir o navegador do agente no painel";
 "team.header.openInspector" = "Abrir detalhes do agente";
 "team.header.terminal" = "Abrir um terminal na pasta do agente";
+"team.home.allBots" = "Todos os bots do marketplace →";
 "team.home.asleep" = "dormindo";
 "team.home.idea1" = "Revise as mudanças de ontem e liste o que parecer arriscado.";
 "team.home.idea2" = "Descubra por que os testes falham na branch principal e corrija.";

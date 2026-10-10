@@ -1945,6 +1945,7 @@
 "team.header.browser" = "パネルでエージェントのブラウザを開く";
 "team.header.openInspector" = "エージェントの詳細を開く";
 "team.header.terminal" = "エージェントのフォルダでターミナルを開く";
+"team.home.allBots" = "マーケットのすべてのボット →";
 "team.home.asleep" = "休止中";
 "team.home.idea1" = "昨日の変更を確認して、危なそうな点を挙げて。";
 "team.home.idea2" = "メインブランチでテストが失敗する理由を調べて直して。";

@@ -1945,6 +1945,7 @@
 "team.header.browser" = "Browser des Agenten im Bereich öffnen";
 "team.header.openInspector" = "Details des Agenten öffnen";
 "team.header.terminal" = "Terminal im Ordner des Agenten öffnen";
+"team.home.allBots" = "Alle Bots im Marktplatz →";
 "team.home.asleep" = "schläft";
 "team.home.idea1" = "Prüfe die gestrigen Änderungen und liste auf, was riskant aussieht.";
 "team.home.idea2" = "Finde heraus, warum die Tests im Hauptzweig fehlschlagen, und behebe es.";

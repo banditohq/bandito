@@ -2660,6 +2660,7 @@ public enum L10n {
         }
 
         public enum Home {
+            public static var allBots: String { L10n.tr("team.home.allBots") }
             public static var asleep: String { L10n.tr("team.home.asleep") }
             public static var idea1: String { L10n.tr("team.home.idea1") }
             public static var idea2: String { L10n.tr("team.home.idea2") }
