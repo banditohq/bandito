@@ -1,0 +1,122 @@
+[
+  {
+    "id": "startup-team",
+    "name_en": "Startup team",
+    "name_ru": "Команда стартапа",
+    "description_en": "A small team of bots that keeps tasks moving, reviews code, watches errors and writes the docs.",
+    "description_ru": "Небольшая команда ботов: ведёт задачи, ревьюит код, следит за ошибками и пишет документацию.",
+    "l10n": {
+      "de": { "name": "Startup-Team", "description": "Ein kleines Bot-Team, das Aufgaben voranbringt, Code prüft, Fehler überwacht und die Dokumentation schreibt." },
+      "es": { "name": "Equipo de startup", "description": "Un equipo pequeño de bots que lleva las tareas, revisa el código, vigila los errores y escribe la documentación." },
+      "fr": { "name": "Équipe startup", "description": "Une petite équipe de bots qui suit les tâches, relit le code, surveille les erreurs et rédige la documentation." },
+      "ja": { "name": "スタートアップチーム", "description": "タスクを進め、コードをレビューし、エラーを監視し、ドキュメントを書く小さなボットチームです。" },
+      "ko": { "name": "스타트업 팀", "description": "작업을 진행하고, 코드를 리뷰하고, 오류를 감시하고, 문서를 쓰는 작은 봇 팀입니다." },
+      "pt-BR": { "name": "Equipe de startup", "description": "Uma pequena equipe de bots que acompanha tarefas, revisa código, vigia erros e escreve a documentação." },
+      "zh-Hans": { "name": "创业团队", "description": "一支小型机器人团队：推进任务、审查代码、监控错误并撰写文档。" }
+    },
+    "icon": "person.3.fill",
+    "accent": "#7388B0",
+    "templates": ["task-manager", "code-reviewer", "sentry-on-call", "docs-writer"],
+    "category": "business"
+  },
+  {
+    "id": "content-studio",
+    "name_en": "Content studio",
+    "name_ru": "Контент-студия",
+    "description_en": "Plans social posts, translates them into other languages and keeps the docs in step.",
+    "description_ru": "Планирует посты для соцсетей, переводит их на другие языки и держит документацию в порядке.",
+    "l10n": {
+      "de": { "name": "Content-Studio", "description": "Plant Social-Media-Beiträge, übersetzt sie in andere Sprachen und hält die Dokumentation aktuell." },
+      "es": { "name": "Estudio de contenido", "description": "Planifica publicaciones para redes sociales, las traduce a otros idiomas y mantiene la documentación al día." },
+      "fr": { "name": "Studio de contenu", "description": "Planifie les publications sur les réseaux sociaux, les traduit dans d'autres langues et tient la documentation à jour." },
+      "ja": { "name": "コンテンツスタジオ", "description": "SNS投稿を計画し、他言語に翻訳し、ドキュメントを最新に保ちます。" },
+      "ko": { "name": "콘텐츠 스튜디오", "description": "SNS 게시물을 기획하고, 다른 언어로 번역하고, 문서를 최신 상태로 유지합니다." },
+      "pt-BR": { "name": "Estúdio de conteúdo", "description": "Planeja publicações para redes sociais, traduz para outros idiomas e mantém a documentação em dia." },
+      "zh-Hans": { "name": "内容工作室", "description": "规划社交媒体帖子，翻译成其他语言，并保持文档同步更新。" }
+    },
+    "icon": "square.and.pencil",
+    "accent": "#B8856A",
+    "templates": ["social-media-manager", "translator", "docs-writer"],
+    "category": "writing"
+  },
+  {
+    "id": "market-research",
+    "name_en": "Market research",
+    "name_ru": "Исследование рынка",
+    "description_en": "Looks into competitors and trends, checks the numbers and watches the money.",
+    "description_ru": "Изучает конкурентов и тренды, проверяет цифры и следит за деньгами.",
+    "l10n": {
+      "de": { "name": "Marktforschung", "description": "Untersucht Wettbewerber und Trends, prüft Zahlen und behält die Finanzen im Blick." },
+      "es": { "name": "Investigación de mercado", "description": "Estudia a la competencia y las tendencias, revisa las cifras y vigila las finanzas." },
+      "fr": { "name": "Étude de marché", "description": "Étudie la concurrence et les tendances, vérifie les chiffres et suit les finances." },
+      "ja": { "name": "市場調査", "description": "競合とトレンドを調べ、数字を検証し、お金の動きを追跡します。" },
+      "ko": { "name": "시장 조사", "description": "경쟁사와 트렌드를 조사하고, 수치를 검증하며, 재무 흐름을 살핍니다." },
+      "pt-BR": { "name": "Pesquisa de mercado", "description": "Estuda concorrentes e tendências, confere os números e acompanha as finanças." },
+      "zh-Hans": { "name": "市场研究", "description": "调研竞争对手和趋势，核对数据，并跟踪资金动向。" }
+    },
+    "icon": "binoculars.fill",
+    "accent": "#5F9AB0",
+    "templates": ["researcher", "data-analyst", "seo-auditor", "finance-watcher"],
+    "category": "research"
+  },
+  {
+    "id": "customer-support",
+    "name_en": "Customer support",
+    "name_ru": "Поддержка клиентов",
+    "description_en": "Answers customers in their language, keeps notes of every case and translates the replies.",
+    "description_ru": "Отвечает клиентам на их языке, ведёт заметки по каждому обращению и переводит ответы.",
+    "l10n": {
+      "de": { "name": "Kundensupport", "description": "Beantwortet Kundenanfragen in deren Sprache, führt Notizen zu jedem Fall und übersetzt die Antworten." },
+      "es": { "name": "Atención al cliente", "description": "Responde a los clientes en su idioma, anota cada caso y traduce las respuestas." },
+      "fr": { "name": "Support client", "description": "Répond aux clients dans leur langue, note chaque dossier et traduit les réponses." },
+      "ja": { "name": "カスタマーサポート", "description": "お客様の言語で回答し、すべての問い合わせのメモを残し、返信を翻訳します。" },
+      "ko": { "name": "고객 지원", "description": "고객의 언어로 응대하고, 모든 문의의 메모를 남기며, 답변을 번역합니다." },
+      "pt-BR": { "name": "Suporte ao cliente", "description": "Responde aos clientes no idioma deles, registra notas de cada caso e traduz as respostas." },
+      "zh-Hans": { "name": "客户支持", "description": "用客户的语言回复，记录每个案例的备注，并翻译回复内容。" }
+    },
+    "icon": "bubble.left.and.bubble.right",
+    "accent": "#A97C9A",
+    "templates": ["support-assistant", "translator", "notes-secretary"],
+    "category": "business"
+  },
+  {
+    "id": "personal-assistant",
+    "name_en": "Personal assistant",
+    "name_ru": "Личный ассистент",
+    "description_en": "A morning digest, a notes secretary and a code mentor for your own projects.",
+    "description_ru": "Утренняя сводка, секретарь заметок и наставник по коду для ваших проектов.",
+    "l10n": {
+      "de": { "name": "Persönlicher Assistent", "description": "Eine Morgenübersicht, eine Notizen-Sekretärin und ein Code-Mentor für Ihre eigenen Projekte." },
+      "es": { "name": "Asistente personal", "description": "Un resumen matutino, un secretario de notas y un mentor de código para tus proyectos." },
+      "fr": { "name": "Assistant personnel", "description": "Un résumé du matin, un secrétaire de notes et un mentor en code pour vos projets." },
+      "ja": { "name": "パーソナルアシスタント", "description": "朝のダイジェスト、メモの秘書、自分のプロジェクト用のコードメンターです。" },
+      "ko": { "name": "개인 비서", "description": "아침 요약, 메모 비서, 내 프로젝트를 위한 코드 멘토입니다." },
+      "pt-BR": { "name": "Assistente pessoal", "description": "Um resumo matinal, um secretário de anotações e um mentor de código para os seus projetos." },
+      "zh-Hans": { "name": "个人助理", "description": "晨间摘要、笔记秘书，以及服务于你自己项目的代码导师。" }
+    },
+    "icon": "person.crop.circle",
+    "accent": "#8A7F9E",
+    "templates": ["morning-digest", "notes-secretary", "code-mentor"],
+    "category": "personal"
+  },
+  {
+    "id": "devops",
+    "name_en": "DevOps",
+    "name_ru": "DevOps",
+    "description_en": "On-call for servers and errors, a tester for the releases and a check on every change.",
+    "description_ru": "Дежурство по серверам и ошибкам, тестировщик релизов и проверка каждого изменения.",
+    "l10n": {
+      "de": { "name": "DevOps", "description": "Bereitschaft für Server und Fehler, ein Tester für Releases und eine Prüfung jeder Änderung." },
+      "es": { "name": "DevOps", "description": "Guardia para servidores y errores, un tester para las versiones y una revisión de cada cambio." },
+      "fr": { "name": "DevOps", "description": "Astreinte pour les serveurs et les erreurs, un testeur pour les versions et un contrôle de chaque changement." },
+      "ja": { "name": "DevOps", "description": "サーバーとエラーの当番、リリースのテスター、すべての変更のチェックを担当します。" },
+      "ko": { "name": "DevOps", "description": "서버와 오류 온콜, 릴리스 테스터, 모든 변경에 대한 검사를 담당합니다." },
+      "pt-BR": { "name": "DevOps", "description": "Plantão para servidores e erros, um testador para as versões e uma verificação de cada mudança." },
+      "zh-Hans": { "name": "DevOps", "description": "服务器与错误值班、发布测试员，以及对每次改动的检查。" }
+    },
+    "icon": "server.rack",
+    "accent": "#6E8290",
+    "templates": ["devops-on-call", "sentry-on-call", "qa-tester"],
+    "category": "ops"
+  }
+]
