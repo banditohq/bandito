@@ -621,7 +621,7 @@ public final class ServerModel: Identifiable {
         if stale { requestAgentsRefresh() }
     }
 
-    private func replaceAgent(_ a: Agent) {
+    func replaceAgent(_ a: Agent) {
         if let i = agents.firstIndex(where: { $0.id == a.id }) { agents[i] = a } else { agents.append(a) }
     }
 
