@@ -6,7 +6,9 @@ use crate::integrations::{self, Pair, Server, Transport};
 use crate::mcp_oauth::{self, Outcome, Target, Why};
 use crate::recommend;
 use crate::redact::Redactor;
-use crate::store::{CallFilter, Integration, IntegrationAuth, IntegrationPatch, IntegrationTool, NewIntegration, Store, now_ms};
+use crate::store::{
+    CallFilter, Integration, IntegrationAuth, IntegrationPatch, IntegrationTool, NewIntegration, Store, now_ms,
+};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::HashMap;

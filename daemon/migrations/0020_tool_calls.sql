@@ -13,3 +13,5 @@ CREATE TABLE IF NOT EXISTS tool_calls (
 );
 CREATE INDEX IF NOT EXISTS tool_calls_integration_at ON tool_calls (integration, at_ms);
 CREATE INDEX IF NOT EXISTS tool_calls_agent_at ON tool_calls (agent_id, at_ms);
+-- Retention and the reads over the last 30 days filter on `at_ms` alone.
+CREATE INDEX IF NOT EXISTS tool_calls_at ON tool_calls (at_ms);

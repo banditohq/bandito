@@ -510,7 +510,7 @@ async fn an_integration_call_is_journaled_under_its_server_name() {
 
     let store = bandito::store::Store::open_in_memory().unwrap();
     let mut journal = bandito::call_journal::Journal::default();
-    journal.set_servers(vec!["linear".into()]);
+    journal.set_session(vec!["linear".into()], bandito::redact::Redactor::default());
     for o in &out {
         match o {
             RuntimeOutput::Event(EventBody::ToolCall { call_id, tool, .. }) => {

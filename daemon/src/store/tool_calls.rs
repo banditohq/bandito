@@ -15,8 +15,8 @@ pub const RETENTION_MS: i64 = 30 * DAY_MS;
 /// Most rows kept; when more, the oldest (by `at_ms`) are removed when a call is recorded.
 pub const MAX_ROWS: i64 = 20_000;
 
-/// Characters of an error text that are kept.
-pub const ERROR_MAX_CHARS: usize = 300;
+/// Characters of an error text that are kept: the first line of the result, at most this many.
+pub const ERROR_MAX_CHARS: usize = 120;
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ToolCall {
@@ -31,7 +31,8 @@ pub struct ToolCall {
     pub duration_ms: Option<i64>,
     /// `null` until the result comes.
     pub ok: Option<bool>,
-    /// The start of the error text of a failed call, at most 300 characters.
+    /// The first line of the error text of a failed call, at most 120 characters; e-mail addresses and long numbers
+    /// hidden (see `call_journal::error_text`).
     pub error: Option<String>,
     /// `allowed`, `asked` or `denied` when the policy judged the call; `null` when it did not.
     pub decision: Option<String>,
@@ -111,10 +112,12 @@ impl Store {
     }
 
     /// Record the result of a call: its duration, and for a failure its error text. A success keeps no text, and
-    /// a blank error is not kept.
+    /// a blank error is not kept. Only the first line is kept, at most [`ERROR_MAX_CHARS`] characters: the caller
+    /// has already hidden what must not be stored (see `call_journal::error_text`).
     pub fn tool_call_finish(&self, id: i64, duration_ms: i64, ok: bool, error: Option<&str>) -> Result<()> {
         let error = error
             .filter(|_| !ok)
+            .and_then(|e| e.lines().next())
             .map(str::trim)
             .filter(|e| !e.is_empty())
             .map(|e| clip(e, ERROR_MAX_CHARS));
@@ -244,10 +247,10 @@ mod tests {
     }
 
     #[test]
-    fn a_failure_keeps_at_most_300_characters_of_its_error() {
+    fn a_failure_keeps_at_most_120_characters_of_its_first_line() {
         let store = Store::open_in_memory().unwrap();
         let id = start(&store, "a1", "linear", NOW);
-        let long = "é".repeat(500);
+        let long = format!("{}\nsecond line", "é".repeat(500));
         store.tool_call_finish(id, 7, false, Some(&long)).unwrap();
         let row = &store
             .tool_calls_list(
@@ -260,6 +263,8 @@ mod tests {
             .unwrap()[0];
         assert_eq!(row.ok, Some(false));
         assert_eq!(row.error.as_deref().map(|e| e.chars().count()), Some(ERROR_MAX_CHARS));
+        assert_eq!(ERROR_MAX_CHARS, 120);
+        assert!(!row.error.as_deref().unwrap().contains("second"));
     }
 
     #[test]

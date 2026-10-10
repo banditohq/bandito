@@ -3,7 +3,8 @@
 //! docs/ARCHITECTURE.md#call-journal.
 
 use crate::integrations::RESERVED_NAME;
-use crate::store::Store;
+use crate::redact::Redactor;
+use crate::store::{ERROR_MAX_CHARS, Store};
 use std::collections::HashMap;
 
 /// `mcp__<integration>__<tool>` → `(integration, tool)`. `None` for any other name, and for the crew server's own
@@ -19,6 +20,8 @@ pub fn split_mcp(name: &str) -> Option<(&str, &str)> {
 pub struct Journal {
     /// The names of the MCP servers of the running session: the integrations the agent may use.
     servers: Vec<String>,
+    /// The secret values the running session's integrations got, replaced in error texts as the probe does.
+    secrets: Redactor,
     open: HashMap<String, Open>,
     decisions: HashMap<String, &'static str>,
 }
@@ -29,10 +32,11 @@ struct Open {
 }
 
 impl Journal {
-    /// The MCP servers of a session that starts now. Codex names an MCP call `<server>.<tool>`, and the server is an
-    /// integration only when it is one of these.
-    pub fn set_servers(&mut self, names: Vec<String>) {
+    /// The MCP servers and secrets of a session that starts now. Codex names an MCP call `<server>.<tool>`, and the
+    /// server is an integration only when it is one of these.
+    pub fn set_session(&mut self, names: Vec<String>, secrets: Redactor) {
         self.servers = names;
+        self.secrets = secrets;
     }
 
     /// `(integration, tool)` of a tool name: `mcp__<integration>__<tool>` (Claude Code), or `<server>.<tool>` (Codex)
@@ -79,13 +83,14 @@ impl Journal {
         }
     }
 
-    /// The result of a call. Its duration is measured from its start. Only a failure keeps its text.
+    /// The result of a call. Its duration is measured from its start. Only a failure keeps its text, shaped by
+    /// [`error_text`].
     pub fn finished(&mut self, store: &Store, call_id: &str, ok: bool, output: &str, now: i64) {
         let Some(open) = self.open.remove(call_id) else {
             return;
         };
-        let error = (!ok).then_some(output);
-        if let Err(e) = store.tool_call_finish(open.row, (now - open.started_ms).max(0), ok, error) {
+        let error = (!ok).then(|| error_text(output, &self.secrets));
+        if let Err(e) = store.tool_call_finish(open.row, (now - open.started_ms).max(0), ok, error.as_deref()) {
             tracing::warn!("record tool result: {e:#}");
         }
     }
@@ -95,6 +100,81 @@ impl Journal {
         self.open.clear();
         self.decisions.clear();
     }
+}
+
+/// The error text a journal row keeps: the first line of the result, with the session's secret values replaced
+/// (`••••NAME`, as the probe does), e-mail addresses as `***@***` and runs of seven or more digits as `***`, and at
+/// most [`ERROR_MAX_CHARS`] characters.
+pub fn error_text(output: &str, secrets: &Redactor) -> String {
+    let line = output.lines().next().unwrap_or("").trim();
+    let line = secrets.redact(line);
+    let line = hide_digit_runs(&hide_emails(&line));
+    line.chars().take(ERROR_MAX_CHARS).collect()
+}
+
+fn is_token_char(c: char) -> bool {
+    c.is_alphanumeric() || matches!(c, '.' | '_' | '%' | '+' | '-' | '@')
+}
+
+/// An e-mail address: `local@domain`, where the domain's labels are non-empty and separated by dots.
+fn is_email(word: &str) -> bool {
+    let Some((local, domain)) = word.split_once('@') else {
+        return false;
+    };
+    !local.is_empty()
+        && domain.contains('.')
+        && domain.split('.').all(|label| !label.is_empty() && !label.contains('@'))
+}
+
+fn push_token(out: &mut String, token: &str) {
+    // A full stop that ends a sentence right after an address stays after the mask.
+    let word = token.trim_end_matches('.');
+    if is_email(word) {
+        out.push_str("***@***");
+        out.push_str(&token[word.len()..]);
+    } else {
+        out.push_str(token);
+    }
+}
+
+fn hide_emails(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut token = String::new();
+    for c in text.chars() {
+        if is_token_char(c) {
+            token.push(c);
+        } else {
+            push_token(&mut out, &token);
+            token.clear();
+            out.push(c);
+        }
+    }
+    push_token(&mut out, &token);
+    out
+}
+
+fn push_digits(out: &mut String, run: &str) {
+    if run.len() >= 7 {
+        out.push_str("***");
+    } else {
+        out.push_str(run);
+    }
+}
+
+fn hide_digit_runs(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut run = String::new();
+    for c in text.chars() {
+        if c.is_ascii_digit() {
+            run.push(c);
+        } else {
+            push_digits(&mut out, &run);
+            run.clear();
+            out.push(c);
+        }
+    }
+    push_digits(&mut out, &run);
+    out
 }
 
 #[cfg(test)]
@@ -242,7 +322,7 @@ mod tests {
         journal.started(&store, "a1", "c0", "linear.create_issue", 1_000);
         assert!(all(&store).is_empty());
 
-        journal.set_servers(vec!["linear".into(), "bandito".into()]);
+        journal.set_session(vec!["linear".into(), "bandito".into()], Redactor::default());
         journal.started(&store, "a1", "c1", "linear.create_issue", 1_000);
         journal.started(&store, "a1", "c2", "github.get_repo", 1_000); // not a server of this session
         journal.started(&store, "a1", "c3", "bandito.crew_send", 1_000); // Bandito's own crew server
@@ -253,5 +333,67 @@ mod tests {
             (rows[0].integration.as_str(), rows[0].tool.as_str()),
             ("linear", "create_issue")
         );
+    }
+
+    #[test]
+    fn an_error_text_hides_e_mail_addresses_and_long_numbers() {
+        let none = Redactor::default();
+        assert_eq!(
+            error_text("no such user ivan.petrov@corp-mail.example", &none),
+            "no such user ***@***"
+        );
+        assert_eq!(
+            error_text("call 81234567890 and 12345 and <a@b.co>. ok", &none),
+            "call *** and 12345 and <***@***>. ok"
+        );
+        // A full stop right after an address is kept; a number of exactly 7 digits is hidden.
+        assert_eq!(error_text("mail a@b.ru.", &none), "mail ***@***.");
+        assert_eq!(error_text("code 1234567", &none), "code ***");
+        assert_eq!(
+            error_text("not an email: @x.ru and a@b", &none),
+            "not an email: @x.ru and a@b"
+        );
+    }
+
+    #[test]
+    fn an_error_text_is_its_first_line_and_at_most_120_characters() {
+        let none = Redactor::default();
+        assert_eq!(error_text("first\nsecond", &none), "first");
+        assert_eq!(error_text(&"x".repeat(500), &none).chars().count(), 120);
+        assert_eq!(error_text("  \n ", &none), "");
+    }
+
+    #[test]
+    fn an_error_text_replaces_the_session_secrets_like_the_probe() {
+        let secrets = Redactor::exact([("TOKEN".to_string(), "k7".to_string())]);
+        assert_eq!(error_text("bad token k7 here", &secrets), "bad token ••••TOKEN here");
+    }
+
+    #[test]
+    fn a_failure_is_stored_redacted_and_masked() {
+        let store = Store::open_in_memory().unwrap();
+        let mut journal = Journal::default();
+        journal.set_session(
+            vec!["linear".into()],
+            Redactor::exact([("TOKEN".to_string(), "k7".to_string())]),
+        );
+        journal.started(&store, "a1", "c1", "mcp__linear__x", 1_000);
+        journal.finished(
+            &store,
+            "c1",
+            false,
+            "denied for k7, ivan@corp.example, phone 89621234567\nstack",
+            1_010,
+        );
+        let row = &store
+            .tool_calls_list(
+                &crate::store::CallFilter {
+                    limit: 1,
+                    ..Default::default()
+                },
+                NOW,
+            )
+            .unwrap()[0];
+        assert_eq!(row.error.as_deref(), Some("denied for ••••TOKEN, ***@***, phone ***"));
     }
 }

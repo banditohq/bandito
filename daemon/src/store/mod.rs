@@ -36,7 +36,7 @@ pub use reactions::Reaction;
 pub use rules::{Rule, RuleAction};
 pub use schedules::{NewSchedule, NextRun, Schedule, SchedulePatch};
 pub use secrets::{SecretInfo, check_agents, check_name, check_value};
-pub use tool_calls::{CallFilter, CallStats, ToolCall};
+pub use tool_calls::{CallFilter, CallStats, ERROR_MAX_CHARS, ToolCall};
 pub use usage::UsageEntry;
 pub use workspaces::{Mount, Network, NewWorkspace, SHARED_WORKSPACE, Workspace, WorkspaceKind, WorkspacePatch};
 
@@ -424,6 +424,33 @@ impl ApprovalMode {
 mod tests {
     use super::*;
     use crate::event::{AgentStatus, EventBody};
+
+    #[test]
+    fn a_fresh_database_reaches_the_last_migration_with_both_tables() {
+        let s = Store::open_in_memory().unwrap();
+        let version: i64 = s.conn().query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+        assert_eq!(version as usize, MIGRATIONS.len());
+        for table in ["integration_tools", "tool_calls"] {
+            let found: i64 = s
+                .conn()
+                .query_row(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
+                    [table],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(found, 1, "table {table}");
+        }
+        let indexed: i64 = s
+            .conn()
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'tool_calls_at'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(indexed, 1, "index on tool_calls(at_ms)");
+    }
 
     #[test]
     fn migrates_and_reopens() {

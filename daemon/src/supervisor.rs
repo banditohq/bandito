@@ -1271,8 +1271,11 @@ impl Actor {
         let secret_map: std::collections::HashMap<String, String> = integration_secrets.iter().cloned().collect();
         let mcp_servers = crate::integrations::resolve(&chosen, &secret_map);
         // The call journal names a Codex MCP call by its server, so it needs the servers this session has.
-        self.journal
-            .set_servers(mcp_servers.iter().map(|s| s.name.clone()).collect());
+        // Its error texts get the same redaction as the probe's: the values of these secrets, however short.
+        self.journal.set_session(
+            mcp_servers.iter().map(|s| s.name.clone()).collect(),
+            Redactor::exact(integration_secrets.clone()),
+        );
         // The sign-in tokens this session starts with, to know later whether a renewal concerns it.
         let oauth_tokens: HashMap<String, String> = chosen
             .iter()
@@ -2678,7 +2681,7 @@ mod tests {
         // No approval was asked for: the policy made no decision, so none is recorded.
         assert_eq!(row.decision, None);
         let error = row.error.as_deref().unwrap();
-        assert_eq!(error.chars().count(), 300);
+        assert_eq!(error.chars().count(), 120);
         assert!(error.starts_with("RESULT-SECRET"));
         let dump = format!("{row:?}");
         assert!(!dump.contains("ARGUMENT-SECRET"), "arguments are not kept");
