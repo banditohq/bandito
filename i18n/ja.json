@@ -2423,5 +2423,18 @@
   "market.try.structured": "構造化された結果",
   "market.try.toolError": "ツールがエラーを返しました。",
   "market.try.emptyResult": "ツールは何も返しませんでした。",
-  "market.try.failed": "ツールを実行できませんでした: {message}"
+  "market.try.failed": "ツールを実行できませんでした: {message}",
+  "dictation.start": "音声入力",
+  "dictation.stop": "音声入力を停止",
+  "dictation.denied.microphone": "Bandito はマイクを使えません。システム設定 → プライバシーとセキュリティ → マイク で許可してください。",
+  "dictation.denied.speech": "Bandito は音声認識を使えません。システム設定 → プライバシーとセキュリティ → 音声認識 で許可してください。",
+  "dictation.onDeviceUnavailable": "この Mac は {language} をオフラインで認識できません。システム設定 → キーボード → 音声入力 で言語を追加してから、もう一度お試しください。音声はネットワークに送信されません。",
+  "dictation.failed": "音声入力が停止しました。もう一度お試しください。",
+  "dictation.openSettings": "システム設定を開く",
+  "speech.read": "読み上げる",
+  "speech.stop": "読み上げを停止",
+  "speech.codeSkipped": "コードは省略",
+  "inspector.readAloud": "返信を読み上げる",
+  "inspector.readAloudHint": "Bandito が前面にあるとき、このエージェントの完了した返信を読み上げます。",
+  "keys.dictate": "メッセージに音声入力"
 }

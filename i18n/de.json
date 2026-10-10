@@ -2453,5 +2453,18 @@
   "market.try.structured": "Strukturiertes Ergebnis",
   "market.try.toolError": "Das Werkzeug hat mit einem Fehler geantwortet.",
   "market.try.emptyResult": "Das Werkzeug hat nichts zurückgegeben.",
-  "market.try.failed": "Das Werkzeug konnte nicht ausgeführt werden: {message}"
+  "market.try.failed": "Das Werkzeug konnte nicht ausgeführt werden: {message}",
+  "dictation.start": "Diktieren",
+  "dictation.stop": "Diktat beenden",
+  "dictation.denied.microphone": "Bandito kann das Mikrofon nicht verwenden. Erlauben Sie es in den Systemeinstellungen → Datenschutz & Sicherheit → Mikrofon.",
+  "dictation.denied.speech": "Bandito kann die Spracherkennung nicht verwenden. Erlauben Sie sie in den Systemeinstellungen → Datenschutz & Sicherheit → Spracherkennung.",
+  "dictation.onDeviceUnavailable": "Dieser Mac kann {language} nicht offline erkennen. Fügen Sie die Sprache in den Systemeinstellungen → Tastatur → Diktierfunktion hinzu und versuchen Sie es erneut. Audio wird nie über das Netzwerk gesendet.",
+  "dictation.failed": "Diktat beendet. Versuchen Sie es erneut.",
+  "dictation.openSettings": "Systemeinstellungen öffnen",
+  "speech.read": "Vorlesen",
+  "speech.stop": "Vorlesen beenden",
+  "speech.codeSkipped": "Code übersprungen",
+  "inspector.readAloud": "Antworten vorlesen",
+  "inspector.readAloudHint": "Wenn Bandito die aktive App ist, wird eine fertige Antwort dieses Agenten vorgelesen.",
+  "keys.dictate": "In die Nachricht diktieren"
 }

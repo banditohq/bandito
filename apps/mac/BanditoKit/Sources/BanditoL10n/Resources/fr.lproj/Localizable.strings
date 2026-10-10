@@ -417,6 +417,13 @@
 "devices.revokeMessage" = "L’appareil perd immédiatement l’accès au serveur.";
 "devices.revokeTitle" = "Révoquer %1$@ ?";
 "devices.thisDeviceHint" = "Vous ne pouvez pas révoquer l'appareil que vous utilisez actuellement.";
+"dictation.denied.microphone" = "Bandito ne peut pas utiliser le microphone. Autorisez-le dans Réglages du système → Confidentialité et sécurité → Microphone.";
+"dictation.denied.speech" = "Bandito ne peut pas utiliser la reconnaissance vocale. Autorisez-la dans Réglages du système → Confidentialité et sécurité → Reconnaissance vocale.";
+"dictation.failed" = "La dictée s'est arrêtée. Réessayez.";
+"dictation.onDeviceUnavailable" = "Ce Mac ne peut pas reconnaître le %1$@ hors ligne. Ajoutez la langue dans Réglages du système → Clavier → Dictée, puis réessayez. L'audio n'est jamais envoyé sur le réseau.";
+"dictation.openSettings" = "Ouvrir Réglages du système";
+"dictation.start" = "Dicter";
+"dictation.stop" = "Arrêter la dictée";
 "effort.high" = "Élevé";
 "effort.hint" = "Un effort plus élevé est plus intelligent sur les tâches difficiles, mais plus lent et consomme la limite plus vite. Pour le travail courant, « Moyen » suffit.";
 "effort.label" = "effort : %1$@";
@@ -654,6 +661,8 @@
 "inspector.project" = "Projet";
 "inspector.promptLabel" = "Prompt";
 "inspector.promptPlaceholder" = "Ce que fait l’agent à chaque exécution";
+"inspector.readAloud" = "Lire les réponses à voix haute";
+"inspector.readAloudHint" = "Quand Bandito est l'app active, une réponse terminée de cet agent est lue à voix haute.";
 "inspector.resets" = "Réinitialisation %1$@";
 "inspector.rules" = "Règles";
 "inspector.runNow" = "Exécuter maintenant";
@@ -798,6 +807,7 @@
 "keys.copyPath" = "Copier le chemin";
 "keys.customizedCount" = "Modifiés par vous : %1$lld";
 "keys.deny" = "Refuser la demande sélectionnée";
+"keys.dictate" = "Dicter dans le message";
 "keys.duplicate" = "Dupliquer";
 "keys.enclosingFolder" = "Dossier parent";
 "keys.exportButton" = "Exporter";
@@ -1977,6 +1987,9 @@
 "slash.sourceServer" = "serveur";
 "slash.terminalSummary" = "Ouvrir un terminal dans le dossier de l’agent";
 "slash.usageSummary" = "Limites des abonnements";
+"speech.codeSkipped" = "code ignoré";
+"speech.read" = "Lire à voix haute";
+"speech.stop" = "Arrêter la lecture";
 "status.error" = "Erreur";
 "status.idle" = "Inactif";
 "status.needsYou" = "Attend votre action";

@@ -417,6 +417,13 @@
 "devices.revokeMessage" = "El dispositivo pierde el acceso al servidor al instante.";
 "devices.revokeTitle" = "¿Revocar %1$@?";
 "devices.thisDeviceHint" = "No puedes revocar el dispositivo con el que trabajas ahora.";
+"dictation.denied.microphone" = "Bandito no puede usar el micrófono. Permítalo en Ajustes del Sistema → Privacidad y seguridad → Micrófono.";
+"dictation.denied.speech" = "Bandito no puede usar el reconocimiento de voz. Permítalo en Ajustes del Sistema → Privacidad y seguridad → Reconocimiento de voz.";
+"dictation.failed" = "El dictado se detuvo. Inténtelo de nuevo.";
+"dictation.onDeviceUnavailable" = "Este Mac no puede reconocer %1$@ sin conexión. Añada el idioma en Ajustes del Sistema → Teclado → Dictado y vuelva a intentarlo. El audio nunca se envía por la red.";
+"dictation.openSettings" = "Abrir Ajustes del Sistema";
+"dictation.start" = "Dictar";
+"dictation.stop" = "Detener dictado";
 "effort.high" = "Alto";
 "effort.hint" = "Un esfuerzo mayor es más listo en tareas difíciles, pero va más lento y gasta el límite más rápido. Para el trabajo diario basta con medio.";
 "effort.label" = "esfuerzo: %1$@";
@@ -654,6 +661,8 @@
 "inspector.project" = "Proyecto";
 "inspector.promptLabel" = "Prompt";
 "inspector.promptPlaceholder" = "Qué hace el agente en cada ejecución";
+"inspector.readAloud" = "Leer las respuestas en voz alta";
+"inspector.readAloudHint" = "Cuando Bandito es la app activa, se lee en voz alta una respuesta terminada de este agente.";
 "inspector.resets" = "Se restablece el %1$@";
 "inspector.rules" = "Reglas";
 "inspector.runNow" = "Ejecutar ahora";
@@ -798,6 +807,7 @@
 "keys.copyPath" = "Copiar ruta";
 "keys.customizedCount" = "Cambiados por ti: %1$lld";
 "keys.deny" = "Rechazar la solicitud seleccionada";
+"keys.dictate" = "Dictar en el mensaje";
 "keys.duplicate" = "Duplicar";
 "keys.enclosingFolder" = "Carpeta contenedora";
 "keys.exportButton" = "Exportar";
@@ -1977,6 +1987,9 @@
 "slash.sourceServer" = "servidor";
 "slash.terminalSummary" = "Abrir una terminal en la carpeta del agente";
 "slash.usageSummary" = "Límites de suscripciones";
+"speech.codeSkipped" = "código omitido";
+"speech.read" = "Leer en voz alta";
+"speech.stop" = "Detener lectura";
 "status.error" = "Error";
 "status.idle" = "Inactivo";
 "status.needsYou" = "Necesita tu atención";

@@ -174,6 +174,10 @@ public final class Router {
     public var pendingTemplate: AgentTemplate?
     /// Team: text for the composer of the selected agent ("Ask about this place"). Taken once by the thread.
     public var pendingComposerText: String?
+    /// Team: ⌥⌘D was pressed. Each press counts up; the composer of the selected agent starts or stops a dictation.
+    public var dictationRequest = 0
+    /// Team: the dictation of the composer is recording. Esc then belongs to it, not to the approval deny command.
+    public var dictationRecording = false
     /// Team: the composer of this agent should take keyboard focus (⌘↵ in the palette, after opening the agent).
     /// Taken once, by the composer of that agent only.
     public private(set) var composerFocusAgentID: String?

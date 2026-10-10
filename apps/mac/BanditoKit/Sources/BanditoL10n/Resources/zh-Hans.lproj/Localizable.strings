@@ -417,6 +417,13 @@
 "devices.revokeMessage" = "该设备将立即失去对服务器的访问权限。";
 "devices.revokeTitle" = "撤销 %1$@？";
 "devices.thisDeviceHint" = "无法撤销当前正在使用的设备。";
+"dictation.denied.microphone" = "Bandito 无法使用麦克风。请在“系统设置”→“隐私与安全性”→“麦克风”中允许。";
+"dictation.denied.speech" = "Bandito 无法使用语音识别。请在“系统设置”→“隐私与安全性”→“语音识别”中允许。";
+"dictation.failed" = "语音输入已停止，请重试。";
+"dictation.onDeviceUnavailable" = "这台 Mac 无法离线识别%1$@。请在“系统设置”→“键盘”→“听写”中添加该语言后重试。语音不会通过网络发送。";
+"dictation.openSettings" = "打开“系统设置”";
+"dictation.start" = "语音输入";
+"dictation.stop" = "停止语音输入";
 "effort.high" = "高";
 "effort.hint" = "投入度越高，在难题上越聪明，但速度更慢，也会更快用完额度。日常工作用“中”就够了。";
 "effort.label" = "投入度: %1$@";
@@ -654,6 +661,8 @@
 "inspector.project" = "项目";
 "inspector.promptLabel" = "提示词";
 "inspector.promptPlaceholder" = "每次运行时智能体要做什么";
+"inspector.readAloud" = "朗读回复";
+"inspector.readAloudHint" = "Bandito 处于前台时，朗读此智能体已完成的回复。";
 "inspector.resets" = "%1$@ 重置";
 "inspector.rules" = "规则";
 "inspector.runNow" = "立即运行";
@@ -798,6 +807,7 @@
 "keys.copyPath" = "复制路径";
 "keys.customizedCount" = "已自定义：%1$lld";
 "keys.deny" = "拒绝当前选中的请求";
+"keys.dictate" = "语音输入到消息";
 "keys.duplicate" = "复制";
 "keys.enclosingFolder" = "所在文件夹";
 "keys.exportButton" = "导出";
@@ -1977,6 +1987,9 @@
 "slash.sourceServer" = "服务器";
 "slash.terminalSummary" = "在代理的文件夹中打开终端";
 "slash.usageSummary" = "订阅限额";
+"speech.codeSkipped" = "已跳过代码";
+"speech.read" = "朗读";
+"speech.stop" = "停止朗读";
 "status.error" = "错误";
 "status.idle" = "空闲";
 "status.needsYou" = "需要处理";

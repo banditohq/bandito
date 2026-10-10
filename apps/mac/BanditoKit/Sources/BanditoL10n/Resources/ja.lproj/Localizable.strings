@@ -417,6 +417,13 @@
 "devices.revokeMessage" = "このデバイスはすぐにサーバーへのアクセスを失います。";
 "devices.revokeTitle" = "%1$@ を取り消しますか？";
 "devices.thisDeviceHint" = "いま作業中のデバイスは取り消せません。";
+"dictation.denied.microphone" = "Bandito はマイクを使えません。システム設定 → プライバシーとセキュリティ → マイク で許可してください。";
+"dictation.denied.speech" = "Bandito は音声認識を使えません。システム設定 → プライバシーとセキュリティ → 音声認識 で許可してください。";
+"dictation.failed" = "音声入力が停止しました。もう一度お試しください。";
+"dictation.onDeviceUnavailable" = "この Mac は %1$@ をオフラインで認識できません。システム設定 → キーボード → 音声入力 で言語を追加してから、もう一度お試しください。音声はネットワークに送信されません。";
+"dictation.openSettings" = "システム設定を開く";
+"dictation.start" = "音声入力";
+"dictation.stop" = "音声入力を停止";
 "effort.high" = "高";
 "effort.hint" = "作業量を上げると難しい作業で賢くなりますが、遅くなり、上限も早く減ります。日常の作業なら「中」で十分です。";
 "effort.label" = "作業量: %1$@";
@@ -654,6 +661,8 @@
 "inspector.project" = "プロジェクト";
 "inspector.promptLabel" = "プロンプト";
 "inspector.promptPlaceholder" = "実行ごとにエージェントが行うこと";
+"inspector.readAloud" = "返信を読み上げる";
+"inspector.readAloudHint" = "Bandito が前面にあるとき、このエージェントの完了した返信を読み上げます。";
 "inspector.resets" = "%1$@ にリセット";
 "inspector.rules" = "ルール";
 "inspector.runNow" = "今すぐ実行";
@@ -798,6 +807,7 @@
 "keys.copyPath" = "パスをコピー";
 "keys.customizedCount" = "変更済み: %1$lld";
 "keys.deny" = "選択中のリクエストを拒否";
+"keys.dictate" = "メッセージに音声入力";
 "keys.duplicate" = "複製";
 "keys.enclosingFolder" = "親フォルダー";
 "keys.exportButton" = "書き出し";
@@ -1977,6 +1987,9 @@
 "slash.sourceServer" = "サーバー";
 "slash.terminalSummary" = "エージェントのフォルダーでターミナルを開く";
 "slash.usageSummary" = "サブスクリプションの上限";
+"speech.codeSkipped" = "コードは省略";
+"speech.read" = "読み上げる";
+"speech.stop" = "読み上げを停止";
 "status.error" = "エラー";
 "status.idle" = "待機中";
 "status.needsYou" = "対応が必要";

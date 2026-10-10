@@ -2,11 +2,16 @@ import BanditoDesign
 import BanditoKit
 import BanditoL10n
 import SwiftUI
+#if os(macOS)
+import AppKit
+#endif
 
 /// The thread of one agent: header, the rows, banners and the composer.
 struct ThreadView: View {
     var server: ServerModel
     var agent: Agent
+    /// Which replies are read aloud (a reference type: changes do not redraw the thread).
+    @State private var readAloud = ReadAloudTracker()
     /// Which tab the inspector opens on; the header's schedules button sets it.
     @Binding var inspectorTab: InspectorTab
 
@@ -478,7 +483,21 @@ struct ThreadView: View {
             if wasRunning && !isRunning {
                 Task { await loadChanges() }
             }
+            readNewReply()
         }
+        // A final message arrives as the last item; it is read when its turn has ended (see `ReadAloudTracker`).
+        .onChange(of: thread.items.last?.id) { _, _ in readNewReply() }
+        .onChange(of: agent.id) { _, _ in readAloud.reset() }
+    }
+
+    /// Reads a new final reply aloud when the agent has "Read replies aloud" on and Bandito is the active app. A reply
+    /// that comes while the app is in the background is passed over, not read later.
+    private func readNewReply() {
+        guard let reply = readAloud.observe(items: thread.items, turnRunning: thread.turnRunning) else { return }
+        guard ReadAloud.isOn(agentID: agent.id), NSApplication.shared.isActive else { return }
+        let spoken = SpeechText.plain(reply.text, codeSkipped: L10n.Speech.codeSkipped)
+        let voice = SpeechLanguage.voiceTag(for: spoken, appLanguage: SpeechLanguage.appLanguage)
+        SpeechOutput.shared.speak(spoken, key: reply.id, voiceTag: voice)
     }
 
     private var isStreaming: Bool {

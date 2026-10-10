@@ -52,6 +52,12 @@ targets:
           identity="${EXPANDED_CODE_SIGN_IDENTITY:--}"
           if [ "$identity" = "-" ]; then timestamp="--timestamp=none"; else timestamp="--timestamp"; fi
           codesign --force --options runtime $timestamp --sign "$identity" "$helpers/bandito"
+    # The hardened runtime needs a declared entitlement for the microphone (dictation). The release script re-signs
+    # with the entitlements of the built app, so this one survives notarization.
+    entitlements:
+      path: Config/Bandito.entitlements
+      properties:
+        com.apple.security.device.audio-input: true
     # Merged into the generated Info.plist (GENERATE_INFOPLIST_FILE stays YES).
     info:
       path: Config/Info.plist
@@ -68,6 +74,9 @@ targets:
         # app declares, so the app lists every language it ships (otherwise it always runs in English).
         CFBundleLocalizations: [en, ru, ja, zh-Hans, ko, es, pt-BR, de, fr]
         CFBundleAllowMixedLocalizations: true
+        # Permission prompts for dictation (the composer's microphone, ⌥⌘D). Translations: Resources/<lang>.lproj/InfoPlist.strings.
+        NSMicrophoneUsageDescription: Bandito uses the microphone only while you dictate a message. Speech is recognised on this Mac and never sent over the network.
+        NSSpeechRecognitionUsageDescription: Bandito turns your dictated words into text on this Mac. Recognition runs on the device; audio is not sent anywhere.
         # `bandito://oauth/callback` brings the owner back from the browser after a service's sign-in
         # (docs/ARCHITECTURE.md#integrations). The app handles it with onOpenURL.
         CFBundleURLTypes:

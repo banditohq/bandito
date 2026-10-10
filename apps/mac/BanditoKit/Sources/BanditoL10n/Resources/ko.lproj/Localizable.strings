@@ -417,6 +417,13 @@
 "devices.revokeMessage" = "이 기기는 즉시 서버에 접근할 수 없게 돼요.";
 "devices.revokeTitle" = "%1$@의 접근을 취소할까요?";
 "devices.thisDeviceHint" = "지금 사용 중인 기기는 취소할 수 없어요.";
+"dictation.denied.microphone" = "Bandito가 마이크를 사용할 수 없습니다. 시스템 설정 → 개인정보 보호 및 보안 → 마이크에서 허용하세요.";
+"dictation.denied.speech" = "Bandito가 음성 인식을 사용할 수 없습니다. 시스템 설정 → 개인정보 보호 및 보안 → 음성 인식에서 허용하세요.";
+"dictation.failed" = "받아쓰기가 중지되었습니다. 다시 시도하세요.";
+"dictation.onDeviceUnavailable" = "이 Mac은 오프라인에서 %1$@ 음성을 인식할 수 없습니다. 시스템 설정 → 키보드 → 받아쓰기에서 언어를 추가한 뒤 다시 시도하세요. 오디오는 네트워크로 전송되지 않습니다.";
+"dictation.openSettings" = "시스템 설정 열기";
+"dictation.start" = "음성 입력";
+"dictation.stop" = "음성 입력 중지";
 "effort.high" = "높음";
 "effort.hint" = "노력 수준을 높이면 어려운 작업에서 더 똑똑하지만 느리고 한도를 더 빨리 써요. 일상 작업에는 보통이면 충분해요.";
 "effort.label" = "노력 수준: %1$@";
@@ -654,6 +661,8 @@
 "inspector.project" = "프로젝트";
 "inspector.promptLabel" = "프롬프트";
 "inspector.promptPlaceholder" = "실행할 때마다 에이전트가 할 일";
+"inspector.readAloud" = "답변 소리 내어 읽기";
+"inspector.readAloudHint" = "Bandito가 활성 앱일 때 이 에이전트의 완료된 답변을 소리 내어 읽습니다.";
 "inspector.resets" = "%1$@에 초기화";
 "inspector.rules" = "규칙";
 "inspector.runNow" = "지금 실행";
@@ -798,6 +807,7 @@
 "keys.copyPath" = "경로 복사";
 "keys.customizedCount" = "내가 바꾼 항목: %1$lld";
 "keys.deny" = "선택한 요청 거부";
+"keys.dictate" = "메시지에 받아쓰기";
 "keys.duplicate" = "복제";
 "keys.enclosingFolder" = "상위 폴더";
 "keys.exportButton" = "내보내기";
@@ -1977,6 +1987,9 @@
 "slash.sourceServer" = "서버";
 "slash.terminalSummary" = "에이전트 폴더에서 터미널 열기";
 "slash.usageSummary" = "구독 한도";
+"speech.codeSkipped" = "코드 생략";
+"speech.read" = "소리 내어 읽기";
+"speech.stop" = "읽기 중지";
 "status.error" = "오류";
 "status.idle" = "대기 중";
 "status.needsYou" = "확인 필요";

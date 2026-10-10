@@ -417,6 +417,13 @@
 "devices.revokeMessage" = "Устройство сразу потеряет доступ к серверу.";
 "devices.revokeTitle" = "Отозвать %1$@?";
 "devices.thisDeviceHint" = "Нельзя отозвать устройство, с которого вы сейчас работаете.";
+"dictation.denied.microphone" = "Bandito не может использовать микрофон. Разрешите доступ в Системных настройках → Конфиденциальность и безопасность → Микрофон.";
+"dictation.denied.speech" = "Bandito не может использовать распознавание речи. Разрешите его в Системных настройках → Конфиденциальность и безопасность → Распознавание речи.";
+"dictation.failed" = "Диктовка остановлена. Попробуйте ещё раз.";
+"dictation.onDeviceUnavailable" = "Этот Mac не может распознавать %1$@ без интернета. Добавьте язык в Системных настройках → Клавиатура → Диктовка и попробуйте снова. Звук никуда не отправляется.";
+"dictation.openSettings" = "Открыть Системные настройки";
+"dictation.start" = "Надиктовать";
+"dictation.stop" = "Остановить диктовку";
 "effort.high" = "Высокое";
 "effort.hint" = "Чем выше, тем умнее на сложных задачах, но дольше и быстрее тратит лимит. Для обычной работы хватает среднего.";
 "effort.label" = "усилие: %1$@";
@@ -654,6 +661,8 @@
 "inspector.project" = "Проект";
 "inspector.promptLabel" = "Запрос";
 "inspector.promptPlaceholder" = "Что агент делает при каждом запуске";
+"inspector.readAloud" = "Читать ответы вслух";
+"inspector.readAloudHint" = "Готовый ответ этого агента читается вслух, когда Bandito — активное приложение.";
 "inspector.resets" = "Сброс %1$@";
 "inspector.rules" = "Правила";
 "inspector.runNow" = "Запустить сейчас";
@@ -798,6 +807,7 @@
 "keys.copyPath" = "Скопировать путь";
 "keys.customizedCount" = "Изменено вами: %1$lld";
 "keys.deny" = "Отклонить выбранный запрос";
+"keys.dictate" = "Диктовка в сообщение";
 "keys.duplicate" = "Дублировать";
 "keys.enclosingFolder" = "Родительская папка";
 "keys.exportButton" = "Экспорт";
@@ -1977,6 +1987,9 @@
 "slash.sourceServer" = "сервер";
 "slash.terminalSummary" = "Открыть терминал в папке агента";
 "slash.usageSummary" = "Лимиты подписок";
+"speech.codeSkipped" = "код пропущен";
+"speech.read" = "Прочитать вслух";
+"speech.stop" = "Остановить";
 "status.error" = "Ошибка";
 "status.idle" = "ждёт задачу";
 "status.needsYou" = "ждёт вас";

@@ -417,6 +417,13 @@
 "devices.revokeMessage" = "O dispositivo perde o acesso ao servidor imediatamente.";
 "devices.revokeTitle" = "Revogar %1$@?";
 "devices.thisDeviceHint" = "Não é possível revogar o dispositivo que você está usando agora.";
+"dictation.denied.microphone" = "O Bandito não pode usar o microfone. Permita em Ajustes do Sistema → Privacidade e Segurança → Microfone.";
+"dictation.denied.speech" = "O Bandito não pode usar o reconhecimento de fala. Permita em Ajustes do Sistema → Privacidade e Segurança → Reconhecimento de Fala.";
+"dictation.failed" = "O ditado parou. Tente de novo.";
+"dictation.onDeviceUnavailable" = "Este Mac não consegue reconhecer %1$@ offline. Adicione o idioma em Ajustes do Sistema → Teclado → Ditado e tente de novo. O áudio nunca é enviado pela rede.";
+"dictation.openSettings" = "Abrir Ajustes do Sistema";
+"dictation.start" = "Ditar";
+"dictation.stop" = "Parar ditado";
 "effort.high" = "Alto";
 "effort.hint" = "Esforço maior é mais inteligente em tarefas difíceis, mas é mais lento e consome o limite mais rápido. Para o dia a dia, o médio basta.";
 "effort.label" = "esforço: %1$@";
@@ -654,6 +661,8 @@
 "inspector.project" = "Projeto";
 "inspector.promptLabel" = "Prompt";
 "inspector.promptPlaceholder" = "O que o agente faz em cada execução";
+"inspector.readAloud" = "Ler as respostas em voz alta";
+"inspector.readAloudHint" = "Quando o Bandito é o app ativo, uma resposta concluída deste agente é lida em voz alta.";
 "inspector.resets" = "Renova %1$@";
 "inspector.rules" = "Regras";
 "inspector.runNow" = "Executar agora";
@@ -798,6 +807,7 @@
 "keys.copyPath" = "Copiar caminho";
 "keys.customizedCount" = "Alterados por você: %1$lld";
 "keys.deny" = "Negar a solicitação em foco";
+"keys.dictate" = "Ditar na mensagem";
 "keys.duplicate" = "Duplicar";
 "keys.enclosingFolder" = "Pasta que contém";
 "keys.exportButton" = "Exportar";
@@ -1977,6 +1987,9 @@
 "slash.sourceServer" = "servidor";
 "slash.terminalSummary" = "Abrir um terminal na pasta do agente";
 "slash.usageSummary" = "Limites das assinaturas";
+"speech.codeSkipped" = "código ignorado";
+"speech.read" = "Ler em voz alta";
+"speech.stop" = "Parar leitura";
 "status.error" = "Erro";
 "status.idle" = "Ocioso";
 "status.needsYou" = "Precisa de você";
