@@ -272,6 +272,18 @@
 "common.now" = "たった今";
 "common.recommended" = "おすすめ";
 "common.save" = "保存";
+"composer.attach.badName" = "このファイル名は添付できません";
+"composer.attach.clipboard" = "クリップボードから";
+"composer.attach.dropHint" = "ドロップして添付";
+"composer.attach.failed" = "ファイルを添付できませんでした";
+"composer.attach.file" = "ファイルまたは画像…";
+"composer.attach.hiddenName" = "ドットで始まる名前は添付できません";
+"composer.attach.label" = "添付";
+"composer.attach.nameTooLong" = "ファイル名が長すぎます";
+"composer.attach.remove" = "削除";
+"composer.attach.screenshot" = "スクリーンショット";
+"composer.attach.tooLarge" = "20 MB を超えています";
+"composer.attach.uploading" = "アップロード中…";
 "composer.contextHint" = "現在のチャプターがどれだけ埋まっているか";
 "composer.contextPopover" = "コンテキスト: %1$@%% — この会話がモデルのメモリをどれだけ使っているかです。80%%に達するとエージェントはメモリを保存して新しいチャプターを始めます。";
 "composer.formGo" = "フォームへ";
@@ -1664,6 +1676,11 @@
 "terminals.updateServer" = "ターミナルを使うにはサーバーを更新してください。";
 "thread.aTeammate" = "チームメイト";
 "thread.attach" = "ファイルを添付";
+"thread.browserRun.noPicture" = "ページの画像がここに表示されます";
+"thread.browserRun.openBrowser" = "ブラウザを開く";
+"thread.browserRun.title" = "ブラウザ内のエージェント";
+"thread.browserRun.titleDomain" = "ブラウザ内のエージェント · %1$@";
+"thread.browserRun.watchBeside" = "横で見る";
 "thread.chapterNotSaved" = "章 %1$@ · メモリは保存されていません";
 "thread.chapterNotSavedHelp" = "エージェントはこの章の前にメモリを保存できませんでした。前の章の内容が欠けている可能性があります。";
 "thread.copy" = "コピー";
@@ -1675,6 +1692,8 @@
 "thread.hintSend" = "↵ 送信";
 "thread.hintStop" = "⌘. 停止";
 "thread.jumpToLatest" = "最新のメッセージへ";
+"thread.link.fileHelp" = "パネルで開きます · ⌥クリックで「ファイル」に表示";
+"thread.link.urlHelp" = "パネルのブラウザで開きます · ⌘クリックでMacのブラウザで開く";
 "thread.messageFor" = "%1$@ へのメッセージ";
 "thread.messageFrom" = "%1$@ からのメッセージ";
 "thread.more" = "その他";
@@ -1787,6 +1806,7 @@
 "viewer.readOnly" = "読み取り専用";
 "viewer.save" = "保存";
 "viewer.saveError" = "保存できませんでした: %1$@";
+"viewer.saved" = "✓ 保存済み";
 "viewer.tooLarge" = "ファイルが 2 MB を超えているため、ここでは開けません。Mac にダウンロードしてください。";
 "viewer.unsaved" = "未保存の変更あり · ⌘S";
 "workbench.add" = "タブを追加";

@@ -272,6 +272,18 @@
 "common.now" = "ahora";
 "common.recommended" = "Recomendado";
 "common.save" = "Guardar";
+"composer.attach.badName" = "Este nombre de archivo no se puede adjuntar";
+"composer.attach.clipboard" = "Desde el portapapeles";
+"composer.attach.dropHint" = "Suelta para adjuntar";
+"composer.attach.failed" = "No se pudo adjuntar el archivo";
+"composer.attach.file" = "Archivo o imagen…";
+"composer.attach.hiddenName" = "No se puede adjuntar un nombre que empieza por punto";
+"composer.attach.label" = "Adjuntar";
+"composer.attach.nameTooLong" = "El nombre del archivo es demasiado largo";
+"composer.attach.remove" = "Quitar";
+"composer.attach.screenshot" = "Captura de pantalla";
+"composer.attach.tooLarge" = "Más de 20 MB";
+"composer.attach.uploading" = "Subiendo…";
 "composer.contextHint" = "Cuánto está llena la parte actual";
 "composer.contextPopover" = "Contexto: %1$@ %% — cuánta memoria del modelo ocupa esta conversación. Al 80 %% el agente guarda su memoria y empieza un capítulo nuevo.";
 "composer.formGo" = "Ir al formulario";
@@ -1664,6 +1676,11 @@
 "terminals.updateServer" = "Actualiza el servidor para usar las terminales.";
 "thread.aTeammate" = "un compañero";
 "thread.attach" = "Adjuntar archivos";
+"thread.browserRun.noPicture" = "Aquí aparecerá la imagen de la página";
+"thread.browserRun.openBrowser" = "Abrir navegador";
+"thread.browserRun.title" = "Agente en el navegador";
+"thread.browserRun.titleDomain" = "Agente en el navegador · %1$@";
+"thread.browserRun.watchBeside" = "Ver al lado";
 "thread.chapterNotSaved" = "Capítulo %1$@ · memoria no guardada";
 "thread.chapterNotSavedHelp" = "El agente no pudo guardar su memoria antes de este capítulo. Pueden faltar datos del capítulo anterior.";
 "thread.copy" = "Copiar";
@@ -1675,6 +1692,8 @@
 "thread.hintSend" = "↵ enviar";
 "thread.hintStop" = "⌘. detener";
 "thread.jumpToLatest" = "Ir al último mensaje";
+"thread.link.fileHelp" = "Se abre en el panel · ⌥-clic lo muestra en Archivos";
+"thread.link.urlHelp" = "Se abre en el panel del navegador · ⌘-clic en tu navegador";
 "thread.messageFor" = "Mensaje para %1$@";
 "thread.messageFrom" = "Mensaje de %1$@";
 "thread.more" = "Más";
@@ -1787,6 +1806,7 @@
 "viewer.readOnly" = "Solo lectura";
 "viewer.save" = "Guardar";
 "viewer.saveError" = "No se pudo guardar: %1$@";
+"viewer.saved" = "✓ Guardado";
 "viewer.tooLarge" = "El archivo pesa más de 2 MB y aquí no se puede abrir. Descárgalo al Mac.";
 "viewer.unsaved" = "Cambios sin guardar · ⌘S";
 "workbench.add" = "Añadir pestaña";

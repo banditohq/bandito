@@ -20,6 +20,8 @@ struct ThreadView: View {
     @State private var changes: ChangesDiff?
     /// Whether the newest message is on screen (the bottom marker is visible).
     @State private var atBottom = true
+    /// Files are dragged over the chat.
+    @State private var dropTargeted = false
     /// The "down" button shows (see `ThreadScroll.showsJump`), and how many messages came in while the person is above.
     @State private var jumpVisible = false
     @State private var unseen = 0
@@ -61,7 +63,7 @@ struct ThreadView: View {
     private var rows: some View {
         ScrollView {
             ThreadItemsView(
-                items: thread.items, server: server,
+                items: thread.items, server: server, agentID: agent.id, folder: agent.cwd,
                 showsLoadEarlier: server.hasMoreHistory[agent.id] == true,
                 onLoadEarlier: loadEarlier,
                 onError: { actionError = $0 },
@@ -148,6 +150,25 @@ struct ThreadView: View {
     }
 
     var body: some View {
+        chatColumn
+            // Files dragged anywhere over the chat (thread and composer) are attached to this agent.
+            .overlay {
+                if dropTargeted && canAttach {
+                    FileDropHighlight()
+                }
+            }
+            .onDrop(of: [.fileURL], isTargeted: $dropTargeted) { providers in
+                guard canAttach else { return false }
+                return AttachmentTrays.shared.accept(providers, agentID: agent.id, server: server)
+            }
+    }
+
+    /// Attaching needs a daemon that lists the `attachments` feature.
+    private var canAttach: Bool {
+        server.supports("attachments")
+    }
+
+    private var chatColumn: some View {
         VStack(spacing: 0) {
             ThreadHeader(
                 agent: agent,
@@ -309,11 +330,16 @@ struct ThreadView: View {
     private func send() {
         let id = agent.id
         let text = router.takeDraft(for: id)
-        guard !text.isEmpty else { return }
+        // The files that finished uploading go with the text; a failed send leaves them in the tray for a retry.
+        let files = AttachmentTray.readyFiles(AttachmentTrays.shared.files(for: id))
+        guard !text.isEmpty || !files.isEmpty else { return }
         let reply = replyDrafts.take(for: id)
         sendError = nil
         Task {
-            do { try await server.send(text, to: id, replyTo: reply?.seq) } catch {
+            do {
+                try await server.send(text, to: id, replyTo: reply?.seq, attachments: files)
+                AttachmentTrays.shared.removeSent(files, agentID: id)
+            } catch {
                 sendError = UserFacingError.message(for: error)
                 router.restoreDraft(text, for: id)
                 replyDrafts.restore(reply, for: id)
@@ -361,7 +387,7 @@ struct ThreadView: View {
         let id = ThreadItem.messageID(seq: seq)
         for item in items where item.id == id {
             switch item {
-            case .user(_, let text, _, _, _): return ReplyTarget(seq: seq, fromUser: true, text: text)
+            case .user(_, let text, _, _, _, _): return ReplyTarget(seq: seq, fromUser: true, text: text)
             case .assistant(_, let text, _): return ReplyTarget(seq: seq, fromUser: false, text: text)
             default: return nil
             }
@@ -455,6 +481,8 @@ private struct ThreadWidthKey: PreferenceKey {
 struct ThreadItemsView: View {
     var items: [ThreadItem]
     var server: ServerModel
+    var agentID = ""
+    var folder: String?
     var showsLoadEarlier = false
     var onLoadEarlier: () -> Void = {}
     var onError: (UserFacingMessage) -> Void = { _ in }
@@ -477,7 +505,7 @@ struct ThreadItemsView: View {
             ForEach(rows) { row in
                 ThreadRowView(
                     row: row, agentName: agentName, primaryRuntime: primaryRuntime, server: server, chat: chat,
-                    onError: onError)
+                    agentID: agentID, folder: folder, onError: onError)
                     .banditoRise()
             }
             if typing {

@@ -1871,8 +1871,18 @@
   "server.tile.freeWord": "свободно",
   "usage.window.day": "День",
   "usage.window.weekModel": "Неделя · {model}",
-  "usage.window.hours": {"one": "{count} час", "few": "{count} часа", "many": "{count} часов", "other": "{count} часа"},
-  "usage.window.days": {"one": "{count} день", "few": "{count} дня", "many": "{count} дней", "other": "{count} дня"},
+  "usage.window.hours": {
+    "one": "{count} час",
+    "few": "{count} часа",
+    "many": "{count} часов",
+    "other": "{count} часа"
+  },
+  "usage.window.days": {
+    "one": "{count} день",
+    "few": "{count} дня",
+    "many": "{count} дней",
+    "other": "{count} дня"
+  },
   "usage.window.minutes": "{minutes} мин",
   "countdown.days": "через {count} дн.",
   "countdown.hours": "через {count} ч",
@@ -2018,5 +2028,25 @@
   "reply.you": "Вы",
   "reply.earlier": "Более раннее сообщение",
   "reply.jump": "Перейти к сообщению",
-  "form.sent": "Отправлено…"
+  "form.sent": "Отправлено…",
+  "thread.browserRun.title": "Агент в браузере",
+  "thread.browserRun.titleDomain": "Агент в браузере · {domain}",
+  "thread.browserRun.watchBeside": "Смотреть рядом",
+  "thread.browserRun.openBrowser": "Открыть браузер",
+  "thread.browserRun.noPicture": "Здесь появится картинка страницы",
+  "thread.link.fileHelp": "Откроется в панели · ⌥-клик покажет в «Файлах»",
+  "thread.link.urlHelp": "Откроется во вкладке браузера · ⌘-клик откроет в браузере Mac",
+  "composer.attach.label": "Прикрепить",
+  "composer.attach.file": "Файл или картинка…",
+  "composer.attach.screenshot": "Снимок экрана",
+  "composer.attach.clipboard": "Из буфера",
+  "composer.attach.dropHint": "Отпустите, чтобы прикрепить",
+  "composer.attach.remove": "Убрать",
+  "composer.attach.uploading": "Загрузка…",
+  "composer.attach.tooLarge": "Больше 20 МБ",
+  "composer.attach.badName": "Такое имя файла нельзя прикрепить",
+  "composer.attach.hiddenName": "Имя с точки в начале нельзя прикрепить",
+  "composer.attach.nameTooLong": "Слишком длинное имя файла",
+  "composer.attach.failed": "Не получилось прикрепить файл",
+  "viewer.saved": "✓ Сохранено"
 }

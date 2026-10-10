@@ -29,7 +29,7 @@ struct MessageBodyView: View {
     }
 
     private func runningText(_ value: String) -> some View {
-        Text(markdown ? InlineMarkdown.render(value) : AttributedString(value))
+        Text(ChatLinkText.linked(markdown ? InlineMarkdown.render(value) : AttributedString(value)))
             .font(BanditoFont.font(size: 14.5, weight: 400))
             .foregroundStyle(Color.Bandito.text)
             .lineSpacing(markdown ? 4 : 3)

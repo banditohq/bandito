@@ -272,6 +272,18 @@
 "common.now" = "jetzt";
 "common.recommended" = "Empfohlen";
 "common.save" = "Sichern";
+"composer.attach.badName" = "Dieser Dateiname geht nicht";
+"composer.attach.clipboard" = "Aus der Zwischenablage";
+"composer.attach.dropHint" = "Zum Anhängen loslassen";
+"composer.attach.failed" = "Die Datei konnte nicht angehängt werden";
+"composer.attach.file" = "Datei oder Bild…";
+"composer.attach.hiddenName" = "Namen mit Punkt am Anfang können nicht angehängt werden";
+"composer.attach.label" = "Anhängen";
+"composer.attach.nameTooLong" = "Der Dateiname ist zu lang";
+"composer.attach.remove" = "Entfernen";
+"composer.attach.screenshot" = "Bildschirmfoto";
+"composer.attach.tooLarge" = "Über 20 MB";
+"composer.attach.uploading" = "Wird hochgeladen…";
 "composer.contextHint" = "Wie voll das aktuelle Kapitel ist";
 "composer.contextPopover" = "Kontext: %1$@ %% — so viel Modellspeicher belegt dieses Gespräch. Bei 80 %% speichert der Agent seinen Speicher und beginnt ein neues Kapitel.";
 "composer.formGo" = "Zum Formular";
@@ -1664,6 +1676,11 @@
 "terminals.updateServer" = "Aktualisieren Sie den Server, um Terminals zu nutzen.";
 "thread.aTeammate" = "einem Teammitglied";
 "thread.attach" = "Dateien anhängen";
+"thread.browserRun.noPicture" = "Hier erscheint das Bild der Seite";
+"thread.browserRun.openBrowser" = "Browser öffnen";
+"thread.browserRun.title" = "Agent im Browser";
+"thread.browserRun.titleDomain" = "Agent im Browser · %1$@";
+"thread.browserRun.watchBeside" = "Daneben ansehen";
 "thread.chapterNotSaved" = "Kapitel %1$@ · Gedächtnis nicht gespeichert";
 "thread.chapterNotSavedHelp" = "Der Agent konnte sein Gedächtnis vor diesem Kapitel nicht speichern. Fakten aus dem vorherigen Kapitel können fehlen.";
 "thread.copy" = "Kopieren";
@@ -1675,6 +1692,8 @@
 "thread.hintSend" = "↵ senden";
 "thread.hintStop" = "⌘. stoppen";
 "thread.jumpToLatest" = "Zur neuesten Nachricht";
+"thread.link.fileHelp" = "Öffnet im Bereich · ⌥-Klick zeigt in „Dateien“";
+"thread.link.urlHelp" = "Öffnet im Browser-Bereich · ⌘-Klick öffnet im Mac-Browser";
 "thread.messageFor" = "Nachricht für %1$@";
 "thread.messageFrom" = "Nachricht von %1$@";
 "thread.more" = "Mehr";
@@ -1787,6 +1806,7 @@
 "viewer.readOnly" = "Nur lesen";
 "viewer.save" = "Sichern";
 "viewer.saveError" = "Konnte nicht gesichert werden: %1$@";
+"viewer.saved" = "✓ Gespeichert";
 "viewer.tooLarge" = "Die Datei ist größer als 2 MB und kann hier nicht geöffnet werden. Laden Sie sie auf Ihren Mac herunter.";
 "viewer.unsaved" = "Ungesicherte Änderungen · ⌘S";
 "workbench.add" = "Tab hinzufügen";

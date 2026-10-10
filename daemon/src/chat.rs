@@ -101,8 +101,12 @@ pub fn reaction_note(items: &[ReactionNote]) -> Option<String> {
     Some(format!("(Реакции с прошлого раза: {})", parts.join("; ")))
 }
 
+/// What the runtime reads in place of the text of a message that carries only files.
+pub const NO_TEXT: &str = "(без текста)";
+
 /// The text the runtime gets for a message: the reaction line first, then the quoted message it replies to,
-/// then the text, then the attachments as paths. `reply` is the text of the message replied to.
+/// then the text, then the attachments as paths. `reply` is the text of the message replied to. A message with
+/// files and no text reads `(без текста)`.
 pub fn runtime_text(text: &str, note: Option<&str>, reply: Option<&str>, attachments: &[Attachment]) -> String {
     let mut out = String::new();
     if let Some(note) = note {
@@ -112,7 +116,11 @@ pub fn runtime_text(text: &str, note: Option<&str>, reply: Option<&str>, attachm
     if let Some(reply) = reply {
         out.push_str(&format!("В ответ на: > {}\n\n", quote(reply, REPLY_QUOTE_CHARS)));
     }
-    out.push_str(text);
+    if text.trim().is_empty() && !attachments.is_empty() {
+        out.push_str(NO_TEXT);
+    } else {
+        out.push_str(text);
+    }
     if !attachments.is_empty() {
         out.push_str("\n\nВложения:");
         for a in attachments {
@@ -212,6 +220,26 @@ mod tests {
             out,
             "(Реакции с прошлого раза: 👍 на «x»)\n\nВ ответ на: > Вопрос?\n\nДа\n\nВложения:\n- /w/.bandito/attachments/2026-10-10/a.png (image/png, 12 байт)"
         );
+    }
+
+    #[test]
+    fn a_message_with_files_and_no_text_reads_no_text() {
+        let files = [Attachment {
+            path: "/w/.bandito/attachments/2026-10-10/a.png".into(),
+            name: "a.png".into(),
+            size: 12,
+            mime: "image/png".into(),
+        }];
+        assert_eq!(
+            runtime_text("", None, None, &files),
+            "(без текста)\n\nВложения:\n- /w/.bandito/attachments/2026-10-10/a.png (image/png, 12 байт)"
+        );
+        assert_eq!(
+            runtime_text("  ", None, None, &files),
+            runtime_text("", None, None, &files)
+        );
+        // Without files an empty text stays empty; the daemon refuses such a message before it gets here.
+        assert_eq!(runtime_text("", None, None, &[]), "");
     }
 
     #[test]

@@ -32,9 +32,18 @@ struct Composer: View {
     @State private var slash = SlashMenuModel()
     /// The context popover is open (the ring is a button).
     @State private var showsContext = false
-
     private var canSend: Bool {
-        !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        AttachmentTray.canSend(text: draft, files: files)
+    }
+
+    /// The files waiting in this agent's composer.
+    private var files: [DraftFile] {
+        AttachmentTrays.shared.files(for: agent?.id ?? "")
+    }
+
+    /// Attaching needs an agent and a daemon that lists the `attachments` feature.
+    private var canAttach: Bool {
+        agent != nil && server?.supports("attachments") == true
     }
 
     /// The typed command name while the menu is open, `nil` when it is closed.
@@ -73,42 +82,57 @@ struct Composer: View {
                 replyBar(reply)
                     .transition(.opacity.combined(with: .offset(y: 6)))
             }
-            HStack(alignment: .bottom, spacing: 10) {
-                // Attaching files returns with uploads; a name-only "@file" was misleading.
-
-                TextField(L10n.Thread.placeholder, text: $draft, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(BanditoFont.font(size: 14.5, weight: 400))
-                    .foregroundStyle(Color.Bandito.text)
-                    .tint(Color.Bandito.signal)
-                    .lineLimit(1...8)
-                    .focused($focused)
-                    .padding(.vertical, 8)
-                    .onKeyPress(keys: [.upArrow, .downArrow, .tab, .escape]) { press in
-                        handleMenuKey(press.key)
-                    }
-                    .onKeyPress(keys: [.return]) { press in
-                        // Shift or Option with Return: a line break at the caret. Plain Return sends.
-                        let newLine = ComposerReturn.action(
-                            shift: press.modifiers.contains(.shift), option: press.modifiers.contains(.option))
-                        if newLine == .newLine {
-                            #if os(macOS)
-                            FieldNewline.insert()
-                            #endif
-                            return .handled
-                        }
-                        if query != nil, entries.indices.contains(slash.index) {
-                            run(entries[slash.index])
-                            return .handled
-                        }
-                        if canSend && !running { submit() }
-                        return .handled
+            VStack(alignment: .leading, spacing: 8) {
+                if !files.isEmpty {
+                    attachmentStrip
+                }
+                HStack(alignment: .bottom, spacing: 10) {
+                    if canAttach {
+                        attachMenu
                     }
 
-                contextIndicator
-                    .padding(.bottom, 9)
+                    TextField(L10n.Thread.placeholder, text: $draft, axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .font(BanditoFont.font(size: 14.5, weight: 400))
+                        .foregroundStyle(Color.Bandito.text)
+                        .tint(Color.Bandito.signal)
+                        .lineLimit(1...8)
+                        .focused($focused)
+                        .padding(.vertical, 8)
+                        .onKeyPress(keys: [.upArrow, .downArrow, .tab, .escape]) { press in
+                            handleMenuKey(press.key)
+                        }
+                        .onKeyPress(keys: [KeyEquivalent("v")]) { press in
+                            // ⌘V of a picture (and no text) attaches it. Text paste is left to the field.
+                            guard canAttach, press.modifiers == .command, PictureSource.clipboardHoldsOnlyPicture,
+                                let data = PictureSource.clipboardPNG(), let agent, let server
+                            else { return .ignored }
+                            AttachmentTrays.shared.addPicture(data, name: Self.pictureName("Clipboard"), agentID: agent.id, server: server)
+                            return .handled
+                        }
+                        .onKeyPress(keys: [.return]) { press in
+                            // Shift or Option with Return: a line break at the caret. Plain Return sends.
+                            let newLine = ComposerReturn.action(
+                                shift: press.modifiers.contains(.shift), option: press.modifiers.contains(.option))
+                            if newLine == .newLine {
+                                #if os(macOS)
+                                FieldNewline.insert()
+                                #endif
+                                return .handled
+                            }
+                            if query != nil, entries.indices.contains(slash.index) {
+                                run(entries[slash.index])
+                                return .handled
+                            }
+                            if canSend && !running { submit() }
+                            return .handled
+                        }
 
-                sendOrStop
+                    contextIndicator
+                        .padding(.bottom, 9)
+
+                    sendOrStop
+                }
             }
             .padding(.leading, 14)
             .padding(.trailing, 10)
@@ -429,11 +453,146 @@ struct Composer: View {
         }
     }
 
-    /// Until uploads exist, an attached file is referred to by its name: the file path goes into the text as `@name`.
-    private func attachFile() {
-        guard let url = FilePanels.openURL() else { return }
-        let separator = draft.isEmpty || draft.hasSuffix(" ") ? "" : " "
-        draft += "\(separator)@\(url.lastPathComponent) "
+    // MARK: Attachments
+
+    /// The "+" menu: files, a screenshot of a region, or the picture on the clipboard.
+    private var attachMenu: some View {
+        Menu {
+            Button(L10n.Composer.Attach.file) { attachFiles() }
+            Button(L10n.Composer.Attach.screenshot) { takeScreenshot() }
+            Button(L10n.Composer.Attach.clipboard) { attachClipboard() }
+                .disabled(!PictureSource.clipboardHoldsOnlyPicture)
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Color.Bandito.text2)
+                .frame(width: 30, height: 30)
+        }
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .banditoButton(.icon(size: 30, label: L10n.Composer.Attach.label))
+        .padding(.bottom, 2)
+    }
+
+    /// The files of the draft, in a row above the field: pictures as miniatures, other files as chips.
+    private var attachmentStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(files) { file in
+                    if file.isImage {
+                        pictureTile(file)
+                    } else {
+                        fileChip(file)
+                    }
+                }
+            }
+            .padding(.top, 6)
+            .padding(.trailing, 6)
+        }
+    }
+
+    /// A picture of 56 pt. A failed one is marked red; an uploading one shows a spinner.
+    private func pictureTile(_ file: DraftFile) -> some View {
+        ZStack(alignment: .topTrailing) {
+            Group {
+                if let preview = file.preview {
+                    Image(nsImage: preview).resizable().scaledToFill()
+                } else {
+                    Image(systemName: "photo")
+                        .font(.system(size: 18, weight: .regular))
+                        .foregroundStyle(Color.Bandito.text3)
+                }
+            }
+            .frame(width: 56, height: 56)
+            .background(Color.Bandito.surface3)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay {
+                stateOverlay(file)
+            }
+            .help(file.failureText ?? file.name)
+            removeButton(file)
+        }
+    }
+
+    /// A file that is not a picture: its icon, name and size, or what is wrong with it.
+    private func fileChip(_ file: DraftFile) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "doc")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Color.Bandito.text3)
+            Text(file.name)
+                .font(BanditoFont.font(size: 12.5, weight: 500))
+                .foregroundStyle(Color.Bandito.text2)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+            if let detail = file.detailText {
+                Text(detail)
+                    .font(BanditoFont.font(size: 11.5, weight: 400))
+                    .foregroundStyle(file.failureText == nil ? Color.Bandito.text3 : Color.Bandito.danger)
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+            removeButton(file)
+        }
+        .padding(.leading, 10)
+        .padding(.trailing, 4)
+        .frame(height: 32)
+        .background(Color.Bandito.surface3, in: Capsule())
+        .overlay(Capsule().stroke(Color.Bandito.line, lineWidth: 0.5))
+    }
+
+    /// The spinner while a picture uploads, and a red wash when it failed.
+    @ViewBuilder
+    private func stateOverlay(_ file: DraftFile) -> some View {
+        if file.state == .uploading {
+            ZStack {
+                Color.black.opacity(0.35)
+                ProgressView().controlSize(.small)
+            }
+        } else if file.failureText != nil {
+            ZStack {
+                Color.Bandito.danger.opacity(0.35)
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(Color.white)
+            }
+        }
+    }
+
+    private func removeButton(_ file: DraftFile) -> some View {
+        Button {
+            AttachmentTrays.shared.remove(file.id, agentID: agent?.id ?? "")
+        } label: {
+            Image(systemName: "xmark")
+                .font(.system(size: 8, weight: .bold))
+        }
+        .banditoButton(.icon(size: 18, label: L10n.Composer.Attach.remove))
+    }
+
+    private func attachFiles() {
+        guard canAttach, let agent, let server else { return }
+        let urls = FilePanels.attachmentURLs()
+        guard !urls.isEmpty else { return }
+        AttachmentTrays.shared.add(urls: urls, agentID: agent.id, server: server)
         focused = true
+    }
+
+    private func attachClipboard() {
+        guard canAttach, let agent, let server, let data = PictureSource.clipboardPNG() else { return }
+        AttachmentTrays.shared.addPicture(data, name: Self.pictureName("Clipboard"), agentID: agent.id, server: server)
+        focused = true
+    }
+
+    private func takeScreenshot() {
+        guard canAttach, let agent, let server else { return }
+        Task {
+            guard let data = await PictureSource.screenshot() else { return }
+            AttachmentTrays.shared.addPicture(data, name: Self.pictureName("Screenshot"), agentID: agent.id, server: server)
+        }
+    }
+
+    /// A name for a picture that has none: the source and the time, without characters a file name cannot hold.
+    static func pictureName(_ source: String) -> String {
+        "\(source)-\(Int(Date().timeIntervalSince1970 * 1000)).png"
     }
 }

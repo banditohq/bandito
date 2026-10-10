@@ -237,11 +237,20 @@ private struct ViewerHeader: View {
                 }
             }
             if document.viewer == .markdown || document.viewer == .text {
-                Button(action: onSave) {
-                    Label(L10n.Viewer.save, systemImage: "square.and.arrow.down")
+                // Nothing to save: say so, instead of a grey button that does nothing.
+                if !document.isDirty && !document.readOnly && !document.isSaving {
+                    Text(L10n.Viewer.saved)
+                        .font(BanditoFont.font(size: 12.5, weight: 500))
+                        .foregroundStyle(Color.Bandito.text3)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                } else {
+                    Button(action: onSave) {
+                        Label(L10n.Viewer.save, systemImage: "square.and.arrow.down")
+                    }
+                    .banditoButton(.lightPill())
+                    .disabled(!document.isDirty || document.readOnly || document.isSaving)
                 }
-                .banditoButton(.lightPill())
-                .disabled(!document.isDirty || document.readOnly || document.isSaving)
             }
         }
         .padding(.horizontal, 16)

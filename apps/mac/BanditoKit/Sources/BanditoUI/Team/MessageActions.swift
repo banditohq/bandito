@@ -46,6 +46,10 @@ struct MessageContainer<Bubble: View>: View {
     var text: String
     var fromUser: Bool
     var chat: ThreadChat
+    /// The files the message carries, drawn under the bubble (see `MessageFiles`).
+    var files: [AgentAttachment] = []
+    var agentID = ""
+    var server: ServerModel?
     @ViewBuilder var bubble: () -> Bubble
 
     @State private var hovering = false
@@ -59,7 +63,6 @@ struct MessageContainer<Bubble: View>: View {
     private var canReply: Bool { chat.repliesOn && seq != nil }
     private var mine: String? { seq.flatMap { chat.reactions[$0]?.mine } }
     private var chips: [ReactionChip] { seq.flatMap { chat.reactions[$0]?.chips } ?? [] }
-    private var files: [MessageAttachment] { seq.flatMap { chat.attachments[$0] } ?? [] }
     private var flashing: Bool { chat.highlightedID == itemID }
 
     var body: some View {
@@ -85,8 +88,8 @@ struct MessageContainer<Bubble: View>: View {
                         chat.onReact(seq, chip.byUser ? nil : chip.emoji)
                     }
                 }
-                if !files.isEmpty {
-                    AttachmentChips(files: files)
+                if !files.isEmpty, let server {
+                    MessageFiles(files: files, agentID: agentID, server: server)
                 }
             }
             .padding(6)
@@ -369,34 +372,6 @@ struct ReactionPicker: View {
 }
 
 // MARK: - Files and selecting
-
-/// The files a message carries, by name.
-struct AttachmentChips: View {
-    var files: [MessageAttachment]
-
-    var body: some View {
-        FlowLayout(spacing: 6) {
-            ForEach(Array(files.enumerated()), id: \.offset) { _, file in
-                HStack(spacing: 5) {
-                    Image(systemName: "paperclip")
-                        .font(.system(size: 10))
-                    Text(file.name)
-                        .font(BanditoFont.font(size: 11.5, weight: 500))
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .frame(maxWidth: 220, alignment: .leading)
-                        .fixedSize(horizontal: true, vertical: false)
-                }
-                .foregroundStyle(Color.Bandito.text2)
-                .padding(.horizontal, 9)
-                .frame(height: 24)
-                .background(Capsule().fill(Color.Bandito.text.opacity(0.05)))
-                .overlay(Capsule().stroke(Color.Bandito.line, lineWidth: 1))
-                .help(file.name)
-            }
-        }
-    }
-}
 
 /// The whole text of a message with everything selected, so that a part of it can be picked and copied.
 struct SelectableTextPanel: View {

@@ -656,12 +656,25 @@ public final class ServerModel: Identifiable {
 
     // MARK: actions
 
-    /// Sends a message. `replyTo` is the `seq` of the message it answers (the daemon takes it with the `attachments`
-    /// feature; without it the field is left out and the text goes alone).
-    public func send(_ text: String, to agentId: String, replyTo: Int64? = nil) async throws {
-        struct P: Encodable { var agentId: String; var text: String; var replyTo: Int64? }
-        let reply = supports("attachments") ? replyTo : nil
-        try await rpc().call("agents.send", P(agentId: agentId, text: text, replyTo: reply))
+    /// Sends a message to an agent. `attachments` are files from `uploadAttachment`; they go by path. `replyTo` is the
+    /// `seq` of the message it answers (the daemon takes it with the `attachments` feature; without that feature the
+    /// field is left out and the text goes alone).
+    public func send(
+        _ text: String, to agentId: String, replyTo: Int64? = nil, attachments: [AgentAttachment] = []
+    ) async throws {
+        let request = AgentSendRequest(
+            agentId: agentId, text: text, attachments: attachments.isEmpty ? nil : attachments.map(\.path),
+            replyTo: supports("attachments") ? replyTo : nil)
+        try await rpc().call("agents.send", request)
+    }
+
+    /// Saves one file in the agent's attachment folder (`attachments.upload`). The daemon refuses more than 20 MB.
+    public func uploadAttachment(_ data: Data, name: String, agentId: String) async throws -> AgentAttachment {
+        struct P: Encodable { var agentId: String; var name: String; var dataBase64: String }
+        return try await rpc().call(
+            "attachments.upload",
+            P(agentId: agentId, name: name, dataBase64: data.base64EncodedString()),
+            as: AgentAttachment.self)
     }
 
     /// Throws `unsupported` when the daemon does not list `feature`: the call would only be refused as an unknown method.

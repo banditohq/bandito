@@ -379,7 +379,7 @@ public enum EventBody: Sendable, Hashable {
     /// `replyTo` is the `seq` of the message this one answers; `attachments` are the files it carries.
     case messageUser(
         text: String, source: MessageSource, fromAgent: String?, replyTo: Int64? = nil,
-        attachments: [MessageAttachment] = [])
+        attachments: [AgentAttachment] = [])
     case messageAssistant(text: String)
     case messageDelta(text: String)
     case toolCall(callId: String, tool: String, title: String, input: JSONValue)
@@ -435,7 +435,7 @@ extension Event: Decodable {
     private struct TurnStartedP: Decodable { var turnId: String; var source: MessageSource }
     private struct MessageUserP: Decodable {
         var text: String; var source: MessageSource; var fromAgent: String?
-        var replyTo: Int64?; var attachments: [MessageAttachment]?
+        var replyTo: Int64?; var attachments: [AgentAttachment]?
     }
     private struct FormRequestedP: Decodable {
         var formId: String

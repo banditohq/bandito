@@ -3,7 +3,8 @@ import Foundation
 
 /// One row in an agent's thread, built from events. See docs/MAC_APP_UX.md#thread.
 public enum ThreadItem: Sendable, Hashable, Identifiable {
-    case user(id: String, text: String, source: MessageSource, from: String?, ts: Int64)
+    /// `attachments` are the files the message carries; empty for a plain message.
+    case user(id: String, text: String, source: MessageSource, from: String?, ts: Int64, attachments: [AgentAttachment] = [])
     case assistant(id: String, text: String, ts: Int64)
     /// Text still streaming in; replaced by `.assistant` when the message is final.
     case streaming(text: String)
@@ -21,7 +22,7 @@ public enum ThreadItem: Sendable, Hashable, Identifiable {
 
     public var id: String {
         switch self {
-        case .user(let id, _, _, _, _), .assistant(let id, _, _), .note(let id, _, _, _): return id
+        case .user(let id, _, _, _, _, _), .assistant(let id, _, _), .note(let id, _, _, _): return id
         case .runtimeSwitch(let id, _, _, _, _): return id
         case .chapter(let id, _, _, _): return id
         case .streaming: return "streaming"
@@ -35,7 +36,7 @@ public enum ThreadItem: Sendable, Hashable, Identifiable {
     /// person or the agent. A message finalized from a stream (`…-s`), and a crew or schedule message, have none.
     public var messageSeq: Int64? {
         switch self {
-        case .user(let id, _, let source, _, _) where source == .user:
+        case .user(let id, _, let source, _, _, _) where source == .user:
             return Self.seq(ofEventID: id)
         case .assistant(let id, _, _):
             return Self.seq(ofEventID: id)
@@ -58,7 +59,7 @@ extension ThreadItem {
     /// Unix milliseconds, for the items that carry a time.
     public var timestamp: Int64? {
         switch self {
-        case .user(_, _, _, _, let ts), .assistant(_, _, let ts), .note(_, _, _, let ts): ts
+        case .user(_, _, _, _, let ts, _), .assistant(_, _, let ts), .note(_, _, _, let ts): ts
         case .runtimeSwitch(_, _, _, _, let ts): ts
         case .chapter(_, _, _, let ts): ts
         case .form(let f): f.ts
@@ -155,7 +156,7 @@ public struct AgentThread: Sendable, Hashable {
     public var lastMessageText: String? {
         for item in items.reversed() {
             switch item {
-            case .assistant(_, let t, _), .user(_, let t, _, _, _), .streaming(let t): return t
+            case .assistant(_, let t, _), .user(_, let t, _, _, _, _), .streaming(let t): return t
             default: continue
             }
         }
@@ -166,7 +167,7 @@ public struct AgentThread: Sendable, Hashable {
     public var preview: String? {
         for item in items.reversed() {
             switch item {
-            case .assistant(_, let t, _), .user(_, let t, _, _, _): return t
+            case .assistant(_, let t, _), .user(_, let t, _, _, _, _): return t
             case .streaming(let t): return t
             case .approval(let a) where a.state == .pending: return a.title
             default: continue
@@ -192,15 +193,15 @@ public struct AgentThread: Sendable, Hashable {
             switch source {
             case .user:
                 dropStreaming()
-                items.append(.user(id: e.id, text: text, source: source, from: nil, ts: e.ts))
+                items.append(.user(id: e.id, text: text, source: source, from: nil, ts: e.ts, attachments: files))
             case .crew:
                 dropStreaming()
                 items.append(.note(id: e.id + "-n", text: L10n.Thread.messageFrom(name: from ?? L10n.Thread.aTeammate), kind: .crew, ts: e.ts))
-                items.append(.user(id: e.id, text: text, source: source, from: from, ts: e.ts))
+                items.append(.user(id: e.id, text: text, source: source, from: from, ts: e.ts, attachments: files))
             case .schedule:
                 dropStreaming()
                 items.append(.note(id: e.id + "-n", text: L10n.Thread.scheduledRun, kind: .schedule, ts: e.ts))
-                items.append(.user(id: e.id, text: text, source: source, from: nil, ts: e.ts))
+                items.append(.user(id: e.id, text: text, source: source, from: nil, ts: e.ts, attachments: files))
             case .system:
                 // Hidden wrap-up turn before a new chapter: no bubble, just a quiet line.
                 finalizeStreaming(e)

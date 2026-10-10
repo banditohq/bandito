@@ -11,6 +11,9 @@ struct ThreadRowView: View {
     var primaryRuntime: String
     var server: ServerModel
     var chat = ThreadChat()
+    /// The agent the thread belongs to, and its folder: where a relative file link in a message points.
+    var agentID = ""
+    var folder: String?
     var onError: (UserFacingMessage) -> Void
 
     var body: some View {
@@ -21,10 +24,12 @@ struct ThreadRowView: View {
             ChapterDivider(number: number, saved: saved, agentName: agentName)
         case .toolGroup(let tools):
             ToolGroupCard(tools: tools, duration: nil)
+        case .browserRun(let tools):
+            BrowserRunCard(tools: tools, server: server, agentID: agentID)
         case .item(let item):
             ItemView(
                 item: item, agentName: agentName, primaryRuntime: primaryRuntime, server: server, chat: chat,
-                onError: onError)
+                agentID: agentID, folder: folder, onError: onError)
         }
     }
 }
@@ -36,6 +41,8 @@ private struct ItemView: View {
     var primaryRuntime: String
     var server: ServerModel
     var chat: ThreadChat
+    var agentID: String
+    var folder: String?
     var onError: (UserFacingMessage) -> Void
 
     /// The quote at the top of a reply, when the message answers another one.
@@ -50,13 +57,39 @@ private struct ItemView: View {
         }
     }
 
+    /// Optional: a thread drawn without the app's router (a preview) shows its items, and links do nothing.
+    @Environment(Router.self) private var router: Router?
+
     var body: some View {
+        content
+            // Links in a message (file paths, web addresses) open here, in the workbench beside the chat.
+            .environment(\.openURL, OpenURLAction { url in
+                if let router {
+                    ChatLinkText.open(url, agentID: agentID, folder: folder, server: server, router: router)
+                }
+                return .handled
+            })
+    }
+
+    @ViewBuilder
+    private var content: some View {
         switch item {
-        case .user(let id, let text, let source, let from, _):
+        case .user(let id, let text, let source, let from, _, let files):
             if source == .user {
                 let seq = item.messageSeq
-                MessageContainer(itemID: id, seq: seq, text: text, fromUser: true, chat: chat) {
-                    UserBubble(text: text) { quote(forSeq: seq) }
+                if text.isEmpty, !files.isEmpty {
+                    // Only files: no bubble, just the pictures and chips.
+                    HStack {
+                        Spacer(minLength: 120)
+                        MessageFiles(files: files, agentID: agentID, server: server)
+                    }
+                } else {
+                    MessageContainer(
+                        itemID: id, seq: seq, text: text, fromUser: true, chat: chat, files: files, agentID: agentID,
+                        server: server
+                    ) {
+                        UserBubble(text: text) { quote(forSeq: seq) }
+                    }
                 }
             } else {
                 // Crew and schedule messages arrive as the agent's own input; name the sender above the bubble.

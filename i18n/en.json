@@ -1826,8 +1826,14 @@
   "server.tile.freeWord": "free",
   "usage.window.day": "Day",
   "usage.window.weekModel": "Week · {model}",
-  "usage.window.hours": {"one": "{count} hour", "other": "{count} hours"},
-  "usage.window.days": {"one": "{count} day", "other": "{count} days"},
+  "usage.window.hours": {
+    "one": "{count} hour",
+    "other": "{count} hours"
+  },
+  "usage.window.days": {
+    "one": "{count} day",
+    "other": "{count} days"
+  },
   "usage.window.minutes": "{minutes} min",
   "countdown.days": "in {count} d",
   "countdown.hours": "in {count} h",
@@ -1973,5 +1979,25 @@
   "reply.you": "You",
   "reply.earlier": "Earlier message",
   "reply.jump": "Go to the message",
-  "form.sent": "Sent…"
+  "form.sent": "Sent…",
+  "thread.browserRun.title": "Agent in the browser",
+  "thread.browserRun.titleDomain": "Agent in the browser · {domain}",
+  "thread.browserRun.watchBeside": "Watch beside",
+  "thread.browserRun.openBrowser": "Open browser",
+  "thread.browserRun.noPicture": "The picture of the page appears here",
+  "thread.link.fileHelp": "Opens in the panel · ⌥-click shows it in Files",
+  "thread.link.urlHelp": "Opens in the browser panel · ⌘-click opens in your browser",
+  "composer.attach.label": "Attach",
+  "composer.attach.file": "File or picture…",
+  "composer.attach.screenshot": "Screenshot",
+  "composer.attach.clipboard": "From clipboard",
+  "composer.attach.dropHint": "Drop to attach",
+  "composer.attach.remove": "Remove",
+  "composer.attach.uploading": "Uploading…",
+  "composer.attach.tooLarge": "Over 20 MB",
+  "composer.attach.badName": "This file name can't be attached",
+  "composer.attach.hiddenName": "A name that starts with a dot can't be attached",
+  "composer.attach.nameTooLong": "The file name is too long",
+  "composer.attach.failed": "Could not attach the file",
+  "viewer.saved": "✓ Saved"
 }

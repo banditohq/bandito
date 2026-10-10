@@ -272,6 +272,18 @@
 "common.now" = "刚刚";
 "common.recommended" = "推荐";
 "common.save" = "存储";
+"composer.attach.badName" = "此文件名无法添加";
+"composer.attach.clipboard" = "从剪贴板";
+"composer.attach.dropHint" = "松开即可添加附件";
+"composer.attach.failed" = "无法添加该文件";
+"composer.attach.file" = "文件或图片…";
+"composer.attach.hiddenName" = "以点开头的文件名无法添加";
+"composer.attach.label" = "添加附件";
+"composer.attach.nameTooLong" = "文件名过长";
+"composer.attach.remove" = "移除";
+"composer.attach.screenshot" = "屏幕截图";
+"composer.attach.tooLarge" = "超过 20 MB";
+"composer.attach.uploading" = "上传中…";
 "composer.contextHint" = "当前章节的占用程度";
 "composer.contextPopover" = "上下文：%1$@%%——这段对话占用的模型记忆量。达到 80%% 时，智能体会保存记忆并开始新的章节。";
 "composer.formGo" = "前往表单";
@@ -1664,6 +1676,11 @@
 "terminals.updateServer" = "请更新服务器以使用终端。";
 "thread.aTeammate" = "队友";
 "thread.attach" = "附加文件";
+"thread.browserRun.noPicture" = "页面画面将显示在这里";
+"thread.browserRun.openBrowser" = "打开浏览器";
+"thread.browserRun.title" = "智能体在浏览器中";
+"thread.browserRun.titleDomain" = "智能体在浏览器中 · %1$@";
+"thread.browserRun.watchBeside" = "在旁边查看";
 "thread.chapterNotSaved" = "第 %1$@ 章 · 记忆未保存";
 "thread.chapterNotSavedHelp" = "智能体在本章之前未能保存记忆。上一章的内容可能缺失。";
 "thread.copy" = "复制";
@@ -1675,6 +1692,8 @@
 "thread.hintSend" = "↵ 发送";
 "thread.hintStop" = "⌘. 停止";
 "thread.jumpToLatest" = "跳到最新消息";
+"thread.link.fileHelp" = "在面板中打开 · ⌥-点击则在“文件”中显示";
+"thread.link.urlHelp" = "在面板浏览器中打开 · ⌘-点击则在 Mac 浏览器中打开";
 "thread.messageFor" = "发给 %1$@ 的消息";
 "thread.messageFrom" = "来自 %1$@ 的消息";
 "thread.more" = "更多";
@@ -1787,6 +1806,7 @@
 "viewer.readOnly" = "只读";
 "viewer.save" = "存储";
 "viewer.saveError" = "无法存储：%1$@";
+"viewer.saved" = "✓ 已保存";
 "viewer.tooLarge" = "文件超过 2 MB，无法在此打开。请下载到 Mac。";
 "viewer.unsaved" = "有未存储的更改 · ⌘S";
 "workbench.add" = "添加标签页";

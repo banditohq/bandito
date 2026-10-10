@@ -47,7 +47,7 @@ enum AgentActivity: Equatable {
     /// thread has none yet.
     static func turnStart(in items: [ThreadItem]) -> Int64? {
         for item in items.reversed() {
-            if case .user(_, _, _, _, let ts) = item {
+            if case .user(_, _, _, _, let ts, _) = item {
                 return ts
             }
         }

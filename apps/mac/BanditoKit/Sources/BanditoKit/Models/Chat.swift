@@ -384,20 +384,8 @@ public enum ReactionBy: String, ForwardCompatibleEnum, CaseIterable {
     public static var fallback: ReactionBy { .agent }
 }
 
-/// A file a message carries (`attachments` of `message.user`).
-public struct MessageAttachment: Codable, Sendable, Hashable {
-    public var path: String
-    public var name: String
-    public var size: Int64
-    public var mime: String?
-
-    public init(path: String, name: String, size: Int64 = 0, mime: String? = nil) {
-        self.path = path
-        self.name = name
-        self.size = size
-        self.mime = mime
-    }
-}
+/// A file a message carries (`attachments` of `message.user`): the same shape as the one the person uploads.
+public typealias MessageAttachment = AgentAttachment
 
 /// The reactions on one message: at most one by the person and one by the agent. Each side remembers the `seq` of the
 /// event that set it, so that history read in pieces (a newer page first, an older page later) settles on the newest.

@@ -19,6 +19,18 @@ enum FilePanels {
         #endif
     }
 
+    /// Any files to attach, in the order the panel returns them. Empty when the user cancelled.
+    static func attachmentURLs() -> [URL] {
+        #if os(macOS)
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        return panel.runModal() == .OK ? panel.urls : []
+        #else
+        return []
+        #endif
+    }
+
     /// A JSON file to open, or `nil` if the user cancelled.
     static func openURL() -> URL? {
         #if os(macOS)

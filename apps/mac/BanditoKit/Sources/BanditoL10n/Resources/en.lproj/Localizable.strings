@@ -272,6 +272,18 @@
 "common.now" = "now";
 "common.recommended" = "Recommended";
 "common.save" = "Save";
+"composer.attach.badName" = "This file name can't be attached";
+"composer.attach.clipboard" = "From clipboard";
+"composer.attach.dropHint" = "Drop to attach";
+"composer.attach.failed" = "Could not attach the file";
+"composer.attach.file" = "File or picture…";
+"composer.attach.hiddenName" = "A name that starts with a dot can't be attached";
+"composer.attach.label" = "Attach";
+"composer.attach.nameTooLong" = "The file name is too long";
+"composer.attach.remove" = "Remove";
+"composer.attach.screenshot" = "Screenshot";
+"composer.attach.tooLarge" = "Over 20 MB";
+"composer.attach.uploading" = "Uploading…";
 "composer.contextHint" = "How full the current chapter is";
 "composer.contextPopover" = "Context: %1$@%% — how much of the model's memory this conversation takes. At 80%% the agent saves its memory and starts a new chapter.";
 "composer.formGo" = "Go to the form";
@@ -1664,6 +1676,11 @@
 "terminals.updateServer" = "Update the server to use terminals.";
 "thread.aTeammate" = "a teammate";
 "thread.attach" = "Attach files";
+"thread.browserRun.noPicture" = "The picture of the page appears here";
+"thread.browserRun.openBrowser" = "Open browser";
+"thread.browserRun.title" = "Agent in the browser";
+"thread.browserRun.titleDomain" = "Agent in the browser · %1$@";
+"thread.browserRun.watchBeside" = "Watch beside";
 "thread.chapterNotSaved" = "Chapter %1$@ · memory not saved";
 "thread.chapterNotSavedHelp" = "The agent could not save its memory before this chapter. Facts from the previous chapter may be missing.";
 "thread.copy" = "Copy";
@@ -1675,6 +1692,8 @@
 "thread.hintSend" = "↵ send";
 "thread.hintStop" = "⌘. stop";
 "thread.jumpToLatest" = "Jump to the newest message";
+"thread.link.fileHelp" = "Opens in the panel · ⌥-click shows it in Files";
+"thread.link.urlHelp" = "Opens in the browser panel · ⌘-click opens in your browser";
 "thread.messageFor" = "Message for %1$@";
 "thread.messageFrom" = "Message from %1$@";
 "thread.more" = "More";
@@ -1787,6 +1806,7 @@
 "viewer.readOnly" = "Read only";
 "viewer.save" = "Save";
 "viewer.saveError" = "Could not save: %1$@";
+"viewer.saved" = "✓ Saved";
 "viewer.tooLarge" = "The file is larger than 2 MB, so it can’t be opened here. Download it to your Mac.";
 "viewer.unsaved" = "Unsaved changes · ⌘S";
 "workbench.add" = "Add a tab";

@@ -835,5 +835,25 @@ mod tests {
         .await
         .unwrap_err();
         assert!(e.message.contains("not an attachment"), "{}", e.message);
+
+        // Files alone pass the empty-text check; without files an empty message is still refused.
+        let e = call(
+            &f,
+            &Peer::Local,
+            "agents.send",
+            json!({ "agent_id": f.agent, "text": "  " }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(e.message, "message is empty");
+        let e = call(
+            &f,
+            &Peer::Local,
+            "agents.send",
+            json!({ "agent_id": f.agent, "text": "", "attachments": ["/etc/hosts"] }),
+        )
+        .await
+        .unwrap_err();
+        assert!(e.message.contains("not an attachment"), "{}", e.message);
     }
 }
