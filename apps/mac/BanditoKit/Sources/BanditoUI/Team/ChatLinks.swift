@@ -1,9 +1,10 @@
 import Foundation
 
-/// What a link in a message opens: a file (as written: absolute, `~/…`, or relative to the agent's folder) or a web
-/// address.
+/// What a link in a message opens: a file (as written: absolute, `~/…`, or relative to the agent's folder), a path
+/// without an extension (a folder or a file, decided on the server when the link is clicked), or a web address.
 public enum ChatLinkTarget: Equatable, Sendable {
     case file(String)
+    case path(String)
     case url(String)
 }
 
@@ -53,8 +54,8 @@ public enum ChatLinks {
 
         for range in matches(wordPattern, in: text) {
             guard !taken.contains(where: { $0.overlaps(range) }) else { continue }
-            guard let (path, pathRange) = filePath(in: text, word: range) else { continue }
-            links.append(ChatLink(range: pathRange, target: .file(path)))
+            guard let (path, pathRange, isFile) = filePath(in: text, word: range) else { continue }
+            links.append(ChatLink(range: pathRange, target: isFile ? .file(path) : .path(path)))
         }
 
         return links.sorted { $0.range.lowerBound < $1.range.lowerBound }
@@ -78,9 +79,10 @@ public enum ChatLinks {
         return regex.matches(in: text, range: whole).compactMap { Range($0.range, in: text) }
     }
 
-    /// The file path a word stands for, with its range in the text, or `nil` when the word is not a file.
-    /// The trailing `:line` or `:line:column` is not part of the path, and it is not part of the link either.
-    private static func filePath(in text: String, word: Range<String.Index>) -> (String, Range<String.Index>)? {
+    /// The path a word stands for, with its range in the text, and whether it is a file (has an extension). `nil` when
+    /// the word is neither a file nor an absolute or `~/` path. The trailing `:line` or `:line:column` is not part of
+    /// the path, and it is not part of the link either.
+    private static func filePath(in text: String, word: Range<String.Index>) -> (String, Range<String.Index>, Bool)? {
         var range = word
         var raw = String(text[range])
         while let last = raw.last, trailingPunctuation.contains(last) {
@@ -92,8 +94,23 @@ public enum ChatLinks {
             raw = String(raw[..<colon.lowerBound])
             range = range.lowerBound..<text.index(range.lowerBound, offsetBy: raw.count)
         }
-        guard isFilePath(raw) else { return nil }
-        return (raw, range)
+        if isFilePath(raw) { return (raw, range, true) }
+        guard isFolderPath(raw) else { return nil }
+        // A trailing slash is not part of the folder's name.
+        let folder = raw.count > 1 ? String(raw.reversed().drop(while: { $0 == "/" }).reversed()) : raw
+        let end = text.index(range.lowerBound, offsetBy: folder.count)
+        return (folder, range.lowerBound..<end, false)
+    }
+
+    /// True for an absolute path or a `~/` path without an extension: `/Users/me/app`, `~/Documents`. An absolute one
+    /// needs two names (`/help` is a word, not a path); whether it exists is asked of the server on click.
+    static func isFolderPath(_ path: String) -> Bool {
+        guard !path.contains("//"), !path.contains("://"), !path.contains("..") else { return false }
+        let names = path.split(separator: "/", omittingEmptySubsequences: true)
+        guard let last = names.last, !last.contains(".") else { return false }
+        if path.hasPrefix("~/") { return names.count >= 2 && names[0] == "~" }
+        guard path.hasPrefix("/") else { return false }
+        return names.count >= 2
     }
 
     /// True for `name.ext`, `dir/name.ext`, `/abs/name.ext` and `~/name.ext` with a known extension.

@@ -38,7 +38,7 @@ enum ChatLinkText {
             let upper = result.index(result.startIndex, offsetByCharacters: plain.distance(from: plain.startIndex, to: link.range.upperBound))
             guard result[lower..<upper].link == nil else { continue }
             switch link.target {
-            case .file(let path):
+            case .file(let path), .path(let path):
                 result[lower..<upper].link = fileURL(path: path)
             case .url(let address):
                 result[lower..<upper].link = URL(string: address)
@@ -47,17 +47,29 @@ enum ChatLinkText {
         return result
     }
 
-    /// Opens a link from a message. A file opens in the workbench panel beside the chat; ⌥ shows it in Files instead.
-    /// A web address opens in the browser tab of the panel; ⌘ opens it in the browser of the Mac instead.
+    /// Opens a link from a message. A path is asked of the server first (`fs.stat`, which also expands `~/`): a
+    /// folder opens in Files, a file opens in the workbench panel beside the chat, and ⌥ shows a file in Files instead.
+    /// A path that is not there opens nothing. A web address opens in the browser tab of the panel; ⌘ opens it in
+    /// the browser of the Mac instead.
     @MainActor
     static func open(_ url: URL, agentID: String, folder: String?, server: ServerModel, router: Router) {
         let flags = NSEvent.modifierFlags
         if let path = filePath(of: url) {
-            let absolute = ChatLinks.absolutePath(path, folder: folder)
-            if flags.contains(.option) {
-                router.openInFiles(absolute, isFile: true)
-            } else {
-                router.showInWorkbench(.file(path: absolute), agentID: agentID)
+            let requested = ChatLinks.absolutePath(path, folder: folder)
+            Task { @MainActor in
+                guard let entry = try? await server.stat(requested) else { return }
+                switch entry.kind {
+                case .dir:
+                    router.openInFiles(entry.path, isFile: false)
+                case .file, .symlink:
+                    if flags.contains(.option) {
+                        router.openInFiles(entry.path, isFile: true)
+                    } else {
+                        router.showInWorkbench(.file(path: entry.path), agentID: agentID)
+                    }
+                case .other:
+                    return
+                }
             }
             return
         }

@@ -73,6 +73,28 @@ import Testing
         }
     }
 
+    /// The path links of a text (folders and other extension-less paths), as written.
+    private func paths(_ text: String) -> [String] {
+        ChatLinks.find(in: text).compactMap { link in
+            if case .path(let path) = link.target { return path }
+            return nil
+        }
+    }
+
+    @Test func absoluteAndHomePathsWithoutAnExtensionAreFolderLinks() {
+        #expect(paths("open /Users/me/app now") == ["/Users/me/app"])
+        #expect(paths("in ~/Documents/notes") == ["~/Documents/notes"])
+        #expect(paths("see /Users/me/app/") == ["/Users/me/app"], "a trailing slash is not part of the name")
+        #expect(files("see /Users/me/app").isEmpty, "a folder is not a file")
+    }
+
+    @Test func aSingleNameOrARelativePathIsNotAFolderLink() {
+        #expect(paths("use /help here").isEmpty)
+        #expect(paths("the src/app folder").isEmpty, "relative folders are not links")
+        #expect(paths("/Users/me/my.app is a bundle").isEmpty, "a dot makes it a file name")
+        #expect(paths("https://example.com/a/b").isEmpty)
+    }
+
     @Test func relativePathsJoinTheAgentFolder() {
         #expect(ChatLinks.absolutePath("Sources/a.swift", folder: "/work/app") == "/work/app/Sources/a.swift")
         #expect(ChatLinks.absolutePath("./a.txt", folder: "/work/app/") == "/work/app/a.txt")
