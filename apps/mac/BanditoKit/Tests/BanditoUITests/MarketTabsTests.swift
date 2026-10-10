@@ -43,7 +43,7 @@ import Testing
 
     @Test func eachPageHasItsOwnSidebarRows() {
         #expect(MarketTab.services.filterRows(categories: ["dev"]) == [.all, .connected, .category("dev")])
-        #expect(MarketTab.bots.filterRows(categories: ["ops", "dev"]) == [.all, .category("ops"), .category("dev")])
+        #expect(MarketTab.bots.filterRows(categories: ["ops", "dev"]) == [.all, .myBots, .category("ops"), .category("dev")])
         #expect(MarketTab.skills.filterRows(categories: []) == [.all, .installed])
         // The old helper of the services page keeps its rows.
         #expect(MarketFilter.rows(categories: ["web"]) == [.all, .connected, .category("web")])

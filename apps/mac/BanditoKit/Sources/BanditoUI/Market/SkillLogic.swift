@@ -22,6 +22,7 @@ enum SkillLogic {
             switch filter {
             case .all, .connected: true
             case .installed: State(skill).isInstalled
+            case .myBots: false
             case .category(let name): skill.category == name
             }
         }.filter { skill in

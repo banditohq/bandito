@@ -22,12 +22,40 @@ enum BotLogic {
         return templates.filter { template in
             switch filter {
             case .all, .connected, .installed: true
+            case .myBots: false
             case .category(let name): template.category == name
             }
         }.filter { template in
             needle.isEmpty
                 || template.searchNames(languageCode: languageCode).contains { $0.localizedCaseInsensitiveContains(needle) }
                 || template.description(languageCode: languageCode).localizedCaseInsensitiveContains(needle)
+        }
+    }
+
+    // MARK: my bots
+
+    /// A bot of the owner's: an agent made from a template. `template` is the catalog's entry, nil when the catalog
+    /// does not list it any more.
+    struct MyBot: Identifiable, Equatable {
+        let agent: Agent
+        let template: BotTemplate?
+        var id: String { agent.id }
+    }
+
+    /// The agents made from a template, in the order the server lists them (agents made by hand are left out). The
+    /// search keeps the bots whose agent name or template name contains it, ignoring case and spaces at the ends.
+    static func myBots(
+        agents: [Agent], templates: [BotTemplate], query: String, languageCode: String
+    ) -> [MyBot] {
+        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        return agents.compactMap { agent -> MyBot? in
+            guard let templateId = agent.templateId else { return nil }
+            let template = templates.first { $0.id == templateId }
+            guard !needle.isEmpty else { return MyBot(agent: agent, template: template) }
+            let templateName = template?.name(languageCode: languageCode) ?? ""
+            let matches = agent.name.localizedCaseInsensitiveContains(needle)
+                || templateName.localizedCaseInsensitiveContains(needle)
+            return matches ? MyBot(agent: agent, template: template) : nil
         }
     }
 

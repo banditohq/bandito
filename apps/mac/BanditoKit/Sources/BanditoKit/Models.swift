@@ -153,6 +153,9 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
     /// The main agent of the server: the one that hands out work to the others (`lead`, feature `lead`). One per
     /// server. A daemon without the feature sends none, and the agent is then not main.
     public var lead: Bool
+    /// The agent template this bot was made from (`agents.create_from_template`); `nil` for an agent made by hand, and
+    /// for a daemon that does not send the field. Read only: the app never sends it.
+    public var templateId: String?
     /// The newest user or assistant message; `nil` when there is none, or when the daemon predates the field.
     public var lastMessage: LastMessage?
     /// The status from the agent's newest `agent.status` event; `nil` before any, or when the daemon predates the field.
@@ -188,8 +191,10 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
         avatar: AvatarSpec? = nil,
         capabilities: [String]? = nil,
         integrations: [String]? = nil,
-        lead: Bool = false
+        lead: Bool = false,
+        templateId: String? = nil
     ) {
+        self.templateId = templateId
         self.lead = lead
         self.avatar = avatar
         self.capabilities = capabilities
@@ -257,6 +262,7 @@ public struct Agent: Codable, Sendable, Identifiable, Hashable {
         capabilities = try c.decodeIfPresent([String].self, forKey: .capabilities)
         integrations = try c.decodeIfPresent([String].self, forKey: .integrations)
         lead = try c.decodeIfPresent(Bool.self, forKey: .lead) ?? false
+        templateId = try c.decodeIfPresent(String.self, forKey: .templateId)
         status = try c.decodeIfPresent(AgentStatus.self, forKey: .status)
         pendingApprovals = try c.decodeIfPresent(Int.self, forKey: .pendingApprovals) ?? 0
         pendingApprovalIds = Set(try c.decodeIfPresent([String].self, forKey: .pendingApprovalIds) ?? [])

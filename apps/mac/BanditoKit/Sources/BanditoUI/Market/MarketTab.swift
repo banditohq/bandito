@@ -36,11 +36,11 @@ public enum MarketTab: String, CaseIterable, Identifiable, Sendable {
         available.contains(chosen) ? chosen : .services
     }
 
-    /// The sidebar rows of the page: All, then what the page filters by, then its categories.
+    /// The sidebar rows of the page: All, then what the page filters by (Bots: My bots), then its categories.
     public func filterRows(categories: [String]) -> [MarketFilter] {
         switch self {
         case .services: [.all, .connected] + categories.map { .category($0) }
-        case .bots: [.all] + categories.map { .category($0) }
+        case .bots: [.all, .myBots] + categories.map { .category($0) }
         case .skills: [.all, .installed] + categories.map { .category($0) }
         }
     }

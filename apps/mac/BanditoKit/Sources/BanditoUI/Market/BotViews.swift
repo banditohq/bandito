@@ -64,8 +64,11 @@ struct BotsPage: View {
     let integrations: [Integration]
     let query: String
     let languageCode: String
+    /// The agents of the server; the My bots filter takes the ones made from a template.
+    let agents: [Agent]
     var onView: (BotTemplate) -> Void
     var onCreate: (BotTemplate) -> Void
+    var onOpen: (Agent) -> Void
     var onRetry: () -> Void
 
     @Environment(Router.self) private var router
@@ -73,9 +76,38 @@ struct BotsPage: View {
     private let columns = [GridItem(.adaptive(minimum: 260), spacing: 14, alignment: .top)]
 
     var body: some View {
+        if router.marketBotFilter == .myBots {
+            myBots
+        } else {
+            templateGrid
+        }
+    }
+
+    /// The bots the owner made from a template, one card each. Empty: a short hint, or "nothing found" for a search.
+    private var myBots: some View {
+        let bots = BotLogic.myBots(agents: agents, templates: model.templates, query: query, languageCode: languageCode)
+        return VStack(alignment: .leading, spacing: 14) {
+            SectionLabel(L10n.Market.Filter.myBots)
+            if !bots.isEmpty {
+                LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
+                    ForEach(bots) { bot in
+                        MyBotCard(bot: bot, languageCode: languageCode, onOpen: { onOpen(bot.agent) })
+                    }
+                }
+            } else {
+                Text(query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? L10n.Market.MyBots.empty : L10n.Market.noResults)
+                    .font(BanditoFont.text(size: 13, weight: 400))
+                    .foregroundStyle(Color.Bandito.text3)
+                    .padding(.vertical, 6)
+            }
+        }
+    }
+
+    /// The templates of the sidebar's filter and the search: the catalog grid.
+    private var templateGrid: some View {
         let shown = BotLogic.visible(
             model.templates, filter: router.marketBotFilter, query: query, languageCode: languageCode)
-        VStack(alignment: .leading, spacing: 14) {
+        return VStack(alignment: .leading, spacing: 14) {
             SectionLabel(L10n.Market.Bots.catalog)
             if !shown.isEmpty {
                 LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
@@ -163,6 +195,58 @@ struct BotCard: View {
             }
         }
         .frame(height: 22)
+    }
+}
+
+/// A bot the owner made from a template: its name, the template it came from, and Open, which shows its chat.
+struct MyBotCard: View {
+    let bot: BotLogic.MyBot
+    let languageCode: String
+    var onOpen: () -> Void
+
+    var body: some View {
+        MarketCardFrame {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    tile
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(bot.agent.name)
+                            .font(BanditoFont.text(size: 14, weight: 600))
+                            .foregroundStyle(Color.Bandito.text)
+                            .lineLimit(1)
+                        if let templateName = bot.template?.name(languageCode: languageCode) {
+                            Text(templateName)
+                                .font(BanditoFont.text(size: 11, weight: 400))
+                                .foregroundStyle(Color.Bandito.text3)
+                                .lineLimit(1)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
+                Spacer(minLength: 0)
+                HStack {
+                    Spacer(minLength: 0)
+                    Button(L10n.Market.MyBots.open, action: onOpen)
+                        .banditoButton(.lightPill())
+                        .fixedSize()
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, minHeight: 130, alignment: .topLeading)
+        }
+        .onTapGesture(perform: onOpen)
+    }
+
+    @ViewBuilder
+    private var tile: some View {
+        if let template = bot.template {
+            BotTile(template: template, size: 36)
+        } else {
+            MarketTileSurface(color: MarketTileStyle.color(hex: nil, name: bot.agent.name), size: 36) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 36 * 0.44, weight: .semibold))
+            }
+        }
     }
 }
 
