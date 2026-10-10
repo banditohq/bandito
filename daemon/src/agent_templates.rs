@@ -38,6 +38,7 @@ pub struct AgentTemplate {
     /// `#RRGGBB`, muted enough to read on the dark background.
     pub accent: String,
     pub role_en: String,
+    pub role_ru: String,
     pub system_prompt: String,
     pub runtime: String,
     pub effort: Option<Effort>,
@@ -56,6 +57,7 @@ pub struct AgentTemplate {
 #[serde(deny_unknown_fields)]
 pub struct Localized {
     pub name: String,
+    pub role: String,
     pub description: String,
     pub long: String,
     pub starter: String,
@@ -157,6 +159,7 @@ mod tests {
                 ("long_en", &t.long_en),
                 ("long_ru", &t.long_ru),
                 ("role_en", &t.role_en),
+                ("role_ru", &t.role_ru),
                 ("system_prompt", &t.system_prompt),
                 ("starter_en", &t.starter_en),
                 ("starter_ru", &t.starter_ru),
@@ -175,6 +178,7 @@ mod tests {
             for (lang, l) in &t.l10n {
                 for (field, value) in [
                     ("name", &l.name),
+                    ("role", &l.role),
                     ("description", &l.description),
                     ("long", &l.long),
                     ("starter", &l.starter),

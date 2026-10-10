@@ -91,7 +91,7 @@ async fn create_from(app: &App, t: &AgentTemplate, req: CreateFromTemplate) -> R
     // The same defaults as `agents.create` (the serde defaults of NewAgent), then the template's fields.
     let mut new_agent: NewAgent = serde_json::from_value(json!({ "name": name, "runtime": runtime }))
         .map_err(|e| RpcError::new(SERVER_ERROR, format!("agent defaults: {e}")))?;
-    new_agent.role = t.role_en.clone();
+    new_agent.role = template_role(t, &language);
     new_agent.model = req.model;
     new_agent.system_prompt = Some(t.system_prompt.clone());
     new_agent.effort = t.effort.map(store_effort);
@@ -210,6 +210,21 @@ fn schedule_prompt(t: &AgentTemplate, index: usize, s: &TemplateSchedule, langua
     }
 }
 
+/// The bot's role in `language` (a tag `resolve_language` returned), by the rule of the schedule prompts: `ru` and `en`
+/// take the template's own role, another language its `l10n` role, English when that is empty.
+fn template_role(t: &AgentTemplate, language: &str) -> String {
+    match language {
+        "ru" => t.role_ru.clone(),
+        "en" => t.role_en.clone(),
+        other => t
+            .l10n
+            .get(other)
+            .map(|l| l.role.clone())
+            .filter(|r| !r.trim().is_empty())
+            .unwrap_or_else(|| t.role_en.clone()),
+    }
+}
+
 /// The language a request names, as the template's schedule prompts know it: `ru`, `en` or a key of `l10n`. Matching
 /// ignores case (`pt-br` is `pt-BR`). A tag that matches nothing falls back to its primary subtag (`ru-RU` is `ru`),
 /// then to `en`.
@@ -318,7 +333,10 @@ mod tests {
 
         let agent = &reply["agent"];
         assert_eq!(agent["name"], "Reviewer");
-        assert_eq!(agent["role"], t.role_en);
+        assert_eq!(
+            agent["role"], t.role_ru,
+            "the role is in the language the request names (ru)"
+        );
         assert_eq!(agent["system_prompt"], t.system_prompt);
         assert_eq!(agent["runtime"], "claude", "the template's runtime by default");
         assert_eq!(agent["capabilities"], json!(t.capabilities));
@@ -332,6 +350,28 @@ mod tests {
         assert_eq!(schedules[0].cron, t.schedules[0].cron);
         assert!(schedules[0].enabled, "the owner chose it, so it is on");
         assert_eq!(reply["schedule_ids"], json!([schedules[0].id]));
+    }
+
+    #[tokio::test]
+    async fn the_role_follows_the_language_ru_de_and_unknown_falls_back_to_english() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, _) = app(dir.path());
+        let t = template("morning-digest");
+        let cases = [
+            ("ru", t.role_ru.clone()),
+            ("de", t.l10n["de"].role.clone()),
+            ("xx", t.role_en.clone()),
+        ];
+        for (language, expected) in cases {
+            let reply = call(
+                &app,
+                "agents.create_from_template",
+                request("morning-digest", &format!("Role {language}"), language, json!([])),
+            )
+            .await
+            .unwrap();
+            assert_eq!(reply["agent"]["role"], expected, "{language}");
+        }
     }
 
     #[tokio::test]
