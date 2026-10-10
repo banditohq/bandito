@@ -1,6 +1,6 @@
 [package]
 name = "bandito"
-version = "0.1.5"
+version = "0.1.6"
 license = "FSL-1.1-ALv2"
 edition = "2024"
 
