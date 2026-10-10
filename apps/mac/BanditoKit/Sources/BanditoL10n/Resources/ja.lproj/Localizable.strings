@@ -208,6 +208,7 @@
 "backups.emptyMessage" = "デーモンは次回の起動時に最初のコピーを作成します。";
 "backups.emptyTitle" = "まだコピーがありません";
 "backups.explain" = "デーモンは起動時、更新の前、そして1日に1回、データベースのコピーを保存します。最新の14件を保管します。";
+"backups.leaveSafeMode" = "データベースを確認してセーフモードを終了";
 "backups.reason.beforeRestore" = "復元の前";
 "backups.reason.broken" = "復元前に保存した破損データベース";
 "backups.reason.daily" = "毎日";
@@ -939,6 +940,7 @@
 "message.reactionMine" = "リアクションを外す";
 "message.reactionOf" = "%1$@のリアクション";
 "message.reactionSame" = "同じリアクションをする";
+"message.resend" = "もう一度送る";
 "message.selectText" = "テキストを選択";
 "mode.browser" = "ブラウザ";
 "mode.connectServer" = "使用するにはサーバーを接続してください。";
@@ -1923,7 +1925,9 @@
 "thread.messageFor" = "%1$@ へのメッセージ";
 "thread.messageFrom" = "%1$@ からのメッセージ";
 "thread.more" = "その他";
+"thread.notDelivered" = "未配信";
 "thread.placeholder" = "タスクや質問を入力…";
+"thread.queued" = "順番待ち";
 "thread.react" = "リアクション";
 "thread.reply" = "返信";
 "thread.reviewApproved" = "%1$@ が変更を確認 · 承認";

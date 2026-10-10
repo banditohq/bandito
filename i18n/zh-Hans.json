@@ -1,5 +1,7 @@
 {
   "thread.savingMemory": "开始新章节前保存记忆",
+  "thread.queued": "排队中",
+  "thread.notDelivered": "未送达",
   "thread.aTeammate": "队友",
   "onboarding.server.newHostTitle": "新服务器 — 请确认",
   "onboarding.skip": "稍后设置",
@@ -2139,6 +2141,7 @@
   "message.reactMore": "更多…",
   "message.reactPickerHint": "请在面板中选择表情",
   "message.copied": "已复制",
+  "message.resend": "重新发送",
   "message.more": "更多",
   "message.copyAsText": "复制为文本",
   "message.selectText": "选择文字",
@@ -2227,5 +2230,6 @@
   "integrations.custom.add": "添加",
   "integrations.custom.trialNote": "检查时会先以关闭状态添加服务器。不点“添加”就关闭会将其移除。",
   "integrations.problem.quoteUnclosed": "命令中的引号没有闭合。",
-  "integrations.oauth.connected": "已连接"
+  "integrations.oauth.connected": "已连接",
+  "backups.leaveSafeMode": "检查数据库并退出安全模式"
 }

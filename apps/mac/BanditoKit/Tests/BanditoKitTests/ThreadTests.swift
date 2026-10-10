@@ -96,6 +96,147 @@ import Testing
         }
     }
 
+    /// The bug found live: the person wrote while the agent saved its memory, the message was not shown, and the
+    /// counter ran from the last message shown (hours ago).
+    @Test mutating func messageSentDuringTheMemorySaveShowsAtOnceAndMovesBelowTheChapter() {
+        var t = AgentThread()
+        t.apply(ev(.messageUser(text: "old question", source: .user, fromAgent: nil)))
+        t.apply(ev(.turnCompleted(turnId: "t0", status: .ok, usage: nil, costUsd: nil)))
+        // The memory save begins; the person writes meanwhile and the daemon shows the message at once, queued.
+        t.apply(ev(.turnStarted(turnId: "w", source: .system)))
+        t.apply(ev(.messageUser(text: "Update your memory files.", source: .system, fromAgent: nil)))
+        t.apply(ev(.messageUser(text: "Which tasks do I have?", source: .user, fromAgent: nil, queued: true)))
+        let queuedSeq = seq
+        #expect(t.waitingSeqs == [queuedSeq])
+        #expect(t.items.contains { if case .user(_, "Which tasks do I have?", _, _, _, _) = $0 { true } else { false } })
+
+        t.apply(ev(.turnCompleted(turnId: "w", status: .ok, usage: nil, costUsd: nil)))
+        t.apply(ev(.sessionRotated(chapter: 2, reason: "context", contextTokens: 130_000)))
+        // Below the divider, where the agent reads it, and only once.
+        let kinds = t.items.map { item -> String in
+            switch item {
+            case .chapter: "chapter"
+            case .user(_, let text, _, _, _, _): "user:\(text)"
+            default: "other"
+            }
+        }
+        #expect(kinds.filter { $0 == "user:Which tasks do I have?" }.count == 1)
+        #expect(kinds.suffix(2) == ["chapter", "user:Which tasks do I have?"])
+
+        // Its turn begins: no longer waiting, and no second copy.
+        t.apply(ev(.turnStarted(turnId: "t1", source: .user, messageSeq: queuedSeq)))
+        #expect(t.waitingSeqs.isEmpty)
+        #expect(t.items.filter { if case .user(_, "Which tasks do I have?", _, _, _, _) = $0 { true } else { false } }.count == 1)
+    }
+
+    @Test mutating func messageQueuedBehindARunningTurnWaitsUntilItsTurnNamesIt() {
+        var t = AgentThread()
+        t.apply(ev(.turnStarted(turnId: "a", source: .user)))
+        t.apply(ev(.messageUser(text: "first", source: .user, fromAgent: nil)))
+        t.apply(ev(.messageUser(text: "second", source: .user, fromAgent: nil, queued: true)))
+        let second = seq
+        #expect(t.waitingSeqs == [second])
+        // The first turn ends and the second begins: the order of the items did not change.
+        t.apply(ev(.turnCompleted(turnId: "a", status: .ok, usage: nil, costUsd: nil)))
+        t.apply(ev(.turnStarted(turnId: "b", source: .user, messageSeq: second)))
+        #expect(t.waitingSeqs.isEmpty)
+        #expect(t.items.map(\.id).count == 2)
+    }
+
+    /// Merging a page of history with live events must not bring a started message back to the queue.
+    @Test mutating func aStartedMessageStaysStartedAfterAMerge() {
+        var live = AgentThread()
+        live.apply(ev(.messageUser(text: "q", source: .user, fromAgent: nil, queued: true)))
+        let q = seq
+        live.apply(ev(.turnStarted(turnId: "b", source: .user, messageSeq: q)))
+        var page = AgentThread()
+        page.apply(Event(seq: q, agentId: "a", ts: 1, body: .messageUser(text: "q", source: .user, fromAgent: nil, queued: true)))
+        #expect(page.waitingSeqs == [q])
+        page.mergeMessageMeta(from: live)
+        #expect(page.waitingSeqs.isEmpty)
+    }
+
+    /// The counter counts from the start of the running turn, not from the newest message shown.
+    @Test mutating func turnStartIsTheTurnNotTheLastMessage() {
+        var t = AgentThread()
+        t.apply(Event(seq: 1, agentId: "a", ts: 1_000, body: .messageUser(text: "hi", source: .user, fromAgent: nil)))
+        t.apply(Event(seq: 2, agentId: "a", ts: 1_001, body: .turnCompleted(turnId: "t", status: .ok, usage: nil, costUsd: nil)))
+        #expect(t.turnStartedAt == nil)
+        // Hours later the memory save runs.
+        t.apply(Event(seq: 3, agentId: "a", ts: 13_000_000, body: .turnStarted(turnId: "w", source: .system)))
+        #expect(t.turnStartedAt == 13_000_000)
+        t.apply(Event(seq: 4, agentId: "a", ts: 13_050_000, body: .turnCompleted(turnId: "w", status: .ok, usage: nil, costUsd: nil)))
+        #expect(t.turnStartedAt == nil)
+        t.apply(Event(seq: 5, agentId: "a", ts: 13_060_000, body: .turnStarted(turnId: "t2", source: .user, messageSeq: nil)))
+        #expect(t.turnStartedAt == 13_060_000)
+    }
+
+    @Test func queuedFlagsDecodeFromTheWire() throws {
+        let message = Data(
+            #"{"seq":5,"agent_id":"a","ts":1,"kind":"message.user","payload":{"text":"x","source":"user","queued":true}}"#.utf8)
+        let plain = Data(#"{"seq":6,"agent_id":"a","ts":1,"kind":"message.user","payload":{"text":"x","source":"user"}}"#.utf8)
+        let turn = Data(
+            #"{"seq":7,"agent_id":"a","ts":1,"kind":"turn.started","payload":{"turn_id":"t","source":"user","message_seq":5}}"#.utf8)
+        guard case .messageUser(_, _, _, _, _, let queued) = try RPCClient.decoder.decode(Event.self, from: message).body,
+            case .messageUser(_, _, _, _, _, let notQueued) = try RPCClient.decoder.decode(Event.self, from: plain).body,
+            case .turnStarted(_, _, let messageSeq) = try RPCClient.decoder.decode(Event.self, from: turn).body
+        else {
+            Issue.record("unexpected bodies")
+            return
+        }
+        #expect(queued && !notQueued)
+        #expect(messageSeq == 5)
+    }
+
+    @Test mutating func aDroppedMessageIsUndeliveredNotWaiting() {
+        var t = AgentThread()
+        t.apply(ev(.messageUser(text: "first", source: .user, fromAgent: nil)))
+        t.apply(ev(.messageUser(text: "lost", source: .user, fromAgent: nil, queued: true)))
+        let lost = seq
+        #expect(t.waitingSeqs == [lost] && t.undeliveredSeqs.isEmpty)
+        t.apply(ev(.messageDropped(seq: lost, reason: "restart")))
+        #expect(t.waitingSeqs.isEmpty)
+        #expect(t.undeliveredSeqs == [lost])
+        // The message itself stays in the thread.
+        #expect(t.items.count == 2)
+    }
+
+    /// The page boundary falls between the queued message and the chapter divider: the order is the same as when
+    /// everything is read at once.
+    @Test mutating func waitingMessageMovesBelowTheDividerWhenThePagesAreMerged() {
+        var all: [Event] = []
+        func add(_ body: EventBody, _ t: inout ThreadTests) { all.append(t.ev(body)) }
+        add(.messageUser(text: "work", source: .user, fromAgent: nil), &self)
+        add(.turnCompleted(turnId: "t0", status: .ok, usage: nil, costUsd: nil), &self)
+        add(.messageUser(text: "Update your memory files.", source: .system, fromAgent: nil), &self)
+        add(.messageUser(text: "asked while saving", source: .user, fromAgent: nil, queued: true), &self)
+        let queued = seq
+        // page boundary here
+        add(.turnCompleted(turnId: "w", status: .ok, usage: nil, costUsd: nil), &self)
+        add(.sessionRotated(chapter: 2, reason: "context", contextTokens: 130_000), &self)
+        add(.turnStarted(turnId: "t1", source: .user, messageSeq: queued), &self)
+        add(.messageAssistant(text: "here you go"), &self)
+
+        var whole = AgentThread()
+        for e in all { whole.apply(e) }
+
+        var newer = AgentThread()
+        for e in all[4...] { newer.apply(e) }
+        var older = AgentThread()
+        for e in all[..<4] { older.apply(e) }
+        // As `loadOlder` does it.
+        var merged = newer
+        merged.items = older.items + newer.items
+        merged.mergeMessageMeta(from: older)
+
+        #expect(merged.items.map(\.id) == whole.items.map(\.id))
+        let ids = merged.items.map(\.id)
+        let divider = ids.firstIndex { $0.hasPrefix("s") && merged.items[ids.firstIndex(of: $0)!].isChapter } ?? -1
+        #expect(ids[divider + 1] == ThreadItem.messageID(seq: queued))
+        #expect(ids.filter { $0 == ThreadItem.messageID(seq: queued) }.count == 1)
+        #expect(merged.waitingSeqs.isEmpty)
+    }
+
     @Test mutating func sessionRotatedIsANote() {
         var t = AgentThread()
         t.apply(ev(.sessionRotated(chapter: 2, reason: "smart", contextTokens: 120_400)))

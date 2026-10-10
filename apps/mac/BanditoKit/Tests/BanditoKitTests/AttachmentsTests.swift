@@ -59,7 +59,7 @@ import Testing
         let e = try decode(
             #"{"seq":3,"agent_id":"a1","ts":1,"kind":"message.user","payload":{"text":"look","source":"user","attachments":[{"path":"/w/.bandito/attachments/2026-10-10/a.png","name":"a.png","size":12,"mime":"image/png"}]}}"#
         )
-        guard case .messageUser(let text, _, _, _, let files) = e.body else {
+        guard case .messageUser(let text, _, _, _, let files, _) = e.body else {
             Issue.record("wrong body \(e.body)")
             return
         }
@@ -69,7 +69,7 @@ import Testing
 
     @Test func messageUserWithoutFilesStillDecodes() throws {
         let e = try decode(#"{"seq":4,"agent_id":"a1","ts":1,"kind":"message.user","payload":{"text":"hi","source":"user"}}"#)
-        guard case .messageUser(_, _, _, _, let files) = e.body else {
+        guard case .messageUser(_, _, _, _, let files, _) = e.body else {
             Issue.record("wrong body \(e.body)")
             return
         }

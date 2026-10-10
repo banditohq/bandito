@@ -122,7 +122,7 @@ pub async fn dispatch(app: &App, _peer: &Peer, method: &str, p: Value) -> RpcRes
             let seq = match r.seq {
                 Some(seq) => seq,
                 None => store
-                    .last_user_message_seq(&r.agent_id)
+                    .current_user_message_seq(&r.agent_id)
                     .map_err(server)?
                     .ok_or_else(|| RpcError::new(INVALID_PARAMS, "no message from the person to react to"))?,
             };
@@ -644,6 +644,7 @@ mod tests {
                     turn_id: "t".into(),
                     source: Source::User,
                     reactions_until: None,
+                    message_seq: None,
                 },
             )
             .unwrap()
@@ -684,6 +685,7 @@ mod tests {
                     command: None,
                     reply_to: None,
                     attachments: Vec::new(),
+                    queued: false,
                 },
             )
             .unwrap()
@@ -712,6 +714,51 @@ mod tests {
         .await
         .unwrap_err();
         assert_eq!(e.code, INVALID_PARAMS);
+    }
+
+    #[tokio::test]
+    async fn the_agent_reacts_to_the_message_of_its_turn_not_to_one_waiting_behind_it() {
+        let f = fixture();
+        let agent = Peer::Agent(f.agent.clone());
+        let user = |text: &str, queued| EventBody::MessageUser {
+            text: text.into(),
+            source: Source::User,
+            from_agent: None,
+            command: None,
+            reply_to: None,
+            attachments: Vec::new(),
+            queued,
+        };
+        let turn = |message_seq| EventBody::TurnStarted {
+            turn_id: "t".into(),
+            source: Source::User,
+            reactions_until: None,
+            message_seq,
+        };
+        // A is answered now; B arrived during the turn and waits.
+        f.store.append_event(&f.agent, turn(None)).unwrap();
+        let a = f.store.append_event(&f.agent, user("A", false)).unwrap().seq;
+        let b = f.store.append_event(&f.agent, user("B", true)).unwrap().seq;
+        let r = call(
+            &f,
+            &agent,
+            "messages.agent.react",
+            json!({ "agent_id": f.agent, "emoji": "👀" }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(r["seq"], a);
+        // B's turn begins: it names B, so B is what the agent answers.
+        f.store.append_event(&f.agent, turn(Some(b))).unwrap();
+        let r = call(
+            &f,
+            &agent,
+            "messages.agent.react",
+            json!({ "agent_id": f.agent, "emoji": "👀" }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(r["seq"], b);
     }
 
     #[tokio::test]

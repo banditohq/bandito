@@ -46,6 +46,27 @@ import Testing
         await model.disconnect()
     }
 
+    @Test func sendingAnUndeliveredMessageAgainKeepsItsReplyOnceOnly() async throws {
+        let (model, fake) = await connected(features: ["attachments"], extra: ["agents.send": { _ in "{}" }])
+        let lines = [
+            #"{"seq":3,"agent_id":"a","ts":1,"kind":"message.user","payload":{"text":"yes","source":"user","reply_to":2,"queued":true}}"#,
+            #"{"seq":4,"agent_id":"a","ts":2,"kind":"message.dropped","payload":{"seq":3,"reason":"restart"}}"#,
+        ]
+        for line in lines { model.apply(try RPCClient.decoder.decode(Event.self, from: Data(line.utf8))) }
+        #expect(model.thread(for: "a").undeliveredSeqs == [3])
+
+        try await model.resendUndelivered(3, of: "a")
+        // The line is gone at once, and a second click sends nothing.
+        #expect(model.thread(for: "a").undeliveredSeqs.isEmpty)
+        try await model.resendUndelivered(3, of: "a")
+        let sent = JSONRPC.requests(of: "agents.send", in: await fake.sentTexts())
+        #expect(sent.count == 1)
+        let p = try params(try #require(sent.first))
+        #expect(p["text"] as? String == "yes")
+        #expect(p["reply_to"] as? Int == 2)
+        await model.disconnect()
+    }
+
     @Test func aPlainMessageHasNoReplyTo() async throws {
         let (model, fake) = await connected(features: ["attachments"], extra: ["agents.send": { _ in "{}" }])
         try await model.send("hi", to: "a")

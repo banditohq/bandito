@@ -79,6 +79,7 @@ The composer sits at the bottom of the thread. It sends the message to the selec
 Где: Team → agent thread → composer (Message {name})
 1. Click in the field and type. Press ↵ to send (↵ send). Press ⇧↵ for a new line (⇧↵ new line).
 2. While the agent is working, the send button becomes Stop (Остановить). Press ⌘. to stop the turn (⌘. stop).
+3. A message you send while the agent is busy, or saving its memory before a new chapter, appears in the chat at once with the line Queued (В очереди) below it. The line goes away when the agent takes the message. If the agent stopped or the server restarted before it did, the line reads Not delivered (Не доставлено); right-click the message and choose Send again (Отправить снова). After a new chapter begins, the message sits below the chapter divider, where the agent reads it. The counter beside Thinking… counts from the start of the current turn.
 
 ## Attach a file to a message
 

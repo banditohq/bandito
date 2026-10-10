@@ -96,6 +96,13 @@ struct BackupsView: View {
             Text(L10n.Backups.safeModeHint)
                 .font(BanditoFont.text(size: 13, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
+            Button(L10n.Backups.leaveSafeMode) {
+                if let server { Task { await model.leaveSafeMode(on: server) } }
+            }
+            .banditoButton(.quiet())
+            .fixedSize()
+            .disabled(!canAct)
+            .padding(.top, 4)
         }
         .fixedSize(horizontal: false, vertical: true)
         .padding(16)
@@ -290,23 +297,49 @@ final class BackupsModel {
             return
         }
         phase = .restarting
+        guard await waitForRestart(server, startedBefore: startedBefore) else { return }
+        // The outcome comes from the daemon's record of this request (matched by its id), not from the restart itself.
+        outcome = RestoreOutcome.from(
+            requested: backup.name,
+            requestID: requestID,
+            record: server.info?.lastRestore,
+            before: recordBefore
+        )
+        await load(server)
+    }
+
+    /// Asks the daemon to leave safe mode. It refuses while the database still does not open (the reason is shown);
+    /// otherwise it restarts with the database, and the list is read again.
+    func leaveSafeMode(on server: ServerModel) async {
+        guard !isBusy, server.isConnectedNow else { return }
+        let startedBefore = server.info?.startedAt
+        phase = .restoring
+        failure = nil
+        outcome = nil
+        do {
+            try await server.leaveSafeMode()
+        } catch {
+            phase = .idle
+            failure = UserFacingError.message(for: error)
+            return
+        }
+        phase = .restarting
+        guard await waitForRestart(server, startedBefore: startedBefore) else { return }
+        await load(server)
+    }
+
+    /// Waits for the server to come back on a new start (its start time changes; an old link that is still up does
+    /// not count). Sets the phase to idle, or to timed out after `restartTimeout`.
+    private func waitForRestart(_ server: ServerModel, startedBefore: Int64?) async -> Bool {
         let deadline = ContinuousClock.now.advanced(by: Self.restartTimeout)
         while ContinuousClock.now < deadline {
             try? await Task.sleep(for: .seconds(1))
             if server.isConnectedNow, let started = server.info?.startedAt, started != startedBefore {
                 phase = .idle
-                // The outcome comes from the daemon's record of this request (matched by its id), not from the
-                // restart itself.
-                outcome = RestoreOutcome.from(
-                    requested: backup.name,
-                    requestID: requestID,
-                    record: server.info?.lastRestore,
-                    before: recordBefore
-                )
-                await load(server)
-                return
+                return true
             }
         }
         phase = .timedOut
+        return false
     }
 }

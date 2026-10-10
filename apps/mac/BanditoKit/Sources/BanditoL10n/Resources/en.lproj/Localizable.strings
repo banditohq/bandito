@@ -208,6 +208,7 @@
 "backups.emptyMessage" = "The daemon makes the first copy at its next start.";
 "backups.emptyTitle" = "No copies yet";
 "backups.explain" = "The daemon saves a copy of the database at start, before an update and once a day. The last 14 are kept.";
+"backups.leaveSafeMode" = "Check the database and leave safe mode";
 "backups.reason.beforeRestore" = "Before restore";
 "backups.reason.broken" = "Damaged database saved before a restore";
 "backups.reason.daily" = "Daily";
@@ -939,6 +940,7 @@
 "message.reactionMine" = "Take your reaction off";
 "message.reactionOf" = "Reaction from %1$@";
 "message.reactionSame" = "React the same way";
+"message.resend" = "Send again";
 "message.selectText" = "Select text";
 "mode.browser" = "Browser";
 "mode.connectServer" = "Connect a server to use it.";
@@ -1923,7 +1925,9 @@
 "thread.messageFor" = "Message for %1$@";
 "thread.messageFrom" = "Message from %1$@";
 "thread.more" = "More";
+"thread.notDelivered" = "Not delivered";
 "thread.placeholder" = "Write a task or a question…";
+"thread.queued" = "Queued";
 "thread.react" = "React";
 "thread.reply" = "Reply";
 "thread.reviewApproved" = "%1$@ reviewed the changes · approved";

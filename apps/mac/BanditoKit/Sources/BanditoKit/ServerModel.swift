@@ -656,6 +656,7 @@ public final class ServerModel: Identifiable {
             t.status = live.status
             t.statusDetail = live.statusDetail
             t.turnRunning = live.turnRunning
+            t.turnStartedAt = live.turnStartedAt
             t.lastSeq = max(t.lastSeq, live.lastSeq)
             t.mergeMessageMeta(from: live)
         }
@@ -707,6 +708,24 @@ public final class ServerModel: Identifiable {
             agentId: agentId, text: text, attachments: attachments.isEmpty ? nil : attachments.map(\.path),
             replyTo: supports("attachments") ? replyTo : nil)
         try await rpc().call("agents.send", request)
+    }
+
+    /// Sends an undelivered message again, with its files and the message it answered. The line "Not delivered" goes
+    /// away at once, so a second click does nothing; a failed send brings it back.
+    public func resendUndelivered(_ seq: Int64, of agentId: String) async throws {
+        guard var thread = threads[agentId], thread.undeliveredSeqs.contains(seq),
+            case .user(_, let text, _, _, _, _)? = thread.items.first(where: { $0.id == ThreadItem.messageID(seq: seq) })
+        else { return }
+        let files = thread.attachments[seq] ?? []
+        let replyTo = thread.replies[seq]
+        thread.markResent(seq)
+        threads[agentId] = thread
+        do {
+            try await send(text, to: agentId, replyTo: replyTo, attachments: files)
+        } catch {
+            threads[agentId]?.unmarkResent(seq)
+            throw error
+        }
     }
 
     /// Saves one file in the agent's attachment folder (`attachments.upload`). The daemon refuses more than 20 MB.

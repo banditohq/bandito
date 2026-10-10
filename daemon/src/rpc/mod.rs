@@ -2169,6 +2169,7 @@ mod history_tests {
             command: None,
             reply_to: None,
             attachments: Vec::new(),
+            queued: false,
         }
     }
 
@@ -4006,6 +4007,7 @@ mod pause_and_logs_tests {
                     command: None,
                     reply_to: None,
                     attachments: Vec::new(),
+                    queued: false,
                 },
             )
             .unwrap();
@@ -4022,6 +4024,7 @@ mod pause_and_logs_tests {
                     command: None,
                     reply_to: None,
                     attachments: Vec::new(),
+                    queued: false,
                 },
             )
             .unwrap();

@@ -1,5 +1,7 @@
 {
   "thread.savingMemory": "新しい章の前にメモリを保存中",
+  "thread.queued": "順番待ち",
+  "thread.notDelivered": "未配信",
   "thread.aTeammate": "チームメイト",
   "onboarding.server.newHostTitle": "新しいサーバーです — 確認してください",
   "onboarding.skip": "あとで設定",
@@ -2139,6 +2141,7 @@
   "message.reactMore": "その他…",
   "message.reactPickerHint": "パネルから絵文字を選んでください",
   "message.copied": "コピーしました",
+  "message.resend": "もう一度送る",
   "message.more": "その他",
   "message.copyAsText": "テキストとしてコピー",
   "message.selectText": "テキストを選択",
@@ -2227,5 +2230,6 @@
   "integrations.custom.add": "追加",
   "integrations.custom.trialNote": "確認するとサーバーが無効の状態で追加されます。「追加」せずに閉じると削除されます。",
   "integrations.problem.quoteUnclosed": "コマンドの引用符が閉じられていません。",
-  "integrations.oauth.connected": "接続済み"
+  "integrations.oauth.connected": "接続済み",
+  "backups.leaveSafeMode": "データベースを確認してセーフモードを終了"
 }

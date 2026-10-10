@@ -208,6 +208,7 @@
 "backups.emptyMessage" = "O daemon faz a primeira cópia na próxima inicialização.";
 "backups.emptyTitle" = "Nenhuma cópia ainda";
 "backups.explain" = "O daemon salva uma cópia do banco ao iniciar, antes de uma atualização e uma vez por dia. As últimas 14 são mantidas.";
+"backups.leaveSafeMode" = "Verificar o banco de dados e sair do modo de segurança";
 "backups.reason.beforeRestore" = "Antes da restauração";
 "backups.reason.broken" = "Banco de dados danificado, guardado antes de restaurar";
 "backups.reason.daily" = "Diária";
@@ -939,6 +940,7 @@
 "message.reactionMine" = "Remover sua reação";
 "message.reactionOf" = "Reação de %1$@";
 "message.reactionSame" = "Reagir da mesma forma";
+"message.resend" = "Enviar novamente";
 "message.selectText" = "Selecionar texto";
 "mode.browser" = "Navegador";
 "mode.connectServer" = "Conecte um servidor para usá-lo.";
@@ -1923,7 +1925,9 @@
 "thread.messageFor" = "Mensagem para %1$@";
 "thread.messageFrom" = "Mensagem de %1$@";
 "thread.more" = "Mais";
+"thread.notDelivered" = "Não entregue";
 "thread.placeholder" = "Escreva uma tarefa ou uma pergunta…";
+"thread.queued" = "Na fila";
 "thread.react" = "Reagir";
 "thread.reply" = "Responder";
 "thread.reviewApproved" = "%1$@ revisou as mudanças · aprovado";

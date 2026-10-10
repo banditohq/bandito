@@ -1,5 +1,7 @@
 {
   "thread.savingMemory": "Speichert das Gedächtnis vor einem neuen Kapitel",
+  "thread.queued": "In der Warteschlange",
+  "thread.notDelivered": "Nicht zugestellt",
   "thread.aTeammate": "einem Teammitglied",
   "onboarding.server.newHostTitle": "Neuer Server — bitte bestätigen",
   "onboarding.skip": "Später einrichten",
@@ -2166,6 +2168,7 @@
   "message.reactMore": "Mehr …",
   "message.reactPickerHint": "Wählen Sie ein Emoji im Fenster",
   "message.copied": "Kopiert",
+  "message.resend": "Erneut senden",
   "message.more": "Mehr",
   "message.copyAsText": "Als Text kopieren",
   "message.selectText": "Text auswählen",
@@ -2254,5 +2257,6 @@
   "integrations.custom.add": "Hinzufügen",
   "integrations.custom.trialNote": "Beim Prüfen wird der Server deaktiviert hinzugefügt. Schließen Sie ohne Hinzufügen, wird er wieder entfernt.",
   "integrations.problem.quoteUnclosed": "Im Befehl ist ein Anführungszeichen nicht geschlossen.",
-  "integrations.oauth.connected": "Verbunden"
+  "integrations.oauth.connected": "Verbunden",
+  "backups.leaveSafeMode": "Datenbank prüfen und abgesicherten Modus verlassen"
 }

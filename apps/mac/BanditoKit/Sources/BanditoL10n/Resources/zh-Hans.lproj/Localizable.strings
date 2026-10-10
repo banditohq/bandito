@@ -208,6 +208,7 @@
 "backups.emptyMessage" = "守护进程会在下次启动时创建第一份副本。";
 "backups.emptyTitle" = "还没有副本";
 "backups.explain" = "守护进程会在启动时、更新前和每天一次保存数据库副本，保留最新的 14 份。";
+"backups.leaveSafeMode" = "检查数据库并退出安全模式";
 "backups.reason.beforeRestore" = "恢复前";
 "backups.reason.broken" = "恢复前保存的已损坏数据库";
 "backups.reason.daily" = "每日";
@@ -939,6 +940,7 @@
 "message.reactionMine" = "取消回应";
 "message.reactionOf" = "%1$@ 的回应";
 "message.reactionSame" = "同样回应";
+"message.resend" = "重新发送";
 "message.selectText" = "选择文字";
 "mode.browser" = "浏览器";
 "mode.connectServer" = "连接服务器后即可使用。";
@@ -1923,7 +1925,9 @@
 "thread.messageFor" = "发给 %1$@ 的消息";
 "thread.messageFrom" = "来自 %1$@ 的消息";
 "thread.more" = "更多";
+"thread.notDelivered" = "未送达";
 "thread.placeholder" = "输入任务或问题…";
+"thread.queued" = "排队中";
 "thread.react" = "回应";
 "thread.reply" = "回复";
 "thread.reviewApproved" = "%1$@ 已审阅更改 · 已批准";

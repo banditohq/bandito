@@ -208,6 +208,7 @@
 "backups.emptyMessage" = "데몬이 다음 시작 때 첫 사본을 만들어요.";
 "backups.emptyTitle" = "아직 사본이 없어요";
 "backups.explain" = "데몬이 시작할 때, 업데이트하기 전, 그리고 하루에 한 번 데이터베이스 사본을 저장해요. 최근 14개를 보관해요.";
+"backups.leaveSafeMode" = "데이터베이스를 확인하고 안전 모드 종료";
 "backups.reason.beforeRestore" = "복원 전";
 "backups.reason.broken" = "복원 전에 보관한 손상된 데이터베이스";
 "backups.reason.daily" = "매일";
@@ -939,6 +940,7 @@
 "message.reactionMine" = "내 반응 지우기";
 "message.reactionOf" = "%1$@의 반응";
 "message.reactionSame" = "같은 반응 남기기";
+"message.resend" = "다시 보내기";
 "message.selectText" = "텍스트 선택";
 "mode.browser" = "브라우저";
 "mode.connectServer" = "사용하려면 서버를 연결하세요.";
@@ -1923,7 +1925,9 @@
 "thread.messageFor" = "%1$@에게 보낸 메시지";
 "thread.messageFrom" = "%1$@의 메시지";
 "thread.more" = "더 보기";
+"thread.notDelivered" = "전달되지 않음";
 "thread.placeholder" = "작업이나 질문을 입력하세요…";
+"thread.queued" = "대기 중";
 "thread.react" = "반응";
 "thread.reply" = "답장";
 "thread.reviewApproved" = "%1$@이(가) 변경 사항을 검토 · 승인";
