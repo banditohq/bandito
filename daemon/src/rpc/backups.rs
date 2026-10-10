@@ -189,6 +189,27 @@ mod tests {
         assert_eq!(code(call(&app, "backups.restore", json!({})).await), INVALID_PARAMS);
     }
 
+    #[tokio::test]
+    async fn daemon_info_reports_the_last_restore() {
+        let home = tempfile::tempdir().unwrap();
+        let app = app_in(home.path());
+        let before = call(&app, "daemon.info", json!({})).await.unwrap();
+        assert!(before["last_restore"].is_null());
+
+        let record = backup::LastRestore {
+            name: "bandito-20270115-080000-start.db".into(),
+            ok: false,
+            error: Some("the restored database does not open".into()),
+            at_ms: 5,
+        };
+        backup::write_last_restore(home.path(), &record).unwrap();
+        let after = call(&app, "daemon.info", json!({})).await.unwrap();
+        assert_eq!(after["last_restore"]["name"], "bandito-20270115-080000-start.db");
+        assert_eq!(after["last_restore"]["ok"], false);
+        assert_eq!(after["last_restore"]["error"], "the restored database does not open");
+        assert_eq!(after["last_restore"]["at_ms"], 5);
+    }
+
     #[test]
     fn the_backups_feature_is_offered() {
         assert!(features().contains(&"backups"));

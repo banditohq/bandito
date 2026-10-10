@@ -207,6 +207,10 @@ Migrations: numbered SQL files embedded in the binary, applied by `PRAGMA user_v
   - `backups.restore{name}` → checks the name and the copy as the CLI does (regular file, `quick_check`), writes the marker `<home>/run/restore-pending` (it holds the name), replies `{restarting: true}` and one second later restarts the daemon through its service manager, the same way a self-update does (`update::restart_for`, `update::run_restart`). A daemon that no service manager runs refuses the request: nothing would start it again, so the CLI is the way then.
   - At the next start, after the daemon lock is taken and before `on_start` and the store open, the daemon applies the marker (`backup::apply_pending_restore`): the same restore as the CLI, with its `before-restore` copy. The marker is removed in every case. A failed restore is logged as an error and the daemon starts with the database as it is.
   - A second `backups.restore` while one waits for its restart is refused.
+  - `daemon.info.last_restore` is `{name, ok, error, at_ms}` of the last restore applied at a start (kept in `<home>/run/last-restore.json`; `null` before any). The app reads it once the server is back: `ok` says whether the restore happened, `error` says why not. A new start alone does not prove a restore.
+  - If the copy before the restore cannot be made because the live database is damaged, `bandito.db` with its `-wal` and `-shm` moves to `backups/broken-<time>.db` (not a copy: not listed, not pruned) and the restore goes on. If the restored database does not open, the daemon puts back the copy from before the restore, starts with it, and records the error in `last_restore`; with no such copy it stops.
+  - A marker that is not text, is empty or is a folder is removed and refused. Pruning errors are logged, never fatal.
+  - Who may restore: the owner's paired devices and the CLI; agents are refused (not in the agent allowlist).
 
 ## RPC
 

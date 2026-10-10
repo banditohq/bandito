@@ -1052,6 +1052,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             "pid": std::process::id(),
             "features": features(),
             "update": update::last_check(),
+            "last_restore": crate::backup::read_last_restore(&app.data_home),
         })),
         "runtimes.status" => {
             let mut out: Vec<(&'static str, Value)> = Vec::new();

@@ -464,18 +464,36 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr, home_given: bool) 
     };
     bandito::update::set_data_home(home);
     // A restore asked over RPC (`backups.restore`) comes first: it replaces the file the store opens next.
-    match bandito::backup::apply_pending_restore(home, bandito::store::now_ms()) {
-        Ok(Some(name)) => tracing::info!(copy = %name, "database restored from a copy, as requested"),
-        Ok(None) => {}
-        Err(e) => tracing::error!("requested database restore failed; starting with the database as it is: {e:#}"),
-    }
+    let mut restored = match bandito::backup::apply_pending_restore(home, bandito::store::now_ms()) {
+        Ok(Some(applied)) => {
+            tracing::info!(copy = %applied.name, "database restored from a copy, as requested");
+            Some(applied)
+        }
+        Ok(None) => None,
+        Err(e) => {
+            tracing::error!("requested database restore failed; starting with the database as it is: {e:#}");
+            None
+        }
+    };
     // Before the store opens: migrations change the file, so the copy must come first. A failed copy does not stop the start.
     match bandito::backup::on_start(home, rpc::VERSION, bandito::store::now_ms()) {
         Ok(Some(path)) => tracing::info!(path = %path.display(), "database copied before start"),
         Ok(None) => {}
         Err(e) => tracing::warn!("database backup before start failed: {e:#}"),
     }
-    let store = Arc::new(Store::open(&home.join("bandito.db"))?);
+    let db_path = home.join("bandito.db");
+    let store = match Store::open(&db_path) {
+        Ok(store) => Arc::new(store),
+        // A restored database that does not open goes back to the copy from before the restore (see docs/ARCHITECTURE.md#backups).
+        Err(e) => match restored.take() {
+            Some(applied) => {
+                tracing::error!("the restored database does not open, going back to the copy from before it: {e:#}");
+                bandito::backup::roll_back_restore(home, &applied, &format!("{e:#}"), bandito::store::now_ms())?;
+                Arc::new(Store::open(&db_path)?)
+            }
+            None => return Err(e),
+        },
+    };
     let agents_root = home::default_agents_root(home, home_given);
     let created = home::backfill(&store, &agents_root);
     if created > 0 {

@@ -6,6 +6,7 @@
 use anyhow::{Context, Result, bail};
 use chrono::NaiveDateTime;
 use rusqlite::{Connection, OpenFlags};
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Write;
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
@@ -20,6 +21,8 @@ const LAST_VERSION: &str = "last-version";
 const LOCK_FILE: &str = "daemon.lock";
 /// The file in `run/` that asks for a restore at the next start (see `request_restore`).
 const RESTORE_MARKER: &str = "restore-pending";
+/// The result of the last restore, in `run/` (see `write_last_restore`).
+const LAST_RESTORE_FILE: &str = "last-restore.json";
 const PARTIAL_SUFFIX: &str = ".partial";
 const TS_FORMAT: &str = "%Y%m%d-%H%M%S";
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
@@ -80,13 +83,22 @@ pub fn snapshot_file(db: &Path, home: &Path, reason: &str, now_ms: i64) -> Resul
     Ok(target)
 }
 
-/// Keeps the `keep` newest copies in `<home>/backups`. Other files there are not touched.
-pub fn prune(home: &Path, keep: usize) -> Result<()> {
+/// Keeps the `keep` newest copies in `<home>/backups`. Other files there are not touched. A copy that cannot be
+/// removed is logged, not returned as an error: the copy the caller made is already safe.
+pub fn prune(home: &Path, keep: usize) {
     let dir = backups_dir(home);
-    for entry in entries(home)?.into_iter().skip(keep) {
-        fs::remove_file(dir.join(&entry.name)).with_context(|| format!("remove backup {}", entry.name))?;
+    let entries = match entries(home) {
+        Ok(entries) => entries,
+        Err(e) => {
+            tracing::warn!("list the backups to prune: {e:#}");
+            return;
+        }
+    };
+    for entry in entries.into_iter().skip(keep) {
+        if let Err(e) = remove_if_exists(&dir.join(&entry.name)) {
+            tracing::warn!("prune backup {}: {e:#}", entry.name);
+        }
     }
-    Ok(())
 }
 
 /// Age in ms of the newest copy, by the time in its name. `None` when there is no copy.
@@ -153,18 +165,30 @@ pub fn restore(home: &Path, name: &str, now_ms: i64) -> Result<()> {
     let Some(_lock) = try_daemon_lock(home)? else {
         bail!(BUSY_MSG);
     };
-    restore_locked(home, name, now_ms)
+    restore_locked(home, name, now_ms).map(|_| ())
 }
 
-/// The restore itself, for a caller that holds the daemon lock already (`restore`, and the daemon's own start).
-fn restore_locked(home: &Path, name: &str, now_ms: i64) -> Result<()> {
+/// The restore itself, for a caller that holds the daemon lock already. Returns the name of the copy made of the
+/// database before the swap, if one was made. When that copy fails, the live database is damaged: its files are
+/// moved aside (see `move_damaged_database_aside`) and the restore goes on.
+fn restore_locked(home: &Path, name: &str, now_ms: i64) -> Result<Option<String>> {
     validate_name(name)?;
     let src = backups_dir(home).join(name);
     check_regular_copy(&src, name)?;
 
     let db = home.join(DB_FILE);
+    let mut before = None;
     if db.exists() {
-        snapshot_file(&db, home, "before-restore", now_ms).context("copy the current database before restore")?;
+        match snapshot_file(&db, home, "before-restore", now_ms) {
+            Ok(path) => {
+                before = path.file_name().and_then(|n| n.to_str()).map(str::to_string);
+            }
+            Err(e) => {
+                tracing::warn!("copy of the current database before restore failed, moving it aside: {e:#}");
+                let moved = move_damaged_database_aside(home, now_ms).context("move the damaged database aside")?;
+                tracing::warn!(path = %moved.display(), "damaged database moved aside");
+            }
+        }
     }
     let tmp = home.join("bandito.db.restore-tmp");
     let swap = || -> Result<()> {
@@ -179,8 +203,39 @@ fn restore_locked(home: &Path, name: &str, now_ms: i64) -> Result<()> {
         let _ = fs::remove_file(&tmp);
         return Err(e);
     }
-    prune(home, KEEP)?;
-    Ok(())
+    prune(home, KEEP);
+    Ok(before)
+}
+
+/// Moves `bandito.db` and its `-wal` and `-shm` files to `<home>/backups/broken-<UTC time>.db` (same suffixes).
+/// Nothing is deleted. The name does not start with `bandito-`, so these files are not copies: they are neither
+/// listed nor pruned, and they stay there for a person to look at.
+fn move_damaged_database_aside(home: &Path, now_ms: i64) -> Result<PathBuf> {
+    let dir = backups_dir(home);
+    create_private_dir(&dir)?;
+    let ts = timestamp(now_ms)?;
+    let target = (1..=1000u32)
+        .map(|n| {
+            if n == 1 {
+                dir.join(format!("broken-{ts}.db"))
+            } else {
+                dir.join(format!("broken-{ts}-{n}.db"))
+            }
+        })
+        .find(|p| fs::symlink_metadata(p).is_err())
+        .context("no free name for the damaged database")?;
+    let db = home.join(DB_FILE);
+    fs::rename(&db, &target).with_context(|| format!("move {} to {}", db.display(), target.display()))?;
+    for suffix in ["-wal", "-shm"] {
+        let from = home.join(format!("{DB_FILE}{suffix}"));
+        let to = PathBuf::from(format!("{}{suffix}", target.display()));
+        match fs::rename(&from, &to) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e).with_context(|| format!("move {} aside", from.display())),
+        }
+    }
+    Ok(target)
 }
 
 /// Makes a copy now with `reason`, keeps the newest `KEEP`, and returns the new copy (`backups.create`).
@@ -190,7 +245,7 @@ pub fn make_copy(home: &Path, reason: &str, now_ms: i64) -> Result<BackupFile> {
         bail!("there is no database to copy yet");
     }
     let path = snapshot_file(&db, home, reason, now_ms)?;
-    prune(home, KEEP)?;
+    prune(home, KEEP);
     let name = path
         .file_name()
         .and_then(|n| n.to_str())
@@ -233,26 +288,178 @@ pub fn request_restore(home: &Path, name: &str) -> Result<()> {
     Ok(())
 }
 
-/// Removes the restore marker when there is one (a restart that did not happen).
+/// Removes the restore marker, whatever is there (a file, a folder, a link), when there is one.
 pub fn clear_restore_request(home: &Path) -> Result<()> {
-    remove_if_exists(&restore_marker(home))
+    remove_marker(&restore_marker(home))
+}
+
+/// A restore the daemon applied at its start. `before` names the copy of the database from before it, if one was made.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AppliedRestore {
+    pub name: String,
+    pub before: Option<String>,
+}
+
+/// What the last restore did, as `daemon.info` reports it. Kept in `<home>/run/last-restore.json`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LastRestore {
+    /// The copy the request named (empty when the request could not be read).
+    pub name: String,
+    pub ok: bool,
+    /// Why it failed, in one short sentence. None on success.
+    pub error: Option<String>,
+    /// When the daemon applied it (Unix milliseconds).
+    pub at_ms: i64,
+}
+
+fn last_restore_path(home: &Path) -> PathBuf {
+    home.join("run").join(LAST_RESTORE_FILE)
+}
+
+/// Writes the result of a restore (atomically: a temporary file, then a rename).
+pub fn write_last_restore(home: &Path, record: &LastRestore) -> Result<()> {
+    let path = last_restore_path(home);
+    let dir = path.parent().context("the run folder has no parent")?;
+    fs::create_dir_all(dir).with_context(|| format!("create {}", dir.display()))?;
+    let tmp = dir.join(format!("{LAST_RESTORE_FILE}.tmp"));
+    let json = serde_json::to_vec(record).context("encode the restore result")?;
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(&tmp)
+        .with_context(|| format!("open {}", tmp.display()))?;
+    file.write_all(&json)
+        .with_context(|| format!("write {}", tmp.display()))?;
+    drop(file);
+    fs::rename(&tmp, &path).with_context(|| format!("replace {}", path.display()))?;
+    Ok(())
+}
+
+/// The result of the last restore, or None when there is none or the file cannot be read.
+pub fn read_last_restore(home: &Path) -> Option<LastRestore> {
+    let raw = fs::read(last_restore_path(home)).ok()?;
+    serde_json::from_slice(&raw).ok()
+}
+
+/// Records a restore result. A failure to write it is logged: the restore itself has already happened or not.
+fn record_restore(home: &Path, record: LastRestore) {
+    if let Err(e) = write_last_restore(home, &record) {
+        tracing::warn!("record the restore result: {e:#}");
+    }
+}
+
+/// The name in the marker. Anything that is not text is an error (the caller removes the marker anyway).
+fn read_marker_name(marker: &Path) -> Result<String> {
+    let bytes = fs::read(marker).with_context(|| format!("read {}", marker.display()))?;
+    let text = String::from_utf8(bytes).context("the restore request is not text")?;
+    Ok(text.trim().to_string())
+}
+
+/// Removes the marker whatever it is: a file, a folder someone put there, or a link.
+fn remove_marker(marker: &Path) -> Result<()> {
+    match fs::symlink_metadata(marker) {
+        Ok(meta) if meta.is_dir() => fs::remove_dir_all(marker).with_context(|| format!("remove {}", marker.display())),
+        Ok(_) => remove_if_exists(marker),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e).with_context(|| format!("stat {}", marker.display())),
+    }
 }
 
 /// Applies the restore marker, if there is one. Called by the daemon with its lock held, before the store opens.
-/// Returns the name of the copy restored, or `None` when there was no marker. The marker is removed in every
-/// case, so a failed restore is not retried on each start; the database then stays as it was.
-pub fn apply_pending_restore(home: &Path, now_ms: i64) -> Result<Option<String>> {
+/// The marker is removed in every case, whatever it holds, so a bad one is not retried on each start. The result is
+/// recorded in `run/last-restore.json`. Returns None when there was no marker.
+pub fn apply_pending_restore(home: &Path, now_ms: i64) -> Result<Option<AppliedRestore>> {
     let marker = restore_marker(home);
-    let name = match fs::read_to_string(&marker) {
-        Ok(s) => s.trim().to_string(),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(e) => return Err(e).with_context(|| format!("read {}", marker.display())),
+    if fs::symlink_metadata(&marker).is_err() {
+        return Ok(None);
+    }
+    let (name, outcome) = match read_marker_name(&marker) {
+        Ok(name) => {
+            let outcome = restore_locked(home, &name, now_ms);
+            (name, outcome)
+        }
+        Err(e) => (String::new(), Err(e)),
     };
-    let result = restore_locked(home, &name, now_ms);
-    let cleared = remove_if_exists(&marker);
-    result?;
-    cleared?;
-    Ok(Some(name))
+    if let Err(e) = remove_marker(&marker) {
+        tracing::warn!("remove the restore request: {e:#}");
+    }
+    match outcome {
+        Ok(before) => {
+            record_restore(
+                home,
+                LastRestore {
+                    name: name.clone(),
+                    ok: true,
+                    error: None,
+                    at_ms: now_ms,
+                },
+            );
+            Ok(Some(AppliedRestore { name, before }))
+        }
+        Err(e) => {
+            record_restore(
+                home,
+                LastRestore {
+                    name,
+                    ok: false,
+                    error: Some(format!("{e:#}")),
+                    at_ms: now_ms,
+                },
+            );
+            Err(e)
+        }
+    }
+}
+
+/// The restored database does not open: puts back the copy from before the restore and records the failure.
+/// Called by the daemon with its lock held. Fails (so the daemon stops) when there is no such copy.
+pub fn roll_back_restore(home: &Path, applied: &AppliedRestore, reason: &str, now_ms: i64) -> Result<()> {
+    let Some(before) = applied.before.as_deref() else {
+        let error =
+            format!("the restored database does not open ({reason}), and there is no copy from before the restore");
+        record_restore(
+            home,
+            LastRestore {
+                name: applied.name.clone(),
+                ok: false,
+                error: Some(error.clone()),
+                at_ms: now_ms,
+            },
+        );
+        bail!(error);
+    };
+    match restore_locked(home, before, now_ms) {
+        Ok(_) => {
+            let error =
+                format!("the restored database does not open ({reason}); the database from before the restore is back");
+            record_restore(
+                home,
+                LastRestore {
+                    name: applied.name.clone(),
+                    ok: false,
+                    error: Some(error),
+                    at_ms: now_ms,
+                },
+            );
+            Ok(())
+        }
+        Err(e) => {
+            let error =
+                format!("the restored database does not open ({reason}), and putting back the copy failed: {e:#}");
+            record_restore(
+                home,
+                LastRestore {
+                    name: applied.name.clone(),
+                    ok: false,
+                    error: Some(error.clone()),
+                    at_ms: now_ms,
+                },
+            );
+            Err(anyhow::anyhow!(error))
+        }
+    }
 }
 
 /// Start of the daemon, called with the daemon lock held: copies the database when there is no copy, the newest
@@ -287,7 +494,7 @@ pub fn on_start(home: &Path, version: &str, now_ms: i64) -> Result<Option<PathBu
         .context("open the last-version file")?;
     file.write_all(version.as_bytes())
         .context("record the version of the last start")?;
-    prune(home, KEEP)?;
+    prune(home, KEEP);
     Ok(Some(path))
 }
 
@@ -302,7 +509,7 @@ pub fn snapshot_if_due(home: &Path, now_ms: i64) -> Result<Option<PathBuf>> {
         return Ok(None);
     }
     let path = snapshot_file(&db, home, "daily", now_ms)?;
-    prune(home, KEEP)?;
+    prune(home, KEEP);
     Ok(Some(path))
 }
 
@@ -591,7 +798,7 @@ mod tests {
         fs::write(dir.join("bandito-20270115-080000-start.db.partial"), "cut off").unwrap();
         assert_eq!(newest_age_ms(home.path(), BASE_MS), None);
         assert!(list(home.path()).unwrap().is_empty());
-        prune(home.path(), 0).unwrap();
+        prune(home.path(), 0);
         assert!(dir.join("bandito-20270115-080000-start.db.partial").exists());
     }
 
@@ -659,7 +866,7 @@ mod tests {
         }
         let dir = backups_dir(home.path());
         fs::write(dir.join("notes.txt"), "mine").unwrap();
-        prune(home.path(), KEEP).unwrap();
+        prune(home.path(), KEEP);
 
         let kept = list(home.path()).unwrap();
         assert_eq!(kept.len(), KEEP);
@@ -964,7 +1171,7 @@ mod tests {
         assert!(restore_marker(home.path()).exists());
         // The start of the daemon, lock held: the copy replaces the database.
         let applied = apply_pending_restore(home.path(), BASE_MS + HOUR_MS).unwrap();
-        assert_eq!(applied.as_deref(), Some(saved_name.as_str()));
+        assert_eq!(applied.as_ref().map(|a| a.name.as_str()), Some(saved_name.as_str()));
         assert_eq!(rows(&db), ["old-1", "old-2"]);
         assert!(!restore_marker(home.path()).exists());
         // The database as it was before the restore is kept, as with the CLI.
@@ -1014,5 +1221,155 @@ mod tests {
         assert!(!restore_marker(home.path()).exists());
         assert!(saved.exists(), "the copy itself stays");
         clear_restore_request(home.path()).unwrap();
+    }
+
+    #[test]
+    fn a_successful_restore_is_recorded_as_ok() {
+        let home = temp_home();
+        let db = home.path().join(DB_FILE);
+        make_db(&db, &["old"]);
+        let saved = snapshot_file(&db, home.path(), "start", BASE_MS).unwrap();
+        let saved_name = saved.file_name().unwrap().to_str().unwrap().to_string();
+        make_db(&db, &["new"]);
+        request_restore(home.path(), &saved_name).unwrap();
+
+        apply_pending_restore(home.path(), BASE_MS + HOUR_MS).unwrap().unwrap();
+        assert_eq!(
+            read_last_restore(home.path()),
+            Some(LastRestore {
+                name: saved_name,
+                ok: true,
+                error: None,
+                at_ms: BASE_MS + HOUR_MS,
+            })
+        );
+    }
+
+    #[test]
+    fn a_failed_restore_is_recorded_with_its_error() {
+        let home = temp_home();
+        let db = home.path().join(DB_FILE);
+        make_db(&db, &["live"]);
+        let marker = restore_marker(home.path());
+        fs::create_dir_all(marker.parent().unwrap()).unwrap();
+        fs::write(&marker, "bandito-20270115-080000-start.db").unwrap();
+
+        assert!(apply_pending_restore(home.path(), BASE_MS).is_err());
+        let record = read_last_restore(home.path()).expect("the failure is recorded");
+        assert_eq!(record.name, "bandito-20270115-080000-start.db");
+        assert!(!record.ok);
+        assert!(record.error.unwrap().contains("no backup named"));
+        assert_eq!(rows(&db), ["live"]);
+    }
+
+    #[test]
+    fn roll_back_puts_back_the_copy_from_before_the_restore() {
+        let home = temp_home();
+        let db = home.path().join(DB_FILE);
+        make_db(&db, &["old"]);
+        let saved = snapshot_file(&db, home.path(), "start", BASE_MS).unwrap();
+        let saved_name = saved.file_name().unwrap().to_str().unwrap().to_string();
+        make_db(&db, &["new"]);
+        request_restore(home.path(), &saved_name).unwrap();
+        let applied = apply_pending_restore(home.path(), BASE_MS + HOUR_MS).unwrap().unwrap();
+        assert_eq!(rows(&db), ["old"]);
+        assert!(applied.before.is_some());
+
+        // The restored database did not open in the daemon: the database from before the restore comes back.
+        roll_back_restore(home.path(), &applied, "file is not a database", BASE_MS + 2 * HOUR_MS).unwrap();
+        // `make_db` appends, so the database from before the restore holds both rows.
+        assert_eq!(rows(&db), ["old", "new"]);
+        let record = read_last_restore(home.path()).unwrap();
+        assert_eq!(record.name, saved_name);
+        assert!(!record.ok);
+        assert!(
+            record
+                .error
+                .unwrap()
+                .contains("the database from before the restore is back")
+        );
+    }
+
+    #[test]
+    fn roll_back_without_a_copy_from_before_is_an_error_and_is_recorded() {
+        let home = temp_home();
+        let db = home.path().join(DB_FILE);
+        make_db(&db, &["live"]);
+        let applied = AppliedRestore {
+            name: "bandito-20270115-080000-start.db".into(),
+            before: None,
+        };
+        assert!(roll_back_restore(home.path(), &applied, "file is not a database", BASE_MS).is_err());
+        let record = read_last_restore(home.path()).unwrap();
+        assert!(!record.ok);
+        assert!(record.error.unwrap().contains("no copy from before the restore"));
+    }
+
+    #[test]
+    fn a_damaged_live_database_is_moved_aside_and_the_restore_goes_on() {
+        let home = temp_home();
+        let db = home.path().join(DB_FILE);
+        make_db(&db, &["good"]);
+        let saved = snapshot_file(&db, home.path(), "start", BASE_MS).unwrap();
+        let saved_name = saved.file_name().unwrap().to_str().unwrap().to_string();
+        // The live database is damaged: the copy before the restore cannot be made.
+        fs::write(&db, "this is not sqlite").unwrap();
+        request_restore(home.path(), &saved_name).unwrap();
+
+        let applied = apply_pending_restore(home.path(), BASE_MS + HOUR_MS).unwrap().unwrap();
+        assert_eq!(applied.before, None, "no copy of the damaged database");
+        assert_eq!(rows(&db), ["good"]);
+        let moved: Vec<PathBuf> = fs::read_dir(backups_dir(home.path()))
+            .unwrap()
+            .map(|e| e.unwrap().path())
+            .filter(|p| p.file_name().unwrap().to_str().unwrap().starts_with("broken-"))
+            .filter(|p| p.extension().is_some_and(|e| e == "db"))
+            .collect();
+        assert_eq!(moved.len(), 1, "{moved:?}");
+        assert_eq!(fs::read_to_string(&moved[0]).unwrap(), "this is not sqlite");
+        // Moved, not copied: the broken file is not a copy, so it is not listed.
+        assert!(!names(home.path()).iter().any(|n| n.starts_with("broken-")));
+        assert!(read_last_restore(home.path()).unwrap().ok);
+    }
+
+    #[test]
+    fn a_marker_that_is_a_folder_is_removed_and_refused() {
+        let home = temp_home();
+        let db = home.path().join(DB_FILE);
+        make_db(&db, &["live"]);
+        let marker = restore_marker(home.path());
+        fs::create_dir_all(marker.join("inside")).unwrap();
+
+        assert!(apply_pending_restore(home.path(), BASE_MS).is_err());
+        assert!(!marker.exists(), "a folder in the marker's place must go");
+        assert_eq!(rows(&db), ["live"]);
+    }
+
+    #[test]
+    fn a_marker_that_is_not_text_is_removed_and_refused() {
+        let home = temp_home();
+        let db = home.path().join(DB_FILE);
+        make_db(&db, &["live"]);
+        let marker = restore_marker(home.path());
+        fs::create_dir_all(marker.parent().unwrap()).unwrap();
+        fs::write(&marker, [0xffu8, 0xfe, 0x00]).unwrap();
+
+        assert!(apply_pending_restore(home.path(), BASE_MS).is_err());
+        assert!(!marker.exists());
+        assert_eq!(rows(&db), ["live"]);
+    }
+
+    #[test]
+    fn an_empty_marker_is_removed_and_refused() {
+        let home = temp_home();
+        let db = home.path().join(DB_FILE);
+        make_db(&db, &["live"]);
+        let marker = restore_marker(home.path());
+        fs::create_dir_all(marker.parent().unwrap()).unwrap();
+        fs::write(&marker, "  \n").unwrap();
+
+        assert!(apply_pending_restore(home.path(), BASE_MS).is_err());
+        assert!(!marker.exists());
+        assert_eq!(rows(&db), ["live"]);
     }
 }
