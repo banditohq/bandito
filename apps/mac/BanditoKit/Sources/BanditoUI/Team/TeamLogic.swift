@@ -14,6 +14,8 @@ public enum ThreadRow: Sendable {
     case item(ThreadItem)
     /// Consecutive tool calls, shown as one card.
     case toolGroup([ToolRow])
+    /// Consecutive browser calls of the agent, shown as one live card (see `BrowserRunCard`).
+    case browserRun([ToolRow])
 }
 
 extension ThreadRow: Identifiable {
@@ -24,6 +26,7 @@ extension ThreadRow: Identifiable {
         case .chapter(let number, _): "chapter-\(number)"
         case .item(let item): item.id
         case .toolGroup(let tools): "tools-\(tools.first?.callId ?? "")"
+        case .browserRun(let tools): "browser-\(tools.first?.callId ?? "")"
         }
     }
 }
@@ -35,11 +38,23 @@ public enum ThreadRows {
         var pending: [ToolRow] = []
         var lastDay: Date?
 
+        /// Tool calls go out as runs: browser calls as a browser card, the rest as a command group, in order.
         func flushTools() {
-            if !pending.isEmpty {
-                rows.append(.toolGroup(pending))
-                pending = []
+            var run: [ToolRow] = []
+            var runIsBrowser = false
+            for tool in pending {
+                let isBrowser = WorkbenchRules.isBrowserTool(tool.tool)
+                if !run.isEmpty, isBrowser != runIsBrowser {
+                    rows.append(runIsBrowser ? .browserRun(run) : .toolGroup(run))
+                    run = []
+                }
+                runIsBrowser = isBrowser
+                run.append(tool)
             }
+            if !run.isEmpty {
+                rows.append(runIsBrowser ? .browserRun(run) : .toolGroup(run))
+            }
+            pending = []
         }
 
         for item in items {

@@ -55,7 +55,7 @@ struct ThreadView: View {
     private var rows: some View {
         ScrollView {
             ThreadItemsView(
-                items: thread.items, server: server,
+                items: thread.items, server: server, agentID: agent.id, folder: agent.cwd,
                 showsLoadEarlier: server.hasMoreHistory[agent.id] == true,
                 onLoadEarlier: loadEarlier,
                 onError: { actionError = $0 },
@@ -291,9 +291,14 @@ struct ThreadView: View {
         let id = agent.id
         let text = router.takeDraft(for: id)
         guard !text.isEmpty else { return }
+        // The files that finished uploading go with the text; a failed send leaves them in the tray for a retry.
+        let files = AttachmentTray.readyFiles(AttachmentTrays.shared.files(for: id))
         sendError = nil
         Task {
-            do { try await server.send(text, to: id) } catch {
+            do {
+                try await server.send(text, to: id, attachments: files)
+                AttachmentTrays.shared.removeSent(files, agentID: id)
+            } catch {
                 sendError = UserFacingError.message(for: error)
                 router.restoreDraft(text, for: id)
             }
@@ -340,6 +345,8 @@ private struct ThreadWidthKey: PreferenceKey {
 struct ThreadItemsView: View {
     var items: [ThreadItem]
     var server: ServerModel
+    var agentID = ""
+    var folder: String?
     var showsLoadEarlier = false
     var onLoadEarlier: () -> Void = {}
     var onError: (UserFacingMessage) -> Void = { _ in }
@@ -360,7 +367,8 @@ struct ThreadItemsView: View {
             }
             ForEach(rows) { row in
                 ThreadRowView(
-                    row: row, agentName: agentName, primaryRuntime: primaryRuntime, server: server, onError: onError)
+                    row: row, agentName: agentName, primaryRuntime: primaryRuntime, server: server,
+                    agentID: agentID, folder: folder, onError: onError)
                     .banditoRise()
             }
             if typing {

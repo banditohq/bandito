@@ -272,6 +272,18 @@
 "common.now" = "maintenant";
 "common.recommended" = "Recommandé";
 "common.save" = "Enregistrer";
+"composer.attach.badName" = "Ce nom de fichier ne peut pas être joint";
+"composer.attach.clipboard" = "Depuis le presse-papiers";
+"composer.attach.dropHint" = "Déposez pour joindre";
+"composer.attach.failed" = "Impossible de joindre le fichier";
+"composer.attach.file" = "Fichier ou image…";
+"composer.attach.hiddenName" = "Un nom commençant par un point ne peut pas être joint";
+"composer.attach.label" = "Joindre";
+"composer.attach.nameTooLong" = "Le nom du fichier est trop long";
+"composer.attach.remove" = "Retirer";
+"composer.attach.screenshot" = "Capture d'écran";
+"composer.attach.tooLarge" = "Plus de 20 Mo";
+"composer.attach.uploading" = "Envoi…";
 "composer.contextHint" = "Niveau de remplissage du chapitre en cours";
 "composer.contextPopover" = "Contexte : %1$@ %% — la part de mémoire du modèle qu'occupe cette conversation. À 80 %%, l'agent sauvegarde sa mémoire et commence un nouveau chapitre.";
 "connect.addKey" = "Ajouter une clé →";
@@ -1593,6 +1605,11 @@
 "terminals.updateServer" = "Mettez à jour le serveur pour utiliser les terminaux.";
 "thread.aTeammate" = "un coéquipier";
 "thread.attach" = "Joindre des fichiers";
+"thread.browserRun.noPicture" = "L'image de la page apparaîtra ici";
+"thread.browserRun.openBrowser" = "Ouvrir le navigateur";
+"thread.browserRun.title" = "Agent dans le navigateur";
+"thread.browserRun.titleDomain" = "Agent dans le navigateur · %1$@";
+"thread.browserRun.watchBeside" = "Voir à côté";
 "thread.chapterNotSaved" = "Chapitre %1$@ · mémoire non enregistrée";
 "thread.chapterNotSavedHelp" = "L'agent n'a pas pu enregistrer sa mémoire avant ce chapitre. Des informations du chapitre précédent peuvent manquer.";
 "thread.copy" = "Copier";
@@ -1604,6 +1621,8 @@
 "thread.hintSend" = "↵ envoyer";
 "thread.hintStop" = "⌘. arrêter";
 "thread.jumpToLatest" = "Aller au dernier message";
+"thread.link.fileHelp" = "S'ouvre dans le panneau · ⌥-clic l'affiche dans Fichiers";
+"thread.link.urlHelp" = "S'ouvre dans le panneau du navigateur · ⌘-clic dans votre navigateur";
 "thread.messageFor" = "Message pour %1$@";
 "thread.messageFrom" = "Message de %1$@";
 "thread.more" = "Plus";
@@ -1716,6 +1735,7 @@
 "viewer.readOnly" = "Lecture seule";
 "viewer.save" = "Enregistrer";
 "viewer.saveError" = "Impossible d’enregistrer : %1$@";
+"viewer.saved" = "✓ Enregistré";
 "viewer.tooLarge" = "Le fichier fait plus de 2 Mo et ne peut pas être ouvert ici. Téléchargez-le sur votre Mac.";
 "viewer.unsaved" = "Modifications non enregistrées · ⌘S";
 "workbench.add" = "Ajouter un onglet";

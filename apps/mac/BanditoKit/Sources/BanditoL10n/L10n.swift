@@ -415,6 +415,21 @@ public enum L10n {
     public enum Composer {
         public static var contextHint: String { L10n.tr("composer.contextHint") }
         public static func contextPopover(percent: String) -> String { L10n.tr("composer.contextPopover", percent) }
+
+        public enum Attach {
+            public static var badName: String { L10n.tr("composer.attach.badName") }
+            public static var clipboard: String { L10n.tr("composer.attach.clipboard") }
+            public static var dropHint: String { L10n.tr("composer.attach.dropHint") }
+            public static var failed: String { L10n.tr("composer.attach.failed") }
+            public static var file: String { L10n.tr("composer.attach.file") }
+            public static var hiddenName: String { L10n.tr("composer.attach.hiddenName") }
+            public static var label: String { L10n.tr("composer.attach.label") }
+            public static var nameTooLong: String { L10n.tr("composer.attach.nameTooLong") }
+            public static var remove: String { L10n.tr("composer.attach.remove") }
+            public static var screenshot: String { L10n.tr("composer.attach.screenshot") }
+            public static var tooLarge: String { L10n.tr("composer.attach.tooLarge") }
+            public static var uploading: String { L10n.tr("composer.attach.uploading") }
+        }
     }
 
     public enum Connect {
@@ -2216,6 +2231,19 @@ public enum L10n {
         public static var stopped: String { L10n.tr("thread.stopped") }
         public static var today: String { L10n.tr("thread.today") }
         public static var yesterday: String { L10n.tr("thread.yesterday") }
+
+        public enum BrowserRun {
+            public static var noPicture: String { L10n.tr("thread.browserRun.noPicture") }
+            public static var openBrowser: String { L10n.tr("thread.browserRun.openBrowser") }
+            public static var title: String { L10n.tr("thread.browserRun.title") }
+            public static func titleDomain(domain: String) -> String { L10n.tr("thread.browserRun.titleDomain", domain) }
+            public static var watchBeside: String { L10n.tr("thread.browserRun.watchBeside") }
+        }
+
+        public enum Link {
+            public static var fileHelp: String { L10n.tr("thread.link.fileHelp") }
+            public static var urlHelp: String { L10n.tr("thread.link.urlHelp") }
+        }
     }
 
     public enum Tour {
@@ -2350,6 +2378,7 @@ public enum L10n {
         public static var readOnly: String { L10n.tr("viewer.readOnly") }
         public static var save: String { L10n.tr("viewer.save") }
         public static func saveError(error: String) -> String { L10n.tr("viewer.saveError", error) }
+        public static var saved: String { L10n.tr("viewer.saved") }
         public static var tooLarge: String { L10n.tr("viewer.tooLarge") }
         public static var unsaved: String { L10n.tr("viewer.unsaved") }
 

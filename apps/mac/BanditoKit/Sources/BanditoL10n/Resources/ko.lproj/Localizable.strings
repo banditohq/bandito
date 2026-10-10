@@ -272,6 +272,18 @@
 "common.now" = "지금";
 "common.recommended" = "추천";
 "common.save" = "저장";
+"composer.attach.badName" = "이 파일 이름은 첨부할 수 없습니다";
+"composer.attach.clipboard" = "클립보드에서";
+"composer.attach.dropHint" = "놓아서 첨부";
+"composer.attach.failed" = "파일을 첨부하지 못했습니다";
+"composer.attach.file" = "파일 또는 사진…";
+"composer.attach.hiddenName" = "점(.)으로 시작하는 이름은 첨부할 수 없습니다";
+"composer.attach.label" = "첨부";
+"composer.attach.nameTooLong" = "파일 이름이 너무 깁니다";
+"composer.attach.remove" = "제거";
+"composer.attach.screenshot" = "스크린샷";
+"composer.attach.tooLarge" = "20MB 초과";
+"composer.attach.uploading" = "업로드 중…";
 "composer.contextHint" = "현재 챕터가 얼마나 찼는지";
 "composer.contextPopover" = "컨텍스트: %1$@%% — 이 대화가 모델 메모리를 차지하는 비율이에요. 80%%가 되면 에이전트가 메모리를 저장하고 새 챕터를 시작해요.";
 "connect.addKey" = "키 추가 →";
@@ -1593,6 +1605,11 @@
 "terminals.updateServer" = "터미널을 사용하려면 서버를 업데이트해 주세요.";
 "thread.aTeammate" = "팀원";
 "thread.attach" = "파일 첨부";
+"thread.browserRun.noPicture" = "여기에 페이지 화면이 표시됩니다";
+"thread.browserRun.openBrowser" = "브라우저 열기";
+"thread.browserRun.title" = "브라우저에서 작업하는 에이전트";
+"thread.browserRun.titleDomain" = "브라우저에서 작업하는 에이전트 · %1$@";
+"thread.browserRun.watchBeside" = "옆에서 보기";
 "thread.chapterNotSaved" = "%1$@장 · 메모리 저장 안 됨";
 "thread.chapterNotSavedHelp" = "에이전트가 이 장 전에 메모리를 저장하지 못했어요. 이전 장의 내용이 빠져 있을 수 있어요.";
 "thread.copy" = "복사";
@@ -1604,6 +1621,8 @@
 "thread.hintSend" = "↵ 보내기";
 "thread.hintStop" = "⌘. 중지";
 "thread.jumpToLatest" = "최신 메시지로 이동";
+"thread.link.fileHelp" = "패널에서 열림 · ⌥-클릭은 파일에서 보기";
+"thread.link.urlHelp" = "패널 브라우저에서 열림 · ⌘-클릭은 Mac 브라우저에서 열기";
 "thread.messageFor" = "%1$@에게 보낸 메시지";
 "thread.messageFrom" = "%1$@의 메시지";
 "thread.more" = "더 보기";
@@ -1716,6 +1735,7 @@
 "viewer.readOnly" = "읽기 전용";
 "viewer.save" = "저장";
 "viewer.saveError" = "저장할 수 없었어요: %1$@";
+"viewer.saved" = "✓ 저장됨";
 "viewer.tooLarge" = "파일이 2MB보다 커서 여기서 열 수 없어요. Mac으로 다운로드해 주세요.";
 "viewer.unsaved" = "저장되지 않은 변경 사항 · ⌘S";
 "workbench.add" = "탭 추가";

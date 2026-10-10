@@ -272,6 +272,18 @@
 "common.now" = "сейчас";
 "common.recommended" = "рекомендуем";
 "common.save" = "Сохранить";
+"composer.attach.badName" = "Такое имя файла нельзя прикрепить";
+"composer.attach.clipboard" = "Из буфера";
+"composer.attach.dropHint" = "Отпустите, чтобы прикрепить";
+"composer.attach.failed" = "Не получилось прикрепить файл";
+"composer.attach.file" = "Файл или картинка…";
+"composer.attach.hiddenName" = "Имя с точки в начале нельзя прикрепить";
+"composer.attach.label" = "Прикрепить";
+"composer.attach.nameTooLong" = "Слишком длинное имя файла";
+"composer.attach.remove" = "Убрать";
+"composer.attach.screenshot" = "Снимок экрана";
+"composer.attach.tooLarge" = "Больше 20 МБ";
+"composer.attach.uploading" = "Загрузка…";
 "composer.contextHint" = "Насколько заполнена текущая глава";
 "composer.contextPopover" = "Контекст: %1$@%% — столько памяти модели занимает этот разговор. На 80%% агент сохранит память и начнёт новую главу.";
 "connect.addKey" = "Добавить ключ →";
@@ -1593,6 +1605,11 @@
 "terminals.updateServer" = "Обновите сервер, чтобы пользоваться терминалами.";
 "thread.aTeammate" = "коллеги";
 "thread.attach" = "Прикрепить файлы";
+"thread.browserRun.noPicture" = "Здесь появится картинка страницы";
+"thread.browserRun.openBrowser" = "Открыть браузер";
+"thread.browserRun.title" = "Агент в браузере";
+"thread.browserRun.titleDomain" = "Агент в браузере · %1$@";
+"thread.browserRun.watchBeside" = "Смотреть рядом";
 "thread.chapterNotSaved" = "Глава %1$@ · память не сохранена";
 "thread.chapterNotSavedHelp" = "Агент не смог сохранить память перед этой главой. Факты из прошлой главы могут отсутствовать.";
 "thread.copy" = "Копировать";
@@ -1604,6 +1621,8 @@
 "thread.hintSend" = "↵ отправить";
 "thread.hintStop" = "⌘. стоп";
 "thread.jumpToLatest" = "К последнему сообщению";
+"thread.link.fileHelp" = "Откроется в панели · ⌥-клик покажет в «Файлах»";
+"thread.link.urlHelp" = "Откроется во вкладке браузера · ⌘-клик откроет в браузере Mac";
 "thread.messageFor" = "Сообщение для %1$@";
 "thread.messageFrom" = "Сообщение от %1$@";
 "thread.more" = "Ещё";
@@ -1716,6 +1735,7 @@
 "viewer.readOnly" = "Только чтение";
 "viewer.save" = "Сохранить";
 "viewer.saveError" = "Не удалось сохранить: %1$@";
+"viewer.saved" = "✓ Сохранено";
 "viewer.tooLarge" = "Файл больше 2 МБ — здесь его не открыть. Скачайте на Mac.";
 "viewer.unsaved" = "Есть несохранённое · ⌘S";
 "workbench.add" = "Добавить вкладку";

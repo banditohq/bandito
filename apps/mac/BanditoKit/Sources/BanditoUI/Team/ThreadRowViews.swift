@@ -10,6 +10,9 @@ struct ThreadRowView: View {
     /// The agent's primary runtime, to tell a return from a limit switch.
     var primaryRuntime: String
     var server: ServerModel
+    /// The agent the thread belongs to, and its folder: where a relative file link in a message points.
+    var agentID = ""
+    var folder: String?
     var onError: (UserFacingMessage) -> Void
 
     var body: some View {
@@ -20,8 +23,12 @@ struct ThreadRowView: View {
             ChapterDivider(number: number, saved: saved, agentName: agentName)
         case .toolGroup(let tools):
             ToolGroupCard(tools: tools, duration: nil)
+        case .browserRun(let tools):
+            BrowserRunCard(tools: tools, server: server, agentID: agentID)
         case .item(let item):
-            ItemView(item: item, agentName: agentName, primaryRuntime: primaryRuntime, server: server, onError: onError)
+            ItemView(
+                item: item, agentName: agentName, primaryRuntime: primaryRuntime, server: server, agentID: agentID,
+                folder: folder, onError: onError)
         }
     }
 }
@@ -32,13 +39,30 @@ private struct ItemView: View {
     var agentName: String
     var primaryRuntime: String
     var server: ServerModel
+    var agentID: String
+    var folder: String?
     var onError: (UserFacingMessage) -> Void
 
+    /// Optional: a thread drawn without the app's router (a preview) shows its items, and links do nothing.
+    @Environment(Router.self) private var router: Router?
+
     var body: some View {
+        content
+            // Links in a message (file paths, web addresses) open here, in the workbench beside the chat.
+            .environment(\.openURL, OpenURLAction { url in
+                if let router {
+                    ChatLinkText.open(url, agentID: agentID, folder: folder, server: server, router: router)
+                }
+                return .handled
+            })
+    }
+
+    @ViewBuilder
+    private var content: some View {
         switch item {
-        case .user(_, let text, let source, let from, _, _):
+        case .user(_, let text, let source, let from, _, let files):
             if source == .user {
-                UserBubble(text: text)
+                UserBubble(text: text, files: files, agentID: agentID, server: server)
             } else {
                 // Crew and schedule messages arrive as the agent's own input; name the sender above the bubble.
                 VStack(alignment: .leading, spacing: 4) {
@@ -82,24 +106,35 @@ private struct ItemView: View {
 
 // MARK: - Bubbles
 
-/// The user's message: right-aligned, on the raised surface.
+/// The user's message: right-aligned, on the raised surface. Its files sit under the text.
 struct UserBubble: View {
     var text: String
+    var files: [AgentAttachment] = []
+    var agentID = ""
+    var server: ServerModel?
 
     var body: some View {
         HStack {
             Spacer(minLength: 120)
-            Text(text)
-                .font(BanditoFont.font(size: 14.5, weight: 400))
-                .foregroundStyle(Color.Bandito.text)
-                .lineSpacing(3)
-                .textSelection(.enabled)
-                .padding(.horizontal, 15)
-                .padding(.vertical, 11)
-                .background(
-                    Color.Bandito.surface3,
-                    in: UnevenRoundedRectangle(
-                        topLeadingRadius: 18, bottomLeadingRadius: 18, bottomTrailingRadius: 6, topTrailingRadius: 18))
+            VStack(alignment: .trailing, spacing: 8) {
+                if !text.isEmpty {
+                    Text(ChatLinkText.linked(AttributedString(text)))
+                        .font(BanditoFont.font(size: 14.5, weight: 400))
+                        .foregroundStyle(Color.Bandito.text)
+                        .lineSpacing(3)
+                        .textSelection(.enabled)
+                        .padding(.horizontal, 15)
+                        .padding(.vertical, 11)
+                        .background(
+                            Color.Bandito.surface3,
+                            in: UnevenRoundedRectangle(
+                                topLeadingRadius: 18, bottomLeadingRadius: 18, bottomTrailingRadius: 6,
+                                topTrailingRadius: 18))
+                }
+                if !files.isEmpty, let server {
+                    MessageFiles(files: files, agentID: agentID, server: server)
+                }
+            }
         }
     }
 }
@@ -110,7 +145,7 @@ struct AgentBubble: View {
 
     var body: some View {
         HStack {
-            Text(Self.markdown(text))
+            Text(ChatLinkText.linked(Self.markdown(text)))
                 .font(BanditoFont.font(size: 14.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text)
                 .lineSpacing(4)
