@@ -37,6 +37,7 @@ public struct BanditoCommands: Commands {
             item("global.mode.terminals") { router.select(mode: .terminals) }
             item("global.mode.browser") { router.select(mode: .browser) }
             item("global.mode.screen") { router.select(mode: .screen) }
+            item("global.mode.market") { router.select(mode: .market) }
             item("global.mode.server") { router.select(mode: .server) }
             Divider()
             item("global.toggleSidebar") { router.toggleSidebar() }

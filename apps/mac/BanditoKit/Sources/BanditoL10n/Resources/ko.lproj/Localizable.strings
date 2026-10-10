@@ -793,6 +793,7 @@
 "market.configure" = "설정";
 "market.filter.all" = "전체";
 "market.filter.connected" = "연결됨";
+"market.more" = "더보기";
 "market.noResults" = "결과가 없습니다";
 "market.search" = "검색";
 "market.subtitle" = "에이전트가 사용할 수 있는 서비스를 연결하세요.";

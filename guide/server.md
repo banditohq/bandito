@@ -1,14 +1,14 @@
 # Server (Сервер)
 
 The health and the setup of the server that runs your agents: its load, what is installed, the workplaces, secrets,
-open ports, paired devices and updates. Open the mode with ⌘6. The sections are switched at the top of the mode.
+open ports, paired devices and updates. Open the mode with ⌘7. The sections are switched at the top of the mode.
 
 ## Server mode
 
 <!-- id: server-mode; covers: mode:server -->
 The Server mode has seven sections: Overview (Обзор), Workplaces (Рабочие места), Secrets (Секреты), Ports (Порты), Devices (Устройства), Updates (Обновления), and Daemon log (Журнал демона). The current server is shown in the top bar.
 Где: Mode bar → Server (Сервер), or Menu View → Server (Сервер)
-1. Press ⌘6 or click Server (Сервер) in the mode bar.
+1. Press ⌘7 or click Server (Сервер) in the mode bar.
 2. Choose a section at the top. Each section keeps its own state.
 3. To switch to another server, use the server picker in the top bar. Actions in progress are dropped when the server changes.
 
@@ -146,7 +146,7 @@ Shows the version of the daemon on the server and the latest release, and how to
 
 <!-- id: server-daemon-log; covers: -->
 The daemon's own log on the server: its newest lines, with the level filter. Secrets and Bandito's tokens are masked before they are shown. The view follows the end of the log. On a server with an older Bandito the section says that the log needs an update.
-Где: Server (⌘6) → Daemon log (Журнал демона)
+Где: Server (⌘7) → Daemon log (Журнал демона)
 1. Open Daemon log. The newest 500 lines are shown, the last one at the bottom.
 2. Choose All (Все), Warnings (Предупреждения) or Errors (Ошибки) to filter the lines by level.
 3. Click Refresh (Обновить) to read the log again, or Copy all (Скопировать всё) to copy the lines on screen.

@@ -2008,6 +2008,7 @@
   "market.noResults": "Ничего не нашлось",
   "market.configure": "Настроить",
   "market.availableToAgents": "Доступно агентам",
+  "market.more": "Ещё",
   "integrations.sheet.connectTitle": "Подключить {name}",
   "integrations.sheet.addTitle": "Новая интеграция",
   "integrations.sheet.editTitle": "Изменить {name}",

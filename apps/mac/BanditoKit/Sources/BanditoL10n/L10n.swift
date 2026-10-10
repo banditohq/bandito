@@ -1129,6 +1129,7 @@ public enum L10n {
     public enum Market {
         public static var availableToAgents: String { L10n.tr("market.availableToAgents") }
         public static var configure: String { L10n.tr("market.configure") }
+        public static var more: String { L10n.tr("market.more") }
         public static var noResults: String { L10n.tr("market.noResults") }
         public static var search: String { L10n.tr("market.search") }
         public static var subtitle: String { L10n.tr("market.subtitle") }

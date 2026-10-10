@@ -793,6 +793,7 @@
 "market.configure" = "設定";
 "market.filter.all" = "すべて";
 "market.filter.connected" = "接続済み";
+"market.more" = "その他";
 "market.noResults" = "見つかりません";
 "market.search" = "検索";
 "market.subtitle" = "エージェントが使えるサービスを接続します。";

@@ -793,6 +793,7 @@
 "market.configure" = "Настроить";
 "market.filter.all" = "Все";
 "market.filter.connected" = "Подключённые";
+"market.more" = "Ещё";
 "market.noResults" = "Ничего не нашлось";
 "market.search" = "Поиск";
 "market.subtitle" = "Подключите сервисы, которыми смогут пользоваться агенты.";

@@ -793,6 +793,7 @@
 "market.configure" = "设置";
 "market.filter.all" = "全部";
 "market.filter.connected" = "已连接";
+"market.more" = "更多";
 "market.noResults" = "没有找到";
 "market.search" = "搜索";
 "market.subtitle" = "连接智能体可以使用的服务。";

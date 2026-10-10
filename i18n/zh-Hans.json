@@ -1927,6 +1927,7 @@
   "market.noResults": "没有找到",
   "market.configure": "设置",
   "market.availableToAgents": "供智能体使用",
+  "market.more": "更多",
   "integrations.sheet.connectTitle": "连接 {name}",
   "integrations.sheet.addTitle": "新建集成",
   "integrations.sheet.editTitle": "编辑 {name}",

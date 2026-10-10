@@ -4,7 +4,7 @@ import BanditoL10n
 import SwiftUI
 
 /// Marketplace mode: the services the agents can use. The connected ones come first, then the catalog to connect
-/// more from. Connecting, configuring and removing happen here; the sidebar picks the filter.
+/// more from. Connecting, configuring, checking and removing happen here; the sidebar picks the filter.
 struct MarketView: View {
     @Environment(Router.self) private var router
     @Environment(AppModel.self) private var app
@@ -13,6 +13,10 @@ struct MarketView: View {
     @State private var catalog: [IntegrationCatalogEntry] = []
     /// The last check of each integration in this session. The daemon keeps no check result.
     @State private var tests: [String: IntegrationTest] = [:]
+    /// Integrations being checked now, by id.
+    @State private var checking: Set<String> = []
+    /// The server the lists above belong to. A switch to another server clears them before the new lists load.
+    @State private var shownServer: UUID?
     @State private var query = ""
     @State private var error: UserFacingMessage?
     @State private var editing: IntegrationTarget?
@@ -30,8 +34,8 @@ struct MarketView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.Bandito.bg)
-        .task(id: app.currentServer?.info != nil) {
-            await reload()
+        .task(id: loadKey) {
+            await loadForCurrentServer()
         }
         .banditoSheet(item: $editing) { target in
             if let server = app.currentServer {
@@ -58,11 +62,17 @@ struct MarketView: View {
 
     private var server: ServerModel? { app.currentServer }
 
+    /// Reloads when the server changes, and when the connection of the current server comes up.
+    private var loadKey: String {
+        "\(server?.id.uuidString ?? "")|\(server?.info != nil)"
+    }
+
     private var page: some View {
         let supported = server?.supports("integrations") ?? false
         let entries = MarketLogic.entries(
             catalog: catalog, integrations: integrations, languageCode: ModelDescription.currentLanguageCode)
         let shown = MarketLogic.page(entries, filter: router.marketFilter, query: query)
+        let empty = MarketLogic.emptyState(shown, filter: router.marketFilter, query: query)
         return VStack(alignment: .leading, spacing: 16) {
             header(supported: supported)
             ScrollView {
@@ -71,16 +81,16 @@ struct MarketView: View {
                         if !shown.connected.isEmpty {
                             SectionLabel(L10n.Integrations.connected)
                             connectedRow(shown.connected)
-                            SectionLabel(L10n.Integrations.catalog)
                         }
-                        if shown.grid.isEmpty {
-                            emptyText
-                        } else {
+                        SectionLabel(L10n.Integrations.catalog)
+                        if !shown.grid.isEmpty {
                             LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
                                 ForEach(shown.grid) { entry in
                                     catalogCard(entry)
                                 }
                             }
+                        } else if let empty {
+                            emptyText(empty)
                         }
                         if let error {
                             UserFacingErrorView(message: error)
@@ -137,12 +147,8 @@ struct MarketView: View {
         .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(Color.Bandito.line))
     }
 
-    /// Shown when the grid is empty: a search with no match says so; the Connected filter with nothing connected says
-    /// how to connect.
-    @ViewBuilder
-    private var emptyText: some View {
-        let searching = !query.trimmingCharacters(in: .whitespaces).isEmpty
-        Text(searching ? L10n.Market.noResults : L10n.Integrations.empty)
+    private func emptyText(_ state: MarketEmptyState) -> some View {
+        Text(state == .noResults ? L10n.Market.noResults : L10n.Integrations.empty)
             .font(.system(size: 13))
             .foregroundStyle(Color.Bandito.text3)
             .padding(.vertical, 6)
@@ -150,11 +156,11 @@ struct MarketView: View {
 
     // MARK: - cards
 
-    /// The connected services as compact cards in one row: a click opens the settings, the menu turns it on or off,
-    /// edits it or removes it.
+    /// The connected services in one row. Each card shows its address, the result of the last check, the switch that
+    /// turns it on or off for the agents, and a menu: check, edit, remove.
     private func connectedRow(_ entries: [MarketEntry]) -> some View {
         ScrollView(.horizontal) {
-            HStack(spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
                 ForEach(entries) { entry in
                     if let integration = entry.integration {
                         connectedCard(entry, integration)
@@ -168,31 +174,84 @@ struct MarketView: View {
 
     private func connectedCard(_ entry: MarketEntry, _ integration: Integration) -> some View {
         let status = IntegrationStatus.of(integration, test: tests[integration.id])
-        return Button {
-            editing = .edit(integration)
-        } label: {
-            MarketCardFrame {
-                HStack(spacing: 10) {
-                    MarketTile(entry: entry, size: 28)
-                    Text(integration.name)
-                        .font(.system(size: 13.5, weight: .semibold))
-                        .foregroundStyle(Color.Bandito.text)
-                        .lineLimit(1)
-                    Spacer(minLength: 6)
-                    statusDot(status)
+        return MarketCardFrame {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top, spacing: 10) {
+                    MarketTile(entry: entry, size: 32)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(integration.name)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Color.Bandito.text)
+                            .lineLimit(1)
+                        Text(MarketLogic.address(integration))
+                            .font(BanditoFont.font(size: 11.5, weight: 400, mono: true))
+                            .foregroundStyle(Color.Bandito.text3)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    menu(integration)
                 }
-                .padding(.horizontal, 12)
-                .frame(width: 230, height: 54)
+                statusLine(status)
+                Toggle(isOn: Binding(get: { integration.enabled }, set: { on in
+                    Task { await setEnabled(integration, on) }
+                })) {
+                    Text(L10n.Market.availableToAgents)
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(Color.Bandito.text2)
+                }
+                .toggleStyle(BanditoToggleStyle())
             }
+            .padding(14)
+            .frame(width: 300, alignment: .topLeading)
         }
-        .banditoButton(.row(cornerRadius: 14))
-        .contextMenu {
-            Toggle(L10n.Market.availableToAgents, isOn: Binding(get: { integration.enabled }, set: { on in
-                Task { await setEnabled(integration, on) }
-            }))
+    }
+
+    private func menu(_ integration: Integration) -> some View {
+        let busy = checking.contains(integration.id)
+        return Menu {
+            Button(busy ? L10n.Integrations.checking : L10n.Integrations.check) {
+                Task { await check(integration.id) }
+            }
+            .disabled(busy || !integration.enabled)
             Button(L10n.Integrations.edit) { editing = .edit(integration) }
             Divider()
             Button(L10n.Integrations.remove, role: .destructive) { removing = integration }
+        } label: {
+            Image(systemName: "ellipsis")
+        }
+        .banditoButton(.icon(size: 26, label: L10n.Market.more))
+        .fixedSize()
+    }
+
+    @ViewBuilder
+    private func statusLine(_ status: IntegrationStatus) -> some View {
+        switch status {
+        case .disabled:
+            Text(L10n.Integrations.Status.disabled)
+                .font(.system(size: 12.5, weight: .medium))
+                .foregroundStyle(Color.Bandito.text3)
+        case .unchecked:
+            Text(L10n.Integrations.Status.unchecked)
+                .font(.system(size: 12.5, weight: .medium))
+                .foregroundStyle(Color.Bandito.text3)
+        case .connected(let tools):
+            Label {
+                Text(L10n.Integrations.Status.connected(count: tools))
+            } icon: {
+                Image(systemName: "checkmark.circle.fill")
+            }
+            .font(.system(size: 12.5, weight: .medium))
+            .foregroundStyle(Color.Bandito.ok)
+        case .failed(let failure):
+            Label {
+                Text(IntegrationFailureText.text(failure))
+                    .fixedSize(horizontal: false, vertical: true)
+            } icon: {
+                Image(systemName: "exclamationmark.triangle.fill")
+            }
+            .font(.system(size: 12.5, weight: .medium))
+            .foregroundStyle(Color.Bandito.danger)
         }
     }
 
@@ -243,32 +302,21 @@ struct MarketView: View {
         }
     }
 
-    private func statusDot(_ status: IntegrationStatus) -> some View {
-        Circle()
-            .fill(Self.statusColor(status))
-            .frame(width: 8, height: 8)
-            .help(Self.statusText(status))
-            .accessibilityLabel(Self.statusText(status))
-    }
-
-    static func statusColor(_ status: IntegrationStatus) -> Color {
-        switch status {
-        case .connected: Color.Bandito.ok
-        case .failed: Color.Bandito.danger
-        case .unchecked, .disabled: Color.Bandito.text3
-        }
-    }
-
-    static func statusText(_ status: IntegrationStatus) -> String {
-        switch status {
-        case .disabled: L10n.Integrations.Status.disabled
-        case .unchecked: L10n.Integrations.Status.unchecked
-        case .connected(let tools): L10n.Integrations.Status.connected(count: tools)
-        case .failed: L10n.Integrations.Status.failed
-        }
-    }
-
     // MARK: - actions
+
+    /// Clears what belongs to the previous server, then loads the current one.
+    private func loadForCurrentServer() async {
+        let id = server?.id
+        if id != shownServer {
+            shownServer = id
+            integrations = []
+            catalog = []
+            tests = [:]
+            checking = []
+            error = nil
+        }
+        await reload()
+    }
 
     private func reload() async {
         guard let server, server.info != nil, server.supports("integrations") else { return }
@@ -288,6 +336,17 @@ struct MarketView: View {
         do {
             try await server.updateIntegration(integration.id, patch: IntegrationPatch(enabled: on))
             await reload()
+        } catch {
+            self.error = UserFacingError.message(for: error)
+        }
+    }
+
+    private func check(_ id: String) async {
+        guard let server else { return }
+        checking.insert(id)
+        defer { checking.remove(id) }
+        do {
+            tests[id] = try await server.testIntegration(id)
         } catch {
             self.error = UserFacingError.message(for: error)
         }
@@ -321,8 +380,8 @@ private struct MarketCardFrame<Content: View>: View {
     }
 }
 
-/// The 36 pt (or smaller) tile of a Marketplace entry: the symbol of its catalog icon, or the first letter of its
-/// name when it has no catalog entry (an own integration).
+/// The tile of a Marketplace entry: the symbol of its catalog icon, or the first letter of its name when it has no
+/// catalog entry (an own integration).
 private struct MarketTile: View {
     let entry: MarketEntry
     let size: CGFloat

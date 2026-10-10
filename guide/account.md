@@ -69,7 +69,7 @@ A new device must be approved before it gets your servers. After the sign-in, a 
 
 <!-- id: acc-devices; covers: -->
 The phones and Macs that connect to a server. Adding and revoking are on the server, not in the account screen. See [server.md](server.md).
-Где: Server (⌘6) → Devices (Устройства)
+Где: Server (⌘7) → Devices (Устройства)
 1. To pair a new device, click Add device (Добавить устройство) and enter the code on the device.
 2. To cut one device off, click Revoke (Отозвать) in its row.
 ## Sign out

@@ -1927,6 +1927,7 @@
   "market.noResults": "見つかりません",
   "market.configure": "設定",
   "market.availableToAgents": "エージェントが使用可能",
+  "market.more": "その他",
   "integrations.sheet.connectTitle": "{name} を接続",
   "integrations.sheet.addTitle": "新しい連携",
   "integrations.sheet.editTitle": "{name} を編集",

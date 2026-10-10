@@ -1953,6 +1953,7 @@
   "market.noResults": "Nothing found",
   "market.configure": "Configure",
   "market.availableToAgents": "Available to agents",
+  "market.more": "More",
   "integrations.sheet.connectTitle": "Connect {name}",
   "integrations.sheet.addTitle": "New integration",
   "integrations.sheet.editTitle": "Edit {name}",

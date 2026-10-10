@@ -6,17 +6,18 @@ their tools. The mode lists the catalog and shows what is connected. Open it wit
 ## Marketplace mode
 
 <!-- id: market-mode; covers: mode:market -->
-The main area lists the services. The connected ones are in one row at the top; the catalog follows. Each connected
-card has a status dot: green is working, red is a failed check, grey is not checked yet (or off).
-Где: Mode bar → Marketplace (Маркетплейс), or Menu View → Go to Marketplace (Маркетплейс)
-1. Press ⌘6 or click Marketplace (Маркетплейс) in the mode bar.
-2. Without a server, the page says No servers (Нет серверов). Click Add server (Добавить сервер).
+The main area lists the services. The connected ones are in one row at the top; the catalog follows without them. Each
+connected card shows its address and the result of the last check: the number of tools, the error, or Not checked yet.
+Где: sidebar footer → Marketplace button (Маркетплейс), or Menu View → Go to Marketplace (Маркетплейс)
+1. Press ⌘6, or click the Marketplace button at the bottom left of the sidebar, between your profile and the usage button.
+2. The button is lit while the Marketplace is on show. It is not in the mode bar at the top of the sidebar.
+3. Without a server, the page says No servers (Нет серверов). Click Add server (Добавить сервер).
 
 ## Filters
 
 <!-- id: market-filters; covers: -->
-The sidebar lists two filters: All (Все) shows the connected row and the whole catalog; Connected (Подключённые) shows
-only the connected services.
+The sidebar lists two filters: All (Все) shows the connected row and the catalog of the services that are not connected;
+Connected (Подключённые) shows only the connected services.
 Где: Marketplace → sidebar → All (Все), Connected (Подключённые)
 1. Click Connected (Подключённые) to hide the services that are not connected.
 2. With no connected service, the page says Nothing is connected yet (Ничего ещё не подключено).
@@ -41,11 +42,12 @@ headers. The sheet can check the connection before you save.
 ## Configure, turn off, remove
 
 <!-- id: market-configure; covers: -->
-Click a connected card, or Configure (Настроить), to change its settings. Right-click a connected card for the menu:
-Available to agents (Доступно агентам) turns the service on or off for the agents; Remove (Удалить) takes it off the
-server. The agents lose its tools. Its secrets stay on the server.
-Где: Marketplace → connected card → right-click → Available to agents (Доступно агентам), Edit (Изменить), Remove (Удалить)
-1. Right-click the card and choose Remove (Удалить). Confirm in the dialog.
+The switch Available to agents (Доступно агентам) on a connected card turns the service on or off for the agents. The
+menu (…) on the card has Check (Проверить), Edit (Изменить) and Remove (Удалить). Remove takes the service off the
+server: the agents lose its tools. Its secrets stay on the server.
+Где: Marketplace → connected card → Available to agents (Доступно агентам) switch, or the menu (…) → Check (Проверить), Edit (Изменить), Remove (Удалить)
+1. Click the menu (…) on the card and choose Remove (Удалить). Confirm in the dialog.
+2. Click Configure (Настроить) on a catalog card to change the settings of a connected service.
 
 ## Own integration
 

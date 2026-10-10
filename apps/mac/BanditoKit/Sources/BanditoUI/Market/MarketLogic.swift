@@ -20,8 +20,17 @@ struct MarketEntry: Identifiable, Equatable {
 struct MarketPage: Equatable {
     /// Shown above the grid under the All filter, only when some connected service matches the search.
     var connected: [MarketEntry]
-    /// Every entry the filter and the search keep, in the order of `MarketLogic.entries`.
+    /// The catalog entries the filter and the search keep, in the order of `MarketLogic.entries`. Under the All filter
+    /// the connected ones are not here: they are in `connected`.
     var grid: [MarketEntry]
+}
+
+/// Why the page has nothing to show.
+enum MarketEmptyState: Equatable {
+    /// A search matched nothing.
+    case noResults
+    /// The Connected filter with nothing connected.
+    case nothingConnected
 }
 
 /// The rules of the Marketplace list. Pure, so the filter, the search and the order are easy to test.
@@ -65,12 +74,26 @@ enum MarketLogic {
         }
     }
 
-    /// The page for a filter and a search. The connected row shows only under the All filter, so the Connected filter
-    /// has the grid alone.
+    /// The page for a filter and a search. Under the All filter the connected services form the row above, and the
+    /// grid keeps the rest of the catalog. The Connected filter has the grid alone, with the connected services.
     static func page(_ entries: [MarketEntry], filter: MarketFilter, query: String) -> MarketPage {
-        MarketPage(
-            connected: filter == .all ? visible(entries, filter: .connected, query: query) : [],
-            grid: visible(entries, filter: filter, query: query))
+        let connected = visible(entries, filter: .connected, query: query)
+        switch filter {
+        case .all:
+            return MarketPage(
+                connected: connected,
+                grid: visible(entries, filter: .all, query: query).filter { !$0.isConnected })
+        case .connected:
+            return MarketPage(connected: [], grid: connected)
+        }
+    }
+
+    /// What to say when the page is empty: a search with no match, or the Connected filter with nothing connected.
+    /// `nil` when there is something to show, or when the All filter has every service connected (the row shows them).
+    static func emptyState(_ page: MarketPage, filter: MarketFilter, query: String) -> MarketEmptyState? {
+        guard page.grid.isEmpty && page.connected.isEmpty else { return nil }
+        if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return .noResults }
+        return filter == .connected ? .nothingConnected : nil
     }
 
     /// The address of an own integration: `https://…` for a web one, the command and its arguments for a program.

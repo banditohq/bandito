@@ -80,7 +80,7 @@ private func connection(
 
         let all = MarketLogic.page(entries, filter: .all, query: "")
         #expect(all.connected.map(\.id) == ["catalog:linear", "own:tool-1"])
-        #expect(all.grid.count == 4)
+        #expect(all.grid.map(\.id) == ["catalog:github", "catalog:playwright"])
 
         let connected = MarketLogic.page(entries, filter: .connected, query: "")
         #expect(connected.connected.isEmpty)
@@ -88,6 +88,38 @@ private func connection(
 
         let searched = MarketLogic.page(entries, filter: .all, query: "linear")
         #expect(searched.connected.map(\.id) == ["catalog:linear"])
-        #expect(searched.grid.map(\.id) == ["catalog:linear"])
+        #expect(searched.grid.isEmpty)
+    }
+
+    @Test func connectedServicesAreNotRepeatedInTheGridUnderAll() {
+        let entries = MarketLogic.entries(
+            catalog: catalog, integrations: [connection("i1", "github")], languageCode: "en")
+        let all = MarketLogic.page(entries, filter: .all, query: "")
+        #expect(all.connected.map(\.id) == ["catalog:github"])
+        #expect(!all.grid.contains { $0.id == "catalog:github" })
+        #expect(all.grid.map(\.id) == ["catalog:linear", "catalog:playwright"])
+    }
+
+    @Test func emptyStateNamesTheReason() {
+        let entries = MarketLogic.entries(
+            catalog: catalog, integrations: [connection("i1", "linear")], languageCode: "en")
+
+        let noMatch = MarketLogic.page(entries, filter: .all, query: "zzz")
+        #expect(MarketLogic.emptyState(noMatch, filter: .all, query: "zzz") == .noResults)
+
+        let nothingConnected = MarketLogic.entries(catalog: catalog, integrations: [], languageCode: "en")
+        let none = MarketLogic.page(nothingConnected, filter: .connected, query: "")
+        #expect(MarketLogic.emptyState(none, filter: .connected, query: "") == .nothingConnected)
+
+        // Under All with every service connected the row shows them: no text.
+        let allConnected = MarketLogic.entries(
+            catalog: catalog,
+            integrations: [connection("github", "github"), connection("linear", "linear"), connection("playwright", "playwright")],
+            languageCode: "en")
+        let full = MarketLogic.page(allConnected, filter: .all, query: "")
+        #expect(MarketLogic.emptyState(full, filter: .all, query: "") == nil)
+
+        let shown = MarketLogic.page(entries, filter: .all, query: "")
+        #expect(MarketLogic.emptyState(shown, filter: .all, query: "") == nil)
     }
 }

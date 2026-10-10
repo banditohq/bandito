@@ -793,6 +793,7 @@
 "market.configure" = "Configurar";
 "market.filter.all" = "Todos";
 "market.filter.connected" = "Conectados";
+"market.more" = "Mais";
 "market.noResults" = "Nada encontrado";
 "market.search" = "Buscar";
 "market.subtitle" = "Conecte os serviços que os agentes podem usar.";

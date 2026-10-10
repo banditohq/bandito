@@ -1927,6 +1927,7 @@
   "market.noResults": "결과가 없습니다",
   "market.configure": "설정",
   "market.availableToAgents": "에이전트가 사용 가능",
+  "market.more": "더보기",
   "integrations.sheet.connectTitle": "{name} 연결",
   "integrations.sheet.addTitle": "새 연동",
   "integrations.sheet.editTitle": "{name} 편집",
