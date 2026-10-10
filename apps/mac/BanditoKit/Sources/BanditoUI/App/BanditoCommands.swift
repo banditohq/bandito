@@ -97,6 +97,7 @@ public struct BanditoCommands: Commands {
                 .disabled(!hasPendingApproval)
             Divider()
             item("team.stop") { interruptSelected() }
+            item("team.dictate") { router.dictationRequest += 1 }
                 .disabled(selectedAgentID == nil)
             pauseAllButton
         }

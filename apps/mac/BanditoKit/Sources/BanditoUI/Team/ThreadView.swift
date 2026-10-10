@@ -2,6 +2,9 @@ import BanditoDesign
 import BanditoKit
 import BanditoL10n
 import SwiftUI
+#if os(macOS)
+import AppKit
+#endif
 
 /// The thread of one agent: header, the rows, banners and the composer.
 struct ThreadView: View {
@@ -477,8 +480,19 @@ struct ThreadView: View {
         .onChange(of: thread.turnRunning) { wasRunning, isRunning in
             if wasRunning && !isRunning {
                 Task { await loadChanges() }
+                readFinishedReply()
             }
         }
+    }
+
+    /// A turn that ended is read aloud when the agent has "Read replies aloud" on and Bandito is the active app.
+    private func readFinishedReply() {
+        guard ReadAloud.isOn(agentID: agent.id), NSApplication.shared.isActive,
+            let reply = ReadAloudRules.lastReply(in: thread.items)
+        else { return }
+        let spoken = SpeechText.plain(reply.text, codeSkipped: L10n.Speech.codeSkipped)
+        let voice = SpeechLanguage.voiceTag(for: spoken, appLanguage: SpeechLanguage.appLanguage)
+        SpeechOutput.shared.speak(spoken, key: reply.id, voiceTag: voice)
     }
 
     private var isStreaming: Bool {

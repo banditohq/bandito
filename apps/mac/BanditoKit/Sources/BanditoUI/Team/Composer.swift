@@ -46,6 +46,8 @@ struct Composer: View {
     @State private var showsContext = false
     /// The popover asks "start a new chapter?" before it does (reset when the popover closes).
     @State private var asksNewChapter = false
+    /// The dictation of this field: the microphone button, ⌥⌘D and Esc. See `DictationController`.
+    @State private var dictation = DictationController()
     private var canSend: Bool {
         AttachmentTray.canSend(text: draft, files: files)
     }
@@ -132,6 +134,10 @@ struct Composer: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 16)
             }
+            if let failure = dictation.failure {
+                dictationNotice(failure)
+                    .transition(.opacity.combined(with: .offset(y: 6)))
+            }
             if let prompt = mention.connectPrompt, draftMentions.contains(where: { $0.pendingTemplate == prompt.pendingTemplate }) {
                 connectBar(prompt)
                     .transition(.opacity.combined(with: .offset(y: 6)))
@@ -154,6 +160,9 @@ struct Composer: View {
                 HStack(alignment: .bottom, spacing: 10) {
                     if canAttach {
                         attachMenu
+                    }
+                    if agent != nil {
+                        dictationButton
                     }
 
                     TextField(L10n.Thread.placeholder, text: $draft, axis: .vertical)
@@ -233,6 +242,8 @@ struct Composer: View {
         .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: reply)
         .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: waitingForm?.formId)
         .onAppear { takeFocus(.agentOpened) }
+        .onDisappear { dictation.cancel() }
+        .onChange(of: router.dictationRequest) { _, _ in toggleDictation() }
         .tourAnchor(.composer)
         .onChange(of: router.composerFocusAgentID, initial: true) { _, _ in
             guard let agentID = agent?.id else { return }
@@ -482,9 +493,83 @@ struct Composer: View {
         }
     }
 
+    // MARK: Dictation
+
+    /// The microphone next to "+": the mic when idle, the filled mic with a cream dot while the field listens.
+    private var dictationButton: some View {
+        let label = dictation.isActive ? L10n.Dictation.stop : L10n.Dictation.start
+        return Button(action: toggleDictation) {
+            Image(systemName: dictation.phase == .recording ? "mic.fill" : "mic")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(dictation.isActive ? Color.Bandito.signal : Color.Bandito.text2)
+                .frame(width: 30, height: 30)
+                .overlay(alignment: .topTrailing) {
+                    if dictation.phase == .recording {
+                        Circle()
+                            .fill(Color.Bandito.signal)
+                            .frame(width: 7, height: 7)
+                            .accessibilityHidden(true)
+                    }
+                }
+        }
+        .banditoButton(.icon(size: 30, label: label))
+        .padding(.bottom, 2)
+    }
+
+    /// Starts the dictation into this field at the caret, or stops it. ⌥⌘D and the button both come here.
+    private func toggleDictation() {
+        guard agent != nil else { return }
+        dictation.toggle(text: $draft, caret: FieldCaret.location, placeCaret: FieldCaret.place)
+        focused = true
+    }
+
+    /// Why the dictation did not run. A refused permission links to its page in System Settings.
+    private func dictationNotice(_ failure: DictationFailure) -> some View {
+        let text: String
+        var settings: String?
+        switch failure {
+        case .denied(.microphone):
+            text = L10n.Dictation.Denied.microphone
+            settings = "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"
+        case .denied(.speech):
+            text = L10n.Dictation.Denied.speech
+            settings = "x-apple.systempreferences:com.apple.preference.security?Privacy_SpeechRecognition"
+        case .onDeviceUnavailable(let language):
+            text = L10n.Dictation.onDeviceUnavailable(language: language)
+        case .engine:
+            text = L10n.Dictation.failed
+        }
+        return HStack(spacing: 10) {
+            Text(text)
+                .font(BanditoFont.text(size: 12.5, weight: 500))
+                .foregroundStyle(Color.Bandito.text)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            if let settings, let url = URL(string: settings) {
+                Button(L10n.Dictation.openSettings) {
+                    #if os(macOS)
+                    NSWorkspace.shared.open(url)
+                    #endif
+                }
+                .banditoButton(.link)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.Bandito.surface2, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.Bandito.danger.opacity(0.5), lineWidth: 1))
+    }
+
     // MARK: Keys and menu actions
 
     private func handleMenuKey(_ key: KeyEquivalent) -> KeyPress.Result {
+        // Esc while dictating ends the dictation, before any menu or the reply.
+        if dictation.isActive, key == .escape {
+            dictation.stop()
+            return .handled
+        }
         // Esc with no menu open takes the reply away.
         if query == nil, key == .escape, reply != nil, mentionRows(mentionSections).isEmpty {
             onCancelReply()
@@ -989,6 +1074,27 @@ enum FieldCaret {
         return range.length == 0 && range.location == (editor.string as NSString).length
         #else
         return true
+        #endif
+    }
+
+    /// The caret as a UTF-16 offset in the field being edited; nil where there is no field editor.
+    static var location: Int? {
+        #if os(macOS)
+        guard let editor = NSApp.keyWindow?.firstResponder as? NSTextView else { return nil }
+        return editor.selectedRange().location
+        #else
+        return nil
+        #endif
+    }
+
+    /// Puts the caret at `offset`. Done on the next turn: SwiftUI writes the new text into the field after this call.
+    static func place(_ offset: Int) {
+        #if os(macOS)
+        DispatchQueue.main.async {
+            guard let editor = NSApp.keyWindow?.firstResponder as? NSTextView else { return }
+            let length = (editor.string as NSString).length
+            editor.setSelectedRange(NSRange(location: min(max(offset, 0), length), length: 0))
+        }
         #endif
     }
 }
