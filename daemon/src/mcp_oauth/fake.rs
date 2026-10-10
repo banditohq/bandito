@@ -306,10 +306,13 @@ async fn mcp(State(f): State<Arc<Fake>>, headers: HeaderMap, body: Bytes) -> Res
             200,
             json!({ "jsonrpc": "2.0", "id": id, "result": { "tools": [{ "name": "search" }, { "name": "fetch" }] } }),
         ),
-        // Echoes the tool and its arguments as text; the tool `fail` answers with `isError`.
+        // Echoes the tool and its arguments as text; the tool `fail` answers with `isError`, `big` with 1.5 MB of text.
         Some("tools/call") => {
             let name = msg["params"]["name"].as_str().unwrap_or_default();
-            let text = format!("{name} {}", msg["params"]["arguments"]);
+            let text = match name {
+                "big" => "x".repeat(1_500_000),
+                _ => format!("{name} {}", msg["params"]["arguments"]),
+            };
             json_response(
                 200,
                 json!({ "jsonrpc": "2.0", "id": id, "result": {

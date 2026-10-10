@@ -381,6 +381,23 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                 Some(_) => return Err(RpcError::new(INVALID_PARAMS, "arguments must be an object")),
             };
             let cur = store.integration_get(&id)?.ok_or_else(|| no_integration(&id))?;
+            if !cur.enabled {
+                return Err(RpcError::new(
+                    INVALID_PARAMS,
+                    format!("{} is turned off: turn it on to use its tools", cur.name),
+                ));
+            }
+            // With a list from an earlier test, the tool must be on it; without one, any name is asked.
+            let listed = store.integration_tools(&id)?;
+            if !listed.is_empty() && !listed.iter().any(|t| t.name == tool) {
+                return Err(RpcError::new(
+                    INVALID_PARAMS,
+                    format!(
+                        "{} has no tool named {tool}: run its test to refresh the list",
+                        cur.name
+                    ),
+                ));
+            }
             match reach(store, &cur, false, &call_request(&tool, &arguments), CALL_TIMEOUT).await {
                 Ok(reply) => ok(call_answer(&reply.result, &Redactor::exact(reply.secrets))),
                 Err(Refused::SignIn) => Err(RpcError::new(SERVER_ERROR, "sign in to this service again")),
@@ -783,16 +800,16 @@ async fn exchange_stdio(
     let secrets = secret_pairs(env);
     let exchange = async {
         let mut stdin = child.stdin.take().ok_or_else(|| anyhow::anyhow!("no stdin"))?;
-        let mut lines = BufReader::new(child.stdout.take().ok_or_else(|| anyhow::anyhow!("no stdout"))?).lines();
+        let mut stdout = BufReader::new(child.stdout.take().ok_or_else(|| anyhow::anyhow!("no stdout"))?);
         send(&mut stdin, &initialize_request()).await?;
-        read_reply(&mut lines, 1).await?;
+        read_reply(&mut stdout, 1).await?;
         send(
             &mut stdin,
             &json!({ "jsonrpc": "2.0", "method": "notifications/initialized" }),
         )
         .await?;
         send(&mut stdin, last).await?;
-        read_reply(&mut lines, 2).await
+        read_reply(&mut stdout, 2).await
     };
     match tokio::time::timeout(limit, exchange).await {
         Ok(Ok(tools)) => Ok(tools),
@@ -820,16 +837,42 @@ async fn send(stdin: &mut tokio::process::ChildStdin, msg: &Value) -> anyhow::Re
     Ok(())
 }
 
-/// Reads lines until the reply with this id; other lines (notifications, logs) are skipped. Returns its result.
-async fn read_reply<R: tokio::io::AsyncBufRead + Unpin>(
-    lines: &mut tokio::io::Lines<R>,
-    id: u64,
-) -> anyhow::Result<Value> {
-    while let Some(line) = lines.next_line().await? {
-        let Ok(msg) = serde_json::from_str::<Value>(&line) else {
+/// The most a server may send in one message (one line of its stdout, or one http answer). A larger one is refused.
+const MAX_MESSAGE_BYTES: usize = 1024 * 1024;
+
+/// Reads the next line of a server's stdout, of at most [`MAX_MESSAGE_BYTES`]; `None` at the end of the output. A longer
+/// line is refused as soon as it passes the limit, without being read in full.
+async fn read_line_capped<R: tokio::io::AsyncBufRead + Unpin>(reader: &mut R) -> anyhow::Result<Option<Vec<u8>>> {
+    let mut line = Vec::new();
+    loop {
+        let chunk = reader.fill_buf().await?;
+        if chunk.is_empty() {
+            return Ok((!line.is_empty()).then_some(line));
+        }
+        let (take, end) = match chunk.iter().position(|b| *b == b'\n') {
+            Some(i) => (i + 1, true),
+            None => (chunk.len(), false),
+        };
+        line.extend_from_slice(if end { &chunk[..take - 1] } else { &chunk[..take] });
+        reader.consume(take);
+        if line.len() > MAX_MESSAGE_BYTES {
+            anyhow::bail!("the server's answer is too large (over 1 MiB)");
+        }
+        if end {
+            return Ok(Some(line));
+        }
+    }
+}
+
+/// Reads the server's lines until its reply to request `id`. A reply has that id and no `method`: a request or a
+/// notification of the server carries one and is not an answer, so it is skipped, as are logs and other non-JSON lines.
+/// Returns the reply's result.
+async fn read_reply<R: tokio::io::AsyncBufRead + Unpin>(reader: &mut R, id: u64) -> anyhow::Result<Value> {
+    while let Some(line) = read_line_capped(reader).await? {
+        let Ok(msg) = serde_json::from_slice::<Value>(&line) else {
             continue;
         };
-        if msg.get("id").and_then(Value::as_u64) == Some(id) {
+        if msg.get("method").is_none() && msg.get("id").and_then(Value::as_u64) == Some(id) {
             return result_of(&msg);
         }
     }
@@ -877,6 +920,15 @@ fn tools_of(result: &Value, seen_at: i64) -> Vec<IntegrationTool> {
             })
         })
         .collect()
+}
+
+/// How long one http POST may take, in seconds: a tool call gets the call's limit, any other request 15 s.
+fn max_time_for(msg: &Value) -> u64 {
+    if msg.get("method").and_then(Value::as_str) == Some("tools/call") {
+        CALL_TIMEOUT.as_secs()
+    } else {
+        15
+    }
 }
 
 fn call_request(tool: &str, arguments: &Value) -> Value {
@@ -978,7 +1030,10 @@ async fn http_post(
     } else {
         config.push_str(&format!("url = {}\n", json!(url)));
     }
-    config.push_str("request = \"POST\"\nsilent\nshow-error\ninclude\nmax-time = 15\n");
+    config.push_str(&format!(
+        "request = \"POST\"\nsilent\nshow-error\ninclude\nmax-time = {}\nmax-filesize = {MAX_MESSAGE_BYTES}\n",
+        max_time_for(msg)
+    ));
     config.push_str(&format!("header = {}\n", json!("Content-Type: application/json")));
     config.push_str(&format!(
         "header = {}\n",
@@ -1010,6 +1065,10 @@ async fn http_post(
         stdin.write_all(config.as_bytes()).await?;
     }
     let out = child.wait_with_output().await?;
+    // curl stops the transfer at the size limit (exit 63); the length is checked again for any other way it could pass.
+    if out.status.code() == Some(63) || out.stdout.len() > MAX_MESSAGE_BYTES {
+        anyhow::bail!("the server's answer is too large (over 1 MiB)");
+    }
     let raw = String::from_utf8_lossy(&out.stdout).into_owned();
     if !out.status.success() {
         // The headers are in the config, not in curl's own messages; the tail is redacted with the secrets anyway.
@@ -1840,9 +1899,14 @@ mod tests {
 
     /// The script of a stdio server: it answers the handshake, then `answer` (`"result":…` or `"error":…`) to its request.
     fn answering(answer: &str) -> String {
+        answering_after("", answer)
+    }
+
+    /// As [`answering`], with `before` (shell commands) run before the answer is written.
+    fn answering_after(before: &str, answer: &str) -> String {
         format!(
             "read a; echo '{{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{{\"protocolVersion\":\"{PROTOCOL}\",\"capabilities\":{{}}}}}}'; \
-             read b; read c; echo '{{\"jsonrpc\":\"2.0\",\"id\":2,{answer}}}'"
+             read b; read c; {before} echo '{{\"jsonrpc\":\"2.0\",\"id\":2,{answer}}}'"
         )
     }
 
@@ -2007,6 +2071,111 @@ mod tests {
             .unwrap();
         assert_eq!(failed["is_error"], true, "{failed}");
         assert!(!answer.to_string().contains("at-initial") && !failed.to_string().contains("at-initial"));
+    }
+
+    #[test]
+    fn the_limit_of_an_http_post_is_the_call_limit_only_for_a_tool_call() {
+        assert_eq!(max_time_for(&call_request("echo", &json!({}))), 30);
+        assert_eq!(max_time_for(&list_request()), 15);
+    }
+
+    #[tokio::test]
+    async fn a_request_of_the_server_is_not_taken_for_the_answer() {
+        let app = app();
+        // The server first sends its own request with id 2 (it has a `method`), then the answer to ours.
+        let script = answering_after(
+            r#"echo '{"jsonrpc":"2.0","id":2,"method":"roots/list"}';"#,
+            r#""result":{"content":[{"type":"text","text":"the real answer"}],"isError":false}"#,
+        );
+        let id = add_sh(&app, "server-request", &script, json!({})).await;
+        let answer = owner(&app, "integrations.call_tool", json!({ "id": id, "tool": "echo" }))
+            .await
+            .unwrap();
+        assert_eq!(answer["content"][0]["text"], "the real answer", "{answer}");
+    }
+
+    #[tokio::test]
+    async fn a_stdio_answer_over_one_megabyte_is_refused_without_being_read_in_full() {
+        // A 5 MiB line comes before the answer: the reader stops at the limit and the server is killed.
+        let server = Server {
+            name: "big".into(),
+            transport: Transport::Stdio {
+                command: "sh".into(),
+                args: vec![
+                    "-c".into(),
+                    answering_after(
+                        "head -c 5242880 /dev/zero | tr '\\0' x; echo;",
+                        r#""result":{"content":[],"isError":false}"#,
+                    ),
+                ],
+                env: vec![],
+            },
+        };
+        let started = std::time::Instant::now();
+        let err = exchange(
+            &server,
+            Duration::from_secs(10),
+            false,
+            &call_request("echo", &json!({})),
+        )
+        .await
+        .unwrap_err();
+        assert!(err.to_string().contains("too large"), "{err}");
+        assert!(
+            started.elapsed() < Duration::from_secs(8),
+            "refused at once, not at the timeout"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_http_answer_over_one_megabyte_is_refused() {
+        let fake = crate::mcp_oauth::fake::Fake::start().await;
+        let app = app();
+        app.sup.hub().store.secret_set("FAKE_TOKEN", "at-initial", &[]).unwrap();
+        let row = owner(
+            &app,
+            "integrations.add",
+            json!({ "name": "fake-big", "kind": "http", "url": fake.url(),
+                    "headers": { "Authorization": "Bearer secret:FAKE_TOKEN" } }),
+        )
+        .await
+        .unwrap();
+        let id = row["id"].as_str().unwrap().to_string();
+        let err = owner(&app, "integrations.call_tool", json!({ "id": id, "tool": "big" }))
+            .await
+            .unwrap_err();
+        assert!(err.message.contains("too large"), "{}", err.message);
+    }
+
+    #[tokio::test]
+    async fn a_turned_off_integration_is_not_called_and_a_tool_off_its_list_is_refused() {
+        let app = app();
+        let ran = answering(r#""result":{"content":[{"type":"text","text":"ran"}],"isError":false}"#);
+        let id = add_sh(&app, "switched-off", &ran, json!({})).await;
+        owner(&app, "integrations.update", json!({ "id": id, "enabled": false }))
+            .await
+            .unwrap();
+        let err = owner(&app, "integrations.call_tool", json!({ "id": id, "tool": "echo" }))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, INVALID_PARAMS);
+        assert!(err.message.contains("turned off"), "{}", err.message);
+
+        // After a test, the list of tools is the check: a name off it is refused, a name on it is called.
+        let listing = answering(r#""result":{"tools":[{"name":"search"}]}"#);
+        let id = add_sh(&app, "listed-tools", &listing, json!({})).await;
+        assert_eq!(
+            owner(&app, "integrations.test", json!({ "id": id })).await.unwrap()["ok"],
+            true
+        );
+        let err = owner(&app, "integrations.call_tool", json!({ "id": id, "tool": "missing" }))
+            .await
+            .unwrap_err();
+        assert!(err.message.contains("no tool named missing"), "{}", err.message);
+        let answer = owner(&app, "integrations.call_tool", json!({ "id": id, "tool": "search" }))
+            .await
+            .unwrap();
+        assert_eq!(answer["is_error"], false, "{answer}");
     }
 
     #[tokio::test]
