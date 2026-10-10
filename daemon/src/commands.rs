@@ -151,10 +151,14 @@ fn collect_codex_prompts(root: &Path, out: &mut Vec<Command>) {
     }
 }
 
-/// Directory entries in name order, so that the listing is stable.
+/// Directory entries in name order, so that the listing is stable. Names that start with a dot are left out: the
+/// daemon's own temporary and old skill folders (`.<id>.tmp-*`, `.<id>.old-*`) are hidden from the list.
 fn sorted_entries(dir: &Path) -> Vec<fs::DirEntry> {
     let Ok(read) = fs::read_dir(dir) else { return Vec::new() };
-    let mut entries: Vec<fs::DirEntry> = read.flatten().collect();
+    let mut entries: Vec<fs::DirEntry> = read
+        .flatten()
+        .filter(|e| !e.file_name().to_string_lossy().starts_with('.'))
+        .collect();
     entries.sort_by_key(|e| e.file_name());
     entries
 }
@@ -547,7 +551,7 @@ pub fn install(
             if !decoded.iter().any(|(rel, _)| rel == Path::new("SKILL.md")) {
                 return fail("missing_skill_file", "a skill needs SKILL.md");
             }
-            root.join("skills").join(name)
+            checked_skill_folder(base, name)?
         }
     };
     let exists = fs::symlink_metadata(&target).is_ok();
@@ -560,16 +564,111 @@ pub fn install(
             let (_, bytes) = &decoded[0];
             write_file(&target, bytes)?;
         }
-        InstallKind::Skill => {
-            if exists {
-                fs::remove_dir_all(&target).map_err(|e| io_error(&target, &e))?;
-            }
-            for (rel, bytes) in &decoded {
-                write_file(&target.join(rel), bytes)?;
-            }
+        InstallKind::Skill => replace_skill_folder(&target, &decoded)?,
+    }
+    Ok(target)
+}
+
+/// The folder `base/.claude/skills/<name>` that a skill install or remove may touch. `.claude` and `.claude/skills`
+/// must not be links, and when the folder exists it must be a real folder whose canonical path lies directly in the
+/// canonical `base/.claude/skills`. Anything else is `unsafe_path`, and nothing is written.
+pub fn checked_skill_folder(base: &Path, name: &str) -> Result<PathBuf, InstallError> {
+    let root = base.join(".claude");
+    let skills = root.join("skills");
+    for dir in [&root, &skills] {
+        if fs::symlink_metadata(dir).is_ok_and(|m| m.file_type().is_symlink()) {
+            return fail(
+                "unsafe_path",
+                format!("{} is a link; skills are not written through it", dir.display()),
+            );
+        }
+    }
+    let target = skills.join(name);
+    if fs::symlink_metadata(&target).is_ok_and(|m| m.file_type().is_symlink()) {
+        return fail(
+            "unsafe_path",
+            format!("{} is a link; it is not replaced", target.display()),
+        );
+    }
+    if fs::symlink_metadata(&target).is_ok() {
+        let real_target = fs::canonicalize(&target).map_err(|e| io_error(&target, &e))?;
+        let real_skills = fs::canonicalize(base)
+            .map_err(|e| io_error(base, &e))?
+            .join(".claude")
+            .join("skills");
+        if real_target.parent() != Some(real_skills.as_path()) {
+            return fail(
+                "unsafe_path",
+                format!("{} lies outside the skills folder", target.display()),
+            );
         }
     }
     Ok(target)
+}
+
+/// Writes a skill folder in place of `target`. The files go to a new folder beside it first; then the old folder (if
+/// any) is moved aside, the new one takes its name, and the old one is removed. A failed write leaves the old folder
+/// as it was, and no temporary folder is left behind.
+fn replace_skill_folder(target: &Path, files: &[(PathBuf, Vec<u8>)]) -> Result<(), InstallError> {
+    let (Some(parent), Some(name)) = (target.parent(), target.file_name().and_then(|n| n.to_str())) else {
+        return fail("invalid_name", format!("bad folder {}", target.display()));
+    };
+    fs::create_dir_all(parent).map_err(|e| io_error(parent, &e))?;
+    let tag = crate::store::new_id();
+    let staged = parent.join(format!(".{name}.tmp-{tag}"));
+    if let Err(e) = write_tree(&staged, files) {
+        let _ = fs::remove_dir_all(&staged);
+        return Err(e);
+    }
+    if fs::symlink_metadata(target).is_err() {
+        return fs::rename(&staged, target).map_err(|e| {
+            let _ = fs::remove_dir_all(&staged);
+            io_error(target, &e)
+        });
+    }
+    let old = parent.join(format!(".{name}.old-{tag}"));
+    if let Err(e) = fs::rename(target, &old) {
+        let _ = fs::remove_dir_all(&staged);
+        return Err(io_error(target, &e));
+    }
+    if let Err(e) = fs::rename(&staged, target) {
+        let _ = fs::rename(&old, target);
+        let _ = fs::remove_dir_all(&staged);
+        return Err(io_error(target, &e));
+    }
+    // The new folder is in place; a leftover old copy is hidden (its name starts with a dot) and harmless.
+    let _ = fs::remove_dir_all(&old);
+    Ok(())
+}
+
+fn write_tree(dir: &Path, files: &[(PathBuf, Vec<u8>)]) -> Result<(), InstallError> {
+    fs::create_dir(dir).map_err(|e| io_error(dir, &e))?;
+    for (rel, bytes) in files {
+        let path = dir.join(rel);
+        write_file(&path, bytes)?;
+        set_mode(&path, skill_file_mode(rel, bytes))?;
+    }
+    Ok(())
+}
+
+/// Mode of a skill file: 0755 for anything under `scripts/` and for any file that starts with `#!`, else 0644.
+pub fn skill_file_mode(rel: &Path, bytes: &[u8]) -> u32 {
+    if rel.starts_with("scripts") || bytes.starts_with(b"#!") {
+        0o755
+    } else {
+        0o644
+    }
+}
+
+#[cfg(unix)]
+fn set_mode(path: &Path, mode: u32) -> Result<(), InstallError> {
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(path, fs::Permissions::from_mode(mode)).map_err(|e| io_error(path, &e))
+}
+
+#[cfg(not(unix))]
+fn set_mode(_path: &Path, _mode: u32) -> Result<(), InstallError> {
+    Ok(())
 }
 
 /// One segment of a command or skill name: letters, digits, `_` and `-`.
@@ -1010,5 +1109,75 @@ mod tests {
         ];
         let err = install(home.path(), InstallKind::Skill, "s", &total, false).unwrap_err();
         assert_eq!(err.reason, "too_large");
+    }
+}
+
+#[cfg(all(test, unix))]
+mod skill_path_tests {
+    use super::*;
+    use std::os::unix::fs::symlink;
+    use tempfile::TempDir;
+
+    fn skill_files() -> Vec<InstallFile> {
+        vec![InstallFile {
+            path: "SKILL.md".into(),
+            content: STANDARD.encode("# Skill"),
+        }]
+    }
+
+    #[test]
+    fn a_linked_skills_folder_is_refused_for_commands_install_too() {
+        let base = TempDir::new().unwrap();
+        let outside = TempDir::new().unwrap();
+        fs::create_dir_all(base.path().join(".claude")).unwrap();
+        symlink(outside.path(), base.path().join(".claude/skills")).unwrap();
+        let err = install(base.path(), InstallKind::Skill, "ship", &skill_files(), true).unwrap_err();
+        assert_eq!(err.reason, "unsafe_path");
+        assert!(fs::read_dir(outside.path()).unwrap().next().is_none());
+    }
+
+    #[test]
+    fn a_skill_folder_that_is_a_link_is_not_replaced() {
+        let base = TempDir::new().unwrap();
+        let outside = TempDir::new().unwrap();
+        fs::create_dir_all(base.path().join(".claude/skills")).unwrap();
+        symlink(outside.path(), base.path().join(".claude/skills/ship")).unwrap();
+        let err = install(base.path(), InstallKind::Skill, "ship", &skill_files(), true).unwrap_err();
+        assert_eq!(err.reason, "unsafe_path");
+        assert!(fs::read_dir(outside.path()).unwrap().next().is_none());
+    }
+}
+
+#[cfg(test)]
+mod hidden_entry_tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    /// A leftover of an interrupted skill install, and a hidden command file, are not commands, even when their
+    /// front matter names a visible command.
+    #[test]
+    fn dot_named_folders_and_files_are_not_listed() {
+        let cwd = TempDir::new().unwrap();
+        let skills = cwd.path().join(".claude/skills");
+        fs::create_dir_all(skills.join(".commit.tmp-1")).unwrap();
+        fs::write(
+            skills.join(".commit.tmp-1/SKILL.md"),
+            "---\nname: commit\n---\nLeft over.",
+        )
+        .unwrap();
+        fs::create_dir_all(skills.join(".commit.old-2")).unwrap();
+        fs::write(skills.join(".commit.old-2/SKILL.md"), "Old copy.").unwrap();
+        fs::create_dir_all(skills.join("visible")).unwrap();
+        fs::write(skills.join("visible/SKILL.md"), "Visible.").unwrap();
+        let commands = cwd.path().join(".claude/commands");
+        fs::create_dir_all(&commands).unwrap();
+        fs::write(commands.join(".hidden.md"), "Hidden.").unwrap();
+        fs::write(commands.join("deploy.md"), "Deploy.").unwrap();
+
+        let names: Vec<String> = discover(None, cwd.path(), RuntimeKind::Claude)
+            .into_iter()
+            .map(|c| c.name)
+            .collect();
+        assert_eq!(names, vec!["deploy".to_string(), "visible".to_string()]);
     }
 }

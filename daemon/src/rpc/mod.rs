@@ -45,6 +45,7 @@ pub mod schedules;
 pub mod screen;
 pub mod secrets;
 pub mod setup;
+pub mod skills;
 pub mod term;
 pub mod tunnel;
 pub mod unix;
@@ -74,6 +75,7 @@ pub fn features() -> Vec<&'static str> {
         "host",
         "setup",
         "commands",
+        "skills",
         "workspaces",
         "browser",
         "update",
@@ -1047,6 +1049,10 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
     }
     if method.starts_with("screen.") {
         return screen::dispatch(app, peer, method, p).await;
+    }
+    if method.starts_with("skills.") {
+        // Every `skills.*` name is answered there, unknown ones with METHOD_NOT_FOUND.
+        return skills::dispatch(app, method, p).await;
     }
     if method.starts_with("workspaces.") {
         // Every `workspaces.*` name is answered there, unknown ones with METHOD_NOT_FOUND.
@@ -3752,6 +3758,9 @@ mod trust_tests {
         "agents.send",
         "agents.interrupt",
         "commands.list",
+        "skills.catalog",
+        "skills.install",
+        "skills.remove",
         "workspaces.list",
         "workspaces.create",
         "workspaces.update",

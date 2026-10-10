@@ -55,6 +55,11 @@ import Testing
         #expect(ServiceLogo.image(for: "notion") != nil)
         #expect(ServiceLogo.image(for: "sentry") != nil)
         #expect(ServiceLogo.image(for: "brave-search") != nil)
+        for id in ["gitlab", "vercel", "netlify", "toolbox-postgres", "grafana", "posthog", "huggingface", "mongodb",
+                   "railway", "render", "snyk", "prisma"] {
+            #expect(ServiceLogo.image(for: id) != nil, "\(id)")
+        }
+        #expect(ServiceLogo.image(for: "neon") == nil)
         #expect(ServiceLogo.image(for: "composio") == nil)
     }
 
