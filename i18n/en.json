@@ -2131,6 +2131,7 @@
   "thread.browserRun.watchBeside": "Watch beside",
   "thread.browserRun.fullscreen": "Full screen",
   "thread.browserRun.noPicture": "The picture of the page appears here",
+  "thread.browserRun.closed": "Browser closed",
   "thread.link.fileHelp": "Opens in the panel · ⌥-click shows it in Files",
   "thread.link.urlHelp": "Opens in the browser panel · ⌘-click opens in your browser",
   "composer.attach.label": "Attach",

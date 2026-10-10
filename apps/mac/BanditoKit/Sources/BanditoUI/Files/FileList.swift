@@ -53,7 +53,7 @@ struct FileRow: View {
                 FileGlyph(category: FileCategory.of(entry), size: 28)
                 if isRenaming {
                     TextField(L10n.Files.Column.name, text: $renameDraft)
-                        .banditoField()
+                        .textFieldStyle(.plain)
                         .focused($renameFocused)
                         .onSubmit(onCommitRename)
                         .onExitCommand(perform: onCancelRename)

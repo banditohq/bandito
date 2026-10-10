@@ -1851,6 +1851,7 @@
 "terminals.updateServer" = "Update the server to use terminals.";
 "thread.aTeammate" = "a teammate";
 "thread.attach" = "Attach files";
+"thread.browserRun.closed" = "Browser closed";
 "thread.browserRun.fullscreen" = "Full screen";
 "thread.browserRun.noPicture" = "The picture of the page appears here";
 "thread.browserRun.title" = "Agent in the browser";

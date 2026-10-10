@@ -2104,6 +2104,7 @@
   "thread.browserRun.watchBeside": "옆에서 보기",
   "thread.browserRun.fullscreen": "전체 화면",
   "thread.browserRun.noPicture": "여기에 페이지 화면이 표시됩니다",
+  "thread.browserRun.closed": "브라우저가 닫혔습니다",
   "thread.link.fileHelp": "패널에서 열림 · ⌥-클릭은 파일에서 보기",
   "thread.link.urlHelp": "패널 브라우저에서 열림 · ⌘-클릭은 Mac 브라우저에서 열기",
   "composer.attach.label": "첨부",

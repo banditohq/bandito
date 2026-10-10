@@ -113,6 +113,23 @@ import Testing
         #expect(BrowserRunPreview.height(width: .infinity) == 0)
         #expect(BrowserRunPreview.height(width: .nan) == 0)
     }
+
+    @Test func aLivePictureWinsOverEverything() {
+        #expect(BrowserRunPreview.picture(hasFrame: true, running: true, hasLastFrame: true) == .live)
+        #expect(BrowserRunPreview.picture(hasFrame: true, running: false, hasLastFrame: false) == .live)
+    }
+
+    @Test func aRunningBrowserWithoutPictureWaitsForIt() {
+        #expect(BrowserRunPreview.picture(hasFrame: false, running: true, hasLastFrame: true) == .waiting)
+        #expect(BrowserRunPreview.picture(hasFrame: false, running: true, hasLastFrame: false) == .waiting)
+        // The status is not known yet: the card waits, as before.
+        #expect(BrowserRunPreview.picture(hasFrame: false, running: nil, hasLastFrame: false) == .waiting)
+    }
+
+    @Test func aClosedBrowserShowsItsLastPictureOrSaysItIsClosed() {
+        #expect(BrowserRunPreview.picture(hasFrame: false, running: false, hasLastFrame: true) == .lastFrame)
+        #expect(BrowserRunPreview.picture(hasFrame: false, running: false, hasLastFrame: false) == .closed)
+    }
 }
 
 @Suite struct BrowserFrameCropTests {

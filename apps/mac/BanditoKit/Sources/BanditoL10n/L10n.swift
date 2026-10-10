@@ -2555,6 +2555,7 @@ public enum L10n {
         public static var yesterday: String { L10n.tr("thread.yesterday") }
 
         public enum BrowserRun {
+            public static var closed: String { L10n.tr("thread.browserRun.closed") }
             public static var fullscreen: String { L10n.tr("thread.browserRun.fullscreen") }
             public static var noPicture: String { L10n.tr("thread.browserRun.noPicture") }
             public static var title: String { L10n.tr("thread.browserRun.title") }

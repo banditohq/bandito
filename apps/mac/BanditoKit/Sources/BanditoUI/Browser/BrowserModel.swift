@@ -32,6 +32,11 @@ final class BrowserModel {
     @ObservationIgnored let frames = BrowserFrameStore()
     /// Whether a picture of the page exists. Written only when it changes.
     private(set) var hasFrame = false
+    /// The last picture the page showed. It stays when the page connection ends, so a card for a closed browser can
+    /// still show it (`BrowserRunPreview.picture`). Not observed, like `frames`.
+    @ObservationIgnored let lastFrames = BrowserFrameStore()
+    /// Whether `lastFrames` holds a picture. Written only when it changes.
+    private(set) var hasLastFrame = false
     /// The page size in CSS pixels, from the last frame (what clicks are scaled from).
     private(set) var pageSize: CGSize = .zero
     private(set) var currentURL: String = ""
@@ -692,6 +697,11 @@ final class BrowserModel {
         frames.set(image)
         let has = image != nil
         if hasFrame != has { hasFrame = has }
+        // A nil picture (the page went away) keeps the last one.
+        if let image {
+            lastFrames.set(image)
+            if !hasLastFrame { hasLastFrame = true }
+        }
     }
 
     /// The page shows another size than the viewport it was given (the override was lost): sends it again, at most

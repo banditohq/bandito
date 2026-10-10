@@ -2131,6 +2131,7 @@
   "thread.browserRun.watchBeside": "Ver al lado",
   "thread.browserRun.fullscreen": "Pantalla completa",
   "thread.browserRun.noPicture": "Aquí aparecerá la imagen de la página",
+  "thread.browserRun.closed": "Navegador cerrado",
   "thread.link.fileHelp": "Se abre en el panel · ⌥-clic lo muestra en Archivos",
   "thread.link.urlHelp": "Se abre en el panel del navegador · ⌘-clic en tu navegador",
   "composer.attach.label": "Adjuntar",

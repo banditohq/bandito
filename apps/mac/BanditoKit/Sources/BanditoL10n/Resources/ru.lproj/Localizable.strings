@@ -1851,6 +1851,7 @@
 "terminals.updateServer" = "Обновите сервер, чтобы пользоваться терминалами.";
 "thread.aTeammate" = "коллеги";
 "thread.attach" = "Прикрепить файлы";
+"thread.browserRun.closed" = "Браузер закрыт";
 "thread.browserRun.fullscreen" = "Во весь экран";
 "thread.browserRun.noPicture" = "Здесь появится картинка страницы";
 "thread.browserRun.title" = "Агент в браузере";

@@ -2104,6 +2104,7 @@
   "thread.browserRun.watchBeside": "在旁边查看",
   "thread.browserRun.fullscreen": "全屏",
   "thread.browserRun.noPicture": "页面画面将显示在这里",
+  "thread.browserRun.closed": "浏览器已关闭",
   "thread.link.fileHelp": "在面板中打开 · ⌥-点击则在“文件”中显示",
   "thread.link.urlHelp": "在面板浏览器中打开 · ⌘-点击则在 Mac 浏览器中打开",
   "composer.attach.label": "添加附件",

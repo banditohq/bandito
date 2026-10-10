@@ -2104,6 +2104,7 @@
   "thread.browserRun.watchBeside": "横で見る",
   "thread.browserRun.fullscreen": "全画面",
   "thread.browserRun.noPicture": "ページの画像がここに表示されます",
+  "thread.browserRun.closed": "ブラウザは閉じられています",
   "thread.link.fileHelp": "パネルで開きます · ⌥クリックで「ファイル」に表示",
   "thread.link.urlHelp": "パネルのブラウザで開きます · ⌘クリックでMacのブラウザで開く",
   "composer.attach.label": "添付",

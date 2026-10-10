@@ -595,7 +595,7 @@ struct FilesToolbar: View {
                 .font(.system(size: 12.5))
                 .foregroundStyle(Color.Bandito.text3)
             TextField(L10n.Files.searchPlaceholder, text: $model.searchText)
-                .banditoField()
+                .textFieldStyle(.plain)
                 .font(BanditoFont.text(size: 13, weight: 400))
                 .lineLimit(1)
                 .focused($searchFocused)

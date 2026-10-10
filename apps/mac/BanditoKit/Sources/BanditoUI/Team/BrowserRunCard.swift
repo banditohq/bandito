@@ -14,6 +14,19 @@ enum BrowserRunPreview {
         guard width.isFinite, width > 0 else { return 0 }
         return pictureHeight
     }
+
+    /// What the picture area shows: the live picture, the wait for the first picture of a running browser, the last
+    /// picture of a closed browser, or the word that the browser is closed.
+    enum Picture: Equatable {
+        case live, waiting, lastFrame, closed
+    }
+
+    /// `running` is nil until the browser's status is known: the card waits then, as it does while the browser starts.
+    static func picture(hasFrame: Bool, running: Bool?, hasLastFrame: Bool) -> Picture {
+        if hasFrame { return .live }
+        guard running == false else { return .waiting }
+        return hasLastFrame ? .lastFrame : .closed
+    }
 }
 
 /// Gives its content the card's full width and the height `BrowserRunPreview.height(width:)` says.
@@ -78,20 +91,32 @@ struct BrowserRunCard: View {
         BrowserRunPreviewLayout {
             ZStack {
                 Color.Bandito.surface1
-                if model.hasFrame {
+                switch BrowserRunPreview.picture(
+                    hasFrame: model.hasFrame, running: model.status?.running, hasLastFrame: model.hasLastFrame)
+                {
+                case .live:
                     BrowserFrameLayer(store: model.frames, fillsFromTop: true)
                         .accessibilityHidden(true)
-                } else {
-                    Text(L10n.Thread.BrowserRun.noPicture)
-                        .font(BanditoFont.text(size: 12, weight: 400))
-                        .foregroundStyle(Color.Bandito.text3)
-                        .multilineTextAlignment(.center)
-                        .padding(12)
+                case .lastFrame:
+                    BrowserFrameLayer(store: model.lastFrames, fillsFromTop: true)
+                        .accessibilityHidden(true)
+                case .waiting:
+                    placeholder(L10n.Thread.BrowserRun.noPicture)
+                case .closed:
+                    placeholder(L10n.Thread.BrowserRun.closed)
                 }
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.Bandito.line, lineWidth: 0.5))
+    }
+
+    private func placeholder(_ text: String) -> some View {
+        Text(text)
+            .font(BanditoFont.text(size: 12, weight: 400))
+            .foregroundStyle(Color.Bandito.text3)
+            .multilineTextAlignment(.center)
+            .padding(12)
     }
 
     /// One line: the page's icon, title and domain on the left, the two buttons on the right.
@@ -106,6 +131,9 @@ struct BrowserRunCard: View {
                 .foregroundStyle(Color.Bandito.text)
                 .lineLimit(1)
                 .truncationMode(.tail)
+                // The title keeps its room: the buttons give way before it does.
+                .frame(minWidth: 120, alignment: .leading)
+                .layoutPriority(1)
             if !label.domain.isEmpty, label.domain != label.title {
                 Text(label.domain)
                     .font(BanditoFont.text(size: 12, weight: 400))
@@ -126,11 +154,12 @@ struct BrowserRunCard: View {
             Button {
                 router?.select(mode: .browser)
             } label: {
-                Text(L10n.Thread.BrowserRun.fullscreen)
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(.system(size: 12, weight: .medium))
             }
-            .banditoButton(.lightPill(size: .regular))
+            .banditoButton(.quiet())
+            .help(L10n.Thread.BrowserRun.fullscreen)
+            .accessibilityLabel(L10n.Thread.BrowserRun.fullscreen)
         }
     }
 }
