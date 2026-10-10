@@ -185,6 +185,7 @@
   "memory.chapterLengthModelMax": "Modell fasst bis zu {max}",
   "memory.chapterLengthInvalid": "Von 20K bis 1M",
   "memory.chapterLengthHint": "Je länger ein Kapitel, desto mehr erinnert sich der Agent ohne erneutes Lesen seines Gedächtnisses, aber desto teurer wird jede Antwort.",
+  "memory.chapterLengthTooLong": "Das Kapitel ist länger, als das Modell fasst ({max}). Wählen Sie eine kleinere Länge.",
   "memory.searched": "Gespräch durchsucht",
   "memory.searchResult": {
     "other": "„{query}“ · {count} Treffer, {time}"

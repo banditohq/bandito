@@ -220,6 +220,7 @@
   "memory.chapterLengthModelMax": "Модель держит до {max}",
   "memory.chapterLengthInvalid": "От 20K до 1M",
   "memory.chapterLengthHint": "Чем длиннее глава, тем больше агент помнит без перечитывания памяти, но тем дороже каждый ответ.",
+  "memory.chapterLengthTooLong": "Глава длиннее, чем держит модель ({max}). Выберите меньше.",
   "memory.searched": "Поискал в переписке",
   "memory.searchResult": {
     "one": "«{query}» · {count} совпадение, {time}",

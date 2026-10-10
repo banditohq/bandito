@@ -797,6 +797,7 @@
 "memory.chapterLengthHint" = "章节越长，代理无需重读记忆就能记住越多，但每次回复的费用也越高。";
 "memory.chapterLengthInvalid" = "20K 到 1M 之间";
 "memory.chapterLengthModelMax" = "模型最多支持 %1$@";
+"memory.chapterLengthTooLong" = "章节长于模型所能容纳的长度（%1$@）。请选择更小的值。";
 "memory.daily" = "每天";
 "memory.dailyDesc" = "每天早上都是空白页。适合有日常任务的助手。";
 "memory.files" = "文件";

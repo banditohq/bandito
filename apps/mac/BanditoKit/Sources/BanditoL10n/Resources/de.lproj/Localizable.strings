@@ -797,6 +797,7 @@
 "memory.chapterLengthHint" = "Je länger ein Kapitel, desto mehr erinnert sich der Agent ohne erneutes Lesen seines Gedächtnisses, aber desto teurer wird jede Antwort.";
 "memory.chapterLengthInvalid" = "Von 20K bis 1M";
 "memory.chapterLengthModelMax" = "Modell fasst bis zu %1$@";
+"memory.chapterLengthTooLong" = "Das Kapitel ist länger, als das Modell fasst (%1$@). Wählen Sie eine kleinere Länge.";
 "memory.daily" = "Jeden Tag";
 "memory.dailyDesc" = "Jeden Morgen eine leere Seite. Gut für Assistenten mit täglichen Aufgaben.";
 "memory.files" = "Dateien";

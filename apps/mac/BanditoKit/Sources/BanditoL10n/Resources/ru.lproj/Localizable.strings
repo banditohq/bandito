@@ -797,6 +797,7 @@
 "memory.chapterLengthHint" = "Чем длиннее глава, тем больше агент помнит без перечитывания памяти, но тем дороже каждый ответ.";
 "memory.chapterLengthInvalid" = "От 20K до 1M";
 "memory.chapterLengthModelMax" = "Модель держит до %1$@";
+"memory.chapterLengthTooLong" = "Глава длиннее, чем держит модель (%1$@). Выберите меньше.";
 "memory.daily" = "Каждый день";
 "memory.dailyDesc" = "Каждое утро — чистый лист. Для ассистентов с ежедневными задачами.";
 "memory.files" = "Файлы";

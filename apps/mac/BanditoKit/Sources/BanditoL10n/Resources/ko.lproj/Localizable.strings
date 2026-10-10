@@ -797,6 +797,7 @@
 "memory.chapterLengthHint" = "챕터가 길수록 에이전트가 메모리를 다시 읽지 않고도 더 많이 기억하지만, 응답마다 비용이 더 듭니다.";
 "memory.chapterLengthInvalid" = "20K에서 1M까지";
 "memory.chapterLengthModelMax" = "모델은 최대 %1$@까지 지원";
+"memory.chapterLengthTooLong" = "챕터가 모델이 담을 수 있는 양(%1$@)보다 깁니다. 더 작은 값을 고르세요.";
 "memory.daily" = "매일";
 "memory.dailyDesc" = "매일 아침 빈 페이지에서 시작해요. 매일 하는 작업이 있는 어시스턴트에 좋아요.";
 "memory.files" = "파일";

@@ -181,6 +181,7 @@
   "memory.chapterLengthModelMax": "모델은 최대 {max}까지 지원",
   "memory.chapterLengthInvalid": "20K에서 1M까지",
   "memory.chapterLengthHint": "챕터가 길수록 에이전트가 메모리를 다시 읽지 않고도 더 많이 기억하지만, 응답마다 비용이 더 듭니다.",
+  "memory.chapterLengthTooLong": "챕터가 모델이 담을 수 있는 양({max})보다 깁니다. 더 작은 값을 고르세요.",
   "memory.searched": "대화를 검색함",
   "memory.searchResult": {
     "other": "“{query}” · {count}건 일치, {time}"

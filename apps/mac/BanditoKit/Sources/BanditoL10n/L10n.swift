@@ -1135,6 +1135,7 @@ public enum L10n {
         public static var chapterLengthHint: String { L10n.tr("memory.chapterLengthHint") }
         public static var chapterLengthInvalid: String { L10n.tr("memory.chapterLengthInvalid") }
         public static func chapterLengthModelMax(max: String) -> String { L10n.tr("memory.chapterLengthModelMax", max) }
+        public static func chapterLengthTooLong(max: String) -> String { L10n.tr("memory.chapterLengthTooLong", max) }
         public static var daily: String { L10n.tr("memory.daily") }
         public static var dailyDesc: String { L10n.tr("memory.dailyDesc") }
         public static var files: String { L10n.tr("memory.files") }

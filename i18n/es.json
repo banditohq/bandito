@@ -185,6 +185,7 @@
   "memory.chapterLengthModelMax": "El modelo admite hasta {max}",
   "memory.chapterLengthInvalid": "De 20K a 1M",
   "memory.chapterLengthHint": "Cuanto más largo el capítulo, más recuerda el agente sin releer su memoria, pero más cuesta cada respuesta.",
+  "memory.chapterLengthTooLong": "El capítulo es más largo de lo que admite el modelo ({max}). Elija uno menor.",
   "memory.searched": "Buscó en la conversación",
   "memory.searchResult": {
     "one": "“{query}” · {count} coincidencia, {time}",

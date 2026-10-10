@@ -181,6 +181,7 @@
   "memory.chapterLengthModelMax": "モデルは最大 {max} まで",
   "memory.chapterLengthInvalid": "20K から 1M まで",
   "memory.chapterLengthHint": "チャプターが長いほど、エージェントはメモリを読み直さずに多くを覚えていますが、返信ごとのコストも上がります。",
+  "memory.chapterLengthTooLong": "チャプターがモデルの上限（{max}）を超えています。短いものを選んでください。",
   "memory.searched": "会話を検索",
   "memory.searchResult": {
     "other": "「{query}」 · {count} 件一致、{time}"
