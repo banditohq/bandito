@@ -4,6 +4,7 @@ import BanditoKit
 import BanditoL10n
 import Foundation
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// A file in the composer, before it is sent. It is uploaded as soon as it is added; the send takes the ones that are
 /// ready. A file that cannot be attached stays in the tray as a failed chip until it is removed.
@@ -56,6 +57,16 @@ enum AttachmentTray {
 
     static func hasUploading(_ files: [DraftFile]) -> Bool {
         files.contains { $0.state == .uploading }
+    }
+
+    /// The URLs that can be attached: files on this Mac. A web address or a folder is dropped (not attached).
+    static func attachableURLs(_ urls: [URL], isDirectory: (URL) -> Bool) -> [URL] {
+        urls.filter { $0.isFileURL && !isDirectory($0) }
+    }
+
+    /// True for a folder on disk. A missing path is not a folder (its upload then fails with a message).
+    static func isFolder(_ url: URL) -> Bool {
+        (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true
     }
 
     /// The uploaded files, in the order they were added.
@@ -123,7 +134,7 @@ final class AttachmentTrays {
 
     /// `add` with the upload given. Tests use it; the app passes the server's upload.
     func add(urls: [URL], agentID: String, upload: @escaping Uploader) {
-        for url in urls {
+        for url in AttachmentTray.attachableURLs(urls, isDirectory: AttachmentTray.isFolder) {
             let name = url.lastPathComponent
             let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?.int64Value ?? 0
             if let failure = AttachmentTray.failure(name: name, size: size) {
@@ -172,10 +183,11 @@ final class AttachmentTrays {
 
     // MARK: - Private
 
-    /// Files dropped on the chat. Only files count: other drags are refused (`false`). Each file goes through `add`.
+    /// Files dropped on the chat. Only files count: a drag without a file on it (text, a web link) is refused
+    /// (`false`). Each file goes through `add`, which drops the folders.
     func accept(_ providers: [NSItemProvider], agentID: String, server: ServerModel) -> Bool {
         var accepted = false
-        for provider in providers where provider.canLoadObject(ofClass: URL.self) {
+        for provider in providers where provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
             accepted = true
             _ = provider.loadObject(ofClass: URL.self) { url, _ in
                 guard let url else { return }

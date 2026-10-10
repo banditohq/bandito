@@ -12,6 +12,14 @@ import Testing
         DraftFile(name: name, size: 9, preview: nil, state: state)
     }
 
+    @Test func onlyFilesOnThisMacAreAttachable() {
+        let web = URL(string: "https://example.com/a.png")!
+        let folder = URL(fileURLWithPath: "/tmp/photos")
+        let file = URL(fileURLWithPath: "/tmp/photos/a.png")
+        let kept = AttachmentTray.attachableURLs([web, folder, file]) { $0 == folder }
+        #expect(kept == [file], "a web address and a folder are not attached")
+    }
+
     @Test func aMessageNeedsTextAndNoUploadInFlight() {
         #expect(AttachmentTray.canSend(text: "look", files: []))
         #expect(AttachmentTray.canSend(text: "look", files: [file(.ready(sample))]))
