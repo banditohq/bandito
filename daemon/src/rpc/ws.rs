@@ -162,6 +162,10 @@ pub(super) fn require_device(app: &App, headers: &HeaderMap) -> Result<Device, (
     if has_browser_origin(headers) {
         return Err((StatusCode::FORBIDDEN, "browser origins are not allowed"));
     }
+    // Files, tunnels, the browser and the preview proxy are for a daemon with its database (docs/ARCHITECTURE.md#backups).
+    if app.safe_mode().is_some() {
+        return Err((StatusCode::SERVICE_UNAVAILABLE, "the daemon is in safe mode"));
+    }
     match device_for(app, headers) {
         Ok(Some(device)) => Ok(device),
         Ok(None) => Err((StatusCode::UNAUTHORIZED, "device token required")),

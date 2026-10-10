@@ -409,8 +409,14 @@ fn backup_cmd(cmd: BackupCmd, home: &Path) -> Result<()> {
         }
         BackupCmd::Restore { name } => {
             // restore takes the daemon lock itself: it refuses while a daemon runs.
-            bandito::backup::restore(home, &name, bandito::store::now_ms())?;
-            println!("Restored {name}. The database before the restore is in the backups list (before-restore).");
+            let done = bandito::backup::restore(home, &name, bandito::store::now_ms())?;
+            println!("Restored {name}.");
+            if let Some(before) = done.before {
+                println!("The database before the restore is in the backups list: {before}");
+            }
+            if let Some(saved) = done.saved {
+                println!("The old database files are kept in backups/ as {saved}; nothing deletes them.");
+            }
             Ok(())
         }
     }
@@ -464,6 +470,11 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr, home_given: bool) 
     };
     bandito::update::set_data_home(home);
     // A restore asked over RPC (`backups.restore`) comes first: it replaces the file the store opens next.
+    // Safe mode (docs/ARCHITECTURE.md#backups): when a restore leaves no database that opens and no way back, the
+    // daemon starts without the database and answers only `daemon.info` and `backups.*`, so the app can show why and
+    // offer the copies. It never starts on an empty new database over files that are set aside.
+    let mut safe_mode: Option<String> = None;
+    let db_path = home.join("bandito.db");
     let mut restored = match bandito::backup::apply_pending_restore(home, bandito::store::now_ms()) {
         Ok(Some(applied)) => {
             tracing::info!(copy = %applied.name, "database restored from a copy, as requested");
@@ -472,30 +483,68 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr, home_given: bool) 
         Ok(None) => None,
         Err(e) => {
             tracing::error!("requested database restore failed; starting with the database as it is: {e:#}");
+            if !db_path.exists() && bandito::backup::has_set_aside(home) {
+                safe_mode = Some(format!("the restore failed and left no database in place: {e:#}"));
+            }
             None
         }
     };
     // Before the store opens: migrations change the file, so the copy must come first. A failed copy does not stop the start.
-    match bandito::backup::on_start(home, rpc::VERSION, bandito::store::now_ms()) {
-        Ok(Some(path)) => tracing::info!(path = %path.display(), "database copied before start"),
-        Ok(None) => {}
-        Err(e) => tracing::warn!("database backup before start failed: {e:#}"),
+    if safe_mode.is_none() {
+        match bandito::backup::on_start(home, rpc::VERSION, bandito::store::now_ms()) {
+            Ok(Some(path)) => tracing::info!(path = %path.display(), "database copied before start"),
+            Ok(None) => {}
+            Err(e) => tracing::warn!("database backup before start failed: {e:#}"),
+        }
     }
-    let db_path = home.join("bandito.db");
-    let store = match Store::open(&db_path) {
-        Ok(store) => Arc::new(store),
-        // A restored database that does not open goes back to the copy from before the restore (see docs/ARCHITECTURE.md#backups).
-        Err(e) => match restored.take() {
-            Some(applied) => {
-                tracing::error!("the restored database does not open, going back to the copy from before it: {e:#}");
-                bandito::backup::roll_back_restore(home, &applied, &format!("{e:#}"), bandito::store::now_ms())?;
-                Arc::new(Store::open(&db_path)?)
-            }
-            None => return Err(e),
-        },
+    let store = if safe_mode.is_some() {
+        None
+    } else {
+        match Store::open(&db_path) {
+            Ok(store) => Some(Arc::new(store)),
+            // A restored database that does not open goes back to the old one (see docs/ARCHITECTURE.md#backups).
+            Err(e) => match restored.take() {
+                Some(applied) => {
+                    tracing::error!("the restored database does not open, putting the old one back: {e:#}");
+                    match bandito::backup::roll_back_restore(
+                        home,
+                        &applied,
+                        &format!("{e:#}"),
+                        bandito::store::now_ms(),
+                    ) {
+                        Ok(()) => match Store::open(&db_path) {
+                            Ok(store) => Some(Arc::new(store)),
+                            Err(e) => {
+                                safe_mode = Some(format!("the database from before the restore does not open: {e:#}"));
+                                None
+                            }
+                        },
+                        Err(e) => {
+                            safe_mode = Some(format!("{e:#}"));
+                            None
+                        }
+                    }
+                }
+                None => return Err(e),
+            },
+        }
+    };
+    let store = match store {
+        Some(store) => store,
+        None => {
+            tracing::error!(
+                reason = safe_mode.as_deref().unwrap_or(""),
+                "starting in safe mode: only daemon.info and backups.* are answered"
+            );
+            Arc::new(Store::open_safe_mode(&db_path)?)
+        }
     };
     let agents_root = home::default_agents_root(home, home_given);
-    let created = home::backfill(&store, &agents_root);
+    let created = if safe_mode.is_some() {
+        0
+    } else {
+        home::backfill(&store, &agents_root)
+    };
     if created > 0 {
         tracing::info!(count = created, "created folders for agents that had none");
     }
@@ -524,8 +573,13 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr, home_given: bool) 
         .context("prepare the run folder")?;
     let config = bandito::config::load(home)?;
     sup.set_agent_sandbox(config.agent_sandbox);
-    sup.recover()?;
+    if safe_mode.is_none() {
+        sup.recover()?;
+    }
     let app = App::new_in_home(sup.clone(), agents_root, App::default_files(), home.to_path_buf());
+    if let Some(why) = &safe_mode {
+        app.enter_safe_mode(why);
+    }
 
     // Children that double-fork away stay under this process, so the owner's socket can tell them apart,
     // and this process reaps them (see docs/ARCHITECTURE.md#trust-model).
@@ -551,7 +605,9 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr, home_given: bool) 
         }
     });
 
-    bandito::scheduler::spawn_loop(sup.clone());
+    if safe_mode.is_none() {
+        bandito::scheduler::spawn_loop(sup.clone());
+    }
     // Stops server screens that nobody has used for 30 minutes (see docs/ARCHITECTURE.md#screen).
     app.screens.spawn_idle_reaper();
 
@@ -600,7 +656,8 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr, home_given: bool) 
         });
     }
 
-    {
+    // Not in safe mode: there is no database to copy, and the prune after a copy must not push good copies out.
+    if safe_mode.is_none() {
         // A database copy once a day while the daemon runs (see docs/ARCHITECTURE.md#backups).
         let home = home.to_path_buf();
         tokio::spawn(async move {

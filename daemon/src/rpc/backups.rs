@@ -38,16 +38,17 @@ pub async fn dispatch(app: &App, method: &str, p: Value) -> RpcResult {
         }
         "backups.restore" => {
             let RestoreParams { name } = params(p)?;
-            restore(&app.data_home, name).await?;
-            ok(json!({ "restarting": true }))
+            let id = restore(&app.data_home, name).await?;
+            ok(json!({ "restarting": true, "id": id }))
         }
         _ => Err(RpcError::new(METHOD_NOT_FOUND, format!("unknown method {method}"))),
     }
 }
 
 /// Checks the copy, asks the service manager to restart this daemon after the reply, and leaves the restore
-/// marker for the new process. Refused when no service manager runs the daemon: nothing would start it again.
-async fn restore(home: &Path, name: String) -> Result<(), RpcError> {
+/// marker for the new process. Returns the id of the operation, which `daemon.info.last_restore.id` carries back.
+/// Refused when no service manager runs the daemon: nothing would start it again.
+async fn restore(home: &Path, name: String) -> Result<String, RpcError> {
     // A bad name is the caller's mistake; a missing or damaged copy is the server's.
     backup::validate_name(&name).map_err(|e| RpcError::new(INVALID_PARAMS, format!("{e:#}")))?;
     let home = home.to_path_buf();
@@ -77,10 +78,13 @@ async fn restore(home: &Path, name: String) -> Result<(), RpcError> {
         let (home, name) = (home.clone(), name.clone());
         blocking(move || backup::request_restore(&home, &name)).await
     };
-    if let Err(e) = marker {
-        RESTORE_PENDING.store(false, Ordering::SeqCst);
-        return Err(e);
-    }
+    let id = match marker {
+        Ok(id) => id,
+        Err(e) => {
+            RESTORE_PENDING.store(false, Ordering::SeqCst);
+            return Err(e);
+        }
+    };
     tokio::spawn(async move {
         tokio::time::sleep(RESTART_AFTER_REPLY).await;
         let why = match tokio::task::spawn_blocking(move || update::run_restart(&restart)).await {
@@ -92,7 +96,7 @@ async fn restore(home: &Path, name: String) -> Result<(), RpcError> {
         let _ = tokio::task::spawn_blocking(move || backup::clear_restore_request(&home)).await;
         RESTORE_PENDING.store(false, Ordering::SeqCst);
     });
-    Ok(())
+    Ok(id)
 }
 
 fn backup_json(file: &BackupFile) -> Value {
@@ -197,6 +201,7 @@ mod tests {
         assert!(before["last_restore"].is_null());
 
         let record = backup::LastRestore {
+            id: "op-1".into(),
             name: "bandito-20270115-080000-start.db".into(),
             ok: false,
             error: Some("the restored database does not open".into()),
@@ -204,10 +209,54 @@ mod tests {
         };
         backup::write_last_restore(home.path(), &record).unwrap();
         let after = call(&app, "daemon.info", json!({})).await.unwrap();
+        assert_eq!(after["last_restore"]["id"], "op-1");
         assert_eq!(after["last_restore"]["name"], "bandito-20270115-080000-start.db");
         assert_eq!(after["last_restore"]["ok"], false);
         assert_eq!(after["last_restore"]["error"], "the restored database does not open");
         assert_eq!(after["last_restore"]["at_ms"], 5);
+    }
+
+    #[tokio::test]
+    async fn in_safe_mode_only_info_hello_and_backups_are_answered() {
+        let home = tempfile::tempdir().unwrap();
+        let app = app_in(home.path());
+        let before = call(&app, "daemon.info", json!({})).await.unwrap();
+        assert_eq!(before["safe_mode"], false);
+        assert!(before["safe_mode_error"].is_null());
+
+        app.enter_safe_mode("the database from before the restore does not open");
+        let info = call(&app, "daemon.info", json!({})).await.unwrap();
+        assert_eq!(info["safe_mode"], true);
+        assert_eq!(
+            info["safe_mode_error"],
+            "the database from before the restore does not open"
+        );
+        assert!(call(&app, "daemon.hello", json!({})).await.is_ok());
+        assert_eq!(call(&app, "backups.list", json!({})).await.unwrap(), json!([]));
+        for method in [
+            "agents.list",
+            "events.since",
+            "devices.list",
+            "fs.list",
+            "term.list",
+            "daemon.logs",
+        ] {
+            let refused = call(&app, method, json!({})).await.unwrap_err();
+            assert_eq!(refused.code, SERVER_ERROR, "{method}");
+            assert!(refused.message.contains("safe mode"), "{method}: {}", refused.message);
+        }
+    }
+
+    #[tokio::test]
+    async fn the_list_shows_set_aside_databases_with_their_reason() {
+        let home = tempfile::tempdir().unwrap();
+        let app = app_in(home.path());
+        let dir = backup::backups_dir(home.path());
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::copy(home.path().join("bandito.db"), dir.join("replaced-20270115-080000.db")).unwrap();
+        let listed = call(&app, "backups.list", json!({})).await.unwrap();
+        assert_eq!(listed[0]["name"], "replaced-20270115-080000.db");
+        assert_eq!(listed[0]["reason"], "replaced");
     }
 
     #[test]

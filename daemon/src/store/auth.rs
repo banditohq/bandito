@@ -4,6 +4,7 @@ use super::{Store, new_id, now_ms};
 use anyhow::Result;
 use rusqlite::{OptionalExtension, Row, params};
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Device {
@@ -62,6 +63,43 @@ impl Store {
         }
         tx.commit()?;
         Ok(valid)
+    }
+
+    /// A throwaway in-memory store for safe mode (the real database could not be opened). It holds the paired
+    /// devices of `live_db` when those can be read, so the app can still connect; everything else is empty and is
+    /// never written back. The live file is opened read-only and not changed. Failing to read it is not an error.
+    pub fn open_safe_mode(live_db: &Path) -> Result<Self> {
+        let store = Self::open_in_memory()?;
+        if live_db.is_file() {
+            if let Err(e) = store.import_devices_from(live_db) {
+                tracing::warn!(
+                    "safe mode: could not read the paired devices from {}: {e:#}",
+                    live_db.display()
+                );
+            }
+        }
+        Ok(store)
+    }
+
+    fn import_devices_from(&self, live_db: &Path) -> Result<()> {
+        let mut uri = String::from("file:");
+        for b in live_db.to_string_lossy().bytes() {
+            match b {
+                b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'/' | b'-' | b'_' | b'.' | b'~' => uri.push(b as char),
+                _ => uri.push_str(&format!("%{b:02X}")),
+            }
+        }
+        uri.push_str("?mode=ro");
+        let conn = self.conn();
+        conn.execute("ATTACH DATABASE ?1 AS live", [&uri])?;
+        let copied = conn.execute(
+            "INSERT OR IGNORE INTO devices (id, name, token_hash, created_at, last_seen_at)
+             SELECT id, name, token_hash, created_at, last_seen_at FROM live.devices",
+            [],
+        );
+        let _ = conn.execute("DETACH DATABASE live", []);
+        copied?;
+        Ok(())
     }
 
     /// Insert a device with `token_hash = sha256_hex(token)`.
@@ -130,6 +168,42 @@ pub fn normalize_code(code: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn safe_mode_store_keeps_the_paired_devices_of_the_live_database_and_changes_nothing_there() {
+        let dir = tempfile::tempdir().unwrap();
+        let live = dir.path().join("bandito.db");
+        {
+            let store = Store::open(&live).unwrap();
+            store.device_add("laptop", "token-1").unwrap();
+        }
+        let before = std::fs::read(&live).unwrap();
+        let safe = Store::open_safe_mode(&live).unwrap();
+        assert_eq!(safe.device_auth("token-1").unwrap().unwrap().name, "laptop");
+        assert!(safe.device_auth("other").unwrap().is_none());
+        assert_eq!(
+            std::fs::read(&live).unwrap(),
+            before,
+            "the live file is read, never written"
+        );
+    }
+
+    #[test]
+    fn safe_mode_store_opens_when_the_live_database_is_missing_or_damaged() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("none.db");
+        assert!(
+            Store::open_safe_mode(&missing)
+                .unwrap()
+                .device_auth("t")
+                .unwrap()
+                .is_none()
+        );
+        let bad = dir.path().join("bad.db");
+        std::fs::write(&bad, vec![9u8; 4096]).unwrap();
+        assert!(Store::open_safe_mode(&bad).unwrap().device_auth("t").unwrap().is_none());
+        assert_eq!(std::fs::read(&bad).unwrap(), vec![9u8; 4096]);
+    }
 
     #[test]
     fn normalize_code_examples() {
