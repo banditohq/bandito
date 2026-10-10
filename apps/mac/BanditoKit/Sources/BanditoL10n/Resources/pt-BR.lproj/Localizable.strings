@@ -792,6 +792,13 @@
 "keys.workbenchSplit" = "Dividir ou unir os painéis";
 "keys.workbenchTab" = "Aba %1$@ do painel";
 "keys.workbenchToggle" = "Mostrar ou ocultar o painel";
+"memory.chapterLength" = "Tamanho do capítulo";
+"memory.chapterLengthCustom" = "Personalizado…";
+"memory.chapterLengthDefault" = "padrão";
+"memory.chapterLengthHint" = "Quanto mais longo o capítulo, mais o agente lembra sem reler a memória, mas mais cada resposta custa.";
+"memory.chapterLengthInvalid" = "De 20K a 1M";
+"memory.chapterLengthModelMax" = "O modelo comporta até %1$@";
+"memory.chapterLengthTooLong" = "O capítulo é maior do que o modelo comporta (%1$@). Escolha um menor.";
 "memory.daily" = "Todo dia";
 "memory.dailyDesc" = "Uma página limpa toda manhã. Bom para assistentes com tarefas diárias.";
 "memory.files" = "Arquivos";

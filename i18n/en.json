@@ -199,6 +199,13 @@
   "memory.dailyDesc": "A clean page every morning. Good for assistants with daily tasks.",
   "memory.full": "One long chapter",
   "memory.fullDesc": "The agent compresses old messages itself. Handy for one big task, but costs more.",
+  "memory.chapterLength": "Chapter length",
+  "memory.chapterLengthDefault": "default",
+  "memory.chapterLengthCustom": "Custom…",
+  "memory.chapterLengthModelMax": "Model holds up to {max}",
+  "memory.chapterLengthInvalid": "From 20K to 1M",
+  "memory.chapterLengthHint": "The longer the chapter, the more the agent remembers without rereading its memory, but the more each reply costs.",
+  "memory.chapterLengthTooLong": "The chapter is longer than the model holds ({max}). Choose a smaller one.",
   "memory.searched": "Searched the conversation",
   "memory.searchResult": {
     "one": "“{query}” · {count} match, {time}",

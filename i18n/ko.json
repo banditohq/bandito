@@ -175,6 +175,13 @@
   "memory.dailyDesc": "매일 아침 빈 페이지에서 시작해요. 매일 하는 작업이 있는 어시스턴트에 좋아요.",
   "memory.full": "하나의 긴 챕터",
   "memory.fullDesc": "에이전트가 오래된 메시지를 스스로 압축해요. 큰 작업 하나에 편하지만 비용이 더 들어요.",
+  "memory.chapterLength": "챕터 길이",
+  "memory.chapterLengthDefault": "기본값",
+  "memory.chapterLengthCustom": "직접 입력…",
+  "memory.chapterLengthModelMax": "모델은 최대 {max}까지 지원",
+  "memory.chapterLengthInvalid": "20K에서 1M까지",
+  "memory.chapterLengthHint": "챕터가 길수록 에이전트가 메모리를 다시 읽지 않고도 더 많이 기억하지만, 응답마다 비용이 더 듭니다.",
+  "memory.chapterLengthTooLong": "챕터가 모델이 담을 수 있는 양({max})보다 깁니다. 더 작은 값을 고르세요.",
   "memory.searched": "대화를 검색함",
   "memory.searchResult": {
     "other": "“{query}” · {count}건 일치, {time}"
