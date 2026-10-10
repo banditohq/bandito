@@ -1,5 +1,6 @@
 import BanditoKit
 import BanditoL10n
+import Foundation
 import Observation
 
 /// The seven sections of the main window. The mode bar and ⌘1…⌘7 switch between them.
@@ -35,9 +36,12 @@ public enum AppMode: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-/// The filter of the Marketplace sidebar: every service, only the connected ones, or one category of the catalog.
+/// The filter of the Marketplace sidebar: everything, only the connected services or the installed skills, or one
+/// category of the catalog.
 public enum MarketFilter: Hashable, Identifiable, Sendable {
     case all, connected
+    /// Skills that are installed somewhere on the server.
+    case installed
     /// A catalog category: `dev`, `productivity`, `data`, `web`, `design`, `other`.
     case category(String)
 
@@ -45,6 +49,7 @@ public enum MarketFilter: Hashable, Identifiable, Sendable {
         switch self {
         case .all: "all"
         case .connected: "connected"
+        case .installed: "installed"
         case .category(let name): "category:\(name)"
         }
     }
@@ -53,13 +58,14 @@ public enum MarketFilter: Hashable, Identifiable, Sendable {
         switch self {
         case .all: L10n.Market.Filter.all
         case .connected: L10n.Market.Filter.connected
+        case .installed: L10n.Market.Filter.installed
         case .category(let name): MarketCategory.title(name)
         }
     }
 
-    /// The sidebar rows: All, Connected, then the categories the catalog has.
+    /// The sidebar rows of the Services page: All, Connected, then the categories the catalog has.
     public static func rows(categories: [String]) -> [MarketFilter] {
-        [.all, .connected] + categories.map { .category($0) }
+        MarketTab.services.filterRows(categories: categories)
     }
 }
 
@@ -82,6 +88,11 @@ public enum MarketCategory {
         case "web": L10n.Market.Category.web
         case "design": L10n.Market.Category.design
         case "other": L10n.Market.Category.other
+        case "ops": L10n.Market.Category.ops
+        case "research": L10n.Market.Category.research
+        case "writing": L10n.Market.Category.writing
+        case "business": L10n.Market.Category.business
+        case "personal": L10n.Market.Category.personal
         default: name.prefix(1).uppercased() + name.dropFirst()
         }
     }
@@ -178,6 +189,18 @@ public final class Router {
     public var marketDetail: String?
     /// Marketplace: the categories of the loaded catalog, for the sidebar. Set by the Marketplace page.
     public var marketCategories: [String] = []
+    /// Marketplace: the page in front (services, bots or skills). Restored from the app's defaults at start. The
+    /// page shown is `MarketTab.effective(_:available:)`: a server without the feature falls back to services.
+    public var marketTab: MarketTab = .services
+    /// Marketplace, Bots page: the sidebar filter (all, or a category).
+    public var marketBotFilter: MarketFilter = .all
+    /// Marketplace, Skills page: the sidebar filter (all, installed, or a category).
+    public var marketSkillFilter: MarketFilter = .all
+    /// The categories of the bot templates and of the skills, for the sidebar. Set by the pages.
+    public var marketBotCategories: [String] = []
+    public var marketSkillCategories: [String] = []
+    /// What the last bot creation left to say: shown over the window as a toast until closed.
+    var botNotice: BotNotice?
     /// Terminals: a command to type into a new terminal (Server → Install, Update). Taken once by the terminals.
     public var pendingTerminalCommand: String?
 
@@ -268,8 +291,9 @@ public final class Router {
     private var backStack: [AppMode] = []
     private var forwardStack: [AppMode] = []
 
-    public init(mode: AppMode = .team) {
+    public init(mode: AppMode = .team, defaults: UserDefaults = .standard) {
         self.mode = mode
+        marketTab = MarketTabStore.load(defaults: defaults)
     }
 
     /// In Files, back and forward walk the folders visited on the server (`FolderHistory`), not the modes.

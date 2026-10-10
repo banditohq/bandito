@@ -1,7 +1,19 @@
 # Marketplace (Маркетплейс)
 
-The services the agents can use: MCP servers that you connect once, on the server, and every agent can then use
-their tools. The mode lists the catalog, shows what is connected, and has a page for every service. Open it with ⌘6.
+Three pages in one place: the services the agents can use (MCP servers that you connect once, on the server, and every
+agent can then use their tools), ready-made bots, and skills. The mode lists the catalog, shows what is connected, and
+has a page for every service. Open it with ⌘6.
+
+## Services, Bots, Skills
+
+<!-- id: market-tabs; covers: -->
+The switch at the top of the Marketplace has three segments: Services (Сервисы), Bots (Боты) and Skills (Скиллы). Each
+page has its own list in the sidebar and its own search. Bandito remembers the page you left it on. Bots and Skills show
+only when the server is new enough to have them; an older server shows Services alone.
+Где: Marketplace → the switch under the title → Services (Сервисы), Bots (Боты), Skills (Скиллы)
+1. Click a segment to change the page. The search field is cleared, and the sidebar changes to that page's rows.
+2. Bots lists All (Все) and the categories. Skills lists All (Все), Installed (Установленные) and the categories.
+3. The search on each page finds by name, in the language of the app and in English, and by the description.
 
 ## Marketplace mode
 
@@ -108,3 +120,89 @@ the text. The server is listed with the connected services.
    sheet wrote.
 6. Click Add (Добавить) to keep the server. If you ticked several servers in a pasted config, the next one comes into
    the form after each Add.
+
+## Bots
+
+<!-- id: market-bots; covers: -->
+The Bots page lists ready-made bots: an agent with its role, instructions, scheduled runs, skills and the services it
+uses already set up. Each card has the icon on a coloured tile, the name, the category, a short description, small
+logos of the services the bot uses (the optional ones are dimmer), View (Посмотреть) and Create bot (Создать бота).
+Где: Marketplace → Bots (Боты)
+1. Click a category in the sidebar to see only its bots.
+2. Click View (Посмотреть) on a card, or the card itself, to read about the bot.
+3. Click Create bot (Создать бота) on a card to go straight to the create sheet.
+
+## A bot's page
+
+<!-- id: market-bot-detail; covers: -->
+View (Посмотреть) opens a panel over the page: the long description, On a schedule (По расписанию) with each run in
+words (for example Weekdays at 8:00 AM), Services it uses (Какие сервисы использует) and Skills (Скиллы). A service is
+marked Required (Обязательно) or Optional (По желанию), and shows Connected (Подключённые), Turned off in Services, or the
+button Connect (Подключить). Connect works as on the Services page, including the sign-in in the browser; the panel stays
+open and updates when the service is connected.
+Где: Marketplace → Bots (Боты) → a card → View (Посмотреть)
+1. Click Connect (Подключить) next to a service that is not connected.
+2. Click Create bot (Создать бота) at the bottom right to go on. Close (Закрыть) or Esc leaves the panel.
+
+## Create a bot
+
+<!-- id: market-bot-create; covers: -->
+Create bot (Создать бота) opens the sheet that makes an agent from the template. Name (Имя) is the template's name in
+the language of the app, and you can change it; the same rules as for a new agent apply, with at most 32 characters.
+Powered by (Чем думает) lists only the programs that are installed and signed in on the server; the template's own
+choice comes first. Under On a schedule (По расписанию) each run is a switch; the ones the template recommends are on.
+If a required service is not connected, the sheet says so and offers Connect (Подключить) there: you can still create the
+bot, but it cannot do its job until the service is connected. When it is made, its chat opens and the first message is
+already in the input field. Bandito does not send it: read it, change it if you like, and send it yourself. If a step
+after the agent was made did not work (a skill, a schedule), a note at the bottom of the window says which one; the
+agent stays.
+Где: Marketplace → Bots (Боты) → Create bot (Создать бота)
+1. Check the Name (Имя); a red line explains a name that is taken or not allowed.
+2. Choose what it is Powered by (Чем думает), and turn the schedules on or off.
+3. Click Create bot (Создать бота). The button says Creating… (Создаём…) and the sheet cannot be closed until it is done.
+4. Click Cancel (Отмена) or press Esc to leave without creating.
+
+## Skills
+
+<!-- id: market-skills; covers: -->
+The Skills page lists open skills: folders of instructions and scripts that an agent reads when a task fits. Each card has
+the name, the author and the licence (small), a short description, the label Claude only (Только Claude) when the skill
+works natively in Claude Code alone, and a warning when the skill needs care (for example a script that runs the command
+you give it). The state shows on the card: Installed (Установлено) with Remove (Удалить) when the skill is installed for
+every agent on the server, On N agents (У N агентов) when only some agents have it, Name taken (Имя занято) when a
+folder of that name already exists that Bandito did not make.
+Где: Marketplace → Skills (Скиллы)
+1. Click Installed (Установленные) in the sidebar to see only the skills that are installed somewhere.
+2. Click Install (Установить) on a card to choose where, or View (Посмотреть) to read first.
+
+## A skill's page
+
+<!-- id: market-skill-detail; covers: -->
+View (Посмотреть) opens a panel: the description, the warning, Where it is installed (Где установлено) with each place and
+Remove (Удалить), the Files (Файлы) the skill brings, and the Source (Источник): a link such as owner/repo@abc1234 that
+opens the author's folder at that exact commit in the browser. Bandito ships a reviewed copy of the files; nothing is
+downloaded when you install.
+Где: Marketplace → Skills (Скиллы) → a card → View (Посмотреть)
+1. Click the source link to read the files at the author's repository.
+2. Click Install (Установить) at the bottom right to choose where to install.
+
+## Install a skill
+
+<!-- id: market-skill-install; covers: -->
+Install (Установить) asks where: All agents on the server (Всем агентам на сервере) puts the skill where every agent that
+reads the server user's skills has it; One agent (Одному агенту) puts it in that agent's folder only, and a list lets you
+pick the agent. A place that is not free is greyed out with the reason: Installed (Установлено), or Name taken (Имя
+занято) for a folder of the same name that is not Bandito's. Bandito never overwrites such a folder and has no button for
+it: move or rename the folder yourself, then install.
+Где: Marketplace → Skills (Скиллы) → Install (Установить)
+1. Choose All agents on the server (Всем агентам на сервере) or One agent (Одному агенту) and pick the agent.
+2. Click Install (Установить). The skill is on the server a moment later and the card shows its state.
+
+## Remove a skill
+
+<!-- id: market-skill-remove; covers: -->
+Remove (Удалить) deletes the folder Bandito installed, after you confirm. Removing the server's copy takes the skill
+from every agent that used it; removing an agent's copy touches that agent's folder only. A folder Bandito did not make is
+never removed.
+Где: Marketplace → Skills (Скиллы) → Remove (Удалить) on an installed card, or on the skill's page
+1. Click Remove (Удалить) and confirm in the dialog.

@@ -176,6 +176,22 @@
 			<string>%1$lld ferramentas</string>
 		</dict>
 	</dict>
+	<key>market.skill.onAgents</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>Em %1$lld agente</string>
+			<key>other</key>
+			<string>Em %1$lld agentes</string>
+		</dict>
+	</dict>
 	<key>memory.filesMeta</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>

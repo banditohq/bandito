@@ -24,6 +24,13 @@ struct MarketView: View {
     @State private var error: UserFacingMessage?
     @State private var editing: IntegrationTarget?
     @State private var removing: Integration?
+    /// The Bots and Skills pages: what the server offers.
+    @State private var bots = BotsMarketModel()
+    @State private var skills = SkillsMarketModel()
+    /// The panel over the page (a bot or a skill), and whether a create or an install in it is running.
+    @State private var panel: MarketPanelState?
+    @State private var panelBusy = false
+    @State private var removingSkill: SkillRemoval?
 
     private let columns = [GridItem(.adaptive(minimum: 240), spacing: 14, alignment: .top)]
 
@@ -37,8 +44,32 @@ struct MarketView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.Bandito.bg)
+        .overlay { panelOverlay }
+        .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: panel)
         .task(id: loadKey) {
             await loadForCurrentServer()
+        }
+        .task(id: "\(loadKey)|\(tab.rawValue)") {
+            await loadTab()
+        }
+        .onChange(of: tab) { _, _ in
+            query = ""
+            panel = nil
+        }
+        .confirmationDialog(
+            L10n.Market.Skill.removeTitle(name: removingSkill?.name ?? ""),
+            isPresented: Binding(get: { removingSkill != nil }, set: { if !$0 { removingSkill = nil } }),
+            titleVisibility: .visible,
+            presenting: removingSkill
+        ) { removal in
+            Button(L10n.Market.Skill.remove, role: .destructive) {
+                Task { await removeSkill(removal) }
+            }
+            Button(L10n.Common.cancel, role: .cancel) {}
+        } message: { removal in
+            Text(removal.target == .everyone
+                ? L10n.Market.Skill.removeMessageEveryone
+                : L10n.Market.Skill.removeMessageAgent(agent: removal.place))
         }
         .onChange(of: app.oauth.phase) { _, phase in
             if case .connected(_, let id) = phase { Task { await signedIn(id) } }
@@ -80,13 +111,22 @@ struct MarketView: View {
         "\(server?.id.uuidString ?? "")|\(server?.info != nil)"
     }
 
+    /// The pages this server offers, and the one in front.
+    private var availableTabs: [MarketTab] {
+        MarketTab.available { server?.supports($0) ?? false }
+    }
+
+    private var tab: MarketTab {
+        MarketTab.effective(router.marketTab, available: availableTabs)
+    }
+
     private var page: some View {
         let supported = server?.supports("integrations") ?? false
         let entries = MarketLogic.entries(
             catalog: catalog, integrations: integrations, languageCode: ModelDescription.currentLanguageCode)
         let shown = MarketLogic.page(entries, filter: router.marketFilter, query: query)
         let empty = MarketLogic.emptyState(shown, filter: router.marketFilter, query: query)
-        if supported, let open = MarketLogic.entry(withID: router.marketDetail, in: entries) {
+        if tab == .services, supported, let open = MarketLogic.entry(withID: router.marketDetail, in: entries) {
             return AnyView(detailPage(open))
         }
         return AnyView(listPage(supported: supported, shown: shown, empty: empty))
@@ -115,7 +155,11 @@ struct MarketView: View {
             header(supported: supported)
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    if supported {
+                    if tab == .bots {
+                        botsContent
+                    } else if tab == .skills {
+                        skillsContent
+                    } else if supported {
                         if !shown.connected.isEmpty {
                             SectionLabel(L10n.Integrations.connected)
                             connectedRow(shown.connected)
@@ -149,28 +193,67 @@ struct MarketView: View {
     }
 
     private func header(supported: Bool) -> some View {
-        HStack(alignment: .center, spacing: 14) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(L10n.Mode.market)
-                    .font(BanditoFont.display(size: 24, weight: 600))
-                    .foregroundStyle(Color.Bandito.text)
-                    // Unbounded is wide: in a narrow window the title shrinks instead of breaking inside the word.
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                    .layoutPriority(1)
-                Text(L10n.Market.subtitle)
-                    .font(BanditoFont.text(size: 13, weight: 400))
-                    .foregroundStyle(Color.Bandito.text2)
-                    .lineLimit(1)
+        let tabs = availableTabs
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center, spacing: 14) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(L10n.Mode.market)
+                        .font(BanditoFont.display(size: 24, weight: 600))
+                        .foregroundStyle(Color.Bandito.text)
+                        // Unbounded is wide: in a narrow window the title shrinks instead of breaking inside the word.
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .layoutPriority(1)
+                    Text(subtitle)
+                        .font(BanditoFont.text(size: 13, weight: 400))
+                        .foregroundStyle(Color.Bandito.text2)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 12)
+                if tabs.count == 1, supported {
+                    // A server with only services keeps the one-row header.
+                    searchField
+                    addOwnButton
+                }
             }
-            Spacer(minLength: 12)
-            if supported {
-                searchField
-                Button(L10n.Integrations.addOwn) { editing = .custom }
-                    .banditoButton(.quiet())
+            if tabs.count > 1 {
+                HStack(alignment: .center, spacing: 12) {
+                    SegmentedPicker(
+                        selection: Binding(
+                            get: { tab },
+                            set: { chosen in
+                                guard chosen != router.marketTab else { return }
+                                router.marketTab = chosen
+                                router.marketDetail = nil
+                                MarketTabStore.save(chosen)
+                            }),
+                        options: tabs.map { ($0, $0.title) }
+                    )
                     .fixedSize()
+                    Spacer(minLength: 12)
+                    if tab != .services || supported {
+                        searchField
+                    }
+                    if tab == .services, supported {
+                        addOwnButton
+                    }
+                }
             }
         }
+    }
+
+    private var subtitle: String {
+        switch tab {
+        case .services: L10n.Market.subtitle
+        case .bots: L10n.Market.Bots.subtitle
+        case .skills: L10n.Market.Skills.subtitle
+        }
+    }
+
+    private var addOwnButton: some View {
+        Button(L10n.Integrations.addOwn) { editing = .custom }
+            .banditoButton(.quiet())
+            .fixedSize()
     }
 
     /// One capsule holds the lens and the field: the capsule draws the fill and the border, the field inside is plain.
@@ -198,6 +281,137 @@ struct MarketView: View {
             .font(BanditoFont.text(size: 13, weight: 400))
             .foregroundStyle(Color.Bandito.text3)
             .padding(.vertical, 6)
+    }
+
+    // MARK: - bots and skills
+
+    private var languageCode: String { ModelDescription.currentLanguageCode }
+
+    @ViewBuilder
+    private var botsContent: some View {
+        BotsPage(
+            model: bots, catalog: catalog, integrations: integrations, query: query, languageCode: languageCode,
+            onView: { panel = .botDetail($0.id) },
+            onCreate: { panel = .botCreate($0.id) },
+            onRetry: { if let server { Task { await bots.load(from: server, force: true) } } })
+        if let error {
+            UserFacingErrorView(message: error)
+        }
+    }
+
+    @ViewBuilder
+    private var skillsContent: some View {
+        SkillsPage(
+            model: skills, query: query, languageCode: languageCode, agents: server?.agents ?? [],
+            onView: { panel = .skillDetail($0.id) },
+            onInstall: { panel = .skillInstall($0.id) },
+            onRemoveEverywhere: { removingSkill = SkillRemoval(skill: $0, target: .everyone, place: "") },
+            onRetry: { if let server { Task { await skills.load(from: server) } } })
+        if let error {
+            UserFacingErrorView(message: error)
+        }
+    }
+
+    private func closePanel() {
+        guard !panelBusy else { return }
+        panel = nil
+    }
+
+    /// The panel over the page, if one is open: a bot's page or its create sheet, a skill's page or its install sheet.
+    /// A panel whose bot or skill is gone (the server changed, the catalog reloaded) closes with the lookup failing.
+    @ViewBuilder
+    private var panelOverlay: some View {
+        if let server, let panel {
+            switch panel {
+            case .botDetail(let id):
+                if let template = bots.templates.first(where: { $0.id == id }) {
+                    MarketPanel(width: 580, canClose: !panelBusy, onClose: closePanel) {
+                        BotDetailPanel(
+                            template: template, services: botServices(template),
+                            skillNames: Dictionary(skills.skills.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first }),
+                            languageCode: languageCode,
+                            onClose: closePanel, onCreate: { self.panel = .botCreate(id) },
+                            onConnect: { connect($0) })
+                    }
+                    .transition(.opacity)
+                }
+            case .botCreate(let id):
+                if let template = bots.templates.first(where: { $0.id == id }) {
+                    MarketPanel(width: 540, canClose: !panelBusy, onClose: closePanel) {
+                        BotCreatePanel(
+                            template: template, server: server, services: botServices(template),
+                            languageCode: languageCode, creating: $panelBusy,
+                            onClose: closePanel, onConnect: { connect($0) })
+                        .id(template.id)
+                    }
+                    .transition(.opacity)
+                }
+            case .skillDetail(let id):
+                if let skill = skills.skills.first(where: { $0.id == id }) {
+                    MarketPanel(width: 580, canClose: !panelBusy, onClose: closePanel) {
+                        SkillDetailPanel(
+                            skill: skill, agents: server.agents, languageCode: languageCode, busy: skills.busy,
+                            onClose: closePanel, onInstall: { self.panel = .skillInstall(id) },
+                            onRemove: { target in
+                                removingSkill = SkillRemoval(
+                                    skill: skill, target: target,
+                                    place: { if case .agent(let agent) = target { SkillLogic.agentName(agent, agents: server.agents) } else { "" } }())
+                            })
+                    }
+                    .transition(.opacity)
+                }
+            case .skillInstall(let id):
+                if let skill = skills.skills.first(where: { $0.id == id }) {
+                    MarketPanel(width: 500, canClose: !panelBusy, onClose: closePanel) {
+                        SkillInstallPanel(
+                            skill: skill, agents: server.agents, installing: $panelBusy,
+                            onInstall: { target in
+                                await skills.change(skill.id, target: target, install: true, on: server)
+                            },
+                            onClose: closePanel)
+                        .id(skill.id)
+                    }
+                    .transition(.opacity)
+                }
+            }
+        }
+    }
+
+    private func botServices(_ template: BotTemplate) -> [BotLogic.Service] {
+        BotLogic.services(of: template, catalog: catalog, integrations: integrations)
+    }
+
+    private func removeSkill(_ removal: SkillRemoval) async {
+        guard let server else { return }
+        if let failure = await skills.change(removal.skill.id, target: removal.target, install: false, on: server) {
+            error = SkillText.message(for: failure)
+        } else {
+            error = nil
+        }
+    }
+
+    /// Reads what the open page needs: the bot templates (and the skill names they point to), or the skills.
+    private func loadTab() async {
+        guard let server, server.info != nil else { return }
+        switch tab {
+        case .services:
+            break
+        case .bots:
+            await bots.load(from: server)
+            if server.supports("skills") { await skills.load(from: server) }
+            let categories = BotLogic.categories(in: bots.templates)
+            if router.marketBotCategories != categories { router.marketBotCategories = categories }
+            if case .category(let name) = router.marketBotFilter, !categories.contains(name) {
+                router.marketBotFilter = .all
+            }
+        case .skills:
+            await skills.load(from: server)
+            let categories = SkillLogic.categories(in: skills.skills)
+            if router.marketSkillCategories != categories { router.marketSkillCategories = categories }
+            if case .category(let name) = router.marketSkillFilter, !categories.contains(name) {
+                router.marketSkillFilter = .all
+            }
+        }
     }
 
     // MARK: - cards
@@ -357,6 +571,15 @@ struct MarketView: View {
             catalog = []
             router.marketCategories = []
             router.marketDetail = nil
+            router.marketBotCategories = []
+            router.marketSkillCategories = []
+            router.marketBotFilter = .all
+            router.marketSkillFilter = .all
+            bots.reset()
+            skills.reset()
+            panel = nil
+            panelBusy = false
+            removingSkill = nil
             tests = [:]
             checking = []
             connections = [:]
@@ -459,7 +682,7 @@ struct MarketView: View {
 }
 
 /// The surface of a Marketplace card: the Bandito surface with a hairline border, lighter while the pointer is on it.
-private struct MarketCardFrame<Content: View>: View {
+struct MarketCardFrame<Content: View>: View {
     @ViewBuilder var content: Content
     @State private var hovering = false
 
@@ -508,9 +731,7 @@ struct MarketTile: View {
     var glow = false
 
     var body: some View {
-        let base = MarketTileStyle.color(of: entry)
-        let shape = RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
-        Group {
+        MarketTileSurface(color: MarketTileStyle.color(of: entry), size: size, glow: glow) {
             if let template = entry.template {
                 if let logo = ServiceLogo.image(for: template.id) {
                     Image(nsImage: logo)
@@ -527,21 +748,36 @@ struct MarketTile: View {
                     .font(BanditoFont.display(size: size * 0.42, weight: 700))
             }
         }
-        .foregroundStyle(.white)
-        .shadow(color: .black.opacity(0.18), radius: 1, y: 0.5)
-        .frame(width: size, height: size)
-        .background(
-            shape.fill(base).overlay(
-                shape.fill(
+    }
+}
+
+/// The look of every Marketplace tile (a service, a bot, a skill): a rounded square in one colour with a soft vertical
+/// gradient (lighter on top), a thin highlight on the upper edge, and a white symbol. With `glow` it casts a soft
+/// shadow of its colour.
+struct MarketTileSurface<Content: View>: View {
+    let color: Color
+    let size: CGFloat
+    var glow = false
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+        content
+            .foregroundStyle(.white)
+            .shadow(color: .black.opacity(0.18), radius: 1, y: 0.5)
+            .frame(width: size, height: size)
+            .background(
+                shape.fill(color).overlay(
+                    shape.fill(
+                        LinearGradient(
+                            colors: [.white.opacity(0.24), .clear, .black.opacity(0.14)],
+                            startPoint: .top, endPoint: .bottom))))
+            .overlay(
+                shape.strokeBorder(
                     LinearGradient(
-                        colors: [.white.opacity(0.24), .clear, .black.opacity(0.14)],
-                        startPoint: .top, endPoint: .bottom))))
-        .overlay(
-            shape.strokeBorder(
-                LinearGradient(
-                    colors: [.white.opacity(0.45), .white.opacity(0.04)], startPoint: .top, endPoint: .bottom),
-                lineWidth: 1))
-        .shadow(color: glow ? base.opacity(0.35) : .clear, radius: 16, y: 6)
+                        colors: [.white.opacity(0.45), .white.opacity(0.04)], startPoint: .top, endPoint: .bottom),
+                    lineWidth: 1))
+            .shadow(color: glow ? color.opacity(0.35) : .clear, radius: 16, y: 6)
     }
 }
 
@@ -597,21 +833,55 @@ struct IntegrationStatusLine: View {
     }
 }
 
-/// Sidebar of the Marketplace: All, Connected, and the categories of the catalog. Picking one sets
-/// `Router.marketFilter` and leaves the page of a service.
+/// Sidebar of the Marketplace. Each page has its own rows: services have All, Connected and the categories; bots have
+/// All and the categories; skills have All, Installed and the categories. Picking one sets the page's filter in
+/// `Router` and leaves the page of a service.
 struct MarketSidebar: View {
     @Environment(Router.self) private var router
+    @Environment(AppModel.self) private var app
+
+    private var tab: MarketTab {
+        let server = app.currentServer
+        return MarketTab.effective(
+            router.marketTab, available: MarketTab.available { server?.supports($0) ?? false })
+    }
+
+    private var categories: [String] {
+        switch tab {
+        case .services: router.marketCategories
+        case .bots: router.marketBotCategories
+        case .skills: router.marketSkillCategories
+        }
+    }
+
+    private var current: MarketFilter {
+        switch tab {
+        case .services: router.marketFilter
+        case .bots: router.marketBotFilter
+        case .skills: router.marketSkillFilter
+        }
+    }
+
+    private func choose(_ filter: MarketFilter) {
+        switch tab {
+        case .services: router.marketFilter = filter
+        case .bots: router.marketBotFilter = filter
+        case .skills: router.marketSkillFilter = filter
+        }
+        router.marketDetail = nil
+    }
 
     var body: some View {
+        let rows = tab.filterRows(categories: categories)
+        let firstCategory = rows.first { if case .category = $0 { true } else { false } }
         VStack(alignment: .leading, spacing: 2) {
-            ForEach(MarketFilter.rows(categories: router.marketCategories)) { filter in
-                let selected = router.marketFilter == filter
-                if case .category(let name) = filter, name == router.marketCategories.first {
+            ForEach(rows) { filter in
+                let selected = current == filter
+                if filter == firstCategory {
                     Divider().padding(.vertical, 6).padding(.horizontal, 10)
                 }
                 Button {
-                    router.marketFilter = filter
-                    router.marketDetail = nil
+                    choose(filter)
                 } label: {
                     Text(filter.title)
                         .font(BanditoFont.text(size: 13, weight: selected ? 600 : 400))
@@ -625,6 +895,7 @@ struct MarketSidebar: View {
                         .contentShape(Rectangle())
                 }
                 .banditoButton(.row(cornerRadius: 9))
+                .accessibilityAddTraits(selected ? .isSelected : [])
             }
             Spacer(minLength: 0)
         }

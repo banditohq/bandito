@@ -68,6 +68,15 @@ struct MainWindow: View {
             }
         }
         .banditoAnimation(BanditoMotion.ease, value: router.rollbackNotice?.id)
+        .overlay(alignment: .bottom) {
+            if let notice = router.botNotice {
+                BotNoticeToast(notice: notice) { router.botNotice = nil }
+                    .padding(.bottom, 18)
+                    .padding(.horizontal, 24)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .banditoAnimation(BanditoMotion.ease, value: router.botNotice?.id)
         .overlayPreferenceValue(TourAnchorKey.self) { anchors in
             if onboarding.tourRequested {
                 TourLayer(anchors: anchors)

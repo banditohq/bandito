@@ -461,6 +461,14 @@ Nothing is rolled back once the agent exists: a failed step is listed in `errors
 
 Rights: the owner's CLI and paired devices. Agents (crew MCP) may not call either method: they are not in `AGENT_METHODS`, and both are in the owner-only list of the trust tests (`rpc/mod.rs`). In safe mode they are refused like every other write.
 
+### Marketplace pages
+
+The Mac app's Marketplace has three pages behind one switch: Services (`integrations`), Bots (`agent_templates`) and Skills (`skills`). A page shows only when `daemon.info.features` has its feature; the last page is kept in the app's defaults (`market.tab.v1`). Each page has its own sidebar rows and its own search (the name in the app's language and in English, and the description).
+
+Texts are picked by one rule (`CatalogLanguage`): Russian reads the `*_ru` fields, another language reads `l10n[tag]` (a tag matches without case, and falls back to its primary language: `de-AT` reads `de`, `zh-Hant` reads `zh-Hans`), anything else reads English. A skill's `warning_*` exists in English and Russian only. `language` in `agents.create_from_template` is the same tag in the daemon's spelling (`ru`, `en`, `pt-BR`, `zh-Hans`, …), `en` when the app's language is none of them.
+
+The create sheet sends `schedules` always (the ticked indexes, possibly none) and the runtime the person picked among those installed and signed in on the server. It asks for the name with the agent rules and the daemon's 32 characters. When the reply has an `agent`, the app opens its chat and puts the template's `starter` into the input field without sending it; `errors` go into a notice over the window. The skill install sheet offers the server (`scope: user`) or one agent (`scope: project`); a place that is installed or in conflict is not offered, and a conflicting folder is never overwritten.
+
 ## Logs
 
 `daemon.logs {lines?, level?}` returns the newest lines of the daemon's own log, for the app's journal view. `lines` is 1–2000 (default 500); `level` is the lowest level to show: `info` (default; debug and trace lines are left out), `warn` or `error`. The reply is `{source, lines}`, where `source` is `journald` or `file`.
@@ -845,7 +853,7 @@ Errors: code `-32027` (`COMMANDS_ERROR`) with `error.data.reason`: `invalid_name
 
 ## Skills
 
-A catalog of open skills the owner can install for the daemon user or for one agent's folder. Code: `daemon/src/skills.rs` (catalog, embedded files, folder state, install, remove), `daemon/src/rpc/skills.rs` (methods), `daemon/src/commands.rs` (the folder writes, `checked_skill_folder`). Feature string: `"skills"`. The app's catalog screen is a separate step.
+A catalog of open skills the owner can install for the daemon user or for one agent's folder. Code: `daemon/src/skills.rs` (catalog, embedded files, folder state, install, remove), `daemon/src/rpc/skills.rs` (methods), `daemon/src/commands.rs` (the folder writes, `checked_skill_folder`). Feature string: `"skills"`. The app shows it as the Skills page of the Marketplace (see [Marketplace pages](#marketplace-pages)).
 
 **Catalog.** `daemon/src/skills_catalog.json`: one entry per skill (`id`, `name`, `publisher`, `source{repo, path, commit, license}`, descriptions in English and Russian and in 7 more languages, `category`, `runtimes`, `scripts`, `files`). Only licenses that allow redistribution (MIT, Apache-2.0, BSD, ISC, CC0, CC-BY) are listed. The tests check every entry against its folder.
 
