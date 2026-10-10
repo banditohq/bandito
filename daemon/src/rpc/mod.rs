@@ -14,7 +14,7 @@ use crate::runtime::RuntimeKind;
 use crate::scheduler;
 use crate::setup::Setup;
 use crate::store::{
-    ALL_CAPABILITIES, AgentPatch, Avatar, Capability, Device, Effort, NewAgent, NewSchedule, NextRun, RuleAction,
+    ALL_CAPABILITIES, AgentPatch, Avatar, Capability, Device, Effort, NewAgent, NewSchedule, RuleAction,
     SHARED_WORKSPACE, SchedulePatch, Store,
 };
 use crate::supervisor::Supervisor;
@@ -30,13 +30,16 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::{broadcast, mpsc};
 
+pub mod avatar;
 pub mod browser;
 pub mod changes;
 pub mod chat;
 pub mod commands;
 pub mod files;
 pub mod host;
+pub mod integrations;
 pub mod preview;
+pub mod schedules;
 pub mod screen;
 pub mod secrets;
 pub mod setup;
@@ -79,6 +82,8 @@ pub fn features() -> Vec<&'static str> {
         "forms",
         "reactions",
         "attachments",
+        "integrations",
+        "avatar_pictures",
     ];
     if cfg!(target_os = "linux") {
         list.push("screen");
@@ -215,6 +220,10 @@ const AGENT_METHODS: &[&str] = &[
     "screen.agent.screenshot",
     "screen.agent.scroll",
     "screen.agent.type",
+    "schedules.agent.list",
+    "schedules.agent.create",
+    "schedules.agent.update",
+    "schedules.agent.delete",
 ];
 
 /// The calls only agents make (the crew tools). The owner's CLI and the apps may not make them,
@@ -226,6 +235,7 @@ pub fn is_agent_only(method: &str) -> bool {
         || method.starts_with("history.")
         || method.starts_with("browser.agent.")
         || method.starts_with("screen.agent.")
+        || method.starts_with("schedules.agent.")
 }
 
 /// Whether `peer` may call `method` at all. [`dispatch`] and the event stream check it first.
@@ -448,6 +458,9 @@ struct AgentPatchParams {
     /// `null` gives the agent all capabilities again.
     #[serde(default, deserialize_with = "double_option")]
     capabilities: Option<Option<Vec<Capability>>>,
+    /// Ids of the integrations the agent may use; `null` = every enabled one (see docs/ARCHITECTURE.md#integrations).
+    #[serde(default, deserialize_with = "double_option")]
+    integrations: Option<Option<Vec<String>>>,
 }
 impl AgentPatchParams {
     /// Whether the patch changes the agent's record in any way. A pause alone does not: the supervisor announces
@@ -471,6 +484,7 @@ impl AgentPatchParams {
             use_personal_settings,
             avatar,
             capabilities,
+            integrations,
         } = self;
         name.is_some()
             || role.is_some()
@@ -488,6 +502,7 @@ impl AgentPatchParams {
             || use_personal_settings.is_some()
             || avatar.is_some()
             || capabilities.is_some()
+            || integrations.is_some()
     }
 
     /// Whether the patch changes something a running session was started with, so
@@ -516,9 +531,11 @@ impl AgentPatchParams {
             // The app draws it: nothing a running session was started with.
             avatar: _,
             capabilities,
+            integrations,
         } = self;
         workspace_id.as_ref().is_some_and(|w| *w != current.workspace_id)
             || capabilities.as_ref().is_some_and(|c| *c != current.capabilities)
+            || integrations.as_ref().is_some_and(|i| *i != current.integrations)
             || runtime.as_ref().is_some_and(|r| *r != current.runtime)
             || name.as_ref().is_some_and(|n| n.trim() != current.name)
             || role.as_ref().is_some_and(|r| *r != current.role)
@@ -705,19 +722,91 @@ fn check_fallback(primary: RuntimeKind, fallback: Option<RuntimeKind>) -> Result
 /// Longest color or face name of an avatar, in characters. The app picks the names; the daemon only keeps them short.
 const AVATAR_PART_CHARS: usize = 32;
 
-/// The avatar as stored: both names trimmed, each 1 to 32 characters.
+/// The avatar as stored. The color is a palette name (1 to 32 characters) or `#RRGGBB`, kept in upper case.
+/// The face is a name of 1 to 32 characters. The emoji, if any, is one character. A picture is never set
+/// here: that is `agents.avatar_image_set`, so the flags come out false.
 fn clean_avatar(avatar: Avatar) -> Result<Avatar, RpcError> {
-    let part = |s: &str| {
+    let bad = || {
+        RpcError::new(
+            INVALID_PARAMS,
+            "avatar color and face must be 1 to 32 characters, color may be #RRGGBB, emoji one character",
+        )
+    };
+    let name = |s: &str| {
         let t = s.trim();
         (!t.is_empty() && t.chars().count() <= AVATAR_PART_CHARS).then(|| t.to_string())
     };
-    match (part(&avatar.color), part(&avatar.face)) {
-        (Some(color), Some(face)) => Ok(Avatar { color, face }),
-        _ => Err(RpcError::new(
-            INVALID_PARAMS,
-            "avatar color and face must be 1 to 32 characters",
-        )),
+    let color = match avatar.color.trim().strip_prefix('#') {
+        Some(hex) if hex.len() == 6 && hex.bytes().all(|b| b.is_ascii_hexdigit()) => {
+            format!("#{}", hex.to_ascii_uppercase())
+        }
+        Some(_) => return Err(bad()),
+        None => name(&avatar.color).ok_or_else(bad)?,
+    };
+    let face = name(&avatar.face).ok_or_else(bad)?;
+    let emoji = match avatar.emoji.as_deref().map(str::trim).filter(|e| !e.is_empty()) {
+        None => None,
+        Some(e) if is_one_grapheme(e) => Some(e.to_string()),
+        Some(_) => return Err(RpcError::new(INVALID_PARAMS, "avatar emoji must be one character")),
+    };
+    Ok(Avatar {
+        color,
+        face,
+        emoji,
+        image: false,
+        image_rev: None,
+    })
+}
+
+/// Whether `s` is one user-perceived character: a base with the marks that join it (variation selectors,
+/// skin tones, keycap, combining marks, ZWJ sequences), or one or two regional indicators (a flag). An
+/// approximation of the Unicode grapheme rules, without a segmentation crate.
+fn is_one_grapheme(s: &str) -> bool {
+    const ZWJ: char = '\u{200D}';
+    let is_regional = |c: char| ('\u{1F1E6}'..='\u{1F1FF}').contains(&c);
+    let is_extend = |c: char| {
+        ('\u{0300}'..='\u{036F}').contains(&c)
+            || ('\u{FE00}'..='\u{FE0F}').contains(&c)
+            || ('\u{1F3FB}'..='\u{1F3FF}').contains(&c)
+            || ('\u{E0020}'..='\u{E007F}').contains(&c)
+            || c == '\u{20E3}'
+    };
+    let chars: Vec<char> = s.chars().collect();
+    let mut i = 0;
+    let mut need_base = true;
+    while i < chars.len() {
+        let c = chars[i];
+        if need_base {
+            if is_extend(c) || c == ZWJ {
+                return false;
+            }
+            // A flag is two regional indicators: the pair is the base, and a third one starts another.
+            i += if is_regional(c) && chars.get(i + 1).copied().is_some_and(is_regional) {
+                2
+            } else {
+                1
+            };
+            need_base = false;
+        } else if c == ZWJ {
+            need_base = true;
+            i += 1;
+        } else if is_extend(c) {
+            i += 1;
+        } else {
+            return false;
+        }
     }
+    !need_base && !chars.is_empty()
+}
+
+/// Every id must name an integration that exists. `null` (every enabled one) needs no check.
+fn check_integration_ids(store: &crate::store::Store, ids: Option<&[String]>) -> Result<(), RpcError> {
+    for id in ids.unwrap_or_default() {
+        if store.integration_get(id)?.is_none() {
+            return Err(RpcError::new(INVALID_PARAMS, format!("no integration {id}")));
+        }
+    }
+    Ok(())
 }
 
 fn check_context_budget(budget: Option<u32>) -> Result<(), RpcError> {
@@ -973,6 +1062,15 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             ok(answers)
         }
 
+        "integrations.list"
+        | "integrations.catalog"
+        | "integrations.add"
+        | "integrations.update"
+        | "integrations.remove"
+        | "integrations.test" => integrations::dispatch(app, method, p).await,
+        "agents.avatar_image_set" | "agents.avatar_image_get" | "agents.avatar_image_clear" => {
+            avatar::dispatch(app, method, p).await
+        }
         "agents.list" => ok(store.agent_list_view()?),
         "agents.get" => {
             let Id { id } = params(p)?;
@@ -987,6 +1085,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             } = params(p)?;
             a.avatar = a.avatar.map(clean_avatar).transpose()?;
             check_capabilities(a.runtime, a.capabilities.as_deref())?;
+            check_integration_ids(store, a.integrations.as_deref())?;
             // No cwd given: the agent's own folder is its cwd, which only exists once it is created.
             let own_folder = a.cwd.trim().is_empty();
             if !own_folder {
@@ -1033,6 +1132,8 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
         "agents.update" => {
             let UpdateAgent { id, mut patch } = params(p)?;
             let changes_record = patch.changes_record();
+            // `null` derives the avatar again, which drops its picture too.
+            let drops_picture = matches!(patch.avatar, Some(None));
             patch.avatar = match patch.avatar.take() {
                 Some(Some(avatar)) => Some(Some(clean_avatar(avatar)?)),
                 other => other,
@@ -1058,6 +1159,9 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                 None => current.capabilities.as_deref(),
             };
             check_capabilities(runtime, caps_after)?;
+            if let Some(ids) = &patch.integrations {
+                check_integration_ids(store, ids.as_deref())?;
+            }
             // Effort is checked against the runtime the agent will run on. One carried over from
             // the old runtime that the new one lacks is dropped, with a warning.
             let mut warnings: Vec<String> = Vec::new();
@@ -1125,6 +1229,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                     use_personal_settings: patch.use_personal_settings,
                     avatar: patch.avatar,
                     capabilities: patch.capabilities,
+                    integrations: patch.integrations,
                 },
             )?;
             // New config takes effect with the next session: the running one is
@@ -1145,6 +1250,9 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             a.status = view.status;
             a.pending_approval_ids = view.pending_approval_ids;
             a.pending_approvals = view.pending_approvals;
+            if drops_picture {
+                crate::avatar::remove(&app.data_home, &id);
+            }
             if changes_record {
                 app.sup.hub().emit(
                     &id,
@@ -1161,6 +1269,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             let Id { id } = params(p)?;
             app.sup.stop(&id).await;
             let deleted = store.agent_delete(&id)?;
+            crate::avatar::remove(&app.data_home, &id);
             if deleted {
                 app.sup.hub().emit(
                     &id,
@@ -1342,49 +1451,25 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
 
         "schedules.list" => {
             let MaybeAgent { agent_id } = params(p)?;
-            ok(store.schedule_list(agent_id.as_deref())?)
+            ok(schedules::views(store.schedule_list(agent_id.as_deref())?))
         }
         "schedules.create" => {
             let s: NewSchedule = params(p)?;
-            if store.agent_get(&s.agent_id)?.is_none() {
-                return Err(RpcError::new(SERVER_ERROR, format!("no agent {}", s.agent_id)));
-            }
-            if s.prompt.trim().is_empty() {
-                return Err(RpcError::new(INVALID_PARAMS, "prompt is empty"));
-            }
-            let next = scheduler::next_run(&s.cron, &s.tz, crate::store::now_ms())
-                .map_err(|e| RpcError::new(INVALID_PARAMS, e.to_string()))?;
-            ok(store.schedule_create(s, Some(next))?)
+            schedules::create(app, s)
         }
         "schedules.update" => {
             let ScheduleUpdate { id, patch } = params(p)?;
-            let Some(cur) = store.schedule_get(&id)? else {
-                return Err(RpcError::new(SERVER_ERROR, format!("no schedule {id}")));
-            };
-            if patch.prompt.as_deref().is_some_and(|t| t.trim().is_empty()) {
-                return Err(RpcError::new(INVALID_PARAMS, "prompt is empty"));
-            }
-            // Recompute the next run only when the timing changes (cron or zone) or the
-            // schedule is switched on. A prompt edit or a switch off keeps next_run_at,
-            // so a run that is already due is not pushed back or duplicated.
-            let timing_changed = patch.cron.as_deref().is_some_and(|c| c != cur.cron)
-                || patch.tz.as_deref().is_some_and(|z| z != cur.tz);
-            let switched_on = patch.enabled == Some(true) && !cur.enabled;
-            let next = if timing_changed || switched_on {
-                let cron = patch.cron.as_deref().unwrap_or(&cur.cron);
-                let tz = patch.tz.as_deref().unwrap_or(&cur.tz);
-                NextRun::Set(Some(
-                    scheduler::next_run(cron, tz, crate::store::now_ms())
-                        .map_err(|e| RpcError::new(INVALID_PARAMS, e.to_string()))?,
-                ))
-            } else {
-                NextRun::Keep
-            };
-            ok(store.schedule_update(&id, patch, next)?)
+            schedules::update(app, &id, patch)
         }
         "schedules.delete" => {
             let Id { id } = params(p)?;
             ok(json!({ "deleted": store.schedule_delete(&id)? }))
+        }
+        "schedules.agent.list" | "schedules.agent.create" | "schedules.agent.update" | "schedules.agent.delete" => {
+            match peer {
+                Peer::Agent(me) => schedules::agent_dispatch(app, me, method, p).await,
+                _ => Err(denied(peer, method)),
+            }
         }
         "schedules.run_now" => {
             let Id { id } = params(p)?;
@@ -1522,6 +1607,7 @@ mod crew_tests {
                     use_personal_settings: false,
                     avatar: None,
                     capabilities: None,
+                    integrations: None,
                     name: name.into(),
                     role: role.into(),
                     runtime: RuntimeKind::Claude,
@@ -1631,6 +1717,7 @@ mod history_tests {
                 use_personal_settings: false,
                 avatar: None,
                 capabilities: None,
+                integrations: None,
                 name: "Forge".into(),
                 role: String::new(),
                 runtime: RuntimeKind::Claude,
@@ -2072,6 +2159,7 @@ mod schedule_tests {
                 use_personal_settings: false,
                 avatar: None,
                 capabilities: None,
+                integrations: None,
                 name: "Forge".into(),
                 role: String::new(),
                 runtime: RuntimeKind::Claude,
@@ -2166,7 +2254,7 @@ mod schedule_tests {
         app.sup
             .hub()
             .store
-            .schedule_update(&id, SchedulePatch::default(), NextRun::Set(Some(1_000)))
+            .schedule_update(&id, SchedulePatch::default(), crate::store::NextRun::Set(Some(1_000)))
             .unwrap();
         let on = call(&app, "schedules.update", json!({"id": id, "enabled": true}))
             .await
@@ -2589,6 +2677,7 @@ mod memory_tests {
                 use_personal_settings: false,
                 avatar: None,
                 capabilities: None,
+                integrations: None,
                 name: "Forge".into(),
                 role: String::new(),
                 runtime: RuntimeKind::Claude,
@@ -3422,6 +3511,7 @@ mod pause_and_logs_tests {
                 use_personal_settings: false,
                 avatar: None,
                 capabilities: None,
+                integrations: None,
                 name: name.into(),
                 role: String::new(),
                 runtime: RuntimeKind::Claude,

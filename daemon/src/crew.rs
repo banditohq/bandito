@@ -61,6 +61,8 @@ pub trait CrewBackend: Send + Sync {
         let _ = params;
         bail!("react is not available here")
     }
+    /// One `schedules.agent.*` RPC method with its parameters. Returns the daemon's result.
+    async fn schedules(&self, method: &str, params: Value) -> Result<Value>;
 }
 
 /// Backend that asks the daemon over `agent.sock`, as the agent whose session token it holds.
@@ -132,6 +134,10 @@ impl CrewBackend for DaemonBackend {
 
     async fn react(&self, params: Value) -> Result<Value> {
         call_agent(&self.sock, &self.token, "messages.agent.react", params).await
+    }
+
+    async fn schedules(&self, method: &str, params: Value) -> Result<Value> {
+        call_agent(&self.sock, &self.token, method, params).await
     }
 }
 
@@ -280,6 +286,7 @@ fn tools_list(on: &[Capability]) -> Vec<Value> {
     ];
     tools.extend(screen_tools());
     tools.extend(browser_tool_defs());
+    tools.extend(crate::crew_schedule::tool_defs());
     tools.retain(|t| capability_of(t["name"].as_str().unwrap_or_default()).is_none_or(|c| on.contains(&c)));
     tools
 }
@@ -418,6 +425,9 @@ async fn call_tool(params: &Value, backend: &dyn CrewBackend, on: &[Capability])
         "react" => Ok(tool_result(react(&args, backend).await)),
         name if BROWSER_TOOLS.contains(&name) => Ok(blocks_result(browser_tool(name, &args, backend).await)),
         _ if SCREEN_TOOLS.iter().any(|(tool, _)| *tool == name) => Ok(screen_tool(name, &args, backend).await),
+        _ if crate::crew_schedule::SCHEDULE_TOOLS.contains(&name) => {
+            Ok(tool_result(crate::crew_schedule::call(name, &args, backend).await))
+        }
         _ => Err((INVALID_PARAMS, format!("Unknown tool: {name}"))),
     }
 }
@@ -901,6 +911,10 @@ mod tests {
         /// Every form the agent asked, and every reaction it put (as sent to the daemon).
         forms: Mutex<Vec<Value>>,
         reactions: Mutex<Vec<Value>>,
+        /// Method and parameters of every schedules call.
+        schedule_calls: Mutex<Vec<(String, Value)>>,
+        /// What schedules calls answer; `{}` when unset.
+        schedule_reply: Option<Value>,
         /// When set, every backend call fails with this message.
         fail: Option<String>,
     }
@@ -964,6 +978,14 @@ mod tests {
             }
             self.screen_calls.lock().unwrap().push((method.to_string(), params));
             Ok(self.screen_reply.clone().unwrap_or_else(|| json!({})))
+        }
+
+        async fn schedules(&self, method: &str, params: Value) -> Result<Value> {
+            if let Some(e) = &self.fail {
+                anyhow::bail!("{e}");
+            }
+            self.schedule_calls.lock().unwrap().push((method.to_string(), params));
+            Ok(self.schedule_reply.clone().unwrap_or_else(|| json!({})))
         }
     }
 
@@ -1165,6 +1187,10 @@ mod tests {
                 "browser_screenshot",
                 "browser_tabs",
                 "browser_switch",
+                "schedule_list",
+                "schedule_create",
+                "schedule_delete",
+                "schedule_pause",
             ]
         );
         assert_eq!(tools[0]["inputSchema"], json!({ "type": "object", "properties": {} }));
@@ -1611,15 +1637,33 @@ mod tests {
         let no_screen = listed(&[Capability::Browser, Capability::Team]).await;
         assert!(!no_screen.iter().any(|n| n.starts_with("screen_")));
 
-        // The shell and the files are not MCP tools: they change the settings, not this list.
-        // The form and reaction tools are every agent's, whatever it may use.
+        // The shell and the files are not MCP tools: they change the settings, not this list. The history,
+        // form, reaction and schedule tools need no capability.
         assert_eq!(
             listed(&[Capability::Terminal, Capability::Files]).await,
-            ["history_search", "history_day", "ask_form", "react"]
+            [
+                "history_search",
+                "history_day",
+                "ask_form",
+                "react",
+                "schedule_list",
+                "schedule_create",
+                "schedule_delete",
+                "schedule_pause"
+            ]
         );
         assert_eq!(
             listed(&[]).await,
-            ["history_search", "history_day", "ask_form", "react"]
+            [
+                "history_search",
+                "history_day",
+                "ask_form",
+                "react",
+                "schedule_list",
+                "schedule_create",
+                "schedule_delete",
+                "schedule_pause"
+            ]
         );
     }
 

@@ -124,6 +124,37 @@ pub struct ClaudeRuntime {
     login: LoginCache,
 }
 
+/// The `--mcp-config` text: the crew server and the owner's integrations in one `mcpServers` object, or `None`
+/// when there is nothing to serve. The values of an integration (its environment, its headers) go in only when the
+/// config has a file of its own (`agent_mcp_file`), so they never reach the command line; without one, a server
+/// that carries a value is left out of the session.
+pub fn mcp_config(cfg: &SpawnConfig) -> anyhow::Result<Option<String>> {
+    let mut servers = serde_json::Map::new();
+    if let Some((prog, args)) = &cfg.mcp {
+        servers.insert(
+            "bandito".into(),
+            json!({"command": crate::runtime::path_text(prog)?, "args": args}),
+        );
+    }
+    if cfg.agent_mcp_file.is_some() {
+        servers.extend(crate::integrations::claude_entries(&cfg.mcp_servers));
+    } else {
+        let (with_values, plain): (Vec<_>, Vec<_>) = cfg
+            .mcp_servers
+            .iter()
+            .cloned()
+            .partition(crate::integrations::has_values);
+        servers.extend(crate::integrations::claude_entries(&plain));
+        if !with_values.is_empty() {
+            tracing::warn!("integrations with values need the owner-only config file; left out of this session");
+        }
+    }
+    if servers.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(json!({ "mcpServers": servers }).to_string()))
+}
+
 impl ClaudeRuntime {
     pub fn new() -> Self {
         Self::with_program("claude")
@@ -263,11 +294,7 @@ impl Runtime for ClaudeRuntime {
         if let Some(id) = &cfg.resume {
             cmd.arg("--resume").arg(id);
         }
-        if let Some((prog, args)) = &cfg.mcp {
-            let config = json!({
-                "mcpServers": {"bandito": {"command": crate::runtime::path_text(prog)?, "args": args}}
-            })
-            .to_string();
+        if let Some(config) = mcp_config(&cfg)? {
             match &cfg.agent_mcp_file {
                 // A file of its own, owner-only and removed with the session: the config stays out of argv.
                 Some(file) => {
@@ -843,6 +870,54 @@ fn single_edit_diff(edit: &Value) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn server(name: &str, env: &[(&str, &str)]) -> crate::integrations::Server {
+        crate::integrations::Server {
+            name: name.into(),
+            transport: crate::integrations::Transport::Stdio {
+                command: "npx".into(),
+                args: vec!["pkg".into()],
+                env: env
+                    .iter()
+                    .map(|(k, v)| crate::integrations::Pair {
+                        key: k.to_string(),
+                        value: v.to_string(),
+                        secret: false,
+                    })
+                    .collect(),
+            },
+        }
+    }
+
+    #[test]
+    fn integration_values_reach_the_config_file_only() {
+        let cfg = SpawnConfig {
+            mcp_servers: vec![server("fetch", &[("API_KEY", "value-in-file")]), server("plain", &[])],
+            agent_mcp_file: Some(PathBuf::from("/run/agent-x.mcp.json")),
+            ..Default::default()
+        };
+        let text = mcp_config(&cfg).unwrap().unwrap();
+        assert!(text.contains("value-in-file"), "the file gets the value");
+        assert!(text.contains("\"plain\""), "{text}");
+    }
+
+    #[test]
+    fn without_a_file_a_server_with_values_is_left_out_and_nothing_reaches_argv() {
+        let cfg = SpawnConfig {
+            mcp_servers: vec![server("fetch", &[("API_KEY", "value-in-argv")]), server("plain", &[])],
+            agent_mcp_file: None,
+            ..Default::default()
+        };
+        let text = mcp_config(&cfg).unwrap().unwrap();
+        assert!(!text.contains("value-in-argv") && !text.contains("API_KEY"), "{text}");
+        assert!(text.contains("\"plain\"") && !text.contains("\"fetch\""), "{text}");
+    }
+
+    #[test]
+    fn no_servers_means_no_config() {
+        let cfg = SpawnConfig::default();
+        assert_eq!(mcp_config(&cfg).unwrap(), None);
+    }
 
     fn approval(msg: &Value) -> ApprovalRequest {
         approval_from_control(msg).expect("an approval request")

@@ -99,6 +99,7 @@ impl Runtime for GrokRuntime {
             cwd: cfg.cwd.clone(),
             resume: cfg.resume.clone(),
             mcp: cfg.mcp.clone(),
+            integrations: cfg.mcp_servers.clone(),
         };
         let router_state = Arc::clone(&state);
         let router: Router = Box::new(move |msg: &Value, sink: &LineSink| route(msg, &router_state, &handshake, sink));
@@ -143,6 +144,8 @@ struct Handshake {
     /// ACP session id to load; `None` creates a new session.
     resume: Option<String>,
     mcp: Option<(PathBuf, Vec<String>)>,
+    /// The owner's integrations, sent in `session/new` with the crew server (see docs/ARCHITECTURE.md#integrations).
+    integrations: Vec<crate::integrations::Server>,
 }
 
 /// State shared by the router (pump task) and the session (caller task).
@@ -401,15 +404,17 @@ fn initialized(msg: &Value, handshake: &Handshake, st: &mut State, sink: &LineSi
         let shown = version.map_or_else(|| "missing".to_string(), Value::to_string);
         out.push(error_event(format!("Unsupported ACP version {shown} from grok")));
     }
-    let servers = match &handshake.mcp {
-        Some((program, args)) => json!([{
+    let mut servers: Vec<Value> = match &handshake.mcp {
+        Some((program, args)) => vec![json!({
             "name": "bandito",
             "command": program.display().to_string(),
             "args": args,
             "env": []
-        }]),
-        None => json!([]),
+        })],
+        None => Vec::new(),
     };
+    servers.extend(crate::integrations::grok_servers(&handshake.integrations));
+    let servers = Value::Array(servers);
     let cwd = handshake.cwd.display().to_string();
     let can_load = msg
         .pointer("/result/agentCapabilities/loadSession")
@@ -837,6 +842,7 @@ mod tests {
             cwd: PathBuf::from("/work"),
             resume: None,
             mcp: None,
+            integrations: Vec::new(),
         }
     }
 

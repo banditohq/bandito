@@ -311,6 +311,7 @@ mod tests {
                 use_personal_settings: false,
                 avatar: None,
                 capabilities: None,
+                integrations: None,
                 name: "Forge".into(),
                 role: String::new(),
                 runtime: RuntimeKind::Claude,

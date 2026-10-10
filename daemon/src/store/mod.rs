@@ -15,6 +15,7 @@ pub mod auth;
 mod checkpoints;
 mod forms;
 mod history;
+mod integrations;
 mod reactions;
 mod rules;
 mod schedules;
@@ -27,6 +28,7 @@ pub use approvals::{Approval, ApprovalStatus};
 pub use auth::Device;
 pub use checkpoints::{Checkpoint, CheckpointKind};
 pub use forms::{Form, FormStatus};
+pub use integrations::{Integration, IntegrationKind, IntegrationPatch, NewIntegration};
 pub use reactions::Reaction;
 pub use rules::{Rule, RuleAction};
 pub use schedules::{NewSchedule, NextRun, Schedule, SchedulePatch};
@@ -47,6 +49,9 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../../migrations/0011_agent_personal_settings.sql"),
     include_str!("../../migrations/0012_agent_avatar_capabilities.sql"),
     include_str!("../../migrations/0013_forms_reactions.sql"),
+    include_str!("../../migrations/0014_agent_avatar_extras.sql"),
+    include_str!("../../migrations/0015_schedule_title.sql"),
+    include_str!("../../migrations/0016_integrations.sql"),
 ];
 
 pub struct Store {

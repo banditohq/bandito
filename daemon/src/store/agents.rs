@@ -22,11 +22,38 @@ pub struct LastMessage {
     pub ts: i64,
 }
 
-/// The agent's avatar: the tile color and the face on it, named as the app names them.
+/// The agent's avatar: the tile color and the face on it, named as the app names them (a `#RRGGBB` color is
+/// taken as is). `emoji` is one grapheme; `image` says a picture is set (served by `agents.avatar_image_get`).
+/// See docs/ARCHITECTURE.md#capabilities.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Avatar {
     pub color: String,
     pub face: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub emoji: Option<String>,
+    /// Set and cleared only by the picture methods; an `agents.update` keeps it. Left out of the wire when false.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub image: bool,
+    /// Changes with every new picture, so a client can drop its cache. Only set while `image` is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image_rev: Option<i64>,
+}
+
+fn is_false(b: &bool) -> bool {
+    !*b
+}
+
+impl Avatar {
+    /// A name-and-face avatar with no emoji and no picture.
+    pub fn new(color: impl Into<String>, face: impl Into<String>) -> Self {
+        Self {
+            color: color.into(),
+            face: face.into(),
+            emoji: None,
+            image: false,
+            image_rev: None,
+        }
+    }
 }
 
 /// What an agent may use. A session gets the tools of its capabilities only (see docs/ARCHITECTURE.md#capabilities).
@@ -118,6 +145,9 @@ pub struct Agent {
     pub avatar: Option<Avatar>,
     /// What the agent may use; `null` = all of it. Read when a session starts (see docs/ARCHITECTURE.md#capabilities).
     pub capabilities: Option<Vec<Capability>>,
+    /// The integrations the agent may use, by id; `null` = every enabled one. Read when a session starts
+    /// (see docs/ARCHITECTURE.md#integrations).
+    pub integrations: Option<Vec<String>>,
     /// The newest user or assistant message; `null` when there is none. Only set by `agent_view` and
     /// `agent_list_view`, the reads the wire uses (see docs/ARCHITECTURE.md#team-preview).
     #[serde(default)]
@@ -168,6 +198,9 @@ pub struct NewAgent {
     /// What the agent may use; `null` or missing = all of it.
     #[serde(default)]
     pub capabilities: Option<Vec<Capability>>,
+    /// The integrations it may use; `null` or missing = every enabled one.
+    #[serde(default)]
+    pub integrations: Option<Vec<String>>,
 }
 
 fn default_memory() -> MemoryMode {
@@ -199,9 +232,10 @@ pub struct AgentPatch {
     pub use_personal_settings: Option<bool>,
     pub avatar: Option<Option<Avatar>>,
     pub capabilities: Option<Option<Vec<Capability>>>,
+    pub integrations: Option<Option<Vec<String>>>,
 }
 
-const COLS: &str = "id, name, role, runtime, model, cwd, approval_mode, system_prompt, runtime_session_id, created_at, updated_at, effort, memory_mode, context_budget, home_dir, context_tokens, chapter, last_turn_at, fallback_runtime, fallback_model, active_runtime, workspace_id, paused, use_personal_settings, avatar_color, avatar_face, capabilities";
+const COLS: &str = "id, name, role, runtime, model, cwd, approval_mode, system_prompt, runtime_session_id, created_at, updated_at, effort, memory_mode, context_budget, home_dir, context_tokens, chapter, last_turn_at, fallback_runtime, fallback_model, active_runtime, workspace_id, paused, use_personal_settings, avatar_color, avatar_face, capabilities, avatar_emoji, avatar_image, avatar_image_rev, integrations";
 
 /// The newest message of the agent in `agents.id`, as one JSON array `[kind, ts, text]` (text cut to
 /// `LAST_MESSAGE_CHARS` in SQL too, so a long message is not read in full). One correlated subquery per agent, served by
@@ -251,8 +285,9 @@ fn from_row(r: &Row) -> rusqlite::Result<Agent> {
         workspace_id: r.get(21)?,
         paused: r.get(22)?,
         use_personal_settings: r.get(23)?,
-        avatar: avatar_column(r, 24, 25)?,
+        avatar: avatar_column(r)?,
         capabilities: capabilities_column(r, 26)?,
+        integrations: integrations_column(r, 30)?,
         last_message: None,
         status: None,
         pending_approval_ids: Vec::new(),
@@ -263,18 +298,25 @@ fn from_row(r: &Row) -> rusqlite::Result<Agent> {
 /// `from_row` for `view_sql()`: the agent columns, then the message, the status and the pending count.
 fn from_row_view(r: &Row) -> rusqlite::Result<Agent> {
     let mut agent = from_row(r)?;
-    agent.last_message = last_message_column(r, 27)?;
-    agent.status = status_column(r, 28)?;
-    agent.pending_approval_ids = pending_ids_column(r, 29)?;
+    agent.last_message = last_message_column(r, 31)?;
+    agent.status = status_column(r, 32)?;
+    agent.pending_approval_ids = pending_ids_column(r, 33)?;
     agent.pending_approvals = agent.pending_approval_ids.len() as u32;
     Ok(agent)
 }
 
-/// The avatar from its two columns: both set, or none (the app derives it from the name).
-fn avatar_column(r: &Row, color: usize, face: usize) -> rusqlite::Result<Option<Avatar>> {
+/// The avatar from its columns: color and face both set, or none (the app derives it from the name).
+/// The emoji and the picture columns belong to it and are read only with it.
+fn avatar_column(r: &Row) -> rusqlite::Result<Option<Avatar>> {
     Ok(
-        match (r.get::<_, Option<String>>(color)?, r.get::<_, Option<String>>(face)?) {
-            (Some(color), Some(face)) => Some(Avatar { color, face }),
+        match (r.get::<_, Option<String>>(24)?, r.get::<_, Option<String>>(25)?) {
+            (Some(color), Some(face)) => Some(Avatar {
+                color,
+                face,
+                emoji: r.get(27)?,
+                image: r.get::<_, i64>(28)? != 0,
+                image_rev: r.get(29)?,
+            }),
             _ => None,
         },
     )
@@ -290,6 +332,21 @@ fn capabilities_column(r: &Row, i: usize) -> rusqlite::Result<Option<Vec<Capabil
 }
 
 /// The stored form of a capability list: a JSON array, or NULL for all of them.
+/// The integration ids from their column: a JSON array, or NULL (every enabled one).
+fn integrations_column(r: &Row, i: usize) -> rusqlite::Result<Option<Vec<String>>> {
+    let Some(json) = r.get::<_, Option<String>>(i)? else {
+        return Ok(None);
+    };
+    Ok(Some(serde_json::from_str(&json).unwrap_or_default()))
+}
+
+fn integrations_json(list: Option<&[String]>) -> Result<Option<String>> {
+    Ok(match list {
+        Some(ids) => Some(serde_json::to_string(ids)?),
+        None => None,
+    })
+}
+
 fn capabilities_json(list: Option<&[Capability]>) -> Result<Option<String>> {
     Ok(match list {
         Some(list) => Some(serde_json::to_string(list)?),
@@ -384,15 +441,17 @@ impl Store {
             use_personal_settings: a.use_personal_settings,
             avatar: a.avatar,
             capabilities: a.capabilities,
+            integrations: a.integrations,
             last_message: None,
             status: None,
             pending_approval_ids: Vec::new(),
             pending_approvals: 0,
         };
         let capabilities = capabilities_json(agent.capabilities.as_deref())?;
+        let integrations = integrations_json(agent.integrations.as_deref())?;
         let res = self.conn().execute(
             &format!(
-                "INSERT INTO agents ({COLS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27)"
+                "INSERT INTO agents ({COLS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31)"
             ),
             params![
                 agent.id,
@@ -421,7 +480,11 @@ impl Store {
                 agent.use_personal_settings,
                 agent.avatar.as_ref().map(|v| v.color.as_str()),
                 agent.avatar.as_ref().map(|v| v.face.as_str()),
-                capabilities
+                capabilities,
+                agent.avatar.as_ref().and_then(|v| v.emoji.as_deref()),
+                agent.avatar.as_ref().is_some_and(|v| v.image),
+                agent.avatar.as_ref().and_then(|v| v.image_rev),
+                integrations,
             ],
         );
         match res {
@@ -531,18 +594,29 @@ impl Store {
             a.use_personal_settings = v;
         }
         if let Some(v) = p.avatar {
-            a.avatar = v;
+            // A new name-and-face keeps the picture; `null` (derived again) drops it.
+            a.avatar = v.map(|mut new| {
+                let old = a.avatar.as_ref();
+                new.image = old.is_some_and(|o| o.image);
+                new.image_rev = old.and_then(|o| o.image_rev);
+                new
+            });
         }
         if let Some(v) = p.capabilities {
             a.capabilities = v;
         }
+        if let Some(v) = p.integrations {
+            a.integrations = v;
+        }
         a.updated_at = now_ms();
         let capabilities = capabilities_json(a.capabilities.as_deref())?;
+        let integrations = integrations_json(a.integrations.as_deref())?;
         let res = self.conn().execute(
             "UPDATE agents SET name=?2, role=?3, model=?4, cwd=?5, approval_mode=?6, system_prompt=?7, updated_at=?8,
              effort=?9, memory_mode=?10, context_budget=?11, runtime=?12, fallback_runtime=?13, fallback_model=?14,
              active_runtime=?15, workspace_id=?16, use_personal_settings=?17,
-             avatar_color=?18, avatar_face=?19, capabilities=?20 WHERE id=?1",
+             avatar_color=?18, avatar_face=?19, capabilities=?20, avatar_emoji=?21, avatar_image=?22,
+             avatar_image_rev=?23, integrations=?24 WHERE id=?1",
             params![
                 a.id,
                 a.name,
@@ -563,7 +637,11 @@ impl Store {
                 a.use_personal_settings,
                 a.avatar.as_ref().map(|v| v.color.as_str()),
                 a.avatar.as_ref().map(|v| v.face.as_str()),
-                capabilities
+                capabilities,
+                a.avatar.as_ref().and_then(|v| v.emoji.as_deref()),
+                a.avatar.as_ref().is_some_and(|v| v.image),
+                a.avatar.as_ref().and_then(|v| v.image_rev),
+                integrations,
             ],
         );
         match res {
@@ -631,6 +709,17 @@ impl Store {
 
     /// Deletes the agent with its approvals, rules, schedules and checkpoints. Events stay
     /// (history), keyed by the old id.
+    /// Set or clear the avatar's picture flag and revision (`None` clears both). The avatar must be set:
+    /// the picture belongs to it. `false` if the agent is missing or has no avatar.
+    pub fn agent_set_avatar_image(&self, id: &str, rev: Option<i64>) -> Result<bool> {
+        let n = self.conn().execute(
+            "UPDATE agents SET avatar_image = ?2, avatar_image_rev = ?3
+             WHERE id = ?1 AND avatar_color IS NOT NULL AND avatar_face IS NOT NULL",
+            params![id, i64::from(rev.is_some()), rev],
+        )?;
+        Ok(n == 1)
+    }
+
     pub fn agent_delete(&self, id: &str) -> Result<bool> {
         let conn = self.conn();
         let tx = conn.unchecked_transaction()?;
@@ -667,6 +756,7 @@ mod tests {
             use_personal_settings: false,
             avatar: None,
             capabilities: None,
+            integrations: None,
         }
     }
 
@@ -677,10 +767,7 @@ mod tests {
         assert_eq!((a.avatar.clone(), a.capabilities.clone()), (None, None));
 
         let mut with = new("Scout");
-        with.avatar = Some(Avatar {
-            color: "sky".into(),
-            face: "dots".into(),
-        });
+        with.avatar = Some(Avatar::new("sky", "dots"));
         with.capabilities = Some(vec![Capability::Team, Capability::Browser]);
         let scout = s.agent_create(with).unwrap();
         let stored = s.agent_get(&scout.id).unwrap().unwrap();

@@ -228,6 +228,9 @@ pub const APPROVAL_TTL_MS: i64 = 24 * 60 * 60 * 1000;
 const CHECKPOINT_BEFORE_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Put first in the system prompt of an agent that has a home folder. `{home}` is replaced by the folder.
+/// Told to every agent: how to make a regular run of itself (see docs/ARCHITECTURE.md#scheduler).
+const SCHEDULE_BRIEFING: &str = "Для регулярных задач (проверять почту каждые 15 минут и т.п.) используйте schedule_create — Bandito сам запустит вас по расписанию, cron/launchd не нужны.";
+
 const MEMORY_BRIEFING: &str = "Your memory lives in {home} — plain Markdown files that you own:
 - MEMORY.md: a short index. Read it at the start of every session before anything else. Keep it under 200 lines: who the user is, current work, open tasks, decisions, and links to notes.
 - notes/<topic>.md: details worth keeping (how things work, decisions and why, preferences).
@@ -1100,7 +1103,21 @@ impl Actor {
             .runtimes
             .get(kind)
             .ok_or_else(|| anyhow!("runtime {} is not available on this server", kind.as_str()))?;
-        // Blocks: memory briefing, role, the user's own instructions.
+        // The owner's MCP servers for this agent: enabled, in its list, with their secrets read now.
+        let all_integrations = self.hub.store.integration_list()?;
+        let chosen = crate::integrations::for_agent(&all_integrations, agent.integrations.as_deref());
+        let integration_secrets: Vec<(String, String)> = {
+            let names = crate::integrations::secret_names(&chosen);
+            self.hub
+                .store
+                .secrets_all()?
+                .into_iter()
+                .filter(|(name, _)| names.contains(name))
+                .collect()
+        };
+        let secret_map: std::collections::HashMap<String, String> = integration_secrets.iter().cloned().collect();
+        let mcp_servers = crate::integrations::resolve(&chosen, &secret_map);
+        // Blocks: memory briefing, role, schedule briefing, integrations, the user's own instructions.
         let mut blocks: Vec<String> = Vec::new();
         let project = (!agent.cwd.trim().is_empty()).then(|| PROJECT_FOLDER.replace("{cwd}", agent.cwd.trim()));
         match (agent.home_dir.as_deref(), project) {
@@ -1120,6 +1137,11 @@ impl Actor {
             ));
         }
         blocks.push(CHAT_GUIDE.to_string());
+        blocks.push(SCHEDULE_BRIEFING.to_string());
+        let names: Vec<&str> = mcp_servers.iter().map(|s| s.name.as_str()).collect();
+        if let Some(line) = crate::integrations::prompt_line(&names) {
+            blocks.push(line);
+        }
         if let Some(sp) = agent.system_prompt.as_deref().filter(|s| !s.trim().is_empty()) {
             blocks.push(sp.to_string());
         }
@@ -1199,6 +1221,7 @@ impl Actor {
                 sandbox,
                 personal_settings: agent.use_personal_settings,
                 capabilities: agent.capabilities.clone(),
+                mcp_servers,
             })
             .await?;
         self.root = spawned
@@ -1211,7 +1234,12 @@ impl Actor {
         self.session_kind = Some(kind);
         self.agent_token = Some(token_guard);
         // The same values the child got, so what it prints is redacted exactly for them, the token too.
-        self.redactor = Redactor::new(secrets.into_iter().chain([("BANDITO_AGENT_TOKEN".to_string(), token)]));
+        self.redactor = Redactor::new(
+            secrets
+                .into_iter()
+                .chain(integration_secrets)
+                .chain([("BANDITO_AGENT_TOKEN".to_string(), token)]),
+        );
         Ok(())
     }
 
@@ -2225,6 +2253,7 @@ mod tests {
                 use_personal_settings: false,
                 avatar: None,
                 capabilities: None,
+                integrations: None,
                 name: "Forge".into(),
                 role: "builder".into(),
                 runtime: RuntimeKind::Claude,
@@ -2787,6 +2816,7 @@ mod tests {
                 use_personal_settings: false,
                 avatar: None,
                 capabilities: None,
+                integrations: None,
                 name: name.into(),
                 role: String::new(),
                 runtime: RuntimeKind::Claude,
@@ -3120,6 +3150,7 @@ mod tests {
                 use_personal_settings: false,
                 avatar: None,
                 capabilities: None,
+                integrations: None,
                 name: "Scout".into(),
                 role: String::new(),
                 runtime: RuntimeKind::Codex,
@@ -3673,6 +3704,7 @@ mod tests {
                 use_personal_settings: false,
                 avatar: None,
                 capabilities: None,
+                integrations: None,
                 name: "Forge".into(),
                 role: "builder".into(),
                 runtime: RuntimeKind::Claude,
@@ -3842,6 +3874,7 @@ mod tests {
                 use_personal_settings: false,
                 avatar: None,
                 capabilities: None,
+                integrations: None,
                 name: "Forge".into(),
                 role: "builder".into(),
                 runtime: RuntimeKind::Claude,
@@ -4469,6 +4502,7 @@ mod workspace_tests {
                     use_personal_settings: false,
                     avatar: None,
                     capabilities: None,
+                    integrations: None,
                     name: name.into(),
                     role: String::new(),
                     runtime: RuntimeKind::Claude,

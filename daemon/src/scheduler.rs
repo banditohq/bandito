@@ -287,6 +287,7 @@ mod tests {
                 use_personal_settings: false,
                 avatar: None,
                 capabilities: None,
+                integrations: None,
                 name: "Forge".into(),
                 role: String::new(),
                 runtime: RuntimeKind::Claude,
@@ -314,6 +315,7 @@ mod tests {
             tz: "UTC".into(),
             prompt: "report".into(),
             enabled,
+            title: None,
         }
     }
 
@@ -486,6 +488,7 @@ mod tests {
                 use_personal_settings: false,
                 avatar: None,
                 capabilities: None,
+                integrations: None,
                 name: "Scout".into(),
                 role: String::new(),
                 runtime: RuntimeKind::Codex,
@@ -508,6 +511,7 @@ mod tests {
                     tz: "UTC".into(),
                     prompt: "/deploy prod".into(),
                     enabled: true,
+                    title: None,
                 },
                 Some(ms("2026-10-09T11:00:00Z")),
             )
