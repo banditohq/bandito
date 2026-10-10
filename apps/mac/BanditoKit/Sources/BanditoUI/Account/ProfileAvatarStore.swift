@@ -29,6 +29,11 @@ final class ProfileAvatarStore {
     private(set) var removed = false
 
     @ObservationIgnored private var userID: String?
+    /// Whether `bind` has run once. The account object is set many times for one user; the picture is read once.
+    @ObservationIgnored private var started = false
+    /// Counts the changes of the picture (the read at bind, a save, a removal, a copy from the blob). A read that began
+    /// before a change and ends after it is stale and must not overwrite the change.
+    @ObservationIgnored private var revision = 0
     @ObservationIgnored private let directory: URL
     @ObservationIgnored private let defaults: UserDefaults
 
@@ -56,7 +61,12 @@ final class ProfileAvatarStore {
     /// Loads the state of `userID` (nil: nobody is signed in and nothing is shown). Only the file read is off the main
     /// thread; the state is set here.
     func bind(userID: String?) async {
+        // The same user again: nothing to read. A second read could end after a save and bring back the old picture.
+        if started, userID == self.userID { return }
+        started = true
         self.userID = userID
+        revision += 1
+        let mine = revision
         guard let userID else {
             image = nil
             updatedAt = 0
@@ -67,8 +77,8 @@ final class ProfileAvatarStore {
         removed = defaults.bool(forKey: Self.removedKeyPrefix + userID)
         let url = fileURL(for: userID)
         let loaded = await Task.detached { Self.readPicture(at: url) }.value
-        // The user may have changed while the file was read; only the current user's picture is shown.
-        guard self.userID == userID else { return }
+        // The user may have changed, or the picture may have been saved, while the file was read.
+        guard self.userID == userID, revision == mine else { return }
         image = loaded?.image
     }
 
@@ -89,6 +99,7 @@ final class ProfileAvatarStore {
             throw StoreError.invalidPicture
         }
         try await write(jpeg, to: fileURL(for: userID))
+        revision += 1
         self.image = image
         removed = false
         record(time)
@@ -99,6 +110,7 @@ final class ProfileAvatarStore {
     func removePicture(at time: Int64) async throws {
         guard let userID else { return }
         try await removeFile(fileURL(for: userID))
+        revision += 1
         image = nil
         removed = true
         defaults.set(true, forKey: Self.removedKeyPrefix + userID)
@@ -113,11 +125,13 @@ final class ProfileAvatarStore {
         let url = fileURL(for: userID)
         if remote.cleared {
             try await removeFile(url)
+            revision += 1
             image = nil
             removed = true
         } else if let avatar = remote.avatar {
             guard let decoded = await Task.detached(operation: { Self.validate(avatar) }).value else { return false }
             try await write(avatar, to: url)
+            revision += 1
             image = decoded
             removed = false
         } else {
@@ -137,6 +151,7 @@ final class ProfileAvatarStore {
         }
         defaults.removeObject(forKey: Self.updatedKeyPrefix + userID)
         defaults.removeObject(forKey: Self.removedKeyPrefix + userID)
+        revision += 1
         image = nil
         updatedAt = 0
         removed = false

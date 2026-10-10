@@ -73,6 +73,8 @@ private struct IdentityCard: View {
     @State private var role = ""
     @State private var error: UserFacingMessage?
     @State private var pickingAvatar = false
+    /// What the avatar editor keeps while its popover is closed (a picture read from disk): choosing a file closes it.
+    @State private var avatarEditor = AvatarEditorModel()
     /// The avatar as the editor shows it. Changes stay local while the editor is open and are sent when it closes.
     @State private var look = AvatarLook(palette: .peach, customHex: nil, face: .chevronDash, emoji: nil)
     @State private var avatarSync = InFlightCounter()
@@ -140,6 +142,9 @@ private struct IdentityCard: View {
         .onChange(of: pickingAvatar) { _, open in
             if !open { sendLookIfChanged() }
         }
+        // The file panel closed the popover; the picture it gave is framed in the editor shown again.
+        .onChange(of: avatarEditor.loadedCount) { _, _ in pickingAvatar = true }
+        .onChange(of: agent.id) { _, _ in avatarEditor.reset() }
         .onChange(of: agent.name, initial: true) { _, value in
             name = IdentityField.text(current: name, saved: value, editing: focused == .name)
         }
@@ -185,7 +190,7 @@ private struct IdentityCard: View {
         }
         .popover(isPresented: $pickingAvatar, arrowEdge: .bottom) {
             AvatarEditor(
-                name: agent.name, look: $look, picture: picture,
+                name: agent.name, look: $look, model: avatarEditor, picture: picture,
                 pictureSupported: server.supports("avatar_pictures"),
                 onSetPicture: { data in
                     try await server.setAgentAvatarImage(agent.id, data)

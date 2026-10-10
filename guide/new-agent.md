@@ -24,11 +24,21 @@ A template fills the name, role, runtime, effort, instructions and approvals for
 ## Name, role, face (Name, Role, Face)
 
 <!-- id: na-name; covers: -->
-The name is shown in the sidebar and in the chat. The role is a short label, for example builder, reviewer or on-call. The face is the avatar: one of the three faces and six colors.
+The name is shown in the sidebar and in the chat. The role is a short label, for example builder, reviewer or on-call. The avatar is a face, an emoji or your own picture on a color; the avatar editor is described below.
 Где: New agent sheet → Name (Имя), Role (Роль), Face (Face:)
 1. Type a name in Name (Имя). It is required.
 2. Type a role in Role (Роль), for example builder, or leave it empty.
-3. Choose a face and a color under Face (Face:).
+3. Click the avatar to open the editor, and choose a face, an emoji or a picture and a color (see Avatar editor below).
+
+## Avatar editor
+
+<!-- id: na-avatar; covers: -->
+A click on the avatar of an agent opens the editor, in the new agent sheet and in the Inspector. The preview is on top, then three tabs: Face (Лицо), Emoji (Эмодзи) and Picture (Картинка). The row of circles at the bottom sets the background color; the last, rainbow circle opens the color picker for your own color.
+Где: New agent sheet → avatar; Team → Inspector (⌘I) → avatar
+1. Face: click a face. It replaces an emoji if one was chosen.
+2. Emoji: click an emoji, paste or type one into the field, or type a word such as raccoon to filter the list by name (English names). The smiley button opens the system emoji palette. No emoji (Без эмодзи) goes back to the face.
+3. Picture: drop a photo on the dashed zone or click it to choose a file. Drag the picture to frame it, set the zoom with the slider and click Save (Сохранить). Replace (Заменить) chooses another file, Remove (Убрать) takes the picture off. The picture needs a server whose daemon is new enough; the tab says so when it is not.
+4. If the file is not a picture, or is too large once framed, the reason is shown under the zone. Choosing a file closes the editor for a moment; it opens again on the Picture tab with the file ready to frame.
 
 ## Runtime: Powered by (Чем думает)
 

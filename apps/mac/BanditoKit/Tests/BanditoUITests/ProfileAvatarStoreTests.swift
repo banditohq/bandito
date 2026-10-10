@@ -189,6 +189,25 @@ import Testing
         #expect(FileManager.default.fileExists(atPath: file.path) == false)
     }
 
+    @Test func bindingTheSameUserAgainDoesNotReadTheFileAgain() async throws {
+        // The account object is set many times per run; a late second read must not undo a fresh save.
+        let avatar = await store()
+        try await avatar.setPicture(try jpeg(), at: 1_000)
+        try FileManager.default.removeItem(at: file)
+        await avatar.bind(userID: user)
+        #expect(avatar.image != nil)
+        #expect(avatar.updatedAt == 1_000)
+    }
+
+    @Test func aSavedPictureShowsAfterARestartWithoutTheServer() async throws {
+        try await store().setPicture(try jpeg(), at: 1_000)
+        // A new store, as after a restart: bound from the remembered user id alone.
+        let restarted = ProfileAvatarStore(directory: directory, defaults: defaults)
+        await restarted.bind(userID: user)
+        #expect(restarted.image != nil)
+        #expect(restarted.updatedAt == 1_000)
+    }
+
     @Test func pictureIsPerUser() async throws {
         let first = await store()
         try await first.setPicture(try jpeg(), at: 1_000)

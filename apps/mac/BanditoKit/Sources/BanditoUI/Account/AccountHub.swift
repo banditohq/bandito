@@ -127,8 +127,16 @@ public final class AccountHub {
     /// The account as the server last said it (`GET /me`): the user and the devices. Nil until it has been read.
     public private(set) var me: Me? {
         didSet {
-            profile.bind(userID: me?.user.id)
-            Task { await avatar.bind(userID: me?.user.id) }
+            if let id = me?.user.id {
+                profile.bind(userID: id)
+                Task { await avatar.bind(userID: id) }
+            } else if !signedIn {
+                // Signed out: nobody is shown, and the next start shows nobody.
+                profile.forget()
+                Task { await avatar.bind(userID: nil) }
+            }
+            // Signed in but the account is not read yet (the start, or no network): the user remembered from the last
+            // run stays, so the photo and nickname show from this Mac.
         }
     }
 
@@ -157,6 +165,11 @@ public final class AccountHub {
         self.loadIdentity = loadIdentity
         // A stored session is enough to know someone is signed in; no device key is read for that.
         signedIn = ((try? keys.load(account: AccountClient.sessionAccount)) ?? nil) != nil
+        // After a restart the profile of the last signed-in user shows before (and without) the answer of the server.
+        if signedIn, let remembered = profile.rememberedUserID {
+            profile.bind(userID: remembered)
+            Task { await avatar.bind(userID: remembered) }
+        }
     }
 
     /// Reads this device's keys (creating them once) and builds the client. Throws if the Keychain refuses. Calls
@@ -178,6 +191,11 @@ public final class AccountHub {
         self.client = client
         syncStore = SyncStore(account: client, keys: keys)
         signedIn = (try? await client.restoreSession()) != nil
+        if !signedIn, me == nil {
+            // The stored session is gone: the profile remembered from the last run is not shown any more.
+            profile.forget()
+            await avatar.bind(userID: nil)
+        }
         return client
     }
 
