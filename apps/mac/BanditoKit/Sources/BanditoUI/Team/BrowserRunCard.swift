@@ -3,34 +3,24 @@ import BanditoKit
 import BanditoL10n
 import SwiftUI
 
-/// The size of the picture in the card. Pure, so the rules are easy to read and test.
+/// The size of the picture in the card. Pure, so the rule is easy to read and test.
 enum BrowserRunPreview {
-    /// The tallest the picture gets, in points.
-    static let maxHeight: CGFloat = 220
-    /// The ratio shown before the first frame.
-    static let placeholderAspect: CGFloat = 1.6
+    /// The picture's height in the card, in points. It is the same for every page, so the card's height does not
+    /// change when the page changes shape.
+    static let pictureHeight: CGFloat = 200
 
-    /// Width over height of the page, kept in a sane range so an odd page size never makes a sliver. The placeholder
-    /// ratio for a size that is not known yet.
-    static func aspect(of page: CGSize) -> CGFloat {
-        guard page.width.isFinite, page.height.isFinite, page.width >= 1, page.height >= 1 else { return placeholderAspect }
-        return min(max(page.width / page.height, 0.4), 3)
-    }
-
-    /// The height of the picture in a card `width` wide: the width at the page's ratio, at most `maxHeight`.
-    static func height(width: CGFloat, aspect: CGFloat) -> CGFloat {
-        guard width.isFinite, width > 0, aspect > 0 else { return 0 }
-        return min(maxHeight, (width / aspect).rounded())
+    /// The picture's height in a card `width` wide: always `pictureHeight`, or 0 when the width is not a usable number.
+    static func height(width: CGFloat) -> CGFloat {
+        guard width.isFinite, width > 0 else { return 0 }
+        return pictureHeight
     }
 }
 
-/// Gives its content the card's full width and the height `BrowserRunPreview.height` says.
+/// Gives its content the card's full width and the height `BrowserRunPreview.height(width:)` says.
 private struct BrowserRunPreviewLayout: Layout {
-    var aspect: CGFloat
-
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let width = proposal.width ?? 360
-        return CGSize(width: width, height: BrowserRunPreview.height(width: width, aspect: aspect))
+        return CGSize(width: width, height: BrowserRunPreview.height(width: width))
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
@@ -81,14 +71,15 @@ struct BrowserRunCard: View {
         }
     }
 
-    /// The picture fills the card's width at the page's ratio (at most 220 pt tall), on the card's surface, with no bars.
-    /// It is drawn in a layer that the browser model feeds directly: the card does not redraw per frame.
+    /// The picture fills the card's width, 200 pt tall, cropped from the bottom so the top of the page shows (as
+    /// `.aspectRatio(.fill)` with top alignment). It sits in a thin frame. It is drawn in a layer that the browser
+    /// model feeds directly: the card does not redraw per frame.
     private func preview(_ model: BrowserModel) -> some View {
-        BrowserRunPreviewLayout(aspect: BrowserRunPreview.aspect(of: model.hasFrame ? model.pageSize : .zero)) {
+        BrowserRunPreviewLayout {
             ZStack {
                 Color.Bandito.surface1
                 if model.hasFrame {
-                    BrowserFrameLayer(store: model.frames)
+                    BrowserFrameLayer(store: model.frames, fillsFromTop: true)
                         .accessibilityHidden(true)
                 } else {
                     Text(L10n.Thread.BrowserRun.noPicture)
@@ -100,6 +91,7 @@ struct BrowserRunCard: View {
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.Bandito.line, lineWidth: 0.5))
     }
 
     /// One line: the page's icon, title and domain on the left, the two buttons on the right.

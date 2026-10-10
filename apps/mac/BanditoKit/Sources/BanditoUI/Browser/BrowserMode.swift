@@ -122,13 +122,37 @@ struct BrowserMainArea: View {
 
 // MARK: Toolbar
 
+/// How the toolbar fits its width. Pure, so the threshold is easy to test.
+enum BrowserToolbarLayout {
+    /// Narrower than this (a browser in a workbench panel), "Open on Mac" is only its icon, so the address field and
+    /// the fullscreen button keep their room.
+    static let iconOpenBelow: CGFloat = 520
+
+    /// True when "Open on Mac" is only an icon. A width not measured yet (0, or not a number) keeps the text.
+    static func opensOnMacAsIcon(width: CGFloat) -> Bool {
+        guard width.isFinite, width > 0 else { return false }
+        return width < iconOpenBelow
+    }
+}
+
+/// Carries the toolbar's measured width up from its background.
+private struct BrowserToolbarWidthKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 private struct BrowserToolbar: View {
     @Bindable var model: BrowserModel
     var onOpenFullscreen: (() -> Void)?
     @FocusState private var addressFocused: Bool
     @Environment(Keymap.self) private var keymap
+    @State private var width: CGFloat = 0
 
     var body: some View {
+        let compact = BrowserToolbarLayout.opensOnMacAsIcon(width: width)
         HStack(spacing: 6) {
             Button {
                 Task { await model.goBack() }
@@ -159,15 +183,24 @@ private struct BrowserToolbar: View {
             .focusable(false)
             .help(L10n.Browser.reload)
 
+            // The address field gives way first: the buttons keep their size and stay on screen.
             addressBar
+                .layoutPriority(-1)
 
             if let external = model.externalURL {
                 Button {
                     ExternalLinks.open(external)
                 } label: {
-                    Text(L10n.Browser.openOnMac)
+                    if compact {
+                        Image(systemName: "laptopcomputer")
+                    } else {
+                        Text(L10n.Browser.openOnMac)
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                    }
                 }
-                .banditoButton(.quiet())
+                .banditoButton(compact ? .icon(size: 30, label: L10n.Browser.openOnMac) : .quiet())
+                .layoutPriority(1)
             }
 
             if let onOpenFullscreen {
@@ -177,12 +210,19 @@ private struct BrowserToolbar: View {
                 .banditoButton(.icon(size: 30, label: L10n.Browser.openFullscreen))
                 .focusable(false)
                 .help(L10n.Browser.openFullscreen)
+                .layoutPriority(1)
             }
         }
         .padding(.horizontal, 14)
         .frame(height: 52)
         .titleBarZoomOnDoubleClick()
         .background(Color.Bandito.bg)
+        .background(
+            GeometryReader { proxy in
+                Color.clear.preference(key: BrowserToolbarWidthKey.self, value: proxy.size.width)
+            }
+        )
+        .onPreferenceChange(BrowserToolbarWidthKey.self) { width = $0 }
         .overlay(alignment: .bottom) {
             Rectangle().fill(Color.Bandito.text.opacity(0.05)).frame(height: 1)
         }

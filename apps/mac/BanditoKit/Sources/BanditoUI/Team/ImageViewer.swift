@@ -250,6 +250,8 @@ struct ImageViewer: View {
                     .font(.system(size: 11, weight: .semibold))
             }
             .banditoButton(.icon(size: 30, label: L10n.Viewer.zoomOut))
+            .accessibilityLabel(L10n.Viewer.zoomOut)
+            .help(L10n.Viewer.zoomOut)
             .keyboardShortcut("-", modifiers: .command)
             .disabled(image == nil)
             if image != nil {
@@ -264,6 +266,8 @@ struct ImageViewer: View {
                     .font(.system(size: 11, weight: .semibold))
             }
             .banditoButton(.icon(size: 30, label: L10n.Viewer.zoomIn))
+            .accessibilityLabel(L10n.Viewer.zoomIn)
+            .help(L10n.Viewer.zoomIn)
             .keyboardShortcut("=", modifiers: .command)
             .disabled(image == nil)
             Spacer().frame(width: 6)
