@@ -1427,9 +1427,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                 msg.attachments = chat::attachments_for(app, agent, &attachments)?;
             }
             if !mentions.is_empty() {
-                let (kept, note) = chat::mentions_for(app, agent.as_ref(), &mentions).await?;
-                msg.mentions = kept;
-                msg.mention_note = note;
+                msg.mentions = chat::mentions_for(app, agent.as_ref(), &mentions).await?;
             }
             // A paused agent takes the message into its thread and starts nothing: `queued` says so.
             let queued = app.sup.send_held(&agent_id, msg).await?;

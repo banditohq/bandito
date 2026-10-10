@@ -72,7 +72,7 @@ private func chip(_ kind: MentionKind, _ id: String, _ label: String, pending: S
     @Test func aLabelIsOneShortLine() {
         #expect(MentionDraft.uniqueLabel("a\nb", among: []) == "a b")
         #expect(MentionDraft.uniqueLabel("   ", among: []) == "?")
-        #expect(MentionDraft.uniqueLabel(String(repeating: "x", count: 100), among: []).count == 60)
+        #expect(MentionDraft.uniqueLabel(String(repeating: "x", count: 100), among: []).count == 80)
     }
 
     @Test func textThatWasDeletedTakesItsChipWithIt() {
@@ -341,5 +341,46 @@ private func template(_ id: String, _ name: String) -> IntegrationCatalogEntry {
         ]
         #expect(SlashMatcher.filter(entries, query: "мод", source: .all).map(\.name) == ["model"])
         #expect(SlashMatcher.filter(entries, query: "ре", source: .all).isEmpty)
+    }
+}
+
+@Suite struct MentionHardeningTests {
+    @Test func labelsAreOneCleanLine() {
+        let dirty = "a\tb\rc\u{2028}d\u{2029}e\nf  g"
+        #expect(MentionDraft.cleanLabel(dirty, fallback: "X") == "a b c d e f g")
+        #expect(MentionDraft.cleanLabel("\t\r\u{2028}", fallback: "Files") == "Files")
+        #expect(MentionDraft.cleanLabel(String(repeating: "я", count: 200), fallback: "X").count == MentionDraft.maxLabel)
+        #expect(MentionDraft.uniqueLabel(" \n ", fallback: "Services", among: []) == "Services")
+    }
+
+    @Test func aWholeWordOnlyCountsAsInTheText() {
+        let drive = chip(.integration, "i1", "Drive")
+        let drive2 = chip(.integration, "i2", "Drive (2)")
+        let list = [drive, drive2]
+        // Only the longer one is in the text: "@Drive" must not be found inside "@Drive (2)".
+        #expect(MentionDraft.reconcile(list, in: "use @Drive (2) now") == [drive2])
+        #expect(MentionDraft.reconcile(list, in: "use @Drive now") == [drive])
+        #expect(MentionDraft.reconcile(list, in: "@Drive and @Drive (2).") == list)
+        #expect(MentionDraft.reconcile(list, in: "@Drive, ok") == [drive])
+        #expect(MentionDraft.reconcile(list, in: "x@Drive") == [])
+        #expect(MentionDraft.reconcile(list, in: "@Drivers") == [])
+        #expect(MentionDraft.reconcile(list, in: "") == [])
+    }
+
+    private func connecting(agent: String = "A", name: String = "Linear") -> MentionMenuModel.Connecting {
+        MentionMenuModel.Connecting(agentID: agent, name: name, template: "linear", known: [])
+    }
+
+    @Test func aSignInFinishesOnlyTheConnectItWasStartedFor() {
+        let done = OAuthSignIn.Phase.connected(name: "Linear", integrationID: "i-9")
+        #expect(MentionConnectRules.finishedIntegration(connecting: connecting(), agentID: "A", phase: done) == "i-9")
+        // The person went to agent B before it ended: nothing is sent.
+        #expect(MentionConnectRules.finishedIntegration(connecting: connecting(), agentID: "B", phase: done) == nil)
+        // A sign-in begun in the Marketplace, with no connect started here, or for another service.
+        #expect(MentionConnectRules.finishedIntegration(connecting: nil, agentID: "A", phase: done) == nil)
+        let other = OAuthSignIn.Phase.connected(name: "GitHub", integrationID: "i-1")
+        #expect(MentionConnectRules.finishedIntegration(connecting: connecting(), agentID: "A", phase: other) == nil)
+        #expect(MentionConnectRules.finishedIntegration(connecting: connecting(), agentID: "A", phase: .idle) == nil)
+        #expect(MentionConnectRules.finishedIntegration(connecting: connecting(), agentID: nil, phase: done) == nil)
     }
 }

@@ -2338,5 +2338,8 @@
   "slash.alias.terminal": "терминал, консоль, командная строка",
   "slash.alias.files": "файлы, папка, обзор",
   "slash.alias.usage": "лимиты, расход, подписка, квота, использование",
-  "slash.alias.pause": "пауза, остановить, приостановить"
+  "slash.alias.pause": "пауза, остановить, приостановить",
+  "mention.connectAndSend": "Подключить и отправить",
+  "mention.connectAccess": "{service} станет доступен агенту {agent}.",
+  "mention.resendDropped": "Отправлено без {names}: больше недоступно."
 }

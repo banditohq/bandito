@@ -1289,6 +1289,8 @@ public enum L10n {
     }
 
     public enum Mention {
+        public static func connectAccess(service: String, agent: String) -> String { L10n.tr("mention.connectAccess", service, agent) }
+        public static var connectAndSend: String { L10n.tr("mention.connectAndSend") }
         public static var connectHint: String { L10n.tr("mention.connectHint") }
         public static func connectPrompt(name: String) -> String { L10n.tr("mention.connectPrompt", name) }
         public static var footerInsert: String { L10n.tr("mention.footerInsert") }
@@ -1296,6 +1298,7 @@ public enum L10n {
         public static var groupBrowser: String { L10n.tr("mention.groupBrowser") }
         public static var groupFiles: String { L10n.tr("mention.groupFiles") }
         public static var groupServices: String { L10n.tr("mention.groupServices") }
+        public static func resendDropped(names: String) -> String { L10n.tr("mention.resendDropped", names) }
 
         public enum Alias {
             public static var agent: String { L10n.tr("mention.alias.agent") }

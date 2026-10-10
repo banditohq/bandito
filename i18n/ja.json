@@ -2251,5 +2251,8 @@
   "slash.alias.terminal": "ターミナル, コンソール, コマンドライン, シェル",
   "slash.alias.files": "ファイル, フォルダ, 参照",
   "slash.alias.usage": "使用量, 制限, 上限, サブスクリプション",
-  "slash.alias.pause": "一時停止, ポーズ, 停止"
+  "slash.alias.pause": "一時停止, ポーズ, 停止",
+  "mention.connectAndSend": "接続して送信",
+  "mention.connectAccess": "{service} が {agent} で使えるようになります。",
+  "mention.resendDropped": "{names} なしで送信しました：利用できなくなっています。"
 }

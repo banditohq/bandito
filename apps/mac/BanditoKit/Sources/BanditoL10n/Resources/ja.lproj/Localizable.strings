@@ -919,6 +919,8 @@
 "mention.alias.browserTab" = "ブラウザ, タブ, ページ, ウェブ";
 "mention.alias.file" = "ファイル, ドキュメント, フォルダ";
 "mention.alias.integration" = "サービス, 連携, 接続, アプリ";
+"mention.connectAccess" = "%1$@ が %2$@ で使えるようになります。";
+"mention.connectAndSend" = "接続して送信";
 "mention.connectHint" = "メッセージにはこのサービスが必要です。接続後すぐに送信されます。";
 "mention.connectPrompt" = "%1$@ を接続しますか？";
 "mention.footerInsert" = "↵ 挿入";
@@ -926,6 +928,7 @@
 "mention.groupBrowser" = "ブラウザ";
 "mention.groupFiles" = "ファイル";
 "mention.groupServices" = "サービス";
+"mention.resendDropped" = "%1$@ なしで送信しました：利用できなくなっています。";
 "menu.agent" = "エージェント";
 "menu.checkForUpdates" = "アップデートを確認…";
 "menu.go" = "移動";

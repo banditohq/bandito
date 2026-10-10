@@ -919,6 +919,8 @@
 "mention.alias.browserTab" = "navegador, abas, páginas, web";
 "mention.alias.file" = "arquivos, documentos, pastas";
 "mention.alias.integration" = "serviços, integrações, conexões, aplicativos";
+"mention.connectAccess" = "%1$@ ficará disponível para %2$@.";
+"mention.connectAndSend" = "Conectar e enviar";
 "mention.connectHint" = "Sua mensagem precisa disso. Ela é enviada logo depois.";
 "mention.connectPrompt" = "Conectar %1$@?";
 "mention.footerInsert" = "↵ inserir";
@@ -926,6 +928,7 @@
 "mention.groupBrowser" = "NAVEGADOR";
 "mention.groupFiles" = "ARQUIVOS";
 "mention.groupServices" = "SERVIÇOS";
+"mention.resendDropped" = "Enviado sem %1$@: não está mais disponível.";
 "menu.agent" = "Agente";
 "menu.checkForUpdates" = "Verificar atualizações…";
 "menu.go" = "Ir";

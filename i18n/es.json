@@ -2279,5 +2279,8 @@
   "slash.alias.terminal": "terminal, consola, línea de comandos, shell",
   "slash.alias.files": "archivos, carpeta, explorar",
   "slash.alias.usage": "uso, límites, cuota, suscripción",
-  "slash.alias.pause": "pausa, detener, pausar"
+  "slash.alias.pause": "pausa, detener, pausar",
+  "mention.connectAndSend": "Conectar y enviar",
+  "mention.connectAccess": "{service} estará disponible para {agent}.",
+  "mention.resendDropped": "Enviado sin {names}: ya no está disponible."
 }

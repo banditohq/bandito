@@ -71,8 +71,6 @@ pub struct Inbound {
     pub attachments: Vec<Attachment>,
     /// `@` mentions of the message (a human's message only), checked by `agents.send`.
     pub mentions: Vec<Mention>,
-    /// The `Mentioned:` block the runtime reads after the text (see `crate::mentions::note`).
-    pub mention_note: Option<String>,
 }
 
 impl Inbound {
@@ -88,7 +86,6 @@ impl Inbound {
             reply_to: None,
             attachments: Vec::new(),
             mentions: Vec::new(),
-            mention_note: None,
         }
     }
 
@@ -104,7 +101,6 @@ impl Inbound {
             reply_to: None,
             attachments: Vec::new(),
             mentions: Vec::new(),
-            mention_note: None,
         }
     }
 }
@@ -646,7 +642,6 @@ impl Supervisor {
             reply_to: None,
             attachments: Vec::new(),
             mentions: Vec::new(),
-            mention_note: None,
         };
         self.send(&to.id, msg).await?;
         Ok(to.id)
@@ -1493,7 +1488,6 @@ impl Actor {
             reply_to: None,
             attachments: Vec::new(),
             mentions: Vec::new(),
-            mention_note: None,
         };
         match self.start_turn(msg, None).await {
             Ok(()) => true,
@@ -1625,7 +1619,7 @@ impl Actor {
             note.as_deref(),
             quote.as_deref(),
             &msg.attachments,
-            msg.mention_note.as_deref(),
+            crate::mentions::note(&crate::mentions::resolve(&self.hub.store, &msg.mentions)).as_deref(),
         );
         if let Some(name) = self.lead_sender(&msg) {
             prompt = format!("{}\n\n{prompt}", FROM_LEAD.replace("{name}", &name));
@@ -3268,7 +3262,6 @@ mod tests {
             reply_to: None,
             attachments: Vec::new(),
             mentions: Vec::new(),
-            mention_note: None,
         };
         w.sup.send(&w.agent, msg).await.unwrap();
         w.wait_log("send hi").await;
@@ -3391,7 +3384,6 @@ mod tests {
             reply_to: None,
             attachments: Vec::new(),
             mentions: Vec::new(),
-            mention_note: None,
         };
         w.sup.send(&w.agent, msg).await.unwrap();
         w.wait_log("send hi").await;
@@ -4501,7 +4493,6 @@ mod tests {
             reply_to: None,
             attachments: Vec::new(),
             mentions: Vec::new(),
-            mention_note: None,
         };
         w.sup.send(&w.agent, wrap_up).await.unwrap();
         w.wait_log("send wrap up").await;
@@ -4984,23 +4975,51 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn mentions_reach_the_prompt_after_the_text_and_stay_in_the_thread() {
+    async fn mentions_are_read_when_the_turn_starts_not_when_the_message_was_sent() {
         let mut w = world(ApprovalMode::Risky);
+        let linear = w
+            .store
+            .integration_create(crate::store::NewIntegration {
+                name: "linear".into(),
+                kind: crate::store::IntegrationKind::Http,
+                command: None,
+                args: Vec::new(),
+                url: Some("https://mcp.example.com/mcp".into()),
+                env: Default::default(),
+                headers: Default::default(),
+                enabled: true,
+                auth: Default::default(),
+            })
+            .unwrap();
         let mention = Mention {
-            kind: crate::mentions::MentionKind::Agent,
-            id: "a-1".into(),
-            label: "Scout".into(),
+            kind: crate::mentions::MentionKind::Integration,
+            id: linear.id.clone(),
+            label: "Linear".into(),
+            url: None,
         };
-        let note = "Mentioned:\n- @Scout is a teammate; hand this to them with crew_send if it belongs to them";
+        // The message waits behind a pause; the service is renamed in the meantime.
+        assert!(w.sup.set_paused(&w.agent, true).await.unwrap());
         let msg = Inbound {
             mentions: vec![mention.clone()],
-            mention_note: Some(note.into()),
-            ..Inbound::user("ask @Scout")
+            ..Inbound::user("check @Linear")
         };
-        w.sup.send(&w.agent, msg).await.unwrap();
-        w.wait_log(&format!("send ask @Scout\n\n{note}")).await;
+        w.sup.send_held(&w.agent, msg).await.unwrap();
+        w.store
+            .integration_update(
+                &linear.id,
+                crate::store::IntegrationPatch {
+                    name: Some("linear2".into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        assert!(w.sup.set_paused(&w.agent, false).await.unwrap());
+        w.wait_log(
+            "send check @Linear\n\nMentioned:\n- linear2 (a connected service): use its tools (prefix mcp__linear2__) for this request",
+        )
+        .await;
         let echo = w
-            .wait(|b| matches!(b, EventBody::MessageUser { text, .. } if text == "ask @Scout"))
+            .wait(|b| matches!(b, EventBody::MessageUser { text, .. } if text == "check @Linear"))
             .await;
         match echo.body {
             EventBody::MessageUser { mentions, .. } => assert_eq!(mentions, vec![mention]),

@@ -2251,5 +2251,8 @@
   "slash.alias.terminal": "터미널, 콘솔, 명령줄, 셸",
   "slash.alias.files": "파일, 폴더, 탐색",
   "slash.alias.usage": "사용량, 한도, 제한, 구독",
-  "slash.alias.pause": "일시정지, 멈춤, 중지"
+  "slash.alias.pause": "일시정지, 멈춤, 중지",
+  "mention.connectAndSend": "연결하고 전송",
+  "mention.connectAccess": "{service}을(를) {agent}에서 사용할 수 있게 됩니다.",
+  "mention.resendDropped": "{names} 없이 보냈어요: 더 이상 사용할 수 없어요."
 }

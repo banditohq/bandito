@@ -25,7 +25,14 @@ final class MentionMenuModel {
     /// The sheet of keys of a service that signs in with a key.
     var editing: IntegrationCatalogEntry?
 
+    /// The agent whose composer this is now. A connect that was started for another agent is dropped.
+    var agentID: String?
+
     struct Connecting: Equatable {
+        /// The agent the message is for, the catalog template, the name the sign-in shows, and this try.
+        var agentID: String
+        var name: String
+        var attempt = UUID()
         var template: String
         /// The integrations there were before, to tell the new one from them.
         var known: Set<String>

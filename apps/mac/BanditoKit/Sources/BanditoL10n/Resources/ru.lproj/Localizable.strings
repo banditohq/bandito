@@ -919,6 +919,8 @@
 "mention.alias.browserTab" = "браузер, вкладки, страницы, сайт";
 "mention.alias.file" = "файлы, документы, папки";
 "mention.alias.integration" = "сервисы, интеграции, подключения, приложения";
+"mention.connectAccess" = "%1$@ станет доступен агенту %2$@.";
+"mention.connectAndSend" = "Подключить и отправить";
 "mention.connectHint" = "Это нужно для вашего сообщения. Оно уйдёт сразу после подключения.";
 "mention.connectPrompt" = "Подключить %1$@?";
 "mention.footerInsert" = "↵ вставить";
@@ -926,6 +928,7 @@
 "mention.groupBrowser" = "БРАУЗЕР";
 "mention.groupFiles" = "ФАЙЛЫ";
 "mention.groupServices" = "СЕРВИСЫ";
+"mention.resendDropped" = "Отправлено без %1$@: больше недоступно.";
 "menu.agent" = "Агент";
 "menu.checkForUpdates" = "Проверить обновления…";
 "menu.go" = "Перейти";

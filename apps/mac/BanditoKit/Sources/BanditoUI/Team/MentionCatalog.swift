@@ -205,10 +205,28 @@ struct DraftMention: Hashable {
 
 /// What a pick leaves in the draft, and how a chip leaves it.
 enum MentionDraft {
+    /// Longest label, in characters.
+    static let maxLabel = 80
+
+    /// A label on one line: control characters, tabs, line and paragraph separators become spaces, runs of spaces
+    /// become one, the ends are trimmed and the rest is cut to `maxLabel`. An empty result is `fallback`.
+    static func cleanLabel(_ label: String, fallback: String) -> String {
+        let spaced = String(
+            String.UnicodeScalarView(
+                label.unicodeScalars.map { scalar in
+                    switch scalar.properties.generalCategory {
+                    case .control, .lineSeparator, .paragraphSeparator: " "
+                    default: scalar
+                    }
+                }))
+        let single = spaced.split(separator: " ", omittingEmptySubsequences: true).joined(separator: " ")
+        let cut = String(single.prefix(maxLabel)).trimmingCharacters(in: .whitespaces)
+        return cut.isEmpty ? fallback : cut
+    }
+
     /// The label of `entry` in the draft: its own, or with a number when another mention already uses it.
-    static func uniqueLabel(_ label: String, among list: [DraftMention]) -> String {
-        let clean = label.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
-        let base = clean.isEmpty ? "?" : String(clean.prefix(60))
+    static func uniqueLabel(_ label: String, fallback: String = "?", among list: [DraftMention]) -> String {
+        let base = cleanLabel(label, fallback: fallback)
         let taken = Set(list.map(\.mention.label))
         guard taken.contains(base) else { return base }
         var n = 2
@@ -226,7 +244,7 @@ enum MentionDraft {
             $0.mention.kind == entry.kind
                 && ($0.mention.id == entry.id || ($0.pendingTemplate != nil && $0.pendingTemplate == entry.templateID))
         }
-        let label = existing?.mention.label ?? uniqueLabel(entry.label, among: list)
+        let label = existing?.mention.label ?? uniqueLabel(entry.label, fallback: entry.group.title, among: list)
         if existing == nil {
             list.append(
                 DraftMention(
@@ -240,7 +258,32 @@ enum MentionDraft {
 
     /// The mentions whose `@Label` is still in the text, each once. Text the person deleted takes its chip with it.
     static func reconcile(_ list: [DraftMention], in draft: String) -> [DraftMention] {
-        list.filter { draft.contains($0.mention.token) }
+        // The longest label first; what a longer label took is hidden from the shorter ones, so "@Drive" is not found
+        // inside "@Drive (2)".
+        var text = draft
+        var found: Set<DraftMention> = []
+        for item in list.sorted(by: { $0.mention.token.count > $1.mention.token.count }) {
+            if let range = tokenRange(item.mention.token, in: text) {
+                found.insert(item)
+                text.replaceSubrange(range, with: String(repeating: "\u{0}", count: item.mention.token.count))
+            }
+        }
+        return list.filter { found.contains($0) }
+    }
+
+    /// Where `token` stands in `text` as a word of its own: at the start or after a space, and followed by a space, a
+    /// punctuation mark or the end.
+    static func tokenRange(_ token: String, in text: String) -> Range<String.Index>? {
+        var from = text.startIndex
+        while let range = text.range(of: token, range: from..<text.endIndex) {
+            let startsWord = range.lowerBound == text.startIndex || text[text.index(before: range.lowerBound)].isWhitespace
+            let endsWord = range.upperBound == text.endIndex
+                || text[range.upperBound].isWhitespace
+                || text[range.upperBound].unicodeScalars.allSatisfy { CharacterSet.punctuationCharacters.contains($0) }
+            if startsWord && endsWord { return range }
+            from = text.index(after: range.lowerBound)
+        }
+        return nil
     }
 
     /// Backspace at the end of the draft over a chip: the whole `@Label` goes (and the space after it), and the
@@ -344,5 +387,20 @@ enum MentionSources {
         let rest = String(path.dropFirst(base.count))
         let folder = (rest as NSString).deletingLastPathComponent
         return folder.isEmpty ? "./" : folder
+    }
+}
+
+/// When a sign-in that ended may finish a connect that the composer started.
+enum MentionConnectRules {
+    /// The id of the integration to finish with, or `nil` when the sign-in is not ours: no connect was started here,
+    /// it was started for another agent, or the service that connected is another one (a sign-in begun in the
+    /// Marketplace).
+    static func finishedIntegration(
+        connecting: MentionMenuModel.Connecting?, agentID: String?, phase: OAuthSignIn.Phase
+    ) -> String? {
+        guard let connecting, let agentID, connecting.agentID == agentID,
+            case .connected(let name, let integrationID) = phase, name == connecting.name
+        else { return nil }
+        return integrationID
     }
 }

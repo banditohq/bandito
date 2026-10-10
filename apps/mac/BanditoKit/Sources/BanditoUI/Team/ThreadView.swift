@@ -617,7 +617,13 @@ struct ThreadView: View {
     private func resend(_ seq: Int64) {
         let agentID = agent.id
         Task {
-            do { try await server.resendUndelivered(seq, of: agentID) } catch {
+            do {
+                let dropped = try await server.resendUndelivered(seq, of: agentID)
+                if !dropped.isEmpty {
+                    let names = dropped.map(\.label).joined(separator: ", ")
+                    actionError = UserFacingMessage(text: L10n.Mention.resendDropped(names: names))
+                }
+            } catch {
                 actionError = UserFacingError.message(for: error)
             }
         }

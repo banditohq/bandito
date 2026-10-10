@@ -2251,5 +2251,8 @@
   "slash.alias.terminal": "终端, 控制台, 命令行, shell",
   "slash.alias.files": "文件, 文件夹, 浏览",
   "slash.alias.usage": "用量, 额度, 限制, 订阅",
-  "slash.alias.pause": "暂停, 停止, 挂起"
+  "slash.alias.pause": "暂停, 停止, 挂起",
+  "mention.connectAndSend": "连接并发送",
+  "mention.connectAccess": "{service} 将可供 {agent} 使用。",
+  "mention.resendDropped": "已在不含 {names} 的情况下发送：它已不可用。"
 }

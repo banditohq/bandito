@@ -43,3 +43,30 @@ public struct Mention: Codable, Sendable, Hashable, Identifiable {
         kind = (try? c.decode(MentionKind.self, forKey: .kind)) ?? .file
     }
 }
+
+/// Which mentions of an undelivered message can go again. The daemon refuses a message with a mention it cannot
+/// keep, so what is gone is left out instead of failing the whole send.
+public struct MentionResend: Sendable, Equatable {
+    public var kept: [Mention]
+    public var dropped: [Mention]
+
+    /// `integrations` are the ids the agent may use now, `agents` the ids of the crew, `tabs` the open pages of the
+    /// browser (nil: not known, so tab mentions are left out), `files` the paths that still exist.
+    public static func split(
+        _ mentions: [Mention], integrations: Set<String>, agents: Set<String>, tabs: Set<String>?, files: Set<String>
+    ) -> MentionResend {
+        var kept: [Mention] = []
+        var dropped: [Mention] = []
+        for mention in mentions {
+            let ok: Bool
+            switch mention.kind {
+            case .integration: ok = integrations.contains(mention.id)
+            case .agent: ok = agents.contains(mention.id)
+            case .file: ok = files.contains(mention.id)
+            case .browserTab: ok = tabs?.contains(mention.id) ?? false
+            }
+            if ok { kept.append(mention) } else { dropped.append(mention) }
+        }
+        return MentionResend(kept: kept, dropped: dropped)
+    }
+}

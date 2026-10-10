@@ -919,6 +919,8 @@
 "mention.alias.browserTab" = "浏览器, 标签页, 页面, 网页";
 "mention.alias.file" = "文件, 文档, 文件夹";
 "mention.alias.integration" = "服务, 集成, 连接, 应用";
+"mention.connectAccess" = "%1$@ 将可供 %2$@ 使用。";
+"mention.connectAndSend" = "连接并发送";
 "mention.connectHint" = "你的消息需要用到它。连接后会立即发送。";
 "mention.connectPrompt" = "连接 %1$@？";
 "mention.footerInsert" = "↵ 插入";
@@ -926,6 +928,7 @@
 "mention.groupBrowser" = "浏览器";
 "mention.groupFiles" = "文件";
 "mention.groupServices" = "服务";
+"mention.resendDropped" = "已在不含 %1$@ 的情况下发送：它已不可用。";
 "menu.agent" = "代理";
 "menu.checkForUpdates" = "检查更新…";
 "menu.go" = "前往";

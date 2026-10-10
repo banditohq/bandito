@@ -2278,5 +2278,8 @@
   "slash.alias.terminal": "terminal, konsole, kommandozeile, shell",
   "slash.alias.files": "dateien, ordner, durchsuchen",
   "slash.alias.usage": "nutzung, limits, kontingent, abo",
-  "slash.alias.pause": "pause, anhalten, stoppen"
+  "slash.alias.pause": "pause, anhalten, stoppen",
+  "mention.connectAndSend": "Verbinden und senden",
+  "mention.connectAccess": "{service} wird für {agent} verfügbar.",
+  "mention.resendDropped": "Ohne {names} gesendet: nicht mehr verfügbar."
 }

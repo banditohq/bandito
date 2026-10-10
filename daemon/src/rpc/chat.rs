@@ -6,7 +6,7 @@ use crate::attachments::{self, Attachment};
 use crate::chat;
 use crate::event::{EventBody, ReactionBy};
 use crate::forms::{self, Outcome};
-use crate::mentions::{self, Mention, MentionKind, Resolved};
+use crate::mentions::{self, Mention, MentionKind};
 use crate::store::{Agent, FormStatus};
 use crate::supervisor::{APPROVAL_TTL_MS, FormReply};
 use base64::Engine;
@@ -215,13 +215,9 @@ pub fn attachments_for(app: &App, agent: &Agent, paths: &[String]) -> Result<Vec
 /// and be one the agent may use; an agent must exist; a file must be a real path inside the agent's folder (or its
 /// own home) and never inside Bandito's data folder; a browser tab must be listed by the server's browser. Returns
 /// the mentions as the thread keeps them (files by their real path) and the block the runtime reads.
-pub async fn mentions_for(
-    app: &App,
-    agent: Option<&Agent>,
-    list: &[Mention],
-) -> Result<(Vec<Mention>, Option<String>), RpcError> {
+pub async fn mentions_for(app: &App, agent: Option<&Agent>, list: &[Mention]) -> Result<Vec<Mention>, RpcError> {
     if list.is_empty() {
-        return Ok((Vec::new(), None));
+        return Ok(Vec::new());
     }
     mentions::check_shape(list).map_err(|e| RpcError::new(INVALID_PARAMS, e))?;
     let agent = agent.ok_or_else(|| RpcError::new(INVALID_PARAMS, "no such agent"))?;
@@ -233,10 +229,9 @@ pub async fn mentions_for(
     };
     let mut pages = None;
     let mut kept: Vec<Mention> = Vec::new();
-    let mut resolved = Vec::new();
     for m in list {
         let id = m.id.trim();
-        let (id, facts) = match m.kind {
+        let (id, url) = match m.kind {
             MentionKind::Integration => {
                 let usable = crate::integrations::for_agent(&integrations, agent.integrations.as_deref());
                 let found = usable.iter().find(|i| i.id == id).ok_or_else(|| {
@@ -245,23 +240,18 @@ pub async fn mentions_for(
                         format!("the agent cannot use the service {}", m.label.trim()),
                     )
                 })?;
-                (
-                    found.id.clone(),
-                    Resolved::Integration {
-                        name: found.name.clone(),
-                    },
-                )
+                (found.id.clone(), None)
             }
             MentionKind::Agent => {
                 let found = store
                     .agent_get(id)
                     .map_err(server)?
                     .ok_or_else(|| RpcError::new(INVALID_PARAMS, format!("no agent {}", m.label.trim())))?;
-                (found.id.clone(), Resolved::Agent { name: found.name })
+                (found.id.clone(), None)
             }
             MentionKind::File => {
                 let real = mentioned_file(app, agent, id)?;
-                (real.clone(), Resolved::File { path: real })
+                (real, None)
             }
             MentionKind::BrowserTab => {
                 if pages.is_none() {
@@ -285,13 +275,7 @@ pub async fn mentions_for(
                     .flatten()
                     .find(|p| p.id == id)
                     .ok_or_else(|| RpcError::new(INVALID_PARAMS, "that browser tab is not open any more"))?;
-                (
-                    tab.id.clone(),
-                    Resolved::BrowserTab {
-                        url: tab.url.clone(),
-                        title: tab.title.clone(),
-                    },
-                )
+                (tab.id.clone(), Some(tab.url.clone()))
             }
         };
         // The same thing named twice is one mention.
@@ -302,10 +286,10 @@ pub async fn mentions_for(
             kind: m.kind,
             id,
             label: m.label.trim().to_string(),
+            url,
         });
-        resolved.push(facts);
     }
-    Ok((kept, mentions::note(&resolved)))
+    Ok(kept)
 }
 
 /// The real path of a file the person mentioned. It must be absolute and plain (no `.` or `..`), exist, lie in the
@@ -1079,6 +1063,7 @@ mod tests {
             kind,
             id: id.into(),
             label: label.into(),
+            url: None,
         }
     }
 
@@ -1098,7 +1083,8 @@ mod tests {
             // The same thing twice counts once.
             mention(MentionKind::Agent, &scout, "Scout"),
         ];
-        let (kept, note) = mentions_for(&f.app, Some(&agent), &list).await.unwrap();
+        let kept = mentions_for(&f.app, Some(&agent), &list).await.unwrap();
+        let note = mentions::note(&mentions::resolve(&f.store, &kept));
         assert_eq!(kept.len(), 3);
         assert_eq!(kept[2].id, file);
         assert_eq!(
@@ -1111,10 +1097,7 @@ mod tests {
             )
         );
         // No mentions, no block.
-        assert_eq!(
-            mentions_for(&f.app, Some(&agent), &[]).await.unwrap(),
-            (Vec::new(), None)
-        );
+        assert!(mentions_for(&f.app, Some(&agent), &[]).await.unwrap().is_empty());
     }
 
     #[tokio::test]

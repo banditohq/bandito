@@ -2279,5 +2279,8 @@
   "slash.alias.terminal": "terminal, shell, console, command line",
   "slash.alias.files": "files, folder, browse",
   "slash.alias.usage": "usage, limits, quota, subscription",
-  "slash.alias.pause": "pause, stop, hold"
+  "slash.alias.pause": "pause, stop, hold",
+  "mention.connectAndSend": "Connect and send",
+  "mention.connectAccess": "{service} will become available to {agent}.",
+  "mention.resendDropped": "Sent without {names}: not available any more."
 }

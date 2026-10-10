@@ -247,6 +247,13 @@ struct Composer: View {
                 mention.closed()
             }
         }
+        .onChange(of: agent?.id, initial: true) { _, id in
+            // A connect belongs to the agent it was started for: going to another one drops it, and sends nothing.
+            mention.agentID = id
+            if mention.connecting != nil { mention.connecting = nil }
+            if mention.connectPrompt != nil { mention.connectPrompt = nil }
+            if mention.editing != nil { mention.editing = nil }
+        }
         .onChange(of: app.oauth.phase) { _, phase in
             handleSignIn(phase)
         }
@@ -700,11 +707,18 @@ struct Composer: View {
                     .font(BanditoFont.text(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
                     .lineLimit(2)
+                // An agent with its own list of services gets this one added: said before it happens.
+                if agent?.integrations != nil {
+                    Text(L10n.Mention.connectAccess(service: item.mention.label, agent: agentName))
+                        .font(BanditoFont.text(size: 12, weight: 500))
+                        .foregroundStyle(Color.Bandito.text)
+                        .lineLimit(2)
+                }
             }
             Spacer(minLength: 8)
             Button(L10n.Common.cancel) { mention.connectPrompt = nil }
                 .banditoButton(.quiet())
-            Button(L10n.Integrations.connect) { connectService(item) }
+            Button(L10n.Mention.connectAndSend) { connectService(item) }
                 .banditoButton(.signal())
         }
         .padding(.horizontal, 14)
@@ -723,7 +737,8 @@ struct Composer: View {
         else { return }
         let known = Set(snapshot.integrations.map(\.id))
         guard template.usesOAuth, let url = template.url else {
-            mention.connecting = MentionMenuModel.Connecting(template: templateID, known: known)
+            mention.connecting = MentionMenuModel.Connecting(
+                agentID: agentID, name: template.name, template: templateID, known: known)
             mention.editing = template
             return
         }
@@ -735,7 +750,8 @@ struct Composer: View {
         Task {
             await app.oauth.begin(server: server, target: .draft(draft), name: template.name)
             if case .waiting = app.oauth.phase {
-                mention.connecting = MentionMenuModel.Connecting(template: templateID, known: known)
+                mention.connecting = MentionMenuModel.Connecting(
+                    agentID: agentID, name: template.name, template: templateID, known: known)
             }
         }
     }
@@ -743,8 +759,13 @@ struct Composer: View {
     /// The browser sign-in ended: well, and the message goes; otherwise the prompt stays for another try.
     private func handleSignIn(_ phase: OAuthSignIn.Phase) {
         guard mention.connecting != nil, mention.editing == nil else { return }
+        if let id = MentionConnectRules.finishedIntegration(
+            connecting: mention.connecting, agentID: mention.agentID, phase: phase)
+        {
+            finishConnect(integrationID: id)
+            return
+        }
         switch phase {
-        case .connected(_, let id): finishConnect(integrationID: id)
         case .idle, .failed: mention.connecting = nil
         default: break
         }
@@ -753,7 +774,10 @@ struct Composer: View {
     /// The sheet of keys was closed. If it saved a service (an integration that was not there before), the message
     /// goes; the sheet writes the keys after it saves, so this waits for the close.
     private func keyedServiceClosed() async {
-        guard let server, let connecting = mention.connecting else { return }
+        guard let server, let connecting = mention.connecting, connecting.agentID == mention.agentID else {
+            mention.connecting = nil
+            return
+        }
         await MentionServices.shared.ensure(server, force: true)
         let added = MentionServices.shared.snapshot(for: server)?.integrations.first { !connecting.known.contains($0.id) }
         guard let added else {
@@ -766,13 +790,18 @@ struct Composer: View {
     /// The service is connected: its mention gets the integration, an agent with its own list of services may use it,
     /// and the message goes.
     private func finishConnect(integrationID: String) {
-        guard let connecting = mention.connecting, let server, let agent else { return }
+        guard let connecting = mention.connecting, connecting.agentID == mention.agentID, let server, let agent else {
+            mention.connecting = nil
+            return
+        }
         mention.connecting = nil
         let list = MentionDraft.connected(draftMentions, template: connecting.template, integrationID: integrationID)
         if router.draftMentions[agentID] != list { router.draftMentions[agentID] = list }
         mention.connectPrompt = nil
         Task {
             await MentionServices.shared.ensure(server, force: true)
+            // The person went to another agent while this ran: nothing is changed or sent.
+            guard mention.agentID == connecting.agentID else { return }
             mention.refreshServices(server: server, agent: agent)
             if let ids = agent.integrations, !ids.contains(integrationID) {
                 do {
@@ -782,6 +811,7 @@ struct Composer: View {
                     return
                 }
             }
+            guard mention.agentID == connecting.agentID else { return }
             submit()
         }
     }

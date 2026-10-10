@@ -87,4 +87,20 @@ import Testing
     @Test func mentionTokenIsAtAndTheLabel() {
         #expect(Mention(kind: .integration, id: "i", label: "Google Drive").token == "@Google Drive")
     }
+
+    @Test func sendAgainLeavesOutWhatIsNotAvailable() {
+        let list = [
+            Mention(kind: .integration, id: "i-ok", label: "Linear"),
+            Mention(kind: .integration, id: "i-off", label: "GitHub"),
+            Mention(kind: .agent, id: "a-gone", label: "Scout"),
+            Mention(kind: .file, id: "/w/a.txt", label: "a.txt"),
+            Mention(kind: .browserTab, id: "T1", label: "Docs"),
+        ]
+        let split = MentionResend.split(
+            list, integrations: ["i-ok"], agents: ["a1"], tabs: nil, files: ["/w/a.txt"])
+        #expect(split.kept.map(\.id) == ["i-ok", "/w/a.txt"])
+        #expect(split.dropped.map(\.label) == ["GitHub", "Scout", "Docs"])
+        let tabs = MentionResend.split(list, integrations: [], agents: [], tabs: ["T1"], files: [])
+        #expect(tabs.kept.map(\.id) == ["T1"])
+    }
 }
