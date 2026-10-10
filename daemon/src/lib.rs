@@ -6,6 +6,7 @@ pub mod attachments;
 pub mod avatar;
 pub mod backup;
 pub mod browser;
+pub mod call_journal;
 pub mod cdp;
 pub mod cdp_pipe;
 pub mod chat;

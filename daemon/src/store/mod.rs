@@ -20,6 +20,7 @@ mod reactions;
 mod rules;
 mod schedules;
 mod secrets;
+mod tool_calls;
 mod usage;
 mod workspaces;
 
@@ -36,6 +37,7 @@ pub use reactions::Reaction;
 pub use rules::{Rule, RuleAction};
 pub use schedules::{NewSchedule, NextRun, Schedule, SchedulePatch};
 pub use secrets::{SecretInfo, check_agents, check_name, check_value};
+pub use tool_calls::{CallFilter, CallStats, ERROR_MAX_CHARS, ToolCall};
 pub use usage::UsageEntry;
 pub use workspaces::{Mount, Network, NewWorkspace, SHARED_WORKSPACE, Workspace, WorkspaceKind, WorkspacePatch};
 
@@ -59,6 +61,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../../migrations/0018_integration_auth.sql"),
     include_str!("../../migrations/0019_integration_tools.sql"),
     include_str!("../../migrations/0020_integration_tool_mode.sql"),
+    include_str!("../../migrations/0021_tool_calls.sql"),
 ];
 
 pub struct Store {
@@ -429,6 +432,44 @@ impl ApprovalMode {
 mod tests {
     use super::*;
     use crate::event::{AgentStatus, EventBody};
+
+    #[test]
+    fn a_fresh_database_reaches_the_last_migration_with_all_the_tables_and_columns() {
+        let s = Store::open_in_memory().unwrap();
+        let version: i64 = s.conn().query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+        assert_eq!(version as usize, MIGRATIONS.len());
+        for table in ["integration_tools", "tool_calls"] {
+            let found: i64 = s
+                .conn()
+                .query_row(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
+                    [table],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(found, 1, "table {table}");
+        }
+        let columns: Vec<String> = s
+            .conn()
+            .prepare("SELECT name FROM pragma_table_info('integrations')")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        for column in ["tool_mode", "tool_overrides"] {
+            assert!(columns.iter().any(|c| c == column), "column integrations.{column}");
+        }
+        let indexed: i64 = s
+            .conn()
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'tool_calls_at'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(indexed, 1, "index on tool_calls(at_ms)");
+    }
 
     #[test]
     fn migrates_and_reopens() {
