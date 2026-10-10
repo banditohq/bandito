@@ -6535,8 +6535,8 @@
       "Получать текущую погоду, прогнозы и историю",
       "Регистрировать аккаунт из агента"
     ],
-    "needs_en": "Nothing to start: three tools work without a key. For data, a data key from an OpenWeather account (the sign_up tool creates one and accepts the Terms; the key is shown once). One Call: 1,000 free credits a day; the rest is paid.",
-    "needs_ru": "Чтобы начать, ничего не нужно: три инструмента работают без ключа. Для данных нужен ключ данных аккаунта OpenWeather (инструмент sign_up создаёт аккаунт и принимает условия; ключ показывается один раз). One Call — 1 000 бесплатных кредитов в сутки, остальное платно.",
+    "needs_en": "Nothing to start: three tools work without a key. For data, a data key from an OpenWeather account (the sign_up tool creates one and accepts the Terms; the key is shown once). One Call: 1,000 free credits a day; the rest is paid. Create the account yourself rather than asking an agent: sign_up accepts OpenWeather's Terms on your behalf.",
+    "needs_ru": "Чтобы начать, ничего не нужно: три инструмента работают без ключа. Для данных нужен ключ данных аккаунта OpenWeather (инструмент sign_up создаёт аккаунт и принимает условия; ключ показывается один раз). One Call — 1 000 бесплатных кредитов в сутки, остальное платно. Аккаунт лучше заведите сами, а не поручайте агенту: sign_up принимает условия OpenWeather от вашего имени.",
     "kind": "http",
     "url": "https://mcp.openweathermap.org/mcp",
     "headers_keys": [
@@ -6560,7 +6560,7 @@
           "Aktuelles Wetter, Vorhersagen und Verlauf abrufen",
           "Ein Konto aus dem Agenten heraus anlegen"
         ],
-        "needs": "Zum Start nichts: drei Werkzeuge funktionieren ohne Schlüssel. Für Daten ein Datenschlüssel aus einem OpenWeather-Konto (das Werkzeug sign_up legt ein Konto an und akzeptiert die Bedingungen; der Schlüssel wird nur einmal angezeigt). One Call: 1 000 kostenlose Credits pro Tag, der Rest ist kostenpflichtig.",
+        "needs": "Zum Start nichts: drei Werkzeuge funktionieren ohne Schlüssel. Für Daten ein Datenschlüssel aus einem OpenWeather-Konto (das Werkzeug sign_up legt ein Konto an und akzeptiert die Bedingungen; der Schlüssel wird nur einmal angezeigt). One Call: 1 000 kostenlose Credits pro Tag, der Rest ist kostenpflichtig. Legen Sie das Konto besser selbst an, statt es einen Agenten machen zu lassen: sign_up akzeptiert die Bedingungen von OpenWeather in Ihrem Namen.",
         "labels": {
           "Authorization": "Datenschlüssel (optional)"
         }
@@ -6573,7 +6573,7 @@
           "Obtener tiempo actual, previsiones e historial",
           "Crear una cuenta desde el agente"
         ],
-        "needs": "Para empezar no hace falta nada: tres herramientas funcionan sin clave. Para datos, una clave de datos de una cuenta de OpenWeather (la herramienta sign_up crea la cuenta y acepta las condiciones; la clave se muestra una sola vez). One Call: 1 000 créditos gratuitos al día; el resto es de pago.",
+        "needs": "Para empezar no hace falta nada: tres herramientas funcionan sin clave. Para datos, una clave de datos de una cuenta de OpenWeather (la herramienta sign_up crea la cuenta y acepta las condiciones; la clave se muestra una sola vez). One Call: 1 000 créditos gratuitos al día; el resto es de pago. Mejor crea la cuenta tú mismo en lugar de pedírselo a un agente: sign_up acepta las condiciones de OpenWeather en tu nombre.",
         "labels": {
           "Authorization": "Clave de datos (opcional)"
         }
@@ -6586,7 +6586,7 @@
           "Obtenir la météo actuelle, les prévisions et l'historique",
           "Créer un compte depuis l'agent"
         ],
-        "needs": "Rien n'est requis pour commencer : trois outils fonctionnent sans clé. Pour les données, une clé de données d'un compte OpenWeather (l'outil sign_up crée le compte et accepte les conditions ; la clé n'est affichée qu'une fois). One Call : 1 000 crédits gratuits par jour, le reste est payant.",
+        "needs": "Rien n'est requis pour commencer : trois outils fonctionnent sans clé. Pour les données, une clé de données d'un compte OpenWeather (l'outil sign_up crée le compte et accepte les conditions ; la clé n'est affichée qu'une fois). One Call : 1 000 crédits gratuits par jour, le reste est payant. Créez plutôt le compte vous-même au lieu de le confier à un agent : sign_up accepte les conditions d'OpenWeather en votre nom.",
         "labels": {
           "Authorization": "Clé de données (facultative)"
         }
@@ -6599,7 +6599,7 @@
           "現在の天気、予報、履歴を取得する",
           "エージェントからアカウントを作成する"
         ],
-        "needs": "開始に必要なものはありません。キーなしで使えるツールが3つあります。データ取得には OpenWeather アカウントのデータキーが必要です（sign_up ツールがアカウントを作成し、利用規約に同意します。キーは一度だけ表示されます）。One Call は毎日 1,000 の無料クレジット、それ以外は有料です。",
+        "needs": "開始に必要なものはありません。キーなしで使えるツールが3つあります。データ取得には OpenWeather アカウントのデータキーが必要です（sign_up ツールがアカウントを作成し、利用規約に同意します。キーは一度だけ表示されます）。One Call は毎日 1,000 の無料クレジット、それ以外は有料です。 アカウントはエージェントに任せず自分で作成してください。sign_up はあなたの代わりに OpenWeather の利用規約に同意します。",
         "labels": {
           "Authorization": "データキー（任意）"
         }
@@ -6612,7 +6612,7 @@
           "현재 날씨·예보·기록 가져오기",
           "에이전트에서 계정 만들기"
         ],
-        "needs": "시작에 필요한 것은 없습니다. 키 없이 쓸 수 있는 도구가 세 개 있습니다. 데이터에는 OpenWeather 계정의 데이터 키가 필요합니다(sign_up 도구가 계정을 만들고 이용약관에 동의하며, 키는 한 번만 표시됩니다). One Call은 매일 1,000 무료 크레딧, 나머지는 유료입니다.",
+        "needs": "시작에 필요한 것은 없습니다. 키 없이 쓸 수 있는 도구가 세 개 있습니다. 데이터에는 OpenWeather 계정의 데이터 키가 필요합니다(sign_up 도구가 계정을 만들고 이용약관에 동의하며, 키는 한 번만 표시됩니다). One Call은 매일 1,000 무료 크레딧, 나머지는 유료입니다. 계정은 에이전트에게 맡기지 말고 직접 만드세요. sign_up은 사용자를 대신해 OpenWeather 약관에 동의해요.",
         "labels": {
           "Authorization": "데이터 키(선택)"
         }
@@ -6625,7 +6625,7 @@
           "Obter o tempo atual, previsões e histórico",
           "Criar uma conta a partir do agente"
         ],
-        "needs": "Para começar não é preciso nada: três ferramentas funcionam sem chave. Para dados, uma chave de dados de uma conta OpenWeather (a ferramenta sign_up cria a conta e aceita os termos; a chave aparece uma única vez). One Call: 1 000 créditos gratuitos por dia; o resto é pago.",
+        "needs": "Para começar não é preciso nada: três ferramentas funcionam sem chave. Para dados, uma chave de dados de uma conta OpenWeather (a ferramenta sign_up cria a conta e aceita os termos; a chave aparece uma única vez). One Call: 1 000 créditos gratuitos por dia; o resto é pago. Prefira criar a conta você mesmo em vez de pedir a um agente: o sign_up aceita os termos da OpenWeather em seu nome.",
         "labels": {
           "Authorization": "Chave de dados (opcional)"
         }
@@ -6638,7 +6638,7 @@
           "获取当前天气、预报和历史数据",
           "由智能体注册账户"
         ],
-        "needs": "开始无需任何东西：三个工具无需密钥即可使用。获取数据需要 OpenWeather 账户的数据密钥（sign_up 工具会创建账户并接受条款，密钥只显示一次）。One Call 每天 1,000 免费积分，其余付费。",
+        "needs": "开始无需任何东西：三个工具无需密钥即可使用。获取数据需要 OpenWeather 账户的数据密钥（sign_up 工具会创建账户并接受条款，密钥只显示一次）。One Call 每天 1,000 免费积分，其余付费。 请自己创建账号，不要让代理去做：sign_up 会以你的名义接受 OpenWeather 的条款。",
         "labels": {
           "Authorization": "数据密钥（可选）"
         }
