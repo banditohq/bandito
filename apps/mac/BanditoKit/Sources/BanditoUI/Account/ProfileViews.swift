@@ -20,6 +20,20 @@ final class ProfileStore {
 
     static func nicknameKey(_ userID: String) -> String { "profile.nickname.\(userID)" }
     static func colorKey(_ userID: String) -> String { "profile.avatarColor.\(userID)" }
+    /// The account that was bound last. After a restart the account is read from the server, which takes a moment or
+    /// fails offline; this lets the nickname, colour and photo show at once, from the files on this Mac.
+    static let lastUserKey = "profile.lastUserID"
+
+    /// The user id remembered from the last run, if someone was signed in.
+    var rememberedUserID: String? {
+        defaults.string(forKey: Self.lastUserKey).flatMap { $0.isEmpty ? nil : $0 }
+    }
+
+    /// Sign-out: nobody is bound and the next start shows nobody.
+    func forget() {
+        defaults.removeObject(forKey: Self.lastUserKey)
+        bind(userID: nil)
+    }
 
     /// Loads the values of this account. Nil means nobody is signed in: the values are reset.
     func bind(userID: String?) {
@@ -30,6 +44,7 @@ final class ProfileStore {
             colorIndex = 0
             return
         }
+        defaults.set(userID, forKey: Self.lastUserKey)
         nickname = defaults.string(forKey: Self.nicknameKey(userID)) ?? ""
         colorIndex = Self.validColor(defaults.object(forKey: Self.colorKey(userID)) as? Int)
     }

@@ -10,9 +10,13 @@ struct AvatarCropFrame: View {
     @Binding var crop: AvatarCrop
     /// Edge of the square on screen, in points.
     var side: CGFloat
+    /// A circle for the profile photo, the avatar tile for an agent.
+    var circular = false
 
     /// The drag translation already applied, so each change moves the crop by the new step only.
     @State private var applied: CGSize = .zero
+
+    private var radius: CGFloat { circular ? side / 2 : side * 17 / 52 }
 
     private var imageSize: CGSize { CGSize(width: image.width, height: image.height) }
 
@@ -28,9 +32,9 @@ struct AvatarCropFrame: View {
             }
         }
         .frame(width: side, height: side, alignment: .topLeading)
-        .clipShape(RoundedRectangle(cornerRadius: side * 17 / 52, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: side * 17 / 52, style: .continuous)
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
                 .stroke(Color.Bandito.line, lineWidth: 1))
         .contentShape(Rectangle())
         .gesture(

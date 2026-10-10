@@ -26,4 +26,24 @@ public enum AvatarEmoji {
     public static func last(of text: String) -> String? {
         text.last(where: isEmoji).map(String.init)
     }
+
+    /// The Unicode names of the characters in `emoji`, lowercased and joined by spaces (🦝 is "raccoon", ❤️ is
+    /// "heavy black heart"). The variation selector and the joiner carry no name. English only.
+    public static func searchName(of emoji: String) -> String {
+        emoji.unicodeScalars
+            .filter { $0.value != 0xFE0F && $0.value != 0x200D }
+            .compactMap { $0.properties.name?.lowercased() }
+            .joined(separator: " ")
+    }
+
+    /// The emoji of `items` whose Unicode name contains every word of `query` (case does not matter). A blank query
+    /// keeps them all, in order.
+    public static func search(_ query: String, in items: [String]) -> [String] {
+        let words = query.lowercased().split(whereSeparator: { $0.isWhitespace }).map(String.init)
+        guard !words.isEmpty else { return items }
+        return items.filter { item in
+            let name = searchName(of: item)
+            return words.allSatisfy { name.contains($0) }
+        }
+    }
 }

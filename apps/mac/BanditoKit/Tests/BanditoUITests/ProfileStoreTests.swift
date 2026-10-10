@@ -31,6 +31,26 @@ import Testing
         #expect(store.colorIndex == 3)
     }
 
+    @Test func theLastAccountIsRememberedForTheNextStartUntilSignOut() {
+        let defaults = Self.defaults()
+        let store = ProfileStore(defaults: defaults)
+        #expect(store.rememberedUserID == nil)
+        store.bind(userID: "u1")
+        store.setNickname("Ann")
+
+        // A new run: the nickname shows from this Mac before the server has answered.
+        let next = ProfileStore(defaults: defaults)
+        #expect(next.rememberedUserID == "u1")
+        next.bind(userID: next.rememberedUserID)
+        #expect(next.nickname == "Ann")
+
+        // Sign-out: nobody is shown, and the next run remembers nobody.
+        next.forget()
+        #expect(next.userID == nil)
+        #expect(next.nickname == "")
+        #expect(ProfileStore(defaults: defaults).rememberedUserID == nil)
+    }
+
     @Test func nothingIsStoredWithoutAnAccount() {
         let defaults = Self.defaults()
         let store = ProfileStore(defaults: defaults)

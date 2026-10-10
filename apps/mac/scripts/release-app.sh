@@ -300,4 +300,12 @@ if [ "$dry_run" -eq 1 ]; then
 fi
 echo "  - commit apps/mac/project.yml and apps/mac/Config/Info.plist on the app branch"
 echo "  - upload the release:  gh release upload v$version $zip_path $dmg_path --repo $REPO_SLUG"
+# The app installs the daemon of its own version on servers: without the server release, "add a server" fails.
+if ! gh release view "v$version" --repo "$REPO_SLUG" --json assets -q '.assets[].name' 2>/dev/null \
+    | grep -q '^bandito-x86_64-unknown-linux-gnu.tar.gz$'; then
+    echo
+    echo "WARNING: release v$version has no server binaries. Servers cannot install $version until the GitHub"
+    echo "         release v$version is published (the release workflow builds and signs them). Do not ship the"
+    echo "         app before that."
+fi
 echo "  - commit public/appcast.xml on the platform appcast branch; deploying the site is a separate decision"

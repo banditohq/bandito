@@ -5,12 +5,16 @@ import BanditoL10n
 import CoreGraphics
 import SwiftUI
 
-/// The avatar editor, shown in a popover from the avatar: a large preview, three tabs (face, emoji, picture) and the
-/// background color row. Every change of the look goes to `look` at once; the owner decides when it is applied (the
-/// inspector sends it when the popover closes, the new agent sheet keeps it in its draft).
+/// The avatar editor, shown in a popover from the avatar: the preview and a line about it, three tabs (face, emoji,
+/// picture) and the background color row. Every change of the look goes to `look` at once; the owner decides when it
+/// is applied (the inspector sends it when the popover closes, the new agent sheet keeps it in its draft).
+///
+/// What must survive the popover closing (a picture read from disk, the tab, the error) lives in `model`, which the
+/// owner keeps. See `AvatarEditorModel` for why.
 struct AvatarEditor: View {
     let name: String
     @Binding var look: AvatarLook
+    let model: AvatarEditorModel
     /// The picture as shown now, decoded; nil without one.
     var picture: CGImage?
     /// Whether the server keeps pictures (`avatar_pictures`). Without it the picture tab says so.
@@ -20,11 +24,8 @@ struct AvatarEditor: View {
     /// Removes the picture. Throws on failure.
     var onRemovePicture: () async throws -> Void
 
-    @State private var tab: Tab = .face
-    /// A picture picked from disk and not yet saved: it is framed in the picture tab.
-    @State private var framing: CGImage?
-    @State private var error: UserFacingMessage?
     @State private var emojiText = ""
+    @FocusState private var emojiFocused: Bool
 
     enum Tab: Hashable {
         case face, emoji, picture
@@ -34,38 +35,59 @@ struct AvatarEditor: View {
     static let maxPictureBytes = 1024 * 1024
 
     var body: some View {
+        @Bindable var model = model
         VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Spacer()
-                AvatarArtView(name: name, look: look, picture: picture, size: 92)
-                Spacer()
-            }
+            header
             SegmentedPicker(
-                selection: $tab,
+                selection: $model.tab,
                 options: [
                     (Tab.face, L10n.Avatar.tabFace),
                     (Tab.emoji, L10n.Avatar.tabEmoji),
                     (Tab.picture, L10n.Avatar.tabPicture),
                 ])
             .frame(maxWidth: .infinity)
-            switch tab {
+            switch model.tab {
             case .face: faceTab
             case .emoji: emojiTab
             case .picture: pictureTab
             }
-            colorRow
-            if let error {
-                UserFacingErrorView(message: error)
+            // Framing a picture takes the whole popover; the color waits until it is saved or cancelled.
+            if !(model.tab == .picture && model.framing != nil) {
+                AvatarColorRow(look: $look)
             }
         }
-        .padding(16)
-        .frame(width: 340)
+        .padding(AvatarEditorLayout.inset)
+        .frame(width: AvatarEditorLayout.width)
+    }
+
+    // MARK: Header
+
+    private var header: some View {
+        HStack(spacing: 14) {
+            AvatarArtView(name: name, look: look, picture: picture, size: 72)
+            VStack(alignment: .leading, spacing: 3) {
+                let title = name.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !title.isEmpty {
+                    Text(title)
+                        .font(BanditoFont.font(size: 15, weight: 600))
+                        .foregroundStyle(Color.Bandito.text)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                Text(L10n.Avatar.hint)
+                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .foregroundStyle(Color.Bandito.text3)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
     }
 
     // MARK: Face
 
     private var faceTab: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 5), spacing: 8) {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 5), spacing: 6) {
             ForEach(AvatarFace.faces, id: \.self) { face in
                 let selected = look.emoji == nil && look.face == face
                 Button {
@@ -75,14 +97,14 @@ struct AvatarEditor: View {
                     emojiText = ""
                 } label: {
                     RaccoonAvatar(
-                        name: name, color: look.palette, face: face, size: 44, mood: .idle,
+                        name: name, color: look.palette, face: face, size: 40, mood: .idle,
                         customHex: look.customHex)
-                        .padding(4)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(selected ? Color.Bandito.text : Color.clear, lineWidth: 1.5))
+                        .frame(width: 52, height: 52)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 15, style: .continuous)
+                                .stroke(selected ? Color.Bandito.text : Color.clear, lineWidth: 2))
                 }
-                .banditoButton(.row(cornerRadius: 12, hoverOpacity: 0.08))
+                .banditoButton(.row(cornerRadius: 15, hoverOpacity: 0.08))
                 .help(faceName(face))
                 .accessibilityLabel(faceName(face))
                 .accessibilityAddTraits(selected ? .isSelected : [])
@@ -92,44 +114,54 @@ struct AvatarEditor: View {
 
     // MARK: Emoji
 
+    /// The words typed into the field when they are not an emoji: they filter the grid by name.
+    private var searchQuery: String {
+        AvatarEmoji.last(of: emojiText) == nil ? emojiText : ""
+    }
+
     private var emojiTab: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let shown = AvatarEmoji.search(searchQuery, in: AvatarEmoji.popular)
+        return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
-                TextField(L10n.Avatar.emojiField, text: $emojiText)
-                    .textFieldStyle(.plain)
-                    .multilineTextAlignment(.center)
-                    .font(.system(size: 16))
-                    .frame(width: 58, height: 28)
-                    .background(Color.Bandito.bg, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Color.Bandito.line))
-                Button(L10n.Avatar.allEmoji) {
-                    NSApp.orderFrontCharacterPalette(nil)
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color.Bandito.text3)
+                    TextField(L10n.Avatar.emojiField, text: $emojiText)
+                        .textFieldStyle(.plain)
+                        .font(BanditoFont.font(size: 13.5, weight: 400))
+                        .focused($emojiFocused)
+                        .accessibilityLabel(L10n.Avatar.emojiField)
                 }
-                .banditoButton(.quiet())
-                .help(L10n.Avatar.allEmoji)
-                Spacer(minLength: 0)
+                .padding(.horizontal, 10)
+                .frame(height: 32)
+                .background(Color.Bandito.bg, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).stroke(Color.Bandito.line))
+                Button {
+                    // The system palette types into the focused field, so the field takes the focus first.
+                    emojiFocused = true
+                    DispatchQueue.main.async { NSApp.orderFrontCharacterPalette(nil) }
+                } label: {
+                    Image(systemName: "face.smiling")
+                        .font(.system(size: 14))
+                }
+                .banditoButton(.icon(size: 32, label: L10n.Avatar.allEmoji))
+            }
+            if shown.isEmpty {
+                Text(L10n.Avatar.noMatches)
+                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .foregroundStyle(Color.Bandito.text3)
+                    .frame(maxWidth: .infinity, minHeight: 60)
+            } else {
+                emojiGrid(shown)
+            }
+            if look.emoji != nil {
                 Button(L10n.Avatar.noEmoji) {
                     look.emoji = nil
+                    emojiText = ""
                 }
-                .banditoButton(.quiet())
-                .disabled(look.emoji == nil)
-            }
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 8), spacing: 4) {
-                ForEach(AvatarEmoji.popular, id: \.self) { emoji in
-                    let selected = look.emoji == emoji
-                    Button {
-                        look.emoji = emoji
-                    } label: {
-                        Text(emoji)
-                            .font(.system(size: 19))
-                            .frame(width: 34, height: 34)
-                            .background(
-                                selected ? Color.Bandito.text.opacity(0.1) : Color.clear,
-                                in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    }
-                    .banditoButton(.row(cornerRadius: 8, hoverOpacity: 0.08))
-                    .accessibilityAddTraits(selected ? .isSelected : [])
-                }
+                .banditoButton(.link)
+                .font(BanditoFont.font(size: 12.5, weight: 500))
             }
         }
         // The system palette types into the field above; the newest character becomes the emoji.
@@ -140,156 +172,38 @@ struct AvatarEditor: View {
         }
     }
 
-    // MARK: Picture
-
-    @ViewBuilder
-    private var pictureTab: some View {
-        if !pictureSupported {
-            hint(L10n.Avatar.pictureNeedsDaemon)
-        } else if let framing {
-            PictureFraming(
-                image: framing, encode: { AvatarPicture.png(image: $0, crop: $1) },
-                maxBytes: Self.maxPictureBytes, tooLargeText: L10n.Avatar.pictureTooLarge,
-                onSave: { data in
-                    try await onSetPicture(data)
-                    self.framing = nil
-                },
-                onCancel: { self.framing = nil })
-        } else {
-            VStack(alignment: .leading, spacing: 10) {
-                hint(picture == nil ? L10n.Avatar.pictureEmpty : L10n.Avatar.pictureCurrent)
-                HStack(spacing: 8) {
-                    Button(L10n.Avatar.chooseFile) { pickFile() }
-                        .banditoButton(.signal())
-                    if picture != nil {
-                        Button(L10n.Avatar.removePicture) { removePicture() }
-                            .banditoButton(.quiet())
+    private func emojiGrid(_ items: [String]) -> some View {
+        let cell = AvatarEditorLayout.emojiCell
+        let spacing = AvatarEditorLayout.emojiSpacing
+        return ScrollView {
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.fixed(cell), spacing: 0), count: AvatarEditorLayout.emojiColumns),
+                spacing: spacing
+            ) {
+                ForEach(items, id: \.self) { emoji in
+                    let selected = look.emoji == emoji
+                    Button {
+                        look.emoji = emoji
+                        emojiText = ""
+                    } label: {
+                        Text(emoji)
+                            .font(.system(size: 20))
+                            .frame(width: cell, height: cell)
+                            .background(
+                                selected ? Color.Bandito.text.opacity(0.12) : Color.clear,
+                                in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                     }
-                }
-                if let error {
-                    UserFacingErrorView(message: error)
+                    .banditoButton(.row(cornerRadius: 9, hoverOpacity: 0.08))
+                    .accessibilityAddTraits(selected ? .isSelected : [])
                 }
             }
+            .frame(maxWidth: .infinity)
         }
-    }
-
-    private func hint(_ text: String) -> some View {
-        Text(text)
-            .font(BanditoFont.font(size: 12, weight: 400))
-            .foregroundStyle(Color.Bandito.text3)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func pickFile() {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.image]
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        panel.message = L10n.Avatar.pickerMessage
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        // Reading and downscaling the file happens off the main thread; only the result is set here.
-        Task {
-            guard let image = await Task.detached(operation: { AvatarImageFile.load(url) }).value else {
-                error = UserFacingMessage(text: L10n.Avatar.pictureUnreadable)
-                return
-            }
-            error = nil
-            framing = image
-        }
-    }
-
-    private func removePicture() {
-        Task {
-            do {
-                try await onRemovePicture()
-                error = nil
-            } catch {
-                self.error = UserFacingError.message(for: error)
-            }
-        }
-    }
-
-    // MARK: Color
-
-    private var colorRow: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text(L10n.Avatar.color)
-                .font(BanditoFont.font(size: 12, weight: 400))
-                .foregroundStyle(Color.Bandito.text3)
-            HStack(spacing: 7) {
-                ForEach(AvatarColor.allCases, id: \.self) { candidate in
-                    paletteSwatch(candidate)
-                }
-                Rectangle().fill(Color.Bandito.text.opacity(0.1)).frame(width: 1, height: 18).padding(.horizontal, 3)
-                customSwatch
-            }
-        }
-    }
-
-    private func paletteSwatch(_ candidate: AvatarColor) -> some View {
-        let selected = look.customHex == nil && look.palette == candidate
-        return Button {
-            look.palette = candidate
-            look.customHex = nil
-        } label: {
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(candidate.color)
-                .frame(width: 22, height: 22)
-                .overlay {
-                    if selected {
-                        RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .stroke(candidate.color, lineWidth: 1.5)
-                            .frame(width: 28, height: 28)
-                    }
-                }
-        }
-        .banditoButton(.row(cornerRadius: 9, hoverOpacity: 0.08))
-        .help(colorName(candidate))
-        .accessibilityLabel(colorName(candidate))
-        .accessibilityAddTraits(selected ? .isSelected : [])
-    }
-
-    /// «Свой…»: a system color picker whose choice is stored as `#RRGGBB`.
-    private var customSwatch: some View {
-        let selected = look.customHex != nil
-        return HStack(spacing: 6) {
-            ColorPicker(L10n.Avatar.customColor, selection: customColor, supportsOpacity: false)
-                .labelsHidden()
-                .frame(width: 26, height: 22)
-            Text(L10n.Avatar.customColor)
-                .font(BanditoFont.font(size: 12, weight: 400))
-                .foregroundStyle(selected ? Color.Bandito.text : Color.Bandito.text3)
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
-        }
-    }
-
-    private var customColor: Binding<Color> {
-        Binding(
-            get: {
-                if let hex = look.customHex.flatMap(AvatarHex.value) { return Color(hex: hex) }
-                return look.palette.color
-            },
-            set: { value in
-                let components = NSColor(value).usingColorSpace(.sRGB) ?? NSColor.gray
-                look.customHex = AvatarHex.hex(
-                    red: components.redComponent, green: components.greenComponent, blue: components.blueComponent)
-            })
+        .scrollIndicators(.automatic)
+        .frame(height: AvatarEditorLayout.gridHeight(count: items.count))
     }
 
     // MARK: Names
-
-    private func colorName(_ color: AvatarColor) -> String {
-        switch color {
-        case .peach: L10n.AgentSheet.colorPeach
-        case .sky: L10n.AgentSheet.colorSky
-        case .sage: L10n.AgentSheet.colorSage
-        case .rose: L10n.AgentSheet.colorRose
-        case .lilac: L10n.AgentSheet.colorLilac
-        case .cream: L10n.AgentSheet.colorCream
-        }
-    }
 
     private func faceName(_ face: AvatarFace) -> String {
         switch face {
