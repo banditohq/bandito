@@ -5,13 +5,15 @@
 //! forwards `crew.list` / `crew.send` to the daemon over its unix socket.
 //! Stdout carries the protocol only, so logs must go to stderr.
 
-use crate::rpc::unix::call_agent;
+use crate::forms;
+use crate::rpc::unix::{call_agent, call_agent_waiting};
 use crate::store::{ALL_CAPABILITIES, Capability};
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::path::PathBuf;
+use std::time::Duration;
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt, BufReader};
 
 /// Version answered when the client asks for none we support.
@@ -49,6 +51,16 @@ pub trait CrewBackend: Send + Sync {
     async fn browser(&self, method: &str, params: Value) -> Result<Value>;
     /// One `screen.agent.*` RPC method with its parameters. Returns the daemon's result.
     async fn screen(&self, method: &str, params: Value) -> Result<Value>;
+    /// Asks the human with a form (`forms.agent.ask`) and waits for the answer. Returns `{action, values?, comment?}`.
+    async fn ask_form(&self, form: Value) -> Result<Value> {
+        let _ = form;
+        bail!("ask_form is not available here")
+    }
+    /// Puts a reaction on a message (`messages.agent.react`). Returns the daemon's result.
+    async fn react(&self, params: Value) -> Result<Value> {
+        let _ = params;
+        bail!("react is not available here")
+    }
 }
 
 /// Backend that asks the daemon over `agent.sock`, as the agent whose session token it holds.
@@ -93,13 +105,40 @@ impl CrewBackend for DaemonBackend {
     }
 
     async fn browser(&self, method: &str, params: Value) -> Result<Value> {
-        // A risky click asks the user in the agent's feed; the daemon knows the agent from the token.
-        call_agent(&self.sock, &self.token, method, params).await
+        // A risky click asks the user in the agent's feed, and the call waits for the answer: it may take as long
+        // as the approval does. The daemon knows the agent from the token.
+        match browser_wait(method) {
+            Some(limit) => call_agent_waiting(&self.sock, &self.token, method, params, limit).await,
+            None => call_agent(&self.sock, &self.token, method, params).await,
+        }
     }
 
     async fn screen(&self, method: &str, params: Value) -> Result<Value> {
         call_agent(&self.sock, &self.token, method, params).await
     }
+
+    async fn ask_form(&self, form: Value) -> Result<Value> {
+        // The answer may take as long as the form waits (see `rpc::chat::FORM_WAIT`), plus a margin.
+        let limit = crate::rpc::chat::FORM_WAIT + Duration::from_secs(60);
+        call_agent_waiting(
+            &self.sock,
+            &self.token,
+            "forms.agent.ask",
+            json!({ "form": form }),
+            limit,
+        )
+        .await
+    }
+
+    async fn react(&self, params: Value) -> Result<Value> {
+        call_agent(&self.sock, &self.token, "messages.agent.react", params).await
+    }
+}
+
+/// How long a browser call may wait for the daemon: a click waits for the person's approval (see
+/// `browser::approve_click`), with a margin; the other calls keep the plain limit (`None`).
+fn browser_wait(method: &str) -> Option<Duration> {
+    (method == "browser.agent.click").then(|| crate::browser::CLICK_APPROVAL_LIMIT + Duration::from_secs(60))
 }
 
 /// The `text` field of a history reply.
@@ -236,6 +275,8 @@ fn tools_list(on: &[Capability]) -> Vec<Value> {
         crew_send_tool(),
         history_search_tool(),
         history_day_tool(),
+        ask_form_tool(),
+        react_tool(),
     ];
     tools.extend(screen_tools());
     tools.extend(browser_tool_defs());
@@ -296,6 +337,57 @@ fn history_search_tool() -> Value {
     })
 }
 
+fn ask_form_tool() -> Value {
+    let field = json!({
+        "type": "object",
+        "properties": {
+            "id": { "type": "string", "description": "Short name of the field, letters, digits, _ or -; unique in the form" },
+            "label": { "type": "string", "description": "What the person sees next to the field" },
+            "type": {
+                "type": "string",
+                "enum": ["text", "textarea", "email", "number", "choice", "multichoice", "boolean", "date"],
+            },
+            "options": { "type": "array", "items": { "type": "string" }, "minItems": 1, "maxItems": 20, "description": "For choice and multichoice" },
+            "required": { "type": "boolean", "description": "The person must answer (default false)" },
+            "default": { "description": "Filled in before the person answers. A date is YYYY-MM-DD" },
+            "placeholder": { "type": "string" },
+            "help": { "type": "string", "description": "A hint under the field" },
+        },
+        "required": ["id", "label", "type"],
+    });
+    json!({
+        "name": "ask_form",
+        "description": "Ask the person a form instead of several questions in text. Blocks until they answer (up to 24 hours). Returns JSON: {\"action\": \"submit\" | \"reject\" | \"expired\", \"values\": {field id: answer}} on submit, {\"comment\"} may come with reject. Use kind \"confirm\" before anything that leaves the server (a letter, a post, a payment, a deletion): the fields are then shown as an editable summary.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "title": { "type": "string", "description": "Short title of the form" },
+                "intro": { "type": "string", "description": "A line above the fields" },
+                "kind": { "type": "string", "enum": ["question", "confirm"] },
+                "fields": { "type": "array", "items": field, "minItems": 1, "maxItems": 20 },
+                "submit_label": { "type": "string", "description": "Text of the submit button" },
+                "reject_label": { "type": "string", "description": "Text of the reject button" },
+            },
+            "required": ["title", "kind", "fields"],
+        },
+    })
+}
+
+fn react_tool() -> Value {
+    json!({
+        "name": "react",
+        "description": "Put an emoji reaction on a message of the person (by default the last one they sent) instead of a short reply. For example 👍 means got it, 👀 means looking at it. One reaction per message from you: a new one replaces the old one.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "seq": { "type": "integer", "minimum": 1, "description": "The message to react to; by default the person's last message" },
+                "emoji": { "type": "string", "description": "One emoji" },
+            },
+            "required": ["emoji"],
+        },
+    })
+}
+
 fn history_day_tool() -> Value {
     json!({
         "name": "history_day",
@@ -322,6 +414,8 @@ async fn call_tool(params: &Value, backend: &dyn CrewBackend, on: &[Capability])
         "crew_send" => Ok(tool_result(crew_send(&args, backend).await)),
         "history_search" => Ok(tool_result(history_search(&args, backend).await)),
         "history_day" => Ok(tool_result(history_day(&args, backend).await)),
+        "ask_form" => Ok(tool_result(ask_form(&args, backend).await)),
+        "react" => Ok(tool_result(react(&args, backend).await)),
         name if BROWSER_TOOLS.contains(&name) => Ok(blocks_result(browser_tool(name, &args, backend).await)),
         _ if SCREEN_TOOLS.iter().any(|(tool, _)| *tool == name) => Ok(screen_tool(name, &args, backend).await),
         _ => Err((INVALID_PARAMS, format!("Unknown tool: {name}"))),
@@ -354,6 +448,29 @@ async fn crew_list(backend: &dyn CrewBackend) -> Result<String, String> {
         })
         .collect();
     Ok(lines.join("\n"))
+}
+
+/// `ask_form`: the form is checked here first, so a mistake comes back as a tool error the agent can fix.
+async fn ask_form(args: &Value, backend: &dyn CrewBackend) -> Result<String, String> {
+    forms::parse_spec(args)?;
+    let answer = backend.ask_form(args.clone()).await.map_err(|e| format!("{e:#}"))?;
+    Ok(answer.to_string())
+}
+
+async fn react(args: &Value, backend: &dyn CrewBackend) -> Result<String, String> {
+    let emoji = args
+        .get("emoji")
+        .and_then(Value::as_str)
+        .ok_or("react needs \"emoji\"")?;
+    let seq = args.get("seq").filter(|v| !v.is_null());
+    if let Some(seq) = seq
+        && seq.as_i64().is_none_or(|n| n < 1)
+    {
+        return Err("seq must be a message number, 1 or more".into());
+    }
+    let params = json!({ "emoji": emoji, "seq": seq.cloned() });
+    backend.react(params).await.map_err(|e| format!("{e:#}"))?;
+    Ok(format!("Reacted with {emoji}."))
 }
 
 async fn crew_send(args: &Value, backend: &dyn CrewBackend) -> Result<String, String> {
@@ -781,6 +898,9 @@ mod tests {
         screen_calls: Mutex<Vec<(String, Value)>>,
         /// What screen calls answer; `{}` when unset.
         screen_reply: Option<Value>,
+        /// Every form the agent asked, and every reaction it put (as sent to the daemon).
+        forms: Mutex<Vec<Value>>,
+        reactions: Mutex<Vec<Value>>,
         /// When set, every backend call fails with this message.
         fail: Option<String>,
     }
@@ -822,6 +942,22 @@ mod tests {
             anyhow::bail!("no browser in this test")
         }
 
+        async fn ask_form(&self, form: Value) -> Result<Value> {
+            if let Some(e) = &self.fail {
+                anyhow::bail!("{e}");
+            }
+            self.forms.lock().unwrap().push(form);
+            Ok(json!({ "action": "submit", "values": { "name": "Ann" } }))
+        }
+
+        async fn react(&self, params: Value) -> Result<Value> {
+            if let Some(e) = &self.fail {
+                anyhow::bail!("{e}");
+            }
+            self.reactions.lock().unwrap().push(params);
+            Ok(json!({}))
+        }
+
         async fn screen(&self, method: &str, params: Value) -> Result<Value> {
             if let Some(e) = &self.fail {
                 anyhow::bail!("{e}");
@@ -859,6 +995,58 @@ mod tests {
         let mut all = replies(&format!("{request}\n"), backend).await;
         assert_eq!(all.len(), 1, "expected exactly one reply");
         all.remove(0)
+    }
+
+    #[test]
+    fn only_a_browser_click_gets_the_long_wait() {
+        // The approval of a risky click can take up to 10 minutes; the other calls keep the plain limit.
+        let wait = browser_wait("browser.agent.click").expect("a click waits");
+        assert!(wait >= crate::browser::CLICK_APPROVAL_LIMIT);
+        assert_eq!(browser_wait("browser.agent.snapshot"), None);
+        assert_eq!(browser_wait("browser.agent.open"), None);
+    }
+
+    #[tokio::test]
+    async fn a_long_wait_outlasts_a_short_one() {
+        // A daemon that answers after 300 ms: a 100 ms limit gives up, a longer one gets the answer.
+        // A short path: a unix socket path is limited to about 104 bytes.
+        let sock = PathBuf::from(format!("/tmp/bcrew-{}.sock", std::process::id()));
+        let _ = std::fs::remove_file(&sock);
+        let listener = tokio::net::UnixListener::bind(&sock).unwrap();
+        tokio::spawn(async move {
+            while let Ok((stream, _)) = listener.accept().await {
+                tokio::spawn(async move {
+                    let (read, mut write) = stream.into_split();
+                    let mut lines = tokio::io::BufReader::new(read).lines();
+                    let _ = lines.next_line().await;
+                    let _ = lines.next_line().await;
+                    tokio::time::sleep(Duration::from_millis(300)).await;
+                    let _ = write
+                        .write_all(b"{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"ok\":true}}\n")
+                        .await;
+                });
+            }
+        });
+        let short = crate::rpc::unix::call_agent_waiting(
+            &sock,
+            "token",
+            "browser.agent.click",
+            json!({ "ref": 1 }),
+            Duration::from_millis(100),
+        )
+        .await;
+        assert!(short.is_err(), "the short limit ends the wait");
+        let long = crate::rpc::unix::call_agent_waiting(
+            &sock,
+            "token",
+            "browser.agent.click",
+            json!({ "ref": 1 }),
+            Duration::from_secs(5),
+        )
+        .await
+        .unwrap();
+        assert_eq!(long["ok"], true);
+        let _ = std::fs::remove_file(&sock);
     }
 
     fn tool_call(name: &str, arguments: Value) -> Value {
@@ -959,6 +1147,8 @@ mod tests {
                 "crew_send",
                 "history_search",
                 "history_day",
+                "ask_form",
+                "react",
                 "screen_screenshot",
                 "screen_click",
                 "screen_move",
@@ -1182,6 +1372,80 @@ mod tests {
         }
     }
 
+    fn a_form() -> Value {
+        json!({
+            "title": "Who are you?",
+            "kind": "question",
+            "fields": [{ "id": "name", "label": "Name", "type": "text", "required": true }],
+        })
+    }
+
+    #[tokio::test]
+    async fn ask_form_sends_a_checked_form_and_returns_the_answer() {
+        let backend = MockBackend::default();
+        let r = reply(tool_call("ask_form", a_form()), &backend).await;
+        assert_eq!(r["result"]["isError"], false, "{r}");
+        let text = tool_text(&r);
+        let answer: Value = serde_json::from_str(text).unwrap();
+        assert_eq!(answer, json!({ "action": "submit", "values": { "name": "Ann" } }));
+        assert_eq!(*backend.forms.lock().unwrap(), vec![a_form()]);
+    }
+
+    #[tokio::test]
+    async fn ask_form_with_a_bad_spec_is_a_tool_error_and_reaches_no_one() {
+        let backend = MockBackend::default();
+        let bad = json!({
+            "title": "Pick",
+            "kind": "question",
+            "fields": [{ "id": "c", "label": "C", "type": "choice" }],
+        });
+        let r = reply(tool_call("ask_form", bad), &backend).await;
+        assert_eq!(r["result"]["isError"], true, "{r}");
+        assert_eq!(tool_text(&r), "field \"c\" needs 1 to 20 options, got 0");
+        assert!(backend.forms.lock().unwrap().is_empty());
+        let r = reply(tool_call("ask_form", json!({ "title": "x" })), &backend).await;
+        assert_eq!(r["result"]["isError"], true, "{r}");
+    }
+
+    #[tokio::test]
+    async fn ask_form_failure_from_the_daemon_is_a_tool_error() {
+        let backend = MockBackend {
+            fail: Some("daemon is down".into()),
+            ..Default::default()
+        };
+        let r = reply(tool_call("ask_form", a_form()), &backend).await;
+        assert_eq!(r["result"]["isError"], true, "{r}");
+        assert!(tool_text(&r).contains("daemon is down"));
+    }
+
+    #[tokio::test]
+    async fn react_forwards_the_emoji_and_the_message_or_the_default() {
+        let backend = MockBackend::default();
+        let r = reply(tool_call("react", json!({ "emoji": "👍" })), &backend).await;
+        assert_eq!(r["result"]["isError"], false, "{r}");
+        assert_eq!(tool_text(&r), "Reacted with 👍.");
+        let r = reply(tool_call("react", json!({ "seq": 12, "emoji": "👀" })), &backend).await;
+        assert_eq!(r["result"]["isError"], false, "{r}");
+        assert_eq!(
+            *backend.reactions.lock().unwrap(),
+            vec![
+                json!({ "emoji": "👍", "seq": null }),
+                json!({ "emoji": "👀", "seq": 12 })
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn react_needs_an_emoji_and_a_message_number() {
+        let backend = MockBackend::default();
+        let r = reply(tool_call("react", json!({ "seq": 3 })), &backend).await;
+        assert_eq!(r["result"]["isError"], true, "{r}");
+        assert_eq!(tool_text(&r), "react needs \"emoji\"");
+        let r = reply(tool_call("react", json!({ "seq": 0, "emoji": "👍" })), &backend).await;
+        assert_eq!(r["result"]["isError"], true, "{r}");
+        assert!(backend.reactions.lock().unwrap().is_empty());
+    }
+
     #[tokio::test]
     async fn screen_click_is_forwarded_to_the_daemon() {
         let backend = MockBackend::default();
@@ -1348,11 +1612,15 @@ mod tests {
         assert!(!no_screen.iter().any(|n| n.starts_with("screen_")));
 
         // The shell and the files are not MCP tools: they change the settings, not this list.
+        // The form and reaction tools are every agent's, whatever it may use.
         assert_eq!(
             listed(&[Capability::Terminal, Capability::Files]).await,
-            ["history_search", "history_day"]
+            ["history_search", "history_day", "ask_form", "react"]
         );
-        assert_eq!(listed(&[]).await, ["history_search", "history_day"]);
+        assert_eq!(
+            listed(&[]).await,
+            ["history_search", "history_day", "ask_form", "react"]
+        );
     }
 
     #[tokio::test]

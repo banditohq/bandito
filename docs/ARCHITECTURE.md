@@ -57,7 +57,7 @@ Everything an agent does becomes a row in `events` (append-only, global `seq`). 
 | kind | payload |
 |---|---|
 | `turn.started` | `{turn_id, source: "user"\|"schedule"\|"crew"}` |
-| `message.user` | `{text, source, from_agent?, command?}` (`text` is what the person typed; `command` names a slash command, see [Commands](#commands)) |
+| `message.user` | `{text, source, from_agent?, command?, reply_to?, attachments?}` (`text` is what the person typed; `command` names a slash command, see [Commands](#commands); `reply_to` is the seq of the message it answers and `attachments` the files it carries, see [Replies and attachments](#replies-and-attachments)) |
 | `message.assistant` | `{text}` (final text of a message) |
 | `message.delta` | `{text}` streaming chunk, **not persisted**, broadcast only |
 | `tool.call` | `{call_id, tool, title, input}` |
@@ -70,7 +70,38 @@ Everything an agent does becomes a row in `events` (append-only, global `seq`). 
 | `usage.limits` | `{runtime, windows:[{name, utilization, resets_at}]}` |
 | `runtime.switched` | `{from, to, until?}`: the agent moved to another runtime (see [Fallback subscription](#fallback-subscription)); `until` is when the limit resets (Unix seconds), if known |
 | `agent_changed` | `{action: "created"\|"updated"\|"deleted"}`: an agent record was created, changed or deleted, by any client or path (RPC `agents.create`/`update`/`delete`, pause, runtime switch). Clients re-read `agents.list` on `created`/`updated`, and on an event from an agent they do not know; `deleted` removes the agent locally. No event for bookkeeping fields (context size, chapter, session) |
+| `form_requested` | `{form_id, title, intro?, kind: "question"\|"confirm", fields, submit_label?, reject_label?}`: the agent asked the person a form (see [Forms](#forms)) |
+| `form_answered` | `{form_id, action: "submit"\|"reject"\|"expired", values?, comment?}`: the form ended |
+| `reaction` | `{seq, emoji?, by: "user"\|"agent"}`: a reaction on the message with that seq; no `emoji` means it was taken off (see [Reactions](#reactions)) |
 | `error` | `{message}` |
+
+Protocol rule for these: new fields are optional, so old clients keep working; new things get a new `kind`, which old clients ignore.
+
+## Forms
+
+An agent asks the person for several answers at once, or for a confirmation before something leaves the server, with the MCP tool `ask_form` instead of questions in text. The tool blocks until the person answers, for at most 24 hours (`APPROVAL_TTL_MS`, the same time as an approval).
+
+The spec: `{title, intro?, kind: "question"|"confirm", fields: [...], submit_label?, reject_label?}`, with up to 20 fields. A field is `{id, label, type, options?, required?, default?, placeholder?, help?}`. `type` is one of `text`, `textarea`, `email` (must contain `@`), `number`, `choice`, `multichoice`, `boolean`, `date` (`YYYY-MM-DD`). `choice` and `multichoice` need 1 to 20 `options`. An `id` is 1 to 64 letters, digits, `_` or `-`, unique in the form. `kind: "confirm"` marks a confirmation before an action outside (a letter, a post, a payment, a deletion): the fields are shown as an editable summary, with Confirm and Reject buttons. A bad spec is a tool error with the reason, and nothing is stored.
+
+Flow: the form is stored (`forms`: `id, agent_id, spec, status, answer, created_at, answered_at`; status `pending`, `submitted`, `rejected` or `expired`), the event `form_requested` goes into the thread, and the agent's status is `needs_you` while the form is open. The answer comes from `forms.answer`: values are checked against the spec (required fields, types, options; an omitted field takes its `default`, an unknown field is refused). The first answer stands: a second one is `already_answered`. The tool returns `{"action": "submit", "values": {...}}`, `{"action": "reject", "comment"?}` or `{"action": "expired"}`, and the event `form_answered` follows.
+
+A form expires when nobody answers in 24 hours, when the turn is cancelled (`agents.interrupt`), when the agent is paused or deleted, when the agent's connection closes while the form waits, and after a daemon restart (a form left open cannot be answered any more). An answer to a form whose call is already gone is refused with `expired`; the form is closed as expired. Expiry is `expired` in the store and in the thread.
+
+`forms.list{agent_id?, status?}` lists forms, newest first. `daemon.info.features` lists `"forms"`, `"reactions"` and `"attachments"` when the daemon has them. Only the owner's CLI and the apps may answer or list forms; an agent may only ask (`forms.agent.ask`).
+
+## Reactions
+
+A person puts one emoji on a message of the agent (`messages.react{agent_id, seq, emoji}`); a new one replaces it, and `emoji: null` takes it off. An agent puts one on a message with the tool `react{seq?, emoji}` (`messages.agent.react`), by default on the person's last message. The event `reaction{seq, emoji?, by}` goes into the thread. Reactions are stored in `reactions(agent_id, seq, by, emoji, at)`, one per message and `by`.
+
+An emoji is one grapheme cluster of at most 16 bytes, with no spaces (a joined family is 18 bytes, so it is refused). A reaction is a message of the thread: `seq` must be a `message.user` or `message.assistant` of that agent.
+
+A reaction by the person on a message of the agent does not start a turn. The reactions made since the last turn that a person started go into the next prompt, as the first line: `(Реакции с прошлого раза: 👍 на «первые 80 символов сообщения…»)`. The window runs from the moment the last human turn read its reactions (recorded as `reactions_until` on its `turn.started`) to the moment this turn reads them. A reaction made after that moment goes into the next prompt, so each reaction is said once.
+
+## Replies and attachments
+
+`agents.send{agent_id, text, reply_to?, attachments?}`. `reply_to` is the seq of a message in the same thread. The prompt then starts with `В ответ на: > <first 300 characters of that message>` and a blank line, and the thread shows the reply in the event's `reply_to`.
+
+Files come first, from `attachments.upload{agent_id, name, data_base64}`. A file is at most 20 MB after decoding. Its name has no `/`, `\`, `..` or control characters, does not start with a dot, and is at most 200 bytes. It is saved in `<agent folder>/.bandito/attachments/<YYYY-MM-DD>/`, or in `<agent home>/files/attachments/<YYYY-MM-DD>/` when the agent has no folder or the folder would be Bandito's own data folder. A name taken on that day becomes `name (2).ext`, `name (3).ext`. The reply is `{path, name, size, mime}` (`mime` from the extension). `agents.send` accepts `attachments: [path]` only for files in those folders of that agent (at most 20 per message). The event `message.user` carries them as `attachments: [{path, name, size, mime}]`, and the prompt lists them after the text: `Вложения:` and one `- <path> (<mime>, <size> байт)` line each. Nothing is written through a link: if `.bandito`, `attachments` or the day folder is a symbolic link, the upload is refused. `agents.send` takes a path only when its real location (links followed) is a file inside one of those folders, and the message carries that real path. The agent reads them by path; the agent's own folder is readable under the approval policy.
 
 ## Approvals (policy)
 
@@ -166,7 +197,8 @@ Migrations: numbered SQL files embedded in the binary, applied by `PRAGMA user_v
 JSON-RPC 2.0. Same methods on every transport.
 
 - `devices.list` returns the paired devices as `{id, name, created_at, last_seen_at, current}`. `current` is `true` for the device whose token made the request; the owner's CLI is no device, so every row is `false` for it. Old apps ignore the field.
-- Requests: `daemon.info`, `runtimes.status` (each entry has `supported_capabilities`, see [Capabilities](#capabilities)), `runtimes.models{runtime?, refresh?}` (see [Runtime models](#runtime-models)), `agents.list|get|create|update|delete` (`update` takes `paused` too, see [Pause](#pause)), `agents.send{agent_id,text}` (replies `{queued: true}` when the agent is paused), `agents.interrupt`, `agents.pause_all{paused}`, `events.since{seq,limit,agent_id?}`, `approvals.list|resolve{approval_id,decision,remember}`, `rules.list|set|delete`, `schedules.list|create|update|delete|run_now`, `devices.list|revoke`, `pair.redeem{code,device_name}` (only unauthenticated method), `term.list|open|input|resize|rename|close|attach|detach` (see Terminals), `fs.*` (see [Files](#files)), `changes.checkpoints|diff|file|restore` (see [Changes](#changes)), `secrets.list|set|delete` (see [Secrets](#secrets), `host.stats|history|processes|ports|kill`, `setup.status|install|job` (see [Setup](#setup)), `commands.list|install` (see [Commands](#commands)), `browser.start|status|stop|control|touch` (see [Browser](#browser)), `workspaces.list|create|update|delete|start|stop` (see [Workspaces](#workspaces)), `daemon.logs{lines,level}` (see [Logs](#logs)). `agents.create|update` also take `avatar` and `capabilities` (see [Capabilities](#capabilities)). `browser.agent.*` is for the crew MCP on the server only.
+- Chat: `forms.answer{form_id, action: "submit"\|"reject", values?, comment?}` (`values` checked against the form, `already_answered` on a second answer), `forms.list{agent_id?, status?}`, `messages.react{agent_id, seq, emoji: string|null}`, `attachments.upload{agent_id, name, data_base64}` (returns `{path, name, size, mime}`). `agents.send` also takes `reply_to?: seq` and `attachments?: [path]`. See [Forms](#forms), [Reactions](#reactions), [Replies and attachments](#replies-and-attachments).
+- Requests: `daemon.info`, `runtimes.status` (each entry has `supported_capabilities`, see [Capabilities](#capabilities)), `runtimes.models{runtime?, refresh?}` (see [Runtime models](#runtime-models)), `agents.list|get|create|update|delete` (`update` takes `paused` too, see [Pause](#pause)), `agents.send{agent_id,text}` (replies `{queued: true}` when the agent is paused), `agents.interrupt`, `agents.new_chapter{id}` (owner only: starts the agent's next chapter now, with the same wrap-up as a context close; a running turn finishes first), `agents.pause_all{paused}`, `events.since{seq,limit,agent_id?}`, `approvals.list|resolve{approval_id,decision,remember}`, `rules.list|set|delete`, `schedules.list|create|update|delete|run_now`, `devices.list|revoke`, `pair.redeem{code,device_name}` (only unauthenticated method), `term.list|open|input|resize|rename|close|attach|detach` (see Terminals), `fs.*` (see [Files](#files)), `changes.checkpoints|diff|file|restore` (see [Changes](#changes)), `secrets.list|set|delete` (see [Secrets](#secrets), `host.stats|history|processes|ports|kill`, `setup.status|install|job` (see [Setup](#setup)), `commands.list|install` (see [Commands](#commands)), `browser.start|status|stop|control|touch` (see [Browser](#browser)), `workspaces.list|create|update|delete|start|stop` (see [Workspaces](#workspaces)), `daemon.logs{lines,level}` (see [Logs](#logs)). `agents.create|update` also take `avatar` and `capabilities` (see [Capabilities](#capabilities)). `browser.agent.*` is for the crew MCP on the server only.
 - Notifications (server → client): `event{seq, agent_id, kind, payload, ts}` for every event including `message.delta`; `term.output|gap|exit|closed` for attached terminals (see Terminals).
 
 ## Transports (connect any way you like)
@@ -210,9 +242,9 @@ Who may call the daemon, and what. One list in `daemon/src/rpc/mod.rs` (`allowed
 | Anonymous | any transport, not paired | `daemon.hello`, `pair.redeem` |
 | Device (paired app) | WebSocket with the device token | everything except the agent tools |
 | Local (owner's CLI) | `bandito.sock`, not under the daemon | everything except the agent tools |
-| Agent | `agent.sock` with a live token | `daemon.hello`, `crew.list`, `crew.send`, `history.day`, `history.search`, `browser.agent.{back,click,open,press,screenshot,snapshot,switch,tabs,type}`, `screen.agent.{click,key,launch,move,screenshot,scroll,type}`; for the agent its token names (see the caveat below) |
+| Agent | `agent.sock` with a live token | `daemon.hello`, `crew.list`, `crew.send`, `forms.agent.ask`, `messages.agent.react`, `history.day`, `history.search`, `browser.agent.{back,click,open,press,screenshot,snapshot,switch,tabs,type}`, `screen.agent.{click,key,launch,move,screenshot,scroll,type}`; for the agent its token names (see the caveat below) |
 
-The agent tools (`crew.send`, `history.*`, `browser.agent.*`, `screen.agent.*`) are for agents alone. The owner's CLI and the apps may not call them, so nothing that speaks as the owner can pass for an agent. Agents may call none of the owner's methods: rules, approvals, pairing, devices, secrets, agent create/update/delete, workspaces, setup, and `commands.install` at user scope.
+The agent tools (`crew.send`, `forms.agent.*`, `messages.agent.*`, `history.*`, `browser.agent.*`, `screen.agent.*`) are for agents alone. The owner's CLI and the apps may not call them, so nothing that speaks as the owner can pass for an agent. Agents may call none of the owner's methods: rules, approvals, pairing, devices, secrets, agent create/update/delete, workspaces, setup, and `commands.install` at user scope.
 
 **Host header.** The check depends on the address the daemon listens on. On a loopback listener (`127.0.0.0/8` or `::1`), HTTP and WebSocket routes accept only the `Host` names `127.0.0.1`, `localhost`, `[::1]` and `::1` (the port is ignored), plus the names in `allowed_hosts` of `$BANDITO_HOME/config.json`. Any other name, and a request without `Host`, gets 421 Misdirected Request. This blocks DNS rebinding from a web page. A reverse proxy or tunnel on the same server connects to loopback and sends its own name, so put that name in `allowed_hosts`. On a listener on any other address (for example `0.0.0.0` or a Tailscale address) the `Host` is not checked: the bearer token and the refused `Origin` header protect it. The config file is optional. It is a JSON object with two keys: `allowed_hosts` (a list of host names without port or path) and `agent_sandbox` (see [macOS sandbox](#macos-sandbox)). An unknown key or a bad name stops the daemon at start.
 
@@ -306,7 +338,7 @@ Before a line is returned, every secret value is replaced as in [Secrets](#secre
 
 `bandito mcp` is an MCP server (stdio) injected into every agent: `--mcp-config` for Claude, `mcp_servers` config for Codex, `mcpServers` in ACP `session/new` for Grok. It answers `initialize` with the client's protocol version when it is one of `2025-06-18`, `2025-03-26`, `2024-11-05`, otherwise with `2025-06-18`. Input lines over 1 MB get a parse error and are skipped.
 
-Tools today: `crew_list` and `crew_send{to, message}` (becomes `message.user` with `source:"crew"` for the target). `report{text}` (shows in the user's inbox) is later, not in the MVP yet. `crew.send` over RPC is accepted only from an agent's session on `agent.sock`, and only as that agent; paired apps can call `crew.list` only. See [Trust model](#trust-model).
+Tools today: `crew_list` and `crew_send{to, message}` (becomes `message.user` with `source:"crew"` for the target). Chat tools, for every agent whatever its capabilities: `ask_form` (see [Forms](#forms)) and `react{seq?, emoji}` (see [Reactions](#reactions)). `report{text}` (shows in the user's inbox) is later, not in the MVP yet. `crew.send` over RPC is accepted only from an agent's session on `agent.sock`, and only as that agent; paired apps can call `crew.list` only. See [Trust model](#trust-model).
 
 Loop guards: every crew message belongs to a chain, which starts with each user or schedule message. The daemon counts three limits:
 
@@ -320,7 +352,7 @@ These limits stop accidental loops. They are not a security boundary: an agent w
 
 The daemon starts the crew server with `--capabilities <list>` when the agent has capabilities set (see [Capabilities](#capabilities)); the server then lists only the tools of those. The crew tools need `team`, the browser tools `browser`, the screen tools `screen`. The history tools need none.
 
-Browser tools are on the same server, through the same crew MCP: `browser_open`, `browser_snapshot`, `browser_click`, `browser_type`, `browser_press`, `browser_back`, `browser_screenshot`, `browser_tabs`, `browser_switch`. They are described in [Browser](#browser).
+Browser tools are on the same server, through the same crew MCP: `browser_open`, `browser_snapshot`, `browser_click`, `browser_type`, `browser_press`, `browser_back`, `browser_screenshot`, `browser_tabs`, `browser_switch`. They are described in [Browser](#browser). A `browser_click` that needs the person's approval waits over MCP for as long as the approval may take (10 minutes, plus a margin), not for the 30 seconds of an ordinary call.
 
 ## Browser
 

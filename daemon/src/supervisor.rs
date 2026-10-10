@@ -3,9 +3,12 @@
 //! output into stored events.
 
 use crate::agent_token::{AgentTokens, SessionToken};
+use crate::attachments::Attachment;
+use crate::chat;
 use crate::checkpoint;
 use crate::event::LimitWindow;
 use crate::event::{AgentChange, AgentStatus, DecidedBy, Decision, EventBody, Source, TurnStatus, Usage};
+use crate::forms::{FormSpec, Outcome};
 use crate::hub::Hub;
 use crate::limit;
 use crate::policy::{self, Protected, Verdict};
@@ -61,6 +64,10 @@ pub struct Inbound {
     pub typed: Option<String>,
     /// Name of the slash command in the message, if one was recognised.
     pub command: Option<String>,
+    /// Seq of the message this one replies to (a human's message only).
+    pub reply_to: Option<i64>,
+    /// Files attached to the message (a human's message only), already saved in the agent's folder.
+    pub attachments: Vec<Attachment>,
 }
 
 impl Inbound {
@@ -73,6 +80,8 @@ impl Inbound {
             chain: None,
             typed: None,
             command: None,
+            reply_to: None,
+            attachments: Vec::new(),
         }
     }
 
@@ -85,6 +94,8 @@ impl Inbound {
             chain: None,
             typed: None,
             command: None,
+            reply_to: None,
+            attachments: Vec::new(),
         }
     }
 }
@@ -140,7 +151,27 @@ enum Cmd {
         spec: ApprovalSpec,
         reply: oneshot::Sender<Result<(String, oneshot::Receiver<Decision>)>>,
     },
+    /// A form the agent asks for (see [`Supervisor::ask_form`]). Replies with the form id and the channel
+    /// that carries the answer.
+    AskForm {
+        spec: FormSpec,
+        reply: oneshot::Sender<Result<(String, oneshot::Receiver<Outcome>)>>,
+    },
+    /// The human's answer to a form: stored, sent to the waiting call, and the event shown. `Ok(false)` when
+    /// the form was answered already.
+    AnswerForm {
+        form_id: String,
+        outcome: Outcome,
+        reply: oneshot::Sender<Result<FormReply>>,
+    },
+    /// One form's wait ran out: it expires now, unless it was answered meanwhile.
+    ExpireForm {
+        form_id: String,
+        reply: oneshot::Sender<Result<()>>,
+    },
     Interrupt(oneshot::Sender<Result<()>>),
+    /// Start the agent's next chapter now, as a context or new-day close does (see [`Supervisor::new_chapter`]).
+    NewChapter(oneshot::Sender<Result<()>>),
     /// The pause flag changed in the store: interrupt the running turn when paused, else start the held messages.
     PauseChanged(oneshot::Sender<Result<()>>),
     Resolve {
@@ -203,6 +234,17 @@ const MEMORY_BRIEFING: &str = "Your memory lives in {home} — plain Markdown fi
 - journal/<YYYY-MM-DD>.md: one line per finished piece of work.
 - files/: anything you make for yourself.
 This conversation is split into sessions to stay fast and cheap; older messages are not in your context. If you need something from before, check your memory files, or use the history_search and history_day tools.";
+
+/// Put in front of the memory briefing when the agent has a folder of its own work. `{cwd}` is replaced by it.
+const PROJECT_FOLDER: &str =
+    "Your project folder is {cwd}: create and change work files there unless the user names another place.";
+
+/// Added to [`PROJECT_FOLDER`] when the agent has a memory folder, which has its own `files/` for private drafts.
+const PRIVATE_DRAFTS: &str = " files/ in your memory folder is only for your private drafts.";
+
+/// Put in the system prompt of every agent: when to ask with a form, and how to react to messages.
+const CHAT_GUIDE: &str = "Когда вам нужно несколько ответов от человека или подтверждение действия наружу (письмо, публикация, оплата, удаление), используйте инструмент ask_form вместо вопросов текстом. В форме — короткий заголовок и понятные подписи полей.
+Можно ставить реакции на сообщения человека инструментом react (например 👍 — принял, 👀 — смотрю), вместо коротких ответов.";
 
 /// Turn sent before a chapter closes, so the agent saves what matters.
 const WRAP_UP: &str = "Before we continue: Bandito is about to start a fresh session to keep this conversation fast and cheap. Update your memory now — MEMORY.md (short: user, current work, open tasks, decisions, links), notes/<topic>.md for details, and today's journal. Then reply with one short line saying what you saved.";
@@ -276,6 +318,7 @@ fn other_runtime(agent: &Agent, current: RuntimeKind) -> Option<RuntimeKind> {
 fn unsaved(reason: &'static str) -> &'static str {
     match reason {
         "context" => "context, memory not saved",
+        "manual" => "manual, memory not saved",
         _ => "new day, memory not saved",
     }
 }
@@ -374,6 +417,10 @@ impl Supervisor {
     /// After a daemon restart no session is alive, so pending approvals from
     /// the previous run can never be answered: deny them.
     pub fn recover(&self) -> Result<()> {
+        for f in self.hub.store.form_expire_all()? {
+            self.hub
+                .emit(&f.agent_id, form_answered_event(&f.id, &Outcome::Expired));
+        }
         for a in self.hub.store.approval_expire_older_than(i64::MAX)? {
             self.hub.emit(
                 &a.agent_id,
@@ -428,6 +475,10 @@ impl Supervisor {
             last_message: None,
             queue: VecDeque::new(),
             pending: HashMap::new(),
+            forms: HashMap::new(),
+            turn_note: None,
+            turn_until: None,
+            manual_chapter: false,
             status: None,
         };
         tokio::spawn(actor.run(rx));
@@ -504,6 +555,8 @@ impl Supervisor {
             chain: Some(chain),
             typed: None,
             command: None,
+            reply_to: None,
+            attachments: Vec::new(),
         };
         self.send(&to.id, msg).await?;
         Ok(to.id)
@@ -574,6 +627,57 @@ impl Supervisor {
                 Ok(answer.try_recv().unwrap_or(Decision::Deny))
             }
         }
+    }
+
+    /// Ask the human for an answer to a form (see docs/ARCHITECTURE.md#forms). The call waits for the answer
+    /// for at most `limit`; without one it is [`Outcome::Expired`]. Expiry also comes when the turn is cancelled,
+    /// the agent paused or deleted, or the daemon restarted.
+    pub async fn ask_form(&self, agent_id: &str, spec: FormSpec, limit: Duration) -> Result<Outcome> {
+        let (form_id, mut answer) = self.call(agent_id, |reply| Cmd::AskForm { spec, reply }).await?;
+        // If this call is dropped while the form waits (the agent's connection closed), the form expires.
+        let mut guard = ExpireOnDrop {
+            actor: self.actor(agent_id).ok(),
+            form_id: form_id.clone(),
+        };
+        match tokio::time::timeout(limit, &mut answer).await {
+            Ok(Ok(outcome)) => {
+                guard.disarm();
+                Ok(outcome)
+            }
+            Ok(Err(_)) => {
+                guard.disarm();
+                Ok(Outcome::Expired)
+            }
+            Err(_) => {
+                guard.disarm();
+                // Too late: expire it through the actor, so the store and the feed record it. An answer that
+                // arrived meanwhile is kept.
+                let _ = self.call(agent_id, |reply| Cmd::ExpireForm { form_id, reply }).await;
+                Ok(answer.try_recv().unwrap_or(Outcome::Expired))
+            }
+        }
+    }
+
+    /// The human's answer to a form, from `forms.answer` (see [`FormReply`]).
+    pub async fn answer_form(&self, form_id: &str, outcome: Outcome) -> Result<FormReply> {
+        let form = self
+            .hub
+            .store
+            .form_get(form_id)?
+            .ok_or_else(|| anyhow!("no form {form_id}"))?;
+        let form_id = form_id.to_string();
+        self.call(&form.agent_id, |reply| Cmd::AnswerForm {
+            form_id,
+            outcome,
+            reply,
+        })
+        .await
+    }
+
+    /// Starts the agent's next chapter by hand: the same close as a context limit, with a wrap-up turn first when the
+    /// agent has a home folder. A running turn finishes first.
+    pub async fn new_chapter(&self, agent_id: &str) -> Result<()> {
+        self.call(agent_id, Cmd::NewChapter).await
     }
 
     /// Deny approvals older than [`APPROVAL_TTL_MS`]. Call periodically.
@@ -654,6 +758,45 @@ impl Supervisor {
     }
 }
 
+/// What became of a human's answer to a form.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FormReply {
+    /// Stored, and handed to the call that waits for it.
+    Answered,
+    /// The form was answered before: the first answer stands.
+    AlreadyAnswered,
+    /// The call that asked is gone: the form expired, and the answer was not stored.
+    Expired,
+}
+
+/// Expires a form when the call that waits for it goes away before an outcome (see [`Supervisor::ask_form`]).
+struct ExpireOnDrop {
+    actor: Option<mpsc::Sender<Cmd>>,
+    form_id: String,
+}
+
+impl ExpireOnDrop {
+    fn disarm(&mut self) {
+        self.actor = None;
+    }
+}
+
+impl Drop for ExpireOnDrop {
+    fn drop(&mut self) {
+        let Some(actor) = self.actor.take() else {
+            return;
+        };
+        let Ok(handle) = tokio::runtime::Handle::try_current() else {
+            return;
+        };
+        let form_id = std::mem::take(&mut self.form_id);
+        handle.spawn(async move {
+            let (reply, _) = oneshot::channel();
+            let _ = actor.send(Cmd::ExpireForm { form_id, reply }).await;
+        });
+    }
+}
+
 struct PendingApproval {
     key: String,
     /// What a "remember" rule should match: the command, or the title.
@@ -710,6 +853,14 @@ struct Actor {
     last_message: Option<Inbound>,
     queue: VecDeque<Queued>,
     pending: HashMap<String, PendingApproval>,
+    /// Forms waiting for the human, by form id: the answer goes to the call that asked.
+    forms: HashMap<String, oneshot::Sender<Outcome>>,
+    /// The reaction line of the running human turn, kept for a retry of the same turn.
+    turn_note: Option<String>,
+    /// The moment the running human turn read its reactions: the next human turn's reactions start after it.
+    turn_until: Option<i64>,
+    /// A new chapter was asked for while a turn ran: it starts when the turn ends.
+    manual_chapter: bool,
     status: Option<AgentStatus>,
 }
 
@@ -764,6 +915,11 @@ impl Actor {
                 let res = self.interrupt_turn().await;
                 let _ = reply.send(res);
             }
+            Cmd::NewChapter(reply) => {
+                self.manual_chapter = true;
+                let res = self.apply_manual_chapter().await;
+                let _ = reply.send(res);
+            }
             Cmd::PauseChanged(reply) => {
                 let res = if self.is_paused() {
                     self.interrupt_turn().await
@@ -788,6 +944,20 @@ impl Actor {
             Cmd::AskExternal { spec, reply } => {
                 let _ = reply.send(self.ask_external(spec));
             }
+            Cmd::AskForm { spec, reply } => {
+                let _ = reply.send(self.ask_form(spec));
+            }
+            Cmd::AnswerForm {
+                form_id,
+                outcome,
+                reply,
+            } => {
+                let _ = reply.send(self.answer_form(&form_id, outcome));
+            }
+            Cmd::ExpireForm { form_id, reply } => {
+                self.expire_one_form(&form_id);
+                let _ = reply.send(Ok(()));
+            }
             Cmd::ReserveCrewSend(text, reply) => {
                 let result = self
                     .reserve_crew_send()
@@ -806,6 +976,8 @@ impl Actor {
 
     /// Asks the running session to stop its turn. Nothing happens when no turn runs.
     async fn interrupt_turn(&mut self) -> Result<()> {
+        // Open forms end with the turn: nobody can answer them for a turn that is gone.
+        self.expire_forms();
         match (&mut self.session, &self.turn) {
             (Some(s), Some(_)) => s.interrupt().await,
             _ => Ok(()),
@@ -826,6 +998,8 @@ impl Actor {
                 source: msg.source,
                 from_agent: msg.from_agent.clone(),
                 command: msg.command.clone(),
+                reply_to: msg.reply_to,
+                attachments: msg.attachments.clone(),
             },
         );
     }
@@ -903,7 +1077,7 @@ impl Actor {
                 remember,
             },
         );
-        if self.pending.is_empty() && self.turn.is_some() {
+        if self.pending.is_empty() && self.forms.is_empty() && self.turn.is_some() {
             self.set_status(AgentStatus::Working, None);
         }
         Ok(())
@@ -928,8 +1102,15 @@ impl Actor {
             .ok_or_else(|| anyhow!("runtime {} is not available on this server", kind.as_str()))?;
         // Blocks: memory briefing, role, the user's own instructions.
         let mut blocks: Vec<String> = Vec::new();
-        if let Some(home) = agent.home_dir.as_deref() {
-            blocks.push(MEMORY_BRIEFING.replace("{home}", home));
+        let project = (!agent.cwd.trim().is_empty()).then(|| PROJECT_FOLDER.replace("{cwd}", agent.cwd.trim()));
+        match (agent.home_dir.as_deref(), project) {
+            (Some(home), Some(project)) => {
+                let project = format!("{project}{PRIVATE_DRAFTS}");
+                blocks.push(format!("{project}\n\n{}", MEMORY_BRIEFING.replace("{home}", home)));
+            }
+            (Some(home), None) => blocks.push(MEMORY_BRIEFING.replace("{home}", home)),
+            (None, Some(project)) => blocks.push(project),
+            (None, None) => {}
         }
         if !agent.role.trim().is_empty() {
             blocks.push(format!(
@@ -938,6 +1119,7 @@ impl Actor {
                 agent.role.trim()
             ));
         }
+        blocks.push(CHAT_GUIDE.to_string());
         if let Some(sp) = agent.system_prompt.as_deref().filter(|s| !s.trim().is_empty()) {
             blocks.push(sp.to_string());
         }
@@ -1100,6 +1282,8 @@ impl Actor {
             chain: None,
             typed: None,
             command: None,
+            reply_to: None,
+            attachments: Vec::new(),
         };
         match self.start_turn(msg, false).await {
             Ok(()) => true,
@@ -1110,6 +1294,18 @@ impl Actor {
                 false
             }
         }
+    }
+
+    /// Starts the requested new chapter when no turn runs: the wrap-up turn first when the agent has a home folder,
+    /// as an automatic close does. Waits (keeps the request) while a turn or a wrap-up runs.
+    async fn apply_manual_chapter(&mut self) -> Result<()> {
+        if self.turn.is_some() || self.wrap_up.is_some() {
+            return Ok(());
+        }
+        self.manual_chapter = false;
+        let agent = self.agent()?;
+        self.begin_rotation("manual", &agent).await;
+        Ok(())
     }
 
     /// Apply a pending reload now, unless a turn is running or a chapter is about to
@@ -1191,6 +1387,21 @@ impl Actor {
         if !retry && msg.source != Source::System {
             self.last_message = Some(msg.clone());
         }
+        // The reactions of the human go first: those since the last human turn read them, up to the moment this
+        // turn reads them. A retry repeats the note it had.
+        // The window ends at the moment it is read: reactions made later wait for the next human turn.
+        let (note, until) = if retry {
+            (self.turn_note.clone(), self.turn_until)
+        } else if msg.source == Source::User {
+            let until = now_ms();
+            (self.reaction_note(until), Some(until))
+        } else {
+            (None, None)
+        };
+        self.turn_note = note.clone();
+        self.turn_until = until;
+        let quote = self.reply_quote(&msg);
+        let prompt = chat::runtime_text(&msg.text, note.as_deref(), quote.as_deref(), &msg.attachments);
         let turn_id = new_id();
         self.turn = Some(turn_id.clone());
         self.turn_hops = msg.hops;
@@ -1202,6 +1413,7 @@ impl Actor {
             EventBody::TurnStarted {
                 turn_id: turn_id.clone(),
                 source: msg.source,
+                reactions_until: until,
             },
         );
         if !retry && !echoed {
@@ -1218,7 +1430,7 @@ impl Actor {
             snapshot_before(&self.hub.store, &self.id, &home, &cwd, &msg.text, &turn_id).await;
         }
         let sent = match &mut self.session {
-            Some(s) => s.send(&msg.text).await,
+            Some(s) => s.send(&prompt).await,
             None => Err(anyhow!("no session")),
         };
         if let Err(e) = sent {
@@ -1226,6 +1438,172 @@ impl Actor {
             return Err(e);
         }
         Ok(())
+    }
+
+    /// The reactions the human put on this agent's messages in the window that ends at `until`, as the line that
+    /// starts the next prompt. `None` when there are none.
+    fn reaction_note(&self, until: i64) -> Option<String> {
+        let store = &self.hub.store;
+        // From where the last human turn read its reactions (its start, for turns from before that was recorded).
+        let since = store.user_reactions_mark(&self.id).ok().flatten().unwrap_or(0);
+        let reactions = match store.user_reactions_between(&self.id, since, until) {
+            Ok(list) => list,
+            Err(e) => {
+                tracing::warn!(agent = self.id, "reactions for the prompt: {e:#}");
+                return None;
+            }
+        };
+        let items: Vec<chat::ReactionNote> = reactions
+            .into_iter()
+            .filter_map(|r| match store.event_at(&self.id, r.seq).ok().flatten()?.body {
+                EventBody::MessageAssistant { text } => Some(chat::ReactionNote {
+                    emoji: r.emoji,
+                    message: text,
+                }),
+                _ => None,
+            })
+            .collect();
+        chat::reaction_note(&items)
+    }
+
+    /// The text of the message `msg` replies to, if it replies to a message of this agent.
+    fn reply_quote(&self, msg: &Inbound) -> Option<String> {
+        let seq = msg.reply_to?;
+        match self.hub.store.event_at(&self.id, seq).ok().flatten()?.body {
+            EventBody::MessageUser { text, .. } | EventBody::MessageAssistant { text } => Some(text),
+            _ => None,
+        }
+    }
+
+    /// Store a form and show it; the call that asked waits for its answer. The agent is `needs you` meanwhile.
+    fn ask_form(&mut self, mut spec: FormSpec) -> Result<(String, oneshot::Receiver<Outcome>)> {
+        // The form is the agent's text: what is stored and shown has no secret of the session in it.
+        self.redact_form(&mut spec);
+        let spec_json = serde_json::to_value(&spec)?;
+        let form = self.hub.store.form_create(&self.id, &spec_json)?;
+        let (answer, received) = oneshot::channel();
+        self.forms.insert(form.id.clone(), answer);
+        self.hub.emit(
+            &self.id,
+            EventBody::FormRequested {
+                form_id: form.id.clone(),
+                title: spec.title,
+                intro: spec.intro,
+                kind: spec.kind,
+                fields: spec.fields,
+                submit_label: spec.submit_label,
+                reject_label: spec.reject_label,
+            },
+        );
+        self.set_status(AgentStatus::NeedsYou, None);
+        Ok((form.id, received))
+    }
+
+    /// Replaces the secrets of the session in every text of a form (see [`Redactor`]).
+    fn redact_form(&self, spec: &mut FormSpec) {
+        let text = |t: &mut String| *t = self.redactor.redact(t).into_owned();
+        text(&mut spec.title);
+        if let Some(intro) = spec.intro.as_mut() {
+            text(intro);
+        }
+        for label in [spec.submit_label.as_mut(), spec.reject_label.as_mut()]
+            .into_iter()
+            .flatten()
+        {
+            text(label);
+        }
+        for field in &mut spec.fields {
+            text(&mut field.label);
+            for part in [field.placeholder.as_mut(), field.help.as_mut()].into_iter().flatten() {
+                text(part);
+            }
+            for option in field.options.iter_mut().flatten() {
+                text(option);
+            }
+            if let Some(serde_json::Value::String(default)) = field.default.as_mut() {
+                text(default);
+            }
+        }
+    }
+
+    /// Stores the human's answer and wakes the call that waits for it (see [`FormReply`]).
+    fn answer_form(&mut self, form_id: &str, outcome: Outcome) -> Result<FormReply> {
+        let waiting = self.forms.remove(form_id);
+        // A form whose call is gone (its connection closed) has nobody to hear the answer: it expires instead.
+        let gone = waiting.as_ref().is_some_and(|w| w.is_closed());
+        let outcome = if gone { Outcome::Expired } else { outcome };
+        let status = match outcome {
+            Outcome::Submit(_) => crate::store::FormStatus::Submitted,
+            Outcome::Reject(_) => crate::store::FormStatus::Rejected,
+            Outcome::Expired => crate::store::FormStatus::Expired,
+        };
+        if self
+            .hub
+            .store
+            .form_answer(form_id, status, &outcome.to_json())?
+            .is_none()
+        {
+            return Ok(FormReply::AlreadyAnswered);
+        }
+        if let Some(waiting) = waiting {
+            let _ = waiting.send(outcome.clone());
+        }
+        self.hub.emit(&self.id, form_answered_event(form_id, &outcome));
+        self.forms_settled();
+        Ok(if gone { FormReply::Expired } else { FormReply::Answered })
+    }
+
+    /// Every open form of this agent expires (its turn ended, it was paused or deleted).
+    fn expire_forms(&mut self) {
+        let waiting = std::mem::take(&mut self.forms);
+        match self.hub.store.form_expire_agent(&self.id) {
+            Ok(list) => {
+                for f in list {
+                    self.hub.emit(&self.id, form_answered_event(&f.id, &Outcome::Expired));
+                }
+            }
+            Err(e) => tracing::error!(agent = self.id, "expire forms: {e:#}"),
+        }
+        let any = !waiting.is_empty();
+        for (_, answer) in waiting {
+            let _ = answer.send(Outcome::Expired);
+        }
+        if any {
+            self.forms_settled();
+        }
+    }
+
+    /// One form's wait ran out: it expires, unless it was answered already.
+    fn expire_one_form(&mut self, form_id: &str) {
+        let Some(waiting) = self.forms.remove(form_id) else {
+            return;
+        };
+        match self
+            .hub
+            .store
+            .form_answer(form_id, crate::store::FormStatus::Expired, &Outcome::Expired.to_json())
+        {
+            Ok(Some(_)) => {
+                self.hub.emit(&self.id, form_answered_event(form_id, &Outcome::Expired));
+            }
+            Ok(None) => {}
+            Err(e) => tracing::error!(agent = self.id, "expire form: {e:#}"),
+        }
+        let _ = waiting.send(Outcome::Expired);
+        self.forms_settled();
+    }
+
+    /// No form waits any more: the agent is working again if its turn runs, or idle if none does.
+    fn forms_settled(&mut self) {
+        if !self.forms.is_empty() || !self.pending.is_empty() || self.status != Some(AgentStatus::NeedsYou) {
+            return;
+        }
+        let status = if self.turn.is_some() {
+            AgentStatus::Working
+        } else {
+            AgentStatus::Idle
+        };
+        self.set_status(status, None);
     }
 
     fn end_turn(&mut self, status: TurnStatus, error: Option<String>) {
@@ -1467,6 +1845,10 @@ impl Actor {
     }
 
     async fn after_turn(&mut self) {
+        // A new chapter asked for during the turn starts now, through the same wrap-up as a context close.
+        if self.manual_chapter && self.apply_manual_chapter().await.is_ok() && self.wrap_up.is_some() {
+            return;
+        }
         // A paused agent holds its queue: it is idle until the pause ends.
         if self.queue.is_empty() || self.is_paused() {
             self.set_status(AgentStatus::Idle, None);
@@ -1495,7 +1877,7 @@ impl Actor {
             Ok(None) => {}
             Err(e) => tracing::error!(agent = self.id, "cancel approval: {e:#}"),
         }
-        if self.pending.is_empty() && self.turn.is_some() {
+        if self.pending.is_empty() && self.forms.is_empty() && self.turn.is_some() {
             self.set_status(AgentStatus::Working, None);
         }
     }
@@ -1689,9 +2071,25 @@ impl Actor {
             self.end_turn(TurnStatus::Interrupted, None);
         }
         self.expire_pending();
+        self.expire_forms();
         if self.status.is_some() {
             self.set_status(AgentStatus::Offline, None);
         }
+    }
+}
+
+/// The `form_answered` event of a form that ended with `outcome`.
+fn form_answered_event(form_id: &str, outcome: &Outcome) -> EventBody {
+    let (values, comment) = match outcome {
+        Outcome::Submit(values) => (Some(values.clone()), None),
+        Outcome::Reject(comment) => (None, comment.clone()),
+        Outcome::Expired => (None, None),
+    };
+    EventBody::FormAnswered {
+        form_id: form_id.to_string(),
+        action: outcome.action(),
+        values,
+        comment,
     }
 }
 
@@ -2463,6 +2861,8 @@ mod tests {
                 source: Source::Crew,
                 from_agent: Some("Forge".into()),
                 command: None,
+                reply_to: None,
+                attachments: Vec::new(),
             }
         );
 
@@ -2541,6 +2941,8 @@ mod tests {
             chain: Some("chain-1".into()),
             typed: None,
             command: None,
+            reply_to: None,
+            attachments: Vec::new(),
         };
         w.sup.send(&w.agent, msg).await.unwrap();
         w.wait_log("send hi").await;
@@ -2635,6 +3037,8 @@ mod tests {
             chain: Some("spent".into()),
             typed: None,
             command: None,
+            reply_to: None,
+            attachments: Vec::new(),
         };
         w.sup.send(&w.agent, msg).await.unwrap();
         w.wait_log("send hi").await;
@@ -2787,8 +3191,15 @@ mod tests {
         let cfg = &spawns[0];
         let sp = cfg.system_prompt.as_deref().unwrap();
         let briefing = MEMORY_BRIEFING.replace("{home}", HOME);
-        assert!(sp.starts_with(&briefing), "briefing comes first: {sp}");
-        assert!(sp[briefing.len()..].starts_with("\n\nYou are Forge, the builder"));
+        // The project folder is the first line of the briefing, and the briefing comes first of the blocks.
+        let project = format!("{}{PRIVATE_DRAFTS}", PROJECT_FOLDER.replace("{cwd}", "/home/u/app"));
+        assert!(
+            sp.starts_with(&format!("{project}\n\n{briefing}")),
+            "project folder, then briefing: {sp}"
+        );
+        let role = format!("{project}\n\n{briefing}\n\nYou are Forge, the builder");
+        assert!(sp.starts_with(&role), "role follows the briefing: {sp}");
+        assert!(sp.contains(CHAT_GUIDE));
         assert!(sp.ends_with("Keep PRs small."));
         assert!(sp.contains(HOME));
         assert_eq!(cfg.effort, Some(Effort::High));
@@ -2810,6 +3221,10 @@ mod tests {
         );
         assert!(spawns[0].extra_dirs.is_empty());
         assert_eq!(spawns[0].effort, None);
+        // Without a memory folder there is no `files/` to speak of: the project line alone.
+        let prompt = spawns[0].system_prompt.as_deref().unwrap();
+        assert!(prompt.starts_with("Your project folder is /home/u/app: create and change work files there unless the user names another place.\n\n"), "{prompt}");
+        assert!(!prompt.contains("private drafts"), "{prompt}");
     }
 
     #[tokio::test]
@@ -3345,6 +3760,8 @@ mod tests {
             chain: None,
             typed: None,
             command: None,
+            reply_to: None,
+            attachments: Vec::new(),
         };
         w.sup.send(&w.agent, wrap_up).await.unwrap();
         w.wait_log("send wrap up").await;
@@ -3666,6 +4083,361 @@ mod tests {
         wait_in(&codex_log, "send again").await;
         assert_eq!(switch_count(&w), 0);
         assert!(w.log.lock().unwrap().is_empty());
+    }
+
+    fn question() -> FormSpec {
+        crate::forms::parse_spec(&json!({
+            "title": "Name?",
+            "kind": "question",
+            "fields": [{ "id": "name", "label": "Name", "type": "text", "required": true }],
+        }))
+        .unwrap()
+    }
+
+    fn form_requested_id(b: &EventBody) -> Option<String> {
+        match b {
+            EventBody::FormRequested { form_id, .. } => Some(form_id.clone()),
+            _ => None,
+        }
+    }
+
+    #[tokio::test]
+    async fn a_form_waits_for_the_answer_and_the_agent_needs_you_meanwhile() {
+        let mut w = world(ApprovalMode::Risky);
+        let (sup, agent) = (w.sup.clone(), w.agent.clone());
+        let asking = tokio::spawn(async move { sup.ask_form(&agent, question(), Duration::from_secs(30)).await });
+        let asked = w.wait(|b| form_requested_id(b).is_some()).await;
+        let form_id = form_requested_id(&asked.body).unwrap();
+        w.wait(is_status(AgentStatus::NeedsYou)).await;
+        let mut values = serde_json::Map::new();
+        values.insert("name".into(), json!("Ann"));
+        assert_eq!(
+            w.sup
+                .answer_form(&form_id, Outcome::Submit(values.clone()))
+                .await
+                .unwrap(),
+            FormReply::Answered
+        );
+        assert_eq!(asking.await.unwrap().unwrap(), Outcome::Submit(values));
+        let closed = w.wait(|b| matches!(b, EventBody::FormAnswered { .. })).await;
+        assert!(matches!(
+            closed.body,
+            EventBody::FormAnswered {
+                action: crate::forms::FormAction::Submit,
+                ..
+            }
+        ));
+        w.wait(is_status(AgentStatus::Idle)).await;
+        assert_eq!(
+            w.store.form_get(&form_id).unwrap().unwrap().status,
+            crate::store::FormStatus::Submitted
+        );
+        // The first answer stands: a second one is refused and changes nothing.
+        assert_eq!(
+            w.sup.answer_form(&form_id, Outcome::Reject(None)).await.unwrap(),
+            FormReply::AlreadyAnswered
+        );
+        assert_eq!(
+            w.store.form_get(&form_id).unwrap().unwrap().status,
+            crate::store::FormStatus::Submitted
+        );
+    }
+
+    #[tokio::test]
+    async fn an_unanswered_form_expires_after_its_limit() {
+        let mut w = world(ApprovalMode::Risky);
+        let outcome = w
+            .sup
+            .ask_form(&w.agent, question(), Duration::from_millis(30))
+            .await
+            .unwrap();
+        assert_eq!(outcome, Outcome::Expired);
+        let forms = w.store.form_list(Some(&w.agent), None).unwrap();
+        assert_eq!(forms.len(), 1);
+        assert_eq!(forms[0].status, crate::store::FormStatus::Expired);
+        w.wait(|b| {
+            matches!(
+                b,
+                EventBody::FormAnswered {
+                    action: crate::forms::FormAction::Expired,
+                    ..
+                }
+            )
+        })
+        .await;
+        w.wait(is_status(AgentStatus::Idle)).await;
+    }
+
+    #[tokio::test]
+    async fn cancelling_pausing_or_stopping_the_agent_expires_its_open_forms() {
+        let mut w = world(ApprovalMode::Risky);
+        // Cancelling the turn.
+        let (sup, agent) = (w.sup.clone(), w.agent.clone());
+        let asking = tokio::spawn(async move { sup.ask_form(&agent, question(), Duration::from_secs(30)).await });
+        w.wait(|b| form_requested_id(b).is_some()).await;
+        w.sup.interrupt(&w.agent).await.unwrap();
+        assert_eq!(asking.await.unwrap().unwrap(), Outcome::Expired);
+
+        // Pausing the agent.
+        let (sup, agent) = (w.sup.clone(), w.agent.clone());
+        let asking = tokio::spawn(async move { sup.ask_form(&agent, question(), Duration::from_secs(30)).await });
+        w.wait(|b| form_requested_id(b).is_some()).await;
+        assert!(w.sup.set_paused(&w.agent, true).await.unwrap());
+        assert_eq!(asking.await.unwrap().unwrap(), Outcome::Expired);
+        assert!(
+            w.store
+                .form_list(Some(&w.agent), Some(crate::store::FormStatus::Pending))
+                .unwrap()
+                .is_empty()
+        );
+
+        // Deleting the agent (its actor stops).
+        let (sup, agent) = (w.sup.clone(), w.agent.clone());
+        let asking = tokio::spawn(async move { sup.ask_form(&agent, question(), Duration::from_secs(30)).await });
+        w.wait(|b| form_requested_id(b).is_some()).await;
+        w.sup.stop(&w.agent).await;
+        assert_eq!(asking.await.unwrap().unwrap(), Outcome::Expired);
+    }
+
+    #[tokio::test]
+    async fn a_reply_and_attachments_reach_the_prompt_and_the_thread() {
+        let mut w = world(ApprovalMode::Risky);
+        let quoted = w
+            .store
+            .append_event(
+                &w.agent,
+                EventBody::MessageAssistant {
+                    text: "Какой цвет?".into(),
+                },
+            )
+            .unwrap()
+            .seq;
+        let file = crate::attachments::Attachment {
+            path: "/home/u/app/.bandito/attachments/2026-10-10/c.png".into(),
+            name: "c.png".into(),
+            size: 3,
+            mime: "image/png".into(),
+        };
+        let msg = Inbound {
+            reply_to: Some(quoted),
+            attachments: vec![file.clone()],
+            ..Inbound::user("Синий")
+        };
+        w.sup.send(&w.agent, msg).await.unwrap();
+        w.wait_log(
+            "send В ответ на: > Какой цвет?\n\nСиний\n\nВложения:\n- /home/u/app/.bandito/attachments/2026-10-10/c.png (image/png, 3 байт)",
+        )
+        .await;
+        let echo = w
+            .wait(|b| matches!(b, EventBody::MessageUser { text, .. } if text == "Синий"))
+            .await;
+        match echo.body {
+            EventBody::MessageUser {
+                reply_to, attachments, ..
+            } => {
+                assert_eq!(reply_to, Some(quoted));
+                assert_eq!(attachments, vec![file]);
+            }
+            other => panic!("not a message: {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn reactions_reach_the_next_prompt_once_and_start_no_turn() {
+        let w = world(ApprovalMode::Risky);
+        w.sup.send(&w.agent, Inbound::user("first")).await.unwrap();
+        w.wait_log("send first").await;
+        w.push(done()).await;
+        let reply = w
+            .store
+            .append_event(
+                &w.agent,
+                EventBody::MessageAssistant {
+                    text: "Готово, файл создан".into(),
+                },
+            )
+            .unwrap()
+            .seq;
+        tokio::time::sleep(Duration::from_millis(5)).await;
+        w.store
+            .reaction_set(&w.agent, reply, crate::event::ReactionBy::User, Some("👍"))
+            .unwrap();
+
+        // A reaction alone starts no turn.
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert_eq!(w.log.lock().unwrap().len(), 1, "only the first turn ran");
+
+        // The next message carries the reaction, at its start.
+        w.sup.send(&w.agent, Inbound::user("second")).await.unwrap();
+        w.wait_log("send (Реакции с прошлого раза: 👍 на «Готово, файл создан»)\n\nsecond")
+            .await;
+        w.push(done()).await;
+
+        // The reaction was delivered with the second message: the third one does not repeat it.
+        w.sup.send(&w.agent, Inbound::user("third")).await.unwrap();
+        w.wait_log("send third").await;
+    }
+
+    #[tokio::test]
+    async fn a_form_keeps_no_secret_of_the_session() {
+        let mut w = world(ApprovalMode::Risky);
+        let old = "sk-old-0123456789";
+        w.store.secret_set("OPENAI_API_KEY", old, &[w.agent.clone()]).unwrap();
+        // The session starts with the secret, so its redactor knows the value.
+        w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
+        w.wait_log("send go").await;
+        let spec = crate::forms::parse_spec(&json!({
+            "title": format!("Key {old}?"),
+            "kind": "question",
+            "fields": [{ "id": "a", "label": format!("Paste {old}"), "type": "text" }],
+        }))
+        .unwrap();
+        let (sup, agent) = (w.sup.clone(), w.agent.clone());
+        let asking = tokio::spawn(async move { sup.ask_form(&agent, spec, Duration::from_secs(30)).await });
+        let asked = w.wait(|b| form_requested_id(b).is_some()).await;
+        let EventBody::FormRequested {
+            title, fields, form_id, ..
+        } = asked.body
+        else {
+            panic!("not a form");
+        };
+        assert!(!title.contains(old) && title.contains("OPENAI_API_KEY"), "{title}");
+        assert!(!fields[0].label.contains(old), "{}", fields[0].label);
+        let stored = w.store.form_get(&form_id).unwrap().unwrap();
+        assert!(!stored.spec.to_string().contains(old));
+        w.sup.answer_form(&form_id, Outcome::Reject(None)).await.unwrap();
+        assert_eq!(asking.await.unwrap().unwrap(), Outcome::Reject(None));
+    }
+
+    #[tokio::test]
+    async fn a_form_expires_when_the_call_waiting_for_it_goes_away() {
+        let mut w = world(ApprovalMode::Risky);
+        let (sup, agent) = (w.sup.clone(), w.agent.clone());
+        let asking = tokio::spawn(async move { sup.ask_form(&agent, question(), Duration::from_secs(30)).await });
+        let asked = w.wait(|b| form_requested_id(b).is_some()).await;
+        let form_id = form_requested_id(&asked.body).unwrap();
+        // The call is dropped (as when the agent's connection closes): nobody waits for the answer any more.
+        asking.abort();
+        w.wait(|b| {
+            matches!(
+                b,
+                EventBody::FormAnswered {
+                    action: crate::forms::FormAction::Expired,
+                    ..
+                }
+            )
+        })
+        .await;
+        assert_eq!(
+            w.store.form_get(&form_id).unwrap().unwrap().status,
+            crate::store::FormStatus::Expired
+        );
+        w.wait(is_status(AgentStatus::Idle)).await;
+    }
+
+    #[tokio::test]
+    async fn an_answer_to_a_form_nobody_waits_for_expires_it() {
+        let w = world(ApprovalMode::Risky);
+        // A form whose waiting end is dropped at once, before any answer.
+        let (form_id, waiting) = w
+            .sup
+            .call(&w.agent, |reply| Cmd::AskForm {
+                spec: question(),
+                reply,
+            })
+            .await
+            .unwrap();
+        drop(waiting);
+        let mut values = serde_json::Map::new();
+        values.insert("name".into(), json!("Ann"));
+        assert_eq!(
+            w.sup.answer_form(&form_id, Outcome::Submit(values)).await.unwrap(),
+            FormReply::Expired
+        );
+        assert_eq!(
+            w.store.form_get(&form_id).unwrap().unwrap().status,
+            crate::store::FormStatus::Expired
+        );
+        assert_eq!(
+            w.sup.answer_form(&form_id, Outcome::Reject(None)).await.unwrap(),
+            FormReply::AlreadyAnswered
+        );
+    }
+
+    #[tokio::test]
+    async fn a_human_turn_records_the_moment_it_read_its_reactions() {
+        let mut w = world(ApprovalMode::Risky);
+        let before = now_ms();
+        w.sup.send(&w.agent, Inbound::user("first")).await.unwrap();
+        let started = w
+            .wait(|b| {
+                matches!(
+                    b,
+                    EventBody::TurnStarted {
+                        source: Source::User,
+                        ..
+                    }
+                )
+            })
+            .await;
+        let EventBody::TurnStarted { reactions_until, .. } = started.body else {
+            panic!("not a turn");
+        };
+        let until = reactions_until.expect("a human turn records its window's end");
+        assert!(until >= before && until <= now_ms());
+        // The next window starts where this one ended.
+        assert_eq!(w.store.user_reactions_mark(&w.agent).unwrap(), Some(until));
+    }
+
+    #[tokio::test]
+    async fn a_manual_new_chapter_wraps_up_then_starts_a_fresh_session() {
+        let mut w = world(ApprovalMode::Risky);
+        w.store.agent_set_home(&w.agent, HOME).unwrap();
+        w.sup.send(&w.agent, Inbound::user("work")).await.unwrap();
+        w.wait_log("send work").await;
+        w.push(RuntimeOutput::SessionId("sess-1".into())).await;
+        w.push(done()).await;
+        w.wait(is_status(AgentStatus::Idle)).await;
+
+        // Idle: the wrap-up starts at once, and the chapter closes when it ends.
+        w.sup.new_chapter(&w.agent).await.unwrap();
+        w.wait_log(&format!("send {WRAP_UP}")).await;
+        w.push(done()).await;
+        let (chapter, reason, _) = rotated(&mut w).await;
+        assert_eq!((chapter, reason.as_str()), (2, "manual"));
+        w.wait_log("shutdown").await;
+        let a = w.store.agent_get(&w.agent).unwrap().unwrap();
+        assert_eq!((a.chapter, a.runtime_session_id), (2, None));
+    }
+
+    #[tokio::test]
+    async fn a_manual_new_chapter_during_a_turn_starts_when_the_turn_ends() {
+        let mut w = world(ApprovalMode::Risky);
+        w.store.agent_set_home(&w.agent, HOME).unwrap();
+        w.sup.send(&w.agent, Inbound::user("work")).await.unwrap();
+        w.wait_log("send work").await;
+        w.push(RuntimeOutput::SessionId("sess-1".into())).await;
+        w.sup.new_chapter(&w.agent).await.unwrap();
+        // The turn runs on: no wrap-up yet.
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert!(!was_sent(&w, WRAP_UP));
+        // The turn ends: the wrap-up runs, and the chapter closes after it.
+        w.push(done()).await;
+        w.wait_log(&format!("send {WRAP_UP}")).await;
+        w.push(done()).await;
+        let (chapter, reason, _) = rotated(&mut w).await;
+        assert_eq!((chapter, reason.as_str()), (2, "manual"));
+    }
+
+    #[tokio::test]
+    async fn a_manual_new_chapter_without_a_home_closes_at_once() {
+        let mut w = world(ApprovalMode::Risky);
+        w.sup.new_chapter(&w.agent).await.unwrap();
+        let (chapter, reason, _) = rotated(&mut w).await;
+        assert_eq!((chapter, reason.as_str()), (2, "manual"));
+        assert!(!was_sent(&w, WRAP_UP), "no home, so no wrap-up");
+        let a = w.store.agent_get(&w.agent).unwrap().unwrap();
+        assert_eq!(a.chapter, 2);
     }
 }
 

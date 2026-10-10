@@ -3,8 +3,9 @@
 
 use crate::event::{Event, EventBody};
 use anyhow::{Context, Result, bail};
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::path::Path;
 use std::sync::Mutex;
 
@@ -12,7 +13,9 @@ mod agents;
 mod approvals;
 pub mod auth;
 mod checkpoints;
+mod forms;
 mod history;
+mod reactions;
 mod rules;
 mod schedules;
 mod secrets;
@@ -23,6 +26,8 @@ pub use agents::{ALL_CAPABILITIES, Agent, AgentPatch, Avatar, Capability, NewAge
 pub use approvals::{Approval, ApprovalStatus};
 pub use auth::Device;
 pub use checkpoints::{Checkpoint, CheckpointKind};
+pub use forms::{Form, FormStatus};
+pub use reactions::Reaction;
 pub use rules::{Rule, RuleAction};
 pub use schedules::{NewSchedule, NextRun, Schedule, SchedulePatch};
 pub use secrets::{SecretInfo, check_agents, check_name, check_value};
@@ -41,6 +46,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../../migrations/0010_events_agent_kind_seq.sql"),
     include_str!("../../migrations/0011_agent_personal_settings.sql"),
     include_str!("../../migrations/0012_agent_avatar_capabilities.sql"),
+    include_str!("../../migrations/0013_forms_reactions.sql"),
 ];
 
 pub struct Store {
@@ -183,6 +189,63 @@ impl Store {
         Ok(self
             .conn()
             .query_row("SELECT COALESCE(MAX(seq), 0) FROM events", [], |r| r.get(0))?)
+    }
+
+    /// One event of an agent by its seq, if it is stored.
+    pub fn event_at(&self, agent_id: &str, seq: i64) -> Result<Option<Event>> {
+        let row = self
+            .conn()
+            .query_row(
+                "SELECT seq, agent_id, ts, kind, payload FROM events WHERE agent_id = ?1 AND seq = ?2",
+                params![agent_id, seq],
+                |r| {
+                    Ok((
+                        r.get::<_, i64>(0)?,
+                        r.get::<_, String>(1)?,
+                        r.get::<_, i64>(2)?,
+                        r.get::<_, String>(3)?,
+                        r.get::<_, String>(4)?,
+                    ))
+                },
+            )
+            .optional()?;
+        let Some((seq, agent_id, ts, kind, payload)) = row else {
+            return Ok(None);
+        };
+        let payload: Value = serde_json::from_str(&payload)?;
+        Ok(Some(Event {
+            seq,
+            agent_id,
+            ts,
+            body: EventBody::from_parts(&kind, payload)?,
+        }))
+    }
+
+    /// The seq of the agent's newest message from the human (`message.user` with source `user`), if any.
+    pub fn last_user_message_seq(&self, agent_id: &str) -> Result<Option<i64>> {
+        Ok(self
+            .conn()
+            .query_row(
+                "SELECT seq FROM events WHERE agent_id = ?1 AND kind = 'message.user'
+                   AND json_extract(payload, '$.source') = 'user' ORDER BY seq DESC LIMIT 1",
+                [agent_id],
+                |r| r.get(0),
+            )
+            .optional()?)
+    }
+
+    /// When the agent's last turn that a human message started was started (`turn.started`, source `user`).
+    pub fn user_reactions_mark(&self, agent_id: &str) -> Result<Option<i64>> {
+        Ok(self
+            .conn()
+            .query_row(
+                "SELECT COALESCE(json_extract(payload, '$.reactions_until'), ts) FROM events
+                   WHERE agent_id = ?1 AND kind = 'turn.started'
+                   AND json_extract(payload, '$.source') = 'user' ORDER BY seq DESC LIMIT 1",
+                [agent_id],
+                |r| r.get(0),
+            )
+            .optional()?)
     }
 }
 

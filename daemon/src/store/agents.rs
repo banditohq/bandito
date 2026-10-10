@@ -639,6 +639,8 @@ impl Store {
         tx.execute("DELETE FROM rules WHERE agent_id=?1", [id])?;
         tx.execute("DELETE FROM schedules WHERE agent_id=?1", [id])?;
         tx.execute("DELETE FROM checkpoints WHERE agent_id=?1", [id])?;
+        tx.execute("DELETE FROM forms WHERE agent_id=?1", [id])?;
+        tx.execute("DELETE FROM reactions WHERE agent_id=?1", [id])?;
         tx.commit()?;
         Ok(n > 0)
     }
@@ -869,6 +871,8 @@ mod tests {
             source,
             from_agent: None,
             command: None,
+            reply_to: None,
+            attachments: Vec::new(),
         };
         s.append_event(&a.id, user("hi", Source::User)).unwrap();
         let reply = s

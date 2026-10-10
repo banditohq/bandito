@@ -404,6 +404,8 @@ impl Prepared {
             from_agent: None,
             hops: 0,
             chain: None,
+            reply_to: None,
+            attachments: Vec::new(),
         }
     }
 }

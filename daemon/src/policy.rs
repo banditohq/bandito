@@ -2120,6 +2120,14 @@ mod tests {
     }
 
     #[test]
+    fn reading_an_attachment_in_the_project_folder_is_allowed() {
+        // Files people attach are saved in `<project>/.bandito/attachments`: a folder of the agent, not Bandito's.
+        let path = "/home/u/app/.bandito/attachments/2026-10-10/photo.png";
+        assert_eq!(run(ApprovalMode::Risky, &read_req(path), &[CWD], &[]), Verdict::Allow);
+        assert_eq!(run(ApprovalMode::Never, &read_req(path), &[CWD], &[]), Verdict::Allow);
+    }
+
+    #[test]
     fn risky_read_of_a_credential_folder_asks_naming_the_folder() {
         let cases = [
             ("/home/u/.ssh/id_rsa", ".ssh"),

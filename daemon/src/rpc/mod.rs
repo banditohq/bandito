@@ -32,6 +32,7 @@ use tokio::sync::{broadcast, mpsc};
 
 pub mod browser;
 pub mod changes;
+pub mod chat;
 pub mod commands;
 pub mod files;
 pub mod host;
@@ -75,6 +76,9 @@ pub fn features() -> Vec<&'static str> {
         "logs",
         "agent_own_folder",
         "runtime_models",
+        "forms",
+        "reactions",
+        "attachments",
     ];
     if cfg!(target_os = "linux") {
         list.push("screen");
@@ -191,6 +195,8 @@ const AGENT_METHODS: &[&str] = &[
     "daemon.hello",
     "crew.list",
     "crew.send",
+    "forms.agent.ask",
+    "messages.agent.react",
     "history.day",
     "history.search",
     "browser.agent.back",
@@ -215,6 +221,8 @@ const AGENT_METHODS: &[&str] = &[
 /// so that nothing that speaks as the owner can pass for an agent.
 pub fn is_agent_only(method: &str) -> bool {
     method == "crew.send"
+        || method.starts_with("forms.agent.")
+        || method.starts_with("messages.agent.")
         || method.starts_with("history.")
         || method.starts_with("browser.agent.")
         || method.starts_with("screen.agent.")
@@ -547,6 +555,12 @@ fn default_log_lines() -> u32 {
 struct SendParams {
     agent_id: String,
     text: String,
+    /// Seq of the message this one replies to, in the same thread.
+    #[serde(default)]
+    reply_to: Option<i64>,
+    /// Paths of files in the agent's attachment folders (see `attachments.upload`).
+    #[serde(default)]
+    attachments: Vec<String>,
 }
 #[derive(Deserialize)]
 struct SinceParams {
@@ -889,6 +903,17 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             .await
             .unwrap_or_else(|| Err(RpcError::new(METHOD_NOT_FOUND, format!("unknown method {method}"))));
     }
+    if matches!(
+        method,
+        "forms.answer"
+            | "forms.list"
+            | "forms.agent.ask"
+            | "messages.react"
+            | "messages.agent.react"
+            | "attachments.upload"
+    ) {
+        return chat::dispatch(app, peer, method, p).await;
+    }
     let store = &app.sup.hub().store;
     match method {
         "daemon.hello" => ok(json!({
@@ -1147,7 +1172,12 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             ok(json!({ "deleted": deleted }))
         }
         "agents.send" => {
-            let SendParams { agent_id, text } = params(p)?;
+            let SendParams {
+                agent_id,
+                text,
+                reply_to,
+                attachments,
+            } = params(p)?;
             if text.trim().is_empty() {
                 return Err(RpcError::new(INVALID_PARAMS, "message is empty"));
             }
@@ -1157,12 +1187,38 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             // A slash command is expanded for runtimes that do not run it themselves; the thread keeps what was typed.
             let agent = store.agent_get(&agent_id)?;
             let prepared = prepare_message(agent.as_ref(), &text)?;
+            let mut msg = prepared.into_inbound(Source::User);
+            if let Some(seq) = reply_to {
+                // A reply quotes a message of this thread: the person's or the agent's.
+                match store.event_at(&agent_id, seq)?.map(|e| e.body) {
+                    Some(EventBody::MessageUser { .. } | EventBody::MessageAssistant { .. }) => {
+                        msg.reply_to = Some(seq)
+                    }
+                    _ => {
+                        return Err(RpcError::new(
+                            INVALID_PARAMS,
+                            format!("no message {seq} in this thread"),
+                        ));
+                    }
+                }
+            }
+            if !attachments.is_empty() {
+                let agent = agent
+                    .as_ref()
+                    .ok_or_else(|| RpcError::new(INVALID_PARAMS, format!("no agent {agent_id}")))?;
+                msg.attachments = chat::attachments_for(app, agent, &attachments)?;
+            }
             // A paused agent takes the message into its thread and starts nothing: `queued` says so.
-            let queued = app
-                .sup
-                .send_held(&agent_id, prepared.into_inbound(Source::User))
-                .await?;
+            let queued = app.sup.send_held(&agent_id, msg).await?;
             ok(if queued { json!({ "queued": true }) } else { json!({}) })
+        }
+        "agents.new_chapter" => {
+            let Id { id } = params(p)?;
+            if store.agent_get(&id)?.is_none() {
+                return Err(RpcError::new(INVALID_PARAMS, format!("no agent {id}")));
+            }
+            app.sup.new_chapter(&id).await?;
+            ok(json!({}))
         }
         "agents.interrupt" => {
             let AgentRef { agent_id } = params(p)?;
@@ -1602,6 +1658,8 @@ mod history_tests {
             source,
             from_agent: from_agent.map(str::to_string),
             command: None,
+            reply_to: None,
+            attachments: Vec::new(),
         }
     }
 
@@ -1937,6 +1995,30 @@ pub async fn serve(app: Arc<App>, peer: Peer, mut inbox: mpsc::Receiver<String>,
                     terms.attach(&app, &peer, req.params)
                 } else if req.method == "term.detach" {
                     terms.detach(&peer, req.params)
+                } else if matches!(peer, Peer::Agent(_)) && req.method == "forms.agent.ask" {
+                    // The call waits for the person. The connection is watched meanwhile: when the agent goes away,
+                    // the call is dropped and its form expires (see `Supervisor::ask_form`).
+                    let call = dispatch(&app, &peer, &req.method, req.params);
+                    tokio::pin!(call);
+                    let answered = loop {
+                        tokio::select! {
+                            r = &mut call => break Some(r),
+                            next = inbox.recv() => match next {
+                                None => break None,
+                                Some(other) => {
+                                    // One request at a time while a form waits: any other is refused for now.
+                                    if let Some(id) = serde_json::from_str::<Value>(&other).ok().and_then(|v| v.get("id").cloned()) {
+                                        let busy = RpcError::new(SERVER_ERROR, "busy: a form is waiting for the person's answer");
+                                        let _ = outbox.send(response(id, Err(busy))).await;
+                                    }
+                                }
+                            },
+                        }
+                    };
+                    match answered {
+                        Some(r) => r,
+                        None => break,
+                    }
                 } else {
                     dispatch(&app, &peer, &req.method, req.params).await
                 };
@@ -3395,6 +3477,8 @@ mod pause_and_logs_tests {
                     source: Source::User,
                     from_agent: None,
                     command: None,
+                    reply_to: None,
+                    attachments: Vec::new(),
                 },
             )
             .unwrap();
@@ -3409,6 +3493,8 @@ mod pause_and_logs_tests {
                     source: Source::System,
                     from_agent: None,
                     command: None,
+                    reply_to: None,
+                    attachments: Vec::new(),
                 },
             )
             .unwrap();
@@ -3620,6 +3706,10 @@ mod pause_and_logs_tests {
             .unwrap_err();
         assert_eq!(err.code, INVALID_PARAMS);
         assert!(features().contains(&"runtime_models"));
+        // What the chat features need from the app: forms, reactions and attachments.
+        for name in ["forms", "reactions", "attachments"] {
+            assert!(features().contains(&name), "{name}");
+        }
     }
 }
 

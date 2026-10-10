@@ -230,6 +230,8 @@ async fn crew_lists_the_browser_tools_after_the_crew_tools() {
             "crew_send",
             "history_search",
             "history_day",
+            "ask_form",
+            "react",
             "screen_screenshot",
             "screen_click",
             "screen_move",

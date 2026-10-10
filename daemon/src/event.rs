@@ -1,8 +1,10 @@
 //! Normalized agent events. Every runtime adapter translates its own protocol
 //! into these; clients render threads from them. See docs/ARCHITECTURE.md#events.
 
+use crate::attachments::Attachment;
+use crate::forms::{FormAction, FormField, FormKind};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Map, Value};
 
 /// Where a user-side message came from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -56,6 +58,14 @@ pub enum DecidedBy {
     Policy,
 }
 
+/// Who put a reaction on a message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReactionBy {
+    User,
+    Agent,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Usage {
     pub input_tokens: u64,
@@ -84,7 +94,14 @@ pub struct Plan {
 #[serde(tag = "kind", content = "payload")]
 pub enum EventBody {
     #[serde(rename = "turn.started")]
-    TurnStarted { turn_id: String, source: Source },
+    /// `reactions_until`: for a human turn, the moment its reactions were read (see docs/ARCHITECTURE.md#reactions).
+    /// The next human turn's reactions start after it.
+    TurnStarted {
+        turn_id: String,
+        source: Source,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reactions_until: Option<i64>,
+    },
     #[serde(rename = "message.user")]
     MessageUser {
         text: String,
@@ -94,6 +111,12 @@ pub enum EventBody {
         /// Name of the slash command in `text`, when one was recognised (see docs/ARCHITECTURE.md#commands).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         command: Option<String>,
+        /// Seq of the message this one replies to (see docs/ARCHITECTURE.md#replies-and-attachments).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reply_to: Option<i64>,
+        /// Files attached to the message.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        attachments: Vec<Attachment>,
     },
     #[serde(rename = "message.assistant")]
     MessageAssistant { text: String },
@@ -171,6 +194,39 @@ pub enum EventBody {
     /// its agent list, since the change may come from another client or from a path with no reply.
     #[serde(rename = "agent_changed")]
     AgentChanged { action: AgentChange },
+    /// The agent asked the human for an answer (see docs/ARCHITECTURE.md#forms). The rest of the payload is
+    /// the form as checked by `forms::parse_spec`.
+    #[serde(rename = "form_requested")]
+    FormRequested {
+        form_id: String,
+        title: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        intro: Option<String>,
+        kind: FormKind,
+        fields: Vec<FormField>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        submit_label: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reject_label: Option<String>,
+    },
+    /// The form ended: submitted, rejected, or expired (never answered in time, or the turn was cancelled).
+    #[serde(rename = "form_answered")]
+    FormAnswered {
+        form_id: String,
+        action: FormAction,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        values: Option<Map<String, Value>>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        comment: Option<String>,
+    },
+    /// A reaction on a message, by seq. No `emoji` means the reaction was taken off.
+    #[serde(rename = "reaction")]
+    Reaction {
+        seq: i64,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        emoji: Option<String>,
+        by: ReactionBy,
+    },
     #[serde(rename = "error")]
     Error { message: String },
 }
