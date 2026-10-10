@@ -4,11 +4,10 @@
 //! The tests hold the data to the rules the install path relies on.
 
 use crate::commands::{self, InstallError, InstallFile, InstallKind};
-use crate::runtime::RuntimeKind;
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
-use serde_json::Value;
-use std::collections::HashSet;
+use serde::Deserialize;
+use serde_json::{Value, json};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -16,16 +15,25 @@ include!(concat!(env!("OUT_DIR"), "/bundled_skills.rs"));
 
 const CATALOG: &str = include_str!("skills_catalog.json");
 
+/// The file that marks a skill folder as installed by Bandito. It holds `{"id", "commit"}`. A folder without it is
+/// the person's own, and is never replaced or removed.
+pub const MARKER: &str = ".bandito-skill";
+
 /// The catalog entries, as written in `skills_catalog.json` (the files are listed by path, not by content).
 pub fn catalog() -> Vec<Value> {
     serde_json::from_str(CATALOG).expect("skills_catalog.json is valid JSON: the tests check it")
 }
 
+/// The catalog entry of `id`, if there is one.
+pub fn catalog_entry(id: &str) -> Option<Value> {
+    catalog()
+        .into_iter()
+        .find(|e| e.get("id").and_then(Value::as_str) == Some(id))
+}
+
 /// Whether `id` is an entry of the catalog.
 pub fn is_catalog_id(id: &str) -> bool {
-    catalog()
-        .iter()
-        .any(|e| e.get("id").and_then(Value::as_str) == Some(id))
+    catalog_entry(id).is_some()
 }
 
 /// The files of skill `id` as bundled, `(path, bytes)`, or None when the skill is not bundled.
@@ -41,14 +49,64 @@ pub fn bundled_file(id: &str, path: &str) -> Option<&'static [u8]> {
         .map(|(_, bytes)| *bytes)
 }
 
-/// Writes skill `id` into `base/.claude/skills/<id>/`, with every bundled file (LICENSE included), replacing an
-/// older copy. `base` is the daemon user's home or an agent's folder. The same code as `commands.install` with
-/// `kind: skill` and `overwrite: true`.
+/// What is at `base/.claude/skills/<id>`: nothing, a folder Bandito installed (`Ours`), or anything else (`Foreign`:
+/// the person's own folder, a link, or a folder whose marker names another skill).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Slot {
+    Absent,
+    Ours,
+    Foreign,
+}
+
+/// The state of skill folder `id` under `base` (the daemon user's home, or an agent's folder). `Ours` needs a real
+/// folder with a `SKILL.md` file and a marker whose `id` is `id`.
+pub fn slot(base: &Path, id: &str) -> Slot {
+    #[derive(Deserialize)]
+    struct Marker {
+        id: String,
+    }
+    let dir = base.join(".claude").join("skills").join(id);
+    let Ok(meta) = fs::symlink_metadata(&dir) else {
+        return Slot::Absent;
+    };
+    if !meta.is_dir() || meta.file_type().is_symlink() {
+        return Slot::Foreign;
+    }
+    let is_file = |p: PathBuf| fs::symlink_metadata(p).is_ok_and(|m| m.is_file());
+    let marker = dir.join(MARKER);
+    let marker_ok = is_file(marker.clone())
+        && fs::read_to_string(&marker)
+            .ok()
+            .and_then(|text| serde_json::from_str::<Marker>(&text).ok())
+            .is_some_and(|m| m.id == id);
+    if marker_ok && is_file(dir.join("SKILL.md")) {
+        Slot::Ours
+    } else {
+        Slot::Foreign
+    }
+}
+
+/// Writes skill `id` into `base/.claude/skills/<id>/`: every bundled file (LICENSE included) and the marker. An older
+/// copy that Bandito installed is replaced as a whole (see `commands::install`). A folder the person made is refused
+/// (`exists_not_ours`). `base` is the daemon user's home or an agent's folder.
 pub fn install(base: &Path, id: &str) -> Result<PathBuf, InstallError> {
-    let Some(files) = bundled_files(id) else {
+    let (Some(files), Some(entry)) = (bundled_files(id), catalog_entry(id)) else {
         return unknown(id);
     };
-    let install_files: Vec<InstallFile> = files
+    let commit = entry["source"]["commit"]
+        .as_str()
+        .expect("catalog entries have a pinned commit: the tests check it");
+    let target = commands::checked_skill_folder(base, id)?;
+    if slot(base, id) == Slot::Foreign {
+        return Err(InstallError {
+            reason: "exists_not_ours",
+            message: format!(
+                "{} exists and was not installed by Bandito; it is not replaced",
+                target.display()
+            ),
+        });
+    }
+    let mut install_files: Vec<InstallFile> = files
         .iter()
         .map(|(rel, _)| InstallFile {
             path: (*rel).to_string(),
@@ -56,60 +114,41 @@ pub fn install(base: &Path, id: &str) -> Result<PathBuf, InstallError> {
             content: STANDARD.encode(bundled_file(id, rel).expect("listed file is bundled")),
         })
         .collect();
+    let marker = json!({ "id": id, "commit": commit }).to_string();
+    install_files.push(InstallFile {
+        path: MARKER.to_string(),
+        content: STANDARD.encode(marker),
+    });
     commands::install(base, InstallKind::Skill, id, &install_files, true)
 }
 
-/// Removes `base/.claude/skills/<id>/`. Only a real folder (not a link) that holds a `SKILL.md` file is removed.
-/// Links inside it are removed as links and never followed, so nothing outside the folder is touched.
+/// Removes `base/.claude/skills/<id>/`, only when Bandito installed it (`not_ours` otherwise). A link is refused
+/// (`unsafe_path`) and never followed; links inside the folder are removed as links.
 pub fn remove(base: &Path, id: &str) -> Result<PathBuf, InstallError> {
     if !is_catalog_id(id) {
         return unknown(id);
     }
-    let skills_dir = base.join(".claude").join("skills");
-    let target = skills_dir.join(id);
-    let Ok(meta) = fs::symlink_metadata(&target) else {
-        return Err(InstallError {
-            reason: "not_installed",
-            message: format!("skill {id} is not installed here"),
-        });
-    };
-    if meta.file_type().is_symlink() || !meta.is_dir() {
-        return Err(InstallError {
-            reason: "not_a_skill_folder",
-            message: format!("{} is not a skill folder; a link is not removed", target.display()),
-        });
-    }
-    // The folder's `.claude/skills` must be real folders too: nothing is removed through a link on the way.
-    for dir in [base.join(".claude"), skills_dir] {
-        if fs::symlink_metadata(&dir).is_ok_and(|m| m.file_type().is_symlink()) {
+    let target = commands::checked_skill_folder(base, id)?;
+    match slot(base, id) {
+        Slot::Ours => {}
+        Slot::Absent => {
             return Err(InstallError {
-                reason: "not_a_skill_folder",
-                message: format!("{} is a link; skills are not removed through it", dir.display()),
+                reason: "not_installed",
+                message: format!("skill {id} is not installed here"),
             });
         }
-    }
-    let skill_md = fs::symlink_metadata(target.join("SKILL.md"));
-    if !skill_md.is_ok_and(|m| m.is_file()) {
-        return Err(InstallError {
-            reason: "not_a_skill_folder",
-            message: format!("{} has no SKILL.md; it is not removed", target.display()),
-        });
+        Slot::Foreign => {
+            return Err(InstallError {
+                reason: "not_ours",
+                message: format!("{} was not installed by Bandito; it is not removed", target.display()),
+            });
+        }
     }
     fs::remove_dir_all(&target).map_err(|e| InstallError {
         reason: "io",
         message: format!("{}: {e}", target.display()),
     })?;
     Ok(target)
-}
-
-/// Ids of the skills in `home` (the daemon user's folder) or in an agent's folder `cwd` (pass `home` as None), as
-/// `commands.list` reports them: source `skill`, named by the folder that holds `SKILL.md`.
-pub fn installed_in(home: Option<&Path>, cwd: &Path) -> HashSet<String> {
-    commands::discover(home, cwd, RuntimeKind::Claude)
-        .into_iter()
-        .filter(|c| c.source == commands::CommandSource::Skill)
-        .filter_map(|c| c.path.parent()?.file_name()?.to_str().map(str::to_string))
-        .collect()
 }
 
 fn unknown<T>(id: &str) -> Result<T, InstallError> {
@@ -439,5 +478,131 @@ mod tests {
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod install_tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    fn source(id: &str, rel: &str) -> Vec<u8> {
+        fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("skills").join(id).join(rel)).unwrap()
+    }
+
+    #[test]
+    fn the_bundle_matches_the_folders_and_holds_no_dotfiles() {
+        for (id, files) in SKILLS {
+            assert!(!files.is_empty(), "{id} has no files");
+            for (rel, bytes) in files.iter() {
+                assert!(!rel.split('/').any(|c| c.starts_with('.')), "{id}/{rel} is a dotfile");
+                assert_eq!(*bytes, source(id, rel).as_slice(), "{id}/{rel}");
+            }
+        }
+    }
+
+    #[test]
+    fn bundled_file_looks_up_one_file() {
+        assert_eq!(
+            bundled_file("commit", "SKILL.md").unwrap(),
+            source("commit", "SKILL.md").as_slice()
+        );
+        assert!(bundled_file("commit", "missing.md").is_none());
+        assert!(bundled_file("nope", "SKILL.md").is_none());
+    }
+
+    #[test]
+    fn every_skill_is_installed_with_a_marker_and_the_right_modes() {
+        for entry in catalog() {
+            let id = entry["id"].as_str().unwrap();
+            let home = TempDir::new().unwrap();
+            install(home.path(), id).unwrap();
+            let folder = home.path().join(".claude/skills").join(id);
+            assert_eq!(slot(home.path(), id), Slot::Ours, "{id}");
+            check_modes(&folder, id);
+        }
+    }
+
+    #[cfg(unix)]
+    fn check_modes(folder: &Path, id: &str) {
+        use std::os::unix::fs::PermissionsExt;
+        for (rel, bytes) in bundled_files(id).unwrap() {
+            let expected = commands::skill_file_mode(Path::new(rel), bytes);
+            let mode = fs::metadata(folder.join(rel)).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode, expected, "{id}/{rel}");
+        }
+    }
+
+    #[cfg(not(unix))]
+    fn check_modes(_folder: &Path, _id: &str) {}
+
+    #[test]
+    fn modes_follow_scripts_and_shebangs() {
+        assert_eq!(
+            commands::skill_file_mode(Path::new("scripts/run.py"), b"print(1)"),
+            0o755
+        );
+        assert_eq!(commands::skill_file_mode(Path::new("tool.sh"), b"#!/bin/sh\n"), 0o755);
+        assert_eq!(commands::skill_file_mode(Path::new("SKILL.md"), b"# Skill"), 0o644);
+        assert_eq!(commands::skill_file_mode(Path::new("notes/scripts.md"), b"text"), 0o644);
+    }
+
+    #[test]
+    fn a_folder_the_person_made_is_never_replaced() {
+        let home = TempDir::new().unwrap();
+        let folder = home.path().join(".claude/skills/commit");
+        fs::create_dir_all(&folder).unwrap();
+        fs::write(folder.join("SKILL.md"), "mine").unwrap();
+        let err = install(home.path(), "commit").unwrap_err();
+        assert_eq!(err.reason, "exists_not_ours");
+        assert_eq!(fs::read_to_string(folder.join("SKILL.md")).unwrap(), "mine");
+        assert_eq!(slot(home.path(), "commit"), Slot::Foreign);
+    }
+
+    #[test]
+    fn a_failed_write_leaves_the_old_copy_and_no_temporary_folder() {
+        // `x` is a file and `x/y` needs `x` to be a folder: the write fails halfway through the new copy.
+        let home = TempDir::new().unwrap();
+        install(home.path(), "commit").unwrap();
+        let folder = home.path().join(".claude/skills/commit");
+        fs::write(folder.join("keep.md"), "old").unwrap();
+        let mut files: Vec<InstallFile> = bundled_files("commit")
+            .unwrap()
+            .iter()
+            .map(|(rel, _)| InstallFile {
+                path: (*rel).to_string(),
+                content: STANDARD.encode(bundled_file("commit", rel).unwrap()),
+            })
+            .collect();
+        files.push(InstallFile {
+            path: "x".into(),
+            content: STANDARD.encode("file"),
+        });
+        files.push(InstallFile {
+            path: "x/y".into(),
+            content: STANDARD.encode("nested"),
+        });
+        let err = commands::install(home.path(), InstallKind::Skill, "commit", &files, true).unwrap_err();
+        assert_eq!(err.reason, "io");
+        assert_eq!(fs::read_to_string(folder.join("keep.md")).unwrap(), "old");
+        assert!(folder.join("SKILL.md").is_file());
+        let names: Vec<String> = fs::read_dir(home.path().join(".claude/skills"))
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, vec!["commit".to_string()], "no .tmp or .old folder left");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_linked_claude_folder_is_refused_before_any_write() {
+        use std::os::unix::fs::symlink;
+        let home = TempDir::new().unwrap();
+        let outside = TempDir::new().unwrap();
+        symlink(outside.path(), home.path().join(".claude")).unwrap();
+        let err = install(home.path(), "commit").unwrap_err();
+        assert_eq!(err.reason, "unsafe_path");
+        assert!(fs::read_dir(outside.path()).unwrap().next().is_none());
     }
 }

@@ -7,7 +7,6 @@ use crate::skills;
 use crate::store::Agent;
 use serde::Deserialize;
 use serde_json::{Value, json};
-use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 /// Answers `skills.*` methods, with the daemon user's home. Unknown names get METHOD_NOT_FOUND.
@@ -43,24 +42,37 @@ pub(super) async fn dispatch_in(app: &App, home: Option<PathBuf>, method: &str, 
     }
 }
 
-/// Each catalog entry, with `installed: {user, projects}`: whether the skill is in the daemon user's folder, and the
-/// ids of the agents whose folder has it.
+/// Each catalog entry, with `installed: {user, projects}` (the folders Bandito installed: the daemon user's home, and
+/// the ids of the agents whose folder has one) and `conflicts: {user, projects}` (folders with the same name that
+/// Bandito did not install, so an install would be refused).
 fn catalog_view(home: Option<&Path>, agents: &[Agent]) -> Vec<Value> {
-    let user: HashSet<String> = home.map(|h| skills::installed_in(Some(h), h)).unwrap_or_default();
-    let per_agent: Vec<(&str, HashSet<String>)> = agents
+    let folders: Vec<(&str, &Path)> = agents
         .iter()
-        .map(|a| (a.id.as_str(), skills::installed_in(None, Path::new(&a.cwd))))
+        .map(|a| (a.id.as_str(), Path::new(a.cwd.as_str())))
         .collect();
     skills::catalog()
         .into_iter()
         .map(|mut entry| {
             let id = entry.get("id").and_then(Value::as_str).unwrap_or_default().to_string();
-            let projects: Vec<&str> = per_agent
-                .iter()
-                .filter(|(_, ids)| ids.contains(&id))
-                .map(|(agent, _)| *agent)
-                .collect();
-            entry["installed"] = json!({ "user": user.contains(&id), "projects": projects });
+            let state = |base: &Path| skills::slot(base, &id);
+            let user = home.map(state);
+            let mut installed_projects = Vec::new();
+            let mut conflict_projects = Vec::new();
+            for (agent, cwd) in &folders {
+                match state(cwd) {
+                    skills::Slot::Ours => installed_projects.push(*agent),
+                    skills::Slot::Foreign => conflict_projects.push(*agent),
+                    skills::Slot::Absent => {}
+                }
+            }
+            entry["installed"] = json!({
+                "user": user == Some(skills::Slot::Ours),
+                "projects": installed_projects,
+            });
+            entry["conflicts"] = json!({
+                "user": user == Some(skills::Slot::Foreign),
+                "projects": conflict_projects,
+            });
             entry
         })
         .collect()
@@ -136,7 +148,7 @@ mod tests {
     use crate::hub::Hub;
     use crate::rpc::{App, COMMANDS_ERROR, INVALID_PARAMS, Peer, RpcResult, UNAUTHORIZED, dispatch, features};
     use crate::runtime::RuntimeKind;
-    use crate::skills;
+    use crate::skills::{self, MARKER};
     use crate::store::{ApprovalMode, MemoryMode, NewAgent, Store};
     use crate::supervisor::{Runtimes, Supervisor};
     use serde_json::{Value, json};
@@ -210,8 +222,21 @@ mod tests {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("skills").join(id)
     }
 
+    /// A folder the person made: not Bandito's, so it has no marker.
+    fn own_folder(home: &Path, id: &str) -> PathBuf {
+        let dir = home.join(".claude/skills").join(id);
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("SKILL.md"), "mine").unwrap();
+        fs::write(dir.join("notes.txt"), "mine").unwrap();
+        dir
+    }
+
     fn entry<'a>(list: &'a Value, id: &str) -> &'a Value {
         list.as_array().unwrap().iter().find(|e| e["id"] == id).unwrap()
+    }
+
+    fn reason(err: &crate::rpc::RpcError) -> String {
+        err.data.as_ref().unwrap()["reason"].as_str().unwrap().to_string()
     }
 
     #[test]
@@ -229,6 +254,7 @@ mod tests {
         assert_eq!(list.as_array().unwrap().len(), skills::catalog().len());
         let e = entry(&list, "systematic-debugging");
         assert_eq!(e["installed"], json!({"user": false, "projects": []}));
+        assert_eq!(e["conflicts"], json!({"user": false, "projects": []}));
         assert!(e.get("files").is_some(), "the file paths stay in the entry");
 
         call(
@@ -302,31 +328,33 @@ mod tests {
             .await
             .unwrap();
             let source = source_dir(id);
-            let expected = files_of(&source);
+            let mut expected = files_of(&source);
             assert!(expected.contains(&"LICENSE".to_string()), "{id}: LICENSE is bundled");
+            expected.push(MARKER.to_string());
+            expected.sort();
             for base in [
                 home.path().join(".claude/skills").join(id),
                 cwd.path().join(".claude/skills").join(id),
             ] {
-                assert_eq!(files_of(&base), expected, "{id}: same files");
-                for rel in &expected {
+                assert_eq!(files_of(&base), expected, "{id}: same files, plus the marker");
+                for rel in files_of(&source) {
                     assert_eq!(
-                        fs::read(base.join(rel)).unwrap(),
-                        fs::read(source.join(rel)).unwrap(),
+                        fs::read(base.join(&rel)).unwrap(),
+                        fs::read(source.join(&rel)).unwrap(),
                         "{id}/{rel}"
                     );
                 }
+                let marker: Value = serde_json::from_str(&fs::read_to_string(base.join(MARKER)).unwrap()).unwrap();
+                assert_eq!(marker["id"], id);
+                assert!(marker["commit"].as_str().unwrap().len() == 40);
             }
         }
     }
 
     #[tokio::test]
-    async fn install_replaces_an_older_copy_as_a_whole() {
+    async fn install_replaces_our_copy_as_a_whole_and_leaves_no_temporary_folder() {
         let r = rig();
         let home = TempDir::new().unwrap();
-        let old = home.path().join(".claude/skills/commit");
-        fs::create_dir_all(&old).unwrap();
-        fs::write(old.join("OLD.md"), "stale").unwrap();
         call(
             &r,
             home.path(),
@@ -335,17 +363,77 @@ mod tests {
         )
         .await
         .unwrap();
-        assert!(!old.join("OLD.md").exists());
-        assert!(old.join("SKILL.md").is_file());
+        let folder = home.path().join(".claude/skills/commit");
+        fs::write(folder.join("stale.md"), "old").unwrap();
+        call(
+            &r,
+            home.path(),
+            "skills.install",
+            json!({"skill_id": "commit", "scope": "user"}),
+        )
+        .await
+        .unwrap();
+        assert!(!folder.join("stale.md").exists());
+        assert!(folder.join("SKILL.md").is_file());
+        let names: Vec<String> = fs::read_dir(home.path().join(".claude/skills"))
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, vec!["commit".to_string()]);
     }
 
     #[tokio::test]
-    async fn remove_deletes_only_the_skill_folder() {
+    async fn install_refuses_a_folder_that_is_not_ours() {
         let r = rig();
         let home = TempDir::new().unwrap();
-        let other = home.path().join(".claude/skills/someone-else");
-        fs::create_dir_all(&other).unwrap();
-        fs::write(other.join("SKILL.md"), "mine").unwrap();
+        let folder = own_folder(home.path(), "commit");
+        let err = call(
+            &r,
+            home.path(),
+            "skills.install",
+            json!({"skill_id": "commit", "scope": "user"}),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, COMMANDS_ERROR);
+        assert_eq!(reason(&err), "exists_not_ours");
+        assert_eq!(fs::read_to_string(folder.join("notes.txt")).unwrap(), "mine");
+        assert!(!folder.join(MARKER).exists());
+
+        let list = call(&r, home.path(), "skills.catalog", json!({})).await.unwrap();
+        assert_eq!(
+            entry(&list, "commit")["installed"],
+            json!({"user": false, "projects": []})
+        );
+        assert_eq!(
+            entry(&list, "commit")["conflicts"],
+            json!({"user": true, "projects": []})
+        );
+    }
+
+    #[tokio::test]
+    async fn a_marker_naming_another_skill_is_not_ours() {
+        let r = rig();
+        let home = TempDir::new().unwrap();
+        let folder = own_folder(home.path(), "commit");
+        fs::write(folder.join(MARKER), r#"{"id":"other","commit":"x"}"#).unwrap();
+        let err = call(
+            &r,
+            home.path(),
+            "skills.remove",
+            json!({"skill_id": "commit", "scope": "user"}),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(reason(&err), "not_ours");
+        assert!(folder.join("notes.txt").is_file());
+    }
+
+    #[tokio::test]
+    async fn remove_deletes_only_our_folder() {
+        let r = rig();
+        let home = TempDir::new().unwrap();
+        let other = own_folder(home.path(), "someone-else");
         fs::write(home.path().join(".claude/skills/loose.txt"), "keep").unwrap();
         call(
             &r,
@@ -379,16 +467,14 @@ mod tests {
         .await
         .unwrap_err();
         assert_eq!(err.code, COMMANDS_ERROR);
-        assert_eq!(err.data.unwrap()["reason"], "not_installed");
+        assert_eq!(reason(&err), "not_installed");
     }
 
     #[tokio::test]
-    async fn remove_refuses_a_folder_without_skill_md() {
+    async fn remove_refuses_a_folder_that_is_not_ours() {
         let r = rig();
         let home = TempDir::new().unwrap();
-        let folder = home.path().join(".claude/skills/commit");
-        fs::create_dir_all(&folder).unwrap();
-        fs::write(folder.join("notes.txt"), "not a skill").unwrap();
+        let folder = own_folder(home.path(), "commit");
         let err = call(
             &r,
             home.path(),
@@ -397,8 +483,8 @@ mod tests {
         )
         .await
         .unwrap_err();
-        assert_eq!(err.data.unwrap()["reason"], "not_a_skill_folder");
-        assert!(folder.join("notes.txt").is_file());
+        assert_eq!(reason(&err), "not_ours");
+        assert!(folder.join("SKILL.md").is_file() && folder.join("notes.txt").is_file());
     }
 
     #[cfg(unix)]
@@ -409,6 +495,7 @@ mod tests {
         let home = TempDir::new().unwrap();
         let outside = TempDir::new().unwrap();
         fs::write(outside.path().join("SKILL.md"), "outside").unwrap();
+        fs::write(outside.path().join(MARKER), r#"{"id":"commit","commit":"x"}"#).unwrap();
         fs::write(outside.path().join("data.txt"), "outside").unwrap();
         let skills_dir = home.path().join(".claude/skills");
         fs::create_dir_all(&skills_dir).unwrap();
@@ -423,7 +510,17 @@ mod tests {
         )
         .await
         .unwrap_err();
-        assert_eq!(err.data.unwrap()["reason"], "not_a_skill_folder");
+        assert_eq!(reason(&err), "unsafe_path");
+        assert_eq!(fs::read_to_string(outside.path().join("data.txt")).unwrap(), "outside");
+        let err = call(
+            &r,
+            home.path(),
+            "skills.install",
+            json!({"skill_id": "commit", "scope": "user"}),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(reason(&err), "unsafe_path");
         assert!(outside.path().join("data.txt").is_file());
         fs::remove_file(skills_dir.join("commit")).unwrap();
 
@@ -448,6 +545,36 @@ mod tests {
         assert!(!skills_dir.join("commit").exists());
         assert_eq!(fs::read_to_string(outside.path().join("data.txt")).unwrap(), "outside");
         assert_eq!(fs::read_to_string(outside.path().join("SKILL.md")).unwrap(), "outside");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn install_never_writes_through_a_linked_claude_or_skills_folder() {
+        use std::os::unix::fs::symlink;
+        let r = rig();
+        let outside = TempDir::new().unwrap();
+        for linked in [".claude", ".claude/skills"] {
+            let home = TempDir::new().unwrap();
+            fs::create_dir_all(home.path().join(".claude")).unwrap();
+            if linked == ".claude" {
+                fs::remove_dir_all(home.path().join(".claude")).unwrap();
+            }
+            let link = home.path().join(linked);
+            symlink(outside.path(), &link).unwrap();
+            let err = call(
+                &r,
+                home.path(),
+                "skills.install",
+                json!({"skill_id": "commit", "scope": "user"}),
+            )
+            .await
+            .unwrap_err();
+            assert_eq!(reason(&err), "unsafe_path", "{linked}");
+            assert!(
+                fs::read_dir(outside.path()).unwrap().next().is_none(),
+                "{linked}: nothing written"
+            );
+        }
     }
 
     #[tokio::test]

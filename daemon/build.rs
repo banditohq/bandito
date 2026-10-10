@@ -48,10 +48,13 @@ fn main() {
     fs::write(out_dir.join("bundled_skills.rs"), code).expect("write bundled_skills.rs");
 }
 
+/// The entries of `dir` in name order. Names that start with a dot (`.git`, `.DS_Store`, a leftover temporary folder)
+/// are not part of a skill and are not bundled.
 fn sorted_entries(dir: &Path) -> Vec<fs::DirEntry> {
     let mut entries: Vec<fs::DirEntry> = fs::read_dir(dir)
         .unwrap_or_else(|e| panic!("cannot read {}: {e}", dir.display()))
         .map(|e| e.expect("readable directory entry"))
+        .filter(|e| !e.file_name().to_string_lossy().starts_with('.'))
         .collect();
     entries.sort_by_key(|e| e.file_name());
     entries
