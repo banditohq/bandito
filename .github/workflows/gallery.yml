@@ -12,6 +12,10 @@ on:
         required: false
       BANDITO_BOT_PRIVATE_KEY:
         required: false
+      TELEGRAM_BOT_TOKEN:
+        required: false
+      TELEGRAM_CHAT_ID:
+        required: false
   # By hand: Actions > gallery > Run workflow.
   workflow_dispatch:
 
@@ -35,6 +39,8 @@ jobs:
       SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       # The Bandito Bot's app id; empty when the run has no secrets (a pull request from a fork).
       BOT_APP_ID: ${{ secrets.BANDITO_BOT_APP_ID }}
+      TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
       QA_CARGO_TARGET: ${{ github.workspace }}/daemon/target
       QA_DERIVED_DATA: ${{ github.workspace }}/.qa-xcode
       QA_BANDITO_BIN: ${{ github.workspace }}/daemon/target/release/bandito
@@ -143,6 +149,45 @@ jobs:
             ${{ runner.temp }}/screen.png
           if-no-files-found: ignore
           retention-days: 7
+
+      # The owner gets an album of previews in Telegram: on a push to a release branch and on a manual run, never on a
+      # pull request (the Bandito Bot comments there). The pictures are 1280 px wide, so no resizing is needed.
+      - name: Send previews to Telegram
+        if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/'))) && env.TG_TOKEN != '' && env.TG_CHAT != '' }}
+        continue-on-error: true
+        env:
+          BRANCH: ${{ github.ref_name }}
+          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -eu
+          dir="$RUNNER_TEMP/gallery"
+          caption="🦝 Bandito · $BRANCH · ${SHA:0:7}
+          Run: $RUN_URL
+          Gallery: ${ARTIFACT_URL:-in the run}"
+          media='[' ; args=''
+          i=0
+          for name in team market server sheet-addServer sheet-account; do
+            file="$dir/$name-1280x820.png"
+            [ -f "$file" ] || continue
+            [ "$i" -gt 0 ] && media="$media,"
+            if [ "$i" -eq 0 ]; then
+              media="$media{\"type\":\"photo\",\"media\":\"attach://p$i\",\"caption\":$(printf '%s' "$caption" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')}"
+            else
+              media="$media{\"type\":\"photo\",\"media\":\"attach://p$i\"}"
+            fi
+            args="$args -F p$i=@$file"
+            i=$((i + 1))
+          done
+          media="$media]"
+          if [ "$i" -lt 2 ]; then
+            echo "::warning::fewer than two previews, nothing sent"
+            exit 0
+          fi
+          # shellcheck disable=SC2086
+          curl -fsS -o /dev/null "https://api.telegram.org/bot${TG_TOKEN}/sendMediaGroup" \
+            -F "chat_id=${TG_CHAT}" -F "media=$media" $args
+          echo "sent $i previews"
 
       # One comment on the pull request, edited by later pushes. A pull request from a fork has no secrets: skipped.
       - name: Token for Bandito Bot
