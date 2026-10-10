@@ -33,6 +33,31 @@ public struct HostStats: Codable, Sendable, Hashable {
     public var uptimeS: Int64
     /// The biggest processes of the server by memory. `nil` from a daemon that predates the list.
     public var topProcesses: [HostTopProcess]?
+    /// Every process of the server summed by app, the biggest 25 by memory (`app_groups`). `nil` from a daemon that
+    /// predates the field; an empty list where the daemon cannot read the process table.
+    public var appGroups: [HostAppGroup]?
+}
+
+/// One app in `host.stats` → `app_groups`: all of its processes, helpers included, with exact sums.
+public struct HostAppGroup: Codable, Sendable, Hashable {
+    /// The app's name (the `.app` bundle without `.app` on macOS, else the program's file name).
+    public var name: String
+    /// Share of one CPU, summed over the app's processes; can exceed 100.
+    public var cpuPercent: Double
+    public var memoryBytes: Int64
+    public var processCount: Int
+    /// Up to three of the app's processes, the biggest by memory first; a group opens from these alone.
+    public var top: [HostAppProcess]
+}
+
+/// One of an app's processes (`host.stats` → `app_groups[].top`).
+public struct HostAppProcess: Codable, Sendable, Hashable {
+    public var pid: Int
+    /// The program's file name.
+    public var name: String
+    /// Share of one CPU; 0 on the first reading after the daemon starts.
+    public var cpuPercent: Double
+    public var memoryBytes: Int64
 }
 
 /// One of the busiest or biggest processes of the server (`host.stats` → `top_processes`).
@@ -140,17 +165,12 @@ public enum HostProcessList {
             if members[key] == nil { order.append(key) }
             members[key, default: []].append(row)
         }
-        func before(_ a: HostProcessEntry, _ b: HostProcessEntry) -> Bool {
-            switch sort {
-            case .memory: a.rssBytes != b.rssBytes ? a.rssBytes > b.rssBytes : a.pid < b.pid
-            case .cpu: a.cpuPercent != b.cpuPercent ? a.cpuPercent > b.cpuPercent : a.pid < b.pid
-            }
-        }
         let groups = order.map { key -> HostProcessGroup in
-            let list = members[key, default: []].sorted(by: before)
+            let list = members[key, default: []].sorted(by: { precedes($0, $1, sort) })
             return HostProcessGroup(
                 id: key, appName: appName(list[0].name), owner: list[0].owner, members: list,
-                rssBytes: list.reduce(0) { $0 + $1.rssBytes }, cpuPercent: list.reduce(0) { $0 + $1.cpuPercent })
+                rssBytes: list.reduce(0) { $0 + $1.rssBytes }, cpuPercent: list.reduce(0) { $0 + $1.cpuPercent },
+                processCount: list.count)
         }
         return groups.sorted { a, b in
             let pa: Double, pb: Double
@@ -159,6 +179,57 @@ public enum HostProcessList {
             case .cpu: (pa, pb) = (a.cpuPercent, b.cpuPercent)
             }
             return pa != pb ? pa > pb : a.members[0].pid < b.members[0].pid
+        }
+    }
+
+    /// The groups of a Memory or CPU list. Without the daemon's app groups: the groups built from `rows`, as before.
+    /// With them: the groups of the processes that have an owner (agents, terminals, the daemon: the app groups leave
+    /// them out) built from `rows`, and one group per app with the daemon's exact sums. All of them sorted together by
+    /// the sum for `sort`.
+    public static func listGroups(_ rows: [HostProcessEntry], apps: [HostAppGroup]?, sort: Sort) -> [HostProcessGroup] {
+        guard let apps, !apps.isEmpty else { return groups(rows, sort: sort) }
+        let owned = groups(rows.filter { $0.owner != nil }, sort: sort)
+        return (owned + appGroups(apps, rows: rows, sort: sort)).sorted { a, b in
+            let (x, y) = (sum(a, sort), sum(b, sort))
+            return x != y ? x > y : a.id < b.id
+        }
+    }
+
+    /// The groups of `host.stats` → `app_groups`: one per app, with the daemon's exact sums over all of its processes.
+    /// Members are the app's `top` processes, sorted for `sort`. A member can be stopped only when `rows` lists the same
+    /// pid as stoppable. Its owner is nil: the app groups hold no owned process.
+    public static func appGroups(_ apps: [HostAppGroup], rows: [HostProcessEntry], sort: Sort) -> [HostProcessGroup] {
+        let known = Dictionary(rows.map { ($0.pid, $0) }, uniquingKeysWith: { first, _ in first })
+        let groups = apps.map { app -> HostProcessGroup in
+            let members = app.top.map { process in
+                HostProcessEntry(
+                    pid: process.pid, name: process.name, rssBytes: process.memoryBytes,
+                    cpuPercent: process.cpuPercent, owner: nil, canStop: known[process.pid]?.canStop == true)
+            }
+            return HostProcessGroup(
+                id: "app|\(app.name)", appName: app.name, owner: nil,
+                members: members.sorted { precedes($0, $1, sort) },
+                rssBytes: app.memoryBytes, cpuPercent: app.cpuPercent, processCount: app.processCount)
+        }
+        return groups.sorted { a, b in
+            let (x, y) = (sum(a, sort), sum(b, sort))
+            return x != y ? x > y : a.appName < b.appName
+        }
+    }
+
+    /// The figure a list is sorted by for `sort`: the group's memory, or its CPU.
+    private static func sum(_ group: HostProcessGroup, _ sort: Sort) -> Double {
+        switch sort {
+        case .memory: Double(group.rssBytes)
+        case .cpu: group.cpuPercent
+        }
+    }
+
+    /// Whether `a` is listed before `b`: by memory or by CPU for `sort`, ties by pid.
+    private static func precedes(_ a: HostProcessEntry, _ b: HostProcessEntry, _ sort: Sort) -> Bool {
+        switch sort {
+        case .memory: a.rssBytes != b.rssBytes ? a.rssBytes > b.rssBytes : a.pid < b.pid
+        case .cpu: a.cpuPercent != b.cpuPercent ? a.cpuPercent > b.cpuPercent : a.pid < b.pid
         }
     }
 
@@ -191,12 +262,15 @@ public struct HostProcessGroup: Identifiable, Hashable, Sendable {
     public var appName: String
     /// The agent, terminal or daemon the processes belong to; nil for ordinary ones.
     public var owner: ProcessOwnerRef?
+    /// The processes of the app that the list knows by name; for a daemon group, possibly fewer than `processCount`.
     public var members: [HostProcessEntry]
     public var rssBytes: Int64
     public var cpuPercent: Double
+    /// How many processes the app has in all.
+    public var processCount: Int
 
-    /// More than one process: the row expands and has no stop action of its own.
-    public var isGroup: Bool { members.count > 1 }
+    /// More than one process: the row has no stop action of its own, and it expands when it has members to show.
+    public var isGroup: Bool { processCount > 1 }
 }
 
 extension HostStats {

@@ -3,7 +3,7 @@
 
 use super::{App, INVALID_PARAMS, METHOD_NOT_FOUND, RpcError, RpcResult, SERVER_ERROR, ok, params};
 use crate::integrations::{self, Pair, Server, Transport};
-use crate::store::{Integration, IntegrationPatch, NewIntegration};
+use crate::store::{Integration, IntegrationPatch, NewIntegration, Store};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -73,18 +73,47 @@ pub async fn dispatch(app: &App, method: &str, p: Value) -> RpcResult {
             let cur = store
                 .integration_get(&id)?
                 .ok_or_else(|| RpcError::new(SERVER_ERROR, format!("no integration {id}")))?;
-            let secrets: HashMap<String, String> = store.secrets_all()?.into_iter().collect();
-            let servers = integrations::resolve(&[&cur], &secrets);
-            let Some(server) = servers.into_iter().next() else {
-                return ok(json!({ "ok": false, "tools": [], "error": "a secret it names is not set" }));
-            };
-            match probe(&server, TEST_TIMEOUT).await {
-                Ok(tools) => ok(json!({ "ok": true, "tools": tools })),
-                Err(e) => ok(json!({ "ok": false, "tools": [], "error": format!("{e:#}") })),
+            probe_row(store, &cur, false).await
+        }
+        "integrations.probe" => {
+            #[derive(Deserialize)]
+            struct ProbeParams {
+                draft: NewIntegration,
             }
+            let ProbeParams { draft } = params(p)?;
+            check_new(&draft)?;
+            // Nothing is saved: the draft runs as a row without an id, and its values stay in memory.
+            probe_row(store, &draft_row(&draft), true).await
         }
         _ => Err(RpcError::new(METHOD_NOT_FOUND, format!("unknown method {method}"))),
     }
+}
+
+/// What `integrations.test` and `integrations.probe` answer for `row`: the server starts (or is reached) and its
+/// tools come back, or the error. With `draft`, every value of the row's environment and headers is a secret for
+/// the error text, since the owner typed them and they are not stored.
+async fn probe_row(store: &Store, row: &Integration, draft: bool) -> RpcResult {
+    let secrets: HashMap<String, String> = store.secrets_all()?.into_iter().collect();
+    let servers = integrations::resolve(&[row], &secrets);
+    let Some(mut server) = servers.into_iter().next() else {
+        return ok(json!({ "ok": false, "tools": [], "error": "a secret it names is not set" }));
+    };
+    if draft {
+        server = all_secret(server);
+    }
+    match probe(&server, TEST_TIMEOUT).await {
+        Ok(tools) => ok(json!({ "ok": true, "tools": tools })),
+        Err(e) => ok(json!({ "ok": false, "tools": [], "error": format!("{e:#}") })),
+    }
+}
+
+/// Every environment and header value of a draft counts as a secret: a failure's stderr tail hides them all.
+fn all_secret(mut server: Server) -> Server {
+    match &mut server.transport {
+        Transport::Stdio { env, .. } => env.iter_mut().for_each(|pair| pair.secret = true),
+        Transport::Http { headers, .. } => headers.iter_mut().for_each(|pair| pair.secret = true),
+    }
+    server
 }
 
 /// The row with a patch applied, as it will be stored.
@@ -115,7 +144,12 @@ fn apply(cur: &Integration, p: &IntegrationPatch) -> Integration {
 }
 
 fn check_new(n: &NewIntegration) -> Result<(), RpcError> {
-    let row = Integration {
+    check_definition(&draft_row(n))
+}
+
+/// The row a new integration would be stored as, before it has an id.
+fn draft_row(n: &NewIntegration) -> Integration {
+    Integration {
         id: String::new(),
         name: n.name.clone(),
         kind: n.kind,
@@ -126,8 +160,7 @@ fn check_new(n: &NewIntegration) -> Result<(), RpcError> {
         headers: n.headers.clone(),
         enabled: n.enabled,
         created_at: 0,
-    };
-    check_definition(&row)
+    }
 }
 
 /// The rules of [`crate::integrations`] for a whole row.
@@ -223,10 +256,10 @@ async fn tail_after_exit(
     stderr_tail(buf, secrets)
 }
 
-/// The last characters of the collected stderr, with every secret value replaced by its `••••NAME`.
+/// The last characters of the collected stderr, with every secret value replaced by its `••••NAME`, however short.
 fn stderr_tail(buf: &std::sync::Mutex<Vec<u8>>, secrets: &[(String, String)]) -> String {
     let raw = String::from_utf8_lossy(&buf.lock().unwrap_or_else(|e| e.into_inner())).into_owned();
-    let redacted = crate::redact::Redactor::new(secrets.iter().cloned())
+    let redacted = crate::redact::Redactor::exact(secrets.iter().cloned())
         .redact(&raw)
         .into_owned();
     let mut tail: Vec<char> = redacted.chars().rev().take(ERROR_TAIL_CHARS).collect();
@@ -243,12 +276,16 @@ fn with_stderr(message: String, tail: String) -> String {
     }
 }
 
-/// The secret values of an environment or a header, by name: what the redaction must hide.
+/// The secret values of an environment or a header, by name: what the redaction must hide. A value with a template
+/// (`Bearer {secret}`) also hides its last word, the secret without the prefix, since a server may print it alone.
 fn secret_pairs(pairs: &[Pair]) -> Vec<(String, String)> {
     pairs
         .iter()
         .filter(|p| p.secret)
-        .map(|p| (p.key.clone(), p.value.clone()))
+        .flat_map(|p| {
+            let word = p.value.split_whitespace().last().filter(|w| *w != p.value.as_str());
+            std::iter::once((p.key.clone(), p.value.clone())).chain(word.map(|w| (p.key.clone(), w.to_string())))
+        })
         .collect()
 }
 
@@ -626,6 +663,77 @@ mod tests {
         assert!(err.to_string().contains("cannot start"), "{err}");
     }
 
+    #[tokio::test]
+    async fn a_draft_is_probed_and_never_saved() {
+        let app = app();
+        let Transport::Stdio { command, args, .. } = fake_server("[{\"name\":\"fetch\"}]").transport else {
+            unreachable!("fake_server is stdio");
+        };
+        let draft = json!({ "draft": { "name": "fake", "kind": "stdio", "command": command, "args": args } });
+        let answer = owner(&app, "integrations.probe", draft).await.unwrap();
+        assert_eq!(answer["ok"], true, "{answer}");
+        assert_eq!(answer["tools"], json!(["fetch"]), "{answer}");
+        let listed = owner(&app, "integrations.list", json!({})).await.unwrap();
+        assert!(listed.as_array().unwrap().is_empty(), "a probe saves nothing: {listed}");
+    }
+
+    #[tokio::test]
+    async fn a_probe_of_a_missing_program_answers_the_error() {
+        let app = app();
+        let draft = json!({ "draft": { "name": "nope", "kind": "stdio", "command": "/definitely/not/here" } });
+        let answer = owner(&app, "integrations.probe", draft).await.unwrap();
+        assert_eq!(answer["ok"], false, "{answer}");
+        assert!(answer["error"].as_str().unwrap().contains("cannot start"), "{answer}");
+    }
+
+    #[tokio::test]
+    async fn a_probe_checks_the_draft_like_add_does() {
+        let app = app();
+        let bad_name = json!({ "draft": { "name": "Bad Name", "kind": "stdio", "command": "sh" } });
+        assert_eq!(
+            owner(&app, "integrations.probe", bad_name).await.unwrap_err().code,
+            INVALID_PARAMS
+        );
+        let no_command = json!({ "draft": { "name": "fine", "kind": "stdio" } });
+        assert_eq!(
+            owner(&app, "integrations.probe", no_command).await.unwrap_err().code,
+            INVALID_PARAMS
+        );
+    }
+
+    #[tokio::test]
+    async fn a_probe_hides_the_draft_values_in_its_error() {
+        let app = app();
+        let draft = json!({ "draft": {
+            "name": "tok",
+            "kind": "stdio",
+            "command": "sh",
+            "args": ["-c", "echo 'boom tok-real-value' >&2; exit 1"],
+            "env": { "TOKEN": "tok-real-value" }
+        } });
+        let answer = owner(&app, "integrations.probe", draft).await.unwrap();
+        let error = answer["error"].as_str().unwrap();
+        assert!(error.contains("boom") && !error.contains("tok-real-value"), "{answer}");
+        assert!(error.contains("••••TOKEN"), "{answer}");
+    }
+
+    #[tokio::test]
+    async fn a_probe_hides_a_template_secret_without_its_prefix_and_a_short_one_whole() {
+        let app = app();
+        // The header value is `Bearer <secret>`; the server prints the secret alone, and a 2-byte secret too.
+        let draft = json!({ "draft": {
+            "name": "tok",
+            "kind": "stdio",
+            "command": "sh",
+            "args": ["-c", "echo 'got tok-real-value, q7 and Bearer tok-real-value' >&2; exit 1"],
+            "env": { "AUTH": "Bearer tok-real-value", "TOKEN": "q7" }
+        } });
+        let answer = owner(&app, "integrations.probe", draft).await.unwrap();
+        let error = answer["error"].as_str().unwrap();
+        assert!(!error.contains("tok-real-value") && !error.contains("q7"), "{answer}");
+        assert!(error.contains("••••AUTH") && error.contains("••••TOKEN"), "{answer}");
+    }
+
     #[test]
     fn the_rules_apply_to_a_patched_row() {
         let cur = Integration {
@@ -786,7 +894,12 @@ mod tests {
     async fn agents_cannot_manage_integrations_and_the_catalog_is_served() {
         let app = app();
         let agent = super::super::Peer::Agent("agent-a".into());
-        for method in ["integrations.list", "integrations.add", "integrations.test"] {
+        for method in [
+            "integrations.list",
+            "integrations.add",
+            "integrations.test",
+            "integrations.probe",
+        ] {
             let err = super::super::dispatch(&app, &agent, method, json!({}))
                 .await
                 .unwrap_err();

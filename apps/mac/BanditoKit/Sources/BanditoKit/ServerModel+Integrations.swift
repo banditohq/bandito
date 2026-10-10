@@ -37,6 +37,13 @@ extension ServerModel {
         struct P: Encodable { var id: String }
         return try await rpc().call("integrations.test", P(id: id), as: IntegrationTest.self, timeout: .seconds(30))
     }
+
+    /// Starts a draft integration the way `testIntegration` starts a saved one, and saves nothing. Needs the
+    /// `integrations_probe` feature. The draft's values stay in the daemon's memory.
+    public func probeIntegration(_ draft: NewIntegration) async throws -> IntegrationTest {
+        struct P: Encodable { var draft: NewIntegration }
+        return try await rpc().call("integrations.probe", P(draft: draft), as: IntegrationTest.self, timeout: .seconds(30))
+    }
 }
 
 /// `integrations.update` params: the id and the patch fields in one object.
