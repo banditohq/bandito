@@ -55,8 +55,9 @@ struct BrowserRunCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.Bandito.surface2, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.Bandito.line, lineWidth: 0.5))
-        // The browser is polled and its page connection kept only while this card is on screen.
-        .task(id: server.id) { model.attach() }
+        // The browser is polled and its page connection kept only while this card is on screen. Attach and detach
+        // are paired on appear and disappear, so the count the browser keeps stays balanced.
+        .onAppear { model.attach() }
         .onDisappear { model.detach() }
     }
 
