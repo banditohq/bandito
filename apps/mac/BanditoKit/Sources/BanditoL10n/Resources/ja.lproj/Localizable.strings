@@ -211,6 +211,7 @@
 "backups.reason.beforeRestore" = "復元の前";
 "backups.reason.broken" = "復元前に保存した破損データベース";
 "backups.reason.daily" = "毎日";
+"backups.reason.incomplete" = "不完全な保存済みデータベース（データベースファイルなし）";
 "backups.reason.manual" = "手動";
 "backups.reason.other" = "コピー";
 "backups.reason.replaced" = "復元前に保存したデータベース";

@@ -211,6 +211,7 @@
 "backups.reason.beforeRestore" = "Перед восстановлением";
 "backups.reason.broken" = "Повреждённая база, сохранённая перед восстановлением";
 "backups.reason.daily" = "Ежедневная";
+"backups.reason.incomplete" = "Неполная сохранённая база (нет файла базы)";
 "backups.reason.manual" = "Вручную";
 "backups.reason.other" = "Копия";
 "backups.reason.replaced" = "База, сохранённая перед восстановлением";

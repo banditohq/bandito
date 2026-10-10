@@ -41,8 +41,61 @@ pub async fn dispatch(app: &App, method: &str, p: Value) -> RpcResult {
             let id = restore(&app.data_home, name).await?;
             ok(json!({ "restarting": true, "id": id }))
         }
+        "backups.leave_safe_mode" => {
+            leave_safe_mode(app).await?;
+            ok(json!({ "restarting": true }))
+        }
         _ => Err(RpcError::new(METHOD_NOT_FOUND, format!("unknown method {method}"))),
     }
+}
+
+/// Takes the daemon out of safe mode when its database opens again (a copy of it is opened to find out; the live
+/// files are not touched), and restarts it through its service manager. The safe mode record is removed just before
+/// the restart and written back if the restart fails.
+async fn leave_safe_mode(app: &App) -> Result<(), RpcError> {
+    if app.safe_mode().is_none() {
+        return Err(RpcError::new(SERVER_ERROR, "the daemon is not in safe mode"));
+    }
+    let home = app.data_home.clone();
+    {
+        let home = home.clone();
+        blocking(move || {
+            backup::check_database_opens(&home)
+                .map_err(|e| anyhow::anyhow!("the database still does not open, restore a copy instead: {e:#}"))
+        })
+        .await?;
+    }
+    let exe = std::env::current_exe()
+        .and_then(|p| p.canonicalize())
+        .map_err(|e| RpcError::new(SERVER_ERROR, format!("find the bandito binary: {e}")))?;
+    let restart = update::restart_for(home.clone(), exe, Some(std::process::id()))
+        .await
+        .map_err(|e| RpcError::new(SERVER_ERROR, format!("{e:#}")))?;
+    if restart == Restart::Manual {
+        return Err(RpcError::new(
+            SERVER_ERROR,
+            "no service manager runs this daemon: stop it, run `bandito backup clear-safe-mode`, then start it",
+        ));
+    }
+    if RESTORE_PENDING.swap(true, Ordering::SeqCst) {
+        return Err(RpcError::new(SERVER_ERROR, "a restart is already waiting"));
+    }
+    tokio::spawn(async move {
+        tokio::time::sleep(RESTART_AFTER_REPLY).await;
+        let record = backup::read_safe_mode(&home);
+        let _ = backup::clear_safe_mode(&home);
+        let why = match tokio::task::spawn_blocking(move || update::run_restart(&restart)).await {
+            Ok(Ok(())) => return,
+            Ok(Err(e)) => format!("{e:#}"),
+            Err(e) => e.to_string(),
+        };
+        tracing::error!("restart to leave safe mode failed: {why}");
+        if let Some(record) = record {
+            let _ = backup::write_safe_mode(&home, &record);
+        }
+        RESTORE_PENDING.store(false, Ordering::SeqCst);
+    });
+    Ok(())
 }
 
 /// Checks the copy, asks the service manager to restart this daemon after the reply, and leaves the restore
@@ -257,6 +310,27 @@ mod tests {
         let listed = call(&app, "backups.list", json!({})).await.unwrap();
         assert_eq!(listed[0]["name"], "replaced-20270115-080000.db");
         assert_eq!(listed[0]["reason"], "replaced");
+    }
+
+    #[tokio::test]
+    async fn leaving_safe_mode_needs_safe_mode_and_a_database_that_opens() {
+        let home = tempfile::tempdir().unwrap();
+        let app = app_in(home.path());
+        let not_safe = call(&app, "backups.leave_safe_mode", json!({})).await.unwrap_err();
+        assert!(not_safe.message.contains("not in safe mode"), "{}", not_safe.message);
+
+        app.enter_safe_mode("the restore failed");
+        let record = backup::SafeMode {
+            reason: "the restore failed".into(),
+            id: String::new(),
+            at_ms: 1,
+        };
+        backup::write_safe_mode(home.path(), &record).unwrap();
+        std::fs::write(home.path().join("bandito.db"), vec![5u8; 4096]).unwrap();
+        let refused = call(&app, "backups.leave_safe_mode", json!({})).await.unwrap_err();
+        assert!(refused.message.contains("still does not open"), "{}", refused.message);
+        assert_eq!(backup::read_safe_mode(home.path()), Some(record), "still in safe mode");
+        assert_eq!(std::fs::read(home.path().join("bandito.db")).unwrap(), vec![5u8; 4096]);
     }
 
     #[test]

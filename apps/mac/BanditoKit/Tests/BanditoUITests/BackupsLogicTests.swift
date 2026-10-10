@@ -157,6 +157,14 @@ import Testing
         #expect(BackupReason.replaced.title != BackupReason.broken.title)
     }
 
+    @Test func anIncompleteSavedDatabaseIsShownButCannotBeRestored() {
+        #expect(BackupReason(raw: "incomplete") == .incomplete)
+        #expect(BackupReason.incomplete.isSavedBeforeRestore)
+        #expect(!BackupReason.incomplete.canRestore)
+        #expect(BackupReason.replaced.canRestore && BackupReason.broken.canRestore && BackupReason.start.canRestore)
+        #expect(BackupReason.incomplete.title == L10n.Backups.Reason.incomplete)
+    }
+
     @Test func aSetAsideNameGivesItsTime() {
         #expect(BackupName.createdAt("replaced-20270115-080000.db") == Date(timeIntervalSince1970: 1_800_000_000))
         #expect(BackupName.createdAt("broken-20270115-080000-2.db") == Date(timeIntervalSince1970: 1_800_000_000))

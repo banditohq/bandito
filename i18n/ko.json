@@ -1283,6 +1283,7 @@
   "backups.reason.beforeRestore": "복원 전",
   "backups.reason.replaced": "복원 전에 보관한 데이터베이스",
   "backups.reason.broken": "복원 전에 보관한 손상된 데이터베이스",
+  "backups.reason.incomplete": "불완전하게 보관된 데이터베이스(데이터베이스 파일 없음)",
   "backups.reason.other": "사본",
   "backups.whenToday": "오늘 {time}",
   "backups.whenYesterday": "어제 {time}",

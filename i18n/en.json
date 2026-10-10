@@ -1153,6 +1153,7 @@
   "backups.reason.beforeRestore": "Before restore",
   "backups.reason.replaced": "Database saved before a restore",
   "backups.reason.broken": "Damaged database saved before a restore",
+  "backups.reason.incomplete": "Incomplete saved database (no database file)",
   "backups.reason.other": "Copy",
   "backups.whenToday": "Today, {time}",
   "backups.whenYesterday": "Yesterday, {time}",

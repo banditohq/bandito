@@ -1686,7 +1686,9 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
 
         "setup.status" | "setup.install" | "setup.job" => setup::dispatch(app, method, p).await,
 
-        "backups.list" | "backups.create" | "backups.restore" => backups::dispatch(app, method, p).await,
+        "backups.list" | "backups.create" | "backups.restore" | "backups.leave_safe_mode" => {
+            backups::dispatch(app, method, p).await
+        }
 
         "daemon.update_check" => ok(update::check_async(VERSION).await?),
         "daemon.update_apply" => {
@@ -3755,6 +3757,7 @@ mod trust_tests {
         "backups.list",
         "backups.create",
         "backups.restore",
+        "backups.leave_safe_mode",
     ];
 
     #[tokio::test]

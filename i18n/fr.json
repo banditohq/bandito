@@ -1305,6 +1305,7 @@
   "backups.reason.beforeRestore": "Avant la restauration",
   "backups.reason.replaced": "Base enregistrée avant une restauration",
   "backups.reason.broken": "Base endommagée, enregistrée avant une restauration",
+  "backups.reason.incomplete": "Base enregistrée incomplète (fichier de base absent)",
   "backups.reason.other": "Sauvegarde",
   "backups.whenToday": "Aujourd’hui, {time}",
   "backups.whenYesterday": "Hier, {time}",

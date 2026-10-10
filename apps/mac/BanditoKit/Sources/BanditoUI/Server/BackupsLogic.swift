@@ -11,6 +11,9 @@ enum BackupReason: Equatable {
     /// The database a restore set aside, whole (`replaced-*`), or a damaged one (`broken-*`). The daemon never
     /// deletes these; the list marks them as "saved before a restore".
     case replaced, broken
+    /// A `-wal` or `-shm` of a set-aside database whose file is not there (a move that stopped in the middle). Kept
+    /// in view, cannot be restored.
+    case incomplete
     /// A reason this app does not know (a newer daemon): shown as a plain copy.
     case other
 
@@ -23,12 +26,16 @@ enum BackupReason: Equatable {
         case "before-restore": self = .beforeRestore
         case "replaced": self = .replaced
         case "broken": self = .broken
+        case "incomplete": self = .incomplete
         default: self = .other
         }
     }
 
     /// A database a restore set aside, not a copy the daemon made on its own schedule.
-    var isSavedBeforeRestore: Bool { self == .replaced || self == .broken }
+    var isSavedBeforeRestore: Bool { self == .replaced || self == .broken || self == .incomplete }
+
+    /// Whether a copy of this kind can be restored: an incomplete group has no database file.
+    var canRestore: Bool { self != .incomplete }
 
     /// The reason in words, as the list shows it.
     var title: String {
@@ -40,6 +47,7 @@ enum BackupReason: Equatable {
         case .beforeRestore: L10n.Backups.Reason.beforeRestore
         case .replaced: L10n.Backups.Reason.replaced
         case .broken: L10n.Backups.Reason.broken
+        case .incomplete: L10n.Backups.Reason.incomplete
         case .other: L10n.Backups.Reason.other
         }
     }

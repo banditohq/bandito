@@ -211,6 +211,7 @@
 "backups.reason.beforeRestore" = "Avant la restauration";
 "backups.reason.broken" = "Base endommagée, enregistrée avant une restauration";
 "backups.reason.daily" = "Quotidienne";
+"backups.reason.incomplete" = "Base enregistrée incomplète (fichier de base absent)";
 "backups.reason.manual" = "Manuelle";
 "backups.reason.other" = "Sauvegarde";
 "backups.reason.replaced" = "Base enregistrée avant une restauration";

@@ -1304,6 +1304,7 @@
   "backups.reason.beforeRestore": "Vor der Wiederherstellung",
   "backups.reason.replaced": "Vor einer Wiederherstellung gesicherte Datenbank",
   "backups.reason.broken": "Beschädigte Datenbank, vor einer Wiederherstellung gesichert",
+  "backups.reason.incomplete": "Unvollständig gesicherte Datenbank (Datenbankdatei fehlt)",
   "backups.reason.other": "Sicherung",
   "backups.whenToday": "Heute, {time}",
   "backups.whenYesterday": "Gestern, {time}",

@@ -211,6 +211,7 @@
 "backups.reason.beforeRestore" = "Vor der Wiederherstellung";
 "backups.reason.broken" = "Beschädigte Datenbank, vor einer Wiederherstellung gesichert";
 "backups.reason.daily" = "Täglich";
+"backups.reason.incomplete" = "Unvollständig gesicherte Datenbank (Datenbankdatei fehlt)";
 "backups.reason.manual" = "Manuell";
 "backups.reason.other" = "Sicherung";
 "backups.reason.replaced" = "Vor einer Wiederherstellung gesicherte Datenbank";

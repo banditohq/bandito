@@ -4,7 +4,7 @@ use super::{Store, new_id, now_ms};
 use anyhow::Result;
 use rusqlite::{OptionalExtension, Row, params};
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Device {
@@ -81,25 +81,32 @@ impl Store {
         Ok(store)
     }
 
+    /// Reads the paired devices from a private copy of `live_db` (the file and its `-wal`, copied to a temporary
+    /// folder), so nothing is opened, created or changed next to the live file: no `-shm`, no checkpoint.
     fn import_devices_from(&self, live_db: &Path) -> Result<()> {
-        let mut uri = String::from("file:");
-        for b in live_db.to_string_lossy().bytes() {
-            match b {
-                b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'/' | b'-' | b'_' | b'.' | b'~' => uri.push(b as char),
-                _ => uri.push_str(&format!("%{b:02X}")),
+        use std::os::unix::fs::DirBuilderExt;
+        let dir = std::env::temp_dir().join(format!("bandito-safe-{}", new_id()));
+        std::fs::DirBuilder::new().mode(0o700).create(&dir)?;
+        let result = (|| -> Result<()> {
+            let copy = dir.join("live.db");
+            std::fs::copy(live_db, &copy)?;
+            let wal = PathBuf::from(format!("{}-wal", live_db.display()));
+            if wal.is_file() {
+                std::fs::copy(&wal, dir.join("live.db-wal"))?;
             }
-        }
-        uri.push_str("?mode=ro");
-        let conn = self.conn();
-        conn.execute("ATTACH DATABASE ?1 AS live", [&uri])?;
-        let copied = conn.execute(
-            "INSERT OR IGNORE INTO devices (id, name, token_hash, created_at, last_seen_at)
-             SELECT id, name, token_hash, created_at, last_seen_at FROM live.devices",
-            [],
-        );
-        let _ = conn.execute("DETACH DATABASE live", []);
-        copied?;
-        Ok(())
+            let conn = self.conn();
+            conn.execute("ATTACH DATABASE ?1 AS live", [copy.to_string_lossy().as_ref()])?;
+            let copied = conn.execute(
+                "INSERT OR IGNORE INTO devices (id, name, token_hash, created_at, last_seen_at)
+                 SELECT id, name, token_hash, created_at, last_seen_at FROM live.devices",
+                [],
+            );
+            let _ = conn.execute("DETACH DATABASE live", []);
+            copied?;
+            Ok(())
+        })();
+        let _ = std::fs::remove_dir_all(&dir);
+        result
     }
 
     /// Insert a device with `token_hash = sha256_hex(token)`.
@@ -186,6 +193,35 @@ mod tests {
             before,
             "the live file is read, never written"
         );
+    }
+
+    #[test]
+    fn safe_mode_store_reads_a_copy_and_leaves_the_live_folder_as_it_was() {
+        let dir = tempfile::tempdir().unwrap();
+        let live = dir.path().join("bandito.db");
+        // A device that exists only in the WAL: a connection that never closed.
+        let store = Store::open(&live).unwrap();
+        store.device_add("laptop", "token-1").unwrap();
+        std::mem::forget(store);
+        let listing = || {
+            let mut names: Vec<(String, u64)> = std::fs::read_dir(dir.path())
+                .unwrap()
+                .map(|e| {
+                    let e = e.unwrap();
+                    (
+                        e.file_name().to_string_lossy().into_owned(),
+                        e.metadata().unwrap().len(),
+                    )
+                })
+                .collect();
+            names.sort();
+            names
+        };
+        let before = listing();
+        assert!(before.iter().any(|(n, _)| n.ends_with("-wal")), "{before:?}");
+        let safe = Store::open_safe_mode(&live).unwrap();
+        assert_eq!(safe.device_auth("token-1").unwrap().unwrap().name, "laptop");
+        assert_eq!(listing(), before, "no file appeared, none changed size");
     }
 
     #[test]

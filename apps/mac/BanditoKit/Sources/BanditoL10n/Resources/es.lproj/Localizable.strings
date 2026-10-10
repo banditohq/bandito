@@ -211,6 +211,7 @@
 "backups.reason.beforeRestore" = "Antes de restaurar";
 "backups.reason.broken" = "Base de datos dañada, guardada antes de restaurar";
 "backups.reason.daily" = "Diaria";
+"backups.reason.incomplete" = "Base de datos guardada incompleta (falta el archivo)";
 "backups.reason.manual" = "Manual";
 "backups.reason.other" = "Copia";
 "backups.reason.replaced" = "Base de datos guardada antes de restaurar";

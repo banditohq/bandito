@@ -1305,6 +1305,7 @@
   "backups.reason.beforeRestore": "Antes da restauração",
   "backups.reason.replaced": "Banco de dados guardado antes de restaurar",
   "backups.reason.broken": "Banco de dados danificado, guardado antes de restaurar",
+  "backups.reason.incomplete": "Banco de dados guardado incompleto (sem o arquivo do banco)",
   "backups.reason.other": "Cópia",
   "backups.whenToday": "Hoje, {time}",
   "backups.whenYesterday": "Ontem, {time}",

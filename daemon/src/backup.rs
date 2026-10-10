@@ -23,6 +23,10 @@ const LOCK_FILE: &str = "daemon.lock";
 const RESTORE_MARKER: &str = "restore-pending";
 /// The result of the last restore, in `run/` (see `write_last_restore`).
 const LAST_RESTORE_FILE: &str = "last-restore.json";
+/// The restore that moved the old files and has not finished, in `run/` (see `restore_locked`).
+const PROGRESS_FILE: &str = "restore-progress.json";
+/// Why the daemon runs in safe mode, in `run/` (see `SafeMode`).
+const SAFE_MODE_FILE: &str = "safe-mode.json";
 const PARTIAL_SUFFIX: &str = ".partial";
 const TS_FORMAT: &str = "%Y%m%d-%H%M%S";
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
@@ -43,11 +47,7 @@ pub fn backups_dir(home: &Path) -> PathBuf {
 /// The lock goes with the file descriptor, so a crashed daemon does not leave it behind.
 pub fn try_daemon_lock(home: &Path) -> Result<Option<fs::File>> {
     let dir = home.join("run");
-    fs::DirBuilder::new()
-        .recursive(true)
-        .mode(0o700)
-        .create(&dir)
-        .with_context(|| format!("create {}", dir.display()))?;
+    create_private_dir(&dir)?;
     let path = dir.join(LOCK_FILE);
     let file = fs::OpenOptions::new()
         .create(true)
@@ -198,7 +198,7 @@ pub fn restore(home: &Path, name: &str, now_ms: i64) -> Result<RestoreDone> {
     let Some(_lock) = try_daemon_lock(home)? else {
         bail!(BUSY_MSG);
     };
-    restore_locked(home, name, now_ms)
+    restore_locked(home, name, now_ms, &crate::store::new_id())
 }
 
 /// The restore itself, for a caller that holds the daemon lock already. The rule: the restore never makes the data
@@ -210,10 +210,13 @@ pub fn restore(home: &Path, name: &str, now_ms: i64) -> Result<RestoreDone> {
 /// 3. The restored file is written next to the database (`bandito.db.restore-tmp`) and synced. The live files are
 ///    still where they were.
 /// 4. The live `-wal`, `-shm` and `bandito.db` are renamed, in that order, to `backups/replaced-<time>.db*` (or
-///    `broken-<time>.db*` for a damaged one). When a step fails, the steps already done are undone.
-/// 5. The restored file is renamed to `bandito.db`. When that fails, the old files are put back.
-/// 6. The folders are synced and old copies pruned, keeping the ones this restore names.
-fn restore_locked(home: &Path, name: &str, now_ms: i64) -> Result<RestoreDone> {
+///    `broken-<time>.db*` for a damaged one), and both folders are synced. When a step or the sync fails, the
+///    steps already done are undone. The name is noted in `run/restore-progress.json` with the operation id first,
+///    so a repeat of the same operation after a crash finishes the same group instead of starting a second one.
+/// 5. The restored file is renamed to `bandito.db` and the folders are synced. When that fails, the restored file is
+///    taken out again and the old files are put back.
+/// 6. Old copies are pruned, keeping the ones this restore names.
+fn restore_locked(home: &Path, name: &str, now_ms: i64, op_id: &str) -> Result<RestoreDone> {
     validate_name(name)?;
     let src = backups_dir(home).join(name);
     check_regular_copy(&src, name)?;
@@ -255,13 +258,41 @@ fn restore_locked(home: &Path, name: &str, now_ms: i64) -> Result<RestoreDone> {
         return Err(e);
     }
 
+    let dir = backups_dir(home);
     let mut saved = None;
     let mut moved = Vec::new();
     if live_files {
-        let dir = backups_dir(home);
-        create_private_dir(&dir)?;
-        let target = free_saved_name(&dir, prefix, now_ms)?;
-        match move_group(&db, &target, "aside") {
+        let target = (|| -> Result<PathBuf> {
+            create_private_dir(&dir)?;
+            let target = saved_target(home, &dir, prefix, now_ms, op_id)?;
+            let name = target.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+            write_progress(
+                home,
+                &Progress {
+                    id: op_id.to_string(),
+                    saved: name.to_string(),
+                },
+            )?;
+            Ok(target)
+        })();
+        let target = match target {
+            Ok(target) => target,
+            Err(e) => {
+                let _ = fs::remove_file(&tmp);
+                return Err(e);
+            }
+        };
+        let step = move_group(&db, &target, "aside").and_then(|done| {
+            // The renames must reach the disk before the new file takes the place of the old one.
+            match sync_both(home, "sync-aside") {
+                Ok(()) => Ok(done),
+                Err(e) => Err(match undo_moves(&done) {
+                    Ok(()) => e.context("the steps already made were undone"),
+                    Err(undo) => e.context(format!("and undoing the steps already made failed: {undo:#}")),
+                }),
+            }
+        });
+        match step {
             Ok(done) => {
                 moved = done;
                 saved = target.file_name().and_then(|n| n.to_str()).map(str::to_string);
@@ -271,26 +302,170 @@ fn restore_locked(home: &Path, name: &str, now_ms: i64) -> Result<RestoreDone> {
                 return Err(e);
             }
         }
+    } else if let Some(p) = read_progress(home)
+        && p.id == op_id
+        && SIDECARS
+            .iter()
+            .any(|s| fs::symlink_metadata(with_suffix(&dir.join(&p.saved), s)).is_ok())
+    {
+        // An earlier try of this very operation moved the old files and stopped before the new one was in place.
+        saved = Some(p.saved);
     }
     let installed = check_fault("install")
         .and_then(|()| fs::rename(&tmp, &db))
         .with_context(|| format!("replace {}", db.display()));
     if let Err(e) = installed {
         let _ = fs::remove_file(&tmp);
-        return Err(match undo_moves(&moved) {
+        let undone = undo_moves(&moved);
+        let _ = sync_both(home, "sync-undo");
+        return Err(match undone {
             Ok(()) => e.context("the old database was put back"),
             Err(undo) => e.context(format!("and putting the old database back failed: {undo:#}")),
         });
     }
-    for dir in [home, backups_dir(home).as_path()] {
-        if let Err(e) = sync_dir(dir) {
-            tracing::warn!("sync {}: {e:#}", dir.display());
-        }
+    if let Err(e) = sync_both(home, "sync-install") {
+        // Not known to be on disk: take the new file out again and put the old ones back.
+        let out = fs::rename(&db, &tmp);
+        let undone = undo_moves(&moved);
+        let _ = fs::remove_file(&tmp);
+        let _ = sync_both(home, "sync-undo");
+        return Err(match (out, undone) {
+            (Ok(()), Ok(())) => e.context("the old database was put back"),
+            (out, undone) => {
+                let mut why = Vec::new();
+                if let Err(x) = out {
+                    why.push(format!("taking the restored file out failed: {x}"));
+                }
+                if let Err(x) = undone {
+                    why.push(format!("putting the old database back failed: {x:#}"));
+                }
+                e.context(why.join("; "))
+            }
+        });
     }
+    clear_progress(home);
     let mut protected = vec![name];
     protected.extend(before.as_deref());
     prune_except(home, KEEP, &protected);
     Ok(RestoreDone { before, saved })
+}
+
+/// Which `replaced-*` / `broken-*` name an operation moves the old files to: the one it noted before a crash, when
+/// that group can take the files without overwriting any; else the first free name.
+fn saved_target(home: &Path, dir: &Path, prefix: &str, now_ms: i64, op_id: &str) -> Result<PathBuf> {
+    if let Some(p) = read_progress(home)
+        && p.id == op_id
+        && parse_saved(&p.saved).is_some()
+    {
+        let candidate = dir.join(&p.saved);
+        // A live part that carries no data does not stand in the way: an empty `-wal`, or a `-shm` (an index that is
+        // rebuilt from the WAL), which opening the database for the copy before the restore may have made again.
+        let empty = |suffix: &str| {
+            let live = live_path(home, suffix);
+            suffix == "-shm" || fs::metadata(&live).is_ok_and(|m| m.len() == 0)
+        };
+        let clashes = |suffix: &str| {
+            fs::symlink_metadata(live_path(home, suffix)).is_ok()
+                && fs::symlink_metadata(with_suffix(&candidate, suffix)).is_ok()
+        };
+        let blocked = SIDECARS.iter().any(|s| clashes(s) && (s.is_empty() || !empty(s)));
+        if !blocked {
+            for s in ["-wal", "-shm"] {
+                if clashes(s) {
+                    let _ = fs::remove_file(live_path(home, s));
+                }
+            }
+            return Ok(candidate);
+        }
+    }
+    free_saved_name(dir, prefix, now_ms)
+}
+
+/// A restore that moved the old files and has not finished: `run/restore-progress.json`.
+#[derive(Debug, Serialize, Deserialize)]
+struct Progress {
+    id: String,
+    saved: String,
+}
+
+fn progress_path(home: &Path) -> PathBuf {
+    home.join("run").join(PROGRESS_FILE)
+}
+
+fn write_progress(home: &Path, progress: &Progress) -> Result<()> {
+    let json = serde_json::to_vec(progress).context("encode the restore progress")?;
+    write_run_file(home, &progress_path(home), &json)
+}
+
+fn read_progress(home: &Path) -> Option<Progress> {
+    serde_json::from_slice(&fs::read(progress_path(home)).ok()?).ok()
+}
+
+fn clear_progress(home: &Path) {
+    if let Err(e) = remove_if_exists(&progress_path(home)) {
+        tracing::warn!("remove the restore progress: {e:#}");
+    }
+}
+
+/// Why the daemon runs in safe mode, kept in `run/safe-mode.json` so that every later start stays in safe mode
+/// until a restore (or a rollback) works, or a person leaves it: `bandito backup clear-safe-mode` or
+/// `backups.leave_safe_mode`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SafeMode {
+    pub reason: String,
+    /// The id of the restore that led here (empty when there was none).
+    #[serde(default)]
+    pub id: String,
+    pub at_ms: i64,
+}
+
+fn safe_mode_path(home: &Path) -> PathBuf {
+    home.join("run").join(SAFE_MODE_FILE)
+}
+
+pub fn write_safe_mode(home: &Path, record: &SafeMode) -> Result<()> {
+    let json = serde_json::to_vec(record).context("encode the safe mode record")?;
+    write_run_file(home, &safe_mode_path(home), &json)
+}
+
+pub fn read_safe_mode(home: &Path) -> Option<SafeMode> {
+    serde_json::from_slice(&fs::read(safe_mode_path(home)).ok()?).ok()
+}
+
+/// Whether the safe mode file exists, even when it cannot be read: an unreadable record still means "stay safe".
+pub fn safe_mode_recorded(home: &Path) -> bool {
+    fs::symlink_metadata(safe_mode_path(home)).is_ok()
+}
+
+pub fn clear_safe_mode(home: &Path) -> Result<()> {
+    remove_if_exists(&safe_mode_path(home))
+}
+
+/// Writes `bytes` to `path` in `<home>/run` atomically: a temporary file made exclusively (an old one, or a link
+/// in its place, is removed first and never followed), synced, then renamed. Mode 0600. `run/` is made 0700.
+fn write_run_file(home: &Path, path: &Path, bytes: &[u8]) -> Result<()> {
+    create_private_dir(&home.join("run"))?;
+    let tmp = with_suffix(path, ".tmp");
+    remove_if_exists(&tmp)?;
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .custom_flags(libc::O_NOFOLLOW)
+        .mode(0o600)
+        .open(&tmp)
+        .with_context(|| format!("open {}", tmp.display()))?;
+    file.write_all(bytes)
+        .and_then(|()| file.sync_all())
+        .with_context(|| format!("write {}", tmp.display()))?;
+    drop(file);
+    fs::rename(&tmp, path).with_context(|| format!("replace {}", path.display()))?;
+    Ok(())
+}
+
+/// Syncs `<home>` and `<home>/backups`. `point` names the fault point of the tests.
+fn sync_both(home: &Path, point: &str) -> Result<()> {
+    sync_dir(home, point)?;
+    sync_dir(&backups_dir(home), point)
 }
 
 /// The file names that go with `bandito.db`, in the order they are moved: the WAL and the shared-memory file
@@ -394,8 +569,8 @@ fn undo_moves(done: &[(PathBuf, PathBuf)]) -> Result<()> {
     }
 }
 
-fn sync_dir(dir: &Path) -> Result<()> {
-    check_fault("sync-dir")?;
+fn sync_dir(dir: &Path, point: &str) -> Result<()> {
+    check_fault(point).with_context(|| format!("sync {}", dir.display()))?;
     fs::File::open(dir)
         .and_then(|d| d.sync_all())
         .with_context(|| format!("sync {}", dir.display()))
@@ -514,9 +689,7 @@ pub fn restore_marker(home: &Path) -> PathBuf {
 pub fn request_restore(home: &Path, name: &str) -> Result<String> {
     check_copy(home, name)?;
     let path = restore_marker(home);
-    if let Some(dir) = path.parent() {
-        fs::create_dir_all(dir).with_context(|| format!("create {}", dir.display()))?;
-    }
+    create_private_dir(&home.join("run"))?;
     remove_marker(&path)?;
     let id = crate::store::new_id();
     let body = serde_json::to_vec(&Marker {
@@ -581,23 +754,8 @@ fn last_restore_path(home: &Path) -> PathBuf {
 
 /// Writes the result of a restore (atomically: a temporary file, then a rename).
 pub fn write_last_restore(home: &Path, record: &LastRestore) -> Result<()> {
-    let path = last_restore_path(home);
-    let dir = path.parent().context("the run folder has no parent")?;
-    fs::create_dir_all(dir).with_context(|| format!("create {}", dir.display()))?;
-    let tmp = dir.join(format!("{LAST_RESTORE_FILE}.tmp"));
     let json = serde_json::to_vec(record).context("encode the restore result")?;
-    let mut file = fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(0o600)
-        .open(&tmp)
-        .with_context(|| format!("open {}", tmp.display()))?;
-    file.write_all(&json)
-        .with_context(|| format!("write {}", tmp.display()))?;
-    drop(file);
-    fs::rename(&tmp, &path).with_context(|| format!("replace {}", path.display()))?;
-    Ok(())
+    write_run_file(home, &last_restore_path(home), &json)
 }
 
 /// The result of the last restore, or None when there is none or the file cannot be read.
@@ -646,7 +804,7 @@ pub fn apply_pending_restore(home: &Path, now_ms: i64) -> Result<Option<AppliedR
     }
     let (id, name, outcome) = match read_marker(&marker) {
         Ok((id, name)) => {
-            let outcome = restore_locked(home, &name, now_ms);
+            let outcome = restore_locked(home, &name, now_ms, &id);
             (id, name, outcome)
         }
         Err(e) => (crate::store::new_id(), String::new(), Err(e)),
@@ -707,10 +865,19 @@ pub fn roll_back_restore(home: &Path, applied: &AppliedRestore, reason: &str, no
             },
         );
     };
+    let from_before = |before: &str| restore_locked(home, before, now_ms, &applied.id).map(|_| ());
     let back = if let Some(saved) = applied.saved.as_deref() {
-        put_back_saved(home, saved, now_ms)
+        match put_back_saved(home, saved, now_ms) {
+            Ok(()) => Ok(()),
+            // The set-aside files are gone: the copy made before the restore is the next way back.
+            Err(e) if !saved_db_exists(home, saved) && applied.before.is_some() => {
+                tracing::warn!("the set-aside database is missing, going to the copy from before: {e:#}");
+                from_before(applied.before.as_deref().unwrap_or_default())
+            }
+            Err(e) => Err(e),
+        }
     } else if let Some(before) = applied.before.as_deref() {
-        restore_locked(home, before, now_ms).map(|_| ())
+        from_before(before)
     } else {
         let error =
             format!("the restored database does not open ({reason}), and there is no copy from before the restore");
@@ -734,15 +901,31 @@ pub fn roll_back_restore(home: &Path, applied: &AppliedRestore, reason: &str, no
     }
 }
 
+fn saved_db_exists(home: &Path, saved: &str) -> bool {
+    fs::symlink_metadata(backups_dir(home).join(saved)).is_ok_and(|m| m.file_type().is_file())
+}
+
 /// Puts the database files set aside as `saved` back in place. The files now in place (the restored database that
 /// does not open) are set aside as `broken-*` first; when putting the old ones back fails, those are put back too.
+/// Fails, changing nothing, when the set-aside database file is not there: a WAL alone is not a database, and
+/// "putting back" nothing would leave the daemon on an empty one. The folders are synced; a failure is an error.
 fn put_back_saved(home: &Path, saved: &str, now_ms: i64) -> Result<()> {
     let dir = backups_dir(home);
     let db = home.join(DB_FILE);
     let saved_db = dir.join(saved);
+    if !saved_db_exists(home, saved) {
+        bail!("the set-aside database {saved} is not in the backups folder");
+    }
     let target = free_saved_name(&dir, "broken", now_ms)?;
     let aside = move_group(&db, &target, "unrestore-aside")?;
-    match move_group(&saved_db, &db, "unrestore-back") {
+    let step = move_group(&saved_db, &db, "unrestore-back").and_then(|done| match sync_both(home, "sync-unrestore") {
+        Ok(()) => Ok(done),
+        Err(e) => Err(match undo_moves(&done) {
+            Ok(()) => e.context("the steps already made were undone"),
+            Err(undo) => e.context(format!("and undoing the steps already made failed: {undo:#}")),
+        }),
+    });
+    match step {
         Ok(_) => Ok(()),
         Err(e) => Err(match undo_moves(&aside) {
             Ok(()) => e.context("the restored database was put back in place"),
@@ -911,12 +1094,10 @@ fn saved_databases(home: &Path) -> Result<Vec<BackupFile>> {
         Err(e) => return Err(e).with_context(|| format!("read {}", dir.display())),
     };
     let mut out = Vec::new();
+    let mut orphans: std::collections::BTreeMap<String, u64> = std::collections::BTreeMap::new();
     for item in read {
         let item = item?;
         let name = item.file_name().to_string_lossy().into_owned();
-        let Some((ts_ms, kind, _)) = parse_saved_full(&name) else {
-            continue;
-        };
         let meta = match item.metadata() {
             Ok(meta) => meta,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
@@ -925,6 +1106,19 @@ fn saved_databases(home: &Path) -> Result<Vec<BackupFile>> {
         if !meta.file_type().is_file() {
             continue;
         }
+        // A `-wal` or `-shm` of a set-aside database whose `.db` is not there: a group the move stopped in the middle
+        // of. It is listed (as `incomplete`), so it is not lost from view, and it cannot be restored.
+        if let Some(base) = name.strip_suffix("-wal").or_else(|| name.strip_suffix("-shm"))
+            && parse_saved_full(base).is_some()
+        {
+            if fs::symlink_metadata(dir.join(base)).is_err() {
+                *orphans.entry(base.to_string()).or_default() += meta.len();
+            }
+            continue;
+        }
+        let Some((ts_ms, kind, _)) = parse_saved_full(&name) else {
+            continue;
+        };
         let wal = fs::metadata(with_suffix(&item.path(), "-wal"))
             .map(|m| m.len())
             .unwrap_or(0);
@@ -935,7 +1129,43 @@ fn saved_databases(home: &Path) -> Result<Vec<BackupFile>> {
             reason: kind.to_string(),
         });
     }
+    for (name, size) in orphans {
+        if let Some((ts_ms, _, _)) = parse_saved_full(&name) {
+            out.push(BackupFile {
+                name,
+                size,
+                created_at_ms: ts_ms,
+                reason: "incomplete".to_string(),
+            });
+        }
+    }
     Ok(out)
+}
+
+/// Checks that the live database opens with this daemon, without touching it: the file and its `-wal` are copied to
+/// a private temporary folder and the copy is opened with `Store::open` (which also runs the migrations, on the copy).
+/// Used before leaving safe mode.
+pub fn check_database_opens(home: &Path) -> Result<()> {
+    let db = home.join(DB_FILE);
+    if !db.is_file() {
+        bail!("there is no database file");
+    }
+    let dir = std::env::temp_dir().join(format!("bandito-check-{}", crate::store::new_id()));
+    fs::DirBuilder::new()
+        .mode(0o700)
+        .create(&dir)
+        .with_context(|| format!("create {}", dir.display()))?;
+    let result = (|| -> Result<()> {
+        let copy = dir.join(DB_FILE);
+        fs::copy(&db, &copy).context("copy the database to check it")?;
+        let wal = live_path(home, "-wal");
+        if wal.is_file() {
+            fs::copy(&wal, with_suffix(&copy, "-wal")).context("copy the WAL to check it")?;
+        }
+        crate::store::Store::open(&copy).map(|_| ())
+    })();
+    let _ = fs::remove_dir_all(&dir);
+    result
 }
 
 /// Whether `backups/` holds a database that a restore set aside. When it cannot be read, says yes: the caller
@@ -1758,6 +1988,20 @@ mod tests {
         saved.file_name().unwrap().to_str().unwrap().to_string()
     }
 
+    /// Like `live_with_wal`, but the files are copies made while the writer was open and no process holds them: the
+    /// state after a crash. (Moving the WAL out from under an open connection of this very test process would only
+    /// test SQLite's reaction to that.)
+    fn live_with_wal_after_a_crash(home: &Path) -> String {
+        let scratch = temp_home();
+        let name = live_with_wal(scratch.path());
+        let dir = backups_dir(home);
+        fs::create_dir_all(&dir).unwrap();
+        fs::copy(backups_dir(scratch.path()).join(&name), dir.join(&name)).unwrap();
+        fs::copy(scratch.path().join(DB_FILE), home.join(DB_FILE)).unwrap();
+        fs::copy(scratch.path().join("bandito.db-wal"), home.join("bandito.db-wal")).unwrap();
+        name
+    }
+
     /// The live database is as `live_with_wal` left it, and the restore left nothing of its own in the way.
     fn assert_live_untouched(home: &Path) {
         assert_eq!(rows(&home.join(DB_FILE)), ["old", "in-wal"]);
@@ -1910,12 +2154,219 @@ mod tests {
     }
 
     #[test]
-    fn a_failing_directory_sync_does_not_undo_a_finished_restore() {
+    fn a_failing_directory_sync_is_an_error_and_puts_the_old_database_back() {
+        // After the old files moved aside, and after the new file took their place: either way nothing changes.
+        for point in ["sync-aside", "sync-install"] {
+            let home = temp_home();
+            let name = live_with_wal(home.path());
+            let _faults = Faults::on(&[(point, libc::EIO)]);
+            let err = restore(home.path(), &name, BASE_MS + HOUR_MS).unwrap_err();
+            assert!(format!("{err:#}").contains("sync"), "{point}: {err:#}");
+            assert_live_untouched(home.path());
+        }
+    }
+
+    #[test]
+    fn a_sync_failure_with_a_failed_undo_keeps_the_old_files_set_aside() {
         let home = temp_home();
         let name = live_with_wal(home.path());
-        let _faults = Faults::on(&[("sync-dir", libc::EIO)]);
-        restore(home.path(), &name, BASE_MS + HOUR_MS).unwrap();
+        let _faults = Faults::on(&[("sync-aside", libc::EIO), ("undo-*", libc::EIO)]);
+        let err = restore(home.path(), &name, BASE_MS + HOUR_MS).unwrap_err();
+        assert!(format!("{err:#}").contains("kept as"), "{err:#}");
+        let aside = set_aside(home.path());
+        assert_eq!(aside.len(), 1, "{aside:?}");
+    }
+
+    #[test]
+    fn a_missing_set_aside_database_is_no_way_back() {
+        let home = temp_home();
+        let name = live_with_wal(home.path());
+        let id = request_restore(home.path(), &name).unwrap();
+        let applied = apply_pending_restore(home.path(), BASE_MS + HOUR_MS).unwrap().unwrap();
+        assert_eq!(applied.id, id);
+        let saved = applied.saved.clone().unwrap();
+        // Only the WAL is left of the set-aside group: it is not a database.
+        fs::remove_file(backups_dir(home.path()).join(&saved)).unwrap();
+        let before = applied.before.clone();
+        let no_before = AppliedRestore {
+            before: None,
+            ..applied.clone()
+        };
+
+        let err = roll_back_restore(home.path(), &no_before, "boom", BASE_MS + 2 * HOUR_MS).unwrap_err();
+        assert!(format!("{err:#}").contains("is not in the backups folder"), "{err:#}");
+        // The restored database is still in place: nothing was set aside, nothing replaced by an empty file.
         assert_eq!(rows(&home.path().join(DB_FILE)), ["old"]);
+        assert!(!read_last_restore(home.path()).unwrap().ok);
+
+        // With the copy from before, that copy is the way back.
+        let with_before = AppliedRestore { before, ..applied };
+        roll_back_restore(home.path(), &with_before, "boom", BASE_MS + 3 * HOUR_MS).unwrap();
+        assert_eq!(rows(&home.path().join(DB_FILE)), ["old", "in-wal"]);
+    }
+
+    #[test]
+    fn a_failing_sync_after_putting_the_old_files_back_is_an_error() {
+        let home = temp_home();
+        let name = live_with_wal(home.path());
+        request_restore(home.path(), &name).unwrap();
+        let applied = apply_pending_restore(home.path(), BASE_MS + HOUR_MS).unwrap().unwrap();
+        let _faults = Faults::on(&[("sync-unrestore", libc::EIO)]);
+        let err = roll_back_restore(home.path(), &applied, "boom", BASE_MS + 2 * HOUR_MS).unwrap_err();
+        assert!(format!("{err:#}").contains("sync"), "{err:#}");
+        // Undone: the restored database is where it was, the old files are set aside again.
+        assert_eq!(rows(&home.path().join(DB_FILE)), ["old"]);
+        assert_eq!(
+            rows(&backups_dir(home.path()).join(applied.saved.unwrap())),
+            ["old", "in-wal"]
+        );
+    }
+
+    #[test]
+    fn a_repeat_of_the_same_operation_finishes_the_group_it_left_half_moved() {
+        let home = temp_home();
+        let name = live_with_wal_after_a_crash(home.path());
+        let dir = backups_dir(home.path());
+        // A crash after the -wal moved: its group name is noted, the database and -shm are still live.
+        let group = "replaced-20270115-090000.db";
+        write_progress(
+            home.path(),
+            &Progress {
+                id: "op-1".into(),
+                saved: group.into(),
+            },
+        )
+        .unwrap();
+        fs::rename(home.path().join("bandito.db-wal"), dir.join(format!("{group}-wal"))).unwrap();
+
+        // The repeat is a bit later, so a fresh name would differ.
+        let done = restore_locked(home.path(), &name, BASE_MS + 5 * HOUR_MS, "op-1").unwrap();
+        assert_eq!(
+            done.saved.as_deref(),
+            Some(group),
+            "the same group is finished, not a second one"
+        );
+        assert_eq!(rows(&dir.join(group)), ["old", "in-wal"]);
+        assert!(
+            set_aside(home.path())
+                .iter()
+                .all(|c| c.reason == "replaced" && c.name == group)
+        );
+        assert!(
+            read_progress(home.path()).is_none(),
+            "the note goes when the operation is over"
+        );
+        assert_eq!(rows(&home.path().join(DB_FILE)), ["old"]);
+    }
+
+    #[test]
+    fn a_crash_after_the_database_moved_is_remembered_by_the_repeat() {
+        let home = temp_home();
+        let name = live_with_wal_after_a_crash(home.path());
+        let dir = backups_dir(home.path());
+        let group = "replaced-20270115-090000.db";
+        write_progress(
+            home.path(),
+            &Progress {
+                id: "op-1".into(),
+                saved: group.into(),
+            },
+        )
+        .unwrap();
+        for suffix in SIDECARS {
+            if live_path(home.path(), suffix).exists() {
+                fs::rename(live_path(home.path(), suffix), with_suffix(&dir.join(group), suffix)).unwrap();
+            }
+        }
+        // Nothing live is left, as after a crash between the moves and the install.
+        let done = restore_locked(home.path(), &name, BASE_MS + 5 * HOUR_MS, "op-1").unwrap();
+        assert_eq!(done.saved.as_deref(), Some(group));
+        assert_eq!(rows(&home.path().join(DB_FILE)), ["old"]);
+    }
+
+    #[test]
+    fn another_operation_does_not_join_a_half_moved_group_and_the_orphan_is_listed() {
+        let home = temp_home();
+        let name = live_with_wal_after_a_crash(home.path());
+        let dir = backups_dir(home.path());
+        let group = "replaced-20270115-090000.db";
+        write_progress(
+            home.path(),
+            &Progress {
+                id: "op-1".into(),
+                saved: group.into(),
+            },
+        )
+        .unwrap();
+        fs::rename(home.path().join("bandito.db-wal"), dir.join(format!("{group}-wal"))).unwrap();
+
+        let done = restore_locked(home.path(), &name, BASE_MS + 5 * HOUR_MS, "op-2").unwrap();
+        assert_ne!(done.saved.as_deref(), Some(group));
+        // The orphan WAL has no database next to it: listed as an incomplete saved database, not lost from view.
+        let listed = copies(home.path()).unwrap();
+        let orphan = listed.iter().find(|c| c.name == group).expect("the orphan is listed");
+        assert_eq!(orphan.reason, "incomplete");
+        assert!(orphan.size > 0);
+        assert!(has_set_aside(home.path()));
+        assert!(restore(home.path(), group, BASE_MS).is_err(), "it cannot be restored");
+    }
+
+    #[test]
+    fn the_run_folder_is_private_and_a_link_at_the_temporary_file_is_not_followed() {
+        let home = temp_home();
+        let run = home.path().join("run");
+        fs::create_dir_all(&run).unwrap();
+        fs::set_permissions(&run, fs::Permissions::from_mode(0o755)).unwrap();
+        let victim = home.path().join("victim.txt");
+        fs::write(&victim, "precious").unwrap();
+        std::os::unix::fs::symlink(&victim, run.join("last-restore.json.tmp")).unwrap();
+
+        let record = LastRestore {
+            id: "op".into(),
+            name: "x".into(),
+            ok: true,
+            error: None,
+            at_ms: 1,
+        };
+        write_last_restore(home.path(), &record).unwrap();
+        assert_eq!(fs::read_to_string(&victim).unwrap(), "precious");
+        assert_eq!(read_last_restore(home.path()), Some(record));
+        assert_eq!(fs::metadata(&run).unwrap().permissions().mode() & 0o777, 0o700);
+        let mode = |name: &str| fs::metadata(run.join(name)).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode("last-restore.json"), 0o600);
+
+        let safe = SafeMode {
+            reason: "why".into(),
+            id: "op".into(),
+            at_ms: 2,
+        };
+        write_safe_mode(home.path(), &safe).unwrap();
+        assert_eq!(read_safe_mode(home.path()), Some(safe));
+        assert!(safe_mode_recorded(home.path()));
+        clear_safe_mode(home.path()).unwrap();
+        assert!(!safe_mode_recorded(home.path()));
+    }
+
+    #[test]
+    fn check_database_opens_uses_a_copy_and_leaves_the_live_folder_alone() {
+        let home = temp_home();
+        let db = home.path().join(DB_FILE);
+        {
+            let store = crate::store::Store::open(&db).unwrap();
+            store.device_add("laptop", "t").unwrap();
+        }
+        let before: Vec<String> = fs::read_dir(home.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        check_database_opens(home.path()).unwrap();
+        let after: Vec<String> = fs::read_dir(home.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(before.len(), after.len());
+        fs::write(&db, vec![1u8; 4096]).unwrap();
+        assert!(check_database_opens(home.path()).is_err());
     }
 
     #[test]

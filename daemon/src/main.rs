@@ -100,6 +100,9 @@ enum BackupCmd {
         /// A file name from `bandito backup list`.
         name: String,
     },
+    /// Take the daemon out of safe mode without a restore. The daemon must be stopped. Its next start opens the
+    /// database as it is; when that fails again with set-aside files in `backups/`, it goes back to safe mode.
+    ClearSafeMode,
 }
 
 #[derive(Subcommand)]
@@ -419,6 +422,22 @@ fn backup_cmd(cmd: BackupCmd, home: &Path) -> Result<()> {
             }
             Ok(())
         }
+        BackupCmd::ClearSafeMode => {
+            let Some(_lock) = bandito::backup::try_daemon_lock(home)? else {
+                bail!("the daemon is running. Stop it first: bandito service uninstall; or use the app (Backups)");
+            };
+            match bandito::backup::read_safe_mode(home) {
+                Some(record) => println!("Safe mode was entered because: {}", record.reason),
+                None if bandito::backup::safe_mode_recorded(home) => println!("Safe mode was on."),
+                None => println!("The daemon is not in safe mode."),
+            }
+            if let Err(e) = bandito::backup::check_database_opens(home) {
+                println!("Warning: the database does not open yet: {e:#}");
+            }
+            bandito::backup::clear_safe_mode(home)?;
+            println!("Cleared. After the next start: bandito service install");
+            Ok(())
+        }
     }
 }
 
@@ -472,12 +491,18 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr, home_given: bool) 
     // A restore asked over RPC (`backups.restore`) comes first: it replaces the file the store opens next.
     // Safe mode (docs/ARCHITECTURE.md#backups): when a restore leaves no database that opens and no way back, the
     // daemon starts without the database and answers only `daemon.info` and `backups.*`, so the app can show why and
-    // offer the copies. It never starts on an empty new database over files that are set aside.
+    // offer the copies. It never starts on an empty new database over files that are set aside. The state is kept in
+    // `run/safe-mode.json`, so every later start stays in safe mode (no crash loop) until a restore or a rollback
+    // works, or a person leaves it (`bandito backup clear-safe-mode`, `backups.leave_safe_mode`).
     let mut safe_mode: Option<String> = None;
     let db_path = home.join("bandito.db");
+    let recorded = bandito::backup::read_safe_mode(home);
+    let was_safe = bandito::backup::safe_mode_recorded(home);
+    let mut restore_id = String::new();
     let mut restored = match bandito::backup::apply_pending_restore(home, bandito::store::now_ms()) {
         Ok(Some(applied)) => {
             tracing::info!(copy = %applied.name, "database restored from a copy, as requested");
+            restore_id = applied.id.clone();
             Some(applied)
         }
         Ok(None) => None,
@@ -489,6 +514,15 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr, home_given: bool) 
             None
         }
     };
+    // Safe mode stays until something works: a restore that was applied, or a person's decision.
+    if safe_mode.is_none() && restored.is_none() && was_safe {
+        safe_mode = Some(
+            recorded
+                .as_ref()
+                .map(|r| r.reason.clone())
+                .unwrap_or_else(|| "the daemon was left in safe mode and has not been taken out of it".into()),
+        );
+    }
     // Before the store opens: migrations change the file, so the copy must come first. A failed copy does not stop the start.
     if safe_mode.is_none() {
         match bandito::backup::on_start(home, rpc::VERSION, bandito::store::now_ms()) {
@@ -525,19 +559,52 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr, home_given: bool) 
                         }
                     }
                 }
-                None => return Err(e),
+                // No restore this time. When an earlier one left files set aside, or failed, a database that does
+                // not open means safe mode, not a crash that repeats at every start.
+                None => {
+                    let failed_restore = bandito::backup::read_last_restore(home).is_some_and(|r| !r.ok);
+                    if bandito::backup::has_set_aside(home) || failed_restore {
+                        safe_mode = Some(format!("the database does not open: {e:#}"));
+                        None
+                    } else {
+                        return Err(e);
+                    }
+                }
             },
         }
     };
+    match &safe_mode {
+        Some(why) => {
+            tracing::error!(reason = %why, "starting in safe mode: only daemon.info and backups.* are answered");
+            if !was_safe {
+                let id = if restore_id.is_empty() {
+                    bandito::backup::read_last_restore(home)
+                        .map(|r| r.id)
+                        .unwrap_or_default()
+                } else {
+                    restore_id.clone()
+                };
+                let record = bandito::backup::SafeMode {
+                    reason: why.clone(),
+                    id,
+                    at_ms: bandito::store::now_ms(),
+                };
+                if let Err(e) = bandito::backup::write_safe_mode(home, &record) {
+                    tracing::warn!("record safe mode: {e:#}");
+                }
+            }
+        }
+        // A restore (or its rollback) worked: safe mode, if it was on, is over.
+        None if was_safe => {
+            if let Err(e) = bandito::backup::clear_safe_mode(home) {
+                tracing::warn!("leave safe mode: {e:#}");
+            }
+        }
+        None => {}
+    }
     let store = match store {
         Some(store) => store,
-        None => {
-            tracing::error!(
-                reason = safe_mode.as_deref().unwrap_or(""),
-                "starting in safe mode: only daemon.info and backups.* are answered"
-            );
-            Arc::new(Store::open_safe_mode(&db_path)?)
-        }
+        None => Arc::new(Store::open_safe_mode(&db_path)?),
     };
     let agents_root = home::default_agents_root(home, home_given);
     let created = if safe_mode.is_some() {

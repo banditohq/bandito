@@ -1283,6 +1283,7 @@
   "backups.reason.beforeRestore": "復元の前",
   "backups.reason.replaced": "復元前に保存したデータベース",
   "backups.reason.broken": "復元前に保存した破損データベース",
+  "backups.reason.incomplete": "不完全な保存済みデータベース（データベースファイルなし）",
   "backups.reason.other": "コピー",
   "backups.whenToday": "今日 {time}",
   "backups.whenYesterday": "昨日 {time}",

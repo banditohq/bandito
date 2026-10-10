@@ -139,3 +139,66 @@ async fn with_no_way_back_the_daemon_starts_in_safe_mode_and_keeps_every_file() 
     assert!(home.join("bandito.db").exists());
     assert!(home.join("backups").join(COPY).exists());
 }
+
+/// A copy this daemon opens: made by `Store::open`, then closed.
+fn write_good_copy(home: &Path, name: &str) {
+    let dir = backup::backups_dir(home);
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join(name);
+    drop(Store::open(&path).unwrap());
+}
+
+#[tokio::test]
+async fn safe_mode_survives_restarts_without_a_marker_and_a_good_restore_ends_it() {
+    let (_guard, home) = short_home();
+    write_unopenable_copy(&home);
+    backup::request_restore(&home, COPY).unwrap();
+    let sock = home.join("bandito.sock");
+
+    // The first start meets the marker. The next two have none: the database still does not open, and they must
+    // stay in safe mode instead of failing in a loop.
+    for round in 0..3 {
+        let daemon = start(&home);
+        let info = wait_for_info(&sock).await;
+        assert_eq!(info["safe_mode"], true, "start {round}: {info}");
+        assert!(home.join("run/safe-mode.json").exists(), "start {round}");
+        assert!(home.join("bandito.db").exists());
+        drop(daemon);
+    }
+
+    // A restore of a copy that opens ends it.
+    let good = "bandito-20270115-090000-start.db";
+    write_good_copy(&home, good);
+    let id = backup::request_restore(&home, good).unwrap();
+    let _daemon = start(&home);
+    let info = wait_for_info(&sock).await;
+    assert_eq!(info["safe_mode"], false, "{info}");
+    assert_eq!(info["last_restore"]["id"], id.as_str());
+    assert_eq!(info["last_restore"]["ok"], true);
+    assert!(!home.join("run/safe-mode.json").exists());
+    // The unopenable file it replaced is kept.
+    let kept = names_in(&home.join("backups"));
+    assert!(
+        kept.iter().any(|n| n.starts_with("replaced-") && n.ends_with(".db")),
+        "{kept:?}"
+    );
+}
+
+#[tokio::test]
+async fn a_database_that_does_not_open_with_set_aside_files_means_safe_mode_not_a_crash() {
+    let (_guard, home) = short_home();
+    // Not a marker run: an earlier restore left files set aside, and the live database is unusable.
+    std::fs::write(home.join("bandito.db"), vec![3u8; 4096]).unwrap();
+    let dir = home.join("backups");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("replaced-20270115-080000.db"), "old data").unwrap();
+
+    let _daemon = start(&home);
+    let info = wait_for_info(&home.join("bandito.sock")).await;
+    assert_eq!(info["safe_mode"], true, "{info}");
+    assert_eq!(
+        std::fs::read(home.join("bandito.db")).unwrap(),
+        vec![3u8; 4096],
+        "left as it was"
+    );
+}

@@ -211,6 +211,7 @@
 "backups.reason.beforeRestore" = "恢复前";
 "backups.reason.broken" = "恢复前保存的已损坏数据库";
 "backups.reason.daily" = "每日";
+"backups.reason.incomplete" = "不完整的已保存数据库（缺少数据库文件）";
 "backups.reason.manual" = "手动";
 "backups.reason.other" = "副本";
 "backups.reason.replaced" = "恢复前保存的数据库";

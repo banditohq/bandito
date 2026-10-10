@@ -161,7 +161,7 @@ struct BackupsView: View {
             }
             .banditoButton(.link)
             .fixedSize()
-            .disabled(!canAct)
+            .disabled(!canAct || !BackupReason(raw: backup.reason).canRestore)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)

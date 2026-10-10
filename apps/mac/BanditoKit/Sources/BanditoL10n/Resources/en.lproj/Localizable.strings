@@ -211,6 +211,7 @@
 "backups.reason.beforeRestore" = "Before restore";
 "backups.reason.broken" = "Damaged database saved before a restore";
 "backups.reason.daily" = "Daily";
+"backups.reason.incomplete" = "Incomplete saved database (no database file)";
 "backups.reason.manual" = "Manual";
 "backups.reason.other" = "Copy";
 "backups.reason.replaced" = "Database saved before a restore";

@@ -556,9 +556,12 @@ public final class ServerModel: Identifiable {
         agentsReadAt = Date()
     }
 
+    /// The daemon runs in safe mode: it answers only `daemon.info` and `backups.*`, so nothing else is asked.
+    private var inSafeMode: Bool { info?.isSafeMode == true }
+
     /// Reads `agents.list` after `agentsRefreshDelay`. Requests that come meanwhile share that one read.
     private func requestAgentsRefresh() {
-        guard !agentsRefreshScheduled else { return }
+        guard !inSafeMode, !agentsRefreshScheduled else { return }
         agentsRefreshScheduled = true
         Task { [weak self] in
             try? await Task.sleep(for: Self.agentsRefreshDelay)
@@ -571,6 +574,7 @@ public final class ServerModel: Identifiable {
     /// the front does not ask again at once.
     private func runAgentsRefresh() async {
         agentsRefreshScheduled = false
+        guard !inSafeMode else { return }
         guard !agentsRefreshing else {
             requestAgentsRefresh()
             return
@@ -597,13 +601,14 @@ public final class ServerModel: Identifiable {
     }
 
     private func scheduleAgentsRetry() {
-        guard !agentsRetryScheduled else { return }
+        guard !inSafeMode, !agentsRetryScheduled else { return }
         agentsRetryScheduled = true
         let delay = agentsRetryDelay
         Task { [weak self] in
             try? await Task.sleep(for: delay)
             guard let self else { return }
             self.agentsRetryScheduled = false
+            // A daemon that went into safe mode meanwhile refuses `agents.list`: no retry.
             self.requestAgentsRefresh()
         }
     }
@@ -611,7 +616,7 @@ public final class ServerModel: Identifiable {
     /// Called when the app comes back to the front. Re-reads the agents when the last read is older than
     /// `agentsStaleAfter`: a daemon from before `agent_changed` sends no event for changes made elsewhere.
     public func refreshAgentsIfStale(now: Date = Date()) {
-        guard state == .connected else { return }
+        guard state == .connected, !inSafeMode else { return }
         let stale = agentsReadAt.map { now.timeIntervalSince($0) > Self.agentsStaleAfter } ?? true
         if stale { requestAgentsRefresh() }
     }

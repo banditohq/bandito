@@ -334,6 +334,7 @@ public enum L10n {
             public static var beforeRestore: String { L10n.tr("backups.reason.beforeRestore") }
             public static var broken: String { L10n.tr("backups.reason.broken") }
             public static var daily: String { L10n.tr("backups.reason.daily") }
+            public static var incomplete: String { L10n.tr("backups.reason.incomplete") }
             public static var manual: String { L10n.tr("backups.reason.manual") }
             public static var other: String { L10n.tr("backups.reason.other") }
             public static var replaced: String { L10n.tr("backups.reason.replaced") }
