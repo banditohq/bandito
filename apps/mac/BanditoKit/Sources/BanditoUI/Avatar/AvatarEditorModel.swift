@@ -11,6 +11,9 @@ enum AvatarEditorLayout {
     static let width: CGFloat = 360
     static let inset: CGFloat = 16
     static var contentWidth: CGFloat { width - 2 * inset }
+    /// The square a picture is framed in. Small enough that the popover, anchored under the avatar, keeps its buttons on
+    /// a 900-point screen.
+    static let cropSide: CGFloat = 200
 
     static let emojiColumns = 8
     static let emojiCell: CGFloat = 36

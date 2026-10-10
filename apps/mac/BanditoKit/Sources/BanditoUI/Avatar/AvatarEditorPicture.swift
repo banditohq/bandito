@@ -24,7 +24,7 @@ extension AvatarEditor {
                     model.reset()
                 },
                 onCancel: { model.reset() },
-                side: AvatarEditorLayout.contentWidth)
+                side: AvatarEditorLayout.cropSide)
         } else {
             VStack(alignment: .leading, spacing: 10) {
                 if let picture {

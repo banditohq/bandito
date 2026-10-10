@@ -27,6 +27,7 @@ struct PictureFraming: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             AvatarCropFrame(image: image, crop: $crop, side: side, circular: circular)
+                .frame(maxWidth: .infinity)
             HStack(spacing: 8) {
                 Image(systemName: "minus.magnifyingglass")
                     .foregroundStyle(Color.Bandito.text3)
@@ -52,7 +53,7 @@ struct PictureFraming: View {
                     .disabled(busy)
             }
         }
-        .frame(width: side)
+        .frame(minWidth: side)
     }
 
     private var zoomBinding: Binding<Double> {

@@ -104,9 +104,9 @@ public struct AvatarSpec: Codable, Sendable, Hashable {
         self.imageRev = imageRev
     }
 
+    // No raw names: the RPC coders turn `imageRev` into `image_rev` themselves (a raw "image_rev" never matched).
     private enum CodingKeys: String, CodingKey {
-        case color, face, emoji, image
-        case imageRev = "image_rev"
+        case color, face, emoji, image, imageRev
     }
 }
 

@@ -147,8 +147,9 @@ public struct AvatarImage: Decodable, Sendable, Equatable {
     /// `image/png` or `image/jpeg`.
     public var mime: String
 
+    // No raw names: the RPC decoder turns `data_base64` into `dataBase64` before matching.
     private enum CodingKeys: String, CodingKey {
-        case dataBase64 = "data_base64"
+        case dataBase64
         case mime
     }
 

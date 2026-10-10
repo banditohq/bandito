@@ -192,6 +192,11 @@ private struct IdentityCard: View {
                 name: agent.name, look: $look, model: avatarEditor, picture: picture,
                 pictureSupported: server.supports("avatar_pictures"),
                 onSetPicture: { data in
+                    // The daemon keeps a picture only on an avatar that is saved: an agent still on the automatic look
+                    // gets the look shown now first.
+                    if agent.avatar == nil {
+                        _ = try await server.updateAgent(agent.id, patch: AgentPatch(avatar: look.spec))
+                    }
                     try await server.setAgentAvatarImage(agent.id, data)
                 },
                 onRemovePicture: {
