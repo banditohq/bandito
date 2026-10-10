@@ -37,8 +37,12 @@ jobs:
       CHANNEL: ${{ inputs.channel }}
       TAG: v${{ inputs.version }}
       GH_TOKEN: ${{ github.token }}
-      PLATFORM_DIR: ${{ runner.temp }}/platform
+      HAS_PLATFORM_TOKEN: ${{ secrets.PLATFORM_TOKEN != '' }}
     steps:
+      # runner.temp is not available in a job's env, so the folder is set by the first step.
+      - name: Set paths
+        run: echo "PLATFORM_DIR=$RUNNER_TEMP/platform" >> "$GITHUB_ENV"
+
       - name: Check the inputs, the server release and the secrets
         env:
           MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
@@ -193,7 +197,7 @@ jobs:
           if-no-files-found: error
 
       - name: Open the appcast PR in banditohq/platform
-        if: ${{ secrets.PLATFORM_TOKEN != '' }}
+        if: ${{ env.HAS_PLATFORM_TOKEN == 'true' }}
         env:
           GH_TOKEN: ${{ secrets.PLATFORM_TOKEN }}
           BRANCH: appcast-${{ inputs.version }}

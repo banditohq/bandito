@@ -9,6 +9,8 @@ yanked = "deny"
 # Only permissive licenses. Copyleft licenses (GPL, LGPL, AGPL) are not on the list on purpose.
 # A dependency that is "X OR Y" passes when one of its licenses is on the list (r-efi: MIT OR Apache-2.0 OR LGPL).
 allow = [
+    # The crate itself (the repo license).
+    "FSL-1.1-ALv2",
     "MIT",
     "Apache-2.0",
     "Apache-2.0 WITH LLVM-exception",

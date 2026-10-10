@@ -6,7 +6,7 @@ name: ci
 on:
   pull_request:
   push:
-    branches: [main, "release/**"]
+    branches: [main, "release/**", "wt*/**"]
 
 # A newer push to the same PR or branch cancels the run for the older one. The group name differs from the called
 # workflows' groups, so the caller never waits for its own children.

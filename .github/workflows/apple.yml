@@ -1,20 +1,12 @@
 name: apple
 
 on:
-  # A PR that changes only the daemon does not rebuild the app (daemon.yml tests it); main still does.
-  pull_request:
-    paths: ["apps/**", "i18n/**", "brand/tokens/**", "guide/**", "scripts/check_guide.py", ".github/workflows/apple.yml"]
-  push:
-    # main, release branches and the branches agents work on: a pushed branch is tested in the cloud, so a change is
-    # checked in full without building it on a laptop.
-    branches: [main, "release/**", "wt*/**"]
-    paths: ["apps/**", "daemon/**", "i18n/**", "brand/tokens/**", "guide/**", "scripts/check_guide.py", ".github/workflows/apple.yml"]
-  # Called by ci.yml, which runs this only when the app part of a change (or a workflow) changed.
+  # Runs only through ci.yml (one entry point for PRs and pushes, so nothing runs twice).
   workflow_call:
 
 # A newer push to the same PR or branch cancels the run for the older one.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: apple-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref != 'refs/heads/main' }}
 
 permissions:
