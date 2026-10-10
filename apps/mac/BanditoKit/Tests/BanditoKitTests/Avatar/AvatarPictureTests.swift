@@ -139,7 +139,7 @@ import Testing
 @Suite struct AvatarWireTests {
     @Test func avatarDecodesPictureFields() throws {
         let json = #"{"color":"sky","face":"wink","emoji":"🦝","image":true,"image_rev":1700000000123}"#
-        let spec = try JSONDecoder().decode(AvatarSpec.self, from: Data(json.utf8))
+        let spec = try RPCClient.decoder.decode(AvatarSpec.self, from: Data(json.utf8))
         #expect(spec.emoji == "🦝")
         #expect(spec.image == true)
         #expect(spec.imageRev == 1_700_000_000_123)
