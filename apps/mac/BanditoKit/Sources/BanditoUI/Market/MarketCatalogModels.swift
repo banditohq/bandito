@@ -7,6 +7,8 @@ import Observation
 @Observable
 final class BotsMarketModel {
     private(set) var templates: [BotTemplate] = []
+    /// The sets of bots (`agents.bundles`); empty on a server without the `agent_bundles` feature.
+    private(set) var bundles: [AgentBundle] = []
     private(set) var loaded = false
     private(set) var failure: UserFacingMessage?
     /// Changes with each reset, so an answer for the server that was in front is dropped.
@@ -15,6 +17,7 @@ final class BotsMarketModel {
     func reset() {
         generation += 1
         templates = []
+        bundles = []
         loaded = false
         failure = nil
     }
@@ -24,8 +27,11 @@ final class BotsMarketModel {
         let started = generation
         do {
             let list = try await server.botTemplates()
+            // The sets are an extra: a failed read leaves the list empty, and the bots still show.
+            let sets = server.supports("agent_bundles") ? ((try? await server.agentBundles()) ?? []) : []
             guard !Task.isCancelled, started == generation else { return }
             templates = list
+            bundles = sets
             loaded = true
             failure = nil
         } catch {

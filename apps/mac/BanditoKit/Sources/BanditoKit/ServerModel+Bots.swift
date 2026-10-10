@@ -44,6 +44,21 @@ extension ServerModel {
         return created
     }
 
+    /// The bundles built into the daemon (`agents.bundles`). Needs the `agent_bundles` feature.
+    public func agentBundles() async throws -> [AgentBundle] {
+        try await rpc().call("agents.bundles", NoParams(), as: [AgentBundle].self)
+    }
+
+    /// Makes a team: one bot per template of the bundle (`agents.create_bundle`). A template that fails does not stop
+    /// the others; the answer says which. Each agent that exists joins the list here at once.
+    public func createBundle(_ new: NewBundle) async throws -> BundleCreation {
+        let made = try await rpc().call("agents.create_bundle", new, as: BundleCreation.self, timeout: .seconds(180))
+        for entry in made.agents {
+            if let agent = entry.agent { replaceAgent(agent) }
+        }
+        return made
+    }
+
     /// The skills catalog with the state of each skill on this server (`skills.catalog`). Needs the `skills` feature.
     public func skillCatalog() async throws -> [SkillEntry] {
         try await rpc().call("skills.catalog", NoParams(), as: [SkillEntry].self)

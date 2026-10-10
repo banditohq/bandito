@@ -5,6 +5,8 @@ import Foundation
 enum MarketPanelState: Equatable {
     case botDetail(String)
     case botCreate(String)
+    /// A set of bots: its page, with the create and the result in the same panel.
+    case bundle(String)
     case skillDetail(String)
     case skillInstall(String)
 }

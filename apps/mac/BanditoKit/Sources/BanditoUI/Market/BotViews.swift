@@ -68,6 +68,7 @@ struct BotsPage: View {
     let agents: [Agent]
     var onView: (BotTemplate) -> Void
     var onCreate: (BotTemplate) -> Void
+    var onViewBundle: (AgentBundle) -> Void = { _ in }
     var onOpen: (Agent) -> Void
     var onRetry: () -> Void
 
@@ -107,7 +108,20 @@ struct BotsPage: View {
     private var templateGrid: some View {
         let shown = BotLogic.visible(
             model.templates, filter: router.marketBotFilter, query: query, languageCode: languageCode)
-        return VStack(alignment: .leading, spacing: 14) {
+        let sets = BundleLogic.visible(
+            model.bundles, filter: router.marketBotFilter, query: query, languageCode: languageCode)
+        return VStack(alignment: .leading, spacing: 28) {
+            if !sets.isEmpty {
+                BundlesRow(bundles: sets, templates: model.templates, languageCode: languageCode, onView: onViewBundle)
+            }
+            catalogGrid(shown)
+        }
+    }
+
+    /// The catalog of single bots: the grid, or the failure, or the empty and no-result texts.
+    @ViewBuilder
+    private func catalogGrid(_ shown: [BotTemplate]) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
             SectionLabel(L10n.Market.Bots.catalog)
             if !shown.isEmpty {
                 LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {

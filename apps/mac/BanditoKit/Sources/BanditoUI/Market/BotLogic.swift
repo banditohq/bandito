@@ -84,7 +84,14 @@ enum BotLogic {
     static func services(
         of template: BotTemplate, catalog: [IntegrationCatalogEntry], integrations: [Integration]
     ) -> [Service] {
-        template.integrations.map { need in
+        services(needs: template.integrations, catalog: catalog, integrations: integrations)
+    }
+
+    /// The same match for any list of needs: a bot's own, or the union of a bundle's (`BundleLogic.services`).
+    static func services(
+        needs: [BotIntegration], catalog: [IntegrationCatalogEntry], integrations: [Integration]
+    ) -> [Service] {
+        needs.map { need in
             let entry = catalog.first { $0.id == need.id }
             let matches = integrations.filter { integration in
                 integration.name == need.id || (entry?.url != nil && integration.url == entry?.url)
