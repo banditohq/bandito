@@ -22,12 +22,22 @@ public enum ChatLinks {
     /// Extensions that make a word a file name. Short and common on purpose: a word that only looks like a file
     /// (`example.com`) stays text.
     static let fileExtensions: Set<String> = [
-        "swift", "m", "mm", "h", "c", "cpp", "hpp", "rs", "go", "kt", "java", "py", "rb", "php", "js", "jsx", "ts",
+        "swift", "mm", "cpp", "hpp", "rs", "go", "kt", "java", "py", "rb", "php", "jsx", "ts",
         "tsx", "vue", "dart", "lua", "sh", "sql", "css", "html", "xml", "plist", "entitlements", "strings",
         "stringsdict", "storyboard", "xib", "pbxproj", "xcconfig", "gradle", "kts", "toml", "yml", "yaml", "json",
         "lock", "env", "ini", "conf", "cfg", "md", "markdown", "txt", "log", "csv", "tsv", "pdf", "doc", "docx",
         "xls", "xlsx", "ppt", "pptx", "png", "jpg", "jpeg", "gif", "webp", "heic", "svg", "mp4", "mov", "mp3", "wav",
         "zip", "tar", "gz",
+    ]
+
+    /// Short extensions that are also words and abbreviations: `Node.js`, `Vue.js`, `5 p.m.`. Such a name is a file
+    /// only with a folder in its path (`src/app.js`).
+    static let slashOnlyExtensions: Set<String> = ["js", "m", "h", "c"]
+
+    /// The first names of an absolute path that can be a folder link: the usual places on a Mac and on a server. An
+    /// API path (`/api/v1/agents`) or a date is not one of them.
+    static let folderRoots: Set<String> = [
+        "Users", "home", "Volumes", "private", "var", "opt", "Applications", "tmp", "etc", "srv",
     ]
 
     private static let urlPattern = #"https?://[^\s<>"'`]+"#
@@ -109,20 +119,22 @@ public enum ChatLinks {
         let names = path.split(separator: "/", omittingEmptySubsequences: true)
         guard let last = names.last, !last.contains(".") else { return false }
         if path.hasPrefix("~/") { return names.count >= 2 && names[0] == "~" }
-        guard path.hasPrefix("/") else { return false }
-        return names.count >= 2
+        guard path.hasPrefix("/"), names.count >= 2 else { return false }
+        return folderRoots.contains(String(names[0]))
     }
 
     /// True for `name.ext`, `dir/name.ext`, `/abs/name.ext` and `~/name.ext` with a known extension.
     static func isFilePath(_ path: String) -> Bool {
-        guard !path.isEmpty, !path.contains("//"), !path.contains("://") else { return false }
+        guard !path.isEmpty, !path.contains("//"), !path.contains("://"), !path.contains("..") else { return false }
         let name = path.split(separator: "/", omittingEmptySubsequences: true).last.map(String.init) ?? ""
         // A bare "/" or "~/" has no name.
         guard !name.isEmpty, name != "~" else { return false }
         guard let dot = name.lastIndex(of: "."), dot != name.startIndex else { return false }
         let base = name[..<dot]
         let ext = name[name.index(after: dot)...].lowercased()
-        guard !base.isEmpty, fileExtensions.contains(ext) else { return false }
+        guard !base.isEmpty, fileExtensions.contains(ext) || slashOnlyExtensions.contains(ext) else { return false }
+        // A short extension counts only with a folder before the name.
+        if slashOnlyExtensions.contains(ext), !path.contains("/") { return false }
         // Numbers with a dot are not files: `1.2`, `10.10.2026`.
         if base.allSatisfy({ $0.isNumber || $0 == "." }) { return false }
         return true

@@ -81,6 +81,32 @@ import Testing
         }
     }
 
+    /// Names that are words, abbreviations or versions, not files: none of them is a link.
+    @Test func wordsAndNamesThatOnlyLookLikeFilesAreNotLinks() {
+        for text in ["Node.js", "Vue.js", "5 p.m.", "p.m", "use the .c API", "a.h or b.m", "file..swift"] {
+            #expect(ChatLinks.find(in: text).isEmpty, "\(text) must stay text")
+        }
+    }
+
+    /// The short extensions count when a folder comes first.
+    @Test func shortExtensionsCountWithAFolder() {
+        #expect(files("edit src/app.js now") == ["src/app.js"])
+        #expect(files("see Sources/main.m") == ["Sources/main.m"])
+        #expect(files("/tmp/build/log.h") == ["/tmp/build/log.h"])
+    }
+
+    /// Absolute paths are links only from the usual roots, and a `..` never makes a link.
+    @Test func absolutePathsOnlyFromTheUsualRoots() {
+        for text in ["/api/v1/agents", "/v1/rpc", "/10/10/2026", "/usr/bin/env", "/help/topic"] {
+            #expect(ChatLinks.find(in: text).isEmpty, "\(text) must not be a link")
+        }
+        #expect(paths("/Volumes/Disk/Photos") == ["/Volumes/Disk/Photos"])
+        #expect(paths("/private/var/tmp/cache") == ["/private/var/tmp/cache"])
+        #expect(files("../secret/notes.md").isEmpty)
+        #expect(files("/Users/me/../other/a.md").isEmpty)
+        #expect(paths("/Users/me/../other").isEmpty)
+    }
+
     @Test func absoluteAndHomePathsWithoutAnExtensionAreFolderLinks() {
         #expect(paths("open /Users/me/app now") == ["/Users/me/app"])
         #expect(paths("in ~/Documents/notes") == ["~/Documents/notes"])
