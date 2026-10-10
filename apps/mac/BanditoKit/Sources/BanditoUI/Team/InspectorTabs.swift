@@ -492,8 +492,18 @@ struct MemoryTab: View {
     @Environment(Router.self) private var router
     @State private var files: [FsEntry] = []
     @State private var error: UserFacingMessage?
+    @State private var customOpen = false
+    @State private var customDraft = ""
 
     private var budget: Int { agent.contextBudget ?? ContextUsage.defaultBudget }
+
+    /// The context window of the agent's model, from its runtime's list: the model it names, or the default model
+    /// when it names none. Nil when the list does not know it.
+    private var modelWindow: Int? {
+        guard let list = server.runtimeModels[agent.runtime.rawValue] else { return nil }
+        guard let model = agent.model, !model.isEmpty else { return list.defaultModel?.contextWindow }
+        return list.models.first { $0.id == model }?.contextWindow
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -504,6 +514,9 @@ struct MemoryTab: View {
                     modeRow(.smart, title: L10n.Memory.smart, description: L10n.Memory.smartDesc, badge: L10n.Common.recommended)
                     modeRow(.daily, title: L10n.Memory.daily, description: L10n.Memory.dailyDesc)
                     modeRow(.full, title: L10n.Memory.full, description: L10n.Memory.fullDesc)
+                }
+                if agent.memoryMode == .smart {
+                    chapterLengthRow
                 }
             }
             filesSection
@@ -550,6 +563,135 @@ struct MemoryTab: View {
         .padding(14)
         .background(Color.Bandito.text.opacity(0.025), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.Bandito.line, lineWidth: 1))
+    }
+
+    /// The chapter length as a menu under the split modes (smart chapters only). Sizes above the model's window are
+    /// off. While the daemon's model list for the agent's runtime is still coming, the menu waits with a spinner.
+    private var chapterLengthRow: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            InspectorRow(label: L10n.Memory.chapterLength, compact: true) {
+                HStack(spacing: 6) {
+                    if modelsLoading {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                    Menu {
+                        ForEach(ChapterLength.presets, id: \.self) { tokens in
+                            Button {
+                                setBudget(tokens)
+                            } label: {
+                                if tokens == budget {
+                                    Label(presetTitle(tokens), systemImage: "checkmark")
+                                } else {
+                                    Text(presetTitle(tokens))
+                                }
+                            }
+                            .disabled(!ChapterLength.isAllowed(tokens, window: modelWindow))
+                        }
+                        Divider()
+                        Button(L10n.Memory.chapterLengthCustom) {
+                            customDraft = ChapterLength.thousandsText(budget)
+                            customOpen = true
+                        }
+                    } label: {
+                        Text(ChapterLength.label(budget))
+                            .font(BanditoFont.font(size: 12.5, weight: 500))
+                            .foregroundStyle(Color.Bandito.text)
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                    .disabled(modelsLoading)
+                }
+            }
+            if let modelWindow {
+                Text(budget > modelWindow
+                     ? L10n.Memory.chapterLengthTooLong(max: ChapterLength.label(modelWindow))
+                     : L10n.Memory.chapterLengthModelMax(max: ChapterLength.label(modelWindow)))
+                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .foregroundStyle(budget > modelWindow ? Color.Bandito.signal : Color.Bandito.text3)
+                    .padding(.horizontal, 16)
+            }
+        }
+        .help(L10n.Memory.chapterLengthHint)
+        .popover(isPresented: $customOpen, arrowEdge: .trailing) { customPopover }
+    }
+
+    /// True while the list of the agent's runtime has not come from the daemon yet. A failed or unsupported request
+    /// does not wait: the window is then unknown and every size is offered.
+    private var modelsLoading: Bool {
+        server.runtimeModelsStatus == .unknown && server.runtimeModels[agent.runtime.rawValue] == nil
+    }
+
+    /// A preset's menu title; the default size says so.
+    private func presetTitle(_ tokens: Int) -> String {
+        let label = ChapterLength.label(tokens)
+        return tokens == ContextUsage.defaultBudget ? "\(label) · \(L10n.Memory.chapterLengthDefault)" : label
+    }
+
+    /// What the typed custom size says: nothing, a size that can be saved, or why not.
+    private var customSize: CustomSize {
+        ChapterLength.customSize(customDraft, current: budget, window: modelWindow)
+    }
+
+    private var customPopover: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(L10n.Memory.chapterLengthCustom)
+                .font(BanditoFont.font(size: 13, weight: 600))
+                .foregroundStyle(Color.Bandito.text)
+            HStack(spacing: 6) {
+                TextField("", text: $customDraft)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 110)
+                    .onSubmit { saveCustom() }
+                Text("K")
+                    .font(BanditoFont.font(size: 12.5, weight: 400))
+                    .foregroundStyle(Color.Bandito.text3)
+            }
+            if let problem = customProblem {
+                Text(problem)
+                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .foregroundStyle(Color.Bandito.danger)
+            }
+            HStack {
+                Spacer()
+                Button(L10n.Common.save) { saveCustom() }
+                    .banditoButton(.signal())
+                    .disabled(customSize.savable == nil)
+            }
+        }
+        .padding(14)
+        .frame(width: 240)
+        .onChange(of: customDraft) { _, value in
+            // Digits and one decimal comma, as typed: the field counts thousands.
+            let cleaned = ChapterLength.cleanedInput(value)
+            if cleaned != value { customDraft = cleaned }
+        }
+    }
+
+    /// The message under the field: not a size at all or outside the daemon's range, or more than the model holds.
+    private var customProblem: String? {
+        switch customSize {
+        case .invalid:
+            L10n.Memory.chapterLengthInvalid
+        case .aboveWindow:
+            modelWindow.map { L10n.Memory.chapterLengthModelMax(max: ChapterLength.label($0)) }
+        case .empty, .unchanged, .ok:
+            nil
+        }
+    }
+
+    private func saveCustom() {
+        guard let tokens = customSize.savable else { return }
+        customOpen = false
+        setBudget(tokens)
+    }
+
+    /// Saves the chapter length; a failure is shown under the split modes.
+    private func setBudget(_ tokens: Int) {
+        error = nil
+        Task {
+            do { _ = try await server.updateAgent(agent.id, contextBudget: tokens) } catch { self.error = UserFacingError.message(for: error) }
+        }
     }
 
     private func modeRow(_ mode: MemoryMode, title: String, description: String, badge: String? = nil) -> some View {

@@ -237,6 +237,7 @@
 "browser.newTabHelp" = "Новая вкладка (⌘T)";
 "browser.onServer" = "открыто на сервере";
 "browser.onServerHelp" = "Страница открыта в браузере на сервере, а не на этом Mac";
+"browser.openFullscreen" = "Открыть во весь экран";
 "browser.openOnMac" = "Открыть на Mac";
 "browser.openPreview" = "Открыть";
 "browser.openServer" = "Открыть «Сервер»";
@@ -791,6 +792,13 @@
 "keys.workbenchSplit" = "Разделить или объединить панели";
 "keys.workbenchTab" = "Вкладка панели %1$@";
 "keys.workbenchToggle" = "Показать или скрыть панель";
+"memory.chapterLength" = "Длина главы";
+"memory.chapterLengthCustom" = "Своё…";
+"memory.chapterLengthDefault" = "по умолчанию";
+"memory.chapterLengthHint" = "Чем длиннее глава, тем больше агент помнит без перечитывания памяти, но тем дороже каждый ответ.";
+"memory.chapterLengthInvalid" = "От 20K до 1M";
+"memory.chapterLengthModelMax" = "Модель держит до %1$@";
+"memory.chapterLengthTooLong" = "Глава длиннее, чем держит модель (%1$@). Выберите меньше.";
 "memory.daily" = "Каждый день";
 "memory.dailyDesc" = "Каждое утро — чистый лист. Для ассистентов с ежедневными задачами.";
 "memory.files" = "Файлы";
@@ -1797,10 +1805,9 @@
 "terminals.updateServer" = "Обновите сервер, чтобы пользоваться терминалами.";
 "thread.aTeammate" = "коллеги";
 "thread.attach" = "Прикрепить файлы";
+"thread.browserRun.fullscreen" = "Во весь экран";
 "thread.browserRun.noPicture" = "Здесь появится картинка страницы";
-"thread.browserRun.openBrowser" = "Открыть браузер";
 "thread.browserRun.title" = "Агент в браузере";
-"thread.browserRun.titleDomain" = "Агент в браузере · %1$@";
 "thread.browserRun.watchBeside" = "Смотреть рядом";
 "thread.chapterNotSaved" = "Глава %1$@ · память не сохранена";
 "thread.chapterNotSavedHelp" = "Агент не смог сохранить память перед этой главой. Факты из прошлой главы могут отсутствовать.";

@@ -237,6 +237,7 @@
 "browser.newTabHelp" = "새 탭 (⌘T)";
 "browser.onServer" = "서버에서 열림";
 "browser.onServerHelp" = "이 페이지는 이 Mac이 아닌 서버의 브라우저에서 열려 있어요";
+"browser.openFullscreen" = "전체 화면으로 열기";
 "browser.openOnMac" = "Mac에서 열기";
 "browser.openPreview" = "열기";
 "browser.openServer" = "서버 열기";
@@ -791,6 +792,13 @@
 "keys.workbenchSplit" = "패널 나누기 또는 합치기";
 "keys.workbenchTab" = "패널 탭 %1$@";
 "keys.workbenchToggle" = "패널 표시 또는 숨기기";
+"memory.chapterLength" = "챕터 길이";
+"memory.chapterLengthCustom" = "직접 입력…";
+"memory.chapterLengthDefault" = "기본값";
+"memory.chapterLengthHint" = "챕터가 길수록 에이전트가 메모리를 다시 읽지 않고도 더 많이 기억하지만, 응답마다 비용이 더 듭니다.";
+"memory.chapterLengthInvalid" = "20K에서 1M까지";
+"memory.chapterLengthModelMax" = "모델은 최대 %1$@까지 지원";
+"memory.chapterLengthTooLong" = "챕터가 모델이 담을 수 있는 양(%1$@)보다 깁니다. 더 작은 값을 고르세요.";
 "memory.daily" = "매일";
 "memory.dailyDesc" = "매일 아침 빈 페이지에서 시작해요. 매일 하는 작업이 있는 어시스턴트에 좋아요.";
 "memory.files" = "파일";
@@ -1797,10 +1805,9 @@
 "terminals.updateServer" = "터미널을 사용하려면 서버를 업데이트해 주세요.";
 "thread.aTeammate" = "팀원";
 "thread.attach" = "파일 첨부";
+"thread.browserRun.fullscreen" = "전체 화면";
 "thread.browserRun.noPicture" = "여기에 페이지 화면이 표시됩니다";
-"thread.browserRun.openBrowser" = "브라우저 열기";
 "thread.browserRun.title" = "브라우저에서 작업하는 에이전트";
-"thread.browserRun.titleDomain" = "브라우저에서 작업하는 에이전트 · %1$@";
 "thread.browserRun.watchBeside" = "옆에서 보기";
 "thread.chapterNotSaved" = "%1$@장 · 메모리 저장 안 됨";
 "thread.chapterNotSavedHelp" = "에이전트가 이 장 전에 메모리를 저장하지 못했어요. 이전 장의 내용이 빠져 있을 수 있어요.";

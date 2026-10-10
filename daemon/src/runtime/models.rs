@@ -56,6 +56,21 @@ pub struct RuntimeModel {
     pub is_default: bool,
     /// Reasoning effort levels the model accepts; empty when it takes none.
     pub efforts: Vec<String>,
+    /// The context window in tokens, when [`known_context_window`] knows it. Left out of the JSON when unknown.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_window: Option<u32>,
+}
+
+/// The context window of a model, in tokens, from a fixed table: Claude 200K (1M when the id has `[1m]`),
+/// Codex 400K, Grok 256K. `None` for every other runtime.
+pub fn known_context_window(runtime: RuntimeKind, model_id: &str) -> Option<u32> {
+    match runtime {
+        RuntimeKind::Claude if model_id.contains("[1m]") => Some(1_000_000),
+        RuntimeKind::Claude => Some(200_000),
+        RuntimeKind::Codex => Some(400_000),
+        RuntimeKind::Grok => Some(256_000),
+        RuntimeKind::Api => None,
+    }
 }
 
 /// What `runtimes.models` answers for one runtime.
@@ -127,6 +142,7 @@ pub fn parse_claude_models(answer: &Value) -> Vec<RuntimeModel> {
                 description: text(m, "description"),
                 is_default,
                 efforts: strings(m.get("supportedEffortLevels")),
+                context_window: known_context_window(RuntimeKind::Claude, &id),
                 id,
             })
         })
@@ -171,6 +187,7 @@ pub fn parse_codex_models(result: &Value) -> Vec<RuntimeModel> {
                     .and_then(Value::as_array)
                     .map(|levels| levels.iter().filter_map(|l| text(l, "reasoningEffort")).collect())
                     .unwrap_or_default(),
+                context_window: known_context_window(RuntimeKind::Codex, &id),
                 id,
             })
         })
@@ -203,6 +220,7 @@ pub fn parse_grok_cache(cache: &Value, default_id: Option<&str>) -> Vec<RuntimeM
                     .and_then(Value::as_array)
                     .map(|levels| levels.iter().filter_map(|l| text(l, "value")).collect())
                     .unwrap_or_default(),
+                context_window: known_context_window(RuntimeKind::Grok, &id),
                 id,
             })
         })
@@ -256,6 +274,7 @@ pub fn parse_grok_acp(models: &Value) -> Vec<RuntimeModel> {
                     .and_then(Value::as_array)
                     .map(|levels| levels.iter().filter_map(|l| text(l, "value")).collect())
                     .unwrap_or_default(),
+                context_window: known_context_window(RuntimeKind::Grok, &id),
                 id,
             })
         })
@@ -687,6 +706,34 @@ mod tests {
     }
 
     #[test]
+    fn known_context_window_follows_the_table() {
+        assert_eq!(known_context_window(RuntimeKind::Claude, "opus"), Some(200_000));
+        assert_eq!(known_context_window(RuntimeKind::Claude, "opus[1m]"), Some(1_000_000));
+        assert_eq!(
+            known_context_window(RuntimeKind::Claude, "claude-opus-5-5[1m]"),
+            Some(1_000_000)
+        );
+        assert_eq!(known_context_window(RuntimeKind::Codex, "gpt-6.1-sol"), Some(400_000));
+        assert_eq!(known_context_window(RuntimeKind::Grok, "grok-4.7"), Some(256_000));
+        assert_eq!(known_context_window(RuntimeKind::Api, "anything"), None);
+    }
+
+    #[test]
+    fn parsed_models_carry_their_context_window_and_unknown_is_left_out_of_json() {
+        let answer: Value = serde_json::from_str(CLAUDE_INIT).unwrap();
+        let models = parse_claude_models(&answer["response"]["response"]);
+        assert_eq!(models[0].context_window, Some(200_000));
+        let json = serde_json::to_value(&models[0]).unwrap();
+        assert_eq!(json["context_window"], 200_000);
+        let unknown = RuntimeModel {
+            context_window: None,
+            ..models[0].clone()
+        };
+        let json = serde_json::to_value(&unknown).unwrap();
+        assert!(json.get("context_window").is_none(), "None is not serialized");
+    }
+
+    #[test]
     fn codex_hidden_models_are_skipped_and_the_default_is_marked() {
         let result = json!({
             "data": [
@@ -1110,6 +1157,7 @@ mod tests {
                 description: None,
                 is_default: true,
                 efforts: vec![],
+                context_window: None,
             }])
         };
         let (a, b) = tokio::join!(

@@ -3,6 +3,7 @@
 pub mod agent_token;
 pub mod attachments;
 pub mod avatar;
+pub mod backup;
 pub mod browser;
 pub mod cdp;
 pub mod cdp_pipe;

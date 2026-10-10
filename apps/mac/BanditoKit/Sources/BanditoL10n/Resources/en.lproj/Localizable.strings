@@ -237,6 +237,7 @@
 "browser.newTabHelp" = "New tab (⌘T)";
 "browser.onServer" = "on server";
 "browser.onServerHelp" = "The page is open in the browser on the server, not on this Mac";
+"browser.openFullscreen" = "Open full screen";
 "browser.openOnMac" = "Open on Mac";
 "browser.openPreview" = "Open";
 "browser.openServer" = "Open Server";
@@ -791,6 +792,13 @@
 "keys.workbenchSplit" = "Split or join the panels";
 "keys.workbenchTab" = "Panel tab %1$@";
 "keys.workbenchToggle" = "Show or hide the panel";
+"memory.chapterLength" = "Chapter length";
+"memory.chapterLengthCustom" = "Custom…";
+"memory.chapterLengthDefault" = "default";
+"memory.chapterLengthHint" = "The longer the chapter, the more the agent remembers without rereading its memory, but the more each reply costs.";
+"memory.chapterLengthInvalid" = "From 20K to 1M";
+"memory.chapterLengthModelMax" = "Model holds up to %1$@";
+"memory.chapterLengthTooLong" = "The chapter is longer than the model holds (%1$@). Choose a smaller one.";
 "memory.daily" = "Every day";
 "memory.dailyDesc" = "A clean page every morning. Good for assistants with daily tasks.";
 "memory.files" = "Files";
@@ -1797,10 +1805,9 @@
 "terminals.updateServer" = "Update the server to use terminals.";
 "thread.aTeammate" = "a teammate";
 "thread.attach" = "Attach files";
+"thread.browserRun.fullscreen" = "Full screen";
 "thread.browserRun.noPicture" = "The picture of the page appears here";
-"thread.browserRun.openBrowser" = "Open browser";
 "thread.browserRun.title" = "Agent in the browser";
-"thread.browserRun.titleDomain" = "Agent in the browser · %1$@";
 "thread.browserRun.watchBeside" = "Watch beside";
 "thread.chapterNotSaved" = "Chapter %1$@ · memory not saved";
 "thread.chapterNotSavedHelp" = "The agent could not save its memory before this chapter. Facts from the previous chapter may be missing.";

@@ -42,7 +42,7 @@ Useful extras we surface: Claude's `rate_limit_event` and Codex `account/rateLim
 
 ### Runtime models
 
-`runtimes.models{runtime?: "claude"|"codex"|"grok", refresh?: bool}` returns the models each agent CLI offers, read from the CLI itself. No model request is sent. Result: `[{runtime, models: [{id, name, description, is_default, efforts}], error, fetched_at}]`, one entry per runtime asked (all three without `runtime`); `runtime: "api"` is `-32602`. `error` is `null`, `"not_installed"` (the CLI is not on the daemon's `PATH`), or a short reason. `id` is the name the CLI takes as its model. `efforts` lists the reasoning levels the model accepts (empty when none). Hidden models are not listed. At most one model has `is_default: true`.
+`runtimes.models{runtime?: "claude"|"codex"|"grok", refresh?: bool}` returns the models each agent CLI offers, read from the CLI itself. No model request is sent. Result: `[{runtime, models: [{id, name, description, is_default, efforts, context_window?}], error, fetched_at}]`, one entry per runtime asked (all three without `runtime`); `runtime: "api"` is `-32602`. `error` is `null`, `"not_installed"` (the CLI is not on the daemon's `PATH`), or a short reason. `id` is the name the CLI takes as its model. `efforts` lists the reasoning levels the model accepts (empty when none). `context_window` is the model's context window in tokens, from a fixed table in the daemon: Claude 200 000 (1 000 000 when the id has `[1m]`), Codex 400 000, Grok 256 000. The key is left out when the table does not know the model. Hidden models are not listed. At most one model has `is_default: true`.
 
 - Claude: `claude -p --setting-sources "" --input-format stream-json --output-format stream-json --verbose` gets a `control_request` `initialize` on stdin; the models are in its `control_response`. The user's settings and hooks are not loaded, and no session is saved (`--no-session-persistence`).
 - Codex: `codex app-server --stdio`, `initialize`, then `model/list` page by page (at most 5 pages). Works without a Codex login.
@@ -191,6 +191,16 @@ A pending approval blocks only that agent. Approvals time out after 24 h → den
 - `workspaces(id, name, kind, image, cpus, memory_mb, network, mounts, created_at)`: where an agent's CLI runs. The row `shared` is created by the migration and always exists. `agents.workspace_id` (default `shared`) says where each agent runs; see [Workspaces](#workspaces)
 
 Migrations: numbered SQL files embedded in the binary, applied by `PRAGMA user_version`.
+
+## Backups
+
+- Where: `<home>/backups/`, folder mode 0700, files 0600. Copies are `bandito-<UTC time>-<reason>.db`, made with `VACUUM INTO` over a read-only connection (busy timeout 5 s), so rows still in the WAL are included. Code: `daemon/src/backup.rs`.
+- Atomic copies: a copy is first written as `<name>.partial`, checked with `PRAGMA quick_check` (must answer `ok`), and only then renamed to its final name. A cut-off file never gets a final name. `.partial` files are not copies: they are not listed, counted or pruned; the daemon removes leftovers of a crash at its next start.
+- One daemon per data folder: the daemon takes an exclusive `flock` on `<home>/run/daemon.lock` before anything else and holds it for its whole life; a second daemon exits with an error. `restore` takes the same lock and refuses while it is held.
+- When: at each daemon start before the store opens, if there is no copy, the newest is older than 20 h, or the version in `backups/last-version` differs (reason `start`, or `upgrade` when the version changed). While the daemon runs, once an hour it checks and makes a `daily` copy if the newest is older than 24 h. Before `bandito backup restore`, a `before-restore` copy of the current database.
+- How many: the 14 newest copies are kept (pruned after each new copy and after a restore). Other files in the folder are not touched.
+- A failed copy is logged as a warning and does not stop the daemon.
+- List: `bandito backup list` (name and size, newest first). Restore: stop the daemon first (`bandito service uninstall`), then `bandito backup restore <name>`; the command refuses while the daemon lock is held and says so. The chosen copy must pass `quick_check` and be a regular file (symlinks are refused). The current database is copied to `before-restore` first; then the copy goes to `bandito.db.restore-tmp`, the old `-wal`/`-shm` files are removed and the temporary file replaces `bandito.db`. If any step fails, the temporary file is removed. After the restore: `bandito service install`.
 
 ## RPC
 
@@ -403,7 +413,7 @@ The server runs one Chrome per workspace (`shared` by default). The app watches 
 
 **Budgets.** A client may have 256 MiB of messages queued (the sum of their lengths); past that it is disconnected as slow, like one whose count of 1024 messages is full. Commands waiting for the pipe may total 128 MiB; a command past that is refused with `{"id", "error": {"code": -32000, "message": "too many bytes waiting for the browser"}}`, not queued. The relay never waits on a client or on the pipe.
 
-**The app.** The app speaks DevTools over the routes below, with its device token, and runs a CDP screencast on the tab socket. The daemon does not relay frames. `browser.status` answers `{running, cdp, pid, started_at, controller}`, where `cdp` is `"relay"` while the browser runs (`null` when stopped) and `controller` is `user`, `agent` or `none`.
+**The app.** The app speaks DevTools over the routes below, with its device token, and runs a CDP screencast on the tab socket. The daemon does not relay frames. The app turns the page's events on with `Page.enable` when it connects (without it Chrome sends no `Page.frameNavigated`), reads the address from `Page.getNavigationHistory`, and draws each decoded frame straight into a layer, off SwiftUI's view updates. A frame's `deviceWidth` × `deviceHeight` is the page's size in CSS pixels, whatever `deviceScaleFactor` the app set (headless Chrome renders screencast frames at 1x unless it is started with `--force-device-scale-factor`); the app sends its viewport again if a frame shows another size. `browser.status` answers `{running, cdp, pid, started_at, controller}`, where `cdp` is `"relay"` while the browser runs (`null` when stopped) and `controller` is `user`, `agent` or `none`.
 
 **Routes.** Device token only (`Authorization: Bearer`; a request with `Origin` gets 403), as for the file routes. `?workspace=<name>` is optional (default `shared`) and checked like the `browser.*` methods (400 when bad). The checks run before the upgrade.
 
@@ -825,6 +835,7 @@ daemon/            Rust crate `bandito`
   src/service.rs   user service: systemd unit, launchd plist, background fallback
   src/rpc/         JSON-RPC, transports, auth, pairing
   src/store/       SQLite + migrations
+  src/backup.rs    database copies: at start, daily, before restore (see Backups)
   src/runtime/     process.rs (shared child-process plumbing), claude.rs, codex.rs, grok.rs, api/
   src/policy.rs    approval rules: protected paths, risky checks (see Approvals)
   src/shell.rs     reads a command line for the policy: simple commands, wrappers, redirections

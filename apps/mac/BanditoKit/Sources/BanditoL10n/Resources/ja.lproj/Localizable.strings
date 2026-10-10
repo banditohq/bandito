@@ -237,6 +237,7 @@
 "browser.newTabHelp" = "新しいタブ (⌘T)";
 "browser.onServer" = "サーバーで開いています";
 "browser.onServerHelp" = "このページは、この Mac ではなくサーバー上のブラウザで開いています";
+"browser.openFullscreen" = "全画面で開く";
 "browser.openOnMac" = "Mac で開く";
 "browser.openPreview" = "開く";
 "browser.openServer" = "サーバーを開く";
@@ -791,6 +792,13 @@
 "keys.workbenchSplit" = "パネルの分割・結合";
 "keys.workbenchTab" = "パネルのタブ %1$@";
 "keys.workbenchToggle" = "パネルの表示・非表示";
+"memory.chapterLength" = "チャプターの長さ";
+"memory.chapterLengthCustom" = "カスタム…";
+"memory.chapterLengthDefault" = "既定";
+"memory.chapterLengthHint" = "チャプターが長いほど、エージェントはメモリを読み直さずに多くを覚えていますが、返信ごとのコストも上がります。";
+"memory.chapterLengthInvalid" = "20K から 1M まで";
+"memory.chapterLengthModelMax" = "モデルは最大 %1$@ まで";
+"memory.chapterLengthTooLong" = "チャプターがモデルの上限（%1$@）を超えています。短いものを選んでください。";
 "memory.daily" = "毎日";
 "memory.dailyDesc" = "毎朝まっさらな状態から始めます。毎日のタスクを持つアシスタント向けです。";
 "memory.files" = "ファイル";
@@ -1797,10 +1805,9 @@
 "terminals.updateServer" = "ターミナルを使うにはサーバーを更新してください。";
 "thread.aTeammate" = "チームメイト";
 "thread.attach" = "ファイルを添付";
+"thread.browserRun.fullscreen" = "全画面";
 "thread.browserRun.noPicture" = "ページの画像がここに表示されます";
-"thread.browserRun.openBrowser" = "ブラウザを開く";
 "thread.browserRun.title" = "ブラウザ内のエージェント";
-"thread.browserRun.titleDomain" = "ブラウザ内のエージェント · %1$@";
 "thread.browserRun.watchBeside" = "横で見る";
 "thread.chapterNotSaved" = "章 %1$@ · メモリは保存されていません";
 "thread.chapterNotSavedHelp" = "エージェントはこの章の前にメモリを保存できませんでした。前の章の内容が欠けている可能性があります。";

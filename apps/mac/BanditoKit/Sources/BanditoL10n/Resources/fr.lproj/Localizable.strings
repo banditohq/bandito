@@ -237,6 +237,7 @@
 "browser.newTabHelp" = "Nouvel onglet (⌘T)";
 "browser.onServer" = "ouvert sur le serveur";
 "browser.onServerHelp" = "La page est ouverte dans le navigateur du serveur, pas sur ce Mac";
+"browser.openFullscreen" = "Ouvrir en plein écran";
 "browser.openOnMac" = "Ouvrir sur le Mac";
 "browser.openPreview" = "Ouvrir";
 "browser.openServer" = "Ouvrir Serveur";
@@ -791,6 +792,13 @@
 "keys.workbenchSplit" = "Diviser ou réunir les panneaux";
 "keys.workbenchTab" = "Onglet %1$@ du panneau";
 "keys.workbenchToggle" = "Afficher ou masquer le panneau";
+"memory.chapterLength" = "Longueur du chapitre";
+"memory.chapterLengthCustom" = "Personnalisé…";
+"memory.chapterLengthDefault" = "par défaut";
+"memory.chapterLengthHint" = "Plus le chapitre est long, plus l’agent se souvient sans relire sa mémoire, mais plus chaque réponse coûte cher.";
+"memory.chapterLengthInvalid" = "De 20K à 1M";
+"memory.chapterLengthModelMax" = "Le modèle tient jusqu’à %1$@";
+"memory.chapterLengthTooLong" = "Le chapitre est plus long que ce que le modèle contient (%1$@). Choisissez-en un plus court.";
 "memory.daily" = "Chaque jour";
 "memory.dailyDesc" = "Une page blanche chaque matin. Idéal pour les assistants avec des tâches quotidiennes.";
 "memory.files" = "Fichiers";
@@ -1797,10 +1805,9 @@
 "terminals.updateServer" = "Mettez à jour le serveur pour utiliser les terminaux.";
 "thread.aTeammate" = "un coéquipier";
 "thread.attach" = "Joindre des fichiers";
+"thread.browserRun.fullscreen" = "Plein écran";
 "thread.browserRun.noPicture" = "L'image de la page apparaîtra ici";
-"thread.browserRun.openBrowser" = "Ouvrir le navigateur";
 "thread.browserRun.title" = "Agent dans le navigateur";
-"thread.browserRun.titleDomain" = "Agent dans le navigateur · %1$@";
 "thread.browserRun.watchBeside" = "Voir à côté";
 "thread.chapterNotSaved" = "Chapitre %1$@ · mémoire non enregistrée";
 "thread.chapterNotSavedHelp" = "L'agent n'a pas pu enregistrer sa mémoire avant ce chapitre. Des informations du chapitre précédent peuvent manquer.";

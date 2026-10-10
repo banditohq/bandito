@@ -237,6 +237,7 @@
 "browser.newTabHelp" = "新标签页 (⌘T)";
 "browser.onServer" = "在服务器上打开";
 "browser.onServerHelp" = "页面在服务器上的浏览器中打开，而不是在这台 Mac 上";
+"browser.openFullscreen" = "全屏打开";
 "browser.openOnMac" = "在 Mac 上打开";
 "browser.openPreview" = "打开";
 "browser.openServer" = "打开服务器";
@@ -791,6 +792,13 @@
 "keys.workbenchSplit" = "拆分或合并面板";
 "keys.workbenchTab" = "面板标签页 %1$@";
 "keys.workbenchToggle" = "显示或隐藏面板";
+"memory.chapterLength" = "章节长度";
+"memory.chapterLengthCustom" = "自定义…";
+"memory.chapterLengthDefault" = "默认";
+"memory.chapterLengthHint" = "章节越长，代理无需重读记忆就能记住越多，但每次回复的费用也越高。";
+"memory.chapterLengthInvalid" = "20K 到 1M 之间";
+"memory.chapterLengthModelMax" = "模型最多支持 %1$@";
+"memory.chapterLengthTooLong" = "章节长于模型所能容纳的长度（%1$@）。请选择更小的值。";
 "memory.daily" = "每天";
 "memory.dailyDesc" = "每天早上都是空白页。适合有日常任务的助手。";
 "memory.files" = "文件";
@@ -1797,10 +1805,9 @@
 "terminals.updateServer" = "请更新服务器以使用终端。";
 "thread.aTeammate" = "队友";
 "thread.attach" = "附加文件";
+"thread.browserRun.fullscreen" = "全屏";
 "thread.browserRun.noPicture" = "页面画面将显示在这里";
-"thread.browserRun.openBrowser" = "打开浏览器";
 "thread.browserRun.title" = "智能体在浏览器中";
-"thread.browserRun.titleDomain" = "智能体在浏览器中 · %1$@";
 "thread.browserRun.watchBeside" = "在旁边查看";
 "thread.chapterNotSaved" = "第 %1$@ 章 · 记忆未保存";
 "thread.chapterNotSavedHelp" = "智能体在本章之前未能保存记忆。上一章的内容可能缺失。";
