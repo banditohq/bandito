@@ -20,6 +20,8 @@ struct ThreadView: View {
     @State private var changes: ChangesDiff?
     /// Whether the newest message is on screen (the bottom marker is visible).
     @State private var atBottom = true
+    /// Files are dragged over the chat.
+    @State private var dropTargeted = false
     /// The "down" button shows (see `ThreadScroll.showsJump`), and how many messages came in while the person is above.
     @State private var jumpVisible = false
     @State private var unseen = 0
@@ -141,6 +143,25 @@ struct ThreadView: View {
     }
 
     var body: some View {
+        chat
+            // Files dragged anywhere over the chat (thread and composer) are attached to this agent.
+            .overlay {
+                if dropTargeted && canAttach {
+                    FileDropHighlight()
+                }
+            }
+            .onDrop(of: [.fileURL], isTargeted: $dropTargeted) { providers in
+                guard canAttach else { return false }
+                return AttachmentTrays.shared.accept(providers, agentID: agent.id, server: server)
+            }
+    }
+
+    /// Attaching needs a daemon that lists the `attachments` feature.
+    private var canAttach: Bool {
+        server.supports("attachments")
+    }
+
+    private var chat: some View {
         VStack(spacing: 0) {
             ThreadHeader(
                 agent: agent,

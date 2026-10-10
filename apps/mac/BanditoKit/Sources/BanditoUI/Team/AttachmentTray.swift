@@ -1,7 +1,9 @@
 import AppKit
+import BanditoDesign
 import BanditoKit
 import BanditoL10n
 import Foundation
+import SwiftUI
 
 /// A file in the composer, before it is sent. It is uploaded as soon as it is added; the send takes the ones that are
 /// ready. A file that cannot be attached stays in the tray as a failed chip until it is removed.
@@ -144,6 +146,21 @@ final class AttachmentTrays {
 
     // MARK: - Private
 
+    /// Files dropped on the chat. Only files count: other drags are refused (`false`). Each file goes through `add`.
+    func accept(_ providers: [NSItemProvider], agentID: String, server: ServerModel) -> Bool {
+        var accepted = false
+        for provider in providers where provider.canLoadObject(ofClass: URL.self) {
+            accepted = true
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                guard let url else { return }
+                Task { @MainActor in
+                    AttachmentTrays.shared.add(urls: [url], agentID: agentID, server: server)
+                }
+            }
+        }
+        return accepted
+    }
+
     private func append(_ file: DraftFile, agentID: String) {
         trays[agentID, default: []].append(file)
     }
@@ -199,5 +216,26 @@ enum PictureSource {
     /// True when the clipboard has a picture and no text, so a paste of a picture is not a paste of text.
     static var clipboardHoldsOnlyPicture: Bool {
         NSPasteboard.general.string(forType: .string) == nil && NSImage(pasteboard: .general) != nil
+    }
+}
+
+/// The highlight over the chat while files are dragged over it: a dashed frame and the words "Drop to attach".
+struct FileDropHighlight: View {
+    var body: some View {
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .fill(Color.Bandito.signal.opacity(0.06))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(Color.Bandito.signal, style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])))
+            .overlay {
+                Text(L10n.Composer.Attach.dropHint)
+                    .font(BanditoFont.font(size: 14, weight: 500))
+                    .foregroundStyle(Color.Bandito.text)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(Color.Bandito.surface2, in: Capsule())
+            }
+            .padding(10)
+            .allowsHitTesting(false)
     }
 }

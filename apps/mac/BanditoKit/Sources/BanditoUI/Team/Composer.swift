@@ -26,9 +26,6 @@ struct Composer: View {
     @State private var slash = SlashMenuModel()
     /// The context popover is open (the ring is a button).
     @State private var showsContext = false
-    /// A file is dragged over the composer.
-    @State private var dropTargeted = false
-
     private var canSend: Bool {
         AttachmentTray.canSend(text: draft, files: files)
     }
@@ -128,15 +125,7 @@ struct Composer: View {
             .padding(.vertical, 10)
             .background(Color.Bandito.surface2, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(Color.Bandito.line, lineWidth: 1))
-            .overlay {
-                if canAttach && dropTargeted {
-                    dropOverlay
-                }
-            }
             .shadow(color: .black.opacity(0.35), radius: 18, x: 0, y: 10)
-            .onDrop(of: [.fileURL], isTargeted: $dropTargeted) { providers in
-                drop(providers)
-            }
 
             HStack(spacing: 14) {
                 Text(L10n.Thread.hintSend)
@@ -497,20 +486,6 @@ struct Composer: View {
         .banditoButton(.icon(size: 18, label: L10n.Composer.Attach.remove))
     }
 
-    private var dropOverlay: some View {
-        RoundedRectangle(cornerRadius: 24, style: .continuous)
-            .fill(Color.Bandito.signal.opacity(0.08))
-            .overlay(
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .strokeBorder(Color.Bandito.signal, style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])))
-            .overlay {
-                Text(L10n.Composer.Attach.dropHint)
-                    .font(BanditoFont.font(size: 13, weight: 500))
-                    .foregroundStyle(Color.Bandito.text)
-            }
-            .allowsHitTesting(false)
-    }
-
     private func attachFiles() {
         guard canAttach, let agent, let server else { return }
         let urls = FilePanels.attachmentURLs()
@@ -531,23 +506,6 @@ struct Composer: View {
             guard let data = await PictureSource.screenshot() else { return }
             AttachmentTrays.shared.addPicture(data, name: Self.pictureName("Screenshot"), agentID: agent.id, server: server)
         }
-    }
-
-    /// A file dropped on the composer. Only files count; the rest is refused.
-    private func drop(_ providers: [NSItemProvider]) -> Bool {
-        guard canAttach, let agent, let server else { return false }
-        let agentID = agent.id
-        var accepted = false
-        for provider in providers where provider.canLoadObject(ofClass: URL.self) {
-            accepted = true
-            _ = provider.loadObject(ofClass: URL.self) { url, _ in
-                guard let url else { return }
-                Task { @MainActor in
-                    AttachmentTrays.shared.add(urls: [url], agentID: agentID, server: server)
-                }
-            }
-        }
-        return accepted
     }
 
     /// A name for a picture that has none: the source and the time, without characters a file name cannot hold.
