@@ -265,9 +265,17 @@ struct ServerFeaturesCard: View {
         }
     }
 
-    /// The symbol of a capability: a chip for an AI runtime, a box for the rest.
+    /// The symbol of a capability, so each tile reads at a glance.
     static func symbol(for id: String) -> String {
-        RuntimeKind(rawValue: id) != nil ? "cpu" : "shippingbox"
+        switch id {
+        case "screen": "display"
+        case "browser": "globe"
+        case "containers": "shippingbox"
+        case "claude": "sparkle"
+        case "codex": "chevron.left.forwardslash.chevron.right"
+        case "grok": "bolt"
+        default: RuntimeKind(rawValue: id) != nil ? "cpu" : "puzzlepiece.extension"
+        }
     }
 
     /// The chip tones of the grid: ready is green, a sign-in is orange, not installed is the quiet grey.

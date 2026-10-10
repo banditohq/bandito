@@ -44,8 +44,9 @@ import Testing
     }
 
     @Test func featureSymbolTellsRuntimesFromOtherParts() {
-        #expect(ServerFeaturesCard.symbol(for: "claude") == "cpu")
-        #expect(ServerFeaturesCard.symbol(for: "git") == "shippingbox")
+        #expect(ServerFeaturesCard.symbol(for: "claude") == "sparkle")
+        #expect(ServerFeaturesCard.symbol(for: "browser") == "globe")
+        #expect(ServerFeaturesCard.symbol(for: "git") == "puzzlepiece.extension")
     }
 
     @Test func catalogLogosLoadFromTheBundle() {

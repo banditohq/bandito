@@ -104,10 +104,7 @@ struct ServerOverview: View {
 
     private var trailing: some View {
         HStack(spacing: 10) {
-            if let stats = monitor.stats {
-                let health = HostHealth.evaluate(stats)
-                Chip(text: Self.healthText(health), tone: health.isOK ? .ok : .signal)
-            }
+            // The health shows once, in the server's passport below.
             SegmentedPicker(
                 selection: Binding(
                     get: { monitor.range },
