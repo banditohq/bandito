@@ -21,7 +21,7 @@ public struct SectionLabel: View {
     public var body: some View {
         Text(text.uppercased())
             .font(BanditoFont.font(size: 11, weight: 600))
-            .tracking(0.9)
+            .tracking(0.8)
             .foregroundStyle(tone == .signal ? Color.Bandito.signal : Color.Bandito.text3)
     }
 }

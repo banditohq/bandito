@@ -11,22 +11,33 @@ struct NoServerView: View {
     @Environment(Router.self) private var router
 
     var body: some View {
-        VStack(spacing: compact ? 8 : 14) {
+        if compact {
+            compactBody
+        } else {
+            EmptyState(
+                symbol: symbol, title: L10n.Empty.NoServers.title, message: L10n.Mode.connectServer,
+                action: EmptyStateAction(L10n.Empty.NoServers.action) { router.sheet = .addServer })
+        }
+    }
+
+    /// The sidebar version keeps its small layout: the full empty state is too large for a 296 pt column.
+    private var compactBody: some View {
+        VStack(spacing: 8) {
             Image(systemName: symbol)
-                .font(.system(size: compact ? 22 : 34, weight: .regular))
+                .font(.system(size: 22, weight: .regular))
                 .foregroundStyle(Color.Bandito.text3)
             Text(L10n.Empty.NoServers.title)
-                .font(.system(size: compact ? 13 : 17, weight: .semibold))
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Color.Bandito.text)
             Text(L10n.Mode.connectServer)
-                .font(.system(size: compact ? 12 : 13))
+                .font(.system(size: 12))
                 .foregroundStyle(Color.Bandito.text2)
                 .multilineTextAlignment(.center)
             Button(L10n.Empty.NoServers.action) {
                 router.sheet = .addServer
             }
             .banditoButton(.signal())
-            .padding(.top, compact ? 2 : 6)
+            .padding(.top, 2)
         }
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity)

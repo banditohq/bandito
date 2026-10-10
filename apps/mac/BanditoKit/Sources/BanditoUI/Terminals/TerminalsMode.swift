@@ -314,31 +314,9 @@ struct TerminalsPlaceholder: View {
     let action: (() -> Void)?
 
     var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: symbol)
-                .font(.system(size: 34))
-                .foregroundStyle(Color.Bandito.text3)
-            Text(title)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(Color.Bandito.text)
-                .multilineTextAlignment(.center)
-            if let detail {
-                Text(detail)
-                    .font(.system(size: 13))
-                    .foregroundStyle(Color.Bandito.text2)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 360)
-            }
-            if let action {
-                Button(action: action) {
-                    Text(L10n.Keys.newTerminal)
-                }
-                .banditoButton(.signal())
-                .padding(.top, 4)
-            }
-        }
-        .padding(28)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        EmptyState(
+            symbol: symbol, title: title, message: detail,
+            action: action.map { EmptyStateAction(L10n.Keys.newTerminal, perform: $0) })
     }
 }
 

@@ -358,25 +358,7 @@ private struct ScreenSidebarContent: View {
 
 private struct ScreenUnsupported: View {
     var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "display")
-                .font(.system(size: 34, weight: .light))
-                .foregroundStyle(Color.Bandito.text3)
-                .padding(.bottom, 4)
-            Text(L10n.Screen.unsupported)
-                .font(BanditoFont.font(size: 18, weight: 600))
-                .foregroundStyle(Color.Bandito.text)
-                .multilineTextAlignment(.center)
-            Text(L10n.Screen.unsupportedText)
-                .font(BanditoFont.font(size: 13.5, weight: 400))
-                .foregroundStyle(Color.Bandito.text2)
-                .multilineTextAlignment(.center)
-                .lineSpacing(2)
-                .frame(maxWidth: 440)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        EmptyState(symbol: "display", title: L10n.Screen.unsupported, message: L10n.Screen.unsupportedText)
     }
 }
 

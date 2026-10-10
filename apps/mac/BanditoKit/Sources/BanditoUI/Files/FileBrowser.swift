@@ -209,7 +209,9 @@ struct FileBrowser: View {
                 if model.searchResults != nil {
                     EmptyNote(text: L10n.Files.noResults, actionTitle: nil, action: nil)
                 } else {
-                    EmptyNote(text: L10n.Files.empty, actionTitle: L10n.Files.emptyCreate) { nameSheet = .folder }
+                    EmptyState(
+                        symbol: "folder", title: L10n.Files.empty,
+                        action: EmptyStateAction(L10n.Files.emptyCreate) { nameSheet = .folder })
                 }
             } else if model.layout == .list {
                 let showsSize = FileColumns.showsSize(model.visibleEntries)
