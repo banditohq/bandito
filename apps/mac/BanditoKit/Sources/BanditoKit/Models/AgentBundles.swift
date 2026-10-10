@@ -145,17 +145,23 @@ public struct BundleCreation: Decodable, Sendable {
 }
 
 /// The body of `agents.create_bundle`. `runtime` nil keeps each template's runtime; `workspaceId` nil is the shared one.
+/// `templates` nil makes every template of the set; a list makes only those (a retry makes the ones still missing).
 public struct NewBundle: Encodable, Sendable, Equatable {
     public var bundleId: String
     /// The app's language as the daemon keys it (`CatalogLanguage.requestCode`).
     public var language: String
     public var runtime: String?
     public var workspaceId: String?
+    public var templates: [String]?
 
-    public init(bundleId: String, language: String, runtime: String? = nil, workspaceId: String? = nil) {
+    public init(
+        bundleId: String, language: String, runtime: String? = nil, workspaceId: String? = nil,
+        templates: [String]? = nil
+    ) {
         self.bundleId = bundleId
         self.language = language
         self.runtime = runtime
         self.workspaceId = workspaceId
+        self.templates = templates
     }
 }

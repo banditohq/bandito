@@ -887,12 +887,17 @@
 "market.bots.empty" = "此服务器上没有机器人模板。";
 "market.bots.subtitle" = "现成的机器人：选一个，连接它需要的服务，马上开工。";
 "market.bundle.create" = "创建团队";
+"market.bundle.createMissing" = "创建缺少的机器人";
 "market.bundle.creating" = "正在创建…";
 "market.bundle.members" = "套装中的机器人";
 "market.bundle.missingRequired" = "需要 %1$@。你可以现在创建团队，稍后再连接；在此之前，用到它们的机器人无法工作。";
 "market.bundle.openFirst" = "打开 %1$@";
+"market.bundle.partial" = "可能已创建部分机器人，请先查看团队列表。";
 "market.bundle.resultTitle" = "已创建 %1$@/%2$@ 个机器人";
 "market.bundle.services" = "套装使用的服务";
+"market.bundle.status.madeWithProblem" = "已创建，但有一步未完成";
+"market.bundle.status.notMade" = "未创建";
+"market.bundles.failed" = "套装加载失败";
 "market.bundles.title" = "套装";
 "market.category.business" = "商务";
 "market.category.data" = "数据";

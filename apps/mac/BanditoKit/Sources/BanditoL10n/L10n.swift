@@ -1263,15 +1263,23 @@ public enum L10n {
 
         public enum Bundle {
             public static var create: String { L10n.tr("market.bundle.create") }
+            public static var createMissing: String { L10n.tr("market.bundle.createMissing") }
             public static var creating: String { L10n.tr("market.bundle.creating") }
             public static var members: String { L10n.tr("market.bundle.members") }
             public static func missingRequired(names: String) -> String { L10n.tr("market.bundle.missingRequired", names) }
             public static func openFirst(name: String) -> String { L10n.tr("market.bundle.openFirst", name) }
+            public static var partial: String { L10n.tr("market.bundle.partial") }
             public static func resultTitle(created: String, total: String) -> String { L10n.tr("market.bundle.resultTitle", created, total) }
             public static var services: String { L10n.tr("market.bundle.services") }
+
+            public enum Status {
+                public static var madeWithProblem: String { L10n.tr("market.bundle.status.madeWithProblem") }
+                public static var notMade: String { L10n.tr("market.bundle.status.notMade") }
+            }
         }
 
         public enum Bundles {
+            public static var failed: String { L10n.tr("market.bundles.failed") }
             public static var title: String { L10n.tr("market.bundles.title") }
         }
 

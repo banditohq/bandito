@@ -887,12 +887,17 @@
 "market.bots.empty" = "Este servidor não tem modelos de bots.";
 "market.bots.subtitle" = "Bots prontos: escolha um, conecte o que ele precisa e mãos à obra.";
 "market.bundle.create" = "Criar equipe";
+"market.bundle.createMissing" = "Criar os bots que faltam";
 "market.bundle.creating" = "Criando…";
 "market.bundle.members" = "Bots do conjunto";
 "market.bundle.missingRequired" = "Precisa de %1$@. Você pode criar a equipe agora e conectar depois; até lá, os bots que usam isso não podem fazer o trabalho.";
 "market.bundle.openFirst" = "Abrir %1$@";
+"market.bundle.partial" = "Alguns bots podem ter sido criados. Confira a lista da equipe.";
 "market.bundle.resultTitle" = "%1$@ de %2$@ bots criados";
 "market.bundle.services" = "Serviços do conjunto";
+"market.bundle.status.madeWithProblem" = "Criado, uma etapa não foi concluída";
+"market.bundle.status.notMade" = "Não criado";
+"market.bundles.failed" = "Os conjuntos não carregaram";
 "market.bundles.title" = "Conjuntos";
 "market.category.business" = "Negócios";
 "market.category.data" = "Dados";

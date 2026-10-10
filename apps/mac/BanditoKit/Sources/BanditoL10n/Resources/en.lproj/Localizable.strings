@@ -887,12 +887,17 @@
 "market.bots.empty" = "No bot templates on this server.";
 "market.bots.subtitle" = "Ready-made bots: pick one, connect what it needs, put it to work.";
 "market.bundle.create" = "Create team";
+"market.bundle.createMissing" = "Create missing bots";
 "market.bundle.creating" = "Creating…";
 "market.bundle.members" = "Bots in the set";
 "market.bundle.missingRequired" = "Needs %1$@. You can create the team now and connect later; until then the bots that use them cannot do their job.";
 "market.bundle.openFirst" = "Open %1$@";
+"market.bundle.partial" = "Some bots may have been created. Check the team list.";
 "market.bundle.resultTitle" = "Created %1$@ of %2$@ bots";
 "market.bundle.services" = "Services the set uses";
+"market.bundle.status.madeWithProblem" = "Created, a step did not finish";
+"market.bundle.status.notMade" = "Not created";
+"market.bundles.failed" = "Sets did not load";
 "market.bundles.title" = "Bundles";
 "market.category.business" = "Business";
 "market.category.data" = "Data";

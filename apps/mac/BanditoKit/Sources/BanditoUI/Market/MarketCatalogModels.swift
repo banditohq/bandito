@@ -1,14 +1,19 @@
 import BanditoKit
 import Foundation
 import Observation
+import os
 
 /// The bot templates of the server in front. Read once per server; `reset()` forgets them when the server changes.
 @MainActor
 @Observable
 final class BotsMarketModel {
+    private static let log = Logger(subsystem: "dev.bandito", category: "bundles")
+
     private(set) var templates: [BotTemplate] = []
-    /// The sets of bots (`agents.bundles`); empty on a server without the `agent_bundles` feature.
+    /// The sets of bots (`agents.bundles`); empty on a server without the `agent_bundles` feature, or when they failed.
     private(set) var bundles: [AgentBundle] = []
+    /// Why the sets did not load. The bots still show; the page offers a retry.
+    private(set) var bundlesFailure: UserFacingMessage?
     private(set) var loaded = false
     private(set) var failure: UserFacingMessage?
     /// Changes with each reset, so an answer for the server that was in front is dropped.
@@ -18,6 +23,7 @@ final class BotsMarketModel {
         generation += 1
         templates = []
         bundles = []
+        bundlesFailure = nil
         loaded = false
         failure = nil
     }
@@ -27,11 +33,21 @@ final class BotsMarketModel {
         let started = generation
         do {
             let list = try await server.botTemplates()
-            // The sets are an extra: a failed read leaves the list empty, and the bots still show.
-            let sets = server.supports("agent_bundles") ? ((try? await server.agentBundles()) ?? []) : []
+            // The sets are an extra: a failed read is logged and offered again, and the bots still show.
+            var sets: [AgentBundle] = []
+            var setsFailure: UserFacingMessage?
+            if server.supports("agent_bundles") {
+                do {
+                    sets = try await server.agentBundles()
+                } catch {
+                    Self.log.error("agents.bundles failed: \(String(describing: error), privacy: .public)")
+                    setsFailure = UserFacingError.message(for: error)
+                }
+            }
             guard !Task.isCancelled, started == generation else { return }
             templates = list
             bundles = sets
+            bundlesFailure = setsFailure
             loaded = true
             failure = nil
         } catch {

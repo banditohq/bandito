@@ -887,12 +887,17 @@
 "market.bots.empty" = "このサーバーにはボットのテンプレートがありません。";
 "market.bots.subtitle" = "用意されたボットを選び、必要なサービスをつなげて、すぐに働かせましょう。";
 "market.bundle.create" = "チームを作成";
+"market.bundle.createMissing" = "不足しているボットを作成";
 "market.bundle.creating" = "作成中…";
 "market.bundle.members" = "セットのボット";
 "market.bundle.missingRequired" = "%1$@ が必要です。今チームを作成し、後で接続できます。それまで、これらを使うボットは役割を果たせません。";
 "market.bundle.openFirst" = "%1$@ を開く";
+"market.bundle.partial" = "一部のボットが作成されている可能性があります。チーム一覧を確認してください。";
 "market.bundle.resultTitle" = "%2$@ 体中 %1$@ 体を作成";
 "market.bundle.services" = "セットが使うサービス";
+"market.bundle.status.madeWithProblem" = "作成済み、一部の手順が未完了";
+"market.bundle.status.notMade" = "作成されず";
+"market.bundles.failed" = "セットを読み込めませんでした";
 "market.bundles.title" = "セット";
 "market.category.business" = "ビジネス";
 "market.category.data" = "データ";

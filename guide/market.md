@@ -180,6 +180,7 @@ Above the ready-made bots, Bots (Боты) shows Bundles (Наборы): a set o
 startup team (a task manager, a code reviewer, a Sentry on-call and a documentation writer). Each set card shows its icon,
 its name and description in the language of the app, and small tiles of the bots it holds. The sets follow the sidebar
 filter and the search; My bots (Мои боты) shows none of them. Bundles show only when the server is new enough to have them.
+If the sets do not load, a quiet line says Sets did not load (Наборы не загрузились) with Retry (Повторить); the single bots still show.
 Где: Marketplace → Bots (Боты) → Bundles (Наборы), above the ready-made bots
 1. Click View (Посмотреть) on a set, or the card itself, to open its panel.
 2. Sets are found by their name, in the language of the app and in English, and by their description.
@@ -193,7 +194,9 @@ The panel lists the bots of the set, each with its description, the services the
 turned on. A bot whose name is taken gets a number (for example Code reviewer 2). The panel then lists the bots that were
 made and the ones that were not, with the reason; a bot made with a problem after its creation still exists. Open (Открыть)
 goes to the chat of the first bot the set made. Close (Закрыть) or Esc leaves the panel. The panel cannot be closed while
-the team is being made.
+the team is being made. If the request fails (a timeout, a lost connection), the panel reads the list of bots again and
+says that some bots may have been created. Create missing bots (Создать недостающих) then makes only the bots that have
+no agent of their template from the last ten minutes; nothing is made twice.
 Где: Marketplace → Bots (Боты) → Bundles (Наборы) → a set → View (Посмотреть)
 1. Choose Powered by (Чем думает) if the default is not the one you want. Only the programs ready on the server are offered.
 2. If a required service is not connected, the panel says so and you can Connect (Подключить) it there, or create the team now and connect later.

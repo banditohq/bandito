@@ -71,14 +71,24 @@ enum BundleLogic {
 
     /// The body of `agents.create_bundle`: the set, the app's language as the daemon keys it, and the runtime every bot
     /// of the set runs on. Nil without a runtime: there is nothing to create with.
-    static func request(bundle: AgentBundle, runtime: RuntimeKind?, languageCode: String) -> NewBundle? {
+    static func request(
+        bundle: AgentBundle, runtime: RuntimeKind?, languageCode: String, templates: [String]? = nil
+    ) -> NewBundle? {
         guard let runtime else { return nil }
         return NewBundle(
-            bundleId: bundle.id, language: CatalogLanguage.requestCode(languageCode), runtime: runtime.rawValue)
+            bundleId: bundle.id, language: CatalogLanguage.requestCode(languageCode), runtime: runtime.rawValue,
+            templates: templates)
     }
 
-    /// One line of the result: a bot the set made, or one it did not. `problem` is the daemon's words; a bot with an
-    /// agent and a problem exists, but a step after its creation failed.
+    /// How a bot of the set came out: made, made but a step after its creation failed, or not made.
+    enum Outcome: Equatable {
+        case made
+        case madeWithProblem
+        case notMade
+    }
+
+    /// One line of the result: a bot the set made, or one it did not. `problem` is the daemon's words, for the log and
+    /// the tooltip; the panel shows the outcome in the app's language.
     struct Row: Identifiable, Equatable {
         let id: String
         let name: String
@@ -86,6 +96,46 @@ enum BundleLogic {
         let problem: String?
 
         var made: Bool { agentName != nil }
+
+        var outcome: Outcome {
+            guard made else { return .notMade }
+            return problem == nil ? .made : .madeWithProblem
+        }
+    }
+
+    /// Created this long ago or less counts as made by the request that failed. An older bot of the same template is
+    /// from an earlier team of the set.
+    static let retryWindow: TimeInterval = 10 * 60
+
+    /// The bots of the set that a retry still has to make: those with no agent of their template created within the
+    /// retry window. The answer keeps the set's order.
+    static func remaining(members: [BotTemplate], agents: [Agent], now: Date) -> [BotTemplate] {
+        let recent = recentAgents(agents, now: now)
+        return members.filter { member in !recent.contains { $0.templateId == member.id } }
+    }
+
+    /// The entries of the bots of the set that were made within the retry window, one per template (the newest).
+    static func recentEntries(members: [BotTemplate], agents: [Agent], now: Date) -> [BundleEntry] {
+        let recent = recentAgents(agents, now: now)
+        return members.compactMap { member in
+            recent.filter { $0.templateId == member.id }
+                .max { $0.createdAt < $1.createdAt }
+                .map { BundleEntry(templateId: member.id, agent: $0) }
+        }
+    }
+
+    private static func recentAgents(_ agents: [Agent], now: Date) -> [Agent] {
+        let since = Int64((now.timeIntervalSince1970 - retryWindow) * 1000)
+        return agents.filter { $0.templateId != nil && $0.createdAt >= since }
+    }
+
+    /// The whole answer of a team made in two steps: the bots that were made before (`earlier`) and the answer of the
+    /// retry (`made`). One entry per template of the set, in the set's order; a template in neither is left out.
+    static func combined(members: [BotTemplate], earlier: [BundleEntry], made: BundleCreation) -> BundleCreation {
+        let entries = members.compactMap { member in
+            made.agents.first { $0.templateId == member.id } ?? earlier.first { $0.templateId == member.id }
+        }
+        return BundleCreation(agents: entries, missingIntegrations: made.missingIntegrations)
     }
 
     /// The result lines, in the set's order. The name is the bot's in the app's language, or the template id when the

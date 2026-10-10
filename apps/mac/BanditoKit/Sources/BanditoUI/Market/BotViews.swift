@@ -111,10 +111,24 @@ struct BotsPage: View {
         let sets = BundleLogic.visible(
             model.bundles, filter: router.marketBotFilter, query: query, languageCode: languageCode)
         return VStack(alignment: .leading, spacing: 28) {
+            if model.bundlesFailure != nil {
+                bundlesFailedLine
+            }
             if !sets.isEmpty {
                 BundlesRow(bundles: sets, templates: model.templates, languageCode: languageCode, onView: onViewBundle)
             }
             catalogGrid(shown)
+        }
+    }
+
+    /// The sets did not load: one quiet line with a retry. The single bots below are not affected.
+    private var bundlesFailedLine: some View {
+        HStack(spacing: 8) {
+            Text(L10n.Market.Bundles.failed)
+                .font(BanditoFont.text(size: 12.5, weight: 400))
+                .foregroundStyle(Color.Bandito.text3)
+            Button(L10n.Banner.retry, action: onRetry)
+                .banditoButton(.link)
         }
     }
 

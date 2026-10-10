@@ -100,5 +100,9 @@ import Testing
         #expect(plain["runtime"] == nil)
         #expect(plain["bundle_id"] as? String == "devops")
         #expect(plain["language"] as? String == "de")
+        #expect(plain["templates"] == nil, "every template when the list is not given")
+
+        let retry = try json(NewBundle(bundleId: "startup-team", language: "ru", templates: ["docs-writer"]))
+        #expect(retry["templates"] as? [String] == ["docs-writer"])
     }
 }

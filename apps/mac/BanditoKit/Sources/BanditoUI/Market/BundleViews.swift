@@ -1,7 +1,9 @@
 import BanditoDesign
 import BanditoKit
 import BanditoL10n
+import Foundation
 import SwiftUI
+import os
 
 // The bundles on the Bots page: the row of sets, a set's card, and the panel that shows what a set holds, connects
 // what it needs, and makes the team. The panel ends with what was made, and opens the first bot.
@@ -22,18 +24,21 @@ struct BundleTile: View {
     }
 }
 
-/// A small tile of one bot of a set, in the bot's own colour and symbol.
+/// A small tile of one bot of a set, in the bot's own colour and symbol. Its tooltip is the bot's name in the app's
+/// language.
 struct MemberMiniTile: View {
     let template: BotTemplate
+    let languageCode: String
     var size: CGFloat = 24
 
     var body: some View {
+        let name = template.name(languageCode: languageCode)
         MarketTileSurface(color: MarketTileStyle.color(hex: template.accent, name: template.id), size: size) {
             Image(systemName: template.icon)
                 .font(.system(size: size * 0.46, weight: .semibold))
         }
-        .help(template.nameEn)
-        .accessibilityLabel(template.nameEn)
+        .help(name)
+        .accessibilityLabel(name)
     }
 }
 
@@ -92,7 +97,7 @@ struct BundleCard: View {
                 }
                 HStack(spacing: 6) {
                     ForEach(members) { member in
-                        MemberMiniTile(template: member)
+                        MemberMiniTile(template: member, languageCode: languageCode)
                     }
                     Spacer(minLength: 0)
                 }
@@ -114,8 +119,12 @@ struct BundleCard: View {
 // MARK: - the panel
 
 /// The panel of one set. The first stage shows the bots, the services and the runtime, and makes the team. The second
-/// shows what was made and what was not, and opens the first bot of the team.
+/// shows what was made and what was not, and opens the first bot of the team. After a request that failed (a timeout,
+/// a dropped connection) the daemon may have made some of the bots: the list is read again, and the next press makes
+/// only the bots that are still missing.
 struct BundlePanel: View {
+    private static let log = Logger(subsystem: "dev.bandito", category: "bundles")
+
     let bundle: AgentBundle
     let members: [BotTemplate]
     let services: [BotLogic.Service]
@@ -131,6 +140,8 @@ struct BundlePanel: View {
     @State private var runtime: RuntimeKind?
     @State private var result: BundleCreation?
     @State private var error: UserFacingMessage?
+    /// A request failed: the bots already made are read from the list, and Create makes the rest.
+    @State private var retrying = false
 
     init(
         bundle: AgentBundle, members: [BotTemplate], services: [BotLogic.Service], server: ServerModel,
@@ -181,7 +192,7 @@ struct BundlePanel: View {
                         .banditoButton(.quiet())
                         .disabled(creating)
                         .fixedSize()
-                    Button(creating ? L10n.Market.Bundle.creating : L10n.Market.Bundle.create) { create() }
+                    Button(createTitle) { create() }
                         .banditoButton(.signal())
                         .disabled(creating || runtime == nil)
                         .fixedSize()
@@ -203,6 +214,11 @@ struct BundlePanel: View {
             created: String(BundleLogic.madeCount(result)), total: String(result.agents.count))
     }
 
+    private var createTitle: String {
+        if creating { return L10n.Market.Bundle.creating }
+        return retrying ? L10n.Market.Bundle.createMissing : L10n.Market.Bundle.create
+    }
+
     // MARK: first stage
 
     private var detailBody: some View {
@@ -212,6 +228,12 @@ struct BundlePanel: View {
                 if !services.isEmpty { servicesSection }
                 runtimeField
                 missingNotice
+                if retrying {
+                    Text(L10n.Market.Bundle.partial)
+                        .font(BanditoFont.text(size: 12.5, weight: 400))
+                        .foregroundStyle(BanditoPalette.peach)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 if let error {
                     UserFacingErrorView(message: error, onRetry: error.canRetry ? { create() } : nil)
                 }
@@ -311,55 +333,92 @@ struct BundlePanel: View {
         .frame(maxHeight: 460)
     }
 
+    /// One bot of the result. The daemon's own words are not shown: they go to the log and the tooltip.
     private func resultRow(_ row: BundleLogic.Row) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: resultSymbol(row))
+            Image(systemName: resultSymbol(row.outcome))
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(resultTint(row))
+                .foregroundStyle(resultTint(row.outcome))
                 .frame(width: 18)
             VStack(alignment: .leading, spacing: 2) {
                 Text(row.agentName ?? row.name)
                     .font(BanditoFont.text(size: 13, weight: 600))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1)
-                if let problem = row.problem {
-                    Text(problem)
+                if let note = outcomeNote(row.outcome) {
+                    Text(note)
                         .font(BanditoFont.text(size: 12.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text2)
                         .fixedSize(horizontal: false, vertical: true)
-                } else if !row.made {
-                    Text(row.name)
-                        .font(BanditoFont.text(size: 12.5, weight: 400))
-                        .foregroundStyle(Color.Bandito.text2)
                 }
             }
         }
+        .help(row.problem ?? "")
     }
 
-    private func resultSymbol(_ row: BundleLogic.Row) -> String {
-        if !row.made { return "xmark.circle" }
-        return row.problem == nil ? "checkmark.circle.fill" : "exclamationmark.triangle"
+    private func resultSymbol(_ outcome: BundleLogic.Outcome) -> String {
+        switch outcome {
+        case .made: "checkmark.circle.fill"
+        case .madeWithProblem: "exclamationmark.triangle"
+        case .notMade: "xmark.circle"
+        }
     }
 
-    private func resultTint(_ row: BundleLogic.Row) -> Color {
-        if !row.made { return Color.Bandito.danger }
-        return row.problem == nil ? Color.Bandito.ok : BanditoPalette.peach
+    private func resultTint(_ outcome: BundleLogic.Outcome) -> Color {
+        switch outcome {
+        case .made: Color.Bandito.ok
+        case .madeWithProblem: BanditoPalette.peach
+        case .notMade: Color.Bandito.danger
+        }
+    }
+
+    private func outcomeNote(_ outcome: BundleLogic.Outcome) -> String? {
+        switch outcome {
+        case .made: nil
+        case .madeWithProblem: L10n.Market.Bundle.Status.madeWithProblem
+        case .notMade: L10n.Market.Bundle.Status.notMade
+        }
     }
 
     // MARK: actions
 
+    /// Makes the team. After a failed request only the bots without a recent agent of their template are asked for, and
+    /// the answer lists the bots made before as well.
     private func create() {
-        guard !creating, let request = BundleLogic.request(bundle: bundle, runtime: runtime, languageCode: languageCode)
-        else { return }
-        creating = true
+        guard !creating, let runtime else { return }
+        let now = Date()
+        let earlier = retrying ? BundleLogic.recentEntries(members: members, agents: server.agents, now: now) : []
+        let targets = retrying ? BundleLogic.remaining(members: members, agents: server.agents, now: now) : members
         error = nil
+        creating = true
         Task {
             do {
-                let made = try await server.createBundle(request)
-                result = made
+                var made = BundleCreation()
+                if !targets.isEmpty {
+                    guard let request = BundleLogic.request(
+                        bundle: bundle, runtime: runtime, languageCode: languageCode,
+                        templates: retrying ? targets.map(\.id) : nil)
+                    else {
+                        creating = false
+                        return
+                    }
+                    made = try await server.createBundle(request)
+                }
+                let answer = retrying ? BundleLogic.combined(members: members, earlier: earlier, made: made) : made
+                for row in BundleLogic.rows(of: answer, templates: members, languageCode: languageCode) {
+                    if let problem = row.problem {
+                        Self.log.error("bundle \(bundle.id, privacy: .public) \(row.id, privacy: .public): \(problem, privacy: .public)")
+                    }
+                }
+                result = answer
+                retrying = false
                 creating = false
             } catch {
+                Self.log.error("agents.create_bundle \(bundle.id, privacy: .public) failed: \(String(describing: error), privacy: .public)")
                 self.error = UserFacingError.message(for: error)
+                // The daemon may have made some of the bots before the request failed: read the list first.
+                try? await server.readAgentsNow()
+                retrying = true
                 creating = false
             }
         }

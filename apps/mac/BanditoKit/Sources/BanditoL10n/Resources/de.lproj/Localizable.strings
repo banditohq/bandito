@@ -887,12 +887,17 @@
 "market.bots.empty" = "Dieser Server hat keine Bot-Vorlagen.";
 "market.bots.subtitle" = "Fertige Bots: auswählen, Benötigtes verbinden, loslegen.";
 "market.bundle.create" = "Team anlegen";
+"market.bundle.createMissing" = "Fehlende Bots anlegen";
 "market.bundle.creating" = "Wird angelegt…";
 "market.bundle.members" = "Bots im Set";
 "market.bundle.missingRequired" = "Benötigt %1$@. Sie können das Team jetzt anlegen und später verbinden; bis dahin können die Bots, die sie brauchen, ihre Aufgabe nicht erfüllen.";
 "market.bundle.openFirst" = "%1$@ öffnen";
+"market.bundle.partial" = "Einige Bots wurden möglicherweise angelegt. Prüfen Sie die Teamliste.";
 "market.bundle.resultTitle" = "%1$@ von %2$@ Bots angelegt";
 "market.bundle.services" = "Dienste des Sets";
+"market.bundle.status.madeWithProblem" = "Angelegt, ein Schritt ist nicht fertig geworden";
+"market.bundle.status.notMade" = "Nicht angelegt";
+"market.bundles.failed" = "Die Sets konnten nicht geladen werden";
 "market.bundles.title" = "Sets";
 "market.category.business" = "Business";
 "market.category.data" = "Daten";

@@ -158,4 +158,66 @@ import Testing
         #expect(BundleLogic.madeCount(none) == 0)
         #expect(BundleLogic.firstAgent(none) == nil)
     }
+
+    // MARK: after a failed request
+
+    private let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    /// An agent of a template, created `minutesAgo` before `now`.
+    private func made(_ id: String, template: String?, minutesAgo: Double) -> Agent {
+        let createdAt = Int64((now.timeIntervalSince1970 - minutesAgo * 60) * 1000)
+        return Agent(id: id, name: "Bot \(id)", runtime: .claude, cwd: "/work", createdAt: createdAt, templateId: template)
+    }
+
+    @Test func aRetryMakesOnlyTheBotsWithoutARecentAgentOfTheirTemplate() {
+        let members = [templates[0], templates[1], templates[2]]  // reviewer, tasks, digest
+        let agents = [
+            made("a", template: "reviewer", minutesAgo: 2),  // recent: counts as made
+            made("b", template: "tasks", minutesAgo: 11),  // older than the window: an earlier team
+            made("c", template: nil, minutesAgo: 1),  // made by hand: never counts
+        ]
+        #expect(BundleLogic.remaining(members: members, agents: agents, now: now).map(\.id) == ["tasks", "digest"])
+        // Nothing made: all of them, in the set's order.
+        #expect(BundleLogic.remaining(members: members, agents: [], now: now).map(\.id) == ["reviewer", "tasks", "digest"])
+        // All made: nothing is left to ask for.
+        let all = members.map { made("x-\($0.id)", template: $0.id, minutesAgo: 0) }
+        #expect(BundleLogic.remaining(members: members, agents: all, now: now).isEmpty)
+    }
+
+    @Test func theNewestRecentAgentOfATemplateIsTheOneTakenAsMade() {
+        let members = [templates[0]]
+        let agents = [
+            made("old", template: "reviewer", minutesAgo: 9),
+            made("new", template: "reviewer", minutesAgo: 3),
+        ]
+        let entries = BundleLogic.recentEntries(members: members, agents: agents, now: now)
+        #expect(entries.map(\.templateId) == ["reviewer"])
+        #expect(entries.first?.agent?.id == "new")
+    }
+
+    @Test func theCombinedAnswerListsTheSetsBotsInItsOrderWithTheEarlierOnes() {
+        let members = [templates[0], templates[1], templates[2]]
+        let earlier = [BundleEntry(templateId: "reviewer", agent: agent("1", "Ревьюер"))]
+        let retry = BundleCreation(agents: [
+            BundleEntry(templateId: "digest", agent: agent("3", "Дайджест")),
+            BundleEntry(templateId: "tasks", error: "unknown runtime nope"),
+        ])
+        let answer = BundleLogic.combined(members: members, earlier: earlier, made: retry)
+        #expect(answer.agents.map(\.templateId) == ["reviewer", "tasks", "digest"])
+        #expect(answer.agents[0].agent?.id == "1")
+        #expect(answer.agents[1].error == "unknown runtime nope")
+        #expect(answer.agents[2].agent?.id == "3")
+    }
+
+    @Test func aRowsOutcomeSaysWhetherTheBotExistsAndWhetherAStepFailed() {
+        let creation = BundleCreation(agents: [
+            BundleEntry(templateId: "tasks", agent: agent("1", "Задачи")),
+            BundleEntry(templateId: "reviewer", error: "unknown runtime nope"),
+            BundleEntry(templateId: "digest", agent: agent("2", "Дайджест"), error: "schedule 1: refused"),
+        ])
+        let rows = BundleLogic.rows(of: creation, templates: templates, languageCode: "en")
+        #expect(rows.map(\.outcome) == [.made, .notMade, .madeWithProblem])
+        // The daemon's words stay on the row, for the log and the tooltip.
+        #expect(rows[1].problem == "unknown runtime nope")
+    }
 }
