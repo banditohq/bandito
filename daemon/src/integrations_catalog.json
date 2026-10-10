@@ -2400,5 +2400,1657 @@
         }
       }
     }
+  },
+  {
+    "id": "gitlab",
+    "name": "GitLab",
+    "category": "dev",
+    "publisher": "GitLab",
+    "official": true,
+    "homepage": "https://gitlab.com",
+    "description_en": "Projects, merge requests, issues and code search, through GitLab's own MCP server.",
+    "description_ru": "Проекты, merge request, задачи и поиск по коду через официальный MCP-сервер GitLab.",
+    "long_en": "GitLab's own MCP server lets an agent work with your projects, merge requests and issues. For example: list the merge requests waiting for your review, or summarize the open issues in a project.",
+    "long_ru": "Официальный MCP-сервер GitLab даёт агенту доступ к вашим проектам, merge request и задачам. Например: показать merge request, которые ждут вашего ревью, или кратко описать открытые задачи проекта.",
+    "abilities_en": [
+      "Find projects and read their details",
+      "Read issues and merge requests",
+      "Work with repositories and search code",
+      "Use GitLab API operations through the assistant"
+    ],
+    "abilities_ru": [
+      "Находить проекты и читать их данные",
+      "Читать задачи и merge request",
+      "Работать с репозиториями и искать код",
+      "Выполнять операции GitLab API через ассистента"
+    ],
+    "needs_en": "A GitLab account (GitLab.com or your own server). Sign in in the browser after you press Connect; the group or the server must allow MCP access.",
+    "needs_ru": "Аккаунт GitLab (GitLab.com или ваш сервер). Войдите в браузере после нажатия «Подключить»; группа или сервер должны разрешать доступ к MCP.",
+    "kind": "http",
+    "url": "https://gitlab.com/api/v4/mcp",
+    "auth": "oauth",
+    "docs_url": "https://docs.gitlab.com/user/model_context_protocol/mcp_server/",
+    "icon": "gitlab",
+    "accent": "#FC6D26",
+    "l10n": {
+      "de": {
+        "description": "Projekte, Merge Requests, Issues und Codesuche über den eigenen MCP-Server von GitLab.",
+        "long": "Der eigene MCP-Server von GitLab erlaubt dem Agenten die Arbeit mit Ihren Projekten, Merge Requests und Issues. Zum Beispiel: die Merge Requests anzeigen, die auf Ihr Review warten, oder die offenen Issues eines Projekts zusammenfassen.",
+        "abilities": [
+          "Projekte finden und ihre Angaben lesen",
+          "Issues und Merge Requests lesen",
+          "Repositories durchsuchen und Dateien lesen",
+          "GitLab-API-Funktionen über den Assistenten nutzen"
+        ],
+        "needs": "Ein GitLab-Konto (GitLab.com oder Ihr eigener Server). Melden Sie sich nach dem Klick auf „Verbinden“ im Browser an; die Gruppe oder der Server muss den Zugriff auf MCP erlauben."
+      },
+      "es": {
+        "description": "Proyectos, merge requests, issues y búsqueda de código, a través del servidor MCP oficial de GitLab.",
+        "long": "El servidor MCP oficial de GitLab permite al agente trabajar con tus proyectos, merge requests e issues. Por ejemplo: listar los merge requests que esperan tu revisión, o resumir los issues abiertos de un proyecto.",
+        "abilities": [
+          "Buscar proyectos y leer sus datos",
+          "Leer issues y merge requests",
+          "Buscar código y leer archivos de repositorios",
+          "Usar operaciones de la API de GitLab desde el asistente"
+        ],
+        "needs": "Una cuenta de GitLab (GitLab.com o tu propio servidor). Inicia sesión en el navegador después de pulsar Conectar; el grupo o el servidor debe permitir el acceso a MCP."
+      },
+      "fr": {
+        "description": "Projets, merge requests, tickets et recherche de code, via le serveur MCP officiel de GitLab.",
+        "long": "Le serveur MCP officiel de GitLab permet à l'agent de travailler avec vos projets, merge requests et tickets. Par exemple : lister les merge requests qui attendent votre revue, ou résumer les tickets ouverts d'un projet.",
+        "abilities": [
+          "Trouver des projets et lire leurs informations",
+          "Lire tickets et merge requests",
+          "Rechercher du code et lire des fichiers de dépôts",
+          "Utiliser les opérations de l'API GitLab via l'assistant"
+        ],
+        "needs": "Un compte GitLab (GitLab.com ou votre propre serveur). Connectez-vous dans le navigateur après avoir cliqué sur Connecter ; le groupe ou le serveur doit autoriser l'accès à MCP."
+      },
+      "ja": {
+        "description": "GitLab 公式の MCP サーバーで、プロジェクト、マージリクエスト、Issue、コード検索を扱います。",
+        "long": "GitLab 公式の MCP サーバーを使うと、エージェントがプロジェクト、マージリクエスト、Issue を扱えます。例: レビュー待ちのマージリクエストを一覧にする、プロジェクトの未完了の Issue を要約する。",
+        "abilities": [
+          "プロジェクトを探して詳細を読む",
+          "Issue とマージリクエストを読む",
+          "リポジトリのコードを検索してファイルを読む",
+          "アシスタントから GitLab API の操作を使う"
+        ],
+        "needs": "GitLab のアカウント（GitLab.com または自社のサーバー）。「接続」を押した後にブラウザでサインインします。グループまたはサーバーで MCP へのアクセスが許可されている必要があります。"
+      },
+      "ko": {
+        "description": "프로젝트, 병합 요청, 이슈, 코드 검색을 GitLab 공식 MCP 서버로 다룹니다.",
+        "long": "GitLab 공식 MCP 서버를 쓰면 에이전트가 프로젝트, 병합 요청, 이슈를 다룰 수 있습니다. 예: 내 리뷰를 기다리는 병합 요청 목록 보기, 프로젝트의 열린 이슈 요약하기.",
+        "abilities": [
+          "프로젝트를 찾고 정보 읽기",
+          "이슈와 병합 요청 읽기",
+          "저장소에서 코드 검색과 파일 읽기",
+          "어시스턴트에서 GitLab API 작업 사용"
+        ],
+        "needs": "GitLab 계정(GitLab.com 또는 자체 서버). '연결'을 누른 뒤 브라우저에서 로그인하세요. 그룹이나 서버가 MCP 접근을 허용해야 합니다."
+      },
+      "pt-BR": {
+        "description": "Projetos, merge requests, issues e busca de código, pelo servidor MCP oficial do GitLab.",
+        "long": "O servidor MCP oficial do GitLab permite que o agente trabalhe com seus projetos, merge requests e issues. Por exemplo: listar os merge requests que esperam sua revisão, ou resumir as issues abertas de um projeto.",
+        "abilities": [
+          "Encontrar projetos e ler os dados deles",
+          "Ler issues e merge requests",
+          "Buscar código e ler arquivos dos repositórios",
+          "Usar operações da API do GitLab pelo assistente"
+        ],
+        "needs": "Uma conta no GitLab (GitLab.com ou seu próprio servidor). Entre no navegador depois de clicar em Conectar; o grupo ou o servidor precisa permitir o acesso ao MCP."
+      },
+      "zh-Hans": {
+        "description": "通过 GitLab 官方 MCP 服务器处理项目、合并请求、议题和代码搜索。",
+        "long": "GitLab 官方 MCP 服务器让智能体可以处理您的项目、合并请求和议题。例如：列出等待您审查的合并请求，或汇总某个项目中未关闭的议题。",
+        "abilities": [
+          "查找项目并读取其信息",
+          "读取议题和合并请求",
+          "搜索代码并读取仓库文件",
+          "通过助手使用 GitLab API 操作"
+        ],
+        "needs": "一个 GitLab 账号（GitLab.com 或您自己的服务器）。点击“连接”后在浏览器中登录；群组或服务器需允许访问 MCP。"
+      }
+    }
+  },
+  {
+    "id": "vercel",
+    "name": "Vercel",
+    "category": "dev",
+    "publisher": "Vercel",
+    "official": true,
+    "homepage": "https://vercel.com",
+    "description_en": "Projects, deployments and logs in Vercel, through Vercel's MCP server.",
+    "description_ru": "Проекты, деплои и логи в Vercel через официальный MCP-сервер Vercel.",
+    "long_en": "Vercel's MCP server lets an agent look at your projects and deployments. For example: find the deployment that failed, read its build logs and explain what went wrong.",
+    "long_ru": "MCP-сервер Vercel позволяет агенту смотреть ваши проекты и деплои. Например: найти деплой, который сломался, прочитать его логи сборки и объяснить, что пошло не так.",
+    "abilities_en": [
+      "Search Vercel documentation",
+      "Manage projects and deployments",
+      "Analyze deployment logs",
+      "Query web analytics"
+    ],
+    "abilities_ru": [
+      "Искать по документации Vercel",
+      "Управлять проектами и деплоями",
+      "Анализировать логи деплоев",
+      "Запрашивать веб-аналитику"
+    ],
+    "needs_en": "A Vercel account. Sign in in the browser after you press Connect.",
+    "needs_ru": "Аккаунт Vercel: войдите в браузере после нажатия «Подключить».",
+    "kind": "http",
+    "url": "https://mcp.vercel.com",
+    "auth": "oauth",
+    "docs_url": "https://vercel.com/docs/mcp/vercel-mcp",
+    "icon": "vercel",
+    "accent": "#3A3A3A",
+    "l10n": {
+      "de": {
+        "description": "Projekte, Deployments und Logs in Vercel über den MCP-Server von Vercel.",
+        "long": "Der MCP-Server von Vercel erlaubt dem Agenten, Ihre Projekte und Deployments anzusehen. Zum Beispiel: das fehlgeschlagene Deployment finden, seine Build-Logs lesen und erklären, was schiefging.",
+        "abilities": [
+          "Vercel-Dokumentation durchsuchen",
+          "Projekte und Deployments verwalten",
+          "Deployment-Logs auswerten",
+          "Web-Analytics abfragen"
+        ],
+        "needs": "Ein Vercel-Konto. Melden Sie sich nach dem Klick auf „Verbinden“ im Browser an."
+      },
+      "es": {
+        "description": "Proyectos, deployments y logs en Vercel, a través del servidor MCP de Vercel.",
+        "long": "El servidor MCP de Vercel permite al agente revisar tus proyectos y deployments. Por ejemplo: encontrar el deployment que falló, leer sus logs de compilación y explicar qué salió mal.",
+        "abilities": [
+          "Buscar en la documentación de Vercel",
+          "Gestionar proyectos y deployments",
+          "Analizar logs de deployments",
+          "Consultar la analítica web"
+        ],
+        "needs": "Una cuenta de Vercel. Inicia sesión en el navegador después de pulsar Conectar."
+      },
+      "fr": {
+        "description": "Projets, déploiements et journaux dans Vercel, via le serveur MCP de Vercel.",
+        "long": "Le serveur MCP de Vercel permet à l'agent de consulter vos projets et déploiements. Par exemple : trouver le déploiement en échec, lire ses journaux de build et expliquer ce qui n'a pas marché.",
+        "abilities": [
+          "Chercher dans la documentation Vercel",
+          "Gérer projets et déploiements",
+          "Analyser les journaux de déploiement",
+          "Interroger les statistiques web"
+        ],
+        "needs": "Un compte Vercel. Connectez-vous dans le navigateur après avoir cliqué sur Connecter."
+      },
+      "ja": {
+        "description": "Vercel のプロジェクト、デプロイ、ログを、Vercel の MCP サーバー経由で扱います。",
+        "long": "Vercel の MCP サーバーを使うと、エージェントがプロジェクトとデプロイを確認できます。例: 失敗したデプロイを見つけ、ビルドログを読んで原因を説明する。",
+        "abilities": [
+          "Vercel のドキュメントを検索",
+          "プロジェクトとデプロイを管理",
+          "デプロイのログを分析",
+          "ウェブ解析データを照会"
+        ],
+        "needs": "Vercel のアカウント。「接続」を押した後にブラウザでサインインします。"
+      },
+      "ko": {
+        "description": "Vercel의 프로젝트, 배포, 로그를 Vercel 공식 MCP 서버로 다룹니다.",
+        "long": "Vercel MCP 서버를 쓰면 에이전트가 프로젝트와 배포를 살펴볼 수 있습니다. 예: 실패한 배포를 찾아 빌드 로그를 읽고 무엇이 잘못됐는지 설명하기.",
+        "abilities": [
+          "Vercel 문서 검색",
+          "프로젝트와 배포 관리",
+          "배포 로그 분석",
+          "웹 분석 데이터 조회"
+        ],
+        "needs": "Vercel 계정. '연결'을 누른 뒤 브라우저에서 로그인하세요."
+      },
+      "pt-BR": {
+        "description": "Projetos, deployments e logs no Vercel, pelo servidor MCP da Vercel.",
+        "long": "O servidor MCP da Vercel permite que o agente veja seus projetos e deployments. Por exemplo: encontrar o deployment que quebrou, ler os logs de build e explicar o que falhou.",
+        "abilities": [
+          "Pesquisar na documentação da Vercel",
+          "Gerenciar projetos e deployments",
+          "Analisar logs de deployment",
+          "Consultar a análise web"
+        ],
+        "needs": "Uma conta na Vercel. Entre no navegador depois de clicar em Conectar."
+      },
+      "zh-Hans": {
+        "description": "通过 Vercel 官方 MCP 服务器处理 Vercel 项目、部署和日志。",
+        "long": "Vercel 的 MCP 服务器让智能体查看您的项目和部署。例如：找到失败的部署，读取其构建日志并说明出错原因。",
+        "abilities": [
+          "搜索 Vercel 文档",
+          "管理项目和部署",
+          "分析部署日志",
+          "查询网页分析数据"
+        ],
+        "needs": "一个 Vercel 账号。点击“连接”后在浏览器中登录。"
+      }
+    }
+  },
+  {
+    "id": "netlify",
+    "name": "Netlify",
+    "category": "dev",
+    "publisher": "Netlify",
+    "official": true,
+    "homepage": "https://www.netlify.com",
+    "description_en": "Sites, deploys, environment variables and team settings in Netlify, through Netlify's MCP server.",
+    "description_ru": "Сайты, деплои, переменные окружения и настройки команды в Netlify через MCP-сервер Netlify.",
+    "long_en": "Netlify's MCP server lets an agent create and manage your projects, deploys and environment variables. For example: set an environment variable for a site, or look up user and team information.",
+    "long_ru": "MCP-сервер Netlify позволяет агенту создавать и вести ваши проекты, деплои и переменные окружения. Например: задать переменную окружения сайту или посмотреть данные пользователя и команды.",
+    "abilities_en": [
+      "Create, manage and deploy projects",
+      "Create and change environment variables and secrets",
+      "Enable and manage form submissions",
+      "Read user and team information"
+    ],
+    "abilities_ru": [
+      "Создавать, вести и деплоить проекты",
+      "Создавать и менять переменные окружения и секреты",
+      "Включать и вести отправку форм",
+      "Читать данные пользователя и команды"
+    ],
+    "needs_en": "A Netlify account. Sign in in the browser after you press Connect.",
+    "needs_ru": "Аккаунт Netlify: войдите в браузере после нажатия «Подключить».",
+    "kind": "http",
+    "url": "https://netlify-mcp.netlify.app/mcp",
+    "auth": "oauth",
+    "docs_url": "https://docs.netlify.com/build/build-with-ai/netlify-mcp-server/",
+    "icon": "netlify",
+    "accent": "#00C7B7",
+    "l10n": {
+      "de": {
+        "description": "Websites, Deployments, Umgebungsvariablen und Team-Einstellungen in Netlify über den MCP-Server von Netlify.",
+        "long": "Der MCP-Server von Netlify erlaubt dem Agenten, Ihre Projekte, Deployments und Umgebungsvariablen anzulegen und zu verwalten. Zum Beispiel: eine Umgebungsvariable für eine Website setzen oder Daten zu Benutzer und Team abrufen.",
+        "abilities": [
+          "Projekte anlegen, verwalten und deployen",
+          "Umgebungsvariablen und Geheimnisse anlegen und ändern",
+          "Formular-Einsendungen einrichten und verwalten",
+          "Benutzer- und Teamdaten lesen"
+        ],
+        "needs": "Ein Netlify-Konto. Melden Sie sich nach dem Klick auf „Verbinden“ im Browser an."
+      },
+      "es": {
+        "description": "Sitios, deployments, variables de entorno y ajustes de equipo en Netlify, a través del servidor MCP de Netlify.",
+        "long": "El servidor MCP de Netlify permite al agente crear y gestionar tus proyectos, deployments y variables de entorno. Por ejemplo: definir una variable de entorno para un sitio, o consultar los datos del usuario y del equipo.",
+        "abilities": [
+          "Crear, gestionar y desplegar proyectos",
+          "Crear y cambiar variables de entorno y secretos",
+          "Activar y gestionar envíos de formularios",
+          "Leer datos del usuario y del equipo"
+        ],
+        "needs": "Una cuenta de Netlify. Inicia sesión en el navegador después de pulsar Conectar."
+      },
+      "fr": {
+        "description": "Sites, déploiements, variables d'environnement et réglages d'équipe dans Netlify, via le serveur MCP de Netlify.",
+        "long": "Le serveur MCP de Netlify permet à l'agent de créer et gérer vos projets, déploiements et variables d'environnement. Par exemple : définir une variable d'environnement pour un site, ou consulter les informations de l'utilisateur et de l'équipe.",
+        "abilities": [
+          "Créer, gérer et déployer des projets",
+          "Créer et modifier variables d'environnement et secrets",
+          "Activer et gérer les envois de formulaires",
+          "Lire les informations de l'utilisateur et de l'équipe"
+        ],
+        "needs": "Un compte Netlify. Connectez-vous dans le navigateur après avoir cliqué sur Connecter."
+      },
+      "ja": {
+        "description": "Netlify のサイト、デプロイ、環境変数、チーム設定を、Netlify の MCP サーバー経由で扱います。",
+        "long": "Netlify の MCP サーバーを使うと、エージェントがプロジェクト、デプロイ、環境変数を作成して管理できます。例: サイトに環境変数を設定する、ユーザーとチームの情報を確認する。",
+        "abilities": [
+          "プロジェクトの作成、管理、デプロイ",
+          "環境変数とシークレットの作成と変更",
+          "フォーム送信の設定と管理",
+          "ユーザーとチームの情報を読む"
+        ],
+        "needs": "Netlify のアカウント。「接続」を押した後にブラウザでサインインします。"
+      },
+      "ko": {
+        "description": "Netlify의 사이트, 배포, 환경 변수, 팀 설정을 Netlify 공식 MCP 서버로 다룹니다.",
+        "long": "Netlify MCP 서버를 쓰면 에이전트가 프로젝트, 배포, 환경 변수를 만들고 관리할 수 있습니다. 예: 사이트에 환경 변수 설정하기, 사용자와 팀 정보 확인하기.",
+        "abilities": [
+          "프로젝트 생성, 관리, 배포",
+          "환경 변수와 비밀 값 생성 및 변경",
+          "폼 제출 설정과 관리",
+          "사용자와 팀 정보 읽기"
+        ],
+        "needs": "Netlify 계정. '연결'을 누른 뒤 브라우저에서 로그인하세요."
+      },
+      "pt-BR": {
+        "description": "Sites, deploys, variáveis de ambiente e configurações de equipe no Netlify, pelo servidor MCP do Netlify.",
+        "long": "O servidor MCP do Netlify permite que o agente crie e gerencie seus projetos, deploys e variáveis de ambiente. Por exemplo: definir uma variável de ambiente para um site, ou consultar os dados do usuário e da equipe.",
+        "abilities": [
+          "Criar, gerenciar e publicar projetos",
+          "Criar e alterar variáveis de ambiente e segredos",
+          "Ativar e gerenciar envios de formulários",
+          "Ler dados do usuário e da equipe"
+        ],
+        "needs": "Uma conta no Netlify. Entre no navegador depois de clicar em Conectar."
+      },
+      "zh-Hans": {
+        "description": "通过 Netlify 官方 MCP 服务器处理站点、部署、环境变量和团队设置。",
+        "long": "Netlify 的 MCP 服务器让智能体创建和管理您的项目、部署和环境变量。例如：为某个站点设置环境变量，或查看用户和团队信息。",
+        "abilities": [
+          "创建、管理和部署项目",
+          "创建和修改环境变量及密钥",
+          "开启并管理表单提交",
+          "读取用户和团队信息"
+        ],
+        "needs": "一个 Netlify 账号。点击“连接”后在浏览器中登录。"
+      }
+    }
+  },
+  {
+    "id": "neon",
+    "name": "Neon",
+    "category": "data",
+    "publisher": "Neon",
+    "official": true,
+    "homepage": "https://neon.com",
+    "description_en": "Projects, branches and SQL in Neon Postgres, through Neon's MCP server.",
+    "description_ru": "Проекты, ветки и SQL в Neon Postgres через официальный MCP-сервер Neon.",
+    "long_en": "Neon's MCP server lets an agent work with your Postgres projects and their branches. For example: create a branch to test a schema change, or inspect a table's structure. Schema changes can run on a temporary branch first.",
+    "long_ru": "MCP-сервер Neon позволяет агенту работать с вашими Postgres-проектами и их ветками. Например: создать ветку, чтобы проверить изменение схемы, или посмотреть структуру таблицы. Изменения схемы можно сначала выполнить на временной ветке.",
+    "abilities_en": [
+      "Manage projects, branches and compute endpoints",
+      "Inspect schemas and run SQL",
+      "Diagnose the database",
+      "Read logs"
+    ],
+    "abilities_ru": [
+      "Управлять проектами, ветками и вычислительными узлами",
+      "Смотреть схемы и выполнять SQL",
+      "Диагностировать базу данных",
+      "Читать логи"
+    ],
+    "needs_en": "A Neon account. Sign in in the browser after you press Connect. For real data, use a branch or a role with limited rights.",
+    "needs_ru": "Аккаунт Neon: войдите в браузере после нажатия «Подключить». Для работы с боевыми данными используйте ветку или роль с ограниченными правами.",
+    "kind": "http",
+    "url": "https://mcp.neon.tech/mcp",
+    "auth": "oauth",
+    "docs_url": "https://neon.com/docs/ai/neon-mcp-server",
+    "icon": "database",
+    "accent": "#00E599",
+    "l10n": {
+      "de": {
+        "description": "Projekte, Branches und SQL in Neon Postgres über den MCP-Server von Neon.",
+        "long": "Der MCP-Server von Neon erlaubt dem Agenten die Arbeit mit Ihren Postgres-Projekten und deren Branches. Zum Beispiel: einen Branch zum Testen einer Schemaänderung anlegen oder die Struktur einer Tabelle ansehen. Schemaänderungen lassen sich zuerst auf einem temporären Branch ausführen.",
+        "abilities": [
+          "Projekte, Branches und Compute-Endpunkte verwalten",
+          "Schemas ansehen und SQL ausführen",
+          "Datenbank diagnostizieren",
+          "Logs lesen"
+        ],
+        "needs": "Ein Neon-Konto. Melden Sie sich nach dem Klick auf „Verbinden“ im Browser an. Für echte Daten nutzen Sie einen Branch oder eine Rolle mit eingeschränkten Rechten."
+      },
+      "es": {
+        "description": "Proyectos, ramas y SQL en Neon Postgres, a través del servidor MCP de Neon.",
+        "long": "El servidor MCP de Neon permite al agente trabajar con tus proyectos Postgres y sus ramas. Por ejemplo: crear una rama para probar un cambio de esquema, o revisar la estructura de una tabla. Los cambios de esquema pueden probarse antes en una rama temporal.",
+        "abilities": [
+          "Gestionar proyectos, ramas y endpoints de cómputo",
+          "Revisar esquemas y ejecutar SQL",
+          "Diagnosticar la base de datos",
+          "Leer logs"
+        ],
+        "needs": "Una cuenta de Neon. Inicia sesión en el navegador después de pulsar Conectar. Para datos reales, usa una rama o un rol con permisos limitados."
+      },
+      "fr": {
+        "description": "Projets, branches et SQL dans Neon Postgres, via le serveur MCP de Neon.",
+        "long": "Le serveur MCP de Neon permet à l'agent de travailler avec vos projets Postgres et leurs branches. Par exemple : créer une branche pour tester une modification de schéma, ou consulter la structure d'une table. Les changements de schéma peuvent d'abord être testés sur une branche temporaire.",
+        "abilities": [
+          "Gérer projets, branches et points de calcul",
+          "Consulter les schémas et exécuter du SQL",
+          "Diagnostiquer la base de données",
+          "Lire les journaux"
+        ],
+        "needs": "Un compte Neon. Connectez-vous dans le navigateur après avoir cliqué sur Connecter. Pour des données réelles, utilisez une branche ou un rôle aux droits limités."
+      },
+      "ja": {
+        "description": "Neon Postgres のプロジェクト、ブランチ、SQL を、Neon の MCP サーバー経由で扱います。",
+        "long": "Neon の MCP サーバーを使うと、エージェントが Postgres プロジェクトとそのブランチを操作できます。例: スキーマ変更を試すブランチを作る、テーブルの構造を確認する。スキーマ変更は先に一時ブランチで実行できます。",
+        "abilities": [
+          "プロジェクト、ブランチ、コンピュートエンドポイントの管理",
+          "スキーマの確認と SQL の実行",
+          "データベースの診断",
+          "ログの読み取り"
+        ],
+        "needs": "Neon のアカウント。「接続」を押した後にブラウザでサインインします。実データを扱う場合は、権限を絞ったブランチまたはロールを使ってください。"
+      },
+      "ko": {
+        "description": "Neon Postgres의 프로젝트, 브랜치, SQL을 Neon 공식 MCP 서버로 다룹니다.",
+        "long": "Neon MCP 서버를 쓰면 에이전트가 Postgres 프로젝트와 브랜치를 다룰 수 있습니다. 예: 스키마 변경을 시험할 브랜치 만들기, 테이블 구조 확인하기. 스키마 변경은 먼저 임시 브랜치에서 실행할 수 있습니다.",
+        "abilities": [
+          "프로젝트, 브랜치, 컴퓨트 엔드포인트 관리",
+          "스키마 조회와 SQL 실행",
+          "데이터베이스 진단",
+          "로그 읽기"
+        ],
+        "needs": "Neon 계정. '연결'을 누른 뒤 브라우저에서 로그인하세요. 실제 데이터는 권한이 제한된 브랜치나 역할로 다루세요."
+      },
+      "pt-BR": {
+        "description": "Projetos, branches e SQL no Neon Postgres, pelo servidor MCP do Neon.",
+        "long": "O servidor MCP do Neon permite que o agente trabalhe com seus projetos Postgres e seus branches. Por exemplo: criar um branch para testar uma mudança de esquema, ou ver a estrutura de uma tabela. Mudanças de esquema podem ser testadas antes em um branch temporário.",
+        "abilities": [
+          "Gerenciar projetos, branches e endpoints de computação",
+          "Ver esquemas e executar SQL",
+          "Diagnosticar o banco de dados",
+          "Ler logs"
+        ],
+        "needs": "Uma conta na Neon. Entre no navegador depois de clicar em Conectar. Para dados reais, use um branch ou uma função com permissões limitadas."
+      },
+      "zh-Hans": {
+        "description": "通过 Neon 官方 MCP 服务器处理 Neon Postgres 项目、分支和 SQL。",
+        "long": "Neon 的 MCP 服务器让智能体处理您的 Postgres 项目及其分支。例如：创建一个分支来测试结构变更，或查看某个表的结构。结构变更可以先在临时分支上试运行。",
+        "abilities": [
+          "管理项目、分支和计算端点",
+          "查看结构并执行 SQL",
+          "诊断数据库",
+          "读取日志"
+        ],
+        "needs": "一个 Neon 账号。点击“连接”后在浏览器中登录。处理真实数据时，请使用权限受限的分支或角色。"
+      }
+    }
+  },
+  {
+    "id": "toolbox-postgres",
+    "name": "Google MCP Toolbox for PostgreSQL",
+    "category": "data",
+    "publisher": "Google",
+    "official": true,
+    "homepage": "https://github.com/googleapis/mcp-toolbox",
+    "description_en": "Queries and ready-made tools for your PostgreSQL database, through Google's MCP Toolbox.",
+    "description_ru": "Запросы и готовые инструменты для вашей базы PostgreSQL через MCP Toolbox от Google.",
+    "long_en": "Google's MCP Toolbox for Databases runs on your computer or server and gives an agent ready-made tools for PostgreSQL. For example: look at the tables in a database, or run a query and explain the result.",
+    "long_ru": "MCP Toolbox for Databases от Google работает на вашем компьютере или сервере и даёт агенту готовые инструменты для PostgreSQL. Например: посмотреть таблицы базы или выполнить запрос и объяснить результат.",
+    "abilities_en": [
+      "Look at schemas and tables",
+      "Run SQL queries",
+      "Use the prebuilt Postgres tools of the Toolbox"
+    ],
+    "abilities_ru": [
+      "Смотреть схемы и таблицы",
+      "Выполнять SQL-запросы",
+      "Использовать готовые инструменты Postgres из Toolbox"
+    ],
+    "needs_en": "Node.js (npx) on your computer or server, and the connection details of your PostgreSQL database. Use a database role with read-only rights.",
+    "needs_ru": "Node.js (npx) на вашем компьютере или сервере и параметры подключения к базе PostgreSQL. Используйте роль базы только с правами на чтение.",
+    "kind": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@toolbox-sdk/server@1.14.0",
+      "--prebuilt=postgres",
+      "--stdio"
+    ],
+    "env_keys": [
+      {
+        "key": "POSTGRES_HOST",
+        "label_en": "Database host",
+        "label_ru": "Адрес сервера базы",
+        "secret": true,
+        "value_template": "{secret}"
+      },
+      {
+        "key": "POSTGRES_PORT",
+        "label_en": "Database port",
+        "label_ru": "Порт базы",
+        "secret": true,
+        "value_template": "{secret}"
+      },
+      {
+        "key": "POSTGRES_DATABASE",
+        "label_en": "Database name",
+        "label_ru": "Имя базы",
+        "secret": true,
+        "value_template": "{secret}"
+      },
+      {
+        "key": "POSTGRES_USER",
+        "label_en": "Database user",
+        "label_ru": "Пользователь базы",
+        "secret": true,
+        "value_template": "{secret}"
+      },
+      {
+        "key": "POSTGRES_PASSWORD",
+        "label_en": "Database password",
+        "label_ru": "Пароль базы",
+        "secret": true,
+        "value_template": "{secret}"
+      }
+    ],
+    "docs_url": "https://googleapis.github.io/genai-toolbox/",
+    "icon": "toolbox-postgres",
+    "accent": "#4285F4",
+    "l10n": {
+      "de": {
+        "description": "Abfragen und Werkzeuge für Ihre PostgreSQL-Datenbank über das MCP Toolbox von Google.",
+        "long": "MCP Toolbox for Databases von Google läuft auf Ihrem Rechner oder Server und gibt dem Agenten fertige Werkzeuge für PostgreSQL. Zum Beispiel: die Tabellen einer Datenbank ansehen oder eine Abfrage ausführen und das Ergebnis erklären.",
+        "abilities": [
+          "Schemas und Tabellen ansehen",
+          "SQL-Abfragen ausführen",
+          "Fertige Postgres-Werkzeuge aus Toolbox nutzen"
+        ],
+        "needs": "Node.js (npx) auf Ihrem Rechner oder Server und die Verbindungsdaten Ihrer PostgreSQL-Datenbank. Nutzen Sie eine Datenbankrolle nur mit Leserechten.",
+        "labels": {
+          "POSTGRES_HOST": "Datenbank-Host",
+          "POSTGRES_PORT": "Datenbank-Port",
+          "POSTGRES_DATABASE": "Datenbankname",
+          "POSTGRES_USER": "Datenbankbenutzer",
+          "POSTGRES_PASSWORD": "Datenbankpasswort"
+        }
+      },
+      "es": {
+        "description": "Consultas y herramientas para tu base PostgreSQL, a través de MCP Toolbox de Google.",
+        "long": "MCP Toolbox for Databases de Google se ejecuta en tu equipo o servidor y da al agente herramientas listas para PostgreSQL. Por ejemplo: revisar las tablas de una base de datos, o ejecutar una consulta y explicar el resultado.",
+        "abilities": [
+          "Revisar esquemas y tablas",
+          "Ejecutar consultas SQL",
+          "Usar las herramientas Postgres preconfiguradas de Toolbox"
+        ],
+        "needs": "Node.js (npx) en tu equipo o servidor, y los datos de conexión de tu base PostgreSQL. Usa un rol de base de datos solo con permisos de lectura.",
+        "labels": {
+          "POSTGRES_HOST": "Host de la base",
+          "POSTGRES_PORT": "Puerto de la base",
+          "POSTGRES_DATABASE": "Nombre de la base",
+          "POSTGRES_USER": "Usuario de la base",
+          "POSTGRES_PASSWORD": "Contraseña de la base"
+        }
+      },
+      "fr": {
+        "description": "Requêtes et outils pour votre base PostgreSQL, via MCP Toolbox de Google.",
+        "long": "MCP Toolbox for Databases de Google fonctionne sur votre ordinateur ou serveur et fournit à l'agent des outils prêts à l'emploi pour PostgreSQL. Par exemple : consulter les tables d'une base, ou exécuter une requête et expliquer le résultat.",
+        "abilities": [
+          "Consulter schémas et tables",
+          "Exécuter des requêtes SQL",
+          "Utiliser les outils Postgres prêts à l'emploi de Toolbox"
+        ],
+        "needs": "Node.js (npx) sur votre ordinateur ou serveur, et les paramètres de connexion à votre base PostgreSQL. Utilisez un rôle de base de données avec des droits en lecture seule.",
+        "labels": {
+          "POSTGRES_HOST": "Hôte de la base",
+          "POSTGRES_PORT": "Port de la base",
+          "POSTGRES_DATABASE": "Nom de la base",
+          "POSTGRES_USER": "Utilisateur de la base",
+          "POSTGRES_PASSWORD": "Mot de passe de la base"
+        }
+      },
+      "ja": {
+        "description": "Google の MCP Toolbox を通じて、PostgreSQL データベースへのクエリと各種ツールを提供します。",
+        "long": "Google の MCP Toolbox for Databases は、お使いのコンピュータやサーバーで動作し、PostgreSQL 用の既製のツールをエージェントに提供します。例: データベースのテーブルを確認する、クエリを実行して結果を説明する。",
+        "abilities": [
+          "スキーマとテーブルを確認",
+          "SQL クエリを実行",
+          "Toolbox の既製の Postgres ツールを使う"
+        ],
+        "needs": "お使いのコンピュータやサーバーで Node.js（npx）が使えること、そして PostgreSQL データベースの接続情報。データベースには読み取り専用の権限を持つロールを使ってください。",
+        "labels": {
+          "POSTGRES_HOST": "データベースのホスト",
+          "POSTGRES_PORT": "データベースのポート",
+          "POSTGRES_DATABASE": "データベース名",
+          "POSTGRES_USER": "データベースのユーザー",
+          "POSTGRES_PASSWORD": "データベースのパスワード"
+        }
+      },
+      "ko": {
+        "description": "Google의 MCP Toolbox로 PostgreSQL 데이터베이스에 대한 쿼리와 도구를 제공합니다.",
+        "long": "Google의 MCP Toolbox for Databases는 사용자의 컴퓨터나 서버에서 실행되며, PostgreSQL용 기본 제공 도구를 에이전트에 줍니다. 예: 데이터베이스의 테이블 보기, 쿼리 실행 후 결과 설명하기.",
+        "abilities": [
+          "스키마와 테이블 보기",
+          "SQL 쿼리 실행",
+          "Toolbox의 기본 Postgres 도구 사용"
+        ],
+        "needs": "컴퓨터나 서버에 Node.js(npx)가 있어야 하고, PostgreSQL 데이터베이스 연결 정보가 필요합니다. 읽기 전용 권한을 가진 데이터베이스 역할을 쓰세요.",
+        "labels": {
+          "POSTGRES_HOST": "데이터베이스 호스트",
+          "POSTGRES_PORT": "데이터베이스 포트",
+          "POSTGRES_DATABASE": "데이터베이스 이름",
+          "POSTGRES_USER": "데이터베이스 사용자",
+          "POSTGRES_PASSWORD": "데이터베이스 비밀번호"
+        }
+      },
+      "pt-BR": {
+        "description": "Consultas e ferramentas para seu banco PostgreSQL, pelo MCP Toolbox do Google.",
+        "long": "O MCP Toolbox for Databases do Google roda no seu computador ou servidor e dá ao agente ferramentas prontas para PostgreSQL. Por exemplo: ver as tabelas de um banco, ou executar uma consulta e explicar o resultado.",
+        "abilities": [
+          "Ver esquemas e tabelas",
+          "Executar consultas SQL",
+          "Usar as ferramentas Postgres prontas do Toolbox"
+        ],
+        "needs": "Node.js (npx) no seu computador ou servidor e os dados de conexão do seu banco PostgreSQL. Use uma função de banco somente com permissão de leitura.",
+        "labels": {
+          "POSTGRES_HOST": "Host do banco",
+          "POSTGRES_PORT": "Porta do banco",
+          "POSTGRES_DATABASE": "Nome do banco",
+          "POSTGRES_USER": "Usuário do banco",
+          "POSTGRES_PASSWORD": "Senha do banco"
+        }
+      },
+      "zh-Hans": {
+        "description": "通过 Google 的 MCP Toolbox 为您的 PostgreSQL 数据库提供查询和工具。",
+        "long": "Google 的 MCP Toolbox for Databases 运行在您的电脑或服务器上，为智能体提供现成的 PostgreSQL 工具。例如：查看数据库中的表，或执行查询并解释结果。",
+        "abilities": [
+          "查看结构和表",
+          "执行 SQL 查询",
+          "使用 Toolbox 提供的现成 Postgres 工具"
+        ],
+        "needs": "您的电脑或服务器上需要有 Node.js（npx），以及您的 PostgreSQL 数据库连接信息。请使用只有读取权限的数据库角色。",
+        "labels": {
+          "POSTGRES_HOST": "数据库主机",
+          "POSTGRES_PORT": "数据库端口",
+          "POSTGRES_DATABASE": "数据库名称",
+          "POSTGRES_USER": "数据库用户",
+          "POSTGRES_PASSWORD": "数据库密码"
+        }
+      }
+    }
+  },
+  {
+    "id": "grafana",
+    "name": "Grafana",
+    "category": "dev",
+    "publisher": "Grafana Labs",
+    "official": true,
+    "homepage": "https://grafana.com",
+    "description_en": "Dashboards, alerts, data sources and queries in Grafana, through Grafana's MCP server.",
+    "description_ru": "Дашборды, алерты, источники данных и запросы в Grafana через MCP-сервер Grafana.",
+    "long_en": "Grafana's MCP server lets an agent read your dashboards, alerts and data sources, and run queries against them. For example: find the dashboard for a service and explain what the latest alert means.",
+    "long_ru": "MCP-сервер Grafana позволяет агенту читать ваши дашборды, алерты и источники данных и выполнять по ним запросы. Например: найти дашборд сервиса и объяснить, что значит последний сработавший алерт.",
+    "abilities_en": [
+      "Search and read dashboards",
+      "Read alerts and incidents",
+      "Query Prometheus and Loki",
+      "Look at data sources"
+    ],
+    "abilities_ru": [
+      "Искать и читать дашборды",
+      "Читать алерты и инциденты",
+      "Запрашивать Prometheus и Loki",
+      "Смотреть источники данных"
+    ],
+    "needs_en": "Grafana (cloud or self-hosted) and a service account token. For reading, give the token the Viewer role only.",
+    "needs_ru": "Grafana (облачная или своя) и токен service account. Для чтения дайте токену только роль Viewer.",
+    "kind": "stdio",
+    "command": "uvx",
+    "args": [
+      "mcp-grafana==2.0.2"
+    ],
+    "env_keys": [
+      {
+        "key": "GRAFANA_URL",
+        "label_en": "Grafana address",
+        "label_ru": "Адрес Grafana",
+        "secret": true,
+        "value_template": "{secret}"
+      },
+      {
+        "key": "GRAFANA_SERVICE_ACCOUNT_TOKEN",
+        "label_en": "Service account token",
+        "label_ru": "Токен service account",
+        "secret": true,
+        "value_template": "{secret}"
+      }
+    ],
+    "docs_url": "https://github.com/grafana/mcp-grafana",
+    "icon": "grafana",
+    "accent": "#F46800",
+    "l10n": {
+      "de": {
+        "description": "Dashboards, Alarme, Datenquellen und Abfragen in Grafana über den MCP-Server von Grafana.",
+        "long": "Der MCP-Server von Grafana erlaubt dem Agenten, Ihre Dashboards, Alarme und Datenquellen zu lesen und Abfragen darauf auszuführen. Zum Beispiel: das Dashboard eines Dienstes finden und erklären, was der letzte ausgelöste Alarm bedeutet.",
+        "abilities": [
+          "Dashboards suchen und lesen",
+          "Alarme und Vorfälle lesen",
+          "Prometheus und Loki abfragen",
+          "Datenquellen ansehen"
+        ],
+        "needs": "Grafana (Cloud oder eigene Installation) und ein Token für ein Service Account. Zum Lesen geben Sie dem Token nur die Rolle Viewer.",
+        "labels": {
+          "GRAFANA_URL": "Adresse von Grafana",
+          "GRAFANA_SERVICE_ACCOUNT_TOKEN": "Token des Service Accounts"
+        }
+      },
+      "es": {
+        "description": "Dashboards, alertas, fuentes de datos y consultas en Grafana, a través del servidor MCP de Grafana.",
+        "long": "El servidor MCP de Grafana permite al agente leer tus dashboards, alertas y fuentes de datos, y ejecutar consultas sobre ellos. Por ejemplo: encontrar el dashboard de un servicio y explicar qué significa la última alerta.",
+        "abilities": [
+          "Buscar y leer dashboards",
+          "Leer alertas e incidentes",
+          "Consultar Prometheus y Loki",
+          "Revisar fuentes de datos"
+        ],
+        "needs": "Grafana (en la nube o propia) y un token de service account. Para leer, dale al token solo el rol Viewer.",
+        "labels": {
+          "GRAFANA_URL": "Dirección de Grafana",
+          "GRAFANA_SERVICE_ACCOUNT_TOKEN": "Token de service account"
+        }
+      },
+      "fr": {
+        "description": "Tableaux de bord, alertes, sources de données et requêtes dans Grafana, via le serveur MCP de Grafana.",
+        "long": "Le serveur MCP de Grafana permet à l'agent de lire vos tableaux de bord, alertes et sources de données, et d'y exécuter des requêtes. Par exemple : trouver le tableau de bord d'un service et expliquer ce que signifie la dernière alerte déclenchée.",
+        "abilities": [
+          "Chercher et lire les tableaux de bord",
+          "Lire alertes et incidents",
+          "Interroger Prometheus et Loki",
+          "Consulter les sources de données"
+        ],
+        "needs": "Grafana (Cloud ou auto-hébergé) et un jeton de service account. Pour la lecture, donnez au jeton le seul rôle Viewer.",
+        "labels": {
+          "GRAFANA_URL": "Adresse de Grafana",
+          "GRAFANA_SERVICE_ACCOUNT_TOKEN": "Jeton du service account"
+        }
+      },
+      "ja": {
+        "description": "Grafana のダッシュボード、アラート、データソース、クエリを、Grafana の MCP サーバー経由で扱います。",
+        "long": "Grafana の MCP サーバーを使うと、エージェントがダッシュボード、アラート、データソースを読み、それに対してクエリを実行できます。例: サービスのダッシュボードを見つけ、直近に発火したアラートの意味を説明する。",
+        "abilities": [
+          "ダッシュボードを検索して読む",
+          "アラートとインシデントを読む",
+          "Prometheus と Loki にクエリ",
+          "データソースを確認"
+        ],
+        "needs": "Grafana（クラウドまたは自前のもの）と service account のトークン。読み取りだけなら、トークンには Viewer ロールのみを付与してください。",
+        "labels": {
+          "GRAFANA_URL": "Grafana のアドレス",
+          "GRAFANA_SERVICE_ACCOUNT_TOKEN": "service account のトークン"
+        }
+      },
+      "ko": {
+        "description": "Grafana의 대시보드, 알림, 데이터 소스, 쿼리를 Grafana 공식 MCP 서버로 다룹니다.",
+        "long": "Grafana MCP 서버를 쓰면 에이전트가 대시보드, 알림, 데이터 소스를 읽고 그에 대해 쿼리를 실행할 수 있습니다. 예: 서비스의 대시보드를 찾고 마지막으로 울린 알림의 의미 설명하기.",
+        "abilities": [
+          "대시보드 검색과 읽기",
+          "알림과 인시던트 읽기",
+          "Prometheus와 Loki 쿼리",
+          "데이터 소스 보기"
+        ],
+        "needs": "Grafana(클라우드 또는 자체 설치)와 service account 토큰. 읽기만 하려면 토큰에 Viewer 역할만 주세요.",
+        "labels": {
+          "GRAFANA_URL": "Grafana 주소",
+          "GRAFANA_SERVICE_ACCOUNT_TOKEN": "service account 토큰"
+        }
+      },
+      "pt-BR": {
+        "description": "Dashboards, alertas, fontes de dados e consultas no Grafana, pelo servidor MCP do Grafana.",
+        "long": "O servidor MCP do Grafana permite que o agente leia seus dashboards, alertas e fontes de dados, e execute consultas neles. Por exemplo: encontrar o dashboard de um serviço e explicar o que significa o último alerta disparado.",
+        "abilities": [
+          "Pesquisar e ler dashboards",
+          "Ler alertas e incidentes",
+          "Consultar Prometheus e Loki",
+          "Ver fontes de dados"
+        ],
+        "needs": "Grafana (na nuvem ou próprio) e um token de service account. Para leitura, dê ao token somente o papel Viewer.",
+        "labels": {
+          "GRAFANA_URL": "Endereço do Grafana",
+          "GRAFANA_SERVICE_ACCOUNT_TOKEN": "Token do service account"
+        }
+      },
+      "zh-Hans": {
+        "description": "通过 Grafana 官方 MCP 服务器处理 Grafana 的仪表板、告警、数据源和查询。",
+        "long": "Grafana 的 MCP 服务器让智能体读取您的仪表板、告警和数据源，并对其执行查询。例如：找到某个服务的仪表板，并解释最近触发的告警是什么意思。",
+        "abilities": [
+          "搜索并读取仪表板",
+          "读取告警和事件",
+          "查询 Prometheus 和 Loki",
+          "查看数据源"
+        ],
+        "needs": "Grafana（云端或自建）以及一个服务账号（service account）令牌。如只做读取，请只给该令牌 Viewer 角色。",
+        "labels": {
+          "GRAFANA_URL": "Grafana 地址",
+          "GRAFANA_SERVICE_ACCOUNT_TOKEN": "服务账号令牌"
+        }
+      }
+    }
+  },
+  {
+    "id": "posthog",
+    "name": "PostHog",
+    "category": "data",
+    "publisher": "PostHog",
+    "official": true,
+    "homepage": "https://posthog.com",
+    "description_en": "Analytics, error tracking and feature flags in PostHog, through PostHog's MCP server.",
+    "description_ru": "Аналитика, отслеживание ошибок и фичефлаги в PostHog через MCP-сервер PostHog.",
+    "long_en": "PostHog's MCP server lets an agent query your product analytics, read errors and manage feature flags. For example: find the most common errors this week and read their stack traces. Some tools change data, such as feature flags, so ask the agent to make such changes only when you mean them.",
+    "long_ru": "MCP-сервер PostHog позволяет агенту запрашивать вашу продуктовую аналитику, читать ошибки и управлять фичефлагами. Например: найти самые частые ошибки за неделю и прочитать их стек-трейсы. Некоторые инструменты меняют данные, например фичефлаги, поэтому просите агента менять их только осознанно.",
+    "abilities_en": [
+      "Query analytics in HogQL (SQL-like)",
+      "Read top errors and stack traces",
+      "Manage feature flags and experiments",
+      "Triage support tickets"
+    ],
+    "abilities_ru": [
+      "Запрашивать аналитику на HogQL (похожем на SQL)",
+      "Читать частые ошибки и стек-трейсы",
+      "Управлять фичефлагами и экспериментами",
+      "Разбирать обращения в поддержку"
+    ],
+    "needs_en": "A PostHog account. Sign in in the browser after you press Connect; your data region (US or EU) follows your account.",
+    "needs_ru": "Аккаунт PostHog: войдите в браузере после нажатия «Подключить». Регион данных (США или ЕС) выбирается по вашему аккаунту.",
+    "kind": "http",
+    "url": "https://mcp.posthog.com/mcp",
+    "auth": "oauth",
+    "docs_url": "https://posthog.com/docs/model-context-protocol",
+    "icon": "posthog",
+    "accent": "#4A4A4A",
+    "l10n": {
+      "de": {
+        "description": "Analysen, Fehlerverfolgung und Feature-Flags in PostHog über den MCP-Server von PostHog.",
+        "long": "Der MCP-Server von PostHog erlaubt dem Agenten, Ihre Produktanalysen abzufragen, Fehler zu lesen und Feature-Flags zu verwalten. Zum Beispiel: die häufigsten Fehler der Woche finden und ihre Stack-Traces lesen. Manche Werkzeuge ändern Daten, etwa Feature-Flags; lassen Sie den Agenten diese nur bewusst ändern.",
+        "abilities": [
+          "Analysen mit HogQL (SQL-ähnlich) abfragen",
+          "Häufige Fehler und Stack-Traces lesen",
+          "Feature-Flags und Experimente verwalten",
+          "Support-Anfragen sichten"
+        ],
+        "needs": "Ein PostHog-Konto. Melden Sie sich nach dem Klick auf „Verbinden“ im Browser an; die Datenregion (USA oder EU) richtet sich nach Ihrem Konto."
+      },
+      "es": {
+        "description": "Analítica, seguimiento de errores y feature flags en PostHog, a través del servidor MCP de PostHog.",
+        "long": "El servidor MCP de PostHog permite al agente consultar tu analítica de producto, leer errores y gestionar feature flags. Por ejemplo: encontrar los errores más frecuentes de la semana y leer sus stack traces. Algunas herramientas cambian datos, como los feature flags, así que pide al agente cambiarlos solo cuando lo quieras.",
+        "abilities": [
+          "Consultar analítica con HogQL (similar a SQL)",
+          "Leer errores frecuentes y stack traces",
+          "Gestionar feature flags y experimentos",
+          "Clasificar tickets de soporte"
+        ],
+        "needs": "Una cuenta de PostHog. Inicia sesión en el navegador después de pulsar Conectar; la región de datos (EE. UU. o UE) depende de tu cuenta."
+      },
+      "fr": {
+        "description": "Analytics, suivi d'erreurs et feature flags dans PostHog, via le serveur MCP de PostHog.",
+        "long": "Le serveur MCP de PostHog permet à l'agent d'interroger vos analytics produit, de lire les erreurs et de gérer les feature flags. Par exemple : trouver les erreurs les plus fréquentes de la semaine et lire leurs stack traces. Certains outils modifient des données, comme les feature flags ; ne demandez à l'agent de les changer que volontairement.",
+        "abilities": [
+          "Interroger les analytics en HogQL (proche de SQL)",
+          "Lire les erreurs fréquentes et leurs stack traces",
+          "Gérer feature flags et expérimentations",
+          "Trier les demandes de support"
+        ],
+        "needs": "Un compte PostHog. Connectez-vous dans le navigateur après avoir cliqué sur Connecter ; la région des données (États-Unis ou UE) dépend de votre compte."
+      },
+      "ja": {
+        "description": "PostHog のアナリティクス、エラー追跡、フィーチャーフラグを、PostHog の MCP サーバー経由で扱います。",
+        "long": "PostHog の MCP サーバーを使うと、エージェントがプロダクトのアナリティクスを照会し、エラーを読み、フィーチャーフラグを管理できます。例: 今週最も多いエラーを見つけてスタックトレースを読む。フィーチャーフラグなど、データを変更するツールもあるため、変更は意図したときだけ依頼してください。",
+        "abilities": [
+          "HogQL（SQL に近い言語）でアナリティクスを照会",
+          "多いエラーとスタックトレースを読む",
+          "フィーチャーフラグと実験を管理",
+          "サポートのチケットを振り分け"
+        ],
+        "needs": "PostHog のアカウント。「接続」を押した後にブラウザでサインインします。データのリージョン（米国または EU）はアカウントに従います。"
+      },
+      "ko": {
+        "description": "PostHog의 분석, 오류 추적, 기능 플래그를 PostHog 공식 MCP 서버로 다룹니다.",
+        "long": "PostHog MCP 서버를 쓰면 에이전트가 제품 분석을 조회하고, 오류를 읽고, 기능 플래그를 관리할 수 있습니다. 예: 이번 주 가장 많은 오류를 찾아 스택 트레이스 읽기. 기능 플래그처럼 데이터를 바꾸는 도구도 있으니, 변경은 의도했을 때만 요청하세요.",
+        "abilities": [
+          "HogQL(SQL과 유사)로 분석 조회",
+          "자주 발생한 오류와 스택 트레이스 읽기",
+          "기능 플래그와 실험 관리",
+          "지원 티켓 분류"
+        ],
+        "needs": "PostHog 계정. '연결'을 누른 뒤 브라우저에서 로그인하세요. 데이터 리전(미국 또는 EU)은 계정에 따라 정해집니다."
+      },
+      "pt-BR": {
+        "description": "Analytics, rastreamento de erros e feature flags no PostHog, pelo servidor MCP do PostHog.",
+        "long": "O servidor MCP do PostHog permite que o agente consulte seus dados de analytics, leia erros e gerencie feature flags. Por exemplo: encontrar os erros mais frequentes da semana e ler os stack traces. Algumas ferramentas alteram dados, como as feature flags; peça ao agente que as altere só quando for intencional.",
+        "abilities": [
+          "Consultar analytics em HogQL (parecido com SQL)",
+          "Ler erros frequentes e stack traces",
+          "Gerenciar feature flags e experimentos",
+          "Triar tickets de suporte"
+        ],
+        "needs": "Uma conta no PostHog. Entre no navegador depois de clicar em Conectar; a região dos dados (EUA ou UE) segue a sua conta."
+      },
+      "zh-Hans": {
+        "description": "通过 PostHog 官方 MCP 服务器处理 PostHog 的分析、错误追踪和功能开关。",
+        "long": "PostHog 的 MCP 服务器让智能体查询您的产品分析、读取错误并管理功能开关。例如：找出本周最常见的错误并阅读其堆栈跟踪。部分工具会修改数据（例如功能开关），请只在确有需要时让智能体执行这些操作。",
+        "abilities": [
+          "用 HogQL（类 SQL）查询分析数据",
+          "读取高频错误和堆栈跟踪",
+          "管理功能开关和实验",
+          "分拣支持工单"
+        ],
+        "needs": "一个 PostHog 账号。点击“连接”后在浏览器中登录；数据区域（美国或欧盟）取决于您的账号。"
+      }
+    }
+  },
+  {
+    "id": "huggingface",
+    "name": "Hugging Face",
+    "category": "data",
+    "publisher": "Hugging Face",
+    "official": true,
+    "homepage": "https://huggingface.co",
+    "description_en": "Models, datasets, Spaces and papers on the Hugging Face Hub, through Hugging Face's MCP server.",
+    "description_ru": "Модели, датасеты, Spaces и статьи на Hugging Face Hub через MCP-сервер Hugging Face.",
+    "long_en": "Hugging Face's MCP server lets an agent search the Hub for models, datasets, Spaces and papers, and look up the Hugging Face documentation. For example: find a model that transcribes audio, or a dataset about weather time series.",
+    "long_ru": "MCP-сервер Hugging Face позволяет агенту искать на Hub модели, датасеты, Spaces и статьи, а также смотреть документацию Hugging Face. Например: найти модель для распознавания речи или датасет с временными рядами погоды.",
+    "abilities_en": [
+      "Search models, datasets and Spaces",
+      "Find papers",
+      "Search the Hugging Face documentation",
+      "Run jobs and sandboxes (optional tools)"
+    ],
+    "abilities_ru": [
+      "Искать модели, датасеты и Spaces",
+      "Искать статьи",
+      "Искать по документации Hugging Face",
+      "Запускать задания и песочницы (дополнительные инструменты)"
+    ],
+    "needs_en": "A Hugging Face account. Sign in in the browser after you press Connect.",
+    "needs_ru": "Аккаунт Hugging Face: войдите в браузере после нажатия «Подключить».",
+    "kind": "http",
+    "url": "https://huggingface.co/mcp",
+    "auth": "oauth",
+    "docs_url": "https://huggingface.co/docs/hub/en/hf-mcp-server",
+    "icon": "huggingface",
+    "accent": "#FFD21E",
+    "l10n": {
+      "de": {
+        "description": "Modelle, Datensätze, Spaces und Paper auf dem Hugging Face Hub über den MCP-Server von Hugging Face.",
+        "long": "Der MCP-Server von Hugging Face erlaubt dem Agenten, im Hub nach Modellen, Datensätzen, Spaces und Papern zu suchen und die Dokumentation von Hugging Face zu durchsuchen. Zum Beispiel: ein Modell zur Spracherkennung finden oder einen Datensatz zu Wetter-Zeitreihen.",
+        "abilities": [
+          "Modelle, Datensätze und Spaces suchen",
+          "Paper suchen",
+          "In der Hugging-Face-Dokumentation suchen",
+          "Jobs und Sandboxes ausführen (optionale Werkzeuge)"
+        ],
+        "needs": "Ein Hugging-Face-Konto. Melden Sie sich nach dem Klick auf „Verbinden“ im Browser an."
+      },
+      "es": {
+        "description": "Modelos, datasets, Spaces y papers en el Hub de Hugging Face, a través del servidor MCP de Hugging Face.",
+        "long": "El servidor MCP de Hugging Face permite al agente buscar en el Hub modelos, datasets, Spaces y papers, y consultar la documentación de Hugging Face. Por ejemplo: encontrar un modelo que transcriba audio, o un dataset sobre series temporales del clima.",
+        "abilities": [
+          "Buscar modelos, datasets y Spaces",
+          "Buscar papers",
+          "Buscar en la documentación de Hugging Face",
+          "Ejecutar jobs y sandboxes (herramientas opcionales)"
+        ],
+        "needs": "Una cuenta de Hugging Face. Inicia sesión en el navegador después de pulsar Conectar."
+      },
+      "fr": {
+        "description": "Modèles, jeux de données, Spaces et articles sur le Hub Hugging Face, via le serveur MCP de Hugging Face.",
+        "long": "Le serveur MCP de Hugging Face permet à l'agent de chercher sur le Hub des modèles, jeux de données, Spaces et articles, et de consulter la documentation Hugging Face. Par exemple : trouver un modèle de transcription audio, ou un jeu de données sur des séries temporelles météo.",
+        "abilities": [
+          "Chercher modèles, jeux de données et Spaces",
+          "Chercher des articles",
+          "Chercher dans la documentation Hugging Face",
+          "Lancer des jobs et sandboxes (outils optionnels)"
+        ],
+        "needs": "Un compte Hugging Face. Connectez-vous dans le navigateur après avoir cliqué sur Connecter."
+      },
+      "ja": {
+        "description": "Hugging Face Hub のモデル、データセット、Spaces、論文を、Hugging Face の MCP サーバー経由で扱います。",
+        "long": "Hugging Face の MCP サーバーを使うと、エージェントが Hub でモデル、データセット、Spaces、論文を検索し、Hugging Face のドキュメントを調べられます。例: 音声を文字起こしするモデルを探す、気象の時系列データセットを探す。",
+        "abilities": [
+          "モデル、データセット、Spaces を検索",
+          "論文を検索",
+          "Hugging Face のドキュメントを検索",
+          "ジョブとサンドボックスを実行（任意のツール）"
+        ],
+        "needs": "Hugging Face のアカウント。「接続」を押した後にブラウザでサインインします。"
+      },
+      "ko": {
+        "description": "Hugging Face의 Hub 모델, 데이터셋, Spaces, 논문을 Hugging Face 공식 MCP 서버로 다룹니다.",
+        "long": "Hugging Face MCP 서버를 쓰면 에이전트가 Hub에서 모델, 데이터셋, Spaces, 논문을 검색하고 Hugging Face 문서를 찾아볼 수 있습니다. 예: 음성을 받아쓰는 모델 찾기, 날씨 시계열 데이터셋 찾기.",
+        "abilities": [
+          "모델, 데이터셋, Spaces 검색",
+          "논문 검색",
+          "Hugging Face 문서 검색",
+          "작업과 샌드박스 실행(선택 도구)"
+        ],
+        "needs": "Hugging Face 계정. '연결'을 누른 뒤 브라우저에서 로그인하세요."
+      },
+      "pt-BR": {
+        "description": "Modelos, datasets, Spaces e artigos no Hub da Hugging Face, pelo servidor MCP da Hugging Face.",
+        "long": "O servidor MCP da Hugging Face permite que o agente pesquise no Hub modelos, datasets, Spaces e artigos, e consulte a documentação da Hugging Face. Por exemplo: encontrar um modelo que transcreve áudio, ou um dataset de séries temporais do clima.",
+        "abilities": [
+          "Pesquisar modelos, datasets e Spaces",
+          "Pesquisar artigos",
+          "Pesquisar na documentação da Hugging Face",
+          "Executar jobs e sandboxes (ferramentas opcionais)"
+        ],
+        "needs": "Uma conta na Hugging Face. Entre no navegador depois de clicar em Conectar."
+      },
+      "zh-Hans": {
+        "description": "通过 Hugging Face 官方 MCP 服务器搜索 Hugging Face Hub 上的模型、数据集、Spaces 和论文。",
+        "long": "Hugging Face 的 MCP 服务器让智能体在 Hub 上搜索模型、数据集、Spaces 和论文，并查阅 Hugging Face 文档。例如：找一个语音转写模型，或一个天气时间序列数据集。",
+        "abilities": [
+          "搜索模型、数据集和 Spaces",
+          "搜索论文",
+          "搜索 Hugging Face 文档",
+          "运行作业和沙盒（可选工具）"
+        ],
+        "needs": "一个 Hugging Face 账号。点击“连接”后在浏览器中登录。"
+      }
+    }
+  },
+  {
+    "id": "mongodb",
+    "name": "MongoDB",
+    "category": "data",
+    "publisher": "MongoDB",
+    "official": true,
+    "homepage": "https://www.mongodb.com",
+    "description_en": "Collections, queries and indexes in MongoDB, through MongoDB's MCP server.",
+    "description_ru": "Коллекции, запросы и индексы в MongoDB через MCP-сервер MongoDB.",
+    "long_en": "MongoDB's MCP server lets an agent explore your database and run queries and aggregations. For example: explain the schema of a collection, or find the documents that match a filter. The server runs here in read-only mode, so it cannot create, change or delete data.",
+    "long_ru": "MCP-сервер MongoDB позволяет агенту изучать базу, выполнять запросы и агрегации. Например: описать схему коллекции или найти документы по фильтру. Сервер запускается здесь в режиме только чтения и не может создавать, менять или удалять данные.",
+    "abilities_en": [
+      "Explain the schema and data types",
+      "Run queries and aggregations",
+      "Give data context for writing queries and code"
+    ],
+    "abilities_ru": [
+      "Описывать схему и типы данных",
+      "Выполнять запросы и агрегации",
+      "Давать контекст данных для написания запросов и кода"
+    ],
+    "needs_en": "Node.js (npx) on your computer or server, and a MongoDB connection string. Use a database user with read-only rights.",
+    "needs_ru": "Node.js (npx) на вашем компьютере или сервере и строка подключения к MongoDB. Используйте пользователя базы только с правами на чтение.",
+    "kind": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "mongodb-mcp-server@3.0.5",
+      "--readOnly"
+    ],
+    "env_keys": [
+      {
+        "key": "MDB_MCP_CONNECTION_STRING",
+        "label_en": "MongoDB connection string",
+        "label_ru": "Строка подключения MongoDB",
+        "secret": true,
+        "value_template": "{secret}"
+      }
+    ],
+    "docs_url": "https://www.mongodb.com/docs/mcp-server/",
+    "icon": "mongodb",
+    "accent": "#47A248",
+    "l10n": {
+      "de": {
+        "description": "Collections, Abfragen und Indexe in MongoDB über den MCP-Server von MongoDB.",
+        "long": "Der MCP-Server von MongoDB erlaubt dem Agenten, Ihre Datenbank zu erkunden und Abfragen und Aggregationen auszuführen. Zum Beispiel: das Schema einer Collection erklären oder Dokumente finden, die einem Filter entsprechen. Der Server läuft hier im Nur-Lese-Modus und kann keine Daten anlegen, ändern oder löschen.",
+        "abilities": [
+          "Schema und Datentypen erklären",
+          "Abfragen und Aggregationen ausführen",
+          "Kontext zu Ihren Daten für das Schreiben von Abfragen liefern"
+        ],
+        "needs": "Node.js (npx) auf Ihrem Rechner oder Server und ein MongoDB-Verbindungsstring. Nutzen Sie einen Datenbankbenutzer nur mit Leserechten.",
+        "labels": {
+          "MDB_MCP_CONNECTION_STRING": "MongoDB-Verbindungsstring"
+        }
+      },
+      "es": {
+        "description": "Colecciones, consultas e índices en MongoDB, a través del servidor MCP de MongoDB.",
+        "long": "El servidor MCP de MongoDB permite al agente explorar tu base de datos y ejecutar consultas y agregaciones. Por ejemplo: explicar el esquema de una colección, o encontrar los documentos que cumplen un filtro. Aquí el servidor funciona en modo solo lectura: no puede crear, cambiar ni borrar datos.",
+        "abilities": [
+          "Explicar el esquema y los tipos de datos",
+          "Ejecutar consultas y agregaciones",
+          "Dar contexto de tus datos para escribir consultas y código"
+        ],
+        "needs": "Node.js (npx) en tu equipo o servidor, y una cadena de conexión de MongoDB. Usa un usuario de base de datos solo con permisos de lectura.",
+        "labels": {
+          "MDB_MCP_CONNECTION_STRING": "Cadena de conexión de MongoDB"
+        }
+      },
+      "fr": {
+        "description": "Collections, requêtes et index dans MongoDB, via le serveur MCP de MongoDB.",
+        "long": "Le serveur MCP de MongoDB permet à l'agent d'explorer votre base et d'exécuter des requêtes et agrégations. Par exemple : expliquer le schéma d'une collection, ou trouver les documents qui correspondent à un filtre. Ici, le serveur fonctionne en lecture seule : il ne peut ni créer, ni modifier, ni supprimer de données.",
+        "abilities": [
+          "Expliquer le schéma et les types de données",
+          "Exécuter des requêtes et agrégations",
+          "Fournir le contexte des données pour écrire requêtes et code"
+        ],
+        "needs": "Node.js (npx) sur votre ordinateur ou serveur, et une chaîne de connexion MongoDB. Utilisez un utilisateur de base avec des droits en lecture seule.",
+        "labels": {
+          "MDB_MCP_CONNECTION_STRING": "Chaîne de connexion MongoDB"
+        }
+      },
+      "ja": {
+        "description": "MongoDB のコレクション、クエリ、インデックスを、MongoDB の MCP サーバー経由で扱います。",
+        "long": "MongoDB の MCP サーバーを使うと、エージェントがデータベースを調べ、クエリや集計を実行できます。例: コレクションのスキーマを説明する、フィルタに一致するドキュメントを探す。ここではサーバーは読み取り専用モードで動作し、データの作成・変更・削除はできません。",
+        "abilities": [
+          "スキーマとデータ型を説明",
+          "クエリと集計を実行",
+          "クエリやコードを書くためのデータの文脈を提供"
+        ],
+        "needs": "お使いのコンピュータやサーバーで Node.js（npx）が使えること、そして MongoDB の接続文字列。データベースには読み取り専用の権限を持つユーザーを使ってください。",
+        "labels": {
+          "MDB_MCP_CONNECTION_STRING": "MongoDB の接続文字列"
+        }
+      },
+      "ko": {
+        "description": "MongoDB의 컬렉션, 쿼리, 인덱스를 MongoDB 공식 MCP 서버로 다룹니다.",
+        "long": "MongoDB MCP 서버를 쓰면 에이전트가 데이터베이스를 살펴보고 쿼리와 집계를 실행할 수 있습니다. 예: 컬렉션의 스키마 설명하기, 필터에 맞는 문서 찾기. 이 서버는 여기서 읽기 전용 모드로 동작하므로 데이터를 만들거나 바꾸거나 지울 수 없습니다.",
+        "abilities": [
+          "스키마와 데이터 타입 설명",
+          "쿼리와 집계 실행",
+          "쿼리와 코드 작성을 위한 데이터 맥락 제공"
+        ],
+        "needs": "컴퓨터나 서버에 Node.js(npx)가 있어야 하고, MongoDB 연결 문자열이 필요합니다. 읽기 전용 권한을 가진 데이터베이스 사용자를 쓰세요.",
+        "labels": {
+          "MDB_MCP_CONNECTION_STRING": "MongoDB 연결 문자열"
+        }
+      },
+      "pt-BR": {
+        "description": "Coleções, consultas e índices no MongoDB, pelo servidor MCP do MongoDB.",
+        "long": "O servidor MCP do MongoDB permite que o agente explore seu banco e execute consultas e agregações. Por exemplo: explicar o esquema de uma coleção, ou encontrar os documentos que batem com um filtro. Aqui o servidor roda em modo somente leitura e não pode criar, alterar nem apagar dados.",
+        "abilities": [
+          "Explicar o esquema e os tipos de dados",
+          "Executar consultas e agregações",
+          "Fornecer contexto dos dados para escrever consultas e código"
+        ],
+        "needs": "Node.js (npx) no seu computador ou servidor, e uma string de conexão do MongoDB. Use um usuário do banco somente com permissão de leitura.",
+        "labels": {
+          "MDB_MCP_CONNECTION_STRING": "String de conexão do MongoDB"
+        }
+      },
+      "zh-Hans": {
+        "description": "通过 MongoDB 官方 MCP 服务器处理集合、查询和索引。",
+        "long": "MongoDB 的 MCP 服务器让智能体探索您的数据库，并执行查询和聚合。例如：说明某个集合的结构，或查找符合过滤条件的文档。此处服务器以只读模式运行，不能创建、修改或删除数据。",
+        "abilities": [
+          "说明结构和数据类型",
+          "执行查询和聚合",
+          "为编写查询和代码提供数据上下文"
+        ],
+        "needs": "您的电脑或服务器上需要有 Node.js（npx），以及 MongoDB 连接字符串。请使用只有读取权限的数据库用户。",
+        "labels": {
+          "MDB_MCP_CONNECTION_STRING": "MongoDB 连接字符串"
+        }
+      }
+    }
+  },
+  {
+    "id": "railway",
+    "name": "Railway",
+    "category": "dev",
+    "publisher": "Railway",
+    "official": true,
+    "homepage": "https://railway.com",
+    "description_en": "Projects, services, deploys and logs in Railway, through Railway's MCP server.",
+    "description_ru": "Проекты, сервисы, деплои и логи в Railway через MCP-сервер Railway.",
+    "long_en": "Railway's MCP server lets an agent see your projects and services and help with deploys. For example: list the services in a project, or ask the Railway agent why a deploy failed. Redeploying and changing feature flags affect running services, so use those tools on purpose.",
+    "long_ru": "MCP-сервер Railway позволяет агенту видеть ваши проекты и сервисы и помогать с деплоями. Например: показать сервисы проекта или разобрать, почему деплой упал. Повторный деплой и изменение фичефлагов затрагивают работающие сервисы, поэтому запускайте их осознанно.",
+    "abilities_en": [
+      "List projects and services",
+      "Redeploy services and accept deploys",
+      "Read and change feature flags",
+      "Look into logs and errors with the Railway agent"
+    ],
+    "abilities_ru": [
+      "Смотреть проекты и сервисы",
+      "Переделывать деплой сервисов и принимать деплои",
+      "Читать и менять фичефлаги",
+      "Разбирать логи и ошибки через агента Railway"
+    ],
+    "needs_en": "A Railway account. Sign in in the browser after you press Connect.",
+    "needs_ru": "Аккаунт Railway: войдите в браузере после нажатия «Подключить».",
+    "kind": "http",
+    "url": "https://mcp.railway.com",
+    "auth": "oauth",
+    "docs_url": "https://docs.railway.com/ai/mcp-server",
+    "icon": "railway",
+    "accent": "#4A4F57",
+    "l10n": {
+      "de": {
+        "description": "Projekte, Services, Deployments und Logs in Railway über den MCP-Server von Railway.",
+        "long": "Der MCP-Server von Railway erlaubt dem Agenten, Ihre Projekte und Services zu sehen und bei Deployments zu helfen. Zum Beispiel: die Services eines Projekts auflisten oder den Railway-Agenten fragen, warum ein Deployment fehlschlug. Erneutes Deployen und das Ändern von Feature-Flags wirken auf laufende Services; nutzen Sie diese Werkzeuge bewusst.",
+        "abilities": [
+          "Projekte und Services auflisten",
+          "Services neu deployen und Deployments annehmen",
+          "Feature-Flags lesen und ändern",
+          "Logs und Fehler über den Railway-Agenten untersuchen"
+        ],
+        "needs": "Ein Railway-Konto. Melden Sie sich nach dem Klick auf „Verbinden“ im Browser an."
+      },
+      "es": {
+        "description": "Proyectos, servicios, deployments y logs en Railway, a través del servidor MCP de Railway.",
+        "long": "El servidor MCP de Railway permite al agente ver tus proyectos y servicios y ayudar con los deployments. Por ejemplo: listar los servicios de un proyecto, o pedir al agente de Railway por qué falló un deployment. Volver a desplegar y cambiar feature flags afecta a servicios en marcha, así que úsalos con intención.",
+        "abilities": [
+          "Listar proyectos y servicios",
+          "Volver a desplegar servicios y aceptar deployments",
+          "Leer y cambiar feature flags",
+          "Revisar logs y errores con el agente de Railway"
+        ],
+        "needs": "Una cuenta de Railway. Inicia sesión en el navegador después de pulsar Conectar."
+      },
+      "fr": {
+        "description": "Projets, services, déploiements et journaux dans Railway, via le serveur MCP de Railway.",
+        "long": "Le serveur MCP de Railway permet à l'agent de voir vos projets et services et d'aider sur les déploiements. Par exemple : lister les services d'un projet, ou demander à l'agent Railway pourquoi un déploiement a échoué. Redéployer et modifier les feature flags touche les services en production : utilisez-les en connaissance de cause.",
+        "abilities": [
+          "Lister projets et services",
+          "Redéployer des services et accepter des déploiements",
+          "Lire et modifier les feature flags",
+          "Analyser journaux et erreurs avec l'agent Railway"
+        ],
+        "needs": "Un compte Railway. Connectez-vous dans le navigateur après avoir cliqué sur Connecter."
+      },
+      "ja": {
+        "description": "Railway のプロジェクト、サービス、デプロイ、ログを、Railway の MCP サーバー経由で扱います。",
+        "long": "Railway の MCP サーバーを使うと、エージェントがプロジェクトとサービスを確認し、デプロイを手伝えます。例: プロジェクトのサービス一覧を出す、デプロイが失敗した理由を Railway のエージェントに尋ねる。再デプロイやフィーチャーフラグの変更は稼働中のサービスに影響するため、意図して使ってください。",
+        "abilities": [
+          "プロジェクトとサービスを一覧",
+          "サービスの再デプロイとデプロイの承認",
+          "フィーチャーフラグの読み取りと変更",
+          "Railway のエージェントでログとエラーを調べる"
+        ],
+        "needs": "Railway のアカウント。「接続」を押した後にブラウザでサインインします。"
+      },
+      "ko": {
+        "description": "Railway의 프로젝트, 서비스, 배포, 로그를 Railway 공식 MCP 서버로 다룹니다.",
+        "long": "Railway MCP 서버를 쓰면 에이전트가 프로젝트와 서비스를 보고 배포를 도울 수 있습니다. 예: 프로젝트의 서비스 목록 보기, 배포가 실패한 이유를 Railway 에이전트에 묻기. 재배포와 기능 플래그 변경은 실행 중인 서비스에 영향을 주므로 의도했을 때만 쓰세요.",
+        "abilities": [
+          "프로젝트와 서비스 목록",
+          "서비스 재배포와 배포 승인",
+          "기능 플래그 읽기와 변경",
+          "Railway 에이전트로 로그와 오류 분석"
+        ],
+        "needs": "Railway 계정. '연결'을 누른 뒤 브라우저에서 로그인하세요."
+      },
+      "pt-BR": {
+        "description": "Projetos, serviços, deploys e logs no Railway, pelo servidor MCP do Railway.",
+        "long": "O servidor MCP do Railway permite que o agente veja seus projetos e serviços e ajude com deploys. Por exemplo: listar os serviços de um projeto, ou perguntar ao agente do Railway por que um deploy falhou. Refazer deploys e alterar feature flags afeta serviços em produção, então use com intenção.",
+        "abilities": [
+          "Listar projetos e serviços",
+          "Refazer deploys de serviços e aceitar deploys",
+          "Ler e alterar feature flags",
+          "Analisar logs e erros com o agente do Railway"
+        ],
+        "needs": "Uma conta no Railway. Entre no navegador depois de clicar em Conectar."
+      },
+      "zh-Hans": {
+        "description": "通过 Railway 官方 MCP 服务器处理 Railway 的项目、服务、部署和日志。",
+        "long": "Railway 的 MCP 服务器让智能体查看您的项目和服务，并协助部署。例如：列出项目中的服务，或询问 Railway 智能体某次部署为何失败。重新部署和修改功能开关会影响正在运行的服务，请有意识地使用。",
+        "abilities": [
+          "列出项目和服务",
+          "重新部署服务并接受部署",
+          "读取和修改功能开关",
+          "通过 Railway 智能体分析日志和错误"
+        ],
+        "needs": "一个 Railway 账号。点击“连接”后在浏览器中登录。"
+      }
+    }
+  },
+  {
+    "id": "render",
+    "name": "Render",
+    "category": "dev",
+    "publisher": "Render",
+    "official": true,
+    "homepage": "https://render.com",
+    "description_en": "Services, deploys, logs and databases in Render, through Render's MCP server.",
+    "description_ru": "Сервисы, деплои, логи и базы в Render через MCP-сервер Render.",
+    "long_en": "Render's MCP server lets an agent list your services, read logs and metrics, and trigger deploys. For example: find the service that restarts often and read its latest logs. An API key reaches all workspaces of your account and can change environment variables and trigger deploys.",
+    "long_ru": "MCP-сервер Render позволяет агенту смотреть список сервисов, читать логи и метрики и запускать деплои. Например: найти сервис, который часто перезапускается, и прочитать его последние логи. API-ключ даёт доступ ко всем workspace вашего аккаунта и может менять переменные окружения и запускать деплои.",
+    "abilities_en": [
+      "List workspaces, services and deploys",
+      "Read logs and metrics",
+      "Run read-only SQL on Render Postgres",
+      "Trigger deploys and change environment variables (write tools)"
+    ],
+    "abilities_ru": [
+      "Смотреть workspace, сервисы и деплои",
+      "Читать логи и метрики",
+      "Выполнять SQL только для чтения в Postgres Render",
+      "Запускать деплои и менять переменные окружения (инструменты записи)"
+    ],
+    "needs_en": "A Render API key from Account Settings. The key is not limited to one workspace or to read rights, so use the key of a user who can reach only the workspace the agent needs.",
+    "needs_ru": "API-ключ Render из настроек аккаунта. Ключ не ограничивается одним workspace или правами на чтение, поэтому берите ключ пользователя, у которого есть доступ только к нужному workspace.",
+    "kind": "http",
+    "url": "https://mcp.render.com/mcp",
+    "headers_keys": [
+      {
+        "key": "Authorization",
+        "label_en": "API key",
+        "label_ru": "API-ключ Render",
+        "secret": true,
+        "value_template": "Bearer {secret}"
+      }
+    ],
+    "docs_url": "https://render.com/docs/mcp-server",
+    "icon": "render",
+    "accent": "#4B4B4B",
+    "l10n": {
+      "de": {
+        "description": "Services, Deployments, Logs und Datenbanken in Render über den MCP-Server von Render.",
+        "long": "Der MCP-Server von Render erlaubt dem Agenten, Ihre Services aufzulisten, Logs und Metriken zu lesen und Deployments auszulösen. Zum Beispiel: den Service finden, der oft neu startet, und seine letzten Logs lesen. Der API-Schlüssel gilt für alle Workspaces Ihres Kontos und kann Umgebungsvariablen ändern sowie Deployments auslösen.",
+        "abilities": [
+          "Workspaces, Services und Deployments auflisten",
+          "Logs und Metriken lesen",
+          "Schreibgeschütztes SQL auf Render-Postgres ausführen",
+          "Deployments auslösen und Umgebungsvariablen ändern (Schreibwerkzeuge)"
+        ],
+        "needs": "Ein API-Schlüssel von Render aus den Kontoeinstellungen. Der Schlüssel ist nicht auf einen Workspace oder auf Leserechte begrenzt: Nehmen Sie den Schlüssel eines Benutzers, der nur Zugriff auf den Workspace hat, den der Agent braucht.",
+        "labels": {
+          "Authorization": "API-Schlüssel"
+        }
+      },
+      "es": {
+        "description": "Servicios, deployments, logs y bases de datos en Render, a través del servidor MCP de Render.",
+        "long": "El servidor MCP de Render permite al agente listar tus servicios, leer logs y métricas, y lanzar deployments. Por ejemplo: encontrar el servicio que se reinicia a menudo y leer sus últimos logs. La clave de API da acceso a todos los workspaces de tu cuenta y puede cambiar variables de entorno y lanzar deployments.",
+        "abilities": [
+          "Listar workspaces, servicios y deployments",
+          "Leer logs y métricas",
+          "Ejecutar SQL de solo lectura en Postgres de Render",
+          "Lanzar deployments y cambiar variables de entorno (herramientas de escritura)"
+        ],
+        "needs": "Una clave de API de Render desde los ajustes de la cuenta. La clave no se limita a un workspace ni a permisos de lectura: usa la clave de un usuario que solo tenga acceso al workspace que necesita el agente.",
+        "labels": {
+          "Authorization": "Clave de API"
+        }
+      },
+      "fr": {
+        "description": "Services, déploiements, journaux et bases de données dans Render, via le serveur MCP de Render.",
+        "long": "Le serveur MCP de Render permet à l'agent de lister vos services, de lire journaux et métriques, et de lancer des déploiements. Par exemple : trouver le service qui redémarre souvent et lire ses derniers journaux. La clé d'API donne accès à tous les workspaces de votre compte et peut modifier les variables d'environnement et lancer des déploiements.",
+        "abilities": [
+          "Lister workspaces, services et déploiements",
+          "Lire journaux et métriques",
+          "Exécuter du SQL en lecture seule sur Postgres Render",
+          "Lancer des déploiements et modifier les variables d'environnement (outils d'écriture)"
+        ],
+        "needs": "Une clé d'API Render, créée dans les paramètres du compte. La clé n'est pas limitée à un workspace ni à la lecture : utilisez la clé d'un utilisateur qui n'a accès qu'au workspace dont l'agent a besoin.",
+        "labels": {
+          "Authorization": "Clé d'API"
+        }
+      },
+      "ja": {
+        "description": "Render のサービス、デプロイ、ログ、データベースを、Render の MCP サーバー経由で扱います。",
+        "long": "Render の MCP サーバーを使うと、エージェントがサービスを一覧にし、ログとメトリクスを読み、デプロイを起動できます。例: よく再起動するサービスを見つけて最新のログを読む。API キーはアカウントのすべてのワークスペースに届き、環境変数の変更やデプロイの起動もできます。",
+        "abilities": [
+          "ワークスペース、サービス、デプロイを一覧",
+          "ログとメトリクスを読む",
+          "Render の Postgres に読み取り専用の SQL を実行",
+          "デプロイの起動と環境変数の変更（書き込みツール）"
+        ],
+        "needs": "Render の API キー（アカウント設定から取得）。キーはワークスペースや読み取り権限では制限できないため、エージェントに必要なワークスペースにだけアクセスできるユーザーのキーを使ってください。",
+        "labels": {
+          "Authorization": "API キー"
+        }
+      },
+      "ko": {
+        "description": "Render의 서비스, 배포, 로그, 데이터베이스를 Render 공식 MCP 서버로 다룹니다.",
+        "long": "Render MCP 서버를 쓰면 에이전트가 서비스 목록을 보고, 로그와 지표를 읽고, 배포를 실행할 수 있습니다. 예: 자주 재시작되는 서비스를 찾아 마지막 로그 읽기. API 키는 계정의 모든 워크스페이스에 접근할 수 있고 환경 변수 변경과 배포 실행도 가능합니다.",
+        "abilities": [
+          "워크스페이스, 서비스, 배포 목록 보기",
+          "로그와 지표 읽기",
+          "Render Postgres에서 읽기 전용 SQL 실행",
+          "배포 실행과 환경 변수 변경(쓰기 도구)"
+        ],
+        "needs": "Render 계정 설정에서 만든 API 키. 키는 워크스페이스나 읽기 권한으로 제한할 수 없으니, 에이전트에 필요한 워크스페이스에만 접근할 수 있는 사용자의 키를 쓰세요.",
+        "labels": {
+          "Authorization": "API 키"
+        }
+      },
+      "pt-BR": {
+        "description": "Serviços, deploys, logs e bancos de dados no Render, pelo servidor MCP do Render.",
+        "long": "O servidor MCP do Render permite que o agente liste seus serviços, leia logs e métricas e dispare deploys. Por exemplo: encontrar o serviço que reinicia com frequência e ler os últimos logs. A chave de API dá acesso a todos os workspaces da sua conta e pode alterar variáveis de ambiente e disparar deploys.",
+        "abilities": [
+          "Listar workspaces, serviços e deploys",
+          "Ler logs e métricas",
+          "Executar SQL somente leitura no Postgres do Render",
+          "Disparar deploys e alterar variáveis de ambiente (ferramentas de escrita)"
+        ],
+        "needs": "Uma chave de API do Render, criada nas configurações da conta. A chave não se limita a um workspace nem a leitura: use a chave de um usuário que tenha acesso só ao workspace de que o agente precisa.",
+        "labels": {
+          "Authorization": "Chave de API"
+        }
+      },
+      "zh-Hans": {
+        "description": "通过 Render 官方 MCP 服务器处理 Render 的服务、部署、日志和数据库。",
+        "long": "Render 的 MCP 服务器让智能体列出您的服务、读取日志和指标，并触发部署。例如：找到频繁重启的服务并读取其最近的日志。API 密钥可访问您账号下的所有工作区，并可修改环境变量、触发部署。",
+        "abilities": [
+          "列出工作区、服务和部署",
+          "读取日志和指标",
+          "在 Render Postgres 上执行只读 SQL",
+          "触发部署并修改环境变量（写入工具）"
+        ],
+        "needs": "一个 Render API 密钥（在账号设置中创建）。该密钥无法限定为某个工作区或只读，请使用只能访问智能体所需工作区的用户的密钥。",
+        "labels": {
+          "Authorization": "API 密钥"
+        }
+      }
+    }
+  },
+  {
+    "id": "snyk",
+    "name": "Snyk",
+    "category": "dev",
+    "publisher": "Snyk",
+    "official": true,
+    "homepage": "https://snyk.io",
+    "description_en": "Security scans of your code and dependencies, through Snyk's MCP server.",
+    "description_ru": "Проверка кода и зависимостей на уязвимости через MCP-сервер Snyk.",
+    "long_en": "Snyk's MCP server runs the Snyk CLI for an agent: it scans your code and dependencies for known vulnerabilities. For example: scan the project before a release and list the issues found.",
+    "long_ru": "MCP-сервер Snyk запускает для агента Snyk CLI: он проверяет ваш код и зависимости на известные уязвимости. Например: проверить проект перед релизом и показать найденные проблемы.",
+    "abilities_en": [
+      "Scan code for security issues",
+      "Scan dependencies for known vulnerabilities",
+      "Show the issues found and their details"
+    ],
+    "abilities_ru": [
+      "Проверять код на проблемы безопасности",
+      "Проверять зависимости на известные уязвимости",
+      "Показывать найденные проблемы и их описание"
+    ],
+    "needs_en": "Node.js (npx) on your computer or server, a Snyk account and a Snyk API token (SNYK_TOKEN).",
+    "needs_ru": "Node.js (npx) на вашем компьютере или сервере, аккаунт Snyk и токен API Snyk (SNYK_TOKEN).",
+    "kind": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "snyk@1.1308.0",
+      "mcp",
+      "-t",
+      "stdio"
+    ],
+    "env_keys": [
+      {
+        "key": "SNYK_TOKEN",
+        "label_en": "Snyk API token",
+        "label_ru": "Токен API Snyk",
+        "secret": true,
+        "value_template": "{secret}"
+      }
+    ],
+    "docs_url": "https://docs.snyk.io/agent-security/agentic-security-with-snyk-studio/getting-started-with-snyk-studio",
+    "icon": "snyk",
+    "accent": "#6B68A3",
+    "l10n": {
+      "de": {
+        "description": "Sicherheitsprüfungen Ihres Codes und Ihrer Abhängigkeiten über den MCP-Server von Snyk.",
+        "long": "Der MCP-Server von Snyk führt für den Agenten die Snyk CLI aus: Er prüft Ihren Code und Ihre Abhängigkeiten auf bekannte Schwachstellen. Zum Beispiel: das Projekt vor einem Release prüfen und die gefundenen Probleme auflisten.",
+        "abilities": [
+          "Code auf Sicherheitsprobleme prüfen",
+          "Abhängigkeiten auf bekannte Schwachstellen prüfen",
+          "Gefundene Probleme und ihre Details zeigen"
+        ],
+        "needs": "Node.js (npx) auf Ihrem Rechner oder Server, ein Snyk-Konto und ein Snyk-API-Token (SNYK_TOKEN).",
+        "labels": {
+          "SNYK_TOKEN": "Snyk-API-Token"
+        }
+      },
+      "es": {
+        "description": "Análisis de seguridad de tu código y dependencias, a través del servidor MCP de Snyk.",
+        "long": "El servidor MCP de Snyk ejecuta para el agente la CLI de Snyk: analiza tu código y tus dependencias en busca de vulnerabilidades conocidas. Por ejemplo: analizar el proyecto antes de una publicación y listar los problemas encontrados.",
+        "abilities": [
+          "Analizar el código en busca de problemas de seguridad",
+          "Analizar dependencias en busca de vulnerabilidades conocidas",
+          "Mostrar los problemas encontrados y sus detalles"
+        ],
+        "needs": "Node.js (npx) en tu equipo o servidor, una cuenta de Snyk y un token de API de Snyk (SNYK_TOKEN).",
+        "labels": {
+          "SNYK_TOKEN": "Token de API de Snyk"
+        }
+      },
+      "fr": {
+        "description": "Analyses de sécurité de votre code et de vos dépendances, via le serveur MCP de Snyk.",
+        "long": "Le serveur MCP de Snyk fait tourner la CLI Snyk pour l'agent : il analyse votre code et vos dépendances à la recherche de vulnérabilités connues. Par exemple : analyser le projet avant une mise en production et lister les problèmes trouvés.",
+        "abilities": [
+          "Analyser le code à la recherche de problèmes de sécurité",
+          "Analyser les dépendances à la recherche de vulnérabilités connues",
+          "Afficher les problèmes trouvés et leurs détails"
+        ],
+        "needs": "Node.js (npx) sur votre ordinateur ou serveur, un compte Snyk et un jeton d'API Snyk (SNYK_TOKEN).",
+        "labels": {
+          "SNYK_TOKEN": "Jeton d'API Snyk"
+        }
+      },
+      "ja": {
+        "description": "Snyk の MCP サーバー経由で、コードと依存関係のセキュリティスキャンを行います。",
+        "long": "Snyk の MCP サーバーは、エージェント向けに Snyk CLI を動かします。コードと依存関係に既知の脆弱性がないかをスキャンします。例: リリース前にプロジェクトをスキャンし、見つかった問題を一覧にする。",
+        "abilities": [
+          "コードのセキュリティ問題をスキャン",
+          "依存関係の既知の脆弱性をスキャン",
+          "見つかった問題と詳細を表示"
+        ],
+        "needs": "お使いのコンピュータやサーバーで Node.js（npx）が使えること、Snyk のアカウント、そして Snyk の API トークン（SNYK_TOKEN）。",
+        "labels": {
+          "SNYK_TOKEN": "Snyk の API トークン"
+        }
+      },
+      "ko": {
+        "description": "코드와 의존성의 보안 검사를 Snyk 공식 MCP 서버로 수행합니다.",
+        "long": "Snyk MCP 서버는 에이전트를 위해 Snyk CLI를 실행합니다. 코드와 의존성에서 알려진 취약점을 검사합니다. 예: 출시 전에 프로젝트를 검사하고 발견된 문제 목록 보기.",
+        "abilities": [
+          "코드의 보안 문제 검사",
+          "의존성의 알려진 취약점 검사",
+          "발견된 문제와 상세 내용 표시"
+        ],
+        "needs": "컴퓨터나 서버에 Node.js(npx), Snyk 계정, Snyk API 토큰(SNYK_TOKEN)이 필요합니다.",
+        "labels": {
+          "SNYK_TOKEN": "Snyk API 토큰"
+        }
+      },
+      "pt-BR": {
+        "description": "Verificações de segurança do seu código e das dependências, pelo servidor MCP do Snyk.",
+        "long": "O servidor MCP do Snyk roda a CLI do Snyk para o agente: ele verifica seu código e suas dependências em busca de vulnerabilidades conhecidas. Por exemplo: verificar o projeto antes de um lançamento e listar os problemas encontrados.",
+        "abilities": [
+          "Verificar o código em busca de problemas de segurança",
+          "Verificar dependências em busca de vulnerabilidades conhecidas",
+          "Mostrar os problemas encontrados e seus detalhes"
+        ],
+        "needs": "Node.js (npx) no seu computador ou servidor, uma conta no Snyk e um token de API do Snyk (SNYK_TOKEN).",
+        "labels": {
+          "SNYK_TOKEN": "Token de API do Snyk"
+        }
+      },
+      "zh-Hans": {
+        "description": "通过 Snyk 官方 MCP 服务器扫描您的代码和依赖的安全问题。",
+        "long": "Snyk 的 MCP 服务器为智能体运行 Snyk CLI，扫描您的代码和依赖中已知的安全漏洞。例如：发布前扫描项目，并列出发现的问题。",
+        "abilities": [
+          "扫描代码中的安全问题",
+          "扫描依赖中的已知漏洞",
+          "显示发现的问题及其详情"
+        ],
+        "needs": "您的电脑或服务器上需要有 Node.js（npx），以及一个 Snyk 账号和 Snyk API 令牌（SNYK_TOKEN）。",
+        "labels": {
+          "SNYK_TOKEN": "Snyk API 令牌"
+        }
+      }
+    }
+  },
+  {
+    "id": "prisma",
+    "name": "Prisma",
+    "category": "data",
+    "publisher": "Prisma",
+    "official": true,
+    "homepage": "https://www.prisma.io",
+    "description_en": "Prisma Postgres databases, SQL and Prisma Compute deployments, through Prisma's MCP server.",
+    "description_ru": "Базы Prisma Postgres, SQL и деплои Prisma Compute через MCP-сервер Prisma.",
+    "long_en": "Prisma's MCP server lets an agent create and manage Prisma Postgres databases, run SQL and restore backups. For example: create a database for a test branch of your app, or read the logs of a Prisma Compute deployment. Tools that change or delete resources can cause data loss or interrupt live traffic, so review each action.",
+    "long_ru": "MCP-сервер Prisma позволяет агенту создавать и вести базы Prisma Postgres, выполнять SQL и восстанавливать резервные копии. Например: создать базу для тестовой ветки приложения или прочитать логи деплоя Prisma Compute. Инструменты, которые меняют или удаляют ресурсы, могут привести к потере данных или прервать живой трафик, поэтому проверяйте каждое действие.",
+    "abilities_en": [
+      "Create and manage Prisma Postgres databases",
+      "Run SQL",
+      "Restore automated backups",
+      "Read logs and set environment variables of Compute deployments"
+    ],
+    "abilities_ru": [
+      "Создавать и вести базы Prisma Postgres",
+      "Выполнять SQL",
+      "Восстанавливать автоматические резервные копии",
+      "Читать логи и задавать переменные деплоев Prisma Compute"
+    ],
+    "needs_en": "A Prisma account. Sign in in the browser after you press Connect, then choose the workspace.",
+    "needs_ru": "Аккаунт Prisma: войдите в браузере после нажатия «Подключить», затем выберите рабочее пространство.",
+    "kind": "http",
+    "url": "https://mcp.prisma.io/mcp",
+    "auth": "oauth",
+    "docs_url": "https://www.prisma.io/docs/ai/tools/mcp-server",
+    "icon": "prisma",
+    "accent": "#4A5568",
+    "l10n": {
+      "de": {
+        "description": "Prisma-Postgres-Datenbanken, SQL und Deployments von Prisma Compute über den MCP-Server von Prisma.",
+        "long": "Der MCP-Server von Prisma erlaubt dem Agenten, Prisma-Postgres-Datenbanken anzulegen und zu verwalten, SQL auszuführen und Backups wiederherzustellen. Zum Beispiel: eine Datenbank für einen Testbranch Ihrer App anlegen oder die Logs eines Prisma-Compute-Deployments lesen. Werkzeuge, die Ressourcen ändern oder löschen, können Daten kosten oder den Live-Betrieb stören; prüfen Sie jede Aktion.",
+        "abilities": [
+          "Prisma-Postgres-Datenbanken anlegen und verwalten",
+          "SQL ausführen",
+          "Automatische Backups wiederherstellen",
+          "Logs lesen und Variablen von Compute-Deployments setzen"
+        ],
+        "needs": "Ein Prisma-Konto. Melden Sie sich nach dem Klick auf „Verbinden“ im Browser an und wählen Sie dann den Workspace."
+      },
+      "es": {
+        "description": "Bases de datos Prisma Postgres, SQL y deployments de Prisma Compute, a través del servidor MCP de Prisma.",
+        "long": "El servidor MCP de Prisma permite al agente crear y gestionar bases de datos Prisma Postgres, ejecutar SQL y restaurar copias de seguridad. Por ejemplo: crear una base para una rama de prueba de tu app, o leer los logs de un deployment de Prisma Compute. Las herramientas que cambian o borran recursos pueden causar pérdida de datos o interrumpir el tráfico real; revisa cada acción.",
+        "abilities": [
+          "Crear y gestionar bases de datos Prisma Postgres",
+          "Ejecutar SQL",
+          "Restaurar copias de seguridad automáticas",
+          "Leer logs y definir variables de deployments de Compute"
+        ],
+        "needs": "Una cuenta de Prisma. Inicia sesión en el navegador después de pulsar Conectar y elige el workspace."
+      },
+      "fr": {
+        "description": "Bases Prisma Postgres, SQL et déploiements Prisma Compute, via le serveur MCP de Prisma.",
+        "long": "Le serveur MCP de Prisma permet à l'agent de créer et gérer des bases Prisma Postgres, d'exécuter du SQL et de restaurer des sauvegardes. Par exemple : créer une base pour une branche de test de votre application, ou lire les journaux d'un déploiement Prisma Compute. Les outils qui modifient ou suppriment des ressources peuvent causer une perte de données ou interrompre le trafic en production ; vérifiez chaque action.",
+        "abilities": [
+          "Créer et gérer des bases Prisma Postgres",
+          "Exécuter du SQL",
+          "Restaurer les sauvegardes automatiques",
+          "Lire les journaux et définir les variables des déploiements Compute"
+        ],
+        "needs": "Un compte Prisma. Connectez-vous dans le navigateur après avoir cliqué sur Connecter, puis choisissez le workspace."
+      },
+      "ja": {
+        "description": "Prisma Postgres のデータベース、SQL、Prisma Compute のデプロイを、Prisma の MCP サーバー経由で扱います。",
+        "long": "Prisma の MCP サーバーを使うと、エージェントが Prisma Postgres のデータベースを作成・管理し、SQL を実行し、バックアップから復元できます。例: アプリのテスト用ブランチ向けにデータベースを作る、Prisma Compute のデプロイのログを読む。リソースを変更・削除するツールはデータ損失やライブ通信の中断を招くことがあるため、操作ごとに確認してください。",
+        "abilities": [
+          "Prisma Postgres のデータベースを作成・管理",
+          "SQL を実行",
+          "自動バックアップから復元",
+          "Compute デプロイのログ読み取りと環境変数の設定"
+        ],
+        "needs": "Prisma のアカウント。「接続」を押した後にブラウザでサインインし、ワークスペースを選んでください。"
+      },
+      "ko": {
+        "description": "Prisma Postgres 데이터베이스, SQL, Prisma Compute 배포를 Prisma 공식 MCP 서버로 다룹니다.",
+        "long": "Prisma MCP 서버를 쓰면 에이전트가 Prisma Postgres 데이터베이스를 만들고 관리하고, SQL을 실행하고, 백업을 복원할 수 있습니다. 예: 앱의 테스트 브랜치용 데이터베이스 만들기, Prisma Compute 배포 로그 읽기. 리소스를 바꾸거나 지우는 도구는 데이터 손실이나 실서비스 중단을 일으킬 수 있으니 작업마다 확인하세요.",
+        "abilities": [
+          "Prisma Postgres 데이터베이스 생성과 관리",
+          "SQL 실행",
+          "자동 백업 복원",
+          "Compute 배포 로그 읽기와 환경 변수 설정"
+        ],
+        "needs": "Prisma 계정. '연결'을 누른 뒤 브라우저에서 로그인하고 워크스페이스를 고르세요."
+      },
+      "pt-BR": {
+        "description": "Bancos Prisma Postgres, SQL e deploys do Prisma Compute, pelo servidor MCP da Prisma.",
+        "long": "O servidor MCP da Prisma permite que o agente crie e gerencie bancos Prisma Postgres, execute SQL e restaure backups. Por exemplo: criar um banco para um branch de teste do seu app, ou ler os logs de um deploy do Prisma Compute. Ferramentas que alteram ou apagam recursos podem causar perda de dados ou interromper o tráfego real; revise cada ação.",
+        "abilities": [
+          "Criar e gerenciar bancos Prisma Postgres",
+          "Executar SQL",
+          "Restaurar backups automáticos",
+          "Ler logs e definir variáveis de deploys do Compute"
+        ],
+        "needs": "Uma conta na Prisma. Entre no navegador depois de clicar em Conectar e escolha o workspace."
+      },
+      "zh-Hans": {
+        "description": "通过 Prisma 官方 MCP 服务器处理 Prisma Postgres 数据库、SQL 和 Prisma Compute 部署。",
+        "long": "Prisma 的 MCP 服务器让智能体创建和管理 Prisma Postgres 数据库、执行 SQL 并恢复备份。例如：为应用的测试分支创建数据库，或读取 Prisma Compute 部署的日志。修改或删除资源的工具可能导致数据丢失或中断线上流量，请逐项确认。",
+        "abilities": [
+          "创建和管理 Prisma Postgres 数据库",
+          "执行 SQL",
+          "恢复自动备份",
+          "读取 Compute 部署日志并设置环境变量"
+        ],
+        "needs": "一个 Prisma 账号。点击“连接”后在浏览器中登录，然后选择工作区。"
+      }
+    }
   }
 ]
