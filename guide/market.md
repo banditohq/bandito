@@ -63,7 +63,7 @@ headers. The sheet can check the connection before you leave it.
 
 <!-- id: market-oauth; covers: -->
 A service that signs in with its own page (no key to copy) shows Connect (Подключить) like the others, but Connect opens your
-browser instead of the sheet. The server asks the service for the permission page and Bandito opens it; the keys never
+browser instead of the sheet. Linear, Notion and Sentry connect this way. The server asks the service for the permission page and Bandito opens it; the keys never
 come to this Mac. A sheet says Waiting for your permission in the browser (Ждём разрешения в браузере) with Open the
 browser again (Открыть браузер снова) and Cancel (Отмена). After you allow access the browser brings you back to Bandito,
 the sheet says Connected (Подключено) and the card shows the tools. If the access is refused, expires or is revoked, the
