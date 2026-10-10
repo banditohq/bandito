@@ -463,6 +463,12 @@ async fn daemon(home: &Path, sock: &Path, listen: SocketAddr, home_given: bool) 
         bail!("another bandito daemon already runs in {}", home.display());
     };
     bandito::update::set_data_home(home);
+    // A restore asked over RPC (`backups.restore`) comes first: it replaces the file the store opens next.
+    match bandito::backup::apply_pending_restore(home, bandito::store::now_ms()) {
+        Ok(Some(name)) => tracing::info!(copy = %name, "database restored from a copy, as requested"),
+        Ok(None) => {}
+        Err(e) => tracing::error!("requested database restore failed; starting with the database as it is: {e:#}"),
+    }
     // Before the store opens: migrations change the file, so the copy must come first. A failed copy does not stop the start.
     match bandito::backup::on_start(home, rpc::VERSION, bandito::store::now_ms()) {
         Ok(Some(path)) => tracing::info!(path = %path.display(), "database copied before start"),

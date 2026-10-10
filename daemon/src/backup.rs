@@ -18,6 +18,8 @@ pub const KEEP: usize = 14;
 const DB_FILE: &str = "bandito.db";
 const LAST_VERSION: &str = "last-version";
 const LOCK_FILE: &str = "daemon.lock";
+/// The file in `run/` that asks for a restore at the next start (see `request_restore`).
+const RESTORE_MARKER: &str = "restore-pending";
 const PARTIAL_SUFFIX: &str = ".partial";
 const TS_FORMAT: &str = "%Y%m%d-%H%M%S";
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
@@ -94,25 +96,71 @@ pub fn newest_age_ms(home: &Path, now_ms: i64) -> Option<i64> {
 
 /// Name and size in bytes of every copy, newest first.
 pub fn list(home: &Path) -> Result<Vec<(String, u64)>> {
-    Ok(entries(home)?.into_iter().map(|e| (e.name, e.size)).collect())
+    Ok(copies(home)?.into_iter().map(|c| (c.name, c.size)).collect())
+}
+
+/// One database copy, as `backups.list` shows it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BackupFile {
+    pub name: String,
+    pub size: u64,
+    /// The time of the copy, from its name (UTC, Unix milliseconds).
+    pub created_at_ms: i64,
+    /// `start`, `upgrade`, `daily`, `manual` or `before-restore`.
+    pub reason: String,
+}
+
+/// Our copies, newest first, with their reasons.
+pub fn copies(home: &Path) -> Result<Vec<BackupFile>> {
+    Ok(entries(home)?
+        .into_iter()
+        .map(|e| BackupFile {
+            name: e.name,
+            size: e.size,
+            created_at_ms: e.ts_ms,
+            reason: e.reason,
+        })
+        .collect())
+}
+
+/// A copy name from `bandito backup list`: no folder parts, and it parses as one of our copies.
+pub fn validate_name(name: &str) -> Result<()> {
+    if name.is_empty() || name.contains('/') || name.contains('\\') || name.contains("..") || parse_name(name).is_none()
+    {
+        bail!("invalid backup name {name:?}: give a file name from `bandito backup list`");
+    }
+    Ok(())
+}
+
+/// Checks that `name` is a regular copy in `<home>/backups` that passes `quick_check`. Changes nothing.
+pub fn check_copy(home: &Path, name: &str) -> Result<()> {
+    validate_name(name)?;
+    check_regular_copy(&backups_dir(home).join(name), name)
+}
+
+fn check_regular_copy(src: &Path, name: &str) -> Result<()> {
+    let meta = fs::symlink_metadata(src).map_err(|_| anyhow::anyhow!("no backup named {name}"))?;
+    if !meta.file_type().is_file() {
+        bail!("{name} is not a regular file: refusing to restore from it");
+    }
+    quick_check(src).with_context(|| format!("{name} failed the integrity check; the database was not changed"))
 }
 
 /// Replaces `<home>/bandito.db` with the copy `name` from `<home>/backups`. The copy must pass `quick_check`.
 /// The current database is copied first, with reason `before-restore`. Refused while the daemon holds its lock.
 pub fn restore(home: &Path, name: &str, now_ms: i64) -> Result<()> {
-    if name.is_empty() || name.contains('/') || name.contains('\\') || name.contains("..") || parse_name(name).is_none()
-    {
-        bail!("invalid backup name {name:?}: give a file name from `bandito backup list`");
-    }
+    validate_name(name)?;
     let Some(_lock) = try_daemon_lock(home)? else {
         bail!(BUSY_MSG);
     };
+    restore_locked(home, name, now_ms)
+}
+
+/// The restore itself, for a caller that holds the daemon lock already (`restore`, and the daemon's own start).
+fn restore_locked(home: &Path, name: &str, now_ms: i64) -> Result<()> {
+    validate_name(name)?;
     let src = backups_dir(home).join(name);
-    let meta = fs::symlink_metadata(&src).map_err(|_| anyhow::anyhow!("no backup named {name}"))?;
-    if !meta.file_type().is_file() {
-        bail!("{name} is not a regular file: refusing to restore from it");
-    }
-    quick_check(&src).with_context(|| format!("{name} failed the integrity check; the database was not changed"))?;
+    check_regular_copy(&src, name)?;
 
     let db = home.join(DB_FILE);
     if db.exists() {
@@ -133,6 +181,78 @@ pub fn restore(home: &Path, name: &str, now_ms: i64) -> Result<()> {
     }
     prune(home, KEEP)?;
     Ok(())
+}
+
+/// Makes a copy now with `reason`, keeps the newest `KEEP`, and returns the new copy (`backups.create`).
+pub fn make_copy(home: &Path, reason: &str, now_ms: i64) -> Result<BackupFile> {
+    let db = home.join(DB_FILE);
+    if !db.is_file() {
+        bail!("there is no database to copy yet");
+    }
+    let path = snapshot_file(&db, home, reason, now_ms)?;
+    prune(home, KEEP)?;
+    let name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .context("the backup name is not valid UTF-8")?
+        .to_string();
+    let (created_at_ms, reason, _) = parse_full(&name).context("the new copy has no backup name")?;
+    let size = fs::metadata(&path)
+        .with_context(|| format!("stat {}", path.display()))?
+        .len();
+    Ok(BackupFile {
+        name,
+        size,
+        created_at_ms,
+        reason,
+    })
+}
+
+/// The marker that asks the daemon to restore a copy at its next start: `<home>/run/restore-pending`.
+pub fn restore_marker(home: &Path) -> PathBuf {
+    home.join("run").join(RESTORE_MARKER)
+}
+
+/// Checks `name` with `check_copy` and writes the restore marker. The daemon applies it at its next start
+/// (`apply_pending_restore`). Nothing is replaced here: the daemon is still running.
+pub fn request_restore(home: &Path, name: &str) -> Result<()> {
+    check_copy(home, name)?;
+    let path = restore_marker(home);
+    if let Some(dir) = path.parent() {
+        fs::create_dir_all(dir).with_context(|| format!("create {}", dir.display()))?;
+    }
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(&path)
+        .with_context(|| format!("open {}", path.display()))?;
+    file.write_all(name.as_bytes())
+        .with_context(|| format!("write {}", path.display()))?;
+    Ok(())
+}
+
+/// Removes the restore marker when there is one (a restart that did not happen).
+pub fn clear_restore_request(home: &Path) -> Result<()> {
+    remove_if_exists(&restore_marker(home))
+}
+
+/// Applies the restore marker, if there is one. Called by the daemon with its lock held, before the store opens.
+/// Returns the name of the copy restored, or `None` when there was no marker. The marker is removed in every
+/// case, so a failed restore is not retried on each start; the database then stays as it was.
+pub fn apply_pending_restore(home: &Path, now_ms: i64) -> Result<Option<String>> {
+    let marker = restore_marker(home);
+    let name = match fs::read_to_string(&marker) {
+        Ok(s) => s.trim().to_string(),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(e).with_context(|| format!("read {}", marker.display())),
+    };
+    let result = restore_locked(home, &name, now_ms);
+    let cleared = remove_if_exists(&marker);
+    result?;
+    cleared?;
+    Ok(Some(name))
 }
 
 /// Start of the daemon, called with the daemon lock held: copies the database when there is no copy, the newest
@@ -189,6 +309,7 @@ pub fn snapshot_if_due(home: &Path, now_ms: i64) -> Result<Option<PathBuf>> {
 struct Entry {
     name: String,
     ts_ms: i64,
+    reason: String,
     /// The `-n` suffix of a name taken in the same second (1 when there is none).
     n: u32,
     size: u64,
@@ -207,7 +328,9 @@ fn entries(home: &Path) -> Result<Vec<Entry>> {
     for item in read {
         let item = item?;
         let name = item.file_name().to_string_lossy().into_owned();
-        let Some((ts_ms, n)) = parse_name(&name) else { continue };
+        let Some((ts_ms, reason, n)) = parse_full(&name) else {
+            continue;
+        };
         // `DirEntry::metadata` does not follow symlinks; a file removed since readdir is skipped.
         let meta = match item.metadata() {
             Ok(meta) => meta,
@@ -220,6 +343,7 @@ fn entries(home: &Path) -> Result<Vec<Entry>> {
         out.push(Entry {
             name,
             ts_ms,
+            reason,
             n,
             size: meta.len(),
         });
@@ -230,6 +354,11 @@ fn entries(home: &Path) -> Result<Vec<Entry>> {
 
 /// `(time in ms, suffix)` of a copy name `bandito-<YYYYMMDD-HHMMSS>-<reason>[-<n>].db`; `None` for other files.
 fn parse_name(name: &str) -> Option<(i64, u32)> {
+    parse_full(name).map(|(ts_ms, _, n)| (ts_ms, n))
+}
+
+/// `(time in ms, reason, suffix)` of a copy name; `None` for other files.
+fn parse_full(name: &str) -> Option<(i64, String, u32)> {
     let stem = name.strip_prefix("bandito-")?.strip_suffix(".db")?;
     let ts = stem.get(..15)?;
     let rest = stem.get(15..)?.strip_prefix('-')?;
@@ -243,7 +372,7 @@ fn parse_name(name: &str) -> Option<(i64, u32)> {
         }
         _ => (rest, 1),
     };
-    valid_reason(reason).then_some((ts_ms, n))
+    valid_reason(reason).then(|| (ts_ms, reason.to_string(), n))
 }
 
 fn valid_reason(reason: &str) -> bool {
@@ -761,5 +890,129 @@ mod tests {
         assert!(snapshot_if_due(home.path(), BASE_MS + 23 * HOUR_MS).unwrap().is_none());
         let due = snapshot_if_due(home.path(), BASE_MS + 25 * HOUR_MS).unwrap().unwrap();
         assert!(due.file_name().unwrap().to_str().unwrap().ends_with("-daily.db"));
+    }
+
+    #[test]
+    fn copies_carry_their_reason_newest_first() {
+        let home = temp_home();
+        let db = home.path().join(DB_FILE);
+        make_db(&db, &["a"]);
+        snapshot_file(&db, home.path(), "start", BASE_MS).unwrap();
+        snapshot_file(&db, home.path(), "upgrade", BASE_MS + HOUR_MS).unwrap();
+        snapshot_file(&db, home.path(), "before-restore", BASE_MS + 2 * HOUR_MS).unwrap();
+        // Same second, other reason: the name differs by reason, so there is no `-n` suffix.
+        snapshot_file(&db, home.path(), "manual", BASE_MS + 2 * HOUR_MS).unwrap();
+        let got: Vec<(String, i64)> = copies(home.path())
+            .unwrap()
+            .into_iter()
+            .map(|c| (c.reason, c.created_at_ms))
+            .collect();
+        assert_eq!(
+            got,
+            [
+                ("manual".to_string(), BASE_MS + 2 * HOUR_MS),
+                ("before-restore".to_string(), BASE_MS + 2 * HOUR_MS),
+                ("upgrade".to_string(), BASE_MS + HOUR_MS),
+                ("start".to_string(), BASE_MS),
+            ]
+        );
+    }
+
+    #[test]
+    fn make_copy_is_manual_and_described() {
+        let home = temp_home();
+        let db = home.path().join(DB_FILE);
+        make_db(&db, &["a", "b"]);
+        let file = make_copy(home.path(), "manual", BASE_MS).unwrap();
+        assert_eq!(file.name, "bandito-20270115-080000-manual.db");
+        assert_eq!(file.reason, "manual");
+        assert_eq!(file.created_at_ms, BASE_MS);
+        assert!(file.size > 0);
+        assert_eq!(list(home.path()).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn make_copy_without_a_database_is_an_error() {
+        let home = temp_home();
+        assert!(make_copy(home.path(), "manual", BASE_MS).is_err());
+        assert!(list(home.path()).unwrap().is_empty());
+    }
+
+    #[test]
+    fn request_restore_refuses_bad_and_missing_names_and_writes_no_marker() {
+        let home = temp_home();
+        let db = home.path().join(DB_FILE);
+        make_db(&db, &["live"]);
+        snapshot_file(&db, home.path(), "start", BASE_MS).unwrap();
+        for bad in ["../x.db", "a/b.db", "", "bandito-20270115-080000-start-x.db"] {
+            assert!(request_restore(home.path(), bad).is_err(), "name {bad:?}");
+        }
+        assert!(request_restore(home.path(), "bandito-20270115-090000-daily.db").is_err());
+        assert!(!restore_marker(home.path()).exists());
+    }
+
+    #[test]
+    fn pending_restore_is_applied_at_start_and_the_marker_goes() {
+        let home = temp_home();
+        let db = home.path().join(DB_FILE);
+        make_db(&db, &["old-1", "old-2"]);
+        let saved = snapshot_file(&db, home.path(), "start", BASE_MS).unwrap();
+        let saved_name = saved.file_name().unwrap().to_str().unwrap().to_string();
+        make_db(&db, &["new"]);
+
+        request_restore(home.path(), &saved_name).unwrap();
+        assert!(restore_marker(home.path()).exists());
+        // The start of the daemon, lock held: the copy replaces the database.
+        let applied = apply_pending_restore(home.path(), BASE_MS + HOUR_MS).unwrap();
+        assert_eq!(applied.as_deref(), Some(saved_name.as_str()));
+        assert_eq!(rows(&db), ["old-1", "old-2"]);
+        assert!(!restore_marker(home.path()).exists());
+        // The database as it was before the restore is kept, as with the CLI.
+        assert!(names(home.path()).iter().any(|n| n.contains("before-restore")));
+        // No marker any more: nothing to apply.
+        assert_eq!(apply_pending_restore(home.path(), BASE_MS + 2 * HOUR_MS).unwrap(), None);
+    }
+
+    #[test]
+    fn pending_restore_with_a_bad_name_fails_and_still_clears_the_marker() {
+        let home = temp_home();
+        let db = home.path().join(DB_FILE);
+        make_db(&db, &["live"]);
+        let marker = restore_marker(home.path());
+        fs::create_dir_all(marker.parent().unwrap()).unwrap();
+        fs::write(&marker, "../x.db").unwrap();
+
+        assert!(apply_pending_restore(home.path(), BASE_MS).is_err());
+        assert!(!marker.exists(), "a failed restore must not be retried on every start");
+        assert_eq!(rows(&db), ["live"]);
+    }
+
+    #[test]
+    fn pending_restore_of_a_missing_copy_fails_and_keeps_the_database() {
+        let home = temp_home();
+        let db = home.path().join(DB_FILE);
+        make_db(&db, &["live"]);
+        let marker = restore_marker(home.path());
+        fs::create_dir_all(marker.parent().unwrap()).unwrap();
+        fs::write(&marker, "bandito-20270115-080000-start.db").unwrap();
+
+        let err = apply_pending_restore(home.path(), BASE_MS).unwrap_err();
+        assert!(format!("{err:#}").contains("no backup named"), "{err:#}");
+        assert!(!marker.exists());
+        assert_eq!(rows(&db), ["live"]);
+    }
+
+    #[test]
+    fn clear_restore_request_removes_the_marker_only() {
+        let home = temp_home();
+        let db = home.path().join(DB_FILE);
+        make_db(&db, &["live"]);
+        let saved = snapshot_file(&db, home.path(), "start", BASE_MS).unwrap();
+        let saved_name = saved.file_name().unwrap().to_str().unwrap().to_string();
+        request_restore(home.path(), &saved_name).unwrap();
+        clear_restore_request(home.path()).unwrap();
+        assert!(!restore_marker(home.path()).exists());
+        assert!(saved.exists(), "the copy itself stays");
+        clear_restore_request(home.path()).unwrap();
     }
 }

@@ -32,6 +32,7 @@ use std::time::Duration;
 use tokio::sync::{broadcast, mpsc};
 
 pub mod avatar;
+pub mod backups;
 pub mod browser;
 pub mod changes;
 pub mod chat;
@@ -76,6 +77,7 @@ pub fn features() -> Vec<&'static str> {
         "workspaces",
         "browser",
         "update",
+        "backups",
         "pause",
         "logs",
         "agent_own_folder",
@@ -1648,6 +1650,8 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
         }
 
         "setup.status" | "setup.install" | "setup.job" => setup::dispatch(app, method, p).await,
+
+        "backups.list" | "backups.create" | "backups.restore" => backups::dispatch(app, method, p).await,
 
         "daemon.update_check" => ok(update::check_async(VERSION).await?),
         "daemon.update_apply" => {
@@ -3711,6 +3715,9 @@ mod trust_tests {
         "browser.close_tab",
         "screen.start",
         "screen.stop",
+        "backups.list",
+        "backups.create",
+        "backups.restore",
     ];
 
     #[tokio::test]
