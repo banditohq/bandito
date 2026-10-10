@@ -113,11 +113,12 @@ public struct BanditoCommands: Commands {
     }
 
     /// A menu item for `commandID`, titled and shortcut from the registry.
-    /// Team commands act on the agent on screen, so they are offered only while Team mode is on screen.
+    /// Team commands act on the agent on screen, so they are offered only while Team mode is on screen. While the
+    /// picture viewer is open they are off too, so Esc (team.deny) and the agent keys leave the viewer alone.
     private func item(_ commandID: String, action: @escaping () -> Void) -> some View {
         Button(Command.find(commandID)?.title ?? commandID, action: action)
             .banditoShortcut(keymap.binding(for: commandID))
-            .disabled(commandID.hasPrefix("team.") && router.mode != .team)
+            .disabled(commandID.hasPrefix("team.") && (router.mode != .team || router.imageViewer != nil))
     }
 
     /// A terminal command: it is handed to the Terminals mode, so it only works while that mode is shown.
