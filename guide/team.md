@@ -81,6 +81,24 @@ The composer sits at the bottom of the thread. It sends the message to the selec
 2. While the agent is working, the send button becomes Stop (Остановить). Press ⌘. to stop the turn (⌘. stop).
 3. A message you send while the agent is busy, or saving its memory before a new chapter, appears in the chat at once with the line Queued (В очереди) below it. The line goes away when the agent takes the message. If the agent stopped or the server restarted before it did, the line reads Not delivered (Не доставлено); right-click the message and choose Send again (Отправить снова). After a new chapter begins, the message sits below the chapter divider, where the agent reads it. The counter beside Thinking… counts from the start of the current turn.
 
+## Dictate a message
+
+<!-- id: team-dictation; covers: -->
+Speak instead of typing. Speech is turned into text on this Mac; no audio is sent over the network. The words go into the field at the caret.
+Где: Team → agent thread → composer, the microphone button (Надиктовать) next to +, or ⌥⌘D (menu Team → Dictate into the message)
+1. Press the microphone or ⌥⌘D. The first time, macOS asks for the microphone and for speech recognition: allow both. If you refused, a line above the field says so and links to System Settings.
+2. Speak. The words appear in the field at the caret. While it listens the microphone is filled and has a cream dot.
+3. Stop it with the microphone again, ⌥⌘D or Esc, or let it stop by itself after two seconds of silence. Check the text, then press ↵ to send.
+4. A language without an offline speech model cannot be dictated. The line above the field says how to add it: System Settings → Keyboard → Dictation.
+
+## Read replies aloud
+
+<!-- id: team-read-aloud; covers: -->
+Hear an agent's answer. The voice follows the language of the text. Markdown is read as plain sentences; a code block is not read, it becomes "code skipped" (код пропущен).
+Где: the ⋯ menu of an agent's message (or right-click) → Read aloud (Прочитать вслух); Inspector → Details → Read replies aloud (Читать ответы вслух)
+1. Point at an agent's message, press ⋯ and choose Read aloud. Choose Stop reading (Остановить) to stop.
+2. To hear every new finished reply of one agent, turn on Read replies aloud in its Details. It is off by default and kept on this Mac, per agent. Replies are read only while Bandito is the active app; opening a thread reads nothing from its history.
+
 ## Attach a file to a message
 
 <!-- id: team-attach; covers: -->

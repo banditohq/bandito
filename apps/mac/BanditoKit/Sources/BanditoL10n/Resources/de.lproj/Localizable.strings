@@ -417,6 +417,13 @@
 "devices.revokeMessage" = "Das Gerät verliert sofort den Zugriff auf den Server.";
 "devices.revokeTitle" = "%1$@ widerrufen?";
 "devices.thisDeviceHint" = "Das Gerät, mit dem Sie gerade arbeiten, kann nicht widerrufen werden.";
+"dictation.denied.microphone" = "Bandito kann das Mikrofon nicht verwenden. Erlauben Sie es in den Systemeinstellungen → Datenschutz & Sicherheit → Mikrofon.";
+"dictation.denied.speech" = "Bandito kann die Spracherkennung nicht verwenden. Erlauben Sie sie in den Systemeinstellungen → Datenschutz & Sicherheit → Spracherkennung.";
+"dictation.failed" = "Diktat beendet. Versuchen Sie es erneut.";
+"dictation.onDeviceUnavailable" = "Dieser Mac kann %1$@ nicht offline erkennen. Fügen Sie die Sprache in den Systemeinstellungen → Tastatur → Diktierfunktion hinzu und versuchen Sie es erneut. Audio wird nie über das Netzwerk gesendet.";
+"dictation.openSettings" = "Systemeinstellungen öffnen";
+"dictation.start" = "Diktieren";
+"dictation.stop" = "Diktat beenden";
 "effort.high" = "Hoch";
 "effort.hint" = "Höherer Aufwand ist bei schwierigen Aufgaben klüger, aber langsamer und verbraucht das Limit schneller. Für den Alltag reicht Mittel.";
 "effort.label" = "Aufwand: %1$@";
@@ -654,6 +661,8 @@
 "inspector.project" = "Projekt";
 "inspector.promptLabel" = "Prompt";
 "inspector.promptPlaceholder" = "Was der Agent bei jedem Lauf tut";
+"inspector.readAloud" = "Antworten vorlesen";
+"inspector.readAloudHint" = "Wenn Bandito die aktive App ist, wird eine fertige Antwort dieses Agenten vorgelesen.";
 "inspector.resets" = "Zurücksetzung %1$@";
 "inspector.rules" = "Regeln";
 "inspector.runNow" = "Jetzt ausführen";
@@ -798,6 +807,7 @@
 "keys.copyPath" = "Pfad kopieren";
 "keys.customizedCount" = "Von Ihnen geändert: %1$lld";
 "keys.deny" = "Ausgewählte Anfrage ablehnen";
+"keys.dictate" = "In die Nachricht diktieren";
 "keys.duplicate" = "Duplizieren";
 "keys.enclosingFolder" = "Übergeordneter Ordner";
 "keys.exportButton" = "Exportieren";
@@ -1964,6 +1974,9 @@
 "slash.sourceServer" = "Server";
 "slash.terminalSummary" = "Terminal im Ordner des Agenten öffnen";
 "slash.usageSummary" = "Abo-Limits";
+"speech.codeSkipped" = "Code übersprungen";
+"speech.read" = "Vorlesen";
+"speech.stop" = "Vorlesen beenden";
 "status.error" = "Fehler";
 "status.idle" = "Inaktiv";
 "status.needsYou" = "Wartet auf Sie";

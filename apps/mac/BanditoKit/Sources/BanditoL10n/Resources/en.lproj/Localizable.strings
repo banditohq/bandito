@@ -417,6 +417,13 @@
 "devices.revokeMessage" = "The device loses access to the server at once.";
 "devices.revokeTitle" = "Revoke %1$@?";
 "devices.thisDeviceHint" = "You can't revoke the device you are working on now.";
+"dictation.denied.microphone" = "Bandito can't use the microphone. Allow it in System Settings → Privacy & Security → Microphone.";
+"dictation.denied.speech" = "Bandito can't use speech recognition. Allow it in System Settings → Privacy & Security → Speech Recognition.";
+"dictation.failed" = "Dictation stopped. Try again.";
+"dictation.onDeviceUnavailable" = "This Mac can't recognise %1$@ offline. Add the language in System Settings → Keyboard → Dictation, then try again. Audio is never sent over the network.";
+"dictation.openSettings" = "Open System Settings";
+"dictation.start" = "Dictate";
+"dictation.stop" = "Stop dictation";
 "effort.high" = "High";
 "effort.hint" = "Higher effort is smarter on hard tasks, but slower and uses up your limit faster. Medium is enough for everyday work.";
 "effort.label" = "effort: %1$@";
@@ -654,6 +661,8 @@
 "inspector.project" = "Project";
 "inspector.promptLabel" = "Prompt";
 "inspector.promptPlaceholder" = "What the agent does on each run";
+"inspector.readAloud" = "Read replies aloud";
+"inspector.readAloudHint" = "A finished reply of this agent is read aloud when Bandito is the active app.";
 "inspector.resets" = "Resets %1$@";
 "inspector.rules" = "Rules";
 "inspector.runNow" = "Run now";
@@ -798,6 +807,7 @@
 "keys.copyPath" = "Copy path";
 "keys.customizedCount" = "Changed by you: %1$lld";
 "keys.deny" = "Deny focused request";
+"keys.dictate" = "Dictate into the message";
 "keys.duplicate" = "Duplicate";
 "keys.enclosingFolder" = "Enclosing folder";
 "keys.exportButton" = "Export";
@@ -1964,6 +1974,9 @@
 "slash.sourceServer" = "server";
 "slash.terminalSummary" = "Open a terminal in the agent's folder";
 "slash.usageSummary" = "Subscription limits";
+"speech.codeSkipped" = "code skipped";
+"speech.read" = "Read aloud";
+"speech.stop" = "Stop reading";
 "status.error" = "Error";
 "status.idle" = "Idle";
 "status.needsYou" = "Needs you";

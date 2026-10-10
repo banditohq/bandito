@@ -85,6 +85,7 @@ Build only from these. Need something that is not here: add it to the system fir
 | Animation | `.banditoAnimation`, `.banditoRise` | `Components/Motion.swift`, `RiseIn.swift` |
 | Hover fill for a gesture row | `.rowHighlight()` | `Components/Interaction.swift` |
 | Focus ring on a custom control | `.brandFocusRing(shape:)` | `Components/Interaction.swift` |
+| Recording indicator (dictation) | `dictationButton` in the composer | `Team/Composer.swift` |
 
 ### Look of each (exact values)
 
@@ -114,6 +115,10 @@ Build only from these. Need something that is not here: add it to the system fir
 - **Menu above the composer** (`/` and `@`): max 640 wide, radius 18, `#201C18` at 98%, 1 pt `text` 12% border, `black` 50% shadow (0 14 30); group title 10.5/600 with 0.8 tracking in `text3`; row radius 10, padding 10 x 7, selected = `peach` 10% fill and 30% edge; footer 11.5 `text3` under a `text` 7% hairline.
 - **Mention chip**: a capsule 26 high, `surface3`, 0.5 pt `line` border (dashed `peach` 60% while the service is not connected), 18 pt picture on the left (a service's Marketplace tile, an agent's avatar, a file glyph, the browser mark), label 12.5/500 `text`, 260 max, middle-truncated. In the composer it sits in a strip above the field with a 18 pt cross; in the thread it sits right-aligned under the bubble, wrapping to the right edge. A file chip opens the file in the workbench.
 - **Avatar**: tile corner size x 17/52; fixed tile colors (peach, sky, sage, rose, lilac, cream) and mask `#12100E`; nine faces; six moods (idle, working, needsYou, thinking, error, sleeping) that rest under reduced motion.
+
+**Recording indicator (dictation).** The microphone button next to "+" is `text2` at rest. While it listens the icon is
+the filled mic in `signal` (cream-orange) with a 7 pt `signal` dot at its top right. The dot is static, no pulse: it
+shows a state, it is not a motion. The dot is hidden from VoiceOver; the button's label reads "Stop dictation".
 
 ## Motion
 

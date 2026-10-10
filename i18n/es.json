@@ -2441,5 +2441,18 @@
   "market.try.structured": "Resultado estructurado",
   "market.try.toolError": "La herramienta respondió con un error.",
   "market.try.emptyResult": "La herramienta no devolvió nada.",
-  "market.try.failed": "No se pudo ejecutar la herramienta: {message}"
+  "market.try.failed": "No se pudo ejecutar la herramienta: {message}",
+  "dictation.start": "Dictar",
+  "dictation.stop": "Detener dictado",
+  "dictation.denied.microphone": "Bandito no puede usar el micrófono. Permítalo en Ajustes del Sistema → Privacidad y seguridad → Micrófono.",
+  "dictation.denied.speech": "Bandito no puede usar el reconocimiento de voz. Permítalo en Ajustes del Sistema → Privacidad y seguridad → Reconocimiento de voz.",
+  "dictation.onDeviceUnavailable": "Este Mac no puede reconocer {language} sin conexión. Añada el idioma en Ajustes del Sistema → Teclado → Dictado y vuelva a intentarlo. El audio nunca se envía por la red.",
+  "dictation.failed": "El dictado se detuvo. Inténtelo de nuevo.",
+  "dictation.openSettings": "Abrir Ajustes del Sistema",
+  "speech.read": "Leer en voz alta",
+  "speech.stop": "Detener lectura",
+  "speech.codeSkipped": "código omitido",
+  "inspector.readAloud": "Leer las respuestas en voz alta",
+  "inspector.readAloudHint": "Cuando Bandito es la app activa, se lee en voz alta una respuesta terminada de este agente.",
+  "keys.dictate": "Dictar en el mensaje"
 }

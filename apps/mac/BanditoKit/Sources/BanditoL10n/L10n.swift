@@ -611,6 +611,19 @@ public enum L10n {
         public static var thisDeviceHint: String { L10n.tr("devices.thisDeviceHint") }
     }
 
+    public enum Dictation {
+        public static var failed: String { L10n.tr("dictation.failed") }
+        public static func onDeviceUnavailable(language: String) -> String { L10n.tr("dictation.onDeviceUnavailable", language) }
+        public static var openSettings: String { L10n.tr("dictation.openSettings") }
+        public static var start: String { L10n.tr("dictation.start") }
+        public static var stop: String { L10n.tr("dictation.stop") }
+
+        public enum Denied {
+            public static var microphone: String { L10n.tr("dictation.denied.microphone") }
+            public static var speech: String { L10n.tr("dictation.denied.speech") }
+        }
+    }
+
     public enum Effort {
         public static var high: String { L10n.tr("effort.high") }
         public static var hint: String { L10n.tr("effort.hint") }
@@ -950,6 +963,8 @@ public enum L10n {
         public static var project: String { L10n.tr("inspector.project") }
         public static var promptLabel: String { L10n.tr("inspector.promptLabel") }
         public static var promptPlaceholder: String { L10n.tr("inspector.promptPlaceholder") }
+        public static var readAloud: String { L10n.tr("inspector.readAloud") }
+        public static var readAloudHint: String { L10n.tr("inspector.readAloudHint") }
         public static func resets(time: String) -> String { L10n.tr("inspector.resets", time) }
         public static var rules: String { L10n.tr("inspector.rules") }
         public static var runNow: String { L10n.tr("inspector.runNow") }
@@ -1129,6 +1144,7 @@ public enum L10n {
         public static var copyPath: String { L10n.tr("keys.copyPath") }
         public static func customizedCount(count: Int) -> String { L10n.tr("keys.customizedCount", count) }
         public static var deny: String { L10n.tr("keys.deny") }
+        public static var dictate: String { L10n.tr("keys.dictate") }
         public static var duplicate: String { L10n.tr("keys.duplicate") }
         public static var enclosingFolder: String { L10n.tr("keys.enclosingFolder") }
         public static var exportButton: String { L10n.tr("keys.exportButton") }
@@ -2667,6 +2683,12 @@ public enum L10n {
             public static var terminal: String { L10n.tr("slash.alias.terminal") }
             public static var usage: String { L10n.tr("slash.alias.usage") }
         }
+    }
+
+    public enum Speech {
+        public static var codeSkipped: String { L10n.tr("speech.codeSkipped") }
+        public static var read: String { L10n.tr("speech.read") }
+        public static var stop: String { L10n.tr("speech.stop") }
     }
 
     public enum Status {

@@ -2441,5 +2441,18 @@
   "market.try.structured": "Structured result",
   "market.try.toolError": "The tool answered with an error.",
   "market.try.emptyResult": "The tool returned nothing.",
-  "market.try.failed": "Could not run the tool: {message}"
+  "market.try.failed": "Could not run the tool: {message}",
+  "dictation.start": "Dictate",
+  "dictation.stop": "Stop dictation",
+  "dictation.denied.microphone": "Bandito can't use the microphone. Allow it in System Settings → Privacy & Security → Microphone.",
+  "dictation.denied.speech": "Bandito can't use speech recognition. Allow it in System Settings → Privacy & Security → Speech Recognition.",
+  "dictation.onDeviceUnavailable": "This Mac can't recognise {language} offline. Add the language in System Settings → Keyboard → Dictation, then try again. Audio is never sent over the network.",
+  "dictation.failed": "Dictation stopped. Try again.",
+  "dictation.openSettings": "Open System Settings",
+  "speech.read": "Read aloud",
+  "speech.stop": "Stop reading",
+  "speech.codeSkipped": "code skipped",
+  "inspector.readAloud": "Read replies aloud",
+  "inspector.readAloudHint": "A finished reply of this agent is read aloud when Bandito is the active app.",
+  "keys.dictate": "Dictate into the message"
 }
