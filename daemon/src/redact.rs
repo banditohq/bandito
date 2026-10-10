@@ -21,11 +21,17 @@ pub struct Redactor {
 impl Redactor {
     /// `secrets` are `(name, value)` pairs. Values shorter than [`MIN_VALUE_BYTES`] are skipped.
     pub fn new(secrets: impl IntoIterator<Item = (String, String)>) -> Self {
-        let mut entries: Vec<(String, String)> = secrets
-            .into_iter()
-            .filter(|(_, value)| value.len() >= MIN_VALUE_BYTES)
-            .map(|(name, value)| (value, name))
-            .collect();
+        Self::of(secrets.into_iter().filter(|(_, value)| value.len() >= MIN_VALUE_BYTES))
+    }
+
+    /// Like [`Redactor::new`], but every non-empty value is replaced, however short. For the owner's own draft in a
+    /// probe, where a short secret would otherwise show in an error.
+    pub fn exact(secrets: impl IntoIterator<Item = (String, String)>) -> Self {
+        Self::of(secrets.into_iter().filter(|(_, value)| !value.is_empty()))
+    }
+
+    fn of(secrets: impl Iterator<Item = (String, String)>) -> Self {
+        let mut entries: Vec<(String, String)> = secrets.map(|(name, value)| (value, name)).collect();
         entries.sort_by_key(|e| std::cmp::Reverse(e.0.len()));
         Self { entries }
     }

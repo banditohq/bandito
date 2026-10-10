@@ -254,6 +254,22 @@ import Testing
             == .failed(.missingProgram))
     }
 
+    @Test func aProbeCarriesTypedSecretsAsValuesAndKeepsStoredReferences() {
+        var draft = IntegrationDraft.custom(kind: .stdio)
+        draft.name = "probe"
+        draft.commandLine = "npx -y pkg"
+        draft.env = [
+            IntegrationPair(key: "TOKEN", value: "tok-typed-123", isSecret: true, template: "Bearer {secret}"),
+            IntegrationPair(key: "KEPT", value: "", isSecret: true, storedSecret: "probe_kept"),
+            IntegrationPair(key: "PLAIN", value: "lit"),
+        ]
+        let probe = draft.probeDraft()
+        // The typed secret goes in as its value (through its template); nothing is written for it.
+        #expect(probe.env == ["TOKEN": "Bearer tok-typed-123", "KEPT": "secret:probe_kept", "PLAIN": "lit"])
+        #expect(probe.command == "npx" && probe.args == ["-y", "pkg"])
+        #expect(probe.enabled == false)
+    }
+
     @Test func failuresAreWordedByKind() {
         #expect(IntegrationFailure.classify("sh: npx: command not found") == .missingProgram)
         #expect(IntegrationFailure.classify("HTTP 401 Unauthorized") == .rejected)

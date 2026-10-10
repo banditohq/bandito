@@ -76,6 +76,14 @@ jobs:
       checks: write
       issues: write
 
+  # Informational, not part of ci-ok: builds the app and takes pictures of every screen (see gallery.yml).
+  gallery:
+    name: gallery
+    needs: changes
+    if: needs.changes.outputs.app == 'true' || needs.changes.outputs.workflows == 'true'
+    uses: ./.github/workflows/gallery.yml
+    secrets: inherit
+
   ci-ok:
     name: ci-ok
     if: always()

@@ -86,6 +86,7 @@ pub fn features() -> Vec<&'static str> {
         "reactions",
         "attachments",
         "integrations",
+        "integrations_probe",
         "avatar_pictures",
         "lead",
     ];
@@ -1099,7 +1100,8 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
         | "integrations.add"
         | "integrations.update"
         | "integrations.remove"
-        | "integrations.test" => integrations::dispatch(app, method, p).await,
+        | "integrations.test"
+        | "integrations.probe" => integrations::dispatch(app, method, p).await,
         "agents.avatar_image_set" | "agents.avatar_image_get" | "agents.avatar_image_clear" => {
             avatar::dispatch(app, method, p).await
         }
