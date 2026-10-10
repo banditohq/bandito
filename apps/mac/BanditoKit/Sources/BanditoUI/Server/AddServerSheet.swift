@@ -20,7 +20,8 @@ struct AddServerSheet: View {
             ScrollView {
                 FirstServerStep(
                     onFinished: { close() },
-                    onConnected: { close() })
+                    onConnected: { close() },
+                    initialAddress: router.addServerAddress)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
             }
             .scrollIndicators(.automatic)
@@ -29,6 +30,8 @@ struct AddServerSheet: View {
         // Not taller than the window: the sheet takes the window's height at most, and the scroll view takes the rest.
         .frame(minWidth: 680, minHeight: 460, maxHeight: .infinity, alignment: .topLeading)
         .background(Color.Bandito.surface2)
+        // The address came from "Connect again" on one server: the next opening starts empty.
+        .onDisappear { router.addServerAddress = nil }
     }
 
     private func close() {

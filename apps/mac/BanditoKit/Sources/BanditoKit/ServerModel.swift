@@ -87,7 +87,13 @@ public final class ServerModel: Identifiable {
     public let config: ServerConfig
     public nonisolated var id: UUID { config.id }
 
-    public private(set) var state: ConnectionState = .disconnected
+    public private(set) var state: ConnectionState = .disconnected {
+        didSet {
+            if state != oldValue { onStateChange?(state) }
+        }
+    }
+    /// Called on the main actor each time `state` changes. The app model repairs a rejected key from it.
+    @ObservationIgnored public var onStateChange: (@MainActor (ConnectionState) -> Void)?
     public internal(set) var info: DaemonInfo? {
         didSet {
             // A listing asked for before the daemon's info was known is sent now that it is.
@@ -381,7 +387,14 @@ public final class ServerModel: Identifiable {
                     return
                 } catch {
                     if Task.isCancelled { return }
-                    model.lastError = FailureKind.classify(error)
+                    let kind = FailureKind.classify(error)
+                    model.lastError = kind
+                    // A server that refuses the key refuses it again: waiting and retrying cannot help.
+                    if kind == .keyRejected {
+                        model.reconnectTask = nil
+                        model.state = .failed(kind)
+                        return
+                    }
                 }
             }
         }

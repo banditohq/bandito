@@ -600,10 +600,15 @@ public enum L10n {
     }
 
     public enum Failure {
+        public static var connectAgain: String { L10n.tr("failure.connectAgain") }
         public static var copy: String { L10n.tr("failure.copy") }
         public static var details: String { L10n.tr("failure.details") }
         public static var deviceRevoked: String { L10n.tr("failure.deviceRevoked") }
         public static var generic: String { L10n.tr("failure.generic") }
+        public static var keyRejected: String { L10n.tr("failure.keyRejected") }
+        public static var keyRejectedThisMac: String { L10n.tr("failure.keyRejectedThisMac") }
+        public static var keyRepairFailed: String { L10n.tr("failure.keyRepairFailed") }
+        public static var keyRepairing: String { L10n.tr("failure.keyRepairing") }
         public static var noAnswer: String { L10n.tr("failure.noAnswer") }
 
         public enum Reason {

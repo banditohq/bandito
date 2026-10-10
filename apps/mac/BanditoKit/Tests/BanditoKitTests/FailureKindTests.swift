@@ -40,6 +40,13 @@ import Testing
         #expect(FailureKind.classify(error) == .deviceRevoked)
     }
 
+    @Test func aRejectedKeyIsNotNoAnswer() {
+        let rejected = RPCError(code: RPCError.keyRejected, message: "the server rejected the device key (HTTP 401)")
+        #expect(FailureKind.classify(rejected) == .keyRejected)
+        // The bare system error of a failed handshake stays what it was: nothing says the server answered.
+        #expect(FailureKind.classify(URLError(.badServerResponse)) != .keyRejected)
+    }
+
     @Test func dataReasonWinsOverTheMessage() {
         let error = RPCError(
             code: RPCError.fileError, message: "could not write", data: .object(["reason": .string("conflict")]))

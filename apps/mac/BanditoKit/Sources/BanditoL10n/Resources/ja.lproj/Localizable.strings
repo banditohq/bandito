@@ -399,10 +399,15 @@
 "empty.noServers.title" = "サーバーがありません";
 "error.disconnected" = "%1$@ から切断されました";
 "error.generic" = "問題が発生しました: %1$@";
+"failure.connectAgain" = "再接続";
 "failure.copy" = "コピー";
 "failure.details" = "詳細";
 "failure.deviceRevoked" = "このデバイスはサーバーに接続されていません。もう一度接続してください。";
 "failure.generic" = "問題が発生しました。";
+"failure.keyRejected" = "サーバーがこの Mac のキーを受け付けませんでした。サーバーが再インストールされたか、キーが取り消された可能性があります。";
+"failure.keyRejectedThisMac" = "この Mac のサーバーがアプリのキーを受け付けませんでした。データが失われた可能性があります。";
+"failure.keyRepairFailed" = "この Mac のサーバーに再接続できませんでした。";
+"failure.keyRepairing" = "この Mac のサーバーに再接続しています…";
 "failure.noAnswer" = "サーバーが応答しません。電源が入っていて、接続が機能しているか確認してください。";
 "failure.reason.binary" = "テキストファイルではないため、ここでは表示できません。";
 "failure.reason.cloneFailed" = "リポジトリをクローンできませんでした。";

@@ -246,6 +246,8 @@ public final class Router {
     }
 
     public var sheet: Sheet?
+    /// The address the add-server sheet starts with: set by "Connect again" on a server that refused this Mac's key.
+    public var addServerAddress: String?
     /// The picture viewer: the pictures to show, and the first one. Set to show it over the main window; `nil` closes it.
     var imageViewer: ImageViewerRequest?
     /// The quick-open palette (⌘K).

@@ -399,10 +399,15 @@
 "empty.noServers.title" = "没有服务器";
 "error.disconnected" = "与 %1$@ 的连接已断开";
 "error.generic" = "出错了：%1$@";
+"failure.connectAgain" = "重新连接";
 "failure.copy" = "复制";
 "failure.details" = "详情";
 "failure.deviceRevoked" = "此设备已无法连接到服务器。请重新连接。";
 "failure.generic" = "出了点问题。";
+"failure.keyRejected" = "服务器不接受这台 Mac 的密钥。服务器可能已重新安装，或密钥已被撤销。";
+"failure.keyRejectedThisMac" = "这台 Mac 的服务器不接受应用的密钥。它可能丢失了数据。";
+"failure.keyRepairFailed" = "无法重新连接这台 Mac 的服务器。";
+"failure.keyRepairing" = "正在重新连接这台 Mac 的服务器…";
 "failure.noAnswer" = "服务器没有响应。请检查它是否开机，以及连接是否正常。";
 "failure.reason.binary" = "这不是文本文件，无法在此显示。";
 "failure.reason.cloneFailed" = "无法克隆该仓库。";
