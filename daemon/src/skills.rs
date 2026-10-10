@@ -119,7 +119,30 @@ pub fn install(base: &Path, id: &str) -> Result<PathBuf, InstallError> {
         path: MARKER.to_string(),
         content: STANDARD.encode(marker),
     });
+    remove_leftovers(base, id)?;
     commands::install(base, InstallKind::Skill, id, &install_files, true)
+}
+
+/// Removes what an interrupted install left beside skill `id`: the folders `.<id>.tmp-*` and `.<id>.old-*`. Only real
+/// folders are removed; a link with that name is left alone.
+fn remove_leftovers(base: &Path, id: &str) -> Result<(), InstallError> {
+    let skills = base.join(".claude").join("skills");
+    let Ok(read) = fs::read_dir(&skills) else {
+        return Ok(());
+    };
+    let prefixes = [format!(".{id}.tmp-"), format!(".{id}.old-")];
+    for entry in read.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let leftover = prefixes.iter().any(|p| name.starts_with(p.as_str()));
+        if leftover && entry.file_type().is_ok_and(|t| t.is_dir()) {
+            let path = entry.path();
+            fs::remove_dir_all(&path).map_err(|e| InstallError {
+                reason: "io",
+                message: format!("{}: {e}", path.display()),
+            })?;
+        }
+    }
+    Ok(())
 }
 
 /// Removes `base/.claude/skills/<id>/`, only when Bandito installed it (`not_ours` otherwise). A link is refused
@@ -604,5 +627,39 @@ mod install_tests {
         let err = install(home.path(), "commit").unwrap_err();
         assert_eq!(err.reason, "unsafe_path");
         assert!(fs::read_dir(outside.path()).unwrap().next().is_none());
+    }
+}
+
+#[cfg(all(test, unix))]
+mod leftover_tests {
+    use super::*;
+    use std::fs;
+    use std::os::unix::fs::symlink;
+    use tempfile::TempDir;
+
+    #[test]
+    fn install_clears_the_leftovers_of_its_own_id_only() {
+        let home = TempDir::new().unwrap();
+        let outside = TempDir::new().unwrap();
+        let skills = home.path().join(".claude/skills");
+        fs::create_dir_all(skills.join(".commit.tmp-1/sub")).unwrap();
+        fs::write(skills.join(".commit.tmp-1/sub/x"), "junk").unwrap();
+        fs::create_dir_all(skills.join(".commit.old-2")).unwrap();
+        fs::write(skills.join(".commit.old-2/SKILL.md"), "old").unwrap();
+        fs::create_dir_all(skills.join(".other.tmp-3")).unwrap();
+        fs::write(skills.join(".other.tmp-3/keep"), "keep").unwrap();
+        symlink(outside.path(), skills.join(".commit.tmp-4")).unwrap();
+        fs::write(outside.path().join("data"), "outside").unwrap();
+
+        install(home.path(), "commit").unwrap();
+        assert!(!skills.join(".commit.tmp-1").exists());
+        assert!(!skills.join(".commit.old-2").exists());
+        assert_eq!(fs::read_to_string(skills.join(".other.tmp-3/keep")).unwrap(), "keep");
+        assert_eq!(fs::read_to_string(outside.path().join("data")).unwrap(), "outside");
+        assert!(
+            skills.join(".commit.tmp-4").symlink_metadata().is_ok(),
+            "a link is left alone"
+        );
+        assert_eq!(slot(home.path(), "commit"), Slot::Ours);
     }
 }

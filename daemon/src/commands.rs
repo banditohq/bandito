@@ -151,10 +151,14 @@ fn collect_codex_prompts(root: &Path, out: &mut Vec<Command>) {
     }
 }
 
-/// Directory entries in name order, so that the listing is stable.
+/// Directory entries in name order, so that the listing is stable. Names that start with a dot are left out: the
+/// daemon's own temporary and old skill folders (`.<id>.tmp-*`, `.<id>.old-*`) are hidden from the list.
 fn sorted_entries(dir: &Path) -> Vec<fs::DirEntry> {
     let Ok(read) = fs::read_dir(dir) else { return Vec::new() };
-    let mut entries: Vec<fs::DirEntry> = read.flatten().collect();
+    let mut entries: Vec<fs::DirEntry> = read
+        .flatten()
+        .filter(|e| !e.file_name().to_string_lossy().starts_with('.'))
+        .collect();
     entries.sort_by_key(|e| e.file_name());
     entries
 }
@@ -1139,5 +1143,39 @@ mod skill_path_tests {
         let err = install(base.path(), InstallKind::Skill, "ship", &skill_files(), true).unwrap_err();
         assert_eq!(err.reason, "unsafe_path");
         assert!(fs::read_dir(outside.path()).unwrap().next().is_none());
+    }
+}
+
+#[cfg(test)]
+mod hidden_entry_tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    /// A leftover of an interrupted skill install, and a hidden command file, are not commands, even when their
+    /// front matter names a visible command.
+    #[test]
+    fn dot_named_folders_and_files_are_not_listed() {
+        let cwd = TempDir::new().unwrap();
+        let skills = cwd.path().join(".claude/skills");
+        fs::create_dir_all(skills.join(".commit.tmp-1")).unwrap();
+        fs::write(
+            skills.join(".commit.tmp-1/SKILL.md"),
+            "---\nname: commit\n---\nLeft over.",
+        )
+        .unwrap();
+        fs::create_dir_all(skills.join(".commit.old-2")).unwrap();
+        fs::write(skills.join(".commit.old-2/SKILL.md"), "Old copy.").unwrap();
+        fs::create_dir_all(skills.join("visible")).unwrap();
+        fs::write(skills.join("visible/SKILL.md"), "Visible.").unwrap();
+        let commands = cwd.path().join(".claude/commands");
+        fs::create_dir_all(&commands).unwrap();
+        fs::write(commands.join(".hidden.md"), "Hidden.").unwrap();
+        fs::write(commands.join("deploy.md"), "Deploy.").unwrap();
+
+        let names: Vec<String> = discover(None, cwd.path(), RuntimeKind::Claude)
+            .into_iter()
+            .map(|c| c.name)
+            .collect();
+        assert_eq!(names, vec!["deploy".to_string(), "visible".to_string()]);
     }
 }
