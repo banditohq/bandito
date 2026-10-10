@@ -3,7 +3,8 @@ import BanditoKit
 import BanditoL10n
 import SwiftUI
 
-/// Consecutive tool calls as one card: "Ran 3 commands", expandable to one line per command.
+/// Consecutive tool calls as one compact line: "Ran 3 commands" with the status icon, expandable to one line per
+/// command. 28 pt high, a thin border, and no card around it, so a long run of calls does not fill the thread.
 struct ToolGroupCard: View {
     var tools: [ToolRow]
     /// Total time of the group in seconds, when known.
@@ -16,27 +17,30 @@ struct ToolGroupCard: View {
             Button {
                 withAnimation(BanditoMotion.ease) { open.toggle() }
             } label: {
-                HStack(spacing: 10) {
+                HStack(spacing: 8) {
                     statusIcon
                     Text(ToolGroupTitle.text(oks: tools.map(\.ok)))
-                        .font(BanditoFont.font(size: 12.5, weight: 500))
-                        .foregroundStyle(Color.Bandito.text)
+                        .font(BanditoFont.font(size: 12, weight: 500))
+                        .foregroundStyle(Color.Bandito.text2)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                     if let duration {
                         Text("· " + L10n.Thread.duration(runtime: duration.formatted(.number.precision(.fractionLength(1)))))
-                            .font(BanditoFont.font(size: 12.5, weight: 400))
+                            .font(BanditoFont.font(size: 12, weight: 400))
                             .foregroundStyle(Color.Bandito.text3)
+                            .lineLimit(1)
                     }
                     Spacer(minLength: 8)
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(Color.Bandito.text3)
                         .rotationEffect(.degrees(open ? 0 : -90))
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
+                .padding(.horizontal, 10)
+                .frame(height: 28)
                 .contentShape(Rectangle())
             }
-            .banditoButton(.row(cornerRadius: 8))
+            .banditoButton(.row(cornerRadius: 7))
 
             if open {
                 VStack(alignment: .leading, spacing: 6) {
@@ -53,24 +57,23 @@ struct ToolGroupCard: View {
                 }
             }
         }
-        .background(Color.Bandito.surface1.opacity(0.6), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.Bandito.line, lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).stroke(Color.Bandito.line, lineWidth: 0.5))
     }
 
     @ViewBuilder
     private var statusIcon: some View {
         if tools.contains(where: { $0.ok == nil }) {
             Image(systemName: "circle.dotted")
-                .font(.system(size: 13, weight: .medium))
+                .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(Color.Bandito.text3)
                 .symbolEffect(.variableColor.iterative, options: .repeating)
-                .frame(width: 14)
+                .frame(width: 13)
         } else if tools.contains(where: { $0.ok == false }) {
-            Image(systemName: "xmark").font(.system(size: 12, weight: .bold))
-                .foregroundStyle(Color.Bandito.danger).frame(width: 14)
+            Image(systemName: "xmark").font(.system(size: 10, weight: .bold))
+                .foregroundStyle(Color.Bandito.danger).frame(width: 13)
         } else {
-            Image(systemName: "checkmark").font(.system(size: 12, weight: .bold))
-                .foregroundStyle(Color.Bandito.ok).frame(width: 14)
+            Image(systemName: "checkmark").font(.system(size: 10, weight: .bold))
+                .foregroundStyle(Color.Bandito.ok).frame(width: 13)
         }
     }
 }

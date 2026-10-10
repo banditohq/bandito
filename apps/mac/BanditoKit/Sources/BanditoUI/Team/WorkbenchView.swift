@@ -15,6 +15,9 @@ struct WorkbenchView: View {
     @Environment(Router.self) private var router
     /// The top pane's share of the height when split; one for the whole app.
     @AppStorage(WorkbenchLayout.splitKey) private var storedSplit = WorkbenchLayout.defaultSplit
+    /// The top pane's share while the divider is dragged: the panes follow the pointer at once. Written to
+    /// `storedSplit` only when the drag ends.
+    @State private var liveSplit: Double?
 
     private var state: WorkbenchState { router.workbenchState(for: agent.id) }
 
@@ -22,7 +25,7 @@ struct WorkbenchView: View {
         GeometryReader { proxy in
             let split = state.isSplit
             let divider = split ? WorkbenchSplitHandle.height : 0
-            let share = WorkbenchLayout.clampSplit(storedSplit)
+            let share = WorkbenchLayout.clampSplit(liveSplit ?? storedSplit)
             let top = split ? max(0, (proxy.size.height - divider) * share) : proxy.size.height
             let panelWidth = Double(proxy.size.width)
             VStack(spacing: 0) {
@@ -32,10 +35,19 @@ struct WorkbenchView: View {
                 WorkbenchSplitHandle(
                     share: share,
                     height: proxy.size.height,
-                    onCommit: { translation in
-                        storedSplit = WorkbenchLayout.clampSplit(share + translation / max(proxy.size.height, 1))
+                    onDrag: { translation in
+                        liveSplit = WorkbenchLayout.splitAfterDrag(
+                            stored: storedSplit, translation: translation, height: proxy.size.height)
                     },
-                    onReset: { storedSplit = WorkbenchLayout.defaultSplit })
+                    onCommit: { translation in
+                        storedSplit = WorkbenchLayout.splitAfterDrag(
+                            stored: storedSplit, translation: translation, height: proxy.size.height)
+                        liveSplit = nil
+                    },
+                    onReset: {
+                        liveSplit = nil
+                        storedSplit = WorkbenchLayout.defaultSplit
+                    })
                     .frame(height: divider)
                     .opacity(split ? 1 : 0)
                     .allowsHitTesting(split)
@@ -112,6 +124,8 @@ private struct WorkbenchSplitHandle: View {
     /// The top pane's share now, and the height of the whole panel.
     var share: Double
     var height: CGFloat
+    /// Called while the divider moves, with the total vertical translation so far.
+    var onDrag: (Double) -> Void
     /// Called once, when the drag ends, with the total vertical translation.
     var onCommit: (Double) -> Void
     var onReset: () -> Void
@@ -142,11 +156,8 @@ private struct WorkbenchSplitHandle: View {
             .gesture(
                 DragGesture(minimumDistance: 1, coordinateSpace: .global)
                     .updating($dragging) { _, state, _ in state = true }
-                    .onEnded { value in
-                        // A click without a move changes nothing.
-                        guard abs(value.translation.height) >= 1 else { return }
-                        onCommit(Double(value.translation.height))
-                    }
+                    .onChanged { value in onDrag(Double(value.translation.height)) }
+                    .onEnded { value in onCommit(Double(value.translation.height)) }
             )
             .simultaneousGesture(TapGesture(count: 2).onEnded { onReset() })
     }
@@ -262,17 +273,15 @@ private struct WorkbenchHeader: View {
         #endif
     }
 
-    /// Opens `tab` in this pane: the pane is focused first, so the tab lands here.
+    /// Opens `tab` in this pane: the pane the person pressed in, so the tab lands here.
     private func open(_ tab: WorkbenchTab) {
-        router.focusWorkbenchPane(pane, agentID: agent.id)
-        router.showInWorkbench(tab, agentID: agent.id)
+        router.showInWorkbench(tab, agentID: agent.id, pane: pane)
     }
 
     private var addMenu: some View {
         Menu {
             Button(L10n.Workbench.newTerminal) {
-                router.focusWorkbenchPane(pane, agentID: agent.id)
-                openAgentTerminal()
+                openNewTerminal()
             }
             .disabled(!server.supports("terminals"))
             Button(L10n.Workbench.browser) { open(.browser) }
@@ -330,11 +339,10 @@ private struct WorkbenchHeader: View {
         #endif
     }
 
-    /// The agent's terminal: the one already open in its folder, else a new one there. The same session as in
-    /// Terminals mode.
-    private func openAgentTerminal() {
+    /// A new terminal in the agent's folder, shown in this pane. Each press makes one: several terminals can share a pane.
+    private func openNewTerminal() {
         #if os(macOS)
-        WorkbenchTerminals.showAgentTerminal(server: server, agent: agent, app: app, router: router)
+        WorkbenchTerminals.openNewTerminal(server: server, agent: agent, app: app, router: router, pane: pane)
         #endif
     }
 }
@@ -526,18 +534,25 @@ private struct WorkbenchEmpty: View {
             HStack(spacing: 8) {
                 if server.supports("terminals") {
                     Button(L10n.Workbench.newTerminal) {
-                        router.focusWorkbenchPane(pane, agentID: agent.id)
                         #if os(macOS)
-                        WorkbenchTerminals.showAgentTerminal(server: server, agent: agent, app: app, router: router)
+                        WorkbenchTerminals.openNewTerminal(
+                            server: server, agent: agent, app: app, router: router, pane: pane)
                         #endif
                     }
                     .banditoButton(.quiet())
                     .lineLimit(1)
                     .fixedSize()
                 }
+                if server.supports("browser") {
+                    Button(L10n.Workbench.browser) {
+                        router.showInWorkbench(.browser, agentID: agent.id, pane: pane)
+                    }
+                    .banditoButton(.quiet())
+                    .lineLimit(1)
+                    .fixedSize()
+                }
                 Button(L10n.Workbench.details) {
-                    router.focusWorkbenchPane(pane, agentID: agent.id)
-                    router.showInWorkbench(.details, agentID: agent.id)
+                    router.showInWorkbench(.details, agentID: agent.id, pane: pane)
                 }
                 .banditoButton(.quiet())
                 .lineLimit(1)
@@ -555,6 +570,18 @@ private struct WorkbenchEmpty: View {
 enum WorkbenchTerminals {
     /// Shows the terminal of the agent: the newest running one in the agent's folder, else a new terminal there.
     static func showAgentTerminal(server: ServerModel, agent: Agent, app: AppModel, router: Router) {
+        open(server: server, agent: agent, app: app, router: router, pane: nil, reuseExisting: true)
+    }
+
+    /// A new terminal in the agent's folder, shown in pane `pane`. Unlike `showAgentTerminal`, it never reuses the
+    /// terminal already open there: each "+" makes one.
+    static func openNewTerminal(server: ServerModel, agent: Agent, app: AppModel, router: Router, pane: Int) {
+        open(server: server, agent: agent, app: app, router: router, pane: pane, reuseExisting: false)
+    }
+
+    private static func open(
+        server: ServerModel, agent: Agent, app: AppModel, router: Router, pane: Int?, reuseExisting: Bool
+    ) {
         let controller = app.terminalController(for: server)
         // A request while one is opening is dropped: one agent opens one terminal at a time.
         guard router.beginOpeningTerminal(agentID: agent.id) else { return }
@@ -564,13 +591,20 @@ enum WorkbenchTerminals {
             // again each time the agent's terminal is asked for.
             await controller.start()
             controller.clearNotice()
-            if let existing = inFolder(agent.cwd, of: controller) {
-                router.showInWorkbench(.terminal(sessionID: existing), agentID: agent.id)
+            @MainActor func show(_ tab: WorkbenchTab) {
+                if let pane {
+                    router.showInWorkbench(tab, agentID: agent.id, pane: pane)
+                } else {
+                    router.showInWorkbench(tab, agentID: agent.id)
+                }
+            }
+            if reuseExisting, let existing = inFolder(agent.cwd, of: controller) {
+                show(.terminal(sessionID: existing))
                 return
             }
             // The id comes from the open itself. On failure the panel says so; no other session is shown in its place.
             if let opened = await controller.openNew(cwd: agent.cwd, afterFocused: false) {
-                router.showInWorkbench(.terminal(sessionID: opened), agentID: agent.id)
+                show(.terminal(sessionID: opened))
             } else {
                 router.setWorkbenchNotice(
                     controller.notice ?? UserFacingMessage(text: L10n.Workbench.terminalFailed), for: agent.id)

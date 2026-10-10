@@ -36,6 +36,16 @@ extension ServerModel {
         try await rpc().call("browser.touch", WorkspaceParams(workspace: workspace))
     }
 
+    /// Closes a tab by force (`browser.close_tab`), even when a client holds it or the page does not answer. Needs a
+    /// daemon that has the method; an older one answers with an error and the caller keeps going.
+    public func browserCloseTab(_ targetID: String, workspace: String? = nil) async throws {
+        struct P: Encodable {
+            var workspace: String?
+            var targetId: String
+        }
+        try await rpc().call("browser.close_tab", P(workspace: workspace, targetId: targetID))
+    }
+
     /// The pages of the running browser (`GET /v1/browser/tabs`). Throws `CDPError.browserNotRunning` (409)
     /// when there is no browser.
     public func browserTabs(workspace: String? = nil) async throws -> [BrowserTab] {

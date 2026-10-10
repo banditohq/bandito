@@ -14,6 +14,8 @@ struct FilePreviewPanel: View {
     let showsTerminal: Bool
     let onTerminal: (FsEntry) -> Void
     let onAgent: (FsEntry) -> Void
+    /// Hides the panel. The toolbar's toggle does the same.
+    var onClose: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -43,6 +45,17 @@ struct FilePreviewPanel: View {
         .background(Color.Bandito.surface1.opacity(0.55))
         .overlay(alignment: .leading) {
             Rectangle().fill(Color.Bandito.text.opacity(0.06)).frame(width: 1)
+        }
+        .overlay(alignment: .topTrailing) {
+            if let onClose {
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .semibold))
+                        .frame(width: 26, height: 26)
+                }
+                .banditoButton(.icon(size: 26, label: L10n.Common.close))
+                .padding(8)
+            }
         }
         .banditoAnimation(.easeOut(duration: BanditoMotion.base), value: entry?.path)
     }

@@ -1,6 +1,7 @@
 #if os(macOS)
 import AppKit
 import BanditoKit
+import OSLog
 import SwiftUI
 
 // Mouse and keyboard of the shared browser's page. The view covers the picture; NSEvent gives the key codes
@@ -26,31 +27,56 @@ enum PageKey {
 struct PageInput: NSViewRepresentable {
     var onPointer: (PagePointer) -> Void
     var onKey: (PageKey) -> Void
+    /// A sideways two-finger swipe over the page is back and forward in its history (the window's swipe handles it),
+    /// so it is not scrolled into the page.
+    var swipeNavigates = false
+    /// Whether the page has an earlier (`true`) or later (`false`) page to swipe to. A sideways gesture with none is a
+    /// scroll of the page.
+    var canSwipe: (Bool) -> Bool = { _ in true }
 
     func makeNSView(context: Context) -> PageInputView {
         let view = PageInputView()
         view.onPointer = onPointer
         view.onKey = onKey
+        view.swipeNavigates = swipeNavigates
+        view.canSwipe = canSwipe
         return view
     }
 
     func updateNSView(_ view: PageInputView, context: Context) {
         view.onPointer = onPointer
         view.onKey = onKey
+        view.swipeNavigates = swipeNavigates
+        view.canSwipe = canSwipe
     }
 }
 
 final class PageInputView: NSView {
     var onPointer: ((PagePointer) -> Void)?
     var onKey: ((PageKey) -> Void)?
+    var swipeNavigates = false
+    var canSwipe: (Bool) -> Bool = { _ in true }
+    private static let log = Logger(subsystem: "dev.bandito.app", category: "browser")
+    private var wheelGesture = WheelGesture()
 
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
 
     private func pointer(_ event: NSEvent, _ type: CDPMouseType, _ button: CDPMouseButton) -> PagePointer {
-        PagePointer(
+        // `clickCount` exists only on mouse button events: AppKit raises on a scroll or move event, and swallows the
+        // exception, so the wheel was lost without a trace.
+        let clicks = Self.hasClickCount(event.type) ? max(event.clickCount, 1) : 0
+        return PagePointer(
             type: type, point: convert(event.locationInWindow, from: nil), button: button,
-            clickCount: max(event.clickCount, 1), deltaX: 0, deltaY: 0, modifiers: Self.modifiers(event))
+            clickCount: clicks, deltaX: 0, deltaY: 0, modifiers: Self.modifiers(event))
+    }
+
+    /// The event types that carry a click count.
+    static func hasClickCount(_ type: NSEvent.EventType) -> Bool {
+        switch type {
+        case .leftMouseDown, .leftMouseUp, .rightMouseDown, .rightMouseUp, .otherMouseDown, .otherMouseUp: true
+        default: false
+        }
     }
 
     private func emit(_ event: NSEvent, _ type: CDPMouseType, _ button: CDPMouseButton) {
@@ -79,11 +105,34 @@ final class PageInputView: NSView {
     override func otherMouseDragged(with event: NSEvent) { emit(event, .mouseMoved, .middle) }
 
     override func scrollWheel(with event: NSEvent) {
-        // Natural scrolling: the content moves with the fingers, which DevTools reads as the opposite delta.
+        // DevTools counts down and right as positive; a mouse wheel's lines become pixels (see `WheelUnits`).
+        // A wheel event made by software in lines may carry only `deltaX/Y`: they are lines too, so they stand in.
+        let scrollX = event.scrollingDeltaX != 0 ? event.scrollingDeltaX : event.deltaX
+        let scrollY = event.scrollingDeltaY != 0 ? event.scrollingDeltaY : event.deltaY
+        let precise = event.hasPreciseScrollingDeltas && (event.scrollingDeltaX != 0 || event.scrollingDeltaY != 0)
+        let delta = WheelUnits.pixels(scrollingDeltaX: Double(scrollX), scrollingDeltaY: Double(scrollY), precise: precise)
+        // The fingers' sideways move, as the window's swipe reads it (see `SwipeSensorView`).
+        let fingerX = event.isDirectionInvertedFromDevice ? event.scrollingDeltaX : -event.scrollingDeltaX
+        let send = wheelGesture.feed(
+            deltaX: delta.x, deltaY: delta.y, phase: Self.wheelPhase(event), swipeEnabled: swipeNavigates,
+            fingerX: Double(fingerX), canSwipe: canSwipe)
+        Self.log.debug("scroll event delta \(delta.x),\(delta.y) phase \(String(describing: Self.wheelPhase(event))) -> send \(send.x),\(send.y)")
+        guard send.x != 0 || send.y != 0 else { return }
         var p = pointer(event, .mouseWheel, .none)
-        p.deltaX = -Double(event.scrollingDeltaX)
-        p.deltaY = -Double(event.scrollingDeltaY)
+        p.deltaX = send.x
+        p.deltaY = send.y
         onPointer?(p)
+    }
+
+    /// The phase of a scroll event: the fingers' own, or the coasting after them.
+    static func wheelPhase(_ event: NSEvent) -> WheelGesture.Phase {
+        if !event.momentumPhase.isEmpty { return .momentum }
+        switch event.phase {
+        case .began, .mayBegin: return .began
+        case .changed, .stationary: return .changed
+        case .ended, .cancelled: return .ended
+        default: return .none
+        }
     }
 
     override func keyDown(with event: NSEvent) {

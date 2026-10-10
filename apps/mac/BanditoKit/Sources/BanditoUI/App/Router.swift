@@ -49,6 +49,14 @@ public enum Sheet: Identifiable, Hashable, Sendable {
     }
 }
 
+/// What Browser mode gives the router so back and forward act on the page's history while it is on screen.
+struct BrowserHistoryHandle {
+    var canBack: () -> Bool
+    var canForward: () -> Bool
+    var back: () -> Void
+    var forward: () -> Void
+}
+
 /// The tabs of the agent details panel (⌘I, and `/memory` opens the memory one).
 enum InspectorTab: String, CaseIterable, Hashable, Sendable {
     case details, memory, whereRuns
@@ -63,8 +71,18 @@ enum InspectorTab: String, CaseIterable, Hashable, Sendable {
 public final class Router {
     public private(set) var mode: AppMode
 
-    /// Team: the agent whose chat is open.
-    public var selectedAgentID: String?
+    /// Team: the agent whose chat is open. Choosing one leaves the team home.
+    public var selectedAgentID: String? {
+        didSet {
+            if selectedAgentID != nil { showsTeamHome = false }
+        }
+    }
+    /// Team: the home screen (greeting, templates, recent agents) is shown instead of a chat.
+    public private(set) var showsTeamHome = false
+    /// Team: the agent whose chat the home replaced, for "forward" (a swipe to the left) to return to.
+    private(set) var agentBeforeHome: String?
+    /// Browser: back and forward walk the page's history while Browser mode is on screen (⌘[ ⌘] and the menu).
+    @ObservationIgnored var browserHistory: BrowserHistoryHandle?
     /// Files: the folder being browsed, absolute on the server. `nil` means the agent's home.
     public var filesPath: String?
     /// Files: a file to open in the viewer once its folder (`filesPath`) is listed. Taken once.
@@ -186,11 +204,13 @@ public final class Router {
 
     /// In Files, back and forward walk the folders visited on the server (`FolderHistory`), not the modes.
     public var canGoBack: Bool {
-        mode == .files ? files.canStepBack || files.showsViewer : !backStack.isEmpty
+        if mode == .browser, let browserHistory { return browserHistory.canBack() }
+        return mode == .files ? files.canStepBack || files.showsViewer : !backStack.isEmpty
     }
 
     public var canGoForward: Bool {
-        mode == .files ? files.canStepForward : !forwardStack.isEmpty
+        if mode == .browser, let browserHistory { return browserHistory.canForward() }
+        return mode == .files ? files.canStepForward : !forwardStack.isEmpty
     }
 
     /// Switches to `next`. Selecting the current mode does nothing. A new switch clears forward history.
@@ -204,6 +224,10 @@ public final class Router {
     /// Returns to the previous mode (⌘[ or a swipe to the right). In Files it goes back one folder instead; with
     /// no folder left to go back to, an open file viewer closes and the folder shows.
     public func back() {
+        if mode == .browser, let browserHistory {
+            browserHistory.back()
+            return
+        }
         if mode == .files {
             if let path = files.stepBack() {
                 showFolder(path)
@@ -219,6 +243,10 @@ public final class Router {
 
     /// Goes forward again after `back()` (⌘] or a swipe to the left). In Files it goes forward one folder.
     public func forward() {
+        if mode == .browser, let browserHistory {
+            browserHistory.forward()
+            return
+        }
         if mode == .files {
             if let path = files.stepForward() { showFolder(path) }
             return
@@ -232,6 +260,27 @@ public final class Router {
     private func showFolder(_ path: String) {
         filesPath = path
         files.showsViewer = false
+    }
+
+    /// Opens the team home (the sidebar's TEAM label, ⌘0, a swipe to the right in a chat). The chat that was open is
+    /// remembered for `leaveTeamHome()`.
+    public func showTeamHome() {
+        if !showsTeamHome { agentBeforeHome = shownAgentID ?? selectedAgentID }
+        // No chat is open on the home: the commands that act on "the agent on screen" (the menu, ⌘↵, ⌘., ⇧⌘D, the
+        // palette) have no agent to act on, so they stay off instead of working on a chat nobody sees.
+        selectedAgentID = nil
+        shownAgentID = nil
+        showsTeamHome = true
+        select(mode: .team)
+    }
+
+    /// Leaves the team home for the chat it replaced; with none remembered, the team's usual agent opens.
+    public func leaveTeamHome() {
+        guard showsTeamHome else { return }
+        let agent = agentBeforeHome
+        agentBeforeHome = nil
+        showsTeamHome = false
+        if let agent { selectedAgentID = agent }
     }
 
     public func toggleSidebar() {
@@ -275,6 +324,11 @@ public final class Router {
     /// The composer's text of each agent, by agent id. Kept here rather than in the thread view, so a draft stays with
     /// its agent when the view is recreated or the person goes to another agent.
     public var drafts: [String: String] = [:]
+    /// Counts each ⌘R. The thread and the folder on show reload their data when it changes (see `RefreshRules`).
+    var refreshRequests = 0
+    /// Where each agent's thread was left (see `ThreadPlace`). Not observed: only the thread reads and writes it, and
+    /// a scroll must not redraw the screens that observe the router.
+    @ObservationIgnored var threadPlaces: [String: ThreadPlace] = [:]
 
     /// The draft of an agent, trimmed, for sending; the draft is cleared.
     public func takeDraft(for agentID: String) -> String {
@@ -359,6 +413,7 @@ public final class Router {
         pendingPreviewPort = nil
         pendingFilePath = nil
         composerFocusAgentID = nil
+        agentBeforeHome = nil
     }
 
     /// Opens the agent details on `tab` (`/memory` opens the memory tab): the details tab of the selected agent's
@@ -375,6 +430,11 @@ public final class Router {
     /// Shows `tab` in the workbench of `agentID` and opens the panel (buttons, menus, the memory viewer).
     func showInWorkbench(_ tab: WorkbenchTab, agentID: String) {
         updateWorkbench(for: agentID) { WorkbenchRules.open(tab, in: $0) }
+    }
+
+    /// Shows `tab` in pane `index` of the workbench of `agentID`: the pane the person pressed in.
+    func showInWorkbench(_ tab: WorkbenchTab, agentID: String, pane index: Int) {
+        updateWorkbench(for: agentID) { WorkbenchRules.open(tab, inPane: index, in: $0) }
     }
 
     /// Selects a tab that is already open in the workbench of `agentID`.

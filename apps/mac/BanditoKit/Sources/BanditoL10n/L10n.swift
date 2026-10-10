@@ -130,6 +130,7 @@ public enum L10n {
             public static var pin: String { L10n.tr("agent.menu.pin") }
             public static var removeLead: String { L10n.tr("agent.menu.removeLead") }
             public static var resume: String { L10n.tr("agent.menu.resume") }
+            public static var schedules: String { L10n.tr("agent.menu.schedules") }
             public static var unpin: String { L10n.tr("agent.menu.unpin") }
         }
     }
@@ -413,6 +414,7 @@ public enum L10n {
 
     public enum Composer {
         public static var contextHint: String { L10n.tr("composer.contextHint") }
+        public static func contextPopover(percent: String) -> String { L10n.tr("composer.contextPopover", percent) }
     }
 
     public enum Connect {
@@ -918,6 +920,7 @@ public enum L10n {
         public static var tabGestures: String { L10n.tr("keys.tabGestures") }
         public static var tabKeys: String { L10n.tr("keys.tabKeys") }
         public static var takeControl: String { L10n.tr("keys.takeControl") }
+        public static var teamHome: String { L10n.tr("keys.teamHome") }
         public static var toggleEdit: String { L10n.tr("keys.toggleEdit") }
         public static var toggleSidebar: String { L10n.tr("keys.toggleSidebar") }
         public static var trash: String { L10n.tr("keys.trash") }
@@ -2048,9 +2051,22 @@ public enum L10n {
         }
 
         public enum Header {
+            public static var browser: String { L10n.tr("team.header.browser") }
             public static var openInspector: String { L10n.tr("team.header.openInspector") }
-            public static var schedules: String { L10n.tr("team.header.schedules") }
             public static var terminal: String { L10n.tr("team.header.terminal") }
+        }
+
+        public enum Home {
+            public static var idea1: String { L10n.tr("team.home.idea1") }
+            public static var idea2: String { L10n.tr("team.home.idea2") }
+            public static var idea3: String { L10n.tr("team.home.idea3") }
+            public static var idea4: String { L10n.tr("team.home.idea4") }
+            public static var ideas: String { L10n.tr("team.home.ideas") }
+            public static var `open`: String { L10n.tr("team.home.open") }
+            public static var recent: String { L10n.tr("team.home.recent") }
+            public static var subtitle: String { L10n.tr("team.home.subtitle") }
+            public static var templates: String { L10n.tr("team.home.templates") }
+            public static var title: String { L10n.tr("team.home.title") }
         }
     }
 
@@ -2179,6 +2195,7 @@ public enum L10n {
         public static var hintSearch: String { L10n.tr("thread.hintSearch") }
         public static var hintSend: String { L10n.tr("thread.hintSend") }
         public static var hintStop: String { L10n.tr("thread.hintStop") }
+        public static var jumpToLatest: String { L10n.tr("thread.jumpToLatest") }
         public static func messageFor(name: String) -> String { L10n.tr("thread.messageFor", name) }
         public static func messageFrom(name: String) -> String { L10n.tr("thread.messageFrom", name) }
         public static var more: String { L10n.tr("thread.more") }
@@ -2327,6 +2344,7 @@ public enum L10n {
     public enum Viewer {
         public static var closeTab: String { L10n.tr("viewer.closeTab") }
         public static var empty: String { L10n.tr("viewer.empty") }
+        public static var emptyFile: String { L10n.tr("viewer.emptyFile") }
         public static func error(error: String) -> String { L10n.tr("viewer.error", error) }
         public static var folder: String { L10n.tr("viewer.folder") }
         public static var readOnly: String { L10n.tr("viewer.readOnly") }

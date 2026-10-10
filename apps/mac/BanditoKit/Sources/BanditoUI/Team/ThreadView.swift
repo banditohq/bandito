@@ -18,6 +18,13 @@ struct ThreadView: View {
     @State private var loadingOlder = false
     /// Files changed since the last checkpoint; `nil` until loaded or when the server lacks `changes`.
     @State private var changes: ChangesDiff?
+    /// Whether the newest message is on screen (the bottom marker is visible).
+    @State private var atBottom = true
+    /// The "down" button shows (see `ThreadScroll.showsJump`), and how many messages came in while the person is above.
+    @State private var jumpVisible = false
+    @State private var unseen = 0
+    /// The scroll position, kept outside the view state: a scroll must not redraw the header and the composer.
+    @State private var scroll = ThreadScrollMemory()
 
     private var thread: AgentThread { server.thread(for: agent.id) }
 
@@ -43,6 +50,91 @@ struct ThreadView: View {
         #endif
     }
 
+    /// The rows in their scroll view. The width of the thread is reported from the background, so a change of the panel
+    /// keeps the bottom on screen (`ThreadWidthKey`).
+    private var rows: some View {
+        ScrollView {
+            ThreadItemsView(
+                items: thread.items, server: server,
+                showsLoadEarlier: server.hasMoreHistory[agent.id] == true,
+                onLoadEarlier: loadEarlier,
+                onError: { actionError = $0 },
+                agentName: agent.name,
+                primaryRuntime: agent.runtime.rawValue,
+                typing: thread.turnRunning && !isStreaming,
+                onBottomVisibility: bottomVisibilityChanged)
+        }
+        .modifier(ThreadDistanceGate { jumpVisible = $0 })
+        .background(GeometryReader { geo in
+            Color.clear.preference(key: ThreadWidthKey.self, value: geo.size.width)
+        })
+    }
+
+    /// The newest message came on screen or went off it: the "down" button and the count follow.
+    private func bottomVisibilityChanged(_ visible: Bool) {
+        atBottom = visible
+        if visible {
+            unseen = 0
+            jumpVisible = false
+        } else if !ThreadScroll.hasScrollGeometry {
+            jumpVisible = true
+        }
+    }
+
+    /// The "down" button, when it shows. Kept apart from the scroll chain so the type checker keeps up.
+    @ViewBuilder
+    private func jumpOverlay(_ proxy: ScrollViewProxy) -> some View {
+        if jumpVisible {
+            jumpButton {
+                withAnimation(.easeOut(duration: BanditoMotion.base)) {
+                    proxy.scrollTo(ThreadScroll.bottomID, anchor: .bottom)
+                }
+            }
+            .transition(.opacity)
+        }
+    }
+
+    /// The round "down" button over the thread's bottom right: the number of messages that came in above, if any.
+    private func jumpButton(action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: "arrow.down")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.Bandito.text)
+                    .frame(width: 34, height: 34)
+                    .background(Color.Bandito.surface2, in: Circle())
+                    .overlay(Circle().stroke(Color.Bandito.line, lineWidth: 1))
+                    .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
+                if unseen > 0 {
+                    Text(unseen > 99 ? "99+" : "\(unseen)")
+                        .font(BanditoFont.font(size: 10, weight: 600))
+                        .monospacedDigit()
+                        .foregroundStyle(Color.Bandito.bg)
+                        .padding(.horizontal, 5)
+                        .frame(minWidth: 17, minHeight: 17)
+                        .background(Color.Bandito.signal, in: Capsule())
+                        .offset(x: 6, y: -6)
+                }
+            }
+        }
+        .banditoButton(.icon(size: 34, label: L10n.Thread.jumpToLatest))
+        .help(L10n.Thread.jumpToLatest)
+        .padding(.trailing, 22)
+        .padding(.bottom, 12)
+    }
+
+    /// Shows the thread where it was left: the row that was on top, or the newest message.
+    private func restore(_ proxy: ScrollViewProxy) {
+        switch ThreadScroll.restoreTarget(router.threadPlaces[agent.id]) {
+        case .bottom:
+            atBottom = true
+            proxy.scrollTo(ThreadScroll.bottomID, anchor: .bottom)
+        case .row(let id):
+            atBottom = false
+            proxy.scrollTo(id, anchor: .top)
+        }
+    }
+
     /// The composer text of this agent, kept by the Router (see `Router.drafts`).
     private var draft: Binding<String> {
         Binding(get: { router.drafts[agent.id] ?? "" }, set: { router.drafts[agent.id] = $0 })
@@ -62,30 +154,38 @@ struct ThreadView: View {
                 isLead: LeadAgentStore.shared.id(server: server.id.uuidString) == agent.id,
                 onChanges: { router.showInWorkbench(.changes, agentID: agent.id) },
                 onTerminal: { showAgentTerminal() },
-                onSchedules: { showDetails() },
                 onTogglePanel: { router.toggleWorkbench() },
                 showsBrowserChip: WorkbenchRules.showsBrowserChip(
                     state: router.workbenchState(for: agent.id), runningTools: runningToolNames),
+                showsBrowserButton: server.supports("browser"),
                 onShowBrowser: { router.showInWorkbench(.browser, agentID: agent.id) })
 
             ScrollViewReader { proxy in
-                ScrollView {
-                    ThreadItemsView(
-                        items: thread.items, server: server,
-                        showsLoadEarlier: server.hasMoreHistory[agent.id] == true,
-                        onLoadEarlier: loadEarlier,
-                        onError: { actionError = $0 },
-                        agentName: agent.name,
-                        primaryRuntime: agent.runtime.rawValue,
-                        typing: thread.turnRunning && !isStreaming)
-                }
-                // Follow the newest item only: prepending older history must not jump to the bottom.
-                .onChange(of: thread.items.last?.id) { _, _ in
-                    withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo("bottom", anchor: .bottom) }
-                }
-                .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
+                rows
+                    // A wider or narrower panel changes the rows' height: the bottom stays the bottom.
+                    .onPreferenceChange(ThreadWidthKey.self) { _ in
+                        guard atBottom else { return }
+                        proxy.scrollTo(ThreadScroll.bottomID, anchor: .bottom)
+                    }
+                    // The row on top is remembered (see `ThreadScrollMemory`), so the thread comes back to it.
+                    .scrollPosition(id: Binding(get: { scroll.topRowID }, set: { scroll.topRowID = $0 }))
+                    // Follow the newest item only while the bottom is on screen: prepending older history, or reading
+                    // further up, must not jump to the bottom.
+                    .onChange(of: thread.items.last?.id) { _, _ in
+                        guard atBottom else { return }
+                        withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo(ThreadScroll.bottomID, anchor: .bottom) }
+                    }
+                    .onChange(of: thread.items.count) { old, new in
+                        if !atBottom {
+                            unseen += ThreadScroll.unseenAdded(previousCount: old, currentCount: new)
+                        }
+                    }
+                    .overlay(alignment: .bottomTrailing) {
+                        jumpOverlay(proxy)
+                    }
+                    .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: jumpVisible)
+                    .onAppear { restore(proxy) }
             }
-
             if thread.status == .error, let detail = thread.statusDetail {
                 Banner(text: detail)
             }
@@ -121,6 +221,9 @@ struct ThreadView: View {
             await loadHistory()
             await loadChanges()
         }
+        .onDisappear {
+            router.threadPlaces[agent.id] = ThreadScroll.place(atBottom: atBottom, topRowID: scroll.topRowID)
+        }
         // The header names the model from the server's list, so the list is asked once per server, not on opening
         // the inspector. The daemon caches the answer, so a repeat of this request is cheap.
         .task(id: server.id) {
@@ -130,6 +233,13 @@ struct ThreadView: View {
         .onChange(of: router.pendingComposerText, initial: true) { _, _ in
             guard let text = router.takeComposerText() else { return }
             router.appendDraft(text, for: agent.id)
+        }
+        // ⌘R re-reads the thread and the change counts.
+        .onChange(of: router.refreshRequests) { _, _ in
+            Task {
+                await loadHistory()
+                await loadChanges()
+            }
         }
         // The change counts are refreshed when a turn ends.
         .onChange(of: thread.turnRunning) { wasRunning, isRunning in
@@ -191,6 +301,41 @@ struct ThreadView: View {
     }
 }
 
+/// The scroll position of one thread view: the row on top. A reference, so that a scroll changes it without a redraw.
+@MainActor
+final class ThreadScrollMemory {
+    var topRowID: String?
+}
+
+/// Reports whether the "down" button shows, from the scroll geometry: the distance to the bottom against one screen.
+/// Systems without the geometry keep the bottom marker's visibility instead (see `ThreadView`).
+private struct ThreadDistanceGate: ViewModifier {
+    var onShows: (Bool) -> Void
+
+    func body(content: Content) -> some View {
+        if #available(macOS 15.0, iOS 18.0, *) {
+            content.onScrollGeometryChange(for: Bool.self) { geometry in
+                ThreadScroll.showsJump(
+                    atBottom: false,
+                    distance: geometry.contentSize.height - geometry.contentOffset.y - geometry.containerSize.height,
+                    screen: geometry.containerSize.height)
+            } action: { _, shows in
+                onShows(shows)
+            }
+        } else {
+            content
+        }
+    }
+}
+
+/// The width of the thread, reported up so that a change of width keeps the bottom on screen.
+private struct ThreadWidthKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 /// The rows of a thread. Separate from the scroll view so it can be rendered on its own (snapshots, previews).
 struct ThreadItemsView: View {
     var items: [ThreadItem]
@@ -202,6 +347,8 @@ struct ThreadItemsView: View {
     var primaryRuntime = ""
     /// Shows the typing indicator after the last row while a turn runs.
     var typing = false
+    /// Whether the bottom marker (the newest message) is on screen.
+    var onBottomVisibility: (Bool) -> Void = { _ in }
 
     var body: some View {
         let rows = ThreadRows.build(items)
@@ -219,7 +366,9 @@ struct ThreadItemsView: View {
             if typing {
                 TypingIndicator(activity: AgentActivity.current(in: items), since: AgentActivity.turnStart(in: items))
             }
-            Color.clear.frame(height: 1).id("bottom")
+            Color.clear.frame(height: 1).id(ThreadScroll.bottomID)
+                .onAppear { onBottomVisibility(true) }
+                .onDisappear { onBottomVisibility(false) }
         }
         .frame(maxWidth: 740)
         .padding(.horizontal, 24)

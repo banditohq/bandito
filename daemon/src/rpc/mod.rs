@@ -3239,6 +3239,7 @@ mod trust_tests {
         "changes.checkpoints",
         "browser.start",
         "browser.stop",
+        "browser.close_tab",
         "screen.start",
         "screen.stop",
     ];

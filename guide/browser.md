@@ -66,8 +66,17 @@ When the page has a link that must open in a Mac browser, a button appears in th
 ## Trackpad in the browser (Two-finger double tap)
 
 <!-- id: browser-gestures; covers: -->
-Two-finger swipe moves back and forward through the pages. A two-finger double tap zooms in on a place on the page.
+Two-finger swipe moves back and forward through the pages, and an arrow at the edge shows where it goes (⌘[ and ⌘] do the same). A sideways swipe is not scrolled into the page; scroll sideways with Shift and the wheel. The wheel and the trackpad scroll the page up and down. A two-finger double tap zooms in on a place on the page.
 Где: Browser → two-finger swipe / two-finger double tap; Settings → Keys and gestures (Клавиши и жесты) → Trackpad gestures (Жесты тачпада)
-1. Swipe with two fingers left or right to go back or forward.
+1. Swipe with two fingers: right to go back, left to go forward.
 2. Double-tap with two fingers to zoom in. Do it again to zoom out.
 3. Switch the gestures off in Settings → Keys and gestures → Trackpad gestures (Жесты тачпада) if you do not want them.
+
+## Close a tab (⌘W)
+
+<!-- id: browser-close-tab; covers: -->
+Closes the shown tab. A tab that hangs and does not answer is closed anyway after 3 seconds, and the next tab opens in its place.
+Где: Browser → ⌘W, or the × on a tab
+1. Press ⌘W while the Browser mode is shown.
+2. If the tab does not answer, wait a moment: the server closes it by force.
+Хоткей: ⌘W

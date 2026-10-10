@@ -13,13 +13,21 @@ struct TeamMode: View {
     @Environment(Router.self) private var router
     /// The panel width the person chose; one for the whole app. Kept in range by `WorkbenchLayout.clampWidth`.
     @AppStorage(WorkbenchLayout.widthKey) private var storedWidth = WorkbenchLayout.defaultWidth
+    /// The width while the edge is dragged: the panel follows the pointer at once. Written to `storedWidth` only when
+    /// the drag ends, so the preference is not written on every pixel.
+    @State private var liveWidth: Double?
 
     var body: some View {
-        if let server = app.currentServer, let agent = shownAgent(on: server) {
+        if router.showsTeamHome, let server = app.currentServer, !server.agents.isEmpty {
+            TeamHome(server: server)
+                .id(server.id)
+                // No chat is on screen: ⌘I, ⌘J and the workbench shortcuts have nothing to act on.
+                .onAppear { router.shownAgentID = nil }
+        } else if let server = app.currentServer, let agent = shownAgent(on: server) {
             let open = router.workbenchState(for: agent.id).isOpen
             GeometryReader { proxy in
                 let modeWidth = Double(proxy.size.width)
-                let width = WorkbenchLayout.fittedWidth(stored: storedWidth, modeWidth: modeWidth)
+                let width = WorkbenchLayout.fittedWidth(stored: liveWidth ?? storedWidth, modeWidth: modeWidth)
                 let covers = WorkbenchLayout.coversChat(modeWidth: modeWidth, panelWidth: width)
                 // One tree: the chat is always the first child. The panel is placed beside it or over it.
                 ZStack(alignment: .trailing) {
@@ -73,14 +81,23 @@ struct TeamMode: View {
     private func panel(server: ServerModel, agent: Agent, width: Double, modeWidth: Double, covers: Bool) -> some View {
         HStack(spacing: 0) {
             WorkbenchResizeHandle(
+                onDrag: { translation in
+                    liveWidth = WorkbenchLayout.draggedWidth(
+                        stored: storedWidth, translation: translation, windowWidth: modeWidth)
+                        ?? WorkbenchLayout.clampWidth(storedWidth, windowWidth: modeWidth)
+                },
                 onCommit: { translation in
                     if let dragged = WorkbenchLayout.draggedWidth(
                         stored: storedWidth, translation: translation, windowWidth: modeWidth)
                     {
                         storedWidth = dragged
                     }
+                    liveWidth = nil
                 },
-                onReset: { storedWidth = WorkbenchLayout.defaultWidth })
+                onReset: {
+                    liveWidth = nil
+                    storedWidth = WorkbenchLayout.defaultWidth
+                })
             WorkbenchView(server: server, agent: agent)
                 .id("\(server.id.uuidString)|\(agent.id)")
         }
@@ -99,6 +116,8 @@ struct TeamMode: View {
 /// The 6 pt edge between the chat and the panel: drag to resize, double-click for the default width. The drag is
 /// tracked here; the parent gets the total translation once, when the drag ends.
 private struct WorkbenchResizeHandle: View {
+    /// Called while the edge moves, with the total horizontal translation so far.
+    var onDrag: (Double) -> Void
     /// Called once, when the drag ends, with the total horizontal translation.
     var onCommit: (Double) -> Void
     var onReset: () -> Void
@@ -129,11 +148,8 @@ private struct WorkbenchResizeHandle: View {
             .gesture(
                 DragGesture(minimumDistance: 1, coordinateSpace: .global)
                     .updating($dragging) { _, state, _ in state = true }
-                    .onEnded { value in
-                        // A click without a move changes nothing.
-                        guard abs(value.translation.width) >= 1 else { return }
-                        onCommit(Double(value.translation.width))
-                    }
+                    .onChanged { value in onDrag(Double(value.translation.width)) }
+                    .onEnded { value in onCommit(Double(value.translation.width)) }
             )
             .simultaneousGesture(TapGesture(count: 2).onEnded { onReset() })
     }

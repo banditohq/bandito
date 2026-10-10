@@ -24,6 +24,8 @@ struct Composer: View {
     @Environment(AppModel.self) private var app
     @FocusState private var focused: Bool
     @State private var slash = SlashMenuModel()
+    /// The context popover is open (the ring is a button).
+    @State private var showsContext = false
 
     private var canSend: Bool {
         !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -72,8 +74,15 @@ struct Composer: View {
                         handleMenuKey(press.key)
                     }
                     .onKeyPress(keys: [.return]) { press in
-                        // Shift+Return is left to the field, which inserts a line break.
-                        if press.modifiers.contains(.shift) { return .ignored }
+                        // Shift or Option with Return: a line break at the caret. Plain Return sends.
+                        let newLine = ComposerReturn.action(
+                            shift: press.modifiers.contains(.shift), option: press.modifiers.contains(.option))
+                        if newLine == .newLine {
+                            #if os(macOS)
+                            FieldNewline.insert()
+                            #endif
+                            return .handled
+                        }
                         if query != nil, entries.indices.contains(slash.index) {
                             run(entries[slash.index])
                             return .handled
@@ -140,14 +149,30 @@ struct Composer: View {
     }
 
     private var contextIndicator: some View {
-        HStack(spacing: 6) {
-            ContextRing(fraction: contextFraction, size: 16)
-            Text("\(Int((contextFraction * 100).rounded()))%")
-                .font(BanditoFont.font(size: 11.5, weight: 400))
-                .monospacedDigit()
+        let percent = Int((contextFraction * 100).rounded())
+        return Button {
+            showsContext.toggle()
+        } label: {
+            HStack(spacing: 6) {
+                ContextRing(fraction: contextFraction, size: 16)
+                Text("\(percent)%")
+                    .font(BanditoFont.font(size: 11.5, weight: 400))
+                    .monospacedDigit()
+            }
+            .foregroundStyle(Color.Bandito.text3)
+            .padding(.horizontal, 4)
+            .frame(height: 22)
         }
-        .foregroundStyle(Color.Bandito.text3)
+        .banditoButton(.row(cornerRadius: 8))
         .help(L10n.Composer.contextHint)
+        .popover(isPresented: $showsContext, arrowEdge: .top) {
+            Text(L10n.Composer.contextPopover(percent: "\(percent)"))
+                .font(BanditoFont.font(size: 12.5, weight: 400))
+                .foregroundStyle(Color.Bandito.text)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(width: 280, alignment: .leading)
+                .padding(14)
+        }
     }
 
     @ViewBuilder

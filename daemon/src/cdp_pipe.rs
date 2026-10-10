@@ -155,6 +155,10 @@ enum Request {
         client: ClientId,
         text: String,
     },
+    /// Closes a tab for the owner, whoever has it attached.
+    ForceClose {
+        target: String,
+    },
 }
 
 /// The byte limits of one relay. The defaults are the production values; tests set small ones.
@@ -245,6 +249,17 @@ impl Relay {
                 queued,
             },
         })
+    }
+
+    /// Closes a tab even when a client has it attached (a tab that does not answer). The relay sends
+    /// `Target.closeTarget` itself and ignores the answer; the attached clients see the tab detach.
+    pub async fn force_close_tab(&self, target: &str) -> Result<(), LinkError> {
+        self.requests
+            .send(Request::ForceClose {
+                target: target.to_string(),
+            })
+            .await
+            .map_err(|_| LinkError::Closed)
     }
 
     /// A client for one tab. Chrome attaches the tab (flattened) before this returns; the client
@@ -516,6 +531,15 @@ impl Mux {
                 self.push(&attach)
             }
             Request::Send { client, text } => self.client_command(client, &text),
+            Request::ForceClose { target } => {
+                let gid = self.next_id();
+                self.pending.insert(gid, Waiting::Ignore);
+                self.push(&json!({
+                    "id": gid,
+                    "method": "Target.closeTarget",
+                    "params": { "targetId": target },
+                }))
+            }
         }
     }
 
@@ -1245,6 +1269,26 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(chrome.command().await["method"], "Target.detachFromTarget");
+    }
+
+    #[tokio::test]
+    async fn the_owner_can_force_a_tab_closed_even_when_a_client_has_it_attached() {
+        let (relay, mut chrome) = setup(MAX_CHROME_MESSAGE);
+        let _tab = page(&relay, &mut chrome, "T1", "S1").await;
+        relay.force_close_tab("T1").await.unwrap();
+        let command = chrome.command().await;
+        assert_eq!(command["method"], "Target.closeTarget");
+        assert_eq!(command["params"]["targetId"], "T1");
+        // The answer is not passed on to anyone, and the relay keeps working.
+        chrome
+            .send(json!({"id": command["id"], "result": {"success": true}}))
+            .await;
+        let mut browser = relay.browser_client().await.unwrap();
+        browser
+            .send(json!({"id": 1, "method": "Browser.getVersion"}).to_string())
+            .await
+            .unwrap();
+        assert_eq!(chrome.command().await["method"], "Browser.getVersion");
     }
 
     #[tokio::test]

@@ -118,6 +118,7 @@ public struct Command: Identifiable, Hashable, Sendable {
         command("global.mode.browser", L10n.Keys.goTo(mode: AppMode.browser.title), .global, "4", .command),
         command("global.mode.screen", L10n.Keys.goTo(mode: AppMode.screen.title), .global, "5", .command),
         command("global.mode.server", L10n.Keys.goTo(mode: AppMode.server.title), .global, "6", .command),
+        command("global.teamHome", L10n.Keys.teamHome, .global, "0", .command),
         command("global.newAgent", L10n.Keys.newAgent, .global, "n", .command),
         command("global.back", L10n.Keys.back, .global, "[", .command),
         command("global.forward", L10n.Keys.forward, .global, "]", .command),
@@ -125,6 +126,8 @@ public struct Command: Identifiable, Hashable, Sendable {
         command("global.usage", L10n.Keys.usage, .global, "u", .option, .command),
         command("global.settings", L10n.Keys.settings, .global, ",", .command),
         command("global.searchHistory", L10n.Keys.searchHistory, .global, "f", .shift, .command),
+        // ⌘R reconnects and re-reads the screen on show. It replaces the browser's own reload (see `RefreshRules`).
+        command("global.refresh", L10n.Keys.reload, .global, "r", .command),
         // Team
         command("team.previousAgent", L10n.Keys.previousAgent, .team, "↑", .option, .command),
         command("team.nextAgent", L10n.Keys.nextAgent, .team, "↓", .option, .command),
@@ -161,7 +164,7 @@ public struct Command: Identifiable, Hashable, Sendable {
         command("terminals.clear", L10n.Keys.clear, .terminals, "k", .shift, .command),
         command("terminals.fontBigger", L10n.Keys.fontBigger, .terminals, "+", .command),
         command("terminals.fontSmaller", L10n.Keys.fontSmaller, .terminals, "-", .command),
-        command("terminals.fontReset", L10n.Keys.fontReset, .terminals, "0", .command),
+        command("terminals.fontReset", L10n.Keys.fontReset, .terminals, "0", .option, .command),
         // Files
         command("files.open", L10n.Keys.open, .files, "↓", .command),
         command("files.enclosingFolder", L10n.Keys.enclosingFolder, .files, "↑", .command),
@@ -180,7 +183,6 @@ public struct Command: Identifiable, Hashable, Sendable {
         command("viewer.previousTab", L10n.Keys.previousTab, .viewer, "tab", .control, .shift),
         // Browser
         command("browser.address", L10n.Keys.address, .browser, "l", .command),
-        command("browser.reload", L10n.Keys.reload, .browser, "r", .command),
         command("browser.newTab", L10n.Keys.newTab, .browser, "t", .command),
         command("browser.closeTab", L10n.Keys.closeTab, .browser, "w", .command),
         command("browser.takeControl", L10n.Keys.takeControl, .browser, "c", .shift, .command),

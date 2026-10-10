@@ -407,6 +407,15 @@ import Testing
         #expect(WorkbenchLayout.clampSplit(0.95) == 0.8)
         #expect(WorkbenchLayout.clampSplit(0.5) == 0.5)
     }
+
+    @Test func splitFollowsTheDividerFromTheSharePersonChose() {
+        // Dragging down 100 points of a 500-point panel moves the share by a fifth, from the stored share.
+        #expect(WorkbenchLayout.splitAfterDrag(stored: 0.5, translation: 100, height: 500) == 0.7)
+        #expect(WorkbenchLayout.splitAfterDrag(stored: 0.5, translation: -1000, height: 500) == 0.2)
+        #expect(WorkbenchLayout.splitAfterDrag(stored: 0.5, translation: 0, height: 500) == 0.5)
+        // A zero height keeps the share instead of dividing by zero.
+        #expect(WorkbenchLayout.splitAfterDrag(stored: 0.5, translation: 40, height: 0) == 0.8)
+    }
 }
 
 @Suite struct WorkbenchPaneLookupTests {
@@ -415,5 +424,37 @@ import Testing
         #expect(state.panes.count == 1)
         #expect(WorkbenchRules.pane(1, of: state) == WorkbenchPane())
         #expect(WorkbenchRules.pane(0, of: state).tabs == [.details])
+    }
+
+    // MARK: open in the pane pressed
+
+    @Test func openInPaneLandsInThatPane() {
+        let term1 = WorkbenchTab.terminal(sessionID: "s1")
+        let term2 = WorkbenchTab.terminal(sessionID: "s2")
+        let state = WorkbenchRules.split(WorkbenchRules.open(term1, in: WorkbenchState()))
+        let next = WorkbenchRules.open(term2, inPane: 1, in: state)
+        #expect(next.panes[1].tabs.contains(term2))
+        #expect(next.panes[1].selected == term2)
+        #expect(next.panes[0].tabs == [term1])
+        #expect(next.focusedPane == 1)
+    }
+
+    @Test func severalTerminalsCanShareOnePane() {
+        let term1 = WorkbenchTab.terminal(sessionID: "s1")
+        let term2 = WorkbenchTab.terminal(sessionID: "s2")
+        var state = WorkbenchRules.open(term1, in: WorkbenchState())
+        state = WorkbenchRules.open(term2, inPane: 0, in: state)
+        #expect(state.panes[0].tabs == [term1, term2])
+        #expect(state.panes[0].selected == term2)
+    }
+
+    @Test func paneThatDoesNotExistKeepsTheFocusedOne() {
+        let term1 = WorkbenchTab.terminal(sessionID: "s1")
+        let term2 = WorkbenchTab.terminal(sessionID: "s2")
+        let state = WorkbenchRules.open(term1, in: WorkbenchState())
+        let next = WorkbenchRules.open(term2, inPane: 1, in: state)
+        #expect(next.panes.count == 1)
+        #expect(next.panes[0].tabs == [term1, term2])
+        #expect(next.focusedPane == 0)
     }
 }

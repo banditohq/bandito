@@ -27,11 +27,13 @@ struct FileViewer: View {
     var body: some View {
         VStack(spacing: 0) {
             ViewerTabBar(workspace: workspace, onSelect: { workspace.select($0) }, onClose: requestClose)
+                .zIndex(1)
             if let document = workspace.selectedDocument {
                 ViewerHeader(
                     document: document,
                     onBack: { if let onBack { onBack() } else { workspace.showsViewer = false } },
                     onSave: { Task { await document.save(server: server) } })
+                    .zIndex(1)
                 if document.conflict != nil {
                     ConflictBanner(
                         onShowDiff: { showsDiff = true },
@@ -44,10 +46,13 @@ struct FileViewer: View {
                         .padding(.horizontal, 16)
                         .padding(.top, 8)
                 }
+                // Clipped: the content (an editor, a page or a player drawn by AppKit) cannot reach over the header
+                // and the tabs, which must stay under the pointer.
                 ViewerBody(document: document, server: server)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
                     .id(document.path)
             } else {
                 Text(L10n.Viewer.empty)
@@ -113,6 +118,14 @@ struct FileViewer: View {
         } else {
             workspace.close(path)
         }
+    }
+}
+
+/// Rules of the viewer. Pure, so they are tested alone.
+enum FileViewerRules {
+    /// An empty file shows "File is empty" over the editor. Whitespace is text: a file with a single newline is not empty.
+    static func showsEmptyHint(text: String) -> Bool {
+        text.isEmpty
     }
 }
 
@@ -298,8 +311,7 @@ private struct ViewerBody: View {
         case .markdown:
             markdown
         case .text:
-            SourceEditor(text: textBinding, highlightsMarkdown: false, isEditable: !document.readOnly)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            editorView(highlightsMarkdown: false)
         case .image:
             ZoomableImage(path: document.path, server: server)
         case .pdf:
@@ -328,8 +340,24 @@ private struct ViewerBody: View {
     }
 
     private var editor: some View {
-        SourceEditor(text: textBinding, highlightsMarkdown: true, isEditable: !document.readOnly)
+        editorView(highlightsMarkdown: true)
+    }
+
+    /// The source editor, with "File is empty" over it while the file has no text. An empty file takes the caret at
+    /// its start (see `SourceEditor`), so typing starts at once.
+    private func editorView(highlightsMarkdown: Bool) -> some View {
+        SourceEditor(text: textBinding, highlightsMarkdown: highlightsMarkdown, isEditable: !document.readOnly)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(alignment: .topLeading) {
+                if FileViewerRules.showsEmptyHint(text: document.text) {
+                    Text(L10n.Viewer.emptyFile)
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.Bandito.text3)
+                        .padding(.top, 16)
+                        .padding(.leading, 52)
+                        .allowsHitTesting(false)
+                }
+            }
     }
 
     private var preview: some View {

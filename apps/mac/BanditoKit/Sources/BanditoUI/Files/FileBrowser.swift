@@ -35,7 +35,7 @@ struct FileBrowser: View {
     }
 
     private var panelShown: Bool {
-        panelDocked ? previewVisible : detailsOverlay
+        FileBrowserLayout.panelShown(docked: panelDocked, previewVisible: previewVisible, overlayOpen: detailsOverlay)
     }
 
     private var selectedEntry: FsEntry? {
@@ -70,7 +70,17 @@ struct FileBrowser: View {
                     onTerminal: openTerminalHere,
                     onCreate: { nameSheet = $0 },
                     onToggleDetails: togglePanel)
+                // Over the list (narrow window), the panel lies under the toolbar: the toolbar's toggle stays in reach.
                 content
+                    .overlay(alignment: .trailing) {
+                        if !panelDocked && detailsOverlay {
+                            detailsPanel
+                                .frame(width: 320)
+                                .background(Color.Bandito.bg)
+                                .shadow(color: .black.opacity(0.35), radius: 18, x: -6)
+                                .transition(.move(edge: .trailing).combined(with: .opacity))
+                        }
+                    }
                 if let job = model.upload {
                     UploadStrip(job: job, folder: current)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -86,15 +96,6 @@ struct FileBrowser: View {
             if panelDocked && panelShown {
                 detailsPanel
                     .frame(width: 320)
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
-            }
-        }
-        .overlay(alignment: .trailing) {
-            if !panelDocked && detailsOverlay {
-                detailsPanel
-                    .frame(width: 320)
-                    .background(Color.Bandito.bg)
-                    .shadow(color: .black.opacity(0.35), radius: 18, x: -6)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
@@ -130,6 +131,7 @@ struct FileBrowser: View {
             router.files.open(entry, server: server)
         }
         .onChange(of: model.showHidden) { Task { await model.reload(server: server) } }
+        .onChange(of: router.refreshRequests) { Task { await model.reload(server: server) } }
         .onDrop(of: [.fileURL], isTargeted: $dropTargeted) { providers in
             let folder = current
             Task {
@@ -186,7 +188,8 @@ struct FileBrowser: View {
         FilePreviewPanel(
             entry: selectedEntry, server: server, onOpen: open, onDownload: download,
             showsTerminal: server.supports("terminals"),
-            onTerminal: { openTerminal(in: $0.path) }, onAgent: { createAgent(in: $0.path) })
+            onTerminal: { openTerminal(in: $0.path) }, onAgent: { createAgent(in: $0.path) },
+            onClose: closePanel)
     }
 
     // MARK: Content
@@ -394,6 +397,14 @@ struct FileBrowser: View {
         } else {
             detailsOverlay.toggle()
         }
+    }
+
+    /// The panel's own close button: hides it in the mode on screen.
+    private func closePanel() {
+        let next = FileBrowserLayout.closed(
+            docked: panelDocked, previewVisible: previewVisible, overlayOpen: detailsOverlay)
+        previewVisible = next.previewVisible
+        detailsOverlay = next.overlayOpen
     }
 
     private func toggleFavorite(_ path: String, isFavorite: Bool) {

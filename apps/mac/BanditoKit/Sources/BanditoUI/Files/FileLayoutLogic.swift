@@ -49,4 +49,16 @@ enum FileBrowserLayout {
     static func isPanelDocked(windowWidth: CGFloat) -> Bool {
         windowWidth >= dockedPanelMinWindowWidth
     }
+
+    /// Whether the details panel is on screen: beside the list when docked (`previewVisible`), over it otherwise
+    /// (`overlayOpen`).
+    static func panelShown(docked: Bool, previewVisible: Bool, overlayOpen: Bool) -> Bool {
+        docked ? previewVisible : overlayOpen
+    }
+
+    /// The flags after the panel's close button: the one that shows the panel in the mode on screen goes off; the
+    /// other mode's flag is kept as it was.
+    static func closed(docked: Bool, previewVisible: Bool, overlayOpen: Bool) -> (previewVisible: Bool, overlayOpen: Bool) {
+        docked ? (false, overlayOpen) : (previewVisible, false)
+    }
 }

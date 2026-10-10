@@ -198,6 +198,12 @@ impl WorkspaceParams {
 }
 
 #[derive(Deserialize)]
+struct CloseTabParams {
+    workspace: Option<String>,
+    target_id: String,
+}
+
+#[derive(Deserialize)]
 struct ControlParams {
     workspace: Option<String>,
     holder: Holder,
@@ -267,6 +273,16 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             let c: ControlParams = params(p)?;
             let workspace = c.workspace.as_deref().unwrap_or(DEFAULT_WORKSPACE);
             ok(browser.control(workspace, c.holder).await.map_err(to_rpc)?)
+        }
+        "browser.close_tab" => {
+            let c: CloseTabParams = params(p)?;
+            let workspace = c.workspace.as_deref().unwrap_or(DEFAULT_WORKSPACE);
+            check_workspace(workspace).map_err(to_rpc)?;
+            if !valid_target_id(&c.target_id) {
+                return Err(RpcError::new(INVALID_PARAMS, "target_id is not a tab id"));
+            }
+            browser.close_tab(workspace, &c.target_id).await.map_err(to_rpc)?;
+            ok(json!({}))
         }
         "browser.touch" => {
             let w: WorkspaceParams = params(p)?;
@@ -369,6 +385,11 @@ fn to_rpc(e: BrowserError) -> RpcError {
         BrowserError::InvalidWorkspace => {
             RpcError::new(INVALID_PARAMS, "workspace must be 1-64 letters, digits, - or _")
         }
+        BrowserError::NoSuchTab => RpcError::with_data(
+            BROWSER_ERROR,
+            "no such tab in the browser",
+            json!({ "reason": "not_found" }),
+        ),
         BrowserError::UnsupportedUrl => RpcError::new(
             INVALID_PARAMS,
             "only http, https, data: and about:blank URLs can be opened",
@@ -413,6 +434,38 @@ mod route_tests {
         let mut app = App::new(sup, dir.to_path_buf());
         Arc::get_mut(&mut app).expect("the app is not shared yet").browser = BrowserManager::new(dir.to_path_buf());
         app
+    }
+
+    #[test]
+    fn an_unknown_tab_is_a_not_found_browser_error() {
+        let e = to_rpc(BrowserError::NoSuchTab);
+        assert_eq!(e.code, BROWSER_ERROR);
+        assert_eq!(e.data.as_ref().unwrap()["reason"], "not_found");
+    }
+
+    #[tokio::test]
+    async fn close_tab_checks_its_params_and_needs_a_running_browser() {
+        let dir = tempfile::tempdir().unwrap();
+        let app = app(dir.path());
+        let call = |params: Value| {
+            let app = app.clone();
+            async move { dispatch(&app, &Peer::Local, "browser.close_tab", params).await }
+        };
+        assert_eq!(call(json!({})).await.unwrap_err().code, INVALID_PARAMS);
+        assert_eq!(
+            call(json!({"target_id": "bad-id"})).await.unwrap_err().code,
+            INVALID_PARAMS
+        );
+        assert_eq!(
+            call(json!({"target_id": "T1", "workspace": "a/b"}))
+                .await
+                .unwrap_err()
+                .code,
+            INVALID_PARAMS
+        );
+        // A good request with no browser running is the same error the other browser calls give.
+        let err = call(json!({"target_id": "T1"})).await.unwrap_err();
+        assert_ne!(err.code, INVALID_PARAMS);
     }
 
     /// A plain GET through the router: the status and the body.

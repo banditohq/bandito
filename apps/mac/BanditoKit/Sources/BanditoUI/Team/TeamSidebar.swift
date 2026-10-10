@@ -24,7 +24,10 @@ struct TeamSidebar: View {
         // The main agent goes first in the whole list, before the list is split into its groups.
         let lead = LeadAgentStore.shared.id(server: server.id.uuidString)
         let agents = LeadAgent.leadFirst(server.sortedAgents, id: \.id, lead: lead)
-        let shown = TeamSelection.shownAgentID(server: server, selected: router.selectedAgentID, pinned: Set(pins.ids))
+        // On the team home no chat is on screen, so no row is marked.
+        let shown = router.showsTeamHome
+            ? nil
+            : TeamSelection.shownAgentID(server: server, selected: router.selectedAgentID, pinned: Set(pins.ids))
         let waiting = agents.filter { server.needsPerson($0.id) }
         let waitingIDs = Set(waiting.map(\.id))
         let others = agents.filter { !waitingIDs.contains($0.id) }
@@ -55,10 +58,22 @@ struct TeamSidebar: View {
                         }
                         .padding(.horizontal, 8)
                     }
-                    SectionLabel(L10n.Sidebar.agents)
-                        .padding(.horizontal, 18)
-                        .padding(.top, 16)
-                        .padding(.bottom, 6)
+                    // The label opens the team home (also ⌘0).
+                    Button {
+                        router.showTeamHome()
+                    } label: {
+                        SectionLabel(L10n.Sidebar.agents)
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .contentShape(Rectangle())
+                    }
+                    .banditoButton(.row(cornerRadius: 8))
+                    .help(L10n.Team.Home.open)
+                    .padding(.horizontal, 8)
+                    .padding(.top, 12)
+                    .padding(.bottom, 2)
                     VStack(spacing: 2) {
                         ForEach(Array(others.enumerated()), id: \.element.id) { index, agent in
                             teamRow(
@@ -209,6 +224,12 @@ struct TeamSidebar: View {
         Button(isLead ? L10n.Agent.Menu.removeLead : L10n.Agent.Menu.makeLead) {
             // One main agent per server: making another one main replaces the old choice.
             LeadAgentStore.shared.set(isLead ? nil : agent.id, server: serverKey)
+        }
+        Button(L10n.Agent.Menu.schedules) {
+            // The schedules are a section of the details tab: the agent is chosen and its details are shown.
+            router.selectAgent(agent.id, on: server)
+            router.inspectorTab = .details
+            router.showInWorkbench(.details, agentID: agent.id)
         }
         Divider()
         Button(L10n.Agent.Menu.delete, role: .destructive) {
