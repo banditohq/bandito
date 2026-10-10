@@ -29,6 +29,7 @@ pub mod mcp_oauth;
 pub mod mentions;
 pub mod pairing;
 pub mod policy;
+pub mod recommend;
 pub mod redact;
 pub mod rpc;
 pub mod runtime;
