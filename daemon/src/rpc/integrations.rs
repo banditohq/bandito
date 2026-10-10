@@ -288,13 +288,16 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
         "integrations.catalog" => ok(serde_json::from_str::<Value>(CATALOG_JSON)
             .map_err(|e| RpcError::new(SERVER_ERROR, format!("catalog: {e}")))?),
         "integrations.add" => {
-            let n: NewIntegration = params(p)?;
+            let n: NewIntegration = params(p.clone())?;
             if n.auth == IntegrationAuth::Oauth {
                 return Err(RpcError::new(
                     INVALID_PARAMS,
                     "a browser sign-in is started with integrations.oauth_begin",
                 ));
             }
+            // What the tools may do can be named when the row is added; without it the row starts as the catalog says.
+            let tools: ToolWords = params(p)?;
+            check_tool_overrides(tools.tool_overrides.as_ref())?;
             check_new(&n)?;
             if store.integration_list()?.iter().any(|i| i.name == n.name) {
                 return Err(RpcError::new(
@@ -302,10 +305,20 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                     format!("an integration named '{}' already exists", n.name),
                 ));
             }
-            ok(store.integration_create(n)?)
+            let made = store.integration_create(n)?;
+            if tools.tool_mode.is_some() || tools.tool_overrides.is_some() {
+                let patch = IntegrationPatch {
+                    tool_mode: tools.tool_mode,
+                    tool_overrides: tools.tool_overrides,
+                    ..Default::default()
+                };
+                return ok(store.integration_update(&made.id, patch)?);
+            }
+            ok(made)
         }
         "integrations.update" => {
             let UpdateParams { id, patch } = params(p)?;
+            check_tool_overrides(patch.tool_overrides.as_ref())?;
             let cur = store
                 .integration_get(&id)?
                 .ok_or_else(|| RpcError::new(SERVER_ERROR, format!("no integration {id}")))?;
@@ -489,6 +502,44 @@ fn apply(cur: &Integration, p: &IntegrationPatch) -> Integration {
     out
 }
 
+/// `tool_mode` and `tool_overrides` of an `integrations.add`, read beside the row's own fields.
+#[derive(Deserialize)]
+struct ToolWords {
+    #[serde(default)]
+    tool_mode: Option<crate::store::ToolMode>,
+    #[serde(default)]
+    tool_overrides: Option<std::collections::BTreeMap<String, crate::store::ToolOverride>>,
+}
+
+/// At most this many tools carry an override of their own.
+const MAX_TOOL_OVERRIDES: usize = 500;
+/// The longest tool name an override may name, in characters.
+const MAX_TOOL_NAME: usize = 128;
+
+/// The names an override list holds must be plain tool names, and there must not be a flood of them.
+fn check_tool_overrides(
+    overrides: Option<&std::collections::BTreeMap<String, crate::store::ToolOverride>>,
+) -> Result<(), RpcError> {
+    let Some(map) = overrides else {
+        return Ok(());
+    };
+    if map.len() > MAX_TOOL_OVERRIDES {
+        return Err(RpcError::new(
+            INVALID_PARAMS,
+            format!("at most {MAX_TOOL_OVERRIDES} tools can have a word of their own"),
+        ));
+    }
+    if map.keys().any(|name| {
+        name.trim().is_empty() || name.chars().count() > MAX_TOOL_NAME || name.chars().any(char::is_control)
+    }) {
+        return Err(RpcError::new(
+            INVALID_PARAMS,
+            "a tool name is 1 to 128 characters with no control characters",
+        ));
+    }
+    Ok(())
+}
+
 fn check_new(n: &NewIntegration) -> Result<(), RpcError> {
     check_definition(&draft_row(n))
 }
@@ -507,6 +558,8 @@ fn draft_row(n: &NewIntegration) -> Integration {
         enabled: n.enabled,
         created_at: 0,
         auth: n.auth,
+        tool_mode: Default::default(),
+        tool_overrides: Default::default(),
     }
 }
 
@@ -1190,6 +1243,8 @@ mod tests {
             enabled: true,
             created_at: 0,
             auth: Default::default(),
+            tool_mode: Default::default(),
+            tool_overrides: Default::default(),
         };
         let patch = IntegrationPatch {
             command: Some(None),
@@ -1486,6 +1541,83 @@ mod tests {
             Some("https://mcp.linear.app/old"),
             "the address is untouched"
         );
+    }
+
+    #[tokio::test]
+    async fn the_mode_and_the_words_for_tools_are_added_updated_and_checked() {
+        let app = app();
+        // A catalog service starts asking, an own one starts open; both are listed with the fields.
+        let catalog = owner(
+            &app,
+            "integrations.add",
+            json!({ "name": "fetch", "kind": "stdio", "command": "uvx", "args": ["mcp-server-fetch"] }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(catalog["tool_mode"], "confirm_writes");
+        assert_eq!(catalog["tool_overrides"], json!({}));
+        let own = owner(
+            &app,
+            "integrations.add",
+            json!({ "name": "mine", "kind": "stdio", "command": "mytool", "tool_mode": "read_only",
+                    "tool_overrides": { "delete_all": "deny" } }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(own["tool_mode"], "read_only", "named when added");
+        assert_eq!(own["tool_overrides"], json!({ "delete_all": "deny" }));
+        let plain = owner(
+            &app,
+            "integrations.add",
+            json!({ "name": "plain", "kind": "stdio", "command": "x" }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(plain["tool_mode"], "all");
+
+        let id = plain["id"].clone();
+        let updated = owner(
+            &app,
+            "integrations.update",
+            json!({ "id": id, "tool_mode": "confirm_writes", "tool_overrides": { "search": "allow", "send": "ask" } }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(updated["tool_mode"], "confirm_writes");
+        assert_eq!(updated["tool_overrides"], json!({ "search": "allow", "send": "ask" }));
+        // Another field leaves them as they are.
+        let off = owner(&app, "integrations.update", json!({ "id": id, "enabled": false }))
+            .await
+            .unwrap();
+        assert_eq!(off["tool_mode"], "confirm_writes");
+        assert_eq!(off["tool_overrides"]["send"], "ask");
+
+        for bad in [
+            json!({ "id": id, "tool_mode": "everything" }),
+            json!({ "id": id, "tool_overrides": { "x": "maybe" } }),
+            json!({ "id": id, "tool_overrides": { "": "deny" } }),
+            json!({ "id": id, "tool_overrides": { "a\nb": "deny" } }),
+            json!({ "id": id, "tool_overrides": { "t".repeat(129): "deny" } }),
+        ] {
+            let err = owner(&app, "integrations.update", bad.clone()).await.unwrap_err();
+            assert_eq!(err.code, INVALID_PARAMS, "{bad}");
+        }
+        let too_many: serde_json::Map<String, Value> = (0..501).map(|i| (format!("tool{i}"), json!("deny"))).collect();
+        let err = owner(
+            &app,
+            "integrations.update",
+            json!({ "id": id, "tool_overrides": too_many }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, INVALID_PARAMS);
+        let listed = owner(&app, "integrations.list", json!({})).await.unwrap();
+        assert!(listed.as_array().unwrap().iter().all(|r| r.get("tool_mode").is_some()));
+    }
+
+    #[test]
+    fn the_tool_permissions_feature_is_offered() {
+        assert!(crate::rpc::features().contains(&"tool_permissions"));
     }
 
     #[test]

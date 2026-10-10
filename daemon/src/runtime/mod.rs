@@ -156,6 +156,9 @@ pub struct SpawnConfig {
     pub capabilities: Option<Vec<crate::store::Capability>>,
     /// The owner's MCP servers for this session, secrets already read (see docs/ARCHITECTURE.md#integrations).
     pub mcp_servers: Vec<crate::integrations::Server>,
+    /// Names of the services whose tools the owner limited (a mode other than `all`, or a word on some tool). Claude
+    /// lists them as `permissions.ask` so every call goes through the daemon, whatever the user's own settings allow.
+    pub gated_tools: Vec<String>,
 }
 
 /// A live session with one agent CLI.
@@ -167,6 +170,11 @@ pub trait Session: Send {
     async fn interrupt(&mut self) -> anyhow::Result<()>;
     /// Answer an [`ApprovalRequest`] by its `key`.
     async fn resolve(&mut self, key: &str, decision: Decision) -> anyhow::Result<()>;
+    /// Refuse an [`ApprovalRequest`] and tell the agent why, when the CLI lets a refusal carry words. A CLI that does
+    /// not just gets the refusal.
+    async fn deny_with_message(&mut self, key: &str, _message: &str) -> anyhow::Result<()> {
+        self.resolve(key, Decision::Deny).await
+    }
     /// Close stdin and wait for the child to exit (kill after a grace period).
     async fn shutdown(self: Box<Self>);
     /// The pid of the CLI process, while the session has one. The host uses it as the root of the session's processes.

@@ -92,6 +92,7 @@ pub fn features() -> Vec<&'static str> {
         "integrations_probe",
         "integrations_oauth",
         "template_updates",
+        "tool_permissions",
         "integrations_recommend",
         "avatar_pictures",
         "lead",

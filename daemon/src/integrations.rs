@@ -246,6 +246,22 @@ pub struct TemplateUpdate<'a> {
     pub template: &'a Template,
 }
 
+/// The templates of the built-in catalog.
+pub fn catalog_templates() -> Vec<Template> {
+    const CATALOG: &str = include_str!("integrations_catalog.json");
+    serde_json::from_str(CATALOG).unwrap_or_default()
+}
+
+/// The mode a new row starts with: a service of the catalog (named like a template, or at its address) asks before its
+/// tools change anything, since which of them do is not known when it is added; an own one is left as it is.
+pub fn default_tool_mode(row: &Integration) -> crate::store::ToolMode {
+    if template_of(row, &catalog_templates()).is_some() {
+        crate::store::ToolMode::ConfirmWrites
+    } else {
+        crate::store::ToolMode::All
+    }
+}
+
 /// A url without the slashes at its end: `https://x/mcp/` and `https://x/mcp` are the same address here.
 fn bare_url(url: &str) -> &str {
     url.trim_end_matches('/')
@@ -619,6 +635,8 @@ mod tests {
             enabled: true,
             created_at: 0,
             auth: Default::default(),
+            tool_mode: Default::default(),
+            tool_overrides: Default::default(),
         }
     }
 
@@ -635,6 +653,8 @@ mod tests {
             enabled: true,
             created_at: 0,
             auth: Default::default(),
+            tool_mode: Default::default(),
+            tool_overrides: Default::default(),
         }
     }
 
@@ -918,6 +938,8 @@ mod update_tests {
             enabled: true,
             created_at: 0,
             auth: IntegrationAuth::None,
+            tool_mode: Default::default(),
+            tool_overrides: Default::default(),
         }
     }
 
