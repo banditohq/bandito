@@ -901,7 +901,10 @@
 "market.filter.all" = "Todos";
 "market.filter.connected" = "Conectados";
 "market.filter.installed" = "Instalados";
+"market.filter.myBots" = "Mis bots";
 "market.more" = "Más";
+"market.myBots.empty" = "Aún no hay bots creados desde una plantilla. Elige una en Todos y pulsa «Crear bot».";
+"market.myBots.open" = "Abrir";
 "market.noResults" = "No se encontró nada";
 "market.official" = "Oficial";
 "market.recommend.hide" = "Ocultar sugerencias";

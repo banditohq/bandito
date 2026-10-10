@@ -1278,6 +1278,12 @@ public enum L10n {
             public static var all: String { L10n.tr("market.filter.all") }
             public static var connected: String { L10n.tr("market.filter.connected") }
             public static var installed: String { L10n.tr("market.filter.installed") }
+            public static var myBots: String { L10n.tr("market.filter.myBots") }
+        }
+
+        public enum MyBots {
+            public static var empty: String { L10n.tr("market.myBots.empty") }
+            public static var `open`: String { L10n.tr("market.myBots.open") }
         }
 
         public enum Recommend {

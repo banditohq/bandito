@@ -901,7 +901,10 @@
 "market.filter.all" = "全部";
 "market.filter.connected" = "已连接";
 "market.filter.installed" = "已安装";
+"market.filter.myBots" = "我的机器人";
 "market.more" = "更多";
+"market.myBots.empty" = "还没有从模板创建的机器人。在“全部”里选一个模板，然后点“创建机器人”。";
+"market.myBots.open" = "打开";
 "market.noResults" = "没有找到";
 "market.official" = "官方";
 "market.recommend.hide" = "隐藏推荐";

@@ -901,7 +901,10 @@
 "market.filter.all" = "전체";
 "market.filter.connected" = "연결됨";
 "market.filter.installed" = "설치됨";
+"market.filter.myBots" = "내 봇";
 "market.more" = "더보기";
+"market.myBots.empty" = "템플릿으로 만든 봇이 아직 없어요. '전체'에서 템플릿을 고르고 '봇 만들기'를 누르세요.";
+"market.myBots.open" = "열기";
 "market.noResults" = "결과가 없습니다";
 "market.official" = "공식";
 "market.recommend.hide" = "추천 숨기기";

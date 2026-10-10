@@ -901,7 +901,10 @@
 "market.filter.all" = "Все";
 "market.filter.connected" = "Подключённые";
 "market.filter.installed" = "Установленные";
+"market.filter.myBots" = "Мои боты";
 "market.more" = "Ещё";
+"market.myBots.empty" = "Ботов из шаблонов пока нет. Выберите шаблон во вкладке «Все» и нажмите «Создать бота».";
+"market.myBots.open" = "Открыть";
 "market.noResults" = "Ничего не нашлось";
 "market.official" = "Официальный";
 "market.recommend.hide" = "Скрыть подсказки";

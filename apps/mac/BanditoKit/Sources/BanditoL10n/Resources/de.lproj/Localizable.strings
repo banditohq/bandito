@@ -901,7 +901,10 @@
 "market.filter.all" = "Alle";
 "market.filter.connected" = "Verbunden";
 "market.filter.installed" = "Installiert";
+"market.filter.myBots" = "Meine Bots";
 "market.more" = "Mehr";
+"market.myBots.empty" = "Noch keine Bots aus einer Vorlage. Wähle unter Alle eine Vorlage und tippe auf „Bot erstellen“.";
+"market.myBots.open" = "Öffnen";
 "market.noResults" = "Nichts gefunden";
 "market.official" = "Offiziell";
 "market.recommend.hide" = "Vorschläge ausblenden";

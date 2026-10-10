@@ -377,8 +377,14 @@ struct MarketView: View {
     private var botsContent: some View {
         BotsPage(
             model: bots, catalog: catalog, integrations: integrations, query: query, languageCode: languageCode,
+            agents: server?.agents ?? [],
             onView: { panel = .botDetail($0.id) },
             onCreate: { panel = .botCreate($0.id) },
+            onOpen: { agent in
+                guard let server else { return }
+                router.selectAgent(agent.id, on: server)
+                router.select(mode: .team)
+            },
             onRetry: { if let server { Task { await bots.load(from: server, force: true) } } })
         if let error {
             UserFacingErrorView(message: error)

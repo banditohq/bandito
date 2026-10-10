@@ -901,7 +901,10 @@
 "market.filter.all" = "すべて";
 "market.filter.connected" = "接続済み";
 "market.filter.installed" = "インストール済み";
+"market.filter.myBots" = "マイボット";
 "market.more" = "その他";
+"market.myBots.empty" = "テンプレートから作ったボットはまだありません。「すべて」からテンプレートを選び、「ボットを作成」を押してください。";
+"market.myBots.open" = "開く";
 "market.noResults" = "見つかりません";
 "market.official" = "公式";
 "market.recommend.hide" = "おすすめを非表示";

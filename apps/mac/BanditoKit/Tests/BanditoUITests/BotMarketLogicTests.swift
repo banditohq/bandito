@@ -29,6 +29,46 @@ import Testing
         try RPCClient.decoder.decode(T.self, from: Data(raw.utf8))
     }
 
+    // MARK: my bots
+
+    private func agent(_ id: String, _ name: String, template: String?) -> Agent {
+        Agent(id: id, name: name, runtime: .claude, cwd: "/work", templateId: template)
+    }
+
+    @Test func myBotsAreTheAgentsMadeFromATemplateInTheServersOrder() {
+        let agents = [
+            agent("1", "Hand", template: nil),
+            agent("2", "Review bot", template: "reviewer"),
+            agent("3", "Digest", template: "digest"),
+        ]
+        let bots = BotLogic.myBots(agents: agents, templates: templates, query: "", languageCode: "en")
+        #expect(bots.map(\.id) == ["2", "3"])
+        #expect(bots.map { $0.template?.id } == ["reviewer", "digest"])
+    }
+
+    @Test func aBotWhoseTemplateIsGoneStillShowsWithoutOne() {
+        let agents = [agent("9", "Orphan", template: "removed")]
+        let bots = BotLogic.myBots(agents: agents, templates: templates, query: "", languageCode: "en")
+        #expect(bots.map(\.id) == ["9"])
+        #expect(bots.first?.template == nil)
+    }
+
+    @Test func theMyBotsSearchReadsTheAgentNameAndTheTemplateName() {
+        let agents = [agent("2", "Review bot", template: "reviewer"), agent("3", "Morning", template: "digest")]
+        func ids(_ query: String) -> [String] {
+            BotLogic.myBots(agents: agents, templates: templates, query: query, languageCode: "en").map(\.id)
+        }
+        #expect(ids(" code ") == ["2"], "the template's name")
+        #expect(ids("MORNING") == ["3"], "the agent's name, ignoring case")
+        #expect(ids("nothing").isEmpty)
+    }
+
+    @Test func myBotsIsNoCatalogFilter() {
+        // The Bots page shows its own list for My bots; the catalog keeps no template under this filter.
+        #expect(BotLogic.visible(templates, filter: .myBots, query: "", languageCode: "en").isEmpty)
+        #expect(MarketFilter.myBots.id == "myBots")
+    }
+
     // MARK: filter and search
 
     @Test func categoriesComeInTheSidebarOrderAndOnlyThePresentOnes() {

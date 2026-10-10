@@ -12,7 +12,7 @@ page has its own list in the sidebar and its own search. Bandito remembers the p
 only when the server is new enough to have them; an older server shows Services alone.
 Где: Marketplace → the switch under the title → Services (Сервисы), Bots (Боты), Skills (Скиллы)
 1. Click a segment to change the page. The search field is cleared, and the sidebar changes to that page's rows.
-2. Bots lists All (Все) and the categories. Skills lists All (Все), Installed (Установленные) and the categories.
+2. Bots lists All (Все), My bots (Мои боты) and the categories. Skills lists All (Все), Installed (Установленные) and the categories.
 3. The search on each page finds by name, in the language of the app and in English, and by the description.
 
 ## Marketplace mode
@@ -131,6 +131,16 @@ logos of the services the bot uses (the optional ones are dimmer), View (Пос�
 1. Click a category in the sidebar to see only its bots.
 2. Click View (Посмотреть) on a card, or the card itself, to read about the bot.
 3. Click Create bot (Создать бота) on a card to go straight to the create sheet.
+
+## My bots
+
+<!-- id: market-my-bots; covers: -->
+My bots (Мои боты) lists the bots you made from a template, one card each: the name, the template it came from and Open
+(Открыть), which opens the bot's chat in the team. Bots you made by hand are not listed. Until you make one, the page
+says so and points to Create bot (Создать бота).
+Где: Marketplace → Bots (Боты) → My bots (Мои боты)
+1. Click Open (Открыть) on a card, or the card itself, to open the bot.
+2. The search finds a bot by its name or by the name of its template.
 
 ## A bot's page
 

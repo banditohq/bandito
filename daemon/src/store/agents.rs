@@ -152,6 +152,10 @@ pub struct Agent {
     /// `Store::agent_set_lead`, never by a patch.
     #[serde(default)]
     pub lead: bool,
+    /// The agent template this bot was made from (`agents.create_from_template`); `null` for every other agent. Set by
+    /// `Store::agent_set_template` only, never by a patch (see docs/ARCHITECTURE.md#agent-templates).
+    #[serde(default)]
+    pub template_id: Option<String>,
     /// The newest user or assistant message; `null` when there is none. Only set by `agent_view` and
     /// `agent_list_view`, the reads the wire uses (see docs/ARCHITECTURE.md#team-preview).
     #[serde(default)]
@@ -241,7 +245,7 @@ pub struct AgentPatch {
     pub lead: Option<bool>,
 }
 
-const COLS: &str = "id, name, role, runtime, model, cwd, approval_mode, system_prompt, runtime_session_id, created_at, updated_at, effort, memory_mode, context_budget, home_dir, context_tokens, chapter, last_turn_at, fallback_runtime, fallback_model, active_runtime, workspace_id, paused, use_personal_settings, avatar_color, avatar_face, capabilities, avatar_emoji, avatar_image, avatar_image_rev, integrations, lead";
+const COLS: &str = "id, name, role, runtime, model, cwd, approval_mode, system_prompt, runtime_session_id, created_at, updated_at, effort, memory_mode, context_budget, home_dir, context_tokens, chapter, last_turn_at, fallback_runtime, fallback_model, active_runtime, workspace_id, paused, use_personal_settings, avatar_color, avatar_face, capabilities, avatar_emoji, avatar_image, avatar_image_rev, integrations, lead, template_id";
 
 /// The newest message of the agent in `agents.id`, as one JSON array `[kind, ts, text]` (text cut to
 /// `LAST_MESSAGE_CHARS` in SQL too, so a long message is not read in full). One correlated subquery per agent, served by
@@ -295,6 +299,7 @@ fn from_row(r: &Row) -> rusqlite::Result<Agent> {
         capabilities: capabilities_column(r, 26)?,
         integrations: integrations_column(r, 30)?,
         lead: r.get::<_, i64>(31)? != 0,
+        template_id: r.get(32)?,
         last_message: None,
         status: None,
         pending_approval_ids: Vec::new(),
@@ -305,9 +310,9 @@ fn from_row(r: &Row) -> rusqlite::Result<Agent> {
 /// `from_row` for `view_sql()`: the agent columns, then the message, the status and the pending count.
 fn from_row_view(r: &Row) -> rusqlite::Result<Agent> {
     let mut agent = from_row(r)?;
-    agent.last_message = last_message_column(r, 32)?;
-    agent.status = status_column(r, 33)?;
-    agent.pending_approval_ids = pending_ids_column(r, 34)?;
+    agent.last_message = last_message_column(r, 33)?;
+    agent.status = status_column(r, 34)?;
+    agent.pending_approval_ids = pending_ids_column(r, 35)?;
     agent.pending_approvals = agent.pending_approval_ids.len() as u32;
     Ok(agent)
 }
@@ -450,6 +455,7 @@ impl Store {
             capabilities: a.capabilities,
             integrations: a.integrations,
             lead: false,
+            template_id: None,
             last_message: None,
             status: None,
             pending_approval_ids: Vec::new(),
@@ -459,7 +465,7 @@ impl Store {
         let integrations = integrations_json(agent.integrations.as_deref())?;
         let res = self.conn().execute(
             &format!(
-                "INSERT INTO agents ({COLS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32)"
+                "INSERT INTO agents ({COLS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33)"
             ),
             params![
                 agent.id,
@@ -494,6 +500,7 @@ impl Store {
                 agent.avatar.as_ref().and_then(|v| v.image_rev),
                 integrations,
                 agent.lead,
+                agent.template_id,
             ],
         );
         match res {
@@ -734,6 +741,14 @@ impl Store {
     }
 
     /// Remember the agent's own folder (set once, when it is created).
+    /// Marks the agent as made from the template `template_id`. Only `agents.create_from_template` calls it, right
+    /// after the agent is created.
+    pub fn agent_set_template(&self, id: &str, template_id: &str) -> Result<()> {
+        self.conn()
+            .execute("UPDATE agents SET template_id=?2 WHERE id=?1", params![id, template_id])?;
+        Ok(())
+    }
+
     pub fn agent_set_home(&self, id: &str, home_dir: &str) -> Result<()> {
         self.conn()
             .execute("UPDATE agents SET home_dir=?2 WHERE id=?1", params![id, home_dir])?;
@@ -1007,6 +1022,37 @@ mod tests {
         let mut with_flag = new("Scout");
         with_flag.use_personal_settings = true;
         assert!(s.agent_create(with_flag).unwrap().use_personal_settings);
+    }
+
+    #[test]
+    fn template_id_is_set_once_read_everywhere_and_kept_by_updates() {
+        let store = Store::open_in_memory().unwrap();
+        let a = store.agent_create(new("Made")).unwrap();
+        assert_eq!(a.template_id, None);
+        store.agent_set_template(&a.id, "code-reviewer").unwrap();
+        let read = |s: &Store| s.agent_get(&a.id).unwrap().unwrap().template_id;
+        assert_eq!(read(&store).as_deref(), Some("code-reviewer"));
+        assert_eq!(
+            store.agent_view(&a.id).unwrap().unwrap().template_id.as_deref(),
+            Some("code-reviewer")
+        );
+        let listed = store.agent_list_view().unwrap();
+        assert_eq!(listed[0].template_id.as_deref(), Some("code-reviewer"));
+
+        let renamed = store
+            .agent_update(
+                &a.id,
+                AgentPatch {
+                    name: Some("Renamed".into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        assert_eq!(renamed.template_id.as_deref(), Some("code-reviewer"));
+        assert_eq!(read(&store).as_deref(), Some("code-reviewer"));
+
+        let plain = store.agent_create(new("Plain")).unwrap();
+        assert_eq!(store.agent_view(&plain.id).unwrap().unwrap().template_id, None);
     }
 
     #[test]

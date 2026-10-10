@@ -42,6 +42,8 @@ public enum MarketFilter: Hashable, Identifiable, Sendable {
     case all, connected
     /// Skills that are installed somewhere on the server.
     case installed
+    /// Bots made from a template (the Bots page only). Not a catalog filter: it keeps no template, service or skill.
+    case myBots
     /// A catalog category: `dev`, `productivity`, `data`, `web`, `design`, `other`.
     case category(String)
 
@@ -50,6 +52,7 @@ public enum MarketFilter: Hashable, Identifiable, Sendable {
         case .all: "all"
         case .connected: "connected"
         case .installed: "installed"
+        case .myBots: "myBots"
         case .category(let name): "category:\(name)"
         }
     }
@@ -59,6 +62,7 @@ public enum MarketFilter: Hashable, Identifiable, Sendable {
         case .all: L10n.Market.Filter.all
         case .connected: L10n.Market.Filter.connected
         case .installed: L10n.Market.Filter.installed
+        case .myBots: L10n.Market.Filter.myBots
         case .category(let name): MarketCategory.title(name)
         }
     }
@@ -192,7 +196,7 @@ public final class Router {
     /// Marketplace: the page in front (services, bots or skills). Restored from the app's defaults at start. The
     /// page shown is `MarketTab.effective(_:available:)`: a server without the feature falls back to services.
     public var marketTab: MarketTab = .services
-    /// Marketplace, Bots page: the sidebar filter (all, or a category).
+    /// Marketplace, Bots page: the sidebar filter (all, my bots, or a category).
     public var marketBotFilter: MarketFilter = .all
     /// Marketplace, Skills page: the sidebar filter (all, installed, or a category).
     public var marketSkillFilter: MarketFilter = .all

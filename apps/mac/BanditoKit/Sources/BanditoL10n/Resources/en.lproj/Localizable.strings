@@ -901,7 +901,10 @@
 "market.filter.all" = "All";
 "market.filter.connected" = "Connected";
 "market.filter.installed" = "Installed";
+"market.filter.myBots" = "My bots";
 "market.more" = "More";
+"market.myBots.empty" = "No bots made from a template yet. Pick one under All and press Create bot.";
+"market.myBots.open" = "Open";
 "market.noResults" = "Nothing found";
 "market.official" = "Official";
 "market.recommend.hide" = "Hide suggestions";
