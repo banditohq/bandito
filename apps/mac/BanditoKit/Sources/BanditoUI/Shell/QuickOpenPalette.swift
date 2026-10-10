@@ -112,6 +112,8 @@ struct QuickOpenPalette: View {
                 .font(BanditoFont.text(size: 17, weight: 400))
                 .foregroundStyle(Color.Bandito.text)
                 .focused($focused)
+                // A focused text field turns Esc into cancelOperation and keeps it from onKeyPress above.
+                .onExitCommand { close() }
             Spacer(minLength: 8)
             Text(L10n.Palette.fieldHint)
                 .font(BanditoFont.text(size: 12, weight: 400))
