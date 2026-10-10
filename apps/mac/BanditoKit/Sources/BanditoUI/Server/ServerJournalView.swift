@@ -153,7 +153,8 @@ struct ServerJournalView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             if entry.repeats > 1 {
                 Text(verbatim: "×\(entry.repeats)")
-                    .font(BanditoFont.font(size: 11.5, weight: 600, mono: true))
+                    .font(BanditoFont.font(size: 11.5, weight: 600))
+                    .monospacedDigit()
                     .foregroundStyle(Color.Bandito.text3)
                     .fixedSize()
             }

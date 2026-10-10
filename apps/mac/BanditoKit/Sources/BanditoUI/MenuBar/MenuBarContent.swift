@@ -120,7 +120,7 @@ public struct MenuBarContent: View {
                 Text(row.agent.name)
                     .font(.system(size: 13, weight: .semibold))
                 Text(row.approval.title)
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(.system(size: 12))
                     .foregroundStyle(Color.Bandito.text2)
                     .lineLimit(1)
                     .truncationMode(.middle)

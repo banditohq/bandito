@@ -408,7 +408,7 @@ struct FirstServerStep: View {
                             .font(BanditoFont.font(size: 12.5, weight: 600))
                             .foregroundStyle(Color.Bandito.text3)
                         Text(detail)
-                            .font(BanditoFont.font(size: 12.5, weight: 400, mono: true))
+                            .font(BanditoFont.font(size: 12.5, weight: 400))
                             .foregroundStyle(Color.Bandito.text2)
                             .textSelection(.enabled)
                             .fixedSize(horizontal: false, vertical: true)

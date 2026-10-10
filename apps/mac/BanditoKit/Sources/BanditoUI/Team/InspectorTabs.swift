@@ -776,7 +776,7 @@ struct WhereTab: View {
                     if let plan { Chip(text: plan, tone: .signal) }
                 }
                 Text(status.installed ? (status.version ?? "") : L10n.Inspector.notInstalled)
-                    .font(BanditoFont.font(size: 11.5, weight: 400, mono: true))
+                    .font(BanditoFont.font(size: 11.5, weight: 400, mono: status.installed))
                     .foregroundStyle(Color.Bandito.text3)
                     .lineLimit(1)
             }

@@ -63,7 +63,7 @@ struct PortsView: View {
                                 .lineLimit(1)
                                 .frame(width: 160, alignment: .leading)
                             Text(port.addr == "*" ? L10n.Ports.allInterfaces : port.addr)
-                                .font(.system(size: 12, design: .monospaced))
+                                .font(port.addr == "*" ? .system(size: 12) : .system(size: 12, design: .monospaced))
                                 .foregroundStyle(Color.Bandito.text3)
                                 .lineLimit(1)
                                 .frame(width: 110, alignment: .leading)

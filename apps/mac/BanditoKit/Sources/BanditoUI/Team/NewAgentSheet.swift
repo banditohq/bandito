@@ -548,7 +548,7 @@ struct NewAgentSheet: View {
                         .fixedSize()
                     }
                     Text(L10n.AgentSheet.memoryAuto)
-                        .font(BanditoFont.font(size: 11.5, weight: 400, mono: true))
+                        .font(BanditoFont.font(size: 11.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
                 }
                 .modifier(FieldBox())

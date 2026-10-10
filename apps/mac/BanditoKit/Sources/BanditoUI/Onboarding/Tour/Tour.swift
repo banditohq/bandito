@@ -86,7 +86,8 @@ struct TourLayer: View {
             HStack(spacing: 10) {
                 RaccoonAvatar(name: "Bandito", color: .peach, size: 26)
                 Text(L10n.Tour.counter(step: String(tour.index + 1), total: String(tour.steps.count)))
-                    .font(BanditoFont.font(size: 12, weight: 400, mono: true))
+                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .monospacedDigit()
                     .foregroundStyle(Color.Bandito.text3)
             }
             Text(title(anchor))

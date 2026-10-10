@@ -110,7 +110,8 @@ struct ThreadHeader: View {
                         Text("+\(changes.additions)").foregroundStyle(Color.Bandito.ok)
                         Text("−\(changes.deletions)").foregroundStyle(Color.Bandito.danger)
                     }
-                    .font(BanditoFont.font(size: 11, weight: 500, mono: true))
+                    .font(BanditoFont.font(size: 11, weight: 500))
+                    .monospacedDigit()
                 }
             }
             .font(BanditoFont.font(size: 12, weight: 500))
