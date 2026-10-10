@@ -324,15 +324,19 @@ public enum L10n {
         public static func restoreFailed(error: String) -> String { L10n.tr("backups.restoreFailed", error) }
         public static var restoreUnknown: String { L10n.tr("backups.restoreUnknown") }
         public static func restoredFrom(date: String) -> String { L10n.tr("backups.restoredFrom", date) }
+        public static func safeMode(error: String) -> String { L10n.tr("backups.safeMode", error) }
+        public static var safeModeHint: String { L10n.tr("backups.safeModeHint") }
         public static var timedOut: String { L10n.tr("backups.timedOut") }
         public static func whenToday(time: String) -> String { L10n.tr("backups.whenToday", time) }
         public static func whenYesterday(time: String) -> String { L10n.tr("backups.whenYesterday", time) }
 
         public enum Reason {
             public static var beforeRestore: String { L10n.tr("backups.reason.beforeRestore") }
+            public static var broken: String { L10n.tr("backups.reason.broken") }
             public static var daily: String { L10n.tr("backups.reason.daily") }
             public static var manual: String { L10n.tr("backups.reason.manual") }
             public static var other: String { L10n.tr("backups.reason.other") }
+            public static var replaced: String { L10n.tr("backups.reason.replaced") }
             public static var start: String { L10n.tr("backups.reason.start") }
             public static var upgrade: String { L10n.tr("backups.reason.upgrade") }
         }

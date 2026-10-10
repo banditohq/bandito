@@ -149,7 +149,9 @@ Copies of the server's database. The daemon saves one at its start, before an up
 Где: Server (⌘7) → Backups (Резервные копии)
 1. Read the list, newest first. Each copy shows its date and time, why it was made (At start, Before update, Daily, Manual, Before restore), and its size.
 2. Click Make a copy now (Сделать копию сейчас) to save the database at once.
-3. To restore a copy, click Restore (Восстановить) in its row and confirm Restore the copy from {date}?. The current database is saved first. The server restarts and agents stop for a few seconds; the banner The server is restarting… stays until it is back.
+3. To restore a copy, click Restore (Восстановить) in its row and confirm Restore the copy from {date}?. The current database is kept first and never deleted. The server restarts and agents stop for a few seconds; the banner The server is restarting… stays until it is back, then the result of this restore is shown.
+4. A row marked Database saved before a restore (База, сохранённая перед восстановлением), or Damaged database saved before a restore, is the old database that a restore set aside. The daemon never deletes it; you can restore it like a copy.
+5. If a restore leaves the server with no usable database, the server starts in safe mode: Overview and Backups show why, and only Backups works. Choose a copy in the list and click Restore (Восстановить).
 
 ## Daemon log (Журнал демона)
 

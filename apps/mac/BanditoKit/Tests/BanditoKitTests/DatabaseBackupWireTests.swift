@@ -38,5 +38,33 @@ import Testing
     @Test func restoreReplySaysTheDaemonRestarts() throws {
         let reply = try RPCClient.decoder.decode(BackupRestoreReply.self, from: Data(#"{"restarting":true}"#.utf8))
         #expect(reply.restarting)
+        #expect(reply.id == nil, "an older daemon sends no id")
+    }
+
+    @Test func restoreReplyCarriesTheOperationId() throws {
+        let reply = try RPCClient.decoder.decode(
+            BackupRestoreReply.self, from: Data(#"{"restarting":true,"id":"0192-op"}"#.utf8))
+        #expect(reply.id == "0192-op")
+    }
+
+    @Test func lastRestoreCarriesTheOperationId() throws {
+        let raw = #"{"id":"0192-op","name":"bandito-20270115-080000-start.db","ok":true,"error":null,"at_ms":3}"#
+        let record = try RPCClient.decoder.decode(LastRestore.self, from: Data(raw.utf8))
+        #expect(record.id == "0192-op")
+    }
+
+    @Test func listReadsSetAsideDatabases() throws {
+        let raw = #"[{"name":"replaced-20270115-080000.db","size":10,"created_at_ms":1800000000000,"reason":"replaced"},{"name":"broken-20270115-070000.db","size":5,"created_at_ms":1799996400000,"reason":"broken"}]"#
+        let list = try RPCClient.decoder.decode([DatabaseBackup].self, from: Data(raw.utf8))
+        #expect(list.map(\.reason) == ["replaced", "broken"])
+    }
+
+    @Test func daemonInfoReadsSafeMode() throws {
+        let raw = #"{"version":"0.1.6","hostname":"h","os":"macos","arch":"arm64","started_at":1,"last_seq":0,"safe_mode":true,"safe_mode_error":"no way back"}"#
+        let info = try RPCClient.decoder.decode(DaemonInfo.self, from: Data(raw.utf8))
+        #expect(info.isSafeMode)
+        #expect(info.safeModeError == "no way back")
+        let older = #"{"version":"0.1.5","hostname":"h","os":"macos","arch":"arm64","started_at":1,"last_seq":0}"#
+        #expect(try RPCClient.decoder.decode(DaemonInfo.self, from: Data(older.utf8)).isSafeMode == false)
     }
 }

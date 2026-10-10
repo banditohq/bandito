@@ -21,9 +21,30 @@ struct ServerOverview: View {
     /// Two columns of cards or one. Starts narrow; changes only when the measured page width crosses the threshold.
     @State private var isWide = false
 
+    /// The daemon runs without a database after a restore (safe mode): the reason, and the way to the copies.
+    private func safeModeCard(_ info: DaemonInfo) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(L10n.Backups.safeMode(error: info.safeModeError ?? info.lastRestore?.error ?? ""))
+                .font(BanditoFont.text(size: 13, weight: 500))
+                .foregroundStyle(Color.Bandito.danger)
+            Text(L10n.Backups.safeModeHint)
+                .font(BanditoFont.text(size: 13, weight: 400))
+                .foregroundStyle(Color.Bandito.text2)
+            Button(L10n.Mode.serverBackups) { router.serverSection = .backups }
+                .banditoButton(.quiet())
+                .fixedSize()
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .banditoCard()
+    }
+
     var body: some View {
         ServerPage(title: L10n.Mode.serverOverview, trailing: { trailing }) {
-            if let server, server.supports("host") {
+            if let server, let info = server.info, info.isSafeMode {
+                safeModeCard(info)
+            } else if let server, server.supports("host") {
                 LocalDaemonUpgradeBanner(server: server, model: app.localUpgrade)
                 // This Mac's daemon is replaced by the bundled one: the release offers would be the same update, shown twice.
                 if !app.localUpgrade.replacesOffer(for: server) {

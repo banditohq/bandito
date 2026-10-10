@@ -22,6 +22,9 @@ struct BackupsView: View {
                         .font(BanditoFont.text(size: 13, weight: 400))
                         .foregroundStyle(Color.Bandito.text2)
                         .fixedSize(horizontal: false, vertical: true)
+                    if let info = server.info, info.isSafeMode {
+                        safeModeBanner(info)
+                    }
                     if model.isRestarting {
                         restartingBanner
                     }
@@ -79,7 +82,25 @@ struct BackupsView: View {
         }
         .banditoButton(.quiet())
         .fixedSize()
-        .disabled(!canAct)
+        // Safe mode has no database to copy: only a restore helps.
+        .disabled(!canAct || server?.info?.isSafeMode == true)
+    }
+
+    /// The daemon runs without a database after a restore: why, and what to do. Restoring a copy below is the way out.
+    private func safeModeBanner(_ info: DaemonInfo) -> some View {
+        let reason = info.safeModeError ?? info.lastRestore?.error ?? ""
+        return VStack(alignment: .leading, spacing: 6) {
+            Text(L10n.Backups.safeMode(error: reason))
+                .font(BanditoFont.text(size: 13, weight: 500))
+                .foregroundStyle(Color.Bandito.danger)
+            Text(L10n.Backups.safeModeHint)
+                .font(BanditoFont.text(size: 13, weight: 400))
+                .foregroundStyle(Color.Bandito.text2)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .banditoCard()
     }
 
     private var canAct: Bool {
@@ -260,8 +281,9 @@ final class BackupsModel {
         phase = .restoring
         failure = nil
         outcome = nil
+        let requestID: String?
         do {
-            _ = try await server.restoreBackup(name: backup.name)
+            requestID = try await server.requestRestore(name: backup.name).id
         } catch {
             phase = .idle
             failure = UserFacingError.message(for: error)
@@ -273,8 +295,14 @@ final class BackupsModel {
             try? await Task.sleep(for: .seconds(1))
             if server.isConnectedNow, let started = server.info?.startedAt, started != startedBefore {
                 phase = .idle
-                // The outcome comes from the daemon's record of this request, not from the restart itself.
-                outcome = RestoreOutcome.from(requested: backup.name, record: server.info?.lastRestore, before: recordBefore)
+                // The outcome comes from the daemon's record of this request (matched by its id), not from the
+                // restart itself.
+                outcome = RestoreOutcome.from(
+                    requested: backup.name,
+                    requestID: requestID,
+                    record: server.info?.lastRestore,
+                    before: recordBefore
+                )
                 await load(server)
                 return
             }

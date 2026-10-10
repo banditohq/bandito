@@ -286,6 +286,14 @@ public final class ServerModel: Identifiable {
             notificationPump = startNotificationPump(c)
             let daemon = try await c.call("daemon.info", NoParams(), as: DaemonInfo.self)
             info = daemon
+            if daemon.isSafeMode {
+                // A daemon in safe mode answers only `daemon.info` and `backups.*` (docs/ARCHITECTURE.md#backups):
+                // stay connected with nothing loaded, so the Backups section can show why and restore a copy.
+                try checkCurrent(attempt)
+                state = .connected
+                lastError = nil
+                return
+            }
             setAgents(try await c.call("agents.list", NoParams(), as: [Agent].self))
             runtimes = try await c.call("runtimes.status", NoParams(), as: [RuntimeStatus].self)
             runtimesFetchedAt = Date()

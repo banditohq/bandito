@@ -118,6 +118,51 @@ import Testing
             == .failed("the restored database does not open"))
     }
 
+    @Test func withAnOperationIdOnlyTheRecordWithThatIdCounts() {
+        let name = "bandito-20270115-080000-start.db"
+        // An earlier successful restore of the very same copy must not pass for this one.
+        let older = LastRestore(name: name, ok: true, error: nil, atMs: 1, id: "op-old")
+        let mine = LastRestore(name: name, ok: false, error: "no way back", atMs: 2, id: "op-new")
+        #expect(RestoreOutcome.from(requested: name, requestID: "op-new", record: older, before: nil) == .unknown)
+        // Even when the record differs from what the app saw before, a different id is not this request.
+        #expect(RestoreOutcome.from(requested: name, requestID: "op-new", record: older, before: mine) == .unknown)
+        #expect(RestoreOutcome.from(requested: name, requestID: "op-new", record: mine, before: older)
+            == .failed("no way back"))
+        let done = LastRestore(name: name, ok: true, error: nil, atMs: 3, id: "op-new")
+        #expect(RestoreOutcome.from(requested: name, requestID: "op-new", record: done, before: older)
+            == .restored(copyDate: Date(timeIntervalSince1970: 1_800_000_000)))
+        // A record without an id (an older daemon) is not accepted for a request that has one.
+        let noID = LastRestore(name: name, ok: true, error: nil, atMs: 3)
+        #expect(RestoreOutcome.from(requested: name, requestID: "op-new", record: noID, before: nil) == .unknown)
+    }
+
+    @Test func withoutAnIdTheOldRuleStillApplies() {
+        let name = "bandito-20270115-080000-start.db"
+        let record = LastRestore(name: name, ok: true, error: nil, atMs: 2)
+        #expect(RestoreOutcome.from(requested: name, requestID: nil, record: record, before: record) == .unknown)
+        #expect(RestoreOutcome.from(requested: name, requestID: "", record: record, before: record) == .unknown)
+        #expect(RestoreOutcome.from(requested: name, requestID: nil, record: record, before: nil)
+            == .restored(copyDate: Date(timeIntervalSince1970: 1_800_000_000)))
+    }
+
+    @Test func aSetAsideDatabaseIsMarkedAsSavedBeforeARestore() {
+        #expect(BackupReason(raw: "replaced") == .replaced)
+        #expect(BackupReason(raw: "broken") == .broken)
+        #expect(BackupReason.replaced.isSavedBeforeRestore)
+        #expect(BackupReason.broken.isSavedBeforeRestore)
+        #expect(!BackupReason.beforeRestore.isSavedBeforeRestore)
+        #expect(!BackupReason.other.isSavedBeforeRestore)
+        #expect(BackupReason.replaced.title == L10n.Backups.Reason.replaced)
+        #expect(BackupReason.broken.title == L10n.Backups.Reason.broken)
+        #expect(BackupReason.replaced.title != BackupReason.broken.title)
+    }
+
+    @Test func aSetAsideNameGivesItsTime() {
+        #expect(BackupName.createdAt("replaced-20270115-080000.db") == Date(timeIntervalSince1970: 1_800_000_000))
+        #expect(BackupName.createdAt("broken-20270115-080000-2.db") == Date(timeIntervalSince1970: 1_800_000_000))
+        #expect(BackupName.createdAt("replaced-") == nil)
+    }
+
     @Test func backupsIsShownOnlyWhenTheServerHasTheFeature() {
         #expect(!ServerSection.visible(supportsBackups: false).contains(.backups))
         #expect(ServerSection.visible(supportsBackups: true).contains(.backups))
