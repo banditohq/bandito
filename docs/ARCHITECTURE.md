@@ -783,6 +783,38 @@ Install writes under the daemon user's home (`user`) or under the agent's folder
 
 Errors: code `-32027` (`COMMANDS_ERROR`) with `error.data.reason`: `invalid_name`, `invalid_path`, `invalid_content`, `file_count`, `too_many_files`, `too_large`, `missing_skill_file`, `exists`, `no_home`, `io`. Bad params are `-32602`.
 
+## Skills
+
+A catalog of open skills the owner can install for the daemon user or for one agent's folder. Code: `daemon/src/skills.rs` (catalog, embedded files, folder state, install, remove), `daemon/src/rpc/skills.rs` (methods), `daemon/src/commands.rs` (the folder writes, `checked_skill_folder`). Feature string: `"skills"`. The app's catalog screen is a separate step.
+
+**Catalog.** `daemon/src/skills_catalog.json`: one entry per skill (`id`, `name`, `publisher`, `source{repo, path, commit, license}`, descriptions in English and Russian and in 7 more languages, `category`, `runtimes`, `scripts`, `files`). Only licenses that allow redistribution (MIT, Apache-2.0, BSD, ISC, CC0, CC-BY) are listed. The tests check every entry against its folder.
+
+**Embedding.** The skill files are vendored in `daemon/skills/<id>/` (a copy of the author's folder at the pinned commit, with its `LICENSE`). Nothing fetches them at run time. `daemon/build.rs` walks each folder and writes `OUT_DIR/bundled_skills.rs`, which `skills.rs` includes: every file, as bytes, in the binary. Names that start with a dot are not bundled; a symlink in a vendored folder fails the build. No new dependency. The vendored files are not edited by hand: an update replaces the folder from a new pinned commit (see `daemon/skills/README.md`).
+
+**Ownership.** Bandito marks every folder it installs with a file `.bandito-skill`, JSON `{"id", "commit"}` (the pinned commit from the catalog). A folder is *Bandito's* when it is a real folder that has a `SKILL.md` file and a marker whose `id` is the folder name. Anything else at that name is the person's own: a folder without the marker, a marker for another skill, or a link. Bandito never replaces or removes it. Install refuses it (`exists_not_ours`), remove refuses it (`not_ours`), and the catalog reports it as a conflict.
+
+**Methods.**
+
+| method | params | result |
+|---|---|---|
+| `skills.catalog` | none | `[Entry]`: each catalog entry as in the JSON (`files` as paths), plus `installed: {user: bool, projects: [agent_id]}` and `conflicts: {user: bool, projects: [agent_id]}` |
+| `skills.install` | `skill_id`, `scope: "user"\|"project"`, `agent_id` (for `project`) | `{path}` |
+| `skills.remove` | `skill_id`, `scope`, `agent_id` (for `project`) | `{path}` |
+
+`installed` lists the folders that are Bandito's: `user` is the daemon user's home, `projects` are the agents whose folder holds one. `conflicts` lists the same-named folders that are not Bandito's.
+
+**Install.** Refused first, before any write: an unknown id; a `.claude` or `.claude/skills` that is a link; a target that is a link or that does not canonicalize to a direct child of the canonical `base/.claude/skills` (`unsafe_path`); a folder that is not Bandito's (`exists_not_ours`). The files are every bundled file (LICENSE included) plus the marker. File modes: 0755 for anything under `scripts/` and for any file that starts with `#!`, 0644 for the rest.
+
+The write is atomic. The files go to a new folder `.claude/skills/.<id>.tmp-<rand>`. An older Bandito copy is renamed to `.<id>.old-<rand>`, the new folder takes the name `<id>`, and the old copy is removed. If the write fails, the old copy stays as it was and the temporary folder is removed. If the second rename fails, the old copy is renamed back. The dot-named folders are hidden from `commands.list`. Before the write, `skills.install` deletes the leftovers of an earlier interrupted install of the same id (`.<id>.tmp-*`, `.<id>.old-*`, real folders only).
+
+`commands.install` with `kind: skill` and `overwrite: true` is the low-level owner method: it replaces the folder without the marker check, while `skills.install` checks the marker first.
+
+**Remove.** Removes `.claude/skills/<id>/` under the home (`user`) or the agent's folder (`project`), and only when it is Bandito's. A missing folder is `not_installed`; a folder that is not Bandito's is `not_ours`; a link is `unsafe_path`. Links inside the folder are removed as links and never followed, so nothing outside the folder is touched.
+
+**Rights.** The owner's CLI and paired devices may call the three methods, with the rights of the daemon user. Agents (crew server) may not: `skills.*` is not in the agent method list (see `rpc/mod.rs`), as with `integrations.add`.
+
+Errors: an unknown `skill_id`, an unknown `agent_id`, a `project` scope without `agent_id` are `-32602` (`INVALID_PARAMS`) with a short message. Install and remove failures are `-32027` (`COMMANDS_ERROR`) with `error.data.reason`: `unknown_skill`, `exists_not_ours`, `not_ours`, `not_installed`, `unsafe_path`, `no_home`, `io`, and the install reasons of `commands.install` (`invalid_name`, `invalid_path`, `invalid_content`, `file_count`, `too_many_files`, `too_large`, `missing_skill_file`, `exists`).
+
 ## Workspaces
 
 A workspace is where an agent's CLI runs: on the server itself, or in a Docker container with its own disk, network and limits. Agents can be mixed freely: some share the server, one sits in a container. Code: `daemon/src/workspace.rs` (Docker, the command each runtime runs), `daemon/src/store/workspaces.rs` (rows), `daemon/src/rpc/workspaces.rs` (methods). Feature string: `"workspaces"`.

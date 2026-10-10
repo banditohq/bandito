@@ -31,3 +31,6 @@ with a throwaway data folder: `BANDITO_HOME=$(mktemp -d) cargo test`.
 - User-facing errors: one short English sentence that says what to do.
 - Integrations catalog: `src/integrations_catalog.json` — every entry checked against the service's official docs;
   no keys or tokens in it.
+- Vendored skills: `skills/<id>/` are copies of the authors' folders (`skills/README.md` lists the source commits).
+  Never edit them by hand; an update replaces the folder from a new pinned commit and updates the README and
+  `src/skills_catalog.json`. `build.rs` embeds them in the binary (docs/ARCHITECTURE.md#skills).
