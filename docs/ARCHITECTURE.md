@@ -192,6 +192,16 @@ A pending approval blocks only that agent. Approvals time out after 24 h → den
 
 Migrations: numbered SQL files embedded in the binary, applied by `PRAGMA user_version`.
 
+## Backups
+
+- Where: `<home>/backups/`, folder mode 0700, files 0600. Copies are `bandito-<UTC time>-<reason>.db`, made with `VACUUM INTO` over a read-only connection (busy timeout 5 s), so rows still in the WAL are included. Code: `daemon/src/backup.rs`.
+- Atomic copies: a copy is first written as `<name>.partial`, checked with `PRAGMA quick_check` (must answer `ok`), and only then renamed to its final name. A cut-off file never gets a final name. `.partial` files are not copies: they are not listed, counted or pruned; the daemon removes leftovers of a crash at its next start.
+- One daemon per data folder: the daemon takes an exclusive `flock` on `<home>/run/daemon.lock` before anything else and holds it for its whole life; a second daemon exits with an error. `restore` takes the same lock and refuses while it is held.
+- When: at each daemon start before the store opens, if there is no copy, the newest is older than 20 h, or the version in `backups/last-version` differs (reason `start`, or `upgrade` when the version changed). While the daemon runs, once an hour it checks and makes a `daily` copy if the newest is older than 24 h. Before `bandito backup restore`, a `before-restore` copy of the current database.
+- How many: the 14 newest copies are kept (pruned after each new copy and after a restore). Other files in the folder are not touched.
+- A failed copy is logged as a warning and does not stop the daemon.
+- List: `bandito backup list` (name and size, newest first). Restore: stop the daemon first (`bandito service uninstall`), then `bandito backup restore <name>`; the command refuses while the daemon lock is held and says so. The chosen copy must pass `quick_check` and be a regular file (symlinks are refused). The current database is copied to `before-restore` first; then the copy goes to `bandito.db.restore-tmp`, the old `-wal`/`-shm` files are removed and the temporary file replaces `bandito.db`. If any step fails, the temporary file is removed. After the restore: `bandito service install`.
+
 ## RPC
 
 JSON-RPC 2.0. Same methods on every transport.
@@ -825,6 +835,7 @@ daemon/            Rust crate `bandito`
   src/service.rs   user service: systemd unit, launchd plist, background fallback
   src/rpc/         JSON-RPC, transports, auth, pairing
   src/store/       SQLite + migrations
+  src/backup.rs    database copies: at start, daily, before restore (see Backups)
   src/runtime/     process.rs (shared child-process plumbing), claude.rs, codex.rs, grok.rs, api/
   src/policy.rs    approval rules: protected paths, risky checks (see Approvals)
   src/shell.rs     reads a command line for the policy: simple commands, wrappers, redirections
