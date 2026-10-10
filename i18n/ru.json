@@ -1829,5 +1829,19 @@
   "modelPicker.failed": "Не удалось получить список моделей: {reason}",
   "modelPicker.noEffort": "Эта модель не настраивает усилие",
   "modelPicker.failedMenu": "Не удалось получить список моделей",
-  "modelPicker.unsupported": "Демон Bandito на сервере слишком старый, он не отдаёт список моделей. Можно ввести id вручную."
+  "modelPicker.unsupported": "Демон Bandito на сервере слишком старый, он не отдаёт список моделей. Можно ввести id вручную.",
+  "modelPicker.otherVersions": "Другие версии",
+  "modelDescription.complexEveryday": "Для сложной и повседневной работы",
+  "modelDescription.toughest": "Для самых трудных и долгих задач",
+  "modelDescription.efficient": "Экономно для простых задач",
+  "modelDescription.fastest": "Быстрее всех для коротких ответов",
+  "modelDescription.workhorse": "Основная модель для кода и повседневной работы",
+  "modelDescription.frontier": "Самая умная, для самых сложных задач",
+  "modelDescription.fastAffordable": "Быстрая и экономная для простых задач",
+  "modelDescription.olderBalanced": "Предыдущая сбалансированная модель",
+  "modelDescription.olderFast": "Предыдущая быстрая модель",
+  "modelDescription.legacyCoding": "Старая модель для кода",
+  "modelDescription.xaiLatest": "Новейшая модель xAI",
+  "select.search": "Поиск",
+  "select.noResults": "Ничего не найдено"
 }

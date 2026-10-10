@@ -683,6 +683,17 @@
 "mode.soonHere" = "Скоро здесь";
 "mode.team" = "Команда";
 "mode.terminals" = "Терминалы";
+"modelDescription.complexEveryday" = "Для сложной и повседневной работы";
+"modelDescription.efficient" = "Экономно для простых задач";
+"modelDescription.fastAffordable" = "Быстрая и экономная для простых задач";
+"modelDescription.fastest" = "Быстрее всех для коротких ответов";
+"modelDescription.frontier" = "Самая умная, для самых сложных задач";
+"modelDescription.legacyCoding" = "Старая модель для кода";
+"modelDescription.olderBalanced" = "Предыдущая сбалансированная модель";
+"modelDescription.olderFast" = "Предыдущая быстрая модель";
+"modelDescription.toughest" = "Для самых трудных и долгих задач";
+"modelDescription.workhorse" = "Основная модель для кода и повседневной работы";
+"modelDescription.xaiLatest" = "Новейшая модель xAI";
 "modelPicker.backToList" = "Вернуться к списку";
 "modelPicker.defaultLabel" = "По умолчанию · %1$@";
 "modelPicker.defaultMenu" = "По умолчанию (%1$@)";
@@ -693,6 +704,7 @@
 "modelPicker.noEffort" = "Эта модель не настраивает усилие";
 "modelPicker.notInstalled" = "Программа не установлена на сервере";
 "modelPicker.other" = "Другая модель…";
+"modelPicker.otherVersions" = "Другие версии";
 "modelPicker.typePlaceholder" = "Id модели";
 "modelPicker.unsupported" = "Демон Bandito на сервере слишком старый, он не отдаёт список моделей. Можно ввести id вручную.";
 "new.agent" = "Новый агент";
@@ -1099,6 +1111,8 @@
 "secrets.reenter" = "Введите значение заново";
 "secrets.valueHint" = "После сохранения видны только последние четыре символа. До 64 КБ.";
 "secrets.valueLabel" = "Значение";
+"select.noResults" = "Ничего не найдено";
+"select.search" = "Поиск";
 "server.add.code" = "Код сопряжения";
 "server.add.codeHint" = "Выполните `bandito pair` на сервере и введите шесть слов.";
 "server.add.connect" = "Подключить";

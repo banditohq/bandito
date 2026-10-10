@@ -683,6 +683,17 @@
 "mode.soonHere" = "곧 출시";
 "mode.team" = "팀";
 "mode.terminals" = "터미널";
+"modelDescription.complexEveryday" = "복잡한 작업과 일상 작업용";
+"modelDescription.efficient" = "간단한 작업에 효율적";
+"modelDescription.fastAffordable" = "간단한 작업용 빠르고 저렴한 모델";
+"modelDescription.fastest" = "짧은 답변에 가장 빠름";
+"modelDescription.frontier" = "가장 뛰어난 성능, 가장 어려운 작업용";
+"modelDescription.legacyCoding" = "코딩용 이전 모델";
+"modelDescription.olderBalanced" = "이전 세대의 균형 잡힌 모델";
+"modelDescription.olderFast" = "이전 세대의 빠른 모델";
+"modelDescription.toughest" = "가장 어렵고 긴 작업용";
+"modelDescription.workhorse" = "코딩과 일상 업무의 주력 모델";
+"modelDescription.xaiLatest" = "xAI의 최신 모델";
 "modelPicker.backToList" = "목록으로 돌아가기";
 "modelPicker.defaultLabel" = "기본값 · %1$@";
 "modelPicker.defaultMenu" = "기본값 (%1$@)";
@@ -693,6 +704,7 @@
 "modelPicker.noEffort" = "이 모델은 추론 강도를 설정하지 않습니다";
 "modelPicker.notInstalled" = "서버에 설치되어 있지 않음";
 "modelPicker.other" = "다른 모델…";
+"modelPicker.otherVersions" = "다른 버전";
 "modelPicker.typePlaceholder" = "모델 ID";
 "modelPicker.unsupported" = "이 서버의 Bandito 데몬이 너무 오래되어 모델 목록을 제공하지 않습니다. ID를 직접 입력할 수 있습니다.";
 "new.agent" = "새 에이전트";
@@ -1099,6 +1111,8 @@
 "secrets.reenter" = "값을 다시 입력하세요";
 "secrets.valueHint" = "저장한 뒤에는 마지막 네 글자만 보여요. 최대 64KB.";
 "secrets.valueLabel" = "값";
+"select.noResults" = "결과 없음";
+"select.search" = "검색";
 "server.add.code" = "페어링 코드";
 "server.add.codeHint" = "서버에서 `bandito pair`를 실행하고 여섯 단어를 입력하세요.";
 "server.add.connect" = "연결";

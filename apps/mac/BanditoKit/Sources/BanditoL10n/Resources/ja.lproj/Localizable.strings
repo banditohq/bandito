@@ -683,6 +683,17 @@
 "mode.soonHere" = "近日公開";
 "mode.team" = "チーム";
 "mode.terminals" = "ターミナル";
+"modelDescription.complexEveryday" = "複雑な作業と日常のタスク向け";
+"modelDescription.efficient" = "簡単な作業向けの省エネモデル";
+"modelDescription.fastAffordable" = "簡単な作業向けの高速で手頃なモデル";
+"modelDescription.fastest" = "短い回答に最速";
+"modelDescription.frontier" = "最も高性能、最も難しい作業向け";
+"modelDescription.legacyCoding" = "コーディング向けの旧モデル";
+"modelDescription.olderBalanced" = "旧世代のバランス型モデル";
+"modelDescription.olderFast" = "旧世代の高速モデル";
+"modelDescription.toughest" = "最も難しく長い作業向け";
+"modelDescription.workhorse" = "コーディングと日常業務の主力モデル";
+"modelDescription.xaiLatest" = "xAIの最新モデル";
 "modelPicker.backToList" = "一覧に戻る";
 "modelPicker.defaultLabel" = "デフォルト · %1$@";
 "modelPicker.defaultMenu" = "デフォルト（%1$@）";
@@ -693,6 +704,7 @@
 "modelPicker.noEffort" = "このモデルは思考の強度を設定しません";
 "modelPicker.notInstalled" = "サーバーにインストールされていません";
 "modelPicker.other" = "別のモデル…";
+"modelPicker.otherVersions" = "その他のバージョン";
 "modelPicker.typePlaceholder" = "モデルID";
 "modelPicker.unsupported" = "このサーバーのBanditoデーモンが古く、モデル一覧を返せません。IDを直接入力できます。";
 "new.agent" = "新規エージェント";
@@ -1099,6 +1111,8 @@
 "secrets.reenter" = "値をもう一度入力";
 "secrets.valueHint" = "保存後は末尾の 4 文字だけが表示されます。64 KB まで。";
 "secrets.valueLabel" = "値";
+"select.noResults" = "見つかりません";
+"select.search" = "検索";
 "server.add.code" = "ペアリングコード";
 "server.add.codeHint" = "サーバーで `bandito pair` を実行し、6つの単語を入力してください。";
 "server.add.connect" = "接続";

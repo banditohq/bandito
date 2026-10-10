@@ -1767,5 +1767,19 @@
   "failure.reason.io": "サーバーがデータを読み書きできませんでした。",
   "failure.reason.unsupported": "サーバーはこの操作に対応していません。サーバーを更新してください。",
   "failure.reason.cloneFailed": "リポジトリをクローンできませんでした。",
-  "failure.reason.decodeFailed": "一部のアップデートを読み取れませんでした。アプリを更新してください。"
+  "failure.reason.decodeFailed": "一部のアップデートを読み取れませんでした。アプリを更新してください。",
+  "modelPicker.otherVersions": "その他のバージョン",
+  "modelDescription.complexEveryday": "複雑な作業と日常のタスク向け",
+  "modelDescription.toughest": "最も難しく長い作業向け",
+  "modelDescription.efficient": "簡単な作業向けの省エネモデル",
+  "modelDescription.fastest": "短い回答に最速",
+  "modelDescription.workhorse": "コーディングと日常業務の主力モデル",
+  "modelDescription.frontier": "最も高性能、最も難しい作業向け",
+  "modelDescription.fastAffordable": "簡単な作業向けの高速で手頃なモデル",
+  "modelDescription.olderBalanced": "旧世代のバランス型モデル",
+  "modelDescription.olderFast": "旧世代の高速モデル",
+  "modelDescription.legacyCoding": "コーディング向けの旧モデル",
+  "modelDescription.xaiLatest": "xAIの最新モデル",
+  "select.search": "検索",
+  "select.noResults": "見つかりません"
 }

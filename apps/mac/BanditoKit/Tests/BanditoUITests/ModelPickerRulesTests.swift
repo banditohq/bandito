@@ -72,6 +72,46 @@ import Testing
         return false
     }
 
+    // MARK: Grouping
+
+    private func option(_ id: String) -> ModelMenuOption {
+        ModelMenuOption(id: id, name: id, description: nil)
+    }
+
+    @Test func aliasesComeFirstAndFullVersionsBelow() {
+        let options = ["claude-opus-4-8", "opus", "claude-sonnet-5", "sonnet", "haiku"].map(option)
+        let grouped = ModelPickerRules.grouped(options)
+        #expect(grouped.main.map(\.id) == ["opus", "sonnet", "haiku"])
+        #expect(grouped.others.map(\.id) == ["claude-opus-4-8", "claude-sonnet-5"])
+    }
+
+    @Test func orderInsideEachSectionIsTheListsOrder() {
+        let options = ["haiku", "b-4", "opus", "a-5", "fable"].map(option)
+        let grouped = ModelPickerRules.grouped(options)
+        #expect(grouped.main.map(\.id) == ["haiku", "opus", "fable"])
+        #expect(grouped.others.map(\.id) == ["b-4", "a-5"])
+    }
+
+    @Test func aListWithNoAliasIsOneSection() {
+        // Codex and Grok ids all carry digits, so there is no alias to put first.
+        let options = ["gpt-5-codex", "gpt-5-mini", "grok-4"].map(option)
+        let grouped = ModelPickerRules.grouped(options)
+        #expect(grouped.main.map(\.id) == ["gpt-5-codex", "gpt-5-mini", "grok-4"])
+        #expect(grouped.others.isEmpty)
+    }
+
+    @Test func presetsAreAllAliasesSoTheyAreOneSection() {
+        let grouped = ModelPickerRules.grouped(ModelPickerRules.options(list: nil, runtime: .claude))
+        #expect(grouped.main.map(\.id) == ["opus", "sonnet", "haiku"])
+        #expect(grouped.others.isEmpty)
+    }
+
+    @Test func aliasIsAnIdWithoutDigits() {
+        #expect(ModelPickerRules.isAlias("opus"))
+        #expect(!ModelPickerRules.isAlias("claude-opus-4-8"))
+        #expect(!ModelPickerRules.isAlias(""))
+    }
+
     // MARK: Typing
 
     @Test func confirmedIdIsKept() {

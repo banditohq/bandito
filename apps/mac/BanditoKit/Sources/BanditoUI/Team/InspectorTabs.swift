@@ -55,16 +55,10 @@ struct DetailsTab: View {
                     }
                 }
                 InspectorRow(label: L10n.Inspector.runsOn) {
-                    Menu {
-                        ForEach(RuntimeKind.pickable.filter { $0 != agent.runtime }, id: \.self) { kind in
-                            Button(kind.title) { switchRuntime(to: kind) }
-                        }
-                    } label: {
-                        Text(runtimeLine)
-                    }
-                    .menuStyle(.button)
-                    .banditoButton(.link)
-                    .fixedSize()
+                    BanditoSelect(
+                        selection: runtimeBinding, sections: [SelectSection(options: runtimeChoices)],
+                        label: L10n.Inspector.runsOn, placeholder: agent.runtime.title)
+                        .frame(maxWidth: 260)
                 }
                 InspectorRow(label: L10n.Inspector.model) {
                     ModelPicker(
@@ -74,31 +68,17 @@ struct DetailsTab: View {
                         .frame(maxWidth: 260)
                 }
                 InspectorRow(label: L10n.AgentSheet.fallbackLabel) {
-                    Menu {
-                        Button(L10n.AgentSheet.fallbackNone) { setFallback(nil) }
-                        ForEach(NewAgentDraft.fallbackOptions(for: agent.runtime), id: \.self) { kind in
-                            Button(kind.title) { setFallback(kind) }
-                        }
-                    } label: {
-                        Text(agent.fallbackRuntime?.title ?? L10n.AgentSheet.fallbackNone)
-                    }
-                    .menuStyle(.button)
-                    .banditoButton(.link)
-                    .fixedSize()
+                    BanditoSelect(
+                        selection: fallbackBinding, sections: [SelectSection(options: fallbackChoices)],
+                        label: L10n.AgentSheet.fallbackLabel, placeholder: L10n.AgentSheet.fallbackNone)
+                        .frame(maxWidth: 260)
                 }
                 InspectorRow(label: L10n.Inspector.approvals) {
-                    Menu {
-                        ForEach(ApprovalMode.allCases, id: \.self) { mode in
-                            Button(mode.title) {
-                                change { _ = try await server.updateAgent(agent.id, approvalMode: mode) }
-                            }
-                        }
-                    } label: {
-                        Text(agent.approvalMode.title)
-                    }
-                    .menuStyle(.button)
-                    .banditoButton(.link)
-                    .fixedSize()
+                    BanditoSelect(
+                        selection: approvalBinding,
+                        sections: [SelectSection(options: ApprovalMode.allCases.map { SelectOption(value: $0, title: $0.title) })],
+                        label: L10n.Inspector.approvals, placeholder: agent.approvalMode.title)
+                        .frame(maxWidth: 260)
                 }
                 InspectorRow(label: L10n.Inspector.project) {
                     TextField("", text: $folder)
@@ -198,9 +178,45 @@ struct DetailsTab: View {
         }
     }
 
-    private var runtimeLine: String {
-        let plan = server.usage.first { $0.runtime == agent.runtime.rawValue }?.plan?.label
-        return [agent.runtime.title, plan].compactMap { $0 }.joined(separator: " · ")
+    /// The runtime the agent runs on. Choosing another one switches it, as the old menu did.
+    private var runtimeBinding: Binding<RuntimeKind> {
+        Binding(
+            get: { agent.runtime },
+            set: { kind in
+                if kind != agent.runtime {
+                    switchRuntime(to: kind)
+                }
+            })
+    }
+
+    /// The three runtimes, each with its plan as the subtitle when the server reports one.
+    private var runtimeChoices: [SelectOption<RuntimeKind>] {
+        RuntimeKind.pickable.map { kind in
+            let plan = server.usage.first { $0.runtime == kind.rawValue }?.plan?.label
+            return SelectOption(value: kind, title: kind.title, subtitle: plan)
+        }
+    }
+
+    private var fallbackBinding: Binding<RuntimeKind?> {
+        Binding(get: { agent.fallbackRuntime }, set: { setFallback($0) })
+    }
+
+    private var fallbackChoices: [SelectOption<RuntimeKind?>] {
+        let none = SelectOption<RuntimeKind?>(value: nil, title: L10n.AgentSheet.fallbackNone, icon: "minus")
+        let runtimes = NewAgentDraft.fallbackOptions(for: agent.runtime).map { kind in
+            SelectOption<RuntimeKind?>(value: kind, title: kind.title, icon: "arrow.right")
+        }
+        return [none] + runtimes
+    }
+
+    private var approvalBinding: Binding<ApprovalMode> {
+        Binding(
+            get: { agent.approvalMode },
+            set: { mode in
+                // Choosing the mode already set is not a change: no request.
+                guard mode != agent.approvalMode else { return }
+                change { _ = try await server.updateAgent(agent.id, approvalMode: mode) }
+            })
     }
 
     private func saveFolder() {
@@ -249,6 +265,8 @@ struct DetailsTab: View {
     }
 
     private func setFallback(_ kind: RuntimeKind?) {
+        // Choosing the fallback already set is not a change: no request.
+        guard kind != agent.fallbackRuntime else { return }
         if let kind {
             apply(AgentPatch(fallbackRuntime: .set(kind)))
         } else {

@@ -53,6 +53,19 @@ enum ModelPickerRules {
         submitted ? typed : started
     }
 
+    /// The two sections of the menu. The short aliases come first: ids with no digit (opus, sonnet, haiku, fable). The
+    /// full versions (claude-opus-4-8) come below them, under "Other versions". A list with no alias at all (Codex and
+    /// Grok name their models in full) is one section. The order of the list is kept.
+    static func grouped(_ options: [ModelMenuOption]) -> (main: [ModelMenuOption], others: [ModelMenuOption]) {
+        guard options.contains(where: { isAlias($0.id) }) else { return (options, []) }
+        return (options.filter { isAlias($0.id) }, options.filter { !isAlias($0.id) })
+    }
+
+    /// A short alias: a non-empty id with no digit in it.
+    static func isAlias(_ id: String) -> Bool {
+        !id.isEmpty && !id.contains(where: \.isNumber)
+    }
+
     /// The hint for the menu and the help. A list that is there wins: its own `error` is then the only news.
     /// Without a list, the request's state says why there is none.
     static func hint(list: RuntimeModelList?, status: RuntimeModelsStatus) -> ModelListHint {

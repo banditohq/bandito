@@ -683,6 +683,17 @@
 "mode.soonHere" = "Bientôt disponible";
 "mode.team" = "Équipe";
 "mode.terminals" = "Terminaux";
+"modelDescription.complexEveryday" = "Pour les tâches complexes et du quotidien";
+"modelDescription.efficient" = "Économique pour les tâches simples";
+"modelDescription.fastAffordable" = "Rapide et économique pour les tâches simples";
+"modelDescription.fastest" = "Le plus rapide pour les réponses courtes";
+"modelDescription.frontier" = "Le plus intelligent, pour les tâches les plus exigeantes";
+"modelDescription.legacyCoding" = "Ancien modèle pour le code";
+"modelDescription.olderBalanced" = "Ancien modèle équilibré";
+"modelDescription.olderFast" = "Ancien modèle rapide";
+"modelDescription.toughest" = "Pour les tâches les plus difficiles et les plus longues";
+"modelDescription.workhorse" = "Le modèle de référence pour le code et le travail courant";
+"modelDescription.xaiLatest" = "Le nouveau modèle de xAI";
 "modelPicker.backToList" = "Retour à la liste";
 "modelPicker.defaultLabel" = "Par défaut · %1$@";
 "modelPicker.defaultMenu" = "Par défaut (%1$@)";
@@ -693,6 +704,7 @@
 "modelPicker.noEffort" = "Ce modèle ne règle pas l'effort";
 "modelPicker.notInstalled" = "Non installé sur le serveur";
 "modelPicker.other" = "Autre modèle…";
+"modelPicker.otherVersions" = "Autres versions";
 "modelPicker.typePlaceholder" = "ID du modèle";
 "modelPicker.unsupported" = "Le démon Bandito de ce serveur est trop ancien et ne fournit pas la liste des modèles. Vous pouvez saisir l'ID à la main.";
 "new.agent" = "Nouvel agent";
@@ -1099,6 +1111,8 @@
 "secrets.reenter" = "Saisir de nouveau la valeur";
 "secrets.valueHint" = "Après l’enregistrement, seuls les quatre derniers caractères restent visibles. Jusqu’à 64 Ko.";
 "secrets.valueLabel" = "Valeur";
+"select.noResults" = "Aucun résultat";
+"select.search" = "Rechercher";
 "server.add.code" = "Code d'appairage";
 "server.add.codeHint" = "Exécutez `bandito pair` sur le serveur et saisissez les six mots.";
 "server.add.connect" = "Connecter";

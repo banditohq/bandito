@@ -291,30 +291,37 @@ struct NewAgentSheet: View {
         }
     }
 
-    /// The fallback runtime: "Don't switch", or one of the other runtimes.
+    /// The fallback runtime: "Don't switch", or one of the other runtimes, each with its status as the subtitle.
     private var fallbackPicker: some View {
-        Menu {
-            Button(L10n.AgentSheet.fallbackNone) {
-                draft.setFallbackRuntime(nil)
-            }
-            ForEach(NewAgentDraft.fallbackOptions(for: draft.runtime), id: \.self) { kind in
-                Button(runtimeName(kind)) { draft.setFallbackRuntime(kind, lists: server?.runtimeModels ?? [:]) }
-            }
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: "arrow.right")
-                    .font(.system(size: 13))
-                    .foregroundStyle(draft.fallbackRuntime == nil ? Color.Bandito.text3 : Color.Bandito.ok)
-                Text(draft.fallbackRuntime.map { runtimeName($0) } ?? L10n.AgentSheet.fallbackNone)
-                    .font(BanditoFont.font(size: 13, weight: 400))
-                    .foregroundStyle(Color.Bandito.text)
-                Spacer(minLength: 0)
-            }
-            .modifier(FieldBox())
+        BanditoSelect(
+            selection: fallbackBinding, sections: [SelectSection(options: fallbackChoices)],
+            label: L10n.AgentSheet.fallbackLabel, placeholder: L10n.AgentSheet.fallbackNone)
+    }
+
+    private var fallbackBinding: Binding<RuntimeKind?> {
+        Binding(
+            get: { draft.fallbackRuntime },
+            set: { draft.setFallbackRuntime($0, lists: server?.runtimeModels ?? [:]) })
+    }
+
+    private var fallbackChoices: [SelectOption<RuntimeKind?>] {
+        let none = SelectOption<RuntimeKind?>(value: nil, title: L10n.AgentSheet.fallbackNone, icon: "minus")
+        let runtimes = NewAgentDraft.fallbackOptions(for: draft.runtime).map { kind in
+            SelectOption<RuntimeKind?>(
+                value: kind, title: runtimeName(kind), subtitle: runtimeStatusText(kind), icon: "arrow.right")
         }
-        .menuStyle(.button)
-        .banditoButton(.row(cornerRadius: 10))
-        .fixedSize(horizontal: false, vertical: true)
+        return [none] + runtimes
+    }
+
+    /// A runtime's state as its card shows it ("Ready · v2.0", "Not installed"), for the fallback's choices.
+    private func runtimeStatusText(_ kind: RuntimeKind) -> String {
+        let now = Date()
+        let card = usageCards.first { $0.runtime == kind.rawValue }
+        let remaining = card.flatMap { UsageCards.percentLeft([$0], runtime: nil) }
+        return RuntimeCardState.make(
+            runtime: kind, status: runtimeStatus(kind), requestDone: runtimesAnswered, remaining: remaining,
+            exhaustedUntil: card.flatMap { UsageCards.exhaustedReset($0.windows, now: now) }, now: now
+        ).text
     }
 
     private func runtimeCard(_ kind: RuntimeKind, now: Date) -> some View {
@@ -528,30 +535,18 @@ struct NewAgentSheet: View {
             workplaceSection
 
             labeled(L10n.AgentSheet.memory, hint: nil) {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text(memoryName(draft.memory))
-                            .font(BanditoFont.font(size: 13, weight: 400))
-                            .foregroundStyle(Color.Bandito.text)
-                        Spacer(minLength: 0)
-                        Menu {
-                            ForEach(MemoryMode.allCases, id: \.self) { mode in
-                                Button(memoryName(mode)) { draft.memory = mode }
-                            }
-                        } label: {
-                            Image(systemName: "chevron.up.chevron.down")
-                                .font(.system(size: 10))
-                                .foregroundStyle(Color.Bandito.text3)
-                        }
-                        .menuStyle(.button)
-                        .banditoButton(.row(cornerRadius: 5, hoverOpacity: 0.08))
-                        .fixedSize()
-                    }
+                VStack(alignment: .leading, spacing: 6) {
+                    BanditoSelect(
+                        selection: $draft.memory, sections: memorySections, label: L10n.AgentSheet.memory,
+                        placeholder: memoryName(draft.memory),
+                        // The field shows only the mode's name; the description is for the panel.
+                        field: { option in SelectFieldView(option: option.map(Self.withoutSubtitle), placeholder: "") },
+                        footer: { _ in EmptyView() })
                     Text(L10n.AgentSheet.memoryAuto)
                         .font(BanditoFont.font(size: 11.5, weight: 400))
                         .foregroundStyle(Color.Bandito.text3)
+                        .padding(.leading, 4)
                 }
-                .modifier(FieldBox())
                 Text(L10n.AgentSheet.memoryHint)
                     .font(BanditoFont.font(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
@@ -842,6 +837,30 @@ struct NewAgentSheet: View {
         case .xhigh: L10n.AgentSheet.effortHintXhigh
         case .max: L10n.AgentSheet.effortHintMax
         }
+    }
+
+    private var memorySections: [SelectSection<MemoryMode>] {
+        [
+            SelectSection(
+                options: MemoryMode.allCases.map { mode in
+                    SelectOption(value: mode, title: memoryName(mode), subtitle: memoryDescription(mode))
+                })
+        ]
+    }
+
+    private func memoryDescription(_ mode: MemoryMode) -> String {
+        switch mode {
+        case .smart: L10n.Memory.smartDesc
+        case .daily: L10n.Memory.dailyDesc
+        case .full: L10n.Memory.fullDesc
+        }
+    }
+
+    /// The same option without its subtitle, for a field that shows only the title.
+    static func withoutSubtitle<Value: Hashable>(_ option: SelectOption<Value>) -> SelectOption<Value> {
+        var copy = option
+        copy.subtitle = nil
+        return copy
     }
 
     private func memoryName(_ mode: MemoryMode) -> String {

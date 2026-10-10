@@ -3,9 +3,10 @@ import BanditoKit
 import BanditoL10n
 import SwiftUI
 
-/// The model field of the agent forms and the inspector. The menu lists the models the runtime's CLI offers
-/// (`runtimes.models`), each with its name and description. "Other model…" types an id the list does not have, for
-/// example an API model. Without a list the menu falls back to the old presets. The field looks like the other fields.
+/// The model field of the agent forms and the inspector. The panel lists the models the runtime's CLI offers
+/// (`runtimes.models`), each with its name and a description in the interface language. The short aliases come first,
+/// the full versions under "Other versions". "Other model…" types an id the list does not have, for example an API
+/// model. Without a list the panel falls back to the old presets.
 struct ModelPicker: View {
     let runtime: RuntimeKind
     /// The model id. Empty means the runtime's default model.
@@ -14,8 +15,15 @@ struct ModelPicker: View {
     let models: RuntimeModelList?
     /// What the last request for the lists came to. Tells "loading", "old daemon" and "failed" apart.
     let status: RuntimeModelsStatus
-    /// Called when a model is picked, or a typed id is confirmed (Return). The inspector saves here.
+    /// Called when a model is picked, or a typed id is confirmed (Return or leaving the field). The inspector saves here.
     var onCommit: (String) -> Void = { _ in }
+
+    /// What the panel chooses between. The failure notice is a row that cannot be chosen.
+    private enum Choice: Hashable {
+        case automatic
+        case model(String)
+        case notice
+    }
 
     @State private var typing = false
     /// The value the field had when typing began. Leaving the field without Return goes back to it.
@@ -35,7 +43,7 @@ struct ModelPicker: View {
             if typing {
                 typingField
             } else {
-                menu
+                select
             }
         }
         // A typed id belongs to the runtime it was typed for: another runtime starts again with the list.
@@ -49,86 +57,106 @@ struct ModelPicker: View {
         }
     }
 
-    // MARK: Menu
+    // MARK: Panel
 
-    private var menu: some View {
-        Menu {
-            menuItems
-        } label: {
-            HStack(spacing: 10) {
-                Text(titleText)
-                    .font(BanditoFont.font(size: 13.5, weight: 400, mono: showsRawID))
-                    .foregroundStyle(Color.Bandito.text)
-                    .lineLimit(1)
-                    .layoutPriority(1)
-                Spacer(minLength: 8)
-                trailing
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 10))
-                    .foregroundStyle(Color.Bandito.text3)
-            }
-            .modifier(FieldBox())
-        }
-        .menuStyle(.button)
-        .banditoButton(.row(cornerRadius: 12))
-        .fixedSize(horizontal: false, vertical: true)
-        .help(helpText)
+    private var select: some View {
+        BanditoSelect(
+            selection: choice, sections: sections, label: L10n.AgentSheet.model,
+            placeholder: L10n.ModelPicker.defaultPlain,
+            field: { option in fieldView(for: option) },
+            footer: { close in footerView(close: close) }
+        )
+        .optionalHelp(helpText)
     }
 
-    @ViewBuilder
-    private var menuItems: some View {
+    /// The selection as the panel sees it. Choosing commits the change, as picking in the old menu did.
+    private var choice: Binding<Choice> {
+        Binding(
+            get: { selection.isEmpty ? .automatic : .model(selection) },
+            set: { next in
+                switch next {
+                case .automatic:
+                    selection = ""
+                case .model(let id):
+                    selection = id
+                case .notice:
+                    return
+                }
+                onCommit(selection)
+            })
+    }
+
+    private var sections: [SelectSection<Choice>] {
+        let grouped = ModelPickerRules.grouped(options)
+        var main: [SelectOption<Choice>] = []
         if hint.isFailure {
-            Button(L10n.ModelPicker.failedMenu) {}
-                .disabled(true)
-            Divider()
+            main.append(
+                SelectOption(
+                    value: .notice, title: L10n.ModelPicker.failedMenu, icon: "exclamationmark.triangle",
+                    tint: Color.Bandito.danger, isEnabled: false, help: helpText))
         }
-        choice(defaultMenuTitle, description: nil, selected: selection.isEmpty) { choose("") }
-        Divider()
+        main.append(SelectOption(value: .automatic, title: defaultMenuTitle))
         if let typed = ModelPickerRules.typedSelection(selection, options: options) {
-            choice(typed, description: nil, selected: true) { choose(typed) }
+            main.append(SelectOption(value: .model(typed), title: typed, monospaced: true))
+        }
+        main += grouped.main.map(option)
+        var result = [SelectSection(options: main)]
+        if !grouped.others.isEmpty {
+            result.append(SelectSection(title: L10n.ModelPicker.otherVersions, options: grouped.others.map(option)))
+        }
+        return result
+    }
+
+    private func option(_ item: ModelMenuOption) -> SelectOption<Choice> {
+        SelectOption(
+            value: .model(item.id), title: item.name,
+            subtitle: ModelDescription.localized(item.description, languageCode: ModelDescription.currentLanguageCode))
+    }
+
+    /// The field. A chosen model uses its own option (title, description, monospace for an unlisted id). The automatic
+    /// choice reads "Default · Opus 5.5" with the default model's description, or the loading line while the list
+    /// comes.
+    private func fieldView(for option: SelectOption<Choice>?) -> SelectFieldView {
+        if case .model? = option?.value {
+            return SelectFieldView(option: option, placeholder: L10n.ModelPicker.defaultPlain)
+        }
+        return SelectFieldView(option: automaticField, placeholder: L10n.ModelPicker.defaultPlain)
+    }
+
+    private var automaticField: SelectOption<String> {
+        SelectOption(
+            value: "", title: defaultLabelText,
+            subtitle: hint == .loading
+                ? L10n.ModelPicker.loading
+                : ModelDescription.localized(
+                    models?.defaultModel?.description, languageCode: ModelDescription.currentLanguageCode))
+    }
+
+    private func footerView(close: @escaping () -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
             Divider()
-        }
-        ForEach(options) { item in
-            choice(item.name, description: item.description, selected: item.id == selection) { choose(item.id) }
-        }
-        Divider()
-        Button(L10n.ModelPicker.other) { startTyping() }
-    }
-
-    /// One menu item. Every item reserves the checkmark's place, so the text does not move when the choice changes:
-    /// the checkmark is clear on the items that are not chosen. The description, when there is one, is the subtitle.
-    private func choice(
-        _ title: String, description: String?, selected: Bool, action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Label {
-                Text(title)
-            } icon: {
-                Image(systemName: "checkmark")
-                    .opacity(selected ? 1 : 0)
+                .padding(.vertical, 6)
+            Button {
+                close()
+                startTyping()
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color.Bandito.text2)
+                        .frame(width: 18)
+                        .accessibilityHidden(true)
+                    Text(L10n.ModelPicker.other)
+                        .font(BanditoFont.font(size: 13, weight: 500))
+                        .foregroundStyle(Color.Bandito.text)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
-            if let description, !description.isEmpty {
-                Text(description)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var trailing: some View {
-        if hint == .loading {
-            HStack(spacing: 6) {
-                ProgressView()
-                    .controlSize(.mini)
-                Text(L10n.ModelPicker.loading)
-                    .font(BanditoFont.font(size: 12, weight: 400))
-                    .foregroundStyle(Color.Bandito.text3)
-                    .lineLimit(1)
-            }
-        } else if let description = selectedModel?.description, !description.isEmpty {
-            Text(description)
-                .font(BanditoFont.font(size: 12, weight: 400))
-                .foregroundStyle(Color.Bandito.text3)
-                .lineLimit(1)
+            .banditoButton(.row(cornerRadius: 9))
         }
     }
 
@@ -180,28 +208,15 @@ struct ModelPicker: View {
         return L10n.ModelPicker.defaultMenu(name: model.name)
     }
 
-    private var titleText: String {
-        if selection.isEmpty {
-            guard let model = models?.defaultModel else { return L10n.ModelPicker.defaultPlain }
-            return L10n.ModelPicker.defaultLabel(name: model.name)
-        }
-        return selectedModel?.name ?? selection
-    }
-
-    /// The listed model the selection names. For the empty selection, the runtime's default model.
-    private var selectedModel: RuntimeModel? {
-        selection.isEmpty ? models?.defaultModel : models?.models.first { $0.id == selection }
-    }
-
-    /// An id the list does not name is shown as it is, in monospace.
-    private var showsRawID: Bool {
-        !selection.isEmpty && selectedModel == nil
+    private var defaultLabelText: String {
+        guard let model = models?.defaultModel else { return L10n.ModelPicker.defaultPlain }
+        return L10n.ModelPicker.defaultLabel(name: model.name)
     }
 
     /// The reason the list is missing or incomplete, for the help. Empty when there is nothing to say.
-    private var helpText: String {
+    private var helpText: String? {
         switch hint {
-        case .none, .loading: ""
+        case .none, .loading: nil
         case .unsupported: L10n.ModelPicker.unsupported
         case .failed(let reason): L10n.ModelPicker.failed(reason: reason)
         case .runtimeError(let error):
@@ -209,10 +224,5 @@ struct ModelPicker: View {
                 ? L10n.ModelPicker.notInstalled
                 : L10n.ModelPicker.failed(reason: error)
         }
-    }
-
-    private func choose(_ id: String) {
-        selection = id
-        onCommit(id)
     }
 }

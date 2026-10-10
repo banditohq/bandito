@@ -1790,5 +1790,19 @@
   "failure.reason.io": "El servidor no pudo leer o escribir los datos.",
   "failure.reason.unsupported": "El servidor no admite esto. Actualiza el servidor.",
   "failure.reason.cloneFailed": "No se pudo clonar el repositorio.",
-  "failure.reason.decodeFailed": "No se pudieron leer algunas actualizaciones. Actualiza la app."
+  "failure.reason.decodeFailed": "No se pudieron leer algunas actualizaciones. Actualiza la app.",
+  "modelPicker.otherVersions": "Otras versiones",
+  "modelDescription.complexEveryday": "Para trabajo complejo y tareas del día a día",
+  "modelDescription.toughest": "Para las tareas más difíciles y largas",
+  "modelDescription.efficient": "Económico para tareas sencillas",
+  "modelDescription.fastest": "El más rápido para respuestas breves",
+  "modelDescription.workhorse": "El modelo principal para código y trabajo diario",
+  "modelDescription.frontier": "El más inteligente, para las tareas más exigentes",
+  "modelDescription.fastAffordable": "Rápido y económico para tareas sencillas",
+  "modelDescription.olderBalanced": "Modelo equilibrado anterior",
+  "modelDescription.olderFast": "Modelo rápido anterior",
+  "modelDescription.legacyCoding": "Modelo anterior para código",
+  "modelDescription.xaiLatest": "El modelo más nuevo de xAI",
+  "select.search": "Buscar",
+  "select.noResults": "No se encontró nada"
 }

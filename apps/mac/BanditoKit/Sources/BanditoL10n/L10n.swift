@@ -997,6 +997,20 @@ public enum L10n {
         public static var terminals: String { L10n.tr("mode.terminals") }
     }
 
+    public enum ModelDescription {
+        public static var complexEveryday: String { L10n.tr("modelDescription.complexEveryday") }
+        public static var efficient: String { L10n.tr("modelDescription.efficient") }
+        public static var fastAffordable: String { L10n.tr("modelDescription.fastAffordable") }
+        public static var fastest: String { L10n.tr("modelDescription.fastest") }
+        public static var frontier: String { L10n.tr("modelDescription.frontier") }
+        public static var legacyCoding: String { L10n.tr("modelDescription.legacyCoding") }
+        public static var olderBalanced: String { L10n.tr("modelDescription.olderBalanced") }
+        public static var olderFast: String { L10n.tr("modelDescription.olderFast") }
+        public static var toughest: String { L10n.tr("modelDescription.toughest") }
+        public static var workhorse: String { L10n.tr("modelDescription.workhorse") }
+        public static var xaiLatest: String { L10n.tr("modelDescription.xaiLatest") }
+    }
+
     public enum ModelPicker {
         public static var backToList: String { L10n.tr("modelPicker.backToList") }
         public static func defaultLabel(name: String) -> String { L10n.tr("modelPicker.defaultLabel", name) }
@@ -1008,6 +1022,7 @@ public enum L10n {
         public static var noEffort: String { L10n.tr("modelPicker.noEffort") }
         public static var notInstalled: String { L10n.tr("modelPicker.notInstalled") }
         public static var other: String { L10n.tr("modelPicker.other") }
+        public static var otherVersions: String { L10n.tr("modelPicker.otherVersions") }
         public static var typePlaceholder: String { L10n.tr("modelPicker.typePlaceholder") }
         public static var unsupported: String { L10n.tr("modelPicker.unsupported") }
     }
@@ -1490,6 +1505,11 @@ public enum L10n {
         public static var reenter: String { L10n.tr("secrets.reenter") }
         public static var valueHint: String { L10n.tr("secrets.valueHint") }
         public static var valueLabel: String { L10n.tr("secrets.valueLabel") }
+    }
+
+    public enum Select {
+        public static var noResults: String { L10n.tr("select.noResults") }
+        public static var search: String { L10n.tr("select.search") }
     }
 
     public enum Server {

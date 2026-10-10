@@ -683,6 +683,17 @@
 "mode.soonHere" = "Coming soon";
 "mode.team" = "Team";
 "mode.terminals" = "Terminals";
+"modelDescription.complexEveryday" = "For complex work and everyday tasks";
+"modelDescription.efficient" = "Economical for simpler tasks";
+"modelDescription.fastAffordable" = "Fast and affordable for simpler tasks";
+"modelDescription.fastest" = "Fastest for quick answers";
+"modelDescription.frontier" = "The smartest, for the most demanding tasks";
+"modelDescription.legacyCoding" = "An older model for coding";
+"modelDescription.olderBalanced" = "An older balanced model";
+"modelDescription.olderFast" = "An older fast model";
+"modelDescription.toughest" = "For the toughest and longest tasks";
+"modelDescription.workhorse" = "The main model for coding and everyday work";
+"modelDescription.xaiLatest" = "xAI's newest model";
 "modelPicker.backToList" = "Back to the list";
 "modelPicker.defaultLabel" = "Default · %1$@";
 "modelPicker.defaultMenu" = "Default (%1$@)";
@@ -693,6 +704,7 @@
 "modelPicker.noEffort" = "This model does not set effort";
 "modelPicker.notInstalled" = "Not installed on the server";
 "modelPicker.other" = "Other model…";
+"modelPicker.otherVersions" = "Other versions";
 "modelPicker.typePlaceholder" = "Model ID";
 "modelPicker.unsupported" = "This server's Bandito daemon is too old to list models. You can type an ID by hand.";
 "new.agent" = "New agent";
@@ -1099,6 +1111,8 @@
 "secrets.reenter" = "Enter the value again";
 "secrets.valueHint" = "After saving, only the last four characters are visible. Up to 64 KB.";
 "secrets.valueLabel" = "Value";
+"select.noResults" = "Nothing found";
+"select.search" = "Search";
 "server.add.code" = "Pairing code";
 "server.add.codeHint" = "Run `bandito pair` on the server and type the six words.";
 "server.add.connect" = "Connect";

@@ -1767,5 +1767,19 @@
   "failure.reason.io": "服务器无法读取或写入数据。",
   "failure.reason.unsupported": "服务器不支持此功能。请更新服务器。",
   "failure.reason.cloneFailed": "无法克隆该仓库。",
-  "failure.reason.decodeFailed": "部分更新无法读取。请更新应用。"
+  "failure.reason.decodeFailed": "部分更新无法读取。请更新应用。",
+  "modelPicker.otherVersions": "其他版本",
+  "modelDescription.complexEveryday": "适合复杂工作和日常任务",
+  "modelDescription.toughest": "适合最困难、耗时最长的任务",
+  "modelDescription.efficient": "简单任务的高效之选",
+  "modelDescription.fastest": "简单快速回答的最快选择",
+  "modelDescription.workhorse": "适合编码和日常工作的主力模型",
+  "modelDescription.frontier": "能力最强，适合最复杂的工作",
+  "modelDescription.fastAffordable": "适合简单任务的快速且经济的模型",
+  "modelDescription.olderBalanced": "较早的均衡模型",
+  "modelDescription.olderFast": "较早的快速模型",
+  "modelDescription.legacyCoding": "较早的编码模型",
+  "modelDescription.xaiLatest": "xAI 的最新模型",
+  "select.search": "搜索",
+  "select.noResults": "没有找到结果"
 }
