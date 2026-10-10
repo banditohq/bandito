@@ -5046,5 +5046,1603 @@
         }
       }
     }
+  },
+  {
+    "id": "deepl",
+    "name": "DeepL",
+    "category": "productivity",
+    "publisher": "DeepL",
+    "official": true,
+    "homepage": "https://www.deepl.com",
+    "description_en": "Translation, rephrasing, glossaries and style rules in DeepL, through DeepL's own MCP server.",
+    "description_ru": "Перевод, перефразирование, глоссарии и правила стиля в DeepL через собственный MCP-сервер DeepL.",
+    "long_en": "DeepL's MCP server lets an agent translate text and documents, rephrase a text in another style, and manage glossaries. For example: translate a product description into German and keep the terms from the glossary. Translations use the limits of your DeepL API plan.",
+    "long_ru": "MCP-сервер DeepL позволяет агенту переводить текст и документы, перефразировать текст в другом стиле и вести глоссарии. Например: перевести описание товара на немецкий, сохранив термины из глоссария. Перевод расходует лимиты вашего тарифа DeepL API.",
+    "abilities_en": [
+      "Translate text and documents",
+      "Rephrase text in another style or tone",
+      "List and read glossaries",
+      "Show supported languages and writing styles"
+    ],
+    "abilities_ru": [
+      "Переводить текст и документы",
+      "Перефразировать текст в другом стиле и тоне",
+      "Смотреть и читать глоссарии",
+      "Показывать поддерживаемые языки и стили письма"
+    ],
+    "needs_en": "A DeepL API key from deepl.com. The README does not say whether there is a free plan; the plans are on that site. Node.js for npx.",
+    "needs_ru": "Ключ DeepL API с deepl.com. В README не сказано, есть ли бесплатный тариф; тарифы — на том же сайте. Node.js для npx.",
+    "kind": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "deepl-mcp-server@1.3.13"
+    ],
+    "env_keys": [
+      {
+        "key": "DEEPL_API_KEY",
+        "label_en": "DeepL API key",
+        "label_ru": "Ключ DeepL API",
+        "secret": true,
+        "value_template": "{secret}"
+      }
+    ],
+    "docs_url": "https://github.com/DeepL/deepl-mcp-server",
+    "icon": "deepl",
+    "accent": "#5B9BD5",
+    "l10n": {
+      "de": {
+        "description": "Übersetzung, Umformulierung, Glossare und Stilregeln in DeepL, über den eigenen MCP-Server von DeepL.",
+        "long": "Der MCP-Server von DeepL lässt den Agenten Texte und Dokumente übersetzen, einen Text in einem anderen Stil umformulieren und Glossare verwalten. Zum Beispiel: eine Produktbeschreibung ins Deutsche übersetzen und dabei die Begriffe aus dem Glossar beibehalten. Übersetzungen verbrauchen das Kontingent Ihres DeepL-API-Tarifs.",
+        "abilities": [
+          "Text und Dokumente übersetzen",
+          "Text in einem anderen Stil oder Ton umformulieren",
+          "Glossare anzeigen und lesen",
+          "Unterstützte Sprachen und Schreibstile anzeigen"
+        ],
+        "needs": "Ein DeepL-API-Schlüssel von deepl.com. Die README sagt nicht, ob es einen kostenlosen Tarif gibt; die Tarife stehen dort. Node.js für npx.",
+        "labels": {
+          "DEEPL_API_KEY": "DeepL-API-Schlüssel"
+        }
+      },
+      "es": {
+        "description": "Traducción, reformulación, glosarios y reglas de estilo en DeepL, mediante el servidor MCP oficial de DeepL.",
+        "long": "El servidor MCP de DeepL permite al agente traducir textos y documentos, reformular un texto con otro estilo y gestionar glosarios. Por ejemplo: traducir la descripción de un producto al alemán manteniendo los términos del glosario. Las traducciones consumen el cupo de su plan de la API de DeepL.",
+        "abilities": [
+          "Traducir textos y documentos",
+          "Reformular un texto con otro estilo o tono",
+          "Ver y leer glosarios",
+          "Mostrar los idiomas y estilos de escritura compatibles"
+        ],
+        "needs": "Una clave de la API de DeepL de deepl.com. El README no indica si hay un plan gratuito; los planes están en esa web. Node.js para npx.",
+        "labels": {
+          "DEEPL_API_KEY": "Clave de la API de DeepL"
+        }
+      },
+      "fr": {
+        "description": "Traduction, reformulation, glossaires et règles de style dans DeepL, via le serveur MCP officiel de DeepL.",
+        "long": "Le serveur MCP de DeepL permet à l'agent de traduire des textes et des documents, de reformuler un texte dans un autre style et de gérer des glossaires. Par exemple : traduire une description de produit en allemand en gardant les termes du glossaire. Les traductions consomment le quota de votre forfait API DeepL.",
+        "abilities": [
+          "Traduire textes et documents",
+          "Reformuler un texte dans un autre style ou ton",
+          "Lister et lire les glossaires",
+          "Afficher les langues et styles d'écriture pris en charge"
+        ],
+        "needs": "Une clé d'API DeepL depuis deepl.com. Le README ne dit pas s'il existe une offre gratuite ; les forfaits sont sur ce site. Node.js pour npx.",
+        "labels": {
+          "DEEPL_API_KEY": "Clé d'API DeepL"
+        }
+      },
+      "ja": {
+        "description": "DeepL の翻訳、言い換え、用語集、文体ルールを、DeepL 公式の MCP サーバー経由で利用できます。",
+        "long": "DeepL の MCP サーバーを使うと、エージェントはテキストや文書を翻訳し、別の文体で言い換え、用語集を管理できます。例: 製品説明を用語集の用語を保ったままドイツ語に翻訳する。翻訳は DeepL API プランの利用枠を消費します。",
+        "abilities": [
+          "テキストや文書を翻訳する",
+          "別の文体やトーンで言い換える",
+          "用語集を一覧表示して読む",
+          "対応言語と文章スタイルを表示する"
+        ],
+        "needs": "deepl.com で取得した DeepL API キー。README には無料プランがあるかの記載がないため、プランは同サイトで確認してください。npx 用の Node.js。",
+        "labels": {
+          "DEEPL_API_KEY": "DeepL API キー"
+        }
+      },
+      "ko": {
+        "description": "DeepL의 번역, 문장 다듬기, 용어집, 문체 규칙을 DeepL 공식 MCP 서버로 사용합니다.",
+        "long": "DeepL MCP 서버를 쓰면 에이전트가 텍스트와 문서를 번역하고, 텍스트를 다른 문체로 바꾸고, 용어집을 관리할 수 있습니다. 예: 제품 설명을 용어집의 용어를 유지한 채 독일어로 번역. 번역은 DeepL API 요금제의 사용량을 씁니다.",
+        "abilities": [
+          "텍스트와 문서 번역",
+          "다른 문체나 어조로 문장 다듬기",
+          "용어집 목록 보기와 읽기",
+          "지원 언어와 글쓰기 스타일 보기"
+        ],
+        "needs": "deepl.com에서 발급받은 DeepL API 키. README에는 무료 요금제 여부가 없으니 요금제는 해당 사이트에서 확인하세요. npx용 Node.js.",
+        "labels": {
+          "DEEPL_API_KEY": "DeepL API 키"
+        }
+      },
+      "pt-BR": {
+        "description": "Tradução, reescrita, glossários e regras de estilo no DeepL, pelo servidor MCP oficial do DeepL.",
+        "long": "O servidor MCP do DeepL permite que o agente traduza textos e documentos, reescreva um texto em outro estilo e gerencie glossários. Por exemplo: traduzir a descrição de um produto para o alemão mantendo os termos do glossário. As traduções usam a cota do seu plano da API do DeepL.",
+        "abilities": [
+          "Traduzir textos e documentos",
+          "Reescrever um texto em outro estilo ou tom",
+          "Listar e ler glossários",
+          "Mostrar idiomas e estilos de escrita disponíveis"
+        ],
+        "needs": "Uma chave da API do DeepL, obtida em deepl.com. O README não diz se há plano gratuito; os planos estão nesse site. Node.js para o npx.",
+        "labels": {
+          "DEEPL_API_KEY": "Chave da API do DeepL"
+        }
+      },
+      "zh-Hans": {
+        "description": "DeepL 的翻译、改写、术语表和风格规则，通过 DeepL 官方 MCP 服务器提供。",
+        "long": "DeepL 的 MCP 服务器让智能体翻译文本和文档、把文本改写成其他风格，并管理术语表。例如：把产品描述翻译成德语，同时保留术语表中的译法。翻译会消耗您 DeepL API 套餐的额度。",
+        "abilities": [
+          "翻译文本和文档",
+          "把文本改写成其他风格或语气",
+          "列出并读取术语表",
+          "显示支持的语言和写作风格"
+        ],
+        "needs": "在 deepl.com 获取的 DeepL API 密钥。README 没有说明是否有免费套餐，请在该网站查看套餐。npx 需要 Node.js。",
+        "labels": {
+          "DEEPL_API_KEY": "DeepL API 密钥"
+        }
+      }
+    }
+  },
+  {
+    "id": "perplexity",
+    "name": "Perplexity",
+    "category": "web",
+    "publisher": "Perplexity",
+    "official": true,
+    "homepage": "https://www.perplexity.ai",
+    "description_en": "Web search with cited answers, quick questions and deeper research, through Perplexity's own MCP server.",
+    "description_ru": "Поиск в вебе с ответами и ссылками, быстрые вопросы и глубокое исследование через собственный MCP-сервер Perplexity.",
+    "long_en": "Perplexity's MCP server gives an agent four tools: a plain search, a question with a sourced answer, deeper research with citations, and step-by-step reasoning. For example: research a supplier's recent news with sources. Each call is billed at the standard API price of the key you connect.",
+    "long_ru": "MCP-сервер Perplexity даёт агенту четыре инструмента: обычный поиск, вопрос с ответом и источниками, глубокое исследование со ссылками и пошаговое рассуждение. Например: собрать свежие новости о поставщике со ссылками на источники. Каждый вызов тарифицируется по стандартной цене API для подключённого ключа.",
+    "abilities_en": [
+      "Search the web and get ranked results",
+      "Ask a question and get a sourced answer",
+      "Run deeper research with citations",
+      "Reason through a step-by-step problem"
+    ],
+    "abilities_ru": [
+      "Искать в вебе и получать ранжированные результаты",
+      "Задавать вопрос и получать ответ с источниками",
+      "Проводить глубокое исследование со ссылками",
+      "Разбирать задачу пошагово"
+    ],
+    "needs_en": "A Perplexity API key with billing set up: calls are paid at the API's standard prices (the docs give no free tier). Node.js for npx.",
+    "needs_ru": "Ключ Perplexity API с настроенной оплатой: вызовы платные по стандартным ценам API (в доках не указан бесплатный уровень). Node.js для npx.",
+    "kind": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@perplexity-ai/mcp-server@1.3.0"
+    ],
+    "env_keys": [
+      {
+        "key": "PERPLEXITY_API_KEY",
+        "label_en": "Perplexity API key",
+        "label_ru": "Ключ Perplexity API",
+        "secret": true,
+        "value_template": "{secret}"
+      }
+    ],
+    "docs_url": "https://docs.perplexity.ai/guides/mcp-server",
+    "icon": "perplexity",
+    "accent": "#20B8CD",
+    "l10n": {
+      "de": {
+        "description": "Websuche mit belegten Antworten, schnelle Fragen und vertiefte Recherche über den eigenen MCP-Server von Perplexity.",
+        "long": "Der MCP-Server von Perplexity gibt dem Agenten vier Werkzeuge: eine einfache Suche, eine Frage mit belegter Antwort, eine vertiefte Recherche mit Quellen und schrittweises Schlussfolgern. Zum Beispiel: aktuelle Nachrichten zu einem Lieferanten mit Quellen zusammentragen. Jeder Aufruf wird zum Standardpreis der API für den verbundenen Schlüssel berechnet.",
+        "abilities": [
+          "Im Web suchen und sortierte Ergebnisse erhalten",
+          "Eine Frage stellen und eine Antwort mit Quellen erhalten",
+          "Vertiefte Recherche mit Quellen durchführen",
+          "Ein Problem schrittweise durchdenken"
+        ],
+        "needs": "Ein Perplexity-API-Schlüssel mit eingerichteter Abrechnung: Aufrufe sind kostenpflichtig zu den Standardpreisen der API (die Doku nennt keine kostenlose Stufe). Node.js für npx.",
+        "labels": {
+          "PERPLEXITY_API_KEY": "Perplexity-API-Schlüssel"
+        }
+      },
+      "es": {
+        "description": "Búsqueda web con respuestas citadas, preguntas rápidas e investigación a fondo mediante el servidor MCP oficial de Perplexity.",
+        "long": "El servidor MCP de Perplexity da al agente cuatro herramientas: búsqueda simple, pregunta con respuesta citada, investigación a fondo con fuentes y razonamiento paso a paso. Por ejemplo: reunir las noticias recientes de un proveedor con sus fuentes. Cada llamada se cobra al precio estándar de la API de la clave conectada.",
+        "abilities": [
+          "Buscar en la web y obtener resultados ordenados",
+          "Hacer una pregunta y recibir una respuesta con fuentes",
+          "Hacer una investigación a fondo con citas",
+          "Razonar un problema paso a paso"
+        ],
+        "needs": "Una clave de la API de Perplexity con facturación activa: las llamadas son de pago a los precios estándar de la API (la documentación no menciona un nivel gratuito). Node.js para npx.",
+        "labels": {
+          "PERPLEXITY_API_KEY": "Clave de la API de Perplexity"
+        }
+      },
+      "fr": {
+        "description": "Recherche web avec réponses sourcées, questions rapides et recherche approfondie via le serveur MCP officiel de Perplexity.",
+        "long": "Le serveur MCP de Perplexity donne à l'agent quatre outils : une recherche simple, une question avec réponse sourcée, une recherche approfondie avec citations et un raisonnement pas à pas. Par exemple : rassembler les actualités récentes d'un fournisseur avec leurs sources. Chaque appel est facturé au tarif API standard de la clé connectée.",
+        "abilities": [
+          "Chercher sur le web et obtenir des résultats classés",
+          "Poser une question et obtenir une réponse sourcée",
+          "Mener une recherche approfondie avec citations",
+          "Raisonner pas à pas sur un problème"
+        ],
+        "needs": "Une clé d'API Perplexity avec facturation activée : les appels sont payants aux tarifs API standard (la doc ne mentionne pas d'offre gratuite). Node.js pour npx.",
+        "labels": {
+          "PERPLEXITY_API_KEY": "Clé d'API Perplexity"
+        }
+      },
+      "ja": {
+        "description": "引用付きの回答を返すWeb検索、簡単な質問、詳しい調査を、Perplexity 公式の MCP サーバー経由で行えます。",
+        "long": "Perplexity の MCP サーバーは、エージェントに4つのツールを渡します。通常の検索、出典付きの回答を返す質問、引用付きの詳しい調査、段階的な推論です。例: 仕入れ先の最新ニュースを出典付きでまとめる。呼び出しごとに、接続したキーの API 標準料金が課金されます。",
+        "abilities": [
+          "Web を検索し、順位付けされた結果を得る",
+          "質問して出典付きの回答を得る",
+          "引用付きで詳しく調査する",
+          "問題を段階的に推論する"
+        ],
+        "needs": "支払いを設定した Perplexity API キー。呼び出しは API の標準料金で有料です（ドキュメントに無料枠の記載はありません）。npx 用の Node.js。",
+        "labels": {
+          "PERPLEXITY_API_KEY": "Perplexity API キー"
+        }
+      },
+      "ko": {
+        "description": "출처가 붙은 답변의 웹 검색, 빠른 질문, 심층 조사를 Perplexity 공식 MCP 서버로 제공합니다.",
+        "long": "Perplexity MCP 서버는 에이전트에게 네 가지 도구를 줍니다. 일반 검색, 출처가 붙은 답변을 주는 질문, 인용이 포함된 심층 조사, 단계별 추론입니다. 예: 공급업체의 최신 뉴스를 출처와 함께 모으기. 호출마다 연결한 키의 API 표준 요금이 부과됩니다.",
+        "abilities": [
+          "웹 검색과 순위가 매겨진 결과 받기",
+          "질문하고 출처가 있는 답변 받기",
+          "인용과 함께 심층 조사하기",
+          "문제를 단계별로 추론하기"
+        ],
+        "needs": "결제가 설정된 Perplexity API 키. 호출은 API 표준 요금으로 유료입니다(문서에 무료 등급은 없습니다). npx용 Node.js.",
+        "labels": {
+          "PERPLEXITY_API_KEY": "Perplexity API 키"
+        }
+      },
+      "pt-BR": {
+        "description": "Busca na web com respostas citadas, perguntas rápidas e pesquisa aprofundada pelo servidor MCP oficial da Perplexity.",
+        "long": "O servidor MCP da Perplexity dá ao agente quatro ferramentas: uma busca simples, uma pergunta com resposta citada, uma pesquisa aprofundada com fontes e raciocínio passo a passo. Por exemplo: reunir as notícias recentes de um fornecedor com as fontes. Cada chamada é cobrada pelo preço padrão da API da chave conectada.",
+        "abilities": [
+          "Pesquisar na web e obter resultados ordenados",
+          "Fazer uma pergunta e receber resposta com fontes",
+          "Fazer uma pesquisa aprofundada com citações",
+          "Raciocinar sobre um problema passo a passo"
+        ],
+        "needs": "Uma chave da API da Perplexity com cobrança configurada: as chamadas são pagas pelos preços padrão da API (a documentação não cita um nível gratuito). Node.js para o npx.",
+        "labels": {
+          "PERPLEXITY_API_KEY": "Chave da API da Perplexity"
+        }
+      },
+      "zh-Hans": {
+        "description": "带引用的网页搜索、快速问答和深入研究，通过 Perplexity 官方 MCP 服务器提供。",
+        "long": "Perplexity 的 MCP 服务器为智能体提供四个工具：普通搜索、带来源的问答、带引用的深入研究，以及分步推理。例如：整理某供应商的最新新闻并附上来源。每次调用按所连接密钥的 API 标准价格计费。",
+        "abilities": [
+          "搜索网页并获得排序结果",
+          "提问并获得带来源的回答",
+          "进行带引用的深入研究",
+          "分步推理一个问题"
+        ],
+        "needs": "已设置付费的 Perplexity API 密钥：调用按 API 标准价格收费（文档未提及免费版）。npx 需要 Node.js。",
+        "labels": {
+          "PERPLEXITY_API_KEY": "Perplexity API 密钥"
+        }
+      }
+    }
+  },
+  {
+    "id": "tavily",
+    "name": "Tavily",
+    "category": "web",
+    "publisher": "Tavily",
+    "official": true,
+    "homepage": "https://www.tavily.com",
+    "description_en": "Web search and page extraction for agents, through Tavily's own MCP package.",
+    "description_ru": "Поиск в вебе и извлечение страниц для агентов через собственный MCP-пакет Tavily.",
+    "long_en": "Tavily's MCP server lets an agent search the web for current sources and extract the readable text of pages. For example: find three recent articles about a regulation change and pull out their key paragraphs. The server runs on your computer and uses your Tavily key for each call.",
+    "long_ru": "MCP-сервер Tavily позволяет агенту искать в вебе актуальные источники и извлекать читаемый текст страниц. Например: найти три свежие статьи об изменении закона и выписать их ключевые абзацы. Сервер работает на вашем компьютере и использует ваш ключ Tavily для каждого вызова.",
+    "abilities_en": [
+      "Search the web for current sources",
+      "Extract the readable text of pages",
+      "Return results with links"
+    ],
+    "abilities_ru": [
+      "Искать актуальные источники в вебе",
+      "Извлекать читаемый текст страниц",
+      "Возвращать результаты со ссылками"
+    ],
+    "needs_en": "A Tavily API key from app.tavily.com (a free account exists; the docs give no quota). Node.js for npx.",
+    "needs_ru": "Ключ Tavily API с app.tavily.com (есть бесплатный аккаунт; квоты в доках не указаны). Node.js для npx.",
+    "kind": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "tavily-mcp@0.2.22"
+    ],
+    "env_keys": [
+      {
+        "key": "TAVILY_API_KEY",
+        "label_en": "Tavily API key",
+        "label_ru": "Ключ Tavily API",
+        "secret": true,
+        "value_template": "{secret}"
+      }
+    ],
+    "docs_url": "https://docs.tavily.com/documentation/mcp",
+    "icon": "search",
+    "accent": "#8B93A7",
+    "l10n": {
+      "de": {
+        "description": "Websuche und Seitenauszug für Agenten über das eigene MCP-Paket von Tavily.",
+        "long": "Der MCP-Server von Tavily lässt den Agenten aktuelle Quellen im Web suchen und den lesbaren Text von Seiten auslesen. Zum Beispiel: drei aktuelle Artikel zu einer Gesetzesänderung finden und ihre Kernabsätze herausziehen. Der Server läuft auf Ihrem Rechner und nutzt bei jedem Aufruf Ihren Tavily-Schlüssel.",
+        "abilities": [
+          "Aktuelle Quellen im Web suchen",
+          "Den lesbaren Text von Seiten auslesen",
+          "Ergebnisse mit Links zurückgeben"
+        ],
+        "needs": "Ein Tavily-API-Schlüssel von app.tavily.com (es gibt ein kostenloses Konto; Kontingente stehen nicht in der Doku). Node.js für npx.",
+        "labels": {
+          "TAVILY_API_KEY": "Tavily-API-Schlüssel"
+        }
+      },
+      "es": {
+        "description": "Búsqueda web y extracción de páginas para agentes mediante el paquete MCP oficial de Tavily.",
+        "long": "El servidor MCP de Tavily permite al agente buscar fuentes actuales en la web y extraer el texto legible de las páginas. Por ejemplo: encontrar tres artículos recientes sobre un cambio normativo y sacar sus párrafos clave. El servidor se ejecuta en su equipo y usa su clave de Tavily en cada llamada.",
+        "abilities": [
+          "Buscar fuentes actuales en la web",
+          "Extraer el texto legible de las páginas",
+          "Devolver resultados con enlaces"
+        ],
+        "needs": "Una clave de la API de Tavily de app.tavily.com (hay cuenta gratuita; la documentación no indica cuotas). Node.js para npx.",
+        "labels": {
+          "TAVILY_API_KEY": "Clave de la API de Tavily"
+        }
+      },
+      "fr": {
+        "description": "Recherche web et extraction de pages pour les agents, avec le paquet MCP officiel de Tavily.",
+        "long": "Le serveur MCP de Tavily permet à l'agent de chercher des sources récentes sur le web et d'extraire le texte lisible des pages. Par exemple : trouver trois articles récents sur un changement de réglementation et en extraire les paragraphes clés. Le serveur tourne sur votre ordinateur et utilise votre clé Tavily à chaque appel.",
+        "abilities": [
+          "Chercher des sources récentes sur le web",
+          "Extraire le texte lisible des pages",
+          "Renvoyer les résultats avec leurs liens"
+        ],
+        "needs": "Une clé d'API Tavily depuis app.tavily.com (un compte gratuit existe ; la doc ne donne pas de quotas). Node.js pour npx.",
+        "labels": {
+          "TAVILY_API_KEY": "Clé d'API Tavily"
+        }
+      },
+      "ja": {
+        "description": "エージェント向けの Web 検索とページ抽出を、Tavily 公式の MCP パッケージで提供します。",
+        "long": "Tavily の MCP サーバーは、エージェントが最新の情報源を Web で検索し、ページの読めるテキストを取り出せるようにします。例: ある法改正に関する最近の記事を3本見つけ、要点の段落を抜き出す。サーバーはお使いのコンピューターで動き、呼び出しごとに Tavily のキーを使います。",
+        "abilities": [
+          "最新の情報源を Web で検索する",
+          "ページの読めるテキストを抽出する",
+          "リンク付きで結果を返す"
+        ],
+        "needs": "app.tavily.com で取得した Tavily API キー（無料アカウントがあります。割り当て量はドキュメントに記載がありません）。npx 用の Node.js。",
+        "labels": {
+          "TAVILY_API_KEY": "Tavily API キー"
+        }
+      },
+      "ko": {
+        "description": "에이전트를 위한 웹 검색과 페이지 추출을 Tavily 공식 MCP 패키지로 제공합니다.",
+        "long": "Tavily MCP 서버를 쓰면 에이전트가 최신 출처를 웹에서 검색하고 페이지의 읽을 수 있는 텍스트를 가져올 수 있습니다. 예: 특정 규정 변경에 관한 최근 기사 세 편을 찾아 핵심 단락을 뽑기. 서버는 사용자의 컴퓨터에서 실행되며 호출마다 Tavily 키를 사용합니다.",
+        "abilities": [
+          "최신 출처를 웹에서 검색",
+          "페이지의 읽을 수 있는 텍스트 추출",
+          "링크가 포함된 결과 반환"
+        ],
+        "needs": "app.tavily.com에서 발급받은 Tavily API 키(무료 계정이 있습니다. 할당량은 문서에 없습니다). npx용 Node.js.",
+        "labels": {
+          "TAVILY_API_KEY": "Tavily API 키"
+        }
+      },
+      "pt-BR": {
+        "description": "Busca na web e extração de páginas para agentes, pelo pacote MCP oficial da Tavily.",
+        "long": "O servidor MCP da Tavily permite que o agente pesquise fontes atuais na web e extraia o texto legível das páginas. Por exemplo: encontrar três artigos recentes sobre uma mudança de regra e tirar os parágrafos principais. O servidor roda no seu computador e usa sua chave da Tavily em cada chamada.",
+        "abilities": [
+          "Pesquisar fontes atuais na web",
+          "Extrair o texto legível das páginas",
+          "Devolver resultados com links"
+        ],
+        "needs": "Uma chave da API da Tavily em app.tavily.com (existe conta gratuita; a documentação não informa cotas). Node.js para o npx.",
+        "labels": {
+          "TAVILY_API_KEY": "Chave da API da Tavily"
+        }
+      },
+      "zh-Hans": {
+        "description": "为智能体提供网页搜索和网页内容提取，由 Tavily 官方 MCP 包提供。",
+        "long": "Tavily 的 MCP 服务器让智能体搜索网上的最新来源，并提取网页中可读的正文。例如：找到三篇关于某项政策变化的近期文章，并摘出要点段落。服务器在您的电脑上运行，每次调用都使用您的 Tavily 密钥。",
+        "abilities": [
+          "搜索网上的最新来源",
+          "提取网页的可读正文",
+          "返回带链接的结果"
+        ],
+        "needs": "在 app.tavily.com 获取的 Tavily API 密钥（有免费账户；文档未说明配额）。npx 需要 Node.js。",
+        "labels": {
+          "TAVILY_API_KEY": "Tavily API 密钥"
+        }
+      }
+    }
+  },
+  {
+    "id": "fal",
+    "name": "fal.ai",
+    "category": "design",
+    "publisher": "fal",
+    "official": true,
+    "homepage": "https://fal.ai",
+    "description_en": "Search and run fal.ai models for images, video and audio, and follow their jobs, through fal's own MCP server.",
+    "description_ru": "Поиск и запуск моделей fal.ai для изображений, видео и аудио, отслеживание заданий через собственный MCP-сервер fal.",
+    "long_en": "fal's MCP server lets an agent find a model for a task, check its input schema and price, run it, and fetch the result. For example: generate a product photo with a chosen model and save the file. Each model run is billed in fal credits; the server itself is free. Run only what you are ready to pay for.",
+    "long_ru": "MCP-сервер fal позволяет агенту подобрать модель под задачу, посмотреть её входные данные и цену, запустить и получить результат. Например: сгенерировать фото товара выбранной моделью и сохранить файл. Каждый запуск модели оплачивается кредитами fal; сам сервер бесплатный. Запускайте только то, за что готовы платить.",
+    "abilities_en": [
+      "Search models and read their input schema and price",
+      "Run a model or a job and check its status",
+      "Get the result of a finished job",
+      "Upload a file for a model"
+    ],
+    "abilities_ru": [
+      "Искать модели и смотреть их входные данные и цену",
+      "Запускать модель или задание и проверять статус",
+      "Получать результат готового задания",
+      "Загружать файл для модели"
+    ],
+    "needs_en": "A fal account, signed in through the browser when you press Connect. Model runs are paid in fal credits; the docs give no free credits.",
+    "needs_ru": "Аккаунт fal: войдите в браузере после нажатия «Подключить». Запуски моделей платные, в доках не указаны бесплатные кредиты.",
+    "kind": "http",
+    "url": "https://mcp.fal.ai/mcp-relay",
+    "auth": "oauth",
+    "docs_url": "https://fal.ai/docs/model-apis/mcp",
+    "icon": "brain",
+    "accent": "#6E6E73",
+    "l10n": {
+      "de": {
+        "description": "Modelle für Bilder, Video und Audio bei fal.ai suchen und starten sowie ihre Jobs verfolgen, über den eigenen MCP-Server von fal.",
+        "long": "Der MCP-Server von fal lässt den Agenten ein Modell für eine Aufgabe finden, dessen Eingaben und Preis prüfen, es starten und das Ergebnis abholen. Zum Beispiel: mit einem gewählten Modell ein Produktfoto erzeugen und die Datei speichern. Jeder Modelllauf wird in fal-Credits berechnet; der Server selbst ist kostenlos.",
+        "abilities": [
+          "Modelle suchen und Eingaben sowie Preis lesen",
+          "Ein Modell oder einen Job starten und den Status prüfen",
+          "Das Ergebnis eines fertigen Jobs abrufen",
+          "Eine Datei für ein Modell hochladen"
+        ],
+        "needs": "Ein fal-Konto; Sie melden sich nach dem Klick auf „Verbinden“ im Browser an. Modelläufe sind kostenpflichtig; die Doku nennt keine kostenlosen Credits."
+      },
+      "es": {
+        "description": "Buscar y ejecutar modelos de generación de imágenes, vídeo y audio de fal.ai, y seguir sus trabajos, mediante el servidor MCP oficial de fal.",
+        "long": "El servidor MCP de fal permite al agente encontrar un modelo para una tarea, revisar sus datos de entrada y precio, ejecutarlo y recuperar el resultado. Por ejemplo: generar una foto de producto con un modelo elegido y guardar el archivo. Cada ejecución del modelo se cobra en créditos de fal; el servidor en sí es gratuito.",
+        "abilities": [
+          "Buscar modelos y leer sus entradas y precio",
+          "Ejecutar un modelo o un trabajo y ver su estado",
+          "Obtener el resultado de un trabajo terminado",
+          "Subir un archivo para un modelo"
+        ],
+        "needs": "Una cuenta de fal; inicie sesión en el navegador al pulsar Conectar. Las ejecuciones son de pago; la documentación no menciona créditos gratuitos."
+      },
+      "fr": {
+        "description": "Chercher et lancer les modèles de génération d'images, de vidéo et d'audio de fal.ai, et suivre leurs tâches, via le serveur MCP officiel de fal.",
+        "long": "Le serveur MCP de fal permet à l'agent de trouver un modèle pour une tâche, de consulter ses entrées et son prix, de le lancer et de récupérer le résultat. Par exemple : générer une photo de produit avec un modèle choisi et enregistrer le fichier. Chaque exécution est facturée en crédits fal ; le serveur lui-même est gratuit.",
+        "abilities": [
+          "Chercher des modèles et lire leurs entrées et leur prix",
+          "Lancer un modèle ou une tâche et voir son statut",
+          "Récupérer le résultat d'une tâche terminée",
+          "Envoyer un fichier pour un modèle"
+        ],
+        "needs": "Un compte fal, connecté dans le navigateur quand vous cliquez sur Connecter. Les exécutions sont payantes ; la doc ne mentionne pas de crédits gratuits."
+      },
+      "ja": {
+        "description": "fal.ai の画像・動画・音声の生成モデルを探して実行し、そのジョブを追跡します。fal 公式の MCP サーバー経由です。",
+        "long": "fal の MCP サーバーを使うと、エージェントは作業に合うモデルを探し、入力項目と料金を確認し、実行して結果を受け取れます。例: 選んだモデルで商品写真を生成してファイルに保存する。モデルの実行ごとに fal クレジットで課金されます。サーバー自体は無料です。",
+        "abilities": [
+          "モデルを検索し、入力項目と料金を見る",
+          "モデルやジョブを実行し、状態を確認する",
+          "完了したジョブの結果を取得する",
+          "モデル用のファイルをアップロードする"
+        ],
+        "needs": "fal のアカウント。「接続」を押すとブラウザでサインインします。モデルの実行は有料です（ドキュメントに無料クレジットの記載はありません）。"
+      },
+      "ko": {
+        "description": "fal.ai의 이미지·동영상·오디오 생성 모델을 찾아 실행하고 작업을 추적합니다. fal 공식 MCP 서버를 통해 제공됩니다.",
+        "long": "fal MCP 서버를 쓰면 에이전트가 작업에 맞는 모델을 찾고, 입력 항목과 가격을 확인하고, 실행한 뒤 결과를 받을 수 있습니다. 예: 고른 모델로 제품 사진을 만들어 파일로 저장. 모델 실행마다 fal 크레딧으로 과금되며, 서버 자체는 무료입니다.",
+        "abilities": [
+          "모델 검색과 입력 항목·가격 확인",
+          "모델이나 작업 실행과 상태 확인",
+          "완료된 작업의 결과 가져오기",
+          "모델용 파일 업로드"
+        ],
+        "needs": "fal 계정. 연결을 누르면 브라우저에서 로그인합니다. 모델 실행은 유료이며 문서에 무료 크레딧은 없습니다."
+      },
+      "pt-BR": {
+        "description": "Buscar e executar modelos de geração de imagem, vídeo e áudio da fal.ai e acompanhar seus jobs, pelo servidor MCP oficial da fal.",
+        "long": "O servidor MCP da fal permite que o agente encontre um modelo para uma tarefa, veja as entradas e o preço, execute-o e pegue o resultado. Por exemplo: gerar uma foto de produto com um modelo escolhido e salvar o arquivo. Cada execução do modelo é cobrada em créditos da fal; o servidor em si é gratuito.",
+        "abilities": [
+          "Buscar modelos e ler entradas e preço",
+          "Executar um modelo ou job e ver o status",
+          "Obter o resultado de um job concluído",
+          "Enviar um arquivo para um modelo"
+        ],
+        "needs": "Uma conta na fal, com login no navegador ao clicar em Conectar. As execuções são pagas; a documentação não cita créditos gratuitos."
+      },
+      "zh-Hans": {
+        "description": "搜索并运行 fal.ai 的图像、视频和音频生成模型，并跟踪其任务，通过 fal 官方 MCP 服务器提供。",
+        "long": "fal 的 MCP 服务器让智能体为任务找到合适的模型、查看其输入项和价格、运行模型并获取结果。例如：用选定的模型生成一张产品图并保存为文件。每次模型运行按 fal 积分计费；服务器本身免费。",
+        "abilities": [
+          "搜索模型，查看输入项和价格",
+          "运行模型或任务并查看状态",
+          "获取已完成任务的结果",
+          "为模型上传文件"
+        ],
+        "needs": "fal 账户：点击“连接”后在浏览器中登录。模型运行是付费的；文档未提及免费积分。"
+      }
+    }
+  },
+  {
+    "id": "stability-ai",
+    "name": "Stability AI",
+    "category": "design",
+    "publisher": "tadasant (community)",
+    "official": false,
+    "homepage": "https://github.com/tadasant/mcp-server-stability-ai",
+    "description_en": "Generate, edit and upscale images with Stability AI models, through a community MCP server (not made by Stability AI).",
+    "description_ru": "Генерация, редактирование и увеличение изображений моделями Stability AI через MCP-сервер сообщества (не от Stability AI).",
+    "long_en": "A community MCP server (by tadasant, MIT licence, not affiliated with Stability AI) lets an agent generate images, remove or replace backgrounds, outpaint, search and replace objects, upscale, and control a picture with a sketch or a structure. For example: make a banner from a sketch. Every generation uses credits of your Stability AI account.",
+    "long_ru": "MCP-сервер сообщества (автор tadasant, лицензия MIT, не связан со Stability AI) позволяет агенту генерировать изображения, убирать или менять фон, достраивать края, искать и заменять объекты, увеличивать изображение и задавать композицию эскизом или структурой. Например: сделать баннер по наброску. Каждая генерация списывает кредиты вашего аккаунта Stability AI.",
+    "abilities_en": [
+      "Generate images from a text prompt",
+      "Remove or replace backgrounds",
+      "Edit: outpaint, search and replace, recolor",
+      "Upscale and control images with a sketch or structure"
+    ],
+    "abilities_ru": [
+      "Генерировать изображения по текстовому описанию",
+      "Убирать или менять фон",
+      "Редактировать: достраивать края, заменять и перекрашивать объекты",
+      "Увеличивать изображения и задавать композицию эскизом или структурой"
+    ],
+    "needs_en": "A Stability AI API key from your Stability AI account. Every generation uses credits of that account. Node.js for npx.",
+    "needs_ru": "Ключ Stability AI API из вашего аккаунта Stability AI. Каждая генерация списывает кредиты этого аккаунта. Node.js для npx.",
+    "kind": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "mcp-server-stability-ai@0.2.0"
+    ],
+    "env_keys": [
+      {
+        "key": "STABILITY_AI_API_KEY",
+        "label_en": "Stability AI API key",
+        "label_ru": "Ключ Stability AI API",
+        "secret": true,
+        "value_template": "{secret}"
+      }
+    ],
+    "docs_url": "https://github.com/tadasant/mcp-server-stability-ai",
+    "icon": "brain",
+    "accent": "#7C5CFF",
+    "l10n": {
+      "de": {
+        "description": "Bilder erzeugen, bearbeiten und hochskalieren mit Modellen von Stability AI, über einen MCP-Server der Community (nicht von Stability AI).",
+        "long": "Ein MCP-Server der Community (von tadasant, MIT-Lizenz, nicht mit Stability AI verbunden) lässt den Agenten Bilder erzeugen, Hintergründe entfernen oder ersetzen, Bildränder ergänzen, Objekte suchen und ersetzen, Bilder hochskalieren und mit einer Skizze oder Struktur steuern. Zum Beispiel: ein Banner nach einer Skizze erstellen. Jede Erzeugung verbraucht Credits Ihres Stability-Kontos.",
+        "abilities": [
+          "Bilder aus einer Textbeschreibung erzeugen",
+          "Hintergründe entfernen oder ersetzen",
+          "Bearbeiten: Ränder ergänzen, Objekte ersetzen oder umfärben",
+          "Bilder hochskalieren und mit Skizze oder Struktur steuern"
+        ],
+        "needs": "Ein API-Schlüssel von Stability AI aus Ihrem Konto bei Stability AI. Jede Erzeugung verbraucht Credits dieses Kontos. Node.js für npx.",
+        "labels": {
+          "STABILITY_AI_API_KEY": "Stability-AI-API-Schlüssel"
+        }
+      },
+      "es": {
+        "description": "Generar, editar y ampliar imágenes con modelos de Stability AI, mediante un servidor MCP de la comunidad (no lo hace Stability AI).",
+        "long": "Un servidor MCP de la comunidad (de tadasant, licencia MIT, sin vínculo con Stability AI) permite al agente generar imágenes, quitar o reemplazar fondos, completar bordes, buscar y reemplazar objetos, ampliar imágenes y controlar la composición con un boceto o una estructura. Por ejemplo: hacer un banner a partir de un boceto. Cada generación gasta créditos de su cuenta de Stability.",
+        "abilities": [
+          "Generar imágenes a partir de una descripción",
+          "Quitar o reemplazar fondos",
+          "Editar: completar bordes, reemplazar o recolorear objetos",
+          "Ampliar imágenes y controlarlas con boceto o estructura"
+        ],
+        "needs": "Una clave de la API de Stability AI de su cuenta. Cada generación gasta créditos de esa cuenta. Node.js para npx.",
+        "labels": {
+          "STABILITY_AI_API_KEY": "Clave de la API de Stability AI"
+        }
+      },
+      "fr": {
+        "description": "Générer, modifier et agrandir des images avec les modèles de Stability AI, via un serveur MCP communautaire (non édité par Stability AI).",
+        "long": "Un serveur MCP communautaire (par tadasant, licence MIT, sans lien avec Stability AI) permet à l'agent de générer des images, de retirer ou remplacer des arrière-plans, d'étendre les bords, de chercher et remplacer des objets, d'agrandir une image et de la guider par un croquis ou une structure. Par exemple : faire une bannière à partir d'un croquis. Chaque génération consomme des crédits de votre compte Stability.",
+        "abilities": [
+          "Générer des images à partir d'une description",
+          "Retirer ou remplacer l'arrière-plan",
+          "Modifier : étendre les bords, remplacer ou recolorer des objets",
+          "Agrandir des images et les guider par un croquis ou une structure"
+        ],
+        "needs": "Une clé d'API Stability AI de votre compte. Chaque génération consomme des crédits de ce compte. Node.js pour npx.",
+        "labels": {
+          "STABILITY_AI_API_KEY": "Clé d'API Stability AI"
+        }
+      },
+      "ja": {
+        "description": "Stability AI のモデルで画像を生成・編集・拡大します。コミュニティ製の MCP サーバー経由です（Stability AI の提供ではありません）。",
+        "long": "コミュニティ製の MCP サーバー（作者 tadasant、MIT ライセンス、Stability AI とは無関係）を使うと、エージェントは画像の生成、背景の削除や置換、縁の拡張、オブジェクトの検索と置換、画像の拡大、スケッチや構図による制御を行えます。例: スケッチからバナーを作る。生成のたびに Stability アカウントのクレジットを使います。",
+        "abilities": [
+          "テキストから画像を生成する",
+          "背景を削除または置換する",
+          "編集: 縁の拡張、オブジェクトの置換や色変更",
+          "画像を拡大し、スケッチや構図で制御する"
+        ],
+        "needs": "Stability AI のアカウントで取得した API キー。生成のたびにそのアカウントのクレジットを使います。npx 用の Node.js。",
+        "labels": {
+          "STABILITY_AI_API_KEY": "Stability AI API キー"
+        }
+      },
+      "ko": {
+        "description": "Stability AI 모델로 이미지를 생성·편집·확대합니다. 커뮤니티가 만든 MCP 서버로 제공되며 Stability AI가 만든 것은 아닙니다.",
+        "long": "커뮤니티 MCP 서버(작성자 tadasant, MIT 라이선스, Stability AI와 무관)를 쓰면 에이전트가 이미지를 생성하고, 배경을 제거하거나 바꾸고, 가장자리를 확장하고, 객체를 찾아 바꾸고, 이미지를 확대하고, 스케치나 구조로 구도를 지정할 수 있습니다. 예: 스케치로 배너 만들기. 생성할 때마다 Stability 계정의 크레딧이 사용됩니다.",
+        "abilities": [
+          "텍스트 설명으로 이미지 생성",
+          "배경 제거 또는 교체",
+          "편집: 가장자리 확장, 객체 교체·재색칠",
+          "이미지 확대와 스케치·구조로 제어"
+        ],
+        "needs": "Stability AI 계정에서 발급받은 API 키. 생성할 때마다 해당 계정의 크레딧이 쓰입니다. npx용 Node.js.",
+        "labels": {
+          "STABILITY_AI_API_KEY": "Stability AI API 키"
+        }
+      },
+      "pt-BR": {
+        "description": "Gerar, editar e ampliar imagens com modelos da Stability AI, por um servidor MCP da comunidade (não feito pela Stability AI).",
+        "long": "Um servidor MCP da comunidade (de tadasant, licença MIT, sem vínculo com a Stability AI) permite que o agente gere imagens, remova ou troque fundos, complete bordas, busque e troque objetos, amplie imagens e controle a composição com um esboço ou uma estrutura. Por exemplo: fazer um banner a partir de um esboço. Cada geração usa créditos da sua conta Stability.",
+        "abilities": [
+          "Gerar imagens a partir de uma descrição",
+          "Remover ou trocar o fundo",
+          "Editar: completar bordas, trocar ou recolorir objetos",
+          "Ampliar imagens e controlá-las com esboço ou estrutura"
+        ],
+        "needs": "Uma chave da API da Stability AI da sua conta. Cada geração usa créditos dessa conta. Node.js para o npx.",
+        "labels": {
+          "STABILITY_AI_API_KEY": "Chave da API da Stability AI"
+        }
+      },
+      "zh-Hans": {
+        "description": "使用 Stability AI 的模型生成、编辑和放大图像，通过社区的 MCP 服务器提供（并非 Stability AI 官方）。",
+        "long": "这是社区 MCP 服务器（作者 tadasant，MIT 许可，与 Stability AI 无关联）。智能体可借此生成图像、移除或替换背景、扩展画面边缘、搜索并替换对象、放大图像，并用草图或结构控制构图。例如：根据草图做一张横幅。每次生成都会消耗您 Stability 账户的积分。",
+        "abilities": [
+          "根据文字描述生成图像",
+          "移除或替换背景",
+          "编辑：扩展边缘、替换或重新上色对象",
+          "放大图像，并用草图或结构控制"
+        ],
+        "needs": "在您的 Stability AI 账户中获取的 API 密钥。每次生成都会消耗该账户的积分。npx 需要 Node.js。",
+        "labels": {
+          "STABILITY_AI_API_KEY": "Stability AI API 密钥"
+        }
+      }
+    }
+  },
+  {
+    "id": "apify",
+    "name": "Apify",
+    "category": "web",
+    "publisher": "Apify",
+    "official": true,
+    "homepage": "https://apify.com",
+    "description_en": "Run Apify Actors (scrapers and automations) and read their datasets, through Apify's own MCP server.",
+    "description_ru": "Запуск акторов Apify (скрейперы и автоматизации) и чтение их датасетов через собственный MCP-сервер Apify.",
+    "long_en": "Apify's MCP server lets an agent find an Actor for a task, run it, and read the data it collected. For example: find an Actor that collects product listings from a marketplace and return the dataset. Running an Actor uses your Apify account and can cost money, so check the Actor's price first. You sign in in the browser; no token goes in the config.",
+    "long_ru": "MCP-сервер Apify позволяет агенту найти актор под задачу, запустить его и прочитать собранные данные. Например: найти актор, который собирает карточки товаров с маркетплейса, и вернуть датасет. Запуск актора идёт через ваш аккаунт Apify и может стоить денег, поэтому сначала смотрите цену актора. Вход — в браузере, токен в настройки не вносится.",
+    "abilities_en": [
+      "Search Actors and read their details",
+      "Run an Actor and wait for its result",
+      "Read datasets the runs produced",
+      "Search the Apify documentation"
+    ],
+    "abilities_ru": [
+      "Искать акторы и смотреть их описание",
+      "Запускать актор и получать результат",
+      "Читать датасеты, которые собрали запуски",
+      "Искать по документации Apify"
+    ],
+    "needs_en": "An Apify account, signed in through the browser when you press Connect. Running Actors uses your plan's limits and can cost money; the docs do not describe a free plan.",
+    "needs_ru": "Аккаунт Apify: войдите в браузере после нажатия «Подключить». Запуски актёров тратят лимиты тарифа и могут стоить денег; бесплатный тариф в доках не описан.",
+    "kind": "http",
+    "url": "https://mcp.apify.com",
+    "auth": "oauth",
+    "docs_url": "https://docs.apify.com/platform/integrations/mcp",
+    "icon": "web",
+    "accent": "#97D700",
+    "l10n": {
+      "de": {
+        "description": "Apify-Actors (Scraper und Automationen) starten und deren Datensätze lesen, über den eigenen MCP-Server von Apify.",
+        "long": "Der MCP-Server von Apify lässt den Agenten einen Actor für eine Aufgabe finden, ihn starten und die gesammelten Daten lesen. Zum Beispiel: einen Actor finden, der Produktangebote von einem Marktplatz sammelt, und den Datensatz zurückgeben. Ein Actor-Lauf läuft über Ihr Apify-Konto und kann Geld kosten, prüfen Sie daher zuerst den Preis des Actors. Die Anmeldung erfolgt im Browser; ein Token kommt nicht in die Konfiguration.",
+        "abilities": [
+          "Actors suchen und ihre Angaben lesen",
+          "Einen Actor starten und sein Ergebnis abwarten",
+          "Datensätze der Läufe lesen",
+          "In der Apify-Dokumentation suchen"
+        ],
+        "needs": "Ein Apify-Konto; Sie melden sich nach dem Klick auf „Verbinden“ im Browser an. Actor-Läufe nutzen die Limits Ihres Tarifs und können kosten; die Doku beschreibt keinen kostenlosen Tarif."
+      },
+      "es": {
+        "description": "Ejecutar Actors de Apify (scrapers y automatizaciones) y leer sus datasets, mediante el servidor MCP oficial de Apify.",
+        "long": "El servidor MCP de Apify permite al agente encontrar un Actor para una tarea, ejecutarlo y leer los datos recogidos. Por ejemplo: encontrar un Actor que recoja fichas de productos de un marketplace y devolver el dataset. Ejecutar un Actor usa su cuenta de Apify y puede costar dinero, así que revise antes el precio del Actor. El inicio de sesión es en el navegador; ningún token va en la configuración.",
+        "abilities": [
+          "Buscar Actors y leer sus datos",
+          "Ejecutar un Actor y esperar su resultado",
+          "Leer los datasets que generaron las ejecuciones",
+          "Buscar en la documentación de Apify"
+        ],
+        "needs": "Una cuenta de Apify; inicie sesión en el navegador al pulsar Conectar. Las ejecuciones usan los límites de su plan y pueden costar; la documentación no describe un plan gratuito."
+      },
+      "fr": {
+        "description": "Lancer des Actors Apify (scrapers et automatisations) et lire leurs jeux de données, via le serveur MCP officiel d'Apify.",
+        "long": "Le serveur MCP d'Apify permet à l'agent de trouver un Actor pour une tâche, de le lancer et de lire les données collectées. Par exemple : trouver un Actor qui relève des fiches produits d'une place de marché et renvoyer le jeu de données. Un lancement passe par votre compte Apify et peut coûter de l'argent ; vérifiez donc d'abord le prix de l'Actor. La connexion se fait dans le navigateur ; aucun jeton ne va dans la configuration.",
+        "abilities": [
+          "Chercher des Actors et lire leurs détails",
+          "Lancer un Actor et attendre son résultat",
+          "Lire les jeux de données produits par les exécutions",
+          "Chercher dans la documentation Apify"
+        ],
+        "needs": "Un compte Apify, connecté dans le navigateur quand vous cliquez sur Connecter. Les exécutions utilisent les limites de votre forfait et peuvent coûter ; la doc ne décrit pas de forfait gratuit."
+      },
+      "ja": {
+        "description": "Apify の Actor（スクレイパーや自動化）を実行し、そのデータセットを読みます。Apify 公式の MCP サーバー経由です。",
+        "long": "Apify の MCP サーバーを使うと、エージェントは作業に合う Actor を探し、実行して、集めたデータを読めます。例: マーケットプレイスの商品情報を集める Actor を見つけ、データセットを返す。Actor の実行は Apify アカウントを使い、費用がかかることがあるため、先に Actor の料金を確認してください。サインインはブラウザで行い、設定にトークンは入れません。",
+        "abilities": [
+          "Actor を検索して詳細を読む",
+          "Actor を実行して結果を待つ",
+          "実行で作られたデータセットを読む",
+          "Apify のドキュメントを検索する"
+        ],
+        "needs": "Apify のアカウント。「接続」を押すとブラウザでサインインします。Actor の実行はプランの上限を使い、費用がかかることがあります（ドキュメントに無料プランの記載はありません）。"
+      },
+      "ko": {
+        "description": "Apify의 Actor(스크레이퍼와 자동화)를 실행하고 그 데이터셋을 읽습니다. Apify 공식 MCP 서버를 통해 제공됩니다.",
+        "long": "Apify MCP 서버를 쓰면 에이전트가 작업에 맞는 Actor를 찾고, 실행하고, 수집된 데이터를 읽을 수 있습니다. 예: 마켓플레이스의 상품 목록을 모으는 Actor를 찾아 데이터셋 돌려받기. Actor 실행은 Apify 계정을 쓰고 비용이 들 수 있으니 먼저 Actor 가격을 확인하세요. 로그인은 브라우저에서 하며 설정에 토큰을 넣지 않습니다.",
+        "abilities": [
+          "Actor 검색과 세부 정보 읽기",
+          "Actor 실행과 결과 대기",
+          "실행이 만든 데이터셋 읽기",
+          "Apify 문서 검색"
+        ],
+        "needs": "Apify 계정. 연결을 누르면 브라우저에서 로그인합니다. Actor 실행은 요금제 한도를 쓰며 비용이 들 수 있습니다(문서에 무료 요금제 설명은 없습니다)."
+      },
+      "pt-BR": {
+        "description": "Executar Actors da Apify (scrapers e automações) e ler seus datasets, pelo servidor MCP oficial da Apify.",
+        "long": "O servidor MCP da Apify permite que o agente encontre um Actor para uma tarefa, execute-o e leia os dados coletados. Por exemplo: achar um Actor que colete anúncios de produtos de um marketplace e devolver o dataset. Executar um Actor usa sua conta Apify e pode custar, então confira antes o preço do Actor. O login é feito no navegador; nenhum token vai na configuração.",
+        "abilities": [
+          "Buscar Actors e ler os detalhes",
+          "Executar um Actor e aguardar o resultado",
+          "Ler os datasets gerados pelas execuções",
+          "Pesquisar na documentação da Apify"
+        ],
+        "needs": "Uma conta na Apify, com login no navegador ao clicar em Conectar. As execuções usam os limites do seu plano e podem custar; a documentação não descreve um plano gratuito."
+      },
+      "zh-Hans": {
+        "description": "运行 Apify 的 Actor（爬虫与自动化任务）并读取其数据集，通过 Apify 官方 MCP 服务器提供。",
+        "long": "Apify 的 MCP 服务器让智能体为任务找到合适的 Actor、运行它，并读取收集到的数据。例如：找到一个可从电商平台收集商品列表的 Actor，并返回数据集。运行 Actor 会使用您的 Apify 账户，可能产生费用，因此请先查看 Actor 的价格。登录在浏览器中完成，令牌不写入配置。",
+        "abilities": [
+          "搜索 Actor 并查看其详情",
+          "运行 Actor 并等待结果",
+          "读取运行产生的数据集",
+          "搜索 Apify 文档"
+        ],
+        "needs": "Apify 账户：点击“连接”后在浏览器中登录。Actor 运行占用您套餐的额度，可能产生费用；文档未描述免费套餐。"
+      }
+    }
+  },
+  {
+    "id": "browserbase",
+    "name": "Browserbase",
+    "category": "web",
+    "publisher": "Browserbase",
+    "official": true,
+    "homepage": "https://www.browserbase.com",
+    "description_en": "Cloud browser sessions: open pages, click, fill forms and extract data, through Browserbase's own MCP server.",
+    "description_ru": "Облачные браузерные сессии: открыть страницу, кликнуть, заполнить форму и извлечь данные, через собственный MCP-сервер Browserbase.",
+    "long_en": "Browserbase's MCP server lets an agent start a cloud browser, go to a page, click, type, and pull out the data it needs. For example: open a supplier's price page and extract the table. The browser runs in Browserbase's cloud, not on your computer, and sessions belong to your Browserbase account.",
+    "long_ru": "MCP-сервер Browserbase позволяет агенту запустить облачный браузер, открыть страницу, кликать, вводить текст и вынимать нужные данные. Например: открыть страницу цен поставщика и извлечь таблицу. Браузер работает в облаке Browserbase, а не на вашем компьютере; сессии относятся к вашему аккаунту Browserbase.",
+    "abilities_en": [
+      "Start, reuse and close browser sessions",
+      "Navigate, click and fill forms",
+      "Observe the page and extract data",
+      "Act on a page from a plain-language instruction"
+    ],
+    "abilities_ru": [
+      "Запускать, переиспользовать и закрывать браузерные сессии",
+      "Переходить по страницам, кликать и заполнять формы",
+      "Смотреть страницу и извлекать данные",
+      "Действовать на странице по инструкции обычными словами"
+    ],
+    "needs_en": "A Browserbase account and its API key. Cloud sessions belong to that account; the docs do not describe prices or a free plan. Node.js for npx. The docs also name a Gemini key for the model used for page actions.",
+    "needs_ru": "Аккаунт Browserbase и его API-ключ. Облачные сессии относятся к этому аккаунту; цены и бесплатный тариф в доках не описаны. Node.js для npx. В доках также назван ключ Gemini для модели, которая выполняет действия на странице.",
+    "kind": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@browserbasehq/mcp@3.0.0"
+    ],
+    "env_keys": [
+      {
+        "key": "BROWSERBASE_API_KEY",
+        "label_en": "Browserbase API key",
+        "label_ru": "Ключ Browserbase API",
+        "secret": true,
+        "value_template": "{secret}"
+      },
+      {
+        "key": "GEMINI_API_KEY",
+        "label_en": "Gemini API key (model for page actions)",
+        "label_ru": "Ключ Gemini API (модель для действий на странице)",
+        "secret": true,
+        "value_template": "{secret}"
+      }
+    ],
+    "docs_url": "https://docs.browserbase.com/integrations/mcp/introduction",
+    "icon": "web",
+    "accent": "#8A8F98",
+    "l10n": {
+      "de": {
+        "description": "Browser-Sitzungen in der Cloud: Seiten öffnen, klicken, Formulare ausfüllen und Daten auslesen, über den eigenen MCP-Server von Browserbase.",
+        "long": "Der MCP-Server von Browserbase lässt den Agenten einen Cloud-Browser starten, eine Seite öffnen, klicken, tippen und die benötigten Daten herausziehen. Zum Beispiel: die Preisseite eines Lieferanten öffnen und die Tabelle auslesen. Der Browser läuft in der Cloud von Browserbase, nicht auf Ihrem Rechner; die Sitzungen gehören zu Ihrem Browserbase-Konto.",
+        "abilities": [
+          "Browser-Sitzungen starten, wiederverwenden und beenden",
+          "Navigieren, klicken und Formulare ausfüllen",
+          "Seite beobachten und Daten auslesen",
+          "Auf einer Seite nach einer Anweisung in Alltagssprache handeln"
+        ],
+        "needs": "Ein Browserbase-Konto und sein API-Schlüssel. Die Sitzungen gehören zu diesem Konto; Preise und ein kostenloser Tarif sind in der Doku nicht beschrieben. Node.js für npx. Die Doku nennt außerdem einen Gemini-Schlüssel für das Modell.",
+        "labels": {
+          "BROWSERBASE_API_KEY": "Browserbase-API-Schlüssel",
+          "GEMINI_API_KEY": "Gemini-API-Schlüssel (Modell für Aktionen)"
+        }
+      },
+      "es": {
+        "description": "Sesiones de navegador en la nube: abrir páginas, hacer clic, rellenar formularios y extraer datos, mediante el servidor MCP oficial de Browserbase.",
+        "long": "El servidor MCP de Browserbase permite al agente iniciar un navegador en la nube, abrir una página, hacer clic, escribir y extraer los datos que necesita. Por ejemplo: abrir la página de precios de un proveedor y extraer la tabla. El navegador se ejecuta en la nube de Browserbase, no en su equipo; las sesiones pertenecen a su cuenta de Browserbase.",
+        "abilities": [
+          "Iniciar, reutilizar y cerrar sesiones de navegador",
+          "Navegar, hacer clic y rellenar formularios",
+          "Observar la página y extraer datos",
+          "Actuar en una página con instrucciones en lenguaje natural"
+        ],
+        "needs": "Una cuenta de Browserbase y su clave de API. Las sesiones pertenecen a esa cuenta; la documentación no describe precios ni un plan gratuito. Node.js para npx. La documentación también menciona una clave de Gemini para el modelo.",
+        "labels": {
+          "BROWSERBASE_API_KEY": "Clave de API de Browserbase",
+          "GEMINI_API_KEY": "Clave de API de Gemini (modelo para acciones)"
+        }
+      },
+      "fr": {
+        "description": "Sessions de navigateur dans le cloud : ouvrir des pages, cliquer, remplir des formulaires et extraire des données, via le serveur MCP officiel de Browserbase.",
+        "long": "Le serveur MCP de Browserbase permet à l'agent de lancer un navigateur dans le cloud, d'ouvrir une page, de cliquer, de saisir du texte et d'extraire les données voulues. Par exemple : ouvrir la page tarifs d'un fournisseur et extraire le tableau. Le navigateur tourne dans le cloud de Browserbase, pas sur votre ordinateur ; les sessions appartiennent à votre compte Browserbase.",
+        "abilities": [
+          "Lancer, réutiliser et fermer des sessions de navigateur",
+          "Naviguer, cliquer et remplir des formulaires",
+          "Observer la page et extraire des données",
+          "Agir sur une page à partir d'une consigne en langage courant"
+        ],
+        "needs": "Un compte Browserbase et sa clé d'API. Les sessions appartiennent à ce compte ; la doc ne décrit ni prix ni forfait gratuit. Node.js pour npx. La doc mentionne aussi une clé Gemini pour le modèle.",
+        "labels": {
+          "BROWSERBASE_API_KEY": "Clé d'API Browserbase",
+          "GEMINI_API_KEY": "Clé d'API Gemini (modèle pour les actions)"
+        }
+      },
+      "ja": {
+        "description": "クラウドのブラウザセッションで、ページを開いて操作し、フォームに入力してデータを抽出します。Browserbase 公式の MCP サーバー経由です。",
+        "long": "Browserbase の MCP サーバーを使うと、エージェントはクラウドのブラウザを起動し、ページを開き、クリックや入力を行い、必要なデータを取り出せます。例: 仕入れ先の価格ページを開いて表を抽出する。ブラウザは Browserbase のクラウドで動き、お使いのコンピューターでは動きません。セッションは Browserbase アカウントに属します。",
+        "abilities": [
+          "ブラウザセッションの開始・再利用・終了",
+          "ページ移動、クリック、フォーム入力",
+          "ページを観察してデータを抽出する",
+          "自然言語の指示でページを操作する"
+        ],
+        "needs": "Browserbase のアカウントと API キー。セッションはそのアカウントに属します。料金や無料プランはドキュメントに記載がありません。npx 用の Node.js。ドキュメントでは、モデル用の Gemini キーも挙げられています。",
+        "labels": {
+          "BROWSERBASE_API_KEY": "Browserbase API キー",
+          "GEMINI_API_KEY": "Gemini API キー（ページ操作用のモデル）"
+        }
+      },
+      "ko": {
+        "description": "클라우드 브라우저 세션으로 페이지를 열고, 클릭하고, 양식을 채우고, 데이터를 추출합니다. Browserbase 공식 MCP 서버로 제공됩니다.",
+        "long": "Browserbase MCP 서버를 쓰면 에이전트가 클라우드 브라우저를 띄우고, 페이지를 열고, 클릭하고 입력해서 필요한 데이터를 뽑아낼 수 있습니다. 예: 공급업체의 가격 페이지를 열고 표 추출하기. 브라우저는 사용자 컴퓨터가 아니라 Browserbase 클라우드에서 실행되며, 세션은 Browserbase 계정에 속합니다.",
+        "abilities": [
+          "브라우저 세션 시작·재사용·종료",
+          "이동, 클릭, 양식 입력",
+          "페이지를 살펴보고 데이터 추출",
+          "자연어 지시로 페이지 조작"
+        ],
+        "needs": "Browserbase 계정과 API 키. 세션은 그 계정에 속합니다. 가격과 무료 요금제는 문서에 없습니다. npx용 Node.js. 문서에는 모델용 Gemini 키도 나와 있습니다.",
+        "labels": {
+          "BROWSERBASE_API_KEY": "Browserbase API 키",
+          "GEMINI_API_KEY": "Gemini API 키(페이지 작업용 모델)"
+        }
+      },
+      "pt-BR": {
+        "description": "Sessões de navegador na nuvem: abrir páginas, clicar, preencher formulários e extrair dados, pelo servidor MCP oficial da Browserbase.",
+        "long": "O servidor MCP da Browserbase permite que o agente inicie um navegador na nuvem, abra uma página, clique, digite e extraia os dados de que precisa. Por exemplo: abrir a página de preços de um fornecedor e extrair a tabela. O navegador roda na nuvem da Browserbase, não no seu computador; as sessões pertencem à sua conta Browserbase.",
+        "abilities": [
+          "Iniciar, reutilizar e encerrar sessões de navegador",
+          "Navegar, clicar e preencher formulários",
+          "Observar a página e extrair dados",
+          "Agir em uma página com instruções em linguagem natural"
+        ],
+        "needs": "Uma conta na Browserbase e a chave de API. As sessões pertencem a essa conta; a documentação não descreve preços nem plano gratuito. Node.js para o npx. A documentação também cita uma chave do Gemini para o modelo.",
+        "labels": {
+          "BROWSERBASE_API_KEY": "Chave de API da Browserbase",
+          "GEMINI_API_KEY": "Chave de API do Gemini (modelo para ações)"
+        }
+      },
+      "zh-Hans": {
+        "description": "云端浏览器会话：打开页面、点击、填写表单并提取数据，通过 Browserbase 官方 MCP 服务器提供。",
+        "long": "Browserbase 的 MCP 服务器让智能体启动云端浏览器、打开页面、点击、输入，并提取所需数据。例如：打开某供应商的价格页面并提取表格。浏览器在 Browserbase 云端运行，而不是在您的电脑上；会话属于您的 Browserbase 账户。",
+        "abilities": [
+          "启动、复用和关闭浏览器会话",
+          "导航、点击并填写表单",
+          "观察页面并提取数据",
+          "根据自然语言指令操作页面"
+        ],
+        "needs": "Browserbase 账户及其 API 密钥。会话属于该账户；文档未说明价格或免费套餐。npx 需要 Node.js。文档还提到用于模型的 Gemini 密钥。",
+        "labels": {
+          "BROWSERBASE_API_KEY": "Browserbase API 密钥",
+          "GEMINI_API_KEY": "Gemini API 密钥（页面操作所用模型）"
+        }
+      }
+    }
+  },
+  {
+    "id": "brightdata",
+    "name": "Bright Data",
+    "category": "web",
+    "publisher": "Bright Data",
+    "official": true,
+    "homepage": "https://brightdata.com",
+    "description_en": "Search, page scraping with unblocking and structured web data, through Bright Data's own MCP server.",
+    "description_ru": "Поиск, сбор страниц с обходом блокировок и структурированные данные из веба через собственный MCP-сервер Bright Data.",
+    "long_en": "Bright Data's MCP server gives an agent search, page scraping past blocks, and ready structured data from sites such as shops and social networks. For example: collect a product's prices from three shops. The server offers many tools; TOOLS or GROUPS limit which ones are enabled. Requests are billed by Bright Data.",
+    "long_ru": "MCP-сервер Bright Data даёт агенту поиск, сбор страниц с обходом блокировок и готовые структурированные данные с сайтов магазинов и соцсетей. Например: собрать цены на товар в трёх магазинах. Инструментов много, их можно ограничить переменными TOOLS или GROUPS. Запросы тарифицирует Bright Data.",
+    "abilities_en": [
+      "Search the web and scrape pages past blocks",
+      "Read structured data from shops and social networks",
+      "Drive a remote browser",
+      "Choose which tool groups are enabled"
+    ],
+    "abilities_ru": [
+      "Искать в вебе и собирать страницы в обход блокировок",
+      "Читать структурированные данные магазинов и соцсетей",
+      "Управлять удалённым браузером",
+      "Выбирать, какие группы инструментов включены"
+    ],
+    "needs_en": "A Bright Data account and its API token. The free tier is 5,000 requests a month; then pay as you go (per the README, $1.50 per 1,000 results and $8 per GB of browser navigation). Node.js for npx.",
+    "needs_ru": "Аккаунт Bright Data и его API-токен. Бесплатно 5 000 запросов в месяц, дальше оплата по мере использования (по README: $1,50 за 1 000 результатов и $8 за ГБ навигации в браузере). Node.js для npx.",
+    "kind": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@brightdata/mcp@2.12.0"
+    ],
+    "env_keys": [
+      {
+        "key": "API_TOKEN",
+        "label_en": "Bright Data API token",
+        "label_ru": "API-токен Bright Data",
+        "secret": true,
+        "value_template": "{secret}"
+      }
+    ],
+    "docs_url": "https://github.com/brightdata/brightdata-mcp",
+    "icon": "database",
+    "accent": "#FF6B3D",
+    "l10n": {
+      "de": {
+        "description": "Suche, Seitenabruf und strukturierte Webdaten mit Entsperrung, über den eigenen MCP-Server von Bright Data.",
+        "long": "Der MCP-Server von Bright Data gibt dem Agenten Suche, das Abrufen von Seiten mit Entsperrung und fertige strukturierte Daten von Websites wie Shops und sozialen Netzwerken. Zum Beispiel: Preise für ein Produkt in drei Shops sammeln. Der Server bietet viele Werkzeuge; mit TOOLS oder GROUPS können Sie sie einschränken. Anfragen werden von Bright Data berechnet.",
+        "abilities": [
+          "Im Web suchen und Seiten trotz Sperren abrufen",
+          "Strukturierte Daten aus Shops und sozialen Netzwerken lesen",
+          "Einen entfernten Browser steuern",
+          "Auswählen, welche Werkzeuggruppen aktiv sind"
+        ],
+        "needs": "Ein Bright-Data-Konto und sein API-Token. Kostenlos sind 5 000 Anfragen im Monat; danach Bezahlung nach Verbrauch (laut README 1,50 $ je 1 000 Ergebnisse und 8 $ je GB Browser-Navigation). Node.js für npx.",
+        "labels": {
+          "API_TOKEN": "Bright-Data-API-Token"
+        }
+      },
+      "es": {
+        "description": "Búsqueda, extracción de páginas y datos web estructurados con desbloqueo, mediante el servidor MCP oficial de Bright Data.",
+        "long": "El servidor MCP de Bright Data da al agente búsqueda, extracción de páginas con desbloqueo y datos estructurados listos de sitios como tiendas y redes sociales. Por ejemplo: reunir los precios de un producto en tres tiendas. El servidor ofrece muchas herramientas; con TOOLS o GROUPS puede limitarlas. Bright Data cobra las solicitudes.",
+        "abilities": [
+          "Buscar en la web y extraer páginas pese a los bloqueos",
+          "Leer datos estructurados de tiendas y redes sociales",
+          "Manejar un navegador remoto",
+          "Elegir qué grupos de herramientas están activos"
+        ],
+        "needs": "Una cuenta de Bright Data y su token de API. Incluye 5 000 solicitudes gratuitas al mes; después se paga según el uso (según el README, 1,50 $ por cada 1 000 resultados y 8 $ por GB de navegación). Node.js para npx.",
+        "labels": {
+          "API_TOKEN": "Token de API de Bright Data"
+        }
+      },
+      "fr": {
+        "description": "Recherche, récupération de pages et données web structurées avec déblocage, via le serveur MCP officiel de Bright Data.",
+        "long": "Le serveur MCP de Bright Data donne à l'agent la recherche, la récupération de pages avec déblocage et des données structurées prêtes à l'emploi, issues de sites comme des boutiques ou des réseaux sociaux. Par exemple : relever les prix d'un produit dans trois boutiques. Le serveur propose beaucoup d'outils ; TOOLS ou GROUPS permettent d'en limiter la liste. Les requêtes sont facturées par Bright Data.",
+        "abilities": [
+          "Chercher sur le web et récupérer des pages malgré les blocages",
+          "Lire des données structurées de boutiques et de réseaux sociaux",
+          "Piloter un navigateur distant",
+          "Choisir les groupes d'outils activés"
+        ],
+        "needs": "Un compte Bright Data et son jeton d'API. 5 000 requêtes gratuites par mois, puis paiement à l'usage (selon le README : 1,50 $ pour 1 000 résultats et 8 $ par Go de navigation). Node.js pour npx.",
+        "labels": {
+          "API_TOKEN": "Jeton d'API Bright Data"
+        }
+      },
+      "ja": {
+        "description": "ブロックを回避する Web 検索、ページ取得、構造化データを、Bright Data 公式の MCP サーバー経由で提供します。",
+        "long": "Bright Data の MCP サーバーを使うと、エージェントは検索、ブロックを回避したページ取得、ショップや SNS などのサイトから得られる構造化データを扱えます。例: 1つの商品の価格を3つのショップから集める。ツールは多いため、TOOLS や GROUPS で絞り込めます。リクエストは Bright Data が課金します。",
+        "abilities": [
+          "Web を検索し、ブロックされたページも取得する",
+          "ショップや SNS の構造化データを読む",
+          "リモートブラウザを操作する",
+          "有効にするツールグループを選ぶ"
+        ],
+        "needs": "Bright Data のアカウントと API トークン。月 5,000 リクエストまで無料で、その後は使った分だけ支払います（README より: 1,000 件の結果あたり 1.50 ドル、ブラウザ操作 1 GB あたり 8 ドル）。npx 用の Node.js。",
+        "labels": {
+          "API_TOKEN": "Bright Data API トークン"
+        }
+      },
+      "ko": {
+        "description": "차단 우회 웹 검색, 페이지 수집, 구조화된 웹 데이터를 Bright Data 공식 MCP 서버로 제공합니다.",
+        "long": "Bright Data MCP 서버를 쓰면 에이전트가 검색하고, 차단을 우회해 페이지를 가져오고, 쇼핑몰이나 소셜 네트워크의 구조화된 데이터를 바로 받을 수 있습니다. 예: 한 상품의 가격을 세 쇼핑몰에서 모으기. 도구가 많아서 TOOLS나 GROUPS로 범위를 줄일 수 있습니다. 요청은 Bright Data가 과금합니다.",
+        "abilities": [
+          "웹 검색과 차단된 페이지 수집",
+          "쇼핑몰·소셜 네트워크의 구조화된 데이터 읽기",
+          "원격 브라우저 조작",
+          "사용할 도구 그룹 고르기"
+        ],
+        "needs": "Bright Data 계정과 API 토큰. 매달 5,000건의 요청이 무료이고, 그 뒤에는 사용량만큼 지불합니다(README 기준 결과 1,000건당 1.50달러, 브라우저 탐색 1GB당 8달러). npx용 Node.js.",
+        "labels": {
+          "API_TOKEN": "Bright Data API 토큰"
+        }
+      },
+      "pt-BR": {
+        "description": "Busca, coleta de páginas e dados web estruturados com desbloqueio, pelo servidor MCP oficial da Bright Data.",
+        "long": "O servidor MCP da Bright Data dá ao agente busca, coleta de páginas com desbloqueio e dados estruturados prontos de sites como lojas e redes sociais. Por exemplo: reunir os preços de um produto em três lojas. O servidor tem muitas ferramentas; com TOOLS ou GROUPS você limita a lista. As requisições são cobradas pela Bright Data.",
+        "abilities": [
+          "Pesquisar na web e coletar páginas apesar de bloqueios",
+          "Ler dados estruturados de lojas e redes sociais",
+          "Controlar um navegador remoto",
+          "Escolher quais grupos de ferramentas ficam ativos"
+        ],
+        "needs": "Uma conta na Bright Data e o token de API. Há 5 000 requisições gratuitas por mês; depois, pagamento por uso (segundo o README, US$ 1,50 por 1 000 resultados e US$ 8 por GB de navegação). Node.js para o npx.",
+        "labels": {
+          "API_TOKEN": "Token de API da Bright Data"
+        }
+      },
+      "zh-Hans": {
+        "description": "带解锁功能的搜索、页面抓取和结构化网页数据，通过 Bright Data 官方 MCP 服务器提供。",
+        "long": "Bright Data 的 MCP 服务器让智能体进行搜索、带解锁功能的页面抓取，并直接获得店铺和社交网络等网站的结构化数据。例如：从三家店铺收集同一商品的价格。工具很多，可以用 TOOLS 或 GROUPS 进行限制。请求由 Bright Data 计费。",
+        "abilities": [
+          "搜索网页并抓取被拦截的页面",
+          "读取店铺和社交网络的结构化数据",
+          "操作远程浏览器",
+          "选择启用哪些工具组"
+        ],
+        "needs": "Bright Data 账户及其 API 令牌。每月 5,000 次请求免费，之后按用量付费（据 README：每 1,000 条结果 1.50 美元，每 GB 浏览器导航 8 美元）。npx 需要 Node.js。",
+        "labels": {
+          "API_TOKEN": "Bright Data API 令牌"
+        }
+      }
+    }
+  },
+  {
+    "id": "kagi",
+    "name": "Kagi",
+    "category": "web",
+    "publisher": "Kagi",
+    "official": true,
+    "homepage": "https://kagi.com",
+    "description_en": "Kagi search (web, news, video, images) and page extraction, through Kagi's own MCP server.",
+    "description_ru": "Поиск Kagi (веб, новости, видео, картинки) и извлечение страниц через собственный MCP-сервер Kagi.",
+    "long_en": "Kagi's MCP server lets an agent search the web with Kagi, with filters and lenses, and read a page's full text as markdown. For example: find recent news on a topic from the sources you choose and read the best article. The Kagi API is pay per use: you prepay credit, and the docs list no free credits for search.",
+    "long_ru": "MCP-сервер Kagi позволяет агенту искать через Kagi с фильтрами и линзами и читать полный текст страницы в markdown. Например: найти свежие новости по теме и прочитать лучшую статью. API Kagi оплачивается по факту использования: кредит вносится заранее, а бесплатных кредитов на поиск в доках нет.",
+    "abilities_en": [
+      "Search web, news, video, podcast and image results",
+      "Apply filters and Kagi lenses",
+      "Fetch a page's full content as markdown"
+    ],
+    "abilities_ru": [
+      "Искать веб, новости, видео, подкасты и картинки",
+      "Применять фильтры и линзы Kagi",
+      "Получать полный текст страницы в markdown"
+    ],
+    "needs_en": "A Kagi API key from the API portal. Pay per use: credit is prepaid; the docs list no free credits for search. Python with uv for uvx.",
+    "needs_ru": "Ключ Kagi API из API-портала. Оплата по факту: кредит вносится заранее; бесплатных кредитов на поиск в доках нет. Python с uv для uvx.",
+    "kind": "stdio",
+    "command": "uvx",
+    "args": [
+      "kagimcp==1.0.2"
+    ],
+    "env_keys": [
+      {
+        "key": "KAGI_API_KEY",
+        "label_en": "Kagi API key",
+        "label_ru": "Ключ Kagi API",
+        "secret": true,
+        "value_template": "{secret}"
+      }
+    ],
+    "docs_url": "https://github.com/kagisearch/kagi-mcp",
+    "icon": "kagi",
+    "accent": "#FFB000",
+    "l10n": {
+      "de": {
+        "description": "Kagi-Suche (Web, Nachrichten, Videos, Bilder) und Seitenauszug über den eigenen MCP-Server von Kagi.",
+        "long": "Der MCP-Server von Kagi lässt den Agenten mit Kagi im Web suchen, mit Filtern und Linsen, und den vollständigen Text einer Seite als Markdown lesen. Zum Beispiel: aktuelle Nachrichten zu einem Thema aus gewählten Quellen finden und den besten Artikel lesen. Die Kagi-API wird nach Verbrauch bezahlt: Sie laden Guthaben vorab auf, und die Doku nennt keine kostenlosen Credits für die Suche.",
+        "abilities": [
+          "Ergebnisse aus Web, Nachrichten, Videos, Podcasts und Bildern suchen",
+          "Filter und Kagi-Linsen anwenden",
+          "Den vollständigen Inhalt einer Seite als Markdown abrufen"
+        ],
+        "needs": "Ein Kagi-API-Schlüssel aus dem API-Portal. Bezahlung nach Verbrauch: Guthaben wird vorab aufgeladen; die Doku nennt keine kostenlosen Credits für die Suche. Python mit uv für uvx.",
+        "labels": {
+          "KAGI_API_KEY": "Kagi-API-Schlüssel"
+        }
+      },
+      "es": {
+        "description": "Búsqueda de Kagi (web, noticias, vídeo, imágenes) y extracción de páginas mediante el servidor MCP oficial de Kagi.",
+        "long": "El servidor MCP de Kagi permite al agente buscar en la web con Kagi, con filtros y lentes, y leer el texto completo de una página en markdown. Por ejemplo: encontrar noticias recientes sobre un tema en las fuentes que elija y leer el mejor artículo. La API de Kagi se paga por uso: se recarga saldo por adelantado y la documentación no menciona créditos gratuitos para la búsqueda.",
+        "abilities": [
+          "Buscar resultados de web, noticias, vídeo, podcasts e imágenes",
+          "Aplicar filtros y lentes de Kagi",
+          "Obtener el contenido completo de una página en markdown"
+        ],
+        "needs": "Una clave de la API de Kagi del portal de API. Pago por uso: el saldo se carga por adelantado; la documentación no menciona créditos gratuitos para la búsqueda. Python con uv para uvx.",
+        "labels": {
+          "KAGI_API_KEY": "Clave de la API de Kagi"
+        }
+      },
+      "fr": {
+        "description": "Recherche Kagi (web, actualités, vidéos, images) et extraction de pages via le serveur MCP officiel de Kagi.",
+        "long": "Le serveur MCP de Kagi permet à l'agent de chercher sur le web avec Kagi, avec filtres et lentilles, et de lire le texte complet d'une page en markdown. Par exemple : trouver les actualités récentes sur un sujet dans les sources de votre choix et lire le meilleur article. L'API Kagi se paie à l'usage : vous rechargez un crédit à l'avance, et la doc ne mentionne pas de crédits gratuits pour la recherche.",
+        "abilities": [
+          "Chercher des résultats web, actualités, vidéos, podcasts et images",
+          "Appliquer des filtres et des lentilles Kagi",
+          "Récupérer le contenu complet d'une page en markdown"
+        ],
+        "needs": "Une clé d'API Kagi depuis le portail API. Paiement à l'usage : crédit rechargé à l'avance ; la doc ne mentionne pas de crédits gratuits pour la recherche. Python avec uv pour uvx.",
+        "labels": {
+          "KAGI_API_KEY": "Clé d'API Kagi"
+        }
+      },
+      "ja": {
+        "description": "Kagi 検索（Web、ニュース、動画、画像）とページ抽出を、Kagi 公式の MCP サーバー経由で行えます。",
+        "long": "Kagi の MCP サーバーを使うと、エージェントはフィルターとレンズを使って Kagi で Web を検索し、ページの全文を markdown で読めます。例: 選んだ情報源からあるテーマの最新ニュースを探し、最も良い記事を読む。Kagi API は使った分だけ支払う方式で、クレジットを前払いします。ドキュメントには検索用の無料クレジットの記載はありません。",
+        "abilities": [
+          "Web、ニュース、動画、ポッドキャスト、画像の結果を検索する",
+          "フィルターと Kagi レンズを適用する",
+          "ページの全文を markdown で取得する"
+        ],
+        "needs": "Kagi API ポータルで取得した API キー。使った分だけ支払い、クレジットを前払いします。ドキュメントには検索用の無料クレジットの記載はありません。uvx 用の uv を入れた Python。",
+        "labels": {
+          "KAGI_API_KEY": "Kagi API キー"
+        }
+      },
+      "ko": {
+        "description": "Kagi 검색(웹, 뉴스, 동영상, 이미지)과 페이지 추출을 Kagi 공식 MCP 서버로 제공합니다.",
+        "long": "Kagi MCP 서버를 쓰면 에이전트가 필터와 렌즈를 적용해 Kagi로 웹을 검색하고, 페이지 전체 내용을 markdown으로 읽을 수 있습니다. 예: 고른 출처에서 주제의 최신 뉴스를 찾고 가장 좋은 기사 읽기. Kagi API는 사용량만큼 지불하며 크레딧을 미리 충전합니다. 문서에는 검색용 무료 크레딧이 없습니다.",
+        "abilities": [
+          "웹·뉴스·동영상·팟캐스트·이미지 결과 검색",
+          "필터와 Kagi 렌즈 적용",
+          "페이지 전체 내용을 markdown으로 가져오기"
+        ],
+        "needs": "Kagi API 포털에서 발급받은 API 키. 사용량만큼 지불하며 크레딧을 미리 충전합니다. 문서에는 검색용 무료 크레딧이 없습니다. uvx용 uv가 있는 Python.",
+        "labels": {
+          "KAGI_API_KEY": "Kagi API 키"
+        }
+      },
+      "pt-BR": {
+        "description": "Busca Kagi (web, notícias, vídeos, imagens) e extração de páginas pelo servidor MCP oficial da Kagi.",
+        "long": "O servidor MCP da Kagi permite que o agente pesquise na web com a Kagi, com filtros e lentes, e leia o texto completo de uma página em markdown. Por exemplo: encontrar notícias recentes sobre um tema nas fontes que você escolher e ler o melhor artigo. A API da Kagi é paga por uso: você recarrega crédito antecipadamente, e a documentação não cita créditos gratuitos para a busca.",
+        "abilities": [
+          "Buscar resultados de web, notícias, vídeos, podcasts e imagens",
+          "Aplicar filtros e lentes da Kagi",
+          "Obter o conteúdo completo de uma página em markdown"
+        ],
+        "needs": "Uma chave da API da Kagi, do portal de API. Pagamento por uso: o crédito é recarregado antecipadamente; a documentação não cita créditos gratuitos para a busca. Python com uv para o uvx.",
+        "labels": {
+          "KAGI_API_KEY": "Chave da API da Kagi"
+        }
+      },
+      "zh-Hans": {
+        "description": "Kagi 搜索（网页、新闻、视频、图片）和网页提取，通过 Kagi 官方 MCP 服务器提供。",
+        "long": "Kagi 的 MCP 服务器让智能体使用 Kagi 搜索网页（可加过滤器和镜头），并以 markdown 读取页面全文。例如：在您选定的来源中查找某主题的最新新闻，并阅读最好的一篇。Kagi API 按用量付费，需要预先充值；文档未提及搜索的免费积分。",
+        "abilities": [
+          "搜索网页、新闻、视频、播客和图片结果",
+          "应用过滤器和 Kagi 镜头",
+          "以 markdown 获取页面全文"
+        ],
+        "needs": "在 Kagi API 门户获取的 API 密钥。按用量付费，需预先充值；文档未提及搜索的免费积分。需要带 uv 的 Python 以运行 uvx。",
+        "labels": {
+          "KAGI_API_KEY": "Kagi API 密钥"
+        }
+      }
+    }
+  },
+  {
+    "id": "serpapi",
+    "name": "SerpApi",
+    "category": "web",
+    "publisher": "SerpApi",
+    "official": true,
+    "homepage": "https://serpapi.com",
+    "description_en": "Search results from Google, Bing, YouTube and other engines as JSON, through SerpApi's own MCP server.",
+    "description_ru": "Выдача Google, Bing, YouTube и других поисковиков в виде JSON через собственный MCP-сервер SerpApi.",
+    "long_en": "SerpApi's MCP server lets an agent run a search on any supported engine and get the results as structured JSON. For example: check where a product ranks in Google Shopping results. Each search uses your SerpApi plan's quota; the docs list a free plan of 250 searches a month.",
+    "long_ru": "MCP-сервер SerpApi позволяет агенту выполнить поиск в любом поддерживаемом поисковике и получить выдачу в виде структурированного JSON. Например: проверить, на каком месте товар в выдаче Google Shopping. Каждый поиск расходует лимит тарифа SerpApi; в доках указан бесплатный тариф на 250 поисков в месяц.",
+    "abilities_en": [
+      "Search Google and other supported engines",
+      "Return results as structured JSON",
+      "Read the list of engines and their parameters"
+    ],
+    "abilities_ru": [
+      "Искать в Google и других поддерживаемых поисковиках",
+      "Возвращать результаты в виде структурированного JSON",
+      "Читать список поисковиков и их параметры"
+    ],
+    "needs_en": "A SerpApi API key. The free plan includes 250 searches a month; more searches need a paid plan.",
+    "needs_ru": "Ключ SerpApi API. Бесплатный тариф: 250 поисков в месяц; больше — платные тарифы.",
+    "kind": "http",
+    "url": "https://mcp.serpapi.com/mcp",
+    "headers_keys": [
+      {
+        "key": "Authorization",
+        "label_en": "SerpApi API key",
+        "label_ru": "Ключ SerpApi API",
+        "secret": true,
+        "value_template": "Bearer {secret}"
+      }
+    ],
+    "docs_url": "https://serpapi.com/mcp",
+    "icon": "search",
+    "accent": "#5B7CFA",
+    "l10n": {
+      "de": {
+        "description": "Suchergebnisse von Google, Bing, YouTube und weiteren Suchmaschinen als JSON, über den eigenen MCP-Server von SerpApi.",
+        "long": "Der MCP-Server von SerpApi lässt den Agenten eine Suche in jeder unterstützten Suchmaschine ausführen und die Ergebnisse als strukturiertes JSON erhalten. Zum Beispiel: prüfen, auf welchem Platz ein Produkt in den Google-Shopping-Ergebnissen steht. Jede Suche verbraucht ein Kontingent Ihres SerpApi-Tarifs; laut Doku gibt es einen kostenlosen Tarif mit 250 Suchen im Monat.",
+        "abilities": [
+          "Google und weitere unterstützte Suchmaschinen durchsuchen",
+          "Ergebnisse als strukturiertes JSON zurückgeben",
+          "Die Liste der Suchmaschinen und ihre Parameter lesen"
+        ],
+        "needs": "Ein SerpApi-API-Schlüssel. Der kostenlose Tarif umfasst 250 Suchen im Monat; mehr gibt es in den kostenpflichtigen Tarifen.",
+        "labels": {
+          "Authorization": "SerpApi-API-Schlüssel"
+        }
+      },
+      "es": {
+        "description": "Resultados de búsqueda de Google, Bing, YouTube y otros buscadores en JSON, mediante el servidor MCP oficial de SerpApi.",
+        "long": "El servidor MCP de SerpApi permite al agente hacer una búsqueda en cualquier buscador compatible y recibir los resultados como JSON estructurado. Por ejemplo: comprobar en qué posición aparece un producto en los resultados de Google Shopping. Cada búsqueda consume el cupo de su plan de SerpApi; según la documentación, hay un plan gratuito de 250 búsquedas al mes.",
+        "abilities": [
+          "Buscar en Google y otros buscadores compatibles",
+          "Devolver los resultados como JSON estructurado",
+          "Leer la lista de buscadores y sus parámetros"
+        ],
+        "needs": "Una clave de la API de SerpApi. El plan gratuito incluye 250 búsquedas al mes; para más búsquedas hay planes de pago.",
+        "labels": {
+          "Authorization": "Clave de la API de SerpApi"
+        }
+      },
+      "fr": {
+        "description": "Résultats de recherche de Google, Bing, YouTube et d'autres moteurs au format JSON, via le serveur MCP officiel de SerpApi.",
+        "long": "Le serveur MCP de SerpApi permet à l'agent de lancer une recherche sur n'importe quel moteur pris en charge et de recevoir les résultats en JSON structuré. Par exemple : vérifier à quelle place un produit apparaît dans Google Shopping. Chaque recherche consomme le quota de votre forfait SerpApi ; selon la doc, il existe un forfait gratuit de 250 recherches par mois.",
+        "abilities": [
+          "Chercher sur Google et d'autres moteurs pris en charge",
+          "Renvoyer les résultats en JSON structuré",
+          "Lire la liste des moteurs et leurs paramètres"
+        ],
+        "needs": "Une clé d'API SerpApi. Le forfait gratuit comprend 250 recherches par mois ; au-delà, il y a des forfaits payants.",
+        "labels": {
+          "Authorization": "Clé d'API SerpApi"
+        }
+      },
+      "ja": {
+        "description": "Google、Bing、YouTube などの検索結果を JSON で、SerpApi 公式の MCP サーバー経由で取得します。",
+        "long": "SerpApi の MCP サーバーを使うと、エージェントは対応する任意の検索エンジンで検索し、結果を構造化された JSON で受け取れます。例: Google ショッピングの結果で商品が何位に出ているか確認する。検索ごとに SerpApi プランの利用枠を消費します。ドキュメントによると、月 250 回の検索が無料プランに含まれます。",
+        "abilities": [
+          "Google などの対応する検索エンジンを検索する",
+          "結果を構造化された JSON で返す",
+          "検索エンジンの一覧とパラメーターを読む"
+        ],
+        "needs": "SerpApi の API キー。無料プランは月 250 回の検索を含みます。それ以上は有料プランです。",
+        "labels": {
+          "Authorization": "SerpApi API キー"
+        }
+      },
+      "ko": {
+        "description": "Google, Bing, YouTube 등 검색 엔진의 결과를 JSON으로 제공합니다. SerpApi 공식 MCP 서버로 제공됩니다.",
+        "long": "SerpApi MCP 서버를 쓰면 에이전트가 지원되는 검색 엔진 중 아무 곳에서나 검색하고 결과를 구조화된 JSON으로 받을 수 있습니다. 예: Google 쇼핑 결과에서 상품이 몇 위에 나오는지 확인. 검색마다 SerpApi 요금제의 사용량을 씁니다. 문서에 따르면 월 250회 검색이 무료 요금제에 포함됩니다.",
+        "abilities": [
+          "Google 등 지원되는 검색 엔진 검색",
+          "결과를 구조화된 JSON으로 반환",
+          "검색 엔진 목록과 매개변수 읽기"
+        ],
+        "needs": "SerpApi API 키. 무료 요금제는 월 250회 검색을 포함하며, 그 이상은 유료 요금제입니다.",
+        "labels": {
+          "Authorization": "SerpApi API 키"
+        }
+      },
+      "pt-BR": {
+        "description": "Resultados de busca do Google, Bing, YouTube e outros buscadores em JSON, pelo servidor MCP oficial da SerpApi.",
+        "long": "O servidor MCP da SerpApi permite que o agente faça uma busca em qualquer buscador compatível e receba os resultados como JSON estruturado. Por exemplo: verificar em que posição um produto aparece no Google Shopping. Cada busca usa a cota do seu plano da SerpApi; segundo a documentação, há um plano gratuito de 250 buscas por mês.",
+        "abilities": [
+          "Pesquisar no Google e em outros buscadores compatíveis",
+          "Devolver os resultados como JSON estruturado",
+          "Ler a lista de buscadores e seus parâmetros"
+        ],
+        "needs": "Uma chave da API da SerpApi. O plano gratuito inclui 250 buscas por mês; para mais, há planos pagos.",
+        "labels": {
+          "Authorization": "Chave da API da SerpApi"
+        }
+      },
+      "zh-Hans": {
+        "description": "以 JSON 形式返回 Google、Bing、YouTube 等搜索引擎的结果，通过 SerpApi 官方 MCP 服务器提供。",
+        "long": "SerpApi 的 MCP 服务器让智能体在任一受支持的搜索引擎上执行搜索，并以结构化 JSON 获取结果。例如：查看某商品在 Google 购物结果中排第几。每次搜索都会占用您 SerpApi 套餐的额度；据文档，免费套餐每月包含 250 次搜索。",
+        "abilities": [
+          "搜索 Google 及其他受支持的搜索引擎",
+          "以结构化 JSON 返回结果",
+          "读取搜索引擎列表及其参数"
+        ],
+        "needs": "SerpApi API 密钥。免费套餐每月包含 250 次搜索；更多搜索需要付费套餐。",
+        "labels": {
+          "Authorization": "SerpApi API 密钥"
+        }
+      }
+    }
+  },
+  {
+    "id": "alpha-vantage",
+    "name": "Alpha Vantage",
+    "category": "data",
+    "publisher": "Alpha Vantage",
+    "official": true,
+    "homepage": "https://www.alphavantage.co",
+    "description_en": "Stock quotes, company fundamentals and economic data, read-only, through Alpha Vantage's own MCP server.",
+    "description_ru": "Котировки акций, фундаментальные данные компаний и экономическая статистика только для чтения через собственный MCP-сервер Alpha Vantage.",
+    "long_en": "Alpha Vantage's MCP server lets an agent read market data: quotes, time series, company fundamentals and economic indicators. For example: compare two companies' revenue over five years. It is read-only: the sign-in grants only the alphavantage:read scope, so nothing can be traded or changed through it.",
+    "long_ru": "MCP-сервер Alpha Vantage позволяет агенту читать рыночные данные: котировки, временные ряды, фундаментальные показатели компаний и экономические индикаторы. Например: сравнить выручку двух компаний за пять лет. Сервер только для чтения: вход выдаёт только право alphavantage:read, торговать или что-то менять через него нельзя.",
+    "abilities_en": [
+      "Get stock quotes and time series",
+      "Read company fundamentals",
+      "Read economic indicators",
+      "Read only: no trading, no changes"
+    ],
+    "abilities_ru": [
+      "Получать котировки и временные ряды",
+      "Читать фундаментальные показатели компаний",
+      "Читать экономические индикаторы",
+      "Только чтение: без торговли и изменений"
+    ],
+    "needs_en": "A free Alpha Vantage account and API key, signed in through the browser when you press Connect.",
+    "needs_ru": "Бесплатный аккаунт и ключ Alpha Vantage: войдите в браузере после нажатия «Подключить».",
+    "kind": "http",
+    "url": "https://mcp.alphavantage.co/mcp",
+    "auth": "oauth",
+    "docs_url": "https://mcp.alphavantage.co/",
+    "icon": "database",
+    "accent": "#3B82C4",
+    "l10n": {
+      "de": {
+        "description": "Aktienkurse, Unternehmenskennzahlen und Wirtschaftsdaten zum Lesen über den eigenen MCP-Server von Alpha Vantage (nur Lesen).",
+        "long": "Der MCP-Server von Alpha Vantage lässt den Agenten Marktdaten lesen: Kurse, Zeitreihen, Unternehmenskennzahlen und Wirtschaftsindikatoren. Zum Beispiel: den Umsatz zweier Unternehmen über fünf Jahre vergleichen. Der Server ist nur zum Lesen da: Die Anmeldung gewährt nur das Recht alphavantage:read, über ihn kann nicht gehandelt und nichts geändert werden.",
+        "abilities": [
+          "Aktienkurse und Zeitreihen abrufen",
+          "Unternehmenskennzahlen lesen",
+          "Wirtschaftsindikatoren lesen",
+          "Nur lesen: kein Handel, keine Änderungen"
+        ],
+        "needs": "Ein kostenloses Alpha-Vantage-Konto mit API-Schlüssel; Sie melden sich nach dem Klick auf „Verbinden“ im Browser an."
+      },
+      "es": {
+        "description": "Cotizaciones bursátiles, datos fundamentales de empresas y datos económicos de solo lectura, mediante el servidor MCP oficial de Alpha Vantage.",
+        "long": "El servidor MCP de Alpha Vantage permite al agente leer datos de mercado: cotizaciones, series temporales, datos fundamentales de empresas e indicadores económicos. Por ejemplo: comparar los ingresos de dos empresas en cinco años. Es solo de lectura: el inicio de sesión concede únicamente el permiso alphavantage:read, así que no se puede operar ni cambiar nada a través de él.",
+        "abilities": [
+          "Obtener cotizaciones y series temporales",
+          "Leer datos fundamentales de empresas",
+          "Leer indicadores económicos",
+          "Solo lectura: sin operaciones ni cambios"
+        ],
+        "needs": "Una cuenta gratuita y una clave de API de Alpha Vantage; inicie sesión en el navegador al pulsar Conectar."
+      },
+      "fr": {
+        "description": "Cours de bourse, données fondamentales d'entreprises et statistiques économiques en lecture seule, via le serveur MCP officiel d'Alpha Vantage.",
+        "long": "Le serveur MCP d'Alpha Vantage permet à l'agent de lire des données de marché : cours, séries temporelles, données fondamentales d'entreprises et indicateurs économiques. Par exemple : comparer le chiffre d'affaires de deux entreprises sur cinq ans. Le serveur est en lecture seule : la connexion n'accorde que le droit alphavantage:read ; on ne peut ni trader ni rien modifier par son intermédiaire.",
+        "abilities": [
+          "Obtenir des cours et des séries temporelles",
+          "Lire les données fondamentales des entreprises",
+          "Lire les indicateurs économiques",
+          "Lecture seule : pas de trading, pas de modification"
+        ],
+        "needs": "Un compte Alpha Vantage gratuit avec sa clé d'API ; connectez-vous dans le navigateur après avoir cliqué sur Connecter."
+      },
+      "ja": {
+        "description": "株価、企業の財務データ、経済統計を読み取り専用で、Alpha Vantage 公式の MCP サーバー経由で取得します。",
+        "long": "Alpha Vantage の MCP サーバーを使うと、エージェントは相場データを読めます。株価、時系列、企業の財務指標、経済指標です。例: 2社の売上を5年分比較する。読み取り専用で、サインインで与えられるのは alphavantage:read の権限だけです。このサーバーでは売買も変更もできません。",
+        "abilities": [
+          "株価と時系列を取得する",
+          "企業の財務指標を読む",
+          "経済指標を読む",
+          "読み取りのみ: 売買や変更はできない"
+        ],
+        "needs": "無料の Alpha Vantage アカウントと API キー。「接続」を押すとブラウザでサインインします。"
+      },
+      "ko": {
+        "description": "주가, 기업 재무 지표, 경제 데이터를 읽기 전용으로 Alpha Vantage 공식 MCP 서버를 통해 제공합니다.",
+        "long": "Alpha Vantage MCP 서버를 쓰면 에이전트가 시세, 시계열, 기업 재무 지표, 경제 지표 같은 시장 데이터를 읽을 수 있습니다. 예: 두 회사의 5년 매출 비교. 읽기 전용이며, 로그인으로 주어지는 권한은 alphavantage:read뿐이라 이 서버로 거래하거나 아무것도 바꿀 수 없습니다.",
+        "abilities": [
+          "시세와 시계열 가져오기",
+          "기업 재무 지표 읽기",
+          "경제 지표 읽기",
+          "읽기 전용: 거래나 변경 불가"
+        ],
+        "needs": "무료 Alpha Vantage 계정과 API 키. 연결을 누르면 브라우저에서 로그인합니다."
+      },
+      "pt-BR": {
+        "description": "Cotações, dados fundamentalistas de empresas e dados econômicos só de leitura, pelo servidor MCP oficial da Alpha Vantage.",
+        "long": "O servidor MCP da Alpha Vantage permite que o agente leia dados de mercado: cotações, séries temporais, indicadores fundamentalistas de empresas e indicadores econômicos. Por exemplo: comparar a receita de duas empresas em cinco anos. É somente leitura: o login concede apenas a permissão alphavantage:read, então não é possível operar nem alterar nada por ele.",
+        "abilities": [
+          "Obter cotações e séries temporais",
+          "Ler indicadores fundamentalistas de empresas",
+          "Ler indicadores econômicos",
+          "Somente leitura: sem operações nem alterações"
+        ],
+        "needs": "Uma conta gratuita na Alpha Vantage com chave de API; entre no navegador ao clicar em Conectar."
+      },
+      "zh-Hans": {
+        "description": "股票行情、公司基本面数据和经济数据（仅读取），通过 Alpha Vantage 官方 MCP 服务器提供。",
+        "long": "Alpha Vantage 的 MCP 服务器让智能体读取市场数据：行情、时间序列、公司基本面指标和经济指标。例如：比较两家公司五年的营收。服务器只读：登录仅授予 alphavantage:read 权限，无法通过它交易或修改任何内容。",
+        "abilities": [
+          "获取行情和时间序列",
+          "读取公司基本面指标",
+          "读取经济指标",
+          "仅读取：不能交易，也不能修改"
+        ],
+        "needs": "免费的 Alpha Vantage 账户和 API 密钥：点击“连接”后在浏览器中登录。"
+      }
+    }
+  },
+  {
+    "id": "openweather",
+    "name": "OpenWeather",
+    "category": "data",
+    "publisher": "OpenWeather",
+    "official": true,
+    "homepage": "https://openweathermap.org",
+    "description_en": "Current weather, forecasts and history through OpenWeather's own MCP server; three tools work without a key.",
+    "description_ru": "Текущая погода, прогнозы и история через собственный MCP-сервер OpenWeather; три инструмента работают без ключа.",
+    "long_en": "OpenWeather's MCP server lets an agent browse the weather product catalogue and fetch data for a place and a time. For example: the forecast for a city for the next three days. Without a key the agent can list products, read one product's details and sign up; fetching data needs a data key. One Call gives 1,000 free credits a day; other data is paid from purchased credits.",
+    "long_ru": "MCP-сервер OpenWeather позволяет агенту смотреть каталог погодных продуктов и получать данные по месту и времени. Например: прогноз для города на три дня. Без ключа доступны список продуктов, описание продукта и регистрация; для получения данных нужен ключ данных. One Call даёт 1 000 бесплатных кредитов в сутки; остальные данные оплачиваются купленными кредитами.",
+    "abilities_en": [
+      "List weather products and their parameters",
+      "Fetch current weather, forecasts and history",
+      "Create an account from the agent"
+    ],
+    "abilities_ru": [
+      "Показывать погодные продукты и их параметры",
+      "Получать текущую погоду, прогнозы и историю",
+      "Регистрировать аккаунт из агента"
+    ],
+    "needs_en": "Nothing to start: three tools work without a key. For data, a data key from an OpenWeather account (the sign_up tool creates one and accepts the Terms; the key is shown once). One Call: 1,000 free credits a day; the rest is paid.",
+    "needs_ru": "Чтобы начать, ничего не нужно: три инструмента работают без ключа. Для данных нужен ключ данных аккаунта OpenWeather (инструмент sign_up создаёт аккаунт и принимает условия; ключ показывается один раз). One Call — 1 000 бесплатных кредитов в сутки, остальное платно.",
+    "kind": "http",
+    "url": "https://mcp.openweathermap.org/mcp",
+    "headers_keys": [
+      {
+        "key": "Authorization",
+        "label_en": "Data key (optional)",
+        "label_ru": "Ключ данных (необязательно)",
+        "secret": true,
+        "value_template": "Bearer {secret}"
+      }
+    ],
+    "docs_url": "https://mcp.openweathermap.org/",
+    "icon": "cloud",
+    "accent": "#EB6E4B",
+    "l10n": {
+      "de": {
+        "description": "Aktuelles Wetter, Vorhersagen und Verlauf über den eigenen MCP-Server von OpenWeather; drei Werkzeuge funktionieren ohne Schlüssel.",
+        "long": "Der MCP-Server von OpenWeather lässt den Agenten den Katalog der Wetterprodukte durchsehen und Daten für einen Ort und eine Zeit abrufen. Zum Beispiel: die Vorhersage für eine Stadt für die nächsten drei Tage. Ohne Schlüssel kann der Agent den Katalog, die Angaben zu einem Produkt und die Anmeldung nutzen; für Daten braucht es einen Datenschlüssel. One Call gibt täglich 1 000 kostenlose Credits; andere Daten werden aus gekauften Credits bezahlt.",
+        "abilities": [
+          "Wetterprodukte und ihre Parameter auflisten",
+          "Aktuelles Wetter, Vorhersagen und Verlauf abrufen",
+          "Ein Konto aus dem Agenten heraus anlegen"
+        ],
+        "needs": "Zum Start nichts: drei Werkzeuge funktionieren ohne Schlüssel. Für Daten ein Datenschlüssel aus einem OpenWeather-Konto (das Werkzeug sign_up legt ein Konto an und akzeptiert die Bedingungen; der Schlüssel wird nur einmal angezeigt). One Call: 1 000 kostenlose Credits pro Tag, der Rest ist kostenpflichtig.",
+        "labels": {
+          "Authorization": "Datenschlüssel (optional)"
+        }
+      },
+      "es": {
+        "description": "Tiempo actual, previsiones e historial mediante el servidor MCP oficial de OpenWeather; tres herramientas funcionan sin clave.",
+        "long": "El servidor MCP de OpenWeather permite al agente consultar el catálogo de productos meteorológicos y obtener datos para un lugar y un momento. Por ejemplo: la previsión de una ciudad para los próximos tres días. Sin clave, el agente puede ver el catálogo, los detalles de un producto y registrarse; para obtener datos hace falta una clave de datos. One Call da 1 000 créditos gratuitos al día; el resto de datos se paga con créditos comprados.",
+        "abilities": [
+          "Listar productos meteorológicos y sus parámetros",
+          "Obtener tiempo actual, previsiones e historial",
+          "Crear una cuenta desde el agente"
+        ],
+        "needs": "Para empezar no hace falta nada: tres herramientas funcionan sin clave. Para datos, una clave de datos de una cuenta de OpenWeather (la herramienta sign_up crea la cuenta y acepta las condiciones; la clave se muestra una sola vez). One Call: 1 000 créditos gratuitos al día; el resto es de pago.",
+        "labels": {
+          "Authorization": "Clave de datos (opcional)"
+        }
+      },
+      "fr": {
+        "description": "Météo actuelle, prévisions et historique via le serveur MCP officiel d'OpenWeather ; trois outils fonctionnent sans clé.",
+        "long": "Le serveur MCP d'OpenWeather permet à l'agent de consulter le catalogue des produits météo et d'obtenir des données pour un lieu et un moment. Par exemple : la prévision pour une ville sur les trois prochains jours. Sans clé, l'agent peut lister le catalogue, lire le détail d'un produit et s'inscrire ; il faut une clé de données pour obtenir des données. One Call donne 1 000 crédits gratuits par jour ; les autres données se paient avec des crédits achetés.",
+        "abilities": [
+          "Lister les produits météo et leurs paramètres",
+          "Obtenir la météo actuelle, les prévisions et l'historique",
+          "Créer un compte depuis l'agent"
+        ],
+        "needs": "Rien n'est requis pour commencer : trois outils fonctionnent sans clé. Pour les données, une clé de données d'un compte OpenWeather (l'outil sign_up crée le compte et accepte les conditions ; la clé n'est affichée qu'une fois). One Call : 1 000 crédits gratuits par jour, le reste est payant.",
+        "labels": {
+          "Authorization": "Clé de données (facultative)"
+        }
+      },
+      "ja": {
+        "description": "OpenWeather 公式の MCP サーバー経由で、現在の天気、予報、履歴を取得します。キーなしで使えるツールが3つあります。",
+        "long": "OpenWeather の MCP サーバーを使うと、エージェントは気象製品の一覧を確認し、場所と時刻を指定してデータを取得できます。例: ある都市の今後3日間の予報。キーがなくても、一覧の確認、製品の詳細の確認、アカウント登録はできます。データの取得にはデータキーが必要です。One Call は毎日 1,000 の無料クレジットがあり、他のデータは購入したクレジットで支払います。",
+        "abilities": [
+          "気象製品と必要なパラメーターを一覧表示する",
+          "現在の天気、予報、履歴を取得する",
+          "エージェントからアカウントを作成する"
+        ],
+        "needs": "開始に必要なものはありません。キーなしで使えるツールが3つあります。データ取得には OpenWeather アカウントのデータキーが必要です（sign_up ツールがアカウントを作成し、利用規約に同意します。キーは一度だけ表示されます）。One Call は毎日 1,000 の無料クレジット、それ以外は有料です。",
+        "labels": {
+          "Authorization": "データキー（任意）"
+        }
+      },
+      "ko": {
+        "description": "OpenWeather 공식 MCP 서버로 현재 날씨, 예보, 기록을 제공합니다. 키 없이 쓸 수 있는 도구가 세 개 있습니다.",
+        "long": "OpenWeather MCP 서버를 쓰면 에이전트가 날씨 상품 목록을 보고, 장소와 시간을 지정해 데이터를 가져올 수 있습니다. 예: 도시의 향후 3일 예보. 키 없이도 상품 목록 보기, 상품 세부 정보 보기, 계정 등록은 가능합니다. 데이터를 가져오려면 데이터 키가 필요합니다. One Call은 매일 1,000 무료 크레딧이 있고, 나머지 데이터는 구매한 크레딧으로 결제합니다.",
+        "abilities": [
+          "날씨 상품과 매개변수 목록 보기",
+          "현재 날씨·예보·기록 가져오기",
+          "에이전트에서 계정 만들기"
+        ],
+        "needs": "시작에 필요한 것은 없습니다. 키 없이 쓸 수 있는 도구가 세 개 있습니다. 데이터에는 OpenWeather 계정의 데이터 키가 필요합니다(sign_up 도구가 계정을 만들고 이용약관에 동의하며, 키는 한 번만 표시됩니다). One Call은 매일 1,000 무료 크레딧, 나머지는 유료입니다.",
+        "labels": {
+          "Authorization": "데이터 키(선택)"
+        }
+      },
+      "pt-BR": {
+        "description": "Tempo atual, previsões e histórico pelo servidor MCP oficial da OpenWeather; três ferramentas funcionam sem chave.",
+        "long": "O servidor MCP da OpenWeather permite que o agente consulte o catálogo de produtos de clima e obtenha dados para um lugar e um horário. Por exemplo: a previsão de uma cidade para os próximos três dias. Sem chave, o agente pode listar o catálogo, ver os detalhes de um produto e criar conta; para obter dados é preciso uma chave de dados. O One Call dá 1 000 créditos gratuitos por dia; os demais dados são pagos com créditos comprados.",
+        "abilities": [
+          "Listar produtos de clima e seus parâmetros",
+          "Obter o tempo atual, previsões e histórico",
+          "Criar uma conta a partir do agente"
+        ],
+        "needs": "Para começar não é preciso nada: três ferramentas funcionam sem chave. Para dados, uma chave de dados de uma conta OpenWeather (a ferramenta sign_up cria a conta e aceita os termos; a chave aparece uma única vez). One Call: 1 000 créditos gratuitos por dia; o resto é pago.",
+        "labels": {
+          "Authorization": "Chave de dados (opcional)"
+        }
+      },
+      "zh-Hans": {
+        "description": "通过 OpenWeather 官方 MCP 服务器获取当前天气、预报和历史数据；三个工具无需密钥即可使用。",
+        "long": "OpenWeather 的 MCP 服务器让智能体查看天气产品目录，并按地点和时间获取数据。例如：某城市未来三天的预报。无需密钥即可查看目录、查看产品详情并注册账户；获取数据则需要数据密钥。One Call 每天提供 1,000 免费积分，其他数据用购买的积分付费。",
+        "abilities": [
+          "列出天气产品及其参数",
+          "获取当前天气、预报和历史数据",
+          "由智能体注册账户"
+        ],
+        "needs": "开始无需任何东西：三个工具无需密钥即可使用。获取数据需要 OpenWeather 账户的数据密钥（sign_up 工具会创建账户并接受条款，密钥只显示一次）。One Call 每天 1,000 免费积分，其余付费。",
+        "labels": {
+          "Authorization": "数据密钥（可选）"
+        }
+      }
+    }
   }
 ]
