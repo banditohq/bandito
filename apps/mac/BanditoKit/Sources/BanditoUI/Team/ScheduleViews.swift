@@ -3,13 +3,6 @@ import BanditoKit
 import BanditoL10n
 import SwiftUI
 
-/// What the schedule sheet was opened for: a new schedule, or an existing one.
-struct ScheduleTarget: Identifiable {
-    var schedule: Schedule?
-
-    var id: String { schedule.map { "edit-\($0.id)" } ?? "new" }
-}
-
 /// One schedule in the details tab: its name and when it runs next, the switch, run now, and edit or delete.
 struct ScheduleRow: View {
     var schedule: Schedule
@@ -128,19 +121,32 @@ struct ScheduleEditor: View {
         _form = State(initialValue: start)
     }
 
+    /// Whether «Добавить» / «Сохранить» may run: the form is complete and not too often, and nothing is saving.
+    private var canSubmit: Bool {
+        !busy && form.canSave && !form.tooOften(now: Date())
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 16) {
             Text(existing == nil ? L10n.Schedule.newTitle : L10n.Schedule.editTitle)
-                .font(BanditoFont.font(size: 16, weight: 650))
+                .font(BanditoFont.font(size: 20, weight: 650))
                 .foregroundStyle(Color.Bandito.text)
             field(L10n.Schedule.name, hint: L10n.Schedule.titleHint) {
                 TextField(L10n.Schedule.namePlaceholder, text: $form.title)
                     .textFieldStyle(.roundedBorder)
+                    // Return in the name adds the schedule, when it can be added.
+                    .onSubmit { if canSubmit { save() } }
             }
             field(L10n.Schedule.repeat) {
-                SegmentedPicker(
+                // One menu for the five choices: a row of segments does not fit 432 pt.
+                BanditoSelect(
                     selection: $form.rhythm,
-                    options: ScheduleForm.Rhythm.allCases.map { ($0, Self.rhythmTitle($0)) })
+                    sections: [
+                        SelectSection(options: ScheduleForm.Rhythm.allCases.map { rhythm in
+                            SelectOption(value: rhythm, title: Self.rhythmTitle(rhythm))
+                        })
+                    ],
+                    label: L10n.Schedule.repeat, placeholder: Self.rhythmTitle(form.rhythm))
             }
             rhythmDetails
             field(L10n.Inspector.promptLabel) {
@@ -166,19 +172,23 @@ struct ScheduleEditor: View {
             if let error {
                 UserFacingErrorView(message: error)
             }
-            HStack {
+            HStack(spacing: 10) {
                 Spacer()
                 Button(L10n.Common.cancel) { dismiss() }
                     .banditoButton(.quiet())
                     .fixedSize()
+                // Enter adds it, when the form is valid (a disabled button takes no Return).
                 Button(existing == nil ? L10n.Inspector.addSchedule : L10n.Common.save) { save() }
                     .banditoButton(.signal())
-                    .disabled(busy || !form.canSave || form.tooOften(now: Date()))
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(!canSubmit)
                     .fixedSize()
             }
+            .padding(.top, 4)
         }
-        .padding(20)
-        .frame(width: 460)
+        .padding(24)
+        .frame(width: 480)
+        .background(Color.Bandito.surface2)
     }
 
     @ViewBuilder
@@ -223,7 +233,8 @@ struct ScheduleEditor: View {
     private var timePicker: some View {
         DatePicker("", selection: timeBinding, displayedComponents: .hourAndMinute)
             .labelsHidden()
-            .frame(maxWidth: 140, alignment: .leading)
+            .fixedSize()
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// The hour and minute of the form, as a date for the picker.
