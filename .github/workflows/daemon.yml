@@ -4,7 +4,9 @@ on:
   pull_request:
     paths: ["daemon/**", ".github/workflows/daemon.yml"]
   push:
-    branches: [main]
+    # main, release branches and the branches agents work on: a pushed branch is tested in the cloud, so a change is
+    # checked in full without building it on a laptop.
+    branches: [main, "release/**", "wt*/**"]
     paths: ["daemon/**", ".github/workflows/daemon.yml"]
   # macOS-specific code (the agents' sandbox, "This Mac") runs every night and on main; PRs test on Linux,
   # where runners are plentiful, and locally on a Mac through .claude/verify.sh before they are sent.
@@ -15,7 +17,7 @@ on:
 # A newer push to the same PR or branch cancels the run for the older one.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read
