@@ -314,8 +314,24 @@ enum TeamTime {
 /// What the sidebar says about an agent's last message. The loaded thread wins when it has a message, else the
 /// daemon's `last_message` (the thread is not loaded until the agent is opened).
 public enum AgentPreview {
+    /// The last message as one plain line for a list row (see `plainLine`). Nil when there is no text to show.
     public static func text(thread: AgentThread, agent: Agent) -> String? {
-        thread.lastMessageText ?? agent.lastMessage?.text
+        (thread.lastMessageText ?? agent.lastMessage?.text).flatMap(plainLine)
+    }
+
+    /// Turns a Markdown message into one plain line: `[text](url)` keeps its text, the emphasis (`**`, `__`, `~~`) and
+    /// code (`` ` ``) marks go, a heading `#`, a quote `>` and a list marker (`-`, `*`, `+`, `1.`) at a line start
+    /// go, and every line break becomes a space. Nil when nothing is left.
+    public static func plainLine(_ markdown: String) -> String? {
+        var text = markdown.replacingOccurrences(of: "```", with: "")
+        text = text.replacingOccurrences(of: #"!?\[([^\]]*)\]\([^)]*\)"#, with: "$1", options: .regularExpression)
+        text = text.replacingOccurrences(of: #"\*\*|__|~~"#, with: "", options: .regularExpression)
+        text = text.replacingOccurrences(of: "`", with: "")
+        text = text.replacingOccurrences(
+            of: #"(?m)^[ \t]*(#{1,6}[ \t]+|>[ \t]?|[-*+][ \t]+|\d+[.)][ \t]+)"#, with: "", options: .regularExpression)
+        text = text.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+        let line = text.trimmingCharacters(in: .whitespaces)
+        return line.isEmpty ? nil : line
     }
 
     /// The time shown on the row: the newest of the thread's last event and the daemon's last message. Without
