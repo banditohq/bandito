@@ -209,7 +209,7 @@
 			<key>NSStringFormatValueTypeKey</key>
 			<string>lld</string>
 			<key>other</key>
-			<string>에이전트 %1$lld개가 확인을 기다립니다</string>
+			<string>에이전트 %1$lld개가 확인을 기다려요</string>
 		</dict>
 	</dict>
 	<key>onboarding.server.minutes</key>

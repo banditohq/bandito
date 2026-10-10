@@ -209,7 +209,7 @@
 			<key>NSStringFormatValueTypeKey</key>
 			<string>lld</string>
 			<key>other</key>
-			<string>%1$lld 个智能体需要你处理</string>
+			<string>%1$lld 个智能体需要处理</string>
 		</dict>
 	</dict>
 	<key>onboarding.server.minutes</key>

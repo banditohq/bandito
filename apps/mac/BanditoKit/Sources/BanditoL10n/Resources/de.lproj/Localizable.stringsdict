@@ -233,9 +233,9 @@
 			<key>NSStringFormatValueTypeKey</key>
 			<string>lld</string>
 			<key>one</key>
-			<string>%1$lld Agent wartet auf dich</string>
+			<string>%1$lld Agent wartet auf Sie</string>
 			<key>other</key>
-			<string>%1$lld Agenten warten auf dich</string>
+			<string>%1$lld Agenten warten auf Sie</string>
 		</dict>
 	</dict>
 	<key>onboarding.server.minutes</key>
