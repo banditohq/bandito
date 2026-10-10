@@ -16,8 +16,10 @@ import Testing
         #expect(AttachmentTray.canSend(text: "look", files: []))
         #expect(AttachmentTray.canSend(text: "look", files: [file(.ready(sample))]))
         #expect(!AttachmentTray.canSend(text: "look", files: [file(.uploading)]), "wait for the upload")
-        #expect(!AttachmentTray.canSend(text: "   ", files: [file(.ready(sample))]), "files alone do not send")
-        #expect(!AttachmentTray.canSend(text: "", files: []))
+        #expect(AttachmentTray.canSend(text: "   ", files: [file(.ready(sample))]), "files alone are a message")
+        #expect(!AttachmentTray.canSend(text: "", files: []), "nothing to send")
+        #expect(!AttachmentTray.canSend(text: "", files: [file(.failed(.upload))]), "a failed file is not sent")
+        #expect(!AttachmentTray.canSend(text: "", files: [file(.uploading)]), "wait for the upload")
     }
 
     @Test func aFailedFileDoesNotBlockTheSend() {

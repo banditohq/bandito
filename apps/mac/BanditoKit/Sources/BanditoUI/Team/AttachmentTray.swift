@@ -45,10 +45,11 @@ struct DraftFile: Identifiable {
 
 /// Rules of the composer's tray. Pure, so the choices are tested without a server.
 enum AttachmentTray {
-    /// The message can go when it has text and no file is still uploading. Files alone do not send: the daemon
-    /// wants text with every message.
+    /// The message can go when it has text or a file that is ready, and no file is still uploading. A file that
+    /// failed does not block the send; it is not sent.
     static func canSend(text: String, files: [DraftFile]) -> Bool {
-        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !hasUploading(files)
+        let hasText = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return (hasText || !readyFiles(files).isEmpty) && !hasUploading(files)
     }
 
     static func hasUploading(_ files: [DraftFile]) -> Bool {

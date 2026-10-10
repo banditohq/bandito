@@ -290,9 +290,9 @@ struct ThreadView: View {
     private func send() {
         let id = agent.id
         let text = router.takeDraft(for: id)
-        guard !text.isEmpty else { return }
         // The files that finished uploading go with the text; a failed send leaves them in the tray for a retry.
         let files = AttachmentTray.readyFiles(AttachmentTrays.shared.files(for: id))
+        guard !text.isEmpty || !files.isEmpty else { return }
         sendError = nil
         Task {
             do {
