@@ -76,6 +76,61 @@ import Testing
         #expect(entry.args.isEmpty)
     }
 
+    @Test func catalogTranslationsKeepTheirLanguageAndLabelKeys() throws {
+        // `l10n` keys are language codes and label keys are env names. RPCClient.decoder converts snake_case keys, so
+        // these must come through untouched.
+        let entry = try decode(
+            IntegrationCatalogEntry.self,
+            #"{"id":"brave-search","name":"Brave Search","description_en":"Search.","description_ru":"Поиск.","kind":"stdio","docs_url":"https://d.test","icon":"search","env_keys":[{"key":"BRAVE_API_KEY","label_en":"Key","label_ru":"Ключ","secret":true,"value_template":"{secret}"}],"l10n":{"pt-BR":{"description":"Busca.","long":"Longo.","abilities":[],"needs":"Chave.","labels":{"BRAVE_API_KEY":"Chave da API"}},"zh-Hans":{"description":"搜索。","long":"长。","abilities":[],"needs":"密钥。","labels":{"BRAVE_API_KEY":"密钥"}}}}"#)
+        #expect(Set(entry.l10n.keys) == ["pt-BR", "zh-Hans"])
+        #expect(entry.l10n["pt-BR"]?.labels == ["BRAVE_API_KEY": "Chave da API"])
+        #expect(entry.l10n["zh-Hans"]?.labels == ["BRAVE_API_KEY": "密钥"])
+        #expect(entry.envKeys[0].key == "BRAVE_API_KEY")
+        #expect(entry.label(for: entry.envKeys[0], languageCode: "pt-BR") == "Chave da API")
+        #expect(entry.description(languageCode: "zh-Hans") == "搜索。")
+    }
+
+    @Test func catalogTemplatePicksTheTextOfTheAppLanguage() throws {
+        let entry = try decode(
+            IntegrationCatalogEntry.self,
+            #"{"id":"exa","name":"Exa","description_en":"Search.","description_ru":"Поиск.","long_en":"Long.","long_ru":"Длинно.","abilities_en":["A","B"],"abilities_ru":["А","Б"],"needs_en":"Key.","needs_ru":"Ключ.","kind":"http","url":"https://mcp.exa.ai/mcp","headers_keys":[{"key":"x-api-key","label_en":"Key","label_ru":"Ключ","secret":true,"value_template":"{secret}"}],"docs_url":"https://d.test","icon":"search","l10n":{"de":{"description":"Suche.","long":"Lang.","abilities":["Ai","Bi"],"needs":"Schlüssel.","labels":{"x-api-key":"Schlüssel"}},"pt-BR":{"description":"Busca.","long":"","abilities":["Aa","Bb"],"needs":"Chave.","labels":{}}}}"#)
+        // A translation is used for its language.
+        #expect(entry.description(languageCode: "de") == "Suche.")
+        #expect(entry.longDescription(languageCode: "de") == "Lang.")
+        #expect(entry.abilities(languageCode: "de") == ["Ai", "Bi"])
+        #expect(entry.needs(languageCode: "de") == "Schlüssel.")
+        #expect(entry.label(for: entry.headersKeys[0], languageCode: "de") == "Schlüssel")
+        // Russian has its own fields.
+        #expect(entry.description(languageCode: "ru") == "Поиск.")
+        #expect(entry.abilities(languageCode: "ru") == ["А", "Б"])
+        #expect(entry.label(for: entry.headersKeys[0], languageCode: "ru") == "Ключ")
+        // A language without a translation reads in English.
+        #expect(entry.description(languageCode: "ko") == "Search.")
+        #expect(entry.abilities(languageCode: "ko") == ["A", "B"])
+        #expect(entry.label(for: entry.headersKeys[0], languageCode: "ko") == "Key")
+        // The app's code is matched without case or underscore, and an empty field falls back to English.
+        #expect(entry.description(languageCode: "pt_BR") == "Busca.")
+        #expect(entry.longDescription(languageCode: "pt-BR") == "Long.")
+        #expect(entry.label(for: entry.headersKeys[0], languageCode: "pt-BR") == "Key")
+        #expect(entry.description(languageCode: "DE") == "Suche.")
+
+        // A translation the daemon left fields out of reads as empty, and the rest falls back to English.
+        let partial = try decode(
+            IntegrationCatalogEntry.self,
+            #"{"id":"fetch","name":"Fetch","description_en":"Short.","description_ru":"Коротко.","kind":"stdio","docs_url":"https://d.test","icon":"globe","l10n":{"fr":{"description":"Court."}}}"#)
+        #expect(partial.description(languageCode: "fr") == "Court.")
+        #expect(partial.longDescription(languageCode: "fr") == "Court.")
+        #expect(partial.abilities(languageCode: "fr").isEmpty)
+        #expect(partial.needs(languageCode: "fr") == nil)
+
+        // A malformed `l10n` drops the translations and keeps the template.
+        let broken = try decode(
+            IntegrationCatalogEntry.self,
+            #"{"id":"fetch","name":"Fetch","description_en":"Short.","description_ru":"Коротко.","kind":"stdio","docs_url":"https://d.test","icon":"globe","l10n":"oops"}"#)
+        #expect(broken.l10n.isEmpty)
+        #expect(broken.description(languageCode: "de") == "Short.")
+    }
+
     @Test func testAnswerReadsToolsOrTheError() throws {
         let ok = try decode(IntegrationTest.self, #"{"ok":true,"tools":["list_repos","get_issue"]}"#)
         #expect(ok.ok)

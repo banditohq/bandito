@@ -90,6 +90,34 @@ public struct IntegrationHeaderKey: Codable, Sendable, Hashable {
     }
 }
 
+/// The texts of one template in another app language, from `l10n` on the wire. A field the daemon left out reads as
+/// empty, and the app then falls back to English.
+public struct IntegrationTranslation: Codable, Sendable, Hashable {
+    public var description: String
+    public var long: String
+    public var abilities: [String]
+    public var needs: String
+    /// The label of each header or env key, by the key's name.
+    public var labels: [String: String]
+
+    public init(description: String, long: String, abilities: [String], needs: String, labels: [String: String] = [:]) {
+        self.description = description
+        self.long = long
+        self.abilities = abilities
+        self.needs = needs
+        self.labels = labels
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        description = try c.decodeIfPresent(String.self, forKey: .description) ?? ""
+        long = try c.decodeIfPresent(String.self, forKey: .long) ?? ""
+        abilities = try c.decodeIfPresent([String].self, forKey: .abilities) ?? []
+        needs = try c.decodeIfPresent(String.self, forKey: .needs) ?? ""
+        labels = try c.decodeIfPresent([String: String].self, forKey: .labels) ?? [:]
+    }
+}
+
 /// One template from `integrations.catalog`, shown in the "Каталог" grid.
 public struct IntegrationCatalogEntry: Codable, Sendable, Identifiable, Hashable {
     public var id: String
@@ -123,6 +151,8 @@ public struct IntegrationCatalogEntry: Codable, Sendable, Identifiable, Hashable
     public var needsRu: String?
     /// `oauth` for a service that signs in in the browser; nil (or `none`) for one that takes a key.
     public var auth: IntegrationAuth
+    /// The texts for the other app languages, by language code (`pt-BR`, `zh-Hans`, …). Empty for an older daemon.
+    public var l10n: [String: IntegrationTranslation]
 
     /// Whether Connect starts a sign-in in the browser instead of opening the sheet of keys.
     public var usesOAuth: Bool { auth == .oauth }
@@ -133,7 +163,8 @@ public struct IntegrationCatalogEntry: Codable, Sendable, Identifiable, Hashable
         headersKeys: [IntegrationHeaderKey] = [], envKeys: [IntegrationHeaderKey] = [], docsUrl: String, icon: String,
         category: String? = nil, accent: String? = nil, publisher: String? = nil, official: Bool = false, homepage: String? = nil,
         longEn: String? = nil, longRu: String? = nil, abilitiesEn: [String] = [], abilitiesRu: [String] = [],
-        needsEn: String? = nil, needsRu: String? = nil, auth: IntegrationAuth = .none
+        needsEn: String? = nil, needsRu: String? = nil, auth: IntegrationAuth = .none,
+        l10n: [String: IntegrationTranslation] = [:]
     ) {
         self.id = id
         self.name = name
@@ -160,6 +191,7 @@ public struct IntegrationCatalogEntry: Codable, Sendable, Identifiable, Hashable
         self.needsEn = needsEn
         self.needsRu = needsRu
         self.auth = auth
+        self.l10n = l10n
     }
 
     public init(from decoder: Decoder) throws {
@@ -189,31 +221,57 @@ public struct IntegrationCatalogEntry: Codable, Sendable, Identifiable, Hashable
         needsEn = try c.decodeIfPresent(String.self, forKey: .needsEn)
         needsRu = try c.decodeIfPresent(String.self, forKey: .needsRu)
         auth = (try? c.decodeIfPresent(IntegrationAuth.self, forKey: .auth)).flatMap { $0 } ?? .none
+        // A malformed translation drops the whole set: the template then reads in English, and the catalog still lists.
+        l10n = (try? c.decodeIfPresent([String: IntegrationTranslation].self, forKey: .l10n)).flatMap { $0 } ?? [:]
     }
 
-    /// The description in the app's language: Russian for `ru`, English for every other language.
+    /// The translation to show in `languageCode`, from `l10n`. Nil for Russian and English, which have their own
+    /// fields, and for a language with no translation: the accessors then use those fields.
+    func translation(languageCode: String) -> IntegrationTranslation? {
+        if Self.isRussian(languageCode) { return nil }
+        let wanted = Self.normalizedLanguage(languageCode)
+        guard let key = l10n.keys.first(where: { Self.normalizedLanguage($0) == wanted }) else { return nil }
+        return l10n[key]
+    }
+
+    /// The description in the app's language: a translation, else Russian for `ru`, else English.
     public func description(languageCode: String) -> String {
-        Self.isRussian(languageCode) ? descriptionRu : descriptionEn
+        if let text = translation(languageCode: languageCode)?.description, !text.isEmpty { return text }
+        return Self.isRussian(languageCode) ? descriptionRu : descriptionEn
     }
 
     /// The longer text of the detail page; the short description when the daemon has none.
     public func longDescription(languageCode: String) -> String {
+        if let text = translation(languageCode: languageCode)?.long, !text.isEmpty { return text }
         let text = Self.isRussian(languageCode) ? longRu : longEn
         return text ?? description(languageCode: languageCode)
     }
 
     /// The short points of what the service can do.
     public func abilities(languageCode: String) -> [String] {
-        Self.isRussian(languageCode) ? abilitiesRu : abilitiesEn
+        if let points = translation(languageCode: languageCode)?.abilities, !points.isEmpty { return points }
+        return Self.isRussian(languageCode) ? abilitiesRu : abilitiesEn
     }
 
     /// What the owner needs before connecting: a key, an account, a program.
     public func needs(languageCode: String) -> String? {
-        Self.isRussian(languageCode) ? needsRu : needsEn
+        if let text = translation(languageCode: languageCode)?.needs, !text.isEmpty { return text }
+        return Self.isRussian(languageCode) ? needsRu : needsEn
+    }
+
+    /// The label of a header or env key in the app's language: the translation's label, else the built-in one.
+    public func label(for key: IntegrationHeaderKey, languageCode: String) -> String {
+        if let text = translation(languageCode: languageCode)?.labels[key.key], !text.isEmpty { return text }
+        return key.label(languageCode: languageCode)
     }
 
     static func isRussian(_ languageCode: String) -> Bool {
         languageCode.lowercased().hasPrefix("ru")
+    }
+
+    /// A language code as the catalog keys it: `pt_BR` and `pt-br` are `pt-br`.
+    static func normalizedLanguage(_ languageCode: String) -> String {
+        languageCode.replacingOccurrences(of: "_", with: "-").lowercased()
     }
 }
 
