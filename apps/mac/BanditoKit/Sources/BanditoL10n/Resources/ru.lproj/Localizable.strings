@@ -1846,7 +1846,6 @@
 "terminals.confirmClose.title" = "Процесс ещё работает. Завершить?";
 "terminals.connectTimeout" = "%1$@ не ответил за 10 секунд.";
 "terminals.connecting" = "Подключение к %1$@…";
-"terminals.dock.empty" = "Ничего не свёрнуто";
 "terminals.dock.lastHint" = "%1$@ — вернуть последний";
 "terminals.dock.restore" = "Вернуть";
 "terminals.dock.running" = "работает";

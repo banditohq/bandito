@@ -1846,7 +1846,6 @@
 "terminals.confirmClose.title" = "프로세스가 아직 실행 중이에요. 종료할까요?";
 "terminals.connectTimeout" = "%1$@이(가) 10초 안에 응답하지 않았습니다.";
 "terminals.connecting" = "%1$@에 연결하는 중이에요…";
-"terminals.dock.empty" = "접은 항목이 없어요";
 "terminals.dock.lastHint" = "%1$@로 마지막 항목 되돌리기";
 "terminals.dock.restore" = "되돌리기";
 "terminals.dock.running" = "실행 중";

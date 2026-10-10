@@ -1505,7 +1505,6 @@
   "terminals.pane.close": "Закрыть и завершить",
   "terminals.pane.rename": "Двойной клик — переименовать",
   "terminals.dock.title": "Свёрнуты",
-  "terminals.dock.empty": "Ничего не свёрнуто",
   "terminals.dock.restore": "Вернуть",
   "terminals.dock.running": "работает",
   "terminals.dock.waiting": "ждёт ввода",

@@ -1846,7 +1846,6 @@
 "terminals.confirmClose.title" = "进程仍在运行。要结束它吗？";
 "terminals.connectTimeout" = "%1$@ 在 10 秒内没有响应。";
 "terminals.connecting" = "正在连接 %1$@…";
-"terminals.dock.empty" = "没有已折叠的内容";
 "terminals.dock.lastHint" = "%1$@ 恢复最近一个";
 "terminals.dock.restore" = "恢复";
 "terminals.dock.running" = "运行中";

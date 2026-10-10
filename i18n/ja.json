@@ -1573,7 +1573,6 @@
   "terminals.pane.close": "閉じてプロセスを終了",
   "terminals.pane.rename": "ダブルクリックで名前を変更",
   "terminals.dock.title": "折りたたみ中",
-  "terminals.dock.empty": "折りたたんだものはありません",
   "terminals.dock.restore": "戻す",
   "terminals.dock.running": "実行中",
   "terminals.dock.waiting": "入力待ち",

@@ -1598,7 +1598,6 @@
   "terminals.pane.close": "Fechar e encerrar o processo",
   "terminals.pane.rename": "Clique duplo para renomear",
   "terminals.dock.title": "Recolhidos",
-  "terminals.dock.empty": "Nada recolhido",
   "terminals.dock.restore": "Trazer de volta",
   "terminals.dock.running": "rodando",
   "terminals.dock.waiting": "aguardando entrada",

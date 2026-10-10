@@ -2524,7 +2524,6 @@ public enum L10n {
         }
 
         public enum Dock {
-            public static var empty: String { L10n.tr("terminals.dock.empty") }
             public static func lastHint(shortcut: String) -> String { L10n.tr("terminals.dock.lastHint", shortcut) }
             public static func lines(count: Int) -> String { L10n.tr("terminals.dock.lines", count) }
             public static var restore: String { L10n.tr("terminals.dock.restore") }

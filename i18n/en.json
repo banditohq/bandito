@@ -1458,7 +1458,6 @@
   "terminals.pane.close": "Close and end the process",
   "terminals.pane.rename": "Double-click to rename",
   "terminals.dock.title": "Collapsed",
-  "terminals.dock.empty": "Nothing collapsed",
   "terminals.dock.restore": "Restore",
   "terminals.dock.running": "running",
   "terminals.dock.waiting": "waiting for input",

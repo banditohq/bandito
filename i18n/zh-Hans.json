@@ -1573,7 +1573,6 @@
   "terminals.pane.close": "关闭并结束进程",
   "terminals.pane.rename": "双击以重命名",
   "terminals.dock.title": "已折叠",
-  "terminals.dock.empty": "没有已折叠的内容",
   "terminals.dock.restore": "恢复",
   "terminals.dock.running": "运行中",
   "terminals.dock.waiting": "等待输入",

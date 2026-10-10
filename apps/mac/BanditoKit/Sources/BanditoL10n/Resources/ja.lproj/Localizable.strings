@@ -1846,7 +1846,6 @@
 "terminals.confirmClose.title" = "プロセスはまだ実行中です。終了しますか？";
 "terminals.connectTimeout" = "%1$@ が10秒以内に応答しませんでした。";
 "terminals.connecting" = "%1$@ に接続しています…";
-"terminals.dock.empty" = "折りたたんだものはありません";
 "terminals.dock.lastHint" = "%1$@ で直前のものを戻す";
 "terminals.dock.restore" = "戻す";
 "terminals.dock.running" = "実行中";

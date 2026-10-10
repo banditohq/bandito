@@ -1598,7 +1598,6 @@
   "terminals.pane.close": "Fermer et terminer le processus",
   "terminals.pane.rename": "Double-cliquez pour renommer",
   "terminals.dock.title": "Réduits",
-  "terminals.dock.empty": "Rien de réduit",
   "terminals.dock.restore": "Rétablir",
   "terminals.dock.running": "en cours",
   "terminals.dock.waiting": "attend une saisie",

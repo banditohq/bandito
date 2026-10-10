@@ -1597,7 +1597,6 @@
   "terminals.pane.close": "Schließen und Prozess beenden",
   "terminals.pane.rename": "Doppelklick zum Umbenennen",
   "terminals.dock.title": "Eingeklappt",
-  "terminals.dock.empty": "Nichts eingeklappt",
   "terminals.dock.restore": "Zurückholen",
   "terminals.dock.running": "läuft",
   "terminals.dock.waiting": "wartet auf Eingabe",

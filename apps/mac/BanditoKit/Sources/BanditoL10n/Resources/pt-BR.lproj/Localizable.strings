@@ -1846,7 +1846,6 @@
 "terminals.confirmClose.title" = "O processo ainda está rodando. Encerrar?";
 "terminals.connectTimeout" = "%1$@ não respondeu em 10 segundos.";
 "terminals.connecting" = "Conectando a %1$@…";
-"terminals.dock.empty" = "Nada recolhido";
 "terminals.dock.lastHint" = "%1$@ traz de volta o último";
 "terminals.dock.restore" = "Trazer de volta";
 "terminals.dock.running" = "rodando";

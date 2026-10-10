@@ -1846,7 +1846,6 @@
 "terminals.confirmClose.title" = "Der Prozess läuft noch. Beenden?";
 "terminals.connectTimeout" = "%1$@ hat innerhalb von 10 Sekunden nicht geantwortet.";
 "terminals.connecting" = "Verbindung zu %1$@ wird hergestellt…";
-"terminals.dock.empty" = "Nichts eingeklappt";
 "terminals.dock.lastHint" = "%1$@ holt den letzten zurück";
 "terminals.dock.restore" = "Zurückholen";
 "terminals.dock.running" = "läuft";

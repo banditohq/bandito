@@ -1846,7 +1846,6 @@
 "terminals.confirmClose.title" = "The process is still running. End it?";
 "terminals.connectTimeout" = "%1$@ did not answer within 10 seconds.";
 "terminals.connecting" = "Connecting to %1$@…";
-"terminals.dock.empty" = "Nothing collapsed";
 "terminals.dock.lastHint" = "%1$@ restores the last one";
 "terminals.dock.restore" = "Restore";
 "terminals.dock.running" = "running";
