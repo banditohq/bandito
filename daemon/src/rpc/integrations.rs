@@ -316,7 +316,6 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             // What the tools may do can be named when the row is added; without it the row starts as the catalog says.
             let tools: ToolWords = params(p)?;
             check_tool_overrides(tools.tool_overrides.as_ref())?;
-            check_new_name(&n.name)?;
             check_new(&n)?;
             if store.integration_list()?.iter().any(|i| i.name == n.name) {
                 return Err(RpcError::new(
@@ -366,7 +365,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             {
                 return Err(RpcError::new(INVALID_PARAMS, "that name is taken"));
             }
-            let changes_tool_rules = changes_tool_rules(&patch);
+            let changes_tool_rules = changes_tool_rules(&cur, &patch);
             let updated = store.integration_update(&id, patch)?;
             if changes_tool_rules {
                 // The agents that have the service start their sessions again, with the new rules: Claude lists
@@ -636,9 +635,12 @@ fn apply(cur: &Integration, p: &IntegrationPatch) -> Integration {
     out
 }
 
-/// A patch that moves what the agents may do with a service's tools.
-fn changes_tool_rules(patch: &IntegrationPatch) -> bool {
-    patch.tool_mode.is_some() || patch.tool_overrides.is_some()
+/// A patch that moves what the agents may do with a service's tools. A new name is one too: the calls of the service are
+/// named after it, so a session that still knows the old name would decide them under the wrong one.
+fn changes_tool_rules(cur: &Integration, patch: &IntegrationPatch) -> bool {
+    patch.tool_mode.is_some()
+        || patch.tool_overrides.is_some()
+        || patch.name.as_deref().is_some_and(|name| name != cur.name)
 }
 
 /// A new name: two underscores in a row would make `mcp__<name>__<tool>` ambiguous, so none are taken. Names that
@@ -692,6 +694,7 @@ fn check_tool_overrides(
 }
 
 fn check_new(n: &NewIntegration) -> Result<(), RpcError> {
+    check_new_name(&n.name)?;
     check_definition(&draft_row(n))
 }
 
@@ -1904,19 +1907,58 @@ mod tests {
     }
 
     #[test]
-    fn only_a_patch_of_the_tool_rules_restarts_sessions() {
-        assert!(changes_tool_rules(&IntegrationPatch {
+    fn only_a_patch_of_the_tool_rules_or_the_name_restarts_sessions() {
+        let cur = Integration {
+            id: "i".into(),
+            name: "svc".into(),
+            kind: IntegrationKind::Stdio,
+            command: Some("x".into()),
+            args: vec![],
+            url: None,
+            env: BTreeMap::new(),
+            headers: BTreeMap::new(),
+            enabled: true,
+            created_at: 0,
+            auth: Default::default(),
+            tool_mode: Default::default(),
+            tool_overrides: Default::default(),
+        };
+        let patch = |p: IntegrationPatch| changes_tool_rules(&cur, &p);
+        assert!(patch(IntegrationPatch {
             tool_mode: Some(crate::store::ToolMode::ReadOnly),
             ..Default::default()
         }));
-        assert!(changes_tool_rules(&IntegrationPatch {
+        assert!(patch(IntegrationPatch {
             tool_overrides: Some(Default::default()),
             ..Default::default()
         }));
-        assert!(!changes_tool_rules(&IntegrationPatch {
+        assert!(patch(IntegrationPatch {
+            name: Some("renamed".into()),
+            ..Default::default()
+        }));
+        // The same name again, or another field, is not a change of the rules.
+        assert!(!patch(IntegrationPatch {
+            name: Some("svc".into()),
+            ..Default::default()
+        }));
+        assert!(!patch(IntegrationPatch {
             enabled: Some(false),
             ..Default::default()
         }));
+    }
+
+    #[tokio::test]
+    async fn a_browser_sign_in_draft_is_held_to_the_name_rule() {
+        let app = app();
+        let err = owner(
+            &app,
+            "integrations.oauth_begin",
+            json!({ "draft": { "name": "a__b", "kind": "http", "url": "https://example.com/mcp" } }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, INVALID_PARAMS);
+        assert!(err.message.contains("two underscores"), "{}", err.message);
     }
 
     #[tokio::test]

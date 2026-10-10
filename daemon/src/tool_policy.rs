@@ -33,6 +33,11 @@ pub const REASON_UNCHECKED: &str = "service: permissions unreadable";
 /// Said to the agent when the owner's permissions could not be read: nothing runs, and it is worth another try.
 pub const UNCHECKED_MESSAGE: &str = "Bandito could not read what the owner allowed for this service just now, so the call was not run. Try again in a moment; if it keeps failing, tell the owner.";
 
+/// Reason of a refusal because no service of the agent has that name any more.
+pub const REASON_GONE: &str = "service: not the agent's any more";
+/// Said to the agent when a call names a service it does not have now (renamed, removed, turned off, not its own).
+pub const GONE_MESSAGE: &str = "This service is no longer available to this agent (it was renamed, removed or turned off), so the call was not run. Do not retry it; tell the owner if the task needs it.";
+
 /// What is known about the tools of the services: whether a tool only reads. The answer comes from the annotations the
 /// server sent in `tools/list` (`readOnlyHint`), kept by the daemon. `None` when the tool is not known.
 pub trait ToolCatalog {

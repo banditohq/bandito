@@ -2179,7 +2179,7 @@ impl Actor {
         // at once when it is allowed, on the user's yes when it is asked about, and never after a refusal.
         // A call of a tool of one of the owner's services is first decided by the service's mode and the owner's
         // word on the tool (see `tool_policy`); what that leaves open goes to the normal policy.
-        let gate = self.tool_gate(&req, agent.approval_mode, &rules);
+        let gate = self.tool_gate(&req, &agent, &rules);
         let (verdict, shell_after, agent_message) = match gate {
             Some(judged) => {
                 if matches!(judged.verdict, Verdict::Ask(_)) {
@@ -2263,15 +2263,36 @@ impl Actor {
     fn tool_gate(
         &self,
         req: &ApprovalRequest,
-        mode: crate::store::ApprovalMode,
+        agent: &crate::store::Agent,
         rules: &[crate::store::Rule],
     ) -> Option<crate::tool_policy::Judged> {
-        if !req.tool.starts_with(crate::tool_policy::MCP_PREFIX) {
+        use crate::tool_policy::{GONE_MESSAGE, Judged, MCP_PREFIX, REASON_GONE};
+        if !req.tool.starts_with(MCP_PREFIX) {
             return None;
         }
+        let mode = agent.approval_mode;
         let store = &self.hub.store;
         let subject = req.command.as_deref().unwrap_or(req.title.as_str());
-        let judged = store.integration_list().and_then(|rows| {
+        let judged = store.integration_list().and_then(|all| {
+            // Only the services this agent has now: a name that is none of them is not a service of its own.
+            let rows: Vec<crate::store::Integration> =
+                crate::integrations::for_agent(&all, agent.integrations.as_deref())
+                    .into_iter()
+                    .cloned()
+                    .collect();
+            if crate::tool_policy::splits(&req.tool, &rows).is_empty() {
+                // Bandito's own crew server, and the owner's personal MCP servers when the agent reads the owner's own
+                // settings, are no integrations: the normal policy decides them. Any other name is a service the
+                // agent no longer has, and a stale session must not reach it unchecked.
+                let crew = format!("{MCP_PREFIX}{}__", crate::integrations::RESERVED_NAME);
+                if req.tool.starts_with(&crew) || agent.use_personal_settings {
+                    return Ok(None);
+                }
+                return Ok(Some(Judged {
+                    verdict: Verdict::Deny(REASON_GONE.to_string()),
+                    agent_message: Some(GONE_MESSAGE.to_string()),
+                }));
+            }
             crate::tool_policy::judge_call(&req.tool, &rows, mode, rules, subject, |row| {
                 // What the last probe of the service saw: a tool it did not list counts as a write.
                 let tools = store.integration_tools(&row.id)?;
@@ -3291,9 +3312,9 @@ mod tests {
         assert!(w.spawns.lock().unwrap()[0].gated_tools.is_empty());
         w.push(service_call("k1", "mcp__mysvc__create_issue")).await;
         w.wait_log("resolve k1 Allow").await;
-        // A tool name that belongs to no service is not touched by this layer either.
+        // A tool name that belongs to no service of the agent is refused: it is not one of its own.
         w.push(service_call("k2", "mcp__unknown__thing")).await;
-        w.wait_log("resolve k2 Allow").await;
+        w.wait_log_prefix("deny_message k2 ").await;
     }
 
     #[tokio::test]
@@ -3389,6 +3410,73 @@ mod tests {
         let spawns = w.spawns.lock().unwrap();
         assert_eq!(spawns.len(), 2, "a new session started");
         assert_eq!(spawns[1].gated_tools, vec!["mysvc".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn a_call_of_a_service_the_agent_no_longer_has_is_refused() {
+        let w = world(ApprovalMode::Never);
+        add_service(&w, "mysvc", crate::store::ToolMode::All, &[]);
+        w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
+        w.wait_log("send go").await;
+        // The service is renamed under the running session: the old name is nobody's now.
+        let id = w.store.integration_list().unwrap()[0].id.clone();
+        w.store
+            .integration_update(
+                &id,
+                crate::store::IntegrationPatch {
+                    name: Some("renamed".into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        w.push(service_call("k1", "mcp__mysvc__list")).await;
+        w.wait_log_prefix("deny_message k1 ").await;
+        let said = w
+            .log
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|l| l.starts_with("deny_message k1 "))
+            .cloned()
+            .unwrap();
+        assert!(said.contains("no longer available"), "{said}");
+        // A removed service is refused the same way.
+        w.store.integration_delete(&id).unwrap();
+        w.push(service_call("k2", "mcp__renamed__list")).await;
+        w.wait_log_prefix("deny_message k2 ").await;
+        // Bandito's own crew tools are no integration and go the normal way.
+        w.push(service_call("k3", "mcp__bandito__team_list")).await;
+        w.wait_log("resolve k3 Allow").await;
+    }
+
+    #[tokio::test]
+    async fn a_service_outside_the_agents_list_is_not_its_own() {
+        let w = world(ApprovalMode::Never);
+        add_service(&w, "mine", crate::store::ToolMode::All, &[]);
+        add_service(&w, "foreign", crate::store::ToolMode::All, &[]);
+        let mine = w
+            .store
+            .integration_list()
+            .unwrap()
+            .into_iter()
+            .find(|i| i.name == "mine")
+            .unwrap()
+            .id;
+        w.store
+            .agent_update(
+                &w.agent,
+                crate::store::AgentPatch {
+                    integrations: Some(Some(vec![mine])),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
+        w.wait_log("send go").await;
+        w.push(service_call("k1", "mcp__mine__list")).await;
+        w.wait_log("resolve k1 Allow").await;
+        w.push(service_call("k2", "mcp__foreign__list")).await;
+        w.wait_log_prefix("deny_message k2 ").await;
     }
 
     #[tokio::test]
