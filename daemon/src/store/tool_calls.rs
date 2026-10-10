@@ -134,23 +134,30 @@ impl Store {
         Ok(())
     }
 
-    /// Calls matching the filter, newest first.
-    pub fn tool_calls_list(&self, filter: &CallFilter) -> Result<Vec<ToolCall>> {
+    /// Calls matching the filter, newest first. Only the calls of the last 30 days before `now` are read.
+    pub fn tool_calls_list(&self, filter: &CallFilter, now: i64) -> Result<Vec<ToolCall>> {
         let conn = self.conn();
         let mut stmt = conn.prepare(
             "SELECT id, at_ms, agent_id, integration, tool, duration_ms, ok, error, decision FROM tool_calls
-             WHERE (?1 IS NULL OR integration = ?1) AND (?2 IS NULL OR agent_id = ?2) AND (?3 IS NULL OR id < ?3)
+             WHERE at_ms >= ?5 AND (?1 IS NULL OR integration = ?1) AND (?2 IS NULL OR agent_id = ?2)
+               AND (?3 IS NULL OR id < ?3)
              ORDER BY id DESC LIMIT ?4",
         )?;
         let rows = stmt.query_map(
-            params![filter.integration, filter.agent_id, filter.before, filter.limit],
+            params![
+                filter.integration,
+                filter.agent_id,
+                filter.before,
+                filter.limit,
+                now - RETENTION_MS
+            ],
             row_to_call,
         )?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
-    /// Per integration that has rows: calls and errors of the last 24 hours, calls of the last 7 days, and the time
-    /// of the newest call. Newest call first.
+    /// Per integration that has calls in the last 30 days before `now`: calls and errors of the last 24 hours, calls
+    /// of the last 7 days, and the time of the newest call. Newest call first.
     pub fn tool_call_stats(&self, now: i64) -> Result<Vec<CallStats>> {
         let conn = self.conn();
         let mut stmt = conn.prepare(
@@ -159,9 +166,9 @@ impl Store {
                     SUM(CASE WHEN at_ms >= ?1 AND ok = 0 THEN 1 ELSE 0 END),
                     SUM(CASE WHEN at_ms >= ?2 THEN 1 ELSE 0 END),
                     MAX(at_ms)
-             FROM tool_calls GROUP BY integration ORDER BY MAX(at_ms) DESC, integration",
+             FROM tool_calls WHERE at_ms >= ?3 GROUP BY integration ORDER BY MAX(at_ms) DESC, integration",
         )?;
-        let rows = stmt.query_map(params![now - DAY_MS, now - 7 * DAY_MS], |row| {
+        let rows = stmt.query_map(params![now - DAY_MS, now - 7 * DAY_MS, now - RETENTION_MS], |row| {
             Ok(CallStats {
                 integration: row.get(0)?,
                 calls_24h: row.get(1)?,
@@ -200,10 +207,13 @@ mod tests {
             .tool_call_start("a1", "linear", "list_issues", Some("allowed"), NOW)
             .unwrap();
         let rows = store
-            .tool_calls_list(&CallFilter {
-                limit: 10,
-                ..Default::default()
-            })
+            .tool_calls_list(
+                &CallFilter {
+                    limit: 10,
+                    ..Default::default()
+                },
+                NOW,
+            )
             .unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].id, id);
@@ -219,10 +229,13 @@ mod tests {
             .tool_call_finish(id, 42, true, Some("text of a success is not kept"))
             .unwrap();
         let row = &store
-            .tool_calls_list(&CallFilter {
-                limit: 10,
-                ..Default::default()
-            })
+            .tool_calls_list(
+                &CallFilter {
+                    limit: 10,
+                    ..Default::default()
+                },
+                NOW,
+            )
             .unwrap()[0];
         assert_eq!(
             (row.duration_ms, row.ok, row.error.clone()),
@@ -237,10 +250,13 @@ mod tests {
         let long = "é".repeat(500);
         store.tool_call_finish(id, 7, false, Some(&long)).unwrap();
         let row = &store
-            .tool_calls_list(&CallFilter {
-                limit: 1,
-                ..Default::default()
-            })
+            .tool_calls_list(
+                &CallFilter {
+                    limit: 1,
+                    ..Default::default()
+                },
+                NOW,
+            )
             .unwrap()[0];
         assert_eq!(row.ok, Some(false));
         assert_eq!(row.error.as_deref().map(|e| e.chars().count()), Some(ERROR_MAX_CHARS));
@@ -252,10 +268,13 @@ mod tests {
         let id = start(&store, "a1", "linear", NOW);
         store.tool_call_finish(id, 7, false, Some("  \n ")).unwrap();
         let row = &store
-            .tool_calls_list(&CallFilter {
-                limit: 1,
-                ..Default::default()
-            })
+            .tool_calls_list(
+                &CallFilter {
+                    limit: 1,
+                    ..Default::default()
+                },
+                NOW,
+            )
             .unwrap()[0];
         assert_eq!(row.error, None);
     }
@@ -266,10 +285,13 @@ mod tests {
         let id = start(&store, "a1", "linear", NOW);
         store.tool_call_set_decision(id, "asked").unwrap();
         let row = &store
-            .tool_calls_list(&CallFilter {
-                limit: 1,
-                ..Default::default()
-            })
+            .tool_calls_list(
+                &CallFilter {
+                    limit: 1,
+                    ..Default::default()
+                },
+                NOW,
+            )
             .unwrap()[0];
         assert_eq!(row.decision.as_deref(), Some("asked"));
     }
@@ -282,10 +304,13 @@ mod tests {
         assert_eq!(count(&store), 2);
         start(&store, "a1", "now", NOW);
         let names: Vec<String> = store
-            .tool_calls_list(&CallFilter {
-                limit: 10,
-                ..Default::default()
-            })
+            .tool_calls_list(
+                &CallFilter {
+                    limit: 10,
+                    ..Default::default()
+                },
+                NOW,
+            )
             .unwrap()
             .into_iter()
             .map(|r| r.integration)
@@ -310,10 +335,13 @@ mod tests {
         start(&store, "a1", "new", NOW);
         assert_eq!(count(&store), MAX_ROWS);
         let all = store
-            .tool_calls_list(&CallFilter {
-                limit: MAX_ROWS,
-                ..Default::default()
-            })
+            .tool_calls_list(
+                &CallFilter {
+                    limit: MAX_ROWS,
+                    ..Default::default()
+                },
+                NOW,
+            )
             .unwrap();
         // Six rows were over the cap: the six oldest seeded rows (at +1 .. +6) are gone, the oldest left is at +7.
         assert_eq!(all.last().unwrap().at_ms, NOW - 3_600_000 + 7);
@@ -327,8 +355,14 @@ mod tests {
         let b = start(&store, "a2", "linear", NOW - 2);
         let c = start(&store, "a1", "github", NOW - 1);
 
-        let ids =
-            |f: CallFilter| -> Vec<i64> { store.tool_calls_list(&f).unwrap().into_iter().map(|r| r.id).collect() };
+        let ids = |f: CallFilter| -> Vec<i64> {
+            store
+                .tool_calls_list(&f, NOW)
+                .unwrap()
+                .into_iter()
+                .map(|r| r.id)
+                .collect()
+        };
         assert_eq!(
             ids(CallFilter {
                 limit: 10,
@@ -400,6 +434,76 @@ mod tests {
                 },
             ]
         );
+    }
+
+    #[test]
+    fn reads_and_stats_show_only_the_last_30_days() {
+        let store = Store::open_in_memory().unwrap();
+        start(&store, "a1", "old", NOW - RETENTION_MS - DAY_MS);
+        let recent = start(&store, "a1", "recent", NOW - DAY_MS);
+        // A 31-day-old row stays until the next write, but it is not read.
+        assert_eq!(count(&store), 2);
+        let ids: Vec<i64> = store
+            .tool_calls_list(
+                &CallFilter {
+                    limit: 10,
+                    ..Default::default()
+                },
+                NOW,
+            )
+            .unwrap()
+            .into_iter()
+            .map(|r| r.id)
+            .collect();
+        assert_eq!(ids, vec![recent]);
+        let names: Vec<String> = store
+            .tool_call_stats(NOW)
+            .unwrap()
+            .into_iter()
+            .map(|s| s.integration)
+            .collect();
+        assert_eq!(names, vec!["recent".to_string()]);
+    }
+
+    #[test]
+    fn deleting_an_agent_deletes_its_journal_rows_in_the_same_transaction() {
+        let store = Store::open_in_memory().unwrap();
+        let agent = store
+            .agent_create(crate::store::NewAgent {
+                use_personal_settings: false,
+                avatar: None,
+                capabilities: None,
+                integrations: None,
+                name: "Forge".into(),
+                role: "builder".into(),
+                runtime: crate::runtime::RuntimeKind::Claude,
+                model: None,
+                cwd: "/tmp".into(),
+                approval_mode: crate::store::ApprovalMode::Risky,
+                system_prompt: None,
+                effort: None,
+                memory_mode: crate::store::MemoryMode::Smart,
+                context_budget: None,
+                fallback_runtime: None,
+                fallback_model: None,
+            })
+            .unwrap();
+        store.tool_call_start(&agent.id, "linear", "list", None, NOW).unwrap();
+        start(&store, "other", "linear", NOW);
+        assert!(store.agent_delete(&agent.id).unwrap());
+        let left: Vec<String> = store
+            .tool_calls_list(
+                &CallFilter {
+                    limit: 10,
+                    ..Default::default()
+                },
+                NOW,
+            )
+            .unwrap()
+            .into_iter()
+            .map(|r| r.agent_id)
+            .collect();
+        assert_eq!(left, vec!["other".to_string()]);
     }
 
     #[test]

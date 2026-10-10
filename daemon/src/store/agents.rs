@@ -801,6 +801,7 @@ impl Store {
         tx.execute("DELETE FROM checkpoints WHERE agent_id=?1", [id])?;
         tx.execute("DELETE FROM forms WHERE agent_id=?1", [id])?;
         tx.execute("DELETE FROM reactions WHERE agent_id=?1", [id])?;
+        tx.execute("DELETE FROM tool_calls WHERE agent_id=?1", [id])?;
         tx.commit()?;
         Ok(n > 0)
     }

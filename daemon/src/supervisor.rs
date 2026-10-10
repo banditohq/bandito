@@ -1270,6 +1270,9 @@ impl Actor {
         };
         let secret_map: std::collections::HashMap<String, String> = integration_secrets.iter().cloned().collect();
         let mcp_servers = crate::integrations::resolve(&chosen, &secret_map);
+        // The call journal names a Codex MCP call by its server, so it needs the servers this session has.
+        self.journal
+            .set_servers(mcp_servers.iter().map(|s| s.name.clone()).collect());
         // The sign-in tokens this session starts with, to know later whether a renewal concerns it.
         let oauth_tokens: HashMap<String, String> = chosen
             .iter()
@@ -2633,10 +2636,13 @@ mod tests {
 
     fn journal_rows(w: &World) -> Vec<crate::store::ToolCall> {
         w.store
-            .tool_calls_list(&crate::store::CallFilter {
-                limit: 100,
-                ..Default::default()
-            })
+            .tool_calls_list(
+                &crate::store::CallFilter {
+                    limit: 100,
+                    ..Default::default()
+                },
+                crate::store::now_ms(),
+            )
             .unwrap()
     }
 

@@ -404,12 +404,15 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             if !(1..=200).contains(&limit) {
                 return Err(RpcError::new(INVALID_PARAMS, "limit must be 1 to 200".to_string()));
             }
-            ok(store.tool_calls_list(&CallFilter {
-                integration,
-                agent_id,
-                before,
-                limit,
-            })?)
+            ok(store.tool_calls_list(
+                &CallFilter {
+                    integration,
+                    agent_id,
+                    before,
+                    limit,
+                },
+                now_ms(),
+            )?)
         }
         "integrations.call_stats" => ok(store.tool_call_stats(now_ms())?),
         _ => Err(RpcError::new(METHOD_NOT_FOUND, format!("unknown method {method}"))),

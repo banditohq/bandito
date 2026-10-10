@@ -17,6 +17,8 @@ pub fn split_mcp(name: &str) -> Option<(&str, &str)> {
 /// their call. Both are dropped when the turn ends: a call that never got its result keeps its row with no result.
 #[derive(Default)]
 pub struct Journal {
+    /// The names of the MCP servers of the running session: the integrations the agent may use.
+    servers: Vec<String>,
     open: HashMap<String, Open>,
     decisions: HashMap<String, &'static str>,
 }
@@ -27,10 +29,27 @@ struct Open {
 }
 
 impl Journal {
-    /// A tool call started. It is recorded when its name is `mcp__<integration>__<tool>`; its decision is taken from
-    /// the policy's verdict when that came first.
+    /// The MCP servers of a session that starts now. Codex names an MCP call `<server>.<tool>`, and the server is an
+    /// integration only when it is one of these.
+    pub fn set_servers(&mut self, names: Vec<String>) {
+        self.servers = names;
+    }
+
+    /// `(integration, tool)` of a tool name: `mcp__<integration>__<tool>` (Claude Code), or `<server>.<tool>` (Codex)
+    /// when the server is one of the session's. The name the runtime reports is not changed; this is for the journal.
+    fn recognize<'a>(&self, tool: &'a str) -> Option<(&'a str, &'a str)> {
+        if let Some(found) = split_mcp(tool) {
+            return Some(found);
+        }
+        let (server, name) = tool.split_once('.')?;
+        let known = server != RESERVED_NAME && self.servers.iter().any(|s| s == server);
+        (known && !name.is_empty()).then_some((server, name))
+    }
+
+    /// A tool call started. It is recorded when its name is an integration's (see [`Journal::recognize`]); its
+    /// decision is taken from the policy's verdict when that came first.
     pub fn started(&mut self, store: &Store, agent: &str, call_id: &str, tool: &str, now: i64) {
-        let Some((integration, name)) = split_mcp(tool) else {
+        let Some((integration, name)) = self.recognize(tool) else {
             return;
         };
         let decision = self.decisions.remove(call_id);
@@ -45,7 +64,7 @@ impl Journal {
     /// The policy's verdict on the approval of a call: `allowed`, `asked` or `denied`. A call that is not recorded
     /// (or whose verdict comes before it) is kept until the turn ends.
     pub fn decided(&mut self, store: &Store, call_id: &str, tool: &str, decision: &'static str) {
-        if split_mcp(tool).is_none() {
+        if self.recognize(tool).is_none() {
             return;
         }
         match self.open.get(call_id) {
@@ -82,6 +101,8 @@ impl Journal {
 mod tests {
     use super::*;
 
+    const NOW: i64 = 1_000;
+
     #[test]
     fn only_mcp_names_of_integrations_are_split() {
         assert_eq!(split_mcp("mcp__linear__list_issues"), Some(("linear", "list_issues")));
@@ -105,10 +126,13 @@ mod tests {
         journal.finished(&store, "c1", true, "the output is not kept", 1_250);
 
         let rows = store
-            .tool_calls_list(&crate::store::CallFilter {
-                limit: 10,
-                ..Default::default()
-            })
+            .tool_calls_list(
+                &crate::store::CallFilter {
+                    limit: 10,
+                    ..Default::default()
+                },
+                NOW,
+            )
             .unwrap();
         assert_eq!(rows.len(), 1);
         let row = &rows[0];
@@ -127,10 +151,13 @@ mod tests {
         journal.decided(&store, "c1", "mcp__linear__x", "asked");
         journal.started(&store, "a1", "c1", "mcp__linear__x", 1_000);
         let row = &store
-            .tool_calls_list(&crate::store::CallFilter {
-                limit: 1,
-                ..Default::default()
-            })
+            .tool_calls_list(
+                &crate::store::CallFilter {
+                    limit: 1,
+                    ..Default::default()
+                },
+                NOW,
+            )
             .unwrap()[0];
         assert_eq!(row.decision.as_deref(), Some("asked"));
     }
@@ -142,10 +169,13 @@ mod tests {
         journal.started(&store, "a1", "c1", "mcp__linear__x", 1_000);
         journal.finished(&store, "c1", false, "not found", 1_010);
         let row = &store
-            .tool_calls_list(&crate::store::CallFilter {
-                limit: 1,
-                ..Default::default()
-            })
+            .tool_calls_list(
+                &crate::store::CallFilter {
+                    limit: 1,
+                    ..Default::default()
+                },
+                NOW,
+            )
             .unwrap()[0];
         assert_eq!((row.ok, row.error.clone()), (Some(false), Some("not found".into())));
     }
@@ -161,10 +191,13 @@ mod tests {
         journal.started(&store, "a1", "c2", "mcp__bandito__send", 1_000);
         assert!(
             store
-                .tool_calls_list(&crate::store::CallFilter {
-                    limit: 10,
-                    ..Default::default()
-                })
+                .tool_calls_list(
+                    &crate::store::CallFilter {
+                        limit: 10,
+                        ..Default::default()
+                    },
+                    NOW
+                )
                 .unwrap()
                 .is_empty()
         );
@@ -179,11 +212,46 @@ mod tests {
         // Its result, if it came now, has nothing to pair with.
         journal.finished(&store, "c1", true, "", 2_000);
         let row = &store
-            .tool_calls_list(&crate::store::CallFilter {
-                limit: 1,
-                ..Default::default()
-            })
+            .tool_calls_list(
+                &crate::store::CallFilter {
+                    limit: 1,
+                    ..Default::default()
+                },
+                NOW,
+            )
             .unwrap()[0];
         assert_eq!((row.duration_ms, row.ok), (None, None));
+    }
+
+    #[test]
+    fn a_codex_call_is_recorded_when_its_server_is_one_of_the_sessions() {
+        let store = Store::open_in_memory().unwrap();
+        let mut journal = Journal::default();
+        let all = |store: &Store| {
+            store
+                .tool_calls_list(
+                    &crate::store::CallFilter {
+                        limit: 10,
+                        ..Default::default()
+                    },
+                    NOW,
+                )
+                .unwrap()
+        };
+        // No servers yet: nothing is an integration.
+        journal.started(&store, "a1", "c0", "linear.create_issue", 1_000);
+        assert!(all(&store).is_empty());
+
+        journal.set_servers(vec!["linear".into(), "bandito".into()]);
+        journal.started(&store, "a1", "c1", "linear.create_issue", 1_000);
+        journal.started(&store, "a1", "c2", "github.get_repo", 1_000); // not a server of this session
+        journal.started(&store, "a1", "c3", "bandito.crew_send", 1_000); // Bandito's own crew server
+        journal.started(&store, "a1", "c4", "apply_patch", 1_000); // a Codex built-in tool
+        let rows = all(&store);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(
+            (rows[0].integration.as_str(), rows[0].tool.as_str()),
+            ("linear", "create_issue")
+        );
     }
 }

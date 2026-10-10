@@ -499,6 +499,49 @@ async fn mcp_tool_that_reports_is_error_failed() {
 }
 
 #[tokio::test]
+async fn an_integration_call_is_journaled_under_its_server_name() {
+    let mut s = spawn(cfg("mcp_integration_call.jsonl")).await;
+    s.session.send("make an issue").await.unwrap();
+    let out = until(&mut s, is_turn_end).await;
+    // The event keeps the runtime's name, `linear.create_issue`: only the journal reads the server name.
+    assert!(out.iter().any(|o| matches!(o,
+        RuntimeOutput::Event(EventBody::ToolCall { call_id, tool, .. })
+            if call_id == "mcp-3" && tool == "linear.create_issue")));
+
+    let store = bandito::store::Store::open_in_memory().unwrap();
+    let mut journal = bandito::call_journal::Journal::default();
+    journal.set_servers(vec!["linear".into()]);
+    for o in &out {
+        match o {
+            RuntimeOutput::Event(EventBody::ToolCall { call_id, tool, .. }) => {
+                journal.started(&store, "a1", call_id, tool, 1_000)
+            }
+            RuntimeOutput::Event(EventBody::ToolResult { call_id, ok, output }) => {
+                journal.finished(&store, call_id, *ok, output, 1_250)
+            }
+            _ => {}
+        }
+    }
+    let filter = bandito::store::CallFilter {
+        limit: 10,
+        ..Default::default()
+    };
+    let rows = store.tool_calls_list(&filter, 1_000).unwrap();
+    assert_eq!(rows.len(), 1);
+    let row = &rows[0];
+    assert_eq!(
+        (row.integration.as_str(), row.tool.as_str()),
+        ("linear", "create_issue")
+    );
+    assert_eq!(
+        (row.ok, row.duration_ms, row.error.clone()),
+        (Some(true), Some(250), None)
+    );
+    assert!(!format!("{row:?}").contains("ARGUMENT-SECRET"));
+    s.session.shutdown().await;
+}
+
+#[tokio::test]
 async fn turn_end_cancels_approvals_that_are_still_open() {
     let mut s = spawn(cfg("approval_open_at_turn_end.jsonl")).await;
     s.session.send("clean").await.unwrap();
