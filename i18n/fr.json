@@ -2255,5 +2255,6 @@
   "integrations.custom.add": "Ajouter",
   "integrations.custom.trialNote": "La vérification ajoute le serveur désactivé. Si vous quittez sans Ajouter, il est supprimé.",
   "integrations.problem.quoteUnclosed": "Un guillemet n'est pas fermé dans la commande.",
-  "integrations.oauth.connected": "Connecté"
+  "integrations.oauth.connected": "Connecté",
+  "backups.leaveSafeMode": "Vérifier la base et quitter le mode sans échec"
 }

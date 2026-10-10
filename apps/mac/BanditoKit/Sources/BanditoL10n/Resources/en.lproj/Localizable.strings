@@ -208,6 +208,7 @@
 "backups.emptyMessage" = "The daemon makes the first copy at its next start.";
 "backups.emptyTitle" = "No copies yet";
 "backups.explain" = "The daemon saves a copy of the database at start, before an update and once a day. The last 14 are kept.";
+"backups.leaveSafeMode" = "Check the database and leave safe mode";
 "backups.reason.beforeRestore" = "Before restore";
 "backups.reason.broken" = "Damaged database saved before a restore";
 "backups.reason.daily" = "Daily";

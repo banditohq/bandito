@@ -208,6 +208,7 @@
 "backups.emptyMessage" = "Der Daemon legt die erste Sicherung beim nächsten Start an.";
 "backups.emptyTitle" = "Noch keine Sicherungen";
 "backups.explain" = "Der Daemon sichert die Datenbank beim Start, vor einem Update und einmal täglich. Die letzten 14 bleiben erhalten.";
+"backups.leaveSafeMode" = "Datenbank prüfen und abgesicherten Modus verlassen";
 "backups.reason.beforeRestore" = "Vor der Wiederherstellung";
 "backups.reason.broken" = "Beschädigte Datenbank, vor einer Wiederherstellung gesichert";
 "backups.reason.daily" = "Täglich";

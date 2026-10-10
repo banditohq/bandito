@@ -65,4 +65,11 @@ extension ServerModel {
         struct P: Encodable { var name: String }
         return try await rpc().call("backups.restore", P(name: name), as: BackupRestoreReply.self)
     }
+
+    /// Asks the daemon to leave safe mode. It first opens a private copy of the database and refuses when that fails
+    /// ("restore a copy instead"); otherwise it answers and restarts, so the caller waits for a new start.
+    public func leaveSafeMode() async throws {
+        struct Reply: Decodable { var restarting: Bool }
+        _ = try await rpc().call("backups.leave_safe_mode", NoParams(), as: Reply.self, timeout: .seconds(60))
+    }
 }

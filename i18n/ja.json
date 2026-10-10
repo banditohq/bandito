@@ -2227,5 +2227,6 @@
   "integrations.custom.add": "追加",
   "integrations.custom.trialNote": "確認するとサーバーが無効の状態で追加されます。「追加」せずに閉じると削除されます。",
   "integrations.problem.quoteUnclosed": "コマンドの引用符が閉じられていません。",
-  "integrations.oauth.connected": "接続済み"
+  "integrations.oauth.connected": "接続済み",
+  "backups.leaveSafeMode": "データベースを確認してセーフモードを終了"
 }

@@ -208,6 +208,7 @@
 "backups.emptyMessage" = "デーモンは次回の起動時に最初のコピーを作成します。";
 "backups.emptyTitle" = "まだコピーがありません";
 "backups.explain" = "デーモンは起動時、更新の前、そして1日に1回、データベースのコピーを保存します。最新の14件を保管します。";
+"backups.leaveSafeMode" = "データベースを確認してセーフモードを終了";
 "backups.reason.beforeRestore" = "復元の前";
 "backups.reason.broken" = "復元前に保存した破損データベース";
 "backups.reason.daily" = "毎日";

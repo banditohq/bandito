@@ -319,6 +319,7 @@ public enum L10n {
         public static var emptyMessage: String { L10n.tr("backups.emptyMessage") }
         public static var emptyTitle: String { L10n.tr("backups.emptyTitle") }
         public static var explain: String { L10n.tr("backups.explain") }
+        public static var leaveSafeMode: String { L10n.tr("backups.leaveSafeMode") }
         public static var restarting: String { L10n.tr("backups.restarting") }
         public static var restore: String { L10n.tr("backups.restore") }
         public static func restoreFailed(error: String) -> String { L10n.tr("backups.restoreFailed", error) }
