@@ -1763,10 +1763,17 @@ async fn revoke(stored: &Stored, access: Option<&str>, name: &str) -> bool {
 /// `remove` (the integration is going away) it is deleted too. Returns whether the service revoked something.
 pub async fn disconnect(store: &Store, row: &Integration, remove: bool) -> Result<bool> {
     let _guard = lock(&row.id).await;
-    let access = store.secret_get(&oauth_access_name(&row.id))?;
-    let revoked = match load_stored(store, &row.id)? {
-        Some(stored) => revoke(&stored, access.as_deref(), &row.name).await,
-        None => false,
+    // A renewal held in memory is the live one: the service already rotated away from the stored refresh token.
+    let held = HELD.lock().unwrap_or_else(|e| e.into_inner()).get(&row.id).cloned();
+    let revoked = match held {
+        Some((access, stored)) => revoke(&stored, Some(&access), &row.name).await,
+        None => {
+            let access = store.secret_get(&oauth_access_name(&row.id))?;
+            match load_stored(store, &row.id)? {
+                Some(stored) => revoke(&stored, access.as_deref(), &row.name).await,
+                None => false,
+            }
+        }
     };
     let (access_name, state_name, client_name) = (
         oauth_access_name(&row.id),

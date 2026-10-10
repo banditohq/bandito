@@ -8,15 +8,20 @@ struct MarketEntry: Identifiable, Equatable {
     let name: String
     /// The catalog description in the app's language, or the address of an own integration.
     let description: String
-    /// The catalog template; `nil` for an own integration.
+    /// The catalog template: of a catalog entry, or of an integration that matches one (its name or its address).
+    /// `nil` for an own integration that matches no template.
     let template: IntegrationCatalogEntry?
     /// The integration on the server with this name; `nil` when the service is not connected.
     let integration: Integration?
 
     var isConnected: Bool { integration != nil }
 
-    /// The category of the catalog template; nil for an own integration.
-    var category: String? { template?.category }
+    /// An integration of the owner's, shown under its own name. It may carry a template for the logo and colour
+    /// (a second connection of a service that is already listed); it is not a catalog entry.
+    var isOwn: Bool { id.hasPrefix("own:") }
+
+    /// The category of the catalog template. An own entry is in no category: the catalog entry of the service is.
+    var category: String? { isOwn ? nil : template?.category }
 }
 
 /// The page of the Marketplace for one filter and one search: the connected row above the grid, and the grid.
@@ -52,29 +57,56 @@ enum MarketEmptyState: Equatable {
 
 /// The rules of the Marketplace list. Pure, so the filter, the search and the order are easy to test.
 enum MarketLogic {
-    /// The catalog templates in catalog order, then the own integrations that no template matches, in their order.
-    /// A template whose name is taken by an integration is connected: it is one entry, not two.
+    /// The catalog templates in catalog order, then the own integrations, in their order. A template that matches an
+    /// integration is connected: it is one entry, not two. The template takes its main integration: the one named after
+    /// it, else the first one that matches by address. Any other integration that matches a template is an own entry
+    /// under its own name, with the template's logo and colour; it is in no category.
     static func entries(
         catalog: [IntegrationCatalogEntry], integrations: [Integration], languageCode: String
     ) -> [MarketEntry] {
         let templates = catalog.map { template in
-            MarketEntry(
+            let matched = integrations.filter { self.template(for: $0, in: catalog)?.id == template.id }
+            return MarketEntry(
                 id: "catalog:\(template.id)",
                 name: template.name,
                 description: template.description(languageCode: languageCode),
                 template: template,
-                integration: integrations.first { $0.name == template.id })
+                integration: matched.first { $0.name == template.id } ?? matched.first)
         }
-        let templateIDs = Set(catalog.map(\.id))
-        let own = integrations.filter { !templateIDs.contains($0.name) }.map { integration in
-            MarketEntry(
+        let taken = Set(templates.compactMap { $0.integration?.id })
+        let own = integrations.filter { !taken.contains($0.id) }.map { integration in
+            return MarketEntry(
                 id: "own:\(integration.id)",
                 name: integration.name,
                 description: address(integration),
-                template: nil,
+                template: template(for: integration, in: catalog),
                 integration: integration)
         }
         return templates + own
+    }
+
+    /// The catalog template an integration belongs to: the one whose id is the integration's name, else the one whose
+    /// address is the integration's address. Nil when neither matches.
+    static func template(for integration: Integration, in catalog: [IntegrationCatalogEntry]) -> IntegrationCatalogEntry? {
+        if let byName = catalog.first(where: { $0.id == integration.name }) {
+            return byName
+        }
+        guard let address = normalizedURL(integration.url) else { return nil }
+        return catalog.first { normalizedURL($0.url) == address }
+    }
+
+    /// An address for comparing: the scheme and the host in lower case, the path as it is, no trailing `/`. Nil when
+    /// nothing is left. Spaces at the ends are ignored.
+    static func normalizedURL(_ raw: String?) -> String? {
+        guard let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return nil }
+        var address = trimmed
+        if var parts = URLComponents(string: trimmed) {
+            parts.scheme = parts.scheme?.lowercased()
+            parts.host = parts.host?.lowercased()
+            address = parts.string ?? trimmed
+        }
+        while address.hasSuffix("/") { address.removeLast() }
+        return address.isEmpty ? nil : address
     }
 
     /// The entries the filter keeps, then the ones the search keeps. The search reads the name and the description,

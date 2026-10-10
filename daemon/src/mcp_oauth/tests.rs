@@ -1420,6 +1420,47 @@ async fn a_renewal_the_database_refuses_twice_is_held_and_written_at_the_next_tr
     );
 }
 
+#[tokio::test]
+async fn disconnect_revokes_the_renewal_held_in_memory_not_the_dead_stored_one() {
+    let (store, flows) = rig();
+    let fake = Fake::start().await;
+    let now = now_ms();
+    let done = connect(&store, &flows, &fake, now).await;
+    let id = done.integration.id.clone();
+    let old_refresh = fake.inner.lock().unwrap().refresh.clone();
+    store.exec_for_test(
+        "CREATE TRIGGER refuse_state BEFORE UPDATE ON secrets WHEN NEW.name LIKE '%_STATE'
+         BEGIN SELECT RAISE(ABORT, 'disk full'); END;",
+    );
+    let late = now + 3_600_000 - 60_000;
+    assert!(
+        refresh(&store, &id, Why::Expiring(SESSION_SKEW_MS), late)
+            .await
+            .is_err()
+    );
+    let (new_access, new_refresh) = {
+        let inner = fake.inner.lock().unwrap();
+        (inner.access.clone(), inner.refresh.clone())
+    };
+    assert_ne!(new_refresh, old_refresh, "the fake rotates refresh tokens");
+    store.exec_for_test("DROP TRIGGER refuse_state");
+    assert!(disconnect(&store, &done.integration, false).await.unwrap());
+    let revoked: Vec<String> = fake
+        .inner
+        .lock()
+        .unwrap()
+        .revoked
+        .iter()
+        .filter_map(|f| f.get("token").cloned())
+        .collect();
+    assert!(revoked.contains(&new_refresh), "{revoked:?}");
+    assert!(revoked.contains(&new_access), "{revoked:?}");
+    assert!(
+        access_token(&store, &id).unwrap().is_none(),
+        "nothing is left after the disconnect"
+    );
+}
+
 #[test]
 fn curl_does_not_read_its_rc_file_or_a_proxy() {
     assert_eq!(CURL_ARGS[0], "-q", "-q must come first or curl reads ~/.curlrc");

@@ -226,7 +226,7 @@ struct MarketView: View {
                 HStack(alignment: .top, spacing: 10) {
                     MarketTile(entry: entry, size: 32)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(integration.name)
+                        Text(entry.name)
                             .font(BanditoFont.text(size: 14, weight: 600))
                             .foregroundStyle(Color.Bandito.text)
                             .lineLimit(1)
@@ -411,7 +411,10 @@ struct MarketView: View {
 
     private func signInAgain(_ integration: Integration) {
         guard let server else { return }
-        Task { await app.oauth.begin(server: server, target: .existing(id: integration.id), name: integration.name) }
+        // The name the card shows: a service's name, or the owner's own name for an own integration.
+        let entry = MarketLogic.entries(catalog: catalog, integrations: integrations, languageCode: "en")
+            .first { $0.integration?.id == integration.id }
+        Task { await app.oauth.begin(server: server, target: .existing(id: integration.id), name: entry?.name ?? integration.name) }
     }
 
     /// A sign-in just ended well: the list is read again and the new service is checked, so its tools show.
