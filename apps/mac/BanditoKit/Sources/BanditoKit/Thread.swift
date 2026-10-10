@@ -124,6 +124,9 @@ public struct AgentThread: Sendable, Hashable {
     private var queuedSeqs: Set<Int64> = []
     private var startedAt: [Int64: Int64] = [:]
     private var droppedAt: [Int64: Int64] = [:]
+    /// Undelivered messages the person sent again: they lose their "Not delivered" line, so a second click cannot
+    /// make a second copy. Kept in the model only.
+    private var resentSeqs: Set<Int64> = []
     /// Reactions by the `seq` of the message they are on.
     public private(set) var reactions: [Int64: MessageReactions] = [:]
     /// The message each reply answers: `seq` of the reply to `seq` of the original.
@@ -147,8 +150,11 @@ public struct AgentThread: Sendable, Hashable {
 
     /// The messages shown as waiting that the daemon gave up on: no turn will take them.
     public var undeliveredSeqs: Set<Int64> {
-        queuedSeqs.filter { startedAt[$0] == nil && droppedAt[$0] != nil }
+        queuedSeqs.filter { startedAt[$0] == nil && droppedAt[$0] != nil && !resentSeqs.contains($0) }
     }
+
+    public mutating func markResent(_ seq: Int64) { resentSeqs.insert(seq) }
+    public mutating func unmarkResent(_ seq: Int64) { resentSeqs.remove(seq) }
 
     /// The daemon closes a chapter with "… memory not saved" when it could not run the memory-save turn at all
     /// (see `unsaved` in daemon/src/supervisor.rs).
@@ -398,6 +404,7 @@ public struct AgentThread: Sendable, Hashable {
     /// of history, or the live events that came while a page was loading.
     public mutating func mergeMessageMeta(from other: AgentThread) {
         queuedSeqs.formUnion(other.queuedSeqs)
+        resentSeqs.formUnion(other.resentSeqs)
         startedAt.merge(other.startedAt) { mine, _ in mine }
         droppedAt.merge(other.droppedAt) { mine, _ in mine }
         reorderWaitingAcrossChapters()

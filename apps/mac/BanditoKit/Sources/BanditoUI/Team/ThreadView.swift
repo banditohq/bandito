@@ -609,14 +609,11 @@ struct ThreadView: View {
         return nil
     }
 
-    /// Sends a message the daemon gave up on once more, with the files it carried. The old line stays as it was.
+    /// Sends a message the daemon gave up on once more (see `ServerModel.resendUndelivered`).
     private func resend(_ seq: Int64) {
         let agentID = agent.id
-        let id = ThreadItem.messageID(seq: seq)
-        guard case .user(_, let text, _, _, _, _)? = thread.items.first(where: { $0.id == id }) else { return }
-        let files = thread.attachments[seq] ?? []
         Task {
-            do { try await server.send(text, to: agentID, attachments: files) } catch {
+            do { try await server.resendUndelivered(seq, of: agentID) } catch {
                 actionError = UserFacingError.message(for: error)
             }
         }

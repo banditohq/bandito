@@ -245,16 +245,42 @@ impl Store {
         }))
     }
 
-    /// The seq of the agent's newest message from the human (`message.user` with source `user`), if any.
-    pub fn last_user_message_seq(&self, agent_id: &str) -> Result<Option<i64>> {
-        Ok(self
-            .conn()
+    /// The seq of the human message the agent is answering: the one the newest human turn took
+    /// (`turn.started.message_seq`, or else the message written right after that `turn.started`). A message that
+    /// still waits behind the turn is not it. Before any human turn: the newest message that did not wait.
+    pub fn current_user_message_seq(&self, agent_id: &str) -> Result<Option<i64>> {
+        let conn = self.conn();
+        let turn: Option<(i64, Option<i64>)> = conn
             .query_row(
-                "SELECT seq FROM events WHERE agent_id = ?1 AND kind = 'message.user'
+                "SELECT seq, json_extract(payload, '$.message_seq') FROM events
+                   WHERE agent_id = ?1 AND kind = 'turn.started'
                    AND json_extract(payload, '$.source') = 'user' ORDER BY seq DESC LIMIT 1",
                 [agent_id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .optional()?;
+        if let Some((_, Some(taken))) = turn {
+            return Ok(Some(taken));
+        }
+        let after = turn.map_or(0, |(seq, _)| seq);
+        // Not queued: written when its turn began (right after `turn.started`), or sent to an idle agent.
+        let not_queued = "SELECT seq FROM events WHERE agent_id = ?1 AND kind = 'message.user'
+                   AND json_extract(payload, '$.source') = 'user'
+                   AND COALESCE(json_extract(payload, '$.queued'), 0) = 0";
+        let first_after: Option<i64> = conn
+            .query_row(
+                &format!("{not_queued} AND seq > ?2 ORDER BY seq ASC LIMIT 1"),
+                params![agent_id, after],
                 |r| r.get(0),
             )
+            .optional()?;
+        if first_after.is_some() && after > 0 {
+            return Ok(first_after);
+        }
+        Ok(conn
+            .query_row(&format!("{not_queued} ORDER BY seq DESC LIMIT 1"), [agent_id], |r| {
+                r.get(0)
+            })
             .optional()?)
     }
 
