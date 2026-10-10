@@ -6,7 +6,7 @@ open ports, paired devices and updates. Open the mode with ⌘7. The sections ar
 ## Server mode
 
 <!-- id: server-mode; covers: mode:server -->
-The Server mode has seven sections: Overview (Обзор), Workplaces (Рабочие места), Secrets (Секреты), Ports (Порты), Devices (Устройства), Updates (Обновления), and Daemon log (Журнал демона). The current server is shown in the top bar.
+The Server mode has seven sections: Overview (Обзор), Workplaces (Рабочие места), Secrets (Секреты), Ports (Порты), Devices (Устройства), Updates (Обновления), and Daemon log (Журнал демона). A server with a recent daemon also has Backups (Резервные копии). The current server is shown in the top bar.
 Где: Mode bar → Server (Сервер), or Menu View → Server (Сервер)
 1. Press ⌘7 or click Server (Сервер) in the mode bar.
 2. Choose a section at the top. Each section keeps its own state.
@@ -142,6 +142,15 @@ Shows the version of the daemon on the server and the latest release, and how to
 1. Read Daemon version (Версия демона) and Latest release (Последний релиз). The badge says Update available (Доступно обновление) or Up to date (Актуально).
 2. Click Open in terminal (Открыть в терминале). The update runs the same install script as the first setup. It replaces the daemon and keeps your data and settings.
 3. Run it in the terminal that opens. The Terminals mode shows the output.
+## Backups (Резервные копии)
+
+<!-- id: server-backups; covers: -->
+Copies of the server's database. The daemon saves one at its start, before an update and once a day, and keeps the newest 14. The section lists them and makes a copy now. It appears only on a server whose daemon has backups.
+Где: Server (⌘7) → Backups (Резервные копии)
+1. Read the list, newest first. Each copy shows its date and time, why it was made (At start, Before update, Daily, Manual, Before restore), and its size.
+2. Click Make a copy now (Сделать копию сейчас) to save the database at once.
+3. To restore a copy, click Restore (Восстановить) in its row and confirm Restore the copy from {date}?. The current database is saved first. The server restarts and agents stop for a few seconds; the banner The server is restarting… stays until it is back.
+
 ## Daemon log (Журнал демона)
 
 <!-- id: server-daemon-log; covers: -->
