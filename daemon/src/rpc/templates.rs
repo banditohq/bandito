@@ -100,6 +100,10 @@ async fn create_from(app: &App, t: &AgentTemplate, req: CreateFromTemplate) -> R
 
     let store = &app.sup.hub().store;
     let mut errors: Vec<Value> = Vec::new();
+    // The mark comes first, so the reply's agent carries it. A failure is listed; the agent stays.
+    if let Err(e) = store.agent_set_template(&id, &t.id) {
+        errors.push(json!({ "step": "agent", "message": format!("agent {id} was created but its template is not saved: {e:#}") }));
+    }
     let agent = match store.agent_view(&id) {
         Ok(Some(agent)) => Some(agent),
         Ok(None) => {
@@ -633,6 +637,48 @@ mod tests {
             let reply = create_from(&app, &t, req).await.unwrap();
             assert_eq!(scheduled_prompts(&store, &reply), want);
         }
+    }
+
+    #[tokio::test]
+    async fn an_agent_made_from_a_template_is_marked_and_the_mark_is_read_back() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, _) = app(dir.path());
+        let made = call(
+            &app,
+            "agents.create_from_template",
+            request("code-reviewer", "Marked", "en", json!([])),
+        )
+        .await
+        .unwrap();
+        assert_eq!(made["agent"]["template_id"], "code-reviewer");
+        let id = made["agent"]["id"].as_str().unwrap().to_string();
+
+        let got = call(&app, "agents.get", json!({ "id": id })).await.unwrap();
+        assert_eq!(got["template_id"], "code-reviewer");
+        let listed = call(&app, "agents.list", json!({})).await.unwrap();
+        let mine = listed.as_array().unwrap().iter().find(|a| a["id"] == id).unwrap();
+        assert_eq!(mine["template_id"], "code-reviewer");
+
+        // Not accepted on the wire: an update leaves the mark as it is.
+        let updated = call(&app, "agents.update", json!({ "id": id, "template_id": "nope" }))
+            .await
+            .unwrap();
+        assert_eq!(updated["template_id"], "code-reviewer");
+    }
+
+    #[tokio::test]
+    async fn agents_create_ignores_a_template_id_and_leaves_the_mark_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, _) = app(dir.path());
+        let created = call(
+            &app,
+            "agents.create",
+            json!({ "name": "Hand made", "runtime": "claude", "template_id": "code-reviewer" }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(created["template_id"], Value::Null);
+        assert_eq!(created["name"], "Hand made");
     }
 
     #[tokio::test]

@@ -483,7 +483,7 @@ The methods that serve the catalog above and make a bot from one. Code: `daemon/
 
 Checks, all before anything is written (`INVALID_PARAMS`, nothing created): an unknown `template_id`; a `name` that is empty or not valid as an agent name (1–32 characters: letters, digits, spaces, `-`, `_`); an unknown `runtime`; an empty `language`; an index outside the template's schedules, or one listed twice; a schedule whose cron the agent rules refuse (an invalid cron, or runs closer than 5 minutes).
 
-Then the agent is created by the code of `agents.create`: the same checks, the same folder, one `agent_changed(created)` event. Its `role` is `role_en`, its `system_prompt`, `effort` and `capabilities` are the template's, its avatar is derived from the name (templates have none), and its integrations are every enabled one (the template's list is not copied).
+Then the agent is created by the code of `agents.create`: the same checks, the same folder, one `agent_changed(created)` event. Its `role` is `role_en`, its `system_prompt`, `effort` and `capabilities` are the template's, its avatar is derived from the name (templates have none), and its integrations are every enabled one (the template's list is not copied). The agent's `template_id` is the template's `id` (migration 0022, a nullable column; `null` for every other agent, and `agents.list|get` show it). Only this method sets it; `agents.create|update` ignore a `template_id` in their params. The Mac app's My bots filter (Bots page) reads it.
 
 Then, in this order:
 - **Skills.** Each id in `skills` is installed in the agent's folder, as `skills.install` does with scope `project`. A failure goes to `errors` and the rest still runs.
