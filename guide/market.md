@@ -300,3 +300,31 @@ Try is dimmed while the service is turned off; point at it to read why.
 2. A red line under a field says what to fix. Nothing is sent until every field is right.
 3. Click Hide (Свернуть) to close the form.
 
+## Import from Claude Code
+
+<!-- id: market-import; covers: sheet:importer -->
+Import from Claude Code (Импорт из Claude Code) brings what you already have for Claude Code and Codex into Bandito.
+It reads these places on this Mac: the subagents in `~/.claude/agents`, the skills in `~/.claude/skills` (the whole
+folder of each), the commands in `~/.claude/commands`, and the prompts in `~/.codex/prompts`. Add a project folder (Добавить
+папку проекта) to read its `.claude/agents`, `.claude/skills` and `.claude/commands` too, and its `AGENTS.md`, which
+becomes an agent named after the folder. Nothing else is read: no settings, no keys, no history. Nothing on the Mac is
+changed or deleted, and a link is never followed. A file over 256 KB, or one that is not text, is not taken, and a skill
+over 50 files or 2 MB is not taken; the list under Found, but not taken (Найдено, но не взято) says which and why.
+Each item has a check box, Preview (Просмотр) with the head of the file, and the folder it came from. A subagent becomes
+an agent: its description (cut to a short role) is the role, its text is the instructions, its model is kept only when the
+runtime you choose offers it, and its tools set what it may do: Bash is the terminal, Edit, Write, MultiEdit and NotebookEdit
+are the files, WebFetch and WebSearch are the browser; a file that lists no tools leaves everything on. Pick the runtime in
+Create agents on (Создавать агентов на); the default is Claude. A skill or a command is installed for every agent on the
+server, with Bandito's commands and skills. If a name is taken (an agent with that name, a command or a skill the server
+has, or another item of the same list), the item is marked Name taken (Имя занято): Rename (Переименовать) with a new name
+(a free one is suggested), or Skip (Пропустить). Bandito never replaces what the server has. A line in orange warns of
+a file that looks like it holds a key or a password, of files that are not text inside a skill, or of a model the runtime
+does not have. Import (Импортировать) makes the checked items one after the other, and the screen then reports what was
+Created (Создано), Skipped (Пропущено) and Failed (Не получилось), with the reason.
+Где: Marketplace → Services (Сервисы) → Import from Claude Code (Импорт из Claude Code), or the menu File → Import from Claude Code… (Файл → Импорт из Claude Code…)
+1. Open the screen. Everything found is checked; clear what you do not want, or use Clear (Снять выбор) for a group.
+2. Click Preview (Просмотр) to read an item, and Add a project folder (Добавить папку проекта) to look in a project.
+3. Settle every Name taken (Имя занято): Rename (Переименовать) or Skip (Пропустить).
+4. Choose Create agents on (Создавать агентов на) and click Import (Импортировать).
+5. Read the report and click Done (Готово).
+

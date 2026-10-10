@@ -88,7 +88,7 @@ public enum MacCommandParser {
     }
 
     /// Names are one or more of `A-Z a-z 0-9 _ . -`, and do not start with a dot.
-    static func isValidSegment(_ segment: String) -> Bool {
+    public static func isValidSegment(_ segment: String) -> Bool {
         guard !segment.isEmpty, !segment.hasPrefix(".") else { return false }
         return segment.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || "_.-".contains($0)) }
     }

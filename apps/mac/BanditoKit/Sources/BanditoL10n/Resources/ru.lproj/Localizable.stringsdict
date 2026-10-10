@@ -122,6 +122,26 @@
 			<string>занято %1$lld токена</string>
 		</dict>
 	</dict>
+	<key>claudeImport.warning.nonText</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%1$lld файла в папке не текстовые; они копируются как есть.</string>
+			<key>many</key>
+			<string>%1$lld файлов в папке не текстовые; они копируются как есть.</string>
+			<key>one</key>
+			<string>%1$lld файл в папке не текстовый; он копируется как есть.</string>
+			<key>other</key>
+			<string>%1$lld файла в папке не текстовые; они копируются как есть.</string>
+		</dict>
+	</dict>
 	<key>common.agentCount</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>

@@ -98,6 +98,22 @@
 			<string>%1$lld tokens usados</string>
 		</dict>
 	</dict>
+	<key>claudeImport.warning.nonText</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%1$lld arquivo da pasta não é texto; ele é copiado como está.</string>
+			<key>other</key>
+			<string>%1$lld arquivos da pasta não são texto; eles são copiados como estão.</string>
+		</dict>
+	</dict>
 	<key>common.agentCount</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>

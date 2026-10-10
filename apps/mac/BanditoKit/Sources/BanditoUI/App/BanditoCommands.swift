@@ -26,6 +26,9 @@ public struct BanditoCommands: Commands {
         CommandGroup(after: .help) {
             Button(L10n.Onboarding.showAgain) { onboarding.replay() }
         }
+        CommandGroup(after: .newItem) {
+            Button(L10n.Menu.importClaude) { router.sheet = .importer }
+        }
         // ⌘W is the terminal close in the Terminals mode, so the window closes with ⇧⌘W.
         CommandGroup(replacing: .saveItem) {
             Button(L10n.Keys.closeWindow) { WindowActions.closeKeyWindow() }

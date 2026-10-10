@@ -86,6 +86,20 @@
 			<string>已用 %1$lld 个词元</string>
 		</dict>
 	</dict>
+	<key>claudeImport.warning.nonText</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>other</key>
+			<string>文件夹中有 %1$lld 个文件不是文本，将原样复制。</string>
+		</dict>
+	</dict>
 	<key>common.agentCount</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>

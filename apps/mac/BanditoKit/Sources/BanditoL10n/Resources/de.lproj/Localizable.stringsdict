@@ -98,6 +98,22 @@
 			<string>%1$lld Tokens verbraucht</string>
 		</dict>
 	</dict>
+	<key>claudeImport.warning.nonText</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%1$lld Datei im Ordner ist kein Text; sie wird unverändert kopiert.</string>
+			<key>other</key>
+			<string>%1$lld Dateien im Ordner sind kein Text; sie werden unverändert kopiert.</string>
+		</dict>
+	</dict>
 	<key>common.agentCount</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>

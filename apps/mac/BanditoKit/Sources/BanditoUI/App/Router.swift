@@ -111,9 +111,12 @@ public enum Sheet: Identifiable, Hashable, Sendable {
     /// A new schedule of the agent (`existing` nil), or the change of an existing one. Shown on the main window,
     /// not on the inspector, which is too narrow for it.
     case schedule(agentID: String, existing: Schedule?)
+    /// Import agents, skills and commands from Claude Code and Codex on this Mac.
+    case importer
 
     public var id: String {
         switch self {
+        case .importer: "importer"
         case .newAgent: "newAgent"
         case .addServer: "addServer"
         case .account: "account"

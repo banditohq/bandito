@@ -466,6 +466,86 @@ public enum L10n {
         public static var usageHint: String { L10n.tr("chapter.usageHint") }
     }
 
+    public enum ClaudeImport {
+        public static var addFolder: String { L10n.tr("claudeImport.addFolder") }
+        public static var clearAll: String { L10n.tr("claudeImport.clearAll") }
+        public static var conflict: String { L10n.tr("claudeImport.conflict") }
+        public static var done: String { L10n.tr("claudeImport.done") }
+        public static var empty: String { L10n.tr("claudeImport.empty") }
+        public static var folderMessage: String { L10n.tr("claudeImport.folderMessage") }
+        public static var hidePreview: String { L10n.tr("claudeImport.hidePreview") }
+        public static var needsAgentFolder: String { L10n.tr("claudeImport.needsAgentFolder") }
+        public static var needsCommands: String { L10n.tr("claudeImport.needsCommands") }
+        public static var newName: String { L10n.tr("claudeImport.newName") }
+        public static var notTaken: String { L10n.tr("claudeImport.notTaken") }
+        public static var preview: String { L10n.tr("claudeImport.preview") }
+        public static var rename: String { L10n.tr("claudeImport.rename") }
+        public static func running(done: String, total: String) -> String { L10n.tr("claudeImport.running", done, total) }
+        public static var runtime: String { L10n.tr("claudeImport.runtime") }
+        public static var scanning: String { L10n.tr("claudeImport.scanning") }
+        public static var selectAll: String { L10n.tr("claudeImport.selectAll") }
+        public static var skip: String { L10n.tr("claudeImport.skip") }
+        public static func start(count: Int) -> String { L10n.tr("claudeImport.start", count) }
+        public static var subtitle: String { L10n.tr("claudeImport.subtitle") }
+        public static var title: String { L10n.tr("claudeImport.title") }
+
+        public enum Group {
+            public static var agents: String { L10n.tr("claudeImport.group.agents") }
+            public static var commands: String { L10n.tr("claudeImport.group.commands") }
+            public static var skills: String { L10n.tr("claudeImport.group.skills") }
+        }
+
+        public enum Kind {
+            public static var agent: String { L10n.tr("claudeImport.kind.agent") }
+            public static var command: String { L10n.tr("claudeImport.kind.command") }
+            public static var skill: String { L10n.tr("claudeImport.kind.skill") }
+        }
+
+        public enum Origin {
+            public static func agentsMd(name: String) -> String { L10n.tr("claudeImport.origin.agentsMd", name) }
+            public static var codex: String { L10n.tr("claudeImport.origin.codex") }
+            public static func project(name: String) -> String { L10n.tr("claudeImport.origin.project", name) }
+            public static var user: String { L10n.tr("claudeImport.origin.user") }
+        }
+
+        public enum Problem {
+            public static var badAgentName: String { L10n.tr("claudeImport.problem.badAgentName") }
+            public static var badName: String { L10n.tr("claudeImport.problem.badName") }
+            public static var empty: String { L10n.tr("claudeImport.problem.empty") }
+            public static var taken: String { L10n.tr("claudeImport.problem.taken") }
+            public static var tooLong: String { L10n.tr("claudeImport.problem.tooLong") }
+        }
+
+        public enum Reason {
+            public static var byYou: String { L10n.tr("claudeImport.reason.byYou") }
+            public static var exists: String { L10n.tr("claudeImport.reason.exists") }
+        }
+
+        public enum Report {
+            public static var created: String { L10n.tr("claudeImport.report.created") }
+            public static var failed: String { L10n.tr("claudeImport.report.failed") }
+            public static var skipped: String { L10n.tr("claudeImport.report.skipped") }
+        }
+
+        public enum Skip {
+            public static func badName(path: String) -> String { L10n.tr("claudeImport.skip.badName", path) }
+            public static func empty(path: String) -> String { L10n.tr("claudeImport.skip.empty", path) }
+            public static func link(path: String) -> String { L10n.tr("claudeImport.skip.link", path) }
+            public static func noSkillFile(path: String) -> String { L10n.tr("claudeImport.skip.noSkillFile", path) }
+            public static func notText(path: String) -> String { L10n.tr("claudeImport.skip.notText", path) }
+            public static func tooBig(path: String) -> String { L10n.tr("claudeImport.skip.tooBig", path) }
+            public static func tooLarge(path: String) -> String { L10n.tr("claudeImport.skip.tooLarge", path) }
+            public static func tooManyFiles(path: String) -> String { L10n.tr("claudeImport.skip.tooManyFiles", path) }
+            public static func unreadable(path: String) -> String { L10n.tr("claudeImport.skip.unreadable", path) }
+        }
+
+        public enum Warning {
+            public static func model(model: String, runtime: String) -> String { L10n.tr("claudeImport.warning.model", model, runtime) }
+            public static func nonText(count: Int) -> String { L10n.tr("claudeImport.warning.nonText", count) }
+            public static var secret: String { L10n.tr("claudeImport.warning.secret") }
+        }
+    }
+
     public enum Common {
         public static func agentCount(count: Int) -> String { L10n.tr("common.agentCount", count) }
         public static var agents: String { L10n.tr("common.agents") }
@@ -1509,6 +1589,7 @@ public enum L10n {
         public static var agent: String { L10n.tr("menu.agent") }
         public static var checkForUpdates: String { L10n.tr("menu.checkForUpdates") }
         public static var go: String { L10n.tr("menu.go") }
+        public static var importClaude: String { L10n.tr("menu.importClaude") }
         public static var terminals: String { L10n.tr("menu.terminals") }
         public static var view: String { L10n.tr("menu.view") }
     }
