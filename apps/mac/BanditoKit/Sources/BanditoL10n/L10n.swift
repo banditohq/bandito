@@ -415,6 +415,8 @@ public enum L10n {
     public enum Composer {
         public static var contextHint: String { L10n.tr("composer.contextHint") }
         public static func contextPopover(percent: String) -> String { L10n.tr("composer.contextPopover", percent) }
+        public static var formGo: String { L10n.tr("composer.formGo") }
+        public static func formWaiting(name: String) -> String { L10n.tr("composer.formWaiting", name) }
     }
 
     public enum Connect {
@@ -752,6 +754,41 @@ public enum L10n {
         public static var search: String { L10n.tr("folderPicker.search") }
     }
 
+    public enum Form {
+        public static var alreadyAnswered: String { L10n.tr("form.alreadyAnswered") }
+        public static var answered: String { L10n.tr("form.answered") }
+        public static func answeredLine(summary: String) -> String { L10n.tr("form.answeredLine", summary) }
+        public static func asks(name: String) -> String { L10n.tr("form.asks", name) }
+        public static var choose: String { L10n.tr("form.choose") }
+        public static var clearDate: String { L10n.tr("form.clearDate") }
+        public static var confirm: String { L10n.tr("form.confirm") }
+        public static var confirmed: String { L10n.tr("form.confirmed") }
+        public static func confirms(name: String) -> String { L10n.tr("form.confirms", name) }
+        public static var errDate: String { L10n.tr("form.errDate") }
+        public static var errEmail: String { L10n.tr("form.errEmail") }
+        public static var errNumber: String { L10n.tr("form.errNumber") }
+        public static var errOption: String { L10n.tr("form.errOption") }
+        public static var errRequired: String { L10n.tr("form.errRequired") }
+        public static var errTooLong: String { L10n.tr("form.errTooLong") }
+        public static var expired: String { L10n.tr("form.expired") }
+        public static var expiredError: String { L10n.tr("form.expiredError") }
+        public static var hideAnswers: String { L10n.tr("form.hideAnswers") }
+        public static var no: String { L10n.tr("form.no") }
+        public static var pickDate: String { L10n.tr("form.pickDate") }
+        public static var reject: String { L10n.tr("form.reject") }
+        public static var rejected: String { L10n.tr("form.rejected") }
+        public static func rejectedWhy(comment: String) -> String { L10n.tr("form.rejectedWhy", comment) }
+        public static var requiredHelp: String { L10n.tr("form.requiredHelp") }
+        public static var sent: String { L10n.tr("form.sent") }
+        public static var showAnswers: String { L10n.tr("form.showAnswers") }
+        public static var skip: String { L10n.tr("form.skip") }
+        public static var skipped: String { L10n.tr("form.skipped") }
+        public static func skippedWhy(comment: String) -> String { L10n.tr("form.skippedWhy", comment) }
+        public static var submit: String { L10n.tr("form.submit") }
+        public static var whyPlaceholder: String { L10n.tr("form.whyPlaceholder") }
+        public static var yes: String { L10n.tr("form.yes") }
+    }
+
     public enum Gestures {
         public static var sensitivity: String { L10n.tr("gestures.sensitivity") }
         public static var sharper: String { L10n.tr("gestures.sharper") }
@@ -1010,6 +1047,19 @@ public enum L10n {
         public static var waiting: String { L10n.tr("menubar.waiting") }
         public static var wantsPush: String { L10n.tr("menubar.wantsPush") }
         public static var working: String { L10n.tr("menubar.working") }
+    }
+
+    public enum Message {
+        public static var copied: String { L10n.tr("message.copied") }
+        public static var copyAsText: String { L10n.tr("message.copyAsText") }
+        public static var more: String { L10n.tr("message.more") }
+        public static var react: String { L10n.tr("message.react") }
+        public static var reactMore: String { L10n.tr("message.reactMore") }
+        public static var reactPickerHint: String { L10n.tr("message.reactPickerHint") }
+        public static var reactionMine: String { L10n.tr("message.reactionMine") }
+        public static func reactionOf(name: String) -> String { L10n.tr("message.reactionOf", name) }
+        public static var reactionSame: String { L10n.tr("message.reactionSame") }
+        public static var selectText: String { L10n.tr("message.selectText") }
     }
 
     public enum Mode {
@@ -1451,6 +1501,15 @@ public enum L10n {
         public static var help: String { L10n.tr("profile.help") }
         public static var settings: String { L10n.tr("profile.settings") }
         public static var signOut: String { L10n.tr("profile.signOut") }
+    }
+
+    public enum Reply {
+        public static var cancel: String { L10n.tr("reply.cancel") }
+        public static var earlier: String { L10n.tr("reply.earlier") }
+        public static var jump: String { L10n.tr("reply.jump") }
+        public static func toAgent(name: String) -> String { L10n.tr("reply.toAgent", name) }
+        public static var toSelf: String { L10n.tr("reply.toSelf") }
+        public static var you: String { L10n.tr("reply.you") }
     }
 
     public enum Rules {

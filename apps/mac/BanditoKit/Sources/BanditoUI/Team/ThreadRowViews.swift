@@ -10,6 +10,7 @@ struct ThreadRowView: View {
     /// The agent's primary runtime, to tell a return from a limit switch.
     var primaryRuntime: String
     var server: ServerModel
+    var chat = ThreadChat()
     var onError: (UserFacingMessage) -> Void
 
     var body: some View {
@@ -21,7 +22,9 @@ struct ThreadRowView: View {
         case .toolGroup(let tools):
             ToolGroupCard(tools: tools, duration: nil)
         case .item(let item):
-            ItemView(item: item, agentName: agentName, primaryRuntime: primaryRuntime, server: server, onError: onError)
+            ItemView(
+                item: item, agentName: agentName, primaryRuntime: primaryRuntime, server: server, chat: chat,
+                onError: onError)
         }
     }
 }
@@ -32,13 +35,29 @@ private struct ItemView: View {
     var agentName: String
     var primaryRuntime: String
     var server: ServerModel
+    var chat: ThreadChat
     var onError: (UserFacingMessage) -> Void
+
+    /// The quote at the top of a reply, when the message answers another one.
+    @ViewBuilder
+    private func quote(forSeq seq: Int64?) -> some View {
+        if chat.repliesOn, let seq, let to = chat.replies[seq] {
+            let original = chat.original(to)
+            ReplyQuoteView(
+                name: original.map { $0.fromUser ? L10n.Reply.you : agentName } ?? "",
+                text: original?.text, accent: chat.accent
+            ) { chat.onJump(to) }
+        }
+    }
 
     var body: some View {
         switch item {
-        case .user(_, let text, let source, let from, _):
+        case .user(let id, let text, let source, let from, _):
             if source == .user {
-                UserBubble(text: text)
+                let seq = item.messageSeq
+                MessageContainer(itemID: id, seq: seq, text: text, fromUser: true, chat: chat) {
+                    UserBubble(text: text) { quote(forSeq: seq) }
+                }
             } else {
                 // Crew and schedule messages arrive as the agent's own input; name the sender above the bubble.
                 VStack(alignment: .leading, spacing: 4) {
@@ -47,13 +66,22 @@ private struct ItemView: View {
                             .font(BanditoFont.font(size: 11.5, weight: 500))
                             .foregroundStyle(Color.Bandito.text3)
                     }
-                    AgentBubble(text: text)
+                    HStack {
+                        AgentBubble(text: text)
+                        Spacer(minLength: 120)
+                    }
                 }
             }
-        case .assistant(_, let text, _):
-            AgentBubble(text: text)
+        case .assistant(let id, let text, _):
+            let seq = item.messageSeq
+            MessageContainer(itemID: id, seq: seq, text: text, fromUser: false, chat: chat) {
+                AgentBubble(text: text) { quote(forSeq: seq) }
+            }
         case .streaming(let text):
-            AgentBubble(text: text)
+            HStack {
+                AgentBubble(text: text)
+                Spacer(minLength: 120)
+            }
         case .tool(let row):
             ToolGroupCard(tools: [row], duration: nil)
         case .approval(let row):
@@ -67,6 +95,12 @@ private struct ItemView: View {
                 }
             }
             .tourAnchor(.approvals)
+        case .form(let row):
+            if chat.formsOn {
+                FormCard(row: row, agentName: agentName) { action, values, comment in
+                    try await chat.onAnswerForm(row, action, values, comment)
+                }
+            }
         case .note(_, let text, let kind, _):
             NoteLine(text: text, isError: kind == .error)
         case .chapter:
@@ -82,55 +116,76 @@ private struct ItemView: View {
 
 // MARK: - Bubbles
 
-/// The user's message: right-aligned, on the raised surface.
-struct UserBubble: View {
+/// The user's message: on the raised surface. `ThreadItemsView` places it at the right (see `MessageContainer`).
+/// `header` goes above the text inside the bubble: the quote of a reply.
+struct UserBubble<Header: View>: View {
     var text: String
+    var header: Header
+
+    init(text: String, @ViewBuilder header: () -> Header) {
+        self.text = text
+        self.header = header()
+    }
 
     var body: some View {
-        HStack {
-            Spacer(minLength: 120)
-            Text(text)
-                .font(BanditoFont.font(size: 14.5, weight: 400))
-                .foregroundStyle(Color.Bandito.text)
-                .lineSpacing(3)
-                .textSelection(.enabled)
-                .padding(.horizontal, 15)
-                .padding(.vertical, 11)
-                .background(
-                    Color.Bandito.surface3,
-                    in: UnevenRoundedRectangle(
-                        topLeadingRadius: 18, bottomLeadingRadius: 18, bottomTrailingRadius: 6, topTrailingRadius: 18))
+        VStack(alignment: .leading, spacing: 8) {
+            header
+            MessageBodyView(text: text, markdown: false)
         }
+        .padding(.horizontal, 15)
+        .padding(.vertical, 11)
+        .background(
+            Color.Bandito.surface3,
+            in: UnevenRoundedRectangle(
+                topLeadingRadius: 18, bottomLeadingRadius: 18, bottomTrailingRadius: 6, topTrailingRadius: 18))
     }
 }
 
-/// The agent's reply: left-aligned, with inline Markdown; inline code is drawn in the accent color.
-struct AgentBubble: View {
-    var text: String
+extension UserBubble where Header == EmptyView {
+    init(text: String) {
+        self.init(text: text) { EmptyView() }
+    }
+}
 
-    var body: some View {
-        HStack {
-            Text(Self.markdown(text))
-                .font(BanditoFont.font(size: 14.5, weight: 400))
-                .foregroundStyle(Color.Bandito.text)
-                .lineSpacing(4)
-                .textSelection(.enabled)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(
-                    Color.Bandito.surface1,
-                    in: UnevenRoundedRectangle(
-                        topLeadingRadius: 18, bottomLeadingRadius: 6, bottomTrailingRadius: 18, topTrailingRadius: 18))
-                .overlay(
-                    UnevenRoundedRectangle(
-                        topLeadingRadius: 18, bottomLeadingRadius: 6, bottomTrailingRadius: 18, topTrailingRadius: 18)
-                        .stroke(Color.Bandito.line, lineWidth: 1))
-            Spacer(minLength: 120)
-        }
+/// The agent's reply, with inline Markdown; inline code is drawn in the accent color, and a fenced code block has a
+/// Copy button. `ThreadItemsView` places it at the left (see `MessageContainer`).
+struct AgentBubble<Header: View>: View {
+    var text: String
+    var header: Header
+
+    init(text: String, @ViewBuilder header: () -> Header) {
+        self.text = text
+        self.header = header()
     }
 
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            header
+            MessageBodyView(text: text, markdown: true)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(
+            Color.Bandito.surface1,
+            in: UnevenRoundedRectangle(
+                topLeadingRadius: 18, bottomLeadingRadius: 6, bottomTrailingRadius: 18, topTrailingRadius: 18))
+        .overlay(
+            UnevenRoundedRectangle(
+                topLeadingRadius: 18, bottomLeadingRadius: 6, bottomTrailingRadius: 18, topTrailingRadius: 18)
+                .stroke(Color.Bandito.line, lineWidth: 1))
+    }
+}
+
+extension AgentBubble where Header == EmptyView {
+    init(text: String) {
+        self.init(text: text) { EmptyView() }
+    }
+}
+
+/// Inline Markdown of the agent's text.
+enum InlineMarkdown {
     /// Inline Markdown. Text that does not parse is shown verbatim.
-    static func markdown(_ text: String) -> AttributedString {
+    static func render(_ text: String) -> AttributedString {
         guard
             var rendered = try? AttributedString(
                 markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))

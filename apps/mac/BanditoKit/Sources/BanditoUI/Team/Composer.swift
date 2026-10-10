@@ -17,6 +17,12 @@ struct Composer: View {
     /// The agent and its server, for slash commands. Without them the slash menu is off.
     var agent: Agent?
     var server: ServerModel?
+    /// The message this one answers, shown in a bar above the field. Esc and the cross in the bar take it away.
+    var reply: ReplyTarget?
+    var onCancelReply: () -> Void = {}
+    /// A form the agent waits on: the hint above the field, with a link that scrolls to the form (given its id).
+    var waitingForm: FormRow?
+    var onGoToForm: (String) -> Void = { _ in }
     var onSend: () -> Void
     var onStop: () -> Void
 
@@ -58,6 +64,14 @@ struct Composer: View {
                 UserFacingErrorView(message: notice)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 16)
+            }
+            if let waitingForm {
+                formHint(waitingForm)
+                    .transition(.opacity.combined(with: .offset(y: 6)))
+            }
+            if let reply {
+                replyBar(reply)
+                    .transition(.opacity.combined(with: .offset(y: 6)))
             }
             HStack(alignment: .bottom, spacing: 10) {
                 // Attaching files returns with uploads; a name-only "@file" was misleading.
@@ -113,6 +127,8 @@ struct Composer: View {
             .foregroundStyle(Color.Bandito.text3.opacity(0.7))
         }
         .animation(.easeOut(duration: BanditoMotion.fast), value: query != nil)
+        .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: reply)
+        .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: waitingForm?.formId)
         .onAppear { focused = true }
         .tourAnchor(.composer)
         .onChange(of: router.composerFocusAgentID, initial: true) { _, _ in
@@ -146,6 +162,65 @@ struct Composer: View {
         } message: {
             Text(L10n.Slash.installMessage)
         }
+    }
+
+    /// The bar above the field: whom the message answers, and the first words of the original.
+    private func replyBar(_ target: ReplyTarget) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(Color.Bandito.signal)
+                .frame(width: 3, height: 32)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(target.fromUser ? L10n.Reply.toSelf : L10n.Reply.toAgent(name: agentName))
+                    .font(BanditoFont.font(size: 12, weight: 600))
+                    .foregroundStyle(Color.Bandito.signal)
+                    .lineLimit(1)
+                Text(target.excerpt)
+                    .font(BanditoFont.font(size: 12.5, weight: 400))
+                    .foregroundStyle(Color.Bandito.text2)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            Spacer(minLength: 8)
+            Button(action: onCancelReply) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .semibold))
+                    .frame(width: 24, height: 24)
+            }
+            .banditoButton(.icon(size: 24, label: L10n.Reply.cancel))
+            .help(L10n.Reply.cancel)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.Bandito.surface2, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.Bandito.line, lineWidth: 1))
+    }
+
+    /// The agent is waiting for an answer in a form: what to do, and a way to the form.
+    private func formHint(_ form: FormRow) -> some View {
+        HStack(spacing: 10) {
+            StatusDot(status: .needsYou, size: 7, ringColor: Color.Bandito.signal.opacity(0.15))
+            Text(L10n.Composer.formWaiting(name: agentName))
+                .font(BanditoFont.font(size: 12.5, weight: 500))
+                .foregroundStyle(Color.Bandito.text)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+            Spacer(minLength: 8)
+            Button {
+                onGoToForm(form.formId)
+            } label: {
+                Text(L10n.Composer.formGo)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+            .banditoButton(.link)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.Bandito.signal.opacity(0.1), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.Bandito.signal.opacity(0.3), lineWidth: 1))
     }
 
     private var contextIndicator: some View {
@@ -205,6 +280,11 @@ struct Composer: View {
     // MARK: Keys and menu actions
 
     private func handleMenuKey(_ key: KeyEquivalent) -> KeyPress.Result {
+        // Esc with no menu open takes the reply away.
+        if query == nil, key == .escape, reply != nil {
+            onCancelReply()
+            return .handled
+        }
         guard query != nil else { return .ignored }
         switch key {
         case .upArrow:

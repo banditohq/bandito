@@ -16,6 +16,8 @@ public enum ThreadItem: Sendable, Hashable, Identifiable {
     /// A new memory chapter began. `saved` is false when its memory could not be saved before it closed.
     /// The number comes from the event, not from any text.
     case chapter(id: String, number: Int, saved: Bool, ts: Int64)
+    /// A form the agent asked the person (see docs/ARCHITECTURE.md#forms).
+    case form(FormRow)
 
     public var id: String {
         switch self {
@@ -25,6 +27,42 @@ public enum ThreadItem: Sendable, Hashable, Identifiable {
         case .streaming: return "streaming"
         case .tool(let t): return "tool-\(t.callId)"
         case .approval(let a): return "approval-\(a.approvalId)"
+        case .form(let f): return "form-\(f.formId)"
+        }
+    }
+
+    /// The `seq` of the event this item is, when it is a message a person can react to or answer: a message from the
+    /// person or the agent. A message finalized from a stream (`…-s`), and a crew or schedule message, have none.
+    public var messageSeq: Int64? {
+        switch self {
+        case .user(let id, _, let source, _, _) where source == .user:
+            return Self.seq(ofEventID: id)
+        case .assistant(let id, _, _):
+            return Self.seq(ofEventID: id)
+        default:
+            return nil
+        }
+    }
+
+    /// `s123` is the event with `seq` 123. Ids of live-only or derived rows have no seq.
+    static func seq(ofEventID id: String) -> Int64? {
+        guard id.hasPrefix("s"), id.dropFirst().allSatisfy(\.isNumber), id.count > 1 else { return nil }
+        return Int64(id.dropFirst())
+    }
+
+    /// The id of the row for the message with this `seq`.
+    public static func messageID(seq: Int64) -> String { "s\(seq)" }
+}
+
+extension ThreadItem {
+    /// Unix milliseconds, for the items that carry a time.
+    public var timestamp: Int64? {
+        switch self {
+        case .user(_, _, _, _, let ts), .assistant(_, _, let ts), .note(_, _, _, let ts): ts
+        case .runtimeSwitch(_, _, _, _, let ts): ts
+        case .chapter(_, _, _, let ts): ts
+        case .form(let f): f.ts
+        case .streaming, .tool, .approval: nil
         }
     }
 }
@@ -70,6 +108,15 @@ public struct AgentThread: Sendable, Hashable {
     /// Last persisted event applied (deltas don't count).
     public var lastSeq: Int64 = 0
     public var turnRunning = false
+    /// Reactions by the `seq` of the message they are on.
+    public private(set) var reactions: [Int64: MessageReactions] = [:]
+    /// The message each reply answers: `seq` of the reply to `seq` of the original.
+    public private(set) var replies: [Int64: Int64] = [:]
+    /// The files each message carries, by its `seq`.
+    public private(set) var attachments: [Int64: [MessageAttachment]] = [:]
+    /// How each form ended, by form id. Kept apart from the rows because a page of history may hold the answer and not
+    /// the question (the question comes with an older page).
+    private var formOutcomes: [String: FormOutcome] = [:]
     /// Between the hidden memory-save turn and the chapter rotation that ends it.
     private var memorySaveRunning = false
     /// The memory-save turn ended with an error, so the chapter closes with its memory unsaved.
@@ -88,6 +135,19 @@ public struct AgentThread: Sendable, Hashable {
             if case .approval(let a) = $0, a.state == .pending { return a }
             return nil
         }
+    }
+
+    /// The forms that wait for the person, oldest first.
+    public var pendingForms: [FormRow] {
+        items.compactMap {
+            if case .form(let f) = $0, f.isPending { return f }
+            return nil
+        }
+    }
+
+    /// The reactions on a message, empty when it has none.
+    public func chips(forMessage seq: Int64) -> [ReactionChip] {
+        reactions[seq]?.chips ?? []
     }
 
     /// Text of the newest message in the thread: a user or assistant message, or the reply still streaming.
@@ -124,7 +184,11 @@ public struct AgentThread: Sendable, Hashable {
         switch e.body {
         case .turnStarted:
             turnRunning = true
-        case .messageUser(let text, let source, let from):
+        case .messageUser(let text, let source, let from, let replyTo, let files):
+            if source != .system {
+                if let replyTo { replies[e.seq] = replyTo }
+                if !files.isEmpty { attachments[e.seq] = files }
+            }
             switch source {
             case .user:
                 dropStreaming()
@@ -215,9 +279,68 @@ public struct AgentThread: Sendable, Hashable {
             items.append(.chapter(id: e.id, number: chapter, saved: !unsaved, ts: e.ts))
         case .runtimeSwitched(let from, let to, let until):
             items.append(.runtimeSwitch(id: e.id, from: from, to: to, until: until, ts: e.ts))
+        case .formRequested(let formId, let spec):
+            finalizeStreaming(e)
+            if !items.contains(where: { $0.id == "form-\(formId)" }) {
+                let known = formOutcomes[formId].map { Self.restored($0, fields: spec.fields) }
+                items.append(.form(FormRow(formId: formId, spec: spec, outcome: known, ts: e.ts)))
+            }
+        case .formAnswered(let formId, let action, let values, let comment):
+            let outcome: FormOutcome
+            switch action {
+            case .submit: outcome = .submitted(values: values ?? [:])
+            case .reject: outcome = .rejected(comment: comment)
+            case .expired: outcome = .expired
+            }
+            close(form: formId, with: outcome)
+        case .reaction(let seq, let emoji, let by):
+            reactions[seq, default: MessageReactions()].set(by: by, emoji: emoji, eventSeq: e.seq)
         case .usageLimits, .agentChanged, .unknown:
             // Not part of a thread: the team's agent list reads its own records.
             break
+        }
+    }
+
+    /// An outcome with its answers keyed by the form's field ids (the RPC decoder rewrites `snake_case` keys).
+    private static func restored(_ outcome: FormOutcome, fields: [FormField]) -> FormOutcome {
+        if case .submitted(let values) = outcome {
+            return .submitted(values: FormKeys.restoring(values, fields: fields))
+        }
+        return outcome
+    }
+
+    /// Ends a form: its row, if loaded, and the table that serves a row loaded later.
+    public mutating func close(form formId: String, with outcome: FormOutcome) {
+        formOutcomes[formId] = outcome
+        if let i = items.firstIndex(where: { $0.id == "form-\(formId)" }), case .form(var row) = items[i] {
+            row.outcome = Self.restored(outcome, fields: row.spec.fields)
+            items[i] = .form(row)
+        }
+    }
+
+    /// Adds a form the daemon still holds open that the loaded history does not show (its request is older than the
+    /// page). It goes where its time puts it among the dated rows.
+    public mutating func addPending(form row: FormRow) {
+        let id = "form-\(row.formId)"
+        guard !items.contains(where: { $0.id == id }), formOutcomes[row.formId] == nil else { return }
+        let at = items.firstIndex { item in
+            guard let ts = item.timestamp else { return false }
+            return ts > row.ts
+        }
+        items.insert(.form(row), at: at ?? items.endIndex)
+    }
+
+    /// Folds in what another reading of the same thread knew about reactions, replies, files and forms: the older page
+    /// of history, or the live events that came while a page was loading.
+    public mutating func mergeMessageMeta(from other: AgentThread) {
+        for (seq, theirs) in other.reactions { reactions[seq, default: MessageReactions()].merge(theirs) }
+        for (seq, to) in other.replies where replies[seq] == nil { replies[seq] = to }
+        for (seq, files) in other.attachments where attachments[seq] == nil { attachments[seq] = files }
+        for (id, outcome) in other.formOutcomes where formOutcomes[id] == nil { formOutcomes[id] = outcome }
+        for (i, item) in items.enumerated() {
+            guard case .form(var row) = item, row.outcome == nil, let outcome = formOutcomes[row.formId] else { continue }
+            row.outcome = Self.restored(outcome, fields: row.spec.fields)
+            items[i] = .form(row)
         }
     }
 

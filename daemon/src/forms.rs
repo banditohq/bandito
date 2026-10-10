@@ -175,7 +175,8 @@ pub fn parse_spec(v: &Value) -> Result<FormSpec, String> {
 }
 
 /// Checks the answer to a form and returns the values by field id. A field left out takes its default when
-/// it has one. Unknown ids are refused.
+/// it has one; a key given empty (`""`, `[]`) stays empty for an optional field and is `required` for a required
+/// one. Unknown ids are refused.
 pub fn check_values(spec: &FormSpec, values: &Value) -> Result<Map<String, Value>, String> {
     let given = match values {
         Value::Null => Map::new(),
@@ -187,6 +188,15 @@ pub fn check_values(spec: &FormSpec, values: &Value) -> Result<Map<String, Value
     }
     let mut out = Map::new();
     for field in &spec.fields {
+        // A key that is there says what the person wants, even when it is empty: the default is only for a key
+        // that is left out (or null). An empty answer clears a field that had a default.
+        if let Some(v) = given.get(&field.id).filter(|v| is_empty(v)) {
+            if field.required {
+                return Err(format!("field \"{}\" is required", field.id));
+            }
+            out.insert(field.id.clone(), v.clone());
+            continue;
+        }
         let value = match given.get(&field.id) {
             Some(v) if !v.is_null() => Some(coerce(field, v).map_err(|e| format!("field \"{}\": {e}", field.id))?),
             _ => match field.default.as_ref().filter(|d| !d.is_null()) {
@@ -518,6 +528,36 @@ mod tests {
             json!([{ "id": "tz", "label": "Zone", "type": "choice", "options": ["UTC", "MSK"], "default": "MSK" }]);
         assert_eq!(checked(fields.clone(), json!({})).unwrap()["tz"], "MSK");
         assert_eq!(checked(fields, json!({ "tz": "UTC" })).unwrap()["tz"], "UTC");
+    }
+
+    #[test]
+    fn an_empty_answer_clears_a_default_but_a_missing_one_does_not() {
+        let fields = json!([
+            { "id": "t", "label": "T", "type": "text", "default": "Hi" },
+            { "id": "e", "label": "E", "type": "email", "default": "a@b.c" },
+            { "id": "d", "label": "D", "type": "date", "default": "2026-10-10" },
+            { "id": "m", "label": "M", "type": "multichoice", "options": ["a", "b"], "default": ["a"] },
+        ]);
+        let cleared = checked(fields.clone(), json!({ "t": "", "e": "", "d": "", "m": [] })).unwrap();
+        assert_eq!(cleared["t"], "");
+        assert_eq!(cleared["e"], "");
+        assert_eq!(cleared["d"], "");
+        assert_eq!(cleared["m"], json!([]));
+        // Left out, or null: the defaults.
+        let left = checked(fields, json!({ "t": null })).unwrap();
+        assert_eq!(left["t"], "Hi");
+        assert_eq!(left["e"], "a@b.c");
+        assert_eq!(left["m"], json!(["a"]));
+    }
+
+    #[test]
+    fn an_empty_answer_to_a_required_field_is_refused_even_with_a_default() {
+        let fields = json!([{ "id": "t", "label": "T", "type": "text", "required": true, "default": "Hi" }]);
+        assert_eq!(
+            checked(fields.clone(), json!({ "t": "  " })).unwrap_err(),
+            "field \"t\" is required"
+        );
+        assert_eq!(checked(fields, json!({})).unwrap()["t"], "Hi");
     }
 
     #[test]

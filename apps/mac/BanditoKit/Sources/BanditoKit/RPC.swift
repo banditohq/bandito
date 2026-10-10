@@ -231,8 +231,16 @@ public actor RPCClient {
     public func call<R: Decodable>(
         _ method: String, _ params: some Encodable, as: R.Type = R.self, timeout: Duration = .seconds(30)
     ) async throws -> R {
-        let data = try await perform(method, params, timeout: timeout)
+        let json = String(decoding: try Self.encoder.encode(params), as: UTF8.self)
+        let data = try await perform(method, paramsJSON: json, timeout: timeout)
         return try Self.decoder.decode(ResultBox<R>.self, from: data).r
+    }
+
+    /// Call a method with params that are already JSON (`jsonParams` is one JSON object). For params whose keys must
+    /// reach the daemon as they are, where the snake_case encoder would rewrite them (the `values` of a form).
+    public func call(_ method: String, jsonParams: Data, timeout: Duration = .seconds(30)) async throws {
+        let text = String(decoding: jsonParams, as: UTF8.self)
+        _ = try await perform(method, paramsJSON: text, timeout: timeout)
     }
 
     /// Call a method whose result the caller doesn't need.
@@ -240,11 +248,10 @@ public actor RPCClient {
         _ = try await call(method, params, as: JSONValue.self, timeout: timeout)
     }
 
-    private func perform(_ method: String, _ params: some Encodable, timeout: Duration) async throws -> Data {
+    private func perform(_ method: String, paramsJSON paramsString: String, timeout: Duration) async throws -> Data {
         if closed { throw RPCError(code: RPCError.disconnected, message: "disconnected from the server") }
         let id = nextId
         nextId += 1
-        let paramsString = String(decoding: try Self.encoder.encode(params), as: UTF8.self)
         let request = "{\"jsonrpc\":\"2.0\",\"id\":\(id),\"method\":\(jsonString(method)),\"params\":\(paramsString)}"
 
         slots[id] = .sent

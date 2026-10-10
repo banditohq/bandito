@@ -616,10 +616,26 @@ public final class ServerModel: Identifiable {
             t.statusDetail = live.statusDetail
             t.turnRunning = live.turnRunning
             t.lastSeq = max(t.lastSeq, live.lastSeq)
+            t.mergeMessageMeta(from: live)
         }
         threads[agentId] = t
         oldestSeq[agentId] = page.first?.seq
         hasMoreHistory[agentId] = !page.isEmpty && page.count == Self.historyPageSize
+        await addOpenForms(agentId)
+    }
+
+    /// A form that still waits can be older than the page that was loaded: the daemon holds it for a day. It is added
+    /// to the thread, so the person sees what the agent is waiting for. A failed read leaves the thread as it is.
+    private func addOpenForms(_ agentId: String) async {
+        guard supports("forms"), let c = try? rpc() else { return }
+        struct P: Encodable { var agentId: String; var status: String }
+        guard let open = try? await c.call("forms.list", P(agentId: agentId, status: "pending"), as: [FormRecord].self)
+        else { return }
+        guard var thread = threads[agentId] else { return }
+        for record in open.reversed() {
+            thread.addPending(form: FormRow(formId: record.id, spec: record.spec, outcome: nil, ts: record.createdAt))
+        }
+        threads[agentId] = thread
     }
 
     /// Prepends the page before the oldest loaded event.
@@ -632,6 +648,7 @@ public final class ServerModel: Identifiable {
         var current = threads[agentId] ?? AgentThread()
         let known = Set(current.items.map(\.id))
         current.items = older.items.filter { !known.contains($0.id) } + current.items
+        current.mergeMessageMeta(from: older)
         threads[agentId] = current
         if let oldest = page.first?.seq { oldestSeq[agentId] = oldest }
         hasMoreHistory[agentId] = !page.isEmpty && page.count == Self.historyPageSize
@@ -639,9 +656,53 @@ public final class ServerModel: Identifiable {
 
     // MARK: actions
 
-    public func send(_ text: String, to agentId: String) async throws {
-        struct P: Encodable { var agentId: String; var text: String }
-        try await rpc().call("agents.send", P(agentId: agentId, text: text))
+    /// Sends a message. `replyTo` is the `seq` of the message it answers (the daemon takes it with the `attachments`
+    /// feature; without it the field is left out and the text goes alone).
+    public func send(_ text: String, to agentId: String, replyTo: Int64? = nil) async throws {
+        struct P: Encodable { var agentId: String; var text: String; var replyTo: Int64? }
+        let reply = supports("attachments") ? replyTo : nil
+        try await rpc().call("agents.send", P(agentId: agentId, text: text, replyTo: reply))
+    }
+
+    /// Throws `unsupported` when the daemon does not list `feature`: the call would only be refused as an unknown method.
+    private func requireFeature(_ feature: String) throws {
+        guard supports(feature) else {
+            throw RPCError(code: RPCError.invalidParams, message: "unsupported: \(feature) is not available on this server")
+        }
+    }
+
+    /// Puts an emoji on a message, or takes the person's reaction off with `nil` (`messages.react`). The thread shows
+    /// it when the daemon's `reaction` event arrives.
+    public func react(_ emoji: String?, toMessage seq: Int64, of agentId: String) async throws {
+        try requireFeature("reactions")
+        struct P: Encodable {
+            var agentId: String; var seq: Int64; var emoji: String?
+            // The daemon reads a missing `emoji` as null, but an explicit null says it plainly.
+            func encode(to encoder: Encoder) throws {
+                var c = encoder.container(keyedBy: Keys.self)
+                try c.encode(agentId, forKey: .agentId)
+                try c.encode(seq, forKey: .seq)
+                try c.encode(emoji, forKey: .emoji)
+            }
+            enum Keys: String, CodingKey { case agentId, seq, emoji }
+        }
+        try await rpc().call("messages.react", P(agentId: agentId, seq: seq, emoji: emoji))
+    }
+
+    /// Answers a form (`forms.answer`). The answer reaches the thread as the daemon's `form_answered` event. A form the
+    /// daemon says is over (`expired`) is closed in the thread at once; the error is still thrown for the card to show.
+    public func answerForm(
+        _ formId: String, in agentId: String, action: FormAction, values: [String: JSONValue]? = nil,
+        comment: String? = nil
+    ) async throws {
+        try requireFeature("forms")
+        let params = try FormAnswer.answerParams(formId: formId, action: action, values: values, comment: comment)
+        do {
+            try await rpc().call("forms.answer", jsonParams: params)
+        } catch let error as RPCError where error.message == "expired" {
+            threads[agentId]?.close(form: formId, with: .expired)
+            throw error
+        }
     }
 
     public func interrupt(_ agentId: String) async throws {

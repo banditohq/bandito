@@ -25,6 +25,12 @@ struct ThreadView: View {
     @State private var unseen = 0
     /// The scroll position, kept outside the view state: a scroll must not redraw the header and the composer.
     @State private var scroll = ThreadScrollMemory()
+    /// A row to bring on screen (a quoted message, a form), and the row that flashes after it.
+    @State private var scrollRequest: ScrollRequest?
+    @State private var highlightedID: String?
+    @State private var jumpTask: Task<Void, Never>?
+    @State private var highlightTask: Task<Void, Never>?
+    private var replyDrafts: ReplyDrafts { ReplyDrafts.shared }
 
     private var thread: AgentThread { server.thread(for: agent.id) }
 
@@ -61,6 +67,7 @@ struct ThreadView: View {
                 onError: { actionError = $0 },
                 agentName: agent.name,
                 primaryRuntime: agent.runtime.rawValue,
+                chat: chat,
                 typing: thread.turnRunning && !isStreaming,
                 onBottomVisibility: bottomVisibilityChanged)
         }
@@ -185,6 +192,12 @@ struct ThreadView: View {
                     }
                     .banditoAnimation(.easeOut(duration: BanditoMotion.fast), value: jumpVisible)
                     .onAppear { restore(proxy) }
+                    .onChange(of: scrollRequest) { _, request in
+                        guard let request else { return }
+                        withAnimation(.easeOut(duration: BanditoMotion.base)) {
+                            proxy.scrollTo(request.id, anchor: .center)
+                        }
+                    }
             }
             if thread.status == .error, let detail = thread.statusDetail {
                 Banner(text: detail)
@@ -209,6 +222,10 @@ struct ThreadView: View {
                 contextFraction: ContextUsage.fraction(tokens: agent.contextTokens, budget: agent.contextBudget),
                 agent: agent,
                 server: server,
+                reply: replyDrafts.target(for: agent.id),
+                onCancelReply: { replyDrafts.set(nil, for: agent.id) },
+                waitingForm: server.supports("forms") ? thread.pendingForms.last : nil,
+                onGoToForm: { scrollTo(id: "form-\($0)") },
                 onSend: send,
                 onStop: stop)
                 .frame(maxWidth: 780)
@@ -222,6 +239,8 @@ struct ThreadView: View {
             await loadChanges()
         }
         .onDisappear {
+            jumpTask?.cancel()
+            highlightTask?.cancel()
             router.threadPlaces[agent.id] = ThreadScroll.place(atBottom: atBottom, topRowID: scroll.topRowID)
         }
         // The header names the model from the server's list, so the list is asked once per server, not on opening
@@ -291,14 +310,110 @@ struct ThreadView: View {
         let id = agent.id
         let text = router.takeDraft(for: id)
         guard !text.isEmpty else { return }
+        let reply = replyDrafts.take(for: id)
         sendError = nil
         Task {
-            do { try await server.send(text, to: id) } catch {
+            do { try await server.send(text, to: id, replyTo: reply?.seq) } catch {
                 sendError = UserFacingError.message(for: error)
                 router.restoreDraft(text, for: id)
+                replyDrafts.restore(reply, for: id)
             }
         }
     }
+
+    // MARK: Messages: replies, reactions, forms
+
+    /// The agent's colour, for the bar of a quote.
+    private var accent: Color {
+        AvatarResolver.resolve(
+            name: agent.name, color: agent.avatar.flatMap { AvatarColor(rawValue: $0.color) }, face: .auto
+        ).color.color
+    }
+
+    /// What the rows need to offer reactions, replies and forms (see `ThreadChat`).
+    private var chat: ThreadChat {
+        let current = thread
+        let agentID = agent.id
+        return ThreadChat(
+            reactionsOn: server.supports("reactions"),
+            repliesOn: server.supports("attachments"),
+            formsOn: server.supports("forms"),
+            agentName: agent.name,
+            accent: accent,
+            reactions: current.reactions,
+            replies: current.replies,
+            attachments: current.attachments,
+            highlightedID: highlightedID,
+            original: { seq in Self.original(seq, in: current.items) },
+            onReply: { target in
+                replyDrafts.set(target, for: agentID)
+                router.requestComposerFocus(agentID: agentID)
+            },
+            onReact: { seq, emoji in react(seq, emoji) },
+            onJump: { seq in jump(toMessage: seq) },
+            onAnswerForm: { row, action, values, comment in
+                try await server.answerForm(row.formId, in: agentID, action: action, values: values, comment: comment)
+            })
+    }
+
+    /// A message of the loaded history by its `seq`, as something to reply to.
+    static func original(_ seq: Int64, in items: [ThreadItem]) -> ReplyTarget? {
+        let id = ThreadItem.messageID(seq: seq)
+        for item in items where item.id == id {
+            switch item {
+            case .user(_, let text, _, _, _): return ReplyTarget(seq: seq, fromUser: true, text: text)
+            case .assistant(_, let text, _): return ReplyTarget(seq: seq, fromUser: false, text: text)
+            default: return nil
+            }
+        }
+        return nil
+    }
+
+    private func react(_ seq: Int64, _ emoji: String?) {
+        let agentID = agent.id
+        Task {
+            do { try await server.react(emoji, toMessage: seq, of: agentID) } catch {
+                actionError = UserFacingError.message(for: error)
+            }
+        }
+    }
+
+    /// Brings a row to the middle of the thread.
+    private func scrollTo(id: String) {
+        scrollRequest = ScrollRequest(id: id, token: (scrollRequest?.token ?? 0) + 1)
+    }
+
+    /// Goes to a message a reply quotes, reading older history first when it is not loaded yet, and lets it flash.
+    private func jump(toMessage seq: Int64) {
+        jumpTask?.cancel()
+        let id = ThreadItem.messageID(seq: seq)
+        let agentID = agent.id
+        jumpTask = Task { @MainActor in
+            var pages = 0
+            while !thread.items.contains(where: { $0.id == id }), server.hasMoreHistory[agentID] == true, pages < 12 {
+                if Task.isCancelled { return }
+                do { try await server.loadOlder(agentID) } catch {
+                    actionError = UserFacingError.message(for: error)
+                    return
+                }
+                pages += 1
+            }
+            guard !Task.isCancelled, thread.items.contains(where: { $0.id == id }) else { return }
+            scrollTo(id: id)
+            highlightedID = id
+            highlightTask?.cancel()
+            highlightTask = Task { @MainActor in
+                try? await Task.sleep(for: .seconds(1))
+                if !Task.isCancelled, highlightedID == id { highlightedID = nil }
+            }
+        }
+    }
+}
+
+/// A row to scroll to. The token makes a second request for the same row a new value.
+private struct ScrollRequest: Equatable {
+    var id: String
+    var token: Int
 }
 
 /// The scroll position of one thread view: the row on top. A reference, so that a scroll changes it without a redraw.
@@ -345,6 +460,7 @@ struct ThreadItemsView: View {
     var onError: (UserFacingMessage) -> Void = { _ in }
     var agentName = ""
     var primaryRuntime = ""
+    var chat = ThreadChat()
     /// Shows the typing indicator after the last row while a turn runs.
     var typing = false
     /// Whether the bottom marker (the newest message) is on screen.
@@ -360,7 +476,8 @@ struct ThreadItemsView: View {
             }
             ForEach(rows) { row in
                 ThreadRowView(
-                    row: row, agentName: agentName, primaryRuntime: primaryRuntime, server: server, onError: onError)
+                    row: row, agentName: agentName, primaryRuntime: primaryRuntime, server: server, chat: chat,
+                    onError: onError)
                     .banditoRise()
             }
             if typing {
