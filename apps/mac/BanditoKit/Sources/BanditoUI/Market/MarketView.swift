@@ -37,6 +37,11 @@ struct MarketView: View {
     /// closes a row, so the view reads the stored choice again.
     @State private var recommendations: [IntegrationRecommendation] = []
     @State private var hideTick = 0
+    /// The "Tools" section of the open service: the tools its last check listed, by integration id, and the ones whose
+    /// mode or words are being saved.
+    @State private var toolLists: [String: [IntegrationTool]] = [:]
+    @State private var toolsSaving: Set<String> = []
+    @State private var toolsError: UserFacingMessage?
 
     private let columns = [GridItem(.adaptive(minimum: 240), spacing: 14, alignment: .top)]
 
@@ -60,6 +65,9 @@ struct MarketView: View {
         }
         .task(id: recommendationKey) {
             await loadRecommendations()
+        }
+        .task(id: toolsKey) {
+            await loadTools()
         }
         .onChange(of: tab) { _, _ in
             query = ""
@@ -156,7 +164,75 @@ struct MarketView: View {
             onRemove: { removing = entry.integration },
             onSetEnabled: { on in
                 if let integration = entry.integration { Task { await setEnabled(integration, on) } }
-            })
+            },
+            tools: toolsInput(for: entry))
+    }
+
+    // MARK: - tool permissions
+
+    /// The "Tools" section of a connected service, when the server can limit tools.
+    private func toolsInput(for entry: MarketEntry) -> ToolsSectionInput? {
+        guard let integration = entry.integration, server?.supports("tool_permissions") == true else { return nil }
+        return ToolsSectionInput(
+            tools: toolLists[integration.id] ?? [],
+            saving: toolsSaving.contains(integration.id),
+            error: toolsError,
+            unreached: ToolPermissionLogic.unreachedAgents(server?.agents ?? []),
+            onMode: { mode in
+                guard mode != integration.toolMode else { return }
+                Task { await saveTools(integration, IntegrationPatch(toolMode: mode)) }
+            },
+            onWord: { tool, word in
+                let words = ToolPermissionLogic.overrides(
+                    setting: word, for: tool, mode: integration.toolMode, current: integration.toolOverrides)
+                guard words != integration.toolOverrides else { return }
+                Task { await saveTools(integration, IntegrationPatch(toolOverrides: words)) }
+            },
+            onCheck: { Task { await check(integration.id) } })
+    }
+
+    /// The open service's id when its page is open on a server that limits tools: what the section is loaded for.
+    private var toolsKey: String {
+        let open = MarketLogic.entry(withID: router.marketDetail, in: openEntries)?.integration?.id ?? ""
+        return "\(loadKey)|\(tab.rawValue)|\(open)"
+    }
+
+    private var openEntries: [MarketEntry] {
+        MarketLogic.entries(catalog: catalog, integrations: integrations, languageCode: ModelDescription.currentLanguageCode)
+    }
+
+    private func loadTools() async {
+        guard let server, tab == .services, server.supports("tool_permissions"),
+            let id = MarketLogic.entry(withID: router.marketDetail, in: openEntries)?.integration?.id
+        else { return }
+        await reloadTools(id, from: server)
+    }
+
+    private func reloadTools(_ id: String, from server: ServerModel) async {
+        do {
+            let list = try await server.integrationTools(id)
+            guard !Task.isCancelled else { return }
+            toolLists[id] = list
+            toolsError = nil
+        } catch {
+            // A daemon that does not list tools yet leaves the section with its "check the service" line.
+            guard !Task.isCancelled else { return }
+            toolLists[id] = toolLists[id] ?? []
+        }
+    }
+
+    /// Saves the mode or the words of one service. The controls wait for the answer; the list is read again.
+    private func saveTools(_ integration: Integration, _ patch: IntegrationPatch) async {
+        guard let server, !toolsSaving.contains(integration.id) else { return }
+        toolsSaving.insert(integration.id)
+        defer { toolsSaving.remove(integration.id) }
+        do {
+            try await server.updateIntegration(integration.id, patch: patch)
+            toolsError = nil
+            await reload()
+        } catch {
+            toolsError = UserFacingError.message(for: error)
+        }
     }
 
     private func listPage(supported: Bool, shown: MarketPage, empty: MarketEmptyState?) -> some View {
@@ -617,6 +693,9 @@ struct MarketView: View {
             skills.reset()
             recommendations = []
             updating = []
+            toolLists = [:]
+            toolsSaving = []
+            toolsError = nil
             panel = nil
             panelBusy = false
             removingSkill = nil
@@ -802,6 +881,7 @@ struct MarketView: View {
         do {
             let result = try await server.testIntegration(id)
             tests[id] = result
+            if server.supports("tool_permissions") { await reloadTools(id, from: server) }
             if result.needsLogin { await reloadConnections(of: server) }
         } catch {
             self.error = UserFacingError.message(for: error)

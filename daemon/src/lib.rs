@@ -45,5 +45,6 @@ pub mod store;
 pub mod supervisor;
 pub mod team;
 pub mod terminal;
+pub mod tool_policy;
 pub mod update;
 pub mod workspace;

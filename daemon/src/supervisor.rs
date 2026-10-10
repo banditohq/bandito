@@ -119,6 +119,8 @@ pub const MAX_TEAM_ASSIGNS_PER_TURN: u8 = 12;
 pub const MAX_CREW_MESSAGES_PER_CHAIN: u32 = 20;
 /// Chain counters are dropped all at once when there are more than this many.
 const MAX_TRACKED_CHAINS: usize = 10_000;
+/// How much of a service tool's arguments an approval card shows, in characters.
+const TOOL_ARGUMENTS_SHOWN: usize = 2000;
 
 /// Crew state of the turn that is running for one agent.
 #[derive(Debug, Clone, PartialEq)]
@@ -1368,6 +1370,12 @@ impl Actor {
                 (self.workspaces.spec(&ws), None)
             }
         };
+        // The services the owner limited: the CLI sends every call of theirs to the daemon to decide.
+        let gated_tools: Vec<String> = chosen
+            .iter()
+            .filter(|i| i.tool_mode != crate::store::ToolMode::All || !i.tool_overrides.is_empty())
+            .map(|i| i.name.clone())
+            .collect();
         let spawned = rt
             .spawn(SpawnConfig {
                 agent_id: agent.id.clone(),
@@ -1406,6 +1414,7 @@ impl Actor {
                 personal_settings: agent.use_personal_settings,
                 capabilities: agent.capabilities.clone(),
                 mcp_servers,
+                gated_tools,
             })
             .await?;
         self.root = spawned
@@ -2165,14 +2174,29 @@ impl Actor {
         // state moves on with the line.
         // The verdict, and the folder the line leaves the shell in. The folder is applied when the line goes ahead:
         // at once when it is allowed, on the user's yes when it is asked about, and never after a refusal.
-        let policy::Judgement { verdict, shell_after } = policy::judge_guarded(
-            agent.approval_mode,
-            &req,
-            &roots,
-            &rules,
-            &self.protected,
-            &self.shell_cwd,
-        );
+        // A call of a tool of one of the owner's services is first decided by the service's mode and the owner's
+        // word on the tool (see `tool_policy`); what that leaves open goes to the normal policy.
+        let gate = self.tool_gate(&req, agent.approval_mode, &rules)?;
+        let (verdict, shell_after, agent_message) = match gate {
+            Some(judged) => {
+                if matches!(judged.verdict, Verdict::Ask(_)) {
+                    // The card shows the arguments the service would get, cut.
+                    req.diff = crate::tool_policy::arguments_text(&req.input, TOOL_ARGUMENTS_SHOWN);
+                }
+                (judged.verdict, None, judged.agent_message)
+            }
+            None => {
+                let policy::Judgement { verdict, shell_after } = policy::judge_guarded(
+                    agent.approval_mode,
+                    &req,
+                    &roots,
+                    &rules,
+                    &self.protected,
+                    &self.shell_cwd,
+                );
+                (verdict, shell_after, None)
+            }
+        };
         let decision = match verdict {
             Verdict::Allow => "allowed",
             Verdict::Ask(_) => "asked",
@@ -2202,9 +2226,10 @@ impl Actor {
                         remember: false,
                     },
                 );
-                match self.session.as_mut() {
-                    Some(s) => s.resolve(&req.key, Decision::Deny).await,
-                    None => Ok(()),
+                match (self.session.as_mut(), agent_message) {
+                    (Some(s), Some(message)) => s.deny_with_message(&req.key, &message).await,
+                    (Some(s), None) => s.resolve(&req.key, Decision::Deny).await,
+                    (None, _) => Ok(()),
                 }
             }
             Verdict::Ask(reason) => {
@@ -2222,6 +2247,27 @@ impl Actor {
                 Ok(())
             }
         }
+    }
+
+    /// The decision of the service's mode for a call of `mcp__<service>__<tool>`, if the call is one and the mode has an
+    /// opinion (docs/ARCHITECTURE.md#tool-permissions).
+    fn tool_gate(
+        &self,
+        req: &ApprovalRequest,
+        mode: crate::store::ApprovalMode,
+        rules: &[crate::store::Rule],
+    ) -> Result<Option<crate::tool_policy::Judged>> {
+        if !req.tool.starts_with(crate::tool_policy::MCP_PREFIX) {
+            return Ok(None);
+        }
+        let rows = self.hub.store.integration_list()?;
+        let Some((row, tool)) = crate::tool_policy::split(&req.tool, &rows) else {
+            return Ok(None);
+        };
+        let subject = req.command.as_deref().unwrap_or(req.title.as_str());
+        // What the last probe of the service saw: a tool it did not list counts as a write.
+        let known = crate::tool_policy::StoredTools::new(row.id.clone(), self.hub.store.integration_tools(&row.id)?);
+        Ok(crate::tool_policy::judge(row, &tool, &known, mode, rules, subject))
     }
 
     /// Record a daemon-asked approval. Its answer channel waits in `pending`, and it shows in the feed
@@ -2441,6 +2487,10 @@ pub(crate) mod testing {
             self.log.lock().unwrap().push(format!("resolve {key} {decision:?}"));
             Ok(())
         }
+        async fn deny_with_message(&mut self, key: &str, message: &str) -> Result<()> {
+            self.log.lock().unwrap().push(format!("deny_message {key} {message}"));
+            Ok(())
+        }
         async fn shutdown(self: Box<Self>) {
             self.log.lock().unwrap().push("shutdown".into());
         }
@@ -2573,6 +2623,19 @@ mod tests {
                 tokio::time::sleep(Duration::from_millis(10)).await;
             }
             panic!("log never had {line:?}: {:?}", self.log.lock().unwrap());
+        }
+
+        async fn wait_log_prefix(&self, prefix: &str) {
+            for _ in 0..300 {
+                if self.log.lock().unwrap().iter().any(|l| l.starts_with(prefix)) {
+                    return;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            panic!(
+                "log never had a line starting {prefix:?}: {:?}",
+                self.log.lock().unwrap()
+            );
         }
 
         fn kinds(&self) -> Vec<String> {
@@ -3128,6 +3191,183 @@ mod tests {
             }
         ));
         assert!(w.store.approval_list_pending(None).unwrap().is_empty());
+    }
+
+    /// A service of the owner's, with the mode and the words for its tools, before the session starts.
+    fn add_service(w: &World, name: &str, mode: crate::store::ToolMode, words: &[(&str, crate::store::ToolOverride)]) {
+        let row = w
+            .store
+            .integration_create(crate::store::NewIntegration {
+                name: name.into(),
+                kind: crate::store::IntegrationKind::Http,
+                command: None,
+                args: vec![],
+                url: Some("https://example.com/mcp".into()),
+                env: Default::default(),
+                headers: Default::default(),
+                enabled: true,
+                auth: Default::default(),
+            })
+            .unwrap();
+        w.store
+            .integration_update(
+                &row.id,
+                crate::store::IntegrationPatch {
+                    tool_mode: Some(mode),
+                    tool_overrides: Some(words.iter().map(|(t, o)| (t.to_string(), *o)).collect()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+    }
+
+    fn service_call(key: &str, tool: &str) -> RuntimeOutput {
+        RuntimeOutput::Approval(ApprovalRequest {
+            key: key.into(),
+            call_id: format!("call-{key}"),
+            tool: tool.into(),
+            title: tool.into(),
+            command: None,
+            diff: None,
+            paths: vec![],
+            input: json!({"title": "Fix the login", "body": "x".repeat(5000)}),
+        })
+    }
+
+    #[tokio::test]
+    async fn a_read_only_service_refuses_a_write_and_tells_the_agent_why() {
+        let mut w = world(ApprovalMode::Risky);
+        add_service(&w, "mysvc", crate::store::ToolMode::ReadOnly, &[]);
+        w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
+        w.wait_log("send go").await;
+        // Claude is told to send every call of this service to the daemon.
+        assert_eq!(w.spawns.lock().unwrap()[0].gated_tools, vec!["mysvc".to_string()]);
+        w.push(service_call("k1", "mcp__mysvc__create_issue")).await;
+        let e = w.wait(|b| matches!(b, EventBody::ApprovalResolved { .. })).await;
+        assert!(matches!(
+            e.body,
+            EventBody::ApprovalResolved {
+                decision: Decision::Deny,
+                by: DecidedBy::Policy,
+                ..
+            }
+        ));
+        let log = w.log.lock().unwrap().clone();
+        let said = log
+            .iter()
+            .find(|l| l.starts_with("deny_message k1 "))
+            .expect("the agent got words");
+        assert!(
+            said.contains("read only") && said.contains("create_issue") && said.contains("mysvc"),
+            "{said}"
+        );
+        assert!(w.store.approval_list_pending(None).unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn the_probe_decides_which_tools_read() {
+        let w = world(ApprovalMode::Risky);
+        add_service(&w, "mysvc", crate::store::ToolMode::ReadOnly, &[]);
+        let id = w.store.integration_list().unwrap()[0].id.clone();
+        let tool = |name: &str, read_only: bool| crate::store::IntegrationTool {
+            name: name.into(),
+            title: None,
+            description: None,
+            read_only,
+            destructive: false,
+            input_schema: None,
+            seen_at: 1,
+        };
+        w.store
+            .integration_tools_replace(&id, &[tool("list_issues", true), tool("create_issue", false)])
+            .unwrap();
+        w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
+        w.wait_log("send go").await;
+        // Annotated as reading: runs. Annotated as changing, or not listed at all: refused.
+        w.push(service_call("k1", "mcp__mysvc__list_issues")).await;
+        w.wait_log("resolve k1 Allow").await;
+        w.push(service_call("k2", "mcp__mysvc__create_issue")).await;
+        w.wait_log_prefix("deny_message k2 ").await;
+        w.push(service_call("k3", "mcp__mysvc__never_listed")).await;
+        w.wait_log_prefix("deny_message k3 ").await;
+    }
+
+    #[tokio::test]
+    async fn a_confirm_writes_service_asks_with_its_name_the_tool_and_cut_arguments() {
+        let mut w = world(ApprovalMode::Risky);
+        add_service(&w, "mysvc", crate::store::ToolMode::ConfirmWrites, &[]);
+        w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
+        w.wait_log("send go").await;
+        w.push(service_call("k1", "mcp__mysvc__create_issue")).await;
+        let e = w.wait(|b| matches!(b, EventBody::ApprovalRequested { .. })).await;
+        let EventBody::ApprovalRequested {
+            tool,
+            title,
+            diff,
+            reason,
+            ..
+        } = e.body
+        else {
+            panic!("not a request");
+        };
+        assert_eq!(tool, "mcp__mysvc__create_issue");
+        assert_eq!(title, "mcp__mysvc__create_issue");
+        assert_eq!(reason, crate::tool_policy::REASON_CONFIRM_MODE);
+        let shown = diff.expect("the arguments are on the card");
+        assert!(shown.contains("Fix the login"));
+        assert!(
+            shown.chars().count() <= TOOL_ARGUMENTS_SHOWN + 2,
+            "cut: {}",
+            shown.chars().count()
+        );
+        assert_eq!(w.store.approval_list_pending(None).unwrap().len(), 1);
+        assert!(!w.log.lock().unwrap().iter().any(|l| l.starts_with("resolve k1")));
+    }
+
+    #[tokio::test]
+    async fn never_drops_the_question_but_not_the_refusals() {
+        let mut w = world(ApprovalMode::Never);
+        add_service(
+            &w,
+            "mysvc",
+            crate::store::ToolMode::ConfirmWrites,
+            &[("drop_all", crate::store::ToolOverride::Deny)],
+        );
+        w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
+        w.wait_log("send go").await;
+        w.push(service_call("k1", "mcp__mysvc__create_issue")).await;
+        w.wait_log("resolve k1 Allow").await;
+        w.push(service_call("k2", "mcp__mysvc__drop_all")).await;
+        w.wait(|b| {
+            matches!(
+                b,
+                EventBody::ApprovalResolved {
+                    decision: Decision::Deny,
+                    ..
+                }
+            )
+        })
+        .await;
+        let log = w.log.lock().unwrap().clone();
+        assert!(
+            log.iter()
+                .any(|l| l.starts_with("deny_message k2 ") && l.contains("forbade")),
+            "{log:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_service_left_as_all_goes_the_normal_way() {
+        let w = world(ApprovalMode::Never);
+        add_service(&w, "mysvc", crate::store::ToolMode::All, &[]);
+        w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
+        w.wait_log("send go").await;
+        assert!(w.spawns.lock().unwrap()[0].gated_tools.is_empty());
+        w.push(service_call("k1", "mcp__mysvc__create_issue")).await;
+        w.wait_log("resolve k1 Allow").await;
+        // A tool name that belongs to no service is not touched by this layer either.
+        w.push(service_call("k2", "mcp__unknown__thing")).await;
+        w.wait_log("resolve k2 Allow").await;
     }
 
     #[tokio::test]

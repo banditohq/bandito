@@ -30,7 +30,8 @@ pub use auth::Device;
 pub use checkpoints::{Checkpoint, CheckpointKind};
 pub use forms::{Form, FormStatus};
 pub use integrations::{
-    Integration, IntegrationAuth, IntegrationKind, IntegrationPatch, IntegrationTool, NewIntegration,
+    Integration, IntegrationAuth, IntegrationKind, IntegrationPatch, IntegrationTool, NewIntegration, ToolMode,
+    ToolOverride,
 };
 pub use reactions::Reaction;
 pub use rules::{Rule, RuleAction};
@@ -59,7 +60,8 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../../migrations/0017_agent_lead.sql"),
     include_str!("../../migrations/0018_integration_auth.sql"),
     include_str!("../../migrations/0019_integration_tools.sql"),
-    include_str!("../../migrations/0020_tool_calls.sql"),
+    include_str!("../../migrations/0020_integration_tool_mode.sql"),
+    include_str!("../../migrations/0021_tool_calls.sql"),
 ];
 
 pub struct Store {
@@ -426,7 +428,7 @@ mod tests {
     use crate::event::{AgentStatus, EventBody};
 
     #[test]
-    fn a_fresh_database_reaches_the_last_migration_with_both_tables() {
+    fn a_fresh_database_reaches_the_last_migration_with_all_the_tables_and_columns() {
         let s = Store::open_in_memory().unwrap();
         let version: i64 = s.conn().query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
         assert_eq!(version as usize, MIGRATIONS.len());
@@ -440,6 +442,17 @@ mod tests {
                 )
                 .unwrap();
             assert_eq!(found, 1, "table {table}");
+        }
+        let columns: Vec<String> = s
+            .conn()
+            .prepare("SELECT name FROM pragma_table_info('integrations')")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        for column in ["tool_mode", "tool_overrides"] {
+            assert!(columns.iter().any(|c| c == column), "column integrations.{column}");
         }
         let indexed: i64 = s
             .conn()

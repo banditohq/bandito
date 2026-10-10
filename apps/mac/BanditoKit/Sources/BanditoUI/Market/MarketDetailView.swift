@@ -21,6 +21,8 @@ struct MarketDetailView: View {
     var onCheck: () -> Void
     var onRemove: () -> Void
     var onSetEnabled: (Bool) -> Void
+    /// The "Tools" section; nil when the server cannot limit tools or the service is not connected.
+    var tools: ToolsSectionInput?
 
     private var template: IntegrationCatalogEntry? { entry.template }
     /// The service's colour: its brand colour, or the palette colour of an own integration.
@@ -38,6 +40,11 @@ struct MarketDetailView: View {
                     }
                     if let integration = entry.integration {
                         connection(integration)
+                        if let tools {
+                            section(L10n.Market.Tools.title) {
+                                ToolPermissionsBody(integration: integration, input: tools)
+                            }
+                        }
                     }
                     if let template {
                         links(template)

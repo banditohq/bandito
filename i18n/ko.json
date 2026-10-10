@@ -2345,5 +2345,22 @@
   "recommend.reason.linearReadme": "README에 Linear가 나와요",
   "recommend.reason.posthogPackage": "프로젝트가 PostHog를 써요",
   "recommend.reason.stripePackage": "프로젝트가 Stripe를 써요",
-  "recommend.reason.other": "프로젝트에서 찾았어요"
+  "recommend.reason.other": "프로젝트에서 찾았어요",
+  "market.tools.title": "도구",
+  "market.tools.mode.all": "전부",
+  "market.tools.mode.confirmWrites": "확인 후",
+  "market.tools.mode.readOnly": "읽기 전용",
+  "market.tools.hint.all": "에이전트는 승인 모드에 따라 모든 도구를 써요.",
+  "market.tools.hint.confirmWrites": "읽기만 하는 도구는 바로 실행돼요. 무언가를 바꾸는 도구는 허락을 기다려요.",
+  "market.tools.hint.readOnly": "읽기만 하는 도구는 실행돼요. 무언가를 바꾸는 도구는 거부돼요.",
+  "market.tools.kind.reads": "읽기",
+  "market.tools.kind.changes": "변경",
+  "market.tools.kind.deletes": "삭제",
+  "market.tools.word.allow": "허용",
+  "market.tools.word.ask": "묻기",
+  "market.tools.word.deny": "거부",
+  "market.tools.notChecked": "아직 알려진 도구가 없어요. 서비스를 확인하면 목록이 나와요. 그때까지는 모든 도구를 무언가를 바꾸는 것으로 봐요.",
+  "market.tools.unreached": "이 설정은 Claude 에이전트에 적용돼요. {agents}은(는) Codex나 Grok으로 동작하고, 도구 호출이 아직 Bandito를 거치지 않아서 설정이 닿지 않아요.",
+  "approval.why.serviceConfirm": "이 서비스는 변경 전에 확인을 받아요",
+  "approval.why.serviceTool": "이 도구는 확인하도록 설정했어요"
 }

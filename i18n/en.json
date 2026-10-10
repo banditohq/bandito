@@ -2374,5 +2374,22 @@
   "recommend.reason.linearReadme": "The README mentions Linear",
   "recommend.reason.posthogPackage": "The project uses PostHog",
   "recommend.reason.stripePackage": "The project uses Stripe",
-  "recommend.reason.other": "Found in the project"
+  "recommend.reason.other": "Found in the project",
+  "market.tools.title": "Tools",
+  "market.tools.mode.all": "Everything",
+  "market.tools.mode.confirmWrites": "With confirmation",
+  "market.tools.mode.readOnly": "Read only",
+  "market.tools.hint.all": "Agents use every tool as their approval mode says.",
+  "market.tools.hint.confirmWrites": "Tools that only read run. Tools that change something wait for your yes.",
+  "market.tools.hint.readOnly": "Tools that only read run. Tools that change something are refused.",
+  "market.tools.kind.reads": "reads",
+  "market.tools.kind.changes": "changes",
+  "market.tools.kind.deletes": "deletes",
+  "market.tools.word.allow": "Allow",
+  "market.tools.word.ask": "Ask",
+  "market.tools.word.deny": "Deny",
+  "market.tools.notChecked": "No tools are known yet. Check the service to list them. Until then every tool counts as one that changes something.",
+  "market.tools.unreached": "These settings apply to agents on Claude. {agents} run on Codex or Grok, which do not send tool calls through Bandito yet, so the settings do not reach them.",
+  "approval.why.serviceConfirm": "this service asks before it changes something",
+  "approval.why.serviceTool": "you asked to confirm this tool"
 }
