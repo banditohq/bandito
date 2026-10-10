@@ -339,8 +339,8 @@ enum ServerSyncPayload {
 }
 
 extension ServerSyncPayload {
-    /// The servers of `remote`, with the ones of `local` added or replacing them by id. Other parts of the blob
-    /// (keymap, snippets) are kept from `remote`.
+    /// The servers of `remote`, with the ones of `local` added or replacing them by id. The profile is the newer copy.
+    /// Other parts of the blob (keymap, snippets) are kept from `remote`.
     static func merge(local: SyncPayload, remote: SyncPayload) -> SyncPayload {
         var servers = remote.servers
         for server in local.servers {
@@ -352,6 +352,8 @@ extension ServerSyncPayload {
         }
         var merged = remote
         merged.servers = servers
+        // The profile is the newer copy of the two, not the remote one: a local change must not be overwritten.
+        merged.profile = SyncedProfile.newer(local.profile, remote.profile)
         return merged
     }
 }

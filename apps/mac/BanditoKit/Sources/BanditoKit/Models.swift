@@ -89,10 +89,24 @@ public struct LastMessage: Codable, Sendable, Hashable {
 public struct AvatarSpec: Codable, Sendable, Hashable {
     public var color: String
     public var face: String
+    /// One emoji the owner chose, shown instead of the face when the agent has no picture. Nil when none.
+    public var emoji: String?
+    /// True when the daemon holds a picture for the agent (`avatar_pictures` feature). Left out of the wire when false.
+    public var image: Bool?
+    /// Changes with each picture: the key a picture is cached under. Nil without a picture.
+    public var imageRev: Int64?
 
-    public init(color: String, face: String) {
+    public init(color: String, face: String, emoji: String? = nil, image: Bool? = nil, imageRev: Int64? = nil) {
         self.color = color
         self.face = face
+        self.emoji = emoji
+        self.image = image
+        self.imageRev = imageRev
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case color, face, emoji, image
+        case imageRev = "image_rev"
     }
 }
 

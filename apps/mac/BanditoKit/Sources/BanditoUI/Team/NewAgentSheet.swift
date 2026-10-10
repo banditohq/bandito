@@ -1,6 +1,7 @@
 import BanditoDesign
 import BanditoKit
 import BanditoL10n
+import CoreGraphics
 import SwiftUI
 
 /// The new agent sheet (docs/design/NewAgent.dc.html). Identity and runtime on the left; project,
@@ -13,6 +14,11 @@ struct NewAgentSheet: View {
     @State private var pickerOpen = false
     @State private var creating = false
     @State private var error: UserFacingMessage?
+    /// The agent made by a create that then failed on its picture; the next press only saves the picture.
+    @State private var createdAgent: Agent?
+    /// The draft's picture, decoded for the header and the editor.
+    @State private var previewPicture: CGImage?
+    @State private var editingAvatar = false
     /// The server's workplaces, loaded when the sheet opens: what the workplace section can offer.
     @State private var workplaces: WorkspacesModel?
     /// True once the `runtimes.status` request has finished, with or without an answer.
@@ -116,14 +122,60 @@ struct NewAgentSheet: View {
 
     // MARK: Header
 
+    /// The avatar in the header; a click opens the editor. Its look and picture go into the draft.
+    private var avatarButton: some View {
+        Button {
+            editingAvatar = true
+        } label: {
+            AvatarArtView(name: draft.name, look: draftLook.wrappedValue, picture: previewPicture, size: 60)
+        }
+        .banditoButton(.row(cornerRadius: 16, hoverOpacity: 0.06))
+        .help(L10n.Inspector.Avatar.help)
+        .popover(isPresented: $editingAvatar, arrowEdge: .bottom) {
+            AvatarEditor(
+                name: draft.name, look: draftLook, picture: previewPicture,
+                pictureSupported: server?.supports("avatar_pictures") == true,
+                onSetPicture: { data in
+                    draft.picture = data
+                    previewPicture = await AvatarPictures.decodeOffMain(data)
+                },
+                onRemovePicture: {
+                    draft.picture = nil
+                    previewPicture = nil
+                })
+        }
+        .onChange(of: draft.picture, initial: true) { _, data in
+            Task {
+                guard let data else {
+                    previewPicture = nil
+                    return
+                }
+                previewPicture = await AvatarPictures.decodeOffMain(data)
+            }
+        }
+    }
+
+    /// The draft's look as the editor edits it.
+    private var draftLook: Binding<AvatarLook> {
+        Binding(
+            get: {
+                AvatarLook(palette: draft.color, customHex: draft.customHex, face: draft.face, emoji: draft.emoji)
+            },
+            set: { look in
+                draft.color = look.palette
+                draft.customHex = look.customHex
+                draft.face = look.face
+                draft.emoji = look.emoji
+            })
+    }
+
     private var header: some View {
         HStack(alignment: .center, spacing: 18) {
-            RaccoonAvatar(name: draft.name, color: draft.color, face: draft.face, size: 60, mood: .idle)
+            avatarButton
             VStack(alignment: .leading, spacing: 8) {
                 Text(L10n.AgentSheet.title)
                     .font(BanditoFont.font(size: 20, weight: 650))
                     .foregroundStyle(Color.Bandito.text)
-                AvatarStylePicker(color: $draft.color, face: $draft.face)
             }
             Spacer(minLength: 0)
             Menu {
@@ -192,7 +244,7 @@ struct NewAgentSheet: View {
                         options: effortLevels.map { ($0, effortName($0)) })
                         .frame(maxWidth: .infinity)
                 }
-                Text(effortHint(draft.effort))
+                Text(L10n.AgentSheet.effortCaption)
                     .font(BanditoFont.font(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .fixedSize(horizontal: false, vertical: true)
@@ -712,15 +764,31 @@ struct NewAgentSheet: View {
         error = nil
         Task {
             do {
-                let workspaceID = try await workplaceForCreate(on: server)
-                let agent = try await server.createAgent(
-                    draft.makeNewAgent(
-                        workspaceID: workspaceID, existingNames: agentNames, lists: server.runtimeModels))
-                // Only a folder the person chose is a recent project folder; an agent's own folder is not.
-                if !draft.cwd.isEmpty {
-                    var recent = RecentFolders.load(serverID: server.id.uuidString)
-                    recent.remember(agent.cwd)
-                    recent.save(serverID: server.id.uuidString)
+                // A picture that failed to save on the first try retries alone: the agent exists already.
+                let agent: Agent
+                if let made = createdAgent {
+                    agent = made
+                } else {
+                    let workspaceID = try await workplaceForCreate(on: server)
+                    agent = try await server.createAgent(
+                        draft.makeNewAgent(
+                            workspaceID: workspaceID, existingNames: agentNames, lists: server.runtimeModels))
+                    createdAgent = agent
+                    // Only a folder the person chose is a recent project folder; an agent's own folder is not.
+                    if !draft.cwd.isEmpty {
+                        var recent = RecentFolders.load(serverID: server.id.uuidString)
+                        recent.remember(agent.cwd)
+                        recent.save(serverID: server.id.uuidString)
+                    }
+                }
+                if let picture = draft.picture {
+                    do {
+                        try await server.setAgentAvatarImage(agent.id, picture)
+                    } catch {
+                        self.error = UserFacingMessage(text: L10n.AgentSheet.pictureFailed)
+                        creating = false
+                        return
+                    }
                 }
                 router.selectAgent(agent.id, on: server)
                 router.select(mode: .team)
@@ -825,16 +893,6 @@ struct NewAgentSheet: View {
         }
     }
 
-    private func effortHint(_ effort: Effort) -> String {
-        switch effort {
-        case .low: L10n.AgentSheet.effortHintLow
-        case .medium: L10n.AgentSheet.effortHintMedium
-        case .high: L10n.AgentSheet.effortHintHigh
-        case .xhigh: L10n.AgentSheet.effortHintXhigh
-        case .max: L10n.AgentSheet.effortHintMax
-        }
-    }
-
     private var memorySections: [SelectSection<MemoryMode>] {
         [
             SelectSection(
@@ -867,17 +925,10 @@ extension RuntimeKind {
 }
 
 extension AvatarFace {
-    /// The faces the new agent sheet offers, in the design's order.
-    static let faces: [AvatarFace] = [.chevronDash, .dots, .carets]
-
-    /// The text drawn for a face in the picker.
-    static func glyph(_ face: AvatarFace) -> String {
-        switch face {
-        case .auto, .chevronDash: "> –"
-        case .dots: "• •"
-        case .carets: "^ ^"
-        }
-    }
+    /// The faces the avatar editor offers, in the design's order: the three first, then the six new ones.
+    static let faces: [AvatarFace] = [
+        .chevronDash, .dots, .carets, .wink, .surprised, .sleeping, .glasses, .happy, .serious,
+    ]
 }
 
 /// The layout of the runtime cards: two per row. Kept out of the view, which is main-actor isolated, so it can be tested.

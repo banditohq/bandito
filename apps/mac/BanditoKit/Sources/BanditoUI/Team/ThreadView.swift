@@ -172,6 +172,7 @@ struct ThreadView: View {
         VStack(spacing: 0) {
             ThreadHeader(
                 agent: agent,
+                server: server,
                 status: thread.status,
                 turnRunning: thread.turnRunning,
                 changes: server.info?.supports("changes") == true ? changes : nil,

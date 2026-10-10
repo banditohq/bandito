@@ -128,7 +128,7 @@ struct TeamHome: View {
             router.selectAgent(agent.id, on: server)
         } label: {
             AgentRow(
-                agent: agent, thread: thread, status: server.status(of: agent.id),
+                agent: agent, server: server, thread: thread, status: server.status(of: agent.id),
                 lastActivity: TeamTime.label(ms: AgentPreview.timestamp(thread: thread, agent: agent)),
                 isLead: lead == agent.id)
                 .contentShape(Rectangle())

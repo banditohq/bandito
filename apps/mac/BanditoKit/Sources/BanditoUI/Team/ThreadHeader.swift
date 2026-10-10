@@ -7,6 +7,8 @@ import SwiftUI
 /// (changes, terminal, browser, panel). Schedules are in the details tab and in the agent's menu.
 struct ThreadHeader: View {
     var agent: Agent
+    /// The server the agent lives on, for its picture.
+    var server: ServerModel?
     var status: AgentStatus
     var turnRunning: Bool
     /// Changes since the last checkpoint; `nil` when not loaded.
@@ -73,8 +75,8 @@ struct ThreadHeader: View {
 
     private func capsule(showsCaption: Bool) -> some View {
         HStack(spacing: 9) {
-            AgentAvatar(
-                name: agent.name, size: 26,
+            AgentAvatarView(
+                agent: agent, server: server, size: 26,
                 mood: AvatarMood.make(status: status, turnRunning: turnRunning, paused: agent.paused))
                 .overlay(alignment: .topTrailing) {
                     if isLead {

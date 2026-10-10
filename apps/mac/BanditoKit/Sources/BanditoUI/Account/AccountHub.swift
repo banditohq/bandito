@@ -51,17 +51,17 @@ enum SignOutSteps {
 enum ServerPublishing {
     static let maxAttempts = 3
 
+    /// Returns the payload the server stored (the merge of both sides).
     static func publish(
         local: SyncPayload,
         fetch: () async throws -> SyncPayload?,
-        write: (SyncPayload) async throws -> Void
-    ) async throws {
+        write: (SyncPayload) async throws -> SyncPayload
+    ) async throws -> SyncPayload {
         var attempt = 1
         while true {
             let remote = try await fetch() ?? SyncPayload()
             do {
-                try await write(ServerSyncPayload.merge(local: local, remote: remote))
-                return
+                return try await write(ServerSyncPayload.merge(local: local, remote: remote))
             } catch AccountError.conflict(let current) {
                 if attempt >= maxAttempts { throw AccountError.conflict(current: current) }
                 attempt += 1
@@ -126,11 +126,16 @@ public final class AccountHub {
     public private(set) var signedIn = false
     /// The account as the server last said it (`GET /me`): the user and the devices. Nil until it has been read.
     public private(set) var me: Me? {
-        didSet { profile.bind(userID: me?.user.id) }
+        didSet {
+            profile.bind(userID: me?.user.id)
+            Task { await avatar.bind(userID: me?.user.id) }
+        }
     }
 
     /// The nickname and avatar colour of the signed-in account on this Mac. Follows `me`.
     let profile = ProfileStore()
+    /// The profile picture on this Mac, kept in step with the sync blob by `syncProfilePicture`.
+    let avatar = ProfileAvatarStore()
 
     /// Where the session and the sync key are kept. The device keys live in `DeviceIdentityStore`.
     public let keys: SecretStore
@@ -243,6 +248,7 @@ public final class AccountHub {
         _ = try SyncKey.rotate(in: keys)
         try ParkedSyncKey.clearParked(in: keys)
         profile.clear()
+        clearPicture()
     }
 
     /// Whether this Mac holds the sync key of the signed-in account.
@@ -259,6 +265,7 @@ public final class AccountHub {
         }
         guard let client = try? await prepare(), let account = try? await client.me() else { return }
         me = account
+        try? await syncProfilePicture()
     }
 
     /// Signs out: the sync key and the local session go first, then the server is asked to end the session
@@ -278,6 +285,7 @@ public final class AccountHub {
         pending = []
         signedIn = false
         profile.clear()
+        clearPicture()
         me = nil
     }
 
@@ -286,10 +294,39 @@ public final class AccountHub {
     public func publishServers(_ configs: [ServerConfig]) async throws {
         _ = try await prepare()
         guard let store = syncStore else { throw AccountHubError.notReady }
-        try await ServerPublishing.publish(
-            local: ServerSyncPayload.payload(for: configs),
+        var local = ServerSyncPayload.payload(for: configs)
+        local.profile = await avatar.currentSyncedProfile()
+        let stored = try await ServerPublishing.publish(
+            local: local,
             fetch: { try await store.pull() },
-            write: { payload in _ = try await store.push(payload) })
+            write: { payload in try await store.push(payload) })
+        try await avatar.apply(stored.profile)
+    }
+
+    /// Brings the profile picture in line with the sync blob. A newer copy in the blob is applied on this Mac; a newer
+    /// copy here is written to the blob. Equal copies do nothing.
+    public func syncProfilePicture() async throws {
+        _ = try await prepare()
+        guard let store = syncStore else { throw AccountHubError.notReady }
+        let remote = try await store.pull()
+        if let local = await avatar.currentSyncedProfile(), local.updatedAt > (remote?.profile?.updatedAt ?? 0) {
+            let stored = try await ServerPublishing.publish(
+                local: SyncPayload(profile: local),
+                fetch: { try await store.pull() },
+                write: { payload in try await store.push(payload) })
+            try await avatar.apply(stored.profile)
+        } else {
+            try await avatar.apply(remote?.profile)
+        }
+    }
+
+    /// Removes this user's picture from this Mac. A failure is logged: the account is already signed out or reset.
+    private func clearPicture() {
+        do {
+            try avatar.clear()
+        } catch {
+            Logger.account.error("Profile picture: could not remove it from this Mac (\(error.localizedDescription, privacy: .public)).")
+        }
     }
 
     /// Asks for devices waiting for approval. Silent on failure: a device that is not approved yet is not allowed to.

@@ -121,8 +121,8 @@ struct TeamSidebar: View {
                     } label: {
                         VStack(spacing: 4) {
                             ZStack(alignment: .bottomTrailing) {
-                                AgentAvatar(
-                                    name: agent.name, size: 36,
+                                AgentAvatarView(
+                                    agent: agent, server: server, size: 36,
                                     mood: AvatarMood.make(status: status, turnRunning: thread.turnRunning, paused: agent.paused))
                                 StatusDot(status: status, size: 10, ringColor: Color.Bandito.surface1)
                             }
@@ -153,7 +153,7 @@ struct TeamSidebar: View {
             router.selectAgent(agent.id, on: server)
         } label: {
             HStack(spacing: 11) {
-                AgentAvatar(name: agent.name, size: 40, mood: .needsYou)
+                AgentAvatarView(agent: agent, server: server, size: 40, mood: .needsYou)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Text(agent.name)
@@ -195,7 +195,7 @@ struct TeamSidebar: View {
             router.selectAgent(agent.id, on: server)
         } label: {
             AgentRow(
-                agent: agent, thread: thread, status: server.status(of: agent.id), isSelected: selected,
+                agent: agent, server: server, thread: thread, status: server.status(of: agent.id), isSelected: selected,
                 lastActivity: lastActivityLabel(agent, thread: thread), isLead: isLead)
                 .contentShape(Rectangle())
         }
@@ -266,6 +266,8 @@ struct TeamSidebar: View {
 /// One agent in the team list: avatar with its status dot, name, role, the time of the last event and a preview.
 struct AgentRow: View {
     var agent: Agent
+    /// The server the agent lives on, for its picture.
+    var server: ServerModel?
     var thread: AgentThread
     /// The status the team shows (see `ServerModel.status(of:)`); the thread may not be loaded.
     var status: AgentStatus
@@ -277,8 +279,8 @@ struct AgentRow: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 11) {
-            AgentAvatar(
-                name: agent.name, size: 40,
+            AgentAvatarView(
+                agent: agent, server: server, size: 40,
                 mood: AvatarMood.make(status: status, turnRunning: thread.turnRunning, paused: agent.paused))
                 .overlay(alignment: .bottomTrailing) {
                     StatusDot(status: status, size: 11, ringColor: Color.Bandito.surface1)

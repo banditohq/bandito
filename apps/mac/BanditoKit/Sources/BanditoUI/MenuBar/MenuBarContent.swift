@@ -116,7 +116,7 @@ public struct MenuBarContent: View {
     private func approvalRow(_ row: WaitingApproval) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 9) {
-                AgentAvatar(name: row.agent.name, size: 26)
+                AgentAvatarView(agent: row.agent, server: row.server, size: 26)
                 Text(row.agent.name)
                     .font(.system(size: 13, weight: .semibold))
                 Text(row.approval.title)
@@ -143,7 +143,7 @@ public struct MenuBarContent: View {
 
     private func unlistedRow(_ row: WaitingAgent) -> some View {
         HStack(spacing: 9) {
-            AgentAvatar(name: row.agent.name, size: 26)
+            AgentAvatarView(agent: row.agent, server: row.server, size: 26)
             VStack(alignment: .leading, spacing: 2) {
                 Text(row.agent.name)
                     .font(.system(size: 13, weight: .semibold))

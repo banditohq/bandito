@@ -1,4 +1,5 @@
 import BanditoKit
+import Foundation
 import BanditoL10n
 
 /// What the "Only risky / Everything / Nothing" control means, in the words of the approval policy.
@@ -36,7 +37,13 @@ public struct NewAgentDraft: Equatable, Sendable {
     public var name = ""
     public var role = ""
     public var color: AvatarColor = .peach
+    /// A custom tile color as `#RRGGBB`; wins over `color` when set.
+    public var customHex: String?
     public var face: AvatarFace = .chevronDash
+    /// One emoji shown instead of the face when there is no picture.
+    public var emoji: String?
+    /// The framed picture as PNG. Sent right after the agent is created: `agents.avatar_image_set` needs its id.
+    public var picture: Data?
     public var runtime: RuntimeKind = .claude
     /// Empty means the runtime's default model.
     public var model = ""
@@ -174,7 +181,7 @@ public struct NewAgentDraft: Equatable, Sendable {
             fallbackRuntime: fallbackRuntime,
             fallbackModel: trimmed(fallbackModel).isEmpty ? nil : trimmed(fallbackModel),
             workspaceId: workspace,
-            avatar: AvatarSpec(color: color.rawValue, face: face.rawValue),
+            avatar: AvatarSpec(color: customHex ?? color.rawValue, face: face.rawValue, emoji: emoji),
             capabilities: AgentCapability.wire(capabilities))
     }
 

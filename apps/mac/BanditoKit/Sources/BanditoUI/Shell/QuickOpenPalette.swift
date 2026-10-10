@@ -237,7 +237,7 @@ struct QuickOpenPalette: View {
                 subtitle: [entry.agent.role, entry.agent.runtime.rawValue, folder].filter { !$0.isEmpty }
                     .joined(separator: " · "),
                 monoSubtitle: false,
-                leading: AnyView(AgentAvatar(name: entry.agent.name, size: 32, mood: .idle)),
+                leading: AnyView(AgentAvatarView(agent: entry.agent, server: entry.server, size: 32, mood: .idle)),
                 trailing: status == .needsYou ? L10n.Palette.needsYou : nil,
                 enabled: true,
                 run: { openAgent(entry.server, entry.agent) })

@@ -87,7 +87,7 @@ struct AccountSection: View {
 
     private func identity(name: String?) -> some View {
         HStack(alignment: .center, spacing: 16) {
-            ProfileAvatar(name: name, color: AvatarColor.at(hub.profile.colorIndex), size: 56)
+            ProfileAvatar(name: name, color: AvatarColor.at(hub.profile.colorIndex), picture: hub.avatar.image, size: 56)
             VStack(alignment: .leading, spacing: 5) {
                 Text(name ?? L10n.Account.title)
                     .font(BanditoFont.font(size: 18, weight: 600))

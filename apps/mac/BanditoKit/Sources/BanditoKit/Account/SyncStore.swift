@@ -100,6 +100,7 @@ public final class SyncStore {
 
     /// Joins two copies of the payload. Servers are matched by `id`: the local copy wins for an id both
     /// have, and ids only one side has are kept. The local keymap wins when there is one.
+    /// The profile is the copy with the newer `updatedAt`; a tie keeps the local one.
     /// There are no tombstones, so a server deleted on one device comes back if another device
     /// still has it and pushes.
     static func merge(local: SyncPayload, remote: SyncPayload) -> SyncPayload {
@@ -115,7 +116,8 @@ public final class SyncStore {
             version: SyncPayload.currentVersion,
             servers: servers,
             keymap: local.keymap ?? remote.keymap,
-            snippets: local.snippets ?? remote.snippets)
+            snippets: local.snippets ?? remote.snippets,
+            profile: SyncedProfile.newer(local.profile, remote.profile))
     }
 
     static func versionKey(accountID: String) -> String {

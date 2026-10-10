@@ -1,6 +1,7 @@
 import BanditoDesign
 import BanditoKit
 import BanditoL10n
+import CoreGraphics
 import SwiftUI
 
 /// The nickname and avatar colour of the signed-in account, kept on this Mac per user id
@@ -79,11 +80,14 @@ extension AvatarColor {
     }
 }
 
-/// A round avatar: the first letter of the name on the chosen colour, or a person when nobody is signed in.
+/// A round avatar: the profile photo when there is one, else the first letter of the name on the chosen colour, or a
+/// person when nobody is signed in.
 struct ProfileAvatar: View {
     /// The name the avatar stands for. Nil shows the generic person.
     let name: String?
     let color: AvatarColor
+    /// The profile photo, if this Mac has one.
+    var picture: CGImage?
     var size: CGFloat = 28
 
     var body: some View {
@@ -91,7 +95,12 @@ struct ProfileAvatar: View {
             .fill(initial == nil ? Color.Bandito.surface3 : color.color)
             .frame(width: size, height: size)
             .overlay {
-                if let initial {
+                if let picture {
+                    Image(decorative: picture, scale: 1)
+                        .resizable()
+                        .scaledToFill()
+                        .clipShape(Circle())
+                } else if let initial {
                     Text(initial)
                         .font(BanditoFont.font(size: size * 0.42, weight: 600))
                         .foregroundStyle(Color.Bandito.bg)

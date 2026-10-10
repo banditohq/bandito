@@ -133,7 +133,7 @@ struct ChangesContent: View {
     /// switch shows icons instead of words.
     private func header(_ agent: Agent, panelWidth: Double) -> some View {
         HStack(spacing: 10) {
-            AgentAvatar(name: agent.name, size: 24)
+            AgentAvatarView(agent: agent, server: server, size: 24)
                 .help(L10n.Changes.title(name: agent.name))
             VStack(alignment: .leading, spacing: 2) {
                 if WorkbenchLayout.showsAgentTitle(panelWidth: panelWidth) {

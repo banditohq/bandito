@@ -741,6 +741,40 @@ public final class ServerModel: Identifiable {
         try await updateAgent(agentID, patch: AgentPatch(paused: paused)).agent
     }
 
+    /// Stores the agent's picture (`agents.avatar_image_set`): a PNG or JPEG of at most 1 MB. The daemon needs the
+    /// avatar set first. Returns the agent, with its new `image_rev`.
+    @discardableResult
+    public func setAgentAvatarImage(_ agentID: String, _ data: Data) async throws -> Agent {
+        struct P: Encodable {
+            var id: String
+            var dataBase64: String
+
+            enum CodingKeys: String, CodingKey {
+                case id
+                case dataBase64 = "data_base64"
+            }
+        }
+        let agent = try await rpc().call(
+            "agents.avatar_image_set", P(id: agentID, dataBase64: data.base64EncodedString()), as: Agent.self)
+        replaceAgent(agent)
+        return agent
+    }
+
+    /// The agent's picture (`agents.avatar_image_get`), or nil when it has none.
+    public func agentAvatarImage(_ agentID: String) async throws -> AvatarImage? {
+        struct P: Encodable { var id: String }
+        return try await rpc().call("agents.avatar_image_get", P(id: agentID), as: AvatarImage?.self)
+    }
+
+    /// Removes the agent's picture (`agents.avatar_image_clear`). Returns the agent.
+    @discardableResult
+    public func clearAgentAvatarImage(_ agentID: String) async throws -> Agent {
+        struct P: Encodable { var id: String }
+        let agent = try await rpc().call("agents.avatar_image_clear", P(id: agentID), as: Agent.self)
+        replaceAgent(agent)
+        return agent
+    }
+
     /// The newest lines of the daemon's own log (`daemon.logs`). `level` is the lowest level to show.
     public func daemonLog(lines: Int = 500, level: DaemonLogLevel? = nil) async throws -> DaemonLog {
         struct P: Encodable {

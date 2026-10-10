@@ -1,4 +1,5 @@
 import BanditoDesign
+import BanditoKit
 import SwiftUI
 
 /// Tile color of an avatar. Fixed brand colors, the same in light and dark themes.
@@ -28,6 +29,18 @@ public enum AvatarFace: String, CaseIterable, Sendable {
     case dots
     /// `^ ^`: two carets above the eyes.
     case carets
+    /// One eye closed in a smile, the other a dot.
+    case wink
+    /// Two open rings: a surprised look.
+    case surprised
+    /// Dash eyes: asleep.
+    case sleeping
+    /// Two rings with a bridge and dot pupils.
+    case glasses
+    /// Two closed smiling eyes (`∪ ∪`).
+    case happy
+    /// Dots under straight brows.
+    case serious
 }
 
 /// Raccoon avatar: a rounded tile in an agent color, the dark mask and a face on it.
@@ -39,6 +52,8 @@ public struct RaccoonAvatar: View {
     public let face: AvatarFace
     public let size: CGFloat
     public let mood: AvatarMood
+    /// A custom tile color as `#RRGGBB`, used instead of `color` when it is valid.
+    public let customHex: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(MotionLevel.storageKey) private var motionLevel = MotionLevel.full.rawValue
     /// Repeating motion stands still: Reduce Motion, or "Less" / "Off" in settings.
@@ -50,25 +65,28 @@ public struct RaccoonAvatar: View {
     ///   - face: Face on the mask, or `.auto` to derive it from `name`.
     ///   - size: Edge of the square tile in points.
     ///   - mood: Expression; `.idle` blinks.
+    ///   - customHex: Tile color as `#RRGGBB`; wins over `color` when valid.
     public init(
         name: String, color: AvatarColor? = nil, face: AvatarFace = .auto, size: CGFloat = 40,
-        mood: AvatarMood = .idle
+        mood: AvatarMood = .idle, customHex: String? = nil
     ) {
         self.name = name
         self.color = color
         self.face = face
         self.size = size
         self.mood = mood
+        self.customHex = customHex
     }
 
     public var body: some View {
         let resolved = AvatarResolver.resolve(name: name, color: color, face: face)
+        let tint = customHex.flatMap(AvatarHex.value).map { Color(hex: $0) } ?? resolved.color.color
         let phase = AvatarPose.phase(for: name)
         TimelineView(AvatarSchedule(mood: mood, phase: phase, paused: still)) { context in
             let pose = AvatarPose.make(
                 mood: mood, time: context.date.timeIntervalSinceReferenceDate, phase: phase,
                 reduceMotion: still)
-            RaccoonFace(resolved: resolved, pose: pose, size: size)
+            RaccoonFace(resolved: resolved, tint: tint, pose: pose, size: size)
         }
         .frame(width: size, height: size)
         // Decorative: the agent name is always shown next to the avatar.
@@ -79,11 +97,11 @@ public struct RaccoonAvatar: View {
 /// One frame of a raccoon avatar drawn from a pose. Pose offsets are in the 52-point design grid.
 private struct RaccoonFace: View {
     let resolved: ResolvedAvatar
+    let tint: Color
     let pose: AvatarPose
     let size: CGFloat
 
     var body: some View {
-        let tint = resolved.color.color
         let unit = size / DesignGrid.edge
         let strokeWidth = size * 2.4 / DesignGrid.edge
         ZStack {
@@ -127,16 +145,9 @@ private struct RaccoonFace: View {
                 .stroke(tint, style: StrokeStyle(lineWidth: strokeWidth, lineCap: .round))
         } else {
             Group {
-                switch resolved.face {
-                case .dots:
-                    RaccoonDots().fill(tint)
-                case .chevronDash, .carets:
-                    RaccoonFaceStrokes(face: resolved.face)
-                        .stroke(tint, style: StrokeStyle(lineWidth: strokeWidth, lineCap: .round, lineJoin: .round))
-                case .auto:
-                    // The resolver never returns `.auto`; kept for exhaustiveness.
-                    EmptyView()
-                }
+                RaccoonFaceDots(face: resolved.face).fill(tint)
+                RaccoonFaceStrokes(face: resolved.face)
+                    .stroke(tint, style: StrokeStyle(lineWidth: strokeWidth, lineCap: .round, lineJoin: .round))
             }
             .scaleEffect(x: 1, y: pose.eyeScaleY, anchor: .center)
             .offset(x: pose.eyeOffsetX * unit)
@@ -226,7 +237,7 @@ struct RaccoonMask: Shape {
     }
 }
 
-/// Stroked face parts for `.chevronDash` and `.carets`. Other faces produce an empty path.
+/// Stroked face parts. `.dots` and `.auto` have none; the dots of a face are `RaccoonFaceDots`.
 struct RaccoonFaceStrokes: Shape {
     let face: AvatarFace
 
@@ -249,21 +260,63 @@ struct RaccoonFaceStrokes: Shape {
             path.move(to: grid.point(31, 27))
             path.addLine(to: grid.point(34, 24))
             path.addLine(to: grid.point(37, 27))
+        case .wink:
+            Self.smileArc(grid, centerX: 18, into: &path)
+        case .happy:
+            Self.smileArc(grid, centerX: 18, into: &path)
+            Self.smileArc(grid, centerX: 34, into: &path)
+        case .sleeping:
+            path.addPath(RaccoonDashEyes().path(in: rect))
+        case .surprised:
+            Self.ring(grid, centerX: 18, radius: 3.2, into: &path)
+            Self.ring(grid, centerX: 34, radius: 3.2, into: &path)
+        case .glasses:
+            Self.ring(grid, centerX: 18, radius: 4.4, into: &path)
+            Self.ring(grid, centerX: 34, radius: 4.4, into: &path)
+            path.move(to: grid.point(22.4, 26))
+            path.addLine(to: grid.point(29.6, 26))
+        case .serious:
+            path.move(to: grid.point(15, 21.8))
+            path.addLine(to: grid.point(21, 21.8))
+            path.move(to: grid.point(31, 21.8))
+            path.addLine(to: grid.point(37, 21.8))
         case .auto, .dots:
             break
         }
         return path
     }
+
+    /// A closed smiling eye (`∪`) six points wide, its ends on the eye line.
+    private static func smileArc(_ grid: DesignGrid, centerX: CGFloat, into path: inout Path) {
+        path.move(to: grid.point(centerX - 3, 25.5))
+        path.addQuadCurve(to: grid.point(centerX + 3, 25.5), control: grid.point(centerX, 28.5))
+    }
+
+    /// An open eye: a circle of `radius` grid points around the eye line.
+    private static func ring(_ grid: DesignGrid, centerX: CGFloat, radius: CGFloat, into path: inout Path) {
+        let center = grid.point(centerX, 26)
+        let r = radius * grid.scale
+        path.addEllipse(in: CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2))
+    }
 }
 
-/// Two filled eye dots (r 2.6 at x 18 and 34, y 26) for `.dots`.
-struct RaccoonDots: Shape {
+/// Filled eye dots of a face: two for `.dots` and `.serious`, one for `.wink`, small pupils for `.glasses`.
+struct RaccoonFaceDots: Shape {
+    let face: AvatarFace
+
     func path(in rect: CGRect) -> Path {
         let grid = DesignGrid(rect: rect)
-        let radius = 2.6 * grid.scale
+        let spots: [(x: CGFloat, radius: CGFloat)]
+        switch face {
+        case .dots, .serious: spots = [(18, 2.6), (34, 2.6)]
+        case .wink: spots = [(34, 2.6)]
+        case .glasses: spots = [(18, 1.6), (34, 1.6)]
+        case .auto, .chevronDash, .carets, .happy, .surprised, .sleeping: spots = []
+        }
         var path = Path()
-        for x in [CGFloat(18), CGFloat(34)] {
-            let center = grid.point(x, 26)
+        for spot in spots {
+            let center = grid.point(spot.x, 26)
+            let radius = spot.radius * grid.scale
             path.addEllipse(in: CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2))
         }
         return path

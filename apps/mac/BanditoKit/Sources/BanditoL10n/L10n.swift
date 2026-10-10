@@ -83,6 +83,13 @@ public enum L10n {
             public static var placeholder: String { L10n.tr("account.nickname.placeholder") }
         }
 
+        public enum Photo {
+            public static var change: String { L10n.tr("account.photo.change") }
+            public static var pickerMessage: String { L10n.tr("account.photo.pickerMessage") }
+            public static var remove: String { L10n.tr("account.photo.remove") }
+            public static var tooLarge: String { L10n.tr("account.photo.tooLarge") }
+        }
+
         public enum Section {
             public static var devices: String { L10n.tr("account.section.devices") }
             public static var sync: String { L10n.tr("account.section.sync") }
@@ -154,15 +161,17 @@ public enum L10n {
         public static var create: String { L10n.tr("agentSheet.create") }
         public static var createBlockedFolder: String { L10n.tr("agentSheet.createBlockedFolder") }
         public static var createBlockedWorkplace: String { L10n.tr("agentSheet.createBlockedWorkplace") }
-        public static var effortHintHigh: String { L10n.tr("agentSheet.effortHintHigh") }
-        public static var effortHintLow: String { L10n.tr("agentSheet.effortHintLow") }
-        public static var effortHintMax: String { L10n.tr("agentSheet.effortHintMax") }
-        public static var effortHintMedium: String { L10n.tr("agentSheet.effortHintMedium") }
-        public static var effortHintXhigh: String { L10n.tr("agentSheet.effortHintXhigh") }
+        public static var effortCaption: String { L10n.tr("agentSheet.effortCaption") }
         public static var faceDots: String { L10n.tr("agentSheet.faceDots") }
+        public static var faceGlasses: String { L10n.tr("agentSheet.faceGlasses") }
+        public static var faceHappy: String { L10n.tr("agentSheet.faceHappy") }
         public static var faceLabel: String { L10n.tr("agentSheet.faceLabel") }
+        public static var faceSerious: String { L10n.tr("agentSheet.faceSerious") }
+        public static var faceSleeping: String { L10n.tr("agentSheet.faceSleeping") }
         public static var faceSmile: String { L10n.tr("agentSheet.faceSmile") }
         public static var faceSquint: String { L10n.tr("agentSheet.faceSquint") }
+        public static var faceSurprised: String { L10n.tr("agentSheet.faceSurprised") }
+        public static var faceWink: String { L10n.tr("agentSheet.faceWink") }
         public static var fallbackHint: String { L10n.tr("agentSheet.fallbackHint") }
         public static var fallbackLabel: String { L10n.tr("agentSheet.fallbackLabel") }
         public static var fallbackNone: String { L10n.tr("agentSheet.fallbackNone") }
@@ -183,6 +192,7 @@ public enum L10n {
         public static var noFolder: String { L10n.tr("agentSheet.noFolder") }
         public static var noServer: String { L10n.tr("agentSheet.noServer") }
         public static var ownFolderHint: String { L10n.tr("agentSheet.ownFolderHint") }
+        public static var pictureFailed: String { L10n.tr("agentSheet.pictureFailed") }
         public static var role: String { L10n.tr("agentSheet.role") }
         public static var roleHint: String { L10n.tr("agentSheet.roleHint") }
         public static var rolePlaceholder: String { L10n.tr("agentSheet.rolePlaceholder") }
@@ -263,6 +273,9 @@ public enum L10n {
     }
 
     public enum Avatar {
+        public static var allEmoji: String { L10n.tr("avatar.allEmoji") }
+        public static var chooseFile: String { L10n.tr("avatar.chooseFile") }
+        public static var color: String { L10n.tr("avatar.color") }
         public static var colorAria: String { L10n.tr("avatar.colorAria") }
         public static var colorBlue: String { L10n.tr("avatar.colorBlue") }
         public static var colorCream: String { L10n.tr("avatar.colorCream") }
@@ -270,12 +283,28 @@ public enum L10n {
         public static var colorPeach: String { L10n.tr("avatar.colorPeach") }
         public static var colorPink: String { L10n.tr("avatar.colorPink") }
         public static var colorSage: String { L10n.tr("avatar.colorSage") }
+        public static var cropHint: String { L10n.tr("avatar.cropHint") }
+        public static var customColor: String { L10n.tr("avatar.customColor") }
+        public static var emojiField: String { L10n.tr("avatar.emojiField") }
         public static var face: String { L10n.tr("avatar.face") }
         public static var generate: String { L10n.tr("avatar.generate") }
+        public static var noEmoji: String { L10n.tr("avatar.noEmoji") }
+        public static var pickerMessage: String { L10n.tr("avatar.pickerMessage") }
+        public static var pictureCurrent: String { L10n.tr("avatar.pictureCurrent") }
+        public static var pictureEmpty: String { L10n.tr("avatar.pictureEmpty") }
+        public static var pictureNeedsDaemon: String { L10n.tr("avatar.pictureNeedsDaemon") }
+        public static var pictureTooLarge: String { L10n.tr("avatar.pictureTooLarge") }
+        public static var pictureUnreadable: String { L10n.tr("avatar.pictureUnreadable") }
         public static var presets: String { L10n.tr("avatar.presets") }
+        public static var removePicture: String { L10n.tr("avatar.removePicture") }
         public static var reset: String { L10n.tr("avatar.reset") }
+        public static var savePicture: String { L10n.tr("avatar.savePicture") }
         public static var set: String { L10n.tr("avatar.set") }
+        public static var tabEmoji: String { L10n.tr("avatar.tabEmoji") }
+        public static var tabFace: String { L10n.tr("avatar.tabFace") }
+        public static var tabPicture: String { L10n.tr("avatar.tabPicture") }
         public static var upload: String { L10n.tr("avatar.upload") }
+        public static var zoom: String { L10n.tr("avatar.zoom") }
     }
 
     public enum Banner {

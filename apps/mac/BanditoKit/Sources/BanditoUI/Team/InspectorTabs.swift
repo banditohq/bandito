@@ -59,6 +59,32 @@ struct DetailsTab: View {
             modelID: agent.model ?? "", runtime: agent.runtime, lists: server.runtimeModels)
     }
 
+    /// The effort control with its caption, one block under the model row. A model that takes no effort says so.
+    @ViewBuilder
+    private var effortBlock: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if effortLevels.isEmpty {
+                Text(L10n.ModelPicker.noEffort)
+                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .foregroundStyle(Color.Bandito.text3)
+            } else {
+                SegmentedPicker(
+                    selection: effort,
+                    options: effortLevels.map { ($0, $0.title) })
+                Text(L10n.AgentSheet.effortCaption)
+                    .font(BanditoFont.font(size: 12, weight: 400))
+                    .foregroundStyle(Color.Bandito.text3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Color.Bandito.text.opacity(0.05)).frame(height: 1)
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             InspectorCard {
@@ -90,6 +116,8 @@ struct DetailsTab: View {
                         status: server.runtimeModelsStatus, onCommit: saveModel)
                         .frame(maxWidth: 260)
                 }
+                // Effort sits right under the model it belongs to: the levels are the model's own.
+                effortBlock
                 InspectorRow(label: L10n.AgentSheet.fallbackLabel) {
                     BanditoSelect(
                         selection: fallbackBinding, sections: [SelectSection(options: fallbackChoices)],
@@ -130,20 +158,6 @@ struct DetailsTab: View {
             VStack(alignment: .leading, spacing: 8) {
                 SectionLabel(L10n.Capability.title)
                 CapabilityChips(enabled: capabilities)
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
-                SectionLabel(L10n.Effort.title)
-                if effortLevels.isEmpty {
-                    Text(L10n.ModelPicker.noEffort)
-                        .font(BanditoFont.font(size: 12.5, weight: 400))
-                        .foregroundStyle(Color.Bandito.text3)
-                        .padding(.vertical, 6)
-                } else {
-                    SegmentedPicker(
-                        selection: effort,
-                        options: effortLevels.map { ($0, $0.title) })
-                }
             }
 
             VStack(alignment: .leading, spacing: 8) {
