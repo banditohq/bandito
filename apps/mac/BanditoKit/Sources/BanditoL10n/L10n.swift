@@ -1005,6 +1005,22 @@ public enum L10n {
             public static var unreachable: String { L10n.tr("integrations.failure.unreachable") }
         }
 
+        public enum Oauth {
+            public static func denied(name: String) -> String { L10n.tr("integrations.oauth.denied", name) }
+            public static var done: String { L10n.tr("integrations.oauth.done") }
+            public static var failed: String { L10n.tr("integrations.oauth.failed") }
+            public static var finishing: String { L10n.tr("integrations.oauth.finishing") }
+            public static var lost: String { L10n.tr("integrations.oauth.lost") }
+            public static func needsUpdate(name: String) -> String { L10n.tr("integrations.oauth.needsUpdate", name) }
+            public static var openAgain: String { L10n.tr("integrations.oauth.openAgain") }
+            public static var retry: String { L10n.tr("integrations.oauth.retry") }
+            public static var signInAgain: String { L10n.tr("integrations.oauth.signInAgain") }
+            public static var starting: String { L10n.tr("integrations.oauth.starting") }
+            public static func title(name: String) -> String { L10n.tr("integrations.oauth.title", name) }
+            public static var waiting: String { L10n.tr("integrations.oauth.waiting") }
+            public static var waitingHint: String { L10n.tr("integrations.oauth.waitingHint") }
+        }
+
         public enum Problem {
             public static var commandEmpty: String { L10n.tr("integrations.problem.commandEmpty") }
             public static var keyEmpty: String { L10n.tr("integrations.problem.keyEmpty") }
@@ -1043,6 +1059,7 @@ public enum L10n {
             public static func connected(count: Int) -> String { L10n.tr("integrations.status.connected", count) }
             public static var disabled: String { L10n.tr("integrations.status.disabled") }
             public static var failed: String { L10n.tr("integrations.status.failed") }
+            public static var needsLogin: String { L10n.tr("integrations.status.needsLogin") }
             public static var unchecked: String { L10n.tr("integrations.status.unchecked") }
         }
     }
@@ -1196,6 +1213,7 @@ public enum L10n {
             public static var fillAddress: String { L10n.tr("market.step.fillAddress") }
             public static var fillPath: String { L10n.tr("market.step.fillPath") }
             public static var getKey: String { L10n.tr("market.step.getKey") }
+            public static var signIn: String { L10n.tr("market.step.signIn") }
         }
     }
 

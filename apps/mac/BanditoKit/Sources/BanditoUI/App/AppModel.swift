@@ -60,9 +60,25 @@ public final class AppModel {
     @ObservationIgnored private var terminalControllers: [UUID: TerminalController] = [:]
     #endif
 
+    /// The sign-in to a service in the browser that is in progress (see `OAuthSignIn`).
+    public let oauth: OAuthSignIn
+
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        oauth = OAuthSignIn(defaults: defaults)
         load()
+    }
+
+    /// Takes `bandito://oauth/callback` from the browser: hands the code to the server that began the sign-in and
+    /// brings that server to the front. Returns false when `url` is not a sign-in callback.
+    @discardableResult
+    public func handleOpen(_ url: URL) async -> Bool {
+        let servers = self.servers
+        guard let serverID = await oauth.handle(url, server: { id in servers.first { $0.id == id } }) else {
+            return false
+        }
+        if servers.contains(where: { $0.id == serverID }) { selectedServerID = serverID }
+        return true
     }
 
     public var currentServer: ServerModel? {

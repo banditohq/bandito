@@ -686,6 +686,19 @@
 "integrations.failure.rejected" = "Der Server hat den Schlüssel abgelehnt. Prüfen Sie den Wert des Geheimnisses.";
 "integrations.failure.timeout" = "Der Server hat nicht rechtzeitig geantwortet.";
 "integrations.failure.unreachable" = "Der Server ist nicht erreichbar. Prüfen Sie Adresse und Netzwerk.";
+"integrations.oauth.denied" = "Der Zugriff wurde nicht erlaubt, deshalb bleibt %1$@ getrennt.";
+"integrations.oauth.done" = "Fertig";
+"integrations.oauth.failed" = "Die Anmeldung wurde nicht abgeschlossen.";
+"integrations.oauth.finishing" = "Anmeldung wird abgeschlossen …";
+"integrations.oauth.lost" = "Diese Anmeldung wartet nicht mehr. Klicken Sie auf „Verbinden“, um neu zu beginnen.";
+"integrations.oauth.needsUpdate" = "Aktualisieren Sie den Server, um %1$@ über den Browser zu verbinden.";
+"integrations.oauth.openAgain" = "Browser erneut öffnen";
+"integrations.oauth.retry" = "Erneut versuchen";
+"integrations.oauth.signInAgain" = "Erneut anmelden";
+"integrations.oauth.starting" = "Browser wird geöffnet …";
+"integrations.oauth.title" = "%1$@ verbinden";
+"integrations.oauth.waiting" = "Warte auf Ihre Freigabe im Browser …";
+"integrations.oauth.waitingHint" = "Erlauben Sie den Zugriff auf der Seite des Dienstes und kehren Sie dann zu Bandito zurück.";
 "integrations.problem.commandEmpty" = "Geben Sie den Befehl ein, mit dem der Server startet.";
 "integrations.problem.keyEmpty" = "Jede Variable und jeder Header braucht einen Namen.";
 "integrations.problem.keyInvalid" = "„%1$@“: nur Buchstaben, Ziffern, _, - und . verwenden";
@@ -719,6 +732,7 @@
 "integrations.sheet.variables" = "Variablen";
 "integrations.status.disabled" = "Aus";
 "integrations.status.failed" = "Prüfung fehlgeschlagen";
+"integrations.status.needsLogin" = "Erneut anmelden nötig";
 "integrations.status.unchecked" = "Noch nicht geprüft";
 "integrations.title" = "Integrationen";
 "integrations.toolsFound" = "Werkzeuge: %1$@";
@@ -841,6 +855,7 @@
 "market.step.fillAddress" = "Tragen Sie Ihre eigenen Werte in die Adresse ein, wo <…> steht.";
 "market.step.fillPath" = "Ersetzen Sie im Befehl den Beispielordner oder -pfad durch Ihren.";
 "market.step.getKey" = "Besorgen Sie den Schlüssel oder das Token. Wo, steht in der Dokumentation.";
+"market.step.signIn" = "Klicken Sie auf „Verbinden“ und erlauben Sie den Zugriff auf der Seite des Dienstes im Browser.";
 "market.subtitle" = "Verbinden Sie die Dienste, die Agenten nutzen können.";
 "market.view" = "Ansehen";
 "market.website" = "Website";

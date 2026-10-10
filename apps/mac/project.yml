@@ -68,6 +68,11 @@ targets:
         # app declares, so the app lists every language it ships (otherwise it always runs in English).
         CFBundleLocalizations: [en, ru, ja, zh-Hans, ko, es, pt-BR, de, fr]
         CFBundleAllowMixedLocalizations: true
+        # `bandito://oauth/callback` brings the owner back from the browser after a service's sign-in
+        # (docs/ARCHITECTURE.md#integrations). The app handles it with onOpenURL.
+        CFBundleURLTypes:
+          - CFBundleURLName: dev.bandito.oauth
+            CFBundleURLSchemes: [bandito]
     settings:
       configs:
         # Debug builds are a separate app: their own defaults, Keychain items (KeychainNamespace) and process,

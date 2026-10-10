@@ -686,6 +686,19 @@
 "integrations.failure.rejected" = "Сервер не принял ключ. Проверьте значение секрета.";
 "integrations.failure.timeout" = "Сервер не ответил вовремя.";
 "integrations.failure.unreachable" = "Не удалось связаться с сервером. Проверьте адрес и сеть.";
+"integrations.oauth.denied" = "Доступ не разрешён, поэтому %1$@ остаётся отключённым.";
+"integrations.oauth.done" = "Готово";
+"integrations.oauth.failed" = "Войти не получилось.";
+"integrations.oauth.finishing" = "Завершаем вход…";
+"integrations.oauth.lost" = "Этот вход больше не ждёт ответа. Нажмите «Подключить», чтобы начать заново.";
+"integrations.oauth.needsUpdate" = "Обновите сервер, чтобы подключить %1$@ через браузер.";
+"integrations.oauth.openAgain" = "Открыть браузер снова";
+"integrations.oauth.retry" = "Повторить";
+"integrations.oauth.signInAgain" = "Войти снова";
+"integrations.oauth.starting" = "Открываем браузер…";
+"integrations.oauth.title" = "Подключить %1$@";
+"integrations.oauth.waiting" = "Ждём разрешения в браузере…";
+"integrations.oauth.waitingHint" = "Разрешите доступ на странице сервиса и вернитесь в Bandito.";
 "integrations.problem.commandEmpty" = "Введите команду, которой запускается сервер.";
 "integrations.problem.keyEmpty" = "У каждой переменной и заголовка должно быть имя.";
 "integrations.problem.keyInvalid" = "«%1$@»: используйте буквы, цифры, _, - и .";
@@ -719,6 +732,7 @@
 "integrations.sheet.variables" = "Переменные";
 "integrations.status.disabled" = "Выключена";
 "integrations.status.failed" = "Проверка не прошла";
+"integrations.status.needsLogin" = "Нужно войти снова";
 "integrations.status.unchecked" = "Ещё не проверена";
 "integrations.title" = "Интеграции";
 "integrations.toolsFound" = "Инструменты: %1$@";
@@ -841,6 +855,7 @@
 "market.step.fillAddress" = "Подставьте свои значения в адрес, где стоят <…>.";
 "market.step.fillPath" = "Замените в команде пример папки или пути на свой.";
 "market.step.getKey" = "Получите ключ или токен. Где — сказано в документации.";
+"market.step.signIn" = "Нажмите «Подключить» и разрешите доступ на странице сервиса в браузере.";
 "market.subtitle" = "Подключите сервисы, которыми смогут пользоваться агенты.";
 "market.view" = "Посмотреть";
 "market.website" = "Сайт";

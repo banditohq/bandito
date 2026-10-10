@@ -686,6 +686,19 @@
 "integrations.failure.rejected" = "The server refused the key. Check the secret's value.";
 "integrations.failure.timeout" = "The server did not answer in time.";
 "integrations.failure.unreachable" = "The server could not be reached. Check the address and the network.";
+"integrations.oauth.denied" = "Access was not allowed, so %1$@ stays disconnected.";
+"integrations.oauth.done" = "Done";
+"integrations.oauth.failed" = "The sign-in did not finish.";
+"integrations.oauth.finishing" = "Finishing the sign-in…";
+"integrations.oauth.lost" = "This sign-in is no longer waiting. Press Connect to start again.";
+"integrations.oauth.needsUpdate" = "Update the server to connect %1$@ through the browser.";
+"integrations.oauth.openAgain" = "Open the browser again";
+"integrations.oauth.retry" = "Try again";
+"integrations.oauth.signInAgain" = "Sign in again";
+"integrations.oauth.starting" = "Opening the browser…";
+"integrations.oauth.title" = "Connect %1$@";
+"integrations.oauth.waiting" = "Waiting for your permission in the browser…";
+"integrations.oauth.waitingHint" = "Allow access on the service's page, then come back to Bandito.";
 "integrations.problem.commandEmpty" = "Enter the command the server starts with.";
 "integrations.problem.keyEmpty" = "Every variable and header needs a name.";
 "integrations.problem.keyInvalid" = "“%1$@”: use letters, digits, _, - and .";
@@ -719,6 +732,7 @@
 "integrations.sheet.variables" = "Variables";
 "integrations.status.disabled" = "Off";
 "integrations.status.failed" = "Check failed";
+"integrations.status.needsLogin" = "Needs sign-in again";
 "integrations.status.unchecked" = "Not checked yet";
 "integrations.title" = "Integrations";
 "integrations.toolsFound" = "Tools: %1$@";
@@ -841,6 +855,7 @@
 "market.step.fillAddress" = "Put your own values into the address, where it has <…>.";
 "market.step.fillPath" = "Replace the example folder or path in the command with yours.";
 "market.step.getKey" = "Get the key or token. The documentation tells where.";
+"market.step.signIn" = "Press Connect and allow access on the service's page in the browser.";
 "market.subtitle" = "Connect the services the agents can use.";
 "market.view" = "View";
 "market.website" = "Website";

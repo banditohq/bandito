@@ -686,6 +686,19 @@
 "integrations.failure.rejected" = "서버가 키를 거부했어요. 비밀 값을 확인해 주세요.";
 "integrations.failure.timeout" = "서버가 제때 응답하지 않았어요.";
 "integrations.failure.unreachable" = "서버에 연결할 수 없어요. 주소와 네트워크를 확인해 주세요.";
+"integrations.oauth.denied" = "접근이 허용되지 않아 %1$@은(는) 연결되지 않은 상태예요.";
+"integrations.oauth.done" = "완료";
+"integrations.oauth.failed" = "로그인을 마치지 못했어요.";
+"integrations.oauth.finishing" = "로그인을 마무리하는 중…";
+"integrations.oauth.lost" = "이 로그인은 더 이상 기다리지 않아요. 연결을 눌러 처음부터 다시 시작하세요.";
+"integrations.oauth.needsUpdate" = "브라우저로 %1$@을(를) 연결하려면 서버를 업데이트하세요.";
+"integrations.oauth.openAgain" = "브라우저 다시 열기";
+"integrations.oauth.retry" = "다시 시도";
+"integrations.oauth.signInAgain" = "다시 로그인";
+"integrations.oauth.starting" = "브라우저를 여는 중…";
+"integrations.oauth.title" = "%1$@ 연결";
+"integrations.oauth.waiting" = "브라우저에서 허용하기를 기다리는 중…";
+"integrations.oauth.waitingHint" = "서비스 페이지에서 접근을 허용한 뒤 Bandito로 돌아오세요.";
 "integrations.problem.commandEmpty" = "서버를 시작하는 명령을 입력해 주세요.";
 "integrations.problem.keyEmpty" = "모든 변수와 헤더에 이름이 필요해요.";
 "integrations.problem.keyInvalid" = "“%1$@”: 영문, 숫자, _, -, .만 쓸 수 있어요.";
@@ -719,6 +732,7 @@
 "integrations.sheet.variables" = "환경 변수";
 "integrations.status.disabled" = "꺼짐";
 "integrations.status.failed" = "확인 실패";
+"integrations.status.needsLogin" = "다시 로그인해야 해요";
 "integrations.status.unchecked" = "아직 확인 안 함";
 "integrations.title" = "연동";
 "integrations.toolsFound" = "도구: %1$@";
@@ -841,6 +855,7 @@
 "market.step.fillAddress" = "주소의 <…> 부분에 본인의 값을 넣으세요.";
 "market.step.fillPath" = "명령의 예시 폴더나 경로를 본인의 것으로 바꾸세요.";
 "market.step.getKey" = "키나 토큰을 발급받으세요. 위치는 문서에 나와 있어요.";
+"market.step.signIn" = "연결을 누르고 브라우저의 서비스 페이지에서 접근을 허용하세요.";
 "market.subtitle" = "에이전트가 사용할 수 있는 서비스를 연결하세요.";
 "market.view" = "보기";
 "market.website" = "웹사이트";

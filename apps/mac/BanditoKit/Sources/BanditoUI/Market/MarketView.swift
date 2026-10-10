@@ -15,6 +15,8 @@ struct MarketView: View {
     @State private var tests: [String: IntegrationTest] = [:]
     /// Integrations being checked now, by id.
     @State private var checking: Set<String> = []
+    /// How each browser sign-in stands, by integration id (`integrations.oauth_status`).
+    @State private var connections: [String: OAuthConnection] = [:]
     /// The server the lists above belong to. A switch to another server clears them before the new lists load.
     @State private var shownServer: UUID?
     @State private var query = ""
@@ -37,6 +39,9 @@ struct MarketView: View {
         .background(Color.Bandito.bg)
         .task(id: loadKey) {
             await loadForCurrentServer()
+        }
+        .onChange(of: app.oauth.phase) { _, phase in
+            if case .connected(_, let id) = phase { Task { await signedIn(id) } }
         }
         .banditoSheet(item: $editing, dismissOnOutsideClick: false) { target in
             if let server = app.currentServer {
@@ -93,8 +98,10 @@ struct MarketView: View {
             languageCode: ModelDescription.currentLanguageCode,
             test: entry.integration.flatMap { tests[$0.id] },
             checking: entry.integration.map { checking.contains($0.id) } ?? false,
+            connection: entry.integration.flatMap { connections[$0.id] },
             onBack: { router.marketDetail = nil },
-            onConnect: { if let template = entry.template { editing = .catalog(template) } },
+            onConnect: { if let template = entry.template { connect(template) } },
+            onSignInAgain: { if let integration = entry.integration { signInAgain(integration) } },
             onConfigure: { if let integration = entry.integration { editing = .edit(integration) } },
             onCheck: { if let integration = entry.integration { Task { await check(integration.id) } } },
             onRemove: { removing = entry.integration },
@@ -212,7 +219,8 @@ struct MarketView: View {
     }
 
     private func connectedCard(_ entry: MarketEntry, _ integration: Integration) -> some View {
-        let status = IntegrationStatus.of(integration, test: tests[integration.id])
+        let status = IntegrationStatus.of(
+            integration, test: tests[integration.id], connection: connections[integration.id])
         return MarketCardFrame {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top, spacing: 10) {
@@ -232,6 +240,11 @@ struct MarketView: View {
                     menu(integration)
                 }
                 statusLine(status)
+                if status == .needsLogin {
+                    Button(L10n.Integrations.Oauth.signInAgain) { signInAgain(integration) }
+                        .banditoButton(.quiet())
+                        .fixedSize()
+                }
                 Toggle(isOn: Binding(get: { integration.enabled }, set: { on in
                     Task { await setEnabled(integration, on) }
                 })) {
@@ -254,7 +267,11 @@ struct MarketView: View {
                 Task { await check(integration.id) }
             }
             .disabled(busy || !integration.enabled)
-            Button(L10n.Integrations.edit) { editing = .edit(integration) }
+            if integration.auth == .oauth {
+                Button(L10n.Integrations.Oauth.signInAgain) { signInAgain(integration) }
+            } else {
+                Button(L10n.Integrations.edit) { editing = .edit(integration) }
+            }
             Divider()
             Button(L10n.Integrations.remove, role: .destructive) { removing = integration }
         } label: {
@@ -317,11 +334,13 @@ struct MarketView: View {
             }
             .font(BanditoFont.text(size: 12.5, weight: 500))
             .foregroundStyle(Color.Bandito.ok)
-            Button(L10n.Market.configure) { editing = .edit(integration) }
-                .banditoButton(.link)
-                .fixedSize()
+            if integration.auth != .oauth {
+                Button(L10n.Market.configure) { editing = .edit(integration) }
+                    .banditoButton(.link)
+                    .fixedSize()
+            }
         } else if let template = entry.template {
-            Button(L10n.Integrations.connect) { editing = .catalog(template) }
+            Button(L10n.Integrations.connect) { connect(template) }
                 .banditoButton(.lightPill())
                 .fixedSize()
         }
@@ -340,6 +359,7 @@ struct MarketView: View {
             router.marketDetail = nil
             tests = [:]
             checking = []
+            connections = [:]
             error = nil
         }
         await reload()
@@ -349,6 +369,7 @@ struct MarketView: View {
         guard let server, server.info != nil, server.supports("integrations") else { return }
         do {
             integrations = try await server.integrations()
+            await reloadConnections(of: server)
             if catalog.isEmpty {
                 catalog = try await server.integrationCatalog()
                 router.marketCategories = MarketCategory.present(in: catalog)
@@ -360,6 +381,43 @@ struct MarketView: View {
         } catch {
             self.error = UserFacingError.message(for: error)
         }
+    }
+
+    /// The state of each browser sign-in. A daemon without the feature has none; a failed read keeps the last answer.
+    private func reloadConnections(of server: ServerModel) async {
+        guard server.supports("integrations_oauth") else {
+            connections = [:]
+            return
+        }
+        if let list = try? await server.oauthStatuses() {
+            connections = Dictionary(list.map { ($0.id, $0.connection) }, uniquingKeysWith: { _, last in last })
+        }
+    }
+
+    /// Connect: a service that signs in in the browser starts the sign-in; the others open the sheet of keys.
+    private func connect(_ template: IntegrationCatalogEntry) {
+        guard template.usesOAuth, let url = template.url else {
+            editing = .catalog(template)
+            return
+        }
+        guard let server else { return }
+        guard server.supports("integrations_oauth") else {
+            error = UserFacingMessage(text: L10n.Integrations.Oauth.needsUpdate(name: template.name))
+            return
+        }
+        let draft = NewIntegration(name: template.id, kind: .http, url: url)
+        Task { await app.oauth.begin(server: server, target: .draft(draft), name: template.name) }
+    }
+
+    private func signInAgain(_ integration: Integration) {
+        guard let server else { return }
+        Task { await app.oauth.begin(server: server, target: .existing(id: integration.id), name: integration.name) }
+    }
+
+    /// A sign-in just ended well: the list is read again and the new service is checked, so its tools show.
+    private func signedIn(_ id: String) async {
+        await reload()
+        await check(id)
     }
 
     private func setEnabled(_ integration: Integration, _ on: Bool) async {
@@ -377,7 +435,9 @@ struct MarketView: View {
         checking.insert(id)
         defer { checking.remove(id) }
         do {
-            tests[id] = try await server.testIntegration(id)
+            let result = try await server.testIntegration(id)
+            tests[id] = result
+            if result.needsLogin { await reloadConnections(of: server) }
         } catch {
             self.error = UserFacingError.message(for: error)
         }
@@ -504,6 +564,14 @@ struct IntegrationStatusLine: View {
             }
             .font(BanditoFont.text(size: 12.5, weight: 500))
             .foregroundStyle(Color.Bandito.ok)
+        case .needsLogin:
+            Label {
+                Text(L10n.Integrations.Status.needsLogin)
+            } icon: {
+                Image(systemName: "person.crop.circle.badge.exclamationmark")
+            }
+            .font(BanditoFont.text(size: 12.5, weight: 500))
+            .foregroundStyle(Color.Bandito.signal)
         case .failed(let failure):
             Label {
                 Text(IntegrationFailureText.text(failure))

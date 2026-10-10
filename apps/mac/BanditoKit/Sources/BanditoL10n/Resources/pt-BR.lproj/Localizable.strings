@@ -686,6 +686,19 @@
 "integrations.failure.rejected" = "O servidor recusou a chave. Verifique o valor do segredo.";
 "integrations.failure.timeout" = "O servidor não respondeu a tempo.";
 "integrations.failure.unreachable" = "Não foi possível alcançar o servidor. Verifique o endereço e a rede.";
+"integrations.oauth.denied" = "O acesso não foi permitido, então %1$@ continua desconectado.";
+"integrations.oauth.done" = "Pronto";
+"integrations.oauth.failed" = "O login não foi concluído.";
+"integrations.oauth.finishing" = "Concluindo o login…";
+"integrations.oauth.lost" = "Este login não está mais aguardando. Toque em Conectar para começar de novo.";
+"integrations.oauth.needsUpdate" = "Atualize o servidor para conectar %1$@ pelo navegador.";
+"integrations.oauth.openAgain" = "Abrir o navegador de novo";
+"integrations.oauth.retry" = "Tentar de novo";
+"integrations.oauth.signInAgain" = "Entrar de novo";
+"integrations.oauth.starting" = "Abrindo o navegador…";
+"integrations.oauth.title" = "Conectar %1$@";
+"integrations.oauth.waiting" = "Aguardando sua permissão no navegador…";
+"integrations.oauth.waitingHint" = "Permita o acesso na página do serviço e volte ao Bandito.";
 "integrations.problem.commandEmpty" = "Digite o comando que inicia o servidor.";
 "integrations.problem.keyEmpty" = "Cada variável e cabeçalho precisa de um nome.";
 "integrations.problem.keyInvalid" = "“%1$@”: use letras, números, _, - e .";
@@ -719,6 +732,7 @@
 "integrations.sheet.variables" = "Variáveis";
 "integrations.status.disabled" = "Desativada";
 "integrations.status.failed" = "Verificação falhou";
+"integrations.status.needsLogin" = "É preciso entrar de novo";
 "integrations.status.unchecked" = "Ainda não verificada";
 "integrations.title" = "Integrações";
 "integrations.toolsFound" = "Ferramentas: %1$@";
@@ -841,6 +855,7 @@
 "market.step.fillAddress" = "Coloque seus próprios valores no endereço, onde aparece <…>.";
 "market.step.fillPath" = "Troque no comando a pasta ou o caminho de exemplo pelo seu.";
 "market.step.getKey" = "Obtenha a chave ou o token. A documentação diz onde.";
+"market.step.signIn" = "Toque em Conectar e permita o acesso na página do serviço, no navegador.";
 "market.subtitle" = "Conecte os serviços que os agentes podem usar.";
 "market.view" = "Ver";
 "market.website" = "Site";

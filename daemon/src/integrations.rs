@@ -55,6 +55,9 @@ pub struct CatalogEntry {
     pub url: Option<String>,
     pub url_hint: Option<String>,
     pub headers_keys: Option<Vec<CatalogKey>>,
+    /// `oauth` for a service that signs in in the browser (see docs/ARCHITECTURE.md#integrations): Connect starts the
+    /// sign-in, and the entry holds no header keys.
+    pub auth: Option<String>,
 }
 
 /// The categories a catalog entry may have.

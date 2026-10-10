@@ -819,6 +819,15 @@ mod tests {
                     }
                 }
             }
+            match e.auth.as_deref() {
+                None | Some("none") => {}
+                Some("oauth") => assert!(
+                    e.kind == IntegrationKind::Http && e.url.is_some() && e.headers_keys.is_none(),
+                    "{}: a browser sign-in needs an http entry with a fixed url and no header keys",
+                    e.id
+                ),
+                Some(other) => panic!("{}: unknown auth {other}", e.id),
+            }
             for key in e.headers_keys.iter().flatten().chain(e.env_keys.iter().flatten()) {
                 assert!(key.value_template.contains("{secret}"), "{}", e.id);
             }
