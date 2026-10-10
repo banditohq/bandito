@@ -1,3 +1,4 @@
+import AppKit
 import BanditoL10n
 import Testing
 
@@ -51,5 +52,30 @@ import Testing
         #expect(ServiceLogo.image(for: "github") != nil)
         #expect(ServiceLogo.image(for: "brave-search") != nil)
         #expect(ServiceLogo.image(for: "composio") == nil)
+    }
+
+    @Test func logoIsReadOnceAndAMissIsRemembered() {
+        final class Counter: @unchecked Sendable { var reads = 0 }
+        let counter = Counter()
+        let cache = ServiceLogoCache { id in
+            counter.reads += 1
+            return id == "github" ? NSImage(size: NSSize(width: 1, height: 1)) : nil
+        }
+        let first = cache.image(for: "github")
+        let second = cache.image(for: "github")
+        #expect(first != nil)
+        #expect(first === second)
+        #expect(counter.reads == 1)
+
+        #expect(cache.image(for: "composio") == nil)
+        #expect(cache.image(for: "composio") == nil)
+        #expect(counter.reads == 2)
+    }
+
+    @Test func serviceLogoUsesTheSharedCache() {
+        let first = ServiceLogo.image(for: "stripe")
+        let second = ServiceLogo.image(for: "stripe")
+        #expect(first != nil)
+        #expect(first === second)
     }
 }
