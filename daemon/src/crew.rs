@@ -557,11 +557,11 @@ fn team_tool_defs() -> Vec<Value> {
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "agent": { "type": "string", "description": "Agent id or name" },
+                    "agent": { "type": "string", "description": "Agent id or name. May be left out when the crew has one other agent." },
                     "task": { "type": "string", "description": "What to do, with enough context to do it alone" },
                     "wait": { "type": "boolean", "description": "Wait for the agent to finish and return its answer. Default false." },
                 },
-                "required": ["agent", "task"],
+                "required": ["task"],
             },
         }),
         json!({
@@ -570,7 +570,7 @@ fn team_tool_defs() -> Vec<Value> {
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "agent": { "type": "string", "description": "Agent id or name. Leave out for the whole crew." },
+                    "agent": { "type": "string", "description": "Agent id or name. Leave out for the whole crew (with wait: until nobody in it is working)." },
                     "wait": { "type": "boolean", "description": "If the agent is working, wait until it stops (at most 2 minutes). Default false." },
                 },
             },
@@ -583,12 +583,17 @@ fn text_arg<'a>(args: &'a Value, key: &str) -> Option<&'a str> {
     args.get(key).and_then(Value::as_str).filter(|s| !s.trim().is_empty())
 }
 
-async fn team_list(backend: &dyn CrewBackend) -> Result<String, String> {
+/// The other agents of the crew, as `team.list` gives them.
+async fn team_members(backend: &dyn CrewBackend) -> Result<Vec<Value>, String> {
     let v = backend
         .team("team.list", json!({}))
         .await
         .map_err(|e| format!("{e:#}"))?;
-    let members = v.get("agents").and_then(Value::as_array).cloned().unwrap_or_default();
+    Ok(v.get("agents").and_then(Value::as_array).cloned().unwrap_or_default())
+}
+
+async fn team_list(backend: &dyn CrewBackend) -> Result<String, String> {
+    let members = team_members(backend).await?;
     if members.is_empty() {
         return Ok("No other agents in this crew yet.".into());
     }
@@ -626,15 +631,29 @@ fn status_text(m: &Value) -> String {
 }
 
 async fn team_assign(args: &Value, backend: &dyn CrewBackend) -> Result<String, String> {
-    let Some(agent) = text_arg(args, "agent") else {
-        // Name the crew, so the next call can pick one without a team_list first.
-        let crew = team_list(backend).await.unwrap_or_default();
-        return Err(format!(
-            "team_assign needs \"agent\": the name or id of one of these.\n{crew}"
-        ));
-    };
     let Some(task) = text_arg(args, "task") else {
         return Err("team_assign needs \"task\"".into());
+    };
+    let only;
+    let agent = match text_arg(args, "agent") {
+        Some(agent) => agent,
+        None => {
+            let members = team_members(backend).await?;
+            match members.as_slice() {
+                // One other agent in the crew: the task can only be for it.
+                [one] => {
+                    only = one["id"].as_str().unwrap_or_default().to_string();
+                    only.as_str()
+                }
+                _ => {
+                    let crew: Vec<String> = members.iter().map(team_line).collect();
+                    return Err(format!(
+                        "team_assign needs \"agent\": the name or id of one of these.\n{}",
+                        crew.join("\n")
+                    ));
+                }
+            }
+        }
     };
     let wait = match args.get("wait") {
         None | Some(Value::Null) => false,
@@ -675,11 +694,18 @@ async fn team_status(args: &Value, backend: &dyn CrewBackend) -> Result<String, 
         Some(Value::Bool(b)) => *b,
         Some(_) => return Err("wait must be true or false".into()),
     };
+    let deadline = tokio::time::Instant::now() + STATUS_WAIT;
     let Some(agent) = text_arg(args, "agent") else {
-        // No agent named: where the whole crew stands.
+        // No agent named: where the whole crew stands; with wait, once nobody in it is working.
+        while wait && tokio::time::Instant::now() < deadline {
+            let members = team_members(backend).await?;
+            if !members.iter().any(|m| m["status"] == "working") {
+                break;
+            }
+            tokio::time::sleep(STATUS_POLL).await;
+        }
         return team_list(backend).await;
     };
-    let deadline = tokio::time::Instant::now() + STATUS_WAIT;
     let v = loop {
         let v = backend
             .team("team.status", json!({ "agent": agent }))
@@ -2065,6 +2091,8 @@ mod tests {
             team_reply: Some(json!({ "agents": [
                 { "id": "a1", "name": "Scout", "role": "", "runtime": "claude", "model": "haiku",
                   "status": "idle", "paused": false, "last_message": null },
+                { "id": "a2", "name": "Mule", "role": "", "runtime": "claude", "model": "haiku",
+                  "status": "idle", "paused": false, "last_message": null },
             ] })),
             ..Default::default()
         };
@@ -2073,11 +2101,27 @@ mod tests {
             .await
             .remove(0);
         assert_eq!(r["result"]["isError"], json!(true));
-        assert!(tool_text(&r).contains("needs \"agent\"") && tool_text(&r).contains("Scout"));
+        assert!(tool_text(&r).contains("needs \"agent\"") && tool_text(&r).contains("Mule"));
         // Only the crew was read: nothing was sent.
         let calls = backend.team_calls.lock().unwrap();
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].0, "team.list");
+    }
+
+    #[tokio::test]
+    async fn team_assign_without_an_agent_goes_to_the_only_other_agent() {
+        let backend = MockBackend {
+            team_reply: Some(json!({ "agents": [
+                { "id": "a1", "name": "Scout", "role": "", "runtime": "claude", "model": "haiku",
+                  "status": "idle", "paused": false, "last_message": null },
+            ] })),
+            ..Default::default()
+        };
+        let call = tool_call("team_assign", json!({ "task": "count" }));
+        lead_replies(&format!("{call}\n"), &backend, &ALL_CAPABILITIES).await;
+        let calls = backend.team_calls.lock().unwrap();
+        assert_eq!(calls[1].0, "team.assign");
+        assert_eq!(calls[1].1, json!({ "agent": "a1", "task": "count", "wait": false }));
     }
 
     #[tokio::test]
