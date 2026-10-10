@@ -61,7 +61,11 @@ struct BanditoApp: App {
                 }
                 .preferredColorScheme(.dark)
                 .background(WindowChrome())
+                // `bandito://oauth/callback` (the browser's way back after a sign-in) goes to this window's
+                // onOpenURL; with the scene's matching below it does not open a second window.
+                .handlesExternalEvents(preferring: ["main"], allowing: ["*"])
         }
+        .handlesExternalEvents(matching: ["main"])
         .defaultSize(width: 1240, height: 800)
         .windowStyle(.hiddenTitleBar)
         .commands {

@@ -190,6 +190,12 @@ enum Cmd {
         new_chapter: Option<&'static str>,
         reply: oneshot::Sender<()>,
     },
+    /// A browser sign-in token was renewed: renew the session if it runs with an older token of one of these
+    /// integrations. Replies whether it did.
+    ReloadForTokens {
+        integrations: Vec<String>,
+        reply: oneshot::Sender<bool>,
+    },
     /// Checks the per-turn and hop limits and, if they pass, counts one crew
     /// message against the running turn. Done in the actor so the check and the
     /// count are one step.
@@ -483,6 +489,7 @@ impl Supervisor {
             turn_context: None,
             turn_checkpoints: false,
             reload_after_turn: false,
+            oauth_in_session: HashMap::new(),
             new_chapter_after_turn: None,
             session_kind: None,
             turn_limit: false,
@@ -805,6 +812,25 @@ impl Supervisor {
         }
     }
 
+    /// A browser sign-in token of these integrations was renewed: the agent's session is renewed too if it runs with
+    /// an older token (from the next turn on, like [`Supervisor::reload`]); an agent with no session is left alone.
+    /// Returns whether it was.
+    pub async fn reload_for_tokens(&self, agent_id: &str, integrations: Vec<String>) -> bool {
+        let tx = self
+            .actors
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(agent_id)
+            .cloned()
+            .filter(|tx| !tx.is_closed());
+        let Some(tx) = tx else { return false };
+        let (reply, rx) = oneshot::channel();
+        if tx.send(Cmd::ReloadForTokens { integrations, reply }).await.is_err() {
+            return false;
+        }
+        rx.await.unwrap_or(false)
+    }
+
     pub async fn stop_all(&self) {
         let ids: Vec<String> = self
             .actors
@@ -898,6 +924,8 @@ struct Actor {
     turn_checkpoints: bool,
     /// Settings changed while a session was running: close that session once it is idle.
     reload_after_turn: bool,
+    /// The browser sign-in tokens the running session was started with, by integration id.
+    oauth_in_session: HashMap<String, String>,
     /// A folder or runtime change while a session was running: the next session starts a new chapter, for this reason.
     new_chapter_after_turn: Option<&'static str>,
     /// The runtime of the running session (the primary one or the fallback).
@@ -1030,6 +1058,21 @@ impl Actor {
                 self.new_chapter_after_turn = self.new_chapter_after_turn.or(new_chapter);
                 self.apply_reload_if_idle().await;
                 let _ = reply.send(());
+            }
+            Cmd::ReloadForTokens { integrations, reply } => {
+                let stale = self.session.is_some()
+                    && self.oauth_in_session.iter().any(|(id, used)| {
+                        integrations.contains(id)
+                            && crate::mcp_oauth::access_token(&self.hub.store, id)
+                                .ok()
+                                .flatten()
+                                .is_some_and(|now| now != *used)
+                    });
+                if stale {
+                    self.reload_after_turn = true;
+                    self.apply_reload_if_idle().await;
+                }
+                let _ = reply.send(stale);
             }
             Cmd::Stop(_) => unreachable!("handled in run"),
         }
@@ -1169,17 +1212,44 @@ impl Actor {
         // The owner's MCP servers for this agent: enabled, in its list, with their secrets read now.
         let all_integrations = self.hub.store.integration_list()?;
         let chosen = crate::integrations::for_agent(&all_integrations, agent.integrations.as_deref());
+        // A browser sign-in whose token ends soon is renewed now; one that cannot be used is left out, and the agent
+        // is told when the person has to sign in again.
+        let unusable = crate::mcp_oauth::ready_for_session(&self.hub.store, &chosen, crate::store::now_ms()).await;
+        let relogin: Vec<&str> = chosen
+            .iter()
+            .filter(|i| unusable.iter().any(|(id, login)| *login && *id == i.id))
+            .map(|i| i.name.as_str())
+            .collect();
+        let relogin_line = crate::integrations::relogin_line(&relogin);
+        let expired: Vec<&str> = chosen
+            .iter()
+            .filter(|i| unusable.iter().any(|(id, login)| !*login && *id == i.id))
+            .map(|i| i.name.as_str())
+            .collect();
+        let expired_line = crate::integrations::unreachable_line(&expired);
+        let chosen: Vec<&crate::store::Integration> = chosen
+            .into_iter()
+            .filter(|i| !unusable.iter().any(|(id, _)| *id == i.id))
+            .collect();
         let integration_secrets: Vec<(String, String)> = {
             let names = crate::integrations::secret_names(&chosen);
-            self.hub
-                .store
-                .secrets_all()?
-                .into_iter()
-                .filter(|(name, _)| names.contains(name))
-                .collect()
+            let mut all = self.hub.store.secrets_all()?;
+            // A sign-in renewal the database refused is the live token.
+            crate::mcp_oauth::overlay_held(&mut all);
+            all.into_iter().filter(|(name, _)| names.contains(name)).collect()
         };
         let secret_map: std::collections::HashMap<String, String> = integration_secrets.iter().cloned().collect();
         let mcp_servers = crate::integrations::resolve(&chosen, &secret_map);
+        // The sign-in tokens this session starts with, to know later whether a renewal concerns it.
+        let oauth_tokens: HashMap<String, String> = chosen
+            .iter()
+            .filter(|i| i.auth == crate::store::IntegrationAuth::Oauth)
+            .filter_map(|i| {
+                secret_map
+                    .get(&crate::integrations::oauth_access_name(&i.id))
+                    .map(|t| (i.id.clone(), t.clone()))
+            })
+            .collect();
         // Blocks: memory briefing, role, schedule briefing, integrations, the user's own instructions.
         let mut blocks: Vec<String> = Vec::new();
         let project = (!agent.cwd.trim().is_empty()).then(|| PROJECT_FOLDER.replace("{cwd}", agent.cwd.trim()));
@@ -1208,6 +1278,12 @@ impl Actor {
         }
         let names: Vec<&str> = mcp_servers.iter().map(|s| s.name.as_str()).collect();
         if let Some(line) = crate::integrations::prompt_line(&names) {
+            blocks.push(line);
+        }
+        if let Some(line) = relogin_line {
+            blocks.push(line);
+        }
+        if let Some(line) = expired_line {
             blocks.push(line);
         }
         if let Some(sp) = agent.system_prompt.as_deref().filter(|s| !s.trim().is_empty()) {
@@ -1301,6 +1377,7 @@ impl Actor {
             .pid()
             .map(|pid| crate::host::register_root(pid as i32, crate::host::Owner::agent(&agent.id)));
         self.session = Some(spawned.session);
+        self.oauth_in_session = oauth_tokens;
         self.shell_cwd = policy::ShellCwd::default();
         self.output = Some(spawned.output);
         self.session_kind = Some(kind);
@@ -3664,6 +3741,136 @@ mod tests {
             "the next chapter does not resume the old session"
         );
     }
+    #[tokio::test]
+    async fn a_renewed_sign_in_token_renews_only_a_session_that_runs_with_the_old_one() {
+        use crate::integrations::{oauth_access_name, oauth_state_name};
+        use crate::store::{IntegrationAuth, IntegrationKind, NewIntegration};
+        let mut w = world(ApprovalMode::Risky);
+        let row = w
+            .store
+            .integration_create(NewIntegration {
+                name: "notion".into(),
+                kind: IntegrationKind::Http,
+                command: None,
+                args: vec![],
+                url: Some("https://mcp.example.com/mcp".into()),
+                env: Default::default(),
+                headers: Default::default(),
+                enabled: true,
+                auth: IntegrationAuth::Oauth,
+            })
+            .unwrap();
+        let store = w.store.clone();
+        let set_token = |token: &str| {
+            let state = r#"{"client_id":"c","issuer":"https://a.example","token_endpoint":"https://a.example/t","resource":"https://mcp.example.com/mcp"}"#;
+            store
+                .secrets_set_many(&[
+                    (&oauth_access_name(&row.id), token),
+                    (&oauth_state_name(&row.id), state),
+                ])
+                .unwrap();
+        };
+        set_token("at-1");
+        let ids = || vec![row.id.clone()];
+        // No session yet: nothing to renew.
+        assert!(!w.sup.reload_for_tokens(&w.agent, ids()).await);
+
+        w.sup.send(&w.agent, Inbound::user("first")).await.unwrap();
+        w.wait_log("send first").await;
+        w.push(RuntimeOutput::SessionId("sess-1".into())).await;
+        w.push(done()).await;
+        w.wait(is_status(AgentStatus::Idle)).await;
+        let header = |w: &World| match &w.spawns.lock().unwrap()[0].mcp_servers[0].transport {
+            crate::integrations::Transport::Http { headers, .. } => headers
+                .iter()
+                .find(|h| h.key == "Authorization")
+                .map(|h| h.value.clone()),
+            _ => None,
+        };
+        assert_eq!(header(&w).as_deref(), Some("Bearer at-1"));
+
+        // The same token again, or another integration: the session stays.
+        assert!(!w.sup.reload_for_tokens(&w.agent, ids()).await);
+        assert!(!w.sup.reload_for_tokens(&w.agent, vec!["other".into()]).await);
+        assert!(!w.log.lock().unwrap().iter().any(|l| l == "shutdown"));
+
+        // A new token: the session closes and the next one starts with it.
+        set_token("at-2");
+        assert!(!w.sup.reload_for_tokens(&w.agent, vec!["other".into()]).await);
+        assert!(w.sup.reload_for_tokens(&w.agent, ids()).await);
+        assert!(w.log.lock().unwrap().iter().any(|l| l == "shutdown"));
+        w.sup.send(&w.agent, Inbound::user("second")).await.unwrap();
+        w.wait_log("send second").await;
+        {
+            let spawns = w.spawns.lock().unwrap();
+            assert_eq!(spawns.len(), 2);
+            match &spawns[1].mcp_servers[0].transport {
+                crate::integrations::Transport::Http { headers, .. } => {
+                    assert!(headers.iter().any(|h| h.value == "Bearer at-2"));
+                }
+                _ => panic!("an http server"),
+            }
+        }
+        // The session is gone and the next one has the new token: another call finds nothing stale.
+        assert!(!w.sup.reload_for_tokens(&w.agent, ids()).await);
+    }
+
+    #[tokio::test]
+    async fn a_token_renewed_for_one_caller_renews_the_session_of_another_agent() {
+        use crate::mcp_oauth::{self, Flows, Target, fake::Fake};
+        use crate::store::{IntegrationAuth, IntegrationKind, NewIntegration};
+        let mut w = world(ApprovalMode::Risky);
+        let fake = Fake::start().await;
+        let flows = Flows::default();
+        let now = crate::store::now_ms();
+        let draft = NewIntegration {
+            name: "notion".into(),
+            kind: IntegrationKind::Http,
+            command: None,
+            args: vec![],
+            url: Some(fake.url()),
+            env: Default::default(),
+            headers: Default::default(),
+            enabled: true,
+            auth: IntegrationAuth::None,
+        };
+        let begun = mcp_oauth::begin(&w.store, &flows, "dev", Target::Draft(draft), None, now)
+            .await
+            .unwrap();
+        let (code, state) = fake.authorize(&begun.authorize_url);
+        let row = mcp_oauth::complete(&w.store, &flows, "dev", &state, &code, None, now)
+            .await
+            .unwrap()
+            .integration;
+        // The background task of the daemon, over this supervisor.
+        let app = crate::rpc::App::new(w.sup.clone(), std::path::PathBuf::from("unused-agents-root"));
+        crate::rpc::integrations::spawn_oauth_refresher(app);
+        // Agent B has a session with the first token.
+        w.sup.send(&w.agent, Inbound::user("first")).await.unwrap();
+        w.wait_log("send first").await;
+        w.push(RuntimeOutput::SessionId("sess-1".into())).await;
+        w.push(done()).await;
+        w.wait(is_status(AgentStatus::Idle)).await;
+        assert!(!w.log.lock().unwrap().iter().any(|l| l == "shutdown"));
+        // Agent A starts a session a minute before the token ends: its start renews the token. B was not asked.
+        let late = now + 3_600_000 - 60_000;
+        let skipped = mcp_oauth::ready_for_session(&w.store, &[&row], late).await;
+        assert!(skipped.is_empty());
+        // B's session is renewed, so its next turn runs with the new token.
+        w.wait_log("shutdown").await;
+        w.sup.send(&w.agent, Inbound::user("second")).await.unwrap();
+        w.wait_log("send second").await;
+        let new_token = mcp_oauth::access_token(&w.store, &row.id).unwrap().unwrap();
+        let spawns = w.spawns.lock().unwrap();
+        assert_eq!(spawns.len(), 2);
+        match &spawns[1].mcp_servers[0].transport {
+            crate::integrations::Transport::Http { headers, .. } => {
+                assert!(headers.iter().any(|h| h.value == format!("Bearer {new_token}")));
+            }
+            _ => panic!("an http server"),
+        }
+    }
+
     #[tokio::test]
     async fn reload_while_idle_closes_the_session_and_keeps_the_chapter() {
         let mut w = world(ApprovalMode::Risky);

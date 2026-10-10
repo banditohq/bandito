@@ -711,6 +711,19 @@
 "integrations.failure.rejected" = "El servidor rechazó la clave. Revisa el valor del secreto.";
 "integrations.failure.timeout" = "El servidor no respondió a tiempo.";
 "integrations.failure.unreachable" = "No se pudo conectar con el servidor. Revisa la dirección y la red.";
+"integrations.oauth.denied" = "No se permitió el acceso, así que %1$@ sigue desconectado.";
+"integrations.oauth.done" = "Listo";
+"integrations.oauth.failed" = "No se pudo terminar el inicio de sesión.";
+"integrations.oauth.finishing" = "Terminando el inicio de sesión…";
+"integrations.oauth.lost" = "Este inicio de sesión ya no está esperando. Pulsa Conectar para empezar de nuevo.";
+"integrations.oauth.needsUpdate" = "Actualiza el servidor para conectar %1$@ desde el navegador.";
+"integrations.oauth.openAgain" = "Abrir el navegador de nuevo";
+"integrations.oauth.retry" = "Reintentar";
+"integrations.oauth.signInAgain" = "Iniciar sesión de nuevo";
+"integrations.oauth.starting" = "Abriendo el navegador…";
+"integrations.oauth.title" = "Conectar %1$@";
+"integrations.oauth.waiting" = "Esperando tu permiso en el navegador…";
+"integrations.oauth.waitingHint" = "Permite el acceso en la página del servicio y vuelve a Bandito.";
 "integrations.problem.commandEmpty" = "Escribe el comando con el que se inicia el servidor.";
 "integrations.problem.keyEmpty" = "Cada variable y encabezado necesita un nombre.";
 "integrations.problem.keyInvalid" = "«%1$@»: usa letras, cifras, _, - y .";
@@ -744,6 +757,8 @@
 "integrations.sheet.variables" = "Variables";
 "integrations.status.disabled" = "Desactivada";
 "integrations.status.failed" = "La comprobación falló";
+"integrations.status.needsLogin" = "Hay que iniciar sesión de nuevo";
+"integrations.status.refreshError" = "No se pudo renovar el inicio de sesión; se reintentará";
 "integrations.status.unchecked" = "Aún sin comprobar";
 "integrations.title" = "Integraciones";
 "integrations.toolsFound" = "Herramientas: %1$@";
@@ -866,6 +881,7 @@
 "market.step.fillAddress" = "Pon tus propios valores en la dirección, donde aparece <…>.";
 "market.step.fillPath" = "Sustituye en el comando la carpeta o ruta de ejemplo por la tuya.";
 "market.step.getKey" = "Consigue la clave o el token. La documentación indica dónde.";
+"market.step.signIn" = "Pulsa Conectar y permite el acceso en la página del servicio, en el navegador.";
 "market.subtitle" = "Conecta los servicios que pueden usar los agentes.";
 "market.view" = "Ver";
 "market.website" = "Sitio web";

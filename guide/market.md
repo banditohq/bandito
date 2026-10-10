@@ -59,6 +59,23 @@ headers. The sheet can check the connection before you leave it.
 2. Click Connect (Подключить) to save. The server is then checked, and the sheet shows the tools it offers.
 3. The card then shows Connected (Подключено) and Configure (Настроить).
 
+## Connect in the browser
+
+<!-- id: market-oauth; covers: -->
+A service that signs in with its own page (no key to copy) shows Connect (Подключить) like the others, but Connect opens your
+browser instead of the sheet. Linear, Notion and Sentry connect this way. The server asks the service for the permission page and Bandito opens it; the keys never
+come to this Mac. A sheet says Waiting for your permission in the browser (Ждём разрешения в браузере) with Open the
+browser again (Открыть браузер снова) and Cancel (Отмена). After you allow access the browser brings you back to Bandito,
+the sheet says Connected (Подключено) and the card shows the tools. If the access is refused, expires or is revoked, the
+card says Needs sign-in again (Нужно войти снова) with the button Sign in again (Войти снова); the agents see the service
+as off until then. If the service is out of reach when Bandito renews the access, the card says Couldn't renew the sign-in, will retry (Не удалось обновить вход, попробуем ещё раз): the access still works, and Bandito tries again by itself. Remove (Удалить) also withdraws the access on the service's side when it can.
+Где: Marketplace → a catalog card or a service's page → Connect (Подключить), then the sheet; Sign in again (Войти снова) on a card, in its menu (…), or on its page
+1. Click Connect (Подключить). The browser opens the service's page.
+2. Allow access there. Come back to Bandito if the browser does not bring you back by itself.
+3. Click Done (Готово) in the sheet. Cancel (Отмена) gives the sign-in up; a late answer from the browser is ignored.
+4. A sign-in waits ten minutes. If it expired, or you pressed Cancel, click Connect (Подключить) again.
+5. Click Sign in again (Войти снова) when the card asks for it. The same service page opens.
+
 ## Configure, turn off, remove
 
 <!-- id: market-configure; covers: -->

@@ -24,6 +24,7 @@ pub mod hub;
 pub mod integrations;
 pub mod limit;
 pub mod logs;
+pub mod mcp_oauth;
 pub mod pairing;
 pub mod policy;
 pub mod redact;

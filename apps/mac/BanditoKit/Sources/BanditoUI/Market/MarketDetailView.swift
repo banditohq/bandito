@@ -12,8 +12,11 @@ struct MarketDetailView: View {
     /// The last check of the integration in this session.
     let test: IntegrationTest?
     let checking: Bool
+    /// The daemon's word on a browser sign-in, when the integration has one.
+    var connection: OAuthConnection?
     var onBack: () -> Void
     var onConnect: () -> Void
+    var onSignInAgain: () -> Void
     var onConfigure: () -> Void
     var onCheck: () -> Void
     var onRemove: () -> Void
@@ -135,18 +138,26 @@ struct MarketDetailView: View {
 
     @ViewBuilder
     private var actions: some View {
-        if entry.integration != nil {
+        if let integration = entry.integration {
             HStack(spacing: 10) {
-                Label {
-                    Text(L10n.Integrations.connected)
-                } icon: {
-                    Image(systemName: "checkmark")
+                if IntegrationStatus.of(integration, test: test, connection: connection) == .needsLogin {
+                    Button(L10n.Integrations.Oauth.signInAgain, action: onSignInAgain)
+                        .banditoButton(.signal())
+                        .fixedSize()
+                } else {
+                    Label {
+                        Text(L10n.Integrations.connected)
+                    } icon: {
+                        Image(systemName: "checkmark")
+                    }
+                    .font(BanditoFont.text(size: 12.5, weight: 500))
+                    .foregroundStyle(Color.Bandito.ok)
                 }
-                .font(BanditoFont.text(size: 12.5, weight: 500))
-                .foregroundStyle(Color.Bandito.ok)
-                Button(L10n.Market.configure, action: onConfigure)
-                    .banditoButton(.quiet())
-                    .fixedSize()
+                if integration.auth != .oauth {
+                    Button(L10n.Market.configure, action: onConfigure)
+                        .banditoButton(.quiet())
+                        .fixedSize()
+                }
             }
         } else if template != nil {
             Button(L10n.Integrations.connect, action: onConnect)
@@ -225,13 +236,14 @@ struct MarketDetailView: View {
         case .fillAddress: L10n.Market.Step.fillAddress
         case .fillPath: L10n.Market.Step.fillPath
         case .connect: L10n.Market.Step.connect
+        case .signIn: L10n.Market.Step.signIn
         }
     }
 
     // MARK: - connection
 
     private func connection(_ integration: Integration) -> some View {
-        let status = IntegrationStatus.of(integration, test: test)
+        let status = IntegrationStatus.of(integration, test: test, connection: connection)
         return section(L10n.Market.Section.connection) {
             VStack(alignment: .leading, spacing: 12) {
                 if template == nil {

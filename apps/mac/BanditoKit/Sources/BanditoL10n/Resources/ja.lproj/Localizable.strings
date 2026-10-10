@@ -711,6 +711,19 @@
 "integrations.failure.rejected" = "サーバーがキーを拒否しました。シークレットの値を確認してください。";
 "integrations.failure.timeout" = "サーバーが時間内に応答しませんでした。";
 "integrations.failure.unreachable" = "サーバーに接続できません。アドレスとネットワークを確認してください。";
+"integrations.oauth.denied" = "アクセスが許可されなかったため、%1$@ は未接続のままです。";
+"integrations.oauth.done" = "完了";
+"integrations.oauth.failed" = "ログインを完了できませんでした。";
+"integrations.oauth.finishing" = "ログインを完了しています…";
+"integrations.oauth.lost" = "このログインはもう待機していません。「接続」を押してやり直してください。";
+"integrations.oauth.needsUpdate" = "ブラウザで %1$@ を接続するには、サーバーを更新してください。";
+"integrations.oauth.openAgain" = "ブラウザをもう一度開く";
+"integrations.oauth.retry" = "再試行";
+"integrations.oauth.signInAgain" = "再ログイン";
+"integrations.oauth.starting" = "ブラウザを開いています…";
+"integrations.oauth.title" = "%1$@ を接続";
+"integrations.oauth.waiting" = "ブラウザでの許可を待っています…";
+"integrations.oauth.waitingHint" = "サービスのページでアクセスを許可してから、Bandito に戻ってください。";
 "integrations.problem.commandEmpty" = "サーバーを起動するコマンドを入力してください。";
 "integrations.problem.keyEmpty" = "環境変数とヘッダーには名前が必要です。";
 "integrations.problem.keyInvalid" = "「%1$@」: 英字・数字・_・-・. のみ使えます。";
@@ -744,6 +757,8 @@
 "integrations.sheet.variables" = "環境変数";
 "integrations.status.disabled" = "無効";
 "integrations.status.failed" = "確認に失敗";
+"integrations.status.needsLogin" = "再ログインが必要です";
+"integrations.status.refreshError" = "ログインを更新できませんでした。再試行します";
 "integrations.status.unchecked" = "未確認";
 "integrations.title" = "連携";
 "integrations.toolsFound" = "ツール: %1$@";
@@ -866,6 +881,7 @@
 "market.step.fillAddress" = "アドレスの <…> の部分に自分の値を入れます。";
 "market.step.fillPath" = "コマンドの例のフォルダーまたはパスを自分のものに置き換えます。";
 "market.step.getKey" = "キーまたはトークンを取得します。取得場所はドキュメントに記載されています。";
+"market.step.signIn" = "「接続」を押し、ブラウザでサービスのページからアクセスを許可します。";
 "market.subtitle" = "エージェントが使えるサービスを接続します。";
 "market.view" = "詳細を見る";
 "market.website" = "ウェブサイト";

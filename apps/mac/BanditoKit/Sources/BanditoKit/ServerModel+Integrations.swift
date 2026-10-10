@@ -46,6 +46,49 @@ extension ServerModel {
     }
 }
 
+// MARK: - browser sign-in (feature `integrations_oauth`)
+
+extension ServerModel: OAuthServer {
+    public var oauthServerID: UUID { id }
+
+    public func oauthBegin(_ target: OAuthBeginTarget) async throws -> OAuthBegun {
+        struct P: Encodable {
+            var integration: String?
+            var draft: NewIntegration?
+        }
+        let params: P
+        switch target {
+        case .existing(let id): params = P(integration: id)
+        case .draft(let draft): params = P(draft: draft)
+        }
+        return try await rpc().call("integrations.oauth_begin", params, as: OAuthBegun.self, timeout: .seconds(30))
+    }
+
+    public func oauthComplete(state: String, code: String, iss: String?) async throws -> OAuthCompleted {
+        struct P: Encodable {
+            var state: String
+            var code: String
+            var iss: String?
+        }
+        return try await rpc().call(
+            "integrations.oauth_complete", P(state: state, code: code, iss: iss), as: OAuthCompleted.self,
+            timeout: .seconds(30))
+    }
+
+    public func oauthCancel(state: String) async {
+        struct P: Encodable { var state: String }
+        struct Reply: Decodable { var cancelled: Bool }
+        _ = try? await rpc().call("integrations.oauth_cancel", P(state: state), as: Reply.self)
+    }
+
+    /// How each browser sign-in stands, by integration id. Empty for a daemon without the feature.
+    public func oauthStatuses() async throws -> [OAuthStatus] {
+        guard supports("integrations_oauth") else { return [] }
+        struct Reply: Decodable { var integrations: [OAuthStatus] }
+        return try await rpc().call("integrations.oauth_status", NoParams(), as: Reply.self).integrations
+    }
+}
+
 /// `integrations.update` params: the id and the patch fields in one object.
 struct IntegrationUpdateParams: Encodable, Sendable {
     var id: String

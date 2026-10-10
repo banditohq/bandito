@@ -32,5 +32,12 @@ public struct RootView: View {
         .task { QAHooks.start(router: router, onboarding: onboarding) }
         #endif
         .task { await app.keepUsageFresh() }
+        // The browser sends the owner back with `bandito://oauth/callback` after a service's sign-in.
+        .onOpenURL { url in
+            Task {
+                if await app.handleOpen(url) { router.select(mode: .market) }
+            }
+        }
+        .modifier(OAuthSignInPresenter())
     }
 }

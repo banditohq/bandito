@@ -40,10 +40,23 @@ public enum IntegrationStatus: Equatable, Sendable {
     case unchecked
     case connected(tools: Int)
     case failed(IntegrationFailure)
+    /// A browser sign-in the service no longer accepts: the owner signs in again.
+    case needsLogin
+    /// A browser sign-in that works but could not be renewed just now; the daemon retries by itself.
+    case refreshError
 
     /// The status from the row and the last check the app ran in this session (`nil` when there was none).
-    public static func of(_ integration: Integration, test: IntegrationTest?) -> IntegrationStatus {
+    /// `connection` is the daemon's word on a browser sign-in (`integrations.oauth_status`), when it gave one.
+    public static func of(
+        _ integration: Integration, test: IntegrationTest?, connection: OAuthConnection? = nil
+    ) -> IntegrationStatus {
         guard integration.enabled else { return .disabled }
+        if integration.auth == .oauth {
+            if connection == .needsLogin || connection == .notConnected || test?.needsLogin == true {
+                return .needsLogin
+            }
+            if connection == .refreshError { return .refreshError }
+        }
         guard let test else { return .unchecked }
         if test.ok { return .connected(tools: test.tools.count) }
         return .failed(IntegrationFailure.classify(test.error))

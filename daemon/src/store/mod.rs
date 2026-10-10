@@ -28,7 +28,7 @@ pub use approvals::{Approval, ApprovalStatus};
 pub use auth::Device;
 pub use checkpoints::{Checkpoint, CheckpointKind};
 pub use forms::{Form, FormStatus};
-pub use integrations::{Integration, IntegrationKind, IntegrationPatch, NewIntegration};
+pub use integrations::{Integration, IntegrationAuth, IntegrationKind, IntegrationPatch, NewIntegration};
 pub use reactions::Reaction;
 pub use rules::{Rule, RuleAction};
 pub use schedules::{NewSchedule, NextRun, Schedule, SchedulePatch};
@@ -53,6 +53,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../../migrations/0015_schedule_title.sql"),
     include_str!("../../migrations/0016_integrations.sql"),
     include_str!("../../migrations/0017_agent_lead.sql"),
+    include_str!("../../migrations/0018_integration_auth.sql"),
 ];
 
 pub struct Store {

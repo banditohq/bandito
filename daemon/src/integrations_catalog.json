@@ -52,30 +52,52 @@
     "long_ru": "MCP-сервер Linear позволяет агенту читать и обновлять ваши задачи и проекты. Например: показать задачи, назначенные вам в этом цикле, или создать задачу из описания бага.",
     "abilities_en": [
       "Find and read issues and projects",
-      "Create and update issues",
-      "Read-only access with a key that has only the Read permission"
+      "Create and update issues"
     ],
     "abilities_ru": [
       "Находить и читать задачи и проекты",
-      "Создавать и обновлять задачи",
-      "Доступ только на чтение, если у ключа включено только право Read"
+      "Создавать и обновлять задачи"
     ],
-    "needs_en": "A Linear API key (Settings, Account, Security & access).",
-    "needs_ru": "Ключ API Linear (Settings, Account, Security & access).",
+    "needs_en": "A Linear account. Sign in in the browser after you press Connect.",
+    "needs_ru": "Аккаунт Linear: войдите в браузере после нажатия «Подключить».",
     "kind": "http",
     "url": "https://mcp.linear.app/mcp",
-    "headers_keys": [
-      {
-        "key": "Authorization",
-        "label_en": "Linear API key",
-        "label_ru": "Ключ API Linear",
-        "secret": true,
-        "value_template": "Bearer {secret}"
-      }
-    ],
+    "auth": "oauth",
     "docs_url": "https://linear.app/docs/mcp",
     "icon": "linear",
     "accent": "#5E6AD2"
+  },
+  {
+    "id": "notion",
+    "name": "Notion",
+    "category": "productivity",
+    "publisher": "Notion",
+    "official": true,
+    "homepage": "https://www.notion.com",
+    "description_en": "Pages, databases and search in your Notion workspace, through Notion's own MCP server.",
+    "description_ru": "Страницы, базы данных и поиск в вашем рабочем пространстве Notion через официальный MCP-сервер Notion.",
+    "long_en": "Notion's MCP server lets an agent search your workspace and read and update pages and databases. It is in beta, and the tools it offers depend on your Notion plan. For example: find last week's meeting notes, or add a row to a task database.",
+    "long_ru": "MCP-сервер Notion позволяет агенту искать в вашем рабочем пространстве и читать и обновлять страницы и базы данных. Сервер в бете, а набор инструментов зависит от вашего тарифа Notion. Например: найти заметки со встречи за прошлую неделю или добавить строку в базу задач.",
+    "abilities_en": [
+      "Search the workspace",
+      "Read pages and databases",
+      "Create and update pages",
+      "The tools you get depend on your Notion plan"
+    ],
+    "abilities_ru": [
+      "Искать по рабочему пространству",
+      "Читать страницы и базы данных",
+      "Создавать и обновлять страницы",
+      "Набор инструментов зависит от вашего тарифа Notion"
+    ],
+    "needs_en": "A Notion account with access to the workspace. Sign in in the browser after you press Connect.",
+    "needs_ru": "Аккаунт Notion с доступом к нужному рабочему пространству. Войдите в браузере после нажатия «Подключить».",
+    "kind": "http",
+    "url": "https://mcp.notion.com/mcp",
+    "auth": "oauth",
+    "docs_url": "https://developers.notion.com/guides/mcp/get-started-with-mcp",
+    "icon": "notion",
+    "accent": "#2F3437"
   },
   {
     "id": "atlassian",
@@ -233,6 +255,36 @@
     "docs_url": "https://developers.cloudflare.com/agents/model-context-protocol/mcp-servers-for-cloudflare/",
     "icon": "cloud",
     "accent": "#F38020"
+  },
+  {
+    "id": "sentry",
+    "name": "Sentry",
+    "category": "dev",
+    "publisher": "Sentry",
+    "official": true,
+    "homepage": "https://sentry.io",
+    "description_en": "Errors, issues and projects in Sentry, through Sentry's own MCP server.",
+    "description_ru": "Ошибки, проблемы и проекты в Sentry через официальный MCP-сервер Sentry.",
+    "long_en": "Sentry's MCP server lets an agent look at the errors your projects report. For example: find the most frequent issue in production this week, or read the stack trace and the events behind an issue.",
+    "long_ru": "MCP-сервер Sentry позволяет агенту смотреть ошибки, которые пишут ваши проекты. Например: найти самую частую проблему в продакшене за эту неделю или прочитать стек-трейс и события, стоящие за проблемой.",
+    "abilities_en": [
+      "Find issues and read their stack traces",
+      "Look at the projects and teams of an organization",
+      "Change projects, teams and alerts within your permissions"
+    ],
+    "abilities_ru": [
+      "Находить проблемы и читать их стек-трейсы",
+      "Смотреть проекты и команды организации",
+      "Менять проекты, команды и оповещения в пределах ваших прав"
+    ],
+    "needs_en": "A Sentry account with access to the organization. Sign in in the browser after you press Connect.",
+    "needs_ru": "Аккаунт Sentry с доступом к нужной организации. Войдите в браузере после нажатия «Подключить».",
+    "kind": "http",
+    "url": "https://mcp.sentry.dev/mcp",
+    "auth": "oauth",
+    "docs_url": "https://github.com/getsentry/sentry-mcp",
+    "icon": "sentry",
+    "accent": "#362D59"
   },
   {
     "id": "context7",
