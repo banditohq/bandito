@@ -426,7 +426,35 @@ All of `integrations.oauth_*` are for the owner and apps; agents are refused lik
 
 How each runtime gets them: Claude, in the same `--mcp-config` file as the crew server (`mcpServers.<name>`: stdio `command`, `args`, `env`; http `{"type":"http", url, headers}`). The values of an integration (its environment and headers, literal or secret) are written only to that owner-only file (mode 0600, like the session token): never on the command line. Without the file, a server with values is left out of the session with a warning. Grok, in `session/new` `mcpServers` on stdin (ACP: stdio `{name, command, args, env:[{name,value}]}`, http `{type:"http", name, url, headers:[{name,value}]}`). Codex, with `-c mcp_servers.<name>.…`, so the argument list carries names only. A stdio server's environment values go into the codex process environment under their own keys, and `env_vars` names them for the server. A key that Codex or the daemon uses (`PATH`, `HOME`, `BANDITO_*`, `CODEX_*`, …), or one another server sets to a different value, skips that server with a warning. An http header's value goes into an environment variable of the codex process, `BANDITO_MCP_HEADER_<n>`, with one counter across the whole config, and `env_http_headers` names it.
 
-The agent's prompt names its integrations in one line: «Подключённые интеграции: <имена>. Используйте их инструменты, когда задача про эти сервисы.» (after the role, before the owner's own instructions). `daemon.info.features` contains `integrations`, `integrations_probe`, `integrations_oauth` and `avatar_pictures`.
+The agent's prompt names its integrations in one line: «Подключённые интеграции: <имена>. Используйте их инструменты, когда задача про эти сервисы.» (after the role, before the owner's own instructions). `daemon.info.features` contains `integrations`, `integrations_probe`, `integrations_oauth`, `integrations_recommend` and `avatar_pictures`.
+
+### Recommendations
+
+`integrations.recommend {agent_id}` (owner and apps; agents are refused; feature `integrations_recommend`) → `[{template_id, reason_key, evidence}]`: at most 6 catalog templates that suit the agent's folder, in the order of the rules below. The folder is the agent's `cwd` when that is an absolute path, else its home folder (`home_dir`). A template is left out when the owner has it connected: an integration named after the template's id, or one at the template's `url` (a trailing `/` and the case of the scheme and host ignored). `reason_key` is a key of the app's text; `evidence` is the file that showed it, relative to the folder. An unknown `agent_id` is `INVALID_PARAMS`. Code: `daemon/src/recommend.rs`.
+
+The scan covers the folder and each real folder directly below it, and nothing deeper. Links are never followed: a link on the way to a file, a link used as a folder, or a link as the folder itself gives no suggestion. A file over 256 KB is skipped, and a file that does not read or parse skips only the rule that needs it; neither is an error of the method. Content is read only from `package.json`, `requirements*.txt`, `pyproject.toml` (the package names: the text at the start of a quoted requirement, `name[extra]>=1`), `.git/config` (`url` lines of `[remote …]` sections), `README*` (the first 64 KB; the name is matched in any case) and `docker-compose*.yml`. Dependency names of `package.json` are the keys of `dependencies` and `devDependencies`, in lower case; `next`, `@sentry/…` and `@supabase/…` match by name or prefix, `posthog` and `stripe` by substring. Python names are normalized (lower case, `_` and `.` as `-`), and `sentry-sdk` and `stripe` match exactly.
+
+| Rule (in this order) | template_id | reason_key | evidence |
+|---|---|---|---|
+| `.git/config` has a remote on github.com | `github` | `recommend.reason.gitRemoteGithub` | `.git/config` |
+| `.git/config` has a remote on gitlab.com | `gitlab` | `recommend.reason.gitRemoteGitlab` | `.git/config` |
+| `package.json` has `next` | `vercel` | `recommend.reason.nextPackage` | `package.json` |
+| `netlify.toml` exists | `netlify` | `recommend.reason.netlifyToml` | `netlify.toml` |
+| `vercel.json` exists | `vercel` | `recommend.reason.vercelJson` | `vercel.json` |
+| `sentry.properties` exists | `sentry` | `recommend.reason.sentryProperties` | `sentry.properties` |
+| `package.json` has an `@sentry/*` package | `sentry` | `recommend.reason.sentryPackage` | `package.json` |
+| requirements or pyproject has `sentry-sdk` | `sentry` | `recommend.reason.sentryPython` | the file |
+| a `supabase/` folder exists | `supabase` | `recommend.reason.supabaseFolder` | `supabase` |
+| `package.json` has an `@supabase/*` package | `supabase` | `recommend.reason.supabasePackage` | `package.json` |
+| `prisma/schema.prisma` exists | `prisma` | `recommend.reason.prismaSchema` | `prisma/schema.prisma` |
+| `wrangler.toml` exists | `cloudflare` | `recommend.reason.wranglerToml` | `wrangler.toml` |
+| a `docker-compose*.yml` mentions `postgres` | `toolbox-postgres` | `recommend.reason.composePostgres` | the compose file |
+| a `.linear` file or folder exists | `linear` | `recommend.reason.linearFolder` | `.linear` |
+| a README mentions `linear.app` | `linear` | `recommend.reason.linearReadme` | the README |
+| `package.json` has `posthog` | `posthog` | `recommend.reason.posthogPackage` | `package.json` |
+| `package.json` or requirements has `stripe` | `stripe` | `recommend.reason.stripePackage` | the file |
+
+A template that several rules suggest appears once, with the reason of its first rule. `toolbox-postgres` is the catalog's id of Google MCP Toolbox for PostgreSQL. The `reason_key` values the app must translate: `recommend.reason.gitRemoteGithub`, `gitRemoteGitlab`, `nextPackage`, `netlifyToml`, `vercelJson`, `sentryProperties`, `sentryPackage`, `sentryPython`, `supabaseFolder`, `supabasePackage`, `prismaSchema`, `wranglerToml`, `composePostgres`, `linearFolder`, `linearReadme`, `posthogPackage`, `stripePackage`.
 
 ## Agent templates (data)
 
