@@ -352,7 +352,7 @@ server, with Bandito's commands and skills. If a name is taken (an agent with th
 has, or another item of the same list), the item is marked Name taken (Имя занято): Rename (Переименовать) with a new name
 (a free one is suggested), or Skip (Пропустить). Bandito never replaces what the server has. A line in orange warns of
 such a file, of files of a skill that were left out (not text, or named like a key: `.env`, `*.pem`, `*.key`, `id_rsa`,
-`id_ed25519`, `credentials`, `*.p12`; they are never copied, and the skill is installed without them), or of a model the
+`id_ed25519`, `credentials`, `*.p12`; and hidden files, which are named in Found, but not taken and in the preview as Not sent (Не будет отправлено); none of them is ever copied, and the skill is installed without them), or of a model the
 runtime does not have. Import (Импортировать) makes the checked items one after the other; Stop (Остановить) ends it after the one that is
 being made. The screen then reports what was Created (Создано), Skipped (Пропущено, with the reason, and the items that
 were not reached) and Failed (Не получилось).

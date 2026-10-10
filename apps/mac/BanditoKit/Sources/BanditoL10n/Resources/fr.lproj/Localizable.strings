@@ -339,6 +339,7 @@
 "claudeImport.needsAgentFolder" = "Ce serveur ne sait pas encore créer des agents depuis des fichiers : mettez-le d'abord à jour.";
 "claudeImport.needsCommands" = "Ce serveur ne sait pas encore installer commandes et skills : mettez-le d'abord à jour.";
 "claudeImport.newName" = "Nouveau nom";
+"claudeImport.notSentFiles" = "Ne sera pas envoyé : %1$@";
 "claudeImport.notTaken" = "Trouvé, mais non pris";
 "claudeImport.origin.agentsMd" = "AGENTS.md de %1$@";
 "claudeImport.origin.codex" = "Codex";
@@ -364,6 +365,7 @@
 "claudeImport.skip" = "Ignorer";
 "claudeImport.skip.badName" = "%1$@ a un nom que le serveur n'accepte pas";
 "claudeImport.skip.empty" = "%1$@ n'a pas d'instructions";
+"claudeImport.skip.hidden" = "%1$@ est un fichier caché : il n'est donc pas copié";
 "claudeImport.skip.link" = "%1$@ est un lien, et les liens ne sont pas suivis";
 "claudeImport.skip.noSkillFile" = "%1$@ n'a pas de SKILL.md";
 "claudeImport.skip.notText" = "%1$@ n'est pas du texte";

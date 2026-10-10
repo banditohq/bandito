@@ -339,6 +339,7 @@
 "claudeImport.needsAgentFolder" = "このサーバーはまだファイルからエージェントを作れません。先にアップデートしてください。";
 "claudeImport.needsCommands" = "このサーバーはまだコマンドやスキルを導入できません。先にアップデートしてください。";
 "claudeImport.newName" = "新しい名前";
+"claudeImport.notSentFiles" = "送信されません: %1$@";
 "claudeImport.notTaken" = "見つかりましたが取り込めません";
 "claudeImport.origin.agentsMd" = "%1$@ の AGENTS.md";
 "claudeImport.origin.codex" = "Codex";
@@ -364,6 +365,7 @@
 "claudeImport.skip" = "スキップ";
 "claudeImport.skip.badName" = "%1$@ の名前はサーバーで使えません";
 "claudeImport.skip.empty" = "%1$@ には指示がありません";
+"claudeImport.skip.hidden" = "%1$@ は隠しファイルのため、コピーしません";
 "claudeImport.skip.link" = "%1$@ はリンクです。リンクはたどりません";
 "claudeImport.skip.noSkillFile" = "%1$@ に SKILL.md がありません";
 "claudeImport.skip.notText" = "%1$@ はテキストではありません";

@@ -2496,5 +2496,7 @@
   "claudeImport.stop": "中止",
   "claudeImport.warning.leftOut": {
     "other": "フォルダ内の {count} 個のファイルは除外されました（テキストでない、またはキーのような名前）。スキルはそれらなしで導入されます。"
-  }
+  },
+  "claudeImport.skip.hidden": "{path} は隠しファイルのため、コピーしません",
+  "claudeImport.notSentFiles": "送信されません: {files}"
 }

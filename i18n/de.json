@@ -2527,5 +2527,7 @@
   "claudeImport.warning.leftOut": {
     "one": "{count} Datei des Ordners wurde weggelassen (kein Text oder wie ein Schlüssel benannt); der Skill wird ohne sie installiert.",
     "other": "{count} Dateien des Ordners wurden weggelassen (kein Text oder wie ein Schlüssel benannt); der Skill wird ohne sie installiert."
-  }
+  },
+  "claudeImport.skip.hidden": "{path} ist eine versteckte Datei und wird deshalb nicht kopiert",
+  "claudeImport.notSentFiles": "Wird nicht gesendet: {files}"
 }

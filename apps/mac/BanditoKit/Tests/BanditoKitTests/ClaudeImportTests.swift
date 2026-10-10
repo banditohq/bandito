@@ -338,6 +338,51 @@ import Testing
         #expect(scan.items(of: .skill).first?.warnings == [.leftOutFiles(8)])
     }
 
+    @Test func hiddenFilesInASkillAreNamedWithAReasonAndNeverSent() {
+        let t = Tree()
+        t.put(".claude/skills/x/SKILL.md", "---\ndescription: d\n---\nDo it")
+        t.put(".claude/skills/x/run.sh", "echo hi")
+        t.put(".claude/skills/x/.env", "TOKEN=abcdefgh12345678")
+        t.put(".claude/skills/x/.notes", "private notes")
+        t.put(".claude/skills/x/sub/.hidden.txt", "x")
+        t.put(".claude/skills/x/.git/config", "[core]")
+        t.put(".claude/skills/x/.DS_Store", "noise")
+        let scan = ImportScanner.scan(home: t.root)
+        func reason(_ suffix: String) -> ImportSkipReason? { scan.skipped.first { $0.path.hasSuffix(suffix) }?.reason }
+        #expect(reason("skills/x/.env") == .sensitiveFile, "a hidden file named like a key says so")
+        #expect(reason("skills/x/.notes") == .hidden)
+        #expect(reason("skills/x/sub/.hidden.txt") == .hidden)
+        #expect(reason("skills/x/.git") == .hidden, "a hidden folder is named once")
+        #expect(!scan.skipped.contains { $0.path.contains(".git/") }, "and not entered")
+        #expect(!scan.skipped.contains { $0.path.hasSuffix(".DS_Store") }, "the Finder's noise is not a line")
+        let item = scan.items(of: .skill).first
+        #expect(item?.notSent == [".env", ".git", ".notes", "sub/.hidden.txt"])
+        #expect(item?.warnings == [.leftOutFiles(4)])
+        guard case .command(let made)? = item?.payload else {
+            Issue.record("no skill")
+            return
+        }
+        #expect(made.files.map(\.path) == ["SKILL.md", "run.sh"], "nothing hidden travels")
+    }
+
+    @Test func aLinkOrAHiddenFileDoesNotHideItsNeighbours() {
+        let t = Tree()
+        t.put("elsewhere/x.md", "x")
+        t.put(".claude/commands/a.md", "a")
+        t.link(".claude/commands/b-link.md", to: t.root.appendingPathComponent("elsewhere/x.md").path)
+        t.put(".claude/commands/z.md", "z")
+        let scan = ImportScanner.scan(home: t.root)
+        #expect(scan.items(of: .command).map(\.name) == ["a", "z"], "files after a link in the same folder are still read")
+        #expect(scan.skipped.contains { $0.path.hasSuffix("b-link.md") && $0.reason == .link })
+    }
+
+    @Test func aSkillWithNothingLeftOutHasNoNotSentLine() {
+        let t = Tree()
+        t.put(".claude/skills/clean/SKILL.md", "x")
+        let item = ImportScanner.scan(home: t.root).items(of: .skill).first
+        #expect(item?.notSent == [] && item?.warnings == [])
+    }
+
     @Test func theNamesOfKeyFilesAreRecognised() {
         let keys: [String] = [
             ".env", ".env.local", "x.pem", "x.KEY", "id_rsa", "id_rsa.pub", "id_ed25519", "id_ed25519.pub", "credentials",

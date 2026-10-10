@@ -64,6 +64,8 @@ public enum ImportSkipReason: Error, Equatable, Sendable {
     case empty
     /// A file whose name says it holds a key or credentials (`.env`, `*.pem`, `id_rsa`, …): never copied.
     case sensitiveFile
+    /// A hidden file (or folder) inside a skill: never copied.
+    case hidden
     /// The folder was cut short (too many files, or deeper than the limit), so what was read may be incomplete.
     case truncated
 }
@@ -101,13 +103,15 @@ public struct ImportItem: Identifiable, Equatable, Sendable {
     /// The first lines of the body, for the preview.
     public var bodyPreview: String
     public var warnings: [ImportWarning]
+    /// Files of a skill folder that will not be sent (hidden, named like a key, not text), as paths in the folder.
+    public var notSent: [String]
     public var payload: Payload
 
     public var id: String { "\(kind.rawValue)|\(path)" }
 
     public init(
         kind: ImportKind, origin: ImportOrigin, name: String, summary: String?, path: String, frontMatter: [String],
-        bodyPreview: String, warnings: [ImportWarning], payload: Payload
+        bodyPreview: String, warnings: [ImportWarning], notSent: [String] = [], payload: Payload
     ) {
         self.kind = kind
         self.origin = origin
@@ -117,6 +121,7 @@ public struct ImportItem: Identifiable, Equatable, Sendable {
         self.frontMatter = frontMatter
         self.bodyPreview = bodyPreview
         self.warnings = warnings
+        self.notSent = notSent
         self.payload = payload
     }
 }
@@ -349,14 +354,19 @@ public enum ImportScanner {
 
         /// The regular files below `root`, the links among them apart, and whether the walk was cut short (more files than
         /// the limit, or something deeper than `maxDepth`).
-        func walk(_ root: URL, maxDepth: Int) -> (files: [URL], links: [URL], truncated: Bool) {
+        /// With `listHidden` hidden files and folders are not skipped silently: they are returned apart (a hidden folder
+        /// is not entered), so the caller can say that they will not be sent.
+        func walk(_ root: URL, maxDepth: Int, listHidden: Bool = false) -> (
+            files: [URL], links: [URL], hidden: [URL], truncated: Bool
+        ) {
             guard isRealDirectory(root),
                 let walker = fileManager.enumerator(
-                    at: root, includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey],
-                    options: [.skipsHiddenFiles])
-            else { return ([], [], false) }
+                    at: root, includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey, .isDirectoryKey],
+                    options: listHidden ? [] : [.skipsHiddenFiles])
+            else { return ([], [], [], false) }
             var files: [URL] = []
             var links: [URL] = []
+            var hidden: [URL] = []
             var visited = 0
             var truncated = false
             for case let url as URL in walker {
@@ -365,20 +375,28 @@ public enum ImportScanner {
                     truncated = true
                     break
                 }
-                let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+                let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .isDirectoryKey])
+                // `skipDescendants` on a file would skip the rest of its folder, so it is called for folders only.
+                let isFolder = values?.isDirectory == true
                 if values?.isSymbolicLink == true {
+                    // The enumerator does not enter a link to a folder.
                     links.append(url)
-                    walker.skipDescendants()
                     continue
                 }
                 if relative(url, to: root).split(separator: "/").count > maxDepth {
                     truncated = true
-                    walker.skipDescendants()
+                    if isFolder { walker.skipDescendants() }
+                    continue
+                }
+                if listHidden, url.lastPathComponent.hasPrefix(".") {
+                    hidden.append(url)
+                    // A hidden folder (`.git`) is named once and not entered.
+                    if isFolder { walker.skipDescendants() }
                     continue
                 }
                 if values?.isRegularFile == true { files.append(url) }
             }
-            return (files.sorted { $0.path < $1.path }, links, truncated)
+            return (files.sorted { $0.path < $1.path }, links, hidden.sorted { $0.path < $1.path }, truncated)
         }
 
         func relative(_ url: URL, to root: URL) -> String {
@@ -523,7 +541,7 @@ public enum ImportScanner {
                 skip(folder, .badName, into: &result)
                 return nil
             }
-            let found = walk(folder, maxDepth: ImportScanner.maxDepth)
+            let found = walk(folder, maxDepth: ImportScanner.maxDepth, listHidden: true)
             if !found.links.isEmpty { skip(folder, .link, into: &result); return nil }
             // A skill that was not read to the end is never sent incomplete.
             if found.truncated { skip(folder, .truncated, into: &result); return nil }
@@ -534,11 +552,20 @@ public enum ImportScanner {
             var files: [MacCommandFile] = []
             var total = 0
             var leftOut = 0
+            var notSent: [String] = []
+            // Hidden files and folders are never sent, and each one is named. The Finder's own `.DS_Store` is not worth a line.
+            for url in found.hidden where url.lastPathComponent != ".DS_Store" {
+                let reason: ImportSkipReason = ImportSensitiveName.matches(url.lastPathComponent) ? .sensitiveFile : .hidden
+                skip(url, reason, into: &result)
+                notSent.append(relative(url, to: folder))
+                leftOut += 1
+            }
             for url in found.files {
                 let path = relative(url, to: folder)
                 // A file named like a key or credentials is not sent, whatever it holds.
                 if path != "SKILL.md", ImportSensitiveName.matches(url.lastPathComponent) {
                     skip(url, .sensitiveFile, into: &result)
+                    notSent.append(path)
                     leftOut += 1
                     continue
                 }
@@ -550,6 +577,7 @@ public enum ImportScanner {
                         // in, and the person is told.
                         if path == "SKILL.md" { skip(folder, .notText, into: &result); return nil }
                         skip(url, .notText, into: &result)
+                        notSent.append(path)
                         leftOut += 1
                         continue
                     }
@@ -572,7 +600,7 @@ public enum ImportScanner {
             return ImportItem(
                 kind: .skill, origin: origin, name: skill.name, summary: oneLine(matter.text("description")),
                 path: shown(folder), frontMatter: preview.front, bodyPreview: preview.body, warnings: warnings,
-                payload: .command(skill))
+                notSent: notSent.sorted(), payload: .command(skill))
         }
     }
 }
