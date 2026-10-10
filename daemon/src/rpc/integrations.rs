@@ -97,19 +97,46 @@ async fn reload_agents(app: &App, agents: Vec<String>) {
 
 /// Renews the tokens that end soon, once a minute, and renews the sessions that held the old ones.
 pub fn spawn_oauth_refresher(app: Arc<App>) {
+    let mut renewed = mcp_oauth::renewed();
     tokio::spawn(async move {
         let mut tick = tokio::time::interval(Duration::from_secs(60));
         loop {
-            tick.tick().await;
-            let store = &app.sup.hub().store;
-            for id in mcp_oauth::refresh_due(store, now_ms()).await {
-                // Only a session that runs with the old token of this integration is renewed.
-                for agent in users_of(store, &id) {
-                    app.sup.reload_for_tokens(&agent, vec![id.clone()]).await;
+            tokio::select! {
+                _ = tick.tick() => {
+                    mcp_oauth::refresh_due(&app.sup.hub().store, now_ms()).await;
+                    // Whoever renewed a token meanwhile (a session start, a test, a retry), every agent that has
+                    // the integration is looked at: the session itself compares the token and leaves the rest.
+                    reload_sessions(&app, None).await;
                 }
+                got = renewed.recv() => match got {
+                    Ok(id) => reload_sessions(&app, Some(&id)).await,
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => reload_sessions(&app, None).await,
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                },
             }
         }
     });
+}
+
+/// Renews the session of each agent that has a browser-sign-in integration (`only`: that one), if the session runs
+/// with an older token of it. An agent without a session, or with the current token, is left alone.
+pub(crate) async fn reload_sessions(app: &App, only: Option<&str>) {
+    let store = &app.sup.hub().store;
+    let rows = match store.integration_list() {
+        Ok(rows) => rows,
+        Err(e) => {
+            tracing::warn!("integration list for the sessions: {e:#}");
+            return;
+        }
+    };
+    for row in rows
+        .iter()
+        .filter(|r| r.auth == IntegrationAuth::Oauth && only.is_none_or(|id| id == r.id))
+    {
+        for agent in users_of(store, &row.id) {
+            app.sup.reload_for_tokens(&agent, vec![row.id.clone()]).await;
+        }
+    }
 }
 
 async fn oauth_dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResult {
@@ -331,7 +358,10 @@ async fn probe_row(store: &Store, row: &Integration, draft: bool) -> RpcResult {
 
 /// One run of the probe for `row`, with the secrets it names read now.
 async fn run_probe(store: &Store, row: &Integration, draft: bool) -> anyhow::Result<Vec<String>> {
-    let secrets: HashMap<String, String> = store.secrets_all()?.into_iter().collect();
+    let mut all = store.secrets_all()?;
+    // A sign-in renewal the database refused is the live token.
+    mcp_oauth::overlay_held(&mut all);
+    let secrets: HashMap<String, String> = all.into_iter().collect();
     let servers = integrations::resolve(&[row], &secrets);
     let Some(mut server) = servers.into_iter().next() else {
         anyhow::bail!("a secret it names is not set");
@@ -339,7 +369,7 @@ async fn run_probe(store: &Store, row: &Integration, draft: bool) -> anyhow::Res
     if draft {
         server = all_secret(server);
     }
-    probe(&server, TEST_TIMEOUT).await
+    probe_guarded(&server, TEST_TIMEOUT, row.auth == IntegrationAuth::Oauth).await
 }
 
 /// An http server answered with this status: kept as a type so a 401 can be told from other failures.
@@ -430,9 +460,15 @@ const STDERR_KEEP_BYTES: usize = 16 * 1024;
 /// `tools/list`. Stops after `limit`, and kills the whole process group it started: no child of the server
 /// outlives the probe. Returns the tool names. A failure carries the tail of the server's stderr, redacted.
 pub async fn probe(server: &Server, limit: Duration) -> anyhow::Result<Vec<String>> {
+    probe_guarded(server, limit, false).await
+}
+
+/// [`probe`]; with `public_only` (a row that signs in in the browser, whose requests carry the daemon's token) an
+/// http address gets the checks and the pinning of the sign-in itself (`mcp_oauth::guard_http`) before a token is sent.
+async fn probe_guarded(server: &Server, limit: Duration, public_only: bool) -> anyhow::Result<Vec<String>> {
     match &server.transport {
         Transport::Stdio { command, args, env } => probe_stdio(command, args, env, limit).await,
-        Transport::Http { url, headers } => probe_http(url, headers, limit).await,
+        Transport::Http { url, headers } => probe_http(url, headers, limit, public_only).await,
     }
 }
 
@@ -633,18 +669,20 @@ fn tool_names(result: &Value) -> Vec<String> {
 
 /// Streamable HTTP through `curl`, its config (URL, headers, body) fed on stdin so no header value reaches argv.
 /// Stops after `limit` as the stdio probe does.
-async fn probe_http(url: &str, headers: &[Pair], limit: Duration) -> anyhow::Result<Vec<String>> {
+async fn probe_http(url: &str, headers: &[Pair], limit: Duration, public_only: bool) -> anyhow::Result<Vec<String>> {
     let exchange = async {
-        let init = http_post(url, headers, &initialize_request(), None).await?;
+        // Every request is checked again: the name may lead somewhere else than a moment ago.
+        let init = http_post(url, headers, &initialize_request(), None, public_only).await?;
         let session = init.session.clone();
         http_post(
             url,
             headers,
             &json!({ "jsonrpc": "2.0", "method": "notifications/initialized" }),
             session.as_deref(),
+            public_only,
         )
         .await?;
-        let listed = http_post(url, headers, &list_request(), session.as_deref()).await?;
+        let listed = http_post(url, headers, &list_request(), session.as_deref(), public_only).await?;
         let reply = find_reply(&listed.body, 2).ok_or_else(|| anyhow::anyhow!("no tools/list answer"))?;
         anyhow::Ok(tool_names(&result_of(&reply)?))
     };
@@ -659,9 +697,21 @@ struct HttpReply {
     body: String,
 }
 
-async fn http_post(url: &str, headers: &[Pair], msg: &Value, session: Option<&str>) -> anyhow::Result<HttpReply> {
+async fn http_post(
+    url: &str,
+    headers: &[Pair],
+    msg: &Value,
+    session: Option<&str>,
+    public_only: bool,
+) -> anyhow::Result<HttpReply> {
     let mut config = String::new();
-    config.push_str(&format!("url = {}\n", json!(url)));
+    if public_only {
+        let (checked, lines) = mcp_oauth::guard_http(url).await?;
+        config.push_str(&format!("url = {}\n", json!(checked)));
+        config.push_str(&lines);
+    } else {
+        config.push_str(&format!("url = {}\n", json!(url)));
+    }
     config.push_str("request = \"POST\"\nsilent\nshow-error\ninclude\nmax-time = 15\n");
     config.push_str(&format!("header = {}\n", json!("Content-Type: application/json")));
     config.push_str(&format!(
@@ -680,7 +730,7 @@ async fn http_post(url: &str, headers: &[Pair], msg: &Value, session: Option<&st
     }
     config.push_str(&format!("data = {}\n", json!(msg.to_string())));
     let mut cmd = tokio::process::Command::new("curl");
-    cmd.args(["--config", "-"])
+    cmd.args(mcp_oauth::CURL_ARGS)
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
@@ -842,6 +892,28 @@ mod tests {
         for needle in ["sk-", "ghp_", "xoxb-", "bearer ey"] {
             assert!(!raw.contains(needle), "{needle}");
         }
+    }
+
+    #[tokio::test]
+    async fn the_probe_of_a_sign_in_row_refuses_a_name_that_leads_to_a_local_address() {
+        crate::mcp_oauth::fake_dns()
+            .lock()
+            .unwrap()
+            .insert("probe-rebind.test".into(), vec!["192.168.1.9".parse().unwrap()]);
+        let server = Server {
+            name: "notion".into(),
+            transport: Transport::Http {
+                url: "https://probe-rebind.test/mcp".into(),
+                headers: vec![Pair {
+                    key: "Authorization".into(),
+                    value: "Bearer at-secret".into(),
+                    secret: true,
+                }],
+            },
+        };
+        let err = probe_guarded(&server, Duration::from_secs(5), true).await.unwrap_err();
+        let text = format!("{err:#}");
+        assert!(text.contains("local address") && !text.contains("at-secret"), "{text}");
     }
 
     #[test]

@@ -1063,10 +1063,7 @@ impl Actor {
                 let stale = self.session.is_some()
                     && self.oauth_in_session.iter().any(|(id, used)| {
                         integrations.contains(id)
-                            && self
-                                .hub
-                                .store
-                                .secret_get(&crate::integrations::oauth_access_name(id))
+                            && crate::mcp_oauth::access_token(&self.hub.store, id)
                                 .ok()
                                 .flatten()
                                 .is_some_and(|now| now != *used)
@@ -1236,12 +1233,10 @@ impl Actor {
             .collect();
         let integration_secrets: Vec<(String, String)> = {
             let names = crate::integrations::secret_names(&chosen);
-            self.hub
-                .store
-                .secrets_all()?
-                .into_iter()
-                .filter(|(name, _)| names.contains(name))
-                .collect()
+            let mut all = self.hub.store.secrets_all()?;
+            // A sign-in renewal the database refused is the live token.
+            crate::mcp_oauth::overlay_held(&mut all);
+            all.into_iter().filter(|(name, _)| names.contains(name)).collect()
         };
         let secret_map: std::collections::HashMap<String, String> = integration_secrets.iter().cloned().collect();
         let mcp_servers = crate::integrations::resolve(&chosen, &secret_map);
@@ -3818,6 +3813,62 @@ mod tests {
         }
         // The session is gone and the next one has the new token: another call finds nothing stale.
         assert!(!w.sup.reload_for_tokens(&w.agent, ids()).await);
+    }
+
+    #[tokio::test]
+    async fn a_token_renewed_for_one_caller_renews_the_session_of_another_agent() {
+        use crate::mcp_oauth::{self, Flows, Target, fake::Fake};
+        use crate::store::{IntegrationAuth, IntegrationKind, NewIntegration};
+        let mut w = world(ApprovalMode::Risky);
+        let fake = Fake::start().await;
+        let flows = Flows::default();
+        let now = crate::store::now_ms();
+        let draft = NewIntegration {
+            name: "notion".into(),
+            kind: IntegrationKind::Http,
+            command: None,
+            args: vec![],
+            url: Some(fake.url()),
+            env: Default::default(),
+            headers: Default::default(),
+            enabled: true,
+            auth: IntegrationAuth::None,
+        };
+        let begun = mcp_oauth::begin(&w.store, &flows, "dev", Target::Draft(draft), None, now)
+            .await
+            .unwrap();
+        let (code, state) = fake.authorize(&begun.authorize_url);
+        let row = mcp_oauth::complete(&w.store, &flows, "dev", &state, &code, None, now)
+            .await
+            .unwrap()
+            .integration;
+        // The background task of the daemon, over this supervisor.
+        let app = crate::rpc::App::new(w.sup.clone(), std::path::PathBuf::from("unused-agents-root"));
+        crate::rpc::integrations::spawn_oauth_refresher(app);
+        // Agent B has a session with the first token.
+        w.sup.send(&w.agent, Inbound::user("first")).await.unwrap();
+        w.wait_log("send first").await;
+        w.push(RuntimeOutput::SessionId("sess-1".into())).await;
+        w.push(done()).await;
+        w.wait(is_status(AgentStatus::Idle)).await;
+        assert!(!w.log.lock().unwrap().iter().any(|l| l == "shutdown"));
+        // Agent A starts a session a minute before the token ends: its start renews the token. B was not asked.
+        let late = now + 3_600_000 - 60_000;
+        let skipped = mcp_oauth::ready_for_session(&w.store, &[&row], late).await;
+        assert!(skipped.is_empty());
+        // B's session is renewed, so its next turn runs with the new token.
+        w.wait_log("shutdown").await;
+        w.sup.send(&w.agent, Inbound::user("second")).await.unwrap();
+        w.wait_log("send second").await;
+        let new_token = mcp_oauth::access_token(&w.store, &row.id).unwrap().unwrap();
+        let spawns = w.spawns.lock().unwrap();
+        assert_eq!(spawns.len(), 2);
+        match &spawns[1].mcp_servers[0].transport {
+            crate::integrations::Transport::Http { headers, .. } => {
+                assert!(headers.iter().any(|h| h.value == format!("Bearer {new_token}")));
+            }
+            _ => panic!("an http server"),
+        }
     }
 
     #[tokio::test]

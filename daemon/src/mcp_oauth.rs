@@ -182,6 +182,8 @@ fn ip_is_local(ip: std::net::IpAddr) -> bool {
             || (o[0] == 198 && o[1] == 51 && o[2] == 100)
             || (o[0] == 203 && o[1] == 0 && o[2] == 113)
             || o[0] >= 240
+            // 192.88.99.0/24, the old 6to4 relay anycast
+            || (o[0] == 192 && o[1] == 88 && o[2] == 99)
     }
     match ip {
         IpAddr::V4(ip) => v4(ip),
@@ -195,6 +197,10 @@ fn ip_is_local(ip: std::net::IpAddr) -> bool {
                 || (s[0] & 0xffc0) == 0xfe80
                 || (s[0] & 0xffc0) == 0xfec0
                 || (s[0] == 0x2001 && s[1] == 0x0db8)
+                // 2001::/32 (Teredo) carries a server and a client IPv4 address: the whole prefix is refused
+                // (both would be local-looking tunnels anyway), and 64:ff9b:1::/48 (local-use NAT64) too
+                || (s[0] == 0x2001 && s[1] == 0)
+                || (s[0] == 0x0064 && s[1] == 0xff9b && s[2] == 1)
                 || ip.to_ipv4_mapped().is_some_and(v4)
                 // ::a.b.c.d, the old IPv4-compatible form
                 || (s[..6] == [0; 6] && v4(embedded(s[6], s[7])))
@@ -416,13 +422,37 @@ async fn pin_address(url: &Url) -> Result<Option<String>> {
     Ok(Some(format!("{}:{port}:{}", url.host, list.join(","))))
 }
 
+/// The arguments of every `curl` that carries a sign-in: `-q` first, so `~/.curlrc` is not read (it could set a
+/// proxy, a resolver or a redirect), then the request on stdin.
+pub(crate) const CURL_ARGS: [&str; 3] = ["-q", "--config", "-"];
+
+/// For a request made outside this module that carries a token (the probe of `rpc/integrations.rs`): the same checks
+/// as a sign-in request. Returns the address to use (in the one spelling the pin is made for) and the `curl`
+/// configuration lines that pin the connection and switch off globbing, proxies and plain http.
+pub(crate) async fn guard_http(url: &str) -> Result<(String, String)> {
+    let parsed = Url::parse(url)?;
+    check_server_url(&parsed, allow_local())?;
+    let pin = pin_address(&parsed).await?;
+    let mut lines = String::from("globoff\nnoproxy = \"*\"\n");
+    lines.push_str(if allow_local() {
+        "proto = \"=https,http\"\n"
+    } else {
+        "proto = \"=https\"\n"
+    });
+    if let Some(pin) = pin {
+        lines.push_str(&format!("resolve = {}\n", quote(&pin)?));
+    }
+    Ok((parsed.text(), lines))
+}
+
 /// The `curl` configuration of a request. `pin` is the `resolve` entry from [`pin_address`].
 fn curl_config(req: &Req<'_>, pin: Option<&str>, local: bool) -> Result<String> {
     let mut config = String::new();
     config.push_str(&format!("url = {}\n", quote(&req.url.text())?));
     config.push_str(&format!("request = {}\n", quote(req.method)?));
     // `globoff`: no `[]`/`{}` expansion in the address. No `location`: a redirect is not followed.
-    config.push_str("silent\nshow-error\ninclude\ngloboff\n");
+    // `noproxy`: a proxy would do the lookup itself, and `resolve` pins nothing then.
+    config.push_str("silent\nshow-error\ninclude\ngloboff\nnoproxy = \"*\"\n");
     config.push_str(if local {
         "proto = \"=https,http\"\n"
     } else {
@@ -450,7 +480,7 @@ async fn send(req: Req<'_>) -> Result<Resp> {
     let pin = pin_address(req.url).await?;
     let config = curl_config(&req, pin.as_deref(), allow_local())?;
     let mut cmd = tokio::process::Command::new("curl");
-    cmd.args(["--config", "-"])
+    cmd.args(CURL_ARGS)
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
@@ -949,6 +979,46 @@ fn load_client(store: &Store, id: &str) -> Result<Option<Client>> {
     Ok(serde_json::from_str(&text).ok())
 }
 
+/// Deletes the registered client of an integration, after the service said it does not know it. A failure to delete
+/// only goes to the log (the next sign-in then fails the same way and tries this again).
+fn forget_client(store: &Store, id: &str) {
+    if let Err(e) = store.secrets_delete_many(&[&oauth_client_name(id)]) {
+        tracing::warn!("could not forget a client the service refused: {e:#}");
+    }
+}
+
+// ---- a renewal that could not be written ----
+
+/// A renewed sign-in that the database refused twice. The service has rotated the refresh token already, so the old
+/// state is dead; this is the only copy of the live one. It is written at the next try, and sessions use its access
+/// token meanwhile. In memory, under the integration's lock.
+static HELD: LazyLock<Mutex<HashMap<String, (String, Stored)>>> = LazyLock::new(Mutex::default);
+
+fn held_access(id: &str) -> Option<String> {
+    HELD.lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(id)
+        .map(|(access, _)| access.clone())
+}
+
+fn forget_held(id: &str) {
+    HELD.lock().unwrap_or_else(|e| e.into_inner()).remove(id);
+}
+
+/// Puts the access tokens that could not be written into `secrets` (name, value), over the stored ones.
+pub fn overlay_held(secrets: &mut [(String, String)]) {
+    let map = HELD.lock().unwrap_or_else(|e| e.into_inner());
+    if map.is_empty() {
+        return;
+    }
+    for (id, (access, _)) in map.iter() {
+        let name = oauth_access_name(id);
+        if let Some(slot) = secrets.iter_mut().find(|(n, _)| *n == name) {
+            slot.1 = access.clone();
+        }
+    }
+}
+
 // ---- failed renewals ----
 
 /// A renewal that failed for a reason that may pass.
@@ -1027,8 +1097,9 @@ struct Tokens {
 enum TokenFail {
     /// The service said the grant or the client is no good (HTTP 400 or 401 with `invalid_grant` or
     /// `invalid_client`): it will not work again, the person signs in.
+    /// The flag: the error was `invalid_client`, so the registered client is no good either.
     #[error("{0}")]
-    Rejected(String),
+    Rejected(String, bool),
     /// Anything that may pass: no network, a 5xx, an answer that did not read.
     #[error("{0}")]
     Transient(String),
@@ -1084,7 +1155,7 @@ async fn token_call(
         let refused =
             matches!(resp.status, 400 | 401) && matches!(code.as_deref(), Some("invalid_grant" | "invalid_client"));
         return Err(if refused {
-            TokenFail::Rejected(text)
+            TokenFail::Rejected(text, code.as_deref() == Some("invalid_client"))
         } else {
             TokenFail::Transient(text)
         });
@@ -1282,7 +1353,13 @@ pub async fn complete(
     )
     .await
     .map_err(|e| match e {
-        TokenFail::Rejected(t) => anyhow!("the service refused the sign-in: {t}"),
+        TokenFail::Rejected(t, invalid_client) => {
+            if invalid_client && let Some(id) = &flow.integration_id {
+                // The service does not know this client (any more): the next sign-in registers a new one.
+                forget_client(store, id);
+            }
+            anyhow!("the service refused the sign-in: {t}")
+        }
         TokenFail::Transient(t) => anyhow!("the sign-in could not be finished: {t}"),
     })?;
     let stored = Stored {
@@ -1351,6 +1428,7 @@ pub async fn complete(
         return Err(e.context("could not store the sign-in"));
     }
     clear_failure(&integration.id);
+    forget_held(&integration.id);
     let integration = store.integration_get(&integration.id)?.unwrap_or(integration);
     Ok(Completed { integration, created })
 }
@@ -1425,6 +1503,23 @@ pub enum Outcome {
 /// stored: the next tries wait 1, 2, 4 ... up to 30 minutes, and `status` says `refresh_error`.
 pub async fn refresh(store: &Store, id: &str, why: Why, now: i64) -> Result<Outcome> {
     let _guard = lock(id).await;
+    // A renewal that could not be written earlier goes first: the service has the new refresh token already, so
+    // asking again would use a dead one.
+    let held = HELD.lock().unwrap_or_else(|e| e.into_inner()).get(id).cloned();
+    if let Some((access, state)) = held {
+        return match save_tokens(store, id, &access, &state) {
+            Ok(()) => {
+                forget_held(id);
+                clear_failure(id);
+                announce_renewed(id);
+                Ok(Outcome::Refreshed)
+            }
+            Err(e) => {
+                note_failure(id, "the renewed sign-in could not be stored", now);
+                Err(e.context("could not store the renewed sign-in"))
+            }
+        };
+    }
     let Some(mut stored) = load_stored(store, id)? else {
         return Ok(Outcome::NeedsLogin);
     };
@@ -1480,20 +1575,30 @@ pub async fn refresh(store: &Store, id: &str, why: Why, now: i64) -> Result<Outc
             if tokens.scope.is_some() {
                 stored.scope = tokens.scope;
             }
-            // Both secrets in one step. If it fails nothing changed here, and the service may already have rotated
-            // the refresh token: the error is told, and the next try (after the wait) shows whether it still works.
-            if let Err(e) = save_tokens(store, id, &tokens.access, &stored) {
+            // Both secrets in one step. The service has rotated the refresh token by now, so a failed write is tried
+            // once more at once; if that fails too, the new state is held in memory (sessions use its token, the
+            // next try writes it) and the error is told.
+            let wrote = save_tokens(store, id, &tokens.access, &stored)
+                .or_else(|_| save_tokens(store, id, &tokens.access, &stored));
+            if let Err(e) = wrote {
+                HELD.lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .insert(id.to_string(), (tokens.access.clone(), stored));
                 note_failure(id, "the renewed sign-in could not be stored", now);
+                announce_renewed(id);
                 return Err(e.context("could not store the renewed sign-in"));
             }
             clear_failure(id);
-            Ok(if tokens.access == current {
-                Outcome::Unchanged
-            } else {
-                Outcome::Refreshed
-            })
+            if tokens.access == current {
+                return Ok(Outcome::Unchanged);
+            }
+            announce_renewed(id);
+            Ok(Outcome::Refreshed)
         }
-        Err(TokenFail::Rejected(_)) => {
+        Err(TokenFail::Rejected(_, invalid_client)) => {
+            if invalid_client {
+                forget_client(store, id);
+            }
             stored.needs_login = true;
             save_state(store, id, &stored)?;
             clear_failure(id);
@@ -1507,17 +1612,39 @@ pub async fn refresh(store: &Store, id: &str, why: Why, now: i64) -> Result<Outc
 }
 
 /// The stored access token of an integration, if any.
+/// One that could not be written yet counts as the stored one.
 pub fn access_token(store: &Store, id: &str) -> Result<Option<String>> {
+    if let Some(held) = held_access(id) {
+        return Ok(Some(held));
+    }
     store.secret_get(&oauth_access_name(id))
+}
+
+/// The ids of integrations whose access token changed. A listener (the daemon's renewal task) renews the sessions
+/// that run with the old one: a renewal done by a session start, a test or a retry after a 401 concerns every agent
+/// that has the integration, not only the one that asked.
+static RENEWED: LazyLock<tokio::sync::broadcast::Sender<String>> =
+    LazyLock::new(|| tokio::sync::broadcast::channel(64).0);
+
+/// Listens for renewed tokens. A `Lagged` error means some were missed: the listener then looks at all of them.
+pub fn renewed() -> tokio::sync::broadcast::Receiver<String> {
+    RENEWED.subscribe()
+}
+
+fn announce_renewed(id: &str) {
+    // No listener is no problem (tests, or a daemon that has not started its task yet).
+    let _ = RENEWED.send(id.to_string());
 }
 
 /// Whether the stored token of `id` is still good at `now` (it has no end, or the end is ahead).
 fn token_alive(store: &Store, id: &str, now: i64) -> bool {
-    matches!(store.secret_get(&oauth_access_name(id)), Ok(Some(_)))
-        && load_stored(store, id)
-            .ok()
-            .flatten()
-            .is_some_and(|s| !s.needs_login && s.expires_at.is_none_or(|e| e > now))
+    // A renewal that only the memory holds has a fresh token.
+    held_access(id).is_some()
+        || matches!(store.secret_get(&oauth_access_name(id)), Ok(Some(_)))
+            && load_stored(store, id)
+                .ok()
+                .flatten()
+                .is_some_and(|s| !s.needs_login && s.expires_at.is_none_or(|e| e > now))
 }
 
 /// How long a session start waits for the renewals, in all.
@@ -1652,6 +1779,7 @@ pub async fn disconnect(store: &Store, row: &Integration, remove: bool) -> Resul
     }
     store.secrets_delete_many(&names)?;
     clear_failure(&row.id);
+    forget_held(&row.id);
     Ok(revoked)
 }
 

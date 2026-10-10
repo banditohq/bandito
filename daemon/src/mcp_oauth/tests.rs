@@ -1284,3 +1284,203 @@ async fn the_connection_is_pinned_to_the_addresses_that_were_checked() {
             .contains("=https,http")
     );
 }
+
+// ---- second review ----
+
+#[tokio::test]
+async fn a_client_the_service_rejects_is_forgotten_so_the_next_sign_in_registers_again() {
+    // At renewal.
+    let (store, flows) = rig();
+    let fake = Fake::start().await;
+    let now = now_ms();
+    let done = connect(&store, &flows, &fake, now).await;
+    let id = done.integration.id.clone();
+    assert!(
+        store
+            .secret_get(&crate::integrations::oauth_client_name(&id))
+            .unwrap()
+            .is_some()
+    );
+    fake.set(|i| i.refresh_failure = Some((401, "invalid_client".into())));
+    let late = now + 3_600_000 - 60_000;
+    assert_eq!(
+        refresh(&store, &id, Why::Expiring(SESSION_SKEW_MS), late)
+            .await
+            .unwrap(),
+        Outcome::NeedsLogin
+    );
+    assert!(
+        store
+            .secret_get(&crate::integrations::oauth_client_name(&id))
+            .unwrap()
+            .is_none()
+    );
+    fake.set(|i| i.refresh_failure = None);
+    let begun = begin(
+        &store,
+        &flows,
+        "dev1",
+        Target::Existing(done.integration.clone()),
+        None,
+        late,
+    )
+    .await
+    .unwrap();
+    assert_eq!(query_of(&begun.authorize_url)["client_id"], "client-2");
+    assert_eq!(fake.inner.lock().unwrap().registrations.len(), 2);
+
+    // At the exchange of the code. invalid_grant leaves the client alone, invalid_client does not.
+    let (code, state) = fake.authorize(&begun.authorize_url);
+    fake.set(|i| i.token_status = Some((400, "invalid_grant".into())));
+    assert!(
+        complete(&store, &flows, "dev1", &state, &code, None, late)
+            .await
+            .is_err()
+    );
+    // (the sign-in is spent; the client was saved by the first sign-in only when it succeeded)
+    let begun = begin(
+        &store,
+        &flows,
+        "dev1",
+        Target::Existing(done.integration.clone()),
+        None,
+        late,
+    )
+    .await
+    .unwrap();
+    let (code, state) = fake.authorize(&begun.authorize_url);
+    fake.set(|i| i.token_status = Some((401, "invalid_client".into())));
+    assert!(
+        complete(&store, &flows, "dev1", &state, &code, None, late)
+            .await
+            .is_err()
+    );
+    assert!(
+        store
+            .secret_get(&crate::integrations::oauth_client_name(&id))
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[tokio::test]
+async fn a_renewal_the_database_refuses_twice_is_held_and_written_at_the_next_try() {
+    let (store, flows) = rig();
+    let fake = Fake::start().await;
+    let now = now_ms();
+    let id = connect(&store, &flows, &fake, now).await.integration.id;
+    let old_access = store.secret_get(&oauth_access_name(&id)).unwrap().unwrap();
+    store.exec_for_test(
+        "CREATE TRIGGER refuse_state BEFORE UPDATE ON secrets WHEN NEW.name LIKE '%_STATE'
+         BEGIN SELECT RAISE(ABORT, 'disk full'); END;",
+    );
+    let late = now + 3_600_000 - 60_000;
+    assert!(
+        refresh(&store, &id, Why::Expiring(SESSION_SKEW_MS), late)
+            .await
+            .is_err()
+    );
+    // The service rotated the refresh token; the new state is not lost.
+    let new_access = fake.inner.lock().unwrap().access.clone();
+    assert_ne!(new_access, old_access);
+    assert_eq!(store.secret_get(&oauth_access_name(&id)).unwrap().unwrap(), old_access);
+    assert_eq!(
+        access_token(&store, &id).unwrap().unwrap(),
+        new_access,
+        "sessions use the held token"
+    );
+    let mut secrets = store.secrets_all().unwrap();
+    overlay_held(&mut secrets);
+    assert!(
+        secrets
+            .iter()
+            .any(|(n, v)| *n == oauth_access_name(&id) && *v == new_access)
+    );
+    let st = status(&store, &id, late).unwrap();
+    assert_eq!(st.status, "refresh_error");
+    // The disk is back: the next try writes it, without asking the service again.
+    store.exec_for_test("DROP TRIGGER refuse_state");
+    let grants = refresh_grants(&fake);
+    assert_eq!(
+        refresh(&store, &id, Why::Expiring(BACKGROUND_SKEW_MS), late + 1000)
+            .await
+            .unwrap(),
+        Outcome::Refreshed
+    );
+    assert_eq!(refresh_grants(&fake), grants);
+    assert_eq!(store.secret_get(&oauth_access_name(&id)).unwrap().unwrap(), new_access);
+    assert_eq!(status(&store, &id, late + 1000).unwrap().status, "connected");
+    // And the rotated refresh token is the one that works.
+    let later = late + 3_600_000 - 60_000;
+    assert_eq!(
+        refresh(&store, &id, Why::Expiring(SESSION_SKEW_MS), later)
+            .await
+            .unwrap(),
+        Outcome::Refreshed
+    );
+}
+
+#[test]
+fn curl_does_not_read_its_rc_file_or_a_proxy() {
+    assert_eq!(CURL_ARGS[0], "-q", "-q must come first or curl reads ~/.curlrc");
+    let url = Url::parse("https://pinned.test/x").unwrap();
+    let config = curl_config(&Req::get(&url), None, false).unwrap();
+    assert!(config.contains("noproxy = \"*\"\n"), "{config}");
+}
+
+#[tokio::test]
+async fn the_probe_of_a_sign_in_row_gets_the_same_address_checks_and_pin() {
+    use std::net::IpAddr;
+    let ip = |s: &str| s.parse::<IpAddr>().unwrap();
+    fake_dns()
+        .lock()
+        .unwrap()
+        .insert("probe-local.test".into(), vec![ip("10.0.0.7")]);
+    fake_dns()
+        .lock()
+        .unwrap()
+        .insert("probe-public.test".into(), vec![ip("93.184.216.34")]);
+    let err = guard_http("https://probe-local.test/mcp").await.err().unwrap();
+    assert!(format!("{err:#}").contains("local address"), "{err:#}");
+    assert!(
+        guard_http("http://probe-public.test/mcp").await.is_err(),
+        "plain http is refused"
+    );
+    assert!(guard_http("https://10.0.0.1/mcp").await.is_err());
+    assert!(guard_http("https://0x7f.0.0.1/mcp").await.is_err());
+    // The address is used in the spelling the pin is made for.
+    let (url, lines) = guard_http("https://Probe-Public.test./mcp").await.unwrap();
+    assert_eq!(url, "https://probe-public.test/mcp");
+    for line in [
+        "globoff\n",
+        "noproxy = \"*\"\n",
+        "proto = \"=https,http\"\n",
+        "resolve = \"probe-public.test:443:93.184.216.34\"\n",
+    ] {
+        assert!(lines.contains(line), "{line:?} not in {lines}");
+    }
+}
+
+#[test]
+fn tunnel_and_relay_ranges_are_local_too() {
+    let remote = |s: &str| Url::parse(s).and_then(|u| check_remote_url(&u, "x", false));
+    for bad in [
+        "https://192.88.99.1/x",
+        "https://[2001::1]/x",
+        "https://[2001:0:4136:e378:8000:63bf:3fff:fdd2]/x",
+        "https://[2001:0:808:808::1]/x",
+        "https://[64:ff9b:1::808:808]/x",
+        "https://[64:ff9b:1::7f00:1]/x",
+        "https://[64:ff9b::a00:1]/x",
+        "https://[2002:a00:1::]/x",
+    ] {
+        assert!(remote(bad).is_err(), "{bad} must be refused");
+    }
+    for good in [
+        "https://192.88.98.1/x",
+        "https://[2001:4860:4860::8888]/x",
+        "https://[64:ff9b::808:808]/x",
+    ] {
+        assert!(remote(good).is_ok(), "{good} must pass");
+    }
+}
