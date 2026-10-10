@@ -42,6 +42,11 @@ struct MarketView: View {
     @State private var toolLists: [String: [IntegrationTool]] = [:]
     @State private var toolsSaving: Set<String> = []
     @State private var toolsError: UserFacingMessage?
+    /// Calls of the last day by service name, for the cards; and the journal of the open service, by name.
+    @State private var callStats: [String: IntegrationCallStats] = [:]
+    @State private var journals: [String: CallJournal] = [:]
+    @State private var journalLoading: Set<String> = []
+    @State private var journalError: UserFacingMessage?
 
     private let columns = [GridItem(.adaptive(minimum: 240), spacing: 14, alignment: .top)]
 
@@ -72,6 +77,9 @@ struct MarketView: View {
         }
         .task(id: toolsKey) {
             await loadTools()
+        }
+        .task(id: toolsKey) {
+            await loadOpenJournal()
         }
         .onChange(of: tab) { _, _ in
             query = ""
@@ -169,7 +177,52 @@ struct MarketView: View {
             onSetEnabled: { on in
                 if let integration = entry.integration { Task { await setEnabled(integration, on) } }
             },
-            tools: toolsInput(for: entry))
+            tools: toolsInput(for: entry),
+            journal: journalInput(for: entry))
+    }
+
+    // MARK: - call journal
+
+    private func journalInput(for entry: MarketEntry) -> JournalSectionInput? {
+        guard let integration = entry.integration, server?.supports("integrations_calls") == true else { return nil }
+        return JournalSectionInput(
+            journal: journals[integration.name] ?? CallJournal(),
+            loading: journalLoading.contains(integration.name),
+            error: journalError,
+            agents: server?.agents ?? [],
+            server: server,
+            onMore: { Task { await loadJournal(integration.name, older: true) } })
+    }
+
+    /// Reads a page of the service's calls: the newest, or the one after the rows read.
+    private func loadJournal(_ name: String, older: Bool) async {
+        guard let server, server.supports("integrations_calls"), !journalLoading.contains(name) else { return }
+        let before = older ? journals[name]?.cursor : nil
+        if older && before == nil { return }
+        journalLoading.insert(name)
+        defer { journalLoading.remove(name) }
+        do {
+            let page = try await server.toolCalls(integration: name, limit: CallJournal.pageSize, before: before)
+            guard !Task.isCancelled else { return }
+            var journal = journals[name] ?? CallJournal()
+            if older { journal.append(page) } else { journal.replace(with: page) }
+            journals[name] = journal
+            journalError = nil
+        } catch {
+            guard !Task.isCancelled else { return }
+            journalError = UserFacingError.message(for: error)
+        }
+    }
+
+    /// How much each service was used in the last day; a failed ask leaves the cards without the line.
+    private func reloadCallStats(of server: ServerModel) async {
+        guard server.supports("integrations_calls") else {
+            callStats = [:]
+            return
+        }
+        if let list = try? await server.toolCallStats() {
+            callStats = Dictionary(list.map { ($0.integration, $0) }, uniquingKeysWith: { first, _ in first })
+        }
     }
 
     // MARK: - tool permissions
@@ -192,7 +245,21 @@ struct MarketView: View {
                 guard words != integration.toolOverrides else { return }
                 Task { await saveTools(integration, IntegrationPatch(toolOverrides: words)) }
             },
-            onCheck: { Task { await check(integration.id) } })
+            onCheck: { Task { await check(integration.id) } },
+            serviceName: entry.name,
+            serviceOn: integration.enabled,
+            onTry: server?.supports("integrations_call_tool") == true
+                ? { tool, arguments in await tryTool(integration, tool, arguments) } : nil)
+    }
+
+    /// Runs a tool for the owner and gives back its answer, or the words for why the call did not go through.
+    private func tryTool(_ integration: Integration, _ tool: IntegrationTool, _ arguments: JSONValue) async -> ToolTryOutcome {
+        guard let server else { return .failure(UserFacingMessage(text: L10n.Failure.noAnswer)) }
+        do {
+            return .answer(try await server.callTool(integration.id, tool: tool.name, arguments: arguments))
+        } catch {
+            return .failure(ToolTryFailure.message(for: error))
+        }
     }
 
     /// The open service's id when its page is open on a server that limits tools: what the section is loaded for.
@@ -207,9 +274,17 @@ struct MarketView: View {
 
     private func loadTools() async {
         guard let server, tab == .services, server.supports("tool_permissions"),
-            let id = MarketLogic.entry(withID: router.marketDetail, in: openEntries)?.integration?.id
+            let integration = MarketLogic.entry(withID: router.marketDetail, in: openEntries)?.integration
         else { return }
-        await reloadTools(id, from: server)
+        await reloadTools(integration.id, from: server)
+    }
+
+    /// The journal of the open service, read when its page opens.
+    private func loadOpenJournal() async {
+        guard let server, tab == .services, server.supports("integrations_calls"),
+            let name = MarketLogic.entry(withID: router.marketDetail, in: openEntries)?.integration?.name
+        else { return }
+        await loadJournal(name, older: false)
     }
 
     private func reloadTools(_ id: String, from server: ServerModel) async {
@@ -562,6 +637,12 @@ struct MarketView: View {
                     menu(integration)
                 }
                 statusLine(status)
+                if let line = CallJournalText.statsLine(callStats[integration.name]) {
+                    Text(line)
+                        .font(BanditoFont.text(size: 12, weight: 400))
+                        .foregroundStyle(Color.Bandito.text3)
+                        .lineLimit(1)
+                }
                 if let update = integration.templateUpdate {
                     updateLine(integration, update)
                 }
@@ -716,6 +797,10 @@ struct MarketView: View {
             toolLists = [:]
             toolsSaving = []
             toolsError = nil
+            callStats = [:]
+            journals = [:]
+            journalLoading = []
+            journalError = nil
             panel = nil
             panelBusy = false
             removingSkill = nil
@@ -732,6 +817,7 @@ struct MarketView: View {
         do {
             integrations = try await server.integrations()
             await reloadConnections(of: server)
+            await reloadCallStats(of: server)
             if catalog.isEmpty {
                 catalog = try await server.integrationCatalog()
                 router.marketCategories = MarketCategory.present(in: catalog)

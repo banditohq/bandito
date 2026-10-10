@@ -1282,6 +1282,26 @@ public enum L10n {
             public static var myBots: String { L10n.tr("market.filter.myBots") }
         }
 
+        public enum Journal {
+            public static func calls24h(count: Int) -> String { L10n.tr("market.journal.calls24h", count) }
+            public static var empty: String { L10n.tr("market.journal.empty") }
+            public static func errors24h(count: Int) -> String { L10n.tr("market.journal.errors24h", count) }
+            public static var failed: String { L10n.tr("market.journal.failed") }
+            public static func minutes(minutes: String, seconds: String) -> String { L10n.tr("market.journal.minutes", minutes, seconds) }
+            public static var more: String { L10n.tr("market.journal.more") }
+            public static func ms(count: Int) -> String { L10n.tr("market.journal.ms", count) }
+            public static var noResult: String { L10n.tr("market.journal.noResult") }
+            public static func seconds(value: String) -> String { L10n.tr("market.journal.seconds", value) }
+            public static var succeeded: String { L10n.tr("market.journal.succeeded") }
+            public static var title: String { L10n.tr("market.journal.title") }
+
+            public enum Decision {
+                public static var allowed: String { L10n.tr("market.journal.decision.allowed") }
+                public static var asked: String { L10n.tr("market.journal.decision.asked") }
+                public static var denied: String { L10n.tr("market.journal.decision.denied") }
+            }
+        }
+
         public enum MyBots {
             public static var empty: String { L10n.tr("market.myBots.empty") }
             public static var `open`: String { L10n.tr("market.myBots.open") }
@@ -1385,6 +1405,37 @@ public enum L10n {
                 public static var allow: String { L10n.tr("market.tools.word.allow") }
                 public static var ask: String { L10n.tr("market.tools.word.ask") }
                 public static var deny: String { L10n.tr("market.tools.word.deny") }
+            }
+        }
+
+        public enum Try {
+            public static var button: String { L10n.tr("market.try.button") }
+            public static var choose: String { L10n.tr("market.try.choose") }
+            public static func confirmMessage(service: String) -> String { L10n.tr("market.try.confirmMessage", service) }
+            public static func confirmTitle(tool: String) -> String { L10n.tr("market.try.confirmTitle", tool) }
+            public static var emptyResult: String { L10n.tr("market.try.emptyResult") }
+            public static func failed(message: String) -> String { L10n.tr("market.try.failed", message) }
+            public static var hide: String { L10n.tr("market.try.hide") }
+            public static var no: String { L10n.tr("market.try.no") }
+            public static var noArguments: String { L10n.tr("market.try.noArguments") }
+            public static var notSet: String { L10n.tr("market.try.notSet") }
+            public static var offHint: String { L10n.tr("market.try.offHint") }
+            public static var rawLabel: String { L10n.tr("market.try.rawLabel") }
+            public static var required: String { L10n.tr("market.try.required") }
+            public static var result: String { L10n.tr("market.try.result") }
+            public static var run: String { L10n.tr("market.try.run") }
+            public static var running: String { L10n.tr("market.try.running") }
+            public static var structured: String { L10n.tr("market.try.structured") }
+            public static var toolError: String { L10n.tr("market.try.toolError") }
+            public static var yes: String { L10n.tr("market.try.yes") }
+
+            public enum Problem {
+                public static var invalidJson: String { L10n.tr("market.try.problem.invalidJson") }
+                public static var notChoice: String { L10n.tr("market.try.problem.notChoice") }
+                public static var notInteger: String { L10n.tr("market.try.problem.notInteger") }
+                public static var notNumber: String { L10n.tr("market.try.problem.notNumber") }
+                public static var notObject: String { L10n.tr("market.try.problem.notObject") }
+                public static var required: String { L10n.tr("market.try.problem.required") }
             }
         }
 

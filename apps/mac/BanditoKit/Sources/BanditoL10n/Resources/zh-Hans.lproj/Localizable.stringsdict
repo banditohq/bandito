@@ -156,6 +156,34 @@
 			<string>%1$lld 个工具</string>
 		</dict>
 	</dict>
+	<key>market.journal.calls24h</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>other</key>
+			<string>24 小时内 %1$lld 次调用</string>
+		</dict>
+	</dict>
+	<key>market.journal.errors24h</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%1$#@value@</string>
+		<key>value</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>other</key>
+			<string>%1$lld 个错误</string>
+		</dict>
+	</dict>
 	<key>market.skill.onAgents</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>

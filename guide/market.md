@@ -267,3 +267,36 @@ it, and the section lists these agents by name.
 2. Click Allow (Разрешить), Ask (Спрашивать) or Deny (Запретить) on a tool to give it a word of its own.
 3. Click Check (Проверить) when the section says no tools are known yet.
 
+## Journal of calls
+
+<!-- id: market-journal; covers: -->
+Bandito keeps a journal of every call an agent makes to a tool of a service: who, which tool, when, how long it took and how
+it ended, for 30 days. A connected card shows the last day in one line, for example 12 calls in 24 hours · 1 error (12
+вызовов за сутки · 1 ошибка); a service with no call in the last day shows nothing. The page of the service has a section
+Journal (Журнал): the newest calls first, each with the agent's picture and name, the tool, the time (the clock for today,
+the date too for another day), the duration, a tick or a cross for the end, the error's first line when it failed, and, in
+quiet type, what Bandito did with the call: allowed (разрешено), you were asked (спросили вас) or denied (отказано). A call
+that has no result (the turn ended, or the agent stopped) says No result (Нет итога). Arguments and results are not kept.
+Где: Marketplace → Services (Сервисы) → a connected service → View (Посмотреть) → Journal (Журнал)
+1. Click Show more (Показать ещё) under the list to read older calls.
+2. With no calls yet, the section says so in one line.
+
+## Try a tool
+
+<!-- id: market-try; covers: -->
+Each tool in the Tools (Инструменты) section has Try (Попробовать): it opens a form under the tool, made from the tool's own
+description of its arguments. A text, a number and a whole number are fields; a yes or no and a list of values are
+choices (Not set, Yes, No; or the values the tool accepts); a required field is marked required (обязательно), and the
+tool's own words about a field are under its name. An argument that is a list, an object or one of several shapes is a
+field of JSON text, which is checked before anything is sent; a tool whose arguments are not described takes one JSON
+object. Run (Запустить) calls the tool through the server, as you and not as an agent, whatever the service's mode says. A
+tool that is not marked as only reading asks first: This will change data in <service> (Это действие изменит данные в
+<сервис>). The answer is under the form: the tool's text in monospace in a box that scrolls, and the structured part as
+JSON. If the tool says it failed, the box is marked The tool answered with an error (Инструмент ответил ошибкой). If the call
+itself did not go through (the service is off, no answer within 30 seconds, a sign-in that ended), the reason is shown.
+Try is dimmed while the service is turned off; point at it to read why.
+Где: Marketplace → Services (Сервисы) → a connected service → View (Посмотреть) → Tools (Инструменты) → Try (Попробовать)
+1. Click Try (Попробовать) on a tool, fill in the fields, and click Run (Запустить).
+2. A red line under a field says what to fix. Nothing is sent until every field is right.
+3. Click Hide (Свернуть) to close the form.
+
