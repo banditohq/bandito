@@ -29,8 +29,9 @@ extension BanditoButtonSize {
     }
 }
 
-/// Primary action: signal gradient, white label, orange glow. Use one per view.
-/// On hover the fill brightens by 7% and the glow spreads. Hover, press and focus come from `InteractiveBody`.
+/// Primary action ("cream"): a cream capsule with a dark label and a small signal dot before it. Use one per view.
+/// On hover the fill brightens and a soft cream shadow appears; disabled, it turns to a quiet surface with a grey dot.
+/// Hover, press and focus come from `InteractiveBody`.
 public struct SignalButtonStyle: ButtonStyle {
     /// Height and label size of the button.
     public var size: BanditoButtonSize
@@ -40,31 +41,38 @@ public struct SignalButtonStyle: ButtonStyle {
     }
 
     public func makeBody(configuration: Configuration) -> some View {
+        SignalButtonBody(configuration: configuration, size: size)
+    }
+}
+
+private struct SignalButtonBody: View {
+    let configuration: ButtonStyleConfiguration
+    let size: BanditoButtonSize
+    @Environment(\.isEnabled) private var isEnabled
+
+    var body: some View {
         InteractiveBody(isPressed: configuration.isPressed) { hovered in
-            configuration.label
-                .font(BanditoFont.font(size: size.fontSize, weight: 600))
-                .foregroundStyle(Color.Bandito.onSignal)
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
-                .padding(.horizontal, size.horizontalPadding)
-                .frame(height: size.height)
-                .background(
-                    LinearGradient(
-                        colors: [Color.Bandito.signalFill, Color.Bandito.signalFillEnd],
-                        startPoint: .top, endPoint: .bottom),
-                    in: Capsule()
-                )
-                .overlay(
-                    Capsule().strokeBorder(
-                        LinearGradient(
-                            colors: [Color.Bandito.onSignal.opacity(0.18), .clear],
-                            startPoint: .top, endPoint: .center),
-                        lineWidth: 1)
-                )
-                .brightness(hovered ? 0.07 : 0)
-                .shadow(
-                    color: Color.Bandito.signalFill.opacity(hovered ? 0.95 : 0.8),
-                    radius: hovered ? 14 : 9, x: 0, y: 6)
+            HStack(spacing: size == .large ? 10 : 8) {
+                Circle()
+                    .fill(isEnabled ? Color.Bandito.signalFill : Color.Bandito.text3)
+                    .frame(width: 7, height: 7)
+                    .background(
+                        Circle()
+                            .fill(Color.Bandito.signalFill.opacity(isEnabled ? 0.18 : 0))
+                            .frame(width: 13, height: 13)
+                    )
+                    .accessibilityHidden(true)
+                configuration.label
+            }
+            .font(BanditoFont.font(size: size.fontSize, weight: 600))
+            .foregroundStyle(isEnabled ? Color.Bandito.bg : Color.Bandito.text3)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+            .padding(.horizontal, size.horizontalPadding)
+            .frame(height: size.height)
+            .background(isEnabled ? Color.Bandito.text : Color.Bandito.surface3, in: Capsule())
+            .brightness(isEnabled && hovered ? 0.06 : 0)
+            .shadow(color: Color.Bandito.text.opacity(isEnabled && hovered ? 0.16 : 0), radius: hovered ? 12 : 0, x: 0, y: 5)
         }
     }
 }
