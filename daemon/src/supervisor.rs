@@ -2891,6 +2891,9 @@ mod tests {
     #[tokio::test]
     async fn a_verdict_before_the_call_is_its_decision_and_one_after_it_updates_the_row() {
         let mut w = running(ApprovalMode::Always).await;
+        // The agent has both services: a call to a service it does not have is refused by the tool rules.
+        add_service(&w, "linear", crate::store::ToolMode::All, &[]);
+        add_service(&w, "github", crate::store::ToolMode::All, &[]);
         // The verdict comes first: the call is asked about.
         w.push(integration_approval("t1", "mcp__linear__create_issue")).await;
         w.wait(|b| matches!(b, EventBody::ApprovalRequested { .. })).await;
