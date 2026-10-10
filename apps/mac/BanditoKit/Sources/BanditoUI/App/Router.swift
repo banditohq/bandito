@@ -180,6 +180,8 @@ public final class Router {
     }
 
     public var sheet: Sheet?
+    /// The picture viewer: the pictures to show, and the first one. Set to show it over the main window; `nil` closes it.
+    var imageViewer: ImageViewerRequest?
     /// The quick-open palette (⌘K).
     public var paletteOpen = false
     /// The subscription limits popover, opened from the sidebar footer (⌥⌘U).

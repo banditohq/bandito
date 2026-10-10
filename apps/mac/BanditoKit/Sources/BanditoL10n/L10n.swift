@@ -2627,15 +2627,21 @@ public enum L10n {
     }
 
     public enum Viewer {
+        public static var close: String { L10n.tr("viewer.close") }
         public static var closeTab: String { L10n.tr("viewer.closeTab") }
+        public static func counter(n: String, total: String) -> String { L10n.tr("viewer.counter", n, total) }
         public static var empty: String { L10n.tr("viewer.empty") }
         public static var emptyFile: String { L10n.tr("viewer.emptyFile") }
         public static func error(error: String) -> String { L10n.tr("viewer.error", error) }
+        public static var fit: String { L10n.tr("viewer.fit") }
         public static var folder: String { L10n.tr("viewer.folder") }
+        public static var imageFailed: String { L10n.tr("viewer.imageFailed") }
         public static var moreActions: String { L10n.tr("viewer.moreActions") }
         public static func notSaved(name: String) -> String { L10n.tr("viewer.notSaved", name) }
+        public static var openInFiles: String { L10n.tr("viewer.openInFiles") }
         public static var readOnly: String { L10n.tr("viewer.readOnly") }
         public static var save: String { L10n.tr("viewer.save") }
+        public static var saveAs: String { L10n.tr("viewer.saveAs") }
         public static func saveError(error: String) -> String { L10n.tr("viewer.saveError", error) }
         public static var savedStatus: String { L10n.tr("viewer.savedStatus") }
         public static var saving: String { L10n.tr("viewer.saving") }

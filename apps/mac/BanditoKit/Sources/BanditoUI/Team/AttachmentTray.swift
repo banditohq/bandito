@@ -28,6 +28,9 @@ struct DraftFile: Identifiable {
     /// A local picture for the miniature. `nil` for files that are not pictures, or when the picture cannot be read.
     var preview: NSImage?
     var state: State
+    /// Where the whole picture is, for the viewer: the file on this Mac, or the bytes of a screenshot or the clipboard.
+    /// `nil` for files that are not pictures.
+    var original: ImageViewerSource?
 
     var isImage: Bool { AttachmentRules.isImage(name: name) }
 
@@ -163,9 +166,10 @@ final class AttachmentTrays {
                 append(DraftFile(name: name, size: size, preview: nil, state: .failed(failure)), agentID: agentID)
                 continue
             }
-            let file = DraftFile(name: name, size: size, preview: nil, state: .uploading)
+            let picture = AttachmentRules.isImage(name: name)
+            let file = DraftFile(name: name, size: size, preview: nil, state: .uploading, original: picture ? .file(url) : nil)
             append(file, agentID: agentID)
-            enqueue(file.id, name: name, agentID: agentID, upload: upload, source: .file(url, picture: AttachmentRules.isImage(name: name)))
+            enqueue(file.id, name: name, agentID: agentID, upload: upload, source: .file(url, picture: picture))
         }
     }
 
@@ -181,7 +185,7 @@ final class AttachmentTrays {
             append(DraftFile(name: name, size: size, preview: nil, state: .failed(failure)), agentID: agentID)
             return
         }
-        let file = DraftFile(name: name, size: size, preview: nil, state: .uploading)
+        let file = DraftFile(name: name, size: size, preview: nil, state: .uploading, original: .data(data))
         append(file, agentID: agentID)
         enqueue(file.id, name: name, agentID: agentID, upload: upload, source: .picture(data))
     }

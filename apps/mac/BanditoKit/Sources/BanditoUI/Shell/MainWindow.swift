@@ -52,6 +52,13 @@ struct MainWindow: View {
                     .transition(.opacity)
             }
         }
+        .overlay {
+            if let viewer = router.imageViewer {
+                ImageViewer(request: viewer)
+                    .transition(.opacity)
+            }
+        }
+        .banditoAnimation(.easeOut(duration: BanditoMotion.base), value: router.imageViewer != nil)
         .overlay(alignment: .bottom) {
             if let notice = router.rollbackNotice {
                 RollbackToast(notice: notice) { router.rollbackNotice = nil }

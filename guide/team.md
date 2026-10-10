@@ -83,7 +83,7 @@ The composer sits at the bottom of the thread. It sends the message to the selec
 ## Attach a file to a message
 
 <!-- id: team-attach; covers: -->
-The + button opens the macOS file picker and adds the file name to the message as `@name`. The file itself is not uploaded in this build: the agent reads the file from its folder, so put the file into the agent's project folder first (Files → upload, see [files.md](files.md)).
+The + button opens the macOS file picker and adds the file name to the message as `@name`. The file itself is not uploaded in this build: the agent reads the file from its folder, so put the file into the agent's project folder first (Files → upload, see [files.md](files.md)). Click a picture in the thread or in the composer to open it full size: pinch or ⌘= / ⌘- zooms, double-click switches between fit and 100%, and Esc closes it.
 Где: Team → agent thread → composer → +
 1. Click +. Choose the file in the picker and click Open.
 2. Check the text: it now contains `@file-name`. Add your request and press ↵.

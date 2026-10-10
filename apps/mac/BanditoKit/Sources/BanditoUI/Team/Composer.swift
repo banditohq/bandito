@@ -568,24 +568,42 @@ struct Composer: View {
     /// A picture of 56 pt. A failed one is marked red; an uploading one shows a spinner.
     private func pictureTile(_ file: DraftFile) -> some View {
         ZStack(alignment: .topTrailing) {
-            Group {
-                if let preview = file.preview {
-                    Image(nsImage: preview).resizable().scaledToFill()
-                } else {
-                    Image(systemName: "photo")
-                        .font(.system(size: 18, weight: .regular))
-                        .foregroundStyle(Color.Bandito.text3)
+            Button {
+                openPicture(file)
+            } label: {
+                Group {
+                    if let preview = file.preview {
+                        Image(nsImage: preview).resizable().scaledToFill()
+                    } else {
+                        Image(systemName: "photo")
+                            .font(.system(size: 18, weight: .regular))
+                            .foregroundStyle(Color.Bandito.text3)
+                    }
+                }
+                .frame(width: 56, height: 56)
+                .background(Color.Bandito.surface3)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay {
+                    stateOverlay(file)
                 }
             }
-            .frame(width: 56, height: 56)
-            .background(Color.Bandito.surface3)
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay {
-                stateOverlay(file)
-            }
+            .banditoButton(.row(cornerRadius: 10))
             .help(file.failureText ?? file.name)
             removeButton(file)
         }
+    }
+
+    /// Opens the viewer on a picture of the draft, with the other pictures of the draft to step through. A picture that
+    /// has no source to read (a failed one) does nothing.
+    private func openPicture(_ file: DraftFile) {
+        let pictures = files.compactMap { draft -> (id: UUID, name: String, source: ImageViewerSource)? in
+            guard draft.isImage, let source = draft.original else { return nil }
+            return (draft.id, draft.name, source)
+        }
+        guard pictures.contains(where: { $0.id == file.id }) else { return }
+        let items = pictures.map { ImageViewerItem(name: $0.name, source: $0.source, openInFiles: nil) }
+        let index = pictures.firstIndex { $0.id == file.id } ?? 0
+        router.imageViewer = ImageViewerRequest(items: items, index: index)
     }
 
     /// A file that is not a picture: its icon, name and size, or what is wrong with it.
