@@ -2,9 +2,9 @@ import BanditoKit
 import BanditoL10n
 import Observation
 
-/// The six sections of the main window. The mode bar and ⌘1…⌘6 switch between them.
+/// The seven sections of the main window. The mode bar and ⌘1…⌘7 switch between them.
 public enum AppMode: String, CaseIterable, Identifiable, Sendable {
-    case team, files, terminals, browser, screen, server
+    case team, files, terminals, browser, screen, market, server
 
     public var id: String { rawValue }
 
@@ -16,6 +16,7 @@ public enum AppMode: String, CaseIterable, Identifiable, Sendable {
         case .terminals: L10n.Mode.terminals
         case .browser: L10n.Mode.browser
         case .screen: L10n.Mode.screen
+        case .market: L10n.Mode.market
         case .server: L10n.Mode.server
         }
     }
@@ -28,7 +29,22 @@ public enum AppMode: String, CaseIterable, Identifiable, Sendable {
         case .terminals: "terminal"
         case .browser: "globe"
         case .screen: "display"
+        case .market: "puzzlepiece.extension"
         case .server: "waveform.path.ecg"
+        }
+    }
+}
+
+/// The filter of the Marketplace sidebar: every service, or only the connected ones.
+public enum MarketFilter: String, CaseIterable, Identifiable, Sendable {
+    case all, connected
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .all: L10n.Market.Filter.all
+        case .connected: L10n.Market.Filter.connected
         }
     }
 }
@@ -112,6 +128,8 @@ public final class Router {
     public var screenID: String?
     /// Server: the section in view.
     public var serverSection: ServerSection = .overview
+    /// Marketplace: the filter the sidebar picked (all services or the connected ones).
+    public var marketFilter: MarketFilter = .all
     /// Terminals: a command to type into a new terminal (Server → Install, Update). Taken once by the terminals.
     public var pendingTerminalCommand: String?
 

@@ -654,10 +654,8 @@
 "integrations.failure.rejected" = "Der Server hat den Schlüssel abgelehnt. Prüfen Sie den Wert des Geheimnisses.";
 "integrations.failure.timeout" = "Der Server hat nicht rechtzeitig geantwortet.";
 "integrations.failure.unreachable" = "Der Server ist nicht erreichbar. Prüfen Sie Adresse und Netzwerk.";
-"integrations.hint" = "MCP-Server, die Agenten nutzen können. Ihre Werkzeuge stehen der Sitzung des Agenten zur Verfügung. Geheimnisse bleiben auf dem Server.";
 "integrations.kind.http" = "Webadresse";
 "integrations.kind.stdio" = "Programm";
-"integrations.more" = "Mehr";
 "integrations.problem.commandEmpty" = "Geben Sie den Befehl ein, mit dem der Server startet.";
 "integrations.problem.keyEmpty" = "Jede Variable und jeder Header braucht einen Namen.";
 "integrations.problem.keyInvalid" = "„%1$@“: nur Buchstaben, Ziffern, _, - und . verwenden";
@@ -697,7 +695,6 @@
 "integrations.status.failed" = "Prüfung fehlgeschlagen";
 "integrations.status.unchecked" = "Noch nicht geprüft";
 "integrations.title" = "Integrationen";
-"integrations.toggleHelp" = "Für Agenten ein- oder ausschalten";
 "integrations.toolsFound" = "Werkzeuge: %1$@";
 "journal.copyAll" = "Alles kopieren";
 "journal.empty" = "Noch keine Einträge.";
@@ -792,6 +789,13 @@
 "keys.workbenchSplit" = "Bereiche teilen oder zusammenführen";
 "keys.workbenchTab" = "Tab %1$@ des Bereichs";
 "keys.workbenchToggle" = "Bereich ein- oder ausblenden";
+"market.availableToAgents" = "Für Agenten verfügbar";
+"market.configure" = "Einrichten";
+"market.filter.all" = "Alle";
+"market.filter.connected" = "Verbunden";
+"market.noResults" = "Nichts gefunden";
+"market.search" = "Suchen";
+"market.subtitle" = "Verbinden Sie die Dienste, die Agenten nutzen können.";
 "memory.chapterLength" = "Kapitellänge";
 "memory.chapterLengthCustom" = "Eigene…";
 "memory.chapterLengthDefault" = "Standard";
@@ -849,10 +853,10 @@
 "mode.browser" = "Browser";
 "mode.connectServer" = "Verbinden Sie einen Server, um ihn zu nutzen.";
 "mode.files" = "Dateien";
+"mode.market" = "Marktplatz";
 "mode.screen" = "Serverbildschirm";
 "mode.server" = "Server";
 "mode.serverDevices" = "Geräte";
-"mode.serverIntegrations" = "Integrationen";
 "mode.serverJournal" = "Daemon-Protokoll";
 "mode.serverOverview" = "Übersicht";
 "mode.serverPorts" = "Ports";

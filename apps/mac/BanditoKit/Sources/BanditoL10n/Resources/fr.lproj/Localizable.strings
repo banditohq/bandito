@@ -654,10 +654,8 @@
 "integrations.failure.rejected" = "Le serveur a refusé la clé. Vérifiez la valeur du secret.";
 "integrations.failure.timeout" = "Le serveur n'a pas répondu à temps.";
 "integrations.failure.unreachable" = "Le serveur est injoignable. Vérifiez l'adresse et le réseau.";
-"integrations.hint" = "Serveurs MCP utilisables par les agents. Leurs outils rejoignent la session de l'agent. Les secrets restent sur le serveur.";
 "integrations.kind.http" = "Adresse web";
 "integrations.kind.stdio" = "Programme";
-"integrations.more" = "Plus";
 "integrations.problem.commandEmpty" = "Saisissez la commande qui démarre le serveur.";
 "integrations.problem.keyEmpty" = "Chaque variable et en-tête a besoin d'un nom.";
 "integrations.problem.keyInvalid" = "« %1$@ » : utilisez des lettres, chiffres, _, - et .";
@@ -697,7 +695,6 @@
 "integrations.status.failed" = "Échec de la vérification";
 "integrations.status.unchecked" = "Pas encore vérifiée";
 "integrations.title" = "Intégrations";
-"integrations.toggleHelp" = "Activer ou désactiver pour les agents";
 "integrations.toolsFound" = "Outils : %1$@";
 "journal.copyAll" = "Tout copier";
 "journal.empty" = "Aucune entrée pour l’instant.";
@@ -792,6 +789,13 @@
 "keys.workbenchSplit" = "Diviser ou réunir les panneaux";
 "keys.workbenchTab" = "Onglet %1$@ du panneau";
 "keys.workbenchToggle" = "Afficher ou masquer le panneau";
+"market.availableToAgents" = "Disponible pour les agents";
+"market.configure" = "Configurer";
+"market.filter.all" = "Tous";
+"market.filter.connected" = "Connectés";
+"market.noResults" = "Rien trouvé";
+"market.search" = "Rechercher";
+"market.subtitle" = "Connectez les services que les agents peuvent utiliser.";
 "memory.chapterLength" = "Longueur du chapitre";
 "memory.chapterLengthCustom" = "Personnalisé…";
 "memory.chapterLengthDefault" = "par défaut";
@@ -849,10 +853,10 @@
 "mode.browser" = "Navigateur";
 "mode.connectServer" = "Connectez un serveur pour l’utiliser.";
 "mode.files" = "Fichiers";
+"mode.market" = "Marché";
 "mode.screen" = "Écran du serveur";
 "mode.server" = "Serveur";
 "mode.serverDevices" = "Appareils";
-"mode.serverIntegrations" = "Intégrations";
 "mode.serverJournal" = "Journal du démon";
 "mode.serverOverview" = "Aperçu";
 "mode.serverPorts" = "Ports";

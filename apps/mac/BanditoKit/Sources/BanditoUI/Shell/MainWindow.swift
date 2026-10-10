@@ -161,6 +161,7 @@ private struct ModeArea: View {
         case .terminals: TerminalsMode()
         case .browser: BrowserMode()
         case .screen: ScreenMode()
+        case .market: MarketView()
         case .server: ServerMode()
         }
     }

@@ -90,6 +90,7 @@ private struct ModeSidebarContent: View {
         case .terminals: TerminalsSidebar()
         case .browser: BrowserSidebar()
         case .screen: ScreenSidebar()
+        case .market: MarketSidebar()
         case .server: ServerSidebar()
         }
     }

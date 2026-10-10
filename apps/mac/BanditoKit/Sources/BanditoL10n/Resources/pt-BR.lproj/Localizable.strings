@@ -654,10 +654,8 @@
 "integrations.failure.rejected" = "O servidor recusou a chave. Verifique o valor do segredo.";
 "integrations.failure.timeout" = "O servidor não respondeu a tempo.";
 "integrations.failure.unreachable" = "Não foi possível alcançar o servidor. Verifique o endereço e a rede.";
-"integrations.hint" = "Servidores MCP que os agentes podem usar. As ferramentas entram na sessão do agente. Os segredos ficam no servidor.";
 "integrations.kind.http" = "Endereço web";
 "integrations.kind.stdio" = "Programa";
-"integrations.more" = "Mais";
 "integrations.problem.commandEmpty" = "Digite o comando que inicia o servidor.";
 "integrations.problem.keyEmpty" = "Cada variável e cabeçalho precisa de um nome.";
 "integrations.problem.keyInvalid" = "“%1$@”: use letras, números, _, - e .";
@@ -697,7 +695,6 @@
 "integrations.status.failed" = "Verificação falhou";
 "integrations.status.unchecked" = "Ainda não verificada";
 "integrations.title" = "Integrações";
-"integrations.toggleHelp" = "Ligar ou desligar para os agentes";
 "integrations.toolsFound" = "Ferramentas: %1$@";
 "journal.copyAll" = "Copiar tudo";
 "journal.empty" = "Nenhuma linha ainda.";
@@ -792,6 +789,13 @@
 "keys.workbenchSplit" = "Dividir ou unir os painéis";
 "keys.workbenchTab" = "Aba %1$@ do painel";
 "keys.workbenchToggle" = "Mostrar ou ocultar o painel";
+"market.availableToAgents" = "Disponível para os agentes";
+"market.configure" = "Configurar";
+"market.filter.all" = "Todos";
+"market.filter.connected" = "Conectados";
+"market.noResults" = "Nada encontrado";
+"market.search" = "Buscar";
+"market.subtitle" = "Conecte os serviços que os agentes podem usar.";
 "memory.chapterLength" = "Tamanho do capítulo";
 "memory.chapterLengthCustom" = "Personalizado…";
 "memory.chapterLengthDefault" = "padrão";
@@ -849,10 +853,10 @@
 "mode.browser" = "Navegador";
 "mode.connectServer" = "Conecte um servidor para usá-lo.";
 "mode.files" = "Arquivos";
+"mode.market" = "Marketplace";
 "mode.screen" = "Tela do servidor";
 "mode.server" = "Servidor";
 "mode.serverDevices" = "Dispositivos";
-"mode.serverIntegrations" = "Integrações";
 "mode.serverJournal" = "Registro do daemon";
 "mode.serverOverview" = "Visão geral";
 "mode.serverPorts" = "Portas";

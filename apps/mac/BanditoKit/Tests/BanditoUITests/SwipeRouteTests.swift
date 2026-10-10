@@ -45,7 +45,7 @@ import Testing
     }
 
     @Test func otherModesDoNothing() {
-        for mode in [AppMode.terminals, .screen, .server] {
+        for mode in [AppMode.terminals, .screen, .market, .server] {
             #expect(action(mode, .back) == .none)
             #expect(action(mode, .forward) == .none)
         }

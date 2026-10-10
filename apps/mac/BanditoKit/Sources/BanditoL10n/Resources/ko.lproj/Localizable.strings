@@ -654,10 +654,8 @@
 "integrations.failure.rejected" = "서버가 키를 거부했어요. 비밀 값을 확인해 주세요.";
 "integrations.failure.timeout" = "서버가 제때 응답하지 않았어요.";
 "integrations.failure.unreachable" = "서버에 연결할 수 없어요. 주소와 네트워크를 확인해 주세요.";
-"integrations.hint" = "에이전트가 쓸 수 있는 MCP 서버예요. 도구는 에이전트 세션에 들어가고, 비밀 값은 서버에 남아요.";
 "integrations.kind.http" = "웹 주소";
 "integrations.kind.stdio" = "프로그램";
-"integrations.more" = "더 보기";
 "integrations.problem.commandEmpty" = "서버를 시작하는 명령을 입력해 주세요.";
 "integrations.problem.keyEmpty" = "모든 변수와 헤더에 이름이 필요해요.";
 "integrations.problem.keyInvalid" = "“%1$@”: 영문, 숫자, _, -, .만 쓸 수 있어요.";
@@ -697,7 +695,6 @@
 "integrations.status.failed" = "확인 실패";
 "integrations.status.unchecked" = "아직 확인 안 함";
 "integrations.title" = "연동";
-"integrations.toggleHelp" = "에이전트용으로 켜거나 끄기";
 "integrations.toolsFound" = "도구: %1$@";
 "journal.copyAll" = "모두 복사";
 "journal.empty" = "아직 기록이 없어요.";
@@ -792,6 +789,13 @@
 "keys.workbenchSplit" = "패널 나누기 또는 합치기";
 "keys.workbenchTab" = "패널 탭 %1$@";
 "keys.workbenchToggle" = "패널 표시 또는 숨기기";
+"market.availableToAgents" = "에이전트가 사용 가능";
+"market.configure" = "설정";
+"market.filter.all" = "전체";
+"market.filter.connected" = "연결됨";
+"market.noResults" = "결과가 없습니다";
+"market.search" = "검색";
+"market.subtitle" = "에이전트가 사용할 수 있는 서비스를 연결하세요.";
 "memory.chapterLength" = "챕터 길이";
 "memory.chapterLengthCustom" = "직접 입력…";
 "memory.chapterLengthDefault" = "기본값";
@@ -849,10 +853,10 @@
 "mode.browser" = "브라우저";
 "mode.connectServer" = "사용하려면 서버를 연결하세요.";
 "mode.files" = "파일";
+"mode.market" = "마켓플레이스";
 "mode.screen" = "서버 화면";
 "mode.server" = "서버";
 "mode.serverDevices" = "기기";
-"mode.serverIntegrations" = "연동";
 "mode.serverJournal" = "데몬 로그";
 "mode.serverOverview" = "개요";
 "mode.serverPorts" = "포트";

@@ -21,6 +21,7 @@ Conventions used in every entry:
 - [terminals.md](terminals.md): the Terminals mode: panes, layouts, collapse, input to all.
 - [browser.md](browser.md): the Browser mode on the server.
 - [screen.md](screen.md): the Server screen mode: view, take control, quality.
+- [market.md](market.md): the Marketplace mode: the services the agents can use, connect, configure, remove.
 - [server.md](server.md): the Server mode: overview, workplaces, secrets, ports, devices, updates, daemon log.
 - [settings.md](settings.md): every Settings section and every setting, with its path.
 - [keys.md](keys.md): every command with its default shortcut and how to change it.
@@ -37,4 +38,5 @@ Conventions used in every entry:
 | Terminals (Терминалы) | ⌘3 | [terminals.md](terminals.md) |
 | Browser (Браузер) | ⌘4 | [browser.md](browser.md) |
 | Server screen (Экран сервера) | ⌘5 | [screen.md](screen.md) |
-| Server (Сервер) | ⌘6 | [server.md](server.md) |
+| Marketplace (Маркетплейс) | ⌘6 | [market.md](market.md) |
+| Server (Сервер) | ⌘7 | [server.md](server.md) |
