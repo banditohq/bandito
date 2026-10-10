@@ -267,8 +267,7 @@ struct InspectorCard<Content: View>: View {
         VStack(spacing: 0) {
             content
         }
-        .background(Color.Bandito.text.opacity(0.025), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.Bandito.line, lineWidth: 1))
+        .banditoCard()
     }
 }
 
