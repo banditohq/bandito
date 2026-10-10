@@ -757,7 +757,7 @@ struct MarketView: View {
     private func cardActions(_ entry: MarketEntry) -> some View {
         if let integration = entry.integration {
             Label {
-                Text(L10n.Integrations.connected)
+                Text(L10n.Integrations.Oauth.connected)
             } icon: {
                 Image(systemName: "checkmark")
             }

@@ -279,6 +279,19 @@ enum ToolResultText {
         }.joined(separator: "\n\n")
     }
 
+    /// The text part as it is shown: a JSON object or array as indented JSON (two spaces, keys sorted), anything else
+    /// as it came. A number or a quoted string is left alone, so its text is never rewritten.
+    static func display(_ text: String) -> String {
+        guard let data = text.data(using: .utf8),
+              let value = try? JSONSerialization.jsonObject(with: data),
+              value is [String: Any] || value is [Any],
+              let pretty = try? JSONSerialization.data(
+                  withJSONObject: value, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]),
+              let string = String(data: pretty, encoding: .utf8)
+        else { return text }
+        return string
+    }
+
     /// The structured part as indented JSON.
     static func structured(_ result: ToolCallResult) -> String? {
         result.structured.flatMap(ToolForm.json)

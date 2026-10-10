@@ -929,7 +929,6 @@
 "market.section.how" = "Как подключить";
 "market.section.links" = "Ссылки";
 "market.section.needs" = "Что понадобится";
-"market.section.tools" = "Инструменты из последней проверки";
 "market.skill.by" = "автор: %1$@";
 "market.skill.claudeOnly" = "Только Claude";
 "market.skill.conflictAgent" = "Папка с таким именем уже лежит в папке агента %1$@, и её создал не Bandito. Bandito её никогда не перезаписывает: переместите или переименуйте папку, потом установите скилл.";
@@ -979,6 +978,7 @@
 "market.tools.mode.readOnly" = "Только чтение";
 "market.tools.notChecked" = "Инструменты пока не известны. Проверьте сервис, чтобы получить их список. До тех пор любой инструмент считается меняющим данные.";
 "market.tools.title" = "Инструменты";
+"market.tools.toList" = "К списку";
 "market.tools.unreached" = "Для агентов %1$@ (Codex/Grok) сервис в этом режиме отключён.";
 "market.tools.word.allow" = "Разрешить";
 "market.tools.word.ask" = "Спрашивать";

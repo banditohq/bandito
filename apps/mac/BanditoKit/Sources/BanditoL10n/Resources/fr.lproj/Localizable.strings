@@ -929,7 +929,6 @@
 "market.section.how" = "Comment connecter";
 "market.section.links" = "Liens";
 "market.section.needs" = "Ce qu'il faut";
-"market.section.tools" = "Outils de la dernière vérification";
 "market.skill.by" = "par %1$@";
 "market.skill.claudeOnly" = "Claude uniquement";
 "market.skill.conflictAgent" = "Un dossier de ce nom se trouve déjà dans le dossier de %1$@, et ce n'est pas Bandito qui l'a créé. Bandito ne l'écrase jamais : déplacez-le ou renommez-le, puis installez le skill.";
@@ -979,6 +978,7 @@
 "market.tools.mode.readOnly" = "Lecture seule";
 "market.tools.notChecked" = "Aucun outil n'est connu pour l'instant. Vérifiez le service pour les lister. D'ici là, chaque outil compte comme un outil qui modifie quelque chose.";
 "market.tools.title" = "Outils";
+"market.tools.toList" = "À la liste";
 "market.tools.unreached" = "Pour les agents %1$@ (Codex ou Grok), le service est désactivé dans ce mode.";
 "market.tools.word.allow" = "Autoriser";
 "market.tools.word.ask" = "Demander";

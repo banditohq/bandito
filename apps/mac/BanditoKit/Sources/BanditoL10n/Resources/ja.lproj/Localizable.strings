@@ -929,7 +929,6 @@
 "market.section.how" = "接続方法";
 "market.section.links" = "リンク";
 "market.section.needs" = "必要なもの";
-"market.section.tools" = "前回の確認で見つかったツール";
 "market.skill.by" = "作者: %1$@";
 "market.skill.claudeOnly" = "Claude 専用";
 "market.skill.conflictAgent" = "%1$@ のフォルダに同じ名前のフォルダがすでにあり、Bandito が作ったものではありません。Bandito は上書きしません。フォルダを移動するか名前を変えてから、スキルをインストールしてください。";
@@ -979,6 +978,7 @@
 "market.tools.mode.readOnly" = "読み取りのみ";
 "market.tools.notChecked" = "ツールはまだ分かっていません。サービスを確認すると一覧が出ます。それまでは、すべてのツールが何かを変更するものとして扱われます。";
 "market.tools.title" = "ツール";
+"market.tools.toList" = "一覧へ";
 "market.tools.unreached" = "エージェント %1$@（Codex または Grok）では、このモードのときサービスはオフになります。";
 "market.tools.word.allow" = "許可";
 "market.tools.word.ask" = "確認";

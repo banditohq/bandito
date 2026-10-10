@@ -1319,7 +1319,6 @@ public enum L10n {
             public static var how: String { L10n.tr("market.section.how") }
             public static var links: String { L10n.tr("market.section.links") }
             public static var needs: String { L10n.tr("market.section.needs") }
-            public static var tools: String { L10n.tr("market.section.tools") }
         }
 
         public enum Skill {
@@ -1381,6 +1380,7 @@ public enum L10n {
         public enum Tools {
             public static var notChecked: String { L10n.tr("market.tools.notChecked") }
             public static var title: String { L10n.tr("market.tools.title") }
+            public static var toList: String { L10n.tr("market.tools.toList") }
             public static func unreached(agents: String) -> String { L10n.tr("market.tools.unreached", agents) }
 
             public enum Hint {

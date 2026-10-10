@@ -29,49 +29,54 @@ struct MarketDetailView: View {
     private var template: IntegrationCatalogEntry? { entry.template }
     /// The service's colour: its brand colour, or the palette colour of an own integration.
     private var accent: Color { MarketTileStyle.color(of: entry) }
+    /// The id of the Tools section; the link under the status scrolls to it.
+    private static let toolsAnchor = "market.tools"
 
     var body: some View {
-        ScrollView {
-            ZStack(alignment: .top) {
-                heroBand
-                VStack(alignment: .leading, spacing: 24) {
-                    backButton
-                    header
-                    if let template {
-                        about(template)
-                    }
-                    if let integration = entry.integration {
-                        connection(integration)
-                        if let tools {
-                            section(L10n.Market.Tools.title) {
-                                ToolPermissionsBody(integration: integration, input: tools)
+        ScrollViewReader { proxy in
+            ScrollView {
+                ZStack(alignment: .top) {
+                    heroBand
+                    VStack(alignment: .leading, spacing: 24) {
+                        backButton
+                        header
+                        if let template {
+                            about(template)
+                        }
+                        if let integration = entry.integration {
+                            connection(integration, proxy: proxy)
+                            if let tools {
+                                section(L10n.Market.Tools.title) {
+                                    ToolPermissionsBody(integration: integration, input: tools)
+                                }
+                                .id(Self.toolsAnchor)
+                            }
+                            if let journal {
+                                section(L10n.Market.Journal.title) {
+                                    CallJournalBody(input: journal)
+                                }
                             }
                         }
-                        if let journal {
-                            section(L10n.Market.Journal.title) {
-                                CallJournalBody(input: journal)
-                            }
+                        if let template {
+                            links(template)
                         }
                     }
-                    if let template {
-                        links(template)
-                    }
+                    .frame(maxWidth: 760, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .padding(.horizontal, 30)
+                    .padding(.top, 22)
+                    .padding(.bottom, 30)
                 }
-                .frame(maxWidth: 760, alignment: .leading)
-                .frame(maxWidth: .infinity, alignment: .topLeading)
-                .padding(.horizontal, 30)
-                .padding(.top, 22)
-                .padding(.bottom, 30)
             }
-        }
-        .scrollIndicators(.never)
-        .background {
-            // Esc goes back to the list.
-            Button("", action: onBack)
-                .keyboardShortcut(.cancelAction)
-                .opacity(0)
-                .frame(width: 0, height: 0)
-                .accessibilityHidden(true)
+            .scrollIndicators(.never)
+            .background {
+                // Esc goes back to the list.
+                Button("", action: onBack)
+                    .keyboardShortcut(.cancelAction)
+                    .opacity(0)
+                    .frame(width: 0, height: 0)
+                    .accessibilityHidden(true)
+            }
         }
     }
 
@@ -160,7 +165,7 @@ struct MarketDetailView: View {
                         .fixedSize()
                 } else {
                     Label {
-                        Text(L10n.Integrations.connected)
+                        Text(L10n.Integrations.Oauth.connected)
                     } icon: {
                         Image(systemName: "checkmark")
                     }
@@ -256,7 +261,7 @@ struct MarketDetailView: View {
 
     // MARK: - connection
 
-    private func connection(_ integration: Integration) -> some View {
+    private func connection(_ integration: Integration, proxy: ScrollViewProxy) -> some View {
         let status = IntegrationStatus.of(integration, test: test, connection: connection)
         return section(L10n.Market.Section.connection) {
             VStack(alignment: .leading, spacing: 12) {
@@ -267,23 +272,12 @@ struct MarketDetailView: View {
                         .textSelection(.enabled)
                 }
                 IntegrationStatusLine(status: status)
-                if let test, test.ok, !test.tools.isEmpty {
-                    Text(L10n.Market.Section.tools)
-                        .font(BanditoFont.text(size: 12, weight: 400))
-                        .foregroundStyle(Color.Bandito.text3)
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 6, alignment: .leading)], alignment: .leading, spacing: 6) {
-                        ForEach(test.tools, id: \.self) { tool in
-                            Text(tool)
-                                .font(BanditoFont.mono(size: 11.5, weight: 400))
-                                .foregroundStyle(Color.Bandito.text2)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.Bandito.text.opacity(0.05)))
-                        }
+                if tools != nil, let test, test.ok, !test.tools.isEmpty {
+                    Button(L10n.Market.Tools.toList) {
+                        proxy.scrollTo(Self.toolsAnchor, anchor: .top)
                     }
+                    .banditoButton(.link)
+                    .fixedSize()
                 }
                 Toggle(isOn: Binding(get: { integration.enabled }, set: onSetEnabled)) {
                     Text(L10n.Market.availableToAgents)

@@ -397,7 +397,7 @@ struct BotServiceRow: View {
             switch service.state {
             case .connected:
                 Label {
-                    Text(L10n.Integrations.connected)
+                    Text(L10n.Integrations.Oauth.connected)
                 } icon: {
                     Image(systemName: "checkmark")
                 }
