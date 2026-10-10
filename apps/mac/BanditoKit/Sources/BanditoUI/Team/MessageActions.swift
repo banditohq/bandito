@@ -112,9 +112,15 @@ struct MessageContainer<Bubble: View>: View {
             .padding(-6)
             .banditoAnimation(.easeOut(duration: 0.3), value: flashing)
             // The row hangs under the bubble, from its edge, and is drawn over the reserved space below it.
+            // It exists only while it is drawn: a thread of hundreds of messages would otherwise hold hundreds of
+            // hidden buttons, menus and hover areas, and update them all on every scroll.
             .overlay(alignment: Alignment(horizontal: MessageActionsPlacement.edge(isUser: fromUser), vertical: .bottom)) {
-                actionRow.offset(y: MessageActionsPlacement.rowHeight)
+                if rowOpacity > 0 {
+                    actionRow.offset(y: MessageActionsPlacement.rowHeight)
+                        .transition(.opacity)
+                }
             }
+            .banditoAnimation(.easeOut(duration: 0.12), value: rowOpacity > 0)
             if !fromUser { Spacer(minLength: 120) }
         }
         .padding(.bottom, MessageActionsPlacement.reservedBelow)
@@ -134,6 +140,9 @@ struct MessageContainer<Bubble: View>: View {
         hideTask?.cancel()
         hideTask = nil
         if on {
+            // Content moving under a still pointer reports hover again and again: while the thread scrolls, rows do
+            // not light up (each would be built for a fraction of a second). They do at the next move of the pointer.
+            if ThreadScrollActivity.isScrolling() { return }
             // A hover event repeats while the content moves under a still pointer: write only a real change.
             if !hovering { hovering = true }
         } else if hovering {

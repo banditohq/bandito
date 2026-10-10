@@ -115,6 +115,7 @@ struct ThreadView: View {
     /// The content moved or changed height (reported from its geometry): the top is watched for older rows, and where
     /// the scroll geometry is not known (macOS 14) the metrics are built from it.
     private func contentChanged(offset: Double, height: Double, _ proxy: ScrollViewProxy) {
+        if offset != scroll.offset { ThreadScrollActivity.noteMove() }
         scroll.offset = offset
         scroll.contentHeight = height
         let near = ThreadScroll.nearTop(offset: offset)
@@ -183,10 +184,11 @@ struct ThreadView: View {
     /// The scroll geometry changed (macOS 15 and later): the bottom, the "down" button and the follow of the bottom
     /// all follow from the measured distance, never from the position of a marker.
     private func scrollGeometryChanged(_ old: ThreadScrollMetrics?, _ new: ThreadScrollMetrics, _ proxy: ScrollViewProxy) {
-        let at = ThreadScroll.atBottom(was: atBottom, old: old, new: new)
-        setAtBottom(at)
-        setJumpVisible(ThreadScroll.showsJump(atBottom: at, distance: new.distance))
-        if ThreadScroll.shouldFollow(atBottom: at, old: old, new: new) { followBottom(proxy) }
+        if let old, old.offset != new.offset { ThreadScrollActivity.noteMove() }
+        let flags = ThreadScroll.flags(was: atBottom, old: old, new: new)
+        setAtBottom(flags.atBottom)
+        setJumpVisible(flags.jump)
+        if ThreadScroll.shouldFollow(atBottom: flags.atBottom, old: old, new: new) { followBottom(proxy) }
     }
 
     /// Brings the bottom on screen, without animation (an animation shakes a growing stream), at most once per
@@ -713,9 +715,12 @@ struct ThreadItemsView: View {
         })?.id
         return VStack(alignment: .leading, spacing: 12) {
             ForEach(rows) { row in
-                ThreadRowView(
-                    row: row, agentName: agentName, primaryRuntime: primaryRuntime, server: server, chat: rowChat,
-                    agentID: agentID, folder: folder, onError: onError)
+                EquatableThreadRow(
+                    key: ThreadRowKey(
+                        row: row, agentName: agentName, primaryRuntime: primaryRuntime, agentID: agentID,
+                        folder: folder, chat: rowChat),
+                    server: server, chat: rowChat, onError: onError)
+                    .equatable()
                     .banditoRise()
                     .onGeometryChange(for: ThreadRowSpan.self) { proxy in
                         let frame = proxy.frame(in: .named(ThreadScroll.contentSpace))

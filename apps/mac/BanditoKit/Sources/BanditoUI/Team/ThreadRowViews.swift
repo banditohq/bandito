@@ -34,6 +34,74 @@ struct ThreadRowView: View {
     }
 }
 
+/// What decides how a row looks, as plain values. Two rows with equal keys draw the same, so a row whose key did not
+/// change is not built again when the thread is (a scroll across a threshold, a new message at the end, a stream).
+/// The closures of `ThreadChat` are left out on purpose: they act on the thread through references and ids, so an old
+/// copy of one still does the right thing.
+struct ThreadRowKey: Equatable {
+    var row: ThreadRow
+    var agentName: String
+    var primaryRuntime: String
+    var agentID: String
+    var folder: String?
+    var reactionsOn: Bool
+    var repliesOn: Bool
+    var formsOn: Bool
+    var accent: Color
+    /// The parts of the chat state that belong to this row only.
+    var reactions: MessageReactions?
+    var quoted: ReplyTarget?
+    var flashing: Bool
+    var isLastAgent: Bool
+
+    init(
+        row: ThreadRow, agentName: String, primaryRuntime: String, agentID: String, folder: String?, chat: ThreadChat
+    ) {
+        self.row = row
+        self.agentName = agentName
+        self.primaryRuntime = primaryRuntime
+        self.agentID = agentID
+        self.folder = folder
+        reactionsOn = chat.reactionsOn
+        repliesOn = chat.repliesOn
+        formsOn = chat.formsOn
+        accent = chat.accent
+        if case .item(let item) = row {
+            let seq = item.messageSeq
+            reactions = seq.flatMap { chat.reactions[$0] }
+            quoted = (chat.repliesOn ? seq.flatMap { chat.replies[$0] } : nil).flatMap { chat.original($0) }
+            flashing = chat.highlightedID == item.id
+            isLastAgent = chat.lastAgentID == item.id
+        } else {
+            reactions = nil
+            quoted = nil
+            flashing = false
+            isLastAgent = false
+        }
+    }
+}
+
+/// A row of the thread that is built again only when its key changes (see `ThreadRowKey`). The server and the
+/// closures are not part of the comparison: the server is one object for the whole thread, and the cards that follow it
+/// observe it themselves.
+struct EquatableThreadRow: View, Equatable {
+    var key: ThreadRowKey
+    var server: ServerModel
+    var chat: ThreadChat
+    var onError: (UserFacingMessage) -> Void
+    private nonisolated var serverID: AnyObject { server }
+
+    nonisolated static func == (lhs: EquatableThreadRow, rhs: EquatableThreadRow) -> Bool {
+        lhs.key == rhs.key && ObjectIdentifier(lhs.serverID) == ObjectIdentifier(rhs.serverID)
+    }
+
+    var body: some View {
+        ThreadRowView(
+            row: key.row, agentName: key.agentName, primaryRuntime: key.primaryRuntime, server: server, chat: chat,
+            agentID: key.agentID, folder: key.folder, onError: onError)
+    }
+}
+
 /// A single thread item that is not a tool call.
 private struct ItemView: View {
     var item: ThreadItem

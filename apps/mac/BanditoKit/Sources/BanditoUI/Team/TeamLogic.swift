@@ -18,6 +18,8 @@ public enum ThreadRow: Sendable {
     case browserRun([ToolRow])
 }
 
+extension ThreadRow: Equatable {}
+
 extension ThreadRow: Identifiable {
     /// Stable across updates, so a row keeps its identity (and its entrance animation) when others arrive.
     public var id: String {

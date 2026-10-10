@@ -11,29 +11,77 @@ struct MessageBodyView: View {
     var markdown: Bool
 
     var body: some View {
-        let blocks = MessageBlocks.parse(text)
+        let blocks = MessageRenderCache.shared.blocks(for: text, markdown: markdown)
         if blocks.contains(where: { if case .code = $0 { return true } else { return false } }) {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
                     switch block {
                     case .text(let running):
                         runningText(running)
-                    case .code(let language, let code, _):
+                    case .code(let language, let code):
                         CodeBlockView(language: language, code: code)
                     }
                 }
             }
-        } else {
-            runningText(text)
+        } else if let first = blocks.first, case .text(let running) = first {
+            runningText(running)
         }
     }
 
-    private func runningText(_ value: String) -> some View {
-        Text(ChatLinkText.linked(markdown ? InlineMarkdown.render(value) : AttributedString(value)))
+    private func runningText(_ value: AttributedString) -> some View {
+        Text(value)
             .font(BanditoFont.font(size: 14.5, weight: 400))
             .foregroundStyle(Color.Bandito.text)
             .lineSpacing(markdown ? 4 : 3)
             .textSelection(.enabled)
+    }
+}
+
+/// A message ready to draw: its text already parsed (Markdown, links), its code blocks split off.
+enum RenderedBlock {
+    case text(AttributedString)
+    case code(language: String?, code: String)
+}
+
+/// The parsed bodies of messages, by text. Parsing Markdown and finding links is the costly part of drawing a bubble;
+/// it must not be redone every time a row is built (a scroll builds rows again and again). Bounded, so a long stream
+/// (a new text at every token) does not fill the memory.
+final class MessageRenderCache: @unchecked Sendable {
+    static let shared = MessageRenderCache()
+
+    private final class Entry { let blocks: [RenderedBlock]; init(_ blocks: [RenderedBlock]) { self.blocks = blocks } }
+    private let cache = NSCache<NSString, Entry>()
+    /// How many times a body was parsed (for tests).
+    private let parsedCounter = NSLock()
+    private var parsedCount = 0
+
+    init(limit: Int = 800) { cache.countLimit = limit }
+
+    var parses: Int { parsedCounter.withLock { parsedCount } }
+
+    func blocks(for text: String, markdown: Bool) -> [RenderedBlock] {
+        let key = (markdown ? "m:" : "p:") + text as NSString
+        if let hit = cache.object(forKey: key) { return hit.blocks }
+        let built = Self.build(text, markdown: markdown)
+        parsedCounter.withLock { parsedCount += 1 }
+        cache.setObject(Entry(built), forKey: key)
+        return built
+    }
+
+    static func build(_ text: String, markdown: Bool) -> [RenderedBlock] {
+        func running(_ value: String) -> AttributedString {
+            ChatLinkText.linked(markdown ? InlineMarkdown.render(value) : AttributedString(value))
+        }
+        let blocks = MessageBlocks.parse(text)
+        if !blocks.contains(where: { if case .code = $0 { return true } else { return false } }) {
+            return [.text(running(text))]
+        }
+        return blocks.map { block in
+            switch block {
+            case .text(let value): return .text(running(value))
+            case .code(let language, let code, _): return .code(language: language, code: code)
+            }
+        }
     }
 }
 

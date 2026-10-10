@@ -41,6 +41,13 @@ enum ThreadScroll {
         return !atBottom
     }
 
+    /// What the thread keeps in state after a scroll geometry change: whether it follows the bottom and whether the
+    /// "down" button shows. Equal values for a scroll that crosses no threshold: nothing is then written.
+    static func flags(was: Bool, old: ThreadScrollMetrics?, new: ThreadScrollMetrics) -> (atBottom: Bool, jump: Bool) {
+        let at = atBottom(was: was, old: old, new: new)
+        return (at, showsJump(atBottom: at, distance: new.distance))
+    }
+
     /// Whether the thread is at the bottom after the scroll geometry changed from `old` to `new`.
     /// A thread at the bottom stays there while content grows below (a stream, a new row, an opened card) or the
     /// panel is resized: the bottom moves away without the person moving. A scroll up (the offset falls while the
@@ -117,6 +124,21 @@ enum ThreadScroll {
     /// Messages that came in since the last look: the growth of the thread. Never negative.
     static func unseenAdded(previousCount: Int, currentCount: Int) -> Int {
         max(0, currentCount - previousCount)
+    }
+}
+
+/// When the thread last moved under the pointer. A reference-free global on purpose: rows read it in their hover
+/// handler, and a scroll writes it on every step, without redrawing anything.
+@MainActor
+enum ThreadScrollActivity {
+    /// How long after the last step the thread still counts as scrolling.
+    static let settle: Double = 0.18
+    private static var lastMove: Double = -.infinity
+
+    static func noteMove(at now: Double = ProcessInfo.processInfo.systemUptime) { lastMove = now }
+
+    static func isScrolling(at now: Double = ProcessInfo.processInfo.systemUptime) -> Bool {
+        now - lastMove < settle
     }
 }
 
