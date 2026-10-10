@@ -36,6 +36,7 @@ pub mod screen;
 pub mod service;
 pub mod setup;
 pub mod shell;
+pub mod skills;
 pub mod store;
 pub mod supervisor;
 pub mod team;
