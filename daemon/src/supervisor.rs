@@ -4,6 +4,7 @@
 
 use crate::agent_token::{AgentTokens, SessionToken};
 use crate::attachments::Attachment;
+use crate::call_journal::Journal;
 use crate::chat;
 use crate::checkpoint;
 use crate::event::LimitWindow;
@@ -514,6 +515,7 @@ impl Supervisor {
             last_message: None,
             queue: VecDeque::new(),
             pending: HashMap::new(),
+            journal: Journal::default(),
             forms: HashMap::new(),
             turn_note: None,
             turn_until: None,
@@ -959,6 +961,8 @@ struct Actor {
     last_message: Option<Inbound>,
     queue: VecDeque<Queued>,
     pending: HashMap<String, PendingApproval>,
+    /// The call journal's open calls of the running turn (see docs/ARCHITECTURE.md#call-journal).
+    journal: Journal,
     /// Forms waiting for the human, by form id: the answer goes to the call that asked.
     forms: HashMap<String, oneshot::Sender<Outcome>>,
     /// The reaction line of the running human turn, kept for a retry of the same turn.
@@ -1858,6 +1862,7 @@ impl Actor {
                 let limited = std::mem::take(&mut self.turn_limit);
                 let retry = self.turn_retry;
                 let turn_id = self.turn.take().unwrap_or_else(new_id);
+                self.journal.turn_ended();
                 self.hub.emit(
                     &self.id,
                     EventBody::TurnCompleted {
@@ -1891,6 +1896,7 @@ impl Actor {
                     self.turn_limit = true;
                 }
                 let body = self.redactor.redact_event(body);
+                self.journal_event(&body);
                 self.hub.emit(&self.id, body);
             }
             RuntimeOutput::ContextSize(tokens) => self.turn_context = Some(tokens),
@@ -1907,6 +1913,7 @@ impl Actor {
             }
             RuntimeOutput::Exited { code, stderr_tail } => {
                 let stderr_tail = self.redactor.redact(&stderr_tail).into_owned();
+                self.journal.turn_ended();
                 self.session = None;
                 self.agent_token = None;
                 self.root = None;
@@ -1951,6 +1958,21 @@ impl Actor {
                     self.after_turn().await;
                 }
             }
+        }
+    }
+
+    /// Tool calls of integrations go to the call journal: the start, and the result when it comes. Arguments and
+    /// results are not kept (see `call_journal`).
+    fn journal_event(&mut self, body: &EventBody) {
+        let now = crate::store::now_ms();
+        match body {
+            EventBody::ToolCall { call_id, tool, .. } => {
+                self.journal.started(&self.hub.store, &self.id, call_id, tool, now);
+            }
+            EventBody::ToolResult { call_id, ok, output } => {
+                self.journal.finished(&self.hub.store, call_id, *ok, output, now);
+            }
+            _ => {}
         }
     }
 
@@ -2145,6 +2167,12 @@ impl Actor {
             &self.protected,
             &self.shell_cwd,
         );
+        let decision = match verdict {
+            Verdict::Allow => "allowed",
+            Verdict::Ask(_) => "asked",
+            Verdict::Deny(_) => "denied",
+        };
+        self.journal.decided(&self.hub.store, &req.call_id, &req.tool, decision);
         let subject = req.command.clone().unwrap_or_else(|| req.title.clone());
         match verdict {
             Verdict::Allow => {
@@ -2571,6 +2599,142 @@ mod tests {
             usage: None,
             cost_usd: Some(0.01),
         })
+    }
+
+    /// A world whose agent session is running: the first message starts it, as in the other tests.
+    async fn running(mode: ApprovalMode) -> World {
+        let w = world(mode);
+        w.sup.send(&w.agent, Inbound::user("go")).await.unwrap();
+        w.wait_log("send go").await;
+        w
+    }
+
+    fn integration_call(call_id: &str, tool: &str, input: serde_json::Value) -> RuntimeOutput {
+        RuntimeOutput::Event(EventBody::ToolCall {
+            call_id: call_id.into(),
+            tool: tool.into(),
+            title: "call".into(),
+            input,
+        })
+    }
+
+    fn integration_approval(call_id: &str, tool: &str) -> RuntimeOutput {
+        RuntimeOutput::Approval(ApprovalRequest {
+            key: format!("key-{call_id}"),
+            call_id: call_id.into(),
+            tool: tool.into(),
+            title: "call".into(),
+            command: None,
+            diff: None,
+            paths: vec![],
+            input: json!({}),
+        })
+    }
+
+    fn journal_rows(w: &World) -> Vec<crate::store::ToolCall> {
+        w.store
+            .tool_calls_list(&crate::store::CallFilter {
+                limit: 100,
+                ..Default::default()
+            })
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn an_integration_call_is_journaled_with_its_result_and_without_its_arguments() {
+        let mut w = running(ApprovalMode::Never).await;
+        w.push(integration_call(
+            "t1",
+            "mcp__linear__create_issue",
+            json!({"title": "ARGUMENT-SECRET"}),
+        ))
+        .await;
+        w.wait(|b| matches!(b, EventBody::ToolCall { .. })).await;
+        assert_eq!(journal_rows(&w).len(), 1, "the start is recorded at once");
+        w.push(RuntimeOutput::Event(EventBody::ToolResult {
+            call_id: "t1".into(),
+            ok: false,
+            output: format!("RESULT-SECRET {}", "x".repeat(400)),
+        }))
+        .await;
+        w.wait(|b| matches!(b, EventBody::ToolResult { .. })).await;
+
+        let rows = journal_rows(&w);
+        assert_eq!(rows.len(), 1);
+        let row = &rows[0];
+        assert_eq!(row.agent_id, w.agent);
+        assert_eq!(
+            (row.integration.as_str(), row.tool.as_str()),
+            ("linear", "create_issue")
+        );
+        assert_eq!(row.ok, Some(false));
+        assert!(row.duration_ms.is_some());
+        // No approval was asked for: the policy made no decision, so none is recorded.
+        assert_eq!(row.decision, None);
+        let error = row.error.as_deref().unwrap();
+        assert_eq!(error.chars().count(), 300);
+        assert!(error.starts_with("RESULT-SECRET"));
+        let dump = format!("{row:?}");
+        assert!(!dump.contains("ARGUMENT-SECRET"), "arguments are not kept");
+    }
+
+    #[tokio::test]
+    async fn a_success_keeps_no_text_and_other_tools_leave_no_row() {
+        let mut w = running(ApprovalMode::Never).await;
+        w.push(integration_call("t1", "mcp__linear__list", json!({}))).await;
+        w.push(integration_call("b1", "Bash", json!({"command": "ls"}))).await;
+        w.push(RuntimeOutput::Event(EventBody::ToolResult {
+            call_id: "t1".into(),
+            ok: true,
+            output: "SUCCESS-TEXT".into(),
+        }))
+        .await;
+        w.wait(|b| matches!(b, EventBody::ToolResult { call_id, .. } if call_id.as_str() == "t1"))
+            .await;
+        let rows = journal_rows(&w);
+        assert_eq!(rows.len(), 1, "Bash is not an integration's call");
+        assert_eq!((rows[0].ok, rows[0].error.clone()), (Some(true), None));
+    }
+
+    #[tokio::test]
+    async fn a_verdict_before_the_call_is_its_decision_and_one_after_it_updates_the_row() {
+        let mut w = running(ApprovalMode::Always).await;
+        // The verdict comes first: the call is asked about.
+        w.push(integration_approval("t1", "mcp__linear__create_issue")).await;
+        w.wait(|b| matches!(b, EventBody::ApprovalRequested { .. })).await;
+        w.push(integration_call("t1", "mcp__linear__create_issue", json!({})))
+            .await;
+        w.wait(|b| matches!(b, EventBody::ToolCall { .. })).await;
+        // The verdict comes after the start: the row gets it.
+        w.push(integration_call("t2", "mcp__github__get_repo", json!({}))).await;
+        w.wait(|b| matches!(b, EventBody::ToolCall { call_id, .. } if call_id.as_str() == "t2"))
+            .await;
+        w.push(integration_approval("t2", "mcp__github__get_repo")).await;
+        w.wait(|b| matches!(b, EventBody::ApprovalRequested { call_id, .. } if call_id.as_str() == "t2"))
+            .await;
+
+        let rows = journal_rows(&w);
+        let by_tool = |tool: &str| rows.iter().find(|r| r.tool == tool).unwrap().decision.clone();
+        assert_eq!(by_tool("create_issue").as_deref(), Some("asked"));
+        assert_eq!(by_tool("get_repo").as_deref(), Some("asked"));
+    }
+
+    #[tokio::test]
+    async fn a_call_still_open_when_the_turn_ends_keeps_its_row_without_a_result() {
+        let mut w = running(ApprovalMode::Never).await;
+        w.push(integration_call("t1", "mcp__linear__list", json!({}))).await;
+        w.push(done()).await;
+        w.wait(|b| matches!(b, EventBody::TurnCompleted { .. })).await;
+        w.push(RuntimeOutput::Event(EventBody::ToolResult {
+            call_id: "t1".into(),
+            ok: true,
+            output: String::new(),
+        }))
+        .await;
+        w.wait(|b| matches!(b, EventBody::ToolResult { .. })).await;
+        let rows = journal_rows(&w);
+        assert_eq!(rows.len(), 1);
+        assert_eq!((rows[0].duration_ms, rows[0].ok), (None, None));
     }
 
     fn is_status(s: AgentStatus) -> impl Fn(&EventBody) -> bool {
