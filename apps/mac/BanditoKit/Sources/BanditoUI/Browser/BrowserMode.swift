@@ -69,6 +69,8 @@ private struct BrowserContent: View {
 /// The main area: toolbar, the control banner, and the page (or the preview, or an empty state).
 struct BrowserMainArea: View {
     @Bindable var model: BrowserModel
+    /// Set where the browser sits in a panel: a button in the toolbar then opens it in Browser mode.
+    var onOpenFullscreen: (() -> Void)?
     @Environment(Router.self) private var router
 
     var body: some View {
@@ -79,7 +81,7 @@ struct BrowserMainArea: View {
                 BrowserUnsupported()
             } else {
                 VStack(spacing: 0) {
-                    BrowserToolbar(model: model)
+                    BrowserToolbar(model: model, onOpenFullscreen: onOpenFullscreen)
                     if let error = model.addressError {
                         Text(error)
                             .font(.system(size: 12))
@@ -122,6 +124,7 @@ struct BrowserMainArea: View {
 
 private struct BrowserToolbar: View {
     @Bindable var model: BrowserModel
+    var onOpenFullscreen: (() -> Void)?
     @FocusState private var addressFocused: Bool
     @Environment(Keymap.self) private var keymap
 
@@ -165,6 +168,15 @@ private struct BrowserToolbar: View {
                     Text(L10n.Browser.openOnMac)
                 }
                 .banditoButton(.quiet())
+            }
+
+            if let onOpenFullscreen {
+                Button(action: onOpenFullscreen) {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                }
+                .banditoButton(.icon(size: 30, label: L10n.Browser.openFullscreen))
+                .focusable(false)
+                .help(L10n.Browser.openFullscreen)
             }
         }
         .padding(.horizontal, 14)
@@ -447,10 +459,9 @@ private struct PageSurface: View {
             let size = geo.size
             ZStack {
                 Color.Bandito.surface1
-                if let frame = model.frame {
-                    Image(decorative: frame, scale: 1)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
+                if model.hasFrame {
+                    // The picture goes to a layer without passing through SwiftUI (see `BrowserFrameLayer`).
+                    BrowserFrameLayer(store: model.frames)
                         .frame(width: geo.size.width, height: geo.size.height)
                         .accessibilityHidden(true)
                 } else {

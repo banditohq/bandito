@@ -46,6 +46,9 @@ struct WorkbenchState: Equatable, Sendable {
     var isOpen = false
     var panes: [WorkbenchPane] = [WorkbenchPane()]
     var focusedPane = 0
+    /// The person closed the browser tab. The chat then does not offer it again ("The agent is using the browser")
+    /// while an agent keeps the browser: it comes back only when the person opens the browser tab themselves.
+    var browserDismissed = false
 
     var isSplit: Bool { panes.count > 1 }
 
@@ -66,6 +69,7 @@ enum WorkbenchRules {
     static func open(_ tab: WorkbenchTab, in state: WorkbenchState) -> WorkbenchState {
         var next = normalized(state)
         next.isOpen = true
+        if tab == .browser { next.browserDismissed = false }
         if let index = next.paneIndex(of: tab) {
             next.panes[index].selected = tab
             next.focusedPane = index
@@ -102,6 +106,7 @@ enum WorkbenchRules {
         guard let index = state.paneIndex(of: tab) else { return state }
         var next = normalized(state)
         removeTab(tab, fromPane: index, in: &next)
+        if tab == .browser { next.browserDismissed = true }
         if next.panes[index].tabs.isEmpty {
             if next.panes.count > 1 {
                 next.panes.remove(at: index)
@@ -183,8 +188,9 @@ enum WorkbenchRules {
 
     /// The chip "The agent is using the browser · Show" in the chat header. It shows while a browser tool of the
     /// agent runs, unless the browser is already the tab on show in an open panel. It only offers the tab; it never
-    /// opens it.
+    /// opens it. Not shown after the person closed the browser tab (`browserDismissed`) until they open it again.
     static func showsBrowserChip(state: WorkbenchState, runningTools: [String]) -> Bool {
+        guard !state.browserDismissed else { return false }
         let browserOnShow = state.isOpen && state.panes.contains { $0.selected == .browser }
         return !browserOnShow && runningTools.contains { isBrowserTool($0) }
     }

@@ -45,4 +45,11 @@ public struct BrowserViewport: Equatable, Sendable {
             height: Int(min(height.rounded(.down), Double(maxSide))),
             scale: usableScale)
     }
+
+    /// Whether a screencast frame shows the page at this viewport. A frame reports the page size in CSS pixels
+    /// (`deviceWidth` × `deviceHeight`). When it differs from the viewport, the page lost the size it was given (the
+    /// browser reset it, or another client changed it), and the picture would be shown scaled: too large or too small.
+    public func matches(frameWidth: Double, frameHeight: Double) -> Bool {
+        abs(frameWidth - Double(width)) < 1 && abs(frameHeight - Double(height)) < 1
+    }
 }

@@ -711,10 +711,12 @@ private struct WorkbenchTerminal: View {
 /// The browser of the server in a workbench tab: the same model as in Browser mode.
 private struct WorkbenchBrowser: View {
     var server: ServerModel
+    @Environment(Router.self) private var router
 
     var body: some View {
         let model = BrowserStore.shared.model(for: server)
-        BrowserMainArea(model: model)
+        // The same page, the same tab: Browser mode shows the model the panel shows.
+        BrowserMainArea(model: model, onOpenFullscreen: { router.select(mode: .browser) })
             .task(id: server.id) {
                 model.attach()
             }

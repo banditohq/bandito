@@ -237,6 +237,7 @@
 "browser.newTabHelp" = "新しいタブ (⌘T)";
 "browser.onServer" = "サーバーで開いています";
 "browser.onServerHelp" = "このページは、この Mac ではなくサーバー上のブラウザで開いています";
+"browser.openFullscreen" = "全画面で開く";
 "browser.openOnMac" = "Mac で開く";
 "browser.openPreview" = "開く";
 "browser.openServer" = "サーバーを開く";
@@ -1797,10 +1798,9 @@
 "terminals.updateServer" = "ターミナルを使うにはサーバーを更新してください。";
 "thread.aTeammate" = "チームメイト";
 "thread.attach" = "ファイルを添付";
+"thread.browserRun.fullscreen" = "全画面";
 "thread.browserRun.noPicture" = "ページの画像がここに表示されます";
-"thread.browserRun.openBrowser" = "ブラウザを開く";
 "thread.browserRun.title" = "ブラウザ内のエージェント";
-"thread.browserRun.titleDomain" = "ブラウザ内のエージェント · %1$@";
 "thread.browserRun.watchBeside" = "横で見る";
 "thread.chapterNotSaved" = "章 %1$@ · メモリは保存されていません";
 "thread.chapterNotSavedHelp" = "エージェントはこの章の前にメモリを保存できませんでした。前の章の内容が欠けている可能性があります。";

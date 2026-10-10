@@ -237,6 +237,7 @@
 "browser.newTabHelp" = "New tab (⌘T)";
 "browser.onServer" = "on server";
 "browser.onServerHelp" = "The page is open in the browser on the server, not on this Mac";
+"browser.openFullscreen" = "Open full screen";
 "browser.openOnMac" = "Open on Mac";
 "browser.openPreview" = "Open";
 "browser.openServer" = "Open Server";
@@ -1797,10 +1798,9 @@
 "terminals.updateServer" = "Update the server to use terminals.";
 "thread.aTeammate" = "a teammate";
 "thread.attach" = "Attach files";
+"thread.browserRun.fullscreen" = "Full screen";
 "thread.browserRun.noPicture" = "The picture of the page appears here";
-"thread.browserRun.openBrowser" = "Open browser";
 "thread.browserRun.title" = "Agent in the browser";
-"thread.browserRun.titleDomain" = "Agent in the browser · %1$@";
 "thread.browserRun.watchBeside" = "Watch beside";
 "thread.chapterNotSaved" = "Chapter %1$@ · memory not saved";
 "thread.chapterNotSavedHelp" = "The agent could not save its memory before this chapter. Facts from the previous chapter may be missing.";

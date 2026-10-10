@@ -237,6 +237,7 @@
 "browser.newTabHelp" = "새 탭 (⌘T)";
 "browser.onServer" = "서버에서 열림";
 "browser.onServerHelp" = "이 페이지는 이 Mac이 아닌 서버의 브라우저에서 열려 있어요";
+"browser.openFullscreen" = "전체 화면으로 열기";
 "browser.openOnMac" = "Mac에서 열기";
 "browser.openPreview" = "열기";
 "browser.openServer" = "서버 열기";
@@ -1797,10 +1798,9 @@
 "terminals.updateServer" = "터미널을 사용하려면 서버를 업데이트해 주세요.";
 "thread.aTeammate" = "팀원";
 "thread.attach" = "파일 첨부";
+"thread.browserRun.fullscreen" = "전체 화면";
 "thread.browserRun.noPicture" = "여기에 페이지 화면이 표시됩니다";
-"thread.browserRun.openBrowser" = "브라우저 열기";
 "thread.browserRun.title" = "브라우저에서 작업하는 에이전트";
-"thread.browserRun.titleDomain" = "브라우저에서 작업하는 에이전트 · %1$@";
 "thread.browserRun.watchBeside" = "옆에서 보기";
 "thread.chapterNotSaved" = "%1$@장 · 메모리 저장 안 됨";
 "thread.chapterNotSavedHelp" = "에이전트가 이 장 전에 메모리를 저장하지 못했어요. 이전 장의 내용이 빠져 있을 수 있어요.";

@@ -26,6 +26,8 @@ public enum CDPKeyType: String, Sendable {
 /// One command of the protocol: its method name and its params.
 public enum CDPCommand: Sendable {
     case navigate(url: String)
+    /// Turns the page's events on (`Page.enable`): without it, no `Page.frameNavigated` or load event comes.
+    case enablePage
     case reload
     case navigationHistory
     case navigateToHistoryEntry(id: Int)
@@ -56,6 +58,7 @@ public enum CDPCommand: Sendable {
     public var method: String {
         switch self {
         case .navigate: "Page.navigate"
+        case .enablePage: "Page.enable"
         case .reload: "Page.reload"
         case .navigationHistory: "Page.getNavigationHistory"
         case .navigateToHistoryEntry: "Page.navigateToHistoryEntry"
@@ -80,7 +83,7 @@ public enum CDPCommand: Sendable {
         switch self {
         case .navigate(let url):
             return .object(["url": .string(url)])
-        case .reload, .navigationHistory, .stopScreencast, .getTargets, .clearViewport:
+        case .enablePage, .reload, .navigationHistory, .stopScreencast, .getTargets, .clearViewport:
             return .object([:])
         case .setViewport(let viewport):
             return .object([
