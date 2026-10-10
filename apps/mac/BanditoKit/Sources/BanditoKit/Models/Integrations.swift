@@ -35,6 +35,70 @@ public struct TemplateUpdate: Codable, Sendable, Hashable {
     }
 }
 
+/// What the agents may do with the tools of a service (`tool_mode`, feature `tool_permissions`).
+public enum IntegrationToolMode: String, ForwardCompatibleEnum, CaseIterable {
+    /// Every tool runs as the agent's approval mode says.
+    case all
+    /// Tools that read run; the others are refused.
+    case readOnly = "read_only"
+    /// Tools that read run; the others wait for the owner's yes.
+    case confirmWrites = "confirm_writes"
+
+    /// An unknown mode is read as the careful one that still lets the agent work.
+    public static var fallback: IntegrationToolMode { .confirmWrites }
+}
+
+/// The owner's word on one tool, over the service's mode.
+public enum ToolWord: String, ForwardCompatibleEnum, CaseIterable {
+    case allow, ask, deny
+
+    public static var fallback: ToolWord { .ask }
+}
+
+/// A tool of a service as its last check listed it (`integrations.tools`).
+public struct IntegrationTool: Decodable, Sendable, Identifiable, Hashable {
+    public var name: String
+    public var title: String?
+    public var description: String?
+    /// The server's `readOnlyHint`.
+    public var readOnly: Bool
+    /// The server's `destructiveHint`.
+    public var destructive: Bool
+    public var inputSchema: JSONValue?
+    /// When the check that listed it ran, in Unix milliseconds.
+    public var seenAt: Int64
+
+    public var id: String { name }
+
+    public init(
+        name: String, title: String? = nil, description: String? = nil, readOnly: Bool = false,
+        destructive: Bool = false, inputSchema: JSONValue? = nil, seenAt: Int64 = 0
+    ) {
+        self.name = name
+        self.title = title
+        self.description = description
+        self.readOnly = readOnly
+        self.destructive = destructive
+        self.inputSchema = inputSchema
+        self.seenAt = seenAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        name = try c.decode(String.self, forKey: .name)
+        title = try c.decodeIfPresent(String.self, forKey: .title)
+        description = try c.decodeIfPresent(String.self, forKey: .description)
+        readOnly = try c.decodeIfPresent(Bool.self, forKey: .readOnly) ?? false
+        destructive = try c.decodeIfPresent(Bool.self, forKey: .destructive) ?? false
+        inputSchema = try c.decodeIfPresent(JSONValue.self, forKey: .inputSchema)
+        seenAt = try c.decodeIfPresent(Int64.self, forKey: .seenAt) ?? 0
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case name, title, description, readOnly, destructive, inputSchema, seenAt
+    }
+}
+
 public struct Integration: Codable, Sendable, Identifiable, Hashable {
     public var id: String
     public var name: String
@@ -51,14 +115,21 @@ public struct Integration: Codable, Sendable, Identifiable, Hashable {
     public var auth: IntegrationAuth
     /// Set when the template this integration came from has moved on; `update_from_template` brings it up to date.
     public var templateUpdate: TemplateUpdate?
+    /// What the agents may do with its tools. `all` on a daemon without `tool_permissions`.
+    public var toolMode: IntegrationToolMode
+    /// The owner's word per tool name; it wins over `toolMode`.
+    public var toolOverrides: [String: ToolWord]
 
     public init(
         id: String, name: String, kind: IntegrationKind, command: String? = nil, args: [String] = [],
         url: String? = nil, env: [String: String] = [:], headers: [String: String] = [:],
         enabled: Bool = true, createdAt: Int64 = 0, auth: IntegrationAuth = .none,
-        templateUpdate: TemplateUpdate? = nil
+        templateUpdate: TemplateUpdate? = nil, toolMode: IntegrationToolMode = .all,
+        toolOverrides: [String: ToolWord] = [:]
     ) {
         self.templateUpdate = templateUpdate
+        self.toolMode = toolMode
+        self.toolOverrides = toolOverrides
         self.id = id
         self.name = name
         self.kind = kind
@@ -87,6 +158,9 @@ public struct Integration: Codable, Sendable, Identifiable, Hashable {
         // A value this app does not know is read as `none`: the row still lists.
         auth = (try? c.decodeIfPresent(IntegrationAuth.self, forKey: .auth)).flatMap { $0 } ?? .none
         templateUpdate = (try? c.decodeIfPresent(TemplateUpdate.self, forKey: .templateUpdate)).flatMap { $0 }
+        toolMode = (try? c.decodeIfPresent(IntegrationToolMode.self, forKey: .toolMode)).flatMap { $0 } ?? .all
+        // A word this app does not know reads as `ask`: the tool is not let through unasked.
+        toolOverrides = (try? c.decodeIfPresent([String: ToolWord].self, forKey: .toolOverrides)).flatMap { $0 } ?? [:]
     }
 }
 
@@ -373,12 +447,18 @@ public struct IntegrationPatch: Encodable, Sendable {
     public var env: [String: String]?
     public var headers: [String: String]?
     public var enabled: Bool?
+    public var toolMode: IntegrationToolMode?
+    /// Replaces the whole map of words.
+    public var toolOverrides: [String: ToolWord]?
 
     public init(
         name: String? = nil, kind: IntegrationKind? = nil, command: FieldChange<String>? = nil,
         args: [String]? = nil, url: FieldChange<String>? = nil, env: [String: String]? = nil,
-        headers: [String: String]? = nil, enabled: Bool? = nil
+        headers: [String: String]? = nil, enabled: Bool? = nil, toolMode: IntegrationToolMode? = nil,
+        toolOverrides: [String: ToolWord]? = nil
     ) {
+        self.toolMode = toolMode
+        self.toolOverrides = toolOverrides
         self.name = name
         self.kind = kind
         self.command = command
@@ -391,7 +471,7 @@ public struct IntegrationPatch: Encodable, Sendable {
 
     /// Keys on the wire. `id` is not a patch field: the request that carries a patch adds it.
     public enum Key: String, CodingKey {
-        case id, name, kind, command, args, url, env, headers, enabled
+        case id, name, kind, command, args, url, env, headers, enabled, toolMode, toolOverrides
     }
 
     /// Writes the set fields into an object that may also hold `id`.
@@ -404,6 +484,8 @@ public struct IntegrationPatch: Encodable, Sendable {
         try c.encodeIfPresent(env, forKey: .env)
         try c.encodeIfPresent(headers, forKey: .headers)
         try c.encodeIfPresent(enabled, forKey: .enabled)
+        try c.encodeIfPresent(toolMode, forKey: .toolMode)
+        try c.encodeIfPresent(toolOverrides, forKey: .toolOverrides)
     }
 
     public func encode(to encoder: Encoder) throws {

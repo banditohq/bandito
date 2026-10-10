@@ -28,6 +28,12 @@ extension ServerModel {
         return try await rpc().call("integrations.recommend", P(agentId: agentID), as: [IntegrationRecommendation].self)
     }
 
+    /// The tools the last successful check of a service listed, with their annotations (`integrations.tools`).
+    public func integrationTools(_ id: String) async throws -> [IntegrationTool] {
+        struct P: Encodable { var id: String }
+        return try await rpc().call("integrations.tools", P(id: id), as: [IntegrationTool].self)
+    }
+
     /// Adds an integration. The daemon refuses a name that is taken or a definition it cannot run.
     @discardableResult
     public func addIntegration(_ new: NewIntegration) async throws -> Integration {

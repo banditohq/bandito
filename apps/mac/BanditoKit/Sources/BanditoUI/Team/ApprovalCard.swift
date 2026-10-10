@@ -222,6 +222,8 @@ enum ApprovalReason {
         if r == "approval required for every action" { return L10n.Approval.Why.always }
         if r.hasPrefix("rule: ") { return L10n.Approval.Why.yourRule(rule: String(r.dropFirst("rule: ".count))) }
         if r == "touches Bandito's files by name" { return L10n.Approval.Why.bandito }
+        if r == "service: confirm changes" { return L10n.Approval.Why.serviceConfirm }
+        if r == "service: confirm tool" { return L10n.Approval.Why.serviceTool }
         return L10n.Approval.rule(rule: r)
     }
 }

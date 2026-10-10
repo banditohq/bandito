@@ -2374,5 +2374,22 @@
   "recommend.reason.linearReadme": "Le README mentionne Linear",
   "recommend.reason.posthogPackage": "Le projet utilise PostHog",
   "recommend.reason.stripePackage": "Le projet utilise Stripe",
-  "recommend.reason.other": "Trouvé dans le projet"
+  "recommend.reason.other": "Trouvé dans le projet",
+  "market.tools.title": "Outils",
+  "market.tools.mode.all": "Tout",
+  "market.tools.mode.confirmWrites": "Avec confirmation",
+  "market.tools.mode.readOnly": "Lecture seule",
+  "market.tools.hint.all": "Les agents utilisent chaque outil selon leur mode d'approbation.",
+  "market.tools.hint.confirmWrites": "Les outils qui ne font que lire s'exécutent. Ceux qui modifient quelque chose attendent votre accord.",
+  "market.tools.hint.readOnly": "Les outils qui ne font que lire s'exécutent. Ceux qui modifient quelque chose sont refusés.",
+  "market.tools.kind.reads": "lit",
+  "market.tools.kind.changes": "modifie",
+  "market.tools.kind.deletes": "supprime",
+  "market.tools.word.allow": "Autoriser",
+  "market.tools.word.ask": "Demander",
+  "market.tools.word.deny": "Refuser",
+  "market.tools.notChecked": "Aucun outil n'est connu pour l'instant. Vérifiez le service pour les lister. D'ici là, chaque outil compte comme un outil qui modifie quelque chose.",
+  "market.tools.unreached": "Ces réglages valent pour les agents sous Claude. {agents} tournent sous Codex ou Grok, dont les appels d'outils ne passent pas encore par Bandito : les réglages ne les atteignent pas.",
+  "approval.why.serviceConfirm": "ce service demande confirmation avant de modifier",
+  "approval.why.serviceTool": "vous avez demandé de confirmer cet outil"
 }

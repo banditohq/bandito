@@ -2373,5 +2373,22 @@
   "recommend.reason.linearReadme": "Die README erwähnt Linear",
   "recommend.reason.posthogPackage": "Das Projekt nutzt PostHog",
   "recommend.reason.stripePackage": "Das Projekt nutzt Stripe",
-  "recommend.reason.other": "Im Projekt gefunden"
+  "recommend.reason.other": "Im Projekt gefunden",
+  "market.tools.title": "Werkzeuge",
+  "market.tools.mode.all": "Alles",
+  "market.tools.mode.confirmWrites": "Mit Bestätigung",
+  "market.tools.mode.readOnly": "Nur lesen",
+  "market.tools.hint.all": "Agenten nutzen jedes Werkzeug so, wie es ihr Freigabemodus vorsieht.",
+  "market.tools.hint.confirmWrites": "Werkzeuge, die nur lesen, laufen sofort. Werkzeuge, die etwas ändern, warten auf Ihr Ja.",
+  "market.tools.hint.readOnly": "Werkzeuge, die nur lesen, laufen. Werkzeuge, die etwas ändern, werden abgelehnt.",
+  "market.tools.kind.reads": "liest",
+  "market.tools.kind.changes": "ändert",
+  "market.tools.kind.deletes": "löscht",
+  "market.tools.word.allow": "Erlauben",
+  "market.tools.word.ask": "Fragen",
+  "market.tools.word.deny": "Verbieten",
+  "market.tools.notChecked": "Noch sind keine Werkzeuge bekannt. Prüfen Sie den Dienst, um sie aufzulisten. Bis dahin gilt jedes Werkzeug als eines, das etwas ändert.",
+  "market.tools.unreached": "Diese Einstellungen gelten für Agenten auf Claude. {agents} laufen auf Codex oder Grok, deren Werkzeugaufrufe noch nicht über Bandito laufen; die Einstellungen erreichen sie daher nicht.",
+  "approval.why.serviceConfirm": "dieser Dienst fragt vor jeder Änderung",
+  "approval.why.serviceTool": "Sie wollten dieses Werkzeug bestätigen"
 }

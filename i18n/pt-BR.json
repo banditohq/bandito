@@ -2374,5 +2374,22 @@
   "recommend.reason.linearReadme": "O README menciona o Linear",
   "recommend.reason.posthogPackage": "O projeto usa PostHog",
   "recommend.reason.stripePackage": "O projeto usa Stripe",
-  "recommend.reason.other": "Encontrado no projeto"
+  "recommend.reason.other": "Encontrado no projeto",
+  "market.tools.title": "Ferramentas",
+  "market.tools.mode.all": "Tudo",
+  "market.tools.mode.confirmWrites": "Com confirmação",
+  "market.tools.mode.readOnly": "Somente leitura",
+  "market.tools.hint.all": "Os agentes usam cada ferramenta conforme o modo de aprovação deles.",
+  "market.tools.hint.confirmWrites": "As ferramentas que só leem rodam. As que mudam algo esperam o seu sim.",
+  "market.tools.hint.readOnly": "As ferramentas que só leem rodam. As que mudam algo são recusadas.",
+  "market.tools.kind.reads": "lê",
+  "market.tools.kind.changes": "altera",
+  "market.tools.kind.deletes": "apaga",
+  "market.tools.word.allow": "Permitir",
+  "market.tools.word.ask": "Perguntar",
+  "market.tools.word.deny": "Negar",
+  "market.tools.notChecked": "Ainda não há ferramentas conhecidas. Verifique o serviço para listá-las. Até lá, toda ferramenta conta como uma que altera algo.",
+  "market.tools.unreached": "Estes ajustes valem para agentes no Claude. {agents} usam Codex ou Grok, que ainda não enviam as chamadas de ferramentas pelo Bandito, então os ajustes não chegam a eles.",
+  "approval.why.serviceConfirm": "este serviço pede confirmação antes de mudar algo",
+  "approval.why.serviceTool": "você pediu para confirmar esta ferramenta"
 }

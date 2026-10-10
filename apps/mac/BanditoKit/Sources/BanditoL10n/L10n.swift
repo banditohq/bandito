@@ -265,6 +265,8 @@ public enum L10n {
             public static var outside: String { L10n.tr("approval.why.outside") }
             public static var publish: String { L10n.tr("approval.why.publish") }
             public static func risky(rule: String) -> String { L10n.tr("approval.why.risky", rule) }
+            public static var serviceConfirm: String { L10n.tr("approval.why.serviceConfirm") }
+            public static var serviceTool: String { L10n.tr("approval.why.serviceTool") }
             public static var sql: String { L10n.tr("approval.why.sql") }
             public static var sudo: String { L10n.tr("approval.why.sudo") }
             public static func yourRule(rule: String) -> String { L10n.tr("approval.why.yourRule", rule) }
@@ -1347,6 +1349,36 @@ public enum L10n {
             public static var bots: String { L10n.tr("market.tab.bots") }
             public static var services: String { L10n.tr("market.tab.services") }
             public static var skills: String { L10n.tr("market.tab.skills") }
+        }
+
+        public enum Tools {
+            public static var notChecked: String { L10n.tr("market.tools.notChecked") }
+            public static var title: String { L10n.tr("market.tools.title") }
+            public static func unreached(agents: String) -> String { L10n.tr("market.tools.unreached", agents) }
+
+            public enum Hint {
+                public static var all: String { L10n.tr("market.tools.hint.all") }
+                public static var confirmWrites: String { L10n.tr("market.tools.hint.confirmWrites") }
+                public static var readOnly: String { L10n.tr("market.tools.hint.readOnly") }
+            }
+
+            public enum Kind {
+                public static var changes: String { L10n.tr("market.tools.kind.changes") }
+                public static var deletes: String { L10n.tr("market.tools.kind.deletes") }
+                public static var reads: String { L10n.tr("market.tools.kind.reads") }
+            }
+
+            public enum Mode {
+                public static var all: String { L10n.tr("market.tools.mode.all") }
+                public static var confirmWrites: String { L10n.tr("market.tools.mode.confirmWrites") }
+                public static var readOnly: String { L10n.tr("market.tools.mode.readOnly") }
+            }
+
+            public enum Word {
+                public static var allow: String { L10n.tr("market.tools.word.allow") }
+                public static var ask: String { L10n.tr("market.tools.word.ask") }
+                public static var deny: String { L10n.tr("market.tools.word.deny") }
+            }
         }
 
         public enum Update {
