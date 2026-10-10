@@ -208,6 +208,7 @@
 "backups.emptyMessage" = "El demonio hará la primera copia en el próximo arranque.";
 "backups.emptyTitle" = "Aún no hay copias";
 "backups.explain" = "El demonio guarda una copia de la base al arrancar, antes de una actualización y una vez al día. Se conservan las últimas 14.";
+"backups.leaveSafeMode" = "Comprobar la base de datos y salir del modo seguro";
 "backups.reason.beforeRestore" = "Antes de restaurar";
 "backups.reason.broken" = "Base de datos dañada, guardada antes de restaurar";
 "backups.reason.daily" = "Diaria";

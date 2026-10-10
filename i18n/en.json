@@ -2255,5 +2255,6 @@
   "integrations.custom.add": "Add",
   "integrations.custom.trialNote": "Check adds the server turned off. Leaving without Add removes it again.",
   "integrations.problem.quoteUnclosed": "A quote in the command is not closed.",
-  "integrations.oauth.connected": "Connected"
+  "integrations.oauth.connected": "Connected",
+  "backups.leaveSafeMode": "Check the database and leave safe mode"
 }

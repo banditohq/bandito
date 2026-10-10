@@ -208,6 +208,7 @@
 "backups.emptyMessage" = "守护进程会在下次启动时创建第一份副本。";
 "backups.emptyTitle" = "还没有副本";
 "backups.explain" = "守护进程会在启动时、更新前和每天一次保存数据库副本，保留最新的 14 份。";
+"backups.leaveSafeMode" = "检查数据库并退出安全模式";
 "backups.reason.beforeRestore" = "恢复前";
 "backups.reason.broken" = "恢复前保存的已损坏数据库";
 "backups.reason.daily" = "每日";

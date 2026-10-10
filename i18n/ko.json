@@ -2227,5 +2227,6 @@
   "integrations.custom.add": "추가",
   "integrations.custom.trialNote": "확인하면 서버가 꺼진 상태로 추가돼요. “추가”를 누르지 않고 닫으면 다시 삭제돼요.",
   "integrations.problem.quoteUnclosed": "명령의 따옴표가 닫히지 않았어요.",
-  "integrations.oauth.connected": "연결됨"
+  "integrations.oauth.connected": "연결됨",
+  "backups.leaveSafeMode": "데이터베이스를 확인하고 안전 모드 종료"
 }

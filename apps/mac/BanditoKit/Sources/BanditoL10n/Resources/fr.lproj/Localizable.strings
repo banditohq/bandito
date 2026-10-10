@@ -208,6 +208,7 @@
 "backups.emptyMessage" = "Le démon fera la première sauvegarde au prochain démarrage.";
 "backups.emptyTitle" = "Aucune sauvegarde pour l’instant";
 "backups.explain" = "Le démon sauvegarde la base au démarrage, avant une mise à jour et une fois par jour. Les 14 dernières sont conservées.";
+"backups.leaveSafeMode" = "Vérifier la base et quitter le mode sans échec";
 "backups.reason.beforeRestore" = "Avant la restauration";
 "backups.reason.broken" = "Base endommagée, enregistrée avant une restauration";
 "backups.reason.daily" = "Quotidienne";

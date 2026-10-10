@@ -208,6 +208,7 @@
 "backups.emptyMessage" = "O daemon faz a primeira cópia na próxima inicialização.";
 "backups.emptyTitle" = "Nenhuma cópia ainda";
 "backups.explain" = "O daemon salva uma cópia do banco ao iniciar, antes de uma atualização e uma vez por dia. As últimas 14 são mantidas.";
+"backups.leaveSafeMode" = "Verificar o banco de dados e sair do modo de segurança";
 "backups.reason.beforeRestore" = "Antes da restauração";
 "backups.reason.broken" = "Banco de dados danificado, guardado antes de restaurar";
 "backups.reason.daily" = "Diária";
