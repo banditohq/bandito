@@ -192,6 +192,8 @@ public final class AccountHub {
         syncStore = SyncStore(account: client, keys: keys)
         signedIn = (try? await client.restoreSession()) != nil
         if !signedIn, me == nil {
+            // Only the display is dropped; the files and settings of the user stay on this Mac. They are removed by
+            // sign-out or reset, not here: the Keychain may be temporarily unavailable, which also reads as no session.
             // The stored session is gone: the profile remembered from the last run is not shown any more.
             profile.forget()
             await avatar.bind(userID: nil)

@@ -9,7 +9,7 @@ The sheet that the profile button at the bottom of the sidebar opens, and that S
 Где: Sidebar → bottom left, the profile button (person icon); or Settings (⌘,) → Account (Аккаунт) → Sign in (Войти)
 1. Click the profile button at the bottom left of the sidebar. The sheet opens on the account, or on the sign-in when nobody is signed in.
 2. Click Sign in (Войти) to sign in with GitHub or by an email code, as in the introduction.
-3. To change your photo, click the camera button on it and choose a picture. It is framed right in the sheet: drag the picture, set the zoom with the slider and click Save (Сохранить). Without a photo, the letter on the avatar takes the color you pick in the row of circles; Remove photo (Убрать фото) brings the letter back. The photo is kept on this Mac and in your encrypted sync, so it shows after a restart, even without the network.
+3. To change your photo, click the camera button on it and choose a picture. It is framed right in the sheet: drag the picture, set the zoom with the slider and click Save (Сохранить). Without a photo, the letter on the avatar takes the color you pick in the row of circles; Remove photo (Убрать фото) brings the letter back. The photo is kept on this Mac and in your encrypted sync, so it shows after a restart, even without the network. The photo and the name are removed from this Mac by Sign out (Выйти из аккаунта) or Reset account (Сбросить аккаунт).
 4. To change your name, click it (or the pencil), type a new one and press Return or click the check; Escape or the cross keeps the old one.
 5. In This Mac, the code is the one to compare when you approve a new device; the icon next to it copies it.
 6. In Devices, to drop a device from the list, click Disconnect (Отключить) on its row.

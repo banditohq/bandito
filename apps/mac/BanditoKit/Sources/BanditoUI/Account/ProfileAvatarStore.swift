@@ -95,10 +95,15 @@ final class ProfileAvatarStore {
     /// Stores a JPEG as the picture, changed at `time`. Throws when the bytes are not a picture within 64 KB.
     func setPicture(_ jpeg: Data, at time: Int64) async throws {
         guard let userID else { throw StoreError.invalidPicture }
+        let mine = revision
         guard let image = await Task.detached(operation: { Self.validate(jpeg) }).value else {
             throw StoreError.invalidPicture
         }
-        try await write(jpeg, to: fileURL(for: userID))
+        guard stillCurrent(mine, userID) else { return }
+        let url = fileURL(for: userID)
+        try await write(jpeg, to: url)
+        // A sign-out or reset (`clear`) may have run while the file was written: then the file is an orphan.
+        guard stillCurrent(mine, userID) else { return discard(url, userID: userID) }
         revision += 1
         self.image = image
         removed = false
@@ -123,14 +128,21 @@ final class ProfileAvatarStore {
     func apply(_ remote: SyncedProfile?) async throws -> Bool {
         guard let userID, let remote, remote.updatedAt > updatedAt else { return false }
         let url = fileURL(for: userID)
+        let mine = revision
         if remote.cleared {
             try await removeFile(url)
+            guard stillCurrent(mine, userID) else { return false }
             revision += 1
             image = nil
             removed = true
         } else if let avatar = remote.avatar {
             guard let decoded = await Task.detached(operation: { Self.validate(avatar) }).value else { return false }
+            guard stillCurrent(mine, userID) else { return false }
             try await write(avatar, to: url)
+            guard stillCurrent(mine, userID) else {
+                discard(url, userID: userID)
+                return false
+            }
             revision += 1
             image = decoded
             removed = false
@@ -172,6 +184,18 @@ final class ProfileAvatarStore {
     }
 
     // MARK: - Private
+
+    /// Nothing changed the picture or the user since `revision` was `mine`.
+    private func stillCurrent(_ mine: Int, _ user: String) -> Bool {
+        revision == mine && userID == user
+    }
+
+    /// Removes a file written by a save that lost to a `clear` or a user change. Only when it is an orphan: for the same
+    /// user with a picture shown, the file belongs to the save that won.
+    private func discard(_ url: URL, userID user: String) {
+        guard userID != user || (image == nil && updatedAt == 0) else { return }
+        try? FileManager.default.removeItem(at: url)
+    }
 
     private func fileURL(for userID: String) -> URL {
         directory.appendingPathComponent(Self.fileName(userID: userID))

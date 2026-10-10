@@ -144,7 +144,6 @@ private struct IdentityCard: View {
         }
         // The file panel closed the popover; the picture it gave is framed in the editor shown again.
         .onChange(of: avatarEditor.loadedCount) { _, _ in pickingAvatar = true }
-        .onChange(of: agent.id) { _, _ in avatarEditor.reset() }
         .onChange(of: agent.name, initial: true) { _, value in
             name = IdentityField.text(current: name, saved: value, editing: focused == .name)
         }

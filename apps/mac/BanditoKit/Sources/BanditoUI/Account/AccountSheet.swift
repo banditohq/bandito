@@ -597,6 +597,7 @@ struct AccountSheet: View {
         do {
             try await hub.signOut(forgetThisMac: forgetThisMac)
             route = nil
+            photoFraming = nil
             resetting = false
             errorText = nil
         } catch {

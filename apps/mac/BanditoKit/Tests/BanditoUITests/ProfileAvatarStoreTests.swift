@@ -208,6 +208,31 @@ import Testing
         #expect(restarted.updatedAt == 1_000)
     }
 
+    @Test func clearDuringApplyLeavesNoFileBehind() async throws {
+        let picture = try jpeg()
+        let avatar = await store()
+        let applying = Task { try await avatar.apply(SyncedProfile(avatar: picture, updatedAt: 5_000)) }
+        await Task.yield()
+        try avatar.clear()
+        let changed = try await applying.value
+        #expect(changed == false)
+        #expect(avatar.image == nil)
+        #expect(avatar.updatedAt == 0)
+        #expect(FileManager.default.fileExists(atPath: file.path) == false)
+    }
+
+    @Test func clearDuringSetPictureLeavesNoFileBehind() async throws {
+        let picture = try jpeg()
+        let avatar = await store()
+        let saving = Task { try await avatar.setPicture(picture, at: 5_000) }
+        await Task.yield()
+        try avatar.clear()
+        try await saving.value
+        #expect(avatar.image == nil)
+        #expect(avatar.updatedAt == 0)
+        #expect(FileManager.default.fileExists(atPath: file.path) == false)
+    }
+
     @Test func pictureIsPerUser() async throws {
         let first = await store()
         try await first.setPicture(try jpeg(), at: 1_000)
