@@ -472,6 +472,13 @@ public final class ServerModel: Identifiable {
                 } else {
                     agents[i].pendingApprovals = max(0, agents[i].pendingApprovals - 1)
                 }
+            case .turnCompleted:
+                // The daemon stores the context the turn left when the turn ends; the ring and the memory tab read it
+                // from the list.
+                requestAgentsRefresh()
+            case .sessionRotated(let chapter, _, _):
+                agents[i].chapter = chapter
+                agents[i].contextTokens = 0
             default:
                 break
             }
