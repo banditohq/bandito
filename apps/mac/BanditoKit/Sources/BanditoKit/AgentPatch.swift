@@ -27,6 +27,10 @@ public struct AgentPatch: Sendable {
     public var workspaceId: String?
     /// Pauses (`true`) or resumes the agent. The daemon interrupts a running turn on pause.
     public var paused: Bool?
+    /// The avatar's color and face. Sent only when set; a daemon without the field ignores it.
+    public var avatar: AvatarSpec?
+    /// The capabilities, as wire names. Sent only when set.
+    public var capabilities: [String]?
 
     public init(
         name: String? = nil, role: String? = nil, cwd: String? = nil, approvalMode: ApprovalMode? = nil,
@@ -34,8 +38,12 @@ public struct AgentPatch: Sendable {
         systemPrompt: String? = nil, model: FieldChange<String>? = nil, runtime: RuntimeKind? = nil,
         fallbackRuntime: FieldChange<RuntimeKind>? = nil, fallbackModel: FieldChange<String>? = nil,
         workspaceId: String? = nil,
-        paused: Bool? = nil
+        paused: Bool? = nil,
+        avatar: AvatarSpec? = nil,
+        capabilities: [String]? = nil
     ) {
+        self.avatar = avatar
+        self.capabilities = capabilities
         self.workspaceId = workspaceId
         self.name = name
         self.role = role
@@ -56,7 +64,7 @@ public struct AgentPatch: Sendable {
     /// field: the request that carries a patch adds it.
     public enum Key: String, CodingKey {
         case id, name, role, cwd, approvalMode, effort, memoryMode, contextBudget, systemPrompt, model, runtime
-        case fallbackRuntime, fallbackModel, workspaceId, paused
+        case fallbackRuntime, fallbackModel, workspaceId, paused, avatar, capabilities
     }
 
     /// Writes the set fields into an object that may also hold other keys (such as `id`).
@@ -75,6 +83,8 @@ public struct AgentPatch: Sendable {
         try Self.encodeChange(fallbackModel, forKey: .fallbackModel, into: &c)
         try c.encodeIfPresent(workspaceId, forKey: .workspaceId)
         try c.encodeIfPresent(paused, forKey: .paused)
+        try c.encodeIfPresent(avatar, forKey: .avatar)
+        try c.encodeIfPresent(capabilities, forKey: .capabilities)
     }
 
     private static func encodeChange<T: Encodable & Sendable>(

@@ -17,6 +17,10 @@ struct ThreadHeader: View {
     var showsTerminal: Bool
     /// The models each runtime offers, to show a model's name rather than its id.
     var models: [String: RuntimeModelList] = [:]
+    /// Opens the agent's inspector on its details tab. The capsule is the button.
+    var onInspect: () -> Void = {}
+    /// The server's main agent: a crown on the avatar.
+    var isLead = false
     var onChanges: () -> Void = {}
     var onTerminal: () -> Void = {}
     var onSchedules: () -> Void = {}
@@ -27,10 +31,14 @@ struct ThreadHeader: View {
         // never runs under the buttons.
         HStack(spacing: 10) {
             Color.clear.frame(width: 0)
-            ViewThatFits(in: .horizontal) {
-                capsule(showsCaption: true)
-                capsule(showsCaption: false)
+            Button(action: onInspect) {
+                ViewThatFits(in: .horizontal) {
+                    capsule(showsCaption: true)
+                    capsule(showsCaption: false)
+                }
             }
+            .banditoButton(.row(cornerRadius: 18, hoverOpacity: 0.06))
+            .help(L10n.Team.Header.openInspector)
             .frame(maxWidth: .infinity)
             .layoutPriority(1)
             HStack(spacing: 6) {
@@ -57,6 +65,12 @@ struct ThreadHeader: View {
             AgentAvatar(
                 name: agent.name, size: 26,
                 mood: AvatarMood.make(status: status, turnRunning: turnRunning, paused: agent.paused))
+                .overlay(alignment: .topTrailing) {
+                    if isLead {
+                        LeadCrown(size: 11)
+                            .offset(x: 4, y: -4)
+                    }
+                }
             Text(agent.name)
                 .font(BanditoFont.font(size: 13, weight: 600))
                 .foregroundStyle(Color.Bandito.text)

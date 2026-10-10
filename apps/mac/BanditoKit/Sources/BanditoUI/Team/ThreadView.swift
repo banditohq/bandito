@@ -35,6 +35,11 @@ struct ThreadView: View {
                 showsChanges: server.info?.supports("changes") == true,
                 showsTerminal: server.supports("terminals"),
                 models: server.runtimeModels,
+                onInspect: {
+                    inspectorTab = .details
+                    router.inspectorOpen = true
+                },
+                isLead: LeadAgentStore.shared.id(server: server.id.uuidString) == agent.id,
                 onChanges: { router.sheet = .changes(agentID: agent.id) },
                 onTerminal: { router.openTerminalHere(agent.cwd) },
                 onSchedules: {
@@ -192,7 +197,7 @@ struct ThreadItemsView: View {
                     .banditoRise()
             }
             if typing {
-                TypingIndicator()
+                TypingIndicator(activity: AgentActivity.current(in: items), since: AgentActivity.turnStart(in: items))
             }
             Color.clear.frame(height: 1).id("bottom")
         }

@@ -124,9 +124,11 @@ public enum L10n {
             public static var copyId: String { L10n.tr("agent.menu.copyId") }
             public static var delete: String { L10n.tr("agent.menu.delete") }
             public static var hide: String { L10n.tr("agent.menu.hide") }
+            public static var makeLead: String { L10n.tr("agent.menu.makeLead") }
             public static var markUnread: String { L10n.tr("agent.menu.markUnread") }
             public static var pause: String { L10n.tr("agent.menu.pause") }
             public static var pin: String { L10n.tr("agent.menu.pin") }
+            public static var removeLead: String { L10n.tr("agent.menu.removeLead") }
             public static var resume: String { L10n.tr("agent.menu.resume") }
             public static var unpin: String { L10n.tr("agent.menu.unpin") }
         }
@@ -327,6 +329,15 @@ public enum L10n {
         public static var title: String { L10n.tr("browser.title") }
         public static var unsupported: String { L10n.tr("browser.unsupported") }
         public static var userHolds: String { L10n.tr("browser.userHolds") }
+    }
+
+    public enum Capability {
+        public static var browser: String { L10n.tr("capability.browser") }
+        public static var crew: String { L10n.tr("capability.crew") }
+        public static var files: String { L10n.tr("capability.files") }
+        public static var screen: String { L10n.tr("capability.screen") }
+        public static var terminal: String { L10n.tr("capability.terminal") }
+        public static var title: String { L10n.tr("capability.title") }
     }
 
     public enum Changes {
@@ -730,8 +741,10 @@ public enum L10n {
         public static var cloneURL: String { L10n.tr("folderPicker.cloneURL") }
         public static var cloning: String { L10n.tr("folderPicker.cloning") }
         public static var hidden: String { L10n.tr("folderPicker.hidden") }
+        public static var nameEmpty: String { L10n.tr("folderPicker.nameEmpty") }
+        public static var nameInvalid: String { L10n.tr("folderPicker.nameInvalid") }
         public static var newFolder: String { L10n.tr("folderPicker.newFolder") }
-        public static var newFolderPlaceholder: String { L10n.tr("folderPicker.newFolderPlaceholder") }
+        public static var newFolderName: String { L10n.tr("folderPicker.newFolderName") }
         public static var recent: String { L10n.tr("folderPicker.recent") }
         public static var repos: String { L10n.tr("folderPicker.repos") }
         public static var search: String { L10n.tr("folderPicker.search") }
@@ -787,6 +800,7 @@ public enum L10n {
         public static var cronLabel: String { L10n.tr("inspector.cronLabel") }
         public static var details: String { L10n.tr("inspector.details") }
         public static var instructionsHeader: String { L10n.tr("inspector.instructionsHeader") }
+        public static var instructionsHint: String { L10n.tr("inspector.instructionsHint") }
         public static var instructionsPlaceholder: String { L10n.tr("inspector.instructionsPlaceholder") }
         public static var library: String { L10n.tr("inspector.library") }
         public static var loggedIn: String { L10n.tr("inspector.loggedIn") }
@@ -820,6 +834,10 @@ public enum L10n {
         public static var usage: String { L10n.tr("inspector.usage") }
         public static var whereRuns: String { L10n.tr("inspector.whereRuns") }
         public static var workplace: String { L10n.tr("inspector.workplace") }
+
+        public enum Avatar {
+            public static var help: String { L10n.tr("inspector.avatar.help") }
+        }
 
         public enum Window {
             public static var fiveHour: String { L10n.tr("inspector.window.fiveHour") }
@@ -953,6 +971,13 @@ public enum L10n {
         public static var smartDesc: String { L10n.tr("memory.smartDesc") }
         public static var splitHeader: String { L10n.tr("memory.splitHeader") }
         public static var title: String { L10n.tr("memory.title") }
+
+        public enum Viewer {
+            public static var back: String { L10n.tr("memory.viewer.back") }
+            public static var empty: String { L10n.tr("memory.viewer.empty") }
+            public static var openInFiles: String { L10n.tr("memory.viewer.openInFiles") }
+            public static var up: String { L10n.tr("memory.viewer.up") }
+        }
     }
 
     public enum Menu {
@@ -1975,6 +2000,7 @@ public enum L10n {
     public enum Team {
         public static var changes: String { L10n.tr("team.changes") }
         public static var emptyTitle: String { L10n.tr("team.emptyTitle") }
+        public static var leadHelp: String { L10n.tr("team.leadHelp") }
         public static var noMessages: String { L10n.tr("team.noMessages") }
         public static var pauseUnavailable: String { L10n.tr("team.pauseUnavailable") }
         public static var pickAgent: String { L10n.tr("team.pickAgent") }
@@ -1984,11 +2010,23 @@ public enum L10n {
         public static var welcomeTitle: String { L10n.tr("team.welcomeTitle") }
         public static var workplaceShared: String { L10n.tr("team.workplaceShared") }
 
+        public enum Activity {
+            public static var browsing: String { L10n.tr("team.activity.browsing") }
+            public static var coding: String { L10n.tr("team.activity.coding") }
+            public static var command: String { L10n.tr("team.activity.command") }
+            public static func minutes(count: Int) -> String { L10n.tr("team.activity.minutes", count) }
+            public static var reading: String { L10n.tr("team.activity.reading") }
+            public static var searching: String { L10n.tr("team.activity.searching") }
+            public static func seconds(count: Int) -> String { L10n.tr("team.activity.seconds", count) }
+            public static var thinking: String { L10n.tr("team.activity.thinking") }
+        }
+
         public enum Delete {
             public static var action: String { L10n.tr("team.delete.action") }
         }
 
         public enum Header {
+            public static var openInspector: String { L10n.tr("team.header.openInspector") }
             public static var schedules: String { L10n.tr("team.header.schedules") }
             public static var terminal: String { L10n.tr("team.header.terminal") }
         }

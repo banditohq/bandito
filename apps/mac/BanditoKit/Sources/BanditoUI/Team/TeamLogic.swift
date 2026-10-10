@@ -206,8 +206,9 @@ public enum AgentPreview {
 /// The order the team sidebar shows agents in, and so what "the first one" means: the pinned tiles at the top,
 /// then the agents that need a person, then the rest. Each group keeps the order it is given (`sortedAgents`).
 public enum TeamSidebarOrder {
-    /// The sidebar's tiles hold this many pinned agents; a further pin stays pinned but sorts with the rest.
-    public static let pinnedTiles = 2
+    /// The pinned row shows at most this many pinned agents, and scrolls sideways when they do not fit. A further pin
+    /// stays pinned but is not in the row: it sorts with the rest.
+    public static let pinnedTiles = 8
 
     public static func ids(agents: [Agent], pinned: Set<String>, needsPerson: (String) -> Bool) -> [String] {
         let tiles = agents.filter { pinned.contains($0.id) }.prefix(pinnedTiles).map(\.id)

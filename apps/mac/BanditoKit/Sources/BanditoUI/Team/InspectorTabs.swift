@@ -19,6 +19,29 @@ struct DetailsTab: View {
     /// Values the daemon changed on its own after the last change (for example an effort the runtime lacks).
     @State private var notes: [String] = []
     @State private var modelDraft = ""
+    @FocusState private var folderFocused: Bool
+    /// The chips on screen, and the sends that have not been answered yet.
+    @State private var chips = AgentCapability.allOn
+    @State private var chipsSync = InFlightCounter()
+    /// The "What it may do" chips as shown. A click sets them at once and sends the whole list; the agent's list is
+    /// taken again only when no send is in flight (see `sendCapabilities`).
+    private var capabilities: Binding<Set<AgentCapability>> {
+        Binding(get: { chips }, set: { sendCapabilities($0) })
+    }
+
+    /// Sends the whole list of chips. A daemon without the field ignores it and the agent's list comes back as all on.
+    private func sendCapabilities(_ next: Set<AgentCapability>) {
+        chips = next
+        chipsSync.begin()
+        Task {
+            defer { chipsSync.end() }
+            do {
+                _ = try await server.updateAgent(agent.id, patch: AgentPatch(capabilities: AgentCapability.wire(next)))
+            } catch {
+                self.error = UserFacingError.message(for: error)
+            }
+        }
+    }
 
     private var effort: Binding<Effort> {
         Binding(
@@ -81,13 +104,32 @@ struct DetailsTab: View {
                         .frame(maxWidth: 260)
                 }
                 InspectorRow(label: L10n.Inspector.project) {
-                    TextField("", text: $folder)
-                        .textFieldStyle(.plain)
-                        .font(BanditoFont.font(size: 12.5, weight: 400, mono: true))
-                        .multilineTextAlignment(.trailing)
-                        .frame(maxWidth: 200)
-                        .onSubmit(saveFolder)
+                    // A long path is cut at its start ("…/projects/app") and the full path is in the tooltip. Clicking
+                    // it turns into the field for editing.
+                    if folderFocused {
+                        TextField("", text: $folder)
+                            .textFieldStyle(.plain)
+                            .font(BanditoFont.font(size: 12.5, weight: 400, mono: true))
+                            .multilineTextAlignment(.trailing)
+                            .frame(maxWidth: 200)
+                            .focused($folderFocused)
+                            .onSubmit(saveFolder)
+                    } else {
+                        Text(folder)
+                            .font(BanditoFont.font(size: 12.5, weight: 400, mono: true))
+                            .lineLimit(1)
+                            .truncationMode(.head)
+                            .frame(maxWidth: 200, alignment: .trailing)
+                            .contentShape(Rectangle())
+                            .help(folder)
+                            .onTapGesture { folderFocused = true }
+                    }
                 }
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                SectionLabel(L10n.Capability.title)
+                CapabilityChips(enabled: capabilities)
             }
 
             VStack(alignment: .leading, spacing: 8) {
@@ -145,14 +187,21 @@ struct DetailsTab: View {
                     .background(Color.Bandito.bg, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.Bandito.line, lineWidth: 1))
-                HStack {
-                    Spacer()
+                HStack(spacing: 12) {
+                    Text(L10n.Inspector.instructionsHint)
+                        .font(BanditoFont.font(size: 12, weight: 400))
+                        .foregroundStyle(Color.Bandito.text3)
+                        .lineLimit(2)
+                    Spacer(minLength: 8)
                     Button(L10n.Common.save) {
                         change { _ = try await server.updateAgent(agent.id, systemPrompt: instructions) }
                     }
                     .banditoButton(.quiet())
+                    .fixedSize()
                     .disabled(instructions == (agent.systemPrompt ?? ""))
                 }
+                .padding(.horizontal, 4)
+                .padding(.top, 2)
             }
 
             ForEach(notes, id: \.self) { note in
@@ -168,7 +217,18 @@ struct DetailsTab: View {
         .onChange(of: agent.model, initial: true) { _, model in
             modelDraft = model ?? ""
         }
+        .onChange(of: agent.capabilities, initial: true) { _, _ in
+            if chipsSync.isIdle { chips = AgentCapability.set(from: agent.capabilities) }
+        }
+        .onChange(of: chipsSync.isIdle) { _, idle in
+            if idle { chips = AgentCapability.set(from: agent.capabilities) }
+        }
+        .onChange(of: folderFocused) { _, focused in
+            // Leaving the field without Return puts the saved path back.
+            if !focused { folder = agent.cwd }
+        }
         .task(id: agent.id) {
+            chips = AgentCapability.set(from: agent.capabilities)
             folder = agent.cwd
             instructions = agent.systemPrompt ?? ""
             await loadSchedules()
@@ -411,6 +471,8 @@ struct MemoryTab: View {
     @Environment(Router.self) private var router
     @State private var files: [FsEntry] = []
     @State private var error: UserFacingMessage?
+    /// What the memory viewer shows, over the chat; nil when closed.
+    @State private var viewing: MemoryViewerTarget?
 
     private var budget: Int { agent.contextBudget ?? ContextUsage.defaultBudget }
 
@@ -431,6 +493,9 @@ struct MemoryTab: View {
             }
         }
         .task(id: agent.id) { await loadFiles() }
+        .banditoSheet(item: $viewing) { target in
+            MemoryViewerSheet(server: server, target: target, onClose: { viewing = nil })
+        }
     }
 
     private var chapterCard: some View {
@@ -514,7 +579,7 @@ struct MemoryTab: View {
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
-    /// The memory files the agent keeps in its folder. Opening one shows it in the Files mode.
+    /// The memory files the agent keeps in its folder. Opening one shows it in a viewer over the chat.
     private var filesSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -532,7 +597,7 @@ struct MemoryTab: View {
                 InspectorCard {
                     ForEach(memoryItems, id: \.path) { item in
                         Button {
-                            router.openInFiles(item.path, isFile: item.isFile)
+                            viewing = MemoryViewerTarget(path: item.path, isFile: item.isFile)
                         } label: {
                             HStack(spacing: 11) {
                                 Image(systemName: item.symbol)

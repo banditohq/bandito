@@ -2,7 +2,7 @@ import BanditoDesign
 import SwiftUI
 
 /// Tile color of an avatar. Fixed brand colors, the same in light and dark themes.
-public enum AvatarColor: CaseIterable, Sendable {
+public enum AvatarColor: String, CaseIterable, Sendable {
     case peach, sky, sage, rose, lilac, cream
 
     /// Fill of the avatar tile.
@@ -19,7 +19,7 @@ public enum AvatarColor: CaseIterable, Sendable {
 }
 
 /// Face drawn on the raccoon mask, in the avatar color.
-public enum AvatarFace: CaseIterable, Sendable {
+public enum AvatarFace: String, CaseIterable, Sendable {
     /// Picked from the name hash together with the color.
     case auto
     /// `> –`: a chevron eye and a dash.

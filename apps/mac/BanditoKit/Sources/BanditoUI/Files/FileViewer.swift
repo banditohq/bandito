@@ -7,12 +7,22 @@ import SwiftUI
 /// for the file's kind. Keys come from the keymap (context `viewer`); ⌘W closes the tab.
 struct FileViewer: View {
     let server: ServerModel
+    /// The tabs to show. `nil` means the Files mode's own workspace.
+    var ownWorkspace: FileWorkspace?
+    /// What the header's back button does. `nil`: hide the viewer of the Files mode.
+    var onBack: (() -> Void)?
     @Environment(Router.self) private var router
     @Environment(Keymap.self) private var keymap
     @State private var closing: String?
     @State private var showsDiff = false
 
-    private var workspace: FileWorkspace { router.files }
+    init(server: ServerModel, workspace: FileWorkspace? = nil, onBack: (() -> Void)? = nil) {
+        self.server = server
+        ownWorkspace = workspace
+        self.onBack = onBack
+    }
+
+    private var workspace: FileWorkspace { ownWorkspace ?? router.files }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -20,7 +30,7 @@ struct FileViewer: View {
             if let document = workspace.selectedDocument {
                 ViewerHeader(
                     document: document,
-                    onBack: { workspace.showsViewer = false },
+                    onBack: { if let onBack { onBack() } else { workspace.showsViewer = false } },
                     onSave: { Task { await document.save(server: server) } })
                 if document.conflict != nil {
                     ConflictBanner(
