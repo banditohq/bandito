@@ -9,6 +9,58 @@ use anyhow::{Result, bail};
 use serde_json::{Map, Value, json};
 use std::collections::{BTreeMap, HashMap};
 
+/// A header or environment variable a catalog entry asks the owner for. `value_template` has `{secret}` where the
+/// secret's reference goes (`Bearer {secret}`).
+#[cfg(test)]
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CatalogKey {
+    pub key: String,
+    pub label_en: String,
+    pub label_ru: String,
+    pub secret: bool,
+    pub value_template: String,
+}
+
+/// One template of the built-in catalog (`integrations_catalog.json`), as the app reads it. Only the first block of
+/// fields is required; the rest is optional, so an older app that ignores them still works. The catalog is served as
+/// it is; this type is what the tests hold it to.
+#[cfg(test)]
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CatalogEntry {
+    pub id: String,
+    pub name: String,
+    pub description_en: String,
+    pub description_ru: String,
+    pub kind: IntegrationKind,
+    pub docs_url: String,
+    pub icon: String,
+    /// One of [`CATALOG_CATEGORIES`].
+    pub category: Option<String>,
+    /// The service's brand color as `#RRGGBB`, for its tile in the app.
+    pub accent: Option<String>,
+    pub publisher: Option<String>,
+    pub official: Option<bool>,
+    pub homepage: Option<String>,
+    pub long_en: Option<String>,
+    pub long_ru: Option<String>,
+    pub abilities_en: Option<Vec<String>>,
+    pub abilities_ru: Option<Vec<String>>,
+    pub needs_en: Option<String>,
+    pub needs_ru: Option<String>,
+    pub command: Option<String>,
+    pub args: Option<Vec<String>>,
+    pub env_keys: Option<Vec<CatalogKey>>,
+    pub url: Option<String>,
+    pub url_hint: Option<String>,
+    pub headers_keys: Option<Vec<CatalogKey>>,
+}
+
+/// The categories a catalog entry may have.
+#[cfg(test)]
+pub const CATALOG_CATEGORIES: [&str; 6] = ["dev", "productivity", "data", "web", "design", "other"];
+
 /// Marks a secret inside a value: `secret:<NAME>`, read when the session starts.
 pub const SECRET_PREFIX: &str = "secret:";
 

@@ -35,6 +35,7 @@ struct IntegrationEditor: View {
             _draft = State(initialValue: .fromCatalog(entry))
             _catalogEntry = State(initialValue: entry)
         case .custom:
+            // The own integration has its own sheet (CustomIntegrationSheet); this one never gets it.
             _draft = State(initialValue: .custom(kind: .stdio))
             _catalogEntry = State(initialValue: nil)
         case .edit(let integration):
@@ -86,7 +87,7 @@ struct IntegrationEditor: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             if let test {
-                testResult(test)
+                IntegrationTestResult(result: test)
             }
             if let error {
                 UserFacingErrorView(message: error, onRetry: { save() })
@@ -127,7 +128,7 @@ struct IntegrationEditor: View {
     private var title: String {
         switch target {
         case .catalog(let entry): L10n.Integrations.Sheet.connectTitle(name: entry.name)
-        case .custom: L10n.Integrations.Sheet.addTitle
+        case .custom: L10n.Integrations.addOwn
         case .edit(let integration): L10n.Integrations.Sheet.editTitle(name: integration.name)
         }
     }
@@ -145,25 +146,11 @@ struct IntegrationEditor: View {
                 .textFieldStyle(.roundedBorder)
                 .font(BanditoFont.font(size: 13, weight: 400, mono: true))
         }
-        if target.isCustom {
-            field(L10n.Integrations.Sheet.kindLabel) {
-                SegmentedPicker(
-                    selection: $draft.kind,
-                    options: [
-                        (IntegrationKind.stdio, L10n.Integrations.Kind.stdio),
-                        (IntegrationKind.http, L10n.Integrations.Kind.http),
-                    ])
-            }
-        }
         switch draft.kind {
         case .stdio:
-            field(L10n.Integrations.Sheet.command) {
-                TextField(L10n.Integrations.Sheet.command, text: $draft.command)
-                    .textFieldStyle(.roundedBorder)
-                    .font(BanditoFont.font(size: 13, weight: 400, mono: true))
-            }
-            field(L10n.Integrations.Sheet.args, hint: L10n.Integrations.Sheet.argsHint) {
-                TextField(L10n.Integrations.Sheet.args, text: $draft.argsText)
+            field(L10n.Integrations.Custom.commandLine, hint: L10n.Integrations.Custom.commandHint) {
+                TextField(L10n.Integrations.Custom.commandLine, text: $draft.commandLine, axis: .vertical)
+                    .lineLimit(1...4)
                     .textFieldStyle(.roundedBorder)
                     .font(BanditoFont.font(size: 13, weight: 400, mono: true))
             }
@@ -203,7 +190,7 @@ struct IntegrationEditor: View {
                 .font(.system(size: 12))
                 .foregroundStyle(Color.Bandito.text3)
             ForEach(items) { $pair in
-                PairRow(pair: $pair) {
+                IntegrationPairRow(pair: $pair) {
                     items.wrappedValue.removeAll { $0.id == pair.id }
                 }
             }
@@ -212,30 +199,6 @@ struct IntegrationEditor: View {
             }
             .banditoButton(.link)
             .fixedSize()
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func testResult(_ result: IntegrationTest) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            if result.ok {
-                Text(L10n.Integrations.toolsFound(names: result.tools.joined(separator: ", ")))
-                    .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(Color.Bandito.ok)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
-                Text(IntegrationFailureText.text(IntegrationFailure.classify(result.error)))
-                    .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(Color.Bandito.danger)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let raw = result.error, !raw.isEmpty {
-                    Text(raw)
-                        .font(BanditoFont.font(size: 11, weight: 400, mono: true))
-                        .foregroundStyle(Color.Bandito.text3)
-                        .lineLimit(6)
-                        .truncationMode(.tail)
-                }
-            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -315,6 +278,7 @@ struct IntegrationEditor: View {
         case .nameInvalid: L10n.Integrations.Problem.nameInvalid
         case .nameTaken: L10n.Integrations.Problem.nameTaken
         case .commandEmpty: L10n.Integrations.Problem.commandEmpty
+        case .quoteUnclosed: L10n.Integrations.Problem.quoteUnclosed
         case .urlInvalid: L10n.Integrations.Problem.urlInvalid
         case .keyEmpty: L10n.Integrations.Problem.keyEmpty
         case .keyInvalid(let key): L10n.Integrations.Problem.keyInvalid(key: key)
@@ -326,12 +290,6 @@ struct IntegrationEditor: View {
 }
 
 extension IntegrationTarget {
-    /// Whether the sheet adds an own integration (the kind is chosen there).
-    var isCustom: Bool {
-        if case .custom = self { return true }
-        return false
-    }
-
     /// Whether the sheet connects an integration that does not exist yet.
     var isNew: Bool {
         if case .edit = self { return false }
@@ -340,7 +298,7 @@ extension IntegrationTarget {
 }
 
 /// One line of variables or headers: the key, the value (or the secret typed in), and the switch that makes it a secret.
-private struct PairRow: View {
+struct IntegrationPairRow: View {
     @Binding var pair: IntegrationPair
     var onRemove: () -> Void
 
