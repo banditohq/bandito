@@ -553,7 +553,7 @@ fn team_tool_defs() -> Vec<Value> {
         }),
         json!({
             "name": "team_assign",
-            "description": "You are the main agent of the crew. Give a task to another agent; it reads it as a message from you. With wait=true the call returns when that agent has finished working on it, with its last answer (it can take minutes); without wait it returns at once and you follow the work with team_status.",
+            "description": "You are the main agent of the crew. Give a task to another agent; it reads it as a message from you. With wait=true the call returns when that agent has finished working on it, with its last answer (it can take minutes): prefer it when you need the answer. Without wait it returns at once; give out the other tasks, then collect the answers with team_status and wait=true.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -566,11 +566,13 @@ fn team_tool_defs() -> Vec<Value> {
         }),
         json!({
             "name": "team_status",
-            "description": "You are the main agent of the crew. Where one agent stands (working, idle, waiting for the person) and its latest answer.",
+            "description": "You are the main agent of the crew. Where one agent stands (working, idle, waiting for the person) and its latest answer; without agent, the whole crew. Do not call it in a loop: pass wait=true and the call returns when the agent stops working (at most 2 minutes).",
             "inputSchema": {
                 "type": "object",
-                "properties": { "agent": { "type": "string", "description": "Agent id or name" } },
-                "required": ["agent"],
+                "properties": {
+                    "agent": { "type": "string", "description": "Agent id or name. Leave out for the whole crew." },
+                    "wait": { "type": "boolean", "description": "If the agent is working, wait until it stops (at most 2 minutes). Default false." },
+                },
             },
         }),
     ]
@@ -624,8 +626,15 @@ fn status_text(m: &Value) -> String {
 }
 
 async fn team_assign(args: &Value, backend: &dyn CrewBackend) -> Result<String, String> {
-    let (Some(agent), Some(task)) = (text_arg(args, "agent"), text_arg(args, "task")) else {
-        return Err("team_assign needs \"agent\" and \"task\"".into());
+    let Some(agent) = text_arg(args, "agent") else {
+        // Name the crew, so the next call can pick one without a team_list first.
+        let crew = team_list(backend).await.unwrap_or_default();
+        return Err(format!(
+            "team_assign needs \"agent\": the name or id of one of these.\n{crew}"
+        ));
+    };
+    let Some(task) = text_arg(args, "task") else {
+        return Err("team_assign needs \"task\"".into());
     };
     let wait = match args.get("wait") {
         None | Some(Value::Null) => false,
@@ -656,15 +665,35 @@ async fn team_assign(args: &Value, backend: &dyn CrewBackend) -> Result<String, 
     })
 }
 
+/// How long `team_status` with `wait` waits for a working agent to stop, and how often it looks meanwhile.
+const STATUS_WAIT: Duration = Duration::from_secs(120);
+const STATUS_POLL: Duration = Duration::from_secs(2);
+
 async fn team_status(args: &Value, backend: &dyn CrewBackend) -> Result<String, String> {
-    let Some(agent) = text_arg(args, "agent") else {
-        return Err("team_status needs \"agent\"".into());
+    let wait = match args.get("wait") {
+        None | Some(Value::Null) => false,
+        Some(Value::Bool(b)) => *b,
+        Some(_) => return Err("wait must be true or false".into()),
     };
-    let v = backend
-        .team("team.status", json!({ "agent": agent }))
-        .await
-        .map_err(|e| format!("{e:#}"))?;
+    let Some(agent) = text_arg(args, "agent") else {
+        // No agent named: where the whole crew stands.
+        return team_list(backend).await;
+    };
+    let deadline = tokio::time::Instant::now() + STATUS_WAIT;
+    let v = loop {
+        let v = backend
+            .team("team.status", json!({ "agent": agent }))
+            .await
+            .map_err(|e| format!("{e:#}"))?;
+        if !wait || v["status"] != "working" || tokio::time::Instant::now() >= deadline {
+            break v;
+        }
+        tokio::time::sleep(STATUS_POLL).await;
+    };
     let mut out = format!("{}: {}", v["name"].as_str().unwrap_or(agent), status_text(&v));
+    if wait && v["status"] == "working" {
+        out.push_str(" (still working after 2 minutes)");
+    }
     match v["last_reply"]["text"].as_str() {
         Some(text) => out.push_str(&format!("\nLatest answer:\n{text}")),
         None => out.push_str("\nNo answer yet."),
@@ -1996,6 +2025,62 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn team_status_without_an_agent_shows_the_whole_crew() {
+        let backend = MockBackend {
+            team_reply: Some(json!({ "agents": [
+                { "id": "a1", "name": "Scout", "role": "", "runtime": "claude", "model": "haiku",
+                  "status": "working", "paused": false, "last_message": null },
+            ] })),
+            ..Default::default()
+        };
+        let r = lead_replies(
+            &format!("{}\n", tool_call("team_status", json!({}))),
+            &backend,
+            &ALL_CAPABILITIES,
+        )
+        .await
+        .remove(0);
+        assert_eq!(r["result"]["isError"], json!(false));
+        assert_eq!(tool_text(&r), "- Scout · id a1 · haiku · working");
+        assert_eq!(backend.team_calls.lock().unwrap()[0].0, "team.list");
+    }
+
+    #[tokio::test]
+    async fn team_status_with_wait_returns_at_once_for_an_agent_that_is_not_working() {
+        let backend = MockBackend {
+            team_reply: Some(json!({ "name": "Scout", "status": "idle", "last_reply": { "text": "391" } })),
+            ..Default::default()
+        };
+        let call = tool_call("team_status", json!({ "agent": "Scout", "wait": true }));
+        let r = lead_replies(&format!("{call}\n"), &backend, &ALL_CAPABILITIES)
+            .await
+            .remove(0);
+        assert_eq!(tool_text(&r), "Scout: idle\nLatest answer:\n391");
+        assert_eq!(backend.team_calls.lock().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn team_assign_without_an_agent_names_the_crew() {
+        let backend = MockBackend {
+            team_reply: Some(json!({ "agents": [
+                { "id": "a1", "name": "Scout", "role": "", "runtime": "claude", "model": "haiku",
+                  "status": "idle", "paused": false, "last_message": null },
+            ] })),
+            ..Default::default()
+        };
+        let call = tool_call("team_assign", json!({ "task": "count" }));
+        let r = lead_replies(&format!("{call}\n"), &backend, &ALL_CAPABILITIES)
+            .await
+            .remove(0);
+        assert_eq!(r["result"]["isError"], json!(true));
+        assert!(tool_text(&r).contains("needs \"agent\"") && tool_text(&r).contains("Scout"));
+        // Only the crew was read: nothing was sent.
+        let calls = backend.team_calls.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "team.list");
+    }
+
+    #[tokio::test]
     async fn team_assign_that_is_still_running_points_to_team_status() {
         let backend = MockBackend {
             team_reply: Some(json!({ "to": "Scout", "status": "running", "hint": "вызовите team_status позже" })),
@@ -2032,9 +2117,8 @@ mod tests {
         let backend = MockBackend::default();
         for (tool, args) in [
             ("team_assign", json!({ "agent": "Scout" })),
-            ("team_assign", json!({ "task": "x" })),
             ("team_assign", json!({ "agent": "Scout", "task": "x", "wait": "yes" })),
-            ("team_status", json!({})),
+            ("team_status", json!({ "agent": "Scout", "wait": "yes" })),
         ] {
             let r = lead_replies(&format!("{}\n", tool_call(tool, args)), &backend, &ALL_CAPABILITIES)
                 .await

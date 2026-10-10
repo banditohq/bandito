@@ -253,7 +253,7 @@ const CHAT_GUIDE: &str = "Когда вам нужно несколько отв
 Можно ставить реакции на сообщения человека инструментом react (например 👍 — принял, 👀 — смотрю), вместо коротких ответов.";
 
 /// Put in the system prompt of the main agent of the crew (see docs/ARCHITECTURE.md#lead-agent).
-const LEAD_BRIEFING: &str = "Вы главный в команде. Делите большие задачи между агентами (team_list, team_assign), следите за ходом (team_status), собирайте итог и отвечайте человеку. Сами делайте только то, что никому не подходит. Агенты команды — это не встроенный инструмент Agent (субагенты): задачи им отправляйте только через team_assign.";
+const LEAD_BRIEFING: &str = "Вы главный в команде. Делите большие задачи между агентами (team_list, team_assign), следите за ходом (team_status с wait=true, а не опросом в цикле), собирайте итог и отвечайте человеку. Сами делайте только то, что никому не подходит. Агенты команды — это не встроенный инструмент Agent (субагенты): задачи им отправляйте только через team_assign.";
 
 /// Put in the system prompt of every other agent when the crew has a main one. `{name}` is replaced by its name.
 const LEAD_NOTICE: &str =
