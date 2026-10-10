@@ -108,7 +108,11 @@ public enum BanditoFont {
             kCTFontVariationAttribute: [weightAxis: wght],
         ] as CFDictionary)
         let font = CTFontCreateWithFontDescriptor(descriptor, size, nil)
-        cache.setObject(Box(font), forKey: key)
+        // A font asked for while the registration is still settling comes back as the system fallback: keep only the
+        // real face, so the next call tries again instead of keeping the fallback for good.
+        if CTFontCopyFamilyName(font) as String == spec.family {
+            cache.setObject(Box(font), forKey: key)
+        }
         return font
     }
 

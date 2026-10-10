@@ -117,9 +117,7 @@ import Testing
         for _ in 0..<5 {
             for text in texts { _ = cache.blocks(for: text, markdown: true) }
         }
-        // NSCache may drop entries under memory pressure (a busy parallel test run), so the bound is loose: drawn five
-        // times, each message is parsed far fewer than five times.
-        #expect(cache.parses >= 300 && cache.parses < 600)
+        #expect(cache.parses == 300)
         let before = cache.parses
         _ = cache.blocks(for: texts[0], markdown: false)
         #expect(cache.parses == before + 1, "plain text is a different entry")
@@ -138,6 +136,20 @@ import Testing
         #expect(plain.count == 1)
     }
 
+    @Test func theLeastRecentlyUsedBodyLeavesFirst() {
+        // Room for two of these three bodies.
+        let cache = MessageRenderCache(limit: 25)
+        _ = cache.blocks(for: "first message", markdown: true)
+        _ = cache.blocks(for: "second message", markdown: true)
+        _ = cache.blocks(for: "first message", markdown: true)
+        _ = cache.blocks(for: "third message", markdown: true)
+        #expect(cache.parses == 3)
+        _ = cache.blocks(for: "first message", markdown: true)
+        #expect(cache.parses == 3, "the recently used one stays")
+        _ = cache.blocks(for: "second message", markdown: true)
+        #expect(cache.parses == 4, "the least recently used one left")
+    }
+
     @Test func aStreamingTextIsNotKept() {
         let cache = MessageRenderCache(limit: 1 << 20)
         _ = cache.blocks(for: "partial", markdown: true, cached: false)
@@ -145,6 +157,6 @@ import Testing
         #expect(cache.parses == 2)
         _ = cache.blocks(for: "partial", markdown: true)
         _ = cache.blocks(for: "partial", markdown: true)
-        #expect(cache.parses >= 3 && cache.parses <= 4, "kept once cached (NSCache may still drop it)")
+        #expect(cache.parses == 3, "kept once cached")
     }
 }

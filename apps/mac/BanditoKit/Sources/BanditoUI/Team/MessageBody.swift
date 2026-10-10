@@ -51,26 +51,57 @@ enum RenderedBlock {
 final class MessageRenderCache: @unchecked Sendable {
     static let shared = MessageRenderCache()
 
-    private final class Entry { let blocks: [RenderedBlock]; init(_ blocks: [RenderedBlock]) { self.blocks = blocks } }
-    private let cache = NSCache<NSString, Entry>()
-    /// How many times a body was parsed (for tests).
-    private let parsedCounter = NSLock()
+    private struct Entry {
+        let blocks: [RenderedBlock]
+        let cost: Int
+        var used: UInt64
+    }
+    /// A plain LRU bounded by text size. NSCache dropped entries under memory pressure at will, and a dropped body is
+    /// parsed again on the next draw: exactly the work this cache is for.
+    private let lock = NSLock()
+    private var entries: [String: Entry] = [:]
+    private var totalCost = 0
+    private var tick: UInt64 = 0
+    private let limit: Int
     private var parsedCount = 0
 
-    init(limit: Int = 8 << 20) { cache.totalCostLimit = limit }
+    init(limit: Int = 8 << 20) { self.limit = limit }
 
-    var parses: Int { parsedCounter.withLock { parsedCount } }
+    /// How many times a body was parsed (for tests).
+    var parses: Int { lock.withLock { parsedCount } }
 
     func blocks(for text: String, markdown: Bool, cached: Bool = true) -> [RenderedBlock] {
         guard cached else {
-            parsedCounter.withLock { parsedCount += 1 }
+            lock.withLock { parsedCount += 1 }
             return Self.build(text, markdown: markdown)
         }
-        let key = (markdown ? "m:" : "p:") + text as NSString
-        if let hit = cache.object(forKey: key) { return hit.blocks }
+        let key = (markdown ? "m:" : "p:") + text
+        if let hit = lock.withLock({ () -> [RenderedBlock]? in
+            guard var entry = entries[key] else { return nil }
+            tick += 1
+            entry.used = tick
+            entries[key] = entry
+            return entry.blocks
+        }) {
+            return hit
+        }
         let built = Self.build(text, markdown: markdown)
-        parsedCounter.withLock { parsedCount += 1 }
-        cache.setObject(Entry(built), forKey: key, cost: text.utf8.count)
+        lock.withLock {
+            parsedCount += 1
+            tick += 1
+            let cost = text.utf8.count
+            if let old = entries.updateValue(Entry(blocks: built, cost: cost, used: tick), forKey: key) {
+                totalCost -= old.cost
+            }
+            totalCost += cost
+            // Evict the least recently used until under the limit (rare: the limit holds thousands of messages).
+            while totalCost > limit, entries.count > 1,
+                let oldest = entries.min(by: { $0.value.used < $1.value.used })
+            {
+                totalCost -= oldest.value.cost
+                entries.removeValue(forKey: oldest.key)
+            }
+        }
         return built
     }
 
