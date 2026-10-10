@@ -801,7 +801,9 @@ A catalog of open skills the owner can install for the daemon user or for one ag
 
 **Install.** Refused first, before any write: an unknown id; a `.claude` or `.claude/skills` that is a link; a target that is a link or that does not canonicalize to a direct child of the canonical `base/.claude/skills` (`unsafe_path`); a folder that is not Bandito's (`exists_not_ours`). The files are every bundled file (LICENSE included) plus the marker. File modes: 0755 for anything under `scripts/` and for any file that starts with `#!`, 0644 for the rest.
 
-The write is atomic. The files go to a new folder `.claude/skills/.<id>.tmp-<rand>`. An older Bandito copy is renamed to `.<id>.old-<rand>`, the new folder takes the name `<id>`, and the old copy is removed. If the write fails, the old copy stays as it was and the temporary folder is removed. If the second rename fails, the old copy is renamed back. The dot-named folders are hidden from `commands.list`.
+The write is atomic. The files go to a new folder `.claude/skills/.<id>.tmp-<rand>`. An older Bandito copy is renamed to `.<id>.old-<rand>`, the new folder takes the name `<id>`, and the old copy is removed. If the write fails, the old copy stays as it was and the temporary folder is removed. If the second rename fails, the old copy is renamed back. The dot-named folders are hidden from `commands.list`. Before the write, `skills.install` deletes the leftovers of an earlier interrupted install of the same id (`.<id>.tmp-*`, `.<id>.old-*`, real folders only).
+
+`commands.install` with `kind: skill` and `overwrite: true` is the low-level owner method: it replaces the folder without the marker check, while `skills.install` checks the marker first.
 
 **Remove.** Removes `.claude/skills/<id>/` under the home (`user`) or the agent's folder (`project`), and only when it is Bandito's. A missing folder is `not_installed`; a folder that is not Bandito's is `not_ours`; a link is `unsafe_path`. Links inside the folder are removed as links and never followed, so nothing outside the folder is touched.
 
