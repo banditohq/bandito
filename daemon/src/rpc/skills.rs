@@ -43,8 +43,9 @@ pub(super) async fn dispatch_in(app: &App, home: Option<PathBuf>, method: &str, 
 }
 
 /// Each catalog entry, with `installed: {user, projects}` (the folders Bandito installed: the daemon user's home, and
-/// the ids of the agents whose folder has one) and `conflicts: {user, projects}` (folders with the same name that
-/// Bandito did not install, so an install would be refused).
+/// the ids of the agents whose folder has one), `conflicts: {user, projects}` (folders with the same name that Bandito
+/// did not install, so an install would be refused) and `updates: {user, projects}` (the installs above whose commit
+/// is not the catalog's: an update replaces them).
 fn catalog_view(home: Option<&Path>, agents: &[Agent]) -> Vec<Value> {
     let folders: Vec<(&str, &Path)> = agents
         .iter()
@@ -56,11 +57,18 @@ fn catalog_view(home: Option<&Path>, agents: &[Agent]) -> Vec<Value> {
             let id = entry.get("id").and_then(Value::as_str).unwrap_or_default().to_string();
             let state = |base: &Path| skills::slot(base, &id);
             let user = home.map(state);
+            let user_update = home.is_some_and(|h| skills::update_available(h, &id));
             let mut installed_projects = Vec::new();
             let mut conflict_projects = Vec::new();
+            let mut update_projects = Vec::new();
             for (agent, cwd) in &folders {
                 match state(cwd) {
-                    skills::Slot::Ours => installed_projects.push(*agent),
+                    skills::Slot::Ours => {
+                        installed_projects.push(*agent);
+                        if skills::update_available(cwd, &id) {
+                            update_projects.push(*agent);
+                        }
+                    }
                     skills::Slot::Foreign => conflict_projects.push(*agent),
                     skills::Slot::Absent => {}
                 }
@@ -72,6 +80,10 @@ fn catalog_view(home: Option<&Path>, agents: &[Agent]) -> Vec<Value> {
             entry["conflicts"] = json!({
                 "user": user == Some(skills::Slot::Foreign),
                 "projects": conflict_projects,
+            });
+            entry["updates"] = json!({
+                "user": user_update,
+                "projects": update_projects,
             });
             entry
         })
@@ -295,6 +307,88 @@ mod tests {
         assert_eq!(
             entry(&list, "systematic-debugging")["installed"],
             json!({"user": false, "projects": [id_agent]})
+        );
+    }
+
+    #[tokio::test]
+    async fn an_install_from_an_older_commit_is_flagged_per_folder_until_it_is_installed_again() {
+        let r = rig();
+        let home = TempDir::new().unwrap();
+        let cwd = TempDir::new().unwrap();
+        let id_agent = agent(&r.store, cwd.path());
+        let install = |scope: &str| {
+            let mut p = json!({"skill_id": "commit", "scope": scope});
+            if scope == "project" {
+                p["agent_id"] = json!(id_agent);
+            }
+            p
+        };
+        call(&r, home.path(), "skills.install", install("user")).await.unwrap();
+        call(&r, home.path(), "skills.install", install("project"))
+            .await
+            .unwrap();
+        let list = call(&r, home.path(), "skills.catalog", json!({})).await.unwrap();
+        assert_eq!(
+            entry(&list, "commit")["updates"],
+            json!({"user": false, "projects": []}),
+            "a fresh install is current"
+        );
+
+        // Both markers name an older commit than the catalog's.
+        for base in [home.path().to_path_buf(), cwd.path().to_path_buf()] {
+            let marker = base.join(".claude/skills/commit").join(MARKER);
+            fs::write(
+                &marker,
+                r#"{"id":"commit","commit":"0000000000000000000000000000000000000000"}"#,
+            )
+            .unwrap();
+        }
+        let list = call(&r, home.path(), "skills.catalog", json!({})).await.unwrap();
+        assert_eq!(
+            entry(&list, "commit")["installed"],
+            json!({"user": true, "projects": [id_agent]}),
+            "an old install still counts as installed"
+        );
+        assert_eq!(
+            entry(&list, "commit")["updates"],
+            json!({"user": true, "projects": [id_agent]})
+        );
+        assert_eq!(
+            entry(&list, "systematic-debugging")["updates"],
+            json!({"user": false, "projects": []}),
+            "an entry without an install has no update"
+        );
+
+        call(&r, home.path(), "skills.install", install("project"))
+            .await
+            .unwrap();
+        let list = call(&r, home.path(), "skills.catalog", json!({})).await.unwrap();
+        assert_eq!(
+            entry(&list, "commit")["updates"],
+            json!({"user": true, "projects": []}),
+            "only the folder that was installed again is current"
+        );
+        call(&r, home.path(), "skills.install", install("user")).await.unwrap();
+        let list = call(&r, home.path(), "skills.catalog", json!({})).await.unwrap();
+        assert_eq!(
+            entry(&list, "commit")["updates"],
+            json!({"user": false, "projects": []})
+        );
+    }
+
+    #[tokio::test]
+    async fn a_folder_that_is_not_ours_has_no_update() {
+        let r = rig();
+        let home = TempDir::new().unwrap();
+        own_folder(home.path(), "commit");
+        let list = call(&r, home.path(), "skills.catalog", json!({})).await.unwrap();
+        assert_eq!(
+            entry(&list, "commit")["conflicts"],
+            json!({"user": true, "projects": []})
+        );
+        assert_eq!(
+            entry(&list, "commit")["updates"],
+            json!({"user": false, "projects": []})
         );
     }
 

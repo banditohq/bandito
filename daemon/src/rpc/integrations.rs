@@ -77,6 +77,11 @@ fn no_integration(id: &str) -> RpcError {
     RpcError::new(SERVER_ERROR, format!("no integration {id}"))
 }
 
+/// The templates of the built-in catalog, as far as the update checks need them.
+fn catalog_templates() -> Result<Vec<integrations::Template>, RpcError> {
+    serde_json::from_str(CATALOG_JSON).map_err(|e| RpcError::new(SERVER_ERROR, format!("catalog: {e}")))
+}
+
 /// The ids of the agents that get the integration in their sessions.
 fn users_of(store: &Store, id: &str) -> Vec<String> {
     store
@@ -242,7 +247,42 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
     }
     let store = &app.sup.hub().store;
     match method {
-        "integrations.list" => ok(store.integration_list()?),
+        "integrations.list" => {
+            // Each row, with `template_update: {from, to}` when its catalog template has moved on (see `template_update`).
+            let templates = catalog_templates()?;
+            let mut items = Vec::new();
+            for row in store.integration_list()? {
+                let mut item = serde_json::to_value(&row).map_err(|e| RpcError::new(SERVER_ERROR, e.to_string()))?;
+                if let Some(update) = integrations::template_update(&row, &templates) {
+                    item["template_update"] = json!({ "from": update.from, "to": update.to });
+                }
+                items.push(item);
+            }
+            ok(items)
+        }
+        "integrations.update_from_template" => {
+            // Only command, args and url change; secrets, headers, env, enabled and the agents stay as they are. Like
+            // `integrations.update`, it neither restarts sessions nor sends an event.
+            let Id { id } = params(p)?;
+            let cur = store
+                .integration_get(&id)?
+                .ok_or_else(|| RpcError::new(SERVER_ERROR, format!("no integration {id}")))?;
+            let templates = catalog_templates()?;
+            let update = integrations::template_update(&cur, &templates).ok_or_else(|| {
+                RpcError::new(
+                    INVALID_PARAMS,
+                    "this integration has no update from its catalog template",
+                )
+            })?;
+            let patch = IntegrationPatch {
+                command: Some(update.template.command.clone()),
+                args: Some(update.template.args.clone()),
+                url: Some(update.template.url.clone()),
+                ..IntegrationPatch::default()
+            };
+            check_definition(&apply(&cur, &patch))?;
+            ok(store.integration_update(&id, patch)?)
+        }
         "integrations.catalog" => ok(serde_json::from_str::<Value>(CATALOG_JSON)
             .map_err(|e| RpcError::new(SERVER_ERROR, format!("catalog: {e}")))?),
         "integrations.add" => {
@@ -1271,6 +1311,7 @@ mod tests {
         for method in [
             "integrations.list",
             "integrations.add",
+            "integrations.update_from_template",
             "integrations.test",
             "integrations.probe",
         ] {
@@ -1281,6 +1322,146 @@ mod tests {
         }
         let catalog = owner(&app, "integrations.catalog", json!({})).await.unwrap();
         assert!(catalog.as_array().is_some_and(|c| c.len() >= 18));
+    }
+
+    /// The `integrations.list` row called `name`.
+    fn listed(list: &Value, name: &str) -> Value {
+        list.as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["name"] == name)
+            .unwrap()
+            .clone()
+    }
+
+    #[tokio::test]
+    async fn a_template_version_behind_is_listed_and_updated_with_the_secrets_kept() {
+        let app = app();
+        let made = owner(
+            &app,
+            "integrations.add",
+            json!({
+                "name": "grafana", "kind": "stdio", "command": "uvx", "args": ["mcp-grafana==1.0.0"],
+                "env": { "GRAFANA_TOKEN": "secret:GRAFANA_TOKEN" }, "enabled": false
+            }),
+        )
+        .await
+        .unwrap();
+        let id = made["id"].as_str().unwrap().to_string();
+        let list = owner(&app, "integrations.list", json!({})).await.unwrap();
+        assert_eq!(
+            listed(&list, "grafana")["template_update"],
+            json!({"from": "1.0.0", "to": "2.0.2"})
+        );
+
+        let done = owner(&app, "integrations.update_from_template", json!({ "id": id }))
+            .await
+            .unwrap();
+        assert_eq!(done["args"], json!(["mcp-grafana==2.0.2"]));
+        assert_eq!(done["command"], "uvx");
+        assert_eq!(done["env"], json!({"GRAFANA_TOKEN": "secret:GRAFANA_TOKEN"}));
+        assert_eq!(done["enabled"], false);
+        let list = owner(&app, "integrations.list", json!({})).await.unwrap();
+        assert!(
+            listed(&list, "grafana").get("template_update").is_none(),
+            "up to date: no field"
+        );
+        let again = owner(&app, "integrations.update_from_template", json!({ "id": id }))
+            .await
+            .unwrap_err();
+        assert_eq!(again.code, INVALID_PARAMS, "nothing left to take from the template");
+    }
+
+    #[tokio::test]
+    async fn a_moved_template_address_is_taken_and_the_headers_stay() {
+        let app = app();
+        let made = owner(
+            &app,
+            "integrations.add",
+            json!({
+                "name": "exa", "kind": "http", "url": "https://mcp.exa.ai/old",
+                "headers": { "x-api-key": "secret:EXA_API_KEY" }, "enabled": false
+            }),
+        )
+        .await
+        .unwrap();
+        let id = made["id"].as_str().unwrap().to_string();
+        let list = owner(&app, "integrations.list", json!({})).await.unwrap();
+        assert_eq!(
+            listed(&list, "exa")["template_update"],
+            json!({"from": null, "to": null})
+        );
+
+        let done = owner(&app, "integrations.update_from_template", json!({ "id": id }))
+            .await
+            .unwrap();
+        assert_eq!(done["url"], "https://mcp.exa.ai/mcp");
+        assert_eq!(done["headers"], json!({"x-api-key": "secret:EXA_API_KEY"}));
+        assert_eq!(done["command"], Value::Null);
+        assert_eq!(done["enabled"], false);
+    }
+
+    #[tokio::test]
+    async fn an_integration_with_the_owners_own_change_or_no_template_is_not_updated() {
+        let app = app();
+        for p in [
+            json!({"name": "my-grafana", "kind": "stdio", "command": "uvx", "args": ["mcp-grafana==1.0.0"]}),
+            json!({"name": "git", "kind": "stdio", "command": "uvx",
+                   "args": ["mcp-server-git", "--repository", "/Users/me/repo"]}),
+        ] {
+            let made = owner(&app, "integrations.add", p).await.unwrap();
+            let id = made["id"].as_str().unwrap().to_string();
+            let refused = owner(&app, "integrations.update_from_template", json!({ "id": id }))
+                .await
+                .unwrap_err();
+            assert_eq!(refused.code, INVALID_PARAMS, "{}", made["name"]);
+        }
+        let list = owner(&app, "integrations.list", json!({})).await.unwrap();
+        assert!(listed(&list, "my-grafana").get("template_update").is_none());
+        assert!(listed(&list, "git").get("template_update").is_none());
+        assert_eq!(
+            listed(&list, "git")["args"],
+            json!(["mcp-server-git", "--repository", "/Users/me/repo"])
+        );
+    }
+
+    #[tokio::test]
+    async fn a_browser_sign_in_is_never_updated_from_its_template() {
+        let app = app();
+        let linear = app
+            .sup
+            .hub()
+            .store
+            .integration_create(
+                serde_json::from_value(json!({
+                    "name": "linear", "kind": "http", "url": "https://mcp.linear.app/old", "auth": "oauth"
+                }))
+                .unwrap(),
+            )
+            .unwrap();
+        let list = owner(&app, "integrations.list", json!({})).await.unwrap();
+        assert!(listed(&list, "linear").get("template_update").is_none());
+        let refused = owner(&app, "integrations.update_from_template", json!({ "id": linear.id }))
+            .await
+            .unwrap_err();
+        assert_eq!(refused.code, INVALID_PARAMS);
+        assert_eq!(
+            app.sup
+                .hub()
+                .store
+                .integration_get(&linear.id)
+                .unwrap()
+                .unwrap()
+                .url
+                .as_deref(),
+            Some("https://mcp.linear.app/old"),
+            "the address is untouched"
+        );
+    }
+
+    #[test]
+    fn the_template_updates_feature_is_offered() {
+        assert!(crate::rpc::features().contains(&"template_updates"));
     }
 
     fn sh_server(script: &str, env: &[(&str, &str, bool)]) -> Server {

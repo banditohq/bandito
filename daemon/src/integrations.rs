@@ -223,6 +223,99 @@ pub struct Server {
     pub transport: Transport,
 }
 
+/// A template of the built-in catalog as far as an installed integration compares with it: the fields of
+/// `integrations_catalog.json` that a server is started with. The other fields are for the app and are ignored here.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+pub struct Template {
+    pub id: String,
+    pub kind: IntegrationKind,
+    #[serde(default)]
+    pub command: Option<String>,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub url: Option<String>,
+}
+
+/// What an integration made from a template gets when it is updated to the template: the template's command, args and
+/// url. `from` and `to` are the package versions that differ (`None` for a change of url, which has no version).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TemplateUpdate<'a> {
+    pub from: Option<String>,
+    pub to: Option<String>,
+    pub template: &'a Template,
+}
+
+/// A url without the slashes at its end: `https://x/mcp/` and `https://x/mcp` are the same address here.
+fn bare_url(url: &str) -> &str {
+    url.trim_end_matches('/')
+}
+
+/// The template an integration was made from: the one whose id is its name, else the one with the same url.
+fn template_of<'a>(row: &Integration, templates: &'a [Template]) -> Option<&'a Template> {
+    templates.iter().find(|t| t.id == row.name).or_else(|| {
+        let url = bare_url(row.url.as_deref()?);
+        templates.iter().find(|t| t.url.as_deref().map(bare_url) == Some(url))
+    })
+}
+
+/// The package and version an argument pins: `pkg@1.2.3` (npx; a scoped `@scope/pkg` with no version pins nothing) or
+/// `pkg==1.2.3` (uvx). Any other argument pins nothing.
+fn pinned(arg: &str) -> Option<(&str, &str)> {
+    if let Some((package, version)) = arg.split_once("==") {
+        return (!package.is_empty() && !version.is_empty()).then_some((package, version));
+    }
+    let at = arg.rfind('@').filter(|&at| at > 0)?;
+    let (package, version) = (&arg[..at], &arg[at + 1..]);
+    (!version.is_empty()).then_some((package, version))
+}
+
+/// Whether `ours` and `theirs` differ only in the version of a pinned package. `None` when they differ in anything
+/// else (a count, a flag, a path, another package). Otherwise the first version pair that differs, `(ours, theirs)`.
+fn args_differ_by_version(ours: &[String], theirs: &[String]) -> Option<Option<(String, String)>> {
+    if ours.len() != theirs.len() {
+        return None;
+    }
+    let mut first = None;
+    for (a, b) in ours.iter().zip(theirs) {
+        if a == b {
+            continue;
+        }
+        let (Some((pa, va)), Some((pb, vb))) = (pinned(a), pinned(b)) else {
+            return None;
+        };
+        if pa != pb {
+            return None;
+        }
+        first.get_or_insert_with(|| (va.to_string(), vb.to_string()));
+    }
+    Some(first)
+}
+
+/// The update the catalog template has for `row`. It exists when the row was made from a template (see
+/// [`template_of`]) and differs from it only in a package version or in the template's url. Browser sign-ins never
+/// get one: their address cannot change. `None` when nothing differs, and when another part of the command or the
+/// arguments differs (then the owner changed it, and an update would overwrite that).
+pub fn template_update<'a>(row: &Integration, templates: &'a [Template]) -> Option<TemplateUpdate<'a>> {
+    if row.auth == IntegrationAuth::Oauth {
+        return None;
+    }
+    let template = template_of(row, templates)?;
+    if template.kind != row.kind || row.command != template.command {
+        return None;
+    }
+    let version_change = args_differ_by_version(&row.args, &template.args)?;
+    let url_moved = row.url.as_deref().map(bare_url) != template.url.as_deref().map(bare_url);
+    if version_change.is_none() && !url_moved {
+        return None;
+    }
+    let (from, to) = match version_change {
+        Some((from, to)) => (Some(from), Some(to)),
+        None => (None, None),
+    };
+    Some(TemplateUpdate { from, to, template })
+}
+
 /// The integrations a session of an agent gets: enabled ones, and only those in the agent's list (`None` is
 /// every enabled one).
 pub fn for_agent<'a>(all: &'a [Integration], ids: Option<&[String]>) -> Vec<&'a Integration> {
@@ -798,5 +891,211 @@ mod tests {
             prompt_line(&["fetch", "gh"]).unwrap(),
             "Подключённые интеграции: fetch, gh. Используйте их инструменты, когда задача про эти сервисы."
         );
+    }
+}
+
+#[cfg(test)]
+mod update_tests {
+    use super::*;
+    use crate::store::{Integration, IntegrationAuth, IntegrationKind};
+    use std::collections::BTreeMap;
+
+    /// The templates of the real catalog, as the daemon reads them.
+    fn templates() -> Vec<Template> {
+        serde_json::from_str(include_str!("integrations_catalog.json")).unwrap()
+    }
+
+    fn row(name: &str, kind: IntegrationKind, command: Option<&str>, args: &[&str], url: Option<&str>) -> Integration {
+        Integration {
+            id: "row".into(),
+            name: name.into(),
+            kind,
+            command: command.map(Into::into),
+            args: args.iter().map(|a| a.to_string()).collect(),
+            url: url.map(Into::into),
+            env: BTreeMap::new(),
+            headers: BTreeMap::new(),
+            enabled: true,
+            created_at: 0,
+            auth: IntegrationAuth::None,
+        }
+    }
+
+    /// The versions an update of `r` goes from and to, or None when there is no update.
+    fn versions(r: &Integration) -> Option<(Option<String>, Option<String>)> {
+        template_update(r, &templates()).map(|u| (u.from, u.to))
+    }
+
+    fn ver(from: &str, to: &str) -> Option<(Option<String>, Option<String>)> {
+        Some((Some(from.into()), Some(to.into())))
+    }
+
+    #[test]
+    fn a_uvx_pin_and_an_npx_pin_are_version_changes() {
+        let grafana = row(
+            "grafana",
+            IntegrationKind::Stdio,
+            Some("uvx"),
+            &["mcp-grafana==1.0.0"],
+            None,
+        );
+        assert_eq!(versions(&grafana), ver("1.0.0", "2.0.2"));
+        let deepl = row(
+            "deepl",
+            IntegrationKind::Stdio,
+            Some("npx"),
+            &["-y", "deepl-mcp-server@1.3.0"],
+            None,
+        );
+        assert_eq!(versions(&deepl), ver("1.3.0", "1.3.13"));
+        // A scoped package keeps its own `@`: the version is what follows the last one.
+        let toolbox = row(
+            "toolbox-postgres",
+            IntegrationKind::Stdio,
+            Some("npx"),
+            &["-y", "@toolbox-sdk/server@1.13.0", "--prebuilt=postgres", "--stdio"],
+            None,
+        );
+        assert_eq!(versions(&toolbox), ver("1.13.0", "1.14.0"));
+    }
+
+    #[test]
+    fn the_same_version_or_no_pin_at_all_is_no_update() {
+        let same = row(
+            "deepl",
+            IntegrationKind::Stdio,
+            Some("npx"),
+            &["-y", "deepl-mcp-server@1.3.13"],
+            None,
+        );
+        assert_eq!(versions(&same), None);
+        // The template pins no version for this one, and neither does the row.
+        let brave = row(
+            "brave-search",
+            IntegrationKind::Stdio,
+            Some("npx"),
+            &["-y", "@brave/brave-search-mcp-server"],
+            None,
+        );
+        assert_eq!(versions(&brave), None);
+    }
+
+    #[test]
+    fn a_change_other_than_a_version_is_the_owners_own() {
+        // The repository path is the owner's: a version would not explain it.
+        let git = row(
+            "git",
+            IntegrationKind::Stdio,
+            Some("uvx"),
+            &["mcp-server-git", "--repository", "/Users/me/repo"],
+            None,
+        );
+        assert_eq!(versions(&git), None);
+        // Another package behind the pin, another command, another number of arguments, another kind.
+        let other_package = row(
+            "grafana",
+            IntegrationKind::Stdio,
+            Some("uvx"),
+            &["mcp-grafana-x==1.0.0"],
+            None,
+        );
+        assert_eq!(versions(&other_package), None);
+        let other_command = row(
+            "grafana",
+            IntegrationKind::Stdio,
+            Some("npx"),
+            &["mcp-grafana==1.0.0"],
+            None,
+        );
+        assert_eq!(versions(&other_command), None);
+        let extra_arg = row(
+            "grafana",
+            IntegrationKind::Stdio,
+            Some("uvx"),
+            &["mcp-grafana==1.0.0", "--x"],
+            None,
+        );
+        assert_eq!(versions(&extra_arg), None);
+        let other_kind = row(
+            "deepl",
+            IntegrationKind::Http,
+            None,
+            &[],
+            Some("https://example.com/mcp"),
+        );
+        assert_eq!(versions(&other_kind), None);
+    }
+
+    #[test]
+    fn an_integration_that_is_not_from_a_template_gets_nothing() {
+        // Its own name and no template address, even with an old pin.
+        let own = row(
+            "my-grafana",
+            IntegrationKind::Stdio,
+            Some("uvx"),
+            &["mcp-grafana==1.0.0"],
+            None,
+        );
+        assert_eq!(versions(&own), None);
+        let own_http = row(
+            "my-mcp",
+            IntegrationKind::Http,
+            None,
+            &[],
+            Some("https://mine.example.com/mcp"),
+        );
+        assert_eq!(versions(&own_http), None);
+    }
+
+    #[test]
+    fn a_moved_template_address_is_an_update_without_versions() {
+        let moved = row("exa", IntegrationKind::Http, None, &[], Some("https://mcp.exa.ai/old"));
+        assert_eq!(versions(&moved), Some((None, None)));
+        // The template's address with a slash at its end is the same address.
+        let slash = row(
+            "github",
+            IntegrationKind::Http,
+            None,
+            &[],
+            Some("https://api.githubcopilot.com/mcp"),
+        );
+        assert_eq!(versions(&slash), None);
+        // Another name, but the template's address: it was made from that template.
+        let renamed = row(
+            "docs",
+            IntegrationKind::Http,
+            None,
+            &[],
+            Some("https://mcp.exa.ai/mcp/"),
+        );
+        assert_eq!(versions(&renamed), None);
+    }
+
+    #[test]
+    fn a_browser_sign_in_never_gets_an_update() {
+        let mut linear = row(
+            "linear",
+            IntegrationKind::Http,
+            None,
+            &[],
+            Some("https://mcp.linear.app/old"),
+        );
+        linear.auth = IntegrationAuth::Oauth;
+        assert_eq!(versions(&linear), None);
+    }
+
+    #[test]
+    fn the_update_points_at_the_template_it_takes_its_pieces_from() {
+        let all = templates();
+        let grafana = row(
+            "grafana",
+            IntegrationKind::Stdio,
+            Some("uvx"),
+            &["mcp-grafana==1.0.0"],
+            None,
+        );
+        let update = template_update(&grafana, &all).unwrap();
+        assert_eq!(update.template.id, "grafana");
+        assert_eq!(update.template.args, vec!["mcp-grafana==2.0.2".to_string()]);
     }
 }

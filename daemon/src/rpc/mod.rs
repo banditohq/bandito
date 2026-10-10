@@ -91,6 +91,7 @@ pub fn features() -> Vec<&'static str> {
         "integrations",
         "integrations_probe",
         "integrations_oauth",
+        "template_updates",
         "avatar_pictures",
         "lead",
         "mentions",
@@ -1201,6 +1202,7 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
         | "integrations.catalog"
         | "integrations.add"
         | "integrations.update"
+        | "integrations.update_from_template"
         | "integrations.remove"
         | "integrations.test"
         | "integrations.probe"
