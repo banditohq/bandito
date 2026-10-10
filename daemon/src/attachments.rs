@@ -129,7 +129,23 @@ pub fn folder_for_today(cwd: &str, home: Option<&str>, data_home: &Path, day: &s
         return Err("the attachment folder is a symbolic link; attachments are not saved through links".into());
     }
     std::fs::create_dir_all(&dir).map_err(|e| format!("create {}: {e}", dir.display()))?;
+    if let Some(dot) = root.parent().filter(|d| d.file_name().is_some_and(|n| n == ".bandito")) {
+        keep_out_of_git(dot);
+    }
     Ok(dir)
+}
+
+/// Puts a `.gitignore` of `*` into the project's `.bandito` folder, so attachments (screenshots, documents) never end
+/// up in the project's commits. Only a new file is written: one already there, or a link in its place, is left alone.
+fn keep_out_of_git(dot: &Path) {
+    use std::io::Write;
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(dot.join(".gitignore"))
+    {
+        let _ = f.write_all(b"# Files sent to Bandito agents: not part of the project.\n*\n");
+    }
 }
 
 /// Whether `path` is a file inside one of the agent's attachment folders (any day). Its folders must be real
@@ -236,6 +252,21 @@ mod tests {
         let none = roots("/Users/u/.bandito", None, Path::new(DATA));
         assert!(none.is_empty());
         assert!(folder_for_today("/Users/u/.bandito", None, Path::new(DATA), "d").is_err());
+    }
+
+    #[test]
+    fn the_project_folder_gets_a_gitignore_once() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cwd = tmp.path().join("proj");
+        std::fs::create_dir_all(&cwd).unwrap();
+        let cwd_s = cwd.display().to_string();
+        folder_for_today(&cwd_s, None, Path::new(DATA), "2026-10-10").unwrap();
+        let ignore = cwd.join(".bandito/.gitignore");
+        assert!(std::fs::read_to_string(&ignore).unwrap().lines().any(|l| l == "*"));
+        // The person's own version stays.
+        std::fs::write(&ignore, "mine\n").unwrap();
+        folder_for_today(&cwd_s, None, Path::new(DATA), "2026-10-11").unwrap();
+        assert_eq!(std::fs::read_to_string(&ignore).unwrap(), "mine\n");
     }
 
     #[test]
