@@ -515,6 +515,7 @@
 "gestures.twoFingerSwipe.title" = "Balayage à deux doigts — retour et avance";
 "gestures.twoFingerSwipe.where" = "Partout";
 "inspector.aboutAgent" = "Infos sur l'agent";
+"inspector.addRole" = "Ajouter un rôle";
 "inspector.addSchedule" = "Ajouter une planification";
 "inspector.approvals" = "Approbations";
 "inspector.askRisky" = "Demander pour le risqué";
@@ -1407,7 +1408,7 @@
 "settings.updates.daemonServer" = "Démon sur le serveur";
 "settings.updates.intro" = "Versions de cette app et du démon sur votre serveur.";
 "settings.updates.latest" = "Dernière version";
-"settings.updates.openServer" = "Ouvrir Serveur → Mises à jour";
+"settings.updates.moreOnServer" = "Plus d’infos sur l’écran « Serveur »";
 "settings.updates.restartDaemon" = "Redémarrer le démon";
 "settings.updates.stable" = "Stable";
 "settings.updates.stableDesc" = "Versions éprouvées";
@@ -1534,6 +1535,7 @@
 "template.scratch.desc" = "Un agent vide : vous choisissez le nom, le rôle et les instructions.";
 "template.scratch.meta" = "N'importe quel modèle";
 "template.scratch.title" = "À partir de zéro";
+"terminals.agentTitle" = "Terminal · %1$@";
 "terminals.confirmClose.cancel" = "Annuler";
 "terminals.confirmClose.end" = "Terminer le processus";
 "terminals.confirmClose.title" = "Le processus tourne encore. Le terminer ?";
@@ -1710,9 +1712,11 @@
 "workbench.details" = "Détails";
 "workbench.emptyHint" = "Ouvrez un terminal, le navigateur, un fichier ou les modifications à côté du chat.";
 "workbench.emptyTitle" = "Rien n'est encore ouvert ici";
+"workbench.endSession" = "Fermer la session";
 "workbench.moveToOtherPane" = "Déplacer vers l'autre panneau";
 "workbench.newTerminal" = "Nouveau terminal";
 "workbench.openNewTerminal" = "En ouvrir un nouveau";
+"workbench.rename" = "Renommer…";
 "workbench.show" = "Afficher";
 "workbench.showHere" = "Afficher ici";
 "workbench.split" = "Diviser le panneau";

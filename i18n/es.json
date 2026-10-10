@@ -1491,7 +1491,6 @@
   "settings.updates.app": "App",
   "settings.updates.daemonServer": "Demonio en el servidor",
   "settings.updates.latest": "Última versión",
-  "settings.updates.openServer": "Abrir Servidor → Actualizaciones",
   "updates.daemonVersion": "Versión del demonio",
   "updates.latestVersion": "Última versión",
   "updates.mostRecent": "Tiene la versión más reciente",
@@ -1889,5 +1888,10 @@
   "workbench.terminalInOtherPane": "Abierto en otro panel",
   "workbench.showHere": "Mostrar aquí",
   "workbench.terminalFailed": "El terminal no se pudo abrir.",
-  "workbench.openNewTerminal": "Abrir uno nuevo"
+  "workbench.openNewTerminal": "Abrir uno nuevo",
+  "workbench.endSession": "Cerrar sesión",
+  "settings.updates.moreOnServer": "Más en la pantalla «Servidor»",
+  "terminals.agentTitle": "Terminal · {name}",
+  "inspector.addRole": "Añadir rol",
+  "workbench.rename": "Renombrar…"
 }

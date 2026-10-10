@@ -12,7 +12,14 @@ final class TerminalController {
     let server: ServerModel
     let workspace: TerminalWorkspace
     let font: TerminalFontStore
-    private(set) var sessions: [String: TerminalSession] = [:]
+    /// The sessions by id. Changing them renames the terminals that need it (see `refreshNames`).
+    private(set) var sessions: [String: TerminalSession] = [:] {
+        didSet { refreshNames() }
+    }
+    /// The name of each session on screen, by id. Kept, so a name is not worked out again on every read.
+    private(set) var names: [String: String] = [:]
+    /// The numbers of same-named sessions; a number stays with its session.
+    @ObservationIgnored private var numbering = TerminalNumbering()
     /// A place takes the terminal views: the Terminals mode, or a pane of a workbench. The last claim wins.
     func claimDisplay(_ place: String) {
         display.claim(place)
@@ -46,6 +53,25 @@ final class TerminalController {
 
     func session(for id: String) -> TerminalSession? {
         sessions[id]
+    }
+
+    /// The name the session has on screen (see `TerminalNames`), or nil when the session is not here.
+    func displayTitle(_ id: String) -> String? {
+        names[id]
+    }
+
+    /// Works the names out again: when the sessions change, when a session is renamed, and when the server's
+    /// sessions are read again (the agents may have changed with them).
+    func refreshNames() {
+        let infos = sessions.values.map(\.info)
+        let agents = server.agents.map { (name: $0.name, cwd: $0.cwd) }
+        let title: (String) -> String = { L10n.Terminals.agentTitle(name: $0) }
+        numbering.sync(infos) { TerminalNames.baseName(of: $0, agents: agents, agentTitle: title) }
+        names = Dictionary(
+            uniqueKeysWithValues: infos.map {
+                ($0.id, TerminalNames.displayName(
+                    of: $0, number: numbering.number(of: $0.id), agents: agents, agentTitle: title))
+            })
     }
 
     func clearNotice() {
@@ -100,6 +126,7 @@ final class TerminalController {
             }
             isListed = true
             notice = nil
+            refreshNames()
         } catch {
             notice = UserFacingError.message(for: error)
         }
@@ -187,6 +214,7 @@ final class TerminalController {
 
     func rename(_ id: String, to title: String) async {
         await sessions[id]?.rename(to: title)
+        refreshNames()
     }
 
     // MARK: layout and dock

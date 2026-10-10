@@ -1470,7 +1470,6 @@
   "settings.updates.app": "应用",
   "settings.updates.daemonServer": "服务器上的守护进程",
   "settings.updates.latest": "最新版本",
-  "settings.updates.openServer": "打开“服务器 → 更新”",
   "updates.daemonVersion": "守护进程版本",
   "updates.latestVersion": "最新版本",
   "updates.mostRecent": "您使用的是最新版本",
@@ -1866,5 +1865,10 @@
   "workbench.terminalInOtherPane": "已在另一个面板中打开",
   "workbench.showHere": "在这里显示",
   "workbench.terminalFailed": "终端未能打开。",
-  "workbench.openNewTerminal": "重新打开"
+  "workbench.openNewTerminal": "重新打开",
+  "workbench.endSession": "关闭会话",
+  "settings.updates.moreOnServer": "在“服务器”页面查看详情",
+  "terminals.agentTitle": "终端 · {name}",
+  "inspector.addRole": "添加角色",
+  "workbench.rename": "重命名…"
 }

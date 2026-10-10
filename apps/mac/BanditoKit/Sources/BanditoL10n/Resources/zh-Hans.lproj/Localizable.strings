@@ -515,6 +515,7 @@
 "gestures.twoFingerSwipe.title" = "双指滑动 — 后退和前进";
 "gestures.twoFingerSwipe.where" = "全局";
 "inspector.aboutAgent" = "代理信息";
+"inspector.addRole" = "添加角色";
 "inspector.addSchedule" = "添加计划";
 "inspector.approvals" = "审批";
 "inspector.askRisky" = "危险操作需确认";
@@ -1407,7 +1408,7 @@
 "settings.updates.daemonServer" = "服务器上的守护进程";
 "settings.updates.intro" = "此应用及服务器上守护进程的版本。";
 "settings.updates.latest" = "最新版本";
-"settings.updates.openServer" = "打开“服务器 → 更新”";
+"settings.updates.moreOnServer" = "在“服务器”页面查看详情";
 "settings.updates.restartDaemon" = "重启守护进程";
 "settings.updates.stable" = "稳定版";
 "settings.updates.stableDesc" = "经过测试的版本";
@@ -1534,6 +1535,7 @@
 "template.scratch.desc" = "空白代理：名称、角色和指令可自由设定。";
 "template.scratch.meta" = "任意模型";
 "template.scratch.title" = "从零开始";
+"terminals.agentTitle" = "终端 · %1$@";
 "terminals.confirmClose.cancel" = "取消";
 "terminals.confirmClose.end" = "结束进程";
 "terminals.confirmClose.title" = "进程仍在运行。要结束它吗？";
@@ -1710,9 +1712,11 @@
 "workbench.details" = "详情";
 "workbench.emptyHint" = "在聊天旁边打开终端、浏览器、文件或更改。";
 "workbench.emptyTitle" = "这里还没有打开的内容";
+"workbench.endSession" = "关闭会话";
 "workbench.moveToOtherPane" = "移到另一个面板";
 "workbench.newTerminal" = "新建终端";
 "workbench.openNewTerminal" = "重新打开";
+"workbench.rename" = "重命名…";
 "workbench.show" = "显示";
 "workbench.showHere" = "在这里显示";
 "workbench.split" = "拆分面板";

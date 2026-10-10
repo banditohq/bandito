@@ -1490,7 +1490,6 @@
   "settings.updates.app": "App",
   "settings.updates.daemonServer": "Daemon auf dem Server",
   "settings.updates.latest": "Neueste Version",
-  "settings.updates.openServer": "Server → Updates öffnen",
   "updates.daemonVersion": "Daemon-Version",
   "updates.latestVersion": "Neueste Version",
   "updates.mostRecent": "Sie haben die neueste Version",
@@ -1888,5 +1887,10 @@
   "workbench.terminalInOtherPane": "In einem anderen Bereich geöffnet",
   "workbench.showHere": "Hier anzeigen",
   "workbench.terminalFailed": "Das Terminal konnte nicht geöffnet werden.",
-  "workbench.openNewTerminal": "Neues öffnen"
+  "workbench.openNewTerminal": "Neues öffnen",
+  "workbench.endSession": "Sitzung beenden",
+  "settings.updates.moreOnServer": "Mehr auf dem Bildschirm „Server“",
+  "terminals.agentTitle": "Terminal · {name}",
+  "inspector.addRole": "Rolle hinzufügen",
+  "workbench.rename": "Umbenennen…"
 }

@@ -144,7 +144,7 @@ private struct TerminalsSidebarList: View {
                         .frame(width: 7, height: 7)
                 }
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(session?.info.title ?? id)
+                    Text(controller.displayTitle(id) ?? id)
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(Color.Bandito.text)
                         .lineLimit(1)

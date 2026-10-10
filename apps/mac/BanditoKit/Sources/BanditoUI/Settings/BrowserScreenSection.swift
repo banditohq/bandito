@@ -27,7 +27,10 @@ struct BrowserScreenSection: View {
                     .fixedSize()
                 }
                 Divider().padding(.horizontal, 16)
-                SettingsRow(title: L10n.Settings.BrowserScreen.clipboard, hint: L10n.Settings.BrowserScreen.clipboardHint) {
+                SettingsRow(
+                    title: L10n.Settings.BrowserScreen.clipboard, hint: L10n.Settings.BrowserScreen.clipboardHint,
+                    keepsControlBeside: true
+                ) {
                     Toggle("", isOn: $sharedClipboard)
                         .labelsHidden()
                         .toggleStyle(BanditoToggleStyle())

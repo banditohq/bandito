@@ -1470,7 +1470,6 @@
   "settings.updates.app": "アプリ",
   "settings.updates.daemonServer": "サーバーのデーモン",
   "settings.updates.latest": "最新リリース",
-  "settings.updates.openServer": "サーバー → アップデート を開く",
   "updates.daemonVersion": "デーモンのバージョン",
   "updates.latestVersion": "最新リリース",
   "updates.mostRecent": "最新バージョンを使用しています",
@@ -1866,5 +1865,10 @@
   "workbench.terminalInOtherPane": "別のペインで開いています",
   "workbench.showHere": "ここに表示",
   "workbench.terminalFailed": "ターミナルを開けませんでした。",
-  "workbench.openNewTerminal": "新しく開く"
+  "workbench.openNewTerminal": "新しく開く",
+  "workbench.endSession": "セッションを終了",
+  "settings.updates.moreOnServer": "「サーバー」画面で詳しく見る",
+  "terminals.agentTitle": "ターミナル · {name}",
+  "inspector.addRole": "役割を追加",
+  "workbench.rename": "名前を変更…"
 }

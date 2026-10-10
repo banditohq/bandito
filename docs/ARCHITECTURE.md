@@ -69,6 +69,7 @@ Everything an agent does becomes a row in `events` (append-only, global `seq`). 
 | `agent.status` | `{status: "idle"\|"working"\|"needs_you"\|"error"\|"offline", detail?}` |
 | `usage.limits` | `{runtime, windows:[{name, utilization, resets_at}]}` |
 | `runtime.switched` | `{from, to, until?}`: the agent moved to another runtime (see [Fallback subscription](#fallback-subscription)); `until` is when the limit resets (Unix seconds), if known |
+| `agent_changed` | `{action: "created"\|"updated"\|"deleted"}`: an agent record was created, changed or deleted, by any client or path (RPC `agents.create`/`update`/`delete`, pause, runtime switch). Clients re-read `agents.list` on `created`/`updated`, and on an event from an agent they do not know; `deleted` removes the agent locally. No event for bookkeeping fields (context size, chapter, session) |
 | `error` | `{message}` |
 
 ## Approvals (policy)

@@ -24,9 +24,9 @@ struct WorkbenchView: View {
             let divider = split ? WorkbenchSplitHandle.height : 0
             let share = WorkbenchLayout.clampSplit(storedSplit)
             let top = split ? max(0, (proxy.size.height - divider) * share) : proxy.size.height
-            let compact = proxy.size.width < Self.compactBelow
+            let panelWidth = Double(proxy.size.width)
             VStack(spacing: 0) {
-                pane(0, showsPanelActions: true, compact: compact)
+                pane(0, showsPanelActions: true, panelWidth: panelWidth)
                     .frame(height: top)
                     .id(0)
                 WorkbenchSplitHandle(
@@ -39,7 +39,7 @@ struct WorkbenchView: View {
                     .frame(height: divider)
                     .opacity(split ? 1 : 0)
                     .allowsHitTesting(split)
-                pane(1, showsPanelActions: false, compact: compact)
+                pane(1, showsPanelActions: false, panelWidth: panelWidth)
                     .frame(maxHeight: split ? .infinity : 0)
                     .clipped()
                     .allowsHitTesting(split)
@@ -74,17 +74,14 @@ struct WorkbenchView: View {
         }
     }
 
-    /// Below this width the panel's header drops the split button.
-    static let compactBelow: CGFloat = 420
-
     /// One pane: its tab strip, and the content of its selected tab. A click anywhere in it focuses it. An index the
     /// state does not have (the second pane while not split) shows an empty pane, which is hidden.
-    private func pane(_ index: Int, showsPanelActions: Bool, compact: Bool) -> some View {
+    private func pane(_ index: Int, showsPanelActions: Bool, panelWidth: Double) -> some View {
         let pane = WorkbenchRules.pane(index, of: state)
         let focused = state.isSplit && state.focusedPane == index
         return VStack(spacing: 0) {
             WorkbenchHeader(
-                server: server, agent: agent, pane: index, showsPanelActions: showsPanelActions, compact: compact)
+                server: server, agent: agent, pane: index, showsPanelActions: showsPanelActions, panelWidth: panelWidth)
             Rectangle().fill(Color.Bandito.line).frame(height: 1)
             if let tab = pane.selected {
                 WorkbenchTabContent(
@@ -164,11 +161,13 @@ private struct WorkbenchHeader: View {
     var pane: Int
     /// Split and close belong to the panel as a whole: only the top pane's header has them.
     var showsPanelActions: Bool
-    /// A narrow panel: the split button is dropped, the tabs and the close button stay.
-    var compact = false
+    /// The whole panel's width. Narrow, the inactive tabs drop their names (see `WorkbenchLayout.showsTabTitle`).
+    var panelWidth: Double
 
     @Environment(AppModel.self) private var app
     @Environment(Router.self) private var router
+    /// The running terminal the person is asked about before its session ends (from a tab's menu).
+    @State private var endCandidate: String?
 
     private var state: WorkbenchState { router.workbenchState(for: agent.id) }
     // The second pane stays in the view tree with no height while the panel is not split, so its index can be past
@@ -177,19 +176,32 @@ private struct WorkbenchHeader: View {
 
     var body: some View {
         HStack(spacing: 6) {
+            // The strip takes what the buttons leave and scrolls sideways; the buttons never leave the panel.
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 4) {
                     ForEach(paneState.tabs, id: \.self) { tab in
+                        let selected = tab == paneState.selected
                         WorkbenchTabButton(
-                            title: title(for: tab), tab: tab, selected: tab == paneState.selected,
-                            agentID: agent.id, paneIndex: pane, paneCount: state.panes.count)
+                            title: title(for: tab), help: help(for: tab), tab: tab,
+                            selected: selected,
+                            showsTitle: WorkbenchLayout.showsTabTitle(selected: selected, panelWidth: panelWidth),
+                            agentID: agent.id, paneIndex: pane, paneCount: state.panes.count,
+                            onEndSession: { requestEnd($0) },
+                            rawName: rawName(for: tab),
+                            onRename: { id, name in
+                                #if os(macOS)
+                                Task { await app.terminalController(for: server).rename(id, to: name) }
+                                #endif
+                            })
                     }
                 }
                 .padding(.vertical, 2)
             }
             .frame(maxWidth: .infinity)
+            .layoutPriority(0)
             addMenu
-            if showsPanelActions && !compact {
+                .layoutPriority(1)
+            if showsPanelActions {
                 Button {
                     router.toggleWorkbenchSplit(agentID: agent.id)
                 } label: {
@@ -200,6 +212,7 @@ private struct WorkbenchHeader: View {
                 .banditoButton(.icon(size: 28, label: state.isSplit ? L10n.Workbench.unsplit : L10n.Workbench.split))
                 .help(state.isSplit ? L10n.Workbench.unsplit : L10n.Workbench.split)
                 .fixedSize()
+                .layoutPriority(1)
                 Button {
                     router.closeWorkbenchPanel(agentID: agent.id)
                 } label: {
@@ -210,10 +223,35 @@ private struct WorkbenchHeader: View {
                 .banditoButton(.icon(size: 28, label: L10n.Workbench.closePanel))
                 .help(L10n.Workbench.closePanel)
                 .fixedSize()
+                .layoutPriority(1)
             }
         }
         .padding(.horizontal, 10)
         .frame(height: 46)
+        .confirmationDialog(
+            L10n.Terminals.ConfirmClose.title,
+            isPresented: Binding(get: { endCandidate != nil }, set: { if !$0 { endCandidate = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button(L10n.Terminals.ConfirmClose.end, role: .destructive) {
+                if let id = endCandidate {
+                    Task { await app.terminalController(for: server).close(id) }
+                }
+            }
+            Button(L10n.Terminals.ConfirmClose.cancel, role: .cancel) {}
+        }
+    }
+
+    /// Ends a terminal's session from its tab. A running process is asked about first, as in Terminals mode.
+    private func requestEnd(_ id: String) {
+        #if os(macOS)
+        let controller = app.terminalController(for: server)
+        if let info = controller.session(for: id)?.info, case .running = info.state {
+            endCandidate = id
+        } else {
+            Task { await controller.close(id) }
+        }
+        #endif
     }
 
     /// Opens `tab` in this pane: the pane is focused first, so the tab lands here.
@@ -256,9 +294,29 @@ private struct WorkbenchHeader: View {
         }
     }
 
+    /// A terminal's name as the person gave it; nil for other tabs and for a terminal not here.
+    private func rawName(for tab: WorkbenchTab) -> String? {
+        #if os(macOS)
+        if case .terminal(let id) = tab {
+            return app.terminalController(for: server).session(for: id)?.info.title
+        }
+        #endif
+        return nil
+    }
+
+    /// The tooltip of a tab: a terminal's folder, which the name does not show. Other tabs have none.
+    private func help(for tab: WorkbenchTab) -> String? {
+        #if os(macOS)
+        if case .terminal(let id) = tab {
+            return app.terminalController(for: server).session(for: id)?.info.cwd
+        }
+        #endif
+        return nil
+    }
+
     private func terminalTitle(_ id: String) -> String {
         #if os(macOS)
-        app.terminalController(for: server).session(for: id)?.info.title ?? L10n.Workbench.terminal
+        app.terminalController(for: server).displayTitle(id) ?? L10n.Workbench.terminal
         #else
         L10n.Workbench.terminal
         #endif
@@ -276,49 +334,105 @@ private struct WorkbenchHeader: View {
 /// One tab of the strip: the name, and a close button that shows on the selected or hovered tab.
 private struct WorkbenchTabButton: View {
     var title: String
+    /// The tooltip of the tab, if it has one (a terminal's folder).
+    var help: String?
     var tab: WorkbenchTab
     var selected: Bool
+    /// Whether the name shows; without it the tab is its icon, and the name is in the tooltip.
+    var showsTitle: Bool
     var agentID: String
     var paneIndex: Int
     var paneCount: Int
+    /// Ends the session of a terminal tab (its menu item). Called with the terminal's id.
+    var onEndSession: (String) -> Void
+    /// A terminal's name as the person gave it (the field's start), and the rename of a terminal (called with the new name).
+    var rawName: String?
+    var onRename: (String, String) -> Void
 
     @Environment(Router.self) private var router
     @State private var hovering = false
+    /// The tab is a name field while a terminal is renamed.
+    @State private var renaming = false
+    @State private var draft = ""
+    @FocusState private var nameFocused: Bool
+
+    private var terminalID: String? {
+        if case .terminal(let id) = tab { return id }
+        return nil
+    }
+
+    /// The field starts with the name as the person gave it, and the rename is the same as in Terminals mode.
+    private func startRename() {
+        draft = rawName ?? title
+        renaming = true
+        nameFocused = true
+    }
+
+    private func commitRename(_ id: String) {
+        renaming = false
+        let name = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, name != rawName else { return }
+        onRename(id, name)
+    }
+
+    /// With the name shown, the tooltip is the folder (terminals). Without it, the name comes first.
+    private var tooltip: String {
+        if showsTitle { return help ?? "" }
+        return [title, help].compactMap { $0 }.joined(separator: "\n")
+    }
 
     var body: some View {
         HStack(spacing: 2) {
-            Button {
-                router.selectWorkbenchTab(tab, agentID: agentID)
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: tab.systemImage)
-                        .font(.system(size: 12, weight: .medium))
-                    Text(title)
-                        .font(BanditoFont.font(size: 12.5, weight: 500))
-                        .lineLimit(1)
-                        .fixedSize()
+            if renaming, let terminalID {
+                TextField(L10n.Terminals.rename, text: $draft)
+                    .textFieldStyle(.plain)
+                    .font(BanditoFont.font(size: 12.5, weight: 500))
+                    .frame(width: 170)
+                    .padding(.horizontal, 9)
+                    .frame(height: 30)
+                    .focused($nameFocused)
+                    .onSubmit { commitRename(terminalID) }
+                    .onExitCommand { renaming = false }
+            } else {
+                Button {
+                    router.selectWorkbenchTab(tab, agentID: agentID)
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: tab.systemImage)
+                            .font(.system(size: 12, weight: .medium))
+                        if showsTitle {
+                            // A long name is cut at the end; the whole name is the tooltip.
+                            Text(title)
+                                .font(BanditoFont.font(size: 12.5, weight: 500))
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                                .frame(maxWidth: 180, alignment: .leading)
+                        }
+                    }
+                    .foregroundStyle(selected ? Color.Bandito.text : Color.Bandito.text2)
+                    .padding(.leading, 9)
+                    .padding(.trailing, showsTitle ? 6 : 9)
+                    .frame(height: 30)
                 }
-                .foregroundStyle(selected ? Color.Bandito.text : Color.Bandito.text2)
-                .padding(.leading, 9)
-                .padding(.trailing, 6)
-                .frame(height: 30)
-            }
-            .banditoButton(.row(cornerRadius: 8, hoverOpacity: 0.06))
-            .help(title)
+                .banditoButton(.row(cornerRadius: 8, hoverOpacity: 0.06))
+                .help(tooltip)
+                .accessibilityLabel(title)
 
-            Button {
-                router.closeWorkbenchTab(tab, agentID: agentID)
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(Color.Bandito.text3)
-                    .frame(width: 18, height: 18)
+                Button {
+                    router.closeWorkbenchTab(tab, agentID: agentID)
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(Color.Bandito.text3)
+                        .frame(width: 18, height: 18)
+                }
+                .banditoButton(.icon(size: 18, label: L10n.Workbench.closeTab))
+                // Its name is for VoiceOver only: a tooltip here would take the hover from the tab.
+                .accessibilityLabel(L10n.Workbench.closeTab)
+                .opacity(selected || hovering ? 1 : 0)
+                .allowsHitTesting(selected || hovering)
+                .padding(.trailing, 4)
             }
-            .banditoButton(.icon(size: 18, label: L10n.Workbench.closeTab))
-            .help(L10n.Workbench.closeTab)
-            .opacity(selected || hovering ? 1 : 0)
-            .allowsHitTesting(selected || hovering)
-            .padding(.trailing, 4)
         }
         .background(
             selected ? Color.Bandito.text.opacity(0.07) : Color.clear,
@@ -332,6 +446,10 @@ private struct WorkbenchTabButton: View {
             }
             Button(L10n.Workbench.closeTab) {
                 router.closeWorkbenchTab(tab, agentID: agentID)
+            }
+            if let terminalID {
+                Button(L10n.Workbench.rename) { startRename() }
+                Button(L10n.Workbench.endSession) { onEndSession(terminalID) }
             }
         }
     }
@@ -427,19 +545,21 @@ private struct WorkbenchEmpty: View {
 /// Opening the agent's terminal in the panel. The terminals are the server's, shared with Terminals mode.
 @MainActor
 enum WorkbenchTerminals {
-    /// Shows the terminal of the agent: the newest one open in the agent's folder, else a new terminal there.
+    /// Shows the terminal of the agent: the newest running one in the agent's folder, else a new terminal there.
     static func showAgentTerminal(server: ServerModel, agent: Agent, app: AppModel, router: Router) {
         let controller = app.terminalController(for: server)
-        if let existing = inFolder(agent.cwd, of: controller) {
-            router.showInWorkbench(.terminal(sessionID: existing), agentID: agent.id)
-            return
-        }
         // A request while one is opening is dropped: one agent opens one terminal at a time.
         guard router.beginOpeningTerminal(agentID: agent.id) else { return }
         Task {
             defer { router.endOpeningTerminal(agentID: agent.id) }
+            // The server's sessions are read first: until then the controller has none, and a terminal would be opened
+            // again each time the agent's terminal is asked for.
             await controller.start()
             controller.clearNotice()
+            if let existing = inFolder(agent.cwd, of: controller) {
+                router.showInWorkbench(.terminal(sessionID: existing), agentID: agent.id)
+                return
+            }
             // The id comes from the open itself. On failure the panel says so; no other session is shown in its place.
             if let opened = await controller.openNew(cwd: agent.cwd, afterFocused: false) {
                 router.showInWorkbench(.terminal(sessionID: opened), agentID: agent.id)
@@ -452,10 +572,8 @@ enum WorkbenchTerminals {
 
     /// The running session in `folder` that was made last, if any.
     private static func inFolder(_ folder: String, of controller: TerminalController) -> String? {
-        controller.sessions.values
-            .filter { $0.info.cwd == folder && $0.exit == nil }
-            .max { $0.info.createdAt < $1.info.createdAt }?
-            .id
+        let running = controller.sessions.values.filter { $0.exit == nil }.map(\.info)
+        return TerminalNames.newestSession(in: folder, among: running)?.id
     }
 }
 
@@ -480,7 +598,7 @@ private struct WorkbenchTerminal: View {
             if let session = controller.session(for: sessionID), controller.display.isOwner(place) {
                 TerminalPaneView(
                     controller: controller, session: session, isFocused: true,
-                    requestClose: { requestClose($0, controller: controller) })
+                    requestClose: { requestClose($0, controller: controller) }, compact: true)
             } else if controller.session(for: sessionID) != nil {
                 VStack(spacing: 12) {
                     Image(systemName: "terminal")

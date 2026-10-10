@@ -14,22 +14,24 @@ struct TeamMode: View {
     /// The panel width the person chose; one for the whole app. Kept in range by `WorkbenchLayout.clampWidth`.
     @AppStorage(WorkbenchLayout.widthKey) private var storedWidth = WorkbenchLayout.defaultWidth
 
-    /// The chat keeps at least this much when the panel sits beside it; less, and the panel covers the chat.
-    private static let chatMinWidth: Double = 420
-    /// Below this width of the mode area the panel always covers the chat.
-    private static let coverBelow: Double = 1100
-
     var body: some View {
         if let server = app.currentServer, let agent = shownAgent(on: server) {
             let open = router.workbenchState(for: agent.id).isOpen
             GeometryReader { proxy in
                 let modeWidth = Double(proxy.size.width)
-                let width = WorkbenchLayout.clampWidth(storedWidth, windowWidth: modeWidth)
-                let covers = modeWidth < Self.coverBelow || modeWidth - width < Self.chatMinWidth
+                let width = WorkbenchLayout.fittedWidth(stored: storedWidth, modeWidth: modeWidth)
+                let covers = WorkbenchLayout.coversChat(modeWidth: modeWidth, panelWidth: width)
                 // One tree: the chat is always the first child. The panel is placed beside it or over it.
                 ZStack(alignment: .trailing) {
                     chat(server: server, agent: agent)
                         .padding(.trailing, open && !covers ? width : 0)
+                    if open && covers {
+                        // Over the chat the panel dims it; a click on the dimming closes the panel.
+                        Color.black.opacity(0.28)
+                            .contentShape(Rectangle())
+                            .onTapGesture { router.closeWorkbenchPanel(agentID: agent.id) }
+                            .transition(.opacity)
+                    }
                     if open {
                         panel(server: server, agent: agent, width: width, modeWidth: modeWidth, covers: covers)
                             .transition(.move(edge: .trailing).combined(with: .opacity))
@@ -72,8 +74,11 @@ struct TeamMode: View {
         HStack(spacing: 0) {
             WorkbenchResizeHandle(
                 onCommit: { translation in
-                    // The panel sits on the right: dragging left makes it wider.
-                    storedWidth = WorkbenchLayout.clampWidth(width - translation, windowWidth: modeWidth)
+                    if let dragged = WorkbenchLayout.draggedWidth(
+                        stored: storedWidth, translation: translation, windowWidth: modeWidth)
+                    {
+                        storedWidth = dragged
+                    }
                 },
                 onReset: { storedWidth = WorkbenchLayout.defaultWidth })
             WorkbenchView(server: server, agent: agent)

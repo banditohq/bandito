@@ -27,6 +27,18 @@ public final class AppModel {
         }
     }
 
+    /// Re-reads the agents of each connected server when the app comes back to the front, if the last read is old
+    /// (see `ServerModel.refreshAgentsIfStale`). Runs until it is cancelled; the root view starts it once.
+    public func watchAppActivation() async {
+        #if os(macOS)
+        for await _ in NotificationCenter.default.notifications(named: NSApplication.didBecomeActiveNotification) {
+            for server in servers where server.state == .connected {
+                server.refreshAgentsIfStale()
+            }
+        }
+        #endif
+    }
+
     /// Called when the server in front changes. The app drops the actions that were aimed at the old server.
     @ObservationIgnored public var onServerChanged: (() -> Void)?
     /// The last problem the user should know about (e.g. a token that could not be stored).

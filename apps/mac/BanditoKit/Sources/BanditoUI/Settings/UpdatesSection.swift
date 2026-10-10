@@ -53,6 +53,15 @@ struct UpdatesSection: View {
                         .lineLimit(1)
                         .truncationMode(.middle)
                     ServerUpdateActions(server: server)
+                    Button(L10n.Settings.Updates.moreOnServer) {
+                        // The Server page is in the main window: Settings closes, and the page opens there.
+                        SettingsHandoff.openMainWindow(router: router) { router in
+                            router.select(mode: .server)
+                            router.serverSection = .updates
+                        }
+                    }
+                    .banditoButton(.link)
+                    .fixedSize()
                 }
                 .padding(16)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -65,14 +74,8 @@ struct UpdatesSection: View {
                     Task { await release.load() }
                 }
                 .banditoButton(.quiet())
-                Button(L10n.Settings.Updates.openServer) {
-                    // The Server page is in the main window: Settings closes, and the page opens there.
-                    SettingsHandoff.openMainWindow(router: router) { router in
-                        router.select(mode: .server)
-                        router.serverSection = .updates
-                    }
-                }
-                .banditoButton(.signal())
+                .lineLimit(1)
+                .fixedSize()
             }
             .padding(.top, 16)
         }

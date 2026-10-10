@@ -26,7 +26,10 @@ struct TerminalFilesSection: View {
                     .fixedSize()
                 }
                 Divider().padding(.horizontal, 16)
-                SettingsRow(title: L10n.Settings.TerminalFiles.showHidden, hint: L10n.Settings.TerminalFiles.showHiddenHint) {
+                SettingsRow(
+                    title: L10n.Settings.TerminalFiles.showHidden, hint: L10n.Settings.TerminalFiles.showHiddenHint,
+                    keepsControlBeside: true
+                ) {
                     Toggle("", isOn: $showHidden)
                         .labelsHidden()
                         .toggleStyle(BanditoToggleStyle())

@@ -215,7 +215,8 @@ public struct AgentThread: Sendable, Hashable {
             items.append(.chapter(id: e.id, number: chapter, saved: !unsaved, ts: e.ts))
         case .runtimeSwitched(let from, let to, let until):
             items.append(.runtimeSwitch(id: e.id, from: from, to: to, until: until, ts: e.ts))
-        case .usageLimits, .unknown:
+        case .usageLimits, .agentChanged, .unknown:
+            // Not part of a thread: the team's agent list reads its own records.
             break
         }
     }

@@ -794,6 +794,7 @@ public enum L10n {
 
     public enum Inspector {
         public static var aboutAgent: String { L10n.tr("inspector.aboutAgent") }
+        public static var addRole: String { L10n.tr("inspector.addRole") }
         public static var addSchedule: String { L10n.tr("inspector.addSchedule") }
         public static var approvals: String { L10n.tr("inspector.approvals") }
         public static var askRisky: String { L10n.tr("inspector.askRisky") }
@@ -1913,7 +1914,7 @@ public enum L10n {
             public static var daemonServer: String { L10n.tr("settings.updates.daemonServer") }
             public static var intro: String { L10n.tr("settings.updates.intro") }
             public static var latest: String { L10n.tr("settings.updates.latest") }
-            public static var openServer: String { L10n.tr("settings.updates.openServer") }
+            public static var moreOnServer: String { L10n.tr("settings.updates.moreOnServer") }
             public static var restartDaemon: String { L10n.tr("settings.updates.restartDaemon") }
             public static var stable: String { L10n.tr("settings.updates.stable") }
             public static var stableDesc: String { L10n.tr("settings.updates.stableDesc") }
@@ -2100,6 +2101,7 @@ public enum L10n {
     }
 
     public enum Terminals {
+        public static func agentTitle(name: String) -> String { L10n.tr("terminals.agentTitle", name) }
         public static func connectTimeout(server: String) -> String { L10n.tr("terminals.connectTimeout", server) }
         public static func connecting(server: String) -> String { L10n.tr("terminals.connecting", server) }
         public static var empty: String { L10n.tr("terminals.empty") }
@@ -2376,9 +2378,11 @@ public enum L10n {
         public static var details: String { L10n.tr("workbench.details") }
         public static var emptyHint: String { L10n.tr("workbench.emptyHint") }
         public static var emptyTitle: String { L10n.tr("workbench.emptyTitle") }
+        public static var endSession: String { L10n.tr("workbench.endSession") }
         public static var moveToOtherPane: String { L10n.tr("workbench.moveToOtherPane") }
         public static var newTerminal: String { L10n.tr("workbench.newTerminal") }
         public static var openNewTerminal: String { L10n.tr("workbench.openNewTerminal") }
+        public static var rename: String { L10n.tr("workbench.rename") }
         public static var show: String { L10n.tr("workbench.show") }
         public static var showHere: String { L10n.tr("workbench.showHere") }
         public static var split: String { L10n.tr("workbench.split") }

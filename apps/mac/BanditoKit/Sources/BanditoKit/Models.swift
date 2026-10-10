@@ -368,6 +368,11 @@ public struct UsageEntry: Codable, Sendable, Hashable {
     }
 }
 
+/// What happened to an agent's record (`agent_changed` events).
+public enum AgentChange: String, Codable, Sendable, Hashable {
+    case created, updated, deleted
+}
+
 /// The typed body of an event (`kind` + `payload` on the wire).
 public enum EventBody: Sendable, Hashable {
     case turnStarted(turnId: String, source: MessageSource)
@@ -390,6 +395,8 @@ public enum EventBody: Sendable, Hashable {
     /// The agent moved to another runtime: to its fallback when the limit ran out, or back to the primary.
     /// `until` is when the limit resets (Unix seconds), if the daemon knows it.
     case runtimeSwitched(from: String, to: String, until: Int64?)
+    /// An agent's record was created, changed or deleted, by any client. Read `agents.list` to see the change.
+    case agentChanged(action: AgentChange)
     case error(message: String)
     /// A kind this app version doesn't know yet. Shown as nothing; kept for forward compatibility.
     case unknown(kind: String)
@@ -437,6 +444,7 @@ extension Event: Decodable {
     private struct SessionRotatedP: Decodable { var chapter: Int; var reason: String; var contextTokens: Int }
     private struct RuntimeSwitchedP: Decodable { var from: String; var to: String; var until: Int64? }
     private struct ErrorP: Decodable { var message: String }
+    private struct AgentChangedRawP: Decodable { var action: String }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
@@ -480,6 +488,14 @@ extension Event: Decodable {
         case "runtime.switched":
             let x = try p(RuntimeSwitchedP.self)
             body = .runtimeSwitched(from: x.from, to: x.to, until: x.until)
+        case "agent_changed":
+            // An action this app does not know is kept as an unknown event, not a decode failure.
+            let raw = try p(AgentChangedRawP.self).action
+            if let action = AgentChange(rawValue: raw) {
+                body = .agentChanged(action: action)
+            } else {
+                body = .unknown(kind: kind)
+            }
         case "error": body = .error(message: try p(ErrorP.self).message)
         default: body = .unknown(kind: kind)
         }

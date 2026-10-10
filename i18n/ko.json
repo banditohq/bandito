@@ -1470,7 +1470,6 @@
   "settings.updates.app": "앱",
   "settings.updates.daemonServer": "서버의 데몬",
   "settings.updates.latest": "최신 릴리스",
-  "settings.updates.openServer": "서버 → 업데이트 열기",
   "updates.daemonVersion": "데몬 버전",
   "updates.latestVersion": "최신 릴리스",
   "updates.mostRecent": "최신 버전을 사용 중입니다",
@@ -1866,5 +1865,10 @@
   "workbench.terminalInOtherPane": "다른 패널에서 열려 있어요",
   "workbench.showHere": "여기에 표시",
   "workbench.terminalFailed": "터미널을 열지 못했어요.",
-  "workbench.openNewTerminal": "새로 열기"
+  "workbench.openNewTerminal": "새로 열기",
+  "workbench.endSession": "세션 종료",
+  "settings.updates.moreOnServer": "「서버」 화면에서 자세히 보기",
+  "terminals.agentTitle": "터미널 · {name}",
+  "inspector.addRole": "역할 추가",
+  "workbench.rename": "이름 변경…"
 }

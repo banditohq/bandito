@@ -1491,7 +1491,6 @@
   "settings.updates.app": "App",
   "settings.updates.daemonServer": "Daemon no servidor",
   "settings.updates.latest": "Versão mais recente",
-  "settings.updates.openServer": "Abrir Servidor → Atualizações",
   "updates.daemonVersion": "Versão do daemon",
   "updates.latestVersion": "Versão mais recente",
   "updates.mostRecent": "Você tem a versão mais recente",
@@ -1889,5 +1888,10 @@
   "workbench.terminalInOtherPane": "Aberto em outro painel",
   "workbench.showHere": "Mostrar aqui",
   "workbench.terminalFailed": "O terminal não foi aberto.",
-  "workbench.openNewTerminal": "Abrir um novo"
+  "workbench.openNewTerminal": "Abrir um novo",
+  "workbench.endSession": "Encerrar sessão",
+  "settings.updates.moreOnServer": "Mais na tela «Servidor»",
+  "terminals.agentTitle": "Terminal · {name}",
+  "inspector.addRole": "Adicionar função",
+  "workbench.rename": "Renomear…"
 }

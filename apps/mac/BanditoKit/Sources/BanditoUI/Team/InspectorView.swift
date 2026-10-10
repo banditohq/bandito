@@ -103,13 +103,19 @@ private struct IdentityCard: View {
                     .lineLimit(1)
                     .focused($focused, equals: .name)
                     .onSubmit(commitName)
-                TextField(L10n.AgentSheet.rolePlaceholder, text: $role)
-                    .textFieldStyle(.plain)
-                    .font(BanditoFont.font(size: 12.5, weight: 400))
-                    .foregroundStyle(Color.Bandito.text3)
-                    .lineLimit(1)
-                    .focused($focused, equals: .role)
-                    .onSubmit(commitRole)
+                // The field is always there: with no role, its placeholder asks for one (with a pencil).
+                HStack(spacing: 5) {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 10.5, weight: .medium))
+                        .foregroundStyle(Color.Bandito.text3)
+                    TextField(L10n.Inspector.addRole, text: $role)
+                        .textFieldStyle(.plain)
+                        .font(BanditoFont.font(size: 12.5, weight: 400))
+                        .foregroundStyle(Color.Bandito.text3)
+                        .lineLimit(1)
+                        .focused($focused, equals: .role)
+                        .onSubmit(commitRole)
+                }
                 if let error {
                     UserFacingErrorView(message: error)
                 }

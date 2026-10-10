@@ -1491,7 +1491,6 @@
   "settings.updates.app": "App",
   "settings.updates.daemonServer": "Démon sur le serveur",
   "settings.updates.latest": "Dernière version",
-  "settings.updates.openServer": "Ouvrir Serveur → Mises à jour",
   "updates.daemonVersion": "Version du démon",
   "updates.latestVersion": "Dernière version",
   "updates.mostRecent": "Vous avez la version la plus récente",
@@ -1889,5 +1888,10 @@
   "workbench.terminalInOtherPane": "Ouvert dans un autre panneau",
   "workbench.showHere": "Afficher ici",
   "workbench.terminalFailed": "Le terminal n'a pas pu s'ouvrir.",
-  "workbench.openNewTerminal": "En ouvrir un nouveau"
+  "workbench.openNewTerminal": "En ouvrir un nouveau",
+  "workbench.endSession": "Fermer la session",
+  "settings.updates.moreOnServer": "Plus d’infos sur l’écran « Serveur »",
+  "terminals.agentTitle": "Terminal · {name}",
+  "inspector.addRole": "Ajouter un rôle",
+  "workbench.rename": "Renommer…"
 }

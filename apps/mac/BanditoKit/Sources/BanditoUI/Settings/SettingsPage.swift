@@ -39,20 +39,32 @@ struct SettingsPage<Content: View>: View {
 struct SettingsRow<Control: View>: View {
     var title: String
     var hint: String?
+    /// A switch stays at the right whatever the text length: the text wraps beside it. Wide controls (buttons,
+    /// selects) go under a long text instead.
+    var keepsControlBeside = false
     @ViewBuilder var control: Control
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(alignment: .center, spacing: 16) {
-                textBlock
-                Spacer(minLength: 12)
-                control
-            }
-            VStack(alignment: .leading, spacing: 10) {
-                textBlock
-                HStack(spacing: 8) {
-                    control
-                    Spacer(minLength: 0)
+        Group {
+            if keepsControlBeside {
+                HStack(alignment: .center, spacing: 16) {
+                    textBlock
+                    control.fixedSize()
+                }
+            } else {
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .center, spacing: 16) {
+                        textBlock
+                        Spacer(minLength: 12)
+                        control
+                    }
+                    VStack(alignment: .leading, spacing: 10) {
+                        textBlock
+                        HStack(spacing: 8) {
+                            control
+                            Spacer(minLength: 0)
+                        }
+                    }
                 }
             }
         }

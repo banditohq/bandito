@@ -515,6 +515,7 @@
 "gestures.twoFingerSwipe.title" = "Свайп двумя пальцами — назад и вперёд";
 "gestures.twoFingerSwipe.where" = "Везде";
 "inspector.aboutAgent" = "Об агенте";
+"inspector.addRole" = "Добавить роль";
 "inspector.addSchedule" = "Добавить";
 "inspector.approvals" = "Одобрения";
 "inspector.askRisky" = "Спрашивать о рискованном";
@@ -1407,7 +1408,7 @@
 "settings.updates.daemonServer" = "Демон на сервере";
 "settings.updates.intro" = "Версии приложения и демона на вашем сервере.";
 "settings.updates.latest" = "Последний релиз";
-"settings.updates.openServer" = "Открыть «Сервер» → «Обновления»";
+"settings.updates.moreOnServer" = "Подробнее на экране «Сервер»";
 "settings.updates.restartDaemon" = "Перезапустить демон";
 "settings.updates.stable" = "Стабильный";
 "settings.updates.stableDesc" = "Проверенные сборки";
@@ -1534,6 +1535,7 @@
 "template.scratch.desc" = "Пустой агент: сами дадите имя, роль и инструкции.";
 "template.scratch.meta" = "Любая модель";
 "template.scratch.title" = "С нуля";
+"terminals.agentTitle" = "Терминал · %1$@";
 "terminals.confirmClose.cancel" = "Отмена";
 "terminals.confirmClose.end" = "Завершить";
 "terminals.confirmClose.title" = "Процесс ещё работает. Завершить?";
@@ -1710,9 +1712,11 @@
 "workbench.details" = "Сведения";
 "workbench.emptyHint" = "Откройте терминал, браузер, файл или изменения рядом с чатом.";
 "workbench.emptyTitle" = "Здесь пока ничего не открыто";
+"workbench.endSession" = "Закрыть сессию";
 "workbench.moveToOtherPane" = "Переместить в другую панель";
 "workbench.newTerminal" = "Новый терминал";
 "workbench.openNewTerminal" = "Открыть новый";
+"workbench.rename" = "Переименовать…";
 "workbench.show" = "Показать";
 "workbench.showHere" = "Показать здесь";
 "workbench.split" = "Разделить панель";

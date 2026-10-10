@@ -515,6 +515,7 @@
 "gestures.twoFingerSwipe.title" = "Deslizar com dois dedos — voltar e avançar";
 "gestures.twoFingerSwipe.where" = "Em todo lugar";
 "inspector.aboutAgent" = "Info do agente";
+"inspector.addRole" = "Adicionar função";
 "inspector.addSchedule" = "Adicionar agendamento";
 "inspector.approvals" = "Aprovações";
 "inspector.askRisky" = "Perguntar sobre o arriscado";
@@ -1407,7 +1408,7 @@
 "settings.updates.daemonServer" = "Daemon no servidor";
 "settings.updates.intro" = "Versões deste app e do daemon no seu servidor.";
 "settings.updates.latest" = "Versão mais recente";
-"settings.updates.openServer" = "Abrir Servidor → Atualizações";
+"settings.updates.moreOnServer" = "Mais na tela «Servidor»";
 "settings.updates.restartDaemon" = "Reiniciar daemon";
 "settings.updates.stable" = "Estável";
 "settings.updates.stableDesc" = "Versões testadas";
@@ -1534,6 +1535,7 @@
 "template.scratch.desc" = "Um agente vazio: você escolhe o nome, a função e as instruções.";
 "template.scratch.meta" = "Qualquer modelo";
 "template.scratch.title" = "Do zero";
+"terminals.agentTitle" = "Terminal · %1$@";
 "terminals.confirmClose.cancel" = "Cancelar";
 "terminals.confirmClose.end" = "Encerrar processo";
 "terminals.confirmClose.title" = "O processo ainda está rodando. Encerrar?";
@@ -1710,9 +1712,11 @@
 "workbench.details" = "Detalhes";
 "workbench.emptyHint" = "Abra um terminal, o navegador, um arquivo ou as alterações ao lado do chat.";
 "workbench.emptyTitle" = "Nada aberto aqui ainda";
+"workbench.endSession" = "Encerrar sessão";
 "workbench.moveToOtherPane" = "Mover para o outro painel";
 "workbench.newTerminal" = "Novo terminal";
 "workbench.openNewTerminal" = "Abrir um novo";
+"workbench.rename" = "Renomear…";
 "workbench.show" = "Mostrar";
 "workbench.showHere" = "Mostrar aqui";
 "workbench.split" = "Dividir o painel";

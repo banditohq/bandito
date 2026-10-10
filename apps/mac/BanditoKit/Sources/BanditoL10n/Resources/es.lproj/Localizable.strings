@@ -515,6 +515,7 @@
 "gestures.twoFingerSwipe.title" = "Deslizar con dos dedos — atrás y adelante";
 "gestures.twoFingerSwipe.where" = "En todas partes";
 "inspector.aboutAgent" = "Info del agente";
+"inspector.addRole" = "Añadir rol";
 "inspector.addSchedule" = "Añadir programación";
 "inspector.approvals" = "Aprobaciones";
 "inspector.askRisky" = "Preguntar por lo arriesgado";
@@ -1407,7 +1408,7 @@
 "settings.updates.daemonServer" = "Demonio en el servidor";
 "settings.updates.intro" = "Versiones de esta app y del demonio en tu servidor.";
 "settings.updates.latest" = "Última versión";
-"settings.updates.openServer" = "Abrir Servidor → Actualizaciones";
+"settings.updates.moreOnServer" = "Más en la pantalla «Servidor»";
 "settings.updates.restartDaemon" = "Reiniciar el daemon";
 "settings.updates.stable" = "Estable";
 "settings.updates.stableDesc" = "Versiones probadas";
@@ -1534,6 +1535,7 @@
 "template.scratch.desc" = "Un agente vacío: tú eliges el nombre, el rol y las instrucciones.";
 "template.scratch.meta" = "Cualquier modelo";
 "template.scratch.title" = "Desde cero";
+"terminals.agentTitle" = "Terminal · %1$@";
 "terminals.confirmClose.cancel" = "Cancelar";
 "terminals.confirmClose.end" = "Terminar proceso";
 "terminals.confirmClose.title" = "El proceso sigue en marcha. ¿Terminarlo?";
@@ -1710,9 +1712,11 @@
 "workbench.details" = "Detalles";
 "workbench.emptyHint" = "Abra una terminal, el navegador, un archivo o los cambios junto al chat.";
 "workbench.emptyTitle" = "Aún no hay nada abierto aquí";
+"workbench.endSession" = "Cerrar sesión";
 "workbench.moveToOtherPane" = "Mover al otro panel";
 "workbench.newTerminal" = "Nueva terminal";
 "workbench.openNewTerminal" = "Abrir uno nuevo";
+"workbench.rename" = "Renombrar…";
 "workbench.show" = "Mostrar";
 "workbench.showHere" = "Mostrar aquí";
 "workbench.split" = "Dividir el panel";

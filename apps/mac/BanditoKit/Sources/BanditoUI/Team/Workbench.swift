@@ -240,12 +240,48 @@ enum WorkbenchLayout {
     static let splitRange: ClosedRange<Double> = 0.2...0.8
 
     static let widthKey = "bandito.workbench.width"
+    /// The chat keeps at least this much beside the panel.
+    static let chatMinWidth: Double = 420
     static let splitKey = "bandito.workbench.split"
 
     /// The panel width kept inside the bounds for a window of `windowWidth`. The minimum wins on a tiny window.
     static func clampWidth(_ width: Double, windowWidth: Double) -> Double {
         let upper = max(minWidth, windowWidth * maxWidthShare)
         return min(max(width, minWidth), upper)
+    }
+
+    /// The width after dragging the panel's left edge by `translation` (dragging left makes it wider), from the width
+    /// the person chose, not the fitted one. Nil for no movement: nothing is written then.
+    static func draggedWidth(stored: Double, translation: Double, windowWidth: Double) -> Double? {
+        guard translation != 0 else { return nil }
+        return clampWidth(stored - translation, windowWidth: windowWidth)
+    }
+
+    /// The width the panel takes in a mode area of `modeWidth`: the chosen width, narrowed to what the chat leaves
+    /// (`chatMinWidth`), but never below `minWidth`. Narrower than that, the panel covers the chat (`coversChat`).
+    static func fittedWidth(stored: Double, modeWidth: Double) -> Double {
+        let roomForPanel = max(minWidth, modeWidth - chatMinWidth)
+        return min(clampWidth(stored, windowWidth: modeWidth), roomForPanel)
+    }
+
+    /// Whether the panel lies over the chat: beside it, the chat would be narrower than `chatMinWidth`.
+    /// `panelWidth` is the whole panel, its resize edge included, because that is what sits beside the chat.
+    static func coversChat(modeWidth: Double, panelWidth: Double) -> Bool {
+        modeWidth - panelWidth < chatMinWidth
+    }
+
+    /// Below this panel width, inactive tabs show only their icon (the name is their tooltip), and the changes header
+    /// shows only the avatar. The active tab always keeps its name.
+    static let titlesMinWidth: Double = 360
+
+    /// Whether a tab shows its name: the active one always does, the others from `titlesMinWidth` on.
+    static func showsTabTitle(selected: Bool, panelWidth: Double) -> Bool {
+        selected || panelWidth >= titlesMinWidth
+    }
+
+    /// Whether the changes header shows the agent's name, beside the avatar.
+    static func showsAgentTitle(panelWidth: Double) -> Bool {
+        panelWidth >= titlesMinWidth
     }
 
     /// The share of the top pane, kept within 20…80 %.

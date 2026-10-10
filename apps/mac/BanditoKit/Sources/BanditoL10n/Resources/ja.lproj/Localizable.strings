@@ -515,6 +515,7 @@
 "gestures.twoFingerSwipe.title" = "2本指スワイプ — 戻る・進む";
 "gestures.twoFingerSwipe.where" = "どこでも";
 "inspector.aboutAgent" = "エージェント情報";
+"inspector.addRole" = "役割を追加";
 "inspector.addSchedule" = "スケジュールを追加";
 "inspector.approvals" = "承認";
 "inspector.askRisky" = "危険な操作は確認";
@@ -1407,7 +1408,7 @@
 "settings.updates.daemonServer" = "サーバーのデーモン";
 "settings.updates.intro" = "このアプリと、サーバー上のデーモンのバージョンです。";
 "settings.updates.latest" = "最新リリース";
-"settings.updates.openServer" = "サーバー → アップデート を開く";
+"settings.updates.moreOnServer" = "「サーバー」画面で詳しく見る";
 "settings.updates.restartDaemon" = "デーモンを再起動";
 "settings.updates.stable" = "安定版";
 "settings.updates.stableDesc" = "動作確認済みのビルド";
@@ -1534,6 +1535,7 @@
 "template.scratch.desc" = "空のエージェント。名前、役割、指示はあなたが決めます。";
 "template.scratch.meta" = "任意のモデル";
 "template.scratch.title" = "ゼロから";
+"terminals.agentTitle" = "ターミナル · %1$@";
 "terminals.confirmClose.cancel" = "キャンセル";
 "terminals.confirmClose.end" = "プロセスを終了";
 "terminals.confirmClose.title" = "プロセスはまだ実行中です。終了しますか？";
@@ -1710,9 +1712,11 @@
 "workbench.details" = "詳細";
 "workbench.emptyHint" = "チャットの横にターミナル、ブラウザ、ファイル、変更を開けます。";
 "workbench.emptyTitle" = "まだ何も開いていません";
+"workbench.endSession" = "セッションを終了";
 "workbench.moveToOtherPane" = "もう一方のペインに移動";
 "workbench.newTerminal" = "新しいターミナル";
 "workbench.openNewTerminal" = "新しく開く";
+"workbench.rename" = "名前を変更…";
 "workbench.show" = "表示";
 "workbench.showHere" = "ここに表示";
 "workbench.split" = "パネルを分割";

@@ -358,6 +358,50 @@ import Testing
         #expect(WorkbenchLayout.clampWidth(460, windowWidth: 900) == 460)
     }
 
+    /// The panel gives way to the chat first: it narrows to 320 pt, and covers the chat only when even that leaves the
+    /// chat under 420 pt.
+    @Test func panelNarrowsBeforeItCoversTheChat() {
+        #expect(WorkbenchLayout.fittedWidth(stored: 460, modeWidth: 1240) == 460)
+        #expect(WorkbenchLayout.fittedWidth(stored: 460, modeWidth: 800) == 380)
+        #expect(!WorkbenchLayout.coversChat(modeWidth: 800, panelWidth: 380))
+        // 740 pt: the panel at its 320 pt minimum leaves the chat exactly 420 pt, so nothing is covered.
+        #expect(WorkbenchLayout.fittedWidth(stored: 460, modeWidth: 740) == 320)
+        #expect(!WorkbenchLayout.coversChat(modeWidth: 740, panelWidth: 320))
+        #expect(WorkbenchLayout.fittedWidth(stored: 460, modeWidth: 700) == 320)
+        #expect(WorkbenchLayout.coversChat(modeWidth: 700, panelWidth: 320))
+    }
+
+    /// The panel covers the chat only when beside it the chat would be narrower than 420 pt.
+    @Test func panelCoversTheChatOnlyWhenTheChatWouldBeNarrowerThan420() {
+        // Beside the chat there is room: no cover, even below 1100 pt.
+        #expect(!WorkbenchLayout.coversChat(modeWidth: 1000, panelWidth: 460))
+        #expect(!WorkbenchLayout.coversChat(modeWidth: 900, panelWidth: 460))
+        // Exactly 420 pt left for the chat is enough.
+        #expect(!WorkbenchLayout.coversChat(modeWidth: 880, panelWidth: 460))
+        // One point less, and the panel lies over the chat.
+        #expect(WorkbenchLayout.coversChat(modeWidth: 879, panelWidth: 460))
+        #expect(WorkbenchLayout.coversChat(modeWidth: 900, panelWidth: 500))
+        #expect(WorkbenchLayout.coversChat(modeWidth: 1100, panelWidth: 700))
+    }
+
+    /// The resize edge: no movement writes nothing; a drag works from the chosen width and stays in bounds.
+    @Test func resizeDragStartsFromTheChosenWidth() {
+        #expect(WorkbenchLayout.draggedWidth(stored: 460, translation: 0, windowWidth: 1000) == nil)
+        // Dragging left by 40 pt makes the panel 40 pt wider than the chosen width.
+        #expect(WorkbenchLayout.draggedWidth(stored: 460, translation: -40, windowWidth: 1000) == 500)
+        #expect(WorkbenchLayout.draggedWidth(stored: 460, translation: 30, windowWidth: 1000) == 430)
+        #expect(WorkbenchLayout.draggedWidth(stored: 460, translation: -2000, windowWidth: 1000) == 700)
+    }
+
+    /// Narrow panel: the inactive tabs show icons, the active one keeps its name; the changes header keeps only the avatar.
+    @Test func narrowPanelKeepsTheActiveTabNameAndDropsTheOthers() {
+        #expect(WorkbenchLayout.showsTabTitle(selected: false, panelWidth: 359) == false)
+        #expect(WorkbenchLayout.showsTabTitle(selected: false, panelWidth: 360))
+        #expect(WorkbenchLayout.showsTabTitle(selected: true, panelWidth: 320))
+        #expect(WorkbenchLayout.showsAgentTitle(panelWidth: 320) == false)
+        #expect(WorkbenchLayout.showsAgentTitle(panelWidth: 360))
+    }
+
     @Test func splitShareIsKeptBetweenTwentyAndEightyPercent() {
         #expect(WorkbenchLayout.clampSplit(0.05) == 0.2)
         #expect(WorkbenchLayout.clampSplit(0.95) == 0.8)

@@ -1398,7 +1398,6 @@
   "settings.updates.app": "Приложение",
   "settings.updates.daemonServer": "Демон на сервере",
   "settings.updates.latest": "Последний релиз",
-  "settings.updates.openServer": "Открыть «Сервер» → «Обновления»",
   "updates.daemonVersion": "Версия демона",
   "updates.latestVersion": "Последний релиз",
   "updates.mostRecent": "У вас самая новая версия",
@@ -1928,5 +1927,10 @@
   "workbench.terminalInOtherPane": "Открыто в другой панели",
   "workbench.showHere": "Показать здесь",
   "workbench.terminalFailed": "Терминал не открылся.",
-  "workbench.openNewTerminal": "Открыть новый"
+  "workbench.openNewTerminal": "Открыть новый",
+  "workbench.endSession": "Закрыть сессию",
+  "settings.updates.moreOnServer": "Подробнее на экране «Сервер»",
+  "terminals.agentTitle": "Терминал · {name}",
+  "inspector.addRole": "Добавить роль",
+  "workbench.rename": "Переименовать…"
 }

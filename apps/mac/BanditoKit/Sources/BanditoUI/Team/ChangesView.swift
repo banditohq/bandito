@@ -80,8 +80,15 @@ struct ChangesContent: View {
     // MARK: - Layout
 
     private func sheetBody(_ agent: Agent) -> some View {
+        GeometryReader { outer in
+            sheetContent(agent, width: Double(outer.size.width))
+                .frame(width: outer.size.width, height: outer.size.height)
+        }
+    }
+
+    private func sheetContent(_ agent: Agent, width: Double) -> some View {
         VStack(spacing: 0) {
-            header(agent)
+            header(agent, panelWidth: width)
             if !timeline.isEmpty {
                 RestorePointStrip(
                     points: timeline, baseID: base?.id, nowTitle: L10n.Changes.now, onSelect: choose)
@@ -121,41 +128,67 @@ struct ChangesContent: View {
         }
     }
 
-    private func header(_ agent: Agent) -> some View {
-        HStack(spacing: 12) {
-            AgentAvatar(name: agent.name, size: 36)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(L10n.Changes.title(name: agent.name))
-                    .font(BanditoFont.font(size: 17, weight: 650))
-                    .foregroundStyle(Color.Bandito.text)
+    /// The compact header of the workbench tab: avatar, one-line title, the diff layout. The tab closes the view, so
+    /// there is no close button here. Narrow, the title leaves the header (the avatar's tooltip has it) and the layout
+    /// switch shows icons instead of words.
+    private func header(_ agent: Agent, panelWidth: Double) -> some View {
+        HStack(spacing: 10) {
+            AgentAvatar(name: agent.name, size: 24)
+                .help(L10n.Changes.title(name: agent.name))
+            VStack(alignment: .leading, spacing: 2) {
+                if WorkbenchLayout.showsAgentTitle(panelWidth: panelWidth) {
+                    Text(L10n.Changes.title(name: agent.name))
+                        .font(BanditoFont.font(size: 14, weight: 650))
+                        .foregroundStyle(Color.Bandito.text)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
                 summaryLine
-                    .font(BanditoFont.font(size: 12.5, weight: 400))
+                    .font(BanditoFont.font(size: 12, weight: 400))
                     .foregroundStyle(Color.Bandito.text3)
                     .lineLimit(1)
             }
-            Spacer(minLength: 12)
-            SegmentedPicker(
-                selection: $viewMode,
-                options: [(.inline, L10n.Changes.inline), (.sideBySide, L10n.Changes.sideBySide)]
-            )
-            .frame(width: 210)
-            Button { onDone() } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.Bandito.text2)
-                    .frame(width: 32, height: 32)
-                    .background(Color.Bandito.text.opacity(0.05), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .layoutPriority(0)
+            ViewThatFits(in: .horizontal) {
+                SegmentedPicker(
+                    selection: $viewMode,
+                    options: [(.inline, L10n.Changes.inline), (.sideBySide, L10n.Changes.sideBySide)]
+                )
+                .frame(width: 210)
+                viewModeIcons
             }
-            .banditoButton(.row(cornerRadius: 10, hoverOpacity: 0.08))
-            .keyboardShortcut(.cancelAction)
-            .help(L10n.Common.close)
-            .accessibilityLabel(L10n.Common.close)
+            .layoutPriority(1)
         }
-        .padding(.horizontal, 22)
-        .padding(.vertical, 14)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
         .overlay(alignment: .bottom) {
             Rectangle().fill(Color.Bandito.text.opacity(0.06)).frame(height: 1)
         }
+    }
+
+    /// The two layouts as icons, for a narrow panel.
+    private var viewModeIcons: some View {
+        HStack(spacing: 4) {
+            viewModeIcon(.inline, symbol: "text.alignleft", label: L10n.Changes.inline)
+            viewModeIcon(.sideBySide, symbol: "rectangle.split.2x1", label: L10n.Changes.sideBySide)
+        }
+    }
+
+    private func viewModeIcon(_ mode: ChangesViewMode, symbol: String, label: String) -> some View {
+        Button {
+            viewMode = mode
+        } label: {
+            Image(systemName: symbol)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(viewMode == mode ? Color.Bandito.text : Color.Bandito.text3)
+                .frame(width: 28, height: 28)
+                .background(
+                    viewMode == mode ? Color.Bandito.text.opacity(0.08) : Color.clear,
+                    in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        }
+        .banditoButton(.icon(size: 28, label: label))
+        .help(label)
     }
 
     /// "Task «…» · 6 files · +412 −18" (the parts appear once they are known).

@@ -5,7 +5,7 @@
 use crate::agent_token::{AgentTokens, SessionToken};
 use crate::checkpoint;
 use crate::event::LimitWindow;
-use crate::event::{AgentStatus, DecidedBy, Decision, EventBody, Source, TurnStatus, Usage};
+use crate::event::{AgentChange, AgentStatus, DecidedBy, Decision, EventBody, Source, TurnStatus, Usage};
 use crate::hub::Hub;
 use crate::limit;
 use crate::policy::{self, Protected, Verdict};
@@ -461,6 +461,12 @@ impl Supervisor {
         if !self.hub.store.agent_set_paused(agent_id, paused)? {
             return Ok(false);
         }
+        self.hub.emit(
+            agent_id,
+            EventBody::AgentChanged {
+                action: AgentChange::Updated,
+            },
+        );
         self.call(agent_id, Cmd::PauseChanged).await?;
         Ok(true)
     }
@@ -1438,8 +1444,16 @@ impl Actor {
     async fn switch_runtime(&mut self, agent: &Agent, from: RuntimeKind, to: RuntimeKind, until: Option<i64>) {
         self.release_session().await;
         let active = (to != agent.runtime).then_some(to);
-        if let Err(e) = self.hub.store.agent_set_active_runtime(&self.id, active) {
-            tracing::warn!(agent = self.id, "set the active runtime: {e:#}");
+        match self.hub.store.agent_set_active_runtime(&self.id, active) {
+            Ok(()) => {
+                self.hub.emit(
+                    &self.id,
+                    EventBody::AgentChanged {
+                        action: AgentChange::Updated,
+                    },
+                );
+            }
+            Err(e) => tracing::warn!(agent = self.id, "set the active runtime: {e:#}"),
         }
         self.hub.emit(
             &self.id,
@@ -2111,6 +2125,28 @@ mod tests {
         assert!(w.sup.set_paused(&w.agent, false).await.unwrap());
         w.wait_log("send queued").await;
         assert_eq!(user_texts(&w), vec!["running", "queued"]);
+    }
+
+    /// The `agent_changed` actions stored for the world's agent, in order.
+    fn agent_changes(w: &World) -> Vec<crate::event::AgentChange> {
+        w.store
+            .events_since(0, 1000, Some(&w.agent))
+            .unwrap()
+            .into_iter()
+            .filter_map(|e| match e.body {
+                EventBody::AgentChanged { action } => Some(action),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn every_pause_is_announced_once_and_a_no_op_is_not() {
+        let w = world(ApprovalMode::Risky);
+        assert!(w.sup.set_paused(&w.agent, true).await.unwrap());
+        assert!(!w.sup.set_paused(&w.agent, true).await.unwrap());
+        assert!(w.sup.set_paused(&w.agent, false).await.unwrap());
+        assert_eq!(agent_changes(&w), vec![AgentChange::Updated, AgentChange::Updated]);
     }
 
     #[tokio::test]
@@ -3492,6 +3528,8 @@ mod tests {
                 until: None,
             }
         );
+        // The record changed too (its active runtime): announced like any other change.
+        assert!(agent_changes(&w).contains(&AgentChange::Updated));
         wait_in(&codex_log, "send fix the build").await;
         let agent = w.store.agent_get(&w.agent).unwrap().unwrap();
         assert_eq!(agent.active_runtime, Some(RuntimeKind::Codex));

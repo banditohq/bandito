@@ -61,12 +61,16 @@ struct TerminalPaneView: View {
     let session: TerminalSession
     let isFocused: Bool
     let requestClose: (String) -> Void
+    /// Inside the workbench panel the tab is the header (name, folder, close in its menu): no header of its own.
+    var compact = false
 
     @Environment(AppModel.self) private var app
 
     var body: some View {
         VStack(spacing: 0) {
-            PaneHeader(controller: controller, session: session, requestClose: requestClose)
+            if !compact {
+                PaneHeader(controller: controller, session: session, requestClose: requestClose)
+            }
             ZStack(alignment: .bottom) {
                 TerminalPane(view: session.view, fontSize: app.terminalFont.size)
                     .padding(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 8))
@@ -122,7 +126,7 @@ struct PaneHeader: View {
                     .onSubmit { commitRename(id) }
                     .onExitCommand { renaming = false }
             } else {
-                Text(session.info.title)
+                Text(controller.displayTitle(id) ?? session.info.title)
                     .font(.system(size: 12.5, weight: .semibold))
                     .foregroundStyle(Color.Bandito.text)
                     .lineLimit(1)

@@ -40,6 +40,15 @@ pub enum Decision {
     Deny,
 }
 
+/// What happened to an agent's record (see `EventBody::AgentChanged`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentChange {
+    Created,
+    Updated,
+    Deleted,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DecidedBy {
@@ -158,6 +167,10 @@ pub enum EventBody {
     },
     #[serde(rename = "usage.limits")]
     UsageLimits { runtime: String, windows: Vec<LimitWindow> },
+    /// An agent's record was created, changed or deleted. The event tells every client to re-read
+    /// its agent list, since the change may come from another client or from a path with no reply.
+    #[serde(rename = "agent_changed")]
+    AgentChanged { action: AgentChange },
     #[serde(rename = "error")]
     Error { message: String },
 }
@@ -224,6 +237,19 @@ mod tests {
         );
         let back: EventBody = serde_json::from_value(serde_json::to_value(&body).unwrap()).unwrap();
         assert_eq!(back, body);
+    }
+
+    #[test]
+    fn agent_changed_names_the_action() {
+        let body = EventBody::AgentChanged {
+            action: AgentChange::Deleted,
+        };
+        assert_eq!(
+            serde_json::to_value(&body).unwrap(),
+            serde_json::json!({"kind": "agent_changed", "payload": {"action": "deleted"}})
+        );
+        let (kind, payload) = body.to_parts();
+        assert_eq!(EventBody::from_parts(&kind, payload).unwrap(), body);
     }
 
     #[test]

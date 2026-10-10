@@ -26,6 +26,7 @@ struct TerminalDock: View {
                             DockCard(
                                 entry: entry,
                                 session: controller.session(for: entry.id),
+                                name: controller.displayTitle(entry.id) ?? entry.id,
                                 now: context.date,
                                 restore: { controller.restore(entry.id) })
                         }
@@ -53,6 +54,8 @@ struct TerminalDock: View {
 struct DockCard: View {
     let entry: TerminalWorkspace.Collapsed
     let session: TerminalSession?
+    /// The name the terminal has on screen.
+    let name: String
     let now: Date
     let restore: () -> Void
 
@@ -69,7 +72,7 @@ struct DockCard: View {
                         .frame(width: 8, height: 8)
                 }
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(session?.info.title ?? entry.id)
+                    Text(name)
                         .font(.system(size: 12.5, weight: .semibold))
                         .foregroundStyle(Color.Bandito.text)
                         .lineLimit(1)

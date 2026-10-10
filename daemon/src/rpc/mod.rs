@@ -3,7 +3,7 @@
 
 use crate::browser::BrowserManager;
 use crate::commands::prepare as prepare_message;
-use crate::event::{Decision, Event, EventBody, Source};
+use crate::event::{AgentChange, Decision, Event, EventBody, Source};
 use crate::files::FileService;
 use crate::home;
 use crate::host::Sampler;
@@ -442,6 +442,46 @@ struct AgentPatchParams {
     capabilities: Option<Option<Vec<Capability>>>,
 }
 impl AgentPatchParams {
+    /// Whether the patch changes the agent's record in any way. A pause alone does not: the supervisor announces
+    /// every pause, however it came, so the record's `agent_changed` is not sent twice for one request.
+    fn changes_record(&self) -> bool {
+        let Self {
+            paused: _,
+            name,
+            role,
+            model,
+            cwd,
+            approval_mode,
+            system_prompt,
+            effort,
+            memory_mode,
+            context_budget,
+            workspace_id,
+            runtime,
+            fallback_runtime,
+            fallback_model,
+            use_personal_settings,
+            avatar,
+            capabilities,
+        } = self;
+        name.is_some()
+            || role.is_some()
+            || model.is_some()
+            || cwd.is_some()
+            || approval_mode.is_some()
+            || system_prompt.is_some()
+            || effort.is_some()
+            || memory_mode.is_some()
+            || context_budget.is_some()
+            || workspace_id.is_some()
+            || runtime.is_some()
+            || fallback_runtime.is_some()
+            || fallback_model.is_some()
+            || use_personal_settings.is_some()
+            || avatar.is_some()
+            || capabilities.is_some()
+    }
+
     /// Whether the patch changes something a running session was started with, so
     /// the session must be reloaded. Compared with the agent's current values: a
     /// form sent back unchanged changes nothing. `approval_mode` is not part of it:
@@ -955,12 +995,19 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
                     format!("could not create the agent's folder: {e:#}"),
                 ));
             }
+            app.sup.hub().emit(
+                &created.id,
+                EventBody::AgentChanged {
+                    action: AgentChange::Created,
+                },
+            );
             ok(store
                 .agent_view(&created.id)?
                 .ok_or_else(|| RpcError::new(SERVER_ERROR, format!("no agent {}", created.id)))?)
         }
         "agents.update" => {
             let UpdateAgent { id, mut patch } = params(p)?;
+            let changes_record = patch.changes_record();
             patch.avatar = match patch.avatar.take() {
                 Some(Some(avatar)) => Some(Some(clean_avatar(avatar)?)),
                 other => other,
@@ -1073,6 +1120,14 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
             a.status = view.status;
             a.pending_approval_ids = view.pending_approval_ids;
             a.pending_approvals = view.pending_approvals;
+            if changes_record {
+                app.sup.hub().emit(
+                    &id,
+                    EventBody::AgentChanged {
+                        action: AgentChange::Updated,
+                    },
+                );
+            }
             let mut body = serde_json::to_value(&a).map_err(|e| RpcError::new(SERVER_ERROR, e.to_string()))?;
             body["warnings"] = json!(warnings);
             ok(body)
@@ -1080,7 +1135,16 @@ pub async fn dispatch(app: &App, peer: &Peer, method: &str, p: Value) -> RpcResu
         "agents.delete" => {
             let Id { id } = params(p)?;
             app.sup.stop(&id).await;
-            ok(json!({ "deleted": store.agent_delete(&id)? }))
+            let deleted = store.agent_delete(&id)?;
+            if deleted {
+                app.sup.hub().emit(
+                    &id,
+                    EventBody::AgentChanged {
+                        action: AgentChange::Deleted,
+                    },
+                );
+            }
+            ok(json!({ "deleted": deleted }))
         }
         "agents.send" => {
             let SendParams { agent_id, text } = params(p)?;
@@ -2109,6 +2173,97 @@ mod memory_tests {
         let store = Arc::new(Store::open_in_memory().unwrap());
         let sup = Supervisor::new(Hub::new(store), runtimes, None);
         App::new(sup, root)
+    }
+
+    /// The `agent_changed` actions stored for one agent, in order.
+    fn agent_changes(app: &App, id: &str) -> Vec<AgentChange> {
+        app.sup
+            .hub()
+            .store
+            .events_since(0, 1000, Some(id))
+            .unwrap()
+            .into_iter()
+            .filter_map(|e| match e.body {
+                EventBody::AgentChanged { action } => Some(action),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn a_pause_over_rpc_is_announced_once() {
+        let (app, _dir) = app_in_tempdir();
+        let created = call(&app, "agents.create", new_agent("Forge", "claude")).await.unwrap();
+        let id = created["id"].as_str().unwrap().to_string();
+
+        call(&app, "agents.update", json!({ "id": id, "paused": true }))
+            .await
+            .unwrap();
+        assert_eq!(
+            agent_changes(&app, &id),
+            vec![AgentChange::Created, AgentChange::Updated]
+        );
+        // Paused again: nothing changes, nothing is announced.
+        call(&app, "agents.update", json!({ "id": id, "paused": true }))
+            .await
+            .unwrap();
+        assert_eq!(agent_changes(&app, &id).len(), 2);
+
+        // A pause that comes with another field is announced for that field too.
+        call(
+            &app,
+            "agents.update",
+            json!({ "id": id, "paused": false, "role": "reviewer" }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            agent_changes(&app, &id),
+            vec![
+                AgentChange::Created,
+                AgentChange::Updated,
+                AgentChange::Updated,
+                AgentChange::Updated
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn agent_record_changes_are_announced_as_agent_changed() {
+        let (app, _dir) = app_in_tempdir();
+        let created = call(&app, "agents.create", new_agent("Forge", "claude")).await.unwrap();
+        let id = created["id"].as_str().unwrap().to_string();
+        assert_eq!(agent_changes(&app, &id), vec![AgentChange::Created]);
+
+        call(&app, "agents.update", json!({ "id": id, "role": "reviewer" }))
+            .await
+            .unwrap();
+        assert_eq!(
+            agent_changes(&app, &id),
+            vec![AgentChange::Created, AgentChange::Updated]
+        );
+
+        // A refused update announces nothing.
+        call(&app, "agents.update", json!({ "id": id, "context_budget": 5 }))
+            .await
+            .unwrap_err();
+        assert_eq!(agent_changes(&app, &id).len(), 2);
+
+        assert_eq!(
+            call(&app, "agents.delete", json!({ "id": id })).await.unwrap(),
+            json!({ "deleted": true })
+        );
+        assert_eq!(
+            agent_changes(&app, &id),
+            vec![AgentChange::Created, AgentChange::Updated, AgentChange::Deleted]
+        );
+
+        // Deleting what is already gone announces nothing.
+        assert_eq!(
+            call(&app, "agents.delete", json!({ "id": id })).await.unwrap(),
+            json!({ "deleted": false })
+        );
+        assert_eq!(agent_changes(&app, &id).len(), 3);
     }
 
     #[tokio::test]

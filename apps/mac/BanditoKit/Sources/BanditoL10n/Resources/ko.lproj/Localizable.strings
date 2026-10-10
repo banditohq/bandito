@@ -515,6 +515,7 @@
 "gestures.twoFingerSwipe.title" = "두 손가락 스와이프 — 뒤로 및 앞으로";
 "gestures.twoFingerSwipe.where" = "어디서나";
 "inspector.aboutAgent" = "에이전트 정보";
+"inspector.addRole" = "역할 추가";
 "inspector.addSchedule" = "일정 추가";
 "inspector.approvals" = "승인";
 "inspector.askRisky" = "위험한 작업은 확인";
@@ -1407,7 +1408,7 @@
 "settings.updates.daemonServer" = "서버의 데몬";
 "settings.updates.intro" = "이 앱과 서버의 데몬 버전이에요.";
 "settings.updates.latest" = "최신 릴리스";
-"settings.updates.openServer" = "서버 → 업데이트 열기";
+"settings.updates.moreOnServer" = "「서버」 화면에서 자세히 보기";
 "settings.updates.restartDaemon" = "데몬 재시작";
 "settings.updates.stable" = "안정 버전";
 "settings.updates.stableDesc" = "검증된 빌드를 받아요";
@@ -1534,6 +1535,7 @@
 "template.scratch.desc" = "빈 에이전트: 이름, 역할, 지침을 직접 정해요.";
 "template.scratch.meta" = "모든 모델";
 "template.scratch.title" = "처음부터";
+"terminals.agentTitle" = "터미널 · %1$@";
 "terminals.confirmClose.cancel" = "취소";
 "terminals.confirmClose.end" = "프로세스 종료";
 "terminals.confirmClose.title" = "프로세스가 아직 실행 중이에요. 종료할까요?";
@@ -1710,9 +1712,11 @@
 "workbench.details" = "세부 정보";
 "workbench.emptyHint" = "채팅 옆에서 터미널, 브라우저, 파일, 변경 사항을 열 수 있어요.";
 "workbench.emptyTitle" = "아직 아무것도 열려 있지 않아요";
+"workbench.endSession" = "세션 종료";
 "workbench.moveToOtherPane" = "다른 패널로 이동";
 "workbench.newTerminal" = "새 터미널";
 "workbench.openNewTerminal" = "새로 열기";
+"workbench.rename" = "이름 변경…";
 "workbench.show" = "보기";
 "workbench.showHere" = "여기에 표시";
 "workbench.split" = "패널 나누기";
