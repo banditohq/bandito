@@ -1255,6 +1255,8 @@
   "viewer.close": "閉じる",
   "viewer.counter": "{n} / {total}",
   "viewer.imageFailed": "画像を読み込めませんでした。",
+  "viewer.zoomIn": "拡大",
+  "viewer.zoomOut": "縮小",
   "viewer.saving": "保存中…",
   "viewer.media.unavailable": "このファイルは再生できません",
   "files.unsupported": "サーバーのファイルを表示するには、サーバーを更新してください",

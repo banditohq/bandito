@@ -24,6 +24,8 @@ struct ImageViewerItem {
 /// The pictures to show and the one that comes first. The router holds it; while it is set, the viewer covers the
 /// main window.
 struct ImageViewerRequest {
+    /// Tells one opening from the next: the viewer is rebuilt for each request.
+    let id = UUID()
     var items: [ImageViewerItem]
     var index: Int
     /// The agent whose composer the viewer was opened from. Closing the viewer gives that composer the focus back.
@@ -117,8 +119,6 @@ struct ImageViewer: View {
             if request.items.count > 1 {
                 arrows
             }
-            // Keeps ⌘= and ⌘- working whatever has the focus; the views above handle the rest.
-            zoomShortcuts
         }
         .focusable()
         .focused($focused)
@@ -184,7 +184,7 @@ struct ImageViewer: View {
                         x: value.location.x - size.width / 2 + zoom.offset.width,
                         y: value.location.y - size.height / 2 + zoom.offset.height)
                     zoom.toggle(at: anchor, fit: fit)
-                    settle()
+                    settle(in: box)
                 }
             )
             .simultaneousGesture(dragGesture(image: image, scale: scale))
@@ -211,7 +211,7 @@ struct ImageViewer: View {
             .onChanged { value in
                 if pinchStart == nil { pinchStart = zoom.effectiveScale(fit: fit) }
                 zoom.set(scale: (pinchStart ?? 1) * value.magnification, fit: fit)
-                settle()
+                settle(in: box)
             }
             .onEnded { _ in pinchStart = nil }
     }
@@ -221,7 +221,10 @@ struct ImageViewer: View {
         GeometryReader { proxy in
             Color.clear
                 .onAppear { box = proxy.size }
-                .onChange(of: proxy.size) { _, size in box = size }
+                .onChange(of: proxy.size) { _, size in
+                    box = size
+                    settle(in: size)
+                }
         }
     }
 
@@ -242,13 +245,28 @@ struct ImageViewer: View {
     private var buttons: some View {
         HStack(spacing: 8) {
             Spacer()
+            Button { zoomBy(1 / ImageViewerZoom.stepFactor) } label: {
+                Image(systemName: "minus")
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .banditoButton(.icon(size: 30, label: L10n.Viewer.zoomOut))
+            .keyboardShortcut("-", modifiers: .command)
+            .disabled(image == nil)
             if image != nil {
                 Text("\(ImageViewerZoom.percent(zoom.effectiveScale(fit: fit)))%")
                     .font(BanditoFont.font(size: 12, weight: 400, mono: true))
                     .foregroundStyle(Color.white.opacity(0.8))
                     .monospacedDigit()
-                    .padding(.trailing, 6)
+                    .frame(minWidth: 44)
             }
+            Button { zoomBy(ImageViewerZoom.stepFactor) } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .banditoButton(.icon(size: 30, label: L10n.Viewer.zoomIn))
+            .keyboardShortcut("=", modifiers: .command)
+            .disabled(image == nil)
+            Spacer().frame(width: 6)
             Button(L10n.Viewer.fit) { zoom.fit() }
                 .banditoButton(.quiet())
             if item.openInFiles != nil {
@@ -296,19 +314,6 @@ struct ImageViewer: View {
         .banditoButton(.icon(size: 36, label: label))
     }
 
-    /// The hidden buttons that carry ⌘= and ⌘-. They take no space and no clicks.
-    private var zoomShortcuts: some View {
-        HStack {
-            Button("") { zoomBy(ImageViewerZoom.stepFactor) }
-                .keyboardShortcut("=", modifiers: .command)
-            Button("") { zoomBy(1 / ImageViewerZoom.stepFactor) }
-                .keyboardShortcut("-", modifiers: .command)
-        }
-        .opacity(0)
-        .allowsHitTesting(false)
-        .frame(width: 0, height: 0)
-    }
-
     // MARK: Actions
 
     private func step(_ delta: Int) {
@@ -319,13 +324,13 @@ struct ImageViewer: View {
     private func zoomBy(_ factor: CGFloat) {
         guard image != nil else { return }
         zoom.zoom(by: factor, fit: fit)
-        settle()
+        settle(in: box)
     }
 
-    /// Keeps the offset inside the pan limits after the picture's size changed.
-    private func settle() {
+    /// Keeps the offset inside the pan limits after the picture's size or the window's size changed.
+    private func settle(in container: CGSize) {
         guard let image else { return }
-        zoom.settle(image: image.size, container: box)
+        zoom.settle(image: image.size, container: container)
     }
 
     private func close() {

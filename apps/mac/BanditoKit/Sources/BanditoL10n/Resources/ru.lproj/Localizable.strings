@@ -1945,6 +1945,8 @@
 "viewer.savedStatus" = "Сохранено";
 "viewer.saving" = "Сохраняется…";
 "viewer.tooLarge" = "Файл больше 2 МБ — здесь его не открыть. Скачайте на Mac.";
+"viewer.zoomIn" = "Увеличить";
+"viewer.zoomOut" = "Уменьшить";
 "workbench.add" = "Добавить вкладку";
 "workbench.agentInBrowser" = "Агент в браузере";
 "workbench.browser" = "Браузер";

@@ -75,6 +75,8 @@ public final class Router {
     public var selectedAgentID: String? {
         didSet {
             if selectedAgentID != nil { showsTeamHome = false }
+            // The picture viewer belongs to the chat it was opened in: another agent closes it.
+            if selectedAgentID != oldValue { imageViewer = nil }
         }
     }
     /// Team: the home screen (greeting, templates, recent agents) is shown instead of a chat.

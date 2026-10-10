@@ -1945,6 +1945,8 @@
 "viewer.savedStatus" = "저장됨";
 "viewer.saving" = "저장 중…";
 "viewer.tooLarge" = "파일이 2MB보다 커서 여기서 열 수 없어요. Mac으로 다운로드해 주세요.";
+"viewer.zoomIn" = "확대";
+"viewer.zoomOut" = "축소";
 "workbench.add" = "탭 추가";
 "workbench.agentInBrowser" = "에이전트가 브라우저를 사용 중이에요";
 "workbench.browser" = "브라우저";

@@ -1945,6 +1945,8 @@
 "viewer.savedStatus" = "已保存";
 "viewer.saving" = "正在保存…";
 "viewer.tooLarge" = "文件超过 2 MB，无法在此打开。请下载到 Mac。";
+"viewer.zoomIn" = "放大";
+"viewer.zoomOut" = "缩小";
 "workbench.add" = "添加标签页";
 "workbench.agentInBrowser" = "智能体正在使用浏览器";
 "workbench.browser" = "浏览器";

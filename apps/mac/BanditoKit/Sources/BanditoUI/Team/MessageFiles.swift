@@ -69,6 +69,27 @@ struct MessageFiles: View {
     }
 }
 
+/// The sizes of the pictures in the thread. Pure, so the layout is tested without a view.
+enum PictureLayout {
+    /// The box one picture fits in, when it is alone in its message.
+    static let single = CGSize(width: 260, height: 200)
+    /// The edge of a square: each picture when there are several, and the placeholder until a single one loads.
+    static let square: CGFloat = 120
+    static let perRow = 3
+    /// The longest side of a miniature. Enough for the largest tile on a Retina screen.
+    static let miniaturePixels = 520
+
+    /// The frame of one tile. A single picture takes its proportions in `single`, never enlarged; until its size is
+    /// known it is a square. Several pictures are always squares.
+    static func frame(single isSingle: Bool, natural: CGSize?) -> CGSize {
+        guard isSingle, let natural, natural.width > 0, natural.height > 0 else {
+            return CGSize(width: square, height: square)
+        }
+        let scale = ImageViewerZoom.fitScale(image: natural, container: single)
+        return CGSize(width: natural.width * scale, height: natural.height * scale)
+    }
+}
+
 /// The pictures of a message, right-aligned. One picture keeps its proportions in a 260 × 200 box (never enlarged);
 /// several are squares of 120 pt, cropped to fill, in rows of three.
 private struct PictureRows: View {
@@ -76,21 +97,15 @@ private struct PictureRows: View {
     let server: ServerModel
     let onOpen: (AgentAttachment) -> Void
 
-    /// The box one picture fits in.
-    static let single = CGSize(width: 260, height: 200)
-    /// The edge of each square when there are several.
-    static let square: CGFloat = 120
-    static let perRow = 3
-
     var body: some View {
         if pictures.count == 1, let picture = pictures.first {
-            PictureTile(file: picture, server: server, square: nil) { onOpen(picture) }
+            PictureTile(file: picture, server: server, single: true) { onOpen(picture) }
         } else {
             VStack(alignment: .trailing, spacing: 6) {
                 ForEach(rows.indices, id: \.self) { row in
                     HStack(spacing: 6) {
                         ForEach(rows[row]) { picture in
-                            PictureTile(file: picture, server: server, square: Self.square) { onOpen(picture) }
+                            PictureTile(file: picture, server: server, single: false) { onOpen(picture) }
                         }
                     }
                 }
@@ -100,32 +115,56 @@ private struct PictureRows: View {
 
     /// The pictures cut into rows of `perRow`, in order.
     private var rows: [[AgentAttachment]] {
-        stride(from: 0, to: pictures.count, by: Self.perRow).map { start in
-            Array(pictures[start..<min(start + Self.perRow, pictures.count)])
+        stride(from: 0, to: pictures.count, by: PictureLayout.perRow).map { start in
+            Array(pictures[start..<min(start + PictureLayout.perRow, pictures.count)])
         }
     }
 }
 
-/// One picture in the thread. It is read in full (the same request as `RemoteImage`). A surface-coloured box of the
-/// final size stands in while it loads, and a "no picture" icon shows when it cannot be read.
+/// The miniatures of the thread, by server and path, so a picture that scrolls back into view is not read again. Only
+/// miniatures are kept: the whole file is read by the viewer.
+@MainActor
+enum ThreadPictureCache {
+    private static let images: NSCache<NSString, NSImage> = {
+        let cache = NSCache<NSString, NSImage>()
+        cache.countLimit = 200
+        return cache
+    }()
+
+    static func key(server: ServerModel, path: String) -> NSString {
+        "\(server.id)\n\(path)" as NSString
+    }
+
+    static func image(for key: NSString) -> NSImage? {
+        images.object(forKey: key)
+    }
+
+    static func store(_ image: NSImage, for key: NSString) {
+        images.setObject(image, forKey: key)
+    }
+}
+
+/// A miniature decoded off the main thread. CGImage is not Sendable in the SDK; it is only handed back once.
+private struct Miniature: @unchecked Sendable {
+    let image: CGImage
+}
+
+/// One picture in the thread. A miniature of at most `PictureLayout.miniaturePixels` is decoded off the main thread
+/// and cached. A square stands in while it loads, and a "no picture" icon shows when it cannot be read.
 private struct PictureTile: View {
     let file: AgentAttachment
     let server: ServerModel
-    /// The edge of a square, or `nil` for a single picture that keeps its proportions.
-    let square: CGFloat?
+    /// A picture alone in its message keeps its proportions; several are squares.
+    let single: Bool
     let action: () -> Void
 
     @State private var image: NSImage?
     @State private var failed = false
 
-    private var radius: CGFloat { square == nil ? 12 : 10 }
+    private var radius: CGFloat { single ? 12 : 10 }
 
-    /// The size of the tile: the square, or the picture fitted in the single box once it is known.
     private var frame: CGSize {
-        if let square { return CGSize(width: square, height: square) }
-        guard let image else { return PictureRows.single }
-        let scale = ImageViewerZoom.fitScale(image: image.size, container: PictureRows.single)
-        return CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        PictureLayout.frame(single: single, natural: image?.size)
     }
 
     var body: some View {
@@ -133,7 +172,7 @@ private struct PictureTile: View {
             ZStack {
                 Color.Bandito.surface2
                 if let image {
-                    if square == nil {
+                    if single {
                         Image(nsImage: image).resizable().scaledToFit()
                     } else {
                         Image(nsImage: image).resizable().scaledToFill()
@@ -147,7 +186,7 @@ private struct PictureTile: View {
             .frame(width: frame.width, height: frame.height)
             .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
             .overlay {
-                if square == nil {
+                if single {
                     RoundedRectangle(cornerRadius: radius, style: .continuous)
                         .stroke(Color.Bandito.line, lineWidth: 0.5)
                 }
@@ -159,13 +198,29 @@ private struct PictureTile: View {
     }
 
     private func load() async {
+        let key = ThreadPictureCache.key(server: server, path: file.path)
+        if let cached = ThreadPictureCache.image(for: key) {
+            image = cached
+            failed = false
+            return
+        }
         image = nil
         failed = false
         do {
             let data = try await RemoteFile.data(path: file.path, server: server)
-            guard let loaded = NSImage(data: data) else { throw RemoteFile.Failure.unavailable }
-            image = loaded
+            let decoded = await Task.detached(priority: .utility) { () -> Miniature? in
+                Thumbnail.decode(data, maxPixel: PictureLayout.miniaturePixels).map(Miniature.init)
+            }.value
+            guard !Task.isCancelled else { return }
+            guard let cg = decoded?.image else { throw RemoteFile.Failure.unavailable }
+            let picture = NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
+            ThreadPictureCache.store(picture, for: key)
+            image = picture
+        } catch is CancellationError {
+            // The row scrolled away or the message changed: not a failure, and nothing to show.
+            return
         } catch {
+            if Task.isCancelled { return }
             failed = true
         }
     }

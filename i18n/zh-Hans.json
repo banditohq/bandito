@@ -1255,6 +1255,8 @@
   "viewer.close": "关闭",
   "viewer.counter": "{n} / {total}",
   "viewer.imageFailed": "无法加载图片。",
+  "viewer.zoomIn": "放大",
+  "viewer.zoomOut": "缩小",
   "viewer.saving": "正在保存…",
   "viewer.media.unavailable": "无法播放此文件",
   "files.unsupported": "请更新服务器以浏览其文件",

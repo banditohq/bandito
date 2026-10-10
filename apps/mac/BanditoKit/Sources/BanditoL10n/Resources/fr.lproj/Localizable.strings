@@ -1945,6 +1945,8 @@
 "viewer.savedStatus" = "Enregistré";
 "viewer.saving" = "Enregistrement…";
 "viewer.tooLarge" = "Le fichier fait plus de 2 Mo et ne peut pas être ouvert ici. Téléchargez-le sur votre Mac.";
+"viewer.zoomIn" = "Zoom avant";
+"viewer.zoomOut" = "Zoom arrière";
 "workbench.add" = "Ajouter un onglet";
 "workbench.agentInBrowser" = "L'agent utilise le navigateur";
 "workbench.browser" = "Navigateur";

@@ -1276,6 +1276,8 @@
   "viewer.close": "Cerrar",
   "viewer.counter": "{n} de {total}",
   "viewer.imageFailed": "No se pudo cargar la imagen.",
+  "viewer.zoomIn": "Acercar",
+  "viewer.zoomOut": "Alejar",
   "viewer.saving": "Guardando…",
   "viewer.media.unavailable": "No se puede reproducir este archivo",
   "files.unsupported": "Actualiza el servidor para explorar sus archivos",

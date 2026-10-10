@@ -1945,6 +1945,8 @@
 "viewer.savedStatus" = "Saved";
 "viewer.saving" = "Saving…";
 "viewer.tooLarge" = "The file is larger than 2 MB, so it can’t be opened here. Download it to your Mac.";
+"viewer.zoomIn" = "Zoom in";
+"viewer.zoomOut" = "Zoom out";
 "workbench.add" = "Add a tab";
 "workbench.agentInBrowser" = "The agent is using the browser";
 "workbench.browser" = "Browser";

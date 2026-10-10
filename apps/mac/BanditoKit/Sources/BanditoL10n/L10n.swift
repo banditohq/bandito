@@ -2646,6 +2646,8 @@ public enum L10n {
         public static var savedStatus: String { L10n.tr("viewer.savedStatus") }
         public static var saving: String { L10n.tr("viewer.saving") }
         public static var tooLarge: String { L10n.tr("viewer.tooLarge") }
+        public static var zoomIn: String { L10n.tr("viewer.zoomIn") }
+        public static var zoomOut: String { L10n.tr("viewer.zoomOut") }
 
         public enum Binary {
             public static var title: String { L10n.tr("viewer.binary.title") }

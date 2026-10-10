@@ -1147,6 +1147,8 @@
   "viewer.close": "Закрыть",
   "viewer.counter": "{n} из {total}",
   "viewer.imageFailed": "Не удалось загрузить картинку.",
+  "viewer.zoomIn": "Увеличить",
+  "viewer.zoomOut": "Уменьшить",
   "viewer.saving": "Сохраняется…",
   "viewer.media.unavailable": "Не получается проиграть этот файл",
   "files.unsupported": "Обновите сервер, чтобы просматривать его файлы",

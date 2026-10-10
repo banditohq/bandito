@@ -55,6 +55,7 @@ struct MainWindow: View {
         .overlay {
             if let viewer = router.imageViewer {
                 ImageViewer(request: viewer)
+                    .id(viewer.id)
                     .transition(.opacity)
             }
         }

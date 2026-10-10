@@ -1945,6 +1945,8 @@
 "viewer.savedStatus" = "Guardado";
 "viewer.saving" = "Guardando…";
 "viewer.tooLarge" = "El archivo pesa más de 2 MB y aquí no se puede abrir. Descárgalo al Mac.";
+"viewer.zoomIn" = "Acercar";
+"viewer.zoomOut" = "Alejar";
 "workbench.add" = "Añadir pestaña";
 "workbench.agentInBrowser" = "El agente está usando el navegador";
 "workbench.browser" = "Navegador";
