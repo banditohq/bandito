@@ -319,6 +319,22 @@ private func entries(_ catalog: [IntegrationCatalogEntry], _ integrations: [Inte
         #expect(MarketLanding.top.index == nil)
     }
 
+    @Test func theJumpScrollsToTheSameIDTheBlockIsKnownBy() {
+        let sections = MarketSections.sections(entries([template("a", "dev"), template("b", "web")], [connection("i", "a")]))
+        // The page gives each block to its ForEach under `scrollID`; the sidebar's jump hands `scrollTo` the same value, of the same type.
+        let pageIDs: [String] = sections.map(\.scrollID)
+        for (index, section) in sections.enumerated() {
+            guard let name = section.categoryName else { continue }
+            let landing = MarketSidebarLogic.landing(of: .category(name), sections: sections)
+            #expect(landing == .section(index))
+            let id = MarketSidebarLogic.scrollID(for: landing!, sections: sections)
+            #expect(pageIDs.contains(id))
+            #expect(id == section.scrollID)
+        }
+        #expect(MarketSidebarLogic.scrollID(for: .top, sections: sections) == MarketScrollDriver.topID)
+        #expect(!pageIDs.contains(MarketScrollDriver.topID))
+    }
+
     @Test func aRequestExpires() {
         let request = MarketScrollRequest(id: 1, target: .top, created: 100)
         #expect(request.isFresh(at: 105))

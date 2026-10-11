@@ -234,9 +234,10 @@ struct MarketScrollDriver: ViewModifier {
 
     /// The coordinate space of the scroll view, for the anchors.
     static let space = "market.scroll"
-    /// The id of the zero-height anchor in front of a block; `top` for the very top.
-    static func anchorID(_ section: MarketSection) -> String { "market-anchor:\(section.id)" }
-    static let topAnchorID = "market-anchor:top"
+    /// What `scrollTo` is given for the very top. It is the identity of an element of a `ForEach` in the stack, like the
+    /// `scrollID` of a block: a lazy stack knows the places of views it has not built only by the identities its
+    /// `ForEach` gives, not by an `.id` set on a view inside (that one is found only while the view is built).
+    static let topID = "market-top"
 
     private struct Key: Hashable {
         let requestID: Int?
@@ -261,11 +262,7 @@ struct MarketScrollDriver: ViewModifier {
 
         let level = MotionLevel(stored: motionLevel)
         let reduced = level.reducesMotion(systemReduceMotion: reduceMotion)
-        let id: String
-        switch landing {
-        case .top: id = Self.topAnchorID
-        case .section(let index): id = Self.anchorID(context.sections[index])
-        }
+        let id = MarketSidebarLogic.scrollID(for: landing, sections: context.sections)
         let tracker = context.tracker
         let settle: TimeInterval = reduced ? 0.1 : level.scaled(0.5)
         tracker.quietUntil = ProcessInfo.processInfo.systemUptime + settle + 0.3
