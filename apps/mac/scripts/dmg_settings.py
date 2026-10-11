@@ -10,8 +10,7 @@ import os
 app = defines["app"]  # noqa: F821 - defines is provided by dmgbuild
 app_name = os.path.basename(app.rstrip("/"))
 
-# make-dmg.sh builds a writable image (UDRW), fixes the Finder labels in dmg_labels.py, then converts it to UDZO.
-format = defines.get("format", "UDZO")  # noqa: F821
+format = "UDZO"
 files = [app]
 symlinks = {"Applications": "/Applications"}
 icon = defines["icon"]  # noqa: F821
