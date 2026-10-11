@@ -85,6 +85,12 @@ struct MarketView: View {
             query = ""
             panel = nil
         }
+        // A pasted `https://bandito.dev/s/<id>` opens the install sheet of that bot or skill, not a search.
+        .onChange(of: query) { _, text in
+            guard let shareID = ShareLogic.shareID(fromLink: text) else { return }
+            query = ""
+            router.sheet = .installShared(shareID: shareID)
+        }
         .confirmationDialog(
             L10n.Market.Skill.removeTitle(name: removingSkill?.name ?? ""),
             isPresented: Binding(get: { removingSkill != nil }, set: { if !$0 { removingSkill = nil } }),
@@ -380,6 +386,7 @@ struct MarketView: View {
                     searchField
                     addOwnButton
                 }
+                mySharesButton
             }
             if tabs.count > 1 {
                 HStack(alignment: .center, spacing: 12) {
@@ -402,6 +409,7 @@ struct MarketView: View {
                     if tab == .services, supported {
                         addOwnButton
                     }
+                    mySharesButton
                 }
             }
         }
@@ -413,6 +421,13 @@ struct MarketView: View {
         case .bots: L10n.Market.Bots.subtitle
         case .skills: L10n.Market.Skills.subtitle
         }
+    }
+
+    /// The account's own shares (bots and skills published as links). Not tied to the server: it is the account.
+    private var mySharesButton: some View {
+        Button(L10n.Share.Mine.title) { router.sheet = .myShares }
+            .banditoButton(.quiet())
+            .fixedSize()
     }
 
     private var addOwnButton: some View {

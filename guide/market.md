@@ -363,3 +363,30 @@ were not reached) and Failed (Не получилось).
 4. Choose Create agents on (Создавать агентов на) and click Import (Импортировать).
 5. Read the report and click Done (Готово).
 
+
+## Share a bot
+
+<!-- id: market-share; covers: sheet:share -->
+Share... (Поделиться...) in the menu (⋯) of a bot in My bots publishes the bot as a link: the bot's settings without its secrets, memory, folders or accounts, with the services it may use as catalog names. The box at the top shows exactly what goes out; long text is cut to twelve lines until you choose Show all (Показать всё). Visibility is one of two cards: Public (Публично) is listed and found by search engines; Only by link (Только по ссылке) works for whoever has the link and nobody else. You set the name and the description. Publish (Опубликовать) gives the link, with Copy link (Скопировать ссылку) and a QR code for a phone. Without a sign-in the sheet says Sign in to share (Войдите, чтобы делиться) and opens Account.
+Где: Marketplace → Bots (Боты) → My bots (Мои боты) → the menu (⋯) of a bot → Share... (Поделиться...)
+1. Read what goes out in the box, and choose a visibility card.
+2. Click Publish (Опубликовать). A second click while it runs does nothing.
+3. Copy the link, or let a phone scan the code.
+
+## Install a shared bot or skill
+
+<!-- id: market-install-shared; covers: sheet:installShared -->
+A link to a shared bot or skill (bandito.dev/s/...) opens this sheet: what it is, who made it, its version and a warning that the community made it, so check the prompt before you run it. A bot shows its capabilities as switches. Running commands, seeing the screen and managing other agents are off by default and marked as risky; turn them on only if you need them. After Add bot (Добавить бота) the schedules are created switched off, and the sheet lists the services that are not connected yet and the ones the catalog does not know. Open the bot (Открыть бота) opens its chat with the first message in the input field. A skill with scripts needs the tick I understand that agents will be able to run these scripts (Понимаю, что агенты смогут запускать эти скрипты) before Install skill (Установить скилл) becomes active; a skill whose name is already yours is not overwritten. Report (Пожаловаться) sends a reason; five reports hide the share until it is reviewed.
+Где: a link to bandito.dev/s/... pasted into the Marketplace search, or the bandito://install link from a web page
+1. Read the author, the version and the warning. For a bot, read the capabilities and the prompt.
+2. Click Add bot (Добавить бота) or Install skill (Установить скилл).
+3. Switch on the schedules in the bot's settings once you have checked the prompt.
+
+## My shares
+
+<!-- id: market-my-shares; covers: sheet:myShares -->
+My shares (Мои публикации) lists what your account published, with the version, the number of installs and whether the platform hid it after reports. Visibility switches between Public (Публично) and Only by link (Только по ссылке). Update to current version (Обновить до текущей версии) publishes the bot or skill again from the place it was shared from on this Mac, as the next version; a share from another Mac has no update button. Delete (Удалить) asks first, and the link stops working. The copies people already installed stay with them.
+Где: Marketplace → My shares (Мои публикации) beside the page switch
+1. Change the visibility with the switch in a row.
+2. Click Update to current version (Обновить до текущей версии) after you change the bot or skill.
+3. Click Delete (Удалить) and confirm.

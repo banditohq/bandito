@@ -235,6 +235,65 @@ public actor AccountClient {
         return try decodeOK(Wire.self, reply).device
     }
 
+    // MARK: sharing (docs/ARCHITECTURE.md#sharing)
+
+    /// Publishes a bot or skill (`POST /shares`). The platform checks every text of the draft for keys and tokens.
+    public func createShare(_ draft: ShareDraft) async throws -> ShareCreated {
+        let reply = try await shareSend("POST", "/shares", body: draft, authenticated: true)
+        return try shareDecode(ShareCreated.self, reply)
+    }
+
+    /// The owner's shares, without their payloads (`GET /shares/mine`).
+    public func myShares() async throws -> [ShareSummary] {
+        struct Wire: Decodable { var shares: [ShareSummary] }
+        let reply = try await shareSend("GET", "/shares/mine", authenticated: true)
+        return try shareDecode(Wire.self, reply).shares
+    }
+
+    /// Changes the visibility, title, summary or payload of one of the owner's shares (`PATCH /shares/:id`).
+    /// A payload change makes the next version. Another account's share is `ShareFailure.notFound`.
+    public func updateShare(id: String, _ update: ShareUpdate) async throws {
+        let path = "/shares/\(try Self.shareSegment(id))"
+        let reply = try await shareSend("PATCH", path, body: update, authenticated: true)
+        try shareCheck(reply)
+    }
+
+    /// Removes one of the owner's shares (`DELETE /shares/:id`). The link stops working.
+    public func deleteShare(id: String) async throws {
+        let reply = try await shareSend("DELETE", "/shares/\(try Self.shareSegment(id))", authenticated: true)
+        try shareCheck(reply)
+    }
+
+    /// A shared item by its id. No sign-in needed. A hidden item is `ShareFailure.hidden`, an unknown one `.notFound`.
+    public func getShare(id: String) async throws -> SharedItem {
+        struct Wire: Decodable { var share: SharedItem }
+        let reply = try await shareSend("GET", "/shares/\(try Self.shareSegment(id))")
+        return try shareDecode(Wire.self, reply).share
+    }
+
+    /// Reports a shared item (`POST /shares/:id/report`). Five different reporters hide it until it is reviewed.
+    public func reportShare(id: String, reason: ShareReportReason, note: String) async throws {
+        struct Body: Encodable {
+            var reason: ShareReportReason
+            var note: String
+        }
+        let path = "/shares/\(try Self.shareSegment(id))/report"
+        let reply = try await shareSend("POST", path, body: Body(reason: reason, note: note))
+        try shareCheck(reply)
+    }
+
+    /// Counts one install of a shared item (`POST /shares/:id/installed`). The platform counts once a day per address.
+    public func markInstalled(id: String) async throws {
+        let reply = try await shareSend("POST", "/shares/\(try Self.shareSegment(id))/installed")
+        try shareCheck(reply)
+    }
+
+    /// An ID of a share as a URL path segment. Only the base62 form of a share id passes (22 characters).
+    static func shareSegment(_ id: String) throws -> String {
+        guard ShareID.isValid(id) else { throw ShareFailure.invalid }
+        return id
+    }
+
     // MARK: internals
 
     private func signedDevice() async throws -> DeviceBlock {
@@ -305,6 +364,39 @@ public actor AccountClient {
         let failure = try? JSONDecoder().decode(Failure.self, from: reply.data)
         if (200..<300).contains(reply.status), failure?.ok != false { return }
         throw apiError(reply, failure)
+    }
+
+    /// `send` for the sharing calls: the same request, with the failures named as `ShareFailure`.
+    private func shareSend(
+        _ method: String, _ path: String, body: (any Encodable)? = nil, authenticated: Bool = false
+    ) async throws -> Reply {
+        do {
+            return try await send(method, path, body: body, authenticated: authenticated)
+        } catch AccountError.notSignedIn {
+            throw ShareFailure.unauthorized
+        } catch AccountError.network(let detail) {
+            throw ShareFailure.network(detail)
+        } catch {
+            throw ShareFailure.badResponse
+        }
+    }
+
+    private func shareDecode<T: Decodable>(_ type: T.Type, _ reply: Reply) throws -> T {
+        try shareCheck(reply)
+        guard let value = try? JSONDecoder().decode(T.self, from: reply.data) else {
+            throw ShareFailure.badResponse
+        }
+        return value
+    }
+
+    /// A 2xx answer without `ok: false` passes. Anything else is the platform's error, by its code or else by status.
+    private func shareCheck(_ reply: Reply) throws {
+        let body = try? JSONDecoder().decode(ShareFailureBody.self, from: reply.data)
+        if (200..<300).contains(reply.status), body?.ok != false { return }
+        if let code = body?.error {
+            throw ShareFailure.from(code: code, status: reply.status, field: body?.field)
+        }
+        throw ShareFailure.from(status: reply.status)
     }
 
     private func apiError(_ reply: Reply, _ failure: Failure?) -> AccountError {
