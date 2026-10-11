@@ -18,7 +18,7 @@ only when the server is new enough to have them; an older server shows Services 
 ## Marketplace mode
 
 <!-- id: market-mode; covers: mode:market -->
-The main area lists the services in blocks (see Filters and categories below). Each
+The main area is a showcase of shelves (see Shelves and categories below). Each
 connected card shows its address and the result of the last check: the number of tools, the error, or Not checked yet.
 Each catalog card shows the icon, the name, the publisher, two lines about the service and one button, Connect
 (Подключить), at the bottom left; a connected service shows Connected (Подключено) and Configure (Настроить) there. The
@@ -28,29 +28,31 @@ whole card is clickable and opens the page of the service.
 2. The button is lit while the Marketplace is on show. It is not in the mode bar at the top of the sidebar.
 3. Without a server, the page says No servers (Нет серверов). Click Add server (Добавить сервер).
 
-## Filters and categories
+## Shelves and categories
 
 <!-- id: market-filters; covers: -->
-The Services page under All (Все) is one long list in blocks: Connected (Подключённые) first, when something is connected,
-then one block per category: Development (Разработка), Productivity (Продуктивность), Data (Данные), Web (Веб), Design
-(Дизайн) and Other (Другое). Each block has its header with a coloured bar, the name and the number of services; the
-header stays at the top while its block scrolls under it. A category block lists its services whether or not they are
-connected. A category with no services has no block and no row in the sidebar. The cards fill the width of the page
-with the same margin at both sides: two to four columns, by the width of the window.
-Где: Marketplace → sidebar → All (Все), Connected (Подключённые), a category
-1. Click a category in the sidebar: the page scrolls to its block (without animation when Reduce Motion is on). Click All (Все) to go back to the top.
-2. While you scroll, the sidebar lights the row of the block in view; each category has a small dot in the colour of its block.
-3. Click Connected (Подключённые) to see only the connected services in one list. Click a category or All (Все) to return to the blocks.
-4. With no connected service, the Connected (Подключённые) list says Nothing is connected yet (Ничего ещё не подключено).
-5. Clicking a row in the sidebar also closes the page of a service.
-6. Bots and Skills keep their filters: the rows of the sidebar show only what they filter by.
+The Services page under All (Все) is a showcase of shelves, like a store: Connected (Подключённые) first, when something is
+connected; then Suited to the project of <agent> (Подойдут для проекта <агент>), when the server has suggestions; then one
+shelf per category: Development (Разработка), Productivity (Продуктивность), Data (Данные), Web (Веб), Design (Дизайн) and
+Other (Другое). A shelf has a quiet header with the category's symbol, its name and the number of services, and All (Все)
+with an arrow at the right. Under it the cards sit in one row that scrolls sideways and stops at a card. Move the pointer
+over a shelf and an arrow shows at each end where there is more to see; a trackpad or a horizontal wheel scrolls it too. A
+category with no services has no shelf and no row in the sidebar.
+Где: Marketplace → sidebar → All (Все), Connected (Подключённые), a category; a shelf's header → All (Все)
+1. Click All (Все) in the header of a shelf, or a category in the sidebar: the page of that category opens, with Back (Назад) at the top left, the name, the number of services and all its cards in a grid of two to four columns by the width of the window.
+2. Click Back (Назад), or All (Все) in the sidebar, to return to the shelves. The row of the open category is lit in the sidebar.
+3. Click the arrow at an end of a shelf to move by a screenful of cards. VoiceOver offers the same two moves as actions on the shelf.
+4. Click Connected (Подключённые) in the sidebar, or All (Все) in the header of the Connected shelf, to see all the connected services in one grid.
+5. With no connected service, that page says Nothing is connected yet (Ничего ещё не подключено).
+6. Clicking a row in the sidebar also closes the page of a service.
+7. Bots and Skills work the same way: shelves under All (Все), a page for each category, Back (Назад).
 
 ## Search
 
 <!-- id: market-search; covers: -->
 The search field at the top right finds services by name and by description. It ignores case and spaces at the ends. Its focus shows as a cream ring around the field. Catalog services show their logo on the brand-colour tile.
 Где: Marketplace → search field (Поиск)
-1. Type part of the name or the description. The results are one plain list without blocks. A search with no match says Nothing found (Ничего не нашлось). Click a category in the sidebar to clear the search and jump to its block.
+1. Type part of the name or the description. Under All (Все) the results are one plain grid without shelves. On a category's page the search narrows that page. A search with no match says Nothing found (Ничего не нашлось).
 
 ## A service's page
 
@@ -148,7 +150,7 @@ The Bots page lists ready-made bots: an agent with its role, instructions, sched
 uses already set up. Each card has the icon on a coloured tile, the name, the category, a short description, small
 logos of the services the bot uses (the optional ones are dimmer) and Create bot (Создать бота). The whole card opens the page of the bot.
 Где: Marketplace → Bots (Боты)
-1. Click a category in the sidebar to see only its bots.
+1. Under All (Все) the bots sit on shelves by category, with Bundles (Наборы) first. Click All (Все) in a shelf's header, or a category in the sidebar, to see all its bots in a grid; Back (Назад) returns to the shelves.
 2. Click the card to read about the bot.
 3. Click Create bot (Создать бота) on a card to go straight to the create sheet.
 
@@ -195,12 +197,12 @@ agent stays.
 ## Bundles
 
 <!-- id: market-bundles; covers: -->
-Above the ready-made bots, Bots (Боты) shows Bundles (Наборы): a set of three to five bots that work together, such as a
+The first shelf of Bots (Боты) is Bundles (Наборы): a set of three to five bots that work together, such as a
 startup team (a task manager, a code reviewer, a Sentry on-call and a documentation writer). Each set card shows its icon,
-its name and description in the language of the app, and small tiles of the bots it holds. The sets follow the sidebar
+its name and description in the language of the app, and small tiles of the bots it holds. On a category's page the sets of that category come before its bots. The sets follow the sidebar
 filter and the search; My bots (Мои боты) shows none of them. Bundles show only when the server is new enough to have them.
 If the sets do not load, a quiet line says Sets did not load (Наборы не загрузились) with Retry (Повторить); the single bots still show.
-Где: Marketplace → Bots (Боты) → Bundles (Наборы), above the ready-made bots
+Где: Marketplace → Bots (Боты) → Bundles (Наборы), the first shelf; All (Все) in its header opens the page of all sets
 1. Click View (Посмотреть) on a set, or the card itself, to open its panel.
 2. Sets are found by their name, in the language of the app and in English, and by their description.
 
@@ -232,8 +234,9 @@ you give it). The state shows on the card: Installed (Установлено) wi
 every agent on the server, On N agents (У N агентов) when only some agents have it, Name taken (Имя занято) when a
 folder of that name already exists that Bandito did not make.
 Где: Marketplace → Skills (Скиллы)
-1. Click Installed (Установленные) in the sidebar to see only the skills that are installed somewhere.
-2. Click Install (Установить) on a card to choose where, or click the card itself to read first.
+1. Under All (Все) the skills sit on shelves by category. Click All (Все) in a shelf's header, or a category in the sidebar, to see all its skills in a grid; Back (Назад) returns to the shelves.
+2. Click Installed (Установленные) in the sidebar to see only the skills that are installed somewhere.
+3. Click Install (Установить) on a card to choose where, or click the card itself to read first.
 
 ## A skill's page
 
@@ -284,16 +287,16 @@ pick up a new service definition at their next session.
 ## Suited to the project
 
 <!-- id: market-recommend; covers: -->
-On the Services page, above the catalog, a row Suited to the project of <agent> (Подойдут для проекта <агент>) suggests up
+On the Services page, right after the Connected shelf, a shelf Suited to the project of <agent> (Подойдут для проекта <агент>) suggests up
 to six services that are not connected yet. The server looks at the agent's project folder (the folder itself and the
 folders directly in it: a git remote on GitHub, package.json, a Sentry or Supabase config, and the like) and each card says
 why in small text, with the file that showed it in monospace. The agent is the one open in the window, else the last one
-you opened. The row shows under All (Все) with an empty search, and only when the server can suggest and has an agent.
-Connect (Подключить) works as on the other cards, including the sign-in in the browser. The cross at the right hides the
-row for that agent on this server; another agent gets its own row.
-Где: Marketplace → Services (Сервисы) → the row above the catalog → Connect (Подключить), cross (Скрыть подсказки)
-1. Click Connect (Подключить) on a suggestion. The service leaves the row once it is connected.
-2. Click the cross to hide the row for this agent.
+you opened. The shelf shows under All (Все) with an empty search, and only when the server can suggest and has an agent.
+Connect (Подключить) works as on the other cards, including the sign-in in the browser. The cross at the right of its header hides the
+shelf for that agent on this server; another agent gets its own shelf.
+Где: Marketplace → Services (Сервисы) → the shelf after Connected → Connect (Подключить), cross (Скрыть подсказки)
+1. Click Connect (Подключить) on a suggestion. The service leaves the shelf once it is connected.
+2. Click the cross to hide the shelf for this agent.
 
 ## Tools of a service
 
@@ -413,6 +416,6 @@ My shares (Мои публикации) lists what your account published, with 
 ## My skills
 
 <!-- id: market-own-skills; covers: -->
-Above the catalog on the Skills page, when you have any: My skills (Мои скиллы), the skills in your own folder for Claude Code on this server, and the copies you installed from a shared link, marked by link (по ссылке). Share... (Поделиться...) on your own skill opens the publish sheet for it; the sheet lists the dot files that will not be sent. A copy from a link cannot be shared again from here. The section is hidden on the other filters and when it is empty.
-Где: Marketplace → Skills (Скиллы) → My skills (Мои скиллы), above the catalog
+The first shelf of the Skills page, when you have any: My skills (Мои скиллы), the skills in your own folder for Claude Code on this server, and the copies you installed from a shared link, marked by link (по ссылке). Share... (Поделиться...) on your own skill opens the publish sheet for it; the sheet lists the dot files that will not be sent. A copy from a link cannot be shared again from here. The shelf is hidden on the category pages and when it is empty; a search under All (Все) lists them above the results.
+Где: Marketplace → Skills (Скиллы) → My skills (Мои скиллы), the first shelf
 1. Click Share... (Поделиться...) on your skill, choose a license, and publish it.

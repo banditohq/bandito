@@ -12,6 +12,11 @@ enum SkillLogic {
         return categoryOrder.filter { used.contains($0) } + used.subtracting(categoryOrder).sorted()
     }
 
+    /// The shelves of the Skills page under All: the skills by category, in the sidebar order.
+    static func shelves(_ skills: [SkillEntry]) -> [MarketCategoryShelf<SkillEntry>] {
+        MarketCategoryShelf.group(skills, category: \.category, order: categoryOrder)
+    }
+
     /// The skills the filter keeps, then the ones the search keeps. The search reads the skill's name and its
     /// description in the app's language and in English; it ignores case and spaces at the ends.
     static func visible(
@@ -22,7 +27,7 @@ enum SkillLogic {
             switch filter {
             case .all, .connected: true
             case .installed: State(skill).isInstalled
-            case .myBots: false
+            case .myBots, .bundles: false
             case .category(let name): skill.category == name
             }
         }.filter { skill in

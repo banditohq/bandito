@@ -13,7 +13,7 @@ enum BundleLogic {
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
         return bundles.filter { bundle in
             switch filter {
-            case .all, .connected, .installed: true
+            case .all, .connected, .installed, .bundles: true
             case .myBots: false
             case .category(let name): bundle.category == name
             }

@@ -46,6 +46,10 @@ enum QACommand: Equatable {
     case zoom
     /// A performance scenario (`perf thread|inspector|market|switch|typing [result path]`, see `PerfScenarios`).
     case perf(PerfScenario, path: String?)
+    /// A page of the Marketplace: `market services|bots|skills [all|connected|installed|bundles|myBots|category:<name>]`.
+    case market(MarketTab, MarketFilter)
+    /// An arrow of the n-th shelf on screen (`shelf next|back [n]`, n counts from 0).
+    case shelf(forward: Bool, index: Int)
 
     static func parse(_ text: String) -> QACommand? {
         let line = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -75,6 +79,17 @@ enum QACommand: Equatable {
             return .workbench(action)
         case ("zoom", nil):
             return .zoom
+        case ("shelf", let rest?):
+            let words = rest.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
+            guard let direction = words.first, ["next", "back"].contains(direction), words.count <= 2 else { return nil }
+            let index = words.count == 2 ? Int(words[1]) : 0
+            guard let index, index >= 0 else { return nil }
+            return .shelf(forward: direction == "next", index: index)
+        case ("market", let rest?):
+            let words = rest.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
+            guard let first = words.first, let tab = MarketTab(rawValue: first), words.count <= 2 else { return nil }
+            guard words.count == 2 else { return .market(tab, .all) }
+            return parseMarketFilter(words[1]).map { .market(tab, $0) }
         case ("perf", let rest?):
             let words = rest.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
             guard let name = words.first, let scenario = PerfScenario(rawValue: String(name)) else { return nil }
@@ -82,6 +97,21 @@ enum QACommand: Equatable {
             return .perf(scenario, path: path?.isEmpty == false ? path : nil)
         default:
             return nil
+        }
+    }
+
+    /// The filter a `market` command names.
+    static func parseMarketFilter(_ name: String) -> MarketFilter? {
+        switch name {
+        case "all": return .all
+        case "connected": return .connected
+        case "installed": return .installed
+        case "bundles": return .bundles
+        case "myBots": return .myBots
+        default:
+            guard name.hasPrefix("category:") else { return nil }
+            let category = String(name.dropFirst("category:".count))
+            return category.isEmpty ? nil : .category(category)
         }
     }
 
@@ -175,6 +205,17 @@ enum QAHooks {
             TitleBarZoom.doubleClick()
         case .perf(let scenario, let path):
             PerfScenarios.start(scenario, path: path, router: router, app: app)
+        case .shelf(let forward, let index):
+            MarketShelfDebug.press(forward: forward, index: index)
+        case .market(let tab, let filter):
+            router.select(mode: .market)
+            router.marketTab = tab
+            router.marketDetail = nil
+            switch tab {
+            case .services: router.marketFilter = filter
+            case .bots: router.marketBotFilter = filter
+            case .skills: router.marketSkillFilter = filter
+            }
         }
     }
 

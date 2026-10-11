@@ -18,96 +18,126 @@ private func entries(_ catalog: [IntegrationCatalogEntry], _ integrations: [Inte
     MarketLogic.entries(catalog: catalog, integrations: integrations, languageCode: "en")
 }
 
-@Suite struct MarketSectionsTests {
+@Suite struct MarketShelvesTests {
     private let catalog = [
         template("a", "web"), template("b", "dev"), template("c", "data"), template("d", "dev"),
         template("e", "design"), template("f", "productivity"), template("g", "other"),
     ]
 
-    @Test func connectedBlockIsFirstThenCategoriesInTheSidebarOrder() {
+    @Test func connectedShelfIsFirstThenTheCategoriesInTheSidebarOrder() {
         let list = entries(catalog, [connection("i1", "d"), connection("own", "mine")])
-        let sections = MarketSections.sections(list)
+        let shelves = MarketSections.shelves(list)
         #expect(
-            sections.map(\.id)
+            shelves.map(\.id)
                 == ["connected", "category:dev", "category:productivity", "category:data", "category:web", "category:design", "category:other"])
-        // The connected block has the connected catalog service and the owner's own one.
-        #expect(sections[0].entries.map(\.id) == ["catalog:d", "own:own"])
+        // The connected shelf has the connected catalog service and the owner's own one.
+        #expect(shelves[0].entries.map(\.id) == ["catalog:d", "own:own"])
+        #expect(shelves[0].count == 2)
     }
 
-    @Test func aCategoryKeepsItsConnectedServicesAndMarksNothingElse() {
+    @Test func theSuggestionsComeRightAfterTheConnectedShelf() {
         let list = entries(catalog, [connection("i1", "d")])
-        let dev = MarketSections.sections(list).first { $0.categoryName == "dev" }
+        let ids = MarketSections.shelves(list, recommended: 3).map(\.id)
+        #expect(ids.prefix(3) == ["connected", "recommended", "category:dev"])
+        let recommended = MarketSections.shelves(list, recommended: 3)[1]
+        #expect(recommended.kind == .recommended)
+        #expect(recommended.count == 3)
+        #expect(recommended.entries.isEmpty)
+        #expect(recommended.destination == nil)
+    }
+
+    @Test func withNothingConnectedTheSuggestionsAreFirst() {
+        let ids = MarketSections.shelves(entries(catalog), recommended: 2).map(\.id)
+        #expect(ids.first == "recommended")
+        #expect(!ids.contains("connected"))
+        #expect(MarketSections.shelves(entries(catalog), recommended: 0).first?.kind != .recommended)
+    }
+
+    @Test func aCategoryKeepsItsConnectedServicesAndCountsAllOfThem() {
+        let list = entries(catalog, [connection("i1", "d")])
+        let dev = MarketSections.shelves(list).first { $0.categoryName == "dev" }
         #expect(dev?.entries.map(\.id) == ["catalog:b", "catalog:d"])
         #expect(dev?.entries.map(\.isConnected) == [false, true])
+        #expect(dev?.count == 2)
     }
 
-    @Test func noConnectedServicesNoConnectedBlock() {
-        let sections = MarketSections.sections(entries(catalog))
-        #expect(sections.first?.kind != .connected)
-        #expect(!sections.contains { $0.kind == .connected })
+    @Test func noConnectedServicesNoConnectedShelf() {
+        #expect(!MarketSections.shelves(entries(catalog)).contains { $0.kind == .connected })
     }
 
-    @Test func anEmptyCategoryHasNoBlock() {
-        let sections = MarketSections.sections(entries([template("a", "web"), template("b", "dev")]))
-        #expect(sections.map(\.id) == ["category:dev", "category:web"])
+    @Test func anEmptyCategoryHasNoShelf() {
+        let shelves = MarketSections.shelves(entries([template("a", "web"), template("b", "dev")]))
+        #expect(shelves.map(\.id) == ["category:dev", "category:web"])
+        #expect(shelves.allSatisfy { $0.count > 0 })
     }
 
     @Test func aServiceWithoutACategoryGoesToOtherWhenTheCatalogHasCategories() {
-        let sections = MarketSections.sections(entries([template("a", "dev"), template("b", nil)]))
-        #expect(sections.map(\.id) == ["category:dev", "category:other"])
-        #expect(sections[1].entries.map(\.id) == ["catalog:b"])
+        let shelves = MarketSections.shelves(entries([template("a", "dev"), template("b", nil)]))
+        #expect(shelves.map(\.id) == ["category:dev", "category:other"])
+        #expect(shelves[1].entries.map(\.id) == ["catalog:b"])
     }
 
-    @Test func aDaemonWithoutCategoriesGivesOneCatalogBlock() {
+    @Test func aDaemonWithoutCategoriesGivesOneCatalogBlockThatOpensNothing() {
         let old = (1...7).map { template("s\($0)", nil) }
-        let sections = MarketSections.sections(entries(old, [connection("i", "s2")]))
-        #expect(sections.map(\.id) == ["connected", "catalog"])
-        #expect(sections[1].entries.count == 7)
+        let shelves = MarketSections.shelves(entries(old, [connection("i", "s2")]))
+        #expect(shelves.map(\.id) == ["connected", "catalog"])
+        #expect(shelves[1].entries.count == 7)
+        #expect(shelves[1].destination == nil)
         #expect(MarketCategory.present(in: old).isEmpty)
     }
 
-    @Test func aSmallCatalogStillGivesSensibleBlocks() {
+    @Test func aSmallCatalogStillGivesSensibleShelves() {
         let seven = [
             template("github", "dev"), template("linear", "productivity"), template("playwright", "web"),
             template("sentry", "dev"), template("notion", "productivity"), template("postgres", "data"),
             template("fetch", "web"),
         ]
-        let sections = MarketSections.sections(entries(seven, [connection("i", "github")]))
-        #expect(sections.map(\.id) == ["connected", "category:dev", "category:productivity", "category:data", "category:web"])
-        #expect(sections.dropFirst().map(\.entries.count) == [2, 2, 1, 2])
+        let shelves = MarketSections.shelves(entries(seven, [connection("i", "github")]))
+        #expect(shelves.map(\.id) == ["connected", "category:dev", "category:productivity", "category:data", "category:web"])
+        #expect(shelves.dropFirst().map(\.count) == [2, 2, 1, 2])
     }
 
     @Test func unknownCategoriesFollowTheKnownOnesAlphabetically() {
-        let sections = MarketSections.sections(entries([template("a", "zeta"), template("b", "dev"), template("c", "beta")]))
-        #expect(sections.map(\.id) == ["category:dev", "category:beta", "category:zeta"])
+        let shelves = MarketSections.shelves(entries([template("a", "zeta"), template("b", "dev"), template("c", "beta")]))
+        #expect(shelves.map(\.id) == ["category:dev", "category:beta", "category:zeta"])
     }
 
-    @Test func noCatalogAndNoIntegrationsHasNoBlocks() {
-        #expect(MarketSections.sections([]).isEmpty)
+    @Test func noCatalogAndNoIntegrationsHasNoShelves() {
+        #expect(MarketSections.shelves([]).isEmpty)
     }
 
-    @Test func onlyOwnIntegrationsGiveTheConnectedBlockAlone() {
-        let sections = MarketSections.sections(entries([], [connection("x", "mine")]))
-        #expect(sections.map(\.id) == ["connected"])
+    @Test func onlyOwnIntegrationsGiveTheConnectedShelfAlone() {
+        #expect(MarketSections.shelves(entries([], [connection("x", "mine")])).map(\.id) == ["connected"])
     }
 
-    @Test func sidebarCategoriesAgreeWithTheBlocks() {
+    @Test func sidebarCategoriesAgreeWithTheShelves() {
         let cat = [template("a", "web"), template("b", "zeta"), template("c", "dev"), template("d", nil), template("e", "dev")]
         #expect(MarketCategory.present(in: cat) == ["dev", "web", "other", "zeta"])
-        let blocks = MarketSections.sections(entries(cat)).compactMap(\.categoryName)
-        #expect(blocks == MarketCategory.present(in: cat))
+        #expect(MarketSections.shelves(entries(cat)).compactMap(\.categoryName) == MarketCategory.present(in: cat))
+    }
+
+    @Test func eachShelfHasASymbolAndTheOnesWithAPageOpenIt() {
+        let shelves = MarketSections.shelves(entries(catalog, [connection("i1", "d")]), recommended: 1)
+        #expect(shelves.allSatisfy { !$0.symbol.isEmpty })
+        #expect(shelves.first { $0.kind == .connected }?.destination == .connected)
+        #expect(shelves.first { $0.categoryName == "web" }?.destination == .category("web"))
+        #expect(MarketCategory.symbol("dev") != MarketCategory.symbol("web"))
+        #expect(MarketCategory.symbol("zeta") == "tag")
     }
 
     // MARK: content
 
-    @Test func allWithNoSearchIsBlocks() {
+    @Test func allWithNoSearchIsTheShelves() {
         let list = entries(catalog)
-        #expect(MarketSections.content(list, filter: .all, query: "  ") == .sections(MarketSections.sections(list)))
+        #expect(MarketSections.content(list, filter: .all, query: "  ") == .shelves(MarketSections.shelves(list)))
+        #expect(
+            MarketSections.content(list, filter: .all, query: "", recommended: 2)
+                == .shelves(MarketSections.shelves(list, recommended: 2)))
     }
 
-    @Test func aSearchIsOneFlatListWithoutBlocks() {
+    @Test func aSearchUnderAllIsOneFlatListWithoutShelves() {
         let list = entries(catalog, [connection("i1", "d")])
-        guard case .flat(let found, let empty) = MarketSections.content(list, filter: .all, query: "about b") else {
+        guard case .flat(let found, let empty) = MarketSections.content(list, filter: .all, query: "about b", recommended: 2) else {
             Issue.record("expected a flat list")
             return
         }
@@ -119,29 +149,81 @@ private func entries(_ catalog: [IntegrationCatalogEntry], _ integrations: [Inte
     }
 
     @Test func aSearchWithNoMatchSaysSo() {
-        let list = entries(catalog)
-        #expect(MarketSections.content(list, filter: .all, query: "zzz") == .flat([], .noResults))
+        #expect(MarketSections.content(entries(catalog), filter: .all, query: "zzz") == .flat([], .noResults))
     }
 
-    @Test func theConnectedFilterIsFlatAndSaysWhenNothingIsConnected() {
+    @Test func aCategoryIsItsOwnPageAndASearchNarrowsIt() {
         let list = entries(catalog, [connection("i1", "d")])
-        guard case .flat(let items, let empty) = MarketSections.content(list, filter: .connected, query: "") else {
-            Issue.record("expected a flat list")
+        #expect(
+            MarketSections.content(list, filter: .category("dev"), query: "")
+                == .page(.category("dev"), list.filter { $0.category == "dev" }, nil))
+        guard case .page(let kind, let found, _) = MarketSections.content(list, filter: .category("dev"), query: "about d") else {
+            Issue.record("expected a page")
             return
         }
-        #expect(items.map(\.id) == ["catalog:d"])
-        #expect(empty == nil)
-        #expect(MarketSections.content(entries(catalog), filter: .connected, query: "") == .flat([], .nothingConnected))
+        #expect(kind == .category("dev"))
+        #expect(found.map(\.id) == ["catalog:d"])
+        #expect(MarketSections.content(list, filter: .category("dev"), query: "zzz") == .page(.category("dev"), [], .noResults))
     }
 
-    // MARK: tones
+    @Test func theConnectedPageSaysWhenNothingIsConnected() {
+        let list = entries(catalog, [connection("i1", "d")])
+        guard case .page(let kind, let items, let empty) = MarketSections.content(list, filter: .connected, query: "") else {
+            Issue.record("expected a page")
+            return
+        }
+        #expect(kind == .connected)
+        #expect(items.map(\.id) == ["catalog:d"])
+        #expect(empty == nil)
+        #expect(MarketSections.content(entries(catalog), filter: .connected, query: "") == .page(.connected, [], .nothingConnected))
+    }
 
-    @Test func everyKnownBlockHasItsOwnToneAndOthersAreStable() {
-        let tones = ["dev", "productivity", "data", "web", "design", "other"].map { MarketTone.of(category: $0) }
-        #expect(tones == [.sky, .peach, .lilac, .rose, .cream, .neutral])
-        #expect(MarketTone.of(category: "zeta") == MarketTone.of(category: "zeta"))
-        #expect(MarketTone.of(MarketSection(kind: .connected, entries: [])) == .connected)
-        #expect(MarketTone.of(MarketSection(kind: .catalog, entries: [])) == .neutral)
+    @Test func allOnAShelfOpensAPageWithTheSameCardsAndBackIsTheShelves() {
+        let list = entries(catalog, [connection("i1", "d"), connection("own", "mine")])
+        let shelves = MarketSections.shelves(list)
+        for shelf in shelves {
+            guard let destination = shelf.destination else { continue }
+            let content = MarketSections.content(list, filter: destination, query: "")
+            guard case .page(let kind, let items, _) = content else {
+                Issue.record("\(shelf.id) did not open a page")
+                continue
+            }
+            // The number in the shelf's header is the number of cards on its page.
+            #expect(items == shelf.entries)
+            #expect(items.count == shelf.count)
+            // Back sets the filter to All: the shelves again.
+            #expect(kind.filter == destination)
+            #expect(MarketSections.content(list, filter: .all, query: "") == .shelves(shelves))
+        }
+    }
+
+    // MARK: page mode
+
+    @Test func theModeFollowsTheFilterAndTheSearch() {
+        #expect(MarketPageMode.of(filter: .all, searching: false) == .shelves)
+        #expect(MarketPageMode.of(filter: .all, searching: true) == .flat)
+        #expect(MarketPageMode.of(filter: .category("dev"), searching: false) == .page)
+        #expect(MarketPageMode.of(filter: .category("dev"), searching: true) == .page)
+        #expect(MarketPageMode.of(filter: .connected, searching: false) == .page)
+        #expect(MarketPageMode.of(filter: .bundles, searching: false) == .page)
+        #expect(MarketPageMode.of(filter: .installed, searching: false) == .flat)
+        #expect(MarketPageMode.of(filter: .myBots, searching: true) == .flat)
+    }
+
+    // MARK: shelves of bots and skills
+
+    private struct Thing: Identifiable, Equatable {
+        let id: String
+        let category: String
+    }
+
+    @Test func thingsAreGroupedByCategoryInTheGivenOrderThenAlphabetically() {
+        let things = [Thing(id: "1", category: "zeta"), Thing(id: "2", category: "dev"), Thing(id: "3", category: "ops"),
+            Thing(id: "4", category: "dev"), Thing(id: "5", category: "beta")]
+        let shelves = MarketCategoryShelf.group(things, category: \.category, order: ["dev", "ops"])
+        #expect(shelves.map(\.category) == ["dev", "ops", "beta", "zeta"])
+        #expect(shelves[0].items.map(\.id) == ["2", "4"])
+        #expect(MarketCategoryShelf.group([Thing](), category: \.category, order: ["dev"]).isEmpty)
     }
 }
 
@@ -186,194 +268,118 @@ private func entries(_ catalog: [IntegrationCatalogEntry], _ integrations: [Inte
     }
 }
 
-@Suite struct MarketSectionMetricsTests {
-    private typealias Metrics = MarketSectionMetrics
+@Suite struct MarketShelfMetricsTests {
+    private typealias Metrics = MarketShelfMetrics
 
-    @Test func aBlockIsItsHeaderItsRowsAndAGap() {
-        let rows = CGFloat(MarketGridLayout.rowCount(items: 5, columns: 2))
-        #expect(Metrics.height(cards: 5, columns: 2) == Metrics.headerHeight + rows * (Metrics.cardHeight + Metrics.rowGap) + Metrics.sectionGap)
-        #expect(Metrics.height(cards: 5, columns: 4) < Metrics.height(cards: 5, columns: 2))
+    @Test func aShelfIsItsHeaderAGapAndItsLane() {
+        let card: CGFloat = 156
+        #expect(Metrics.laneHeight(card: card) == card + Metrics.laneTop + Metrics.laneBottom)
+        #expect(Metrics.shelfHeight(card: card) == Metrics.headerHeight + Metrics.headerGap + Metrics.laneHeight(card: card))
     }
 
-    @Test func theLastBlockCanReachTheTop() {
-        let last = Metrics.height(cards: 3, columns: 2)
-        #expect(Metrics.bottomPadding(viewport: 700, last: last) == 700 - last)
-        #expect(Metrics.bottomPadding(viewport: 100, last: 900) == 24)
-    }
-}
-
-@Suite struct MarketStickyOffsetTests {
-    private typealias Sticky = MarketStickyOffset
-    private let header = MarketSectionMetrics.headerHeight
-
-    @Test func theHeaderStaysInPlaceUntilTheBlockReachesTheTop() {
-        #expect(Sticky.offset(sectionMinY: 300, sectionHeight: 800) == 0)
-        #expect(Sticky.offset(sectionMinY: 0, sectionHeight: 800) == 0)
+    @Test func theRoomForTheHoverShadowIsInsideTheLane() {
+        // The lane clips: the lift (1.5) and the shadow (12 blur, 7 down) of a hovered card must fit.
+        #expect(Metrics.laneTop >= 1.5)
+        #expect(Metrics.laneBottom >= 7 + 12)
     }
 
-    @Test func thenItFollowsTheTopEdge() {
-        #expect(Sticky.offset(sectionMinY: -1, sectionHeight: 800) == 1)
-        #expect(Sticky.offset(sectionMinY: -250, sectionHeight: 800) == 250)
+    @Test func aConnectedCardGrowsWithTheLinesItHas() {
+        let plain = Metrics.connectedCardHeight(hasStats: false, hasUpdate: false, needsLogin: false)
+        #expect(Metrics.connectedCardHeight(hasStats: true, hasUpdate: false, needsLogin: false) > plain)
+        #expect(Metrics.connectedCardHeight(hasStats: false, hasUpdate: true, needsLogin: false) > plain)
+        #expect(Metrics.connectedCardHeight(hasStats: false, hasUpdate: false, needsLogin: true) > plain)
+        #expect(
+            Metrics.connectedCardHeight(hasStats: true, hasUpdate: true, needsLogin: true)
+                > Metrics.connectedCardHeight(hasStats: true, hasUpdate: true, needsLogin: false))
     }
 
-    @Test func atTheEndOfTheBlockItIsPushedUpByTheNextOne() {
-        // The block is 800 tall and has scrolled 756 past: its header is at the bottom of it, as far as it goes.
-        #expect(Sticky.offset(sectionMinY: -(800 - header), sectionHeight: 800) == 800 - header)
-        // Scrolled further, the header moves up with the block: the offset stays, the block's own position carries it.
-        #expect(Sticky.offset(sectionMinY: -790, sectionHeight: 800) == 800 - header)
-        #expect(Sticky.offset(sectionMinY: -5000, sectionHeight: 800) == 800 - header)
-    }
-
-    @Test func aBlockShorterThanItsHeaderDoesNotMove() {
-        #expect(Sticky.offset(sectionMinY: -10, sectionHeight: 20) == 0)
-        #expect(Sticky.offset(sectionMinY: -10, sectionHeight: 0) == 0)
-    }
-
-    @Test func nonsenseGivesNoOffset() {
-        #expect(Sticky.offset(sectionMinY: .nan, sectionHeight: 500) == 0)
-        #expect(Sticky.offset(sectionMinY: -10, sectionHeight: .infinity) == 0)
-    }
-
-    @Test func theNextHeaderArrivesAtTheBottomOfThePinnedOne() {
-        // With block A 800 tall at minY -756, block B starts at A's bottom, 44 below the top: its header touches the
-        // pinned header of A exactly when A's header has reached its lowest place.
-        let aTop: CGFloat = -(800 - header)
-        let bTop = aTop + 800
-        #expect(bTop == header)
-        #expect(Sticky.offset(sectionMinY: aTop, sectionHeight: 800) + header == 800)
+    @Test func aStepIsACardAndAGap() {
+        #expect(Metrics.pitch == Metrics.cardWidth + Metrics.gap)
     }
 }
 
-@MainActor
-@Suite struct MarketSectionTrackerTests {
-    private func tracker(_ ids: [String] = ["a", "b", "c"]) -> MarketSectionTracker {
-        let tracker = MarketSectionTracker()
-        tracker.configure(ids: ids)
-        return tracker
+@Suite struct MarketShelfScrollTests {
+    /// A row of 10 cards in a 1000 pt box with the 30 pt page margins, at `offset`.
+    private func row(_ offset: CGFloat, container: CGFloat = 1000, cards: Int = 10) -> MarketShelfScroll {
+        let pitch = MarketShelfMetrics.pitch
+        return MarketShelfScroll(
+            offset: offset, container: container, content: CGFloat(cards) * pitch - MarketShelfMetrics.gap,
+            leadingInset: 30, trailingInset: 30)
     }
 
-    @Test func nothingIsActiveBeforeAnAnchorPasses() {
-        let t = tracker()
-        #expect(t.active == nil)
-        #expect(!t.report(index: 0, minY: 300))
-        #expect(t.active == nil)
+    @Test func atTheStartThereIsNothingBehind() {
+        let scroll = row(-30)
+        #expect(!scroll.canBack)
+        #expect(scroll.canForward)
+        #expect(scroll.overflows)
     }
 
-    @Test func theLastAnchorThatHasPassedIsActive() {
-        let t = tracker()
-        #expect(t.report(index: 0, minY: 0))
-        #expect(t.active == 0)
-        #expect(t.report(index: 1, minY: 20))
-        #expect(t.active == 1)
-        // The next header reaches the bottom of the pinned one: it takes over there, not before.
-        #expect(!t.report(index: 2, minY: Int(MarketSectionTracker.threshold) + 1))
-        #expect(t.report(index: 2, minY: Int(MarketSectionTracker.threshold)))
-        #expect(t.active == 2)
+    @Test func atTheEndThereIsNothingAhead() {
+        let end = row(0).maxOffset
+        #expect(row(end).canBack)
+        #expect(!row(end).canForward)
     }
 
-    @Test func scrollingBackUpGivesTheBlockBack() {
-        let t = tracker()
-        _ = t.report(index: 0, minY: -400)
-        _ = t.report(index: 1, minY: 0)
-        #expect(t.active == 1)
-        #expect(t.report(index: 1, minY: 120))
-        #expect(t.active == 0)
+    @Test func inTheMiddleBothShow() {
+        #expect(row(500).canBack)
+        #expect(row(500).canForward)
     }
 
-    @Test func aMoveThatChangesNothingIsNotReported() {
-        let t = tracker()
-        _ = t.report(index: 0, minY: -10)
-        #expect(!t.report(index: 0, minY: -20))
-        #expect(!t.report(index: 1, minY: 500))
+    @Test func aRowThatFitsHasNoArrows() {
+        let few = row(-30, container: 1000, cards: 3)
+        #expect(!few.canBack)
+        #expect(!few.canForward)
+        #expect(!few.overflows)
     }
 
-    @Test func aChangeInsideAJumpIsNotReported() {
-        let t = tracker()
-        t.quietUntil = 100
-        #expect(!t.report(index: 0, minY: 0, now: 50))
-        #expect(t.active == 0)
-        // The state is kept: the same block is not reported again later.
-        #expect(!t.report(index: 0, minY: -5, now: 150))
+    @Test func aRowNotMeasuredYetShowsNothing() {
+        let blank = MarketShelfScroll()
+        #expect(!blank.canBack)
+        #expect(!blank.canForward)
+        #expect(blank.pageIndex(forward: true, count: 5) == 1)
     }
 
-    @Test func aJumpSetsTheFlagsOfAnchorsThatWereNeverBuilt() {
-        let t = tracker(["a", "b", "c", "d"])
-        _ = t.report(index: 3, minY: 0)
-        #expect(t.active == 3)
-        t.jump(to: 1)
-        #expect(t.active == 1)
-        t.jump(to: nil)
-        #expect(t.active == nil)
+    @Test func aScreenfulIsTheWholeCardsBetweenTheMargins() {
+        // 940 pt of room, 274 pt a step: three cards (3 x 260 + 2 x 14 = 808; four would need 1082).
+        #expect(row(0).screenful() == 3)
+        #expect(row(0, container: 200).screenful() == 1)
+        #expect(MarketShelfScroll(offset: 0, container: .nan, content: 1, leadingInset: 0, trailingInset: 0).screenful() == 1)
     }
 
-    @Test func aResetForgetsWhatWasSeen() {
-        let t = tracker()
-        _ = t.report(index: 1, minY: 12)
-        t.reset()
-        #expect(t.active == nil)
+    @Test func anArrowMovesByAScreenfulFromTheNearestCard() {
+        // At the start the nearest card is the first: forward goes to the fourth, back stays on the first.
+        #expect(row(-30).pageIndex(forward: true, count: 10) == 3)
+        #expect(row(-30).pageIndex(forward: false, count: 10) == 0)
+        // A row dragged to about the middle of the third card counts from it (the card nearest to the start edge).
+        let pitch = MarketShelfMetrics.pitch
+        #expect(row(-30 + pitch * 2 + 40).pageIndex(forward: true, count: 10) == 5)
+        #expect(row(-30 + pitch * 5).pageIndex(forward: false, count: 10) == 2)
     }
 
-    @Test func aNewListOfBlocksStartsOver() {
-        let t = tracker()
-        _ = t.report(index: 2, minY: 0)
-        t.configure(ids: ["a", "b", "c"])
-        #expect(t.active == 2)
-        t.configure(ids: ["a", "b"])
-        #expect(t.active == nil)
-        #expect(!t.report(index: 5, minY: 0))
+    @Test func theTargetNeverLeavesTheRow() {
+        #expect(row(-30 + MarketShelfMetrics.pitch * 8).pageIndex(forward: true, count: 10) == 9)
+        #expect(row(-30).pageIndex(forward: true, count: 2) == 1)
+        #expect(row(-30).pageIndex(forward: true, count: 0) == nil)
+        #expect(MarketShelfScroll(offset: .nan).pageIndex(forward: true, count: 4) == nil)
     }
 }
 
 @Suite struct MarketSidebarLogicTests {
-    @Test func onServicesAllAndCategoriesScrollAndConnectedFilters() {
-        #expect(MarketSidebarLogic.action(for: .all, tab: .services) == .scroll(.top))
-        #expect(MarketSidebarLogic.action(for: .category("dev"), tab: .services) == .scroll(.category("dev")))
-        #expect(MarketSidebarLogic.action(for: .connected, tab: .services) == .filter(.connected))
-    }
-
-    @Test func botsAndSkillsFilterAsBefore() {
-        #expect(MarketSidebarLogic.action(for: .category("ops"), tab: .bots) == .filter(.category("ops")))
-        #expect(MarketSidebarLogic.action(for: .all, tab: .skills) == .filter(.all))
-        #expect(MarketSidebarLogic.action(for: .installed, tab: .skills) == .filter(.installed))
-    }
-
-    @Test func underAllTheBlockInViewIsLit() {
-        #expect(MarketSidebarLogic.highlighted(tab: .services, filter: .all, section: nil) == .all)
-        #expect(MarketSidebarLogic.highlighted(tab: .services, filter: .all, section: "web") == .category("web"))
-        // The Connected filter and the other pages keep their own row.
-        #expect(MarketSidebarLogic.highlighted(tab: .services, filter: .connected, section: "web") == .connected)
-        #expect(MarketSidebarLogic.highlighted(tab: .bots, filter: .category("ops"), section: "web") == .category("ops"))
-    }
-
-    @Test func aTargetLandsOnTheTopOrOnItsBlock() {
-        let sections = MarketSections.sections(entries([template("a", "dev"), template("b", "web")]))
-        #expect(MarketSidebarLogic.landing(of: .top, sections: sections) == .top)
-        #expect(MarketSidebarLogic.landing(of: .category("web"), sections: sections) == .section(1))
-        // A category with no block (empty, or gone) has no place.
-        #expect(MarketSidebarLogic.landing(of: .category("design"), sections: sections) == nil)
-        #expect(MarketLanding.section(1).index == 1)
-        #expect(MarketLanding.top.index == nil)
-    }
-
-    @Test func theJumpScrollsToTheSameIDTheBlockIsKnownBy() {
-        let sections = MarketSections.sections(entries([template("a", "dev"), template("b", "web")], [connection("i", "a")]))
-        // The page gives each block to its ForEach under `scrollID`; the sidebar's jump hands `scrollTo` the same value, of the same type.
-        let pageIDs: [String] = sections.map(\.scrollID)
-        for (index, section) in sections.enumerated() {
-            guard let name = section.categoryName else { continue }
-            let landing = MarketSidebarLogic.landing(of: .category(name), sections: sections)
-            #expect(landing == .section(index))
-            let id = MarketSidebarLogic.scrollID(for: landing!, sections: sections)
-            #expect(pageIDs.contains(id))
-            #expect(id == section.scrollID)
+    @Test func aRowSetsItsOwnFilterOnEveryPage() {
+        for row in [MarketFilter.all, .connected, .installed, .myBots, .category("dev")] {
+            #expect(MarketSidebarLogic.target(for: row) == row)
         }
-        #expect(MarketSidebarLogic.scrollID(for: .top, sections: sections) == MarketScrollDriver.topID)
-        #expect(!pageIDs.contains(MarketScrollDriver.topID))
     }
 
-    @Test func aRequestExpires() {
-        let request = MarketScrollRequest(id: 1, target: .top, created: 100)
-        #expect(request.isFresh(at: 105))
-        #expect(!request.isFresh(at: 109))
+    @Test func onlyCategoriesCarryASymbol() {
+        #expect(MarketSidebarLogic.symbol(of: .category("dev")) == MarketCategory.symbol("dev"))
+        #expect(MarketSidebarLogic.symbol(of: .all) == nil)
+        #expect(MarketSidebarLogic.symbol(of: .connected) == nil)
+    }
+
+    @Test func theSetsPageIsAFilterOfItsOwnThatNoRowLights() {
+        #expect(MarketFilter.bundles.id == "bundles")
+        #expect(!MarketTab.bots.filterRows(categories: ["dev"]).contains(.bundles))
+        #expect(MarketFilter.bundles != .all)
     }
 }

@@ -818,7 +818,6 @@
 "integrations.check" = "检查";
 "integrations.checking" = "检查中…";
 "integrations.connect" = "连接";
-"integrations.connected" = "已连接";
 "integrations.custom.add" = "添加";
 "integrations.custom.commandHint" = "程序及其参数，与文档中一致。";
 "integrations.custom.commandLine" = "完整命令";
@@ -1098,6 +1097,10 @@
 "market.section.how" = "如何连接";
 "market.section.links" = "链接";
 "market.section.needs" = "所需条件";
+"market.shelf.all" = "全部";
+"market.shelf.allLabel" = "查看全部：%1$@";
+"market.shelf.next" = "向右滚动";
+"market.shelf.previous" = "向左滚动";
 "market.skill.by" = "作者：%1$@";
 "market.skill.claudeOnly" = "仅限 Claude";
 "market.skill.conflictAgent" = "%1$@ 的文件夹里已有同名文件夹，且不是 Bandito 放的。Bandito 绝不会覆盖它：请先移动或重命名该文件夹，再安装技能。";

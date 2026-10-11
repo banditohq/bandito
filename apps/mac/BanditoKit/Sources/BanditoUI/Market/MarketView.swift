@@ -3,8 +3,9 @@ import BanditoKit
 import BanditoL10n
 import SwiftUI
 
-/// Marketplace mode: the services the agents can use. The connected ones come first, then the catalog to connect
-/// more from. Connecting, configuring, checking and removing happen here; the sidebar picks the filter.
+/// Marketplace mode: the services the agents can use, shown as shelves: the connected ones first, then what suits the
+/// project, then one shelf per category of the catalog. "All" on a shelf (or a row of the sidebar) opens its page.
+/// Connecting, configuring, checking and removing happen here.
 struct MarketView: View {
     @Environment(Router.self) private var router
     @Environment(AppModel.self) private var app
@@ -48,12 +49,8 @@ struct MarketView: View {
     @State private var journalLoading: Set<String> = []
     @State private var journalError: UserFacingMessage?
 
-    /// How many cards a row holds, from the width of the scroll view; written only when it changes.
+    /// How many cards a row of a grid holds, from the width of the scroll view; written only when it changes.
     @State private var columns = 3
-    /// The height of the scroll view in 8 pt steps: the space under the last block lets it reach the top.
-    @State private var viewportHeight: CGFloat = 0
-    /// Which block is in view, from the real positions of the anchors (a plain object: no view state per scroll step).
-    @State private var tracker = MarketSectionTracker()
     /// The entries and the page for the last inputs, so the body does not rebuild them on every pass.
     @State private var memo = MarketListMemo()
 
@@ -92,7 +89,6 @@ struct MarketView: View {
         .onChange(of: tab) { _, _ in
             query = ""
             panel = nil
-            router.marketScroll = nil
         }
         // A pasted `https://bandito.dev/s/<id>` opens the install sheet of that bot or skill, not a search.
         .onChange(of: query) { _, text in
@@ -351,125 +347,112 @@ struct MarketView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    /// The scroll view of the page. It spans the window, so a hover shadow or the pinned header is never cut at the
-    /// page margin; the margin is inside the content. The columns come from its width.
+    /// The scroll view of the page. It spans the window, so a hover shadow or a shelf's cards are never cut at the page
+    /// margin; the margin is inside the content. The columns of a grid come from its width. The view is made again when
+    /// the page or its filter changes, so a category's page opens at its top.
     private func scrollArea(supported: Bool, entries: [MarketEntry]) -> some View {
+        let recommendation = tab == .services && supported ? recommendationContext : nil
         let content: MarketContent? =
             tab == .services && supported
-            ? memo.content(entries, filter: router.marketFilter, query: query) : nil
-        let sections: [MarketSection] = {
-            if case .sections(let list) = content { return list }
-            return []
-        }()
-        let recommendation = tab == .services && supported ? recommendationContext : nil
-        let firstIsConnected = sections.first?.kind == .connected
-        tracker.configure(ids: sections.map(\.id))
-        let context = MarketScrollContext(
-            sections: sections, tracker: tracker, ready: !sections.isEmpty,
-            request: router.marketScroll,
-            onHandled: { router.marketScroll = nil },
-            onActive: { index in
-                let name = index.flatMap { sections.indices.contains($0) ? sections[$0].categoryName : nil }
-                if router.marketSection != name { router.marketSection = name }
-            })
-        return ScrollViewReader { proxy in
-            ScrollView {
-                if let content {
-                    servicesContent(
-                        content, recommendation: recommendation, firstIsConnected: firstIsConnected,
-                        onActive: context.onActive)
-                } else {
-                    VStack(alignment: .leading, spacing: 18) {
-                        if tab == .bots {
-                            botsContent
-                        } else if tab == .skills {
-                            skillsContent
-                        } else {
-                            ServerUnavailable(server: server)
-                        }
+            ? memo.content(
+                entries, filter: router.marketFilter, query: query, recommended: recommendation?.items.count ?? 0)
+            : nil
+        return ScrollView {
+            if let content {
+                servicesContent(content, recommendation: recommendation)
+            } else {
+                VStack(alignment: .leading, spacing: 18) {
+                    if tab == .bots {
+                        botsContent
+                    } else if tab == .skills {
+                        skillsContent
+                    } else {
+                        ServerUnavailable(server: server)
                     }
-                    .padding(.horizontal, MarketGridLayout.sidePadding)
-                    .padding(.top, MarketSectionMetrics.topInset)
-                    .padding(.bottom, 24)
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
+                .padding(.top, MarketShelfMetrics.topInset)
+                .padding(.bottom, 24)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
             }
-            .scrollIndicators(.automatic)
-            .environment(\.marketColumns, columns)
-            .onGeometryChange(for: Int.self) { MarketGridLayout.columns(scrollWidth: $0.size.width) } action: { new in
-                if columns != new { columns = new }
-            }
-            .onGeometryChange(for: CGFloat.self) { ($0.size.height / 8).rounded() * 8 } action: { new in
-                if viewportHeight != new { viewportHeight = new }
-            }
-            .modifier(MarketScrollDriver(context: context, proxy: proxy))
         }
-        .onChange(of: router.marketScroll) { _, request in
-            // A jump to a block needs the blocks: a search is cleared first.
-            if request != nil, !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { query = "" }
+        .id(pageKey)
+        .scrollIndicators(.automatic)
+        .environment(\.marketColumns, columns)
+        .onGeometryChange(for: Int.self) { MarketGridLayout.columns(scrollWidth: $0.size.width) } action: { new in
+            if columns != new { columns = new }
         }
         .task(id: tileWarmKey) { await warmTiles(entries) }
     }
 
-    /// The Services page. Under All: pinned blocks (the connected services, then the categories). A search, or the
-    /// Connected filter: one flat list.
+    /// The page in front and its filter: when it changes the scroll view starts again at the top.
+    private var pageKey: String {
+        let filter =
+            switch tab {
+            case .services: router.marketFilter
+            case .bots: router.marketBotFilter
+            case .skills: router.marketSkillFilter
+            }
+        return "\(tab.rawValue)|\(filter.id)"
+    }
+
+    /// Opens the page that "All" on a shelf stands for.
+    private func open(_ filter: MarketFilter) {
+        router.marketFilter = filter
+        router.marketDetail = nil
+    }
+
+    /// The Services page. Under All: shelves (the connected services, the suggestions, then the categories). A category,
+    /// or the connected services: that page, a grid under a header with Back. A search under All: one flat grid.
     @ViewBuilder
-    private func servicesContent(
-        _ content: MarketContent, recommendation: RecommendationContext?, firstIsConnected: Bool,
-        onActive: @escaping (Int?) -> Void
-    ) -> some View {
+    private func servicesContent(_ content: MarketContent, recommendation: RecommendationContext?) -> some View {
         let actions = cardActions
-        // Not a lazy stack: it does not know the height of what it has not built, so a jump upward landed in the wrong
-        // place. A page of about eight blocks and sixty light, Equatable cards is cheap to build once.
+        // Not a lazy stack: about eight shelves, each lazy sideways, are cheap to build once, and a lazy stack of shelves
+        // only moves their heights around while the page is scrolled.
         VStack(alignment: .leading, spacing: 0) {
-            Color.clear.frame(height: MarketSectionMetrics.topInset)
-                .id(MarketScrollDriver.topID)
+            Color.clear.frame(height: MarketShelfMetrics.topInset)
             switch content {
-            case .sections(let sections):
-                if let recommendation, !firstIsConnected {
-                    recommendationRow(recommendation)
-                        .padding(.horizontal, MarketGridLayout.sidePadding)
-                        .padding(.bottom, 14)
+            case .shelves(let shelves):
+                ForEach(shelves) { shelf in
+                    shelfView(shelf, actions: actions, recommendation: recommendation)
+                        .padding(.bottom, MarketShelfMetrics.shelfGap)
                 }
-                ForEach(Array(sections.enumerated()), id: \.element.scrollID) { index, section in
-                    VStack(alignment: .leading, spacing: 0) {
-                        // The place of the header; the header itself is drawn over it and stays at the top.
-                        Color.clear.frame(height: MarketSectionMetrics.headerHeight)
-                        sectionBody(
-                            section, actions: actions,
-                            recommendation: section.kind == .connected ? recommendation : nil)
-                        Color.clear.frame(height: MarketSectionMetrics.sectionGap)
+            case .page(let kind, let items, let empty):
+                MarketPageHeader(
+                    title: kind.title, symbol: kind.symbol, count: items.count, onBack: { open(.all) }
+                )
+                .padding(.bottom, 18)
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    MarketRowList(
+                        items: items, columns: columns,
+                        rowHeight: kind == .connected ? nil : MarketShelfMetrics.catalogCardHeight,
+                        inset: MarketGridLayout.sidePadding
+                    ) { entry in
+                        if kind == .connected {
+                            connectedCard(entry, actions: actions)
+                        } else {
+                            MarketCatalogCard(entry: entry, actions: actions).equatable()
+                        }
                     }
-                    .overlay {
-                        MarketStickyHeader(
-                            title: title(of: section), count: section.entries.count, tone: .of(section))
-                    }
-                    .id(section.scrollID)
-                    .marketAnchor { y in
-                        if tracker.report(index: index, minY: y) { onActive(tracker.active) }
-                    }
-                }
-                if let last = sections.last {
-                    Color.clear.frame(
-                        height: MarketSectionMetrics.bottomPadding(
-                            viewport: viewportHeight,
-                            last: last.kind == .connected
-                                ? viewportHeight : MarketSectionMetrics.height(cards: last.entries.count, columns: columns)))
-                }
-            case .flat(let items, let empty):
-                MarketRowList(
-                    items: items, columns: columns, rowHeight: MarketSectionMetrics.cardHeight,
-                    inset: MarketGridLayout.sidePadding
-                ) { entry in
-                    MarketCatalogCard(entry: entry, actions: actions).equatable()
                 }
                 if let empty {
                     emptyText(empty)
                         .padding(.horizontal, MarketGridLayout.sidePadding)
                 }
-                Color.clear.frame(height: 24)
-                    .onAppear { if router.marketSection != nil { router.marketSection = nil } }
+            case .flat(let items, let empty):
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    MarketRowList(
+                        items: items, columns: columns, rowHeight: MarketShelfMetrics.catalogCardHeight,
+                        inset: MarketGridLayout.sidePadding
+                    ) { entry in
+                        MarketCatalogCard(entry: entry, actions: actions).equatable()
+                    }
+                }
+                if let empty {
+                    emptyText(empty)
+                        .padding(.horizontal, MarketGridLayout.sidePadding)
+                }
             }
+            Color.clear.frame(height: 24)
             if let error {
                 UserFacingErrorView(message: error)
                     .padding(.horizontal, MarketGridLayout.sidePadding)
@@ -477,38 +460,74 @@ struct MarketView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .onAppear {
-            tracker.reset()
-            if case .sections = content, router.marketSection != nil { router.marketSection = nil }
-        }
     }
 
-    /// The cards of a block: the connected services as full cards, the catalog as even cards of one height.
+    /// One shelf of the All page.
     @ViewBuilder
-    private func sectionBody(
-        _ section: MarketSection, actions: MarketCardActions, recommendation: RecommendationContext?
-    ) -> some View {
-        if section.kind == .connected {
-            VStack(alignment: .leading, spacing: 0) {
-                MarketRowList(
-                    items: section.entries, columns: columns, rowHeight: nil, inset: MarketGridLayout.sidePadding
-                ) { entry in
-                    connectedCard(entry, actions: actions)
-                }
-                if let recommendation {
-                    recommendationRow(recommendation)
-                        .padding(.horizontal, MarketGridLayout.sidePadding)
-                        .padding(.bottom, 14)
+    private func shelfView(_ shelf: MarketShelf, actions: MarketCardActions, recommendation: RecommendationContext?)
+        -> some View
+    {
+        switch shelf.kind {
+        case .connected:
+            MarketShelfView(
+                title: L10n.Market.Filter.connected, symbol: shelf.symbol, count: shelf.count, items: shelf.entries,
+                cardHeight: connectedShelfHeight(shelf.entries), onAll: { open(.connected) }
+            ) { entry in
+                connectedCard(entry, actions: actions)
+            }
+        case .recommended:
+            if let recommendation {
+                MarketShelfView(
+                    title: L10n.Market.Recommend.title(agent: recommendation.agent.name), symbol: shelf.symbol,
+                    count: shelf.count, items: recommendation.items,
+                    cardHeight: MarketShelfMetrics.suggestionCardHeight, onAll: nil,
+                    accessory: {
+                        Button {
+                            RecommendationStore.hide(server: recommendation.serverID, agent: recommendation.agent.id)
+                            hideTick += 1
+                        } label: {
+                            Image(systemName: "xmark")
+                        }
+                        .banditoButton(.icon(size: 24, label: L10n.Market.Recommend.hide))
+                    }
+                ) { item in
+                    RecommendationCard(item: item, onConnect: { connect(item.template) }).equatable()
                 }
             }
-        } else {
-            MarketRowList(
-                items: section.entries, columns: columns, rowHeight: MarketSectionMetrics.cardHeight,
-                inset: MarketGridLayout.sidePadding
+        case .category(let name):
+            MarketShelfView(
+                title: MarketCategory.title(name), symbol: shelf.symbol, count: shelf.count, items: shelf.entries,
+                cardHeight: MarketShelfMetrics.catalogCardHeight, onAll: { open(.category(name)) }
             ) { entry in
                 MarketCatalogCard(entry: entry, actions: actions).equatable()
             }
+        case .catalog:
+            // A daemon that sends no categories: one grid of everything, with nothing to open with "All".
+            VStack(alignment: .leading, spacing: 8) {
+                MarketShelfHeader(
+                    title: L10n.Integrations.catalog, symbol: shelf.symbol, count: shelf.count, onAll: nil)
+                MarketRowList(
+                    items: shelf.entries, columns: columns, rowHeight: MarketShelfMetrics.catalogCardHeight,
+                    inset: MarketGridLayout.sidePadding
+                ) { entry in
+                    MarketCatalogCard(entry: entry, actions: actions).equatable()
+                }
+            }
         }
+    }
+
+    /// The height of the connected shelf: the tallest of its cards (a card has the lines its service has).
+    private func connectedShelfHeight(_ entries: [MarketEntry]) -> CGFloat {
+        let heights = entries.compactMap { entry -> CGFloat? in
+            guard let integration = entry.integration else { return nil }
+            return MarketShelfMetrics.connectedCardHeight(
+                hasStats: CallJournalText.statsLine(callStats[integration.name]) != nil,
+                hasUpdate: integration.templateUpdate != nil,
+                needsLogin: IntegrationStatus.of(
+                    integration, test: tests[integration.id], connection: connections[integration.id]) == .needsLogin)
+        }
+        return heights.max()
+            ?? MarketShelfMetrics.connectedCardHeight(hasStats: false, hasUpdate: false, needsLogin: false)
     }
 
     @ViewBuilder
@@ -522,14 +541,6 @@ struct MarketView: View {
                 actions: actions
             )
             .equatable()
-        }
-    }
-
-    private func title(of section: MarketSection) -> String {
-        switch section.kind {
-        case .connected: L10n.Integrations.connected
-        case .category(let name): MarketCategory.title(name)
-        case .catalog: L10n.Integrations.catalog
         }
     }
 
@@ -681,6 +692,7 @@ struct MarketView: View {
             onRetry: { if let server { Task { await bots.load(from: server, force: true) } } })
         if let error {
             UserFacingErrorView(message: error)
+                .padding(.horizontal, MarketGridLayout.sidePadding)
         }
     }
 
@@ -696,6 +708,7 @@ struct MarketView: View {
             onShare: { skill in router.sheet = .share(.skill(name: skill.name)) })
         if let error {
             UserFacingErrorView(message: error)
+                .padding(.horizontal, MarketGridLayout.sidePadding)
         }
     }
 
@@ -835,8 +848,6 @@ struct MarketView: View {
             integrations = []
             catalog = []
             router.marketCategories = []
-            router.marketSection = nil
-            router.marketScroll = nil
             router.marketDetail = nil
             router.marketBotCategories = []
             router.marketSkillCategories = []
@@ -1024,32 +1035,6 @@ struct MarketView: View {
         else { return nil }
         let items = RecommendationLogic.items(recommendations, catalog: catalog, integrations: integrations)
         return items.isEmpty ? nil : RecommendationContext(serverID: server.id.uuidString, agent: agent, items: items)
-    }
-
-    /// "Suited to <agent>'s project": up to six services, shown over the catalog under All with no search.
-    func recommendationRow(_ context: RecommendationContext) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                SectionLabel(L10n.Market.Recommend.title(agent: context.agent.name))
-                Spacer(minLength: 8)
-                Button {
-                    RecommendationStore.hide(server: context.serverID, agent: context.agent.id)
-                    hideTick += 1
-                } label: {
-                    Image(systemName: "xmark")
-                }
-                .banditoButton(.icon(size: 24, label: L10n.Market.Recommend.hide))
-            }
-            ScrollView(.horizontal) {
-                HStack(alignment: .top, spacing: 12) {
-                    ForEach(context.items) { item in
-                        RecommendationCard(item: item, onConnect: { connect(item.template) })
-                    }
-                }
-                .padding(.vertical, 2)
-            }
-            .scrollIndicators(.never)
-        }
     }
 
     private func setEnabled(_ integration: Integration, _ on: Bool) async {
@@ -1288,12 +1273,13 @@ final class MarketListMemo {
         let entries: [MarketEntry]
         let filter: MarketFilter
         let query: String
+        let recommended: Int
     }
 
     private var entriesKey: EntriesKey?
     private var entriesValue: [MarketEntry] = []
     private var contentKey: ContentKey?
-    private var contentValue: MarketContent = .sections([])
+    private var contentValue: MarketContent = .shelves([])
 
     func entries(catalog: [IntegrationCatalogEntry], integrations: [Integration], languageCode: String) -> [MarketEntry] {
         let key = EntriesKey(catalog: catalog, integrations: integrations, languageCode: languageCode)
@@ -1304,10 +1290,10 @@ final class MarketListMemo {
         return entriesValue
     }
 
-    func content(_ entries: [MarketEntry], filter: MarketFilter, query: String) -> MarketContent {
-        let key = ContentKey(entries: entries, filter: filter, query: query)
+    func content(_ entries: [MarketEntry], filter: MarketFilter, query: String, recommended: Int) -> MarketContent {
+        let key = ContentKey(entries: entries, filter: filter, query: query, recommended: recommended)
         if key != contentKey {
-            contentValue = MarketSections.content(entries, filter: filter, query: query)
+            contentValue = MarketSections.content(entries, filter: filter, query: query, recommended: recommended)
             contentKey = key
         }
         return contentValue
@@ -1367,10 +1353,9 @@ struct IntegrationStatusLine: View {
 }
 
 /// Sidebar of the Marketplace. Each page has its own rows: services have All, Connected and the categories; bots have
-/// All and the categories; skills have All, Installed and the categories. Picking one sets the page's filter in
-/// `Router` and leaves the page of a service. On the Services page All and the categories do not filter: the page is
-/// one list of blocks, and they scroll it; the row of the block in view is lit, and each category has the color of its
-/// block.
+/// All, My bots and the categories; skills have All, Installed and the categories. Picking one sets the page's filter in
+/// `Router` and leaves the page of a service. All is the showcase of shelves; a category (or Connected) is its own page,
+/// and its row stays lit while the page is open, whether it was opened here or with "All" on a shelf.
 struct MarketSidebar: View {
     @Environment(Router.self) private var router
     @Environment(AppModel.self) private var app
@@ -1391,26 +1376,18 @@ struct MarketSidebar: View {
 
     private var current: MarketFilter {
         switch tab {
-        case .services:
-            MarketSidebarLogic.highlighted(
-                tab: tab, filter: router.marketFilter, section: router.marketDetail == nil ? router.marketSection : nil)
+        case .services: router.marketFilter
         case .bots: router.marketBotFilter
         case .skills: router.marketSkillFilter
         }
     }
 
     private func choose(_ filter: MarketFilter) {
-        switch MarketSidebarLogic.action(for: filter, tab: tab) {
-        case .filter(let picked):
-            switch tab {
-            case .services: router.marketFilter = picked
-            case .bots: router.marketBotFilter = picked
-            case .skills: router.marketSkillFilter = picked
-            }
-            router.marketSection = nil
-        case .scroll(let target):
-            if router.marketFilter != .all { router.marketFilter = .all }
-            router.requestMarketScroll(target)
+        let picked = MarketSidebarLogic.target(for: filter)
+        switch tab {
+        case .services: router.marketFilter = picked
+        case .bots: router.marketBotFilter = picked
+        case .skills: router.marketSkillFilter = picked
         }
         router.marketDetail = nil
     }
@@ -1428,11 +1405,11 @@ struct MarketSidebar: View {
                     choose(filter)
                 } label: {
                     HStack(spacing: 8) {
-                        if tab == .services, let tone = dotTone(filter) {
-                            Circle()
-                                .fill(tone.color)
-                                .frame(width: 7, height: 7)
-                                .opacity(selected ? 1 : 0.7)
+                        if let symbol = MarketSidebarLogic.symbol(of: filter) {
+                            Image(systemName: symbol)
+                                .font(.system(size: 11.5, weight: .medium))
+                                .foregroundStyle(selected ? Color.Bandito.text : Color.Bandito.text3)
+                                .frame(width: 16)
                                 .accessibilityHidden(true)
                         }
                         Text(filter.title)
@@ -1457,15 +1434,6 @@ struct MarketSidebar: View {
         .padding(.horizontal, 14)
         .padding(.top, 4)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-    }
-
-    /// The color of a Services row: a category has its block's color, Connected has the "working" green.
-    private func dotTone(_ filter: MarketFilter) -> MarketTone? {
-        switch filter {
-        case .connected: .connected
-        case .category(let name): .of(category: name)
-        default: nil
-        }
     }
 }
 

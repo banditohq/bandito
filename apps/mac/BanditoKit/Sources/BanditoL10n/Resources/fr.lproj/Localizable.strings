@@ -818,7 +818,6 @@
 "integrations.check" = "Vérifier";
 "integrations.checking" = "Vérification…";
 "integrations.connect" = "Connecter";
-"integrations.connected" = "Connectées";
 "integrations.custom.add" = "Ajouter";
 "integrations.custom.commandHint" = "Le programme et ses arguments, comme dans la documentation.";
 "integrations.custom.commandLine" = "Commande complète";
@@ -1098,6 +1097,10 @@
 "market.section.how" = "Comment connecter";
 "market.section.links" = "Liens";
 "market.section.needs" = "Ce qu'il faut";
+"market.shelf.all" = "Tout";
+"market.shelf.allLabel" = "Tout afficher : %1$@";
+"market.shelf.next" = "Défiler en avant";
+"market.shelf.previous" = "Défiler en arrière";
 "market.skill.by" = "par %1$@";
 "market.skill.claudeOnly" = "Claude uniquement";
 "market.skill.conflictAgent" = "Un dossier de ce nom se trouve déjà dans le dossier de %1$@, et ce n'est pas Bandito qui l'a créé. Bandito ne l'écrase jamais : déplacez-le ou renommez-le, puis installez le skill.";

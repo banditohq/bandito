@@ -203,6 +203,93 @@ extension LayoutAuditSnapshots {
         },
     ]
 
+    // MARK: showcase
+
+    private static let showcaseActions = MarketCardActions(
+        open: { _ in }, connect: { _ in }, configure: { _ in }, check: { _ in }, remove: { _ in },
+        signInAgain: { _ in }, setEnabled: { _, _ in }, update: { _ in })
+
+    private static var showcaseEntries: [MarketEntry] {
+        MarketLogic.entries(
+            catalog: MarketGridSnapshots.catalog, integrations: MarketGridSnapshots.integrations,
+            languageCode: L10n.locale.identifier)
+    }
+
+    /// A row of cards as a shelf draws it, cut by the window's edge (a ScrollView does not render offscreen).
+    private static func shelfRow<Item: Identifiable, Card: View>(
+        _ items: [Item], height: CGFloat, @ViewBuilder card: @escaping (Item) -> Card
+    ) -> some View {
+        HStack(alignment: .top, spacing: MarketShelfMetrics.gap) {
+            ForEach(items) { item in card(item).frame(width: MarketShelfMetrics.cardWidth, height: height) }
+        }
+        .padding(.leading, MarketGridLayout.sidePadding)
+        .padding(.vertical, 8)
+        .frame(width: modeArea, alignment: .leading)
+        .clipped()
+    }
+
+    static let marketShelfScreens: [AuditCase] = [
+        // The headers with the longest words: a long category, a suggestion title with a long agent name, the "All" link.
+        AuditCase(name: "market-shelves", width: modeArea, selfSized: true) { _ in
+            let entries = showcaseEntries
+            let dev = entries.filter { $0.category == "dev" }
+            let connected = entries.filter(\.isConnected)
+            let suggestion = RecommendationLogic.Item(
+                template: MarketGridSnapshots.catalog[0], reasonKey: "vercel", evidence: "apps/web/vercel.json")
+            return AnyView(
+                VStack(alignment: .leading, spacing: 8) {
+                    MarketShelfHeader(
+                        title: L10n.Market.Filter.connected, symbol: MarketShelfSymbol.connected, count: connected.count,
+                        onAll: {})
+                    shelfRow(
+                        connected,
+                        height: MarketShelfMetrics.connectedCardHeight(hasStats: true, hasUpdate: false, needsLogin: false)
+                    ) { entry in
+                        if let integration = entry.integration {
+                            MarketConnectedCard(
+                                entry: entry, integration: integration, status: .connected(tools: 12),
+                                statsLine: "12", updating: false, checking: false, actions: showcaseActions)
+                        }
+                    }
+                    MarketShelfHeader(
+                        title: L10n.Market.Recommend.title(agent: "Integration agent with a very long name"),
+                        symbol: MarketShelfSymbol.recommended, count: 1, onAll: nil
+                    ) {
+                        Image(systemName: "xmark")
+                    }
+                    shelfRow([suggestion], height: MarketShelfMetrics.suggestionCardHeight) { item in
+                        RecommendationCard(item: item, onConnect: {})
+                    }
+                    MarketShelfHeader(
+                        title: MarketCategory.title("productivity"), symbol: MarketCategory.symbol("productivity"),
+                        count: 14, onAll: {})
+                    shelfRow(dev, height: MarketShelfMetrics.catalogCardHeight) { entry in
+                        MarketCatalogCard(entry: entry, actions: showcaseActions)
+                    }
+                }
+                .padding(.vertical, 12)
+                .background(Color.Bandito.bg))
+        },
+        AuditCase(name: "market-category-page", width: modeArea, selfSized: true) { _ in
+            let shown = showcaseEntries.filter { $0.category == "productivity" || $0.category == "dev" }
+            return AnyView(
+                VStack(alignment: .leading, spacing: 18) {
+                    MarketPageHeader(
+                        title: MarketCategory.title("productivity"), symbol: MarketCategory.symbol("productivity"),
+                        count: shown.count, onBack: {})
+                    MarketRowList(
+                        items: shown, columns: 2, rowHeight: MarketShelfMetrics.catalogCardHeight,
+                        inset: MarketGridLayout.sidePadding
+                    ) { entry in
+                        MarketCatalogCard(entry: entry, actions: showcaseActions)
+                    }
+                }
+                .frame(width: modeArea, alignment: .topLeading)
+                .padding(.vertical, 12)
+                .background(Color.Bandito.bg))
+        },
+    ]
+
     private static func marketDetail(_ entry: MarketEntry) -> some View {
         MarketDetailView(
             entry: entry, languageCode: L10n.locale.identifier, test: nil, checking: false, connection: nil,

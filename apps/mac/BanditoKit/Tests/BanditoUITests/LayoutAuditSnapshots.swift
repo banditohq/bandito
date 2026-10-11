@@ -20,7 +20,7 @@ import Testing
     static let settingsColumn: CGFloat = 520
 
     static var cases: [AuditCase] {
-        settings + sheets + dataSheets + serverScreens + marketScreens + onboardingScreens + flowSheets + browserScreens
+        settings + sheets + dataSheets + serverScreens + marketScreens + marketShelfScreens + onboardingScreens + flowSheets + browserScreens
             + approvalViews + messageTimeRows
     }
 

@@ -818,7 +818,6 @@
 "integrations.check" = "Comprobar";
 "integrations.checking" = "Comprobando…";
 "integrations.connect" = "Conectar";
-"integrations.connected" = "Conectadas";
 "integrations.custom.add" = "Añadir";
 "integrations.custom.commandHint" = "El programa y sus argumentos, como en la documentación.";
 "integrations.custom.commandLine" = "Comando completo";
@@ -1098,6 +1097,10 @@
 "market.section.how" = "Cómo conectar";
 "market.section.links" = "Enlaces";
 "market.section.needs" = "Qué necesitas";
+"market.shelf.all" = "Todo";
+"market.shelf.allLabel" = "Ver todo: %1$@";
+"market.shelf.next" = "Desplazar hacia delante";
+"market.shelf.previous" = "Desplazar hacia atrás";
 "market.skill.by" = "de %1$@";
 "market.skill.claudeOnly" = "Solo Claude";
 "market.skill.conflictAgent" = "Ya hay una carpeta con este nombre en la carpeta de %1$@ y Bandito no la puso ahí. Bandito nunca la sobrescribe: muévela o renómbrala y luego instala el skill.";
