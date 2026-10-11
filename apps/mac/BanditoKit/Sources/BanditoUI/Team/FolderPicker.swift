@@ -12,6 +12,8 @@ struct FolderPicker: View {
     var server: ServerModel
     @Binding var selection: String
     var onChoose: () -> Void
+    /// A folder chosen here is kept in the recent list. The agents folder is not a project, so the sheet turns this off.
+    var remembersChoice = true
 
     @State private var listing: FsListing?
     @State private var repos: [ProjectHint] = []
@@ -365,8 +367,10 @@ struct FolderPicker: View {
     private func choose() {
         guard let path = listing?.path else { return }
         selection = path
-        recent.remember(path)
-        recent.save(serverID: server.id.uuidString)
+        if remembersChoice {
+            recent.remember(path)
+            recent.save(serverID: server.id.uuidString)
+        }
         onChoose()
     }
 }

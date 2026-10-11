@@ -32,6 +32,11 @@ public enum CreateBlocker: Equatable, Sendable {
     case workplace
 }
 
+/// Where the agent works: a folder the sheet makes inside the agents folder (the default), or a folder that exists.
+public enum NewAgentFolderMode: Equatable, Hashable, Sendable {
+    case newFolder, existing
+}
+
 /// Everything the new agent sheet collects before `agents.create`. Pure: the sheet only binds to it.
 public struct NewAgentDraft: Equatable, Sendable {
     public var name = ""
@@ -52,7 +57,13 @@ public struct NewAgentDraft: Equatable, Sendable {
     public var modelChosen = false
     public var effort: Effort = .medium
     public var instructions = ""
-    /// The project folder on the server. Empty until one is picked.
+    /// "New folder" (the default): the sheet makes `<agentsRoot>/<name>` when the agent is created, and `cwd` is set to
+    /// it then. "Existing folder": the person picks `cwd`, a folder that is there already.
+    public var folderMode: NewAgentFolderMode = .newFolder
+    /// The agents folder that "New folder" puts the agent's folder into. Empty until it is known or picked.
+    public var agentsRoot = ""
+    /// The project folder on the server, in the "Existing folder" mode. Empty until one is picked; in the "New folder"
+    /// mode the sheet sets it to the folder it made before the agent is created.
     public var cwd = ""
     /// The server takes an agent without a folder (`agent_own_folder`): the agent then works in its own folder.
     public var folderOptional = false
@@ -79,11 +90,19 @@ public struct NewAgentDraft: Equatable, Sendable {
         L10n.AgentSheet.autoName(number: "\(number)")
     }
 
-    /// The project folder is required unless the server takes an agent without one (`folderOptional`); the name is
-    /// optional, see `resolvedName`. A new container needs a valid name and limits. The runtime is checked by
-    /// `createBlocker`.
+    /// The folder is ready when the mode has what it needs: the agents folder for "New folder"; for "Existing folder" a
+    /// picked one, or none when the server takes an agent without one (`folderOptional`). The name is optional, see
+    /// `resolvedName`. A new container needs a valid name and limits. The runtime is checked by `createBlocker`.
     public var canCreate: Bool {
-        (folderOptional || !trimmed(cwd).isEmpty) && workplaceReady
+        folderReady && workplaceReady
+    }
+
+    /// The folder part of `canCreate`.
+    public var folderReady: Bool {
+        switch folderMode {
+        case .newFolder: !trimmed(agentsRoot).isEmpty
+        case .existing: folderOptional || !trimmed(cwd).isEmpty
+        }
     }
 
     /// The first reason creation cannot happen, in the order the sheet explains it: the runtime, then the folder,
@@ -95,7 +114,7 @@ public struct NewAgentDraft: Equatable, Sendable {
         if let status, status.loggedIn == false {
             return .runtimeLogin(runtime, command: LoginCommand.arguments(for: runtime).joined(separator: " "))
         }
-        if !folderOptional && trimmed(cwd).isEmpty {
+        if !folderReady {
             return .folder
         }
         if !workplaceReady {

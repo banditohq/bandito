@@ -47,6 +47,7 @@ import Testing
 
     @Test func nameIsOptional() {
         var draft = NewAgentDraft()
+        draft.folderMode = .existing
         draft.cwd = "/home/me/billing"
         #expect(draft.canCreate)
         draft.name = "   "
@@ -55,6 +56,7 @@ import Testing
 
     @Test func createNeedsAProjectFolder() {
         var draft = NewAgentDraft()
+        draft.folderMode = .existing
         draft.name = "Forge"
         #expect(!draft.canCreate)
         draft.cwd = "   "
@@ -96,6 +98,7 @@ import Testing
 
     @Test func makeNewAgentUsesTheResolvedName() {
         var draft = NewAgentDraft()
+        draft.folderMode = .existing
         draft.cwd = "/home/me/billing"
         #expect(draft.makeNewAgent(existingNames: [NewAgentDraft.defaultName(1)]).name == NewAgentDraft.defaultName(2))
         draft.name = "Forge"
@@ -104,6 +107,7 @@ import Testing
 
     @Test func runtimeMissingBlocksCreation() {
         var draft = NewAgentDraft()
+        draft.folderMode = .existing
         draft.cwd = "/home/me/billing"
         draft.runtime = .codex
         let missing = RuntimeStatus(kind: .codex, installed: false, version: nil, loggedIn: nil, detail: nil)
@@ -112,6 +116,7 @@ import Testing
 
     @Test func notSignedInBlocksCreationWithTheLoginCommand() {
         var draft = NewAgentDraft()
+        draft.folderMode = .existing
         draft.cwd = "/home/me/billing"
         draft.runtime = .codex
         let out = RuntimeStatus(kind: .codex, installed: true, version: "0.46.0", loggedIn: false, detail: nil)
@@ -120,6 +125,7 @@ import Testing
 
     @Test func runtimeIsNotBlockingWhileItIsUnknownOrReady() {
         var draft = NewAgentDraft()
+        draft.folderMode = .existing
         draft.cwd = "/home/me/billing"
         #expect(draft.createBlocker(status: nil) == nil)
         let ready = RuntimeStatus(kind: .claude, installed: true, version: "2.0.5", loggedIn: nil, detail: nil)
@@ -128,6 +134,7 @@ import Testing
 
     @Test func missingFolderBlocksCreation() {
         var draft = NewAgentDraft()
+        draft.folderMode = .existing
         let ready = RuntimeStatus(kind: .claude, installed: true, version: nil, loggedIn: true, detail: nil)
         #expect(draft.createBlocker(status: ready) == .folder)
         draft.cwd = "/home/me/billing"
@@ -142,6 +149,7 @@ import Testing
 
     @Test func invalidNewWorkplaceBlocksCreation() {
         var draft = NewAgentDraft()
+        draft.folderMode = .existing
         draft.cwd = "/home/me/billing"
         draft.workplace = .new
         #expect(draft.createBlocker(status: nil) == .workplace)
@@ -151,6 +159,7 @@ import Testing
 
     @Test func makeNewAgentCarriesEveryChoice() {
         var draft = NewAgentDraft()
+        draft.folderMode = .existing
         draft.name = "  Forge "
         draft.role = "builder"
         draft.runtime = .claude
@@ -174,6 +183,7 @@ import Testing
 
     @Test func emptyModelAndInstructionsAreNil() {
         var draft = NewAgentDraft()
+        draft.folderMode = .existing
         draft.name = "Forge"
         draft.cwd = "/home/me/billing"
         draft.model = "   "
@@ -194,6 +204,7 @@ import Testing
     }
     @Test func fallbackIsSentWhenSet() {
         var draft = NewAgentDraft()
+        draft.folderMode = .existing
         draft.name = "Forge"
         draft.cwd = "/home/me/billing"
         draft.fallbackRuntime = .codex
@@ -227,6 +238,7 @@ import Testing
 
     @Test func folderIsRequiredUnlessTheServerTakesAnAgentWithoutOne() {
         var draft = NewAgentDraft()
+        draft.folderMode = .existing
         #expect(draft.canCreate == false)
         #expect(draft.createBlocker(status: nil) == .folder)
 
@@ -240,6 +252,7 @@ import Testing
 @Suite struct NewAgentDraftAvatarTests {
     @Test func newAgentCarriesEmojiAndCustomColorButNotThePicture() {
         var draft = NewAgentDraft()
+        draft.folderMode = .existing
         draft.cwd = "/home/me/billing"
         draft.color = .sky
         draft.customHex = "#FF8800"
@@ -252,6 +265,7 @@ import Testing
 
     @Test func paletteColorIsSentWhenThereIsNoCustomColor() {
         var draft = NewAgentDraft()
+        draft.folderMode = .existing
         draft.cwd = "/home/me/billing"
         draft.color = .rose
         #expect(draft.makeNewAgent(existingNames: []).avatar == AvatarSpec(color: "rose", face: "chevronDash"))
