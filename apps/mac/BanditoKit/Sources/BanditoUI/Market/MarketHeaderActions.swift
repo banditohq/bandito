@@ -125,14 +125,13 @@ enum MarketHeaderFit {
     /// The space between the field and the actions, and between two actions.
     static let spacing: CGFloat = 10
 
-    /// The first form whose measured width, with the search field before it, fits `available`. The text buttons
-    /// while nothing is measured yet; the menu when nothing else fits.
+    /// The first form whose measured width, with the search field before it, fits `available`; the menu when nothing
+    /// else fits, and until the width and the forms are measured (the most compact never runs over the edge).
     static func form(available: CGFloat?, widths: [Form: CGFloat], search: Bool) -> Form {
-        guard let available else { return .text }
+        guard let available, widths.count == Form.allCases.count else { return .menu }
         let field = search ? MarketSearchField.width + spacing : 0
-        for form in [Form.text, .icons] {
-            guard let width = widths[form] else { return form }
-            if field + width <= available + 0.5 { return form }
+        for form in [Form.text, .icons] where field + (widths[form] ?? .infinity) <= available + 0.5 {
+            return form
         }
         return .menu
     }

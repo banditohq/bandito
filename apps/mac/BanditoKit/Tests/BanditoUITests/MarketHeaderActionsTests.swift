@@ -32,12 +32,12 @@ import Testing
     @Test func theFirstFormThatFitsIsShown() {
         let widths: [MarketHeaderFit.Form: CGFloat] = [.text: 330, .icons: 120, .menu: 32]
         let field = MarketSearchField.width + MarketHeaderFit.spacing
-        #expect(MarketHeaderFit.form(available: nil, widths: widths, search: true) == .text)
+        #expect(MarketHeaderFit.form(available: nil, widths: widths, search: true) == .menu)
         #expect(MarketHeaderFit.form(available: field + 330, widths: widths, search: true) == .text)
         #expect(MarketHeaderFit.form(available: field + 329, widths: widths, search: true) == .icons)
         #expect(MarketHeaderFit.form(available: field + 100, widths: widths, search: true) == .menu)
         #expect(MarketHeaderFit.form(available: 330, widths: widths, search: false) == .text)
-        // Not measured yet: the form is tried as if it fits, so it gets measured.
-        #expect(MarketHeaderFit.form(available: 50, widths: [:], search: true) == .text)
+        // Not measured yet: the most compact form.
+        #expect(MarketHeaderFit.form(available: 2000, widths: [:], search: true) == .menu)
     }
 }

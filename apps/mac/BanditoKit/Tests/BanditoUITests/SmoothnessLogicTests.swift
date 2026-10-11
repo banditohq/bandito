@@ -91,6 +91,33 @@ import Testing
         #expect(lines.box.change == .all && lines.box.lines.last?.id == ThreadListLine.typingID)
     }
 
+    @Test func theListKeepsWhatStaysWhenTheThreadChanges() {
+        #expect(ThreadListDiff.of(old: ["a", "b"], new: ["a", "b"]) == .same)
+        // A new message, the typing line coming and going, a stream that got its final id: the end changes.
+        #expect(ThreadListDiff.of(old: ["a", "b"], new: ["a", "b", "c"]) == .tail(removed: 0, inserted: 1))
+        #expect(ThreadListDiff.of(old: ["a", "b", "typing"], new: ["a", "b"]) == .tail(removed: 1, inserted: 0))
+        #expect(ThreadListDiff.of(old: ["a", "streaming"], new: ["a", "m5"]) == .tail(removed: 1, inserted: 1))
+        // Older history above, on another day and on the same day (its day line comes again above it).
+        #expect(
+            ThreadListDiff.of(old: ["day-1", "m3", "m4"], new: ["day-0", "m1", "day-1", "m3", "m4"])
+                == .head(removed: 0, inserted: 2))
+        #expect(
+            ThreadListDiff.of(old: ["day-1", "m3", "m4"], new: ["day-1", "m1", "m2", "m3", "m4"])
+                == .head(removed: 1, inserted: 3))
+        // Nothing in common: made again.
+        #expect(ThreadListDiff.of(old: ["a"], new: ["b"]) == .reload)
+        #expect(ThreadListDiff.of(old: [], new: ["b"]) == .reload)
+    }
+
+    @MainActor @Test func aFoldedPartStaysOpenOutsideItsRow() {
+        let disclosure = ThreadDisclosure()
+        #expect(!disclosure.isOpen("tools-a"))
+        disclosure.toggle("tools-a")
+        #expect(disclosure.isOpen("tools-a") && !disclosure.isOpen("form-a"))
+        disclosure.toggle("tools-a")
+        #expect(!disclosure.isOpen("tools-a"))
+    }
+
     @Test func firstFitTakesTheFirstCandidateThatFits() {
         let widths: [Int: CGFloat] = [0: 500, 1: 300, 2: 40]
         #expect(FirstFitRule.index(available: nil, widths: widths, count: 3) == 2)

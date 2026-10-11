@@ -27,6 +27,17 @@ enum ThreadListLine: Equatable, Identifiable {
 
     static let typingID = "typing"
 
+    /// What VoiceOver reads for the row as a whole: the message's text (its controls are read inside it).
+    var accessibilityText: String? {
+        guard case .row(let key, _) = self, case .item(let item) = key.row else { return nil }
+        switch item {
+        case .user(_, let text, _, _, _, _), .assistant(_, let text, _), .streaming(let text):
+            return text.isEmpty ? nil : String(text.prefix(400))
+        default:
+            return nil
+        }
+    }
+
     /// The id of the agent's newest reply: its row offers the quick actions.
     static func lastAgentID(in items: [ThreadItem]) -> String? {
         items.last(where: { item in
@@ -39,6 +50,34 @@ enum ThreadListLine: Equatable, Identifiable {
 /// What changed in the lines since the list last had them: nothing, only the last one (a stream), or anything.
 enum ThreadRowsChange: Equatable {
     case none, last, all
+}
+
+/// How the list goes from one set of line ids to the next without reloading what stays.
+enum ThreadListDiff: Equatable {
+    /// The same ids: only contents changed.
+    case same
+    /// The head of the list changed and the rest stayed (older history read: its rows come above, and the day line
+    /// on top may be made again). `removed` lines at the top go, `inserted` come in their place.
+    case head(removed: Int, inserted: Int)
+    /// The tail changed and the rest stayed (a new message, the typing line, a stream that got its final id).
+    case tail(removed: Int, inserted: Int)
+    /// Nothing in common worth keeping.
+    case reload
+
+    static func of(old: [String], new: [String]) -> ThreadListDiff {
+        if old == new { return .same }
+        guard !old.isEmpty, !new.isEmpty else { return .reload }
+        let prefix = zip(old, new).prefix { $0 == $1 }.count
+        let suffix = zip(old.reversed(), new.reversed()).prefix { $0 == $1 }.count
+        // The longer kept part decides; a list with nothing kept is made again.
+        if prefix >= suffix, prefix > 0 {
+            return .tail(removed: old.count - prefix, inserted: new.count - prefix)
+        }
+        if suffix > 0 {
+            return .head(removed: old.count - suffix, inserted: new.count - suffix)
+        }
+        return .reload
+    }
 }
 
 /// What every row needs besides its key: the server and the actions, which do not decide how a row looks.
@@ -189,42 +228,60 @@ final class ThreadListView: NSScrollView, NSTableViewDataSource, NSTableViewDele
             return
         }
         guard new != old else { return }
-        let oldIDs = old.map(\.id)
-        let newIDs = new.map(\.id)
-        lines = new
-        if oldIDs == newIDs {
+        switch ThreadListDiff.of(old: old.map(\.id), new: new.map(\.id)) {
+        case .same:
             // Same rows: the ones whose content changed are reconfigured (a stream, a reaction, a flash).
+            lines = new
             var changed = IndexSet()
             for index in new.indices where new[index] != old[index] { changed.insert(index) }
             reconfigure(changed)
-            return
-        }
-        // Rows put above the first one (older history): the rows on screen stay where they are.
-        if newIDs.count > oldIDs.count, Array(newIDs.suffix(oldIDs.count)) == oldIDs {
-            let added = newIDs.count - oldIDs.count
+        case .tail(let removed, let inserted):
+            // The rows before the end are kept; the end is replaced (a new message, the typing line, a stream that
+            // got its final id).
+            lines = new
+            let kept = old.count - removed
+            var changed = IndexSet()
+            for index in 0..<kept where new[index] != old[index] { changed.insert(index) }
+            table.beginUpdates()
+            if removed > 0 { table.removeRows(at: IndexSet(integersIn: kept..<old.count), withAnimation: []) }
+            if inserted > 0 { table.insertRows(at: IndexSet(integersIn: kept..<new.count), withAnimation: []) }
+            table.endUpdates()
+            reconfigure(changed)
+        case .head(let removed, let inserted):
+            // Rows put above (older history, its day line made again): what shows stays where it is. The offset moves
+            // by what the head grew.
             let before = contentView.bounds.origin.y
-            table.insertRows(at: IndexSet(integersIn: 0..<added), withAnimation: [])
-            let shift = (0..<added).reduce(CGFloat(0)) { $0 + height(ofRow: $1) }
-            scrollTo(y: before + shift)
-            return
-        }
-        // Rows added at the end (a new message, the typing indicator): the rows before are kept.
-        if newIDs.count > oldIDs.count, Array(newIDs.prefix(oldIDs.count)) == oldIDs {
+            let oldHead = removed > 0 ? table.rect(ofRow: removed - 1).maxY : 0
+            lines = new
+            table.beginUpdates()
+            if removed > 0 { table.removeRows(at: IndexSet(integersIn: 0..<removed), withAnimation: []) }
+            if inserted > 0 { table.insertRows(at: IndexSet(integersIn: 0..<inserted), withAnimation: []) }
+            table.endUpdates()
+            let newHead = inserted > 0 ? table.rect(ofRow: inserted - 1).maxY : 0
+            scrollTo(y: before + newHead - oldHead)
             var changed = IndexSet()
-            for index in old.indices where new[index] != old[index] { changed.insert(index) }
+            for index in 0..<(old.count - removed) where new[inserted + index] != old[removed + index] {
+                changed.insert(inserted + index)
+            }
             reconfigure(changed)
-            table.insertRows(at: IndexSet(integersIn: oldIDs.count..<newIDs.count), withAnimation: [])
-            return
+        case .reload:
+            lines = new
+            table.reloadData()
         }
-        // The last row went away (the typing indicator), the rest are kept.
-        if newIDs.count < oldIDs.count, Array(oldIDs.prefix(newIDs.count)) == newIDs {
-            var changed = IndexSet()
-            for index in new.indices where new[index] != old[index] { changed.insert(index) }
-            table.removeRows(at: IndexSet(integersIn: newIDs.count..<oldIDs.count), withAnimation: [])
-            reconfigure(changed)
-            return
-        }
-        table.reloadData()
+    }
+
+    /// A row's content reported its own height (it grew or shrank by itself: a tool group opened, a form folded).
+    fileprivate func cellReported(_ cell: ThreadListCell, height reported: CGFloat) {
+        let row = table.row(for: cell)
+        guard row >= 0, lines.indices.contains(row), table.bounds.width > 0 else { return }
+        let id = lines[row].id
+        let clamped = ThreadListCell.clamp(reported)
+        guard abs((heights[id] ?? -1) - clamped) > 0.5 else { return }
+        let before = height(ofRow: row)
+        heights[id] = clamped
+        guard abs(before - clamped) > 0.5 else { return }
+        pendingHeights.insert(row)
+        scheduleHeights()
     }
 
     /// Gives the visible rows of `indexes` their new content; the others are made when they come into view.
@@ -317,6 +374,7 @@ final class ThreadListView: NSScrollView, NSTableViewDataSource, NSTableViewDele
         let line = lines[row]
         let cell = (tableView.makeView(withIdentifier: ThreadListCell.identifier, owner: nil) as? ThreadListCell)
             ?? ThreadListCell()
+        cell.list = self
         configure(cell, with: line)
         if heights[line.id] == nil { measure(cell, line: line, row: row) }
         return cell
@@ -324,7 +382,12 @@ final class ThreadListView: NSScrollView, NSTableViewDataSource, NSTableViewDele
 
     func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool { false }
 
-    func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? { ThreadListRowView() }
+    func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
+        let view = ThreadListRowView()
+        // VoiceOver reads a row by what it says; its controls stay inside it.
+        if lines.indices.contains(row) { view.setAccessibilityLabel(lines[row].accessibilityText) }
+        return view
+    }
 
     // MARK: width
 
@@ -334,11 +397,26 @@ final class ThreadListView: NSScrollView, NSTableViewDataSource, NSTableViewDele
         let width = contentView.bounds.width
         if let column = table.tableColumns.first, abs(column.width - width) > 0.5 { column.width = width }
         if abs(width - measuredWidth) > 0.5 {
-            // Another width makes every height wrong: they are measured again as the rows are drawn.
+            // Another width makes every height wrong. The rows on screen are measured at once at the new width (they
+            // must not stand at a guess); the others again as they are drawn.
             measuredWidth = width
-            heights.removeAll()
+            var kept: [String: CGFloat] = [:]
+            if width > 0 {
+                let visible = table.rows(in: contentView.bounds)
+                if visible.location != NSNotFound {
+                    for row in visible.location..<min(lines.count, visible.location + visible.length) {
+                        guard let cell = table.view(atColumn: 0, row: row, makeIfNecessary: false) as? ThreadListCell
+                        else { continue }
+                        kept[lines[row].id] = cell.height(forWidth: width)
+                    }
+                }
+            }
+            heights = kept
             if !lines.isEmpty {
+                NSAnimationContext.beginGrouping()
+                NSAnimationContext.current.duration = 0
                 table.noteHeightOfRows(withIndexesChanged: IndexSet(integersIn: 0..<lines.count))
+                NSAnimationContext.endGrouping()
             }
         }
     }
@@ -474,8 +552,10 @@ final class ThreadListRowView: NSTableRowView {
 /// A cell: one hosting controller, given each row it shows in turn.
 final class ThreadListCell: NSTableCellView {
     static let identifier = NSUserInterfaceItemIdentifier("thread-row")
-    private let host = NSHostingController(rootView: ThreadListLineView(line: nil, context: nil))
+    private let host = NSHostingController(rootView: ThreadListLineView(line: nil, context: nil, onHeight: nil))
     private var shown: ThreadListLine?
+    /// The list that shows the cell: told when the content changes its height by itself.
+    weak var list: ThreadListView?
 
     init() {
         super.init(frame: .zero)
@@ -495,13 +575,21 @@ final class ThreadListCell: NSTableCellView {
         // An equal line keeps its views: no new rootView, nothing is built.
         if shown == line { return }
         shown = line
-        host.rootView = ThreadListLineView(line: line, context: context)
+        host.rootView = ThreadListLineView(
+            line: line, context: context,
+            onHeight: { [weak self] height in
+                guard let self else { return }
+                self.list?.cellReported(self, height: height)
+            })
     }
 
     func height(forWidth width: CGFloat) -> CGFloat {
-        let height = host.sizeThatFits(in: CGSize(width: width, height: CGFloat.greatestFiniteMagnitude)).height
-        // A row is never taller than a screen can scroll through, and never not a number.
-        return height.isFinite ? min(max(height, 1), 100_000) : 100
+        Self.clamp(host.sizeThatFits(in: CGSize(width: width, height: CGFloat.greatestFiniteMagnitude)).height)
+    }
+
+    /// A row is never taller than a screen can scroll through, and never not a number.
+    static func clamp(_ height: CGFloat) -> CGFloat {
+        height.isFinite ? min(max(height, 1), 100_000) : 100
     }
 }
 
@@ -609,6 +697,8 @@ final class ThreadListLines {
 struct ThreadListLineView: View {
     var line: ThreadListLine?
     var context: ThreadListContext?
+    /// The row's own height, reported when it changes (an opened tool group, a folded form): the cell is sized from it.
+    var onHeight: ((CGFloat) -> Void)?
 
     var body: some View {
         Group {
@@ -634,6 +724,9 @@ struct ThreadListLineView: View {
         // The row is laid out for the width alone, the same way it is measured: the cell's height is then not a new
         // proposal, and the layout made for the measure is the one drawn.
         .fixedSize(horizontal: false, vertical: true)
+        .onGeometryChange(for: CGFloat.self) { ($0.size.height * 2).rounded() / 2 } action: { height in
+            onHeight?(height)
+        }
     }
 }
 

@@ -431,6 +431,9 @@ struct ThreadView: View {
         .onDisappear {
             sessions.onScreen = false
             session.leave()
+            // The list's reports held this view: they are let go with it (made again on appearing).
+            list.onMetrics = nil
+            list.onNearTop = nil
             let top = list.topRowID()
             router.threadPlaces[agent.id] = ThreadScroll.place(atBottom: atBottom, topRowID: top)
         }

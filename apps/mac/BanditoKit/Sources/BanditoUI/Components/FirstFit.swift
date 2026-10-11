@@ -16,14 +16,17 @@ struct FirstFit<Candidate: View>: View {
     var alignment: Alignment = .leading
     @ViewBuilder let candidate: (_ index: Int, _ measuring: Bool) -> Candidate
 
-    @State private var widths: [Int: CGFloat] = [:]
-    @State private var available: CGFloat?
+    /// The candidate shown: written only when the choice changes, so a window being resized does not rebuild it.
+    @State private var chosen: Int?
+    @State private var sizes = FirstFitSizes()
+    @Environment(\.locale) private var locale
 
     var body: some View {
-        candidate(FirstFitRule.index(available: available, widths: widths, count: count), false)
+        candidate(chosen ?? max(count - 1, 0), false)
             .frame(maxWidth: .infinity, alignment: alignment)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
-                if available != width { available = width }
+                sizes.available = width
+                choose()
             }
             .background(alignment: .topLeading) {
                 ZStack(alignment: .topLeading) {
@@ -31,7 +34,8 @@ struct FirstFit<Candidate: View>: View {
                         candidate(index, true)
                             .fixedSize()
                             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
-                                if widths[index] != width { widths[index] = width }
+                                sizes.widths[index] = width
+                                choose()
                             }
                     }
                 }
@@ -39,7 +43,24 @@ struct FirstFit<Candidate: View>: View {
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
             }
+            // Another language: the widths are measured again, and the compact candidate stands until they are.
+            .onChange(of: locale) { _, _ in
+                sizes.widths.removeAll()
+                choose()
+            }
     }
+
+    private func choose() {
+        let index = FirstFitRule.index(available: sizes.available, widths: sizes.widths, count: count)
+        if chosen != index { chosen = index }
+    }
+}
+
+/// The widths a `FirstFit` measured, kept out of the observed state: a new width redraws nothing by itself.
+@MainActor
+final class FirstFitSizes {
+    var available: CGFloat?
+    var widths: [Int: CGFloat] = [:]
 }
 
 /// Which candidate of a `FirstFit` shows.

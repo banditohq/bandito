@@ -10,12 +10,14 @@ struct ToolGroupCard: View {
     /// Total time of the group in seconds, when known.
     var duration: Double?
 
-    @State private var open = false
+    /// Open or folded, kept by the thread (`ThreadDisclosure`), so it stays when the row scrolls away and back.
+    private var open: Bool { ThreadDisclosure.shared.isOpen(key) }
+    private var key: String { "tools-\(tools.first?.callId ?? "")" }
 
     var body: some View {
         VStack(spacing: 0) {
             Button {
-                withAnimation(BanditoMotion.ease) { open.toggle() }
+                withAnimation(BanditoMotion.ease) { ThreadDisclosure.shared.toggle(key) }
             } label: {
                 HStack(spacing: 8) {
                     statusIcon

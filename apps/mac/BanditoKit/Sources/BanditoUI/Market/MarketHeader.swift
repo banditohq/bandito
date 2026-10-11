@@ -26,8 +26,8 @@ struct MarketHeader: View, Equatable {
 
     /// The header's width, and the widths of the parts beside the actions: what the actions may take follows.
     @State private var width: CGFloat?
-    @State private var titleWidth: CGFloat = 0
-    @State private var pickerWidth: CGFloat = 0
+    @State private var titleWidth: CGFloat?
+    @State private var pickerWidth: CGFloat?
 
     nonisolated static func == (lhs: MarketHeader, rhs: MarketHeader) -> Bool {
         lhs.tab == rhs.tab && lhs.tabs == rhs.tabs && lhs.supported == rhs.supported
@@ -72,7 +72,7 @@ struct MarketHeader: View, Equatable {
                 Spacer(minLength: 12)
                 if tabs.count == 1, supported {
                     // A server with only services keeps the one-row header.
-                    actions(showsSearch: true, addsIntegration: true, beside: titleWidth + 14 + 12 + 14)
+                    actions(showsSearch: true, addsIntegration: true, beside: titleWidth.map { $0 + 14 + 12 + 14 })
                 }
             }
             if tabs.count > 1 {
@@ -88,14 +88,14 @@ struct MarketHeader: View, Equatable {
                     Spacer(minLength: 12)
                     actions(
                         showsSearch: tab != .services || supported, addsIntegration: tab == .services && supported,
-                        beside: pickerWidth + 12 + 12 + 12)
+                        beside: pickerWidth.map { $0 + 12 + 12 + 12 })
                 }
             }
     }
 
     /// The search field and the actions of the header: text buttons, icon buttons or one menu, whichever fits in what
-    /// the parts `beside` them leave.
-    private func actions(showsSearch: Bool, addsIntegration: Bool, beside: CGFloat) -> some View {
+    /// the parts `beside` them leave (nil until those are measured).
+    private func actions(showsSearch: Bool, addsIntegration: Bool, beside: CGFloat?) -> some View {
         MarketHeaderActions(
             showsSearch: showsSearch,
             search: MarketSearchField(search: search),
@@ -104,7 +104,7 @@ struct MarketHeader: View, Equatable {
             onImport: onImport,
             onOwn: onOwn,
             onMine: onMine,
-            available: width.map { $0 - beside })
+            available: width.flatMap { width in beside.map { width - $0 } })
     }
 
     private var subtitle: String {

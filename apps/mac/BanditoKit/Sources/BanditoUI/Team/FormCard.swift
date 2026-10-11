@@ -26,7 +26,8 @@ private struct AnsweredFormLine: View {
     var row: FormRow
     var outcome: FormOutcome
 
-    @State private var expanded = false
+    /// Open or folded, kept by the thread (`ThreadDisclosure`), so it stays when the row scrolls away and back.
+    private var expanded: Bool { ThreadDisclosure.shared.isOpen("form-\(row.formId)") }
 
     private var rows: [(label: String, value: String)] {
         if case .submitted(let values) = outcome { return FormPresentation.answerRows(spec: row.spec, values: values) }
@@ -51,7 +52,7 @@ private struct AnsweredFormLine: View {
                 line
             } else {
                 Button {
-                    expanded.toggle()
+                    ThreadDisclosure.shared.toggle("form-\(row.formId)")
                 } label: {
                     line
                         .contentShape(Rectangle())
