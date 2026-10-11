@@ -771,6 +771,9 @@
 "integrations.custom.recognizedProgram" = "인식함: 프로그램 %1$@";
 "integrations.custom.recognizedWeb" = "인식함: 웹 주소 %1$@";
 "integrations.custom.remaining" = "추가 대기: %1$lld";
+"integrations.custom.signIn" = "브라우저에서 로그인";
+"integrations.custom.signInHint" = "키나 헤더는 필요 없습니다. 브라우저에서 계정에 로그인하면 Bandito가 스스로 접근 권한을 받습니다.";
+"integrations.custom.signInTitle" = "이 서버는 브라우저에서 로그인합니다";
 "integrations.custom.titleLabel" = "이름";
 "integrations.custom.titlePlaceholder" = "예: GitHub";
 "integrations.custom.trialNote" = "확인하면 서버가 꺼진 상태로 추가돼요. “추가”를 누르지 않고 닫으면 다시 삭제돼요.";

@@ -771,6 +771,9 @@
 "integrations.custom.recognizedProgram" = "認識しました: プログラム %1$@";
 "integrations.custom.recognizedWeb" = "認識しました: Webアドレス %1$@";
 "integrations.custom.remaining" = "追加待ち: %1$lld";
+"integrations.custom.signIn" = "ブラウザでサインイン";
+"integrations.custom.signInHint" = "キーやヘッダーは不要です。ブラウザでアカウントにサインインすると、Bandito が自動でアクセス権を取得します。";
+"integrations.custom.signInTitle" = "このサーバーはブラウザでサインインします";
 "integrations.custom.titleLabel" = "名前";
 "integrations.custom.titlePlaceholder" = "例: GitHub";
 "integrations.custom.trialNote" = "確認するとサーバーが無効の状態で追加されます。「追加」せずに閉じると削除されます。";

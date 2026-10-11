@@ -379,12 +379,16 @@ public struct IntegrationTest: Codable, Sendable, Hashable {
     public var error: String?
     /// The service refused the browser sign-in and it could not be renewed: the owner signs in again.
     public var needsLogin: Bool
+    /// A draft's address answered 401 and the service signs in in the browser (`integrations.probe`, feature
+    /// `integrations_oauth_probe`): not a failure, the sign-in is offered instead.
+    public var oauth: Bool
 
-    public init(ok: Bool, tools: [String] = [], error: String? = nil, needsLogin: Bool = false) {
+    public init(ok: Bool, tools: [String] = [], error: String? = nil, needsLogin: Bool = false, oauth: Bool = false) {
         self.ok = ok
         self.tools = tools
         self.error = error
         self.needsLogin = needsLogin
+        self.oauth = oauth
     }
 
     public init(from decoder: Decoder) throws {
@@ -393,6 +397,7 @@ public struct IntegrationTest: Codable, Sendable, Hashable {
         tools = try c.decodeIfPresent([String].self, forKey: .tools) ?? []
         error = try c.decodeIfPresent(String.self, forKey: .error)
         needsLogin = try c.decodeIfPresent(Bool.self, forKey: .needsLogin) ?? false
+        oauth = try c.decodeIfPresent(Bool.self, forKey: .oauth) ?? false
     }
 }
 

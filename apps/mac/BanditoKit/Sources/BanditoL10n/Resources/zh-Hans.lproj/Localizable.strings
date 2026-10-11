@@ -771,6 +771,9 @@
 "integrations.custom.recognizedProgram" = "已识别：程序 %1$@";
 "integrations.custom.recognizedWeb" = "已识别：网址 %1$@";
 "integrations.custom.remaining" = "待添加：%1$lld";
+"integrations.custom.signIn" = "在浏览器中登录";
+"integrations.custom.signInHint" = "无需密钥或请求头。在浏览器中登录你的账户，Bandito 会自动获取访问权限。";
+"integrations.custom.signInTitle" = "此服务器通过浏览器登录";
 "integrations.custom.titleLabel" = "名称";
 "integrations.custom.titlePlaceholder" = "例如 GitHub";
 "integrations.custom.trialNote" = "检查时会先以关闭状态添加服务器。不点“添加”就关闭会将其移除。";
