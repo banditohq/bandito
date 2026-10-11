@@ -815,9 +815,12 @@
 "integrations.oauth.done" = "Done";
 "integrations.oauth.failed" = "The sign-in did not finish.";
 "integrations.oauth.finishing" = "Finishing the sign-in…";
+"integrations.oauth.loopback.done" = "Done — return to Bandito";
+"integrations.oauth.loopback.failed" = "The sign-in did not finish. Return to Bandito and try again.";
 "integrations.oauth.lost" = "This sign-in is no longer waiting. Press Connect to start again.";
 "integrations.oauth.needsUpdate" = "Update the server to connect %1$@ through the browser.";
 "integrations.oauth.openAgain" = "Open the browser again";
+"integrations.oauth.portBusy" = "Port 45819 is in use by another app. Close it and try again.";
 "integrations.oauth.retry" = "Try again";
 "integrations.oauth.signInAgain" = "Sign in again";
 "integrations.oauth.starting" = "Opening the browser…";

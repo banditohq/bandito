@@ -815,9 +815,12 @@
 "integrations.oauth.done" = "Fertig";
 "integrations.oauth.failed" = "Die Anmeldung wurde nicht abgeschlossen.";
 "integrations.oauth.finishing" = "Anmeldung wird abgeschlossen …";
+"integrations.oauth.loopback.done" = "Fertig – kehren Sie zu Bandito zurück";
+"integrations.oauth.loopback.failed" = "Die Anmeldung wurde nicht abgeschlossen. Kehren Sie zu Bandito zurück und versuchen Sie es erneut.";
 "integrations.oauth.lost" = "Diese Anmeldung wartet nicht mehr. Klicken Sie auf „Verbinden“, um neu zu beginnen.";
 "integrations.oauth.needsUpdate" = "Aktualisieren Sie den Server, um %1$@ über den Browser zu verbinden.";
 "integrations.oauth.openAgain" = "Browser erneut öffnen";
+"integrations.oauth.portBusy" = "Port 45819 wird von einer anderen App verwendet. Schließen Sie sie und versuchen Sie es erneut.";
 "integrations.oauth.retry" = "Erneut versuchen";
 "integrations.oauth.signInAgain" = "Erneut anmelden";
 "integrations.oauth.starting" = "Browser wird geöffnet …";

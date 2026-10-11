@@ -36,6 +36,22 @@ private final class FakeServer: OAuthServer {
 
 private struct Boom: Error {}
 
+private final class ListenerLog: @unchecked Sendable { var items: [FakeListener] = [] }
+
+/// A listener that does nothing but answer `start` from a script and remember it was stopped.
+private final class FakeListener: OAuthLoopbackListening, @unchecked Sendable {
+    let state: String
+    let onCallback: @Sendable (OAuthCallback) -> Void
+    var startError: OAuthLoopbackError?
+    private(set) var stopped = false
+    init(state: String, onCallback: @escaping @Sendable (OAuthCallback) -> Void) {
+        self.state = state
+        self.onCallback = onCallback
+    }
+    func start() async throws { if let startError { throw startError } }
+    func stop() { stopped = true }
+}
+
 /// Time and the opened addresses, held outside the model so the model's closures can read them.
 private final class Box: @unchecked Sendable {
     var clock = Date(timeIntervalSince1970: 1_000_000)
@@ -48,14 +64,24 @@ private final class Rig {
     let suite: String
     private let box = Box()
     let oauth: OAuthSignIn
+    private let log = ListenerLog()
+    var listeners: [FakeListener] { log.items }
 
-    init() {
+    init(listenerError: OAuthLoopbackError? = nil) {
         let suite = "oauth-test-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         let box = self.box
+        let log = self.log
         self.suite = suite
         self.defaults = defaults
-        oauth = OAuthSignIn(defaults: defaults, now: { box.clock }, opener: { box.opened.append($0) })
+        oauth = OAuthSignIn(
+            defaults: defaults, now: { box.clock }, opener: { box.opened.append($0) },
+            makeListener: { state, onCallback in
+                let listener = FakeListener(state: state, onCallback: onCallback)
+                listener.startError = listenerError
+                log.items.append(listener)
+                return listener
+            })
     }
 
     var openedURLs: [URL] { box.opened }
@@ -76,6 +102,62 @@ private final class Rig {
 
     private func callback(_ state: String, code: String = "code-1", extra: String = "") -> URL {
         URL(string: "bandito://oauth/callback?code=\(code)&state=\(state)\(extra)")!
+    }
+
+    private let loopbackBegun = OAuthBegun(
+        authorizeUrl: "https://mcp.example/authorize?x=1", state: "state-1", redirect: "loopback")
+
+    @Test func aLoopbackSignInListensBeforeTheBrowserOpensAndTakesTheAnswerFromIt() async throws {
+        let rig = Rig()
+        defer { rig.tearDown() }
+        let server = FakeServer()
+        server.beginAnswer = .success(loopbackBegun)
+        await rig.oauth.begin(server: server, target: .draft(linear), name: "Linear")
+        #expect(rig.oauth.phase == .waiting(name: "Linear"))
+        let listener = try #require(rig.listeners.first)
+        #expect(listener.state == "state-1")
+        #expect(rig.openedURLs.count == 1)
+        listener.onCallback(OAuthCallback(state: "state-1", code: "code-9", iss: "https://mcp.example"))
+        for _ in 0..<50 where rig.oauth.phase == .waiting(name: "Linear") { await Task.yield() }
+        #expect(server.completed.first?.code == "code-9")
+        #expect(server.completed.first?.iss == "https://mcp.example")
+        #expect(rig.oauth.phase == .connected(name: "Linear", integrationID: "i1"))
+        #expect(listener.stopped, "the listener closes when the sign-in ends")
+    }
+
+    @Test func aBusyPortFailsTheSheetBeforeTheBrowserOpens() async {
+        let rig = Rig(listenerError: .portBusy)
+        defer { rig.tearDown() }
+        let server = FakeServer()
+        server.beginAnswer = .success(loopbackBegun)
+        await rig.oauth.begin(server: server, target: .draft(linear), name: "Linear")
+        guard case .failed(_, let message, let canRetry) = rig.oauth.phase else {
+            Issue.record("expected a failure, got \(rig.oauth.phase)")
+            return
+        }
+        #expect(message.text.contains("45819"))
+        #expect(canRetry)
+        #expect(rig.openedURLs.isEmpty)
+        #expect(server.cancelled == ["state-1"], "the daemon is told the sign-in is dropped")
+        #expect(rig.listeners.first?.stopped == true)
+    }
+
+    @Test func dismissingTheSheetClosesTheListener() async throws {
+        let rig = Rig()
+        defer { rig.tearDown() }
+        let server = FakeServer()
+        server.beginAnswer = .success(loopbackBegun)
+        await rig.oauth.begin(server: server, target: .draft(linear), name: "Linear")
+        await rig.oauth.dismiss()
+        #expect(try #require(rig.listeners.first).stopped)
+        #expect(server.cancelled == ["state-1"])
+    }
+
+    @Test func aSchemeSignInStartsNoListener() async {
+        let rig = Rig()
+        defer { rig.tearDown() }
+        await rig.oauth.begin(server: FakeServer(), target: .draft(linear), name: "Linear")
+        #expect(rig.listeners.isEmpty)
     }
 
     @Test func beginOpensTheBrowserAndWaits() async {

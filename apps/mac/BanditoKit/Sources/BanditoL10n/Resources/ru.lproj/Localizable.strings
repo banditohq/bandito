@@ -815,9 +815,12 @@
 "integrations.oauth.done" = "Готово";
 "integrations.oauth.failed" = "Войти не получилось.";
 "integrations.oauth.finishing" = "Завершаем вход…";
+"integrations.oauth.loopback.done" = "Готово — вернитесь в Bandito";
+"integrations.oauth.loopback.failed" = "Вход не завершён. Вернитесь в Bandito и попробуйте снова.";
 "integrations.oauth.lost" = "Этот вход больше не ждёт ответа. Нажмите «Подключить», чтобы начать заново.";
 "integrations.oauth.needsUpdate" = "Обновите сервер, чтобы подключить %1$@ через браузер.";
 "integrations.oauth.openAgain" = "Открыть браузер снова";
+"integrations.oauth.portBusy" = "Порт 45819 занят другим приложением — закройте его и попробуйте снова.";
 "integrations.oauth.retry" = "Повторить";
 "integrations.oauth.signInAgain" = "Войти снова";
 "integrations.oauth.starting" = "Открываем браузер…";

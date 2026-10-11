@@ -815,9 +815,12 @@
 "integrations.oauth.done" = "完成";
 "integrations.oauth.failed" = "登录未能完成。";
 "integrations.oauth.finishing" = "正在完成登录…";
+"integrations.oauth.loopback.done" = "完成 — 请返回 Bandito";
+"integrations.oauth.loopback.failed" = "登录未完成。请返回 Bandito 后重试。";
 "integrations.oauth.lost" = "这次登录已不再等待。请点击“连接”重新开始。";
 "integrations.oauth.needsUpdate" = "请更新服务器，以便通过浏览器连接 %1$@。";
 "integrations.oauth.openAgain" = "重新打开浏览器";
+"integrations.oauth.portBusy" = "端口 45819 已被其他应用占用。请关闭该应用后重试。";
 "integrations.oauth.retry" = "重试";
 "integrations.oauth.signInAgain" = "重新登录";
 "integrations.oauth.starting" = "正在打开浏览器…";
