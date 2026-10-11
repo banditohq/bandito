@@ -112,8 +112,7 @@ import Testing
         let center = AppUpdateCenter(upToDateDelay: .milliseconds(40))
         center.setPhase(.upToDate)
         #expect(center.phase == .upToDate)
-        try await Task.sleep(for: .milliseconds(400))
-        #expect(center.phase == .idle)
+        #expect(await phaseBecomes(.idle, in: center))
     }
 
     @Test func aNewPhaseCancelsTheUpToDateTimer() async throws {
@@ -129,7 +128,19 @@ import Testing
         center.setPhase(.upToDate)
         center.setPhase(.checking)
         center.setPhase(.upToDate)
-        try await Task.sleep(for: .milliseconds(700))
-        #expect(center.phase == .idle)
+        #expect(await phaseBecomes(.idle, in: center))
+    }
+
+    /// Waits for the phase, up to a deadline long enough for a busy CI machine, instead of a fixed sleep.
+    private func phaseBecomes(
+        _ wanted: AppUpdateCenter.Phase, in center: AppUpdateCenter, within limit: Duration = .seconds(5)
+    ) async -> Bool {
+        let clock = ContinuousClock()
+        let deadline = clock.now + limit
+        while clock.now < deadline {
+            if center.phase == wanted { return true }
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        return center.phase == wanted
     }
 }
