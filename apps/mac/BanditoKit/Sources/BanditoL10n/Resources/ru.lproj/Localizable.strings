@@ -66,9 +66,7 @@
 "agentSheet.advancedFallback" = "Запасной: %1$@";
 "agentSheet.apiKey" = "API-ключ";
 "agentSheet.apiKeyHint" = "Любая модель, оплата за токены. Скоро.";
-"agentSheet.approvals" = "Одобрения";
-"agentSheet.approvalsHint" = "Пуш, деплой, удаление и запись вне %1$@ ждут вашего «да». Остальное он делает сам.";
-"agentSheet.askAbout" = "Что спрашивать у вас";
+"agentSheet.askAbout" = "Спрашивать разрешение";
 "agentSheet.autoName" = "Агент %1$@";
 "agentSheet.avatar" = "Аватар";
 "agentSheet.cancel" = "Отмена";
@@ -199,9 +197,12 @@
 "approval.why.sudo" = "запускает от администратора";
 "approval.why.yourRule" = "ваше правило: %1$@";
 "approval.withdrawn" = "Отозвано";
-"approvalMode.always" = "Всё подряд";
-"approvalMode.never" = "Ничего";
-"approvalMode.risky" = "Только рискованное";
+"approvalMode.always" = "Обо всём";
+"approvalMode.hint.always" = "Спросит перед каждой командой и действием в сервисах";
+"approvalMode.hint.never" = "Делает всё сам. Подходит, если вы доверяете агенту";
+"approvalMode.hint.risky" = "Спросит про push, деплой, удаление, запись вне папки и действия, которые сервис просит подтверждать";
+"approvalMode.never" = "Ни о чём";
+"approvalMode.risky" = "Только о рискованном";
 "avatar.allEmoji" = "Все эмодзи";
 "avatar.color" = "Цвет фона";
 "avatar.colorAria" = "Цвет аватара";
@@ -733,7 +734,7 @@
 "inspector.aboutAgent" = "Об агенте";
 "inspector.addRole" = "Добавить роль";
 "inspector.addSchedule" = "Добавить";
-"inspector.approvals" = "Одобрения";
+"inspector.approvals" = "Спрашивать разрешение";
 "inspector.askRisky" = "Спрашивать о рискованном";
 "inspector.avatar.help" = "Изменить аватар: картинка, эмодзи, цвет, лицо";
 "inspector.cronLabel" = "Расписание (cron)";

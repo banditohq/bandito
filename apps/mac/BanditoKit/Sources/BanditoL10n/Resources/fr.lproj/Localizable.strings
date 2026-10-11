@@ -66,9 +66,7 @@
 "agentSheet.advancedFallback" = "Secours : %1$@";
 "agentSheet.apiKey" = "Clé API";
 "agentSheet.apiKeyHint" = "Tout modèle, paiement à la consommation. Bientôt disponible.";
-"agentSheet.approvals" = "Approbations";
-"agentSheet.approvalsHint" = "Les push, déploiements, suppressions et écritures hors de %1$@ attendent votre accord. Le reste, il le gère seul.";
-"agentSheet.askAbout" = "Me demander confirmation pour";
+"agentSheet.askAbout" = "Demander l'autorisation";
 "agentSheet.autoName" = "Agent %1$@";
 "agentSheet.avatar" = "Avatar";
 "agentSheet.cancel" = "Annuler";
@@ -199,8 +197,11 @@
 "approval.why.sudo" = "s’exécute en administrateur";
 "approval.why.yourRule" = "votre règle : %1$@";
 "approval.withdrawn" = "Retirée";
-"approvalMode.always" = "Tout";
-"approvalMode.never" = "Rien";
+"approvalMode.always" = "Sur tout";
+"approvalMode.hint.always" = "Demande avant chaque commande et chaque action dans un service";
+"approvalMode.hint.never" = "Fait tout seul. Convient si vous faites confiance à l'agent";
+"approvalMode.hint.risky" = "Demande pour les push, déploiements, suppressions, écritures hors du dossier et les actions qu'un service demande de confirmer";
+"approvalMode.never" = "Sur rien";
 "approvalMode.risky" = "Seulement le risqué";
 "avatar.allEmoji" = "Tous les emoji";
 "avatar.color" = "Fond";
@@ -733,7 +734,7 @@
 "inspector.aboutAgent" = "Infos sur l'agent";
 "inspector.addRole" = "Ajouter un rôle";
 "inspector.addSchedule" = "Ajouter une planification";
-"inspector.approvals" = "Approbations";
+"inspector.approvals" = "Demander l'autorisation";
 "inspector.askRisky" = "Demander pour le risqué";
 "inspector.avatar.help" = "Modifier l’avatar : image, emoji, couleur, visage";
 "inspector.cronLabel" = "Planification (cron)";

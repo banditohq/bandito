@@ -254,7 +254,7 @@ The main settings of the agent. Each row changes the agent for the next message.
 1. Runs on (Работает на): choose another runtime, Claude Code, Codex or Grok. Memory and tasks move with the agent.
 2. Model (Модель): type a model name, or click Default (По умолчанию) to use the runtime's default.
 3. If the limit runs out (Если лимит кончится): choose Don't switch (Не переключаться) or another runtime. The agent continues there until the first limit resets.
-4. Approvals (Одобрения): choose Risky only (Только рискованное), Everything (Всё подряд) or Nothing (Ничего). See [security.md](security.md).
+4. Ask for permission (Спрашивать разрешение): choose Only the risky ones (Только о рискованном), About everything (Обо всём) or About nothing (Ни о чём). See [security.md](security.md).
 5. Project (Проект): the folder the agent works in on the server. Change it with the folder picker of the row.
 6. Effort (Усилие): choose Low, Medium, High, Very high or Max. Higher levels are smarter on hard tasks but use the limit faster.
 7. Instructions (INSTRUCTIONS): edit the text, then click Save (Сохранить).

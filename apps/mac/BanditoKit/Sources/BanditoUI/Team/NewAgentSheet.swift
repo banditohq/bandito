@@ -674,7 +674,7 @@ struct NewAgentSheet: View {
                     selection: $draft.approval,
                     options: ApprovalChoice.allCases.map { ($0, $0.title) })
             }
-            Text(L10n.AgentSheet.approvalsHint(path: approvalsPath))
+            Text(draft.approval.mode.hint)
                 .font(BanditoFont.text(size: 12, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
                 .fixedSize(horizontal: false, vertical: true)
@@ -773,12 +773,6 @@ struct NewAgentSheet: View {
         guard !draft.agentsRoot.isEmpty else { return nil }
         return NewAgentFolderRules.folderPath(
             root: draft.agentsRoot, name: NewAgentFolderRules.folderName(for: defaultName))
-    }
-
-    /// The folder the approvals text names: the folder the agent will work in.
-    private var approvalsPath: String {
-        let path = draft.folderMode == .newFolder ? (folderPreview ?? "") : draft.cwd
-        return path.isEmpty ? "~" : path
     }
 
     /// Sets the agents folder when the person has not chosen one on this server yet: the saved one, the parent of the

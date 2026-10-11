@@ -1,5 +1,5 @@
 import BanditoDesign
-import BanditoKit
+@testable import BanditoKit
 import BanditoL10n
 import SwiftUI
 import Testing
@@ -19,7 +19,9 @@ import Testing
     /// Right column of Settings at the smallest window: 760 pt window minus the 240 pt navigation.
     static let settingsColumn: CGFloat = 520
 
-    static var cases: [AuditCase] { settings + sheets + dataSheets + serverScreens + marketScreens + onboardingScreens + flowSheets }
+    static var cases: [AuditCase] {
+        settings + sheets + dataSheets + serverScreens + marketScreens + onboardingScreens + flowSheets + approvalViews
+    }
 
     static let settings: [AuditCase] = [
         AuditCase(name: "settings-general", width: settingsColumn, scrolls: true) { _ in AnyView(GeneralSection()) },
@@ -233,6 +235,27 @@ import Testing
             env.hub.me = try? JSONDecoder().decode(Me.self, from: Data(me.utf8))
             env.hub.pending = (try? JSONDecoder().decode([PendingDevice].self, from: Data(pending.utf8))) ?? []
             return AnyView(AccountSheet())
+        },
+    ]
+
+    // MARK: approvals in the thread and the agent's details
+
+    /// A request that waits for the person: the command, and the reason in the daemon's words.
+    static let pendingApproval = ApprovalRow(
+        approvalId: "ap1", tool: "bash", title: "Run a command", command: "git push origin release/0.1.11",
+        diff: nil, reason: "risky: git push", state: .pending)
+
+    static let approvalViews: [AuditCase] = [
+        // The card's own glow (a shadow) paints just beyond its box on purpose: no spill check. The width check still runs.
+        AuditCase(name: "approval-card-narrow", width: 360, bleeds: true) { _ in
+            AnyView(ApprovalCard(row: pendingApproval, agentName: "Forge", onDecide: { _, _ in }))
+        },
+        AuditCase(name: "approval-card", width: 560, bleeds: true) { _ in
+            AnyView(ApprovalCard(row: pendingApproval, agentName: "Forge", onDecide: { _, _ in }))
+        },
+        // The agent's details with the approval mode's hint under the choice (the longest hint: Risky only).
+        AuditCase(name: "agent-inspector-approvals", width: 360, scrolls: true) { env in
+            AnyView(DetailsTab(server: env.server, agent: movingAgent))
         },
     ]
 

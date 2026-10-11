@@ -66,9 +66,7 @@
 "agentSheet.advancedFallback" = "Respaldo: %1$@";
 "agentSheet.apiKey" = "Clave de API";
 "agentSheet.apiKeyHint" = "Cualquier modelo, pago por token. Próximamente.";
-"agentSheet.approvals" = "Aprobaciones";
-"agentSheet.approvalsHint" = "Los push, despliegues, borrados y escrituras fuera de %1$@ esperan tu visto bueno. El resto lo hace por su cuenta.";
-"agentSheet.askAbout" = "Pedirme confirmación para";
+"agentSheet.askAbout" = "Pedir permiso";
 "agentSheet.autoName" = "Agente %1$@";
 "agentSheet.avatar" = "Avatar";
 "agentSheet.cancel" = "Cancelar";
@@ -199,9 +197,12 @@
 "approval.why.sudo" = "se ejecuta como administrador";
 "approval.why.yourRule" = "tu regla: %1$@";
 "approval.withdrawn" = "Retirada";
-"approvalMode.always" = "Todo";
-"approvalMode.never" = "Nada";
-"approvalMode.risky" = "Solo lo arriesgado";
+"approvalMode.always" = "Sobre todo";
+"approvalMode.hint.always" = "Pregunta antes de cada comando y de cada acción en un servicio";
+"approvalMode.hint.never" = "Lo hace todo por su cuenta. Sirve si confías en el agente";
+"approvalMode.hint.risky" = "Pregunta por push, despliegues, borrados, escrituras fuera de la carpeta y acciones que un servicio pide confirmar";
+"approvalMode.never" = "Sobre nada";
+"approvalMode.risky" = "Solo sobre lo arriesgado";
 "avatar.allEmoji" = "Todos los emoji";
 "avatar.color" = "Fondo";
 "avatar.colorAria" = "Color del avatar";
@@ -733,7 +734,7 @@
 "inspector.aboutAgent" = "Info del agente";
 "inspector.addRole" = "Añadir rol";
 "inspector.addSchedule" = "Añadir programación";
-"inspector.approvals" = "Aprobaciones";
+"inspector.approvals" = "Pedir permiso";
 "inspector.askRisky" = "Preguntar por lo arriesgado";
 "inspector.avatar.help" = "Editar el avatar: imagen, emoji, color, cara";
 "inspector.cronLabel" = "Programación (cron)";

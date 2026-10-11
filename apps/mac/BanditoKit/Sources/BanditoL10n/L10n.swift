@@ -176,8 +176,6 @@ public enum L10n {
         public static func advancedFallback(runtime: String) -> String { L10n.tr("agentSheet.advancedFallback", runtime) }
         public static var apiKey: String { L10n.tr("agentSheet.apiKey") }
         public static var apiKeyHint: String { L10n.tr("agentSheet.apiKeyHint") }
-        public static var approvals: String { L10n.tr("agentSheet.approvals") }
-        public static func approvalsHint(path: String) -> String { L10n.tr("agentSheet.approvalsHint", path) }
         public static var askAbout: String { L10n.tr("agentSheet.askAbout") }
         public static func autoName(number: String) -> String { L10n.tr("agentSheet.autoName", number) }
         public static var avatar: String { L10n.tr("agentSheet.avatar") }
@@ -327,6 +325,12 @@ public enum L10n {
         public static var always: String { L10n.tr("approvalMode.always") }
         public static var never: String { L10n.tr("approvalMode.never") }
         public static var risky: String { L10n.tr("approvalMode.risky") }
+
+        public enum Hint {
+            public static var always: String { L10n.tr("approvalMode.hint.always") }
+            public static var never: String { L10n.tr("approvalMode.hint.never") }
+            public static var risky: String { L10n.tr("approvalMode.hint.risky") }
+        }
     }
 
     public enum Avatar {
