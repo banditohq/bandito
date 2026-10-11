@@ -21,8 +21,8 @@ struct MarketCardActions {
 // MARK: - catalog card
 
 /// A service of the catalog, or a connected one in a flat list: the tile, the name and the publisher, the description
-/// (three lines, then an ellipsis), and the actions at the bottom. The card has a fixed height, so a row is even. When
-/// the two actions do not fit side by side (a narrow column, a long translation), they stack.
+/// (two lines, then an ellipsis), and at the foot one thing: Connect, or the state of a connected service. The whole
+/// card opens the page of the service. It has a fixed height, so a row is even.
 struct MarketCatalogCard: View, Equatable {
     let entry: MarketEntry
     let actions: MarketCardActions
@@ -53,56 +53,60 @@ struct MarketCatalogCard: View, Equatable {
                 Text(entry.description)
                     .font(BanditoFont.text(size: 12.5, weight: 400))
                     .foregroundStyle(Color.Bandito.text2)
-                    .lineLimit(3)
+                    .lineLimit(2)
                     .truncationMode(.tail)
                     .multilineTextAlignment(.leading)
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-                Spacer(minLength: 0)
-                actionRow
+                    // Takes what is left between the header and the foot, so the two lines are never squeezed to one.
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                foot
             }
             .padding(14)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .onTapGesture { actions.open(entry) }
+        .marketCardOpens(entry.name) { actions.open(entry) }
     }
 
-    private var viewButton: some View {
-        Button(L10n.Market.view) { actions.open(entry) }
-            .banditoButton(.quiet())
-            .fixedSize()
-    }
-
-    /// View and the rest on one line when they fit, else the rest under View.
-    private var actionRow: some View {
-        MarketActionRow {
-            viewButton
-        } trailing: {
-            trailing
-        }
-    }
-
+    /// Connect at the left; a connected service shows its state and Configure instead. When both do not fit, the state
+    /// stays (the page of the service has Configure).
     @ViewBuilder
-    private var trailing: some View {
+    private var foot: some View {
         if let integration = entry.integration {
-            Label {
-                Text(L10n.Integrations.Oauth.connected)
-            } icon: {
-                Image(systemName: "checkmark")
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) {
+                    connectedLabel
+                    if !integration.auth.isDaemonSignIn {
+                        Button(L10n.Market.configure) { actions.configure(integration) }
+                            .banditoButton(.link)
+                            .fixedSize()
+                    }
+                    Spacer(minLength: 0)
+                }
+                HStack(spacing: 0) {
+                    connectedLabel
+                    Spacer(minLength: 0)
+                }
             }
-            .font(BanditoFont.text(size: 12.5, weight: 500))
-            .foregroundStyle(Color.Bandito.ok)
-            .lineLimit(1)
-            .fixedSize()
-            if !integration.auth.isDaemonSignIn {
-                Button(L10n.Market.configure) { actions.configure(integration) }
-                    .banditoButton(.link)
-                    .fixedSize()
-            }
+            .frame(height: 38)
         } else if let template = entry.template {
-            Button(L10n.Integrations.connect) { actions.connect(template) }
-                .banditoButton(.lightPill())
-                .fixedSize()
+            HStack(spacing: 0) {
+                Button(L10n.Integrations.connect) { actions.connect(template) }
+                    .banditoButton(.lightPill())
+                    .fixedSize()
+                Spacer(minLength: 0)
+            }
         }
+    }
+
+    private var connectedLabel: some View {
+        Label {
+            Text(L10n.Integrations.Oauth.connected)
+        } icon: {
+            Image(systemName: "checkmark")
+        }
+        .font(BanditoFont.text(size: 12.5, weight: 500))
+        .foregroundStyle(Color.Bandito.ok)
+        .lineLimit(1)
+        .fixedSize()
     }
 }
 
@@ -175,7 +179,7 @@ struct MarketConnectedCard: View, Equatable {
             .padding(14)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .onTapGesture { actions.open(entry) }
+        .marketCardOpens(entry.name) { actions.open(entry) }
     }
 
     /// "Update available · 1.2 → 1.3" and Update: the catalog's definition of this service moved on.

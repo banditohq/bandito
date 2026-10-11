@@ -147,16 +147,16 @@ enum MarketGridLayout {
     }
 }
 
-// MARK: - positions
+// MARK: - sizes
 
-/// Where each block of the Services page starts in the scroll content, and which block is in view. The heights of the
-/// pinned header and of the catalog rows are fixed on purpose, so the starts are sums, not measurements; only the
-/// content above the first category (the connected cards and the suggestions row) is measured and passed in.
-struct MarketSectionMetrics: Equatable {
+/// The fixed sizes of the Services page. Heights are fixed on purpose (an even row, a stable header), but nothing here
+/// decides where the page scrolls: jumps go to the anchor of a block, and the block in view comes from where the
+/// anchors really are (`MarketSectionTracker`).
+enum MarketSectionMetrics {
     /// The pinned header of a block.
     static let headerHeight: CGFloat = 44
-    /// A catalog card.
-    static let cardHeight: CGFloat = 190
+    /// A catalog card: the tile and name, two lines, the foot with one button.
+    static let cardHeight: CGFloat = 156
     /// The space under every row of cards.
     static let rowGap: CGFloat = MarketGridLayout.gap
     /// The space under the last row of a block, before the next header.
@@ -164,48 +164,72 @@ struct MarketSectionMetrics: Equatable {
     /// The space above the first block.
     static let topInset: CGFloat = 6
 
-    /// One block, as far as the positions are concerned.
-    struct Shape: Equatable {
-        let id: String
-        /// How many cards the block has (catalog blocks).
-        let cards: Int
-        /// The measured height of the block's content when its cards are not of the fixed height (the connected block).
-        var measuredContent: CGFloat?
+    /// The height of a block of catalog cards: its header, its rows, the gap after it.
+    static func height(cards: Int, columns: Int) -> CGFloat {
+        headerHeight + CGFloat(MarketGridLayout.rowCount(items: cards, columns: columns)) * (cardHeight + rowGap) + sectionGap
     }
 
-    /// The height of a block: its header, its rows, the gap after it.
-    static func height(of shape: Shape, columns: Int) -> CGFloat {
-        let content =
-            shape.measuredContent
-            ?? CGFloat(MarketGridLayout.rowCount(items: shape.cards, columns: columns)) * (cardHeight + rowGap)
-        return headerHeight + content + sectionGap
-    }
-
-    /// The start of each block, from the top of the scroll content. `leading` is the content above the first block.
-    static func starts(_ shapes: [Shape], columns: Int, leading: CGFloat = 0) -> [CGFloat] {
-        var y = topInset + leading
-        var result: [CGFloat] = []
-        for shape in shapes {
-            result.append(y)
-            y += height(of: shape, columns: columns)
-        }
-        return result
-    }
-
-    /// The index of the block whose header is pinned at the top when the content is scrolled to `offset`. A block takes
-    /// over when its header reaches the bottom of the pinned one. Nil above the first block.
-    static func activeIndex(offset: CGFloat, starts: [CGFloat]) -> Int? {
-        var active: Int?
-        for (index, start) in starts.enumerated() where start <= offset + headerHeight {
-            active = index
-        }
-        return active
-    }
-
-    /// The space to leave under the last block so that every block, the short last one too, can be scrolled to the top
-    /// (and never less than a margin).
+    /// The space to leave under the last block so that it, short as it may be, can be scrolled to the top (and never less
+    /// than a margin).
     static func bottomPadding(viewport: CGFloat, last: CGFloat, minimum: CGFloat = 24) -> CGFloat {
         max(minimum, viewport - last)
+    }
+}
+
+/// Which block is in view, from the positions the anchors in front of the blocks report. An anchor is a zero-height view
+/// at the natural start of its block; it has passed when it is no lower than the bottom of the pinned header (the next
+/// header takes over there). The block in view is the last one passed. Anchors far from the screen are not built by the
+/// lazy stack and report nothing, so a jump sets the flags itself (`jump(to:)`).
+@MainActor
+final class MarketSectionTracker {
+    /// How far below the top an anchor may be and still count as passed.
+    static let threshold = MarketSectionMetrics.headerHeight + 1
+
+    private var ids: [String] = []
+    private var passed: [Bool] = []
+    private var heights: [String: Int] = [:]
+    /// Until then a change of the block in view is not reported (a jump passes the blocks between).
+    var quietUntil: TimeInterval = 0
+    private var lastReported: Int?
+
+    var active: Int? { passed.lastIndex(of: true) }
+
+    /// Starts over for these blocks (the list changed, or the page was shown again).
+    func configure(ids new: [String]) {
+        guard new != ids else { return }
+        reset(ids: new)
+    }
+
+    func reset(ids new: [String]? = nil) {
+        if let new { ids = new }
+        passed = Array(repeating: false, count: ids.count)
+        heights = [:]
+        topY = nil
+        lastReported = nil
+    }
+
+    /// An anchor moved. Returns true when the block in view changed and may be reported.
+    func report(index: Int, minY: Int, now: TimeInterval = ProcessInfo.processInfo.systemUptime) -> Bool {
+        guard passed.indices.contains(index) else { return false }
+        heights[ids[index]] = minY
+        passed[index] = CGFloat(minY) <= Self.threshold
+        guard active != lastReported else { return false }
+        lastReported = active
+        return now >= quietUntil
+    }
+
+    /// Where the anchor at the very top last was (nil until it reports).
+    private(set) var topY: Int?
+
+    func reportTop(_ minY: Int) { topY = minY }
+
+    /// The last position an anchor reported, nil when it has not been built.
+    func minY(of id: String) -> Int? { heights[id] }
+
+    /// A jump to block `index` (nil: the top): the blocks up to it count as passed, the ones after it as not.
+    func jump(to index: Int?) {
+        for i in passed.indices { passed[i] = index.map { i <= $0 } ?? false }
+        lastReported = active
     }
 }
 
@@ -267,14 +291,23 @@ enum MarketSidebarLogic {
         return .all
     }
 
-    /// The scroll offset of a target, or nil when there is no such block (an empty category).
-    static func offset(of target: MarketScrollTarget, sections: [MarketSection], starts: [CGFloat]) -> CGFloat? {
+    /// Where a target lands: the top, or the block of a category. Nil when there is no such block (an empty category).
+    static func landing(of target: MarketScrollTarget, sections: [MarketSection]) -> MarketLanding? {
         switch target {
-        case .top: return 0
+        case .top: return .top
         case .category(let name):
-            guard let index = sections.firstIndex(where: { $0.categoryName == name }), index < starts.count else { return nil }
-            return starts[index]
+            return sections.firstIndex { $0.categoryName == name }.map { .section($0) }
         }
+    }
+}
+
+enum MarketLanding: Equatable {
+    case top
+    case section(Int)
+
+    var index: Int? {
+        if case .section(let index) = self { return index }
+        return nil
     }
 }
 

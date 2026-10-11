@@ -196,20 +196,17 @@ struct BotCard: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 logos
                 Spacer(minLength: 0)
-                MarketActionRow {
-                    Button(L10n.Market.view, action: onView)
-                        .banditoButton(.quiet())
-                        .fixedSize()
-                } trailing: {
+                HStack(spacing: 0) {
                     Button(L10n.Market.Bots.create, action: onCreate)
                         .banditoButton(.lightPill())
                         .fixedSize()
+                    Spacer(minLength: 0)
                 }
             }
             .padding(14)
             .frame(maxWidth: .infinity, minHeight: 190, alignment: .topLeading)
         }
-        .onTapGesture(perform: onView)
+        .marketCardOpens(template.name(languageCode: languageCode), perform: onView)
     }
 
     /// The services the bot uses, as small logos in a row; the rest as a count. Room is kept when there are none.

@@ -50,14 +50,10 @@ struct MarketView: View {
 
     /// How many cards a row holds, from the width of the scroll view; written only when it changes.
     @State private var columns = 3
-    /// The scroll view has been measured once (a jump from the sidebar waits for it).
-    @State private var measured = false
     /// The height of the scroll view in 8 pt steps: the space under the last block lets it reach the top.
     @State private var viewportHeight: CGFloat = 0
-    /// The measured heights of the content above the first category: the connected cards (with the suggestions row
-    /// when they are the first block), and the suggestions row when there are no connected cards.
-    @State private var connectedContent: CGFloat = 0
-    @State private var leadingContent: CGFloat = 0
+    /// Which block is in view, from the real positions of the anchors (a plain object: no view state per scroll step).
+    @State private var tracker = MarketSectionTracker()
     /// The entries and the page for the last inputs, so the body does not rebuild them on every pass.
     @State private var memo = MarketListMemo()
 
@@ -366,17 +362,9 @@ struct MarketView: View {
         }()
         let recommendation = tab == .services && supported ? recommendationContext : nil
         let firstIsConnected = sections.first?.kind == .connected
-        let leading = (recommendation != nil && !firstIsConnected && !sections.isEmpty) ? leadingContent : 0
-        let shapes = sections.map { section in
-            MarketSectionMetrics.Shape(
-                id: section.id, cards: section.entries.count,
-                measuredContent: section.kind == .connected ? connectedContent : nil)
-        }
-        let starts = MarketSectionMetrics.starts(shapes, columns: columns, leading: leading)
-        let measuredConnected = !firstIsConnected || connectedContent > 0
+        tracker.configure(ids: sections.map(\.id))
         let context = MarketScrollContext(
-            sections: sections, starts: starts,
-            ready: measured && !sections.isEmpty && measuredConnected,
+            sections: sections, tracker: tracker, ready: !sections.isEmpty,
             request: router.marketScroll,
             onHandled: { router.marketScroll = nil },
             onActive: { index in
@@ -387,7 +375,8 @@ struct MarketView: View {
             ScrollView {
                 if let content {
                     servicesContent(
-                        content, shapes: shapes, recommendation: recommendation, firstIsConnected: firstIsConnected)
+                        content, recommendation: recommendation, firstIsConnected: firstIsConnected,
+                        onActive: context.onActive)
                 } else {
                     VStack(alignment: .leading, spacing: 18) {
                         if tab == .bots {
@@ -408,7 +397,6 @@ struct MarketView: View {
             .environment(\.marketColumns, columns)
             .onGeometryChange(for: Int.self) { MarketGridLayout.columns(scrollWidth: $0.size.width) } action: { new in
                 if columns != new { columns = new }
-                if !measured { measured = true }
             }
             .onGeometryChange(for: CGFloat.self) { ($0.size.height / 8).rounded() * 8 } action: { new in
                 if viewportHeight != new { viewportHeight = new }
@@ -426,22 +414,27 @@ struct MarketView: View {
     /// Connected filter: one flat list.
     @ViewBuilder
     private func servicesContent(
-        _ content: MarketContent, shapes: [MarketSectionMetrics.Shape], recommendation: RecommendationContext?,
-        firstIsConnected: Bool
+        _ content: MarketContent, recommendation: RecommendationContext?, firstIsConnected: Bool,
+        onActive: @escaping (Int?) -> Void
     ) -> some View {
         let actions = cardActions
         LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
-            Color.clear.frame(height: MarketSectionMetrics.topInset).id(MarketScrollDriver.topAnchorID)
+            Color.clear.frame(height: MarketSectionMetrics.topInset)
+                .id(MarketScrollDriver.topAnchorID)
+                .marketAnchor { tracker.reportTop($0) }
             switch content {
             case .sections(let sections):
                 if let recommendation, !firstIsConnected {
                     recommendationRow(recommendation)
                         .padding(.horizontal, MarketGridLayout.sidePadding)
                         .padding(.bottom, 14)
-                        .marketMeasuredHeight($leadingContent)
                 }
-                ForEach(sections) { section in
-                    Color.clear.frame(height: 0).id(MarketScrollDriver.anchorID(section))
+                ForEach(Array(sections.enumerated()), id: \.element.id) { index, section in
+                    Color.clear.frame(height: 0)
+                        .id(MarketScrollDriver.anchorID(section))
+                        .marketAnchor { y in
+                            if tracker.report(index: index, minY: y) { onActive(tracker.active) }
+                        }
                     Section {
                         sectionBody(
                             section, actions: actions,
@@ -451,10 +444,12 @@ struct MarketView: View {
                         MarketSectionHeader(title: title(of: section), count: section.entries.count, tone: .of(section))
                     }
                 }
-                if let last = shapes.last {
+                if let last = sections.last {
                     Color.clear.frame(
                         height: MarketSectionMetrics.bottomPadding(
-                            viewport: viewportHeight, last: MarketSectionMetrics.height(of: last, columns: columns)))
+                            viewport: viewportHeight,
+                            last: last.kind == .connected
+                                ? viewportHeight : MarketSectionMetrics.height(cards: last.entries.count, columns: columns)))
                 }
             case .flat(let items, let empty):
                 MarketRowList(
@@ -477,7 +472,10 @@ struct MarketView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .onAppear { if case .sections = content, router.marketSection != nil { router.marketSection = nil } }
+        .onAppear {
+            tracker.reset()
+            if case .sections = content, router.marketSection != nil { router.marketSection = nil }
+        }
     }
 
     /// The cards of a block: the connected services as full cards, the catalog as even cards of one height.
@@ -498,7 +496,6 @@ struct MarketView: View {
                         .padding(.bottom, 14)
                 }
             }
-            .marketMeasuredHeight($connectedContent)
         } else {
             MarketRowList(
                 items: section.entries, columns: columns, rowHeight: MarketSectionMetrics.cardHeight,

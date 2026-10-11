@@ -112,7 +112,7 @@ struct BundleCard: View {
             .padding(16)
             .frame(maxWidth: .infinity, minHeight: 176, alignment: .topLeading)
         }
-        .onTapGesture(perform: onView)
+        .marketCardOpens(bundle.name(languageCode: languageCode), perform: onView)
     }
 }
 

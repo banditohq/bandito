@@ -76,12 +76,17 @@ import Testing
     }
 
     @Test func twoColumns() throws {
-        let url = try SnapshotSupport.render(page(columns: 2, width: 640), "market-grid-2", size: CGSize(width: 640, height: 2900))
+        let url = try SnapshotSupport.render(page(columns: 2, width: 640), "market-grid-2", size: CGSize(width: 640, height: 1700))
+        #expect(FileManager.default.fileExists(atPath: url.path))
+    }
+
+    @Test func threeColumns() throws {
+        let url = try SnapshotSupport.render(page(columns: 3, width: 1000), "market-grid-3", size: CGSize(width: 1000, height: 1250))
         #expect(FileManager.default.fileExists(atPath: url.path))
     }
 
     @Test func fourColumns() throws {
-        let url = try SnapshotSupport.render(page(columns: 4, width: 1100), "market-grid-4", size: CGSize(width: 1100, height: 2000))
+        let url = try SnapshotSupport.render(page(columns: 4, width: 1100), "market-grid-4", size: CGSize(width: 1100, height: 1000))
         #expect(FileManager.default.fileExists(atPath: url.path))
     }
 }

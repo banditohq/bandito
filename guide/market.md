@@ -18,10 +18,11 @@ only when the server is new enough to have them; an older server shows Services 
 ## Marketplace mode
 
 <!-- id: market-mode; covers: mode:market -->
-The main area lists the services. The connected ones are in one row at the top; the catalog follows without them. Each
+The main area lists the services in blocks (see Filters and categories below). Each
 connected card shows its address and the result of the last check: the number of tools, the error, or Not checked yet.
-Each catalog card shows the icon, the name, the publisher, two lines about the service, View (Посмотреть) and Connect
-(Подключить).
+Each catalog card shows the icon, the name, the publisher, two lines about the service and one button, Connect
+(Подключить), at the bottom left; a connected service shows Connected (Подключено) and Configure (Настроить) there. The
+whole card is clickable and opens the page of the service.
 Где: sidebar footer → Marketplace button (Маркетплейс), or Menu View → Go to Marketplace (Маркетплейс)
 1. Press ⌘6, or click the Marketplace button at the bottom left of the sidebar, between your profile and the usage button.
 2. The button is lit while the Marketplace is on show. It is not in the mode bar at the top of the sidebar.
@@ -54,7 +55,7 @@ The search field at the top right finds services by name and by description. It 
 ## A service's page
 
 <!-- id: market-detail; covers: -->
-Click a card, or View (Посмотреть) on it, to read about the service before you connect it. The page has the icon, the
+Click a card to read about the service before you connect it. The page has the icon, the
 name, the publisher with the Official (Официальный) badge when the service is the maker's own, and the category. On
 the right: Connect (Подключить), or the status and Configure (Настроить) when it is connected.
 Below: What it can do (Что умеет), About (Описание), What you need (Что понадобится), How to connect (Как подключить)
@@ -62,8 +63,8 @@ with one to three steps made from the service's fields (get the key, fill in the
 and the links Documentation (Документация) and Website (Сайт). A connected service also shows its status with the number of tools from the
 last check and To the list (К списку), which jumps to the Tools section below; then the switch Available to agents
 (Доступно агентам), Check (Проверить) and Remove (Удалить).
-Где: Marketplace → a card → View (Посмотреть)
-1. Click View (Посмотреть) on a card. The page opens in the same area.
+Где: Marketplace → a card
+1. Click a card. The page opens in the same area.
 2. Click Marketplace (Маркетплейс) at the top left, or press Esc, to go back to the list.
 3. Click Connect (Подключить) on the page to open the sheet with the service's settings.
 
@@ -145,10 +146,10 @@ the text. The server is listed with the connected services.
 <!-- id: market-bots; covers: -->
 The Bots page lists ready-made bots: an agent with its role, instructions, scheduled runs, skills and the services it
 uses already set up. Each card has the icon on a coloured tile, the name, the category, a short description, small
-logos of the services the bot uses (the optional ones are dimmer), View (Посмотреть) and Create bot (Создать бота).
+logos of the services the bot uses (the optional ones are dimmer) and Create bot (Создать бота). The whole card opens the page of the bot.
 Где: Marketplace → Bots (Боты)
 1. Click a category in the sidebar to see only its bots.
-2. Click View (Посмотреть) on a card, or the card itself, to read about the bot.
+2. Click the card to read about the bot.
 3. Click Create bot (Создать бота) on a card to go straight to the create sheet.
 
 ## My bots
@@ -232,7 +233,7 @@ every agent on the server, On N agents (У N агентов) when only some agen
 folder of that name already exists that Bandito did not make.
 Где: Marketplace → Skills (Скиллы)
 1. Click Installed (Установленные) in the sidebar to see only the skills that are installed somewhere.
-2. Click Install (Установить) on a card to choose where, or View (Посмотреть) to read first.
+2. Click Install (Установить) on a card to choose where, or click the card itself to read first.
 
 ## A skill's page
 
