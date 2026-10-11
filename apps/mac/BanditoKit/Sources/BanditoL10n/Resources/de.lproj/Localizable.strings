@@ -821,9 +821,9 @@
 "integrations.device.network" = "Der Bandito-Server konnte den Dienst nicht erreichen. Prüfe die Verbindung und versuche es erneut.";
 "integrations.device.openGithub" = "GitHub öffnen";
 "integrations.device.refused" = "Der Dienst hat die Anmeldung nicht akzeptiert.";
-"integrations.device.revokeHint" = "Der Zugriff bleibt beim Dienst gültig, bis du ihn dort entfernst: github.com/settings/applications.";
+"integrations.device.revokeHint" = "Der Zugriff bleibt beim Dienst gültig, bis Sie ihn dort entfernen: github.com/settings/applications.";
 "integrations.device.starting" = "Code wird angefordert …";
-"integrations.device.waiting" = "Warte auf deine Bestätigung auf %1$@ …";
+"integrations.device.waiting" = "Warten auf Ihre Bestätigung auf %1$@ …";
 "integrations.edit" = "Bearbeiten";
 "integrations.empty" = "Noch nichts verbunden. Verbinden Sie einen Dienst aus dem Katalog oder fügen Sie eine eigene Integration hinzu.";
 "integrations.failure.missingProgram" = "Das Programm ist auf dem Server nicht installiert. Installieren Sie es dort und prüfen Sie erneut.";
