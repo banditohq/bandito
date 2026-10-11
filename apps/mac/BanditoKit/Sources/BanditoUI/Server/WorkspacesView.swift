@@ -464,8 +464,7 @@ struct WorkspaceCreateSheet: View {
                 UserFacingErrorView(message: error)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            HStack(spacing: 10) {
-                Spacer(minLength: 0)
+            ActionRow {
                 Button(L10n.AgentSheet.cancel) { onDone() }
                     .banditoButton(.quiet(size: .regular))
                 Button(L10n.Workspace.Create.submit) { save() }

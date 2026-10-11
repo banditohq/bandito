@@ -2691,7 +2691,7 @@
   "integrations.device.codeHint": "Type this code on {site} to allow access, then come back to Bandito.",
   "integrations.device.copy": "Copy",
   "integrations.device.copied": "Copied",
-  "integrations.device.open": "Open {address}",
+  "integrations.device.openGithub": "Open GitHub",
   "integrations.device.waiting": "Waiting for you to confirm on {site}…",
   "integrations.device.expiresIn": "The code works for another {time}",
   "integrations.device.expired": "The code expired. Try again to get a new one.",

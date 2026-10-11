@@ -87,8 +87,7 @@ struct DeviceSignInSheet: View {
 
     @ViewBuilder
     private var buttons: some View {
-        HStack(spacing: 10) {
-            Spacer(minLength: 0)
+        ActionRow {
             switch device.phase {
             case .idle:
                 EmptyView()
@@ -100,7 +99,7 @@ struct DeviceSignInSheet: View {
                 Button(L10n.Common.cancel) { Task { await device.dismiss() } }
                     .banditoButton(.quiet())
                     .keyboardShortcut(.cancelAction)
-                Button(L10n.Integrations.Device.open(address: page.address)) { device.openPage() }
+                Button(L10n.Integrations.Device.openGithub) { device.openPage() }
                     .banditoButton(.signal())
                     .keyboardShortcut(.defaultAction)
             case .connected:
@@ -132,7 +131,7 @@ private struct DeviceCodeBlock: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(L10n.Integrations.Device.codeHint(site: page.host))
+            Text(L10n.Integrations.Device.codeHint(site: page.address))
                 .font(BanditoFont.text(size: 12.5, weight: 400))
                 .foregroundStyle(Color.Bandito.text3)
                 .fixedSize(horizontal: false, vertical: true)

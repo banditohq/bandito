@@ -810,7 +810,7 @@
 "integrations.device.expiresIn" = "コードの有効期限まであと %1$@";
 "integrations.device.needsUpdate" = "コードで %1$@ を接続するには、サーバーを更新してください。";
 "integrations.device.network" = "Bandito のサーバーがサービスに接続できませんでした。接続を確認してもう一度お試しください。";
-"integrations.device.open" = "%1$@ を開く";
+"integrations.device.openGithub" = "GitHubを開く";
 "integrations.device.refused" = "サービスがサインインを受け付けませんでした。";
 "integrations.device.revokeHint" = "アクセスはサービス側で削除するまで有効なままです: github.com/settings/applications";
 "integrations.device.starting" = "コードを取得しています…";

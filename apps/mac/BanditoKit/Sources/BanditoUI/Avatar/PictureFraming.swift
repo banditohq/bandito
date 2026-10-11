@@ -44,8 +44,7 @@ struct PictureFraming: View {
             if let error {
                 UserFacingErrorView(message: error)
             }
-            HStack(spacing: 8) {
-                Spacer(minLength: 0)
+            ActionRow {
                 Button(L10n.Common.cancel, action: onCancel)
                     .banditoButton(.quiet())
                 Button(L10n.Common.save) { save() }

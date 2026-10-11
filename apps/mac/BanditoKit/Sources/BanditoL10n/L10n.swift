@@ -1175,7 +1175,7 @@ public enum L10n {
             public static func expiresIn(time: String) -> String { L10n.tr("integrations.device.expiresIn", time) }
             public static func needsUpdate(name: String) -> String { L10n.tr("integrations.device.needsUpdate", name) }
             public static var network: String { L10n.tr("integrations.device.network") }
-            public static func `open`(address: String) -> String { L10n.tr("integrations.device.open", address) }
+            public static var openGithub: String { L10n.tr("integrations.device.openGithub") }
             public static var refused: String { L10n.tr("integrations.device.refused") }
             public static var revokeHint: String { L10n.tr("integrations.device.revokeHint") }
             public static var starting: String { L10n.tr("integrations.device.starting") }

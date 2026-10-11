@@ -183,7 +183,7 @@ struct FolderPicker: View {
     }
 
     private var footer: some View {
-        HStack(spacing: 6) {
+        ActionRow {
             Button(L10n.FolderPicker.newFolder) {
                 if newFolder == nil {
                     error = nil
@@ -200,7 +200,6 @@ struct FolderPicker: View {
             }
                 .banditoButton(.quiet(size: .regular))
                 .disabled(listing == nil || cloneBusy)
-            Spacer(minLength: 0)
             Button(L10n.FolderPicker.choose(name: FolderPickerLogic.name(of: listing?.path ?? "")), action: choose)
                 .banditoButton(.signal(size: .regular))
                 .disabled(listing == nil)
@@ -322,8 +321,7 @@ struct FolderPicker: View {
                 UserFacingErrorView(message: cloneError)
             }
             Spacer(minLength: 0)
-            HStack {
-                Spacer(minLength: 0)
+            ActionRow {
                 Button(L10n.Common.cancel) { cloneOpen = false }
                     .banditoButton(.quiet(size: .regular))
                     .disabled(cloneBusy)

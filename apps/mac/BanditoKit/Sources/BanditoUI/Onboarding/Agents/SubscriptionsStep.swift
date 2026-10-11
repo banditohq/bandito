@@ -295,7 +295,7 @@ struct SubscriptionsStep: View {
             Button(L10n.Onboarding.Server.checkAgain) { Task { await model.checkAgain() } }
                 .banditoButton(.quiet(size: .regular))
         case .signIn:
-            HStack(spacing: 8) {
+            ActionRow {
                 Button(L10n.Onboarding.Subs.signIn) { Task { await model.startLogin(kind) } }
                     .banditoButton(.signal(size: .regular))
                     .disabled(model.terminal != nil)
@@ -303,7 +303,7 @@ struct SubscriptionsStep: View {
                     .banditoButton(.quiet(size: .regular))
             }
         case .confirm:
-            HStack(spacing: 8) {
+            ActionRow {
                 Button(L10n.Onboarding.Subs.signIn) { Task { await model.startLogin(kind) } }
                     .banditoButton(.quiet(size: .regular))
                     .disabled(model.terminal != nil)

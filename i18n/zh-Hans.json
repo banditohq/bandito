@@ -2658,7 +2658,7 @@
   "integrations.device.codeHint": "请在 {site} 输入此代码以允许访问，然后回到 Bandito。",
   "integrations.device.copy": "复制",
   "integrations.device.copied": "已复制",
-  "integrations.device.open": "打开 {address}",
+  "integrations.device.openGithub": "打开 GitHub",
   "integrations.device.waiting": "正在等待你在 {site} 确认…",
   "integrations.device.expiresIn": "代码还有 {time} 有效",
   "integrations.device.expired": "代码已过期。请重试以获取新代码。",

@@ -346,8 +346,7 @@ struct ShareSheet: View {
     // MARK: buttons
 
     private var buttons: some View {
-        HStack(spacing: 10) {
-            Spacer(minLength: 8)
+        ActionRow {
             Button(L10n.Common.cancel) { router.sheet = nil }
                 .banditoButton(.quiet())
             if accountHub.signedIn, case .editing = model.phase {

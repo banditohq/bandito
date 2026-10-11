@@ -94,8 +94,7 @@ struct OAuthSignInSheet: View {
 
     @ViewBuilder
     private var buttons: some View {
-        HStack(spacing: 10) {
-            Spacer(minLength: 0)
+        ActionRow {
             switch oauth.phase {
             case .idle, .finishing:
                 EmptyView()
