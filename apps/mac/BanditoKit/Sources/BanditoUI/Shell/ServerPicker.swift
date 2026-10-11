@@ -107,7 +107,7 @@ struct ServerPicker: View {
     }
 
     static func hasUpdate(_ server: ServerModel) -> Bool {
-        DaemonUpdateOffer.offer(for: server.info) != nil
+        server.daemonUpdateOffer != nil
     }
 
     static func isOnline(_ server: ServerModel) -> Bool {

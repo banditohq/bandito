@@ -13,6 +13,32 @@ extension ServerModel {
         }
     }
 
+    /// The update the Server screens offer for this daemon (see `DaemonUpdateOffer.shown`).
+    public var daemonUpdateOffer: DaemonUpdate? {
+        DaemonUpdateOffer.shown(info: info, check: daemonUpdateCheck, checkedAt: daemonUpdateCheckedAt)
+    }
+
+    /// Asks the daemon to check for a newer release now (`daemon.update_check`) and keeps the answer in
+    /// `daemonUpdateCheck` (nil when the call fails). Nothing is asked, and nothing is kept, when the server is not
+    /// connected or the daemon has no `update` feature (an older daemon).
+    @discardableResult
+    public func checkDaemonUpdate() async -> DaemonUpdateCheck? {
+        guard state == .connected, supports("update"), let c = try? rpc() else { return nil }
+        let answer = try? await c.call("daemon.update_check", NoParams(), as: DaemonUpdateCheck.self)
+        daemonUpdateCheck = answer
+        daemonUpdateCheckedAt = Date()
+        return answer
+    }
+
+    /// Asks the daemon for its check when it is needed: this server is not this Mac (its daemon is replaced from the
+    /// app bundle), the daemon has the `update` feature, and `daemon.info` carries no offer. Run on connect, every hour
+    /// and when the Server screen opens.
+    public func refreshDaemonUpdateCheck() async {
+        guard !LocalDaemonUpgrade.isThisMac(config), supports("update"), DaemonUpdateOffer.offer(for: info) == nil
+        else { return }
+        await checkDaemonUpdate()
+    }
+
     /// Asks the daemon to install `version` (`daemon.update_apply`, without `v`). The reply comes before the restart,
     /// so the link drops right after: the caller then waits for `info.version` to change. Returns whether a service
     /// manager restarts the daemon (false: the new binary waits for a manual restart).
