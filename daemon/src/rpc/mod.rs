@@ -3803,6 +3803,7 @@ mod trust_tests {
         "agents.create_from_shared",
         "skills.export",
         "skills.install_shared",
+        "skills.own",
         "agents.update",
         "agents.delete",
         "agents.get",

@@ -993,6 +993,7 @@ A catalog of open skills the owner can install for the daemon user or for one ag
 | `skills.catalog` | none | `[Entry]`: each catalog entry as in the JSON (`files` as paths), plus `installed: {user: bool, projects: [agent_id]}`, `conflicts: {user: bool, projects: [agent_id]}` and `updates: {user: bool, projects: [agent_id]}` |
 | `skills.install` | `skill_id`, `scope: "user"\|"project"`, `agent_id` (for `project`) | `{path}` |
 | `skills.remove` | `skill_id`, `scope`, `agent_id` (for `project`) | `{path}` |
+| `skills.own` | `agent_id?` (the agent's folder; none is the daemon user's) | `{skills: [{name, description, source: "own" \| "shared:<id>", version: number \| null, has_scripts, files}]}`: the owner's own skills and the copies of shared links in that folder (catalog installs and folders without `SKILL.md` are left out, links are not followed). Owner-only. |
 
 `installed` lists the folders that are Bandito's: `user` is the daemon user's home, `projects` are the agents whose folder holds one. `conflicts` lists the same-named folders that are not Bandito's.
 
