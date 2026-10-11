@@ -378,14 +378,12 @@ struct MarketView: View {
                     Text(subtitle)
                         .font(BanditoFont.text(size: 13, weight: 400))
                         .foregroundStyle(Color.Bandito.text2)
-                        .lineLimit(1)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 12)
                 if tabs.count == 1, supported {
                     // A server with only services keeps the one-row header.
-                    searchField
-                    addOwnButton
-                    mySharesButton
+                    headerActions(showsSearch: true, addsIntegration: true)
                 }
             }
             if tabs.count > 1 {
@@ -403,16 +401,24 @@ struct MarketView: View {
                     )
                     .fixedSize()
                     Spacer(minLength: 12)
-                    if tab != .services || supported {
-                        searchField
-                    }
-                    if tab == .services, supported {
-                        addOwnButton
-                    }
-                    mySharesButton
+                    headerActions(
+                        showsSearch: tab != .services || supported,
+                        addsIntegration: tab == .services && supported)
                 }
             }
         }
+    }
+
+    /// The search field and the actions of the header: text buttons, icon buttons or one menu, whichever fits.
+    private func headerActions(showsSearch: Bool, addsIntegration: Bool) -> some View {
+        MarketHeaderActions(
+            showsSearch: showsSearch,
+            search: searchField,
+            addsIntegration: addsIntegration,
+            showsMine: sharingSupported,
+            onImport: { router.sheet = .importer },
+            onOwn: { editing = .custom },
+            onMine: { router.sheet = .myShares })
     }
 
     private var subtitle: String {
@@ -426,28 +432,6 @@ struct MarketView: View {
     /// The server has the `sharing` feature: bots and skills can be published, and the list of one's shares exists.
     private var sharingSupported: Bool {
         server?.supports("sharing") ?? false
-    }
-
-    /// The account's own shares (bots and skills published as links). Shown only where sharing is supported. One
-    /// placement: beside the action buttons of the header's second row (or the one row of a services-only server).
-    @ViewBuilder
-    private var mySharesButton: some View {
-        if sharingSupported {
-            Button(L10n.Share.Mine.title) { router.sheet = .myShares }
-                .banditoButton(.quiet())
-                .fixedSize()
-        }
-    }
-
-    private var addOwnButton: some View {
-        HStack(spacing: 8) {
-            Button(L10n.ClaudeImport.title) { router.sheet = .importer }
-                .banditoButton(.quiet())
-                .fixedSize()
-            Button(L10n.Integrations.addOwn) { editing = .custom }
-                .banditoButton(.quiet())
-                .fixedSize()
-        }
     }
 
     /// One capsule holds the lens and the field: the capsule draws the fill and the border, the field inside is plain.

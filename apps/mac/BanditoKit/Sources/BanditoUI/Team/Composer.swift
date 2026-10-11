@@ -182,11 +182,8 @@ struct Composer: View {
                             handleBackspace(press)
                         }
                         .onKeyPress(keys: [KeyEquivalent("v")]) { press in
-                            // ⌘V of a picture (and no text) attaches it. Text paste is left to the field.
-                            guard canAttach, press.modifiers == .command, PictureSource.clipboardHoldsOnlyPicture,
-                                let data = PictureSource.clipboardPNG(), let agent, let server
-                            else { return .ignored }
-                            AttachmentTrays.shared.addPicture(data, name: Self.pictureName("Clipboard"), agentID: agent.id, server: server)
+                            // ⌘V of pictures or files (and no text) attaches them. Text paste is left to the field.
+                            guard canAttach, press.modifiers == .command, attachFromPasteboard() else { return .ignored }
                             return .handled
                         }
                         .onKeyPress(keys: [.return]) { press in
@@ -1067,6 +1064,21 @@ struct Composer: View {
         guard !urls.isEmpty else { return }
         AttachmentTrays.shared.add(urls: urls, agentID: agent.id, server: server)
         focused = true
+    }
+
+    /// Attaches what ⌘V found on the clipboard, the way a drop of files or the "+" menu's clipboard item does. False
+    /// when the clipboard holds text or nothing to attach, so the field pastes as usual.
+    private func attachFromPasteboard() -> Bool {
+        guard let agent, let server else { return false }
+        switch PasteboardAttachments.read(.general) {
+        case .files(let urls):
+            AttachmentTrays.shared.add(urls: urls, agentID: agent.id, server: server)
+        case .picture(let png):
+            AttachmentTrays.shared.addPicture(png, name: Self.pictureName("Clipboard"), agentID: agent.id, server: server)
+        case .none:
+            return false
+        }
+        return true
     }
 
     private func attachClipboard() {
