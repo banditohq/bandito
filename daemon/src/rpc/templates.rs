@@ -370,7 +370,7 @@ fn export_agent(app: &App, id: &str) -> RpcResult {
         .into_iter()
         .filter(|s| s.enabled)
         .map(|s| shared::BotSchedule {
-            text: s.cron,
+            cron: s.cron,
             prompt: s.prompt,
         })
         .collect();
@@ -413,10 +413,11 @@ fn shared_services(store: &Store, agent: &Agent) -> Result<Vec<String>, RpcError
 /// taken as `free_name` takes a bundle's: `<name> 2` when another agent has it.
 async fn create_shared(app: &App, share_id: &str, bot: shared::BotPayload) -> RpcResult {
     validate_name(bot.name.trim()).map_err(|_| share_error(ShareError::invalid("name")))?;
+    let starter = bot.starter.clone();
     let tz = schedule_text::local_zone();
     for (index, s) in bot.schedules.iter().enumerate() {
-        schedules::check_agent_interval(&s.text, &tz)
-            .map_err(|_| share_error(ShareError::invalid(format!("schedules[{index}].text"))))?;
+        schedules::check_agent_interval(&s.cron, &tz)
+            .map_err(|_| share_error(ShareError::invalid(format!("schedules[{index}].cron"))))?;
     }
     let name = free_name(app, bot.name.trim())?;
     validate_name(&name).map_err(|_| share_error(ShareError::invalid("name")))?;
@@ -472,7 +473,7 @@ async fn create_shared(app: &App, share_id: &str, bot: shared::BotPayload) -> Rp
     for (index, s) in bot.schedules.into_iter().enumerate() {
         let new = NewSchedule {
             agent_id: id.clone(),
-            cron: s.text,
+            cron: s.cron,
             tz: tz.clone(),
             prompt: s.prompt,
             enabled: true,
@@ -505,6 +506,7 @@ async fn create_shared(app: &App, share_id: &str, bot: shared::BotPayload) -> Rp
         "schedule_ids": schedule_ids,
         "unknown_services": unknown,
         "missing_services": missing_services,
+        "starter": starter,
         "errors": errors,
     }))
 }
@@ -645,7 +647,7 @@ mod share_tests {
             "system_prompt": "You find sources.",
             "capabilities": ["browser", "files"],
             "services": ["notion"],
-            "schedules": [{"text": "0 9 * * *", "prompt": "Morning digest"}],
+            "schedules": [{"cron": "0 9 * * *", "prompt": "Morning digest"}],
         })
     }
 
@@ -741,7 +743,7 @@ mod share_tests {
         );
         assert_eq!(p.services, vec!["notion".to_string()]);
         assert_eq!(p.schedules.len(), 1);
-        assert_eq!(p.schedules[0].text, "0 9 * * *");
+        assert_eq!(p.schedules[0].cron, "0 9 * * *");
         assert_eq!(p.schedules[0].prompt, "Morning digest");
         assert_eq!(p.starter, None, "an agent has no starter of its own");
     }
@@ -845,7 +847,7 @@ mod share_tests {
         let mut extra = bot();
         extra["memory"] = json!("x");
         let mut bad_cron = bot();
-        bad_cron["schedules"] = json!([{"text": "nonsense", "prompt": "p"}]);
+        bad_cron["schedules"] = json!([{"cron": "nonsense", "prompt": "p"}]);
         let mut long_name = bot();
         long_name["name"] = json!("n".repeat(33));
         let cases = [
@@ -897,6 +899,33 @@ mod share_tests {
         assert_eq!(made["agent"]["system_prompt"], "Find sources.");
         assert_eq!(made["unknown_services"], json!([]));
         assert_eq!(made["missing_services"], json!([]));
+    }
+
+    #[tokio::test]
+    async fn create_from_shared_hands_the_starter_back_as_the_templates_do_not() {
+        let root = TempDir::new().unwrap();
+        let (app, _store) = app(root.path());
+        let mut with_starter = bot();
+        with_starter["starter"] = json!("Start here");
+        let made = call(
+            &app,
+            "agents.create_from_shared",
+            json!({"share_id": SHARE, "version": 1, "payload": with_starter}),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            made["starter"], "Start here",
+            "the app puts it in the input field, unsent"
+        );
+        let plain = call(
+            &app,
+            "agents.create_from_shared",
+            json!({"share_id": SHARE, "version": 1, "payload": bot()}),
+        )
+        .await
+        .unwrap();
+        assert_eq!(plain["starter"], Value::Null);
     }
 
     #[tokio::test]

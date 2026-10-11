@@ -17,12 +17,12 @@ const INTEGRATIONS_JSON: &str = include_str!("integrations_catalog.json");
 
 /// The only payload schema this daemon reads and writes.
 pub const SCHEMA: u32 = 1;
-pub const BOT_NAME_MAX: usize = 40;
+pub const BOT_NAME_MAX: usize = 32;
 pub const BOT_ROLE_MAX: usize = 80;
 pub const BOT_PROMPT_MAX: usize = 20_000;
 pub const BOT_SERVICES_MAX: usize = 20;
 pub const BOT_SCHEDULES_MAX: usize = 5;
-pub const BOT_SCHEDULE_TEXT_MAX: usize = 120;
+pub const BOT_SCHEDULE_CRON_MAX: usize = 120;
 pub const BOT_SCHEDULE_PROMPT_MAX: usize = 4_000;
 pub const BOT_STARTER_MAX: usize = 2_000;
 pub const SKILL_DESCRIPTION_MAX: usize = 1_024;
@@ -57,11 +57,12 @@ pub struct BotPayload {
     pub starter: Option<String>,
 }
 
-/// One schedule of a shared bot. `text` is the cron of the schedule (5 fields, in the server's zone rules).
+/// One schedule of a shared bot. `cron` is the schedule's cron: 5 fields, checked the way the daemon checks its own
+/// schedules (`rpc::schedules::check_agent_interval`) when the bot is made.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BotSchedule {
-    pub text: String,
+    pub cron: String,
     pub prompt: String,
 }
 
@@ -148,8 +149,8 @@ pub fn check_bot(p: &BotPayload) -> Result<(), ShareError> {
         return Err(ShareError::invalid("schedules"));
     }
     for (i, s) in p.schedules.iter().enumerate() {
-        if s.text.trim().is_empty() || s.text.chars().count() > BOT_SCHEDULE_TEXT_MAX {
-            return Err(ShareError::invalid(format!("schedules[{i}].text")));
+        if s.cron.trim().is_empty() || s.cron.chars().count() > BOT_SCHEDULE_CRON_MAX {
+            return Err(ShareError::invalid(format!("schedules[{i}].cron")));
         }
         if s.prompt.trim().is_empty() || s.prompt.chars().count() > BOT_SCHEDULE_PROMPT_MAX {
             return Err(ShareError::invalid(format!("schedules[{i}].prompt")));
@@ -286,13 +287,18 @@ pub fn bot_from_agent(
     Ok(p)
 }
 
-/// The skill payload of the folder `base/.claude/skills/<name>`, for `skills.export`. `license` is the owner's choice
-/// (None is `license_required`). Refused, with the path named: a catalog install (`catalog_skill`), no folder
-/// (`no_skill`), a link (`unsafe_path`), a file that is not a regular file (`unsafe_path`), a path component the
-/// payload does not allow (`bad_path`), a file that is not UTF-8 (`not_utf8`), a file over the limit (`too_large`).
-/// The marker `.bandito-skill` at the top is never exported. Executables are the files under `scripts/` with an execute
-/// bit. The description is the `description:` line of the SKILL.md front matter.
-pub fn skill_from_folder(base: &Path, name: &str, license: Option<&str>) -> Result<SkillPayload, ShareError> {
+/// The skill payload of the folder `base/.claude/skills/<name>`, for `skills.export`, and the paths it skipped (dot files
+/// and dot folders, sorted). `license` is the owner's choice (None is `license_required`). Refused, with the path named:
+/// a skill the owner did not make (`catalog_skill` for a catalog install, `not_yours` for a copy of a shared link), no
+/// folder (`no_skill`), a link (`unsafe_path`), a file that is not a regular file (`unsafe_path`), a name the payload
+/// does not allow (`bad_path`), a file that is not UTF-8 (`not_utf8`), a file over the limit (`too_large`). The marker
+/// `.bandito-skill` at the top is never exported. Executables are the files under `scripts/` with an execute bit. The
+/// description is the `description:` line of the SKILL.md front matter.
+pub fn skill_from_folder(
+    base: &Path,
+    name: &str,
+    license: Option<&str>,
+) -> Result<(SkillPayload, Vec<String>), ShareError> {
     if !skill_name(name) {
         return Err(ShareError::invalid("name"));
     }
@@ -329,15 +335,29 @@ pub fn skill_from_folder(base: &Path, name: &str, license: Option<&str>) -> Resu
             format!("{} is not a skill folder", dir.display()),
         ));
     }
-    if catalog_marker(&dir, name) {
-        return Err(ShareError::refused(
-            "catalog_skill",
-            format!("{name} is a skill of the catalog: only the owner's own skills are shared"),
-        ));
+    if let Some(marker) = folder_marker(&dir) {
+        if is_catalog_marker(&marker, name) {
+            return Err(ShareError::refused(
+                "catalog_skill",
+                format!("{name} is a skill of the catalog: only the owner's own skills are shared"),
+            ));
+        }
+        if marker
+            .get("source")
+            .and_then(Value::as_str)
+            .is_some_and(|s| s.starts_with("shared:"))
+        {
+            return Err(ShareError::refused(
+                "not_yours",
+                format!("{name} was installed from a shared link: only the owner's own skills are shared"),
+            ));
+        }
     }
 
     let mut found = Vec::new();
-    walk(&dir, "", &mut found)?;
+    let mut skipped = Vec::new();
+    walk(&dir, "", &mut found, &mut skipped)?;
+    skipped.sort();
     let mut files = BTreeMap::new();
     let mut executable = Vec::new();
     for (rel, path, exec) in found {
@@ -363,7 +383,7 @@ pub fn skill_from_folder(base: &Path, name: &str, license: Option<&str>) -> Resu
         executable,
     };
     check_skill(&p)?;
-    Ok(p)
+    Ok((p, skipped))
 }
 
 /// Writes a shared skill into `base/.claude/skills/<name>/` as `skills::install` does: the same folder checks, the same
@@ -477,22 +497,22 @@ fn service_id(id: &str) -> bool {
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, b'-' | b'_'))
 }
 
-/// Whether `folder` holds a marker of a catalog install of `name`: `{"id", "commit"}`, with no `source`. A shared
-/// install has a `source` and no `commit`.
-fn catalog_marker(folder: &Path, name: &str) -> bool {
+/// The marker of a skill folder as JSON, when it is a regular file that holds an object. A link is never read.
+fn folder_marker(folder: &Path) -> Option<Value> {
     let path = folder.join(MARKER);
     if !fs::symlink_metadata(&path).is_ok_and(|m| m.is_file()) {
-        return false;
+        return None;
     }
-    let Ok(text) = fs::read_to_string(&path) else {
-        return false;
-    };
-    let Ok(v) = serde_json::from_str::<Value>(&text) else {
-        return false;
-    };
-    v.get("id").and_then(Value::as_str) == Some(name)
-        && v.get("commit").is_some_and(Value::is_string)
-        && v.get("source").is_none()
+    let text = fs::read_to_string(&path).ok()?;
+    serde_json::from_str::<Value>(&text).ok().filter(Value::is_object)
+}
+
+/// Whether a marker is a catalog install of `name`: `{"id", "commit"}` with no `source`. A shared install has a `source`
+/// and no `commit`.
+fn is_catalog_marker(marker: &Value, name: &str) -> bool {
+    marker.get("id").and_then(Value::as_str) == Some(name)
+        && marker.get("commit").is_some_and(Value::is_string)
+        && marker.get("source").is_none()
 }
 
 /// The `source` of a shared install's marker, or None.
@@ -503,9 +523,15 @@ fn marker_source(folder: &Path) -> Option<String> {
 }
 
 /// Every file under `dir`, relative to the skill folder: `(path, absolute path, executable)`. The marker at the top is
-/// skipped. A link, or a file that is not a regular file, is refused (`unsafe_path`); a path the payload does not allow
+/// skipped. A dot file or dot folder (`.DS_Store`, `.git`) is not shared: its path goes to `skipped`, and a folder is not
+/// entered. A link, or a file that is not a regular file, is refused (`unsafe_path`); a name the payload does not allow
 /// is refused (`bad_path`). Both name the path.
-fn walk(dir: &Path, rel: &str, found: &mut Vec<(String, PathBuf, bool)>) -> Result<(), ShareError> {
+fn walk(
+    dir: &Path,
+    rel: &str,
+    found: &mut Vec<(String, PathBuf, bool)>,
+    skipped: &mut Vec<String>,
+) -> Result<(), ShareError> {
     let mut entries: Vec<fs::DirEntry> = fs::read_dir(dir)
         .map_err(|e| io_refused(dir, &e))?
         .collect::<Result<_, _>>()
@@ -535,8 +561,12 @@ fn walk(dir: &Path, rel: &str, found: &mut Vec<(String, PathBuf, bool)>) -> Resu
                 format!("{child} is a link; links are not shared"),
             ));
         }
+        if file_name.starts_with('.') {
+            skipped.push(child);
+            continue;
+        }
         if meta.is_dir() {
-            walk(&path, &child, found)?;
+            walk(&path, &child, found, skipped)?;
             continue;
         }
         if !meta.is_file() {
@@ -571,28 +601,64 @@ fn io_refused(path: &Path, e: &std::io::Error) -> ShareError {
     ShareError::refused("io", format!("{}: {e}", path.display()))
 }
 
-/// The `description:` line of a SKILL.md front matter, without quotes. A folded or literal block (`>`, `|`) is not
-/// read, and an empty value is none: the owner is asked for one line.
+/// The `description:` line of a SKILL.md front matter. A quoted value loses its quotes. A block scalar is read: `>`
+/// folds the block's lines into paragraphs (lines joined by a space, a blank line starts a new paragraph), and `|` keeps
+/// its lines joined by `\n`. The block is the indented lines after the key, with the indentation of its first line
+/// taken off. An empty description is None.
 fn description_of(skill_md: &str) -> Option<String> {
     let mut lines = skill_md.lines();
     if lines.next()?.trim_end() != "---" {
         return None;
     }
-    for line in lines {
-        if line.trim_end() == "---" {
-            break;
+    let front: Vec<&str> = lines.take_while(|l| l.trim_end() != "---").collect();
+    let at = front.iter().position(|l| l.starts_with("description:"))?;
+    let value = front[at]["description:".len()..].trim();
+    let text = if matches!(value, ">" | "|" | ">-" | "|-" | ">+" | "|+") {
+        let body: Vec<&str> = front[at + 1..]
+            .iter()
+            .copied()
+            .take_while(|l| l.is_empty() || l.starts_with([' ', '\t']))
+            .collect();
+        let indent = body
+            .iter()
+            .find(|l| !l.trim().is_empty())
+            .map_or(0, |&l| l.len() - l.trim_start().len());
+        let stripped: Vec<&str> = body
+            .iter()
+            .map(|&l| &l[(l.len() - l.trim_start().len()).min(indent)..])
+            .collect();
+        if value.starts_with('>') {
+            let mut paragraphs: Vec<String> = Vec::new();
+            let mut current: Vec<&str> = Vec::new();
+            for l in stripped {
+                let t = l.trim();
+                if t.is_empty() {
+                    if !current.is_empty() {
+                        paragraphs.push(current.join(" "));
+                        current.clear();
+                    }
+                } else {
+                    current.push(t);
+                }
+            }
+            if !current.is_empty() {
+                paragraphs.push(current.join(" "));
+            }
+            paragraphs.join("\n")
+        } else {
+            stripped.iter().map(|l| l.trim_end()).collect::<Vec<_>>().join("\n")
         }
-        if let Some(value) = line.strip_prefix("description:") {
-            let value = value.trim();
-            let quoted = value.len() >= 2
-                && ((value.starts_with('"') && value.ends_with('"'))
-                    || (value.starts_with('\'') && value.ends_with('\'')));
-            let text = if quoted { &value[1..value.len() - 1] } else { value };
-            let block = matches!(value, ">" | "|" | ">-" | "|-" | ">+" | "|+");
-            return (!block && !text.is_empty()).then(|| text.to_string());
+    } else {
+        let quoted = value.len() >= 2
+            && ((value.starts_with('"') && value.ends_with('"')) || (value.starts_with('\'') && value.ends_with('\'')));
+        if quoted {
+            value[1..value.len() - 1].to_string()
+        } else {
+            value.to_string()
         }
-    }
-    None
+    };
+    let text = text.trim().to_string();
+    (!text.is_empty()).then_some(text)
 }
 
 #[cfg(test)]
@@ -614,7 +680,7 @@ mod tests {
             "system_prompt": "You find sources.",
             "capabilities": ["browser", "files"],
             "services": ["notion"],
-            "schedules": [{"text": "0 9 * * *", "prompt": "Morning digest"}],
+            "schedules": [{"cron": "0 9 * * *", "prompt": "Morning digest"}],
         })
     }
 
@@ -699,14 +765,18 @@ mod tests {
     }
 
     #[test]
-    fn bot_name_is_one_to_forty_characters_and_not_blank() {
+    fn bot_name_is_one_to_thirty_two_characters_and_not_blank() {
+        assert_eq!(BOT_NAME_MAX, 32, "the agent name limit of the daemon");
         assert_eq!(invalid(with(bot(), "name", json!(""))), "name");
         assert_eq!(invalid(with(bot(), "name", json!("   "))), "name");
         assert!(
             parse_bot(with(bot(), "name", json!(repeat_chars('а', BOT_NAME_MAX)))).is_ok(),
-            "40 Cyrillic letters"
+            "32 Cyrillic letters"
         );
-        assert_eq!(invalid(with(bot(), "name", json!(repeat_chars('a', 41)))), "name");
+        assert_eq!(
+            invalid(with(bot(), "name", json!(repeat_chars('a', BOT_NAME_MAX + 1)))),
+            "name"
+        );
     }
 
     #[test]
@@ -732,8 +802,8 @@ mod tests {
             ),
             (
                 "schedules",
-                json!(vec![json!({"text": "0 9 * * *", "prompt": "p"}); BOT_SCHEDULES_MAX]),
-                json!(vec![json!({"text": "0 9 * * *", "prompt": "p"}); BOT_SCHEDULES_MAX + 1]),
+                json!(vec![json!({"cron": "0 9 * * *", "prompt": "p"}); BOT_SCHEDULES_MAX]),
+                json!(vec![json!({"cron": "0 9 * * *", "prompt": "p"}); BOT_SCHEDULES_MAX + 1]),
                 "schedules",
             ),
             (
@@ -750,18 +820,18 @@ mod tests {
     }
 
     #[test]
-    fn schedule_text_and_prompt_limits_pass_at_the_edge() {
-        let at = |text: String, prompt: String| with(bot(), "schedules", json!([{"text": text, "prompt": prompt}]));
+    fn schedule_cron_and_prompt_limits_pass_at_the_edge() {
+        let at = |text: String, prompt: String| with(bot(), "schedules", json!([{"cron": text, "prompt": prompt}]));
         assert!(
             parse_bot(at(
-                repeat_chars('0', BOT_SCHEDULE_TEXT_MAX),
+                repeat_chars('0', BOT_SCHEDULE_CRON_MAX),
                 repeat_chars('p', BOT_SCHEDULE_PROMPT_MAX)
             ))
             .is_ok()
         );
         assert_eq!(
-            invalid(at(repeat_chars('0', BOT_SCHEDULE_TEXT_MAX + 1), "p".into())),
-            "schedules[0].text"
+            invalid(at(repeat_chars('0', BOT_SCHEDULE_CRON_MAX + 1), "p".into())),
+            "schedules[0].cron"
         );
         assert_eq!(
             invalid(at("0 9 * * *".into(), repeat_chars('p', BOT_SCHEDULE_PROMPT_MAX + 1))),
@@ -774,7 +844,7 @@ mod tests {
         let v = with(
             bot(),
             "schedules",
-            json!([{"text": "0 9 * * *", "prompt": "p", "enabled": false}]),
+            json!([{"cron": "0 9 * * *", "prompt": "p", "enabled": false}]),
         );
         assert_eq!(invalid(v), "enabled");
     }
@@ -923,6 +993,7 @@ mod tests {
     fn the_file_count_and_the_bytes_have_limits_that_pass_at_the_edge() {
         let mut many = skill();
         many["files"] = json!({"SKILL.md": skill_md()});
+        many["executable"] = json!([]);
         for i in 0..SKILL_FILES_MAX - 1 {
             many["files"][format!("docs/f{i}.md")] = json!("x");
         }
@@ -932,6 +1003,7 @@ mod tests {
 
         let mut exact = skill();
         exact["files"] = json!({"SKILL.md": skill_md()});
+        exact["executable"] = json!([]);
         let used = skill_md().len();
         exact["files"]["docs/big.md"] = json!(repeat_chars('b', SKILL_BYTES_MAX - used));
         assert!(parse_skill(exact.clone()).is_ok(), "exactly 150 KiB in all");
@@ -1000,7 +1072,8 @@ mod tests {
     fn a_folder_exports_its_files_and_its_executables() {
         let home = TempDir::new().unwrap();
         own_skill(home.path(), "release-notes");
-        let p = skill_from_folder(home.path(), "release-notes", Some("MIT")).unwrap();
+        let (p, skipped) = skill_from_folder(home.path(), "release-notes", Some("MIT")).unwrap();
+        assert!(skipped.is_empty());
         assert_eq!(p.name, "release-notes");
         assert_eq!(p.description, "Writes release notes");
         assert_eq!(p.license, "MIT");
@@ -1101,16 +1174,43 @@ mod tests {
     }
 
     #[test]
-    fn a_file_whose_name_the_payload_does_not_allow_is_refused_with_its_path() {
+    fn a_name_the_payload_does_not_allow_is_refused_with_its_path() {
         let home = TempDir::new().unwrap();
         let dir = own_skill(home.path(), "release-notes");
-        fs::write(dir.join("docs/.env"), "x").unwrap();
+        fs::write(dir.join("docs/sp ace.md"), "x").unwrap();
         match skill_from_folder(home.path(), "release-notes", Some("MIT")) {
             Err(ShareError::Refused { reason, message }) => {
                 assert_eq!(reason, "bad_path");
-                assert!(message.contains("docs/.env"), "{message}");
+                assert!(message.contains("docs/sp ace.md"), "{message}");
             }
             other => panic!("expected bad_path, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn dot_files_and_dot_folders_are_skipped_and_listed_not_refused() {
+        let home = TempDir::new().unwrap();
+        let dir = own_skill(home.path(), "release-notes");
+        fs::write(dir.join(".DS_Store"), "x").unwrap();
+        fs::write(dir.join("docs/.env"), "x").unwrap();
+        fs::create_dir_all(dir.join(".git/objects")).unwrap();
+        fs::write(dir.join(".git/objects/a"), "x").unwrap();
+        let (p, skipped) = skill_from_folder(home.path(), "release-notes", Some("MIT")).unwrap();
+        assert_eq!(
+            skipped,
+            vec![".DS_Store".to_string(), ".git".to_string(), "docs/.env".to_string()]
+        );
+        assert!(p.files.contains_key("SKILL.md") && p.files.contains_key("docs/notes.md"));
+        assert!(p.files.keys().all(|k| !k.split('/').any(|s| s.starts_with('.'))));
+    }
+
+    #[test]
+    fn a_copy_of_a_shared_link_is_not_exported() {
+        let base = TempDir::new().unwrap();
+        install_shared(base.path(), "release-notes", SHARE, 1, &payload()).unwrap();
+        match skill_from_folder(base.path(), "release-notes", Some("MIT")) {
+            Err(ShareError::Refused { reason, .. }) => assert_eq!(reason, "not_yours"),
+            other => panic!("expected not_yours, got {other:?}"),
         }
     }
 
@@ -1130,7 +1230,7 @@ mod tests {
         let home = TempDir::new().unwrap();
         let dir = own_skill(home.path(), "release-notes");
         fs::write(dir.join(MARKER_NAME), r#"{"id":"release-notes"}"#).unwrap();
-        let p = skill_from_folder(home.path(), "release-notes", Some("MIT")).unwrap();
+        let (p, _) = skill_from_folder(home.path(), "release-notes", Some("MIT")).unwrap();
         assert!(!p.files.contains_key(MARKER_NAME));
     }
 
@@ -1267,6 +1367,47 @@ mod tests {
             other => panic!("expected unsafe_path, got {other:?}"),
         }
         assert!(fs::read_dir(outside.path()).unwrap().next().is_none());
+    }
+
+    /// The `SKILL.md` text with `front` as its front matter, for the description rules.
+    fn description_from(front: &str) -> Option<String> {
+        description_of(&format!("---\n{front}\n---\n# Body\n"))
+    }
+
+    #[test]
+    fn a_folded_block_joins_its_lines_with_spaces_and_its_paragraphs_with_newlines() {
+        let folded =
+            "name: x\ndescription: >\n  Writes release\n  notes for a repo.\n\n  Second paragraph.\nlicense: MIT";
+        assert_eq!(
+            description_from(folded),
+            Some("Writes release notes for a repo.\nSecond paragraph.".to_string())
+        );
+    }
+
+    #[test]
+    fn a_literal_block_keeps_its_lines_and_their_relative_indentation() {
+        assert_eq!(
+            description_from("description: |\n  Line one\n  Line two"),
+            Some("Line one\nLine two".to_string())
+        );
+        assert_eq!(
+            description_from("description: |\n    deep\n      deeper"),
+            Some("deep\n  deeper".to_string())
+        );
+    }
+
+    #[test]
+    fn a_quoted_description_loses_its_quotes_and_an_empty_one_is_none() {
+        assert_eq!(
+            description_from("description: \"Quoted, text\""),
+            Some("Quoted, text".to_string())
+        );
+        assert_eq!(
+            description_from("description: >\nlicense: MIT"),
+            None,
+            "a block with no lines"
+        );
+        assert_eq!(description_from("name: x"), None, "no description key");
     }
 
     /// The marker's file name, as the skills module names it.

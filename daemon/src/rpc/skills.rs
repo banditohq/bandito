@@ -42,10 +42,10 @@ pub(super) async fn dispatch_in(app: &App, home: Option<PathBuf>, method: &str, 
         "skills.export" => {
             let p: ExportSkill = params(p)?;
             let base = base_dir(app, home, Scope::User, None)?;
-            let payload = run(move || shared::skill_from_folder(&base, &p.name, p.license.as_deref()))
+            let (payload, skipped) = run(move || shared::skill_from_folder(&base, &p.name, p.license.as_deref()))
                 .await?
                 .map_err(share_error)?;
-            ok(json!({ "payload": payload }))
+            ok(json!({ "payload": payload, "skipped": skipped }))
         }
         "skills.install_shared" => {
             let p: InstallShared = params(p)?;
@@ -301,6 +301,11 @@ mod share_tests {
         fs::create_dir_all(dir.join("docs")).unwrap();
         fs::write(dir.join("SKILL.md"), skill_md()).unwrap();
         fs::write(dir.join("scripts/run.sh"), "#!/bin/sh\necho hi\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(dir.join("scripts/run.sh"), fs::Permissions::from_mode(0o755)).unwrap();
+        }
         fs::write(dir.join("docs/notes.md"), "details").unwrap();
         dir
     }
@@ -560,6 +565,48 @@ mod share_tests {
             let err = dispatch(&r.app, &agent_peer, method, p).await.unwrap_err();
             assert_eq!(err.code, UNAUTHORIZED, "{method}");
         }
+    }
+
+    #[tokio::test]
+    async fn skills_export_lists_the_dot_files_it_skipped() {
+        let r = rig();
+        let home = TempDir::new().unwrap();
+        let dir = own_folder(home.path(), "release-notes");
+        fs::write(dir.join(".DS_Store"), "x").unwrap();
+        let reply = call(
+            &r,
+            home.path(),
+            "skills.export",
+            json!({"name": "release-notes", "license": "MIT"}),
+        )
+        .await
+        .unwrap();
+        assert_eq!(reply["skipped"], json!([".DS_Store"]));
+        assert!(shared::parse_skill(reply["payload"].clone()).is_ok());
+    }
+
+    #[tokio::test]
+    async fn skills_export_refuses_a_copy_of_a_shared_link() {
+        let r = rig();
+        let home = TempDir::new().unwrap();
+        call(
+            &r,
+            home.path(),
+            "skills.install_shared",
+            json!({"share_id": SHARE, "version": 1, "payload": payload()}),
+        )
+        .await
+        .unwrap();
+        let err = call(
+            &r,
+            home.path(),
+            "skills.export",
+            json!({"name": "release-notes", "license": "MIT"}),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.code, COMMANDS_ERROR);
+        assert_eq!(reason(&err), "not_yours");
     }
 
     #[test]
