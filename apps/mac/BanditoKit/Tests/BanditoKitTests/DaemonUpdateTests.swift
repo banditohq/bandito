@@ -5,14 +5,18 @@ import Testing
 
 @Suite struct DaemonUpdateTests {
     /// A `daemon.info` reply as the daemon sends it: snake_case keys, `update` as given.
-    static func info(update: String?, version: String = "0.2.0") throws -> DaemonInfo {
+    static func info(update: String?, version: String = "0.2.0", features: [String] = ["host"]) throws -> DaemonInfo {
         let updateField = update.map { ", \"update\": \($0)" } ?? ""
+        let list = features.map { "\"\($0)\"" }.joined(separator: ", ")
         let json = """
             {"version": "\(version)", "hostname": "box", "os": "linux", "arch": "x86_64",
-             "started_at": 1700000000000, "last_seq": 7, "features": ["host"]\(updateField)}
+             "started_at": 1700000000000, "last_seq": 7, "features": [\(list)]\(updateField)}
             """
         return try RPCClient.decoder.decode(DaemonInfo.self, from: Data(json.utf8))
     }
+
+    static let checkedAt = Date(timeIntervalSince1970: 1_700_000_000)
+    static let checkedAtMs: Int64 = 1_700_000_000_000
 
     @Test func nullUpdateDecodesAsNoCheckResult() throws {
         let info = try Self.info(update: "null")
@@ -61,6 +65,60 @@ import Testing
         #expect(DaemonUpdateOffer.isApplied(info, target: "0.3.0"))
         #expect(!DaemonUpdateOffer.isApplied(info, target: "0.4.0"))
         #expect(!DaemonUpdateOffer.isApplied(nil, target: "0.3.0"))
+    }
+
+    @Test func updateCheckReplyDecodesWithoutCheckedAt() throws {
+        // `daemon.update_check` answers `{current, latest, available}`: no `checked_at`, unlike `daemon.info.update`.
+        let check = try RPCClient.decoder.decode(
+            DaemonUpdateCheck.self, from: Data(#"{"current": "0.1.5", "latest": "0.1.9", "available": true}"#.utf8))
+        #expect(check == DaemonUpdateCheck(current: "0.1.5", latest: "0.1.9", available: true))
+    }
+
+    // MARK: the one offer every Server screen shows
+
+    static func check(_ available: Bool, latest: String? = "0.3.0") -> DaemonUpdateCheck {
+        DaemonUpdateCheck(current: "0.2.0", latest: latest, available: available)
+    }
+
+    @Test func sharedOfferPrefersTheDaemonsOwnOffer() throws {
+        let info = try Self.info(
+            update: #"{"current": "0.2.0", "latest": "0.3.0", "available": true, "checked_at": 1}"#,
+            features: ["host", "update"])
+        let shown = DaemonUpdateOffer.shown(info: info, check: Self.check(true, latest: "0.4.0"), checkedAt: Self.checkedAt)
+        #expect(shown?.latest == "0.3.0")
+        #expect(shown?.checkedAt == 1)
+    }
+
+    @Test func sharedOfferIsTheCheckWhenTheInfoHasNoOffer() throws {
+        let info = try Self.info(update: "null", features: ["host", "update"])
+        let shown = DaemonUpdateOffer.shown(info: info, check: Self.check(true), checkedAt: Self.checkedAt)
+        #expect(shown == DaemonUpdate(current: "0.2.0", latest: "0.3.0", available: true, checkedAt: Self.checkedAtMs))
+    }
+
+    @Test func sharedOfferIsNothingWithoutAnyAnswer() throws {
+        let withFeature = try Self.info(update: "null", features: ["host", "update"])
+        #expect(DaemonUpdateOffer.shown(info: withFeature, check: nil, checkedAt: nil) == nil)
+        #expect(DaemonUpdateOffer.shown(info: nil, check: Self.check(true), checkedAt: Self.checkedAt) == nil)
+    }
+
+    @Test func sharedOfferNeedsTheUpdateFeatureForACheck() throws {
+        let withoutFeature = try Self.info(update: "null", features: ["host"])
+        #expect(DaemonUpdateOffer.shown(info: withoutFeature, check: Self.check(true), checkedAt: Self.checkedAt) == nil)
+    }
+
+    @Test func sharedOfferIsNothingWhenTheCheckSaysNotAvailableOrNotNewer() throws {
+        let info = try Self.info(update: "null", features: ["host", "update"])
+        #expect(DaemonUpdateOffer.shown(info: info, check: Self.check(false), checkedAt: Self.checkedAt) == nil)
+        let same = Self.check(true, latest: "0.2.0")
+        #expect(DaemonUpdateOffer.shown(info: info, check: same, checkedAt: Self.checkedAt) == nil)
+    }
+
+    @Test func theLastCheckReplacesTheEarlierOne() throws {
+        let info = try Self.info(update: "null", features: ["host", "update"])
+        let newer = DaemonUpdateOffer.shown(info: info, check: Self.check(true), checkedAt: Self.checkedAt)
+        #expect(newer != nil)
+        // The later answer says there is nothing newer: that is the answer shown, whatever the earlier one said.
+        #expect(DaemonUpdateOffer.shown(info: info, check: Self.check(false), checkedAt: Self.checkedAt.addingTimeInterval(60)) == nil)
     }
 
     @Test func updateApplyReplyDecodes() throws {

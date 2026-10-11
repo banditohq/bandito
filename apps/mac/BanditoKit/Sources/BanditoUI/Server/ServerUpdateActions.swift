@@ -124,65 +124,100 @@ struct ServerUpdateActions: View {
 
     @ViewBuilder
     private var remoteStatus: some View {
-        let offer = DaemonUpdateOffer.offer(for: server.info)
-        if let offer {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .center, spacing: 12) {
-                    Text(L10n.Server.DaemonUpdate.title(latest: offer.latest, current: offer.current))
-                        .font(BanditoFont.text(size: 13, weight: 500))
-                        .foregroundStyle(Color.Bandito.text)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 8)
-                    if !daemonUpdate.isBusy {
-                        Button(L10n.Server.DaemonUpdate.button) { confirming = true }
-                            .banditoButton(.lightPill())
-                            .fixedSize()
-                    }
-                }
-                if let status = DaemonUpdateModel.statusText(for: daemonUpdate.phase) {
-                    Text(status)
-                        .font(BanditoFont.text(size: 12, weight: 400))
-                        .foregroundStyle(Color.Bandito.text2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                if case .failed(let failure) = daemonUpdate.phase {
-                    UserFacingErrorView(message: failure.wrapped { L10n.Server.DaemonUpdate.failed(error: $0) })
-                }
-            }
-            .confirmationDialog(
-                L10n.Server.DaemonUpdate.confirmTitle(version: offer.latest),
-                isPresented: $confirming,
-                titleVisibility: .visible
-            ) {
-                Button(L10n.Server.DaemonUpdate.confirm) {
-                    Task { await daemonUpdate.run(server, offer: offer) }
-                }
-                Button(L10n.Common.cancel, role: .cancel) {}
-            } message: {
-                Text(L10n.Server.DaemonUpdate.confirmMessage)
-            }
-        } else if server.info == nil {
+        let choice = daemonChoice
+        if server.info == nil {
             Text(L10n.Server.notConnected)
                 .font(BanditoFont.text(size: 13, weight: 400))
                 .foregroundStyle(Color.Bandito.text2)
+        } else if case .offer(let offer) = choice {
+            daemonOfferRow(offer, isLive: true)
+        } else if let finished = daemonUpdate.shownOffer(current: nil, serverID: server.id) {
+            // After an update on this server its outcome stays until the screen is left: the daemon no longer offers it.
+            daemonOfferRow(finished, isLive: false)
         } else {
-            switch ReleaseFeed.standing(installed: server.info?.version, latest: release.latest) {
-            case .available(let latest):
-                // The server's daemon reports no release of its own: the newest one is only known from GitHub.
-                Text(L10n.Server.Update.available(version: latest.description))
-                    .font(BanditoFont.text(size: 13, weight: 500))
-                    .foregroundStyle(Color.Bandito.text)
-                    .fixedSize(horizontal: false, vertical: true)
+            switch choice {
+            case .offer:
+                EmptyView()
             case .upToDate:
                 Text(L10n.Updates.upToDate)
                     .font(BanditoFont.text(size: 13, weight: 500))
                     .foregroundStyle(Color.Bandito.text)
-            case .unknown:
-                if release.checked {
-                    failedLine { Task { await release.load() } }
-                } else {
-                    checkingLine
+            case .checking:
+                checkingLine
+            case .releaseOnly:
+                releaseStatus
+            }
+        }
+    }
+
+    /// What the card shows about the daemon's update (see `RemoteDaemonUpdateRules`).
+    private var daemonChoice: RemoteDaemonUpdateRules.Choice {
+        RemoteDaemonUpdateRules.choice(
+            info: server.info,
+            connected: server.isConnectedNow,
+            offer: server.daemonUpdateOffer,
+            check: server.daemonUpdateCheck,
+            checkAsked: server.daemonUpdateCheckedAt != nil)
+    }
+
+    /// The daemon's newer release with its install button. `isLive` is false only for the outcome of an update that was
+    /// just run: then the title is the status, and there is no button.
+    private func daemonOfferRow(_ offer: DaemonUpdate, isLive: Bool) -> some View {
+        let status = DaemonUpdateModel.statusText(for: daemonUpdate.phase)
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .center, spacing: 12) {
+                Text(isLive ? L10n.Server.DaemonUpdate.title(latest: offer.latest, current: offer.current) : (status ?? ""))
+                    .font(BanditoFont.text(size: 13, weight: 500))
+                    .foregroundStyle(Color.Bandito.text)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
+                if isLive, !daemonUpdate.isBusy {
+                    Button(L10n.Server.DaemonUpdate.button) { confirming = true }
+                        .banditoButton(.lightPill())
+                        .fixedSize()
                 }
+            }
+            if isLive, case .failed(let failure) = daemonUpdate.phase {
+                UserFacingErrorView(message: failure.wrapped { L10n.Server.DaemonUpdate.failed(error: $0) })
+            } else if isLive, let status {
+                Text(status)
+                    .font(BanditoFont.text(size: 12, weight: 400))
+                    .foregroundStyle(Color.Bandito.text2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .confirmationDialog(
+            L10n.Server.DaemonUpdate.confirmTitle(version: offer.latest),
+            isPresented: $confirming,
+            titleVisibility: .visible
+        ) {
+            Button(L10n.Server.DaemonUpdate.confirm) {
+                Task { await daemonUpdate.run(server, offer: offer) }
+            }
+            Button(L10n.Common.cancel, role: .cancel) {}
+        } message: {
+            Text(L10n.Server.DaemonUpdate.confirmMessage)
+        }
+    }
+
+    /// Only the GitHub line: the server's daemon reports no release of its own, so the newest one is known from GitHub.
+    @ViewBuilder
+    private var releaseStatus: some View {
+        switch ReleaseFeed.standing(installed: server.info?.version, latest: release.latest) {
+        case .available(let latest):
+            Text(L10n.Server.Update.available(version: latest.description))
+                .font(BanditoFont.text(size: 13, weight: 500))
+                .foregroundStyle(Color.Bandito.text)
+                .fixedSize(horizontal: false, vertical: true)
+        case .upToDate:
+            Text(L10n.Updates.upToDate)
+                .font(BanditoFont.text(size: 13, weight: 500))
+                .foregroundStyle(Color.Bandito.text)
+        case .unknown:
+            if release.checked {
+                failedLine { Task { await release.load() } }
+            } else {
+                checkingLine
             }
         }
     }

@@ -352,6 +352,7 @@ public final class AppModel {
             try? await Task.sleep(for: .seconds(3600))
             for server in reachableServers {
                 await server.refreshInfo()
+                await server.refreshDaemonUpdateCheck()
             }
         }
     }

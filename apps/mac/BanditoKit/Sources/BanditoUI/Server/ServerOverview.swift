@@ -50,9 +50,10 @@ struct ServerOverview: View {
                 // This Mac's daemon is replaced by the bundled one: the release offers would be the same update, shown twice.
                 if !app.localUpgrade.replacesOffer(for: server) {
                     // The daemon's own check wins; the GitHub hint is only for a daemon that has not reported one yet.
-                    if daemonUpdate.shownOffer(current: DaemonUpdateOffer.offer(for: server.info), serverID: server.id) != nil {
+                    if daemonUpdate.shownOffer(current: server.daemonUpdateOffer, serverID: server.id) != nil {
                         DaemonUpdateBanner(server: server, model: daemonUpdate)
-                    } else if release.updateAvailable(current: server.info?.version) {
+                    } else if release.updateAvailable(current: server.info?.version), server.info?.supports("update") != true {
+                        // Only a daemon the app cannot update (no `update` feature) gets the terminal command.
                         updateBanner(server)
                     }
                 }
@@ -101,6 +102,7 @@ struct ServerOverview: View {
         .task(id: server?.id) {
             // Opening the Server screen re-reads the daemon's update check, so the offer is current.
             await server?.refreshInfo()
+            await server?.refreshDaemonUpdateCheck()
         }
         .task(id: server?.info != nil) {
             guard let server, server.info != nil else { return }
