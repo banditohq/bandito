@@ -304,6 +304,13 @@ struct ThreadView: View {
         }
     }
 
+    /// A suggestion of the empty thread: its text goes into the composer after what is there, unsent, and the field takes
+    /// the keyboard. The same path as a template's starter (`Router.appendDraft`).
+    private func pickSuggestion(_ text: String) {
+        router.appendDraft(text, for: agent.id)
+        router.requestComposerFocus(agentID: agent.id)
+    }
+
     /// The composer text of this agent, kept by the Router (see `Router.drafts`).
     private var draft: Binding<String> {
         Binding(get: { router.drafts[agent.id] ?? "" }, set: { router.drafts[agent.id] = $0 })
@@ -410,6 +417,13 @@ struct ThreadView: View {
                             proxy.scrollTo(request.id, anchor: .center)
                         }
                     }
+            }
+            .overlay {
+                // The first screen of a thread with no message. It waits for the history: `hasMoreHistory` is set once the
+                // first page is read, so a thread that has messages on the server never flashes it.
+                if thread.items.isEmpty, server.hasMoreHistory[agent.id] != nil {
+                    ThreadEmptyState(agent: agent, server: server, onPick: pickSuggestion)
+                }
             }
             if thread.status == .error, let detail = thread.statusDetail {
                 Banner(text: detail)

@@ -2342,6 +2342,13 @@
 "thread.copyMarkdown" = "复制为 Markdown";
 "thread.dictate" = "听写";
 "thread.duration" = "%1$@ 秒";
+"thread.empty.start" = "从哪里开始？";
+"thread.empty.suggest.capabilities" = "你会做什么？能怎样帮我？";
+"thread.empty.suggest.dayPlan" = "根据我的任务，帮我制定今天的计划";
+"thread.empty.suggest.fixErrors" = "找出项目里的错误并修复";
+"thread.empty.suggest.listProject" = "告诉我项目文件夹里有什么";
+"thread.empty.suggest.meetTeam" = "认识一下团队，告诉我每个人在忙什么";
+"thread.empty.suggest.news" = "在网上查找我这个主题的最新新闻";
 "thread.hintNewLine" = "⇧↵ 换行";
 "thread.hintSearch" = "⌘K 搜索";
 "thread.hintSend" = "↵ 发送";

@@ -3253,6 +3253,19 @@ public enum L10n {
             public static var watchBeside: String { L10n.tr("thread.browserRun.watchBeside") }
         }
 
+        public enum Empty {
+            public static var start: String { L10n.tr("thread.empty.start") }
+
+            public enum Suggest {
+                public static var capabilities: String { L10n.tr("thread.empty.suggest.capabilities") }
+                public static var dayPlan: String { L10n.tr("thread.empty.suggest.dayPlan") }
+                public static var fixErrors: String { L10n.tr("thread.empty.suggest.fixErrors") }
+                public static var listProject: String { L10n.tr("thread.empty.suggest.listProject") }
+                public static var meetTeam: String { L10n.tr("thread.empty.suggest.meetTeam") }
+                public static var news: String { L10n.tr("thread.empty.suggest.news") }
+            }
+        }
+
         public enum Link {
             public static var fileHelp: String { L10n.tr("thread.link.fileHelp") }
             public static var urlHelp: String { L10n.tr("thread.link.urlHelp") }

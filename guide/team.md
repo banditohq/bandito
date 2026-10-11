@@ -72,6 +72,14 @@ A palette with agents, files, terminals, ports and actions. Type to filter; arro
 2. Use ↑↓ to choose (↑↓ select), then ↵ to open (↵ open). ⌘↵ sends a message to the agent (⌘↵ message).
 3. Press Esc to close the palette.
 
+## Start a new agent's thread
+
+<!-- id: team-empty-thread; covers: -->
+A new agent's thread has no messages yet. It shows the agent's avatar, its name and role, and four suggestions to begin with, chosen from what the agent may do (Terminal, Project files, Browser, Message the crew).
+Где: Team → agent thread, before the first message (Write a task or a question…)
+1. Click a suggestion. Its text goes into the message field, after anything already there, without being sent. The field takes the keyboard with the caret at the end: change the text if you want, then press ↵ to send.
+2. The suggestions go away with the first message, yours or the agent's. A thread that already has messages on the server shows none.
+
 ## Write a message
 
 <!-- id: team-composer; covers: -->

@@ -358,7 +358,11 @@ struct Composer: View {
             other = true
         }
         #endif
-        if ComposerFocus.shouldTakeFocus(reason: reason, otherFieldHasFocus: other) { focused = true }
+        if ComposerFocus.shouldTakeFocus(reason: reason, otherFieldHasFocus: other) {
+            focused = true
+            // A requested focus (a suggestion, Reply, quick open) leaves the caret after the text, not on a selection.
+            if reason == .requested { FieldCaret.place(draft.utf16.count) }
+        }
     }
 
     /// The bar above the field: whom the message answers, and the first words of the original.

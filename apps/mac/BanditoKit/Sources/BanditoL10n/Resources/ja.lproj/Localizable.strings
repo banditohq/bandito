@@ -2342,6 +2342,13 @@
 "thread.copyMarkdown" = "Markdownとしてコピー";
 "thread.dictate" = "音声入力";
 "thread.duration" = "%1$@ 秒";
+"thread.empty.start" = "何から始めましょうか？";
+"thread.empty.suggest.capabilities" = "何ができて、どんな手伝いができる？";
+"thread.empty.suggest.dayPlan" = "私のタスクから今日の計画を立てて";
+"thread.empty.suggest.fixErrors" = "プロジェクトのエラーを見つけて直して";
+"thread.empty.suggest.listProject" = "プロジェクトのフォルダに何があるか教えて";
+"thread.empty.suggest.meetTeam" = "チームのメンバーに会って、それぞれ何をしているか教えて";
+"thread.empty.suggest.news" = "私のテーマについて、インターネットで最新のニュースを探して";
 "thread.hintNewLine" = "⇧↵ 改行";
 "thread.hintSearch" = "⌘K 検索";
 "thread.hintSend" = "↵ 送信";
